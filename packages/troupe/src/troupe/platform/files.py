@@ -1,0 +1,107 @@
+"""Atomic file replacement (spec: platform; design D5).
+
+Write the new bytes to a temporary file in the same directory, fsync it, give it the original's
+permission bits, then rename it over the target. A reader sees the old file or the new one, never
+part of either. On any failure the original is untouched and the temporary file is removed.
+
+Platform differences, handled here so callers see one behaviour:
+- POSIX: the directory is fsynced after the rename, so the rename itself is durable.
+- Windows: a directory can't be fsynced (NTFS journals the rename). A target that another process
+  has open can't be replaced; the replace retries with backoff, announces the wait, and gives up
+  with FileInUseError. A read-only target is replaced and stays read-only, as it would on POSIX.
+"""
+
+import contextlib
+import os
+import stat
+import sys
+import tempfile
+import time
+from collections.abc import Callable
+from pathlib import Path
+
+from troupe.platform.errors import FileInUseError
+
+WaitCallback = Callable[[Path, float], None]
+"""Called once when a wait has lasted ``announce_after`` seconds, with the path and time waited."""
+
+_WINDOWS = sys.platform == "win32"
+
+
+def replace_bytes(
+    path: str | os.PathLike[str],
+    data: bytes,
+    *,
+    timeout: float,
+    announce_after: float,
+    on_wait: WaitCallback | None = None,
+) -> None:
+    """Atomically replace the contents of ``path`` with ``data``, keeping its permission bits."""
+    target = Path(path)
+    mode = stat.S_IMODE(target.stat().st_mode) if target.exists() else None
+    fd, temp_name = tempfile.mkstemp(dir=target.parent, prefix=f".{target.name}.", suffix=".tmp")
+    temp = Path(temp_name)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        if mode is not None:
+            os.chmod(temp, mode)
+        _replace(
+            temp, target, mode, timeout=timeout, announce_after=announce_after, on_wait=on_wait
+        )
+    except BaseException:
+        with contextlib.suppress(FileNotFoundError):
+            temp.unlink()
+        raise
+    _fsync_directory(target.parent)
+
+
+def _replace(
+    temp: Path,
+    target: Path,
+    mode: int | None,
+    *,
+    timeout: float,
+    announce_after: float,
+    on_wait: WaitCallback | None,
+) -> None:
+    read_only = _WINDOWS and mode is not None and not mode & stat.S_IWRITE
+    started = time.monotonic()
+    delay = 0.02
+    announced = False
+    while True:
+        try:
+            if read_only:
+                # Windows refuses to replace a read-only file. Lift the flag for the rename only;
+                # the new file already carries the read-only mode copied from the original.
+                os.chmod(target, stat.S_IWRITE | stat.S_IREAD)
+            os.replace(temp, target)
+            return
+        except PermissionError:
+            if not _WINDOWS:
+                raise
+            if read_only:
+                with contextlib.suppress(OSError):
+                    os.chmod(target, stat.S_IREAD)
+        # Windows: the target is open in another process (sharing violation). Wait, bounded.
+        waited = time.monotonic() - started
+        if waited >= timeout:
+            raise FileInUseError(target, waited)
+        if not announced and waited >= announce_after:
+            announced = True
+            if on_wait is not None:
+                on_wait(target, waited)
+        time.sleep(min(delay, max(timeout - waited, 0.0)))
+        delay = min(delay * 2, 0.25)
+
+
+def _fsync_directory(directory: Path) -> None:
+    if _WINDOWS:
+        return
+    fd = os.open(directory, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)

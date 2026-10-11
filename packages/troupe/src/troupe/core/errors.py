@@ -9,6 +9,8 @@ from typing import Any
 
 from troupe.core.exit_codes import ExitCode
 
+BUG_REPORT_URL = "https://github.com/troupe-run/troupe.run/issues"
+
 CODES: dict[str, ExitCode] = {
     "internal.unexpected": ExitCode.FAILURE,
     "usage.invalid": ExitCode.USAGE,

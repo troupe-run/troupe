@@ -11,13 +11,11 @@ from typing import TextIO
 
 from troupe.cli.parser import Command, parse
 from troupe.cli.render import render_error
-from troupe.core.errors import TroupeError
+from troupe.core.errors import BUG_REPORT_URL, TroupeError
 from troupe.core.exit_codes import ExitCode
 
 COMMANDS: tuple[Command, ...] = ()
 """The subcommands troupe offers. The bootstrap defines none; later changes register them here."""
-
-BUG_REPORT_URL = "https://github.com/troupe-run/troupe.run/issues"
 
 
 def run(
