@@ -154,6 +154,41 @@ are not, and the session SHALL be told the workflow it is working under.
 - **WHEN** a session starts in a clone where `core.hooksPath` doesn't point at the repository's hooks
 - **THEN** it is set to the repository's hooks, and the session is told so
 
+### Requirement: Git hooks are on by default
+The repository's own tooling SHALL turn its git hooks on wherever it runs, so a contributor doesn't have to remember
+to. Running the repository's check, or starting a Claude Code session, SHALL make the git hooks active if they
+aren't, and say so.
+
+#### Scenario: Running the check in a fresh clone
+- **WHEN** a contributor runs the repository's check in a clone where the git hooks aren't active
+- **THEN** the hooks are turned on, the check says so, and later commits go through them
+
+### Requirement: Commit messages are checked before a push
+A push SHALL be refused while any commit it would send, on any branch, has a message that isn't a Conventional
+Commit. The refusal names each such commit.
+
+#### Scenario: Pushing a non-conventional commit
+- **WHEN** a contributor pushes a branch carrying a commit whose first line is `Add a thing`
+- **THEN** the push is refused, naming that commit and the expected form
+
+#### Scenario: Pushing conventional commits
+- **WHEN** every commit being pushed is a Conventional Commit
+- **THEN** the push goes ahead
+
+### Requirement: The rules are re-checked on GitHub
+For every push to any branch and for every pull request, a GitHub check SHALL re-apply the git-level rules to the
+commits involved: every commit message is a Conventional Commit, the branch matches an OpenSpec change (for any
+branch other than `main`), and no archived change has an unticked task. It applies the same rules as the git hooks,
+so a commit that skipped the local hooks is still caught.
+
+#### Scenario: A push that skipped the local hooks
+- **WHEN** a branch is pushed carrying a commit with a non-conventional message that was made with `--no-verify`
+- **THEN** the GitHub check for that push fails and names the commit
+
+#### Scenario: A pull request from a branch with no matching change
+- **WHEN** a pull request's branch has no matching OpenSpec change
+- **THEN** the GitHub check fails and names the rule
+
 ### Requirement: Guardrails behave the same on every platform
 Every rule in this capability SHALL behave the same on Linux, macOS and Windows.
 

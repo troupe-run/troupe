@@ -41,6 +41,14 @@
 - [ ] 6.3 Verify whether a PreToolUse deny applies in `bypassPermissions` mode by attempting a refused edit in that mode; record the result in `docs/development-workflow.md` and in the design's open question
 - [x] 6.4 Write `docs/development-workflow.md`: every rule (id, what it refuses, fix), how to grant an override and read the log, and the known gaps (not a security boundary, `gh api` PRs, the bypass-mode result); verify every rule id in it matches the guard module's list with a test
 
+## 7. On by default, before push, and on GitHub (design D11)
+
+- [x] 7.1 Make `scripts/check.py` turn on the git hooks when they aren't active, and say so; verify with a test in a temporary repository that a run sets `core.hooksPath` and prints the notice, and that a second run doesn't
+- [x] 7.2 Implement `guard.py pre-push` and `.githooks/pre-push`: check every commit being pushed with the commit-message rule, skip deleted refs, and handle a new branch; verify end to end in a temporary repository with a bare remote that a non-conventional commit refuses the push, naming it, and a conventional one goes through
+- [x] 7.3 Implement `guard.py ci` (range, branch, rules per design D11) with tests for a pull-request range, a push range, a new-branch push, a push to `main` (branch rule skipped), and an archived change with an unticked task
+- [ ] 7.4 Add `.github/workflows/guard.yml` running `guard.py ci` on every push and pull request; verify it passes on this branch, and that it fails on a throwaway branch carrying a commit made with `--no-verify` and a non-conventional message (the branch is deleted afterwards)
+- [x] 7.5 Update `docs/development-workflow.md` (the layers, the pre-push hook, the GitHub check, and the probe result) and comment on #23 that its commit linting moves here; verify the docs' rule test still passes
+
 ## Workflow follow-up
 
 - Open the PR with "Closes #22"; archive the change on the branch before merging (all tasks ticked — the new `archive-incomplete` rule will check that); after the merge, comment on #22 with the PR and the archived change.
