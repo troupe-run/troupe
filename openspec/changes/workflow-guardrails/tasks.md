@@ -37,7 +37,7 @@
 ## 6. Integration
 
 - [x] 6.1 Run the full check on Linux, macOS and Windows in CI; verify every job passes, including the guard tests that make real commits in temporary repositories on Windows
-- [ ] 6.2 Run the guard tests on the owner's Windows machine, in a Claude Code session there, and confirm a refused edit and a refused `--no-verify` behave as on macOS
+- [x] 6.2 Run the guard tests on the owner's Windows machine, in a Claude Code session there, and confirm a refused edit and a refused `--no-verify` behave as on macOS (done 2026-10-11 on Windows, auto mode: the session start context and CLAUDE.md loaded; `/hooks` listed both hooks; `git commit --no-verify` was refused with `skip-hooks`; an edit to README.md on branch `scratch-test-2` was refused with `edit-branch-change`, and the session reported the refusal and its fix without working round it; the git hooks refused `commit-branch-change` and `commit-message` outside Claude Code)
 - [ ] 6.3 Verify whether a PreToolUse deny applies in `bypassPermissions` mode by attempting a refused edit in that mode; record the result in `docs/development-workflow.md` and in the design's open question
 - [x] 6.4 Write `docs/development-workflow.md`: every rule (id, what it refuses, fix), how to grant an override and read the log, and the known gaps (not a security boundary, `gh api` PRs, the bypass-mode result); verify every rule id in it matches the guard module's list with a test
 
