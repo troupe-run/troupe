@@ -446,6 +446,16 @@ def test_an_ordinary_bash_command_produces_no_output(make_repo: Callable[[], Rep
     assert pre_tool_use(repo.path, "Bash", {"command": "git status"}) is None
 
 
+def test_a_bash_pr_into_another_repository_is_allowed_and_into_this_one_denied(
+    troupe_clone: Repo,
+) -> None:
+    other = f"gh pr create --repo troupe-run/.github {NO_CLOSE}"
+    ours = f"gh pr create {NO_CLOSE}"
+    assert pre_tool_use(troupe_clone.path, "Bash", {"command": other}) is None
+    reason = denial_reason(pre_tool_use(troupe_clone.path, "Bash", {"command": ours}))
+    assert reason.startswith("guard: pr-closes-issue:")
+
+
 def test_a_tool_outside_any_repository_is_left_alone(tmp_path: Path) -> None:
     assert pre_tool_use(tmp_path, "Write", {"file_path": str(tmp_path / "a.py")}) is None
 

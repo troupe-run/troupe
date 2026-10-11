@@ -42,7 +42,7 @@ guard: commit-on-main: commits aren't made on main; work reaches main through a 
 | `commit-checks` | git | a commit while tracked files have unstaged changes, or while `scripts/check.py` fails | stage or stash the changes; fix what the check reports |
 | `archive-incomplete` | git | a commit that adds an archived change with an unticked task | finish and tick every task first |
 | `edit-branch-change` | Claude | an Edit, Write, MultiEdit or NotebookEdit to a repository file when the branch has no matching change | switch to, or create, the change's branch |
-| `pr-closes-issue` | Claude | `gh pr create` whose `--body` or `--body-file` doesn't close an issue, or that uses `--fill` or stdin | add `Closes #<issue>` |
+| `pr-closes-issue` | Claude | `gh pr create` into this repository whose `--body` or `--body-file` doesn't close an issue, or that uses `--fill` or stdin. The target is named by `--repo`/`-R`, else `GH_REPO`, else it's this repository; a PR into another repository isn't checked, and a target that can't be read, or a clone with no remote, counts as this one | add `Closes #<issue>`, or name the other repository with `--repo` |
 | `skip-hooks` | Claude | `--no-verify`, `git commit -n`, and setting, unsetting or overriding `core.hooksPath` | fix what the hook reports |
 | `command-unparseable` | Claude | a `git` or `gh` command that can't be parsed (for example, unbalanced quotes) | simplify the command |
 | `guard-tamper` | Claude | running the override command, naming a path in the override directory, or editing under `.git/`. **No override unlocks this rule.** | ask the owner |
