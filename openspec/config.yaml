@@ -1,0 +1,75 @@
+schema: spec-driven
+
+# Project context (optional)
+# Add only constraints that should guide OpenSpec artifacts and workflows.
+# Include constraints an agent cannot infer by reading the code.
+# Keep general project documentation and discoverable codebase facts out.
+# Example:
+#   context: |
+#     Designs and tasks must cover Windows, macOS, and Linux
+#     Write all artifacts in Spanish
+context: |
+  troupe runs a software process with agents and people in named roles. It is local-first: config, history and
+  decisions live in the project's git repo. Pre-alpha; built in stages, and requirements will change. Build for the
+  current stage in a way that is easy to change.
+
+  Fixed constraints:
+  - Python 3.12+, managed with uv. macOS and Linux; Windows is out of scope in the short term, but required for 1.0.
+    Keep OS-specific behaviour (paths, file locking, atomic replace, processes and signals, daemon IPC, file
+    watching) behind one named seam, and call out any design choice that would block Windows later.
+  - Pure event sourcing and CQRS, configuration included. Events come first; files are projections.
+  - troupe's own state is text that git can merge (append-only, line-per-record). No SQLite or binary stores.
+  - Every event carries lineage: actor (human, agent, or explicit unknown, never null), via, time, reason, change id,
+    approvals. Fail when there is no identity.
+  - Stages (sandboxes), actor runners, notification channels and guests are pluggable. Declared effects are enforced.
+  - Humans hold roles like agents. Gates and escalations name the role they route to, never "the human".
+  - Not a monorepo: this repo is the app only.
+
+  The first people who use it will be developers who review their files as diffs, but later (pre 1.0) there will be a
+  UI which enables generic workflows for non-technical users. It is expected this workflow will be a local run server
+  connecting to the same internal workflow as the CLI and dev-friendly tooling uses.
+  - The CLI is a thin client. Commands and queries live in a core that the CLI, the run server and later UIs all
+    call; no behaviour exists only in one surface.
+  - Never reformat, reorder or rewrite anything the user did not ask to change, whichever surface made the change.
+    A UI edit to config is a set like any other, written back surgically.
+  - Refuse rather than guess. Messages name the problem, the path and the fix, and are structured data so each
+    surface can phrase them for its own users.
+  - Never wait silently or indefinitely.
+
+  Quality bar:
+  - Fully typed; mypy --strict and ruff clean, checked in the pipeline.
+  - Every behaviour has a test that fails when it breaks; a test's name states exactly what its body checks. Test real
+    shapes, and use property or fuzz tests for unusual inputs.
+  - Done means verified: run the tests and show the result.
+  - Keep each decision in one named place. When unsure, take the choice that cannot lose user data, and say so.
+  - Deliver the whole of what is asked; never quietly narrow scope.
+
+  Working:
+  - Don't invent requirements. Before asking, research what you can reach; then ask with findings, options and a
+    recommendation.
+  - Surface design decisions in the proposal or design before code depends on them.
+  - Keep specs, code and tests in agreement; change all three together.
+  - When a change fixes a tracked issue, comment on the issue with the change and close it.
+  - Commit in small steps with messages that say why.
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always state what is out of scope
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing
