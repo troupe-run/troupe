@@ -13,12 +13,12 @@
 
 ## 3. CLI (spec: cli)
 
-- [ ] 3.1 Implement the argparse root with a shared global-options parent (design D2) and `--version`; verify the "Version outside any theatre" scenario with a test that runs the installed console script in an empty temp directory
-- [ ] 3.2 Implement global flags anywhere; verify both "Global flags are accepted anywhere" scenarios using a test-only subcommand
-- [ ] 3.3 Implement the `--` convention for dash-leading values; verify the "Dash-leading value without separator" scenario
-- [ ] 3.4 Implement error rendering (stderr only, empty stdout, non-zero exit) and an unexpected-error fallback (code 1, still structured); verify the "An error names the problem and the fix" and "Error data matches the protocol schema" scenarios
-- [ ] 3.5 Implement unknown subcommand and flag handling with difflib suggestions; verify the "Unknown subcommand with a near match" and "Unknown flag" scenarios and the "Every returned code is documented" scenario across the CLI test suite
-- [ ] 3.6 Document the CLI's global flags and error format in `docs/cli/README.md`; verify every documented command runs as written
+- [x] 3.1 Implement the argparse root with a shared global-options parent (design D2) and `--version`; verify the "Version outside any theatre" scenario with a test that runs the installed console script in an empty temp directory
+- [x] 3.2 Implement global flags anywhere; verify both "Global flags are accepted anywhere" scenarios using a test-only subcommand
+- [x] 3.3 Implement the `--` convention for dash-leading values; verify the "Dash-leading value without separator" scenario
+- [x] 3.4 Implement error rendering (stderr only, empty stdout, non-zero exit) and an unexpected-error fallback (code 1, still structured); verify the "An error names the problem and the fix" and "Error data matches the protocol schema" scenarios
+- [x] 3.5 Implement unknown subcommand and flag handling with difflib suggestions; verify the "Unknown subcommand with a near match" and "Unknown flag" scenarios and the "Every returned code is documented" scenario across the CLI test suite
+- [x] 3.6 Document the CLI's global flags and error format in `docs/cli/README.md`; verify every documented command runs as written
 
 ## 4. Platform seam (spec: platform)
 
