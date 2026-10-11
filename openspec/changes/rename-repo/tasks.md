@@ -14,7 +14,7 @@
 - [x] 2.2 Set the clone's remote: `git remote set-url origin git@github.com:troupe-run/troupe.git`; verify `git remote -v` shows the new URL and `git ls-remote origin main` succeeds
 - [x] 2.3 Verify the new URLs resolve directly, with no redirect: `curl -sI https://github.com/troupe-run/troupe` and `.../troupe/issues` both return `200`
 - [x] 2.4 Push the branch and open the PR with `Closes #26`; verify every CI job passes on Linux, macOS and Windows
-- [ ] 2.5 Confirm both Apps still cover the repo: `gh api user/installations/170159387/repositories` (DCO) and `.../170224209/repositories` (`troupe-run-infrastructure`) each list `troupe-run/troupe`, and the DCO check appears on the PR
+- [x] 2.5 Confirm both Apps still cover the repo: the DCO check runs and passes on PR #27, and the `troupe-run-infrastructure` installation's settings page (`/organizations/troupe-run/settings/installations/170224209`) lists `troupe-run/troupe` under its selected repositories. The API route (`gh api user/installations/<id>/repositories`) refuses a `gh` OAuth token even with the `user` scope, so the owner checked the settings page
 
 ## 3. The rest of the org
 
