@@ -4,7 +4,7 @@
 
 - [x] 1.1 Create the workspace root `pyproject.toml` (members `packages/*`, dev dependency group, ruff/mypy/pytest/import-linter config per design D8) and `packages/troupe/` with src layout and the `troupe` console script; verify `uv sync` succeeds and `uv run python -c "import troupe"` exits 0
 - [x] 1.2 Add `scripts/check.py` running ruff, `ruff format --check`, `mypy --strict`, `lint-imports` and pytest in that order, stopping at the first failure; verify it passes on the empty package and fails when a deliberate lint error is added (then removed)
-- [ ] 1.3 Add `plugins/README.md` (out-of-process rule, JSON-RPC over stdio, imports only `protocol/`) and `protocol/README.md` (language-neutral contracts, generation plan per #7); verify both render on GitHub
+- [x] 1.3 Add `plugins/README.md` (out-of-process rule, JSON-RPC over stdio, imports only `protocol/`) and `protocol/README.md` (language-neutral contracts, generation plan per #7); verify both render on GitHub
 
 ## 2. Errors and the protocol schema
 
@@ -26,7 +26,7 @@
 - [x] 4.2 Verify "Reader never sees a partial write" with a multi-process test that replaces a file repeatedly while a reader checks every read is one complete version
 - [x] 4.3 Implement lock-file locks (`flock` on POSIX, `msvcrt.locking` on Windows) with announce callback, timeout and nested-acquisition refusal (design D6), with defaults in `troupe.core.defaults`; verify "Lock held by another process" (second process, short timeouts), "Timeout comes from a named setting" and "Nested acquisition"
 - [x] 4.4 Implement friendly path display with the platform separator (design D5a); verify the three path scenarios plus a hypothesis test that the output is never relative and starts with `~` plus the separator exactly when the path is under home
-- [ ] 4.5 Implement the bounded, announced retry when the replace target is held open (design D5); verify "Target held open by another process" on Windows by holding the file open from a second process, and confirm the test isn't skipped on any platform where the condition can be produced
+- [x] 4.5 Implement the bounded, announced retry when the replace target is held open (design D5); verify "Target held open by another process" on Windows by holding the file open from a second process, and confirm the test isn't skipped on any platform where the condition can be produced
 - [ ] 4.6 Verify "The same tests pass on every platform": run the platform suite on a Windows machine locally (owner's session) as well as in CI, and check `pytest -rs` reports no skips for a missing platform implementation on any of the three
 - [x] 4.7 Document the platform seam (what lives there, how each platform differs inside it, the NFS limitation) in `docs/platform.md`
 
@@ -36,13 +36,13 @@
 
 ## 6. CI
 
-- [ ] 6.1 Add `.github/workflows/ci.yml`: matrix {ubuntu, macos, windows} × {3.12, 3.13} running `scripts/check.py`, all jobs required; verify by pushing the branch and confirming all six jobs pass, and record per-job durations
+- [x] 6.1 Add `.github/workflows/ci.yml`: matrix {ubuntu, macos, windows} × {3.12, 3.13} running `scripts/check.py`, all jobs required; verify by pushing the branch and confirming all six jobs pass, and record per-job durations
 
 ## 7. Contributing and DCO
 
-- [ ] 7.1 Don't add a repo-level `CONTRIBUTING.md`: the org default in `troupe-run/.github` covers the DCO and the workflow, and a repo file would replace it entirely. Put the repo-specific part (how to run `scripts/check.py`) in `README.md` under "Development", which the org default points to; verify the commands run as written and that GitHub's contributing link on this repo shows the org default
-- [ ] 7.2 Install the DCO GitHub App on the repo (owner, from the GitHub UI) **before the bootstrap PR is opened**. `dco.yml` (`require: members: false`, design D10) is already on the default branch of `troupe-run/.github`, the org-wide fallback the app reads when a repo has none; the app is installed on both repos. Verify both paths: the bootstrap PR's commits (signed by an org member, no sign-off) pass, and a throwaway PR with an unsigned commit and no sign-off fails until it's amended with `git commit -s`. If the member path fails because the owner's org membership is private, record it and decide with the owner: make the membership public, or sign off anyway. Making the check required is a ruleset in #19
-- [ ] 7.3 Update `README.md` with what troupe is (site wording), status (pre-alpha), licence, and links to the org contributing guide and the roadmap project
+- [x] 7.1 Don't add a repo-level `CONTRIBUTING.md`: the org default in `troupe-run/.github` covers the DCO and the workflow, and a repo file would replace it entirely. Put the repo-specific part (how to run `scripts/check.py`) in `README.md` under "Development", which the org default points to; verify the commands run as written and that GitHub's contributing link on this repo shows the org default
+- [x] 7.2 Install the DCO GitHub App on the repo (owner, from the GitHub UI) **before the bootstrap PR is opened**. `dco.yml` (`require: members: false`, design D10) is already on the default branch of `troupe-run/.github`, the org-wide fallback the app reads when a repo has none; the app is installed on both repos. Verify both paths: the bootstrap PR's commits (signed by an org member, no sign-off) pass, and a throwaway PR with an unsigned commit and no sign-off fails until it's amended with `git commit -s`. If the member path fails because the owner's org membership is private, record it and decide with the owner: make the membership public, or sign off anyway. Making the check required is a ruleset in #19
+- [x] 7.3 Update `README.md` with what troupe is (site wording), status (pre-alpha), licence, and links to the org contributing guide and the roadmap project
 
 ## Workflow follow-up
 
