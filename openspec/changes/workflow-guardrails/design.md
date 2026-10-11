@@ -201,8 +201,12 @@ be re-checked on GitHub.
 - **Server-side push rejection isn't available on our plan.** A probe on 2026-10-11 used a scratch public repo in
   the free-plan `troupe-run` org. It created an active `commit_message_pattern` ruleset on all branches, which
   GitHub accepted ("bypass: never"), and then pushed non-conforming commits to a new branch, to an existing branch,
-  and to `main`. **All three were accepted:** the rule is stored but not enforced. GitHub Enterprise would be needed
-  for metadata rules or pre-receive hooks. This is recorded so it isn't retried by accident.
+  and to `main`. **All three were accepted:** the rule is stored but not enforced. A second probe the same day, in
+  the GitHub Team org `hpsgd`, repeated it on a private and a public repository: both accepted a non-conforming
+  push to `main` and to a new branch, while a branch-deletion rule in the same private repository refused a
+  deletion. So Team enforces rulesets but not metadata rules, and moving the project to a paid Team org wouldn't
+  close the gap. GitHub Enterprise would be needed for metadata rules or pre-receive hooks. This is recorded so it
+  isn't retried by accident.
 - **`guard.py ci`** applies the same rule functions to a range of commits: every message; the branch-change match
   (skipped on `main`); and archived changes touched in the range. A `guard` workflow runs it on every push to every
   branch and on every pull request. A bad push then shows red within a minute, and #19 makes the check required, so
