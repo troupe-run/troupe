@@ -27,7 +27,7 @@
 - [x] 4.3 Implement lock-file locks (`flock` on POSIX, `msvcrt.locking` on Windows) with announce callback, timeout and nested-acquisition refusal (design D6), with defaults in `troupe.core.defaults`; verify "Lock held by another process" (second process, short timeouts), "Timeout comes from a named setting" and "Nested acquisition"
 - [x] 4.4 Implement friendly path display with the platform separator (design D5a); verify the three path scenarios plus a hypothesis test that the output is never relative and starts with `~` plus the separator exactly when the path is under home
 - [x] 4.5 Implement the bounded, announced retry when the replace target is held open (design D5); verify "Target held open by another process" on Windows by holding the file open from a second process, and confirm the test isn't skipped on any platform where the condition can be produced
-- [ ] 4.6 Verify "The same tests pass on every platform": run the platform suite on a Windows machine locally (owner's session) as well as in CI, and check `pytest -rs` reports no skips for a missing platform implementation on any of the three
+- [x] 4.6 Verify "The same tests pass on every platform": run the platform suite on a Windows machine locally (owner's session) as well as in CI, and check `pytest -rs` reports no skips for a missing platform implementation on any of the three (done 2026-10-11: `scripts/check.py` passed on the owner's Windows machine after renormalising a checkout made from `main`; the suite has no skip paths)
 - [x] 4.7 Document the platform seam (what lives there, how each platform differs inside it, the NFS limitation) in `docs/platform.md`
 
 ## 5. Import contracts
