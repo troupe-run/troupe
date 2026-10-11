@@ -30,7 +30,7 @@ These run from a terminal in `~/Projects/troupe/`, with no Claude Code session o
 - [x] 4.2 Back up `~/.claude-troupe/.claude.json` and `~/.claude-troupe/history.jsonl`, then `mv ~/Projects/troupe/troupe.run ~/Projects/troupe/troupe` and `mv ~/.claude-troupe/projects/-Users-martin-Projects-troupe-troupe-run ~/.claude-troupe/projects/-Users-martin-Projects-troupe-troupe`; verify the old paths no longer exist and the new ones do
 - [x] 4.3 Rewrite the old folder path to the new one: the `projects` key in `.claude.json`, and the `project` field of each `history.jsonl` entry; verify both files still parse as JSON/JSONL, `.claude.json` has a `projects["/Users/martin/Projects/troupe/troupe"]` entry with the old entry's `allowedTools` and `hasTrustDialogAccepted`, and no entry or line names the old path
 - [x] 4.4 Rebuild the virtual environment in the new folder (`rm -rf .venv && uv sync`); verify `head -1 .venv/bin/troupe` names the new path and `uv run scripts/check.py` passes
-- [ ] 4.5 Start Claude Code in `~/Projects/troupe/troupe` and verify: there's no trust prompt, the memory index loads (the decisions memory is in context), earlier sessions are listed in `/resume`, and `git remote -v` shows `troupe-run/troupe`
+- [x] 4.5 Start Claude Code in `~/Projects/troupe/troupe` and verify: there's no trust prompt, the memory index loads (the decisions memory is in context), earlier sessions are listed in `/resume`, and `git remote -v` shows `troupe-run/troupe`
 
 ## Workflow follow-up
 
