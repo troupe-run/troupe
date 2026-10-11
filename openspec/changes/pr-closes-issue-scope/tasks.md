@@ -2,7 +2,7 @@
 
 ## 1. Reproduce the bug
 
-- [ ] 1.1 Add failing tests to `scripts/tests/test_guard_claude.py` for the new scenarios, run against a temporary repository (`make_repo`) whose `origin` is `git@github.com:troupe-run/troupe.git`. Each uses a description that closes no issue:
+- [x] 1.1 Add failing tests to `scripts/tests/test_guard_claude.py` for the new scenarios, run against a temporary repository (`make_repo`) whose `origin` is `git@github.com:troupe-run/troupe.git`. Each uses a description that closes no issue:
   - `--repo troupe-run/.github`, `-R troupe-run/troupe-run.github.io`, `--repo=troupe-run/.github` and `GH_REPO=troupe-run/.github gh pr create ...`: allowed;
   - `--repo troupe-run/troupe`, `--repo TROUPE-RUN/Troupe`, `--repo github.com/troupe-run/troupe` and `--repo https://github.com/troupe-run/troupe.git`: refused with `pr-closes-issue`;
   - an unrecognisable `--repo` value, and a repository with no remotes: refused.
@@ -10,8 +10,8 @@
 
 ## 2. Scope the rule to this repository
 
-- [ ] 2.1 Implement repository-name normalisation (design decision 3) with a test per accepted form: `OWNER/REPO`, `HOST/OWNER/REPO`, `https://` with and without `.git`, `git@HOST:OWNER/REPO.git`, `ssh://git@HOST/OWNER/REPO.git`, and a few rejected values. Add a hypothesis test that any generated owner/name, in each form, normalises to the same triple. Verify with `uv run pytest scripts/tests/test_guard_claude.py`
-- [ ] 2.2 Resolve the PR's target in `pr_closes_issue` (design decisions 1, 2 and 4): `-R`/`--repo`/`--repo=`, then a leading `GH_REPO=`, then the environment's `GH_REPO`, comparing against every remote of the repository from `cwd`. Pass the remotes in rather than reading them per word. Verify the section 1 tests and the existing `pr-closes-issue` tests all pass, including a test that `GH_REPO` in the environment is honoured (via `monkeypatch`) and that `--repo` beats `GH_REPO`
+- [x] 2.1 Implement repository-name normalisation (design decision 3) with a test per accepted form: `OWNER/REPO`, `HOST/OWNER/REPO`, `https://` with and without `.git`, `git@HOST:OWNER/REPO.git`, `ssh://git@HOST/OWNER/REPO.git`, and a few rejected values. Add a hypothesis test that any generated owner/name, in each form, normalises to the same triple. Verify with `uv run pytest scripts/tests/test_guard_claude.py`
+- [x] 2.2 Resolve the PR's target in `pr_closes_issue` (design decisions 1, 2 and 4): `-R`/`--repo`/`--repo=`, then a leading `GH_REPO=`, then the environment's `GH_REPO`, comparing against every remote of the repository from `cwd`. Pass the remotes in rather than reading them per word. Verify the section 1 tests and the existing `pr-closes-issue` tests all pass, including a test that `GH_REPO` in the environment is honoured (via `monkeypatch`) and that `--repo` beats `GH_REPO`
 - [ ] 2.3 Add a test of the Claude hook entry point: real-shaped PreToolUse JSON for `gh pr create --repo troupe-run/.github --title t --body 'Updates a link.'` from a repository whose `origin` is troupe produces no deny, and the same command without `--repo` produces the `pr-closes-issue` deny. Verify it passes
 - [ ] 2.4 Update the `pr-closes-issue` row in `docs/development-workflow.md` to say it covers PRs into this repository, named by `--repo`/`-R` or `GH_REPO` or by default, and that an unrecognised target counts as this one. Verify `uv run pytest scripts/tests/test_guard_docs.py` passes and the row reads correctly in the rendered table
 
