@@ -8,7 +8,9 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
-from conftest import SCRIPTS, Repo, clean_env
+from conftest import SCRIPTS, Repo, clean_env, git
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
 
 import guard
 
@@ -134,6 +136,192 @@ def test_a_body_file_is_read_relative_to_the_working_directory(tmp_path: Path) -
     bad = guard.shell_decisions("gh pr create --body-file=bad.md", tmp_path)
     assert not any(d.refused for d in good)
     assert "pr-closes-issue" in {d.rule for d in bad}
+
+
+# pr-closes-issue covers PRs into this repository only (#28)
+
+TROUPE_ORIGIN = "git@github.com:troupe-run/troupe.git"
+NO_CLOSE = "--title t --body 'Updates a link.'"
+
+
+@pytest.fixture(autouse=True)
+def no_gh_repo(monkeypatch: pytest.MonkeyPatch) -> None:
+    """GH_REPO in the developer's shell mustn't change what these tests check."""
+    monkeypatch.delenv("GH_REPO", raising=False)
+
+
+@pytest.fixture
+def troupe_clone(make_repo: Callable[[], Repo]) -> Repo:
+    repo = make_repo()
+    git(repo.path, "remote", "add", "origin", TROUPE_ORIGIN)
+    return repo
+
+
+def pr_rules(command: str, cwd: Path) -> set[str | None]:
+    return {d.rule for d in guard.shell_decisions(command, cwd)}
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        f"gh pr create --repo troupe-run/.github {NO_CLOSE}",
+        f"gh pr create -R troupe-run/troupe-run.github.io {NO_CLOSE}",
+        f"gh pr create --repo=troupe-run/.github {NO_CLOSE}",
+        f"GH_REPO=troupe-run/.github gh pr create {NO_CLOSE}",
+    ],
+)
+def test_a_pr_into_another_repository_that_closes_no_issue_is_allowed(
+    troupe_clone: Repo, command: str
+) -> None:
+    assert "pr-closes-issue" not in pr_rules(command, troupe_clone.path)
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        "troupe-run/troupe",
+        "TROUPE-RUN/Troupe",
+        "github.com/troupe-run/troupe",
+        "https://github.com/troupe-run/troupe.git",
+    ],
+)
+def test_a_pr_naming_this_repository_that_closes_no_issue_is_refused(
+    troupe_clone: Repo, target: str
+) -> None:
+    command = f"gh pr create --repo {target} {NO_CLOSE}"
+    assert "pr-closes-issue" in pr_rules(command, troupe_clone.path)
+
+
+@pytest.mark.parametrize("target", ["not a repo", "troupe", "a/b/c/d", "ftp://x/y/z", ""])
+def test_a_pr_with_an_unrecognisable_target_is_refused(troupe_clone: Repo, target: str) -> None:
+    command = f"gh pr create --repo '{target}' {NO_CLOSE}"
+    assert "pr-closes-issue" in pr_rules(command, troupe_clone.path)
+
+
+def test_a_pr_from_a_repository_with_no_remotes_is_refused(make_repo: Callable[[], Repo]) -> None:
+    command = f"gh pr create --repo troupe-run/.github {NO_CLOSE}"
+    assert "pr-closes-issue" in pr_rules(command, make_repo().path)
+
+
+def test_gh_repo_in_the_environment_names_the_target(
+    troupe_clone: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("GH_REPO", "troupe-run/.github")
+    assert "pr-closes-issue" not in pr_rules(f"gh pr create {NO_CLOSE}", troupe_clone.path)
+
+
+def test_repo_flag_beats_gh_repo_in_the_environment(
+    troupe_clone: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("GH_REPO", "troupe-run/.github")
+    command = f"gh pr create --repo troupe-run/troupe {NO_CLOSE}"
+    assert "pr-closes-issue" in pr_rules(command, troupe_clone.path)
+
+
+def test_repo_flag_beats_gh_repo_set_for_the_command(troupe_clone: Repo) -> None:
+    command = f"GH_REPO=troupe-run/.github gh pr create -R troupe-run/troupe {NO_CLOSE}"
+    assert "pr-closes-issue" in pr_rules(command, troupe_clone.path)
+
+
+def test_gh_repo_set_for_the_command_beats_the_environment(
+    troupe_clone: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("GH_REPO", "troupe-run/.github")
+    command = f"GH_REPO=troupe-run/troupe gh pr create {NO_CLOSE}"
+    assert "pr-closes-issue" in pr_rules(command, troupe_clone.path)
+
+
+def test_a_repo_flag_inside_the_body_isn_t_read_as_the_target(troupe_clone: Repo) -> None:
+    command = "gh pr create --title t --body '--repo' --head x"
+    assert "pr-closes-issue" in pr_rules(command, troupe_clone.path)
+    command = "gh pr create --title '-Rtroupe-run/.github' --body 'Updates a link.'"
+    assert "pr-closes-issue" in pr_rules(command, troupe_clone.path)
+
+
+def test_a_pr_into_the_upstream_of_a_fork_s_clone_is_checked(
+    make_repo: Callable[[], Repo],
+) -> None:
+    repo = make_repo()
+    git(repo.path, "remote", "add", "origin", "https://github.com/someone/troupe.git")
+    git(repo.path, "remote", "add", "upstream", TROUPE_ORIGIN)
+    for target in ("someone/troupe", "troupe-run/troupe"):
+        command = f"gh pr create --repo {target} {NO_CLOSE}"
+        assert "pr-closes-issue" in pr_rules(command, repo.path)
+    assert "pr-closes-issue" not in pr_rules(
+        f"gh pr create --repo troupe-run/.github {NO_CLOSE}", repo.path
+    )
+
+
+def test_a_pr_from_outside_any_repository_naming_a_target_is_refused(tmp_path: Path) -> None:
+    command = f"gh pr create --repo troupe-run/.github {NO_CLOSE}"
+    assert "pr-closes-issue" in pr_rules(command, tmp_path / "missing")
+
+
+# Repository-name normalisation (design decision 3)
+
+TROUPE = ("github.com", "troupe-run", "troupe")
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "troupe-run/troupe",
+        "github.com/troupe-run/troupe",
+        "https://github.com/troupe-run/troupe",
+        "https://github.com/troupe-run/troupe.git",
+        "https://github.com/troupe-run/troupe/",
+        "git@github.com:troupe-run/troupe.git",
+        "ssh://git@github.com/troupe-run/troupe.git",
+        "ssh://git@github.com:22/troupe-run/troupe.git",
+        "  Troupe-Run/TROUPE.git  ",
+    ],
+)
+def test_each_accepted_form_normalises_to_host_owner_name(name: str) -> None:
+    assert guard.normalise_repository(name) == TROUPE
+
+
+def test_a_host_other_than_github_is_kept() -> None:
+    assert guard.normalise_repository("ghe.example.com/a/b") == ("ghe.example.com", "a", "b")
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "",
+        "troupe",
+        "a/b/c/d",
+        "not a repo",
+        "ftp://github.com/a/b",
+        "https://github.com/a/b/pull/3",
+        "https://github.com/a",
+        "../b",
+        "a/..",
+        "/a/b",
+    ],
+)
+def test_an_unrecognisable_name_normalises_to_none(name: str) -> None:
+    assert guard.normalise_repository(name) is None
+
+
+REPO_NAME = st.text(alphabet=st.sampled_from("abcXYZ019_.-"), min_size=1, max_size=20).filter(
+    lambda part: part not in (".", "..") and not part.lower().endswith(".git")
+)
+
+
+@settings(suppress_health_check=[HealthCheck.function_scoped_fixture])  # no_gh_repo is harmless
+@given(owner=REPO_NAME, name=REPO_NAME)
+def test_any_owner_and_name_normalise_the_same_in_every_form(owner: str, name: str) -> None:
+    forms = [
+        f"{owner}/{name}",
+        f"github.com/{owner}/{name}",
+        f"GitHub.com/{owner}/{name}",
+        f"https://github.com/{owner}/{name}",
+        f"https://github.com/{owner}/{name}.git",
+        f"git@github.com:{owner}/{name}.git",
+        f"ssh://git@github.com/{owner}/{name}.git",
+    ]
+    expected = ("github.com", owner.lower(), name.lower())
+    assert {guard.normalise_repository(form) for form in forms} == {expected}
 
 
 # Task 3.4: edit-branch-change

@@ -494,11 +494,94 @@ def skip_hooks(words: Sequence[str]) -> Decision:
     return ALLOW
 
 
+REPO_PART = re.compile(r"[\w.-]+")
+REPO_URL = re.compile(r"(?:https|ssh)://(?:[^@/]+@)?([^@/:]+)(?::\d+)?/(.+)")
+REPO_SCP = re.compile(r"[^@/:]+@([^@/:]+):(.+)")
+GH_PR_CREATE_VALUE_FLAGS = frozenset(
+    {
+        "-a", "--assignee", "-B", "--base", "-b", "--body", "-F", "--body-file", "-H", "--head",
+        "-l", "--label", "-m", "--milestone", "-p", "--project", "-R", "--repo", "--recover",
+        "-r", "--reviewer", "-T", "--template", "-t", "--title",
+    }
+)  # fmt: skip
+"""gh pr create's flags that take the next word as their value, so it isn't read as a flag."""
+
+
+def normalise_repository(name: str) -> tuple[str, str, str] | None:
+    """A repository name or remote URL as (host, owner, name), lower-cased; None if unrecognised.
+
+    Accepts what gh accepts for --repo (OWNER/REPO, HOST/OWNER/REPO, an https:// URL) and the
+    SSH forms a remote may use (git@HOST:OWNER/REPO, ssh://git@HOST/OWNER/REPO). A trailing
+    .git and / are dropped, and a name without a host means github.com (design decision 3).
+    """
+    text = name.strip().lower().rstrip("/").removesuffix(".git")
+    host: str | None = None
+    if match := REPO_URL.fullmatch(text) or REPO_SCP.fullmatch(text):
+        host, text = match.group(1), match.group(2)
+    parts = text.split("/")
+    if host is None and len(parts) == 3:
+        host, parts = parts[0], parts[1:]
+    if len(parts) != 2 or not all(
+        REPO_PART.fullmatch(part) and part not in (".", "..")
+        for part in (*parts, *([] if host is None else [host]))
+    ):
+        return None
+    return (host or "github.com", parts[0], parts[1])
+
+
+def remote_urls(cwd: Path) -> list[str]:
+    """The fetch and push URLs of every remote of the repository at cwd; empty if there's none."""
+    try:
+        listing = git(cwd, "remote", "-v", check=False)
+    except OSError:
+        return []
+    return [fields[1] for line in listing.splitlines() if len(fields := line.split()) >= 2]
+
+
+def pr_target(words: Sequence[str], args: Sequence[str]) -> str | None:
+    """The repository a gh pr create names, in gh's order: -R/--repo, then GH_REPO set for the
+    command, then GH_REPO in the environment. None when it names none (design decision 1)."""
+    target: str | None = None
+    index = 0
+    while index < len(args):
+        word = args[index]
+        name, equals, inline = word.partition("=")
+        if name in ("-R", "--repo"):
+            target = inline if equals else (args[index + 1] if index + 1 < len(args) else "")
+        elif word.startswith("-R") and not equals:
+            target = word[2:]
+        if not equals and word in GH_PR_CREATE_VALUE_FLAGS:
+            index += 1
+        index += 1
+    if target is not None:
+        return target
+    for word in words:
+        variable, equals, value = word.partition("=")
+        if not equals or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", variable):
+            break
+        if variable == "GH_REPO":
+            target = value
+    return target if target is not None else os.environ.get("GH_REPO")
+
+
+def targets_this_repository(target: str | None, remotes: Iterable[str]) -> bool:
+    """Whether a PR's target is this repository. A target that isn't named or can't be read, or
+    a clone with no readable remote, counts as this repository (design decisions 2 and 4)."""
+    if target is None:
+        return True
+    named = normalise_repository(target)
+    ours = {repository for url in remotes if (repository := normalise_repository(url))}
+    return named is None or not ours or named in ours
+
+
 def pr_closes_issue(words: Sequence[str], cwd: Path) -> Decision:
     program, args = _program(words)
     if program != "gh" or args[:2] != ["pr", "create"]:
         return ALLOW
     rest = args[2:]
+    target = pr_target(words, rest)
+    if not targets_this_repository(target, remote_urls(cwd) if target is not None else ()):
+        return ALLOW
     body: str | None = None
     problem = "the pull request's description doesn't close an issue."
     fix = "Add a line like 'Closes #22' to the description (--body or --body-file)."
