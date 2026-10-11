@@ -26,7 +26,7 @@
 
 These run from a terminal in `~/Projects/troupe/`, with no Claude Code session open in the clone (design decision 5).
 
-- [ ] 4.1 Update the memory's text: in `~/.claude-troupe/projects/-Users-martin-Projects-troupe-troupe-run/memory/`, change `troupe-run/troupe.run` to `troupe-run/troupe` (and "troupe.run's open design questions" to "troupe's") in `MEMORY.md` and `troupe-decisions-live-in-github-issues.md`; verify `grep -rn "troupe\.run" memory/` returns nothing
+- [x] 4.1 Update the memory's text: in `~/.claude-troupe/projects/-Users-martin-Projects-troupe-troupe-run/memory/`, change `troupe-run/troupe.run` to `troupe-run/troupe` (and "troupe.run's open design questions" to "troupe's") in `MEMORY.md` and `troupe-decisions-live-in-github-issues.md`; verify `grep -rn "troupe\.run" memory/` returns nothing
 - [ ] 4.2 Back up `~/.claude-troupe/.claude.json` and `~/.claude-troupe/history.jsonl`, then `mv ~/Projects/troupe/troupe.run ~/Projects/troupe/troupe` and `mv ~/.claude-troupe/projects/-Users-martin-Projects-troupe-troupe-run ~/.claude-troupe/projects/-Users-martin-Projects-troupe-troupe`; verify the old paths no longer exist and the new ones do
 - [ ] 4.3 Rewrite the old folder path to the new one: the `projects` key in `.claude.json`, and the `project` field of each `history.jsonl` entry; verify both files still parse as JSON/JSONL, `.claude.json` has a `projects["/Users/martin/Projects/troupe/troupe"]` entry with the old entry's `allowedTools` and `hasTrustDialogAccepted`, and no entry or line names the old path
 - [ ] 4.4 Rebuild the virtual environment in the new folder (`rm -rf .venv && uv sync`); verify `head -1 .venv/bin/troupe` names the new path and `uv run scripts/check.py` passes
