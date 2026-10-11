@@ -2,16 +2,16 @@
 
 ## 1. Guard module foundation
 
-- [ ] 1.1 Create `scripts/guard.py` with the decision type (allow, or refuse with rule id, problem and fix), the rule-id list (design D7), the fact-gathering helpers (current branch including during a rebase, matching change per design D3, repo root), and a CLI dispatching to the entry points; add `scripts/tests/` to pytest `testpaths`; verify `uv run scripts/check.py` passes and `uv run --no-sync python scripts/guard.py --help` lists the entry points
-- [ ] 1.2 Implement and test the matching-change helper: active change, archived-on-branch change (`archive/<date>-<branch>`), no change, `main`, and a branch read during a rebase; verify each case with a test in a temporary git repository
+- [x] 1.1 Create `scripts/guard.py` with the decision type (allow, or refuse with rule id, problem and fix), the rule-id list (design D7), the fact-gathering helpers (current branch including during a rebase, matching change per design D3, repo root), and a CLI dispatching to the entry points; add `scripts/tests/` to pytest `testpaths`; verify `uv run scripts/check.py` passes and `uv run --no-sync python scripts/guard.py --help` lists the entry points
+- [x] 1.2 Implement and test the matching-change helper: active change, archived-on-branch change (`archive/<date>-<branch>`), no change, `main`, and a branch read during a rebase; verify each case with a test in a temporary git repository
 
 ## 2. Git-level rules (git hooks)
 
-- [ ] 2.1 Implement `commit-message` (design D5) with tests: accepted types with and without scope and `!`, autosquash prefixes, unknown type, missing type, `Revert "…"`, merge message; add a hypothesis test that any generated `type(scope): subject` from the accepted set is accepted and any first line without `: ` is refused
-- [ ] 2.2 Implement `commit-on-main`, `commit-branch-change` and `archive-incomplete` with tests, including an archived change with one unticked task (the message names the change and the task)
-- [ ] 2.3 Implement `commit-checks` (design D4): refuse when a tracked file has unstaged changes, otherwise run `scripts/check.py` and refuse naming the failing gate; test both paths with a stub check script in a temporary repository
-- [ ] 2.4 Add `.githooks/pre-commit` and `.githooks/commit-msg` shims (design D1) and test them end to end in a temporary git repository with `core.hooksPath` set: a commit on `main` is refused, a non-conventional message is refused, a commit on a matching branch with a conventional message and a passing stub check is made, and each refusal leaves no commit
-- [ ] 2.5 Document the git hooks and the one-time `git config core.hooksPath .githooks` in the README's Development section; verify the documented command activates them in a fresh clone
+- [x] 2.1 Implement `commit-message` (design D5) with tests: accepted types with and without scope and `!`, autosquash prefixes, unknown type, missing type, `Revert "…"`, merge message; add a hypothesis test that any generated `type(scope): subject` from the accepted set is accepted and any first line without `: ` is refused
+- [x] 2.2 Implement `commit-on-main`, `commit-branch-change` and `archive-incomplete` with tests, including an archived change with one unticked task (the message names the change and the task)
+- [x] 2.3 Implement `commit-checks` (design D4): refuse when a tracked file has unstaged changes, otherwise run `scripts/check.py` and refuse naming the failing gate; test both paths with a stub check script in a temporary repository
+- [x] 2.4 Add `.githooks/pre-commit` and `.githooks/commit-msg` shims (design D1) and test them end to end in a temporary git repository with `core.hooksPath` set: a commit on `main` is refused, a non-conventional message is refused, a commit on a matching branch with a conventional message and a passing stub check is made, and each refusal leaves no commit
+- [x] 2.5 Document the git hooks and the one-time `git config core.hooksPath .githooks` in the README's Development section; verify the documented command activates them in a fresh clone
 
 ## 3. Claude Code rules (PreToolUse)
 

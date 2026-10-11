@@ -1,0 +1,3 @@
+#!/bin/sh
+# Workflow guardrails (docs/development-workflow.md). The rules live in scripts/guard.py.
+exec uv run --quiet --no-project python "$(git rev-parse --show-toplevel)/scripts/guard.py" commit-msg "$1"
