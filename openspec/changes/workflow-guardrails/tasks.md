@@ -12,6 +12,7 @@
 - [x] 2.3 Implement `commit-checks` (design D4): refuse when a tracked file has unstaged changes, otherwise run `scripts/check.py` and refuse naming the failing gate; test both paths with a stub check script in a temporary repository
 - [x] 2.4 Add `.githooks/pre-commit` and `.githooks/commit-msg` shims (design D1) and test them end to end in a temporary git repository with `core.hooksPath` set: a commit on `main` is refused, a non-conventional message is refused, a commit on a matching branch with a conventional message and a passing stub check is made, and each refusal leaves no commit
 - [x] 2.5 Document the git hooks and the one-time `git config core.hooksPath .githooks` in the README's Development section; verify the documented command activates them in a fresh clone
+- [x] 2.6 Make the pre-commit check never silent and never endless (found on the owner's Windows machine): announce it, stream its output, and stop it with its process tree after a timeout defined once; verify with tests for the announcement, the streamed lines, and a stub check that sleeps past a short timeout and is refused naming the timeout
 
 ## 3. Claude Code rules (PreToolUse)
 

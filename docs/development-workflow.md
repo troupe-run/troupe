@@ -23,7 +23,7 @@ guard: commit-on-main: commits aren't made on main; work reaches main through a 
 |---|---|---|---|
 | `commit-on-main` | git | a commit with `main` checked out | create a branch named after the change |
 | `commit-branch-change` | git | a commit on a branch with no matching OpenSpec change (active, or archived on that branch), or on a detached HEAD | propose the change, or switch to its branch |
-| `commit-message` | git | a first line that isn't a Conventional Commit (`type(scope)!: subject`); `fixup!`, `squash!` and `amend!` are accepted | use one of `feat fix docs build ci test refactor perf style chore revert` |
+| `commit-message` | git | a first line that isn't a Conventional Commit (`type(scope)!: subject`); `fixup!`, `squash!` and `amend!` are accepted when they name a Conventional Commit subject | use one of `feat fix docs build ci test refactor perf style chore revert` |
 | `commit-checks` | git | a commit while tracked files have unstaged changes, or while `scripts/check.py` fails | stage or stash the changes; fix what the check reports |
 | `archive-incomplete` | git | a commit that adds an archived change with an unticked task | finish and tick every task first |
 | `edit-branch-change` | Claude | an Edit, Write, MultiEdit or NotebookEdit to a repository file when the branch has no matching change | switch to, or create, the change's branch |
@@ -32,8 +32,10 @@ guard: commit-on-main: commits aren't made on main; work reaches main through a 
 | `command-unparseable` | Claude | a `git` or `gh` command that can't be parsed (for example, unbalanced quotes) | simplify the command |
 | `guard-tamper` | Claude | running the override command, naming a path in the override directory, or editing under `.git/`. **No override unlocks this rule.** | ask the owner |
 
-The pre-commit check runs the full `scripts/check.py`, which takes 10–15 seconds at present. It's the same check CI
-runs, so a commit that passes locally passes CI.
+The pre-commit check runs the full `scripts/check.py`. That takes 10–15 seconds on macOS and about a minute on
+Windows, plus a one-time dependency download on a fresh clone. It's the same check CI runs, so a commit that passes
+locally passes CI. The check is announced before it starts, its output streams as it runs, and it's stopped and the
+commit refused after 10 minutes (`CHECK_TIMEOUT_SECONDS` in `scripts/guard.py`).
 
 ## Overrides
 

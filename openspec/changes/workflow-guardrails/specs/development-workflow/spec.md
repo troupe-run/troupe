@@ -58,6 +58,12 @@ committed.
 - **WHEN** a contributor commits while a gate fails
 - **THEN** the commit is refused and the message names the failing gate
 
+#### Scenario: The check is never silent and never endless
+- **WHEN** the check runs before a commit
+- **THEN** it is announced before it starts, and its output appears as it runs
+- **AND** if it is still running after a set timeout (default 10 minutes, defined in one place), it is stopped
+  and the commit is refused with a message naming the timeout
+
 ### Requirement: Archived changes are complete
 A commit that adds or changes an archived OpenSpec change SHALL be refused while that change's task list has an
 unticked task.
