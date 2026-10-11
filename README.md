@@ -31,8 +31,8 @@ git config core.hooksPath .githooks
 ```
 
 They refuse commits on `main`, commits on a branch with no matching OpenSpec change, messages that aren't
-Conventional Commits, and commits whose checks fail. [docs/development-workflow.md](docs/development-workflow.md)
-lists every rule and how an override works.
+Conventional Commits, and commits whose checks fail. The rules are maintained in `troupe-run/infrastructure`, and
+[development-workflow.md](https://github.com/troupe-run/infrastructure/blob/main/docs/development-workflow.md) lists every rule and how an override works.
 
 | Where | What |
 |---|---|

@@ -37,7 +37,8 @@ def activate_git_hooks(root: Path) -> str | None:
     """Turn the repository's git hooks on by default (spec: development-workflow).
 
     Git never runs hooks from a fresh clone, so the project's own tooling turns them on. The
-    logic lives in guard.py, next to the hooks it activates.
+    logic lives in guard.py, next to the hooks it activates. The spec and the guard's source are in
+    troupe-run/infrastructure, which delivers guard.py here.
     """
     if not (root / ".git").exists():
         return None  # not a git checkout (for example, an unpacked source archive)
