@@ -21,8 +21,9 @@ Commits are Conventional Commits (`feat(cli): ...`), signed, and `uv run scripts
 
 ## Guardrails
 
-Git hooks and Claude Code hooks enforce the path above. [docs/development-workflow.md](docs/development-workflow.md)
-lists every rule. When one refuses an action:
+Git hooks and Claude Code hooks enforce the path above. They're maintained in `troupe-run/infrastructure`, and
+[development-workflow.md](https://github.com/troupe-run/infrastructure/blob/main/docs/development-workflow.md) lists every rule. When one refuses
+an action:
 
 - **Follow its fix.** Don't look for another route to the same action. The hooks aren't a security boundary, so
   getting round one is possible, and it's exactly the shortcut they exist to stop.
