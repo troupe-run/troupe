@@ -30,7 +30,7 @@
 
 ## 5. Session start and CLAUDE.md
 
-- [ ] 5.1 Implement `claude-session-start` (design D8): set `core.hooksPath` when it isn't `.githooks` and say so, then return the workflow and branch/change status as `additionalContext`; test with a temporary repository in both states
+- [x] 5.1 Implement `claude-session-start` (design D8): set `core.hooksPath` when it isn't `.githooks` and say so, then return the workflow and branch/change status as `additionalContext`; test with a temporary repository in both states
 - [ ] 5.2 Write the project `CLAUDE.md` (design D9); verify a new session in this repository loads it, and receives the session-start context on its first turn
 
 ## 6. Integration
@@ -38,7 +38,7 @@
 - [ ] 6.1 Run the full check on Linux, macOS and Windows in CI; verify every job passes, including the guard tests that make real commits in temporary repositories on Windows
 - [ ] 6.2 Run the guard tests on the owner's Windows machine, in a Claude Code session there, and confirm a refused edit and a refused `--no-verify` behave as on macOS
 - [ ] 6.3 Verify whether a PreToolUse deny applies in `bypassPermissions` mode by attempting a refused edit in that mode; record the result in `docs/development-workflow.md` and in the design's open question
-- [ ] 6.4 Write `docs/development-workflow.md`: every rule (id, what it refuses, fix), how to grant an override and read the log, and the known gaps (not a security boundary, `gh api` PRs, the bypass-mode result); verify every rule id in it matches the guard module's list with a test
+- [x] 6.4 Write `docs/development-workflow.md`: every rule (id, what it refuses, fix), how to grant an override and read the log, and the known gaps (not a security boundary, `gh api` PRs, the bypass-mode result); verify every rule id in it matches the guard module's list with a test
 
 ## Workflow follow-up
 
