@@ -11,6 +11,6 @@ Language-neutral contracts between troupe and everything that talks to it: the C
 ## Source of truth
 
 The JSON Schema here is the source of truth (decision
-[#7](https://github.com/troupe-run/troupe.run/issues/7)). Once there is enough schema to justify a generator,
+[#7](https://github.com/troupe-run/troupe/issues/7)). Once there is enough schema to justify a generator,
 Python types are generated from it. Until then, the Python types that mirror a schema are checked against it by
 tests, so the two can't drift.

@@ -1,4 +1,4 @@
-# troupe.run
+# troupe
 
 troupe runs a development process with agents and people in named roles. This repository is the app: see
 [README.md](README.md) for the layout and [openspec/config.yaml](openspec/config.yaml) for the constraints every

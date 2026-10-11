@@ -50,7 +50,7 @@ implementation. The rename is outward-facing, so the owner confirms it at that s
 
 `test_a_pr_body_referring_to_another_repository_s_issue_is_allowed` uses `troupe-run/troupe.run#22`, which is *this*
 repo, so its name claims more than its fixture shows. Swapping in `troupe-run/troupe#22` would keep that flaw.
-Instead it uses `troupe-run/infrastructure#19`, a real issue in a different repo, so the name and the body agree.
+Instead it uses `troupe-run/infrastructure#1`, an issue reference in a repo that really is different, so the name and the body agree. The number is illustrative: the guard parses the reference without calling GitHub, and no other org repo has an issue yet.
 
 ### 3. The website's 16 references all change, the design records included
 
