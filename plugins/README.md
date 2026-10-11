@@ -19,4 +19,4 @@ First-party *in-process* adapters (storage, version control, built-in identity s
 live under [`packages/`](../packages/), because they sit deep in the house and are loaded as Python packages.
 
 The first plugin, a scripted actor runner for deterministic tests, arrives with the walking skeleton (decision
-[#16](https://github.com/troupe-run/troupe.run/issues/16)).
+[#16](https://github.com/troupe-run/troupe/issues/16)).

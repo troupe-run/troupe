@@ -101,7 +101,7 @@ def test_a_pr_body_with_a_closing_keyword_is_allowed(keyword: str) -> None:
 
 
 def test_a_pr_body_referring_to_another_repository_s_issue_is_allowed() -> None:
-    command = "gh pr create --body 'Closes troupe-run/troupe.run#22'"
+    command = "gh pr create --body 'Closes troupe-run/infrastructure#1'"
     assert not any(d.refused for d in guard.shell_decisions(command, Path.cwd()))
 
 

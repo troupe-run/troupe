@@ -146,7 +146,7 @@ def test_an_unexpected_exception_is_reported_as_a_structured_internal_error() ->
     assert code == ExitCode.FAILURE
     assert out == ""
     assert "RuntimeError: boom" in err
-    assert "github.com/troupe-run/troupe.run/issues" in err
+    assert "github.com/troupe-run/troupe/issues" in err
 
 
 @pytest.mark.parametrize(

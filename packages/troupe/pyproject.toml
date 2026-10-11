@@ -10,7 +10,7 @@ dependencies = []
 
 [project.urls]
 Homepage = "https://troupe.run"
-Repository = "https://github.com/troupe-run/troupe.run"
+Repository = "https://github.com/troupe-run/troupe"
 
 [project.scripts]
 troupe = "troupe.cli:main"
