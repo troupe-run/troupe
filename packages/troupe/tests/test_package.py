@@ -9,6 +9,8 @@ def test_installed_version_is_the_one_in_pyproject() -> None:
     assert f'version = "{version("troupe")}"' in pyproject
 
 
-def test_package_licence_is_identical_to_the_repo_licence() -> None:
-    package = (REPO / "packages" / "troupe" / "LICENSE").read_bytes()
-    assert package == (REPO / "LICENSE").read_bytes()
+def test_package_licence_text_is_identical_to_the_repo_licence_text() -> None:
+    # Text, not bytes: a checkout made before .gitattributes existed can hold one copy with CRLF
+    # line endings, and line endings aren't what this test protects.
+    package = (REPO / "packages" / "troupe" / "LICENSE").read_text(encoding="utf-8")
+    assert package == (REPO / "LICENSE").read_text(encoding="utf-8")
