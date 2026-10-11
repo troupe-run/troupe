@@ -5,14 +5,14 @@
 - [x] 1.1 Point `BUG_REPORT_URL` (`packages/troupe/src/troupe/core/errors.py`) at `https://github.com/troupe-run/troupe/issues` and update `test_an_unexpected_exception_is_reported_as_a_structured_internal_error` in `packages/troupe/tests/test_cli.py` to expect `github.com/troupe-run/troupe/issues`; verify that test passes and fails against the old URL
 - [x] 1.2 Set `Repository = "https://github.com/troupe-run/troupe"` in `packages/troupe/pyproject.toml`, leaving `Homepage` as `https://troupe.run`; verify `uv build --package troupe` succeeds and the built wheel's `METADATA` lists the new `Project-URL: Repository`
 - [x] 1.3 Change the guard fixture in `test_a_pr_body_referring_to_another_repository_s_issue_is_allowed` (`scripts/tests/test_guard_claude.py`) to `Closes troupe-run/infrastructure#1` (design decision 2); verify the guard tests pass
-- [ ] 1.4 Update the repo links in `packages/troupe/README.md`, `plugins/README.md` (#16) and `protocol/README.md` (#7) to `github.com/troupe-run/troupe`, and retitle `CLAUDE.md` to `# troupe`; verify the links resolve once the repo is renamed (2.3)
+- [x] 1.4 Update the repo links in `packages/troupe/README.md`, `plugins/README.md` (#16) and `protocol/README.md` (#7) to `github.com/troupe-run/troupe`, and retitle `CLAUDE.md` to `# troupe`; verify the links resolve once the repo is renamed (2.3)
 - [x] 1.5 Verify nothing live still names the old repo: `git grep -n "troupe-run/troupe\.run\|troupe\.run\.git" -- ':!openspec/changes/archive' ':!openspec/changes/rename-repo'` returns nothing, and the remaining `troupe\.run` hits are only the domain (`https://troupe.run`); then `uv run scripts/check.py` passes and the work is committed
 
 ## 2. Rename on GitHub and open the PR
 
-- [ ] 2.1 With the owner's go-ahead, rename the repo: `gh repo rename troupe --repo troupe-run/troupe.run --yes`; verify `gh repo view troupe-run/troupe --json id` returns `R_kgDOVEZa3g`
-- [ ] 2.2 Set the clone's remote: `git remote set-url origin git@github.com:troupe-run/troupe.git`; verify `git remote -v` shows the new URL and `git ls-remote origin main` succeeds
-- [ ] 2.3 Verify the new URLs resolve directly, with no redirect: `curl -sI https://github.com/troupe-run/troupe` and `.../troupe/issues` both return `200`
+- [x] 2.1 With the owner's go-ahead, rename the repo: `gh repo rename troupe --repo troupe-run/troupe.run --yes`; verify `gh repo view troupe-run/troupe --json id` returns `R_kgDOVEZa3g`
+- [x] 2.2 Set the clone's remote: `git remote set-url origin git@github.com:troupe-run/troupe.git`; verify `git remote -v` shows the new URL and `git ls-remote origin main` succeeds
+- [x] 2.3 Verify the new URLs resolve directly, with no redirect: `curl -sI https://github.com/troupe-run/troupe` and `.../troupe/issues` both return `200`
 - [ ] 2.4 Push the branch and open the PR with `Closes #26`; verify every CI job passes on Linux, macOS and Windows
 - [ ] 2.5 Confirm both Apps still cover the repo: `gh api user/installations/170159387/repositories` (DCO) and `.../170224209/repositories` (`troupe-run-infrastructure`) each list `troupe-run/troupe`, and the DCO check appears on the PR
 
