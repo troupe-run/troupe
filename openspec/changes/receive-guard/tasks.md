@@ -2,7 +2,7 @@
 
 ## 1. Remove troupe's copy
 
-- [ ] 1.1 Delete `scripts/tests/test_guard_*.py` and `docs/development-workflow.md`. Verify: `uv run scripts/check.py`
+- [x] 1.1 Delete `scripts/tests/test_guard_*.py` and `docs/development-workflow.md`. Verify: `uv run scripts/check.py`
   passes, and `test_check_activation.py` still runs.
 - [ ] 1.2 Point `CLAUDE.md`, `README.md` and `scripts/check.py`'s docstring at
   `troupe-run/infrastructure`'s rules doc and spec. Verify: `grep -rn "docs/development-workflow.md"` outside
