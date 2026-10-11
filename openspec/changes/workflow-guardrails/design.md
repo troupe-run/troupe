@@ -105,6 +105,14 @@ work being committed", pre-commit refuses when a tracked file has unstaged chang
 stash them. Untracked files are ignored. Checking out the index into a temporary directory would be exact, but means
 a fresh `uv sync` on every commit, which is too slow. Rejected.
 
+**The check is announced, streamed and bounded.** Found on the owner's Windows machine: the first version captured
+the check's output, so a first-time `uv` sync plus a minute-long Windows check sat silent and looked hung. That
+breaks "never wait silently or indefinitely". The check is now:
+- announced on stderr before it starts;
+- streamed line by line as it runs;
+- stopped, with its whole process tree, after `CHECK_TIMEOUT_SECONDS` (600, defined once in `guard.py`). A
+  stopped check refuses the commit with a message naming the timeout.
+
 ### D5. Commit messages
 
 First line:

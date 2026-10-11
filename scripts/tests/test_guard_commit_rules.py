@@ -1,5 +1,7 @@
 """Tasks 2.1-2.3: the git-level rules as pure decisions."""
 
+import io
+import time
 from collections.abc import Callable
 
 import pytest
@@ -65,6 +67,16 @@ def test_any_well_formed_conventional_first_line_is_accepted(
 ) -> None:
     line = f"{kind}{f'({scope})' if scope else ''}{'!' if breaking else ''}: {subject}"
     assert guard.commit_message(line) == guard.ALLOW
+
+
+@pytest.mark.parametrize("message", ["fixup! ", "squash! Add a thing", "fixup! fixup! "])
+def test_an_autosquash_line_must_name_a_conventional_subject(message: str) -> None:
+    """Found by hypothesis: 'fixup! ' alone used to be accepted."""
+    assert guard.commit_message(message).rule == "commit-message"
+
+
+def test_a_fixup_of_a_fixup_of_a_conventional_commit_is_accepted() -> None:
+    assert guard.commit_message("fixup! fixup! feat(cli): add --version") == guard.ALLOW
 
 
 @given(line=st.text(alphabet=st.characters(blacklist_characters=":\n\r#"), min_size=1))
@@ -169,6 +181,41 @@ def test_a_failing_check_is_refused_naming_the_gate(make_repo: Callable[[], Repo
     decision = guard.commit_checks(repo.path)
     assert decision.rule == "commit-checks"
     assert "mypy --strict" in decision.problem
+
+
+def test_the_check_is_announced_and_its_output_streamed(make_repo: Callable[[], Repo]) -> None:
+    """Found on Windows: a captured check sat silent for minutes and looked hung."""
+    repo = make_repo()
+    repo.write("scripts/check.py", 'print("==> ruff lint")\nprint("check: all gates passed")\n')
+    git(repo.path, "add", "-A")
+    progress = io.StringIO()
+    assert guard.commit_checks(repo.path, progress=progress) == guard.ALLOW
+    lines = progress.getvalue().splitlines()
+    assert lines[0].startswith("guard: running scripts/check.py")
+    assert "  | ==> ruff lint" in lines
+    assert lines[-1].startswith("guard: the check passed in")
+
+
+def test_a_check_that_runs_past_the_timeout_is_stopped_and_refused(
+    make_repo: Callable[[], Repo],
+) -> None:
+    repo = make_repo()
+    repo.write("scripts/check.py", 'import time\nprint("==> tests", flush=True)\ntime.sleep(60)\n')
+    git(repo.path, "add", "-A")
+    progress = io.StringIO()
+    started = time.monotonic()
+    decision = guard.commit_checks(repo.path, timeout=3.0, progress=progress)
+    assert time.monotonic() - started < 30
+    assert decision.rule == "commit-checks"
+    assert "still running after 3s" in decision.problem
+    assert "  | ==> tests" in progress.getvalue()
+
+
+def test_the_check_timeout_default_is_defined_once() -> None:
+    import inspect
+
+    default = inspect.signature(guard.commit_checks).parameters["timeout"].default
+    assert default == guard.CHECK_TIMEOUT_SECONDS
 
 
 def test_a_passing_check_with_everything_staged_is_allowed(make_repo: Callable[[], Repo]) -> None:

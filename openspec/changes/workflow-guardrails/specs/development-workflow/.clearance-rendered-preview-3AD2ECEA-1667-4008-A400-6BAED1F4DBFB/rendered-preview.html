@@ -539,6 +539,16 @@ committed.</p>
 <li><p><strong>THEN</strong> the commit is refused and the message names the failing gate</p>
 </li>
 </ul>
+<h4 id="scenario-the-check-is-never-silent-and-never-endless">Scenario: The check is never silent and never endless</h4>
+<ul>
+<li><p><strong>WHEN</strong> the check runs before a commit</p>
+</li>
+<li><p><strong>THEN</strong> it is announced before it starts, and its output appears as it runs</p>
+</li>
+<li><p><strong>AND</strong> if it is still running after a set timeout (default 10 minutes, defined in one place), it is stopped
+and the commit is refused with a message naming the timeout</p>
+</li>
+</ul>
 <h3 id="requirement-archived-changes-are-complete">Requirement: Archived changes are complete</h3>
 <p>A commit that adds or changes an archived OpenSpec change SHALL be refused while that change’s task list has an
 unticked task.</p>

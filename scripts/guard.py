@@ -20,8 +20,11 @@ import json
 import os
 import re
 import shlex
+import signal
 import subprocess
 import sys
+import threading
+import time
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -46,6 +49,9 @@ RULES = (*OVERRIDABLE_RULES, TAMPER_RULE)
 
 HOOKS_PATH = ".githooks"
 GUARD_DIR = "troupe-guard"
+CHECK_TIMEOUT_SECONDS = 600.0
+"""How long the pre-commit check may run before the commit is refused. The default lives here
+only; pass a different value to commit_checks to override it."""
 COMMIT_TYPES = (
     "feat", "fix", "docs", "build", "ci", "test", "refactor", "perf", "style", "chore", "revert",
 )  # fmt: skip
@@ -189,7 +195,11 @@ def commit_branch_change(root: Path, branch: str | None) -> Decision:
 def commit_message(message: str) -> Decision:
     lines = [line for line in message.splitlines() if not line.startswith("#")]
     first = next((line for line in lines if line.strip()), "")
-    if first.startswith(AUTOSQUASH_PREFIXES) or COMMIT_PATTERN.match(first):
+    target = first
+    while target.startswith(AUTOSQUASH_PREFIXES):
+        # git writes "fixup! <subject of the commit being fixed>": that subject must conform too.
+        target = target.split(" ", 1)[1]
+    if COMMIT_PATTERN.match(target):
         return ALLOW
     example = "feat(cli): add --version"
     if first.startswith('Revert "'):
@@ -246,8 +256,30 @@ class ReadStaged:
         return result.stdout if result.returncode == 0 else None
 
 
-def commit_checks(root: Path) -> Decision:
-    """Refuse unless the tracked work equals what's staged and scripts/check.py passes (D4)."""
+def _stop_process_tree(process: subprocess.Popen[str]) -> None:
+    """Stop the check and everything it started (uv, python, pytest's children)."""
+    if process.poll() is not None:
+        return
+    if sys.platform == "win32":
+        subprocess.run(
+            ["taskkill", "/T", "/F", "/PID", str(process.pid)], capture_output=True, check=False
+        )
+    else:
+        os.killpg(process.pid, signal.SIGKILL)
+
+
+def commit_checks(
+    root: Path,
+    *,
+    timeout: float = CHECK_TIMEOUT_SECONDS,
+    progress: TextIO | None = None,
+) -> Decision:
+    """Refuse unless the tracked work equals what's staged and scripts/check.py passes (D4).
+
+    The check never runs silently: it is announced, its output is streamed to ``progress``
+    (stderr by default) as it runs, and it is stopped after ``timeout`` seconds.
+    """
+    out = sys.stderr if progress is None else progress
     unstaged = git(root, "diff", "--name-only")
     if unstaged:
         files = ", ".join(unstaged.splitlines()[:5])
@@ -258,23 +290,56 @@ def commit_checks(root: Path) -> Decision:
             "Stage them (git add) or set them aside (git stash --keep-index), then commit again.",
         )
     check = root / "scripts" / "check.py"
-    result = subprocess.run(
+    print(
+        f"guard: running scripts/check.py, the same check CI runs (gives up after "
+        f"{timeout:.0f}s)...",
+        file=out,
+        flush=True,
+    )
+    started = time.monotonic()
+    process = subprocess.Popen(
         ["uv", "run", "--quiet", str(check)],
         cwd=root,
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
         text=True,
-        check=False,
         env=_git_env(),
+        start_new_session=sys.platform != "win32",
+        creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
     )
-    if result.returncode != 0:
-        output = result.stdout + result.stderr
-        failed = re.search(r"^check: (.+?) failed", output, re.MULTILINE)
+    timed_out = threading.Event()
+
+    def give_up() -> None:
+        timed_out.set()
+        _stop_process_tree(process)
+
+    timer = threading.Timer(timeout, give_up)
+    timer.start()
+    output: list[str] = []
+    try:
+        for line in process.stdout or ():
+            output.append(line)
+            print(f"  | {line}", end="", file=out, flush=True)
+        process.wait()
+    finally:
+        timer.cancel()
+    elapsed = time.monotonic() - started
+    if timed_out.is_set():
+        return Decision(
+            "commit-checks",
+            f"the check was still running after {timeout:.0f}s, so it was stopped.",
+            "Run `uv run scripts/check.py` on its own to see what is slow or stuck, then commit "
+            "again.",
+        )
+    if process.returncode != 0:
+        failed = re.search(r"^check: (.+?) failed", "".join(output), re.MULTILINE)
         gate = failed.group(1) if failed else "a"
         return Decision(
             "commit-checks",
             f"the {gate} gate failed.",
             "Run `uv run scripts/check.py`, fix what it reports, then commit again.",
         )
+    print(f"guard: the check passed in {elapsed:.0f}s.", file=out, flush=True)
     return ALLOW
 
 
