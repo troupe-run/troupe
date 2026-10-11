@@ -80,6 +80,14 @@ candidate. Switching is cheap: the shims are two lines each, and `guard.py` does
   problem and fix text. Every guard handler in `.claude/settings.json` sets `onFailure: "block"`, so a crash or
   timeout refuses instead of silently allowing.
 
+### D2a. Nested git in hooks
+
+While a hook runs, git sets repository-location variables (`GIT_DIR`, `GIT_INDEX_FILE` and others). The pre-commit
+check runs the test suite, which makes commits in temporary repositories. If those inherited the variables, they
+would act on the outer repository. So every git call the guard makes, and the check it runs, drops exactly those
+variables, and keeps every other `GIT_*` setting, which belongs to the user. An early version stripped every
+`GIT_*` variable; a test showed that also dropped `GIT_CONFIG_GLOBAL`.
+
 ### D3. What "a matching change" means
 
 The branch is `git rev-parse --abbrev-ref HEAD`. During a rebase, HEAD is detached, so the branch name is read from
@@ -133,7 +141,13 @@ that's a known gap, covered later by #19's required checks.
   determined one.)
 
 Rule ids, which are what an override names: `commit-on-main`, `commit-branch-change`, `commit-message`,
-`commit-checks`, `archive-incomplete`, `edit-branch-change`, `pr-closes-issue`, `skip-hooks`.
+`commit-checks`, `archive-incomplete`, `edit-branch-change`, `pr-closes-issue`, `skip-hooks` and
+`command-unparseable` (D6's refuse-when-unparseable path, given its own id while building).
+
+`guard-tamper` is also a rule, but no override unlocks it, so an agent can never unlock the override machinery
+itself. The tamper check reads the parsed words of a command, with heredoc bodies removed. That way a commit
+message that only *mentions* the override command isn't taken for running it. That was found live, when this
+change's own commit was refused.
 
 ### D8. Session start
 
@@ -166,7 +180,8 @@ It links to the org contributing guide instead of repeating it.
 
 ## Risks / Trade-offs
 
-- [The pre-commit check adds about five seconds to every commit] → It's the same `scripts/check.py` CI runs, so a
+- [The pre-commit check adds 10–15 seconds to every commit (measured while building this; the guard tests
+  make real commits in temporary repositories)] → It's the same `scripts/check.py` CI runs, so a
   commit that passes locally passes CI. The time is reported. An emergency skip goes through an override, which is
   logged.
 - [Bash parsing misses an unusual command form] → Refuse when parsing fails. The git hooks and #19 are the backstop.
