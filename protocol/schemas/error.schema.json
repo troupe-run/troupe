@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/error.schema.json",
+  "title": "Error",
+  "description": "A failure, as structured data. Each surface (CLI, run server, UI) renders it in its own words; the code identifies it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["code", "problem", "fix"],
+  "properties": {
+    "code": {
+      "title": "Code",
+      "description": "Stable, dotted identifier for this kind of error, such as usage.unknown-command. Surfaces use it to recognise and rephrase the error.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)+$"
+    },
+    "problem": {
+      "title": "Problem",
+      "description": "What went wrong, pointing at the real cause.",
+      "type": "string",
+      "minLength": 1
+    },
+    "fix": {
+      "title": "Fix",
+      "description": "What the user can do about it.",
+      "type": "string",
+      "minLength": 1
+    },
+    "path": {
+      "title": "Path",
+      "description": "The absolute path of the file or directory concerned, when there is one.",
+      "type": "string",
+      "minLength": 1
+    },
+    "details": {
+      "title": "Details",
+      "description": "Extra structured facts about this error, keyed by name.",
+      "type": "object"
+    }
+  }
+}

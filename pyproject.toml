@@ -1,0 +1,60 @@
+# Workspace root. Not a distributable package: it holds the workspace members, the shared dev toolchain and the
+# tool configuration that scripts/check.py runs. See openspec/changes/bootstrap-repo/design.md (D1, D8).
+[project]
+name = "troupe-workspace"
+version = "0"
+requires-python = ">=3.12"
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+troupe = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "troupe",
+    "ruff>=0.17",
+    "mypy>=2.4",
+    "pytest>=9.1",
+    "hypothesis>=6.168",
+    "import-linter>=2.15",
+    "jsonschema>=4.26",
+    "types-jsonschema>=4.26",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["packages/troupe/src", "packages/troupe/tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "SIM", "RUF", "PT", "N", "ANN", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests assert, and drive the CLI and helper processes through subprocess with trusted arguments.
+"packages/*/tests/**" = ["S101", "S603"]
+# The check script runs the project's own tools with fixed arguments.
+"scripts/**" = ["S603"]
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+files = ["packages/troupe/src", "packages/troupe/tests", "scripts"]
+mypy_path = "packages/troupe/src"
+
+[tool.pytest.ini_options]
+testpaths = ["packages/troupe/tests"]
+addopts = ["-ra", "--strict-markers", "--strict-config"]
+xfail_strict = true
+
+[tool.importlinter]
+root_packages = ["troupe"]
+
+[[tool.importlinter.contracts]]
+name = "troupe layers: cli -> core -> platform"
+type = "layers"
+layers = ["troupe.cli", "troupe.core", "troupe.platform"]

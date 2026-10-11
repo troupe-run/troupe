@@ -1,0 +1,20 @@
+[project]
+name = "troupe"
+version = "0.0.1.dev0"
+description = "Run your development process with agents and people in named roles."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+dependencies = []
+
+[project.urls]
+Homepage = "https://troupe.run"
+Repository = "https://github.com/troupe-run/troupe.run"
+
+[project.scripts]
+troupe = "troupe.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.13.0,<0.14"]
+build-backend = "uv_build"
