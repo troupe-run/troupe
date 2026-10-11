@@ -11,6 +11,7 @@ troupe calls it and sees one behaviour on Linux, macOS and Windows. An import co
 |---|---|---|---|
 | Atomic file replacement | `platform/files.py` | Temporary file in the same directory, fsynced, given the original's permission bits, renamed over the target. The directory is then fsynced. | The same, except a directory can't be fsynced (NTFS journals the rename). A read-only target stays read-only: the flag is lifted only for the rename. |
 | A replacement target that is open elsewhere | `platform/files.py` | Never blocks: the rename succeeds and the other program keeps the old contents. | Windows refuses the rename while another program has the file open. troupe retries with backoff, says which file it is waiting for after `REPLACE_ANNOUNCE_AFTER_SECONDS`, and fails with `replace.in-use` after `REPLACE_TIMEOUT_SECONDS`. |
+| Reading a file that is being replaced | `platform/files.py` | Always sees the old or the new file. | Opening the file can briefly fail while a replace completes. `read_bytes` retries that, bounded and announced like a replacement, so the reader still gets one complete version. |
 | Directory locks | `platform/locks.py` | `fcntl.flock` on `<directory>/.lock` | `msvcrt.locking` on the first byte of `<directory>/.lock` |
 | Paths shown to people | `platform/paths.py` | `~/Projects/theatre` | `~\Projects\theatre` |
 

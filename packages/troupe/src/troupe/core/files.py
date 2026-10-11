@@ -49,6 +49,31 @@ def replace_file(
         ) from error
 
 
+def read_file(
+    path: str | os.PathLike[str],
+    *,
+    timeout: float = defaults.REPLACE_TIMEOUT_SECONDS,
+    announce_after: float = defaults.REPLACE_ANNOUNCE_AFTER_SECONDS,
+    on_wait: WaitCallback | None = None,
+) -> bytes:
+    """Read the whole of ``path``, as one complete version even while it is being replaced."""
+    try:
+        return files.read_bytes(
+            path, timeout=timeout, announce_after=announce_after, on_wait=on_wait
+        )
+    except FileInUseError as error:
+        raise TroupeError(
+            "replace.in-use",
+            problem=(
+                f"Couldn't read the file: another program is holding it "
+                f"(waited {error.waited:.1f}s)."
+            ),
+            fix="Close the program that has the file open, such as an editor, then try again.",
+            path=str(error.path),
+            details={"waited_seconds": round(error.waited, 3)},
+        ) from error
+
+
 @contextmanager
 def directory_lock(
     directory: str | os.PathLike[str],

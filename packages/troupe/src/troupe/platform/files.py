@@ -9,6 +9,9 @@ Platform differences, handled here so callers see one behaviour:
 - Windows: a directory can't be fsynced (NTFS journals the rename). A target that another process
   has open can't be replaced; the replace retries with backoff, announces the wait, and gives up
   with FileInUseError. A read-only target is replaced and stays read-only, as it would on POSIX.
+- Windows: while a replace completes, opening the file can briefly fail with a sharing violation.
+  read_bytes retries that refusal the same bounded, announced way, so a reader still gets one
+  complete version.
 """
 
 import contextlib
@@ -86,6 +89,36 @@ def _replace(
                 with contextlib.suppress(OSError):
                     os.chmod(target, stat.S_IREAD)
         # Windows: the target is open in another process (sharing violation). Wait, bounded.
+        waited = time.monotonic() - started
+        if waited >= timeout:
+            raise FileInUseError(target, waited)
+        if not announced and waited >= announce_after:
+            announced = True
+            if on_wait is not None:
+                on_wait(target, waited)
+        time.sleep(min(delay, max(timeout - waited, 0.0)))
+        delay = min(delay * 2, 0.25)
+
+
+def read_bytes(
+    path: str | os.PathLike[str],
+    *,
+    timeout: float,
+    announce_after: float,
+    on_wait: WaitCallback | None = None,
+) -> bytes:
+    """Read the whole of ``path``: one complete version, even while it is being replaced."""
+    target = Path(path)
+    started = time.monotonic()
+    delay = 0.02
+    announced = False
+    while True:
+        try:
+            return target.read_bytes()
+        except PermissionError:
+            if not _WINDOWS:
+                raise
+        # Windows: the file is mid-replace or held without read sharing. Wait, bounded.
         waited = time.monotonic() - started
         if waited >= timeout:
             raise FileInUseError(target, waited)

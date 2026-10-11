@@ -110,7 +110,7 @@ def test_a_reader_never_sees_a_partial_write(tmp_path: Path) -> None:
     reads = 0
     try:
         while writer.poll() is None:
-            content = target.read_bytes()
+            content = files.read_bytes(target, timeout=5.0, announce_after=5.0)
             assert content in versions, f"read {len(content)} bytes, not a complete version"
             reads += 1
     finally:
