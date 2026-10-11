@@ -17,7 +17,7 @@ Facts about Claude Code hooks, checked against the hooks reference (code.claude.
 - **Windows:** hooks run under Git Bash, or PowerShell when Git Bash is absent. Shell-inspecting hooks should match
   `Bash|PowerShell`. `${CLAUDE_PROJECT_DIR}` is the form that expands under both shells.
 - **Failures:** a hook that fails or times out does **not** block unless `onFailure` is `block`.
-- **Unverified:** whether a deny applies in `bypassPermissions` and `dontAsk` modes.
+- **Permission modes:** a deny holds in `bypassPermissions` mode (verified in task 6.3). `dontAsk` is untested.
 
 **Claude Code hooks aren't a security boundary.** The Edit hook doesn't see a file written through Bash. These
 guardrails exist to stop honest shortcuts, not to resist a determined bypass. That is why every rule that matters at
@@ -224,8 +224,8 @@ be re-checked on GitHub.
   commit that passes locally passes CI. The time is reported. An emergency skip goes through an override, which is
   logged.
 - [Bash parsing misses an unusual command form] → Refuse when parsing fails. The git hooks and #19 are the backstop.
-- [Unverified: a deny may not apply in bypass-permissions mode] → The git hooks still apply in every mode. To verify
-  in task 6.x by running a refused edit in that mode, and to record the result.
+- [A deny might not apply in bypass-permissions mode] → Verified that it does (task 6.3). The git hooks still apply in
+  every mode, including `dontAsk`, which is untested.
 - [The rules bind this change's own implementation part-way through] → Expected, and useful: the guardrails start
   working on the change that builds them.
 
@@ -237,5 +237,7 @@ be re-checked on GitHub.
 
 ## Open Questions
 
-- Whether a PreToolUse deny applies in `bypassPermissions` and `dontAsk` modes is unverified. It doesn't change the
-  design, because the git hooks are the backstop. Task 6.3 records the result.
+- ~~Whether a PreToolUse deny applies in `bypassPermissions` mode.~~ Resolved 2026-10-11 (task 6.3): it does. In a
+  Claude Code session started with `--dangerously-skip-permissions` on Windows, on `workflow-guardrails`,
+  `git commit --dry-run --no-verify -m "test: x"` was refused with `skip-hooks`, and the session didn't look for
+  another route. `dontAsk` mode remains untested; the git hooks are its backstop.

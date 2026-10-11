@@ -78,5 +78,6 @@ uv run scripts/guard.py override commit-on-main --reason "hotfix while CI is dow
 - **Overrides are local.** The `guard` check on GitHub ignores them, so nothing granted on one machine excuses a
   commit on `main`.
 - **Bash parsing is heuristic.** When a `git` or `gh` command can't be parsed, it's refused rather than guessed at.
-- **Permission modes:** whether a Claude Code hook's deny applies in `bypassPermissions` mode is recorded here once
-  verified (task 6.3 of `workflow-guardrails`). The git hooks apply in every mode.
+- **Permission modes:** a Claude Code hook's deny holds in `bypassPermissions` mode (`--dangerously-skip-permissions`).
+  Verified on 2026-10-11 on Windows: `git commit --dry-run --no-verify` was refused with `skip-hooks`. `dontAsk` mode
+  is untested. The git hooks apply in every mode.
