@@ -53,8 +53,16 @@ xfail_strict = true
 
 [tool.importlinter]
 root_packages = ["troupe"]
+include_external_packages = true
 
 [[tool.importlinter.contracts]]
 name = "troupe layers: cli -> core -> platform"
 type = "layers"
 layers = ["troupe.cli", "troupe.core", "troupe.platform"]
+
+[[tool.importlinter.contracts]]
+name = "only troupe.platform imports OS-specific modules"
+type = "forbidden"
+source_modules = ["troupe"]
+forbidden_modules = ["fcntl", "msvcrt", "termios", "signal", "winreg", "pwd", "grp"]
+ignore_imports = ["troupe.platform.** -> *"]

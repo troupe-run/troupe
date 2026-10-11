@@ -22,17 +22,17 @@
 
 ## 4. Platform seam (spec: platform)
 
-- [ ] 4.1 Implement atomic replacement on POSIX and Windows (design D5); verify "Permissions are kept" and "Write fails part-way" (inject a failure before replace), plus a hypothesis property test that arbitrary byte contents (BOM, CRLF, no final newline, empty) round-trip exactly
-- [ ] 4.2 Verify "Reader never sees a partial write" with a multi-process test that replaces a file repeatedly while a reader checks every read is one complete version
-- [ ] 4.3 Implement lock-file locks (`flock` on POSIX, `msvcrt.locking` on Windows) with announce callback, timeout and nested-acquisition refusal (design D6), with defaults in `troupe.core.defaults`; verify "Lock held by another process" (second process, short timeouts), "Timeout comes from a named setting" and "Nested acquisition"
-- [ ] 4.4 Implement friendly path display with the platform separator (design D5a); verify the three path scenarios plus a hypothesis test that the output is never relative and starts with `~` plus the separator exactly when the path is under home
+- [x] 4.1 Implement atomic replacement on POSIX and Windows (design D5); verify "Permissions are kept" and "Write fails part-way" (inject a failure before replace), plus a hypothesis property test that arbitrary byte contents (BOM, CRLF, no final newline, empty) round-trip exactly
+- [x] 4.2 Verify "Reader never sees a partial write" with a multi-process test that replaces a file repeatedly while a reader checks every read is one complete version
+- [x] 4.3 Implement lock-file locks (`flock` on POSIX, `msvcrt.locking` on Windows) with announce callback, timeout and nested-acquisition refusal (design D6), with defaults in `troupe.core.defaults`; verify "Lock held by another process" (second process, short timeouts), "Timeout comes from a named setting" and "Nested acquisition"
+- [x] 4.4 Implement friendly path display with the platform separator (design D5a); verify the three path scenarios plus a hypothesis test that the output is never relative and starts with `~` plus the separator exactly when the path is under home
 - [ ] 4.5 Implement the bounded, announced retry when the replace target is held open (design D5); verify "Target held open by another process" on Windows by holding the file open from a second process, and confirm the test isn't skipped on any platform where the condition can be produced
 - [ ] 4.6 Verify "The same tests pass on every platform": run the platform suite on a Windows machine locally (owner's session) as well as in CI, and check `pytest -rs` reports no skips for a missing platform implementation on any of the three
-- [ ] 4.7 Document the platform seam (what lives there, how each platform differs inside it, the NFS limitation) in `docs/platform.md`
+- [x] 4.7 Document the platform seam (what lives there, how each platform differs inside it, the NFS limitation) in `docs/platform.md`
 
 ## 5. Import contracts
 
-- [ ] 5.1 Add import-linter contracts for the `cli` → `core` → `platform` layers and for OS-specific modules being imported only in `platform` (design D7); verify `lint-imports` passes, then introduce one deliberate violation of each contract, confirm each fails, record the output for the PR, and remove the violations
+- [x] 5.1 Add import-linter contracts for the `cli` → `core` → `platform` layers and for OS-specific modules being imported only in `platform` (design D7); verify `lint-imports` passes, then introduce one deliberate violation of each contract, confirm each fails, record the output for the PR, and remove the violations
 
 ## 6. CI
 
