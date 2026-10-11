@@ -1,3 +1,4 @@
 #!/bin/sh
-# Workflow guardrails (docs/development-workflow.md). The rules live in scripts/guard.py.
+# Source: troupe-run/infrastructure. Change it there; copies in other repositories are delivered.
+# Workflow guardrails (troupe-run/infrastructure: docs/development-workflow.md). The rules live in scripts/guard.py.
 exec uv run --quiet --no-project python "$(git rev-parse --show-toplevel)/scripts/guard.py" pre-commit
