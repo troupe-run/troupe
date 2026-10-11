@@ -83,10 +83,25 @@ ALLOW = Decision()
 # --- facts ---------------------------------------------------------------------------------
 
 
+REPOSITORY_LOCATION_VARIABLES = frozenset(
+    {
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_INDEX_FILE",
+        "GIT_PREFIX",
+        "GIT_COMMON_DIR",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_NAMESPACE",
+    }
+)
+"""Set by git while a hook runs. They pin git to that repository, so nested git calls (such as
+the tests' temporary repositories) must not inherit them. Other GIT_* settings are the user's."""
+
+
 def _git_env() -> dict[str, str]:
-    """The environment without git's hook-time variables, so nested git calls target their own
-    repository rather than the one whose hook is running."""
-    return {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    """The environment without the hook-time repository-location variables."""
+    return {k: v for k, v in os.environ.items() if k not in REPOSITORY_LOCATION_VARIABLES}
 
 
 def git(root: Path, *args: str, check: bool = True) -> str:
@@ -440,26 +455,38 @@ def pr_closes_issue(words: Sequence[str], cwd: Path) -> Decision:
     )
 
 
-def guard_tamper_command(command: str) -> Decision:
-    lowered = command.lower()
-    if GUARD_DIR in lowered or re.search(r"guard\.py\S*\s+override\b", lowered):
-        return Decision(
-            TAMPER_RULE,
-            "agents can't grant themselves an override or touch the override files.",
-            "Ask the owner. Only a person, in their own terminal, can grant an override.",
-        )
+TAMPER = Decision(
+    TAMPER_RULE,
+    "agents can't grant themselves an override or touch the override files.",
+    "Ask the owner. Only a person, in their own terminal, can grant an override.",
+)
+
+
+def guard_tamper(words: Sequence[str]) -> Decision:
+    """Refuse a command that runs the override, or names a path in the override directory.
+
+    Works on parsed words, so a commit message that merely mentions the override command (one
+    quoted word containing spaces) isn't mistaken for running it.
+    """
+    for index, word in enumerate(words):
+        runs_override = word.lower().endswith("guard.py") and words[index + 1 : index + 2] == [
+            "override"
+        ]
+        names_override_path = GUARD_DIR in word.lower() and not re.search(r"\s", word)
+        if runs_override or names_override_path:
+            return TAMPER
     return ALLOW
 
 
 def shell_decisions(command: str, cwd: Path) -> list[Decision]:
-    tamper = guard_tamper_command(command)
-    if tamper.refused:
-        return [tamper]
-    if not re.search(r"\b(git|gh)\b", command):
-        return [ALLOW]
+    text = strip_heredocs(command)
     try:
         simple_commands = split_command(command)
     except ValueError as error:
+        if GUARD_DIR in text.lower() or re.search(r"guard\.py\S*\s+override\b", text.lower()):
+            return [TAMPER]
+        if not re.search(r"\b(git|gh)\b", text):
+            return [ALLOW]
         return [
             Decision(
                 "command-unparseable",
@@ -470,9 +497,12 @@ def shell_decisions(command: str, cwd: Path) -> list[Decision]:
         ]
     decisions: list[Decision] = []
     for words in simple_commands:
+        tamper = guard_tamper(words)
+        if tamper.refused:
+            return [tamper]
         decisions.append(skip_hooks(words))
         decisions.append(pr_closes_issue(words, cwd))
-    return decisions
+    return decisions or [ALLOW]
 
 
 def edit_decision(root: Path, file_path: str, branch: str | None) -> Decision:

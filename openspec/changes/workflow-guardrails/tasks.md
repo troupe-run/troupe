@@ -24,9 +24,9 @@
 
 ## 4. Overrides
 
-- [ ] 4.1 Implement `guard.py override <rule> --reason …` (design D7): validate the rule id, write `.git/troupe-guard/override.json` with who and when; test that an unknown rule is refused and a valid one is written
-- [ ] 4.2 Make every refusal consume a matching override and append to `.git/troupe-guard/overrides.jsonl`; test grant → one action allowed → logged → next action refused, for a git-hook rule and a Claude rule
-- [ ] 4.3 Refuse agent attempts to grant overrides (Bash running `guard.py override` or mentioning `troupe-guard`; edits under `.git/`), with tests
+- [x] 4.1 Implement `guard.py override <rule> --reason …` (design D7): validate the rule id, write `.git/troupe-guard/override.json` with who and when; test that an unknown rule is refused and a valid one is written
+- [x] 4.2 Make every refusal consume a matching override and append to `.git/troupe-guard/overrides.jsonl`; test grant → one action allowed → logged → next action refused, for a git-hook rule and a Claude rule
+- [x] 4.3 Refuse agent attempts to grant overrides (Bash running `guard.py override` or mentioning `troupe-guard`; edits under `.git/`), with tests
 
 ## 5. Session start and CLAUDE.md
 
