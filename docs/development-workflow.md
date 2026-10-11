@@ -18,8 +18,10 @@ drift apart:
 them on: running `uv run scripts/check.py` does it, and so does starting a Claude Code session. Each says so when it
 does. You can also run `git config core.hooksPath .githooks` yourself.
 
-**GitHub can't reject a non-conforming push on our plan.** We tested this on 2026-10-11. A commit-message ruleset is
-accepted, but not enforced, on a free-plan organisation; that needs GitHub Enterprise. So a bad message can still
+**GitHub can't reject a non-conforming push on our plan, or on GitHub Team.** We tested this on 2026-10-11. A
+commit-message ruleset is accepted, but not enforced, on Free (`troupe-run`) and on Team (`hpsgd`, public and
+private repositories), although Team did enforce a branch-deletion rule in the same repository. Metadata rules need
+GitHub Enterprise, so moving the project or upgrading to Team wouldn't help. So a bad message can still
 reach a branch. The `guard` check goes red within a minute of the push, and can't be merged once #19 makes it
 required. Fix it before anyone builds on the branch.
 
