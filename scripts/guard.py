@@ -431,10 +431,14 @@ def pr_closes_issue(words: Sequence[str], cwd: Path) -> Decision:
         return ALLOW
     rest = args[2:]
     body: str | None = None
+    problem = "the pull request's description doesn't close an issue."
+    fix = "Add a line like 'Closes #22' to the description (--body or --body-file)."
     for index, word in enumerate(rest):
         name, _, inline = word.partition("=")
         if name in ("-f", "--fill", "--fill-first", "--fill-verbose"):
             body = None
+            problem = "--fill writes the description from commits, so it can't be checked."
+            fix = "Pass the description with --body or --body-file, including 'Closes #<issue>'."
             break
         if name in ("-b", "--body"):
             body = inline if inline else (rest[index + 1] if index + 1 < len(rest) else "")
@@ -442,17 +446,25 @@ def pr_closes_issue(words: Sequence[str], cwd: Path) -> Decision:
             path = inline if inline else (rest[index + 1] if index + 1 < len(rest) else "-")
             if path == "-":
                 body = None
+                problem = "a description read from stdin can't be checked before it's sent."
+                fix = "Write the description to a file and pass it with --body-file."
                 break
             file = Path(path) if Path(path).is_absolute() else cwd / path
-            body = file.read_text(encoding="utf-8") if file.is_file() else ""
+            if file.is_file():
+                body = file.read_text(encoding="utf-8")
+            else:
+                body = None
+                problem = f"the body file '{path}' doesn't exist when the command starts."
+                fix = (
+                    "Write the file in an earlier, separate command, and name it with a literal "
+                    "path: shell variables aren't expanded before the check."
+                )
+                break
+    if body is None and problem.startswith("the pull request's"):
+        problem = "the pull request has no description, so it closes no issue."
     if body is not None and CLOSING.search(body):
         return ALLOW
-    return Decision(
-        "pr-closes-issue",
-        "the pull request's description must close the issue it delivers, and it can't be "
-        "read from --fill or stdin.",
-        "Pass the description with --body or --body-file, including a line like 'Closes #22'.",
-    )
+    return Decision("pr-closes-issue", problem, fix)
 
 
 TAMPER = Decision(
