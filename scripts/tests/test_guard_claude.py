@@ -119,6 +119,14 @@ def test_a_pr_that_closes_no_issue_is_refused(command: str) -> None:
     assert "pr-closes-issue" in rules
 
 
+def test_a_missing_body_file_says_so_and_how_to_fix_it(tmp_path: Path) -> None:
+    """Found live: a body file written by the same command, named through $S, doesn't exist yet."""
+    [_, decision] = guard.shell_decisions("gh pr create --body-file $S/pr.md", tmp_path)
+    assert decision.rule == "pr-closes-issue"
+    assert "doesn't exist when the command starts" in decision.problem
+    assert "shell variables aren't expanded" in decision.fix
+
+
 def test_a_body_file_is_read_relative_to_the_working_directory(tmp_path: Path) -> None:
     (tmp_path / "good.md").write_text("Closes #22\n", encoding="utf-8")
     (tmp_path / "bad.md").write_text("Mentions #22\n", encoding="utf-8")
