@@ -4,11 +4,24 @@ This repository enforces its own workflow (spec: `openspec/specs/development-wor
 is in the org's [contributing guide](https://github.com/troupe-run/.github/blob/main/CONTRIBUTING.md). This page
 lists what the guardrails refuse and how an override works.
 
-Two layers enforce the rules. Both call the same rules in `scripts/guard.py`:
+Four layers enforce the rules. All of them call the same rule functions in `scripts/guard.py`, so they can't
+drift apart:
 
-- **Git hooks** (`.githooks/`) apply to everyone, human or agent. Turn them on once per clone with
-  `git config core.hooksPath .githooks`. Claude Code sessions do this automatically at start-up.
-- **Claude Code hooks** (`.claude/settings.json`) apply to agent sessions, before a tool runs.
+| Layer | Runs | Covers | Can be skipped? |
+|---|---|---|---|
+| Git hooks: `pre-commit`, `commit-msg` | on every commit, for everyone | the git rules below | yes, `--no-verify` (it's your machine) |
+| Git hook: `pre-push` | on every push, any branch | every commit being pushed is a Conventional Commit | yes, `--no-verify` |
+| Claude Code hooks (`.claude/settings.json`) | before an agent's tool call | the Claude rules below, including refusing `--no-verify` | no, for an agent following `CLAUDE.md` |
+| The `guard` GitHub check (`.github/workflows/guard.yml`) | on every push to every branch, and every pull request | commit messages, the branch-change match, archived tasks | no, once #19 makes it required |
+
+**The git hooks are on by default.** Git never runs hooks from a fresh clone, so the repository's own tooling turns
+them on: running `uv run scripts/check.py` does it, and so does starting a Claude Code session. Each says so when it
+does. You can also run `git config core.hooksPath .githooks` yourself.
+
+**GitHub can't reject a non-conforming push on our plan.** We tested this on 2026-10-11. A commit-message ruleset is
+accepted, but not enforced, on a free-plan organisation; that needs GitHub Enterprise. So a bad message can still
+reach a branch. The `guard` check goes red within a minute of the push, and can't be merged once #19 makes it
+required. Fix it before anyone builds on the branch.
 
 Every refusal names its rule and its fix:
 
@@ -57,8 +70,11 @@ uv run scripts/guard.py override commit-on-main --reason "hotfix while CI is dow
 - **These hooks aren't a security boundary.** They stop honest shortcuts. A Bash command that writes a file isn't
   seen by the edit hook, though the git hooks catch it at commit time. A determined bypass is still possible.
   GitHub's rulesets and required checks (#19) are the hard backstop.
-- **Pull requests opened through `gh api`** aren't checked for a closing reference. #19's required checks cover
-  that.
+- **Pull requests opened through `gh api`** aren't checked for a closing reference by the Claude Code hook.
+- **A bad commit message can reach a branch** if the local hooks were skipped, because GitHub doesn't reject it at
+  push time on our plan. The `guard` check flags it at once, and blocks the merge once required (#19).
+- **Overrides are local.** The `guard` check on GitHub ignores them, so nothing granted on one machine excuses a
+  commit on `main`.
 - **Bash parsing is heuristic.** When a `git` or `gh` command can't be parsed, it's refused rather than guessed at.
 - **Permission modes:** whether a Claude Code hook's deny applies in `bypassPermissions` mode is recorded here once
   verified (task 6.3 of `workflow-guardrails`). The git hooks apply in every mode.

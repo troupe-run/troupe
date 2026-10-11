@@ -186,6 +186,33 @@ It links to the org contributing guide instead of repeating it.
     its output.
 - **Overrides** are tested for grant, use once, log, and agent refusal.
 
+### D11. Defaults on, and a server-side layer (owner, 2026-10-11)
+
+The owner's requirements: the guardrails should be on by default outside Claude Code too; commit messages should be
+enforced at push time on every branch, so history never needs a force-push to rewrite; and the other rules should
+be re-checked on GitHub.
+
+- **On by default:** `scripts/check.py`, which every contributor runs, turns the git hooks on when they aren't,
+  the same way the session-start hook does. Git itself never runs hooks from a fresh clone, so the project's own
+  tooling is the only place a default can live.
+- **`pre-push` hook:** `guard.py pre-push` reads the refs git is about to push. For each, it checks every commit
+  not yet on the remote (`<remote>..<local>`, or for a new branch, everything not on any remote branch) with the
+  `commit-message` rule. Deleted refs are skipped.
+- **Server-side push rejection isn't available on our plan.** A probe on 2026-10-11 used a scratch public repo in
+  the free-plan `troupe-run` org. It created an active `commit_message_pattern` ruleset on all branches, which
+  GitHub accepted ("bypass: never"), and then pushed non-conforming commits to a new branch, to an existing branch,
+  and to `main`. **All three were accepted:** the rule is stored but not enforced. GitHub Enterprise would be needed
+  for metadata rules or pre-receive hooks. This is recorded so it isn't retried by accident.
+- **`guard.py ci`** applies the same rule functions to a range of commits: every message; the branch-change match
+  (skipped on `main`); and archived changes touched in the range. A `guard` workflow runs it on every push to every
+  branch and on every pull request. A bad push then shows red within a minute, and #19 makes the check required, so
+  nothing unchecked can merge.
+  - **Range:** for a pull request, `merge-base(origin/main, HEAD)..HEAD`. For a push, `before..after`, or the
+    merge-base with `origin/main` when the push creates the branch.
+  - **Branch:** the pull request's head branch, or the pushed branch.
+- **#23's commit linting** reuses this check instead of adding commitlint. #23 keeps the release tool and the
+  PR-title check.
+
 ## Risks / Trade-offs
 
 - [The pre-commit check adds 10–15 seconds to every commit (measured while building this; the guard tests

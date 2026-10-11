@@ -7,6 +7,8 @@ the rules, honour a person-granted override, and refuse or allow:
     guard.py commit-msg FILE         git hook (.githooks/commit-msg)
     guard.py claude-pre-tool-use     Claude Code PreToolUse hook (.claude/settings.json)
     guard.py claude-session-start    Claude Code SessionStart hook
+    guard.py pre-push                git hook (.githooks/pre-push)
+    guard.py ci                      the same rules on GitHub, for a push or pull request
     guard.py override RULE --reason  a person grants one override, from their own terminal
 
 Standard library only, so it runs under `uv run --no-project` without installing anything.
@@ -25,7 +27,7 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -214,7 +216,9 @@ def commit_message(message: str) -> Decision:
     return Decision("commit-message", f"'{first}' isn't a Conventional Commit.", fix)
 
 
-def unticked_archived_tasks(staged: Iterable[str], read_staged: ReadStaged) -> Decision:
+def unticked_archived_tasks(
+    staged: Iterable[str], read_staged: Callable[[str], str | None]
+) -> Decision:
     """Refuse when a staged archived change still has an unticked task (design D7)."""
     archived = re.compile(r"^openspec/changes/archive/([^/]+)/")
     seen: set[str] = set()
@@ -664,7 +668,121 @@ def first_refusal(root: Path, decisions: Iterable[Decision], action: str) -> Dec
     return None
 
 
+# --- checking a range of commits (pre-push and CI) -------------------------------------------
+
+
+def _is_null(sha: str) -> bool:
+    return set(sha) == {"0"}
+
+
+def commits_in_range(root: Path, base: str | None, head: str) -> list[str]:
+    """Commits reachable from ``head`` but not ``base``. With no usable base, everything not on
+    any remote-tracking branch (a branch being pushed for the first time)."""
+    if base and not _is_null(base):
+        result = subprocess.run(
+            ["git", "rev-list", f"{base}..{head}"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=_git_env(),
+        )
+        if result.returncode == 0:
+            return result.stdout.split()
+    return git(root, "rev-list", head, "--not", "--remotes").split()
+
+
+def nonconforming_commits(root: Path, commits: Iterable[str]) -> Decision:
+    """The commit-message rule over many commits, naming each one that fails."""
+    bad: list[str] = []
+    for sha in commits:
+        message = git(root, "log", "-1", "--format=%B", sha)
+        if commit_message(message).refused:
+            first = next((line for line in message.splitlines() if line.strip()), "")
+            bad.append(f"{sha[:7]} '{first}'")
+    if not bad:
+        return ALLOW
+    listed = "; ".join(bad[:5]) + (f"; and {len(bad) - 5} more" if len(bad) > 5 else "")
+    return Decision(
+        "commit-message",
+        f"{len(bad)} commit(s) aren't Conventional Commits: {listed}.",
+        "Reword them before they're shared: git commit --amend for the last commit, or git rebase "
+        "with --exec / reword for earlier ones. Expected form: 'feat(cli): add --version'.",
+    )
+
+
+def run_ci(root: Path, base: str | None, head: str, branch: str | None) -> list[Decision]:
+    """The git-level rules, re-checked on GitHub for a push or a pull request (design D11)."""
+    commits = commits_in_range(root, base, head)
+    decisions = [nonconforming_commits(root, commits)]
+    if branch and branch != "main":
+        decisions.append(commit_branch_change(root, branch))
+    changed: list[str] = []
+    for sha in commits:
+        changed += git(root, "diff-tree", "--no-commit-id", "--name-only", "-r", sha).splitlines()
+
+    def read_at_head(path: str) -> str | None:
+        result = subprocess.run(
+            ["git", "show", f"{head}:{path}"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=_git_env(),
+        )
+        return result.stdout if result.returncode == 0 else None
+
+    decisions.append(unticked_archived_tasks(changed, read_at_head))
+    return [decision for decision in decisions if decision.refused]
+
+
 # --- entry points ----------------------------------------------------------------------------
+
+
+def run_pre_push(root: Path, refs: Iterable[str]) -> int:
+    """git pre-push hook: stdin lines are '<local ref> <local sha> <remote ref> <remote sha>'."""
+    for line in refs:
+        parts = line.split()
+        if len(parts) != 4:
+            continue
+        local_ref, local_sha, _, remote_sha = parts
+        if _is_null(local_sha):
+            continue  # deleting a remote branch sends no commits
+        decision = nonconforming_commits(root, commits_in_range(root, remote_sha, local_sha))
+        refusal = first_refusal(root, [decision], f"push {local_ref}")
+        if refusal is not None:
+            print(refusal.text(), file=sys.stderr)
+            return 1
+    return 0
+
+
+def github_ci_inputs(root: Path) -> tuple[str | None, str, str | None]:
+    """The range and branch for this GitHub Actions run (design D11)."""
+    event = os.environ.get("GITHUB_EVENT_NAME", "")
+    head = git(root, "rev-parse", "HEAD")
+    if event == "pull_request":
+        base_branch = os.environ.get("GITHUB_BASE_REF", "main")
+        base = git(root, "merge-base", f"origin/{base_branch}", head, check=False) or None
+        return base, head, os.environ.get("GITHUB_HEAD_REF")
+    before: str | None = None
+    event_path = os.environ.get("GITHUB_EVENT_PATH")
+    if event_path and Path(event_path).is_file():
+        before = json.loads(Path(event_path).read_text(encoding="utf-8")).get("before")
+    branch = os.environ.get("GITHUB_REF_NAME")
+    if not before or _is_null(before):
+        before = git(root, "merge-base", "origin/main", head, check=False) or None
+    return before, head, branch
+
+
+def run_ci_entry(root: Path, base: str | None, head: str | None, branch: str | None) -> int:
+    if head is None:
+        base, head, branch = github_ci_inputs(root)
+    refusals = run_ci(root, base, head, branch)
+    for refusal in refusals:
+        print(refusal.text(), file=sys.stderr)
+    if not refusals:
+        print(f"guard: every rule passes for {branch or 'this range'}.")
+    return 1 if refusals else 0
 
 
 def run_pre_commit(root: Path) -> int:
@@ -740,16 +858,27 @@ WORKFLOW_SUMMARY = (
 )
 
 
+def activate_hooks(root: Path) -> str | None:
+    """Turn the repository's git hooks on if they aren't; return a notice when it changed them.
+
+    The one place hook activation lives: the session-start hook and scripts/check.py both call it.
+    """
+    configured = git(root, "config", "--get", "core.hooksPath", check=False)
+    if configured == HOOKS_PATH:
+        return None
+    git(root, "config", "core.hooksPath", HOOKS_PATH)
+    return (
+        f"Activated the repository's git hooks (core.hooksPath was "
+        f"{configured or 'unset'}; now {HOOKS_PATH})."
+    )
+
+
 def run_claude_session_start(root: Path, stdout: TextIO | None = None) -> int:
     out = sys.stdout if stdout is None else stdout
     notes: list[str] = []
-    configured = git(root, "config", "--get", "core.hooksPath", check=False)
-    if configured != HOOKS_PATH:
-        git(root, "config", "core.hooksPath", HOOKS_PATH)
-        notes.append(
-            f"Activated the repository's git hooks (core.hooksPath was "
-            f"{configured or 'unset'}; now {HOOKS_PATH})."
-        )
+    activated = activate_hooks(root)
+    if activated is not None:
+        notes.append(activated)
     branch = current_branch(root)
     change = matching_change(root, branch)
     if change is not None:
@@ -780,6 +909,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     message.add_argument("message_file")
     sub.add_parser("claude-pre-tool-use", help="Claude Code PreToolUse hook (JSON on stdin)")
     sub.add_parser("claude-session-start", help="Claude Code SessionStart hook")
+    push = sub.add_parser("pre-push", help="git pre-push hook (refs on stdin)")
+    push.add_argument("remote", nargs="?", help="passed by git; not needed")
+    push.add_argument("url", nargs="?", help="passed by git; not needed")
+    ci = sub.add_parser("ci", help="re-check a push or pull request on GitHub")
+    ci.add_argument("--base", help="exclusive start of the range (default: from GitHub)")
+    ci.add_argument("--head", help="end of the range (default: from GitHub)")
+    ci.add_argument("--branch", help="branch the range belongs to (default: from GitHub)")
     grant = sub.add_parser("override", help="grant one override (a person, in a terminal)")
     grant.add_argument("rule", choices=OVERRIDABLE_RULES)
     grant.add_argument("--reason", required=True)
@@ -799,6 +935,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.entry == "claude-session-start":
         sys.stdin.read()
         return run_claude_session_start(root)
+    if args.entry == "pre-push":
+        return run_pre_push(root, sys.stdin.read().splitlines())
+    if args.entry == "ci":
+        return run_ci_entry(root, args.base, args.head, args.branch)
     path = grant_override(root, args.rule, args.reason)
     print(f"guard: override granted for '{args.rule}' (one action). Recorded in {path.parent}.")
     return 0

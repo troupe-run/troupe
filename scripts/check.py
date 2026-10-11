@@ -33,7 +33,24 @@ GATES: list[tuple[str, list[str]]] = [
 ]
 
 
+def activate_git_hooks(root: Path) -> str | None:
+    """Turn the repository's git hooks on by default (spec: development-workflow).
+
+    Git never runs hooks from a fresh clone, so the project's own tooling turns them on. The
+    logic lives in guard.py, next to the hooks it activates.
+    """
+    if not (root / ".git").exists():
+        return None  # not a git checkout (for example, an unpacked source archive)
+    sys.path.insert(0, str(root / "scripts"))
+    import guard
+
+    return guard.activate_hooks(root)
+
+
 def main() -> int:
+    activated = activate_git_hooks(ROOT)
+    if activated is not None:
+        print(f"check: {activated}", flush=True)
     for label, command in GATES:
         print(f"==> {label}", flush=True)
         started = time.monotonic()

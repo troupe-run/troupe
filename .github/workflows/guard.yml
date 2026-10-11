@@ -1,0 +1,32 @@
+name: guard
+
+# The git-level workflow rules, re-checked on GitHub (docs/development-workflow.md, design D11):
+# every commit is a Conventional Commit, the branch matches an OpenSpec change, and no archived
+# change has an unticked task. Local hooks can be skipped; this can't once #19 makes it required.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: guard-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    name: guard (workflow rules)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Every commit and branch, to compute the range. For a pull request, its head commit,
+          # not GitHub's synthetic merge commit (whose "Merge ..." message isn't the author's).
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: Check the workflow rules
+        run: uv run --no-project python scripts/guard.py ci

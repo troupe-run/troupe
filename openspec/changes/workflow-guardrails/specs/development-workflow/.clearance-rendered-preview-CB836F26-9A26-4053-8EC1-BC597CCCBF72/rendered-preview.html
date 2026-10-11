@@ -677,6 +677,53 @@ are not, and the session SHALL be told the workflow it is working under.</p>
 <li><p><strong>THEN</strong> it is set to the repository’s hooks, and the session is told so</p>
 </li>
 </ul>
+<h3 id="requirement-git-hooks-are-on-by-default">Requirement: Git hooks are on by default</h3>
+<p>The repository’s own tooling SHALL turn its git hooks on wherever it runs, so a contributor doesn’t have to remember
+to. Running the repository’s check, or starting a Claude Code session, SHALL make the git hooks active if they
+aren’t, and say so.</p>
+<h4 id="scenario-running-the-check-in-a-fresh-clone">Scenario: Running the check in a fresh clone</h4>
+<ul>
+<li><p><strong>WHEN</strong> a contributor runs the repository’s check in a clone where the git hooks aren’t active</p>
+</li>
+<li><p><strong>THEN</strong> the hooks are turned on, the check says so, and later commits go through them</p>
+</li>
+</ul>
+<h3 id="requirement-commit-messages-are-checked-before-a-push">Requirement: Commit messages are checked before a push</h3>
+<p>A push SHALL be refused while any commit it would send, on any branch, has a message that isn’t a Conventional
+Commit. The refusal names each such commit.</p>
+<h4 id="scenario-pushing-a-non-conventional-commit">Scenario: Pushing a non-conventional commit</h4>
+<ul>
+<li><p><strong>WHEN</strong> a contributor pushes a branch carrying a commit whose first line is <code>Add a thing</code></p>
+</li>
+<li><p><strong>THEN</strong> the push is refused, naming that commit and the expected form</p>
+</li>
+</ul>
+<h4 id="scenario-pushing-conventional-commits">Scenario: Pushing conventional commits</h4>
+<ul>
+<li><p><strong>WHEN</strong> every commit being pushed is a Conventional Commit</p>
+</li>
+<li><p><strong>THEN</strong> the push goes ahead</p>
+</li>
+</ul>
+<h3 id="requirement-the-rules-are-re-checked-on-github">Requirement: The rules are re-checked on GitHub</h3>
+<p>For every push to any branch and for every pull request, a GitHub check SHALL re-apply the git-level rules to the
+commits involved: every commit message is a Conventional Commit, the branch matches an OpenSpec change (for any
+branch other than <code>main</code>), and no archived change has an unticked task. It applies the same rules as the git hooks,
+so a commit that skipped the local hooks is still caught.</p>
+<h4 id="scenario-a-push-that-skipped-the-local-hooks">Scenario: A push that skipped the local hooks</h4>
+<ul>
+<li><p><strong>WHEN</strong> a branch is pushed carrying a commit with a non-conventional message that was made with <code>--no-verify</code></p>
+</li>
+<li><p><strong>THEN</strong> the GitHub check for that push fails and names the commit</p>
+</li>
+</ul>
+<h4 id="scenario-a-pull-request-from-a-branch-with-no-matching-change">Scenario: A pull request from a branch with no matching change</h4>
+<ul>
+<li><p><strong>WHEN</strong> a pull request’s branch has no matching OpenSpec change</p>
+</li>
+<li><p><strong>THEN</strong> the GitHub check fails and names the rule</p>
+</li>
+</ul>
 <h3 id="requirement-guardrails-behave-the-same-on-every-platform">Requirement: Guardrails behave the same on every platform</h3>
 <p>Every rule in this capability SHALL behave the same on Linux, macOS and Windows.</p>
 <h4 id="scenario-the-guardrail-tests-on-each-platform">Scenario: The guardrail tests on each platform</h4>
