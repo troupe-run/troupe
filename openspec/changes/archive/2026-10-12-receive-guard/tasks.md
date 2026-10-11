@@ -8,12 +8,12 @@
   `troupe-run/infrastructure`'s rules doc and spec. Verify: `grep -rn "docs/development-workflow.md"` outside
   `openspec/changes/archive/` and the delivered files (`scripts/guard.py`, `.githooks/`,
   `.github/workflows/guard.yml`, which infrastructure's delivery replaces) finds only links to infrastructure.
-- [ ] 1.3 Archive on the branch, which retires `openspec/specs/development-workflow`. Verify: the main spec is gone,
+- [x] 1.3 Archive on the branch, which retires `openspec/specs/development-workflow`. Verify: the main spec is gone,
   and `openspec validate --specs` passes.
 
 ## 2. Pull request
 
-- [ ] 2.1 Open the PR closing #30. Verify: CI on all three platforms, `guard` and DCO are green.
+- [x] 2.1 Open the PR closing #30. Verify: CI on all three platforms, `guard` and DCO are green.
 
 ## Workflow follow-up
 
