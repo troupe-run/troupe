@@ -14,16 +14,24 @@ context: |
   current stage in a way that is easy to change.
 
   Fixed constraints:
-  - Python 3.12+, managed with uv. macOS and Linux; Windows is out of scope in the short term, but required for 1.0.
+  - Python 3.12+, managed with uv. Linux, macOS and Windows, all supported from the first commit and required in CI.
     Keep OS-specific behaviour (paths, file locking, atomic replace, processes and signals, daemon IPC, file
-    watching) behind one named seam, and call out any design choice that would block Windows later.
+    watching) behind one named seam, and choose mechanisms that work on all three rather than adapting later.
   - Pure event sourcing and CQRS, configuration included. Events come first; files are projections.
   - troupe's own state is text that git can merge (append-only, line-per-record). No SQLite or binary stores.
   - Every event carries lineage: actor (human, agent, or explicit unknown, never null), via, time, reason, change id,
     approvals. Fail when there is no identity.
   - Stages (sandboxes), actor runners, notification channels and guests are pluggable. Declared effects are enforced.
   - Humans hold roles like agents. Gates and escalations name the role they route to, never "the human".
-  - Not a monorepo: this repo is the app only.
+  - One repo until 1.0: packages/ (in-process, first-party), plugins/ (out-of-process), protocol/ (language-neutral).
+    Plugins stay self-contained so they can be split into their own repos later. The site and other deliverables
+    live in their own repos.
+  - Third-party code only ever runs out of process.
+  - Version control, storage and identity sources are adapters: git is one VCS adapter, a plain filesystem another.
+  - Every limit (timeouts, sizes, costs, endpoints) is a named setting with its default in one place. Policy is
+    authoritative: a lower level can tighten it, never loosen it.
+  - Nothing may rule out a hosted, multi-tenant deployment: address theatres by id rather than host path, and take
+    identity from a provider rather than the OS directly.
 
   The first people who use it will be developers who review their files as diffs, but later (pre 1.0) there will be a
   UI which enables generic workflows for non-technical users. It is expected this workflow will be a local run server
