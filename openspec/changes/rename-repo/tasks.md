@@ -18,8 +18,8 @@
 
 ## 3. The rest of the org
 
-- [ ] 3.1 In `troupe-run/troupe-run.github.io`, on a branch, change all 16 references to `github.com/troupe-run/troupe`: the copy (header, hero, closing), the two backstage docs pages, `tests/e2e/landing.spec.ts`, the `--skip` in `.github/workflows/links-weekly.yml`, `CONTRIBUTING.md`, and `docs/superpowers/` (design decision 3). Verify `git grep "troupe-run/troupe\.run"` returns nothing, the site's build and e2e tests pass, and the PR (citing #26) is open with checks green
-- [ ] 3.2 In `troupe-run/.github`, change `profile/README.md` to link `https://github.com/troupe-run/troupe` as the "troupe repository" (design decision 4); verify `git grep "troupe-run/troupe\.run"` returns nothing and the PR (citing #26) is open
+- [x] 3.1 In `troupe-run/troupe-run.github.io`, on a branch, change all 16 references to `github.com/troupe-run/troupe`: the copy (header, hero, closing), the two backstage docs pages, `tests/e2e/landing.spec.ts`, the `--skip` in `.github/workflows/links-weekly.yml`, `CONTRIBUTING.md`, and `docs/superpowers/` (design decision 3). Verify `git grep "troupe-run/troupe\.run"` returns nothing, the site's build and e2e tests pass, and the PR (citing #26) is open with checks green
+- [x] 3.2 In `troupe-run/.github`, change `profile/README.md` to link `https://github.com/troupe-run/troupe` as the "troupe repository" (design decision 4); verify `git grep "troupe-run/troupe\.run"` returns nothing and the PR (citing #26) is open
 - [x] 3.3 Edit the bodies of #19 and #25 to the new name; verify by scanning every open issue's body (`gh issue list --state open --json number,body` with a `troupe\.run` scan) that only #26 still mentions the old name. GitHub's search splits `troupe.run` into two words, so `--search "troupe.run in:body"` can't tell old names apart
 
 ## 4. The local workspace
