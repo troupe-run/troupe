@@ -32,7 +32,7 @@
 ## 5. Session start and CLAUDE.md
 
 - [x] 5.1 Implement `claude-session-start` (design D8): set `core.hooksPath` when it isn't `.githooks` and say so, then return the workflow and branch/change status as `additionalContext`; test with a temporary repository in both states
-- [ ] 5.2 Write the project `CLAUDE.md` (design D9); verify a new session in this repository loads it, and receives the session-start context on its first turn
+- [x] 5.2 Write the project `CLAUDE.md` (design D9); verify a new session in this repository loads it, and receives the session-start context on its first turn (done 2026-10-11 on the owner's Windows machine: a new session quoted the session-start context, including the branch-change match, and CLAUDE.md's guardrails section)
 
 ## 6. Integration
 
@@ -46,7 +46,7 @@
 - [x] 7.1 Make `scripts/check.py` turn on the git hooks when they aren't active, and say so; verify with a test in a temporary repository that a run sets `core.hooksPath` and prints the notice, and that a second run doesn't
 - [x] 7.2 Implement `guard.py pre-push` and `.githooks/pre-push`: check every commit being pushed with the commit-message rule, skip deleted refs, and handle a new branch; verify end to end in a temporary repository with a bare remote that a non-conventional commit refuses the push, naming it, and a conventional one goes through
 - [x] 7.3 Implement `guard.py ci` (range, branch, rules per design D11) with tests for a pull-request range, a push range, a new-branch push, a push to `main` (branch rule skipped), and an archived change with an unticked task
-- [ ] 7.4 Add `.github/workflows/guard.yml` running `guard.py ci` on every push and pull request; verify it passes on this branch, and that it fails on a throwaway branch carrying a commit made with `--no-verify` and a non-conventional message (the branch is deleted afterwards)
+- [x] 7.4 Add `.github/workflows/guard.yml` running `guard.py ci` on every push and pull request; verify it passes on this branch, and that it fails on a throwaway branch carrying a commit made with `--no-verify` and a non-conventional message (the branch is deleted afterwards) (done 2026-10-11: a commit made through the GitHub API on throwaway branch guard-probe-bad failed the guard check, naming the commit and the branch rule; branch deleted)
 - [x] 7.5 Update `docs/development-workflow.md` (the layers, the pre-push hook, the GitHub check, and the probe result) and comment on #23 that its commit linting moves here; verify the docs' rule test still passes
 
 ## Workflow follow-up
