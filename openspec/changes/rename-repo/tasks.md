@@ -13,14 +13,14 @@
 - [x] 2.1 With the owner's go-ahead, rename the repo: `gh repo rename troupe --repo troupe-run/troupe.run --yes`; verify `gh repo view troupe-run/troupe --json id` returns `R_kgDOVEZa3g`
 - [x] 2.2 Set the clone's remote: `git remote set-url origin git@github.com:troupe-run/troupe.git`; verify `git remote -v` shows the new URL and `git ls-remote origin main` succeeds
 - [x] 2.3 Verify the new URLs resolve directly, with no redirect: `curl -sI https://github.com/troupe-run/troupe` and `.../troupe/issues` both return `200`
-- [ ] 2.4 Push the branch and open the PR with `Closes #26`; verify every CI job passes on Linux, macOS and Windows
+- [x] 2.4 Push the branch and open the PR with `Closes #26`; verify every CI job passes on Linux, macOS and Windows
 - [ ] 2.5 Confirm both Apps still cover the repo: `gh api user/installations/170159387/repositories` (DCO) and `.../170224209/repositories` (`troupe-run-infrastructure`) each list `troupe-run/troupe`, and the DCO check appears on the PR
 
 ## 3. The rest of the org
 
 - [ ] 3.1 In `troupe-run/troupe-run.github.io`, on a branch, change all 16 references to `github.com/troupe-run/troupe`: the copy (header, hero, closing), the two backstage docs pages, `tests/e2e/landing.spec.ts`, the `--skip` in `.github/workflows/links-weekly.yml`, `CONTRIBUTING.md`, and `docs/superpowers/` (design decision 3). Verify `git grep "troupe-run/troupe\.run"` returns nothing, the site's build and e2e tests pass, and the PR (citing #26) is open with checks green
 - [ ] 3.2 In `troupe-run/.github`, change `profile/README.md` to link `https://github.com/troupe-run/troupe` as the "troupe repository" (design decision 4); verify `git grep "troupe-run/troupe\.run"` returns nothing and the PR (citing #26) is open
-- [ ] 3.3 Edit the bodies of #19 and #25 to the new name; verify with `gh issue list --repo troupe-run/troupe --state open --search "troupe.run in:body"` that only #26 still mentions the old name
+- [x] 3.3 Edit the bodies of #19 and #25 to the new name; verify by scanning every open issue's body (`gh issue list --state open --json number,body` with a `troupe\.run` scan) that only #26 still mentions the old name. GitHub's search splits `troupe.run` into two words, so `--search "troupe.run in:body"` can't tell old names apart
 
 ## 4. The local workspace
 
