@@ -1,6 +1,5 @@
 """Shared helpers for the guard tests: temporary git repositories shaped like this one."""
 
-import os
 import shutil
 import subprocess
 import sys
@@ -20,8 +19,10 @@ FAILING_CHECK = (
 
 
 def clean_env() -> dict[str, str]:
-    """No inherited GIT_* variables: tests may run inside a real pre-commit hook."""
-    return {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    """No inherited repository-location variables: tests may run inside a real pre-commit hook."""
+    import guard
+
+    return guard._git_env()
 
 
 def git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
