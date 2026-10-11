@@ -1,6 +1,7 @@
 """Task 1.2: which OpenSpec change matches the current branch (design D3)."""
 
 from collections.abc import Callable
+from pathlib import Path
 
 from conftest import Repo, git
 
@@ -47,7 +48,7 @@ def test_the_branch_is_read_from_the_rebase_state_while_head_is_detached(
     git_dir = git(repo.path, "rev-parse", "--absolute-git-dir").stdout.strip()
     git(repo.path, "checkout", "-q", "--detach")
     state = repo.path / ".git" / "rebase-merge"
-    assert str(state.parent) == git_dir
+    assert state.parent == Path(git_dir)  # git prints C:/... on Windows; compare as paths
     state.mkdir()
     (state / "head-name").write_text("refs/heads/add-thing\n", encoding="utf-8")
     assert guard.current_branch(repo.path) == "add-thing"
