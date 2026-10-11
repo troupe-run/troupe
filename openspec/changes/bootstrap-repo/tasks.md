@@ -2,14 +2,14 @@
 
 ## 1. Workspace and gates
 
-- [ ] 1.1 Create the workspace root `pyproject.toml` (members `packages/*`, dev dependency group, ruff/mypy/pytest/import-linter config per design D8) and `packages/troupe/` with src layout and the `troupe` console script; verify `uv sync` succeeds and `uv run python -c "import troupe"` exits 0
-- [ ] 1.2 Add `scripts/check.py` running ruff, `ruff format --check`, `mypy --strict`, `lint-imports` and pytest in that order, stopping at the first failure; verify it passes on the empty package and fails when a deliberate lint error is added (then removed)
+- [x] 1.1 Create the workspace root `pyproject.toml` (members `packages/*`, dev dependency group, ruff/mypy/pytest/import-linter config per design D8) and `packages/troupe/` with src layout and the `troupe` console script; verify `uv sync` succeeds and `uv run python -c "import troupe"` exits 0
+- [x] 1.2 Add `scripts/check.py` running ruff, `ruff format --check`, `mypy --strict`, `lint-imports` and pytest in that order, stopping at the first failure; verify it passes on the empty package and fails when a deliberate lint error is added (then removed)
 - [ ] 1.3 Add `plugins/README.md` (out-of-process rule, JSON-RPC over stdio, imports only `protocol/`) and `protocol/README.md` (language-neutral contracts, generation plan per #7); verify both render on GitHub
 
 ## 2. Errors and the protocol schema
 
-- [ ] 2.1 Add `protocol/schemas/error.schema.json` (code, problem, fix, optional path and details; design D3) and the mirroring error type in `troupe.core`; verify with a test that serialises each error variant and validates it against the schema
-- [ ] 2.2 Add the exit-code table in `troupe.core` (0, 1, 2; design D4) and `docs/cli/exit-codes.md`; verify with a test that the document lists exactly the enum's codes
+- [x] 2.1 Add `protocol/schemas/error.schema.json` (code, problem, fix, optional path and details; design D3) and the mirroring error type in `troupe.core`; verify with a test that serialises each error variant and validates it against the schema
+- [x] 2.2 Add the exit-code table in `troupe.core` (0, 1, 2; design D4) and `docs/cli/exit-codes.md`; verify with a test that the document lists exactly the enum's codes
 
 ## 3. CLI (spec: cli)
 

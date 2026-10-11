@@ -93,7 +93,8 @@ validates it against the schema (`jsonschema` is a dev dependency only).
 
 One `IntEnum` in `troupe.core` holds the codes:
 - `0` OK;
-- `1` unexpected internal error;
+- `1` the command could not complete (including an unexpected internal error, reported as
+  `internal.unexpected`);
 - `2` usage error.
 
 Later changes add codes to that table only. `docs/cli/exit-codes.md` is checked against the enum by a test, so the
