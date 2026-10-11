@@ -15,12 +15,12 @@
 
 ## 3. Claude Code rules (PreToolUse)
 
-- [ ] 3.1 Implement the Bash command splitter (design D6) with tests for `&&`, `||`, `;`, `|`, newlines, quoting, and the refuse-when-unparseable path
-- [ ] 3.2 Implement `skip-hooks` (`--no-verify`, `git commit -n`, `core.hooksPath` changes via `git config` and `git -c`) with tests
-- [ ] 3.3 Implement `pr-closes-issue` for `gh pr create` with `--body`, `--body-file`, `--fill` and no body, with tests for each closing keyword, a missing keyword, and a body file that does and doesn't close an issue
-- [ ] 3.4 Implement `edit-branch-change` for `Edit|Write|MultiEdit|NotebookEdit` (paths inside the repository only; paths outside it are allowed), with tests for `main`, a non-matching branch, a matching branch, an archived-on-branch change and an outside path
-- [ ] 3.5 Implement the `claude-pre-tool-use` entry point: read the hook JSON from stdin, apply the rules, print the documented `permissionDecision: "deny"` JSON on refusal; test it by piping real-shaped PreToolUse JSON for Edit, Write and Bash and asserting the output
-- [ ] 3.6 Add `.claude/settings.json` with the PreToolUse hooks (matchers `Edit|Write|MultiEdit|NotebookEdit` and `Bash|PowerShell`, `${CLAUDE_PROJECT_DIR}` paths, `onFailure: "block"`) and the SessionStart hook; verify in a live session that an edit on a non-matching branch is refused with the rule's message
+- [x] 3.1 Implement the Bash command splitter (design D6) with tests for `&&`, `||`, `;`, `|`, newlines, quoting, and the refuse-when-unparseable path
+- [x] 3.2 Implement `skip-hooks` (`--no-verify`, `git commit -n`, `core.hooksPath` changes via `git config` and `git -c`) with tests
+- [x] 3.3 Implement `pr-closes-issue` for `gh pr create` with `--body`, `--body-file`, `--fill` and no body, with tests for each closing keyword, a missing keyword, and a body file that does and doesn't close an issue
+- [x] 3.4 Implement `edit-branch-change` for `Edit|Write|MultiEdit|NotebookEdit` (paths inside the repository only; paths outside it are allowed), with tests for `main`, a non-matching branch, a matching branch, an archived-on-branch change and an outside path
+- [x] 3.5 Implement the `claude-pre-tool-use` entry point: read the hook JSON from stdin, apply the rules, print the documented `permissionDecision: "deny"` JSON on refusal; test it by piping real-shaped PreToolUse JSON for Edit, Write and Bash and asserting the output
+- [x] 3.6 Add `.claude/settings.json` with the PreToolUse hooks (matchers `Edit|Write|MultiEdit|NotebookEdit` and `Bash|PowerShell`, `${CLAUDE_PROJECT_DIR}` paths, `onFailure: "block"`) and the SessionStart hook; verify in a live session that an edit on a non-matching branch is refused with the rule's message
 
 ## 4. Overrides
 
