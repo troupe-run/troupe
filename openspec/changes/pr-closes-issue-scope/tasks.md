@@ -18,7 +18,7 @@
 ## 3. Integration
 
 - [x] 3.1 Run `uv run scripts/check.py`, and verify all gates pass
-- [ ] 3.2 In a live session on this branch, run `gh pr create --repo troupe-run/.github --head no-such-branch --title t --body 'x'` and verify the hook doesn't refuse it. `gh` itself then fails on the missing branch, which creates nothing. Then run the same command without `--repo`, and verify it is refused with `pr-closes-issue`. Record both outputs in the task's commit message
+- [x] 3.2 In a live session on this branch, run `gh pr create --repo troupe-run/.github --head no-such-branch --title t --body 'x'` and verify the hook doesn't refuse it. `gh` itself then fails on the missing branch, which creates nothing. Then run the same command without `--repo`, and verify it is refused with `pr-closes-issue`. Record both outputs in the task's commit message
 
 ## Workflow follow-up
 
