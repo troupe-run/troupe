@@ -120,6 +120,10 @@ Platform differences, all inside `platform`:
   error names the path and says to close whatever holds it. POSIX never takes this path. The test forces it on
   Windows by holding the file open from a second process.
 - troupe's own reads open files briefly and close them, so they don't block a concurrent replace for long.
+- **Reading during a replace** can briefly fail on Windows: opening the file is refused while the rename
+  completes. This was found by the first Windows CI run. `read_bytes` (and `troupe.core.files.read_file`) retries
+  that refusal with the same bounded, announced wait, so a reader always gets one complete version. POSIX never
+  takes this path.
 
 ### D5a. Friendly paths
 
