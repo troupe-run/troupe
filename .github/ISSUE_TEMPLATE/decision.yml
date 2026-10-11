@@ -1,0 +1,40 @@
+name: Decision
+description: An open question that needs a decision from whoever owns it. Research first, then the brief.
+type: Decision
+labels: ["needs:owner"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do the research before asking. State what is already decided, then ask only the open part.
+        Add a `cap:<capability>` label for each capability this touches.
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What is already decided, what prompted this, and the constraints that apply.
+    validations:
+      required: true
+  - type: textarea
+    id: options
+    attributes:
+      label: Options
+      description: Each option with its trade-offs and the evidence for them.
+    validations:
+      required: true
+  - type: textarea
+    id: recommendation
+    attributes:
+      label: Recommendation
+      description: Your recommendation and why, or "none yet" and what would settle it.
+    validations:
+      required: true
+  - type: textarea
+    id: blocks
+    attributes:
+      label: What it blocks
+      description: The OpenSpec changes or work that wait on this decision.
+  - type: textarea
+    id: sources
+    attributes:
+      label: Sources
