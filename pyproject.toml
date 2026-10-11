@@ -37,17 +37,19 @@ select = ["E", "W", "F", "I", "UP", "B", "SIM", "RUF", "PT", "N", "ANN", "S"]
 [tool.ruff.lint.per-file-ignores]
 # Tests assert, and drive the CLI and helper processes through subprocess with trusted arguments.
 "packages/*/tests/**" = ["S101", "S603"]
-# The check script runs the project's own tools with fixed arguments.
-"scripts/**" = ["S603"]
+"scripts/tests/**" = ["S101", "S603", "S607"]
+# Repository scripts run the project's own tools (git, uv) from PATH with fixed arguments.
+"scripts/**" = ["S603", "S607"]
 
 [tool.mypy]
 strict = true
 python_version = "3.12"
 files = ["packages/troupe/src", "packages/troupe/tests", "scripts"]
-mypy_path = "packages/troupe/src"
+explicit_package_bases = true
+mypy_path = ["packages/troupe/src", "scripts", "scripts/tests"]
 
 [tool.pytest.ini_options]
-testpaths = ["packages/troupe/tests"]
+testpaths = ["packages/troupe/tests", "scripts/tests"]
 addopts = ["-ra", "--strict-markers", "--strict-config"]
 xfail_strict = true
 

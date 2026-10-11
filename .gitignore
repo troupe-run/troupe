@@ -8,3 +8,4 @@ __pycache__/
 .import_linter_cache/
 dist/
 build/
+.DS_Store

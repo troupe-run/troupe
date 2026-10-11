@@ -24,6 +24,16 @@ uv run scripts/check.py
 --strict`, the import contracts, and the tests. CI runs the same script on all three platforms, and every job
 must pass.
 
+Turn on the repository's git hooks once per clone (Claude Code sessions do this for you):
+
+```console
+git config core.hooksPath .githooks
+```
+
+They refuse commits on `main`, commits on a branch with no matching OpenSpec change, messages that aren't
+Conventional Commits, and commits whose checks fail. [docs/development-workflow.md](docs/development-workflow.md)
+lists every rule and how an override works.
+
 | Where | What |
 |---|---|
 | `packages/troupe/` | The `troupe` distribution: the core, the command line and the platform seam |
