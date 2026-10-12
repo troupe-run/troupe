@@ -70,7 +70,7 @@ select = ["E", "W", "F", "I", "UP", "B", "SIM", "RUF", "PT", "N", "ANN", "S"]
 
 [tool.ruff.lint.flake8-bugbear]
 # Field factories for dataclasses that carry JSON metadata: they return dataclasses.field(...).
-extend-immutable-calls = ["troupe.core.runners.protocol._json"]
+extend-immutable-calls = ["troupe.core.messages.json_field"]
 
 [tool.ruff.lint.per-file-ignores]
 # Tests assert, and drive the CLI and helper processes through subprocess with trusted arguments.

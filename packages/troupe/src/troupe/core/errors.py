@@ -62,6 +62,9 @@ CODES: dict[str, ExitCode] = {
     "stage.effects-unenforced": ExitCode.FAILURE,
     "theatre.not-found": ExitCode.FAILURE,
     "runner.unknown": ExitCode.FAILURE,
+    # A request that isn't understood is a usage error from any surface (design D15).
+    "client.invalid-request": ExitCode.USAGE,
+    "client.unknown-method": ExitCode.USAGE,
 }
 
 

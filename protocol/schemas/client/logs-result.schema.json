@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/client/logs-result.schema.json",
+  "title": "logs: result",
+  "description": "The run's summary and every event recorded for it, in seq order, whether or not it was followed, and any notices, such as why following stopped.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "run",
+    "events",
+    "notices"
+  ],
+  "properties": {
+    "run": {
+      "$ref": "run.schema.json#/$defs/summary"
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "$ref": "run.schema.json#/$defs/loggedEvent"
+      }
+    },
+    "notices": {
+      "type": "array",
+      "items": {
+        "$ref": "../notice.schema.json"
+      }
+    }
+  }
+}

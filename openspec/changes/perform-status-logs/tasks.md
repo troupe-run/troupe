@@ -62,15 +62,15 @@
 
 ## 6. Client protocol
 
-- [ ] 6.1 Write `protocol/schemas/client/` (design D2): the `perform`, `status` and `logs` requests, updates and
+- [x] 6.1 Write `protocol/schemas/client/` (design D2): the `perform`, `status` and `logs` requests, updates and
   results, and the shared `run-summary` definitions. List them in `protocol/README.md`. Verify schema tests with valid
   and invalid examples: an absolute path, `..` or a drive in `effectCheck.paths`; an actor name breaking its pattern;
   an `effectCheck` that is neither `none` nor `files`; an unknown field at each level; a run prefix shorter than 8
-- [ ] 6.2 Add the message types in `troupe.core.client` (strict `from_data`, `to_data`), `client.invalid-request` and
+- [x] 6.2 Add the message types in `troupe.core.client` (strict `from_data`, `to_data`), `client.invalid-request` and
   `client.unknown-method` (both exit 2). Verify every message both ways against its schema, including a hypothesis
   property test that schema-generated messages parse and serialise back unchanged, and tests that each kind of
   malformed request names its field
-- [ ] 6.3 Add the `Session` context and the dispatcher `call(method, params, session, on_update)` (design D2). Verify
+- [x] 6.3 Add the `Session` context and the dispatcher `call(method, params, session, on_update)` (design D2). Verify
   with a test that an unknown method is refused, and that a request is parsed before any method runs (an invalid
   `perform` starts no runner and writes nothing)
 

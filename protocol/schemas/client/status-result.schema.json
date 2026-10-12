@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/client/status-result.schema.json",
+  "title": "status: result",
+  "description": "The runs asked for, newest first, and any notices from reading the store.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "runs",
+    "notices"
+  ],
+  "properties": {
+    "runs": {
+      "type": "array",
+      "items": {
+        "$ref": "run.schema.json#/$defs/summary"
+      }
+    },
+    "notices": {
+      "type": "array",
+      "items": {
+        "$ref": "../notice.schema.json"
+      }
+    }
+  }
+}
