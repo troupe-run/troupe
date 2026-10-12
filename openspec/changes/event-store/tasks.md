@@ -25,7 +25,7 @@ Waiting for main stays the default. Either way, rebase only, never merge.
   the environment-policy, narrowing, whole-tree and run-to-completion requirements this change relies on (design D11).
   Verify `openspec validate event-store --strict` passes, and the git adapter's timeout test (4.2) shows the tree
   killed on all three CI platforms
-- [ ] 2.2 Wrap the platform errors in `troupe.core` as `command.timeout`, `command.not-found`,
+- [x] 2.2 Wrap the platform errors in `troupe.core` as `command.timeout`, `command.not-found`,
   `command.output-too-large` (naming the command) and `environment.policy-invalid`, and document the git adapter's
   limits in `docs/platform.md`. Verify the error-schema test and `test_platform_docs.py` pass, and that narrowing
   `GIT_ENVIRONMENT` wider is refused with `environment.policy-invalid`
@@ -41,14 +41,14 @@ Waiting for main stays the default. Either way, rebase only, never merge.
 
 ## 4. VCS port and adapters
 
-- [ ] 4.1 Define the VCS port in `troupe.core.vcs` (adapter name, branch, HEAD, `is_committed(path)`, configured
+- [x] 4.1 Define the VCS port in `troupe.core.vcs` (adapter name, branch, HEAD, `is_committed(path)`, configured
   identity). Implement `troupe_vcs_files`. Verify with tests for the `vcs` spec's plain-filesystem requirement
-- [ ] 4.2 Implement `troupe_vcs_git` over `run_to_completion`, with `GIT_ENVIRONMENT`, `GIT_TIMEOUT_SECONDS` and
+- [x] 4.2 Implement `troupe_vcs_git` over `run_to_completion`, with `GIT_ENVIRONMENT`, `GIT_TIMEOUT_SECONDS` and
   `GIT_MAX_OUTPUT_BYTES` as named defaults in `troupe_vcs_git.defaults` (design D11), and `vcs.failed` for git
   errors. Verify with tests against real temporary repositories: fresh repository (branch, no HEAD), detached HEAD,
   staged-only file counts as committed, `user.email` unset or empty is none, git missing from `PATH`, and a hung git
   (a stub on `PATH` that sleeps) times out with its tree killed
-- [ ] 4.3 Verify the git adapter's environment policy with tests for every scenario of the `vcs` spec's
+- [x] 4.3 Verify the git adapter's environment policy with tests for every scenario of the `vcs` spec's
   environment-policy requirement: global config under a temporary `HOME` (and `XDG_CONFIG_HOME`) found, hook-time
   `GIT_DIR`/`GIT_WORK_TREE` ignored, `AWS_SECRET_ACCESS_KEY` not passed, and the installed git's
   `git rev-parse --local-env-vars` all in `never`
