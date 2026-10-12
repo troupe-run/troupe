@@ -64,6 +64,8 @@ export TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE=true
 | `stage.unknown` | No stage of that name is installed |
 | `stage.effects-unenforced` | The stage can't enforce the actor's effects, and policy doesn't allow running it anyway |
 | `policy.invalid-value` | A policy variable is set to something other than `true` or `false` |
+| `run.out-of-sequence` | A run event isn't the next one its run expects, or arrived after the run ended: a fault, never retried |
+| `run.recording-failed` | A run event, or the run's end, couldn't be recorded, so the run was stopped |
 | `client.invalid-request` | A command's or query's request doesn't match its schema; it names the field. Exits 2 |
 | `client.unknown-method` | A surface called a command or query troupe doesn't offer. Exits 2 |
 

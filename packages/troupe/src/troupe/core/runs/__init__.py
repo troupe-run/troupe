@@ -2,12 +2,19 @@
 design D8 to D13)."""
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING
+from typing import Any
 
-if TYPE_CHECKING:
-    from troupe.core.client.dispatch import Method
+from troupe.core.client import messages as m
+from troupe.core.client.dispatch import Method, Send
+from troupe.core.client.session import Session
+from troupe.core.messages import Message
+from troupe.core.runs.perform import perform
 
 
-def methods() -> "Mapping[str, Method]":
+async def _perform(request: Any, session: Session, send: Send) -> Message:  # noqa: ANN401
+    return await perform(request, session, send)
+
+
+def methods() -> Mapping[str, Method]:
     """The commands and queries runs offer through the client protocol, by name."""
-    return {}
+    return {"perform": Method(m.PerformRequest, _perform)}

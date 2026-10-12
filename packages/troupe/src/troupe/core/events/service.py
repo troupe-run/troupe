@@ -76,10 +76,11 @@ class CanonicalTranscoder(JSONTranscoder):
 
 @dataclass(frozen=True)
 class Recorded:
-    """A recorded event's notification id and content-hash id."""
+    """A recorded event's notification id, content-hash id, and the time its lineage records."""
 
     notification_id: int
     event_id: str
+    at: str
 
 
 class EventStore:
@@ -217,7 +218,7 @@ class EventStore:
         if not numbers:
             return []
         ordered = self.recorder.notifications(numbers[0], len(numbers), numbers[-1], ())
-        return [Recorded(n, record.id) for n, record in ordered]
+        return [Recorded(n, record.id, lineage.at) for n, record in ordered]
 
     def _check_cause(self, cause: Cause, change: str) -> None:
         if isinstance(cause, CommandCause):

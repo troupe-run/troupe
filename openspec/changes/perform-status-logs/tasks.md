@@ -76,25 +76,25 @@
 
 ## 7. Recording a run
 
-- [ ] 7.1 Add the `Run` aggregate and its events (`Run.Started`, `Run.Reported`, `Run.Ended`) in `troupe.core.runs`,
+- [x] 7.1 Add the `Run` aggregate and its events (`Run.Started`, `Run.Reported`, `Run.Ended`) in `troupe.core.runs`,
   with `run.out-of-sequence` (design D8). Verify tests for: a repeated `seq`, a gap, a report before the start or after
   the end, a second start or end, all refused with nothing recorded; and a hypothesis test that any gap-free sequence
   of run events is accepted and reads back in order
-- [ ] 7.2 Add `perform` in `troupe.core.runs`: resolve identity, read policy, admit on the stage, mint the run id,
+- [x] 7.2 Add `perform` in `troupe.core.runs`: resolve identity, read policy, admit on the stage, mint the run id,
   take the run's lease (`.troupe/local/runs/<id>/`), store instructions and options as artifacts, run the host with
   `on_event` recording through `asyncio.to_thread`, record `Run.Started` on `init` (or at the end without one), each
   `Run.Reported`, then `Run.Ended`, and send `started`, `event` and `notice` updates (design D8, D9). Verify with
   scripted-runner tests, recording into a real git theatre, that a successful run's stream is start, `init`, the
   other events in `seq` order, then the end with `succeeded`; its lineage (person via `cli` for the start, agent via
   `runner` for the rest, one change id, the stage's allowance); and the options artifact's bytes
-- [ ] 7.3 Verify the run's end for each outcome the scripted runner can produce (`succeeded`, `failed` with each error
+- [x] 7.3 Verify the run's end for each outcome the scripted runner can produce (`succeeded`, `failed` with each error
   code, `crashed`, `timed-out`, `cancelled`, `could-not-start`), each recorded with the outcome and error the run host
   derived; and that a run that never sends `init` records its start with no runner name or version, then its end
 - [ ] 7.4 Handle recording failures (design D9): a failure in `on_event` cancels the run, records no further events,
   tries `Run.Ended` with `recording.failedAt` and the error, and fails with `run.recording-failed`. Verify with a test
   that injects a store failure at `seq` 2, and one where `Run.Ended` also fails (the error says so, and `status` shows
   the run `interrupted`)
-- [ ] 7.5 Verify the refusals that leave nothing behind: no identity, a malformed policy value, the default policy on
+- [x] 7.5 Verify the refusals that leave nothing behind: no identity, a malformed policy value, the default policy on
   the local stage, an unknown runner, and an unknown stage each fail before a runner starts, with no event, artifact or
   lease written
 

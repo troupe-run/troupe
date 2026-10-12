@@ -379,3 +379,11 @@ def test_a_command_acting_as_another_actor_shares_its_change_id_cause_and_stage(
     assert by_person["via"] == "cli"
     assert by_agent["actor"] == {"kind": "agent", "id": "tester", "source": "troupe"}
     assert by_agent["via"] == "runner"
+
+
+def test_each_recorded_event_carries_the_time_its_lineage_records(tmp_path: Path) -> None:
+    service = files_service(tmp_path)
+    recorded = service.command(via="cli").record(Counter(value=1).collect_events())
+    assert recorded
+    for each in recorded:
+        assert each.at == lineage_of(tmp_path, each.event_id)["at"]
