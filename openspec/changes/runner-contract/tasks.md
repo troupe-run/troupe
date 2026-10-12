@@ -16,11 +16,11 @@
 
 ## 3. Artifact store (spec: artifact-store)
 
-- [ ] 3.1 Add `commit_file(temp, target)` to `troupe.platform.files` (move a finished temporary file into place, reusing the Windows in-use retry and POSIX directory fsync; if the target exists, delete the temporary file); verify with tests for a new target, an existing target, and a target held open on Windows
-- [ ] 3.2 Implement the `ArtifactStore` port, `LocalArtifactStore(root)` and an in-memory store in `troupe.core.artifacts` (design D10), with `artifact.missing`, `artifact.corrupt` and `artifact.write-failed` in `CODES`; verify "Reference is the content hash", "Storing the same bytes twice", "Large streamed artifact" (64 MiB in 4 KiB pieces), "Unfinished artifact is not readable" and "Write abandoned part-way", plus a hypothesis test that any bytes round-trip with the reference equal to their SHA-256
-- [ ] 3.3 Verify "Stored file was altered" and "Missing artifact": each read fails with an error naming the reference and path that validates against the error schema
-- [ ] 3.4 Implement the self-ignoring `.gitignore`; verify "Store inside a git repository" with a test that stores artifacts in a store inside a fresh `git init` directory and checks `git status --porcelain` is empty
-- [ ] 3.5 Document the store (layout, references, the `.gitignore`, leftover temporary files) in `docs/runners.md` under Transcripts; verify the docs test from 1.3 still passes
+- [x] 3.1 Add `commit_file(temp, target)` to `troupe.platform.files` (move a finished temporary file into place, reusing the Windows in-use retry and POSIX directory fsync; if the target exists, delete the temporary file); verify with tests for a new target, an existing target, and a target held open on Windows
+- [x] 3.2 Implement the `ArtifactStore` port, `LocalArtifactStore(root)` and an in-memory store in `troupe.core.artifacts` (design D10), with `artifact.missing`, `artifact.corrupt` and `artifact.write-failed` in `CODES`; verify "Reference is the content hash", "Storing the same bytes twice", "Large streamed artifact" (64 MiB in 4 KiB pieces), "Unfinished artifact is not readable" and "Write abandoned part-way", plus a hypothesis test that any bytes round-trip with the reference equal to their SHA-256
+- [x] 3.3 Verify "Stored file was altered" and "Missing artifact": each read fails with an error naming the reference and path that validates against the error schema
+- [x] 3.4 Implement the self-ignoring `.gitignore`; verify "Store inside a git repository" with a test that stores artifacts in a store inside a fresh `git init` directory and checks `git status --porcelain` is empty
+- [x] 3.5 Document the store (layout, references, the `.gitignore`, leftover temporary files) in `docs/runners.md` under Transcripts; verify the docs test from 1.3 still passes
 
 ## 4. Core types, limits and outcomes (spec: actor-runners)
 

@@ -175,3 +175,51 @@ def test_replacing_a_file_another_process_holds_open(tmp_path: Path) -> None:
     finally:
         holder.stdin.close()
         holder.wait(timeout=10)
+
+
+# Moving a finished temporary file into place (content-addressed files; spec: artifact-store)
+
+
+def test_commit_file_moves_the_temporary_file_to_a_new_target(tmp_path: Path) -> None:
+    temp = tmp_path / "tmp.part"
+    temp.write_bytes(b"artifact")
+    target = tmp_path / "ab" / "abcdef"
+    target.parent.mkdir()
+    assert files.commit_file(temp, target, timeout=2.0, announce_after=1.0) is True
+    assert target.read_bytes() == b"artifact"
+    assert not temp.exists()
+
+
+def test_commit_file_keeps_an_existing_target_and_removes_the_temporary_file(
+    tmp_path: Path,
+) -> None:
+    temp = tmp_path / "tmp.part"
+    temp.write_bytes(b"artifact")
+    target = tmp_path / "abcdef"
+    target.write_bytes(b"artifact")
+    assert files.commit_file(temp, target, timeout=2.0, announce_after=1.0) is False
+    assert target.read_bytes() == b"artifact"
+    assert not temp.exists()
+
+
+def test_commit_file_does_not_wait_for_an_existing_target_held_open_by_a_reader(
+    tmp_path: Path,
+) -> None:
+    temp = tmp_path / "tmp.part"
+    temp.write_bytes(b"artifact")
+    target = tmp_path / "abcdef"
+    target.write_bytes(b"artifact")
+    waits: list[float] = []
+    with target.open("rb"):
+        assert (
+            files.commit_file(
+                temp,
+                target,
+                timeout=0.5,
+                announce_after=0.0,
+                on_wait=lambda _path, waited: waits.append(waited),
+            )
+            is False
+        )
+    assert waits == []
+    assert not temp.exists()

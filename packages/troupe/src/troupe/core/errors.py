@@ -21,6 +21,9 @@ CODES: dict[str, ExitCode] = {
     "lock.already-held": ExitCode.FAILURE,
     "replace.in-use": ExitCode.FAILURE,
     "replace.failed": ExitCode.FAILURE,
+    "artifact.missing": ExitCode.FAILURE,
+    "artifact.corrupt": ExitCode.FAILURE,
+    "artifact.write-failed": ExitCode.FAILURE,
 }
 
 

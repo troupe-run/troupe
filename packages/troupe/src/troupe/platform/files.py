@@ -61,6 +61,43 @@ def replace_bytes(
     _fsync_directory(target.parent)
 
 
+def commit_file(
+    temp: str | os.PathLike[str],
+    target: str | os.PathLike[str],
+    *,
+    timeout: float,
+    announce_after: float,
+    on_wait: WaitCallback | None = None,
+) -> bool:
+    """Move a finished, fsynced temporary file into place, unless ``target`` already exists.
+
+    For content-addressed files, whose name is a hash of their bytes: an existing target already
+    holds the same bytes, so the temporary file is deleted and False is returned. Otherwise the
+    temporary file is renamed to ``target`` (retrying, bounded and announced, while Windows refuses)
+    and True is returned. The temporary file must be in the same directory tree and file system.
+    """
+    source = Path(temp)
+    destination = Path(target)
+    try:
+        if destination.exists():
+            source.unlink()
+            return False
+        _replace(
+            source,
+            destination,
+            None,
+            timeout=timeout,
+            announce_after=announce_after,
+            on_wait=on_wait,
+        )
+    except BaseException:
+        with contextlib.suppress(FileNotFoundError):
+            source.unlink()
+        raise
+    _fsync_directory(destination.parent)
+    return True
+
+
 def _replace(
     temp: Path,
     target: Path,
