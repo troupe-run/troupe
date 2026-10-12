@@ -10,7 +10,8 @@ from hypothesis import strategies as st
 from runner_schemas import is_valid, validate
 from troupe.core.runners import protocol as p
 
-RUN_IDS = st.from_regex(r"\A[A-Za-z0-9._-]{1,40}\Z")
+RUN_IDS = st.uuids().map(str)
+RUN = "0f8fad5b-d9cb-469f-a165-70867728950e"
 TEXT = st.text(max_size=30)
 NAME = st.text(min_size=1, max_size=20)
 NATIVE = st.dictionaries(st.text(max_size=8), st.integers() | st.text(max_size=8), max_size=3)
@@ -46,6 +47,7 @@ CASES: list[tuple[type[p.Message], str, st.SearchStrategy[Any]]] = [
             {
                 "protocolVersions": st.lists(st.integers(1, 9), min_size=1, unique=True),
                 "host": NAMED,
+                "capabilities": st.lists(NAME, unique=True, max_size=3),
             }
         ),
     ),
@@ -56,7 +58,7 @@ CASES: list[tuple[type[p.Message], str, st.SearchStrategy[Any]]] = [
             {
                 "protocolVersion": st.integers(1, 9),
                 "runner": NAMED,
-                "capabilities": st.dictionaries(NAME, st.booleans(), max_size=3),
+                "capabilities": st.lists(NAME, unique=True, max_size=3),
             }
         ),
     ),
@@ -234,7 +236,7 @@ def test_every_runner_event_type_has_a_python_type() -> None:
 # Strictness: what the schema refuses, from_data refuses too
 
 INIT = {
-    "runId": "r",
+    "runId": RUN,
     "seq": 0,
     "type": "init",
     "runner": {"name": "s", "version": "1"},
@@ -247,17 +249,18 @@ REFUSED: list[tuple[str, type[p.Message], dict[str, Any], str]] = [
     ("wrong type", p.InitEvent, {**INIT, "tools": "Write"}, "must be an array"),
     ("init not first", p.InitEvent, {**INIT, "seq": 3}, "seq is always 0"),
     ("bad run id", p.InitEvent, {**INIT, "runId": "has space"}, "doesn't match"),
+    ("uppercase uuid", p.InitEvent, {**INIT, "runId": RUN.upper()}, "doesn't match"),
     (
         "bool as int",
         p.RetryEvent,
-        {"runId": "r", "seq": 1, "type": "retry", "attempt": True, "delayMs": 0, "reason": "other"},
+        {"runId": RUN, "seq": 1, "type": "retry", "attempt": True, "delayMs": 0, "reason": "other"},
         "must be an integer",
     ),
     (
         "negative",
         p.ToolResultEvent,
         {
-            "runId": "r",
+            "runId": RUN,
             "seq": 1,
             "type": "tool_result",
             "callId": "c",
@@ -270,14 +273,14 @@ REFUSED: list[tuple[str, type[p.Message], dict[str, Any], str]] = [
     (
         "bad enum",
         p.ResultEvent,
-        {"runId": "r", "seq": 1, "type": "result", "status": "success", "message": ""},
+        {"runId": RUN, "seq": 1, "type": "result", "status": "success", "message": ""},
         "one of",
     ),
     ("wrong type field", p.TurnEvent, {**INIT, "type": "init"}, "type must be 'turn'"),
     (
         "no versions",
         p.InitializeParams,
-        {"protocolVersions": [], "host": {"name": "t", "version": "1"}},
+        {"protocolVersions": [], "host": {"name": "t", "version": "1"}, "capabilities": []},
         "at least 1",
     ),
 ]
@@ -303,7 +306,7 @@ def test_from_data_refuses_what_the_schema_refuses(
 def test_parse_event_dispatches_on_type_and_refuses_troupes_own_oversized_event() -> None:
     assert isinstance(p.parse_event(INIT), p.InitEvent)
     oversized = {
-        "runId": "r",
+        "runId": RUN,
         "seq": 1,
         "type": "oversized",
         "originalType": "log",
@@ -352,13 +355,13 @@ def test_parse_line_refuses_anything_a_runner_may_not_send(line: bytes) -> None:
 
 def test_messages_the_host_builds_validate_as_host_messages() -> None:
     sent = [
-        p.request(1, "initialize", p.InitializeParams([1], p.Named("troupe", "0.0.1"))),
+        p.request(1, "initialize", p.InitializeParams([1], p.Named("troupe", "0.0.1"), [])),
         p.request(
             2,
             "run/start",
-            p.RunStartParams("r-1", "go", "/w", {"script": []}, p.StartLimits(65536)),
+            p.RunStartParams(RUN, "go", "/w", {"script": []}, p.StartLimits(65536)),
         ),
-        p.request(3, "run/cancel", p.RunCancelParams("r-1")),
+        p.request(3, "run/cancel", p.RunCancelParams(RUN)),
         p.request(4, "shutdown", p.Empty()),
     ]
     for message in sent:
