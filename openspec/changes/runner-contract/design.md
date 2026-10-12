@@ -26,6 +26,10 @@ See proposal.md for why. What this builds on:
 - **Parallel work:** the event format is being designed in the event-store change (#35). This change does not
   record anything into the event store; part C (#33) does. What this change assumes about the event format is set
   out in [Assumptions about the event format](#assumptions-about-the-event-format-35).
+- **Owner decisions from comparing this design with event-store's (2026-10-12):** event-store builds its git
+  runner on this change's `troupe.platform.processes` (D6); a child's environment is a declared policy per port or
+  adapter, not one platform rule (D6); run ids are UUIDs (D11); announcements are notices in a shared shape (D7);
+  the local store is its own package (D10). The assumptions about the event format were revised to match.
 
 ## Goals / Non-Goals
 
@@ -171,8 +175,39 @@ streams for its standard input, output and error; `wait()`; and `kill_tree()`.
 |---|---|---|
 | Own group | `start_new_session=True` (a new session and process group) | `CREATE_NEW_PROCESS_GROUP`, and the child is assigned to a new **job object** at once |
 | Kill the tree | `os.killpg(pgid, SIGKILL)` | `TerminateJobObject`; the job is created with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, so the tree also dies if troupe does |
-| Minimal environment | none: the command is resolved to an absolute path with the caller's `PATH` before starting | `SYSTEMROOT` (Python and Winsock need it), plus the resolved absolute command |
+| Platform minimum environment | none: the command is resolved to an absolute path with the caller's `PATH` before starting | `SYSTEMROOT` (Python and Winsock need it), plus the resolved absolute command |
 | Long lines | `limit=` on the stream reader, from the caller | same |
+
+**Environment policies (owner, 2026-10-12: "design for adaptability now").** A child always gets an explicit
+environment; nothing is inherited implicitly. What it gets is a per-port decision, not a platform rule:
+
+- `EnvironmentPolicy` (frozen): `names` (exact), `prefixes`, `never` (names) and `never_prefixes`.
+  `build_environment(policy, source=os.environ, explicit={})` returns the platform minimum, plus the variables of
+  `source` the policy selects, minus the never-passed ones, plus `explicit`. An explicit value can't bring back a
+  never-passed name. Names match case-insensitively on Windows, where the environment is case-insensitive.
+- `policy.narrow(drop_names=..., drop_prefixes=..., never=...)` only removes; asking it to select something new is
+  refused. That is how "tightenable, never loosenable" is enforced until the `settings` capability exists.
+- Each port or adapter declares its policy once, as a named default in `troupe.core.defaults`. This change adds
+  `RUNNER_ENVIRONMENT`, which selects nothing: a runner gets only what its caller names. The event-store change adds
+  `GIT_ENVIRONMENT` (what git needs for config, credentials and SSH, minus the hook-time repository-location
+  variables). A filesystem adapter needs none.
+- Why not one rule: with a minimal environment, git can't find `user.email`, and the identity chain would silently
+  fall through to the OS login.
+
+**Run to completion.** `run_to_completion(argv, *, cwd, env, timeout, max_output_bytes, input=None,
+announce_after, on_wait=None, search_path=None) -> Completed(returncode, stdout, stderr)` serves short commands such
+as event-store's git calls (its D11).
+
+- **It blocks, and works in any context.** It uses `subprocess.Popen` with the same own-group (POSIX) or job-object
+  (Windows) start and the same `kill_tree`, and threads drain standard output and error; no event loop is involved.
+  Change C calls git through event-store's synchronous store from inside the async run host, so a version that
+  refused to run inside a running loop could never work there. A caller that must not block its loop wraps the call
+  in `asyncio.to_thread`.
+- Past `timeout`: the tree is killed, then `ProcessTimeoutError` carries the command, the timeout and the output so
+  far. Past `max_output_bytes` (both streams together): the tree is killed and `OutputTooLargeError` names the
+  limit. After `announce_after`, `on_wait(command, waited)` is called once, as for locks and file replacement.
+- Alternatives considered: refusing inside a running loop (breaks change C); running a private loop on a worker
+  thread when a loop is running (two code paths and two failure modes for one job). Rejected.
 
 - Job objects are reached through `ctypes` (standard library), inside `platform` only. The import contract already
   forbids `signal` outside `platform`; `ctypes` joins that list.
@@ -194,6 +229,13 @@ streams for its standard input, output and error; `wait()`; and `kill_tree()`.
 - `outcome.py`: the pure derivation (D4);
 - `effects.py`: the effect-check port and its two checks (D10);
 - `conformance.py`: the conformance checks (D13).
+
+**Announcements are notices.** `on_announce` receives a `Notice`: the shape of `protocol/schemas/notice.schema.json`,
+which has the same fields as the error shape (`code`, `problem`, `fix`, and optionally `path` and `details`). Notice
+codes are declared once, in `troupe.core.notices`, as error codes are in `troupe.core.errors`. This change declares
+`run.silent` (no event for the silence threshold; details: seconds silent) and `run.retrying` (a `retry` event;
+details: attempt, maximum, delay and reason). The event-store change uses the same shape for its own notices:
+whichever change lands second adopts the other's schema file and module, and merges its codes in.
 
 The host runs three concurrent tasks per run: reading standard output (dispatching events, transcript records and
 responses), draining standard error into its artifact, and a watchdog (run timeout, silence announcements, cancel
@@ -238,7 +280,7 @@ continues. The limit is also sent to the runner in `run/start`, so a well-behave
 
 **Store:** a port (`ArtifactStore`: `open_writer()` → writer with `write(bytes)`, `finish() -> ref`, `abort()`;
 `put(bytes) -> ref`; `read(ref) -> bytes`; `contains(ref)`), with `LocalArtifactStore(root)` and an in-memory store
-for tests. There is no streaming reader: it would hand back bytes before it could detect a hash mismatch, and the
+for tests. The port and the in-memory store are in `troupe.core.artifacts`. There is no streaming reader: it would hand back bytes before it could detect a hash mismatch, and the
 spec says corrupted bytes are never returned. A streaming, verify-at-end reader can be added when a caller needs
 one.
 
@@ -247,14 +289,21 @@ one.
   temporary file is deleted (deduplication without a race).
 - The move uses `platform` (a new `commit_file(temp, target)` beside the existing atomic replace), so the Windows
   in-use retry and the POSIX directory fsync are reused.
-- **Out of git without touching user files:** on first use the store writes `<root>/.gitignore` containing `*`. Git
-  then ignores the whole directory, including that file, and the theatre's own `.gitignore` is never edited. This
-  also means the event-store change doesn't need to coordinate a `.gitignore` entry for it.
+- **Its own package (owner, 2026-10-12).** `LocalArtifactStore` lives in `packages/troupe-artifacts-local/`
+  (distribution `troupe-artifacts-local`, module `troupe_artifacts_local`), registered in the `troupe.artifacts`
+  entry point group as `local`. `troupe.core.artifacts.load_store(name, root)` finds a store by name; an unknown name
+  fails with `artifact.unknown-store`, naming the stores that are installed. This follows the bootstrap design: every
+  port is proven by a separately packaged implementation. It matches event-store's `troupe.store`, `troupe.vcs` and
+  `troupe.identity` groups. An import contract stops `troupe` from importing `troupe_artifacts_local`; the package
+  may import `troupe.core` and `troupe.platform`.
+- **Out of git without touching user files:** part C puts the store under `.troupe/local/artifacts/`, and
+  event-store keeps `.troupe/local/` out of git. The store also writes `<root>/.gitignore` containing `*` on first
+  use, as a harmless guard for a root put anywhere else; the theatre's own `.gitignore` is never edited.
 - Reads stream the file through SHA-256 and raise `artifact.corrupt` on a mismatch; a missing reference raises
   `artifact.missing`.
 - Leftover temporary files from a killed process stay in `<root>/tmp/`. Cleaning them is safe only when no writer is
   live, so it is left to a later `troupe` maintenance command and noted in the docs.
-- Location: the caller passes the root. Part C will use `.troupe/artifacts/` in the theatre. The store is addressed
+- Location: the caller passes the root. Part C will use `.troupe/local/artifacts/` in the theatre. The store is addressed
   by hash, not path, so a hosted store can replace it (#4 option C) without changing callers.
 
 **Effect check:** a port (`EffectCheck`: `before()` at run start, `after() -> EffectVerdict`), with:
@@ -273,7 +322,10 @@ generator choice (and whether its output needs a runtime dependency such as pyda
 and the config change will bring far more schema than this one, so the generator is chosen there.
 
 Until then, the types in `troupe.core.runners.protocol` are frozen dataclasses with `to_data()`/`from_data()`, and
-tests validate every message both sides produce against the schema, including hypothesis-generated events. The
+tests validate every message both sides produce against the schema, including hypothesis-generated events.
+
+Run ids are UUIDs in canonical lowercase form (owner, 2026-10-12), checked by the schema's `runId` pattern
+(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`) and by the Python types. The
 scripted runner has its own small copy of the types, because it may not import troupe; its tests validate against
 the same schema files.
 
@@ -352,7 +404,8 @@ variable, `TROUPE_CONFORMANCE_RUNNER`, points them at another runner command.
 
 Added to `CODES`, all `ExitCode.FAILURE`: `runner.start-failed`, `runner.incompatible`, `runner.start-timeout`,
 `runner.protocol`, `runner.crashed`, `run.error-result`, `run.effect-missing`, `run.timeout`, `run.authentication`,
-`run.transcript-too-large`, `artifact.missing`, `artifact.corrupt`, `artifact.write-failed`.
+`run.transcript-too-large`, `artifact.missing`, `artifact.corrupt`, `artifact.write-failed`,
+`artifact.unknown-store`. Notice codes (D7) are separate: `run.silent` and `run.retrying`, in `troupe.core.notices`.
 
 ## Assumptions about the event format (#35)
 
@@ -367,24 +420,23 @@ so #35 can check them; if one is wrong, what changes is listed with it.
    and each is capped at `RUN_EVENT_MAX_BYTES` (64 KiB). Anything larger is stored out of line and referenced by
    hash. *If #35 sets a lower per-event size:* lower the default; the mechanism stays.
 3. **Lineage is added by troupe, never by the runner.** The runner is untrusted and supplies no actor, via, time,
-   reason, change id or approvals. C sets the actor to the agent being run (kind `agent`, never null), `via` to the
-   runner's name and version from `init`, and the time to when the host received the event. Any time inside a run
-   event is data, not lineage. *If #35 expects the producer to supply lineage:* C supplies it; the protocol stays.
+   reason, change id or approvals. C sets the actor to the agent being run (kind `agent`, never null) and `via` to
+   `runner` (event-store's `via` is a closed set: `cli`, `file`, `runner`, `server`). The runner's name and version,
+   from `init`, go in C's run-started payload. Lineage time is when troupe recorded the event (owner, 2026-10-12),
+   not when the host received it. Any time inside a run event is data, not lineage.
 4. **Content-hash IDs that leave out wall time and actor** don't collide across runs, because every run event carries
-   its `runId` and `seq`. The same run event recorded twice hashes the same, which makes recording idempotent.
-   *Assumes:* the hash covers the payload, and the payload includes the run id.
-5. **One stream per run fits.** A run's events have a dense, gap-free `seq` starting at 0, which maps onto
-   `originator_version` if #35 makes each run its own stream (the run id as originator id). A repeated `seq` is
-   already a protocol violation here, matching the library's `IntegrityError` on a duplicate version. *If #35 uses a
-   different stream layout:* `seq` is still the in-run order; nothing here relies on notification ids.
+   its `runId` and `seq`. Recording the same run event twice is an error, not a silent no-op: event-store refuses a
+   duplicate stream and version (`IntegrityError`, reported as `events.version-conflict`). The host hands each event
+   to `on_event` exactly once, so a duplicate means a bug or a replay, and C must not retry blindly.
+5. **`seq` is the order within the run, kept in the payload.** It is not mapped to `originator_version`: the
+   library's versions start at 1, and C adds run-started and run-ended events to the same stream (owner,
+   2026-10-12). Nothing here relies on notification ids.
 6. **Artifacts are referenced as strings.** References are `sha256:<64 hex>`; the event store needs no binary or
    attachment support. *If #35 wants a structured reference:* C wraps the string.
 7. **VCS state is C's job.** Branch, HEAD and file hashes are recorded by C, not reported by the runner.
 8. **`init` is recorded first** (#4). The host guarantees `init` is the first run event, so C can record it first
    without reordering.
-9. **The run id is minted by the caller** (C), as a unique string. This change only checks it is a non-empty string
-   of at most 128 characters from `[A-Za-z0-9._-]`. *If #35 standardises an id format (UUID, ULID):* tighten the
-   check in the schema.
+9. **The run id is a UUID minted by the caller** (C), in canonical lowercase form, checked by the schema (D11).
 
 ## Risks / Trade-offs
 
