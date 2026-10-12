@@ -366,3 +366,27 @@ def test_messages_the_host_builds_validate_as_host_messages() -> None:
     ]
     for message in sent:
         validate(message, "message.schema.json#/$defs/fromHost")
+
+
+# Ambiguous JSON is refused, never read with a guess (design D1a)
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        b'{"jsonrpc":"2.0","method":"run/event","method":"run/transcript","params":{}}',
+        b'{"jsonrpc":"2.0","method":"run/event","params":{"seq":1,"seq":2}}',
+        b'{"jsonrpc":"2.0","method":"run/event","params":{"costUsd":NaN}}',
+        b'{"jsonrpc":"2.0","method":"run/event","params":{"costUsd":Infinity}}',
+        b'{"jsonrpc":"2.0","method":"run/event","params":{"costUsd":-Infinity}}',
+    ],
+    ids=["duplicate top-level key", "duplicate nested key", "NaN", "Infinity", "-Infinity"],
+)
+def test_parse_line_refuses_ambiguous_json(line: bytes) -> None:
+    with pytest.raises(p.ProtocolError, match=r"ambiguous JSON|isn't a JSON number"):
+        p.parse_line(line)
+
+
+def test_parse_line_reads_a_message_ending_in_a_carriage_return_and_line_feed() -> None:
+    note = p.parse_line(b'{"jsonrpc":"2.0","method":"run/event","params":{}}\r\n')
+    assert note.method == "run/event"

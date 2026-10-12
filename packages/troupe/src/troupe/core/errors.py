@@ -31,6 +31,7 @@ CODES: dict[str, ExitCode] = {
     "run.timeout": ExitCode.FAILURE,
     "run.authentication": ExitCode.FAILURE,
     "run.transcript-too-large": ExitCode.FAILURE,
+    "run.unclean-exit": ExitCode.FAILURE,
     "artifact.missing": ExitCode.FAILURE,
     "artifact.corrupt": ExitCode.FAILURE,
     "artifact.write-failed": ExitCode.FAILURE,

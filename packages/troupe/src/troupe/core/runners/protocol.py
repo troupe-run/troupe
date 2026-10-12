@@ -438,12 +438,31 @@ class Incoming:
     error: RpcError | None = None
 
 
-def parse_line(line: bytes) -> Incoming:
-    """Read one line a runner wrote: a notification, a success response or an error response."""
+def _no_duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    data: dict[str, object] = {}
+    for key, value in pairs:
+        if key in data:
+            raise ProtocolError(f"ambiguous JSON: the key {key!r} appears more than once")
+        data[key] = value
+    return data
+
+
+def _no_non_finite(constant: str) -> object:
+    raise ProtocolError(f"not JSON: {constant} isn't a JSON number")
+
+
+def loads_strict(line: bytes) -> object:
+    """Parse one line of JSON, refusing what Python's reader would quietly accept (design D1a):
+    a duplicated key (it would keep the last value) and NaN or Infinity (not JSON)."""
     try:
-        data = json.loads(line)
+        return json.loads(line, object_pairs_hook=_no_duplicate_keys, parse_constant=_no_non_finite)
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise ProtocolError(f"not JSON: {error}") from error
+
+
+def parse_line(line: bytes) -> Incoming:
+    """Read one line a runner wrote: a notification, a success response or an error response."""
+    data = loads_strict(line)
     if not isinstance(data, dict) or data.get("jsonrpc") != "2.0":
         raise ProtocolError("not a JSON-RPC 2.0 message")
     keys = set(data) - {"jsonrpc"}
