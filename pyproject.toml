@@ -15,12 +15,20 @@ members = ["packages/*", "plugins/*"]
 troupe = { workspace = true }
 troupe-artifacts-local = { workspace = true }
 troupe-runner-scripted = { workspace = true }
+troupe-identity-local = { workspace = true }
+troupe-store-text = { workspace = true }
+troupe-vcs-files = { workspace = true }
+troupe-vcs-git = { workspace = true }
 
 [dependency-groups]
 dev = [
     "troupe",
     "troupe-artifacts-local",
     "troupe-runner-scripted",
+    "troupe-identity-local",
+    "troupe-store-text",
+    "troupe-vcs-files",
+    "troupe-vcs-git",
     "ruff>=0.17",
     "mypy>=2.4",
     "pytest>=9.1",
@@ -28,6 +36,8 @@ dev = [
     "import-linter>=2.15",
     "jsonschema>=4.26",
     "types-jsonschema>=4.26",
+    # The eventsourcing recorder test suite imports AESCipher at module scope (design: prior art).
+    "pycryptodome>=3.23",
 ]
 
 [tool.ruff]
@@ -38,6 +48,14 @@ src = [
     "packages/troupe/tests",
     "packages/troupe-artifacts-local/src",
     "packages/troupe-artifacts-local/tests",
+    "packages/troupe-identity-local/src",
+    "packages/troupe-identity-local/tests",
+    "packages/troupe-store-text/src",
+    "packages/troupe-store-text/tests",
+    "packages/troupe-vcs-files/src",
+    "packages/troupe-vcs-files/tests",
+    "packages/troupe-vcs-git/src",
+    "packages/troupe-vcs-git/tests",
     "plugins/runner-scripted/src",
     "plugins/runner-scripted/tests",
     "scripts",
@@ -68,6 +86,14 @@ files = [
     "packages/troupe/tests",
     "packages/troupe-artifacts-local/src",
     "packages/troupe-artifacts-local/tests",
+    "packages/troupe-identity-local/src",
+    "packages/troupe-identity-local/tests",
+    "packages/troupe-store-text/src",
+    "packages/troupe-store-text/tests",
+    "packages/troupe-vcs-files/src",
+    "packages/troupe-vcs-files/tests",
+    "packages/troupe-vcs-git/src",
+    "packages/troupe-vcs-git/tests",
     "plugins/runner-scripted/src",
     "plugins/runner-scripted/tests",
     "scripts",
@@ -77,6 +103,10 @@ mypy_path = [
     "packages/troupe/src",
     "packages/troupe/tests",
     "packages/troupe-artifacts-local/src",
+    "packages/troupe-identity-local/src",
+    "packages/troupe-store-text/src",
+    "packages/troupe-vcs-files/src",
+    "packages/troupe-vcs-git/src",
     "plugins/runner-scripted/src",
     "plugins/runner-scripted/tests",
     "scripts",
@@ -87,6 +117,10 @@ mypy_path = [
 testpaths = [
     "packages/troupe/tests",
     "packages/troupe-artifacts-local/tests",
+    "packages/troupe-identity-local/tests",
+    "packages/troupe-store-text/tests",
+    "packages/troupe-vcs-files/tests",
+    "packages/troupe-vcs-git/tests",
     "plugins/runner-scripted/tests",
     "scripts/tests",
 ]
@@ -94,7 +128,15 @@ addopts = ["-ra", "--strict-markers", "--strict-config"]
 xfail_strict = true
 
 [tool.importlinter]
-root_packages = ["troupe", "troupe_artifacts_local", "troupe_runner_scripted"]
+root_packages = [
+    "troupe",
+    "troupe_artifacts_local",
+    "troupe_identity_local",
+    "troupe_store_text",
+    "troupe_vcs_files",
+    "troupe_vcs_git",
+    "troupe_runner_scripted",
+]
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
@@ -105,7 +147,14 @@ layers = ["troupe.cli", "troupe.core", "troupe.platform"]
 [[tool.importlinter.contracts]]
 name = "only troupe.platform imports OS-specific modules"
 type = "forbidden"
-source_modules = ["troupe", "troupe_artifacts_local"]
+source_modules = [
+    "troupe",
+    "troupe_artifacts_local",
+    "troupe_identity_local",
+    "troupe_store_text",
+    "troupe_vcs_files",
+    "troupe_vcs_git",
+]
 forbidden_modules = ["fcntl", "msvcrt", "termios", "signal", "winreg", "pwd", "grp", "ctypes"]
 ignore_imports = ["troupe.platform.** -> *"]
 
@@ -122,4 +171,26 @@ forbidden_modules = ["troupe_artifacts_local"]
 name = "plugins import nothing from troupe"
 type = "forbidden"
 source_modules = ["troupe_runner_scripted"]
-forbidden_modules = ["troupe", "troupe_artifacts_local"]
+forbidden_modules = ["troupe", "troupe_artifacts_local", "troupe_identity_local", "troupe_store_text", "troupe_vcs_files", "troupe_vcs_git"]
+
+[[tool.importlinter.contracts]]
+# Event-store adapters are found by name through the troupe.store, troupe.vcs and troupe.identity entry point
+# groups, never imported, so every port is proven by a separately packaged implementation, and no surface can
+# reach a recorder except through troupe.core.events (event-store design D1).
+name = "troupe never imports an event-store adapter package"
+type = "forbidden"
+source_modules = ["troupe"]
+forbidden_modules = ["troupe_identity_local", "troupe_store_text", "troupe_vcs_files", "troupe_vcs_git"]
+
+[[tool.importlinter.contracts]]
+# Adapters reach each other only through the ports in troupe.core (for example, the vcs identity source asks
+# the VCS port, never the git adapter), and never import a surface (event-store design D1).
+name = "event-store adapters are independent of each other"
+type = "independence"
+modules = ["troupe_identity_local", "troupe_store_text", "troupe_vcs_files", "troupe_vcs_git"]
+
+[[tool.importlinter.contracts]]
+name = "event-store adapters import no surface"
+type = "forbidden"
+source_modules = ["troupe_identity_local", "troupe_store_text", "troupe_vcs_files", "troupe_vcs_git"]
+forbidden_modules = ["troupe.cli"]

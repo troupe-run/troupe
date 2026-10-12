@@ -1,0 +1,21 @@
+[project]
+name = "troupe-store-text"
+version = "0.0.1.dev0"
+description = "troupe's text event store: append-only JSON Lines segments that git can merge, as an eventsourcing persistence module."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+dependencies = ["troupe", "eventsourcing>=9.5.5,<9.6"]
+
+[project.urls]
+Homepage = "https://troupe.run"
+Repository = "https://github.com/troupe-run/troupe"
+
+# Found by name through the entry point group (design D1); troupe never imports this package directly.
+[project.entry-points."troupe.store"]
+text = "troupe_store_text:open_store"
+
+[build-system]
+requires = ["uv_build>=0.13.0,<0.14"]
+build-backend = "uv_build"

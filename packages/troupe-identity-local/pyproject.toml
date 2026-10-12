@@ -1,0 +1,23 @@
+[project]
+name = "troupe-identity-local"
+version = "0.0.1.dev0"
+description = "troupe's local identity sources: the TROUPE_ACTOR override, the VCS-configured identity and the OS login."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+dependencies = ["troupe"]
+
+[project.urls]
+Homepage = "https://troupe.run"
+Repository = "https://github.com/troupe-run/troupe"
+
+# Found by name through the entry point group (design D1); troupe never imports this package directly.
+[project.entry-points."troupe.identity"]
+env = "troupe_identity_local:EnvSource"
+vcs = "troupe_identity_local:VcsSource"
+"os-login" = "troupe_identity_local:OsLoginSource"
+
+[build-system]
+requires = ["uv_build>=0.13.0,<0.14"]
+build-backend = "uv_build"

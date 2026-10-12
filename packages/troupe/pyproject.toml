@@ -6,7 +6,7 @@ readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = ["eventsourcing>=9.5.5,<9.6"]
 
 [project.urls]
 Homepage = "https://troupe.run"
