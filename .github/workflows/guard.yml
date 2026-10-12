@@ -4,7 +4,7 @@ name: guard
 # The git-level workflow rules, re-checked on GitHub (troupe-run/infrastructure:
 # docs/development-workflow.md): every commit is a Conventional Commit, the branch matches an
 # OpenSpec change, no archived change has an unticked task, and delivered files change only by
-# delivery. Local hooks can be skipped; this can't once required-checks makes it required.
+# delivery. Local hooks can be skipped; this can't: it's a required check (tofu/required-checks.json).
 on:
   push:
     branches: ["**"]
