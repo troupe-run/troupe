@@ -21,10 +21,10 @@ If apply reaches those tasks before the runner contract merges, `event-store` ma
 commits (`eab458c`, `46dd1b6`) to build on the real API, then rebase onto main once the runner contract lands.
 Waiting for main stays the default. Either way, rebase only, never merge.
 
-- [ ] 2.1 After rebasing onto main, confirm the runner contract's `platform` spec in `openspec/specs/platform` holds
+- [x] 2.1 After rebasing onto main, confirm the runner contract's `platform` spec in `openspec/specs/platform` holds
   the environment-policy, narrowing, whole-tree and run-to-completion requirements this change relies on (design D11).
   Verify `openspec validate event-store --strict` passes, and the git adapter's timeout test (4.2) shows the tree
-  killed on all three CI platforms
+  killed on all three CI platforms (done 2026-10-12: rebased onto main at bd9135f, where openspec/specs/platform holds all four requirements; CI run 38236982390 passed the hung-git tree-kill test on Linux, macOS and Windows)
 - [x] 2.2 Wrap the platform errors in `troupe.core` as `command.timeout`, `command.not-found`,
   `command.output-too-large` (naming the command) and `environment.policy-invalid`, and document the git adapter's
   limits in `docs/platform.md`. Verify the error-schema test and `test_platform_docs.py` pass, and that narrowing
@@ -152,8 +152,8 @@ contract has merged and this branch is rebased onto main, so the PR carries only
 - [x] 10.1 Runner-contract check: read the `runner-contract` change's artifacts (#34) as they stand, compare them with
   design.md D-Runner, revise any point they contradict (with the owner's agreement), and record the outcome in
   the PR. Verify D-Runner matches #34's design, or lists each remaining difference
-- [ ] 10.2 Run `uv run scripts/check.py` locally, push, and verify every CI job passes on Linux, macOS and Windows
-  (3.12 and 3.13)
+- [x] 10.2 Run `uv run scripts/check.py` locally, push, and verify every CI job passes on Linux, macOS and Windows
+  (3.12 and 3.13) (done 2026-10-12: CI run 38236982390 on 2d7445b, all six jobs pass. Linux and macOS 792 passed, Windows 790: a bootstrap test has two fewer permission-mode cases there. The one skip on each is the runner contract's opt-in check of another runner. The first run failed on Windows only, in one test that read HOME from Git for Windows' bash, fixed in 2d7445b)
 
 ## Workflow follow-up
 
