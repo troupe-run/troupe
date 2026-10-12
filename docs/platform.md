@@ -18,6 +18,7 @@ troupe calls it and sees one behaviour on Linux, macOS and Windows. An import co
 | Starting a child process | `platform/processes.py` | A new session, so the child leads its own process group. Only the caller's variables are passed. | A new process group, and the child is assigned at once to a new job object created with kill-on-close. `SYSTEMROOT` is always passed, because Python and sockets need it. |
 | Killing a child and everything it started | `platform/processes.py` | `SIGKILL` to the process group | The job is terminated. If troupe itself dies, the job's last handle closes and the tree dies with it. |
 | Reading a child's output | `platform/processes.py` | Line by line, with a caller-set maximum; a longer line is an error naming the maximum, never a hang | The same |
+| Catching Ctrl-C | `platform/interrupts.py` | `SIGINT`, through `signal.signal`, calls back instead of raising `KeyboardInterrupt` | `SIGINT` and `SIGBREAK` (Ctrl-Break: a process in its own console process group gets only that). The previous handlers come back when the block ends |
 
 ## Locks
 
