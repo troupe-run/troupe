@@ -125,18 +125,18 @@ Waiting for main stays the default. Either way, rebase only, never merge.
 
 ## 9. The event-store service and lineage
 
-- [ ] 9.1 Implement lineage types in `troupe.core.events` (actor kinds, via, UTC time from an injectable clock, change
+- [x] 9.1 Implement lineage types in `troupe.core.events` (actor kinds, via, UTC time from an injectable clock, change
   ID per command, `cause` in both kinds, approvals, VCS state with theatre-relative `/` paths and `sha256:` hashes). Verify every built
   shape validates against `lineage.schema.json`
-- [ ] 9.2 Implement the service: open a theatre with VCS, identity and store adapters by name. Resolve identity
+- [x] 9.2 Implement the service: open a theatre with VCS, identity and store adapters by name. Resolve identity
   before any write, validate lineage (`events.lineage-invalid`) and its cause (a command cause equal to `change`;
   `events.cause-unknown` for an event cause that isn't visible) before calling the recorder, map `IntegrityError` to
   `events.version-conflict`, and return notices with reads. Verify with tests for every `lineage` spec scenario,
   including that one command's events share a change ID and an invalid lineage writes nothing
-- [ ] 9.3 Verify the abandoned-edit rules from #1 end to end through the service: an edit and its revert both kept
+- [x] 9.3 Verify the abandoned-edit rules from #1 end to end through the service: an edit and its revert both kept
   (history 3, 5, 3), stash and pop events all present in order, and an unknown-actor `via: file` event with before
   and after hashes recorded and validated
-- [ ] 9.4 Implement `record_reaction(trigger, …)` (design D8): it inherits the trigger's `change` and sets an event cause.
+- [x] 9.4 Implement `record_reaction(trigger, …)` (design D8): it inherits the trigger's `change` and sets an event cause.
   Verify with tests for the `lineage` spec's cause scenarios: the E1 → E2, E3, E4 example, a reaction to a reaction
   keeping the original `change`, an unknown cause refused with nothing written, and a mismatched command cause refused
 - [ ] 9.5 Write `docs/event-store.md`: layout, record format, ordering, forks, visibility, notices, identity chain and its absent-vs-malformed rule, correlation and cause,

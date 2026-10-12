@@ -7,23 +7,18 @@ from typing import Any
 import jsonschema
 import pytest
 
-from event_schemas import FILES, is_valid, load
-
-HASH = "sha256:" + "ab" * 32
-OTHER_HASH = "sha256:" + "cd" * 32
-ULID = "01K7ZX3N8V4Q2M6R9T5W1Y0B3C"
-AT = "2026-10-12T03:04:05.678Z"
-
-LINEAGE: dict[str, Any] = {
-    "actor": {"kind": "human", "id": "ada@example.com", "source": "vcs"},
-    "via": "cli",
-    "at": AT,
-    "reason": None,
-    "change": ULID,
-    "cause": {"kind": "command", "id": ULID},
-    "approvals": [],
-    "vcs": {"adapter": "git", "branch": "main", "head": "a" * 40, "source": None},
-}
+from event_schemas import (
+    AT,
+    FILES,
+    HASH,
+    LINEAGE,
+    OTHER_HASH,
+    ULID,
+    is_valid,
+    lineage,
+    load,
+    without,
+)
 
 EVENT: dict[str, Any] = {
     "format": 1,
@@ -36,18 +31,6 @@ EVENT: dict[str, Any] = {
     "state": {"lineage": LINEAGE, "timestamp": AT, "name": "x"},
     "batch": {"id": ULID, "index": 0, "size": 1},
 }
-
-
-def lineage(**changes: object) -> dict[str, Any]:
-    result = copy.deepcopy(LINEAGE)
-    result.update(changes)
-    return result
-
-
-def without(data: dict[str, Any], key: str) -> dict[str, Any]:
-    result = copy.deepcopy(data)
-    del result[key]
-    return result
 
 
 @pytest.mark.parametrize("name", FILES)

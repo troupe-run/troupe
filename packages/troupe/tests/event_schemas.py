@@ -4,6 +4,7 @@ The schemas in protocol/schemas/ are the source of truth (decision #7). They are
 their $ids, so lineage.schema.json can be referenced from event-record.schema.json.
 """
 
+import copy
 import json
 from functools import cache
 from pathlib import Path
@@ -44,3 +45,34 @@ def validator(ref: str) -> jsonschema.Draft202012Validator:
 
 def is_valid(instance: object, ref: str) -> bool:
     return validator(ref).is_valid(instance)
+
+
+# Example lineage, valid by the schema, for tests to vary.
+
+HASH = "sha256:" + "ab" * 32
+OTHER_HASH = "sha256:" + "cd" * 32
+ULID = "01K7ZX3N8V4Q2M6R9T5W1Y0B3C"
+AT = "2026-10-12T03:04:05.678Z"
+
+LINEAGE: dict[str, Any] = {
+    "actor": {"kind": "human", "id": "ada@example.com", "source": "vcs"},
+    "via": "cli",
+    "at": AT,
+    "reason": None,
+    "change": ULID,
+    "cause": {"kind": "command", "id": ULID},
+    "approvals": [],
+    "vcs": {"adapter": "git", "branch": "main", "head": "a" * 40, "source": None},
+}
+
+
+def lineage(**changes: object) -> dict[str, Any]:
+    result = copy.deepcopy(LINEAGE)
+    result.update(changes)
+    return result
+
+
+def without(data: dict[str, Any], key: str) -> dict[str, Any]:
+    result = copy.deepcopy(data)
+    del result[key]
+    return result
