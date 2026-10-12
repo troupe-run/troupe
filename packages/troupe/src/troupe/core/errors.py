@@ -34,6 +34,7 @@ CODES: dict[str, ExitCode] = {
     "artifact.missing": ExitCode.FAILURE,
     "artifact.corrupt": ExitCode.FAILURE,
     "artifact.write-failed": ExitCode.FAILURE,
+    "artifact.unknown-store": ExitCode.FAILURE,
 }
 
 
