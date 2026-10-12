@@ -41,6 +41,12 @@ troupe calls it and sees one behaviour on Linux, macOS and Windows. An import co
   Runners use `RUNNER_ENVIRONMENT`, which selects nothing.
 - **Command lookup:** the command is resolved to an absolute path with the caller's search path before the child
   starts, so the child doesn't need `PATH` unless the caller names it.
+- **Short commands:** `run_to_completion(argv, cwd=, env=, timeout=, max_output_bytes=, announce_after=)` runs a
+  command such as git and returns its exit code and both outputs. It blocks and uses no event loop, so it works
+  from anywhere; wrap it in `asyncio.to_thread` to keep a loop free. It never waits silently or without limit: it
+  announces a long wait once through `on_wait`, and past `timeout` (`ProcessTimeoutError`, with the output so far)
+  or past `max_output_bytes` of output (`OutputTooLargeError`) it kills the whole tree. A command that exits while a
+  child still holds its output open counts as still running.
 - **Stopping:** `kill_tree()` kills the child and everything it started. Asking a child to stop gracefully is a
   protocol matter (for runners, `run/cancel`), not a signal, because Windows has no `SIGTERM`.
 

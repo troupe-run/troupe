@@ -47,3 +47,19 @@ class EnvironmentPolicyError(PlatformError):
         super().__init__(f"environment variable {name!r}: {reason}")
         self.name = name
         self.reason = reason
+
+
+class ProcessTimeoutError(PlatformError):
+    def __init__(self, command: str, timeout: float, stdout: bytes, stderr: bytes) -> None:
+        super().__init__(f"{command} was still running after {timeout:g}s and was stopped")
+        self.command = command
+        self.timeout = timeout
+        self.stdout = stdout
+        self.stderr = stderr
+
+
+class OutputTooLargeError(PlatformError):
+    def __init__(self, command: str, limit: int) -> None:
+        super().__init__(f"{command} wrote more than the limit of {limit} bytes and was stopped")
+        self.command = command
+        self.limit = limit
