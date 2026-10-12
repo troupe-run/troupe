@@ -16,6 +16,10 @@ SECRET_PATTERNS = {
     "macOS home directory": re.compile(r"/Users/[^/\"\s]+"),
     "Linux home directory": re.compile(r"/home/[^/\"\s]+"),
     "Windows home directory": re.compile(r"[A-Za-z]:\\\\+Users\\\\+"),
+    # A pattern to find temporary host paths, not a use of one.
+    "host temporary path": re.compile(r"/tmp/|/private/var/|/var/folders/|\\\\Temp\\\\"),  # noqa: S108
+    # In a recording the native line is a JSON string, so its quotes are escaped.
+    "account usage": re.compile(r'utilization\\?":\s*(?!0\.5\b)[0-9.]+'),
 }
 
 
@@ -34,7 +38,12 @@ def scan(directory: Path, home: str = str(Path.home())) -> list[str]:
 
 
 def test_there_are_fixtures_for_each_failure_shape() -> None:
-    assert {"is-error-success-subtype", "auth-retries", "terminated-no-result"} <= set(NAMES)
+    assert {
+        "is-error-success-subtype",
+        "auth-retries",
+        "terminated-no-result",
+        "success-with-tools",
+    } <= set(NAMES)
 
 
 @pytest.mark.parametrize("name", NAMES)
@@ -50,6 +59,8 @@ def test_a_committed_fixture_holds_no_secret_or_home_path(name: str) -> None:
         ('{"transcript": "cwd /Users/someone/project"}', "macOS home directory"),
         ('{"transcript": "cwd /home/someone/project"}', "Linux home directory"),
         ('{"transcript": "cwd C:\\\\Users\\\\someone"}', "Windows home directory"),
+        ('{"transcript": "socket /tmp/cc-socks/1.sock"}', "host temporary path"),
+        ('{"transcript": "{\\"utilization\\":0.08}"}', "account usage"),
     ],
 )
 def test_the_scan_names_the_fixture_and_line_of_a_planted_secret(

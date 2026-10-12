@@ -56,8 +56,7 @@ def test_each_fixture_replays_through_the_contract_to_its_stated_outcome(
         name, RunLimits(fail_fast_on_auth_retry=fail_fast, cancel_grace=3.0), tmp_path
     )
     assert outcome.outcome == want["outcome"]
-    assert outcome.error is not None
-    assert outcome.error.code == want["errorCode"]
+    assert (None if outcome.error is None else outcome.error.code) == want["errorCode"]
     for direction, message in messages:
         validate(
             message,

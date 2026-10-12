@@ -2,6 +2,7 @@
 
 Usage:
     python capture_claude.py <fixture> <output directory>
+    python capture_claude.py --rescrub <fixture directory>   apply newer value scrubbing in place
 
 Fixtures that need no credential (an invalid key against a local fake API, so nothing reaches
 Anthropic):
@@ -82,6 +83,7 @@ class Scrubber:
         return self.uuids[found]
 
     def __call__(self, line: str) -> str:
+        line = scrub_values(line)
         for old, new in self.replacements:
             line = line.replace(old, new)
         return UUID.sub(self._uuid, line)
@@ -93,7 +95,74 @@ class Scrubber:
             "the capturing user's home directory -> ~, and their login name -> user",
             "the fake API's port -> 8080",
             "every UUID (session ids, message ids) -> 00000000-0000-4000-8000-<n>, consistently",
+            *VALUE_SCRUBBING,
         ]
+
+
+SCRUBBED_PATH = "<host path>"
+SCRUBBED_UTILIZATION = 0.5
+SCRUBBED_RESETS_AT = 1790000000
+VALUE_SCRUBBING = [
+    f"messaging_socket_path (a host path outside the workspace) -> {SCRUBBED_PATH!r}",
+    f"rate_limit_info: every utilization -> {SCRUBBED_UTILIZATION}, every resetsAt -> "
+    f"{SCRUBBED_RESETS_AT} (the account's usage isn't published)",
+]
+
+
+def _scrub_rate_limits(node: Any) -> Any:  # noqa: ANN401 - any JSON value
+    if isinstance(node, dict):
+        return {
+            key: SCRUBBED_UTILIZATION
+            if key == "utilization"
+            else SCRUBBED_RESETS_AT
+            if key == "resetsAt"
+            else _scrub_rate_limits(value)
+            for key, value in node.items()
+        }
+    if isinstance(node, list):
+        return [_scrub_rate_limits(item) for item in node]
+    return node
+
+
+def scrub_values(line: str) -> str:
+    """Scrub values that identify the host or the account, by field, keeping the record's shape.
+
+    Lines with nothing to scrub are returned unchanged, byte for byte; a changed line is written
+    back as compact JSON, as Claude Code writes it.
+    """
+    try:
+        record = json.loads(line)
+    except json.JSONDecodeError:
+        return line
+    if not isinstance(record, dict):
+        return line
+    changed = dict(record)
+    if "messaging_socket_path" in changed:
+        changed["messaging_socket_path"] = SCRUBBED_PATH
+    if "rate_limit_info" in changed:
+        changed["rate_limit_info"] = _scrub_rate_limits(changed["rate_limit_info"])
+    if changed == record:
+        return line
+    return json.dumps(changed, ensure_ascii=False, separators=(",", ":"))
+
+
+def rescrub(directory: Path) -> None:
+    """Apply the value scrubbing to a recording captured before it existed, and say so."""
+    recording = directory / "recording.jsonl"
+    entries = [json.loads(line) for line in recording.read_text(encoding="utf-8").splitlines()]
+    for entry in entries:
+        if "transcript" in entry:
+            entry["transcript"] = scrub_values(entry["transcript"])
+    recording.write_text(
+        "".join(json.dumps(entry, ensure_ascii=False) + "\n" for entry in entries), encoding="utf-8"
+    )
+    provenance_path = directory / "provenance.json"
+    provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+    provenance["scrubbing"] = [
+        *provenance["scrubbing"],
+        *(item for item in VALUE_SCRUBBING if item not in provenance["scrubbing"]),
+    ]
+    provenance_path.write_text(json.dumps(provenance, indent=2) + "\n", encoding="utf-8")
 
 
 def capture(fixture: str, out: Path) -> None:
@@ -225,4 +294,7 @@ def capture(fixture: str, out: Path) -> None:
 if __name__ == "__main__":
     if len(sys.argv) != 3:
         sys.exit(__doc__)
-    capture(sys.argv[1], Path(sys.argv[2]))
+    if sys.argv[1] == "--rescrub":
+        rescrub(Path(sys.argv[2]))
+    else:
+        capture(sys.argv[1], Path(sys.argv[2]))

@@ -1,0 +1,10 @@
+{
+  "description": "A real run with a credential: Write a file, Read it back, reply 'done'. init, two tool calls with their results, a rate-limit record with no event, then an ok result.",
+  "exitCode": 0,
+  "outcome": "succeeded",
+  "errorCode": null,
+  "withoutFailFast": {
+    "outcome": "succeeded",
+    "errorCode": null
+  }
+}
