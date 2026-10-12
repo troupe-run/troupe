@@ -147,8 +147,9 @@ async def logs(
     request: m.LogsRequest, session: Session, send: Send, *, backends: Backends | None = None
 ) -> m.LogsResult:
     """A run's events in seq order. With follow, each new event is sent as it is recorded, until
-    the run ends or stops running; following polls the store at SUBSCRIBE_POLL_SECONDS, as its
-    subscription does."""
+    the run ends or stops running. Following looks for new events every LOGS_FOLLOW_POLL_SECONDS:
+    the store stats its segments and reads only new bytes, so a look costs little and events
+    appear as they're recorded."""
     backends = backends or Backends()
     store = await asyncio.to_thread(backends.event_store, session)
     runs = await asyncio.to_thread(read_runs, store)
@@ -171,7 +172,7 @@ async def logs(
                     send(event)
                 break
             with contextlib.suppress(TimeoutError):
-                await asyncio.wait_for(cancel.wait(), defaults.SUBSCRIBE_POLL_SECONDS)
+                await asyncio.wait_for(cancel.wait(), defaults.LOGS_FOLLOW_POLL_SECONDS)
             view = await asyncio.to_thread(_log, store, run_id)
     summary = _summary(view, session.theatre, notices)
     return m.LogsResult(

@@ -154,6 +154,10 @@ each new event as an update as it is recorded, and SHALL stop when the run ends 
 - **THEN** each event is shown as it is recorded
 - **AND** following stops when the run's end is recorded
 
+#### Scenario: Following shows events as they are recorded
+- **WHEN** a person follows a running run's logs and the runner sends an event
+- **THEN** the event is shown within `LOGS_FOLLOW_POLL_SECONDS` of being recorded, plus the time to read it
+
 #### Scenario: Following an interrupted run
 - **WHEN** a person follows the logs of a run that is `interrupted`
 - **THEN** the recorded events are shown and following stops at once with the notice `run.interrupted`

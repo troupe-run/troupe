@@ -64,7 +64,8 @@ show how far it got. Lease directories stay in `.troupe/local/runs/` (they're lo
 events it has, its times, and its transcript's and standard error's references.
 
 `troupe logs <run>` shows a run's events in order, each with the time troupe recorded it. `--follow` then waits for
-more, reading the store every `SUBSCRIBE_POLL_SECONDS`, and stops when the run's end is recorded, when it stops
+more, showing each event as it's recorded (it looks every `LOGS_FOLLOW_POLL_SECONDS`, a tenth of a second, as `tail -f`
+does), and stops when the run's end is recorded, when it stops
 running, or at Ctrl-C, saying why.
 
 A run is named by its full id or by a prefix of at least 8 hex digits that matches exactly one run. Both commands
@@ -147,5 +148,6 @@ Every limit and default runs use has its default in `troupe.core.defaults`.
 
 | Setting | Default | What it is |
 |---|---|---|
+| `LOGS_FOLLOW_POLL_SECONDS` | 0.1 | How often `troupe logs --follow` looks for new events |
 | `STATUS_RUNS_LIMIT` | 20 | How many runs `troupe status` lists when it isn't given `--limit` |
 | `ALLOW_UNENFORCED_LOCAL_STAGE` | false | The policy setting `allow_unenforced_local_stage`, when nothing sets it |
