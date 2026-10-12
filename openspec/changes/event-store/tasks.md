@@ -2,11 +2,11 @@
 
 ## 1. Workspace and packages
 
-- [ ] 1.1 Create `packages/troupe-store-text`, `packages/troupe-vcs-git`, `packages/troupe-vcs-files` and
+- [x] 1.1 Create `packages/troupe-store-text`, `packages/troupe-vcs-git`, `packages/troupe-vcs-files` and
   `packages/troupe-identity-local` (src layout, `py.typed`, licence, README, entry points per design D1). Add them to
   the dev group, and add `eventsourcing>=9.5.5,<9.6` (runtime, in `troupe` and `troupe-store-text`) and `pycryptodome`
   (dev). Verify `uv sync` succeeds and `uv run python -c "import troupe_store_text, troupe_vcs_git, troupe_vcs_files, troupe_identity_local"` exits 0
-- [ ] 1.2 Extend `pyproject.toml` tool config (ruff `src`, mypy `files` and `mypy_path`, pytest `testpaths`) to cover the
+- [x] 1.2 Extend `pyproject.toml` tool config (ruff `src`, mypy `files` and `mypy_path`, pytest `testpaths`) to cover the
   new packages, and add the import contracts from design D1: `troupe` imports no adapter package, and `troupe.cli`
   imports no recorder. Verify each contract fails on a deliberate violation (record the output for the PR), and
   `uv run scripts/check.py` passes

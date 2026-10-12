@@ -1,0 +1,21 @@
+[project]
+name = "troupe-vcs-files"
+version = "0.0.1.dev0"
+description = "troupe's plain filesystem VCS adapter: no branches, no commits, every file counts as committed."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+dependencies = ["troupe"]
+
+[project.urls]
+Homepage = "https://troupe.run"
+Repository = "https://github.com/troupe-run/troupe"
+
+# Found by name through the entry point group (design D1); troupe never imports this package directly.
+[project.entry-points."troupe.vcs"]
+files = "troupe_vcs_files:FilesAdapter"
+
+[build-system]
+requires = ["uv_build>=0.13.0,<0.14"]
+build-backend = "uv_build"
