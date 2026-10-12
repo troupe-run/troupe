@@ -5,8 +5,8 @@ Issue: troupe-run/troupe#34 (part A of the walking skeleton, #33). Decisions: #1
 
 ## Why
 
-Every later slice of troupe runs an actor, and actors are third-party code that only ever runs out of process. The
-walking skeleton (#33) needs that seam first: a language-neutral contract that any runner can implement, and a
+Every later slice of troupe runs an actor, through a runner that troupe talks to over a port with a JSON-RPC
+transport (decision #37, plugin transports). The walking skeleton (#33) needs that seam first: a language-neutral contract that any runner can implement, and a
 runner that lets tests drive every outcome deterministically, offline and for free. Spike B showed that the
 contract can't be naive: a Claude Code failure arrives as `is_error` with a "success" subtype, auth failures retry
 for minutes and look like hangs, and a cancelled run emits no `result` at all. So troupe derives the outcome itself
