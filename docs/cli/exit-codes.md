@@ -9,3 +9,4 @@ wrong and how to fix it.
 | 0 | `OK` | The command completed. |
 | 1 | `FAILURE` | The command could not complete. The error says why and what to do. |
 | 2 | `USAGE` | The command line was not understood: an unknown command or flag, or a malformed value. |
+| 130 | `CANCELLED` | You cancelled the command with Ctrl-C, and it stopped cleanly: `troupe perform` records the run as `cancelled`. 130 is the shell's code for an interrupt, and troupe uses it on Windows too. |

@@ -25,12 +25,14 @@ HELP_FIX = "Run `troupe --help` to see the commands and options."
 
 @dataclass(frozen=True)
 class Command:
-    """A subcommand: its name, one line of help, how to declare its arguments, and how to run it."""
+    """A subcommand: its name, one line of help, how to declare its arguments, and how to run it.
+    It runs with the parsed arguments, standard output for its result, and standard error for
+    progress and notices."""
 
     name: str
     help: str
     configure: Callable[[argparse.ArgumentParser], None]
-    run: Callable[[argparse.Namespace, TextIO], ExitCode]
+    run: Callable[[argparse.Namespace, TextIO, TextIO], ExitCode]
 
 
 @dataclass(frozen=True)

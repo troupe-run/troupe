@@ -9,13 +9,14 @@ from collections.abc import Sequence
 from importlib.metadata import version
 from typing import TextIO
 
+from troupe.cli.commands import COMMANDS as RUN_COMMANDS
 from troupe.cli.parser import Command, parse
 from troupe.cli.render import render_error
 from troupe.core.errors import BUG_REPORT_URL, TroupeError
 from troupe.core.exit_codes import ExitCode
 
-COMMANDS: tuple[Command, ...] = ()
-"""The subcommands troupe offers. The bootstrap defines none; later changes register them here."""
+COMMANDS: tuple[Command, ...] = RUN_COMMANDS
+"""The subcommands troupe offers."""
 
 
 def run(
@@ -23,6 +24,7 @@ def run(
     *,
     commands: Sequence[Command] = COMMANDS,
     stdout: TextIO,
+    stderr: TextIO,
 ) -> ExitCode:
     """Run one command line. Raises TroupeError for any failure the user should see."""
     parsed = parse(argv, commands)
@@ -32,7 +34,7 @@ def run(
     if parsed.command is None:
         print(parsed.help_text, end="", file=stdout)
         return ExitCode.OK
-    return parsed.command.run(parsed.arguments, stdout)
+    return parsed.command.run(parsed.arguments, stdout, stderr)
 
 
 def main(
@@ -46,7 +48,9 @@ def main(
     out = sys.stdout if stdout is None else stdout
     err = sys.stderr if stderr is None else stderr
     try:
-        return run(sys.argv[1:] if argv is None else argv, commands=commands, stdout=out)
+        return run(
+            sys.argv[1:] if argv is None else argv, commands=commands, stdout=out, stderr=err
+        )
     except TroupeError as error:
         print(render_error(error), file=err)
         return error.exit_code

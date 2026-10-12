@@ -129,9 +129,9 @@
 
 ## 10. The CLI
 
-- [ ] 10.1 Add `ExitCode.CANCELLED = 130` and document it in `docs/cli/exit-codes.md` (design D14). Verify
+- [x] 10.1 Add `ExitCode.CANCELLED = 130` and document it in `docs/cli/exit-codes.md` (design D14). Verify
   `test_exit_codes_doc.py` passes
-- [ ] 10.2 Add `troupe perform` in `troupe.cli.commands` (design D4, D14): find the theatre, build the request from
+- [x] 10.2 Add `troupe perform` in `troupe.cli.commands` (design D4, D14): find the theatre, build the request from
   `--runner`, `--runner-options` (strict JSON, `perform.options-invalid`), `--instructions` and exactly one of
   `--expect`/`--no-effect-check` (paths from the working directory, `perform.path-outside-theatre`), call the core,
   render updates on standard error, catch Ctrl-C through the platform hook (the `run.cancelling` notice, repeated on
@@ -141,17 +141,17 @@
 - [ ] 10.3 Verify Ctrl-C end to end on Linux, macOS and Windows in CI: a `troupe perform` process with a hanging
   scripted runner, interrupted once, exits 130 and records `cancelled`; interrupted twice with a runner that ignores
   cancel, shows the notice twice and still records the end after the grace period
-- [ ] 10.4 Add `troupe status` and `troupe logs` (with `--limit`, `--follow` and `--json`). Verify CLI tests that
+- [x] 10.4 Add `troupe status` and `troupe logs` (with `--limit`, `--follow` and `--json`). Verify CLI tests that
   `--json` output validates against the result schemas (and, with `--follow`, each line against the update schema),
   that notices go to standard error, and an end-to-end test that `troupe logs --follow` in a second process shows a
   running run's events and exits 0 when it ends
-- [ ] 10.5 Register the three commands in `COMMANDS`, and document them in `docs/cli/README.md`, marking the
+- [x] 10.5 Register the three commands in `COMMANDS`, and document them in `docs/cli/README.md`, marking the
   `perform` flags as interim (replaced by config). Verify `test_cli_docs.py` passes and `troupe --help` lists the
   three commands
 
 ## 11. Errors, notices and the whole
 
-- [ ] 11.1 Add every new error and notice code from design D15 to `CODES` and `troupe.core.notices`, with their exit
+- [x] 11.1 Add every new error and notice code from design D15 to `CODES` and `troupe.core.notices`, with their exit
   codes. Verify the test that serialises every declared error and notice and validates each against its schema
 - [ ] 11.2 Run `uv run scripts/check.py` and the full suite; confirm CI passes on Linux, macOS and Windows. Record the
   run in the PR

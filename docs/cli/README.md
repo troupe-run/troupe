@@ -3,8 +3,47 @@
 The command line is a thin client. Every command it offers is a command or query in troupe's core, which the run
 server and UIs will also call, so nothing here behaves differently from any other surface.
 
-Pre-alpha: there are no subcommands yet, only the conventions below. They apply to every subcommand as it is
-added.
+Pre-alpha. The conventions below apply to every subcommand.
+
+## Commands
+
+Every command runs in a **theatre**: the nearest directory, from where you are upwards, that holds `.troupe/`.
+troupe never creates one for you; without one, a command fails with `theatre.not-found`.
+
+| Command | What it does |
+|---|---|
+| `troupe perform <actor>` | Runs one actor and records the run. Progress goes to standard error; on success, standard output gets `run <id> succeeded`. Exits by the run's outcome: 0 succeeded, 130 cancelled with Ctrl-C, 1 otherwise |
+| `troupe status [<run>] [--limit <n>] [--json]` | Lists the most recent runs, newest first, or shows one run |
+| `troupe logs <run> [--follow] [--json]` | Shows a run's events in order; `--follow` waits for more until the run ends |
+
+A run is named by its full id or by its first 8 or more characters. [docs/runs.md](../runs.md) describes runs, their
+states and what is recorded.
+
+**`perform`'s flags are interim.** Until actors are configured, you say how to run one:
+
+| Flag | |
+|---|---|
+| `--runner <name>` | Required. The runner, by name: `scripted` is the only one so far |
+| `--runner-options <file>` | A JSON file holding the runner's options, passed to it untouched. For the scripted runner, `{"script": {...}}` or `{"scriptPath": "..."}` (relative to the theatre's root) |
+| `--instructions <text>` | What the actor is asked to do |
+| `--expect <path>` | A file the run must create or change, relative to where you are and inside the theatre. Repeatable |
+| `--no-effect-check` | Check nothing after the run. One of `--expect` or this is required: there's no default |
+
+The local stage runs an actor only when policy allows it (`TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE=true`; see
+[docs/runs.md](../runs.md#policy)).
+
+```text
+troupe perform tester --runner scripted --runner-options hello.json --expect out/hello.txt
+troupe logs 1a2b3c4d --follow        # from another terminal, while it runs
+troupe status 1a2b3c4d
+```
+
+**Ctrl-C** during `perform` cancels the run, records it as `cancelled`, and exits 130. Pressing it again only says
+troupe is already cancelling: the run is stopped within its grace period either way.
+
+**`--json`** on `status` and `logs` prints the query's result exactly in its protocol shape
+([`protocol/schemas/client/`](../../protocol/schemas/client/)). With `--follow`, each update is printed on its own line
+first.
 
 ## Global flags
 
