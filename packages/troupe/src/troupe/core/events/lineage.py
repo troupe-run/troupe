@@ -163,7 +163,8 @@ class Lineage:
 def timestamp(moment: datetime) -> str:
     """RFC 3339 in UTC, with milliseconds and Z."""
     utc = moment.astimezone(UTC)
-    return utc.strftime("%Y-%m-%dT%H:%M:%S.") + f"{utc.microsecond // 1000:03d}Z"
+    # The year is formatted by hand: strftime's %Y doesn't pad years before 1000 on Linux.
+    return f"{utc.year:04d}-" + utc.strftime("%m-%dT%H:%M:%S.") + f"{utc.microsecond // 1000:03d}Z"
 
 
 # Checking lineage data by hand, by the schema's rules. Each check returns the first problem.

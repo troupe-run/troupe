@@ -218,3 +218,7 @@ def test_a_stage_record_names_an_allowance_exactly_when_effects_are_unenforced(
 def test_the_hand_written_check_names_the_stage_when_it_is_at_fault() -> None:
     problem = lineage_problem(lineage(stage={**UNENFORCED_LOCAL, "allowedBy": None}))
     assert "stage.allowedBy" in (problem or "")
+
+
+def test_a_year_before_1000_is_written_with_four_digits_on_every_platform() -> None:
+    assert timestamp(datetime(999, 1, 2, 3, 4, 5, 6000, tzinfo=UTC)) == "0999-01-02T03:04:05.006Z"
