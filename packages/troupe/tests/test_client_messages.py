@@ -6,6 +6,7 @@ hand-written strategies of the schemas' shapes. Each generated message is first 
 schema, so the property covers exactly what the schema accepts that the strategies reach.
 """
 
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -14,14 +15,15 @@ from hypothesis import strategies as st
 
 from client_schemas import check
 from troupe.core.client import messages as m
+from troupe.core.events.lineage import timestamp
 from troupe.core.messages import Message, ProtocolError
 
 RUN_IDS = st.uuids().map(str)
 NAMES = st.from_regex(r"\A[a-z][a-z0-9-]{0,10}\Z")
 TEXT = st.text(min_size=1, max_size=20)
-TIMES = st.datetimes().map(
-    lambda d: d.strftime("%Y-%m-%dT%H:%M:%S.") + f"{d.microsecond // 1000:03d}Z"
-)
+TIMES = st.datetimes(
+    min_value=datetime(1, 1, 2), max_value=datetime(9999, 12, 30), timezones=st.just(UTC)
+).map(timestamp)
 HASHES = st.binary(min_size=32, max_size=32).map(lambda b: "sha256:" + b.hex())
 PATHS = st.lists(st.from_regex(r"\A[a-z][a-z0-9_.-]{0,8}\Z"), min_size=1, max_size=3).map("/".join)
 EFFECT_CHECKS = st.just({"kind": "none"}) | st.fixed_dictionaries(
