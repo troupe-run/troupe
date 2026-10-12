@@ -143,7 +143,8 @@ fixtures pin it.
 | stream-json record | Run event |
 |---|---|
 | `system/init` | `init`, with the whole record under `native` |
-| `assistant` message | `turn`, plus one `tool_call` per `tool_use` block. An API failure arrives this way too, as an `assistant` message with `error` set and the error's text as its content |
+| `assistant` message | A `turn` for its text, if it has any, then one `tool_call` per `tool_use` block. An API failure arrives this way too, as an `assistant` message with `error` set and the error's text as its content |
+| `rate_limit_event` | None while its status is `allowed` (the transcript keeps it); otherwise a `log` warning naming the status |
 | `user` message with `tool_result` blocks | one `tool_result` per block |
 | `system/api_retry` | `retry`: `authentication_failed` → `authentication`, HTTP 429 → `rate-limit`, connection errors → `network`, 5xx → `server` |
 | `result` | `result`, with `status` `error` whenever `is_error` is true, whatever `subtype` says |
