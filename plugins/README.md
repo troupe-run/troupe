@@ -1,8 +1,8 @@
 # plugins
 
-Out-of-process plugins: actor runners, stages, guests and notification channels. **Third-party code only ever
-runs out of process**, so that declared effects can be enforced on it and a plugin can be written in any
-language.
+Out-of-process plugins: actor runners, stages, guests and notification channels. **They run over JSON-RPC, ours
+included**, so declared effects can be enforced on them and a plugin can be written in any language (decision
+[#37](https://github.com/troupe-run/troupe/issues/37)).
 
 Rules for everything in this directory:
 
@@ -15,8 +15,10 @@ Rules for everything in this directory:
   needs one, a container image. That lets it move to its own repository later with its history
   (`git filter-repo`).
 
-First-party *in-process* adapters (storage, version control, built-in identity sources) are not plugins. They
-live under [`packages/`](../packages/), because they sit deep in the house and are loaded as Python packages.
+Adapters bundled with troupe (storage, version control, built-in identity sources) are not plugins. They live
+under [`packages/`](../packages/) and run direct, in process, because they ship with core and sit deep in the
+house. #37 gives every port a JSON-RPC transport too, so an adapter acquired by config runs as a plugin
+([#38](https://github.com/troupe-run/troupe/issues/38)).
 
 | Plugin | What it is |
 |---|---|
