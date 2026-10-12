@@ -18,15 +18,22 @@ from the stream and the effect, never from the exit code.
   Schema. A handshake, one run per runner process, a stream of run events (`init` first, then turns, tool calls,
   tool results and retries, then `result`), the native transcript as a separate stream, cancel, shutdown, and
   failures as protocol errors. Vendor-neutral, so Claude Code, a local model and the scripted runner all fit.
-- **A runner host in the core:** starts a runner with an explicit environment (never pass-through), performs the
-  handshake, supervises the run, enforces every limit as a named setting, cancels gracefully then hard, announces
+- **A runner host in the core:** starts a runner with only the variables its caller names (the runner's environment
+  policy), performs the handshake, supervises the run, enforces every limit as a named setting, cancels gracefully then hard, announces
   silences and retries rather than waiting silently, and derives one outcome per run from the stream, the
   termination and an effect check.
-- **Process supervision in the `platform` seam:** starting a runner in its own process group, and killing its
-  whole process tree, on Linux, macOS and Windows.
-- **A local artifact store:** content-addressed (SHA-256), gitignored, verified on read. The raw transcript (and
-  the runner's standard error) go there; the run's outcome references them by hash. The store is a port, so other
-  stores can follow (#4 option C).
+- **Process supervision in the `platform` seam:** starting a child in its own process group, and killing its
+  whole process tree, on Linux, macOS and Windows. Every child gets an explicit environment built from a declared
+  **environment policy**, a named default per port or adapter. A bounded **run to completion** (with a timeout,
+  and the tree killed when it passes) serves short commands, such as the event store's git calls (#35).
+- **Notices:** silences and retries are announced as notices in the shared shape (`protocol/schemas/notice.schema.json`,
+  the same fields as an error), with their codes declared once in `troupe.core.notices`. Shared with the event-store
+  change: whichever lands second adopts the other's file.
+- **An artifact store port, and a local store:** content-addressed (SHA-256), verified on read. The raw transcript
+  (and the runner's standard error) go there; the run's outcome references them by hash. The port is in the core;
+  the local store is its own package, `troupe-artifacts-local`, found by the `troupe.artifacts` entry point, so the
+  port is proven by a separately packaged implementation and other stores can follow (#4 option C). Part C keeps
+  it under `.troupe/local/artifacts/`, which the event store keeps out of git.
 - **A scripted runner plugin in `plugins/`:** a self-contained package that imports nothing from troupe. It plays
   a script of steps, or replays a recorded protocol stream, and can produce each outcome on demand: success, tool
   calls, an error result, `is_error` with "success", retries, a hang, a cancel honoured or ignored, a missing
@@ -56,10 +63,11 @@ from the stream and the effect, never from the exit code.
 
 ## Impact
 
-- New: `protocol/schemas/runner/` (the contract), `plugins/runner-scripted/` (its own `pyproject.toml`, tests and
-  fixtures), `troupe.core.runners` and `troupe.core.artifacts`, `troupe.platform.processes`.
+- New: `protocol/schemas/runner/` (the contract), `protocol/schemas/notice.schema.json`, `plugins/runner-scripted/`
+  (its own `pyproject.toml`, tests and fixtures), `packages/troupe-artifacts-local/` (the local store),
+  `troupe.core.runners`, `troupe.core.artifacts` (the port), `troupe.core.notices`, `troupe.platform.processes`.
 - Changed: `troupe.core.defaults` (runner and store limits), `troupe.core.errors` (new codes),
-  `pyproject.toml` (plugins join the workspace, test paths, the plugin import contract), `protocol/README.md`,
+  `pyproject.toml` (plugins join the workspace, test paths, import contracts for the plugin and the store package), `protocol/README.md`,
   `plugins/README.md`, `docs/platform.md`, and new `docs/runners.md`.
 - Dependencies: none at runtime (asyncio and ctypes are standard library). `jsonschema` stays dev-only.
 - Out of scope: the Claude Code runner and its opt-in live test (follow-up), a local-model runner (#16, later),

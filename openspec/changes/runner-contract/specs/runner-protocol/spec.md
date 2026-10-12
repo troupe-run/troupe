@@ -55,13 +55,17 @@ then exit. A second `run/start` SHALL be answered with an error.
 - **THEN** the runner answers with an error and the first run is unaffected
 
 ### Requirement: Run start carries everything the runner may use
-The `run/start` request SHALL carry the run id, the actor's instructions, the workspace directory, the
+The `run/start` request SHALL carry the run id (a UUID in canonical lowercase form), the actor's instructions, the workspace directory, the
 runner-specific options as an object, and the limits the runner must respect, including the maximum size of one
 event. The runner SHALL use no other source of instructions or configuration from troupe.
 
 #### Scenario: Run start is accepted
 - **WHEN** the runner receives a valid `run/start`
 - **THEN** it answers with a result acknowledging the run id before it sends any run event
+
+#### Scenario: Run id is not a UUID
+- **WHEN** a `run/start` carries a run id that is not a canonical lowercase UUID
+- **THEN** it does not validate against the contract's schema
 
 #### Scenario: Runner-specific options are opaque to the host
 - **WHEN** `run/start` carries options the host does not understand

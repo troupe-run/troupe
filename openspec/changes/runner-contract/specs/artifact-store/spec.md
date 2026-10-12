@@ -45,7 +45,8 @@ the path and the fix; corrupted bytes SHALL NOT be returned.
 
 ### Requirement: The local store stays out of version control
 The local store SHALL keep its files out of git by itself, without the user editing any of their own files, and
-SHALL NOT change any file outside its own directory.
+SHALL NOT change any file outside its own directory. This SHALL hold wherever its caller puts it, including under a
+directory that is already ignored.
 
 #### Scenario: Store inside a git repository
 - **WHEN** artifacts are stored in a local store inside a git working tree
@@ -66,3 +67,20 @@ local one without changing callers. The local store's location SHALL be given by
 #### Scenario: Run host uses any store
 - **WHEN** the run host is given an in-memory store in a test instead of the local store
 - **THEN** runs store and reference their transcripts the same way
+
+### Requirement: Stores are separately packaged and found by name
+Each artifact store other than the core's in-memory one SHALL be its own package, registered under the
+`troupe.artifacts` entry point group, and SHALL be found by its name. The local store SHALL be registered as
+`local`. The core SHALL NOT import a store package directly.
+
+#### Scenario: Local store found by name
+- **WHEN** the store named `local` is asked for with a root directory
+- **THEN** a local store at that root is returned, from its own package
+
+#### Scenario: Unknown store name
+- **WHEN** a store name that no installed package registers is asked for
+- **THEN** the request fails with an error naming the store and the stores that are installed
+
+#### Scenario: Core does not import a store package
+- **WHEN** code in the core imports the local store's package
+- **THEN** the import contract check fails

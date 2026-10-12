@@ -66,8 +66,9 @@ after `result`, or a message over the maximum size), the host SHALL stop the run
 - **THEN** the runner is stopped and the outcome is `crashed` with a protocol error naming the line's position
 
 ### Requirement: Runners start with an explicit environment
-The host SHALL start a runner with only the environment variables the caller names, plus the minimum the operating
-system needs to start a process. It SHALL NOT pass through the host's environment.
+The host SHALL start a runner under the runner environment policy, a named default that selects nothing from the
+host: the runner gets only the variables the caller names, plus the minimum the operating system needs to start a
+process. It SHALL NOT pass through the host's environment.
 
 #### Scenario: Host secret is not inherited
 - **WHEN** the host process has an environment variable the caller did not name
@@ -113,7 +114,8 @@ A run SHALL be cancelled when it exceeds its run timeout, and its outcome SHALL 
 
 ### Requirement: Silence and retries are announced, never waited out silently
 While a run is going, the host SHALL announce when no event has arrived for the silence threshold, and SHALL
-announce each `retry` event as it arrives, through a callback the caller supplies.
+announce each `retry` event as it arrives, through a callback the caller supplies. Each announcement SHALL be a
+notice in the protocol's notice shape, with a code declared in one place.
 
 #### Scenario: Runner goes quiet
 - **WHEN** a runner sends no event for longer than the silence threshold
@@ -122,6 +124,10 @@ announce each `retry` event as it arrives, through a callback the caller supplie
 #### Scenario: Engine is retrying
 - **WHEN** a runner sends a `retry` event
 - **THEN** the host announces the attempt and the reason
+
+#### Scenario: Announcements match the notice schema
+- **WHEN** the host announces a silence or a retry
+- **THEN** the notice validates against the protocol's notice schema and its code is a declared notice code
 
 ### Requirement: Authentication retries fail fast
 By default, a `retry` event with reason `authentication` SHALL cancel the run, and the outcome SHALL be `failed`
