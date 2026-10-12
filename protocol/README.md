@@ -7,6 +7,7 @@ Language-neutral contracts between troupe and everything that talks to it: the C
 | Schema | What it defines |
 |---|---|
 | [`schemas/error.schema.json`](schemas/error.schema.json) | The structured error every surface renders: a stable `code`, the `problem`, the `fix`, and an optional `path` and `details` |
+| [`schemas/notice.schema.json`](schemas/notice.schema.json) | Something a person should know while troupe works, such as a wait or a retry: the same fields as an error, with its own codes |
 | [`schemas/runner/`](schemas/runner/) | The runner contract: JSON-RPC 2.0 over a runner's standard input and output, one message per line. One schema per message (`initialize`, `run/start`, `run/event`, `run/transcript`, `run/cancel`, `shutdown`), the error response, and `message.schema.json`, which accepts any line either side may send. [docs/runners.md](../docs/runners.md) explains how to write a runner |
 
 ## Source of truth

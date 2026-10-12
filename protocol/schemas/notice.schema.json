@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/notice.schema.json",
+  "title": "Notice",
+  "description": "Something a person should know while troupe works, such as a wait or a retry, as structured data. It has the same fields as an error; each surface renders it in its own words, and the code identifies it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "code",
+    "problem",
+    "fix"
+  ],
+  "properties": {
+    "code": {
+      "title": "Code",
+      "description": "Stable, dotted identifier for this kind of notice, such as run.silent. Surfaces use it to recognise and rephrase the notice.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)+$"
+    },
+    "problem": {
+      "title": "Problem",
+      "description": "What is happening.",
+      "type": "string",
+      "minLength": 1
+    },
+    "fix": {
+      "title": "Fix",
+      "description": "What the person can do about it, if anything.",
+      "type": "string",
+      "minLength": 1
+    },
+    "path": {
+      "title": "Path",
+      "description": "The absolute path of the file or directory concerned, when there is one.",
+      "type": "string",
+      "minLength": 1
+    },
+    "details": {
+      "title": "Details",
+      "description": "Extra structured facts about this notice, keyed by name.",
+      "type": "object"
+    }
+  }
+}
