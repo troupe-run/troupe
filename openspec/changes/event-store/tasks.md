@@ -97,21 +97,21 @@ Waiting for main stays the default. Either way, rebase only, never merge.
 
 ## 7. Ordering across branches, merges and removals
 
-- [ ] 7.1 Implement replay of visible, unordered events (topological, then session, then line) and the crash window
+- [x] 7.1 Implement replay of visible, unordered events (topological, then session, then line) and the crash window
   self-heal. Verify with tests using real git repositories: a merge that appends without renumbering, with events
   recorded earlier than ones already numbered; IDs surviving a restart; no tracked file holding notification IDs;
   and a two-branch merge with no conflicts in `.troupe/events/`
-- [ ] 7.2 Implement other-branch visibility (design D7): uncommitted segments from another branch left out of reads and
+- [x] 7.2 Implement other-branch visibility (design D7): uncommitted segments from another branch left out of reads and
   uniqueness checks, with `events.other-branch`, and committed segments always read. Verify with the untracked
   `git switch` scenario and the merged-branch scenario
-- [ ] 7.3 Implement order rebuild with a new epoch and `events.order-rebuilt`, and tracking reset by epoch. Verify by
+- [x] 7.3 Implement order rebuild with a new epoch and `events.order-rebuilt`, and tracking reset by epoch. Verify by
   deleting an uncommitted segment: the order is rebuilt, the notice names the reason, and a follower restarts from 0
-- [ ] 7.4 Implement missing-parent refusal (`events.missing-parent`, naming the dependent file and line, the missing
+- [x] 7.4 Implement missing-parent refusal (`events.missing-parent`, naming the dependent file and line, the missing
   ID, and the fix). Verify with the "parent's file was removed by hand" scenario, including a parent that is only in
   an other-branch segment
-- [ ] 7.5 Implement equal-ID deduplication and `recordings(id)`. Verify with two clones recording the same change
+- [x] 7.5 Implement equal-ID deduplication and `recordings(id)`. Verify with two clones recording the same change
   with different actors: after a merge, reads return one event and `recordings` returns both lineages
-- [ ] 7.6 Add a Hypothesis state-machine test over random branch, record, commit, switch, merge and delete-file
+- [x] 7.6 Add a Hypothesis state-machine test over random branch, record, commit, switch, merge and delete-file
   sequences on a real repository. Verify the invariants hold after every step: IDs dense, no issued ID renumbered
   except after a reported rebuild, every visible event ordered exactly once, and no merge conflicts in `events/`
 
