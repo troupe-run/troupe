@@ -8,6 +8,7 @@ import json
 from functools import cache
 from pathlib import Path
 from typing import Any
+from urllib.parse import urljoin
 
 import jsonschema
 from referencing import Registry, Resource
@@ -46,7 +47,7 @@ def registry() -> Registry[Any]:
 
 def validator(ref: str) -> jsonschema.Draft202012Validator:
     """A validator for ``ref``, relative to the runner schemas (``file.schema.json#/$defs/x``)."""
-    return jsonschema.Draft202012Validator({"$ref": BASE + ref}, registry=registry())
+    return jsonschema.Draft202012Validator({"$ref": urljoin(BASE, ref)}, registry=registry())
 
 
 def validate(instance: object, ref: str) -> None:
