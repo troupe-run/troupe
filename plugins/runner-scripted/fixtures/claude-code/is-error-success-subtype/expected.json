@@ -1,0 +1,10 @@
+{
+  "description": "An invalid key, no retries: Claude Code reports the failure under subtype \"success\" with is_error true, then exits 1.",
+  "exitCode": 1,
+  "outcome": "failed",
+  "errorCode": "run.error-result",
+  "withoutFailFast": {
+    "outcome": "failed",
+    "errorCode": "run.error-result"
+  }
+}

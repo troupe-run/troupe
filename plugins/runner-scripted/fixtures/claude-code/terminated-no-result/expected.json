@@ -1,0 +1,10 @@
+{
+  "description": "Retrying an invalid key, then SIGTERM during the backoff: Claude Code exits 143 and sends no result.",
+  "exitCode": 143,
+  "outcome": "failed",
+  "errorCode": "run.authentication",
+  "withoutFailFast": {
+    "outcome": "crashed",
+    "errorCode": "runner.crashed"
+  }
+}
