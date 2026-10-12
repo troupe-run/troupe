@@ -43,6 +43,10 @@ See proposal.md for why. What this builds on:
 
 **Non-Goals:**
 - Recording run events into the event store, lineage, identity (part C, #35).
+- A direct (in-process) runner transport and the generic bridge between transports: later work under decision
+  #37 (plugin transports). This change builds the JSON-RPC transport first, and its conformance suite (D13) is
+  the pattern #37 names for every port, run against both transports once the direct one exists. The local
+  artifact store, its own in-process package (D10), is #37's "ships in the box" case.
 - Choosing which runner an actor uses, or any config for it (the config change). This change takes the runner
   command as an argument.
 - Stages and declared-effect enforcement (Docker stages later). The effect check here is a small port with a
