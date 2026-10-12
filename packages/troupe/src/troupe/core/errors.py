@@ -64,6 +64,8 @@ CODES: dict[str, ExitCode] = {
     "runner.unknown": ExitCode.FAILURE,
     "run.out-of-sequence": ExitCode.FAILURE,
     "run.recording-failed": ExitCode.FAILURE,
+    "run.not-found": ExitCode.FAILURE,
+    "run.ambiguous-id": ExitCode.FAILURE,
     # A request that isn't understood is a usage error from any surface (design D15).
     "client.invalid-request": ExitCode.USAGE,
     "client.unknown-method": ExitCode.USAGE,

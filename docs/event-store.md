@@ -5,6 +5,8 @@ nothing in git is ever rewritten because of a merge. This page describes the sto
 change (#35); the decisions behind it are #1 (layout, ordering, forks, abandoned edits), #9 (identity) and #37
 (what runs in process).
 
+Runs are recorded here by `troupe perform`: see [docs/runs.md](runs.md).
+
 ## Layout
 
 ```

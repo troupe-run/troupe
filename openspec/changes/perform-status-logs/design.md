@@ -317,8 +317,8 @@ without changing.
   resolves ids the same way.
 - **`status`** with no run lists the most recent runs, newest first, up to `STATUS_RUNS_LIMIT` (20, a named default;
   `--limit` overrides it). With a run, it shows that run's summary.
-- **`logs <run>`** prints the run's events in order. `--follow` prints them, then waits for more using the store's
-  subscription (`SUBSCRIBE_POLL_SECONDS`). It stops when `Run.Ended` arrives, or when the run is no longer `running`
+- **`logs <run>`** prints the run's events in order. `--follow` prints them, then waits for more by reading the
+  store every `SUBSCRIBE_POLL_SECONDS`, the interval its subscription polls at for other processes' writes. It stops when `Run.Ended` arrives, or when the run is no longer `running`
   (D11), and says why. It never waits on a run that can't progress.
 - **`--json`** on `status` and `logs` prints the query's result exactly as its schema shapes it (for `logs --follow`,
   one update per line, then the result). That gives scripts and tests the protocol's own shape, not a parse of

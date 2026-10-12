@@ -12,10 +12,12 @@ from storetesting import git_service
 from troupe.core.artifacts import load_store
 from troupe.core.client import messages as m
 from troupe.core.client.session import CancelSignal, Session
+from troupe.core.errors import TroupeError
 from troupe.core.events import EventStore
 from troupe.core.messages import Message
 from troupe.core.runners.limits import RunLimits
 from troupe.core.runs.perform import Backends, perform
+from troupe.core.runs.queries import logs, status
 
 ALLOW = {"TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE": "true"}
 ADA = {"TROUPE_ACTOR": "human:ada@example.com"}
@@ -78,6 +80,14 @@ class Harness:
         parsed = m.PerformRequest.from_data(request)
         return asyncio.run(perform(parsed, self.session(), self.send, backends=self.backends()))
 
+    def status(self, **fields: Any) -> m.StatusResult:  # noqa: ANN401
+        parsed = m.StatusRequest.from_data(fields)
+        return asyncio.run(status(parsed, self.session(), self.send, backends=self.backends()))
+
+    def logs(self, **fields: Any) -> m.LogsResult:  # noqa: ANN401
+        parsed = m.LogsRequest.from_data(fields)
+        return asyncio.run(logs(parsed, self.session(), self.send, backends=self.backends()))
+
 
 def request(
     options: dict[str, Any],
@@ -92,3 +102,29 @@ def request(
         "effectCheck": effect or {"kind": "none"},
         **fields,
     }
+
+
+def failing_at(reported: int, *, end_too: bool = False) -> Any:  # noqa: ANN401
+    """A store wrapper whose write of the given run event (by seq), and of the end if asked,
+    fails as a full disk would."""
+
+    def wrap(store: Any) -> Any:  # noqa: ANN401
+        original = store.record_with_lineage
+
+        def record(events: Any, lineage: Any, **kwargs: Any) -> Any:  # noqa: ANN401
+            for event in events:
+                name = type(event).__qualname__
+                if (name == "Run.Reported" and event.seq == reported) or (
+                    end_too and name == "Run.Ended"
+                ):
+                    raise TroupeError(
+                        "artifact.write-failed",
+                        problem="No space left on device.",
+                        fix="Free some.",
+                    )
+            return original(events, lineage, **kwargs)
+
+        store.record_with_lineage = record
+        return store
+
+    return wrap
