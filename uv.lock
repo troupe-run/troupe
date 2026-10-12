@@ -12,6 +12,7 @@ members = [
     "troupe-artifacts-local",
     "troupe-identity-local",
     "troupe-runner-scripted",
+    "troupe-stage-local",
     "troupe-store-text",
     "troupe-vcs-files",
     "troupe-vcs-git",
@@ -808,6 +809,17 @@ version = "0.0.1.dev0"
 source = { editable = "plugins/runner-scripted" }
 
 [[package]]
+name = "troupe-stage-local"
+version = "0.0.1.dev0"
+source = { editable = "packages/troupe-stage-local" }
+dependencies = [
+    { name = "troupe" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "troupe", editable = "packages/troupe" }]
+
+[[package]]
 name = "troupe-store-text"
 version = "0.0.1.dev0"
 source = { editable = "packages/troupe-store-text" }
@@ -862,6 +874,7 @@ dev = [
     { name = "troupe-artifacts-local" },
     { name = "troupe-identity-local" },
     { name = "troupe-runner-scripted" },
+    { name = "troupe-stage-local" },
     { name = "troupe-store-text" },
     { name = "troupe-vcs-files" },
     { name = "troupe-vcs-git" },
@@ -883,6 +896,7 @@ dev = [
     { name = "troupe-artifacts-local", editable = "packages/troupe-artifacts-local" },
     { name = "troupe-identity-local", editable = "packages/troupe-identity-local" },
     { name = "troupe-runner-scripted", editable = "plugins/runner-scripted" },
+    { name = "troupe-stage-local", editable = "packages/troupe-stage-local" },
     { name = "troupe-store-text", editable = "packages/troupe-store-text" },
     { name = "troupe-vcs-files", editable = "packages/troupe-vcs-files" },
     { name = "troupe-vcs-git", editable = "packages/troupe-vcs-git" },
