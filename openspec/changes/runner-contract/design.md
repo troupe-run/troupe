@@ -35,7 +35,8 @@ See proposal.md for why. What this builds on:
 
 **Goals:**
 - A contract that a runner in any language can implement from the schema and `docs/runners.md` alone.
-- One outcome per run, derived by troupe, that cannot be fooled by an exit code or a "success" label.
+- One outcome per run, derived by troupe from every signal together, that neither an exit code nor a "success"
+  label can fool on its own.
 - Cancel and every timeout behave the same on Linux, macOS and Windows, with OS differences inside `platform`.
 - Tests can produce every outcome deterministically, and the shapes they use come from real Claude Code output.
 - Nothing in this change constrains the event format #35 chooses.
@@ -65,11 +66,32 @@ contains a raw line feed. Standard output carries only protocol messages; standa
 - Precedent: MCP's stdio transport uses the same newline-delimited JSON-RPC, so runner authors are likely to have
   seen it.
 
+### D1a. Strict reading: malformed or ambiguous input is an error (owner, 2026-10-12)
+
+Nothing in the contract falls back quietly to a default. Every one of these is a protocol violation that ends the
+run as `crashed` with `runner.protocol`, naming what was wrong:
+
+- **Ambiguous JSON:** a duplicated key in an object (Python's reader would silently keep the last), and `NaN`,
+  `Infinity` or `-Infinity` (accepted by Python's reader, but not JSON). Reading uses an `object_pairs_hook` that
+  refuses duplicates and a `parse_constant` that refuses the non-finite numbers.
+- **Shapes:** an unknown field, a missing field, a wrong type or a value outside its enum or range (already strict:
+  the protocol types mirror the schemas' `additionalProperties: false`).
+- **Cross-checks the schema can't make:** a notification method the contract doesn't define; a response to an id
+  troupe never sent, or a second response to one; a protocol version or capability troupe didn't offer; a
+  `run/start` answer, event or transcript record carrying another run id; a `tool_result` whose call id matches no
+  earlier `tool_call`; a `base64` transcript record that isn't valid base64 (nothing is written for it).
+- **Runner side:** a runner refuses `run/start` options it doesn't define instead of ignoring them (the scripted
+  runner refuses unknown option keys, unknown script steps and unknown step fields).
+
+Deliberately accepted: `encoding` may be left out and means `utf-8`; that default is part of the schema, not a
+guess. A `\r` before a message's line feed is accepted, because JSON treats it as whitespace, so the message's
+meaning is unambiguous (a Windows runner writing in text mode produces it).
+
 ### D2. Messages
 
 | Direction | Method | Kind | Purpose |
 |---|---|---|---|
-| host → runner | `initialize` | request | Offers `protocolVersions: [1]`. Answer: `protocolVersion`, `runner: {name, version}`, `capabilities`. |
+| host → runner | `initialize` | request | Offers `protocolVersions: [1]` and `capabilities` (the names troupe supports). Answer: `protocolVersion` (one of those offered), `runner: {name, version}`, `capabilities` (a subset of those offered). |
 | host → runner | `run/start` | request | `runId`, `instructions`, `workspace`, `options` (opaque object), `limits: {eventMaxBytes}`. Answer: `{runId}`. |
 | runner → host | `run/event` | notification | One run event (D3). |
 | runner → host | `run/transcript` | notification | `{runId, record, encoding?}`: one native record, unchanged. `encoding` is `utf-8` (default) or `base64` for non-text output. |
@@ -79,8 +101,10 @@ contains a raw line feed. Standard output carries only protocol messages; standa
 - **One run per process.** A runner serves one run and exits. That matches how a containerised runner will be
   started (one `docker run` per run), keeps runner state trivial, and makes "kill the process tree" mean "end this
   run". A second `run/start` is an error.
-- **`capabilities`** is an object of booleans so later versions can add features (for example, resuming a
-  session) without a new protocol version. Version 1 defines none as required.
+- **`capabilities` are negotiated, never guessed.** troupe offers the capability names it supports (an array);
+  the runner answers with the ones it will use, each from the offer. A name troupe didn't offer is a protocol
+  violation, not something to ignore. Later versions add features (for example, resuming a session) this way
+  without a new protocol version. Version 1 defines none, so troupe offers an empty list.
 - **Errors** are JSON-RPC errors whose `data` validates against `error.schema.json`, so a runner's refusal renders
   like any other troupe error. JSON-RPC error `code`s use the standard values (-32600 and so on) plus one
   application code, -32000, for "refused"; the troupe `code` in `data` identifies the reason.
@@ -127,7 +151,7 @@ place and is property-tested.
 
 Facts: whether the runner started and completed the handshake; the `result` event if any; whether cancel was
 requested and why (caller, run timeout, authentication retry, transcript limit, protocol violation); any protocol
-violation; the effect verdict; the exit code (recorded only).
+violation; the effect verdict; how the runner ended (exit code, or killed after the grace period).
 
 | Facts (first match wins) | Outcome | Error code |
 |---|---|---|
@@ -137,16 +161,26 @@ violation; the effect verdict; the exit code (recorded only).
 | Cancelled because the transcript passed its limit | `failed` | `run.transcript-too-large` |
 | `result` with status `error` | `failed` | `run.error-result` |
 | `result` with status `ok`, effect check failed | `failed` | `run.effect-missing` |
-| `result` with status `ok`, effect check passed | `succeeded` | — |
+| `result` with status `ok`, effect check passed, non-zero exit or killed during shutdown | `failed` | `run.unclean-exit` |
+| `result` with status `ok`, effect check passed, exit code 0 | `succeeded` | — |
 | No `result`, run timeout expired | `timed-out` | `run.timeout` |
 | No `result`, cancelled by the caller | `cancelled` | — |
 | No `result`, otherwise | `crashed` | `runner.crashed` |
 
 - **A `result` wins over a later timeout or cancel.** If the runner finished and the timeout fired while it was
   shutting down, the run did finish.
-- **The exit code never decides.** A runner that reports `ok`, passes the effect check and exits 1 has `succeeded`,
-  with the exit code recorded. This follows #34 and spike B literally. Treating a non-zero exit as a failure would be
-  the stricter choice; it is called out in the summary for the owner.
+- **Success takes all three signals (owner, 2026-10-12).** "It's the combination of status=ok + effects valid +
+  exit=0 that makes us think it's completed properly." A runner that reports `ok` and passes the effect check, then
+  exits non-zero (a disk filling up at the last moment, say) or has to be killed during shutdown, leaves the run's
+  state uncertain, so the outcome is `failed` with `run.unclean-exit`. Its problem says the runner reported success
+  but exited with code N, so the run's state is uncertain; the fix says to check the run's effects and transcript
+  before relying on them.
+- **The exit code alone never makes a run succeed.** No `result` with exit 0 is still `crashed`, and an `error`
+  result with exit 0 is still `failed` (spike B: exit 0 isn't evidence that the work happened).
+- Alternative considered: a seventh outcome, `uncertain`, for an unclean exit after an `ok` result. Rejected: every
+  consumer of outcomes would need a case for it, it would act as `failed` everywhere (nothing proceeds on it), and
+  the transcript, the effects and the exit code are recorded either way, so nothing is lost by calling it `failed`
+  with its own error code.
 - The outcome is a value (`RunOutcome`) holding the outcome, the error (protocol error shape), the `result` event,
   the exit code, how the runner ended (exited, killed after grace), the transcript and stderr references, and the
   limits in effect.
@@ -405,7 +439,7 @@ variable, `TROUPE_CONFORMANCE_RUNNER`, points them at another runner command.
 Added to `CODES`, all `ExitCode.FAILURE`: `runner.start-failed`, `runner.incompatible`, `runner.start-timeout`,
 `runner.protocol`, `runner.crashed`, `run.error-result`, `run.effect-missing`, `run.timeout`, `run.authentication`,
 `run.transcript-too-large`, `artifact.missing`, `artifact.corrupt`, `artifact.write-failed`,
-`artifact.unknown-store`. Notice codes (D7) are separate: `run.silent` and `run.retrying`, in `troupe.core.notices`.
+`artifact.unknown-store`, `run.unclean-exit`. Notice codes (D7) are separate: `run.silent` and `run.retrying`, in `troupe.core.notices`.
 
 ## Assumptions about the event format (#35)
 
@@ -448,8 +482,6 @@ so #35 can check them; if one is wrong, what changes is listed with it.
   runner's opt-in live test catches drift against the current version.
 - [Hand-written types drift from the schema] → Every message both sides produce is validated against the schema in
   tests, including generated ones. The generator decision is taken in the config change (D11).
-- [`success` with a non-zero exit code] → Follows the spike's rule that the exit code isn't evidence. Flagged for the
-  owner; changing it is one row of D4.
 - [The owner's capture of a successful run is a manual step] → It's one short run at about $0.03, scripted end to
   end. The credential-free fixtures don't depend on it, so implementation isn't blocked while it waits.
 - [Timing-based tests are flaky on slow CI runners, especially Windows] → Tests use the scripted runner's explicit

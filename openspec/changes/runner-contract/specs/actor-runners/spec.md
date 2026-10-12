@@ -20,29 +20,41 @@ shape. The outcome SHALL be returned as data; a failed run SHALL NOT be raised a
 - **WHEN** a run ends with an outcome that carries an error
 - **THEN** the error validates against the protocol's error schema
 
-### Requirement: The outcome never comes from the exit code
-The host SHALL derive the outcome from the event stream, how the runner ended, and the effect check. The runner's
-exit code SHALL be recorded but SHALL NOT decide the outcome.
+### Requirement: The exit code alone never makes a run succeed
+The host SHALL derive the outcome from the event stream, the effect check and how the runner ended, together. The
+exit code SHALL be recorded with every outcome. A clean exit SHALL NOT make a run succeed on its own, and a run
+without a `result` SHALL NOT succeed whatever its exit code.
 
 #### Scenario: Error result with exit code 0
 - **WHEN** a runner sends a `result` with status `error` and exits with code 0
 - **THEN** the outcome is `failed`
 
-#### Scenario: Success result with a non-zero exit code
-- **WHEN** a runner sends a `result` with status `ok`, the effect check passes, and the runner exits non-zero
-- **THEN** the outcome is `succeeded` and the exit code is recorded with it
+#### Scenario: No result with exit code 0
+- **WHEN** a runner exits with code 0 without sending a `result`, and no cancel was requested
+- **THEN** the outcome is `crashed`
 
-### Requirement: Success needs an ok result and a passing effect check
-The outcome SHALL be `succeeded` only when the run's `result` event has status `ok` and the run's effect check
-passes. A run with no effect to check SHALL use a check that always passes, stated explicitly by the caller.
+### Requirement: Success needs an ok result, a passing effect check and a clean exit
+The outcome SHALL be `succeeded` only when the run's `result` event has status `ok`, the run's effect check passes,
+and the runner exits with code 0 after `shutdown`. A run with no effect to check SHALL use a check that always
+passes, stated explicitly by the caller.
 
 #### Scenario: Result ok but declared output missing
 - **WHEN** a runner reports status `ok` but a file the run was expected to produce does not exist
 - **THEN** the outcome is `failed` with an error naming the missing path
 
 #### Scenario: Result ok and declared output written
-- **WHEN** a runner reports status `ok` and every expected file exists with changed contents
+- **WHEN** a runner reports status `ok`, every expected file exists with changed contents, and the runner exits 0
 - **THEN** the outcome is `succeeded`
+
+#### Scenario: Success result with a non-zero exit code
+- **WHEN** a runner reports status `ok`, the effect check passes, and the runner then exits with code 3
+- **THEN** the outcome is `failed` with an error saying the runner reported success but exited with code 3, so the
+  run's state is uncertain
+
+#### Scenario: Success result, then killed during shutdown
+- **WHEN** a runner reports status `ok`, the effect check passes, and the runner does not exit within the grace
+  period after `shutdown` and is killed
+- **THEN** the outcome is `failed` with the same uncertain-state error
 
 ### Requirement: A run without a result did not succeed
 When the runner's stream ends without a `result` event, the outcome SHALL be `cancelled` if the host had asked to
@@ -57,13 +69,35 @@ cancel, `timed-out` if a run limit had expired, and `crashed` otherwise.
 - **THEN** the outcome is `cancelled`
 
 ### Requirement: Protocol violations end the run
-When a runner violates the contract (an invalid message, an event out of sequence, an event before `init`, an event
-after `result`, or a message over the maximum size), the host SHALL stop the runner and the outcome SHALL be
-`crashed` with an error that names the violation.
+When a runner violates the contract, the host SHALL stop the runner and the outcome SHALL be `crashed` with an
+error that names the violation. A malformed or ambiguous message SHALL be a violation, never quietly read with a
+default. The violations are listed in the scenarios.
 
 #### Scenario: Garbage on standard output
 - **WHEN** a runner writes a line that is not JSON to standard output
 - **THEN** the runner is stopped and the outcome is `crashed` with a protocol error naming the line's position
+
+#### Scenario: Ambiguous JSON
+- **WHEN** a runner sends a message with a duplicated key, or with `NaN` or `Infinity` as a value
+- **THEN** it is a protocol violation, not read with either value
+
+#### Scenario: Unknown method or response
+- **WHEN** a runner sends a notification with a method the contract doesn't define, or a response to an id the
+  host never sent
+- **THEN** it is a protocol violation
+
+#### Scenario: Answers that don't match the request
+- **WHEN** a runner chooses a protocol version the host didn't offer, answers `run/start` with a different run id,
+  or sends an event or transcript record for a different run id
+- **THEN** it is a protocol violation
+
+#### Scenario: Tool result without its call
+- **WHEN** a runner sends a `tool_result` whose call id matches no earlier `tool_call` in the run
+- **THEN** it is a protocol violation
+
+#### Scenario: Invalid base64 transcript record
+- **WHEN** a runner sends a transcript record with encoding `base64` that is not valid base64
+- **THEN** it is a protocol violation, and nothing is written to the transcript for it
 
 ### Requirement: Runners start with an explicit environment
 The host SHALL start a runner under the runner environment policy, a named default that selects nothing from the
