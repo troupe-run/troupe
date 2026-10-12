@@ -72,3 +72,14 @@ option C). Off by default: the local stage then refuses every actor."""
 
 STAGE = "local"
 """The stage an actor runs on until config says otherwise."""
+
+# Where a theatre's runs are kept (perform-status-logs design D4). Interim: config names them.
+
+VCS = "git"
+"""The version-control adapter a theatre is read and recorded with."""
+
+EVENT_STORE = "text"
+"""The event store a theatre's events are kept in."""
+
+ARTIFACT_STORE = "local"
+"""The artifact store a theatre's transcripts and large payloads are kept in."""
