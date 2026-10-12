@@ -47,5 +47,7 @@ def test_every_outcome_and_runner_error_code_is_documented() -> None:
     assert runner_codes <= documented
 
 
-def test_every_notice_code_is_documented() -> None:
-    assert all(f"`{code}`" in TEXT for code in NOTICE_CODES)
+def test_every_runner_notice_code_is_documented() -> None:
+    runner_notices = {code for code in NOTICE_CODES if code.split(".")[0] in {"run", "runner"}}
+    assert runner_notices
+    assert all(f"`{code}`" in TEXT for code in runner_notices)

@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/lineage.schema.json",
+  "title": "Lineage",
+  "description": "Where an event came from: who made it, through what, when, why, as part of which command and in reaction to what, with whose approval, and in what version-control state. Every event troupe records carries it. It is left out of the event's content hash, so two clones that make the same change agree on the event's id.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["actor", "via", "at", "reason", "change", "cause", "approvals", "vcs"],
+  "properties": {
+    "actor": {"$ref": "#/$defs/actor"},
+    "via": {
+      "title": "Via",
+      "description": "The surface the event came through. A closed set: a new surface is a schema change.",
+      "enum": ["cli", "file", "runner", "server"]
+    },
+    "at": {"$ref": "#/$defs/timestamp", "description": "When troupe recorded the event, in UTC."},
+    "reason": {
+      "title": "Reason",
+      "description": "Why, in the actor's words. null when none was given: absent is explicit, never a missing field.",
+      "type": ["string", "null"],
+      "minLength": 1
+    },
+    "change": {
+      "$ref": "#/$defs/ulid",
+      "title": "Change",
+      "description": "The correlation id: minted by the command that started this, and carried by every event that follows from it, reactions included."
+    },
+    "cause": {"$ref": "#/$defs/cause"},
+    "approvals": {
+      "title": "Approvals",
+      "description": "Who approved the event, and in which role. Empty when nobody had to.",
+      "type": "array",
+      "items": {"$ref": "#/$defs/approval"}
+    },
+    "vcs": {"$ref": "#/$defs/vcs"}
+  },
+  "$defs": {
+    "hash": {
+      "title": "Content hash",
+      "description": "sha256: and the lowercase hex SHA-256 digest.",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "ulid": {
+      "title": "ULID",
+      "description": "A ULID: 26 characters of Crockford base32, sortable by time.",
+      "type": "string",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "timestamp": {
+      "title": "Time",
+      "description": "RFC 3339 in UTC, with milliseconds and Z.",
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+    },
+    "actor": {
+      "title": "Actor",
+      "description": "Who made the event. Never null: where nobody can be known, such as a hand edit to a file, the kind is an explicit unknown.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "id", "source"],
+          "properties": {
+            "kind": {"enum": ["human", "agent"]},
+            "id": {"type": "string", "minLength": 1},
+            "source": {
+              "description": "The identity source that resolved the actor, such as env, vcs or os-login, or troupe for an agent troupe assigned.",
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {"kind": {"const": "unknown"}}
+        }
+      ]
+    },
+    "cause": {
+      "title": "Cause",
+      "description": "What made the event happen: the command that recorded it directly (its id is the change id), or the event it reacts to. Never null.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "id"],
+          "properties": {"kind": {"const": "command"}, "id": {"$ref": "#/$defs/ulid"}}
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "id"],
+          "properties": {"kind": {"const": "event"}, "id": {"$ref": "#/$defs/hash"}}
+        }
+      ]
+    },
+    "approval": {
+      "title": "Approval",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actor", "role", "at"],
+      "properties": {
+        "actor": {"$ref": "#/$defs/actor"},
+        "role": {"type": "string", "minLength": 1},
+        "at": {"$ref": "#/$defs/timestamp"}
+      }
+    },
+    "vcs": {
+      "title": "Version-control state",
+      "description": "The state the event was made in. branch is null when HEAD is detached or the adapter has no branches; head is null before the first commit or without version control. source is set only for an event made from a file.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["adapter", "branch", "head", "source"],
+      "properties": {
+        "adapter": {"type": "string", "minLength": 1},
+        "branch": {"type": ["string", "null"], "minLength": 1},
+        "head": {"type": ["string", "null"], "minLength": 1},
+        "source": {
+          "oneOf": [
+            {"type": "null"},
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["path", "before", "after"],
+              "properties": {
+                "path": {
+                  "description": "The file, relative to the theatre, with / separators. Never a host path.",
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^(?![/\\\\])(?![A-Za-z]:)(?!.*\\\\)(?!(.*/)?\\.\\.(/|$)).+$"
+                },
+                "before": {
+                  "description": "The file's content hash before the change; null when it didn't exist.",
+                  "oneOf": [{"type": "null"}, {"$ref": "#/$defs/hash"}]
+                },
+                "after": {
+                  "description": "The file's content hash after the change; null when it no longer exists.",
+                  "oneOf": [{"type": "null"}, {"$ref": "#/$defs/hash"}]
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

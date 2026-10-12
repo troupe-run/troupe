@@ -36,6 +36,26 @@ CODES: dict[str, ExitCode] = {
     "artifact.corrupt": ExitCode.FAILURE,
     "artifact.write-failed": ExitCode.FAILURE,
     "artifact.unknown-store": ExitCode.FAILURE,
+    # The event store, identity and version control (event-store design D12).
+    "events.version-conflict": ExitCode.FAILURE,
+    "events.stream-forked": ExitCode.FAILURE,
+    "events.settle-incomplete": ExitCode.FAILURE,
+    "events.missing-parent": ExitCode.FAILURE,
+    "events.malformed-record": ExitCode.FAILURE,
+    "events.unknown-format": ExitCode.FAILURE,
+    "events.lineage-invalid": ExitCode.FAILURE,
+    "events.cause-unknown": ExitCode.FAILURE,
+    "events.unknown-store": ExitCode.FAILURE,
+    "identity.unresolved": ExitCode.FAILURE,
+    "identity.invalid-override": ExitCode.FAILURE,
+    "identity.ambiguous": ExitCode.FAILURE,
+    "identity.unknown-source": ExitCode.FAILURE,
+    "vcs.unknown-adapter": ExitCode.FAILURE,
+    "vcs.failed": ExitCode.FAILURE,
+    "command.timeout": ExitCode.FAILURE,
+    "command.not-found": ExitCode.FAILURE,
+    "command.output-too-large": ExitCode.FAILURE,
+    "environment.policy-invalid": ExitCode.FAILURE,
 }
 
 
