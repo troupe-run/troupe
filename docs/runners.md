@@ -99,13 +99,18 @@ and records only their reference.
 - **Reads are verified.** If a stored file's bytes no longer match its reference, reading fails with
   `artifact.corrupt` instead of returning them. A reference that isn't in the store fails with
   `artifact.missing`.
-- **The local store** is a directory: `sha256/<first two hex digits>/<hex>`. It writes its own `.gitignore`
-  (containing `*`) the first time it is used, so git ignores it without any change to your own `.gitignore`.
+- **The local store** is a directory: `sha256/<first two hex digits>/<hex>`. troupe keeps it at
+  `.troupe/local/artifacts/` in the theatre, and `.troupe/local/` is kept out of git. The store also writes its own
+  `.gitignore` (containing `*`) the first time it is used, as a guard: wherever its directory is, git ignores it,
+  and your own `.gitignore` is never changed.
 - **Writes are atomic.** An artifact is streamed into `tmp/` and moved into place when finished; until then it
   can't be read. If troupe is killed mid-write, the temporary file stays in `tmp/`; it is never mistaken for an
   artifact, and is safe to delete when no troupe command is running.
-- The store is a port: another store (object storage, a hosted store) can replace the local one without changing
-  anything that uses it.
+- **Stores are found by name.** The store is a port (`ArtifactStore` in `troupe.core.artifacts`). Each store is its
+  own package, registered in the `troupe.artifacts` entry point group; the local one is `troupe-artifacts-local`,
+  registered as `local`. troupe never imports a store package, so another store (object storage, a hosted store)
+  can replace the local one without changing anything that uses it. Asking for a store that isn't installed fails
+  with `artifact.unknown-store`, naming the stores that are.
 
 ### Environment
 

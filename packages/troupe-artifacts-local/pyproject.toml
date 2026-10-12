@@ -1,0 +1,21 @@
+[project]
+name = "troupe-artifacts-local"
+version = "0.0.1.dev0"
+description = "troupe's local artifact store: content-addressed files in a directory."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+dependencies = ["troupe"]
+
+[project.urls]
+Homepage = "https://troupe.run"
+Repository = "https://github.com/troupe-run/troupe"
+
+# Found by name through the troupe.artifacts entry point group (spec: artifact-store).
+[project.entry-points."troupe.artifacts"]
+local = "troupe_artifacts_local:LocalArtifactStore"
+
+[build-system]
+requires = ["uv_build>=0.13.0,<0.14"]
+build-backend = "uv_build"

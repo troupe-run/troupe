@@ -13,10 +13,12 @@ members = ["packages/*"]
 
 [tool.uv.sources]
 troupe = { workspace = true }
+troupe-artifacts-local = { workspace = true }
 
 [dependency-groups]
 dev = [
     "troupe",
+    "troupe-artifacts-local",
     "ruff>=0.17",
     "mypy>=2.4",
     "pytest>=9.1",
@@ -29,7 +31,13 @@ dev = [
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-src = ["packages/troupe/src", "packages/troupe/tests", "scripts"]
+src = [
+    "packages/troupe/src",
+    "packages/troupe/tests",
+    "packages/troupe-artifacts-local/src",
+    "packages/troupe-artifacts-local/tests",
+    "scripts",
+]
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "UP", "B", "SIM", "RUF", "PT", "N", "ANN", "S"]
@@ -48,17 +56,29 @@ extend-immutable-calls = ["troupe.core.runners.protocol._json"]
 [tool.mypy]
 strict = true
 python_version = "3.12"
-files = ["packages/troupe/src", "packages/troupe/tests", "scripts"]
+files = [
+    "packages/troupe/src",
+    "packages/troupe/tests",
+    "packages/troupe-artifacts-local/src",
+    "packages/troupe-artifacts-local/tests",
+    "scripts",
+]
 explicit_package_bases = true
-mypy_path = ["packages/troupe/src", "packages/troupe/tests", "scripts", "scripts/tests"]
+mypy_path = [
+    "packages/troupe/src",
+    "packages/troupe/tests",
+    "packages/troupe-artifacts-local/src",
+    "scripts",
+    "scripts/tests",
+]
 
 [tool.pytest.ini_options]
-testpaths = ["packages/troupe/tests", "scripts/tests"]
+testpaths = ["packages/troupe/tests", "packages/troupe-artifacts-local/tests", "scripts/tests"]
 addopts = ["-ra", "--strict-markers", "--strict-config"]
 xfail_strict = true
 
 [tool.importlinter]
-root_packages = ["troupe"]
+root_packages = ["troupe", "troupe_artifacts_local"]
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
@@ -69,6 +89,13 @@ layers = ["troupe.cli", "troupe.core", "troupe.platform"]
 [[tool.importlinter.contracts]]
 name = "only troupe.platform imports OS-specific modules"
 type = "forbidden"
-source_modules = ["troupe"]
+source_modules = ["troupe", "troupe_artifacts_local"]
 forbidden_modules = ["fcntl", "msvcrt", "termios", "signal", "winreg", "pwd", "grp", "ctypes"]
 ignore_imports = ["troupe.platform.** -> *"]
+
+[[tool.importlinter.contracts]]
+# Stores are found by name through the troupe.artifacts entry point group, never imported (spec: artifact-store).
+name = "troupe never imports a store package"
+type = "forbidden"
+source_modules = ["troupe"]
+forbidden_modules = ["troupe_artifacts_local"]
