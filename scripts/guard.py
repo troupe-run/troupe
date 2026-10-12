@@ -49,6 +49,8 @@ OVERRIDABLE_RULES = (
     "skip-hooks",
     "command-unparseable",
     "delivered-file",
+    "owner-only",
+    "gh-allow-list",
 )
 TAMPER_RULE = "guard-tamper"
 """Refuses an agent's attempt to grant itself an override. Never overridable."""
@@ -668,6 +670,434 @@ def pr_closes_issue(words: Sequence[str], cwd: Path) -> Decision:
     return Decision("pr-closes-issue", problem, fix)
 
 
+# The gh allow-list (spec: development-workflow, "Agents don't act as the owner" and "Agents' gh
+# commands are allow-listed"; refuse-admin-merge design D1-D5). Every gh command in a session is
+# classified against this table. Its evidence is a survey of the gh commands agents ran in 13
+# earlier sessions (design D4). To allow something new, add it here, by pull request.
+
+GH_READS = frozenset(
+    {
+        ("pr", "view"), ("pr", "list"), ("pr", "checks"), ("pr", "diff"), ("pr", "status"),
+        ("issue", "view"), ("issue", "list"), ("issue", "status"),
+        ("run", "list"), ("run", "view"), ("run", "watch"), ("run", "download"),
+        ("repo", "view"), ("repo", "list"), ("repo", "clone"),
+        ("label", "list"),
+        ("project", "view"), ("project", "list"), ("project", "item-list"),
+        ("project", "field-list"),
+        ("workflow", "list"), ("workflow", "view"),
+        ("release", "list"), ("release", "view"),
+        ("secret", "list"), ("variable", "list"),
+        ("ruleset", "list"), ("ruleset", "view"), ("ruleset", "check"),
+        ("auth", "status"),
+    }
+)  # fmt: skip
+GH_WORKFLOW_WRITES = frozenset(
+    {
+        ("pr", "create"), ("pr", "edit"), ("pr", "ready"), ("pr", "close"), ("pr", "reopen"),
+        ("pr", "comment"), ("pr", "checkout"), ("pr", "merge"),
+        ("issue", "create"), ("issue", "comment"), ("issue", "edit"), ("issue", "close"),
+        ("issue", "reopen"),
+        ("project", "item-add"), ("project", "item-edit"), ("project", "item-archive"),
+        ("workflow", "run"), ("run", "rerun"), ("run", "cancel"),
+    }
+)  # fmt: skip
+GH_OWNER_ONLY = {
+    ("secret", "set"): "admin", ("secret", "delete"): "admin",
+    ("variable", "set"): "admin", ("variable", "delete"): "admin",
+    ("repo", "create"): "admin", ("repo", "edit"): "admin", ("repo", "rename"): "admin",
+    ("repo", "archive"): "admin", ("repo", "unarchive"): "admin", ("repo", "delete"): "admin",
+    ("repo", "transfer"): "admin",
+    ("issue", "transfer"): "admin", ("issue", "delete"): "admin",
+    ("label", "create"): "admin", ("label", "edit"): "admin", ("label", "delete"): "admin",
+    ("label", "clone"): "admin",
+    ("project", "create"): "admin", ("project", "delete"): "admin", ("project", "edit"): "admin",
+    ("project", "close"): "admin", ("project", "copy"): "admin", ("project", "link"): "admin",
+    ("project", "unlink"): "admin", ("project", "mark-template"): "admin",
+    ("project", "field-create"): "admin", ("project", "field-delete"): "admin",
+    ("auth", "token"): "credentials", ("auth", "login"): "credentials",
+    ("auth", "logout"): "credentials", ("auth", "refresh"): "credentials",
+    ("auth", "switch"): "credentials", ("auth", "setup-git"): "credentials",
+}  # fmt: skip
+
+_SEG = r"[^/]+"
+_REPO = rf"repos/{_SEG}/{_SEG}"
+_WRITES = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+GH_API_WORKFLOW_WRITES = tuple(
+    (re.compile(pattern), frozenset(methods))
+    for pattern, methods in (
+        (rf"{_REPO}/issues/{_SEG}/comments", {"POST"}),
+        (rf"{_REPO}/issues/{_SEG}/labels(/{_SEG})?", {"POST", "DELETE"}),
+        (rf"{_REPO}/issues/{_SEG}/sub_issues", {"POST"}),
+        (rf"{_REPO}/issues/{_SEG}/sub_issue", {"DELETE"}),
+        (rf"{_REPO}/issues/{_SEG}", {"PATCH"}),
+        (rf"{_REPO}/pulls/{_SEG}/comments", {"POST"}),
+        (rf"{_REPO}/pulls/{_SEG}/reviews", {"POST"}),
+    )
+)
+GH_API_OWNER_ONLY = tuple(
+    (re.compile(pattern), group)
+    for pattern, group in (
+        (rf"{_REPO}/pulls/{_SEG}/merge", "merge"),
+        (rf"{_REPO}/actions/runs/{_SEG}/pending_deployments", "deployment"),
+        (rf"({_REPO}|orgs/{_SEG})/rulesets(/.*)?", "gates"),
+        (rf"{_REPO}/branches/.+/protection(/.*)?", "gates"),
+        (rf"{_REPO}/environments(/.*)?", "gates"),
+        (rf"{_REPO}", "admin"),
+        (
+            rf"{_REPO}/(pages|labels|collaborators|private-vulnerability-reporting|hooks)(/.*)?",
+            "admin",
+        ),
+        (rf"orgs/{_SEG}", "admin"),
+        (rf"orgs/{_SEG}/(issue-types|members|teams)(/.*)?", "admin"),
+        (r".*/(secrets|variables)(/.*)?", "admin"),
+    )
+)
+GH_MUTATIONS_ALLOWED = frozenset(
+    {
+        "updateIssue", "addSubIssue", "removeSubIssue", "addComment", "addProjectV2ItemById",
+        "updateProjectV2ItemFieldValue",
+    }
+)  # fmt: skip
+GH_MUTATIONS_OWNER_ONLY = {
+    "mergePullRequest": "merge",
+    "approveDeployments": "deployment", "rejectDeployments": "deployment",
+    "createRepositoryRuleset": "gates", "updateRepositoryRuleset": "gates",
+    "deleteRepositoryRuleset": "gates",
+    "createBranchProtectionRule": "gates", "updateBranchProtectionRule": "gates",
+    "deleteBranchProtectionRule": "gates",
+    "updateProjectV2Field": "admin",
+}  # fmt: skip
+
+# Throwaway repositories (design D2): any write by an agent, but only infra-probe-* may be deleted,
+# and archiving, unarchiving or deleting the others' records is the owner's.
+THROWAWAY_OWNER = "troupe-run"
+THROWAWAY_DELETABLE = ("infra-probe-",)
+THROWAWAY_KEPT = ("spike-", "bakeoff-")
+# gh's own command groups that act on one repository, so a throwaway target can exempt them.
+# Anything else (an extension, an alias) is never exempt: what it does can't be known here.
+GH_REPO_GROUPS = frozenset(
+    {"api", "pr", "issue", "release", "repo", "run", "workflow", "secret", "variable", "label",
+     "ruleset", "cache"}
+)  # fmt: skip
+
+GH_API_VALUE_FLAGS = frozenset(
+    {"-X", "--method", "-f", "--raw-field", "-F", "--field", "-H", "--header", "--input", "-q",
+     "--jq", "-t", "--template", "--hostname", "--cache", "-p", "--preview"}
+)  # fmt: skip
+GH_REPO_VALUE_FLAGS = GH_PR_CREATE_VALUE_FLAGS | GH_API_VALUE_FLAGS
+
+OWNER_ONLY_MESSAGES = {
+    "merge": (
+        "only the owner merges past a pull request's rules.",
+        "Ask the owner to merge it, or fix what blocks it.",
+    ),
+    "deployment": (
+        "only the owner approves or rejects a deployment.",
+        "Tell the owner the run is waiting, with its link.",
+    ),
+    "gates": (
+        "only the owner changes a ruleset, branch protection or an environment.",
+        "Change it in troupe-run/infrastructure through a pull request, or ask the owner.",
+    ),
+    "admin": (
+        "only the owner changes the org's or a repository's administration.",
+        "Change it in troupe-run/infrastructure through a pull request, or ask the owner.",
+    ),
+    "credentials": (
+        "agents don't handle the login's credentials.",
+        "Use gh itself; if something needs the token, ask the owner.",
+    ),
+}
+NOT_LISTED_FIX = (
+    "Ask the owner, or add it to the list in troupe-run/infrastructure (scripts/guard.py). "
+    "A read with fields needs -X GET."
+)
+
+
+def _flag_value(rest: Sequence[str], index: int, word: str) -> tuple[str, bool]:
+    """The value of the flag at rest[index], and whether it used the next word."""
+    _, equals, inline = word.partition("=")
+    if equals:
+        return inline, False
+    return (rest[index + 1] if index + 1 < len(rest) else ""), True
+
+
+def _gh_repository(words: Sequence[str], call_args: Sequence[str]) -> str | None:
+    """The repository a gh command names: -R/--repo, else GH_REPO set for the command (D2)."""
+    index = 0
+    while index < len(call_args):
+        word = call_args[index]
+        name = word.partition("=")[0]
+        if name in ("-R", "--repo"):
+            return _flag_value(call_args, index, word)[0]
+        if word.startswith("-R") and len(word) > 2 and "=" not in word:
+            return word[2:]
+        if word in GH_REPO_VALUE_FLAGS:
+            index += 1
+        index += 1
+    for word in words:
+        variable, equals, value = word.partition("=")
+        if not equals or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", variable):
+            break
+        if variable == "GH_REPO":
+            return value
+    return None
+
+
+def _positionals(rest: Sequence[str], value_flags: frozenset[str]) -> list[str]:
+    out: list[str] = []
+    index = 0
+    while index < len(rest):
+        word = rest[index]
+        if word.startswith("-"):
+            if "=" not in word and word in value_flags:
+                index += 1
+        else:
+            out.append(word)
+        index += 1
+    return out
+
+
+def throwaway_kind(repository: str | None) -> str | None:
+    """'deletable' for troupe-run/infra-probe-*, 'kept' for troupe-run/spike-* and bakeoff-*."""
+    named = normalise_repository(repository) if repository else None
+    if named is None or named[0] != "github.com" or named[1] != THROWAWAY_OWNER:
+        return None
+    if named[2].startswith(THROWAWAY_DELETABLE):
+        return "deletable"
+    if named[2].startswith(THROWAWAY_KEPT):
+        return "kept"
+    return None
+
+
+def _api_fields(rest: Sequence[str]) -> list[tuple[str, bool]]:
+    """Each -f/-F/--raw-field/--field value as (key=value, typed): -F and --field read @files."""
+    fields: list[tuple[str, bool]] = []
+    for index, word in enumerate(rest):
+        if word in ("-f", "-F", "--raw-field", "--field"):
+            value = rest[index + 1] if index + 1 < len(rest) else ""
+            fields.append((value, word in ("-F", "--field")))
+        elif word.startswith(("--raw-field=", "--field=")):
+            fields.append((word.partition("=")[2], word.startswith("--field=")))
+        elif re.fullmatch(r"-[fF].+", word):
+            fields.append((word[2:], word[1] == "F"))
+    return fields
+
+
+def _api_method(rest: Sequence[str]) -> str:
+    """gh's rule: -X/--method if given, else POST when it sends fields or --input, else GET."""
+    for index, word in enumerate(rest):
+        name = word.partition("=")[0]
+        if name in ("-X", "--method"):
+            return _flag_value(rest, index, word)[0].upper()
+        if word.startswith("-X") and len(word) > 2:
+            return word[2:].upper()
+    sends_input = any(word.partition("=")[0] == "--input" for word in rest)
+    return "POST" if _api_fields(rest) or sends_input else "GET"
+
+
+def _api_endpoint(rest: Sequence[str]) -> str:
+    positionals = _positionals(rest, GH_API_VALUE_FLAGS)
+    endpoint = positionals[0] if positionals else ""
+    endpoint = re.sub(r"^https?://api\.github\.com/", "", endpoint, flags=re.IGNORECASE)
+    return endpoint.lstrip("/").split("?", 1)[0].rstrip("/").lower()
+
+
+def _graphql_queries(rest: Sequence[str], cwd: Path) -> list[str] | None:
+    """Every GraphQL query a gh api graphql command sends; None if one can't be read first."""
+    queries: list[str] = []
+    for value, typed in _api_fields(rest):
+        key, _, content = value.partition("=")
+        if key != "query":
+            continue
+        if typed and content.startswith("@"):
+            text = _read_named(content[1:], cwd)
+            if text is None:
+                return None
+            queries.append(text)
+        else:
+            queries.append(content)
+    for index, word in enumerate(rest):
+        if word.partition("=")[0] != "--input":
+            continue
+        text = _read_named(_flag_value(rest, index, word)[0], cwd)
+        if text is None:
+            return None
+        try:
+            body = json.loads(text)
+        except ValueError:
+            return None
+        query = body.get("query") if isinstance(body, dict) else None
+        if not isinstance(query, str):
+            return None
+        queries.append(query)
+    return queries or None
+
+
+def _read_named(path: str, cwd: Path) -> str | None:
+    if path in ("", "-"):
+        return None
+    file = Path(path) if Path(path).is_absolute() else cwd / path
+    try:
+        return file.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+
+def graphql_mutations(query: str) -> list[str] | None:
+    """The top-level fields of every mutation in a GraphQL document; [] when it has none.
+
+    A small scanner, not a parser: strings and comments are skipped, and a field at depth one of a
+    `mutation` operation is a mutation. Returns None if the braces don't balance.
+    """
+    pieces = re.findall(r'"""(?:.|\n)*?"""|"(?:\\.|[^"\\])*"|#[^\n]*|[A-Za-z_]\w*|[{}()]|:', query)
+    mutations: list[str] = []
+    depth = 0
+    parens = 0
+    in_mutation = False
+    pending: str | None = None
+    for piece in pieces:
+        if piece.startswith(('"', "#")):
+            continue
+        if piece == "(":
+            parens += 1
+        elif piece == ")":
+            parens -= 1
+        elif parens:
+            continue
+        elif piece == "{":
+            if depth == 0 and pending is not None:
+                in_mutation = pending == "mutation"
+            elif depth == 0:
+                in_mutation = False
+            depth += 1
+            pending = None
+        elif piece == "}":
+            depth -= 1
+            if depth < 0:
+                return None
+        elif depth == 0 and piece in ("query", "mutation", "subscription", "fragment"):
+            pending = piece
+        elif depth == 1 and in_mutation and piece != ":":
+            mutations.append(piece)
+    if depth != 0 or parens != 0:
+        return None
+    # An alias (`alias: field`) names two pieces; the field is the second, so keep both: an alias
+    # that matches a listed name can't hide an unlisted field after it.
+    return mutations
+
+
+def _owner_only(group: str) -> Decision:
+    problem, fix = OWNER_ONLY_MESSAGES[group]
+    return Decision("owner-only", problem, fix)
+
+
+def _not_listed(what: str) -> Decision:
+    return Decision("gh-allow-list", f"{what} isn't on the guard's gh allow-list.", NOT_LISTED_FIX)
+
+
+def _classify_api(rest: Sequence[str], cwd: Path) -> tuple[str, str | None, str | None]:
+    """('allow' | 'owner' | 'unlisted', owner group, repository) for a gh api call."""
+    endpoint = _api_endpoint(rest)
+    method = _api_method(rest)
+    repo_match = re.match(rf"repos/({_SEG}/{_SEG})", endpoint)
+    repository = repo_match.group(1) if repo_match else None
+    if endpoint == "graphql":
+        queries = _graphql_queries(rest, cwd)
+        if queries is None:
+            return "unreadable", None, None
+        names: list[str] = []
+        for query in queries:
+            found = graphql_mutations(query)
+            if found is None:
+                return "unreadable", None, None
+            names.extend(found)
+        for name in names:
+            if name in GH_MUTATIONS_OWNER_ONLY:
+                return "owner", GH_MUTATIONS_OWNER_ONLY[name], None
+        if all(name in GH_MUTATIONS_ALLOWED for name in names):
+            return "allow", None, None
+        return "unlisted", None, None
+    if method in ("GET", "HEAD"):
+        return "allow", None, repository
+    for pattern, group in GH_API_OWNER_ONLY:
+        if pattern.fullmatch(endpoint) and method in _WRITES:
+            return "owner", group, repository
+    for pattern, methods in GH_API_WORKFLOW_WRITES:
+        if pattern.fullmatch(endpoint) and method in methods:
+            return "allow", None, repository
+    return "unlisted", None, repository
+
+
+def gh_decision(words: Sequence[str], cwd: Path) -> Decision:
+    """Classify one gh command against the allow-list: owner-only first, then gh-allow-list."""
+    program, args = _program(words)
+    if program != "gh":
+        return ALLOW
+    leading = 0
+    while leading < len(args) and args[leading].startswith("-"):
+        if args[leading] in ("--version", "-h", "--help"):
+            return ALLOW
+        leading += 1
+    if leading >= len(args):
+        return ALLOW
+    group = args[leading]
+    call_args = args[leading + 1 :]
+    if group == "help":
+        return ALLOW
+    if group == "search":
+        return ALLOW
+    if group == "api":
+        verdict, owner_group, repository = _classify_api(call_args, cwd)
+        repository = repository or _gh_repository(words, call_args)
+        kind = throwaway_kind(repository)
+        if verdict == "allow":
+            return ALLOW
+        if verdict == "unreadable":
+            return Decision(
+                "gh-allow-list",
+                "a GraphQL query read from stdin, from a file that doesn't exist yet, or that "
+                "doesn't parse can't be checked.",
+                "Pass the query with -f query=..., or write it to a file in an earlier command.",
+            )
+        if kind is not None:
+            endpoint = _api_endpoint(call_args)
+            repo_itself = re.fullmatch(_REPO, endpoint) is not None
+            if not (kind == "kept" and repo_itself and _api_method(call_args) in _WRITES):
+                return ALLOW
+        if verdict == "owner" and owner_group is not None:
+            return _owner_only(owner_group)
+        return _not_listed(f"gh api {_api_method(call_args)} {_api_endpoint(call_args) or '?'}")
+    sub = call_args[0] if call_args and not call_args[0].startswith("-") else None
+    rest = call_args[1:] if sub is not None else call_args
+    key = (group, sub or "")
+    if key == ("auth", "status") and any(
+        word in ("-t", "--show-token") or word.startswith("--show-token=") for word in rest
+    ):
+        return _owner_only("credentials")
+    if key == ("pr", "merge") and any(
+        word == "--admin"
+        or (word.startswith("--admin=") and word[8:].lower() not in ("false", "0"))
+        for word in rest
+    ):
+        return ALLOW if throwaway_kind(_gh_repository(words, rest)) else _owner_only("merge")
+    if key in GH_READS or key in GH_WORKFLOW_WRITES:
+        return ALLOW
+    repository = _gh_repository(words, rest)
+    if group == "repo" and sub in ("create", "delete", "archive", "unarchive", "edit", "rename"):
+        positional = _positionals(rest, GH_REPO_VALUE_FLAGS)
+        if positional and sub != "rename":
+            repository = positional[0]
+    kind = throwaway_kind(repository)
+    if kind is not None and group in GH_REPO_GROUPS:
+        keeps_record = group == "repo" and sub in ("delete", "archive", "unarchive", "rename")
+        if not (kind == "kept" and keeps_record):
+            return ALLOW
+    if key in GH_OWNER_ONLY:
+        return _owner_only(GH_OWNER_ONLY[key])
+    return _not_listed(f"gh {group}{' ' + sub if sub else ''}")
+
+
 TAMPER = Decision(
     TAMPER_RULE,
     "agents can't grant themselves an override or touch the override files.",
@@ -715,6 +1145,7 @@ def shell_decisions(command: str, cwd: Path) -> list[Decision]:
             return [tamper]
         decisions.append(skip_hooks(words))
         decisions.append(pr_closes_issue(words, cwd))
+        decisions.append(gh_decision(words, cwd))
     return decisions or [ALLOW]
 
 
