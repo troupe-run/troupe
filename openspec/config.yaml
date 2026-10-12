@@ -23,7 +23,8 @@ context: |
     (the correlation ID that one command's events share, and that events recorded in reaction to them inherit), cause
     (the command, or the event it was recorded in reaction to), approvals. Fail when there is no identity.
   - Stages (sandboxes), actor runners, notification channels and guests are pluggable. Declared effects are enforced
-    on code that runs over JSON-RPC.
+    by a stage that can enforce them. A stage that can't refuses the actor unless policy allows it, and lineage
+    records that its effects weren't enforced.
   - Humans hold roles like agents. Gates and escalations name the role they route to, never "the human".
   - One repo until 1.0: packages/ (core and its bundled adapters, run direct), plugins/ (JSON-RPC plugins, ours
     included), protocol/ (language-neutral). Plugins stay self-contained so they can be split into their own repos

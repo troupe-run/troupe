@@ -1,8 +1,10 @@
 # plugins
 
 Out-of-process plugins: actor runners, stages, guests and notification channels. **They run over JSON-RPC, ours
-included**, so declared effects can be enforced on them and a plugin can be written in any language (decision
-[#37](https://github.com/troupe-run/troupe/issues/37)).
+included**, so a stage that can enforce declared effects can enforce them on a plugin, and a plugin can be written
+in any language (decision [#37](https://github.com/troupe-run/troupe/issues/37)). Running out of process isn't a
+sandbox by itself: what a plugin can touch is up to the stage it runs on, and policy (decision
+[#3](https://github.com/troupe-run/troupe/issues/3)).
 
 Rules for everything in this directory:
 
