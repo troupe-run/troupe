@@ -61,6 +61,30 @@ Every limit has its default in `troupe.core.defaults`, and each can be overridde
 | `REPLACE_TIMEOUT_SECONDS` | 10 |
 | `REPLACE_ANNOUNCE_AFTER_SECONDS` | 1 |
 
+## Adapters' commands
+
+An adapter that runs commands calls `troupe.core.commands.run_command`, which builds the child's environment from the
+adapter's own policy and turns platform failures into errors with a code, the problem and the fix:
+`command.not-found`, `command.timeout`, `command.output-too-large` (each naming the command) and
+`environment.policy-invalid` (a policy widened, or an explicit value it forbids). `narrow_policy` narrows a policy
+under the same rule.
+
+Each adapter declares its policy and limits in its own package, because `troupe.core` never imports an adapter.
+
+### The git adapter (`troupe_vcs_git.defaults`)
+
+`GIT_ENVIRONMENT` passes `HOME`, `USERPROFILE`, `APPDATA`, `XDG_CONFIG_HOME`, `PATH`, `SSH_AUTH_SOCK` and the user's
+`GIT_*` variables, so git finds its config, credentials and SSH agent. It never passes the repository-location
+variables a hook sets (exactly what `git rev-parse --local-env-vars` prints, plus `GIT_NAMESPACE`), so troupe always
+reads the theatre's own repository. Nothing else of troupe's environment reaches git. The git adapter runs only
+local commands, so git never starts a credential helper or `ssh`.
+
+| Setting | Default |
+|---|---|
+| `GIT_TIMEOUT_SECONDS` | 10 |
+| `GIT_ANNOUNCE_AFTER_SECONDS` | 1 |
+| `GIT_MAX_OUTPUT_BYTES` | 16777216 |
+
 ## Paths
 
 Paths in messages are absolute, with the home directory shown as `~`, and never `.` or relative. Matching the
