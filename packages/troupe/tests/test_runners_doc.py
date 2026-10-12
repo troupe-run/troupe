@@ -4,6 +4,9 @@ import re
 from pathlib import Path
 
 from runner_schemas import RUNNER_SCHEMAS, load
+from troupe.core.errors import CODES
+from troupe.core.notices import CODES as NOTICE_CODES
+from troupe.core.runners.outcome import Outcome
 
 DOC = Path(__file__).resolve().parents[3] / "docs" / "runners.md"
 TEXT = DOC.read_text(encoding="utf-8")
@@ -35,3 +38,14 @@ def test_the_run_events_table_lists_exactly_the_event_types_in_the_schema() -> N
         for ref in [*defs["event"]["oneOf"], {"$ref": "#/$defs/oversized"}]
     }
     assert _first_column(_section("Run events")) == types
+
+
+def test_every_outcome_and_runner_error_code_is_documented() -> None:
+    documented = set(re.findall(r"`([a-z.-]+)`", _section("Outcomes")))
+    runner_codes = {code for code in CODES if code.split(".")[0] in {"run", "runner"}}
+    assert {str(outcome) for outcome in Outcome} <= documented
+    assert runner_codes <= documented
+
+
+def test_every_notice_code_is_documented() -> None:
+    assert all(f"`{code}`" in TEXT for code in NOTICE_CODES)
