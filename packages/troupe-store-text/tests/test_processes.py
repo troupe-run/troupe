@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 from uuid import UUID, uuid4
 
+import pytest
 from eventsourcing.persistence import Notification
 
 from gitrepo import make_repo
@@ -76,6 +77,37 @@ def child(
     )
 
 
+def outcome(stdout: str) -> str:
+    """A child's outcome: its last line. Every earlier line must be a lock-wait announcement,
+    which the spec requires of a writer that waits ("Writers wait for each other, bounded and
+    announced")."""
+    *announcements, last = stdout.strip().splitlines()
+    for line in announcements:
+        assert line.startswith("waiting "), f"unexpected output before the outcome: {line!r}"
+    return last
+
+
+WINDOWS_LOSER = (
+    "waiting C:\\Users\\runneradmin\\AppData\\Local\\Temp\\pytest-of-runneradmin\\pytest-0\\"
+    "test_two_processes_racing_for_0\\.troupe\\local\\.lock\r\nintegrity-error\r\n"
+)
+"""A losing racer's real stdout from Windows CI (#43): it announced its wait, then its outcome."""
+
+
+def test_a_child_s_outcome_is_its_last_line_after_its_announcements() -> None:
+    assert outcome(WINDOWS_LOSER) == "integrity-error"
+    assert outcome("waiting a\nwaiting b\nrecorded\n") == "recorded"
+
+
+def test_a_child_s_outcome_without_announcements_is_its_only_line() -> None:
+    assert outcome("recorded\r\n") == "recorded"
+
+
+def test_an_unexpected_line_before_a_child_s_outcome_fails_naming_it() -> None:
+    with pytest.raises(AssertionError, match="Traceback"):
+        outcome("Traceback (most recent call last):\nrecorded\n")
+
+
 def test_two_processes_racing_for_one_version_give_exactly_one_integrity_error(
     tmp_path: Path,
 ) -> None:
@@ -84,7 +116,7 @@ def test_two_processes_racing_for_one_version_give_exactly_one_integrity_error(
     racers = [child(tmp_path, go, stream, who=f"racer-{i}") for i in range(2)]
     time.sleep(0.5)
     go.touch()
-    outcomes = sorted(racer.communicate(timeout=60)[0].strip() for racer in racers)
+    outcomes = sorted(outcome(racer.communicate(timeout=60)[0]) for racer in racers)
     assert outcomes == ["integrity-error", "recorded"]
     store = open_store(tmp_path, load_vcs("files", tmp_path))
     assert len(store.history(UUID(stream))) == 1
@@ -118,7 +150,7 @@ def test_another_processs_write_wakes_this_processs_subscription(tmp_path: Path)
         go = tmp_path / "go"
         go.touch()
         writer = child(tmp_path, go, str(uuid4()))
-        assert writer.communicate(timeout=60)[0].strip() == "recorded"
+        assert outcome(writer.communicate(timeout=60)[0]) == "recorded"
         reader.join(timeout=10)
         subscription.stop()
     assert [n.id for n in received] == [1]
