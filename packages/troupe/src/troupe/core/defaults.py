@@ -61,3 +61,9 @@ override, then the identity the VCS is configured with (git's user.email), then 
 
 SUBSCRIBE_POLL_SECONDS = 1.0
 """How often a subscription looks for events another process recorded."""
+
+# Policy (spec: policy; perform-status-logs design D6). docs/runs.md lists it.
+
+ALLOW_UNENFORCED_LOCAL_STAGE = False
+"""Whether a stage that can't enforce an actor's declared effects may run it anyway (decision #3,
+option C). Off by default: the local stage then refuses every actor."""
