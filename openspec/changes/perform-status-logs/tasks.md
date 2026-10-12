@@ -124,12 +124,12 @@
 
 ## 9. Platform: interrupts
 
-- [ ] 9.1 Add `troupe.platform.interrupts`: a context manager that calls back on `SIGINT`, and `SIGBREAK` on Windows,
+- [x] 9.1 Add `troupe.platform.interrupts`: a context manager that calls back on `SIGINT`, and `SIGBREAK` on Windows,
   restoring the previous handlers on exit (design D10). Add `signal` use here to the platform contract's allowance.
   Verify a test that sends the interrupt to a real child Python process on each OS in CI (`CTRL_BREAK_EVENT` to a new
   console process group on Windows, which disables Ctrl-C for it) and observes the callback, and that the previous
   handler is restored. On Windows also verify a real Ctrl-C: a child with a console of its own sends `CTRL_C_EVENT`
-  to it, and the callback runs
+  to it, and the callback runs (done 2026-10-12: CI run 38254270057 on 1b61d4b passed on Linux, macOS and Windows, Python 3.12 and 3.13; on Windows both interrupt tests ran, the real Ctrl-C one included, and all 28 CLI tests)
 - [x] 9.2 Document interrupts in `docs/platform.md`. Verify `test_platform_docs.py` passes
 
 ## 10. The CLI
@@ -143,9 +143,9 @@
   later presses), and exit by outcome. Verify CLI tests for each usage error, each refusal, the stdout/stderr split on
   success and on failure, and an end-to-end test that runs `troupe perform` as a real process with the scripted
   runner and policy allowed, and finds the events in the theatre
-- [ ] 10.3 Verify Ctrl-C end to end on Linux, macOS and Windows in CI: a `troupe perform` process with a hanging
+- [x] 10.3 Verify Ctrl-C end to end on Linux, macOS and Windows in CI: a `troupe perform` process with a hanging
   scripted runner, interrupted once, exits 130 and records `cancelled`; interrupted twice with a runner that ignores
-  cancel, shows the notice twice and still records the end after the grace period
+  cancel, shows the notice twice and still records the end after the grace period (done 2026-10-12: CI run 38254270057 on 1b61d4b passed on Linux, macOS and Windows, Python 3.12 and 3.13; on Windows both interrupt tests ran, the real Ctrl-C one included, and all 28 CLI tests)
 - [x] 10.4 Add `troupe status` and `troupe logs` (with `--limit`, `--follow` and `--json`). Verify CLI tests that
   `--json` output validates against the result schemas (and, with `--follow`, each line against the update schema),
   that notices go to standard error, and an end-to-end test that `troupe logs --follow` in a second process shows a
@@ -158,8 +158,8 @@
 
 - [x] 11.1 Add every new error and notice code from design D15 to `CODES` and `troupe.core.notices`, with their exit
   codes. Verify the test that serialises every declared error and notice and validates each against its schema
-- [ ] 11.2 Run `uv run scripts/check.py` and the full suite; confirm CI passes on Linux, macOS and Windows. Record the
-  run in the PR
+- [x] 11.2 Run `uv run scripts/check.py` and the full suite; confirm CI passes on Linux, macOS and Windows. Record the
+  run in the PR (done 2026-10-12: CI run 38254270057 on 1b61d4b passed on Linux, macOS and Windows, Python 3.12 and 3.13; on Windows both interrupt tests ran, the real Ctrl-C one included, and all 28 CLI tests)
 
 ## Workflow follow-up
 
