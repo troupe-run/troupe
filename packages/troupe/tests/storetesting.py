@@ -4,11 +4,16 @@ import hashlib
 from pathlib import Path
 from uuid import UUID, uuid4
 
+from eventsourcing.domain import Aggregate
+from eventsourcing.domain import event as aggregate_event
 from eventsourcing.persistence import StoredEvent
 
+from gitrepo import Repo
 from troupe.core import strict_json
+from troupe.core.events import EventStore
 from troupe.core.vcs import Vcs, load_vcs
 from troupe_store_text.store import TextStore
+from troupe_vcs_git import GitAdapter
 
 
 def event(stream: UUID | str, version: int, **payload: object) -> StoredEvent:
@@ -41,3 +46,32 @@ def segments(theatre: Path) -> list[Path]:
 
 def new_stream() -> UUID:
     return uuid4()
+
+
+class Counter(Aggregate):
+    """A small aggregate for tests: a value that can be set."""
+
+    @aggregate_event("Created")
+    def __init__(self, value: int = 0) -> None:
+        self.value = value
+
+    @aggregate_event("Set")
+    def set(self, value: int) -> None:
+        self.value = value
+
+
+ADA = {"TROUPE_ACTOR": "human:ada@example.com"}
+
+
+def files_service(
+    theatre: Path, env: dict[str, str] | None = None, **options: object
+) -> EventStore:
+    """The event-store service over a theatre with no version control, acting as Ada."""
+    vcs = load_vcs("files", theatre)
+    return EventStore(theatre, vcs=vcs, recorder=TextStore(theatre, vcs), env=env or ADA, **options)  # type: ignore[arg-type]
+
+
+def git_service(repo: Repo, env: dict[str, str] | None = None) -> EventStore:
+    """The event-store service over a git theatre, with git isolated from this machine."""
+    vcs = GitAdapter(repo.path, source=repo.env)
+    return EventStore(repo.path, vcs=vcs, recorder=TextStore(repo.path, vcs), env=env or ADA)

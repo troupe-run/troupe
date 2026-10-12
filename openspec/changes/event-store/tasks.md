@@ -117,9 +117,9 @@ Waiting for main stays the default. Either way, rebase only, never merge.
 
 ## 8. Forks and settling
 
-- [ ] 8.1 Implement parents, head detection, `forks()` and `events.stream-forked` on `select_events` and on insert.
+- [x] 8.1 Implement parents, head detection, `forks()` and `events.stream-forked` on `select_events` and on insert.
   Verify with the "two branches append to one stream" and "appending to a forked stream" scenarios
-- [ ] 8.2 Implement the settling-event base (Snapshot mechanics), `settle()`, `events.settle-incomplete`, loading
+- [x] 8.2 Implement the settling-event base (Snapshot mechanics), `settle()`, `events.settle-incomplete`, loading
   from the latest settling event, and `history(stream)`. Verify with a test aggregate: a settled stream loads to the
   settled state plus later events, a settle naming one head fails, and history includes both branches
 
