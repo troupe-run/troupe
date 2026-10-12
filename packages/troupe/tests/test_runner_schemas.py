@@ -11,7 +11,7 @@ from hypothesis import strategies as st
 
 from runner_schemas import RUNNER_SCHEMAS, is_valid, load, registry, schema_files, validate
 
-RUN_ID = "run-1"
+RUN_ID = "0f8fad5b-d9cb-469f-a165-70867728950e"
 HASH = "sha256:" + "ab" * 32
 
 
@@ -76,10 +76,20 @@ EXAMPLES: list[tuple[str, object, object]] = [
     (
         "initialize.schema.json",
         _request(
-            "initialize", {"protocolVersions": [1], "host": {"name": "troupe", "version": "1"}}
+            "initialize",
+            {
+                "protocolVersions": [1],
+                "host": {"name": "troupe", "version": "1"},
+                "capabilities": [],
+            },
         ),
         _request(
-            "initialize", {"protocolVersions": [], "host": {"name": "troupe", "version": "1"}}
+            "initialize",
+            {
+                "protocolVersions": [],
+                "host": {"name": "troupe", "version": "1"},
+                "capabilities": [],
+            },
         ),
     ),
     (
@@ -87,9 +97,13 @@ EXAMPLES: list[tuple[str, object, object]] = [
         {
             "protocolVersion": 1,
             "runner": {"name": "scripted", "version": "0.1"},
-            "capabilities": {},
+            "capabilities": ["resume"],
         },
-        {"protocolVersion": 1, "runner": {"name": "scripted"}, "capabilities": {}},
+        {
+            "protocolVersion": 1,
+            "runner": {"name": "scripted", "version": "0.1"},
+            "capabilities": ["resume", "resume"],
+        },
     ),
     (
         "run-start.schema.json",
@@ -221,7 +235,7 @@ def _strategy(schema: dict[str, Any]) -> st.SearchStrategy[Any]:
     if "$ref" in schema:
         ref = schema["$ref"]
         if ref.endswith("/runId"):
-            return st.from_regex(r"\A[A-Za-z0-9._-]{1,20}\Z")
+            return st.uuids().map(str)
         if ref.endswith("/named"):
             return st.fixed_dictionaries(
                 {"name": st.text(min_size=1), "version": st.text(min_size=1)}
@@ -271,3 +285,16 @@ def test_an_init_event_from_a_runner_without_a_model_or_engine_is_valid() -> Non
         "tools": [],
     }
     validate(event, "run-event.schema.json#/$defs/event")
+
+
+# Requirement: Run start carries everything the runner may use
+
+
+@pytest.mark.parametrize(
+    "run_id", ["run-1", "", "0F8FAD5B-D9CB-469F-A165-70867728950E", "0f8fad5b"]
+)
+def test_a_run_start_whose_run_id_is_not_a_canonical_lowercase_uuid_does_not_validate(
+    run_id: str,
+) -> None:
+    assert not is_valid(_request("run/start", {**START, "runId": run_id}), "run-start.schema.json")
+    validate(_request("run/start", START), "run-start.schema.json")

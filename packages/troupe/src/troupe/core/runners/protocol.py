@@ -20,7 +20,8 @@ from typing import Any, ClassVar, Literal, Self, get_args, get_origin, get_type_
 PROTOCOL_VERSION = 1
 """The protocol version this troupe speaks."""
 
-RUN_ID_PATTERN = re.compile(r"\A[A-Za-z0-9._-]{1,128}\Z")
+RUN_ID_PATTERN = re.compile(r"\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\Z")
+"""Run ids are UUIDs in canonical lowercase form (design D11)."""
 REF_PATTERN = re.compile(r"\Asha256:[0-9a-f]{64}\Z")
 
 JSONRPC_PARSE_ERROR = -32700
@@ -43,6 +44,7 @@ def _json(
     minimum: int | None = None,
     pattern: re.Pattern[str] | None = None,
     min_items: int | None = None,
+    unique: bool = False,
 ) -> Any:  # noqa: ANN401 - dataclasses.field returns Any
     metadata = {
         "json": name,
@@ -50,6 +52,7 @@ def _json(
         "minimum": minimum,
         "pattern": pattern,
         "min_items": min_items,
+        "unique": unique,
     }
     if default is MISSING:
         return field(metadata=metadata)
@@ -101,9 +104,7 @@ def _decode(value: object, hint: object, where: str, meta: Mapping[str, Any]) ->
         if meta.get("min_items") is not None and len(value) < meta["min_items"]:
             raise _fail(where, f"must have at least {meta['min_items']} item(s)")
         decoded = [_decode(entry, item, f"{where}[{i}]", {}) for i, entry in enumerate(value)]
-        if meta.get("min_items") is not None and len({json.dumps(v) for v in decoded}) != len(
-            decoded
-        ):
+        if meta.get("unique") and len({json.dumps(v) for v in decoded}) != len(decoded):
             raise _fail(where, "must not repeat an item")
         return decoded
     if origin is dict:
@@ -202,19 +203,26 @@ class Named(Message):
 
 @dataclass(frozen=True)
 class InitializeParams(Message):
-    protocol_versions: list[int] = _json("protocolVersions", min_items=1)
+    protocol_versions: list[int] = _json("protocolVersions", min_items=1, unique=True)
     host: Named = _json("host")
+    capabilities: list[str] = _json("capabilities", unique=True)
 
     def _check(self, where: str) -> None:
         if any(version < 1 for version in self.protocol_versions):
             raise _fail(where, "protocol versions start at 1")
+        if any(not name for name in self.capabilities):
+            raise _fail(where, "capability names must not be empty")
 
 
 @dataclass(frozen=True)
 class InitializeResult(Message):
     protocol_version: int = _json("protocolVersion", minimum=1)
     runner: Named = _json("runner")
-    capabilities: dict[str, bool] = _json("capabilities")
+    capabilities: list[str] = _json("capabilities", unique=True)
+
+    def _check(self, where: str) -> None:
+        if any(not name for name in self.capabilities):
+            raise _fail(where, "capability names must not be empty")
 
 
 # Starting, cancelling and shutting down

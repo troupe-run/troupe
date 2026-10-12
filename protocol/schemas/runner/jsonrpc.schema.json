@@ -15,9 +15,9 @@
     },
     "runId": {
       "title": "Run id",
-      "description": "Chosen by troupe for each run attempt.",
+      "description": "Chosen by troupe for each run attempt: a UUID in canonical lowercase form.",
       "type": "string",
-      "pattern": "^[A-Za-z0-9._-]{1,128}$"
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
     },
     "named": {
       "title": "Name and version",

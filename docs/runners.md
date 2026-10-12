@@ -23,7 +23,7 @@ produce every outcome on demand. A Claude Code runner and a local-model runner f
 
 | Method | Direction | Kind | Params | Result |
 |---|---|---|---|---|
-| `initialize` | troupe → runner | request | `protocolVersions`, `host {name, version}` | `protocolVersion`, `runner {name, version}`, `capabilities` |
+| `initialize` | troupe → runner | request | `protocolVersions`, `host {name, version}`, `capabilities` | `protocolVersion`, `runner {name, version}`, `capabilities` |
 | `run/start` | troupe → runner | request | `runId`, `instructions`, `workspace`, `options`, `limits {eventMaxBytes}` | `runId` |
 | `run/event` | runner → troupe | notification | one run event | — |
 | `run/transcript` | runner → troupe | notification | `runId`, `record`, `encoding` (optional) | — |
@@ -32,11 +32,14 @@ produce every outcome on demand. A Claude Code runner and a local-model runner f
 
 A run goes like this:
 
-1. troupe sends `initialize` with the protocol versions it supports (version 1 today). The runner answers with
-   the version it chose, its name and version, and `capabilities` (an object of booleans; version 1 requires
-   none). If it supports none of the offered versions, it answers with an error whose `details` name the
-   versions it does support, and troupe starts no run.
-2. troupe sends one `run/start`. The runner answers with the run id, then starts the actor. **A runner process
+1. troupe sends `initialize` with the protocol versions it supports (version 1 today) and the capability names
+   it supports. The runner answers with one of the offered versions, its name and version, and the capabilities
+   it will use, each one from the offer (version 1 defines none, so the offer and the answer are empty lists). A
+   version or capability troupe didn't offer is a protocol violation. If the runner supports none of the offered
+   versions, it answers with an error whose `details` name the versions it does support, and troupe starts no
+   run.
+2. troupe sends one `run/start`, with a new run id (a UUID, in canonical lowercase form). The runner answers
+   with the same run id, then starts the actor. **A runner process
    serves one run.** A second `run/start` is refused.
 3. The runner sends `run/event` notifications as the actor works, and the engine's native output as
    `run/transcript` notifications.
@@ -44,7 +47,8 @@ A run goes like this:
    and exits.
 
 `run/start` carries everything the runner may use from troupe. `options` holds runner-specific settings, which
-troupe passes through without looking inside them. `limits.eventMaxBytes` is the largest serialised event troupe
+troupe passes through without looking inside them. A runner refuses an option it doesn't define, with an error
+naming it, rather than ignoring it. `limits.eventMaxBytes` is the largest serialised event troupe
 keeps inline: summarise below it.
 
 ### Run events
