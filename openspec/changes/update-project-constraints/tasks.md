@@ -11,8 +11,8 @@
 
 ## 3. Record and check
 
-- [ ] 3.1 Comment on #37 with the correction from design D1 ("plugins, ours included, run over JSON-RPC"; the line is drawn at core and its bundled adapters, not at shipped versus acquired); verify the comment URL is returned
-- [ ] 3.2 Run `uv run scripts/check.py`, and verify all gates pass
+- [x] 3.1 Comment on #37 with the correction from design D1 ("plugins, ours included, run over JSON-RPC"; the line is drawn at core and its bundled adapters, not at shipped versus acquired); verify the comment URL is returned
+- [x] 3.2 Run `uv run scripts/check.py`, and verify all gates pass
 
 ## Workflow follow-up
 
