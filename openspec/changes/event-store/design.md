@@ -74,7 +74,7 @@ Alternatives considered:
 
 ```
 .troupe/
-  .gitignore         "local/" and ".lock". Written only if missing; never rewritten.
+  .gitignore         "local/". Written only if missing; never rewritten.
   .gitattributes     "events/** -text". Written only if missing.
   events/            tracked: <session-id>.jsonl segments
   local/             gitignored
@@ -85,6 +85,8 @@ Alternatives considered:
 ```
 
 - The lock lives in `local/`, not `events/`, so it is never a tracked file.
+- Anything else the library asks a store for (such as its snapshots, `purpose="snapshots"`) is derived, so it lives
+  under `local/purposes/<purpose>/` and is never committed.
 - `local/artifacts/` belongs to the runner contract's artifact store. It's listed here because this change writes
   the `.gitignore` that covers it (`local/`).
 - `-text` stops git (`core.autocrlf` on Windows) from rewriting line endings in event files. The reader still
@@ -124,6 +126,8 @@ Each segment starts with a header line, followed by one line per event:
   plain reader would keep the last duplicate and accept `NaN` silently, which is the quiet fall-through D9 rules
   out. The writer already refuses both (`allow_nan=False`, built from dicts). The allowances for a torn last line
   (D4, D5) are for incomplete writes only. A complete line that is malformed is always an error.
+- **The id is checked on read.** Each line's `id` is recomputed from its content, and a mismatch (a line edited by
+  hand) is `events.malformed-record`.
 - `format` is checked on every line. An unknown format fails with `events.unknown-format`, naming the file, the
   line, and the fix (upgrade troupe).
 
@@ -138,11 +142,14 @@ contract's transcript references, will most likely use (D-Runner).
   starts a new segment with a new ULID. This is "one segment per session per branch".
 - **That check is cheap.** A run streams hundreds of batches, and a git call per batch would dominate. So the VCS
   port has `branch_token()`, which is a cheap value that changes whenever the branch might have. For git, the
-  adapter asks once per session for the HEAD file's path (`git rev-parse --git-path HEAD`, which handles worktrees),
-  and the token is that file's size, mtime and inode. The session asks for the branch again only when the token
+  adapter asks once for the paths of HEAD, the index and the HEAD reflog (`git rev-parse --git-path`, which handles
+  worktrees), and the token is their sizes, mtimes and inodes. HEAD moves on a switch; the index changes on add,
+  commit, switch, merge and reset; the reflog grows whenever HEAD moves. So the token changes whenever the branch,
+  HEAD or what is committed might have, which is everything visibility (D7) depends on. The session asks for the branch again only when the token
   changes. The filesystem adapter's token never changes.
-- **A batch is one write.** Every line of the batch is written with one `write` call on an `O_APPEND` handle,
-  then fsynced. Each line carries `batch: {id, index, size}`.
+- **A batch is one write.** Every line of the batch is appended through one handle, then fsynced, by
+  `append_bytes` in `troupe.platform.files`: in binary mode, so Windows never turns line feeds into CRLF, and with
+  the directory fsynced when the segment is new (POSIX). Each line carries `batch: {id, index, size}`.
 - **An incomplete batch.** A crash can leave a segment ending in a partial line or a short batch. That batch's
   `insert_events` never returned, so it never took effect. Reads leave out an incomplete batch *at the end of a
   segment* and report `events.incomplete-batch` (the file, and the fix: remove the trailing lines, which never
@@ -175,7 +182,8 @@ Alternatives considered:
 - **Tracking** (`local/tracking/<branch-key>.jsonl`): `{"epoch", "application_name", "notification_id"}` lines.
   `max_tracking_id` ignores lines from an earlier epoch, so after a rebuild every follower starts again from 0 and
   its projection is rebuilt. Delivery is at-least-once (cladus): a deterministic policy that reprocesses produces
-  the same events, which are refused as duplicates. A torn last line is ignored; damage anywhere else fails.
+  the same events, which are refused as duplicates. A torn last line (an interrupted append) is trimmed from the file, because troupe alone writes it and that line
+  never took effect; otherwise the next append would land after it. Damage anywhere else fails.
 - **Per branch:** switching branches switches the order and tracking files, so each branch's IDs stay stable for
   that branch.
 
@@ -280,10 +288,13 @@ nothing passes to the next source. A source that finds something it can't use cl
 source, the value and the fix. It never falls through quietly to the next source or a default, because a quiet
 fall-through records the wrong person, and nothing shows it. In this chain:
 - `TROUPE_ACTOR` set but not `human:<id>` or `agent:<id>` → `identity.invalid-override`.
-- More than one `user.email` (`git config --get-all` returns several) → `identity.ambiguous`, listing them.
+- More than one `user.email` in the winning setting → `identity.ambiguous`, listing them. As in git, a more
+  specific setting overrides a less specific one (the repository's over the global), so a global email with a
+  repository email is not ambiguous; two in the same file are. The git adapter reports the winning setting's values
+  (`git config --get-all --show-scope`).
 - A chain naming a source that isn't installed → `identity.unknown-source`.
 - `user.email` unset, or set to the empty string → absent, so it passes on. git itself treats an empty value as no
-  identity.
+  identity. An empty `TROUPE_ACTOR` counts as unset in the same way (owner, 2026-10-12).
 
 The rest of this change follows the same rule: an unknown record `format`, a malformed line, an unknown cause, and a
 settle that names too few heads are all errors, never defaults. #35's starting default (git user, OS user, refuse) is the same chain without the override.
@@ -326,9 +337,11 @@ Alternatives considered:
 - **Across processes:** each write takes `troupe.core.files.directory_lock(.troupe/local)`, which is bounded and
   announced with the existing defaults. Under it, the store rescans (D5), checks uniqueness, appends the segment
   batch (fsync), then appends the order log (fsync). Reads don't take the lock. They rescan, and tolerate a batch
-  still being written by treating an incomplete trailing batch as not there yet. The `events.incomplete-batch`
-  notice is raised only when the segment's session isn't the one holding the lock. The lock file records the
-  holder's session ID.
+  still being written by treating an incomplete trailing batch as not there yet. To tell an interrupted write from
+  one in progress, a reader that finds an incomplete batch tries the lock without waiting: if it gets it, nobody is
+  writing, the batch was interrupted, and `events.incomplete-batch` is reported; if not, another process is still
+  writing, and nothing is reported. The lock file stays empty, as the platform's lock design requires (bootstrap
+  D6).
 - **Subscription** reuses `ListenNotifySubscription`. The recorder owes `listen` and `unlisten` over
   `threading.Event` (cladus 0014). Writes in this process set the events. A poll at `SUBSCRIBE_POLL_SECONDS`
   rescans for other processes' writes and sets them when anything new is visible. File watching arrives with the
@@ -409,7 +422,8 @@ Alternatives considered:
 - New errors (all exit 1): `events.stream-forked`, `events.settle-incomplete`, `events.missing-parent`,
   `events.malformed-record`, `events.unknown-format`, `events.lineage-invalid`, `identity.unresolved`,
   `identity.invalid-override`, `identity.ambiguous`, `identity.unknown-source`, `events.cause-unknown`, `command.timeout`, `command.not-found`,
-  `command.output-too-large`, `environment.policy-invalid`, `vcs.failed`.
+  `command.output-too-large`, `environment.policy-invalid`, `vcs.failed`, and `events.unknown-store` and
+  `vcs.unknown-adapter` for loading an adapter by a name that isn't installed.
 - `environment.policy-invalid` wraps `EnvironmentPolicyError`, naming the variable and the reason. Today only
   troupe's own code can hit it, by narrowing wrongly or passing an explicit value for a forbidden name. Once
   `settings` lets config narrow a policy, a person can.
@@ -438,8 +452,9 @@ For this change:
 
 ### D-Runner. What this change assumes about the runner contract (#34)
 
-The runner-contract change has no artifacts yet (its worktree holds no change, as of 2026-10-12). This change
-assumes the following, and depends on nothing from it:
+Checked against the runner-contract change's design.md (at `914ffc2`, its "Assumptions about the event format"),
+and against its `troupe.platform.processes` API (at `eab458c` and `46dd1b6`), which this change builds on (D11). This
+change assumes the following:
 
 1. **troupe records, runners don't.** A runner's JSON-RPC stream (init, turns, tool calls, result, failure) is read
    by troupe core. Change C turns it into domain events and records them through `troupe.core.events`. A runner
@@ -462,8 +477,9 @@ assumes the following, and depends on nothing from it:
      version, a retried run event would land at the *next* version with a different parent, so the store would
      neither refuse it nor deduplicate it. C's run aggregate therefore refuses a `seq` that isn't the next one it
      expects. The store's `events.version-conflict` still guards two writers racing for the same version.
-6. **Outcome is derived, then recorded.** #34 derives the outcome from the stream and the effect, never from the
-   exit code. This change records whatever outcome event C defines. It has no outcome type of its own.
+6. **Outcome is derived, then recorded.** #34 derives the outcome from the stream, the effect check and the exit
+   code together; the exit code alone never makes a run succeed (owner, 2026-10-12). This change records whatever
+   outcome event C defines. It has no outcome type of its own.
 7. **Notices are shared.** The runner contract's announcements (silences, retries) use `notice.schema.json` and
    `troupe.core.notices` from this change (D12). Whichever change lands second adopts the other's file.
 8. **The artifact store** (`LocalArtifactStore`) is its own package with a `troupe.artifacts` entry point, the same
@@ -474,9 +490,11 @@ assumes the following, and depends on nothing from it:
    re-locks `uv.lock`.
 
 These were compared with the runner contract's design on 2026-10-12, and the owner's decisions are folded in above.
-Two of its own assumptions differed, and were sent back to that change: its point 3 (`via` as the runner's name and
-version; it is `"runner"`), and points 4 and 5 (re-recording a run event is idempotent, and `seq` maps to the
-version; it doesn't, and recording twice is an error). Task 10.1 checks again before the PR.
+Its points 3, 5 and 9 were revised to match (`via` is `"runner"`; `seq` stays in the payload; run ids are UUIDs).
+One wording difference remains, recorded for the PR (task 10.1): its point 4 says the store refuses a run event
+recorded twice as a duplicate version. That holds only when C retries with a stale version; a retry after reloading
+lands at the next version, so it is C's run aggregate, refusing a `seq` that isn't the next one, that makes a
+second recording an error (point 5 above).
 
 ## Risks / Trade-offs
 

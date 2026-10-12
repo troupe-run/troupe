@@ -42,12 +42,17 @@ provides an identity.
 - **THEN** the identity is the OS login name, resolved by the OS login source
 
 ### Requirement: The override has one form
-`TROUPE_ACTOR` SHALL be `human:<id>` or `agent:<id>`, with a non-empty ID. Any other value SHALL fail with an
-error naming the value and the accepted forms, without falling through to the next source.
+`TROUPE_ACTOR` SHALL be `human:<id>` or `agent:<id>`, with a non-empty ID. Any other non-empty value SHALL fail
+with an error naming the value and the accepted forms, without falling through to the next source. An empty value
+SHALL count as unset.
 
 #### Scenario: A malformed override
 - **WHEN** `TROUPE_ACTOR` is `ada`
 - **THEN** the command fails with an error that names the value and shows `human:<id>` and `agent:<id>`
+
+#### Scenario: An empty override is unset
+- **WHEN** `TROUPE_ACTOR` is set to the empty string
+- **THEN** it counts as unset, and the next source in the chain is asked
 
 ### Requirement: A malformed or ambiguous answer is an error
 A source that finds no identity SHALL pass to the next source. A source that finds something it can't use cleanly

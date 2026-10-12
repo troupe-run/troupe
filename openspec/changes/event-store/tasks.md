@@ -146,7 +146,10 @@ Waiting for main stays the default. Either way, rebase only, never merge.
 
 ## 10. Integration
 
-- [ ] 10.1 Runner-contract check: read the `runner-contract` change's artifacts (#34) as they stand, compare them with
+This branch is rebased on the runner contract's unmerged commits (group 2's option). Pushing waits until the runner
+contract has merged and this branch is rebased onto main, so the PR carries only this change.
+
+- [x] 10.1 Runner-contract check: read the `runner-contract` change's artifacts (#34) as they stand, compare them with
   design.md D-Runner, revise any point they contradict (with the owner's agreement), and record the outcome in
   the PR. Verify D-Runner matches #34's design, or lists each remaining difference
 - [ ] 10.2 Run `uv run scripts/check.py` locally, push, and verify every CI job passes on Linux, macOS and Windows
