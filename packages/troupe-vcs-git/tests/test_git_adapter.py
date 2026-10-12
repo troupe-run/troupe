@@ -196,7 +196,9 @@ def test_unrelated_variables_never_reach_git(repo: Repo) -> None:
     seen = _env_git_sees(adapter(repo, **unrelated))
     assert "AWS_SECRET_ACCESS_KEY" not in seen
     assert seen.get("GIT_SSH_COMMAND") == "ssh -v"
-    assert seen["HOME"] == repo.env["HOME"]
+    # HOME isn't checked here: on Windows the shell git runs the alias in (Git for Windows' bash)
+    # sets its own HOME, so this view can't show it. That git receives HOME is shown by
+    # test_git_finds_the_users_global_configuration_under_home.
 
 
 def test_every_repository_location_variable_the_installed_git_lists_is_excluded() -> None:
