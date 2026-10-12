@@ -115,3 +115,5 @@ def main(mode: str) -> None:
 
 if __name__ == "__main__":
     main(sys.argv[1])
+    if sys.argv[1] == "ignore-eof":
+        time.sleep(120)  # breaks the contract: a runner exits when its input closes

@@ -61,8 +61,8 @@
 
 ## 7. Conformance suite (spec: actor-runners)
 
-- [ ] 7.1 Implement `troupe.core.runners.conformance` (design D13) and a test module that runs it against the scripted runner, and against `TROUPE_CONFORMANCE_RUNNER` with its options from `TROUPE_CONFORMANCE_OPTIONS` when set; verify "Scripted runner conforms", and that each check fails against a deliberately broken scripted script (no `init`, a `seq` gap, no exit on end of input)
-- [ ] 7.2 Document how to run the conformance suite against another runner in `docs/runners.md`; verify by running the documented command against the scripted runner as written
+- [x] 7.1 Implement `troupe.core.runners.conformance` (design D13) and a test module that runs it against the scripted runner, and against `TROUPE_CONFORMANCE_RUNNER` with its options from `TROUPE_CONFORMANCE_OPTIONS` when set; verify "Scripted runner conforms", and that each check fails against a deliberately broken scripted script (no `init`, a `seq` gap, no exit on end of input)
+- [x] 7.2 Document how to run the conformance suite against another runner in `docs/runners.md`; verify by running the documented command against the scripted runner as written
 
 ## 8. Fixtures from real Claude Code output (spec: scripted-runner)
 
