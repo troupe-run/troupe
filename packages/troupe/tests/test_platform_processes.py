@@ -145,7 +145,7 @@ def test_closing_stdin_lets_a_child_read_end_of_file() -> None:
 def _first_line(size: int, limit: int) -> bytes:
     async def main() -> bytes:
         child = await processes.start(
-            _python(f"import sys; sys.stdout.write('x' * {size} + '\\n')"),
+            _python(f"import sys; sys.stdout.buffer.write(b'x' * {size} + b'\\n')"),
             cwd=Path.cwd(),
             env={},
             line_limit=limit,
@@ -175,7 +175,7 @@ def test_a_line_over_the_maximum_is_an_error_naming_the_maximum() -> None:
 def test_reading_at_end_of_output_returns_the_unterminated_last_line_then_nothing() -> None:
     async def main() -> list[bytes]:
         child = await processes.start(
-            _python("import sys; sys.stdout.write('a\\nlast')"),
+            _python("import sys; sys.stdout.buffer.write(b'a\\nlast')"),
             cwd=Path.cwd(),
             env={},
             line_limit=LIMIT,
