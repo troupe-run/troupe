@@ -28,10 +28,12 @@ def _numeric(module: ModuleType) -> dict[str, float]:
 def test_the_docs_list_exactly_the_defaults_and_their_values_each_in_one_place() -> None:
     platform = _documented(DOC)
     runners = _documented(DOCS / "runners.md")
+    events = _documented(DOCS / "event-store.md")
     assert platform.keys().isdisjoint(runners)
+    assert events.keys().isdisjoint(platform | runners)
     # Adapters keep their limits in their own package (event-store design D11); the platform doc
     # lists the git adapter's beside troupe's own.
-    assert {**platform, **runners} == _numeric(defaults) | _numeric(git_defaults)
+    assert {**platform, **runners, **events} == _numeric(defaults) | _numeric(git_defaults)
 
 
 def test_platform_doc_has_a_row_for_every_platform_module() -> None:

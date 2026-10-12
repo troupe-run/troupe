@@ -52,7 +52,7 @@ Waiting for main stays the default. Either way, rebase only, never merge.
   environment-policy requirement: global config under a temporary `HOME` (and `XDG_CONFIG_HOME`) found, hook-time
   `GIT_DIR`/`GIT_WORK_TREE` ignored, `AWS_SECRET_ACCESS_KEY` not passed, and the installed git's
   `git rev-parse --local-env-vars` all in `never`
-- [ ] 4.4 Implement `branch_token()` (design D4) for both adapters. Verify that a session makes one git call for the
+- [x] 4.4 Implement `branch_token()` (design D4) for both adapters. Verify that a session makes one git call for the
   token path and none per batch while the branch is unchanged (count calls through an injected runner), and that
   switching branches mid-session changes the token and starts a new segment
 
@@ -74,24 +74,24 @@ Waiting for main stays the default. Either way, rebase only, never merge.
   state bytes round-trip exactly, inline lines are strict JSON, the hash ignores lineage and time, the hash
   changes with any content field, and a line with a duplicate key or a `NaN`/`Infinity`/`-Infinity` inserted
   anywhere fails with `events.malformed-record` (file and line) while the same line without it reads
-- [ ] 6.2 Implement segments and sessions (design D4): a monotonic ULID session ID, the header written with the first
+- [x] 6.2 Implement segments and sessions (design D4): a monotonic ULID session ID, the header written with the first
   batch, a new segment on a branch change, a batch as one fsynced append, and an incomplete trailing batch left out
   with `events.incomplete-batch` while malformed lines elsewhere fail. Verify with tests for each scenario, including
   one that truncates a batch mid-line
-- [ ] 6.3 Implement the aggregate and application recorders over the local order log (design D5): rescan of new
+- [x] 6.3 Implement the aggregate and application recorders over the local order log (design D5): rescan of new
   bytes, uniqueness over visible events, dense IDs, and the thread lock taken before `directory_lock(.troupe/local)`
   (design D10). Write `.troupe/.gitignore` and `.troupe/.gitattributes` only if missing. Verify with
   `AggregateRecorderTestCase`, `ApplicationRecorderTestCase` and `NonInterleavingNotificationIDsBaseCase`
   unmodified, and a test that reads create no files
-- [ ] 6.4 Implement `listen`/`unlisten` and `subscribe` via `ListenNotifySubscription`, with the cross-process poll at
+- [x] 6.4 Implement `listen`/`unlisten` and `subscribe` via `ListenNotifySubscription`, with the cross-process poll at
   `SUBSCRIBE_POLL_SECONDS`. Verify with the suite's `optional_test_insert_subscribe` and a two-process test where
   one process's write wakes the other's subscription
-- [ ] 6.5 Implement the tracking and process recorders (epoch-scoped tracking, a torn last line ignored, damage
+- [x] 6.5 Implement the tracking and process recorders (epoch-scoped tracking, a torn last line ignored, damage
   elsewhere failing, duplicate keys and non-finite numbers refused) and the `InfrastructureFactory` (parameterised, `PERSISTENCE_MODULE=troupe_store_text`).
   Verify with `TrackingRecorderTestCase`, `ProcessRecorderTestCase` and `InfrastructureFactoryTestCase` unmodified.
   Add fixture tests for a duplicate key and a `NaN` in the order log and the tracking file. Then run the whole library
   suite and confirm none is skipped or replaced
-- [ ] 6.6 Verify cross-process behaviour on all three platforms: two processes racing for the same stream version
+- [x] 6.6 Verify cross-process behaviour on all three platforms: two processes racing for the same stream version
   (exactly one integrity error), and a waiting writer that announces and times out. Verify `git status` shows no
   lock file
 

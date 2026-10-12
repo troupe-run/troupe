@@ -1,0 +1,43 @@
+"""Helpers for the text event store's tests: theatres, events and snapshots of their files."""
+
+import hashlib
+from pathlib import Path
+from uuid import UUID, uuid4
+
+from eventsourcing.persistence import StoredEvent
+
+from troupe.core import strict_json
+from troupe.core.vcs import Vcs, load_vcs
+from troupe_store_text.store import TextStore
+
+
+def event(stream: UUID | str, version: int, **payload: object) -> StoredEvent:
+    """A stored event whose state is canonical JSON, as troupe's own events are."""
+    state = strict_json.dumps({"timestamp": "t", **payload}).encode("utf-8")
+    return StoredEvent(
+        originator_id=stream, originator_version=version, topic="tests:E", state=state
+    )
+
+
+def fresh_store(theatre: Path, vcs: Vcs | None = None, **options: float) -> TextStore:
+    """A store that reads the theatre's files from scratch, as a new process would."""
+    return TextStore(theatre, vcs or load_vcs("files", theatre), **options)  # type: ignore[arg-type]
+
+
+def snapshot(directory: Path) -> dict[str, str]:
+    """Every file under ``directory``, with a hash of its bytes."""
+    if not directory.exists():
+        return {}
+    return {
+        path.relative_to(directory).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in sorted(directory.rglob("*"))
+        if path.is_file()
+    }
+
+
+def segments(theatre: Path) -> list[Path]:
+    return sorted((theatre / ".troupe" / "events").glob("*.jsonl"))
+
+
+def new_stream() -> UUID:
+    return uuid4()

@@ -56,3 +56,8 @@ names, plus the platform minimum (design D6)."""
 IDENTITY_CHAIN: tuple[str, ...] = ("env", "vcs", "os-login")
 """The identity sources asked, in order, for who is acting (#9, agreed 2026-10-12): the TROUPE_ACTOR
 override, then the identity the VCS is configured with (git's user.email), then the OS login."""
+
+# The event store (spec: event-store; event-store design D10). docs/event-store.md lists it.
+
+SUBSCRIBE_POLL_SECONDS = 1.0
+"""How often a subscription looks for events another process recorded."""
