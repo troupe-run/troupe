@@ -72,8 +72,12 @@ def test_a_valid_request_reaches_its_handler_parsed_and_updates_and_result_retur
     assert result == {"runs": [], "notices": []}
 
 
-def test_the_core_offers_no_method_beyond_perform_status_and_logs() -> None:
-    assert set(handlers()) <= {"perform", "status", "logs"}
+def test_the_core_offers_exactly_perform_status_and_logs_with_their_request_types() -> None:
+    assert {name: method.request for name, method in handlers().items()} == {
+        "perform": m.PerformRequest,
+        "status": m.StatusRequest,
+        "logs": m.LogsRequest,
+    }
 
 
 def test_a_cancel_requested_before_binding_sets_the_bound_event_at_once() -> None:

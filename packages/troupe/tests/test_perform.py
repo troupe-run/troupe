@@ -9,7 +9,7 @@ from uuid import UUID
 
 import pytest
 
-from runtesting import ADA, ALLOW, INIT, OK, Harness, request, script, theatre, turn
+from runtesting import ADA, ALLOW, INIT, OK, Harness, failing_at, request, script, theatre, turn
 from storetesting import snapshot
 from troupe.core import defaults, strict_json
 from troupe.core.errors import TroupeError
@@ -258,32 +258,6 @@ def test_an_unknown_stage_leaves_no_event_artifact_or_lease(
 
 
 # 7.4: a recording failure stops the run, and is reported.
-
-
-def failing_at(reported: int, *, end_too: bool = False) -> Any:  # noqa: ANN401
-    """A store wrapper whose write of the given run event (by seq), and of the end if asked,
-    fails as a full disk would."""
-
-    def wrap(store: Any) -> Any:  # noqa: ANN401
-        original = store.record_with_lineage
-
-        def record(events: Any, lineage: Any, **kwargs: Any) -> Any:  # noqa: ANN401
-            for event in events:
-                name = type(event).__qualname__
-                if (name == "Run.Reported" and event.seq == reported) or (
-                    end_too and name == "Run.Ended"
-                ):
-                    raise TroupeError(
-                        "artifact.write-failed",
-                        problem="No space left on device.",
-                        fix="Free some.",
-                    )
-            return original(events, lineage, **kwargs)
-
-        store.record_with_lineage = record
-        return store
-
-    return wrap
 
 
 def test_a_failure_to_record_an_event_cancels_the_run_and_its_end_says_where_it_stopped(

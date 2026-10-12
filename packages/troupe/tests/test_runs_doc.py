@@ -3,11 +3,14 @@
 import re
 from collections.abc import Iterable
 from pathlib import Path
+from typing import get_args
 
 from troupe.core import defaults
+from troupe.core.client.messages import State
 from troupe.core.errors import CODES
 from troupe.core.notices import CODES as NOTICE_CODES
 from troupe.core.policy import ALLOW_UNENFORCED_LOCAL_STAGE, env_name
+from troupe.core.runs.aggregate import TOPICS
 
 DOC = Path(__file__).resolve().parents[3] / "docs" / "runs.md"
 TEXT = DOC.read_text(encoding="utf-8")
@@ -62,3 +65,14 @@ def _ours(codes: Iterable[str]) -> set[str]:
 def test_the_tables_list_exactly_the_errors_and_notices_runs_add() -> None:
     listed = set(re.findall(r"^\| `([a-z-]+\.[a-z.-]+)` \|", _section("Notices and errors"), re.M))
     assert listed == _ours(CODES) | _ours(NOTICE_CODES)
+
+
+def test_the_states_table_lists_exactly_the_states_a_run_can_be_in() -> None:
+    section = TEXT.split("### States", 1)[1].split("\n## ", 1)[0]
+    assert set(re.findall(r"^\| `([a-z-]+)` \|", section, re.M)) == set(get_args(State))
+
+
+def test_the_run_events_table_lists_exactly_the_topics_a_run_records() -> None:
+    section = TEXT.split("### Run events", 1)[1].split("\n### ", 1)[0]
+    listed = set(re.findall(r"^\| `(Run\.[A-Za-z]+)` \|", section, re.M))
+    assert listed == {topic.split(":")[1] for topic in TOPICS}

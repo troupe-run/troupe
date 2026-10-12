@@ -90,7 +90,7 @@
 - [x] 7.3 Verify the run's end for each outcome the scripted runner can produce (`succeeded`, `failed` with each error
   code, `crashed`, `timed-out`, `cancelled`, `could-not-start`), each recorded with the outcome and error the run host
   derived; and that a run that never sends `init` records its start with no runner name or version, then its end
-- [ ] 7.4 Handle recording failures (design D9): a failure in `on_event` cancels the run, records no further events,
+- [x] 7.4 Handle recording failures (design D9): a failure in `on_event` cancels the run, records no further events,
   tries `Run.Ended` with `recording.failedAt` and the error, and fails with `run.recording-failed`. Verify with a test
   that injects a store failure at `seq` 2, and one where `Run.Ended` also fails (the error says so, and `status` shows
   the run `interrupted`)
@@ -100,20 +100,21 @@
 
 ## 8. Projections and queries
 
-- [ ] 8.1 Add the runs and run-log projections as folds over recorded events (design D12), and the derived states
+- [x] 8.1 Add the runs and run-log projections as folds over recorded events (design D12), and the derived states
   (`running`, `ended`, `interrupted`, `unfinished-elsewhere`) with the lease probe (design D11) and the notices
   `run.interrupted` and `run.unfinished-elsewhere`. Verify tests for each state: a held lease, a recorded end, a lease
   left by a killed `perform` process (a real child process killed mid-run), and a run whose events arrived by a git
   merge from another clone
-- [ ] 8.2 Implement the `status` query: recent runs, newest first, up to `STATUS_RUNS_LIMIT` (20, in
+- [x] 8.2 Implement the `status` query: recent runs, newest first, up to `STATUS_RUNS_LIMIT` (20, in
   `troupe.core.defaults`) or the request's `limit`, and one run's summary; run id resolution by full id or a unique
   prefix of at least 8 hex digits, with `run.not-found` and `run.ambiguous-id` (design D13). Verify tests for each,
   including two runs sharing an 8-digit prefix, and that the store's notices come back with the result
-- [ ] 8.3 Implement the `logs` query, with `follow` streaming `event` updates through the store's subscription until
+- [x] 8.3 Implement the `logs` query, with `follow` streaming `event` updates, reading the store every
+  `SUBSCRIBE_POLL_SECONDS` (its subscription's interval) until
   the run's end, or until the run stops being `running` (design D13). Verify tests that following from a second
   process sees each event as it is recorded and stops on the end, and that following an `interrupted` run returns at
   once with its notice
-- [ ] 8.4 Document runs, their states, `status`, `logs` and the run events in `docs/runs.md`, and link it from
+- [x] 8.4 Document runs, their states, `status`, `logs` and the run events in `docs/runs.md`, and link it from
   `docs/runners.md` and `docs/event-store.md`. Verify the doc test (states, notice and error codes, default limit)
   passes
 

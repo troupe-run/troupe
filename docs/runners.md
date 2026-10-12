@@ -4,6 +4,8 @@ An actor runs through a **runner**: a separate process that troupe starts and ta
 and output. A runner can be written in any language. This page and the schemas in
 [`protocol/schemas/runner/`](../protocol/schemas/runner/) are all you need to write one.
 
+`troupe perform` runs an actor through a runner and records the run: see [docs/runs.md](runs.md).
+
 troupe ships one runner so far, the [scripted runner](../plugins/runner-scripted/README.md), which tests use to
 produce every outcome on demand. A Claude Code runner and a local-model runner follow (decision
 [#16](https://github.com/troupe-run/troupe/issues/16)).

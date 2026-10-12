@@ -83,3 +83,8 @@ EVENT_STORE = "text"
 
 ARTIFACT_STORE = "local"
 """The artifact store a theatre's transcripts and large payloads are kept in."""
+
+# Reading runs back (spec: runs; perform-status-logs design D13). docs/runs.md lists it.
+
+STATUS_RUNS_LIMIT = 20
+"""How many runs status lists, newest first, when the request doesn't say."""
