@@ -20,15 +20,101 @@ import contextlib
 import os
 import shutil
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
-from troupe.platform.errors import CommandNotFoundError, LineTooLongError
+from troupe.platform.errors import CommandNotFoundError, EnvironmentPolicyError, LineTooLongError
 
 _WINDOWS = sys.platform == "win32"
 
 MINIMUM_ENVIRONMENT: tuple[str, ...] = ("SYSTEMROOT",) if _WINDOWS else ()
 """The variables passed to every child, whatever the caller names, when the parent has them."""
+
+
+def _key(name: str) -> str:
+    """Environment names are case-insensitive on Windows, case-sensitive elsewhere."""
+    return name.upper() if _WINDOWS else name
+
+
+@dataclass(frozen=True)
+class EnvironmentPolicy:
+    """Which of the parent's environment variables a kind of child may receive (design D6).
+
+    Each port or adapter declares one, as a named default in one place. Nothing is inherited
+    except what a policy selects: ``names`` exactly and ``prefixes`` by prefix, minus ``never``
+    (exactly) and ``never_prefixes``. A policy can be narrowed, never widened.
+    """
+
+    names: frozenset[str] = frozenset()
+    prefixes: tuple[str, ...] = ()
+    never: frozenset[str] = frozenset()
+    never_prefixes: tuple[str, ...] = ()
+
+    def selects(self, name: str) -> bool:
+        key = _key(name)
+        return (
+            key in {_key(n) for n in self.names}
+            or any(key.startswith(_key(p)) for p in self.prefixes)
+        ) and not self.forbids(name)
+
+    def forbids(self, name: str) -> bool:
+        key = _key(name)
+        return key in {_key(n) for n in self.never} or any(
+            key.startswith(_key(p)) for p in self.never_prefixes
+        )
+
+    def narrow(
+        self,
+        *,
+        names: Iterable[str] | None = None,
+        prefixes: Iterable[str] | None = None,
+        never: Iterable[str] = (),
+        never_prefixes: Iterable[str] = (),
+    ) -> "EnvironmentPolicy":
+        """A narrower policy: keep only ``names`` and ``prefixes`` (each already selected here),
+        and pass ``never`` and ``never_prefixes`` in addition. Anything wider is refused."""
+        kept_names = self.names if names is None else frozenset(names)
+        kept_prefixes = self.prefixes if prefixes is None else tuple(prefixes)
+        mine = {_key(n) for n in self.names}
+        for name in kept_names:
+            if _key(name) not in mine:
+                raise EnvironmentPolicyError(
+                    name, "narrowing can't select a name the policy doesn't select"
+                )
+        for prefix in kept_prefixes:
+            if not any(_key(prefix).startswith(_key(p)) for p in self.prefixes):
+                raise EnvironmentPolicyError(
+                    prefix, "narrowing can't select a prefix the policy doesn't select"
+                )
+        return EnvironmentPolicy(
+            names=kept_names,
+            prefixes=kept_prefixes,
+            never=self.never | frozenset(never),
+            never_prefixes=self.never_prefixes + tuple(never_prefixes),
+        )
+
+
+def build_environment(
+    policy: EnvironmentPolicy,
+    *,
+    source: Mapping[str, str] | None = None,
+    explicit: Mapping[str, str] | None = None,
+) -> dict[str, str]:
+    """The environment for a child: the platform minimum, what ``policy`` selects from ``source``
+    (the parent's environment when omitted), then ``explicit`` values.
+
+    An explicit value for a name the policy never passes is refused, not dropped: the caller and
+    the policy disagree, and guessing which one is right could leak or lose a variable.
+    """
+    parent = os.environ if source is None else source
+    environment = {name: parent[name] for name in MINIMUM_ENVIRONMENT if name in parent}
+    environment.update({name: value for name, value in parent.items() if policy.selects(name)})
+    for name, value in (explicit or {}).items():
+        if policy.forbids(name):
+            raise EnvironmentPolicyError(name, "this policy never passes it")
+        environment[name] = value
+    return environment
 
 
 if sys.platform == "win32":

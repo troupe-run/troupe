@@ -107,6 +107,12 @@ and records only their reference.
 - The store is a port: another store (object storage, a hosted store) can replace the local one without changing
   anything that uses it.
 
+### Environment
+
+A runner starts with only the environment variables troupe's caller names for it, plus the minimum the operating
+system needs (`SYSTEMROOT` on Windows). Nothing is passed through from troupe's own environment: the runner policy,
+`RUNNER_ENVIRONMENT`, selects nothing. A runner that needs a credential or a setting is given it explicitly.
+
 ### Cancel, end of input and shutdown
 
 - **`run/cancel`** may arrive at any time after `run/start`. Answer it, stop the actor and exit. You may send a

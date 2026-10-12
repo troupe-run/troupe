@@ -4,6 +4,8 @@ Every timeout, size or other limit troupe uses has its default here. Callers can
 the ``settings`` capability will later let configuration override them too, bounded by policy.
 """
 
+from troupe.platform.processes import EnvironmentPolicy
+
 LOCK_TIMEOUT_SECONDS = 30.0
 """How long to wait for another process's lock before giving up."""
 
@@ -44,3 +46,7 @@ RUNNER_STDERR_MAX_BYTES = 1024 * 1024
 
 RUNNER_FAIL_FAST_ON_AUTH_RETRY = True
 """Whether a retry because authentication failed cancels the run at once."""
+
+RUNNER_ENVIRONMENT = EnvironmentPolicy()
+"""What a runner receives from troupe's environment: nothing. It gets only the variables its caller
+names, plus the platform minimum (design D6)."""

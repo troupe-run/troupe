@@ -6,15 +6,16 @@
 A child SHALL receive exactly the environment its caller passes; nothing SHALL be inherited implicitly. The
 environment SHALL be built from the platform minimum plus a declared policy: variables selected from the parent by
 exact name or by prefix, minus names never passed (exactly or by prefix), plus explicit values. An explicit value
-SHALL NOT override a never-passed name.
+for a never-passed name SHALL be refused with an error, not dropped or passed.
 
 #### Scenario: Only selected variables pass
 - **WHEN** a policy selects `A` exactly and `GIT_` by prefix, and the parent has `A`, `GIT_X` and `B`
 - **THEN** the environment holds `A` and `GIT_X` and the platform minimum, and not `B`
 
 #### Scenario: Never-passed names win
-- **WHEN** a policy selects the prefix `GIT_` but never passes `GIT_DIR`, and `GIT_DIR` is also given explicitly
+- **WHEN** a policy selects the prefix `GIT_` but never passes `GIT_DIR`, and the parent has `GIT_DIR`
 - **THEN** the environment has no `GIT_DIR`
+- **AND** if `GIT_DIR` is also given explicitly, building the environment fails with an error naming `GIT_DIR`
 
 #### Scenario: Never-passed prefixes win
 - **WHEN** a policy selects the prefix `GIT_` but never passes the prefix `GIT_INDEX`, and the parent has `GIT_INDEX_FILE`
@@ -42,7 +43,7 @@ policy.
 - **THEN** the narrowed policy selects `A` only
 
 #### Scenario: Narrowing cannot add
-- **WHEN** narrowing is asked to select a name the policy does not select
+- **WHEN** narrowing is asked to select a name, or a prefix wider than one, the policy does not select
 - **THEN** it is refused with an error naming the name
 
 ### Requirement: Killing a child kills its whole process tree

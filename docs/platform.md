@@ -30,9 +30,15 @@ troupe calls it and sees one behaviour on Linux, macOS and Windows. An import co
 
 ## Child processes
 
-- **Explicit environment:** a child gets only the variables its caller names, plus `MINIMUM_ENVIRONMENT` (empty on
-  Linux and macOS, `SYSTEMROOT` on Windows). Nothing else is passed through, so a host secret can't leak into a
-  runner by habit.
+- **Explicit environment:** a child gets exactly the environment its caller passes; nothing is inherited. The caller
+  builds it with `build_environment(policy, explicit=...)`: `MINIMUM_ENVIRONMENT` (empty on Linux and macOS,
+  `SYSTEMROOT` on Windows), plus the parent's variables the policy selects, plus explicit values.
+- **Environment policies:** each port or adapter declares one `EnvironmentPolicy`, as a named default in one place.
+  A policy selects variables by exact name (`names`) or by prefix (`prefixes`), and never passes `never` names or
+  `never_prefixes`. An explicit value for a never-passed name is refused (`EnvironmentPolicyError`), not dropped.
+  Names match case-insensitively on Windows. `policy.narrow(...)` keeps a subset and adds never-passed names; it
+  refuses to select anything the policy doesn't already select, so a policy can be tightened but never loosened.
+  Runners use `RUNNER_ENVIRONMENT`, which selects nothing.
 - **Command lookup:** the command is resolved to an absolute path with the caller's search path before the child
   starts, so the child doesn't need `PATH` unless the caller names it.
 - **Stopping:** `kill_tree()` kills the child and everything it started. Asking a child to stop gracefully is a
