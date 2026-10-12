@@ -54,6 +54,8 @@ extend-immutable-calls = ["troupe.core.runners.protocol._json"]
 # Tests assert, and drive the CLI and helper processes through subprocess with trusted arguments.
 "packages/*/tests/**" = ["S101", "S603"]
 "plugins/*/tests/**" = ["S101", "S603"]
+# Plugin tools are owner-run scripts, like scripts/: they run fixed commands found on PATH.
+"plugins/*/tools/**" = ["S603"]
 "scripts/tests/**" = ["S101", "S603", "S607"]
 # Repository scripts run the project's own tools (git, uv) from PATH with fixed arguments.
 "scripts/**" = ["S603", "S607"]

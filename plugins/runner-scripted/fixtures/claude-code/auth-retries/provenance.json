@@ -1,0 +1,39 @@
+{
+  "fixture": "auth-retries",
+  "claudeCodeVersion": "2.1.296",
+  "date": "2026-10-12",
+  "command": [
+    "claude",
+    "-p",
+    "say hi",
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--no-session-persistence",
+    "--bare",
+    "--model",
+    "claude-haiku-5-5"
+  ],
+  "environment": [
+    "ANTHROPIC_BASE_URL",
+    "CLAUDE_CODE_DISABLE_AUTO_MEMORY",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+    "CLAUDE_CODE_MAX_RETRIES",
+    "CLAUDE_CONFIG_DIR",
+    "DISABLE_AUTOUPDATER",
+    "HOME",
+    "PATH",
+    "ANTHROPIC_API_KEY (deliberately invalid)"
+  ],
+  "credential": "none: a local fake API refused an invalid key",
+  "exitCode": 1,
+  "terminatedWith": null,
+  "scrubbing": [
+    "the temporary workspace -> /workspace",
+    "the temporary home and config directories -> ~",
+    "the capturing user's home directory -> ~, and their login name -> user",
+    "the fake API's port -> 8080",
+    "every UUID (session ids, message ids) -> 00000000-0000-4000-8000-<n>, consistently"
+  ],
+  "events": "written by hand from the native lines, following the mapping in docs/runners.md, and reviewed"
+}

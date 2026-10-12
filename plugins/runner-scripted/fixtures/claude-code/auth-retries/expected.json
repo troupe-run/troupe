@@ -1,0 +1,10 @@
+{
+  "description": "An invalid key with two retries: api_retry events with authentication_failed, then the error result.",
+  "exitCode": 1,
+  "outcome": "failed",
+  "errorCode": "run.authentication",
+  "withoutFailFast": {
+    "outcome": "failed",
+    "errorCode": "run.error-result"
+  }
+}
