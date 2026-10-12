@@ -149,6 +149,57 @@ fixtures pin it.
 | `result` | `result`, with `status` `error` whenever `is_error` is true, whatever `subtype` says |
 | every line | one `run/transcript` record, verbatim |
 
+## How troupe runs a runner
+
+`troupe.core.runners.host.run_actor` starts the runner, performs the handshake, starts the run and supervises it.
+The caller gives it the runner's command, the run (a UUID run id, the instructions, the workspace and the runner's
+options), an artifact store, an effect check, and optionally the limits, an `on_event` callback, an `on_announce`
+callback and a cancel signal.
+
+- **Events reach the caller as they arrive,** in `seq` order. `on_event` is awaited before the next message is read,
+  so a slow consumer slows the runner down rather than troupe buffering without limit.
+- **Every message is checked.** Anything the contract doesn't allow ends the run as `crashed` with
+  `runner.protocol`, naming what was wrong and on which line of the runner's output: a line that isn't JSON or
+  JSON-RPC, a duplicated JSON key, `NaN` or `Infinity`, a method the contract doesn't define, an answer to a
+  request troupe never sent, a version or capability troupe didn't offer, another run's id, an event out of
+  sequence, before `init` or after `result`, a `tool_result` with no earlier `tool_call`, a `base64` record that
+  isn't base64, or a message over `RUNNER_MAX_MESSAGE_BYTES`. troupe never reads such a message with a guess.
+- **Cancelling** sends `run/cancel` and gives the runner `RUNNER_CANCEL_GRACE_SECONDS` to exit, then kills it and
+  every process it started. The same happens after `shutdown`.
+- **Notices** tell the caller what is happening without waiting silently. They have the shape of
+  [`notice.schema.json`](../protocol/schemas/notice.schema.json): `run.silent` when no event has arrived for
+  `RUN_SILENCE_ANNOUNCE_SECONDS`, and `run.retrying` for each `retry` event. A `retry` with reason
+  `authentication` stops the run at once (`RUNNER_FAIL_FAST_ON_AUTH_RETRY`): a bad credential otherwise looks like
+  a hang for minutes.
+- **Standard error** is kept in the artifact store too, up to `RUNNER_STDERR_MAX_BYTES`: its first and last halves,
+  with a marker saying how much was left out between them.
+
+### Outcomes
+
+Every run attempt ends with exactly one outcome, returned as data with an error (in the protocol's error shape)
+for every outcome but `succeeded` and `cancelled`. The first row that matches wins.
+
+| Outcome | When | Error code |
+|---|---|---|
+| `could-not-start` | The runner couldn't be started, or refused or timed out the handshake or `run/start` | `runner.start-failed`, `runner.incompatible`, `runner.start-timeout` |
+| `crashed` | The runner broke the contract | `runner.protocol` |
+| `failed` | The run was stopped because authentication failed | `run.authentication` |
+| `failed` | The transcript passed `RUN_TRANSCRIPT_MAX_BYTES` | `run.transcript-too-large` |
+| `failed` | The `result` had status `error` | `run.error-result` |
+| `failed` | The `result` was `ok`, but the effect check failed | `run.effect-missing` |
+| `failed` | The `result` was `ok` and the effect check passed, but the runner exited non-zero or had to be killed: the run's state is uncertain | `run.unclean-exit` |
+| `succeeded` | The `result` was `ok`, the effect check passed, and the runner exited with code 0 | — |
+| `timed-out` | No `result` by `RUN_TIMEOUT_SECONDS` | `run.timeout` |
+| `cancelled` | No `result`, and the caller cancelled the run | — |
+| `crashed` | No `result`, for any other reason | `runner.crashed` |
+
+Success takes all three signals together. The exit code alone never makes a run succeed: a runner that exits 0
+without a `result` has `crashed`. The outcome also records the exit code, whether the runner exited or was
+killed, the transcript's and standard error's references, and the limits in effect.
+
+**The effect check** has no default, so a caller can't forget it. `ExpectedFiles(paths)` needs each file to exist
+after the run and to differ from before it; `NoEffectExpected` is for a run with nothing to check.
+
 ## Limits
 
 Every limit has its default in `troupe.core.defaults`, and each can be overridden per run (`RunLimits`).

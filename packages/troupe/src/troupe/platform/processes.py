@@ -309,8 +309,16 @@ class ChildProcess:
     def release(self) -> None:
         """Let go of the platform resources held for the child. Call once it has exited.
 
-        On Windows this closes the job, which kills any process of the tree still running.
+        On Windows this closes the job, which kills any process of the tree still running. On every
+        platform it closes the child's pipes now, while the event loop is still running, rather
+        than leaving them to be closed after the loop has gone.
         """
+        self.close_stdin()
+        # asyncio.subprocess.Process has no public close; its transport is the documented
+        # SubprocessTransport, reached through the attribute asyncio itself uses.
+        transport = getattr(self._process, "_transport", None)
+        if isinstance(transport, asyncio.SubprocessTransport):
+            transport.close()
         if self._job is not None:
             _close_job(self._job)
             self._job = None
