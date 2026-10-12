@@ -102,6 +102,7 @@ event without valid lineage is refused before anything is written (`events.linea
 | `cause` | `{kind: command, id: <change>}` for a command's own events, or `{kind: event, id: <id>}` for a reaction |
 | `approvals` | Who approved it, in which role; empty until gates exist |
 | `vcs` | The adapter, branch and HEAD, and for an event made from a file, its theatre-relative path and its before and after content hashes |
+| `stage` | For an event a run recorded, the stage the actor ran on and whether its effects were `enforced` or `unenforced`; for an unenforced run, the policy setting and source that allowed it. `null` for every other event |
 
 **Correlation and cause.** If a command records E1, and E2, E3 and E4 are recorded in reaction to E1, all four
 carry the command's change id, and E2 to E4 name E1 as their cause. A reaction to E2 still carries the same change

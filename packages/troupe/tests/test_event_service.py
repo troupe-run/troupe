@@ -14,7 +14,16 @@ from gitrepo import make_repo
 from storetesting import ADA, Counter, files_service, git_service, segments, snapshot
 from troupe.core import strict_json
 from troupe.core.errors import TroupeError
-from troupe.core.events import CommandCause, EventStore, Lineage, Source, Unknown, VcsState
+from troupe.core.events import (
+    Allowance,
+    CommandCause,
+    EventStore,
+    Lineage,
+    Source,
+    StageLineage,
+    Unknown,
+    VcsState,
+)
 from troupe.core.events.lineage import timestamp
 from troupe.core.identity import Identity
 from troupe_identity_local import EnvSource, OsLoginSource, VcsSource
@@ -294,3 +303,79 @@ def test_the_default_actor_comes_from_the_identity_chain(tmp_path: Path) -> None
     assert service.command(via="cli").actor == Identity(
         kind="human", id="ada@example.com", source="env"
     )
+
+
+# The stage a run ran on, and one command recording as several actors (perform-status-logs D7, D8).
+
+LOCAL = StageLineage(
+    name="local",
+    effects="unenforced",
+    allowed_by=Allowance(setting="allow_unenforced_local_stage", source="env"),
+)
+TESTER = Identity(kind="agent", id="tester", source="troupe")
+
+
+def test_an_event_recorded_outside_a_stage_has_a_null_stage(tmp_path: Path) -> None:
+    service = files_service(tmp_path)
+    [recorded] = service.command(via="cli").record(Counter(value=1).collect_events())
+    assert lineage_of(tmp_path, recorded.event_id)["stage"] is None
+
+
+def test_a_commands_stage_is_recorded_in_the_lineage_of_every_event_it_records(
+    tmp_path: Path,
+) -> None:
+    service = files_service(tmp_path)
+    recorded = service.command(via="cli", stage=LOCAL).record(Counter(value=1).collect_events())
+    assert recorded
+    for each in recorded:
+        assert lineage_of(tmp_path, each.event_id)["stage"] == {
+            "name": "local",
+            "effects": "unenforced",
+            "allowedBy": {"setting": "allow_unenforced_local_stage", "source": "env"},
+        }
+
+
+def test_an_unenforced_stage_naming_no_allowance_is_refused_and_writes_nothing(
+    tmp_path: Path,
+) -> None:
+    service = files_service(tmp_path)
+    # StageLineage refuses to be built this way, so go around it: the service is the second check.
+    unallowed = object.__new__(StageLineage)
+    object.__setattr__(unallowed, "name", "local")
+    object.__setattr__(unallowed, "effects", "unenforced")
+    object.__setattr__(unallowed, "allowed_by", None)
+    good = service.command(via="cli").lineage()
+    bad = Lineage(
+        actor=good.actor,
+        via=good.via,
+        at=good.at,
+        reason=None,
+        change=good.change,
+        cause=good.cause,
+        vcs=good.vcs,
+        stage=unallowed,
+    )
+    with pytest.raises(TroupeError) as caught:
+        service.record_with_lineage(Counter(value=1).collect_events(), bad)
+    assert caught.value.code == "events.lineage-invalid"
+    assert "stage" in caught.value.problem
+    assert snapshot(tmp_path) == {}
+
+
+def test_a_command_acting_as_another_actor_shares_its_change_id_cause_and_stage(
+    tmp_path: Path,
+) -> None:
+    service = files_service(tmp_path)
+    person = service.command(via="cli", stage=LOCAL)
+    agent = person.acting_as(TESTER, via="runner")
+    [first] = person.record(Counter(value=1).collect_events())
+    [second] = agent.record(Counter(value=2).collect_events())
+    by_person = lineage_of(tmp_path, first.event_id)
+    by_agent = lineage_of(tmp_path, second.event_id)
+    assert by_person["change"] == by_agent["change"] == person.change
+    assert by_person["cause"] == by_agent["cause"] == {"kind": "command", "id": person.change}
+    assert by_agent["stage"] == by_person["stage"] == LOCAL.to_data()
+    assert by_person["actor"] == {"kind": "human", "id": "ada@example.com", "source": "env"}
+    assert by_person["via"] == "cli"
+    assert by_agent["actor"] == {"kind": "agent", "id": "tester", "source": "troupe"}
+    assert by_agent["via"] == "runner"

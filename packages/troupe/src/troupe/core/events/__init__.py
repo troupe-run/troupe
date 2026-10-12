@@ -2,11 +2,13 @@
 
 from troupe.core.events.lineage import (
     Actor,
+    Allowance,
     Approval,
     CommandCause,
     EventCause,
     Lineage,
     Source,
+    StageLineage,
     Unknown,
     VcsState,
     Via,
@@ -17,6 +19,7 @@ from troupe.core.events.settling import Settled
 
 __all__ = [
     "Actor",
+    "Allowance",
     "Approval",
     "Command",
     "CommandCause",
@@ -28,6 +31,7 @@ __all__ = [
     "RecordedEvent",
     "Settled",
     "Source",
+    "StageLineage",
     "Unknown",
     "VcsState",
     "Via",

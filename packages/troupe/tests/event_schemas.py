@@ -63,7 +63,15 @@ LINEAGE: dict[str, Any] = {
     "cause": {"kind": "command", "id": ULID},
     "approvals": [],
     "vcs": {"adapter": "git", "branch": "main", "head": "a" * 40, "source": None},
+    "stage": None,
 }
+
+UNENFORCED_LOCAL: dict[str, Any] = {
+    "name": "local",
+    "effects": "unenforced",
+    "allowedBy": {"setting": "allow_unenforced_local_stage", "source": "env"},
+}
+ENFORCED: dict[str, Any] = {"name": "docker", "effects": "enforced", "allowedBy": None}
 
 
 def lineage(**changes: object) -> dict[str, Any]:

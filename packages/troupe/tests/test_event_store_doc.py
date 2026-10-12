@@ -1,6 +1,7 @@
 """docs/event-store.md lists exactly the event store's notices and errors, and its links resolve
 (event-store task 9.5)."""
 
+import json
 import re
 from pathlib import Path
 
@@ -31,3 +32,12 @@ def test_every_relative_link_resolves() -> None:
 def test_the_benchmark_the_doc_cites_exists() -> None:
     assert "scripts/benchmark_event_store.py" in TEXT
     assert (DOC.parents[1] / "scripts" / "benchmark_event_store.py").is_file()
+
+
+def test_the_lineage_table_names_every_field_the_lineage_schema_requires() -> None:
+    schema = json.loads(
+        (DOC.parents[1] / "protocol" / "schemas" / "lineage.schema.json").read_text("utf-8")
+    )
+    section = TEXT.split("## Lineage", 1)[1].split("\n## ", 1)[0]
+    listed = set(re.findall(r"^\| `([a-z]+)` \|", section, re.MULTILINE))
+    assert listed == set(schema["required"])
