@@ -32,11 +32,11 @@ Waiting for main stays the default. Either way, rebase only, never merge.
 
 ## 3. Protocol: lineage, records and notices
 
-- [ ] 3.1 Write `protocol/schemas/lineage.schema.json`, `event-record.schema.json` (header and event lines) and
+- [x] 3.1 Write `protocol/schemas/lineage.schema.json`, `event-record.schema.json` (header and event lines) and
   `notice.schema.json` (design D3, D8, D12), and list them in `protocol/README.md`. Verify with schema tests that
   valid and invalid examples (a null actor, `unknown` with an ID, an extra field, `NaN`, a null or missing `cause`, an
   unknown `cause.kind`, an event cause that isn't a `sha256:` hash) are accepted and rejected as intended
-- [ ] 3.2 Add `troupe.core.notices` (declared codes, mirroring `errors.CODES`) and the new error codes from design D12.
+- [x] 3.2 Add `troupe.core.notices` (declared codes, mirroring `errors.CODES`) and the new error codes from design D12.
   Verify with a test that serialises every declared notice and error and validates each against its schema
 
 ## 4. VCS port and adapters

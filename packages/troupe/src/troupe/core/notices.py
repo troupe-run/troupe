@@ -11,6 +11,10 @@ from typing import Any
 CODES: dict[str, str] = {
     "run.silent": "A run has sent no event for the silence threshold.",
     "run.retrying": "A runner reported that its engine is retrying.",
+    # The event store (event-store design D12). docs/event-store.md lists them.
+    "events.other-branch": "Uncommitted events made on another branch were left out of a read.",
+    "events.order-rebuilt": "The local notification order was rebuilt, so followers start again.",
+    "events.incomplete-batch": "A segment ends in an interrupted batch, which was left out.",
 }
 """Every notice code, with what it means."""
 
