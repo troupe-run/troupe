@@ -69,7 +69,7 @@ Waiting for main stays the default. Either way, rebase only, never merge.
 
 ## 6. Recorder: segments, records and the library suite
 
-- [ ] 6.1 Implement the record codec (design D3): canonical JSON, inline `state` only when exact (else `state_b64`),
+- [x] 6.1 Implement the record codec (design D3): canonical JSON, inline `state` only when exact (else `state_b64`),
   content hash leaving out `timestamp` and `lineage`, `format` check. Verify with Hypothesis property tests: arbitrary
   state bytes round-trip exactly, inline lines are strict JSON, the hash ignores lineage and time, the hash
   changes with any content field, and a line with a duplicate key or a `NaN`/`Infinity`/`-Infinity` inserted

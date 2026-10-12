@@ -175,3 +175,31 @@ def _fsync_directory(directory: Path) -> None:
         os.fsync(fd)
     finally:
         os.close(fd)
+
+
+def append_bytes(path: str | os.PathLike[str], data: bytes) -> int:
+    """Append ``data`` to ``path`` durably, creating the file if it is missing, and return the
+    file's size before the append.
+
+    All of ``data`` goes in through one handle opened for appending, in binary mode (on Windows a
+    text-mode handle would turn line feeds into CRLF), and is fsynced before this returns. When the
+    file is new, its directory is fsynced too (POSIX), so the new name survives a crash. A crash
+    part-way leaves at most a prefix of ``data`` at the end of the file, never a gap or an overlap:
+    readers detect that by the record framing (event-store design D4).
+    """
+    target = Path(path)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_BINARY", 0)
+    created = not target.exists()
+    fd = os.open(target, flags, 0o644)
+    try:
+        before = os.fstat(fd).st_size
+        view = memoryview(data)
+        while view:
+            written = os.write(fd, view)
+            view = view[written:]
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    if created:
+        _fsync_directory(target.parent)
+    return before
