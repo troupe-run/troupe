@@ -2,10 +2,10 @@
 
 ## 1. Workspace and package scaffolding
 
-- [ ] 1.1 Create `packages/troupe-stage-local` (src layout, `py.typed`, licence, README, the `troupe.stages` entry
+- [x] 1.1 Create `packages/troupe-stage-local` (src layout, `py.typed`, licence, README, the `troupe.stages` entry
   point registering `local`, per design D1) and add it to the dev group. Verify `uv sync` succeeds and
   `uv run python -c "import troupe_stage_local"` exits 0
-- [ ] 1.2 Extend `pyproject.toml` (ruff `src`, mypy `files` and `mypy_path`, pytest `testpaths`) for the new package,
+- [x] 1.2 Extend `pyproject.toml` (ruff `src`, mypy `files` and `mypy_path`, pytest `testpaths`) for the new package,
   and add the import contracts from design D1: `troupe` never imports `troupe_stage_local`; `troupe.cli` imports
   nothing from `troupe.core.runs`, `troupe.core.stages` or `troupe.core.policy` (only `troupe.core.client`); and
   `troupe_stage_local` imports no surface. Verify each contract fails on a deliberate violation (record the output for

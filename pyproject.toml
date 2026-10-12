@@ -15,6 +15,7 @@ members = ["packages/*", "plugins/*"]
 troupe = { workspace = true }
 troupe-artifacts-local = { workspace = true }
 troupe-runner-scripted = { workspace = true }
+troupe-stage-local = { workspace = true }
 troupe-identity-local = { workspace = true }
 troupe-store-text = { workspace = true }
 troupe-vcs-files = { workspace = true }
@@ -25,6 +26,7 @@ dev = [
     "troupe",
     "troupe-artifacts-local",
     "troupe-runner-scripted",
+    "troupe-stage-local",
     "troupe-identity-local",
     "troupe-store-text",
     "troupe-vcs-files",
@@ -50,6 +52,8 @@ src = [
     "packages/troupe-artifacts-local/tests",
     "packages/troupe-identity-local/src",
     "packages/troupe-identity-local/tests",
+    "packages/troupe-stage-local/src",
+    "packages/troupe-stage-local/tests",
     "packages/troupe-store-text/src",
     "packages/troupe-store-text/tests",
     "packages/troupe-vcs-files/src",
@@ -88,6 +92,8 @@ files = [
     "packages/troupe-artifacts-local/tests",
     "packages/troupe-identity-local/src",
     "packages/troupe-identity-local/tests",
+    "packages/troupe-stage-local/src",
+    "packages/troupe-stage-local/tests",
     "packages/troupe-store-text/src",
     "packages/troupe-store-text/tests",
     "packages/troupe-vcs-files/src",
@@ -104,6 +110,7 @@ mypy_path = [
     "packages/troupe/tests",
     "packages/troupe-artifacts-local/src",
     "packages/troupe-identity-local/src",
+    "packages/troupe-stage-local/src",
     "packages/troupe-store-text/src",
     "packages/troupe-vcs-files/src",
     "packages/troupe-vcs-git/src",
@@ -118,6 +125,7 @@ testpaths = [
     "packages/troupe/tests",
     "packages/troupe-artifacts-local/tests",
     "packages/troupe-identity-local/tests",
+    "packages/troupe-stage-local/tests",
     "packages/troupe-store-text/tests",
     "packages/troupe-vcs-files/tests",
     "packages/troupe-vcs-git/tests",
@@ -134,6 +142,7 @@ root_packages = [
     "troupe",
     "troupe_artifacts_local",
     "troupe_identity_local",
+    "troupe_stage_local",
     "troupe_store_text",
     "troupe_vcs_files",
     "troupe_vcs_git",
@@ -153,6 +162,7 @@ source_modules = [
     "troupe",
     "troupe_artifacts_local",
     "troupe_identity_local",
+    "troupe_stage_local",
     "troupe_store_text",
     "troupe_vcs_files",
     "troupe_vcs_git",
@@ -173,7 +183,7 @@ forbidden_modules = ["troupe_artifacts_local"]
 name = "plugins import nothing from troupe"
 type = "forbidden"
 source_modules = ["troupe_runner_scripted"]
-forbidden_modules = ["troupe", "troupe_artifacts_local", "troupe_identity_local", "troupe_store_text", "troupe_vcs_files", "troupe_vcs_git"]
+forbidden_modules = ["troupe", "troupe_artifacts_local", "troupe_identity_local", "troupe_stage_local", "troupe_store_text", "troupe_vcs_files", "troupe_vcs_git"]
 
 [[tool.importlinter.contracts]]
 # Event-store adapters are found by name through the troupe.store, troupe.vcs and troupe.identity entry point
@@ -196,3 +206,27 @@ name = "event-store adapters import no surface"
 type = "forbidden"
 source_modules = ["troupe_identity_local", "troupe_store_text", "troupe_vcs_files", "troupe_vcs_git"]
 forbidden_modules = ["troupe.cli"]
+
+[[tool.importlinter.contracts]]
+# Stages are found by name through the troupe.stages entry point group, never imported, and the local stage reaches
+# troupe only through the core's ports (spec: stages; perform-status-logs design D1).
+name = "troupe never imports a stage package"
+type = "forbidden"
+source_modules = ["troupe"]
+forbidden_modules = ["troupe_stage_local"]
+
+[[tool.importlinter.contracts]]
+name = "stage packages import no surface"
+type = "forbidden"
+source_modules = ["troupe_stage_local"]
+forbidden_modules = ["troupe.cli"]
+
+[[tool.importlinter.contracts]]
+# The CLI reaches perform, status and logs only through the client protocol's messages, so no behaviour exists in
+# the CLI alone (spec: client-protocol; perform-status-logs design D1).
+name = "the CLI reaches runs only through the client protocol"
+type = "forbidden"
+source_modules = ["troupe.cli"]
+forbidden_modules = ["troupe.core.runs", "troupe.core.stages", "troupe.core.policy"]
+# troupe.core.client reaches them on the CLI's behalf; only a direct import bypasses the protocol.
+allow_indirect_imports = true

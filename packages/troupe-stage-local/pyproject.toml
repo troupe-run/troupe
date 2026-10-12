@@ -1,0 +1,21 @@
+[project]
+name = "troupe-stage-local"
+version = "0.0.1.dev0"
+description = "troupe's local stage: runs an actor on the host, in the theatre, with its effects unenforced."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+dependencies = ["troupe"]
+
+[project.urls]
+Homepage = "https://troupe.run"
+Repository = "https://github.com/troupe-run/troupe"
+
+# Found by name through the troupe.stages entry point group (spec: stages).
+[project.entry-points."troupe.stages"]
+local = "troupe_stage_local:LocalStage"
+
+[build-system]
+requires = ["uv_build>=0.13.0,<0.14"]
+build-backend = "uv_build"
