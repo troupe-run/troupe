@@ -67,3 +67,8 @@ SUBSCRIBE_POLL_SECONDS = 1.0
 ALLOW_UNENFORCED_LOCAL_STAGE = False
 """Whether a stage that can't enforce an actor's declared effects may run it anyway (decision #3,
 option C). Off by default: the local stage then refuses every actor."""
+
+# Stages (spec: stages; perform-status-logs design D5). Interim: config chooses an actor's stage.
+
+STAGE = "local"
+"""The stage an actor runs on until config says otherwise."""
