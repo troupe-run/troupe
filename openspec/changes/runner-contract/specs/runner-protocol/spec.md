@@ -33,13 +33,18 @@ MAY write diagnostics to standard error.
 - **THEN** the host receives it whole
 
 ### Requirement: Handshake before anything else
-The host's first message SHALL be an `initialize` request carrying the protocol versions it supports. The runner
-SHALL answer with the version it chose, its name and version, and its capabilities. A runner that supports none of
-the offered versions SHALL answer with an error, and the host SHALL NOT start a run.
+The host's first message SHALL be an `initialize` request carrying the protocol versions and the capabilities it
+supports. The runner SHALL answer with one of the offered versions, its name and version, and the capabilities it
+will use, each one the host offered. A runner that supports none of the offered versions SHALL answer with an
+error, and the host SHALL NOT start a run.
 
 #### Scenario: Compatible runner
 - **WHEN** the host offers protocol version 1 and the runner supports it
 - **THEN** the runner's answer names version 1, the runner's name and version, and its capabilities
+
+#### Scenario: Capability the host didn't offer
+- **WHEN** a runner's answer names a capability that was not in the host's offer
+- **THEN** the host treats it as a protocol violation and starts no run
 
 #### Scenario: Incompatible runner
 - **WHEN** the host offers only versions the runner does not support
@@ -70,6 +75,10 @@ event. The runner SHALL use no other source of instructions or configuration fro
 #### Scenario: Runner-specific options are opaque to the host
 - **WHEN** `run/start` carries options the host does not understand
 - **THEN** the host passes them through unchanged and does not validate them beyond being a JSON object
+
+#### Scenario: Runner refuses options it doesn't understand
+- **WHEN** a runner receives a `run/start` whose options include a key it does not define
+- **THEN** it answers with an error naming the key, rather than ignoring it
 
 ### Requirement: Run events are notifications with a sequence number
 The runner SHALL report the run as `run/event` notifications. Each event SHALL carry the run id, a `seq` that

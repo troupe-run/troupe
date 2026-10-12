@@ -29,8 +29,12 @@ write a file in the workspace, hang, exit with a code, and write a raw line to s
 - **THEN** the runner plays that file's steps
 
 #### Scenario: Invalid script
-- **WHEN** the script is malformed or names an unknown step
+- **WHEN** the script is malformed, names an unknown step, or a step has a field the step doesn't define
 - **THEN** the runner answers `run/start` with an error naming the step and the problem, and plays nothing
+
+#### Scenario: Unknown option
+- **WHEN** the `run/start` options hold a key other than the script, the script path and the replay options
+- **THEN** the runner answers with an error naming the key and plays nothing
 
 ### Requirement: The runner numbers events itself
 The runner SHALL assign `seq` and the run id to every event it sends, so scripts do not repeat them, unless a step
