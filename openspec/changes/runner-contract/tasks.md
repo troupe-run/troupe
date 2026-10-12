@@ -66,10 +66,10 @@
 
 ## 8. Fixtures from real Claude Code output (spec: scripted-runner)
 
-- [ ] 8.1 Write `plugins/runner-scripted/tools/capture_claude.py` (design D14): runs `claude -p --output-format stream-json --verbose` with an isolated `CLAUDE_CONFIG_DIR`, a temporary workspace and the given credential mode, records the native lines, applies scrubbing and writes `provenance.json`; verify by running it in credential-free mode and inspecting the output
-- [ ] 8.2 Capture the credential-free fixtures `is-error-success-subtype`, `auth-retries` and `terminated-no-result`, and write each fixture's events and `expected.json` by hand; verify "Fixtures replay through the contract" for these three
-- [ ] 8.3 Add the secret scan over every fixture (credential patterns, home-directory paths); verify "Secret pattern in a fixture" with a planted test fixture in a temporary directory, and that all committed fixtures pass
-- [ ] 8.4 Verify "Provenance is recorded" with a test that every fixture directory has a `provenance.json` with the version, date, command and scrubbing fields
+- [x] 8.1 Write `plugins/runner-scripted/tools/capture_claude.py` (design D14): runs `claude -p --output-format stream-json --verbose` with an isolated `CLAUDE_CONFIG_DIR`, a temporary workspace and the given credential mode, records the native lines, applies scrubbing and writes `provenance.json`; verify by running it in credential-free mode and inspecting the output
+- [x] 8.2 Capture the credential-free fixtures `is-error-success-subtype`, `auth-retries` and `terminated-no-result`, and write each fixture's events and `expected.json` by hand; verify "Fixtures replay through the contract" for these three
+- [x] 8.3 Add the secret scan over every fixture (credential patterns, home-directory paths); verify "Secret pattern in a fixture" with a planted test fixture in a temporary directory, and that all committed fixtures pass
+- [x] 8.4 Verify "Provenance is recorded" with a test that every fixture directory has a `provenance.json` with the version, date, command and scrubbing fields
 - [ ] 8.5 Owner: run `capture_claude.py` in the owner's own terminal with a real credential, pinned `--model` and `--max-budget-usd 0.10`, to capture `success-with-tools`; then write its events and `expected.json` by hand, and verify it replays through the contract, passes the secret scan, and derives `succeeded`
 
 ## 9. Integration
