@@ -8,11 +8,11 @@
 
 ## 2. Child processes in the platform seam (spec: platform)
 
-- [ ] 2.1 Implement `troupe.platform.processes`: start a child with `argv`, `cwd` and an explicit environment in its own process group (POSIX `start_new_session`; Windows `CREATE_NEW_PROCESS_GROUP` and a job object with kill-on-close through `ctypes`), with the platform minimum environment (design D6); verify "Caller's variables only" and "Platform minimum on Windows" with tests that start a Python child that prints its environment
-- [ ] 2.2 Implement `kill_tree()` (POSIX `killpg` SIGKILL; Windows `TerminateJobObject`); verify "Grandchild is killed" with a child that starts a grandchild, writes both pids, and a check that neither is running afterwards
-- [ ] 2.3 Implement line reading with a caller-set maximum; verify "Line of several megabytes" (5 MiB line) and "Line over the maximum" (error names the limit)
-- [ ] 2.4 Add `ctypes` to the import contract's forbidden modules outside `platform`; verify `lint-imports` passes, then fails on a deliberate `import ctypes` in `troupe.core` (record the output for the PR, then remove it)
-- [ ] 2.5 Add child processes to `docs/platform.md` (the table of POSIX and Windows mechanisms, the `setsid` limitation); verify the existing platform docs test still passes and covers the new row
+- [x] 2.1 Implement `troupe.platform.processes`: start a child with `argv`, `cwd` and an explicit environment in its own process group (POSIX `start_new_session`; Windows `CREATE_NEW_PROCESS_GROUP` and a job object with kill-on-close through `ctypes`), with the platform minimum environment (design D6); verify "Caller's variables only" and "Platform minimum on Windows" with tests that start a Python child that prints its environment
+- [x] 2.2 Implement `kill_tree()` (POSIX `killpg` SIGKILL; Windows `TerminateJobObject`); verify "Grandchild is killed" with a child that starts a grandchild, writes both pids, and a check that neither is running afterwards
+- [x] 2.3 Implement line reading with a caller-set maximum; verify "Line of several megabytes" (5 MiB line) and "Line over the maximum" (error names the limit)
+- [x] 2.4 Add `ctypes` to the import contract's forbidden modules outside `platform`; verify `lint-imports` passes, then fails on a deliberate `import ctypes` in `troupe.core` (record the output for the PR, then remove it)
+- [x] 2.5 Add child processes to `docs/platform.md` (the table of POSIX and Windows mechanisms, the `setsid` limitation); verify the existing platform docs test still passes and covers the new row
 
 ## 3. Artifact store (spec: artifact-store)
 

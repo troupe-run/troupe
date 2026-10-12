@@ -28,3 +28,15 @@ class FileInUseError(PlatformError):
         super().__init__(f"{path} is held open by another process (waited {waited:.1f}s)")
         self.path = path
         self.waited = waited
+
+
+class CommandNotFoundError(PlatformError):
+    def __init__(self, command: str) -> None:
+        super().__init__(f"command not found: {command!r}")
+        self.command = command
+
+
+class LineTooLongError(PlatformError):
+    def __init__(self, limit: int) -> None:
+        super().__init__(f"a line of output was longer than the limit of {limit} bytes")
+        self.limit = limit
