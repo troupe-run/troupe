@@ -19,14 +19,19 @@ context: |
     watching) behind one named seam, and choose mechanisms that work on all three rather than adapting later.
   - Pure event sourcing and CQRS, configuration included. Events come first; files are projections.
   - troupe's own state is text that git can merge (append-only, line-per-record). No SQLite or binary stores.
-  - Every event carries lineage: actor (human, agent, or explicit unknown, never null), via, time, reason, change id,
-    approvals. Fail when there is no identity.
-  - Stages (sandboxes), actor runners, notification channels and guests are pluggable. Declared effects are enforced.
+  - Every event carries lineage: actor (human, agent, or explicit unknown, never null), via, time, reason, change id
+    (the correlation ID that one command's events share, and that events recorded in reaction to them inherit), cause
+    (the command, or the event it was recorded in reaction to), approvals. Fail when there is no identity.
+  - Stages (sandboxes), actor runners, notification channels and guests are pluggable. Declared effects are enforced
+    on code that runs over JSON-RPC.
   - Humans hold roles like agents. Gates and escalations name the role they route to, never "the human".
-  - One repo until 1.0: packages/ (in-process, first-party), plugins/ (out-of-process), protocol/ (language-neutral).
-    Plugins stay self-contained so they can be split into their own repos later. The site and other deliverables
-    live in their own repos.
-  - Third-party code only ever runs out of process.
+  - One repo until 1.0: packages/ (core and its bundled adapters, run direct), plugins/ (JSON-RPC plugins, ours
+    included), protocol/ (language-neutral). Plugins stay self-contained so they can be split into their own repos
+    later. The site and other deliverables live in their own repos.
+  - Every port is defined in core, with a direct (in-process) and a JSON-RPC transport. Core, the adapters bundled
+    with it and the libraries it pins run direct. Plugins, ours included, and anything acquired by config run over
+    JSON-RPC. In-process code is trusted and its effects aren't enforced; policy can restrict which transports are
+    allowed. Neither transport is a sandbox: stages and policy decide what code can touch.
   - Version control, storage and identity sources are adapters: git is one VCS adapter, a plain filesystem another.
   - Every limit (timeouts, sizes, costs, endpoints) is a named setting with its default in one place. Policy is
     authoritative: a lower level can tighten it, never loosen it.
@@ -42,6 +47,8 @@ context: |
     A UI edit to config is a set like any other, written back surgically.
   - Refuse rather than guess. Messages name the problem, the path and the fix, and are structured data so each
     surface can phrase them for its own users.
+  - A malformed or ambiguous input is an error that names the input and the fix, never a quiet fall-through to a
+    default. Only an absent input may fall through.
   - Never wait silently or indefinitely.
 
   Quality bar:
