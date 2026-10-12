@@ -58,10 +58,10 @@ Waiting for main stays the default. Either way, rebase only, never merge.
 
 ## 5. Identity
 
-- [ ] 5.1 Implement the chain in `troupe.core.identity`: sources by entry-point name, `IDENTITY_CHAIN` default,
+- [x] 5.1 Implement the chain in `troupe.core.identity`: sources by entry-point name, `IDENTITY_CHAIN` default,
   `identity.unknown-source`, `identity.unresolved` (listing the sources tried). Verify with tests for "first that
   answers wins", "reordering the chain", and "nothing resolves, nothing written"
-- [ ] 5.2 Implement the `env`, `vcs` and `os-login` sources in `troupe_identity_local` (design D9). Verify with tests
+- [x] 5.2 Implement the `env`, `vcs` and `os-login` sources in `troupe_identity_local` (design D9). Verify with tests
   for every `identity` spec scenario, including a malformed `TROUPE_ACTOR` and two `user.email` values (`identity.ambiguous`) that
   fail rather than fall through, an unset `user.email` that does fall through, the
   `vcs` source answering nothing under the filesystem adapter, and `user.email` set only in a global config under
