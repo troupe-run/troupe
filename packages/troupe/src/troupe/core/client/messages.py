@@ -1,0 +1,261 @@
+"""The client protocol's messages as Python types (spec: client-protocol; perform-status-logs
+design D2).
+
+The JSON Schemas in protocol/schemas/client/ are the source of truth (decision #7). These types
+mirror them by hand, and the tests check every type against the schemas. ``from_data`` is strict:
+anything a schema refuses raises ProtocolError, which the dispatcher reports as
+client.invalid-request, naming where.
+"""
+
+import re
+from dataclasses import dataclass
+from typing import ClassVar, Literal
+
+from troupe.core.messages import Message, ProtocolError, decode, fail, json_field
+from troupe.core.notices import CODES as NOTICE_CODES
+from troupe.core.notices import Notice
+from troupe.core.runners import protocol as p
+
+ACTOR_NAME = re.compile(r"\A[a-z][a-z0-9-]{0,63}\Z")
+RUNNER_NAME = ACTOR_NAME
+RUN_REF = re.compile(r"\A[0-9a-f]{8}[0-9a-f-]{0,28}\Z")
+THEATRE_PATH = re.compile(r"\A(?![/\\])(?![A-Za-z]:)(?!.*\\)(?!(.*/)?\.\.(/|\Z)).+\Z")
+TIME = re.compile(r"\A[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z\Z")
+SETTING = re.compile(r"\A[a-z][a-z0-9_]*\Z")
+STAGE_NAME = re.compile(r"\A[a-z][a-z0-9-]*\Z")
+CODE = re.compile(r"\A[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+\Z")
+STATUS_LIMIT_MAX = 10000
+"""The schema's upper bound on status's limit."""
+
+State = Literal["running", "ended", "interrupted", "unfinished-elsewhere"]
+OutcomeName = Literal["succeeded", "failed", "cancelled", "timed-out", "crashed", "could-not-start"]
+
+
+class Tagged(Message):
+    """A client message that is one of several kinds, told apart by ``kind``."""
+
+    TYPE_FIELD: ClassVar[str] = "kind"
+
+
+# What perform is asked to run.
+
+
+@dataclass(frozen=True)
+class NoEffectCheck(Tagged):
+    TYPE: ClassVar[str | None] = "none"
+
+
+@dataclass(frozen=True)
+class FilesEffectCheck(Tagged):
+    """Each file must exist after the run and differ from before it."""
+
+    TYPE: ClassVar[str | None] = "files"
+    paths: list[str] = json_field("paths", min_items=1, unique=True)
+
+    def _check(self, where: str) -> None:
+        for index, path in enumerate(self.paths):
+            if not THEATRE_PATH.match(path):
+                raise fail(
+                    f"{where}.paths[{index}]",
+                    f"{path!r} must be relative to the theatre, with / separators, and stay in it",
+                )
+
+
+EffectCheck = NoEffectCheck | FilesEffectCheck
+
+
+@dataclass(frozen=True)
+class PerformRequest(Message):
+    actor: str = json_field("actor", pattern=ACTOR_NAME)
+    runner: str = json_field("runner", pattern=RUNNER_NAME)
+    effect_check: EffectCheck = json_field("effectCheck")
+    options: dict[str, object] | None = json_field("options", default=None)
+    instructions: str | None = json_field("instructions", default=None)
+
+
+# A run as status and logs report it.
+
+
+@dataclass(frozen=True)
+class ActorData(Message):
+    """An actor, as lineage records it (lineage.schema.json#/$defs/actor)."""
+
+    kind: Literal["human", "agent", "unknown"] = json_field("kind")
+    id: str | None = json_field("id", default=None, min_length=1)
+    source: str | None = json_field("source", default=None, min_length=1)
+
+    def _check(self, where: str) -> None:
+        if (self.kind == "unknown") != (self.id is None and self.source is None):
+            raise fail(where, "an unknown actor has only a kind; any other has an id and source")
+        if self.kind != "unknown" and (self.id is None or self.source is None):
+            raise fail(where, "a human or agent actor has an id and a source")
+
+
+@dataclass(frozen=True)
+class AllowanceData(Message):
+    setting: str = json_field("setting", pattern=SETTING)
+    source: str = json_field("source", min_length=1)
+
+
+@dataclass(frozen=True)
+class StageData(Message):
+    """Where a run's actor ran, as lineage records it (lineage.schema.json#/$defs/stage)."""
+
+    name: str = json_field("name", pattern=STAGE_NAME)
+    effects: Literal["enforced", "unenforced"] = json_field("effects")
+    allowed_by: AllowanceData | None = json_field("allowedBy", nullable=True)
+
+    def _check(self, where: str) -> None:
+        if (self.effects == "unenforced") != (self.allowed_by is not None):
+            raise fail(where, "allowedBy names what allowed it exactly when effects are unenforced")
+
+
+@dataclass(frozen=True)
+class ReportedRunner(Message):
+    name: str = json_field("name", min_length=1)
+    version: str = json_field("version", min_length=1)
+
+
+@dataclass(frozen=True)
+class RunnerData(Message):
+    requested: str = json_field("requested", pattern=RUNNER_NAME)
+    reported: ReportedRunner | None = json_field("reported", nullable=True)
+
+
+@dataclass(frozen=True)
+class RecordingFailure(Message):
+    failed_at: int = json_field("failedAt", minimum=0)
+    error: p.ErrorData = json_field("error")
+
+
+@dataclass(frozen=True)
+class RunSummary(Message):
+    run_id: str = json_field("runId", pattern=p.RUN_ID_PATTERN)
+    actor: str = json_field("actor", pattern=ACTOR_NAME)
+    started_by: ActorData = json_field("startedBy")
+    runner: RunnerData = json_field("runner")
+    stage: StageData = json_field("stage")
+    effect_check: EffectCheck = json_field("effectCheck")
+    state: State = json_field("state")
+    outcome: OutcomeName | None = json_field("outcome", nullable=True)
+    error: p.ErrorData | None = json_field("error", nullable=True)
+    events: int = json_field("events", minimum=0)
+    started_at: str = json_field("startedAt", pattern=TIME)
+    ended_at: str | None = json_field("endedAt", nullable=True, pattern=TIME)
+    transcript: str | None = json_field("transcript", nullable=True, pattern=p.REF_PATTERN)
+    stderr: str | None = json_field("stderr", nullable=True, pattern=p.REF_PATTERN)
+    recording: RecordingFailure | None = json_field("recording", nullable=True)
+
+
+HostEvent = (
+    p.InitEvent
+    | p.TurnEvent
+    | p.ToolCallEvent
+    | p.ToolResultEvent
+    | p.RetryEvent
+    | p.LogEvent
+    | p.ResultEvent
+    | p.OversizedEvent
+)
+"""A run event as troupe passes it on: the runner's, or the oversized stand-in for one."""
+
+
+@dataclass(frozen=True)
+class LoggedEvent(Tagged):
+    """One run event as recorded, and when troupe recorded it."""
+
+    TYPE: ClassVar[str | None] = "event"
+    run_id: str = json_field("runId", pattern=p.RUN_ID_PATTERN)
+    seq: int = json_field("seq", minimum=0)
+    at: str = json_field("at", pattern=TIME)
+    event: HostEvent = json_field("event")
+
+    def _check(self, where: str) -> None:
+        if self.event.run_id != self.run_id or self.event.seq != self.seq:
+            raise fail(where, "the event's runId and seq must be the logged event's own")
+
+
+@dataclass(frozen=True)
+class NoticeData(Message):
+    """A notice (notice.schema.json)."""
+
+    code: str = json_field("code", pattern=CODE)
+    problem: str = json_field("problem", min_length=1)
+    fix: str = json_field("fix", min_length=1)
+    path: str | None = json_field("path", default=None, min_length=1)
+    details: dict[str, object] | None = json_field("details", default=None)
+
+    @classmethod
+    def of(cls, notice: Notice) -> "NoticeData":
+        return cls.from_data(notice.to_data())
+
+    def to_notice(self) -> Notice:
+        if self.code not in NOTICE_CODES:
+            raise ProtocolError(f"notice: {self.code!r} isn't a notice code troupe declares")
+        return Notice(self.code, self.problem, self.fix, self.path, dict(self.details or {}))
+
+
+# Updates.
+
+
+@dataclass(frozen=True)
+class Started(Tagged):
+    TYPE: ClassVar[str | None] = "started"
+    run_id: str = json_field("runId", pattern=p.RUN_ID_PATTERN)
+
+
+@dataclass(frozen=True)
+class NoticeUpdate(Tagged):
+    TYPE: ClassVar[str | None] = "notice"
+    notice: NoticeData = json_field("notice")
+
+
+PerformUpdate = Started | LoggedEvent | NoticeUpdate
+LogsUpdate = LoggedEvent | NoticeUpdate
+
+
+# Results and the queries' requests.
+
+
+@dataclass(frozen=True)
+class PerformResult(Message):
+    run: RunSummary = json_field("run")
+
+
+@dataclass(frozen=True)
+class StatusRequest(Message):
+    run: str | None = json_field("run", default=None, pattern=RUN_REF)
+    limit: int | None = json_field("limit", default=None, minimum=1)
+
+    def _check(self, where: str) -> None:
+        if self.run is not None and self.limit is not None:
+            raise fail(where, "give a run or a limit, not both: a limit is for a list")
+        if self.limit is not None and self.limit > STATUS_LIMIT_MAX:
+            raise fail(f"{where}.limit", f"must be at most {STATUS_LIMIT_MAX}")
+
+
+@dataclass(frozen=True)
+class StatusResult(Message):
+    runs: list[RunSummary] = json_field("runs")
+    notices: list[NoticeData] = json_field("notices")
+
+
+@dataclass(frozen=True)
+class LogsRequest(Message):
+    run: str = json_field("run", pattern=RUN_REF)
+    follow: bool | None = json_field("follow", default=None)
+
+
+@dataclass(frozen=True)
+class LogsResult(Message):
+    run: RunSummary = json_field("run")
+    events: list[LoggedEvent] = json_field("events")
+    notices: list[NoticeData] = json_field("notices")
+
+
+def parse_update(kind: object, data: object) -> Message:
+    """An update for a method whose updates are ``kind`` (PerformUpdate or LogsUpdate)."""
+    message = decode(kind, data, "update")
+    if not isinstance(message, Message):
+        raise TypeError(f"{kind!r} isn't a union of tagged messages")
+    return message

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/client/perform-result.schema.json",
+  "title": "perform: result",
+  "description": "The run as recorded once it ended. A run that ended badly is still a result: its outcome and error say how.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "run"
+  ],
+  "properties": {
+    "run": {
+      "$ref": "run.schema.json#/$defs/summary"
+    }
+  }
+}
