@@ -9,7 +9,12 @@ from pathlib import Path
 import pytest
 
 from troupe.platform import processes
-from troupe.platform.errors import CommandNotFoundError, LineTooLongError
+from troupe.platform.errors import (
+    CommandNotFoundError,
+    LineTooLongError,
+    OutputTooLargeError,
+    ProcessTimeoutError,
+)
 
 WINDOWS = sys.platform == "win32"
 LIMIT = 8 * 1024 * 1024
@@ -181,3 +186,95 @@ def test_reading_at_end_of_output_returns_the_unterminated_last_line_then_nothin
         return lines
 
     assert asyncio.run(main()) == [b"a\n", b"last", b""]
+
+
+# Requirement: A command can be run to completion within a bound
+
+
+def _run(code: str, **overrides: object) -> processes.Completed:
+    options: dict[str, object] = {
+        "cwd": Path.cwd(),
+        "env": {},
+        "timeout": 30.0,
+        "max_output_bytes": LIMIT,
+        "announce_after": 30.0,
+    }
+    options.update(overrides)
+    return processes.run_to_completion(_python(code), **options)  # type: ignore[arg-type]
+
+
+def test_a_finished_command_returns_both_outputs_and_its_exit_code() -> None:
+    done = _run("import sys; sys.stdout.write('out'); sys.stderr.write('err'); sys.exit(3)")
+    assert (done.returncode, done.stdout, done.stderr) == (3, b"out", b"err")
+
+
+def test_input_is_given_to_the_command_on_standard_input() -> None:
+    done = _run("import sys; sys.stdout.write(sys.stdin.read().upper())", input=b"abc")
+    assert done.stdout == b"ABC"
+
+
+GRANDPARENT_THAT_TALKS = """
+import subprocess, sys, time
+grandchild = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"])
+print(grandchild.pid, flush=True)
+time.sleep(120)
+"""
+
+
+def test_a_command_past_its_timeout_is_killed_with_its_children_and_keeps_its_output() -> None:
+    with pytest.raises(ProcessTimeoutError) as caught:
+        _run(GRANDPARENT_THAT_TALKS, timeout=3.0)
+    error = caught.value
+    assert error.timeout == 3.0
+    assert error.command == sys.executable
+    grandchild = int(error.stdout)
+    assert _gone_within(grandchild, 10)
+
+
+def test_a_command_writing_past_the_output_limit_is_killed_and_the_limit_named() -> None:
+    with pytest.raises(OutputTooLargeError) as caught:
+        _run(
+            "import sys, time\nwhile True: sys.stdout.write('x' * 65536)", max_output_bytes=100_000
+        )
+    assert caught.value.limit == 100_000
+    assert "100000" in str(caught.value)
+
+
+def test_a_command_run_from_inside_a_running_event_loop_completes_the_same_way() -> None:
+    async def inside_a_loop() -> processes.Completed:
+        return _run("print('from a loop')")
+
+    assert asyncio.run(inside_a_loop()).stdout.strip() == b"from a loop"
+
+
+def test_a_long_wait_is_announced_once_with_the_command_and_the_time_waited() -> None:
+    waits: list[tuple[str, float]] = []
+    _run(
+        "import time; time.sleep(0.5)",
+        announce_after=0.1,
+        on_wait=lambda command, waited: waits.append((command, waited)),
+    )
+    assert len(waits) == 1
+    assert waits[0][0] == sys.executable
+    assert waits[0][1] >= 0.1
+
+
+def test_a_command_that_exits_while_its_child_holds_its_output_open_still_times_out() -> None:
+    code = (
+        "import subprocess, sys\n"
+        "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(120)'])"
+    )
+    with pytest.raises(ProcessTimeoutError):
+        _run(code, timeout=2.0)
+
+
+def test_running_a_missing_command_names_it() -> None:
+    with pytest.raises(CommandNotFoundError):
+        processes.run_to_completion(
+            ["troupe-no-such-command"],
+            cwd=Path.cwd(),
+            env={},
+            timeout=5,
+            max_output_bytes=1024,
+            announce_after=5,
+        )

@@ -19,12 +19,22 @@ import asyncio
 import contextlib
 import os
 import shutil
+import subprocess
 import sys
-from collections.abc import Iterable, Mapping, Sequence
+import threading
+import time
+import typing
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from troupe.platform.errors import CommandNotFoundError, EnvironmentPolicyError, LineTooLongError
+from troupe.platform.errors import (
+    CommandNotFoundError,
+    EnvironmentPolicyError,
+    LineTooLongError,
+    OutputTooLargeError,
+    ProcessTimeoutError,
+)
 
 _WINDOWS = sys.platform == "win32"
 
@@ -378,3 +388,141 @@ async def read_line(stream: asyncio.StreamReader, limit: int) -> bytes:
         return error.partial  # end of file: the last line has no line feed, or there is none
     except asyncio.LimitOverrunError as error:
         raise LineTooLongError(limit) from error
+
+
+ProcessWaitCallback = Callable[[str, float], None]
+"""Called once when a command has run for ``announce_after`` seconds, with the command and time."""
+
+_CREATE_NEW_PROCESS_GROUP = 0x00000200
+_READ_CHUNK = 64 * 1024
+_POLL_SECONDS = 0.02
+
+
+@dataclass(frozen=True)
+class Completed:
+    """A command that ran to completion."""
+
+    returncode: int
+    stdout: bytes
+    stderr: bytes
+
+
+class _Output:
+    """Both output streams of one command, drained by threads, with a shared size limit."""
+
+    def __init__(self, limit: int) -> None:
+        self.limit = limit
+        self.stdout = bytearray()
+        self.stderr = bytearray()
+        self.total = 0
+        self.overflowed = threading.Event()
+        self._lock = threading.Lock()
+
+    def drain(self, stream: "typing.IO[bytes]", into: bytearray) -> None:
+        with contextlib.suppress(OSError, ValueError):
+            while chunk := stream.read1(_READ_CHUNK):  # type: ignore[attr-defined]
+                with self._lock:
+                    into.extend(chunk)
+                    self.total += len(chunk)
+                    if self.total > self.limit:
+                        self.overflowed.set()
+
+
+def run_to_completion(
+    argv: Sequence[str],
+    *,
+    cwd: str | os.PathLike[str],
+    env: Mapping[str, str],
+    timeout: float,
+    max_output_bytes: int,
+    announce_after: float,
+    input: bytes | None = None,
+    on_wait: ProcessWaitCallback | None = None,
+    search_path: str | None = None,
+) -> Completed:
+    """Run a short command to completion, bounded (spec: platform; design D6).
+
+    It blocks, and uses no event loop, so it works from anywhere, including inside a running loop
+    (wrap it in ``asyncio.to_thread`` to keep the loop free). The command starts in its own process
+    group (POSIX) or job object (Windows) with exactly ``env`` plus the platform minimum. Past
+    ``timeout``, or past ``max_output_bytes`` of output in both streams together, the whole process
+    tree is killed and ProcessTimeoutError or OutputTooLargeError is raised. A run longer than
+    ``announce_after`` is announced once through ``on_wait``. A command that exits but leaves a
+    process holding its output open counts as still running.
+    """
+    if not argv:
+        raise CommandNotFoundError("")
+    command = resolve_command(argv[0], search_path)
+    child_env = {name: os.environ[name] for name in MINIMUM_ENVIRONMENT if name in os.environ}
+    child_env.update(env)
+    process = subprocess.Popen(  # noqa: S603 - argv is the caller's, resolved to an absolute path
+        [command, *argv[1:]],
+        cwd=cwd,
+        env=child_env,
+        stdin=subprocess.DEVNULL if input is None else subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=not _WINDOWS,
+        creationflags=_CREATE_NEW_PROCESS_GROUP if _WINDOWS else 0,
+    )
+    job: int | None = None
+    try:
+        if _WINDOWS:
+            job = _new_job_for(process.pid)
+    except OSError:
+        process.kill()
+        process.wait()
+        raise
+    output = _Output(max_output_bytes)
+    if process.stdout is None or process.stderr is None:
+        raise RuntimeError("the command's output must be piped")
+    threads = [
+        threading.Thread(target=output.drain, args=(process.stdout, output.stdout), daemon=True),
+        threading.Thread(target=output.drain, args=(process.stderr, output.stderr), daemon=True),
+    ]
+    if input is not None and process.stdin is not None:
+        threads.append(threading.Thread(target=_feed, args=(process.stdin, input), daemon=True))
+    for thread in threads:
+        thread.start()
+
+    def kill() -> None:
+        if job is not None:
+            _kill_job(job)
+        else:
+            _kill_group(process.pid)
+        process.wait()
+        for thread in threads:
+            thread.join(timeout=5)
+
+    started = time.monotonic()
+    announced = False
+    try:
+        while True:
+            finished = process.poll() is not None and not any(t.is_alive() for t in threads[:2])
+            if output.overflowed.is_set():
+                kill()
+                raise OutputTooLargeError(argv[0], max_output_bytes)
+            if finished:
+                break
+            waited = time.monotonic() - started
+            if waited >= timeout:
+                kill()
+                raise ProcessTimeoutError(
+                    argv[0], timeout, bytes(output.stdout), bytes(output.stderr)
+                )
+            if not announced and waited >= announce_after:
+                announced = True
+                if on_wait is not None:
+                    on_wait(argv[0], waited)
+            time.sleep(_POLL_SECONDS)
+    finally:
+        if job is not None:
+            _close_job(job)
+    return Completed(process.returncode, bytes(output.stdout), bytes(output.stderr))
+
+
+def _feed(stdin: "typing.IO[bytes]", data: bytes) -> None:
+    with contextlib.suppress(OSError, ValueError):
+        stdin.write(data)
+    with contextlib.suppress(OSError, ValueError):
+        stdin.close()
