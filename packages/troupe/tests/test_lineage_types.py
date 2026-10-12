@@ -7,16 +7,18 @@ from typing import Any
 
 import pytest
 
-from event_schemas import LINEAGE, is_valid, lineage, without
+from event_schemas import ENFORCED, LINEAGE, UNENFORCED_LOCAL, is_valid, lineage, without
 from troupe.core.events.lineage import (
     VIA,
     Actor,
+    Allowance,
     Approval,
     Cause,
     CommandCause,
     EventCause,
     Lineage,
     Source,
+    StageLineage,
     Unknown,
     VcsState,
     lineage_problem,
@@ -38,8 +40,25 @@ SOURCES = [
     Source(path="gone.yaml", before=HASH, after=None),
 ]
 
+STAGES = [
+    None,
+    StageLineage(
+        name="local",
+        effects="unenforced",
+        allowed_by=Allowance(setting="allow_unenforced_local_stage", source="env"),
+    ),
+    StageLineage(name="docker", effects="enforced", allowed_by=None),
+]
 
-def build(actor: Actor, via: str, cause: Cause, source: Source | None, change: str) -> Lineage:
+
+def build(
+    actor: Actor,
+    via: str,
+    cause: Cause,
+    source: Source | None,
+    change: str,
+    stage: StageLineage | None = None,
+) -> Lineage:
     return Lineage(
         actor=actor,
         via=via,  # type: ignore[arg-type]
@@ -48,6 +67,7 @@ def build(actor: Actor, via: str, cause: Cause, source: Source | None, change: s
         change=change,
         cause=cause,
         vcs=VcsState(adapter="git", branch="main", head="a" * 40, source=source),
+        stage=stage,
     )
 
 
@@ -55,12 +75,13 @@ def build(actor: Actor, via: str, cause: Cause, source: Source | None, change: s
 @pytest.mark.parametrize("via", VIA)
 @pytest.mark.parametrize("cause_kind", ["command", "event"])
 @pytest.mark.parametrize("source", SOURCES, ids=["no file", "edited", "created", "deleted"])
+@pytest.mark.parametrize("stage", STAGES, ids=["no stage", "unenforced", "enforced"])
 def test_every_lineage_troupe_builds_validates_against_the_schema(
-    actor: Actor, via: str, cause_kind: str, source: Source | None
+    actor: Actor, via: str, cause_kind: str, source: Source | None, stage: StageLineage | None
 ) -> None:
     change = new_ulid()
     cause: Cause = CommandCause(change) if cause_kind == "command" else EventCause(HASH)
-    data = build(actor, via, cause, source, change).to_data()
+    data = build(actor, via, cause, source, change, stage).to_data()
     assert is_valid(data, "lineage.schema.json")
     assert lineage_problem(data) is None
 
@@ -145,6 +166,19 @@ INVALID: list[dict[str, Any]] = [
 ]
 
 
+INVALID += [
+    without(LINEAGE, "stage"),
+    lineage(stage={**UNENFORCED_LOCAL, "allowedBy": None}),
+    lineage(stage={**ENFORCED, "allowedBy": UNENFORCED_LOCAL["allowedBy"]}),
+    lineage(stage={**ENFORCED, "effects": "partly"}),
+    lineage(stage={**ENFORCED, "name": "Local Stage"}),
+    lineage(stage={**UNENFORCED_LOCAL, "allowedBy": {"setting": "x"}}),
+    lineage(stage={**UNENFORCED_LOCAL, "allowedBy": {"setting": "Allow", "source": "env"}}),
+    lineage(stage={**UNENFORCED_LOCAL, "allowedBy": {"setting": "x", "source": ""}}),
+    lineage(stage="local"),
+]
+
+
 @pytest.mark.parametrize("data", INVALID)
 def test_the_hand_written_check_refuses_exactly_what_the_schema_refuses(
     data: dict[str, Any],
@@ -168,3 +202,19 @@ def test_the_hand_written_check_names_the_field_at_fault() -> None:
 )
 def test_times_are_written_in_utc_with_milliseconds_and_z(moment: datetime) -> None:
     assert timestamp(moment) == "2026-10-12T03:04:05.678Z"
+
+
+@pytest.mark.parametrize(
+    ("effects", "allowed_by"),
+    [("unenforced", None), ("enforced", Allowance(setting="x", source="env"))],
+)
+def test_a_stage_record_names_an_allowance_exactly_when_effects_are_unenforced(
+    effects: str, allowed_by: Allowance | None
+) -> None:
+    with pytest.raises(ValueError, match="names what allowed it"):
+        StageLineage(name="local", effects=effects, allowed_by=allowed_by)  # type: ignore[arg-type]
+
+
+def test_the_hand_written_check_names_the_stage_when_it_is_at_fault() -> None:
+    problem = lineage_problem(lineage(stage={**UNENFORCED_LOCAL, "allowedBy": None}))
+    assert "stage.allowedBy" in (problem or "")

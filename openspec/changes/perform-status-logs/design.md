@@ -207,8 +207,8 @@ as `ALLOW_UNENFORCED_LOCAL_STAGE`.
 "stage": {"name": "docker", "effects": "enforced", "allowedBy": null}
 ```
 
-- `allowedBy` is required, and non-null, exactly when `effects` is `unenforced`. The schema says so with an
-  `if`/`then`, and `lineage_problem` checks the same rule.
+- `allowedBy` is required, and non-null, exactly when `effects` is `unenforced`. The schema says so with one
+  `oneOf` branch per kind of stage record, and `lineage_problem` checks the same rule.
 - Every event a run records (D8) carries the run's stage. Every other event has `null`.
 - **Required and nullable, like `reason`,** so an absent value is explicit. Lineage is checked when an event is
   written, never when it's read, so events recorded before this change still read. None exist outside tests

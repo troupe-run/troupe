@@ -13,18 +13,18 @@
 
 ## 2. Lineage records the stage
 
-- [ ] 2.1 Add the required, nullable `stage` to `protocol/schemas/lineage.schema.json`, with the `if`/`then` rule
+- [x] 2.1 Add the required, nullable `stage` to `protocol/schemas/lineage.schema.json`, with the rule
   that `allowedBy` is non-null exactly when `effects` is `unenforced` (design D7). Verify with schema tests that a
   null stage, an enforced stage with no allowance and an allowed unenforced stage are accepted, and a missing `stage`,
   an unenforced stage with a null `allowedBy`, an enforced one with an allowance and an unknown `effects` are rejected
-- [ ] 2.2 Add `stage` to `troupe.core.events.lineage` (`Lineage`, `to_data`, `lineage_problem`) and to `Command`
+- [x] 2.2 Add `stage` to `troupe.core.events.lineage` (`Lineage`, `to_data`, `lineage_problem`) and to `Command`
   (design D7), with `null` for every existing caller. Verify the existing lineage tests, the "types and schema agree"
   test extended to every stage shape, and a test that the service refuses an unenforced stage without an allowance
   with `events.lineage-invalid`, all pass
-- [ ] 2.3 Add `Command.acting_as(actor, via)` to the event-store service (design D8): records with another actor and
+- [x] 2.3 Add `Command.acting_as(actor, via)` to the event-store service (design D8): records with another actor and
   via, sharing the command's change id and cause. Verify with a test that events recorded through the view and through
   the command share one change id and a command cause naming it, and that the view's events carry its actor and via
-- [ ] 2.4 Document `stage` in `docs/event-store.md`'s lineage table and `protocol/README.md`. Verify
+- [x] 2.4 Document `stage` in `docs/event-store.md`'s lineage table and `protocol/README.md`. Verify
   `test_event_store_doc.py` passes
 
 ## 3. Policy

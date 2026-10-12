@@ -89,6 +89,41 @@ class VcsState:
         return {"adapter": self.adapter, "branch": self.branch, "head": self.head, "source": source}
 
 
+Effects = Literal["enforced", "unenforced"]
+STAGE_NAME = re.compile(r"^[a-z][a-z0-9-]*$")
+SETTING_NAME = re.compile(r"^[a-z][a-z0-9_]*$")
+
+
+@dataclass(frozen=True)
+class Allowance:
+    """The policy setting, and the source of its value, that allowed a run whose effects a stage
+    couldn't enforce (decision #3)."""
+
+    setting: str
+    source: str
+
+
+@dataclass(frozen=True)
+class StageLineage:
+    """Where a run's actor ran, and whether troupe enforced its effects there (design D7)."""
+
+    name: str
+    effects: Effects
+    allowed_by: Allowance | None
+
+    def __post_init__(self) -> None:
+        if (self.effects == "unenforced") != (self.allowed_by is not None):
+            raise ValueError(
+                "an unenforced stage names what allowed it, and an enforced one doesn't"
+            )
+
+    def to_data(self) -> dict[str, Any]:
+        allowed = None
+        if self.allowed_by is not None:
+            allowed = {"setting": self.allowed_by.setting, "source": self.allowed_by.source}
+        return {"name": self.name, "effects": self.effects, "allowedBy": allowed}
+
+
 @dataclass(frozen=True)
 class Approval:
     actor: Actor
@@ -106,6 +141,8 @@ class Lineage:
     cause: Cause
     vcs: VcsState
     approvals: tuple[Approval, ...] = field(default=())
+    stage: StageLineage | None = None
+    """None for an event recorded outside a stage."""
 
     def to_data(self) -> dict[str, Any]:
         return {
@@ -119,6 +156,7 @@ class Lineage:
                 {"actor": actor_data(a.actor), "role": a.role, "at": a.at} for a in self.approvals
             ],
             "vcs": self.vcs.to_data(),
+            "stage": None if self.stage is None else self.stage.to_data(),
         }
 
 
@@ -135,7 +173,7 @@ def lineage_problem(data: object) -> str | None:
     """What is wrong with ``data`` as lineage, naming the field, or None if it is valid."""
     if not isinstance(data, Mapping):
         return "lineage must be an object"
-    expected = {"actor", "via", "at", "reason", "change", "cause", "approvals", "vcs"}
+    expected = {"actor", "via", "at", "reason", "change", "cause", "approvals", "vcs", "stage"}
     if set(data) != expected:
         return _fields("lineage", set(data), expected)
     checks = (
@@ -149,6 +187,7 @@ def lineage_problem(data: object) -> str | None:
         _cause_problem(data["cause"]),
         _approvals_problem(data["approvals"]),
         _vcs_problem(data["vcs"]),
+        _stage_problem(data["stage"]),
     )
     return next((problem for problem in checks if problem), None)
 
@@ -236,6 +275,26 @@ def _vcs_problem(vcs: object) -> str | None:
         ):
             return f"vcs.source.{name} must be a sha256: hash or null"
     return None
+
+
+def _stage_problem(stage: object) -> str | None:
+    if stage is None:
+        return None
+    if not isinstance(stage, Mapping) or set(stage) != {"name", "effects", "allowedBy"}:
+        return "stage must be {name, effects, allowedBy} or null"
+    problem = _match("stage.name", stage["name"], STAGE_NAME, "a stage's registered name")
+    if problem:
+        return problem
+    allowed = stage["allowedBy"]
+    if stage["effects"] == "enforced":
+        return None if allowed is None else "stage.allowedBy must be null when effects are enforced"
+    if stage["effects"] != "unenforced":
+        return "stage.effects must be enforced or unenforced"
+    if not isinstance(allowed, Mapping) or set(allowed) != {"setting", "source"}:
+        return "stage.allowedBy must name the setting and source that allowed unenforced effects"
+    return _match(
+        "stage.allowedBy.setting", allowed["setting"], SETTING_NAME, "a policy setting's name"
+    ) or (None if _nonempty(allowed["source"]) else "stage.allowedBy.source must be non-empty")
 
 
 def _theatre_relative(path: str) -> bool:

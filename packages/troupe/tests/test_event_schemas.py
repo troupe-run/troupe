@@ -9,11 +9,13 @@ import pytest
 
 from event_schemas import (
     AT,
+    ENFORCED,
     FILES,
     HASH,
     LINEAGE,
     OTHER_HASH,
     ULID,
+    UNENFORCED_LOCAL,
     is_valid,
     lineage,
     load,
@@ -80,6 +82,15 @@ def test_each_schema_is_a_valid_draft_2020_12_schema(name: str) -> None:
             ),
             id="a file that didn't exist before",
         ),
+        pytest.param(
+            lineage(
+                actor={"kind": "agent", "id": "tester", "source": "troupe"},
+                via="runner",
+                stage=UNENFORCED_LOCAL,
+            ),
+            id="a run on a stage that doesn't enforce effects, and what allowed it",
+        ),
+        pytest.param(lineage(stage=ENFORCED), id="a run on a stage that enforces effects"),
     ],
 )
 def test_lineage_the_schema_accepts(value: dict[str, Any]) -> None:
@@ -148,6 +159,23 @@ def test_lineage_the_schema_accepts(value: dict[str, Any]) -> None:
                 }
             ),
             id="a hash that isn't sha256",
+        ),
+        pytest.param(without(LINEAGE, "stage"), id="missing stage"),
+        pytest.param(
+            lineage(stage={**UNENFORCED_LOCAL, "allowedBy": None}),
+            id="an unenforced stage that names nothing that allowed it",
+        ),
+        pytest.param(
+            lineage(stage={**ENFORCED, "allowedBy": UNENFORCED_LOCAL["allowedBy"]}),
+            id="an enforced stage that names an allowance",
+        ),
+        pytest.param(lineage(stage={**ENFORCED, "effects": "partly"}), id="unknown effects"),
+        pytest.param(
+            lineage(stage={**ENFORCED, "name": "Local Stage"}), id="a stage name with spaces"
+        ),
+        pytest.param(
+            lineage(stage={**UNENFORCED_LOCAL, "allowedBy": {"setting": "x"}}),
+            id="an allowance without its source",
         ),
     ],
 )

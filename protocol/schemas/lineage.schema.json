@@ -5,7 +5,7 @@
   "description": "Where an event came from: who made it, through what, when, why, as part of which command and in reaction to what, with whose approval, and in what version-control state. Every event troupe records carries it. It is left out of the event's content hash, so two clones that make the same change agree on the event's id.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["actor", "via", "at", "reason", "change", "cause", "approvals", "vcs"],
+  "required": ["actor", "via", "at", "reason", "change", "cause", "approvals", "vcs", "stage"],
   "properties": {
     "actor": {"$ref": "#/$defs/actor"},
     "via": {
@@ -32,7 +32,8 @@
       "type": "array",
       "items": {"$ref": "#/$defs/approval"}
     },
-    "vcs": {"$ref": "#/$defs/vcs"}
+    "vcs": {"$ref": "#/$defs/vcs"},
+    "stage": {"$ref": "#/$defs/stage"}
   },
   "$defs": {
     "hash": {
@@ -96,6 +97,47 @@
           "properties": {"kind": {"const": "event"}, "id": {"$ref": "#/$defs/hash"}}
         }
       ]
+    },
+    "stage": {
+      "title": "Stage",
+      "description": "Where the actor whose run recorded this event ran, and whether troupe enforced its declared effects there. null for an event recorded outside a stage, such as one a person's command recorded. An unenforced stage names the policy setting, and the source of its value, that allowed the run; an enforced one names none.",
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "effects", "allowedBy"],
+          "properties": {
+            "name": {"$ref": "#/$defs/stageName"},
+            "effects": {"const": "enforced"},
+            "allowedBy": {"type": "null"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "effects", "allowedBy"],
+          "properties": {
+            "name": {"$ref": "#/$defs/stageName"},
+            "effects": {"const": "unenforced"},
+            "allowedBy": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["setting", "source"],
+              "properties": {
+                "setting": {"description": "The policy setting that allowed the run, such as allow_unenforced_local_stage.", "type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+                "source": {"description": "Where the setting's value came from, such as env.", "type": "string", "minLength": 1}
+              }
+            }
+          }
+        }
+      ]
+    },
+    "stageName": {
+      "title": "Stage name",
+      "description": "The name a stage is registered under, such as local.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
     },
     "approval": {
       "title": "Approval",

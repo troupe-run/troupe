@@ -8,7 +8,7 @@ Language-neutral contracts between troupe and everything that talks to it: the C
 |---|---|
 | [`schemas/error.schema.json`](schemas/error.schema.json) | The structured error every surface renders: a stable `code`, the `problem`, the `fix`, and an optional `path` and `details` |
 | [`schemas/notice.schema.json`](schemas/notice.schema.json) | Something a person should know while troupe works, such as a wait or a retry: the same fields as an error, with its own codes |
-| [`schemas/lineage.schema.json`](schemas/lineage.schema.json) | Where an event came from: actor (never null), via, time, reason, change (the correlation id), cause, approvals and the version-control state. Every event troupe records carries it |
+| [`schemas/lineage.schema.json`](schemas/lineage.schema.json) | Where an event came from: actor (never null), via, time, reason, change (the correlation id), cause, approvals, the version-control state, and for a run, the stage it ran on and whether its effects were enforced. Every event troupe records carries it |
 | [`schemas/event-record.schema.json`](schemas/event-record.schema.json) | One line of an event segment in `.troupe/events/`: the segment header, or an event with its content-hash id, parents and batch. [docs/event-store.md](../docs/event-store.md) explains the store |
 | [`schemas/runner/`](schemas/runner/) | The runner contract: JSON-RPC 2.0 over a runner's standard input and output, one message per line. One schema per message (`initialize`, `run/start`, `run/event`, `run/transcript`, `run/cancel`, `shutdown`), the error response, and `message.schema.json`, which accepts any line either side may send. [docs/runners.md](../docs/runners.md) explains how to write a runner |
 

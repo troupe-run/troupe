@@ -37,6 +37,7 @@ from troupe.core.events.lineage import (
     EventCause,
     Lineage,
     Source,
+    StageLineage,
     VcsState,
     Via,
     lineage_problem,
@@ -128,12 +129,22 @@ class EventStore:
         return resolve_identity(context, chain=self.identity_chain, sources=self.identity_sources)
 
     def command(
-        self, *, via: Via, reason: str | None = None, actor: Actor | None = None
+        self,
+        *,
+        via: Via,
+        reason: str | None = None,
+        actor: Actor | None = None,
+        stage: StageLineage | None = None,
     ) -> "Command":
         """Start a command: resolve the actor (unless given, as for an agent troupe runs or an
-        unknown hand edit) and mint its change id. Nothing is written yet."""
+        unknown hand edit) and mint its change id. Nothing is written yet. ``stage`` is where the
+        run this command records ran, when it records one (design D7)."""
         return Command(
-            self, actor=self.identify() if actor is None else actor, via=via, reason=reason
+            self,
+            actor=self.identify() if actor is None else actor,
+            via=via,
+            reason=reason,
+            stage=stage,
         )
 
     def vcs_state(self, source: Source | None = None) -> VcsState:
@@ -273,12 +284,35 @@ class EventStore:
 class Command:
     """One command: an actor, a surface, a reason and a change id shared by all it records."""
 
-    def __init__(self, store: EventStore, *, actor: Actor, via: Via, reason: str | None) -> None:
+    def __init__(
+        self,
+        store: EventStore,
+        *,
+        actor: Actor,
+        via: Via,
+        reason: str | None,
+        stage: StageLineage | None = None,
+        change: str | None = None,
+    ) -> None:
         self.store = store
         self.actor = actor
         self.via = via
         self.reason = reason
-        self.change = new_ulid()
+        self.stage = stage
+        self.change = new_ulid() if change is None else change
+
+    def acting_as(self, actor: Actor, *, via: Via) -> "Command":
+        """This command, recording as another actor through another surface: the same change id,
+        cause, reason and stage. A run's own events are the agent's, through the runner, though a
+        person's command records them (perform-status-logs design D8)."""
+        return Command(
+            self.store,
+            actor=actor,
+            via=via,
+            reason=self.reason,
+            stage=self.stage,
+            change=self.change,
+        )
 
     def lineage(self, source: Source | None = None) -> Lineage:
         return Lineage(
@@ -289,6 +323,7 @@ class Command:
             change=self.change,
             cause=CommandCause(self.change),
             vcs=self.store.vcs_state(source),
+            stage=self.stage,
         )
 
     def record(
