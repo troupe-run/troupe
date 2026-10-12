@@ -74,7 +74,7 @@
 
 ## 9. Integration
 
-- [ ] 9.1 Run `uv run scripts/check.py` locally and confirm every gate passes, then push and confirm all CI jobs pass on Linux, macOS and Windows with no skipped runner or platform tests (`pytest -rs`); record per-job durations for comparison with the bootstrap's
+- [x] 9.1 Run `uv run scripts/check.py` locally and confirm every gate passes, then push and confirm all CI jobs pass on Linux, macOS and Windows with no skipped runner or platform tests (`pytest -rs`); record per-job durations for comparison with the bootstrap's (done 2026-10-12, run 38227575292 on 1ce88ff: all six jobs pass; Windows 405 passed. The one skip is the opt-in check of another runner, `TROUPE_CONFORMANCE_RUNNER`, not a missing platform implementation; the scripted runner's conformance tests ran. Durations: ubuntu 55s/58s, macOS 69s/75s, Windows 85s/105s (3.13/3.12). The first run failed on Windows only in two tests whose child wrote text-mode CRLF, fixed in 1ce88ff)
 - [x] 9.2 Re-read the event-format assumptions in design.md against the event-store change (#35) as it stands at the time, and record on #34 any assumption that no longer holds and what was changed for it
 
 ## Workflow follow-up
