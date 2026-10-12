@@ -1,0 +1,76 @@
+# Tasks
+
+## 1. The contract in protocol/ (spec: runner-protocol)
+
+- [ ] 1.1 Add `protocol/schemas/runner/` with one schema per message (`initialize`, `run/start`, `run/event`, `run/transcript`, `run/cancel`, `shutdown`, their results and the JSON-RPC error envelope whose `data` references `error.schema.json`) and `run-event.schema.json` with a `oneOf` over the event types (design D2, D3); verify with a test that every schema is valid draft 2020-12, every `$ref` resolves, and a hand-written valid and invalid example of each message passes and fails as expected
+- [ ] 1.2 Add property tests (hypothesis) that generate run events from the schema's shapes and check that no event type requires an engine-specific field, and that an `init` without `engine` is valid; verify the "A runner without a model" scenario
+- [ ] 1.3 Update `protocol/README.md` with the runner schemas, and write `docs/runners.md` (framing, message sequence, event types, cancel and end-of-input rules, the error envelope, the Claude Code mapping table from design D3) so a runner can be written from it alone; verify with a test that every method and event type named in the schemas appears in `docs/runners.md` and vice versa
+
+## 2. Child processes in the platform seam (spec: platform)
+
+- [ ] 2.1 Implement `troupe.platform.processes`: start a child with `argv`, `cwd` and an explicit environment in its own process group (POSIX `start_new_session`; Windows `CREATE_NEW_PROCESS_GROUP` and a job object with kill-on-close through `ctypes`), with the platform minimum environment (design D6); verify "Caller's variables only" and "Platform minimum on Windows" with tests that start a Python child that prints its environment
+- [ ] 2.2 Implement `kill_tree()` (POSIX `killpg` SIGKILL; Windows `TerminateJobObject`); verify "Grandchild is killed" with a child that starts a grandchild, writes both pids, and a check that neither is running afterwards
+- [ ] 2.3 Implement line reading with a caller-set maximum; verify "Line of several megabytes" (5 MiB line) and "Line over the maximum" (error names the limit)
+- [ ] 2.4 Add `ctypes` to the import contract's forbidden modules outside `platform`; verify `lint-imports` passes, then fails on a deliberate `import ctypes` in `troupe.core` (record the output for the PR, then remove it)
+- [ ] 2.5 Add child processes to `docs/platform.md` (the table of POSIX and Windows mechanisms, the `setsid` limitation); verify the existing platform docs test still passes and covers the new row
+
+## 3. Artifact store (spec: artifact-store)
+
+- [ ] 3.1 Add `commit_file(temp, target)` to `troupe.platform.files` (move a finished temporary file into place, reusing the Windows in-use retry and POSIX directory fsync; if the target exists, delete the temporary file); verify with tests for a new target, an existing target, and a target held open on Windows
+- [ ] 3.2 Implement the `ArtifactStore` port, `LocalArtifactStore(root)` and an in-memory store in `troupe.core.artifacts` (design D10), with `artifact.missing`, `artifact.corrupt` and `artifact.write-failed` in `CODES`; verify "Reference is the content hash", "Storing the same bytes twice", "Large streamed artifact" (64 MiB in 4 KiB pieces), "Unfinished artifact is not readable" and "Write abandoned part-way", plus a hypothesis test that any bytes round-trip with the reference equal to their SHA-256
+- [ ] 3.3 Verify "Stored file was altered" and "Missing artifact": each read fails with an error naming the reference and path that validates against the error schema
+- [ ] 3.4 Implement the self-ignoring `.gitignore`; verify "Store inside a git repository" with a test that stores artifacts in a store inside a fresh `git init` directory and checks `git status --porcelain` is empty
+- [ ] 3.5 Document the store (layout, references, the `.gitignore`, leftover temporary files) in `docs/runners.md` under Transcripts; verify the docs test from 1.3 still passes
+
+## 4. Core types, limits and outcomes (spec: actor-runners)
+
+- [ ] 4.1 Add the runner limits to `troupe.core.defaults` (design D8) and a `RunLimits` value that defaults every field from there; verify "Defaults come from one place" and "Caller overrides a limit" at the value level, and extend `docs/platform.md`'s defaults table (or `docs/runners.md`) with the new settings, checked by a test against `troupe.core.defaults`
+- [ ] 4.2 Add the error codes from design D15 to `CODES`; verify the existing error-schema test covers each new code
+- [ ] 4.3 Implement the protocol types in `troupe.core.runners.protocol` as frozen dataclasses with `to_data()` and `from_data()` (design D11); verify with tests that every type's `to_data()` validates against its schema, and a hypothesis round-trip test (`from_data(to_data(x)) == x`)
+- [ ] 4.4 Implement the outcome derivation as a pure function (design D4); verify each row of the D4 table with a named test, "Error result with exit code 0", "Success result with a non-zero exit code", "Runner exits mid-run", "Cancelled runner sends no result", and a hypothesis test that every combination of facts yields exactly one outcome and that `succeeded` is returned only with an `ok` result and a passing effect check
+- [ ] 4.5 Implement the effect-check port with `NoEffectExpected` and `ExpectedFiles` (design D10); verify "Result ok but declared output missing" and "Result ok and declared output written" at the derivation level, plus `ExpectedFiles` failing for an unchanged existing file
+
+## 5. Scripted runner plugin (spec: scripted-runner)
+
+- [ ] 5.1 Create `plugins/runner-scripted/` (own `pyproject.toml`, `src/troupe_runner_scripted/`, `tests/`, README), add `plugins/*` to the workspace members and the ruff, mypy and pytest paths; verify `uv sync` succeeds and `uv run python -m troupe_runner_scripted` starts and exits on end of input
+- [ ] 5.2 Add the import-linter contract forbidding `troupe` in `troupe_runner_scripted` and update `plugins/README.md` to say it is enforced; verify "Plugin imports troupe" by introducing a deliberate import, confirming `lint-imports` fails, recording the output for the PR, and removing it
+- [ ] 5.3 Implement the stdin reader thread, the JSON-RPC handling (`initialize` with version refusal, one `run/start`, second `run/start` refused, `run/cancel`, `shutdown`, exit on end of input) and the plugin's own message types; verify with tests that drive the module over pipes and validate every message it sends against the schema files in `protocol/`
+- [ ] 5.4 Implement the script format and steps (design D12: `event`, `transcript`, `stderr`, `wait`, `writeFile`, `hang`, `exit`, `rawStdout`, `replay`), `seq` and `runId` filling with deliberate overrides, and `onCancel` (`honour`, `honour-with-result`, `ignore`); verify "Script plays in order", "Script from a file", "Invalid script", "Deliberate sequence gap", "Cancel ignored", "Cancel honoured without a result", "Crash" and "Input closes during a hang"
+- [ ] 5.5 Implement recording replay (JSON Lines of `transcript` and `event` entries, optional recorded delays); verify "Replay of a recording" with a recording that interleaves both kinds
+- [ ] 5.6 Implement `writeFile`'s refusal of paths outside the workspace (including `..` and absolute paths, on Windows drive and UNC forms); verify with tests per form
+
+## 6. The run host (spec: actor-runners)
+
+- [ ] 6.1 Implement `run_actor` in `troupe.core.runners.host` (design D7): start through `platform`, handshake within the start timeout, `run/start`, the reader, stderr and watchdog tasks, `on_event` awaited per event in `seq` order, and the outcome from 4.4; verify "Each outcome is reachable" by driving the scripted runner to all six outcomes, and "Outcome errors match the schema"
+- [ ] 6.2 Implement protocol-violation detection (invalid JSON, not JSON-RPC, `seq` gap or repeat, event before `init`, event after `result`, message over the maximum); verify "Garbage on standard output", "Gap in the sequence", "Another event before init", "No events after the result", "Non-protocol output on standard output" and a message over a lowered maximum, each ending `crashed` with an error naming the violation
+- [ ] 6.3 Implement start failures; verify "Command not found", "Runner never answers the handshake" (the scripted runner answers `initialize` before it has a script, so this uses a tiny test-only process that reads and never answers), "Compatible runner" and "Incompatible runner"
+- [ ] 6.4 Implement cancel (D5): `run/cancel`, grace, `kill_tree`; verify "Runner honours cancel" (not killed), "Runner ignores cancel" (killed, the runner's own child process is gone too), and that shutdown after a `result` uses the same grace then kill
+- [ ] 6.5 Implement the run timeout, silence announcements, retry announcements and fail-fast on authentication retries; verify "Run exceeds its timeout", "Runner goes quiet", "Engine is retrying", "Bad credentials" (and that with the setting off the run continues), and "Caller overrides a limit" end to end
+- [ ] 6.6 Implement transcript and stderr streaming into the store, the stderr head-and-tail limit, the transcript limit, and oversized events (D8, D9); verify "Native records are kept verbatim" (including a `base64` record), "Cancelled run keeps its transcript", "Transcript too large", "Huge tool result summary", "A message larger than 64 KiB", and "Run host uses any store" with the in-memory store
+- [ ] 6.7 Verify the environment and live delivery: "Host secret is not inherited", "Named variable is passed" (through the scripted runner echoing its environment into an event), and "Caller sees events live" (the caller receives the first event while the script is still in a `hang` before the second)
+- [ ] 6.8 Verify "Every message the host sends validates" by validating every message the host writes during the 6.x tests against the schema (a recording pipe in the test harness), and the exit code is recorded in every outcome
+- [ ] 6.9 Document the host (outcomes and how each is derived, limits and their settings, cancel, announcements) in `docs/runners.md`; verify the docs test from 1.3 also checks that every outcome and error code from design D4 and D15 is documented
+
+## 7. Conformance suite (spec: actor-runners)
+
+- [ ] 7.1 Implement `troupe.core.runners.conformance` (design D13) and a test module that runs it against the scripted runner, and against `TROUPE_CONFORMANCE_RUNNER` with its options from `TROUPE_CONFORMANCE_OPTIONS` when set; verify "Scripted runner conforms", and that each check fails against a deliberately broken scripted script (no `init`, a `seq` gap, no exit on end of input)
+- [ ] 7.2 Document how to run the conformance suite against another runner in `docs/runners.md`; verify by running the documented command against the scripted runner as written
+
+## 8. Fixtures from real Claude Code output (spec: scripted-runner)
+
+- [ ] 8.1 Write `plugins/runner-scripted/tools/capture_claude.py` (design D14): runs `claude -p --output-format stream-json --verbose` with an isolated `CLAUDE_CONFIG_DIR`, a temporary workspace and the given credential mode, records the native lines, applies scrubbing and writes `provenance.json`; verify by running it in credential-free mode and inspecting the output
+- [ ] 8.2 Capture the credential-free fixtures `is-error-success-subtype`, `auth-retries` and `terminated-no-result`, and write each fixture's events and `expected.json` by hand; verify "Fixtures replay through the contract" for these three
+- [ ] 8.3 Add the secret scan over every fixture (credential patterns, home-directory paths); verify "Secret pattern in a fixture" with a planted test fixture in a temporary directory, and that all committed fixtures pass
+- [ ] 8.4 Verify "Provenance is recorded" with a test that every fixture directory has a `provenance.json` with the version, date, command and scrubbing fields
+- [ ] 8.5 Owner: run `capture_claude.py` in the owner's own terminal with a real credential, pinned `--model` and `--max-budget-usd 0.10`, to capture `success-with-tools`; then write its events and `expected.json` by hand, and verify it replays through the contract, passes the secret scan, and derives `succeeded`
+
+## 9. Integration
+
+- [ ] 9.1 Run `uv run scripts/check.py` locally and confirm every gate passes, then push and confirm all CI jobs pass on Linux, macOS and Windows with no skipped runner or platform tests (`pytest -rs`); record per-job durations for comparison with the bootstrap's
+- [ ] 9.2 Re-read the event-format assumptions in design.md against the event-store change (#35) as it stands at the time, and record on #34 any assumption that no longer holds and what was changed for it
+
+## Workflow follow-up
+
+- Open the PR with `Closes #34`, including the recorded import-contract violation outputs (2.4, 5.2).
+- Run `/opsx:archive` on the branch before merging.
+- After the merge, comment on #34 with the PR and the archived change, and note on #33 that part A is done and its contract is ready for part C.
