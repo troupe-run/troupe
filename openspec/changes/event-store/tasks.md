@@ -139,7 +139,7 @@ Waiting for main stays the default. Either way, rebase only, never merge.
 - [x] 9.4 Implement `record_reaction(trigger, …)` (design D8): it inherits the trigger's `change` and sets an event cause.
   Verify with tests for the `lineage` spec's cause scenarios: the E1 → E2, E3, E4 example, a reaction to a reaction
   keeping the original `change`, an unknown cause refused with nothing written, and a mismatched command cause refused
-- [ ] 9.5 Write `docs/event-store.md`: layout, record format, ordering, forks, visibility, notices, identity chain and its absent-vs-malformed rule, correlation and cause,
+- [x] 9.5 Write `docs/event-store.md`: layout, record format, ordering, forks, visibility, notices, identity chain and its absent-vs-malformed rule, correlation and cause,
   defaults table, and the measured cold-load time for 10,000 segments (a benchmark script under `scripts/`). Link
   it from the README. Extend the docs test so the defaults table matches `troupe.core.defaults` exactly. Verify the
   test passes
