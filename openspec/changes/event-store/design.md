@@ -490,11 +490,10 @@ change assumes the following:
    re-locks `uv.lock`.
 
 These were compared with the runner contract's design on 2026-10-12, and the owner's decisions are folded in above.
-Its points 3, 5 and 9 were revised to match (`via` is `"runner"`; `seq` stays in the payload; run ids are UUIDs).
-One wording difference remains, recorded for the PR (task 10.1): its point 4 says the store refuses a run event
-recorded twice as a duplicate version. That holds only when C retries with a stale version; a retry after reloading
-lands at the next version, so it is C's run aggregate, refusing a `seq` that isn't the next one, that makes a
-second recording an error (point 5 above).
+Its points 3, 4, 5 and 9 were revised to match (`via` is `"runner"`; a duplicate run event is refused by C's run
+aggregate, which refuses a `seq` that isn't the next one, while the store alone refuses only a stale-version write;
+`seq` stays in the payload; run ids are UUIDs). The two designs agree (runner-contract `b99a423`, archived in
+`faefad2`).
 
 ## Risks / Trade-offs
 
