@@ -56,6 +56,8 @@ CODES: dict[str, ExitCode] = {
     "command.not-found": ExitCode.FAILURE,
     "command.output-too-large": ExitCode.FAILURE,
     "environment.policy-invalid": ExitCode.FAILURE,
+    # perform, status and logs (perform-status-logs design D15). docs/runs.md lists them.
+    "policy.invalid-value": ExitCode.FAILURE,
 }
 
 

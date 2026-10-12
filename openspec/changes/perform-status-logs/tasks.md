@@ -29,12 +29,12 @@
 
 ## 3. Policy
 
-- [ ] 3.1 Add `troupe.core.policy` with `allow_unenforced_local_stage` (default `ALLOW_UNENFORCED_LOCAL_STAGE = False`
+- [x] 3.1 Add `troupe.core.policy` with `allow_unenforced_local_stage` (default `ALLOW_UNENFORCED_LOCAL_STAGE = False`
   in `troupe.core.defaults`), its environment source `TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE`, and values that
   carry their source (design D6). Add `policy.invalid-value`. Verify tests for: unset and empty → false from
   `default`; `true` and `false` → that value from `env`; and `yes`, `TRUE`, ` true` and `1` each → `policy.invalid-value`
   naming the variable, the value and the accepted values
-- [ ] 3.2 Document the policy seam and its variable in a new `docs/runs.md` section, marked interim (replaced by config
+- [x] 3.2 Document the policy seam and its variable in a new `docs/runs.md` section, marked interim (replaced by config
   and #8). Verify the doc's variable name and default are checked against the code by a test, like
   `test_runners_doc.py`
 
