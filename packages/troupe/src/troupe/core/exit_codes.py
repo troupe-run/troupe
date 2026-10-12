@@ -14,3 +14,6 @@ class ExitCode(IntEnum):
     """The command could not complete. The error says why and what to do."""
     USAGE = 2
     """The command line was not understood: an unknown command or flag, or a malformed value."""
+    CANCELLED = 130
+    """A person cancelled the command with Ctrl-C (128 + SIGINT, on every platform), and what it
+    was doing stopped cleanly. For perform, the run's end is recorded as cancelled."""

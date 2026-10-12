@@ -136,6 +136,8 @@ export TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE=true
 | `run.cancelling` | (notice) Ctrl-C was pressed: the run is stopping within its grace period |
 | `run.interrupted` | (notice) A run has no recorded end, and the `troupe perform` that ran it has stopped |
 | `run.unfinished-elsewhere` | (notice) A run started in another clone has no recorded end here |
+| `perform.options-invalid` | The file given to `--runner-options` can't be read, isn't strict JSON, or isn't a JSON object |
+| `perform.path-outside-theatre` | An `--expect` path isn't a file inside the theatre. Exits 2 |
 | `client.invalid-request` | A command's or query's request doesn't match its schema; it names the field. Exits 2 |
 | `client.unknown-method` | A surface called a command or query troupe doesn't offer. Exits 2 |
 

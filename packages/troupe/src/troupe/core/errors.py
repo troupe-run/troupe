@@ -69,6 +69,8 @@ CODES: dict[str, ExitCode] = {
     # A request that isn't understood is a usage error from any surface (design D15).
     "client.invalid-request": ExitCode.USAGE,
     "client.unknown-method": ExitCode.USAGE,
+    "perform.options-invalid": ExitCode.FAILURE,
+    "perform.path-outside-theatre": ExitCode.USAGE,
 }
 
 

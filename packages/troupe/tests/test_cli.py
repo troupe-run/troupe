@@ -28,13 +28,13 @@ def _configure_echo(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--upper", action="store_true")
 
 
-def _run_echo(arguments: argparse.Namespace, stdout: TextIO) -> ExitCode:
+def _run_echo(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
     value = str(arguments.value)
     print(value.upper() if arguments.upper else value, file=stdout)
     return ExitCode.OK
 
 
-def _run_failing(arguments: argparse.Namespace, stdout: TextIO) -> ExitCode:
+def _run_failing(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
     raise TroupeError(
         "lock.timeout",
         problem="timed out waiting for the theatre lock",
@@ -43,7 +43,7 @@ def _run_failing(arguments: argparse.Namespace, stdout: TextIO) -> ExitCode:
     )
 
 
-def _run_crashing(arguments: argparse.Namespace, stdout: TextIO) -> ExitCode:
+def _run_crashing(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
     raise RuntimeError("boom")
 
 
@@ -160,7 +160,7 @@ def test_usage_error_data_matches_the_protocol_schema(argv: tuple[str, ...]) -> 
 
 def test_internal_and_command_error_data_matches_the_protocol_schema() -> None:
     with pytest.raises(TroupeError) as caught:
-        _run_failing(argparse.Namespace(), io.StringIO())
+        _run_failing(argparse.Namespace(), io.StringIO(), io.StringIO())
     jsonschema.validate(caught.value.to_data(), SCHEMA)
     internal = TroupeError("internal.unexpected", problem="p", fix="f")
     jsonschema.validate(internal.to_data(), SCHEMA)
