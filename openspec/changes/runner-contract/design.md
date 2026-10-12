@@ -466,9 +466,11 @@ so #35 can check them; if one is wrong, what changes is listed with it.
    from `init`, go in C's run-started payload. Lineage time is when troupe recorded the event (owner, 2026-10-12),
    not when the host received it. Any time inside a run event is data, not lineage.
 4. **Content-hash IDs that leave out wall time and actor** don't collide across runs, because every run event carries
-   its `runId` and `seq`. Recording the same run event twice is an error, not a silent no-op: event-store refuses a
-   duplicate stream and version (`IntegrityError`, reported as `events.version-conflict`). The host hands each event
-   to `on_event` exactly once, so a duplicate means a bug or a replay, and C must not retry blindly.
+   its `runId` and `seq`. Recording the same run event twice is an error, not a silent no-op, and it is C's run
+   aggregate that makes it one: it refuses any `seq` that isn't the next it expects. The store alone wouldn't: it
+   refuses only a write at a stale version (`IntegrityError`, reported as `events.version-conflict`), so a retry
+   after reloading would land at the next version. The host hands each event to `on_event` exactly once, so a
+   duplicate means a bug or a replay, and C must not retry blindly (#36 carries the aggregate rule).
 5. **`seq` is the order within the run, kept in the payload.** It is not mapped to `originator_version`: the
    library's versions start at 1, and C adds run-started and run-ended events to the same stream (owner,
    2026-10-12). Nothing here relies on notification ids.
