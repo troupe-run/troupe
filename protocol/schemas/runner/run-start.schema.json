@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/runner/run-start.schema.json",
+  "title": "run/start",
+  "description": "Starts the one run this runner process serves. It carries everything the runner may use.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["jsonrpc", "id", "method", "params"],
+  "properties": {
+    "jsonrpc": {"$ref": "jsonrpc.schema.json#/$defs/jsonrpc"},
+    "id": {"$ref": "jsonrpc.schema.json#/$defs/id"},
+    "method": {"const": "run/start"},
+    "params": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId", "instructions", "workspace", "options", "limits"],
+      "properties": {
+        "runId": {"$ref": "jsonrpc.schema.json#/$defs/runId"},
+        "instructions": {
+          "description": "What the actor is asked to do.",
+          "type": "string"
+        },
+        "workspace": {
+          "description": "The absolute path of the directory the actor works in.",
+          "type": "string",
+          "minLength": 1
+        },
+        "options": {
+          "description": "Runner-specific options. troupe passes them through unchanged.",
+          "type": "object"
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["eventMaxBytes"],
+          "properties": {
+            "eventMaxBytes": {
+              "description": "The largest serialised run event troupe keeps inline. Summarise below it.",
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "result": {
+      "title": "run/start result",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId"],
+      "properties": {"runId": {"$ref": "jsonrpc.schema.json#/$defs/runId"}}
+    }
+  }
+}

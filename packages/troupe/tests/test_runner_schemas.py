@@ -1,0 +1,273 @@
+"""Tests for the runner contract's schemas (spec: runner-protocol)."""
+
+from collections.abc import Iterator
+from pathlib import Path
+from typing import Any
+
+import jsonschema
+import pytest
+from hypothesis import given, settings
+from hypothesis import strategies as st
+
+from runner_schemas import RUNNER_SCHEMAS, is_valid, load, registry, schema_files, validate
+
+RUN_ID = "run-1"
+HASH = "sha256:" + "ab" * 32
+
+
+def _refs(node: object) -> Iterator[str]:
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key == "$ref" and isinstance(value, str):
+                yield value
+            else:
+                yield from _refs(value)
+    elif isinstance(node, list):
+        for item in node:
+            yield from _refs(item)
+
+
+# Requirement: The contract is JSON Schema in the protocol directory
+
+
+@pytest.mark.parametrize("path", schema_files(), ids=lambda path: path.name)
+def test_each_schema_is_a_valid_draft_2020_12_schema(path: Path) -> None:
+    jsonschema.Draft202012Validator.check_schema(load(path))
+
+
+@pytest.mark.parametrize(
+    "path", sorted(RUNNER_SCHEMAS.glob("*.schema.json")), ids=lambda path: path.name
+)
+def test_every_ref_in_each_runner_schema_resolves(path: Path) -> None:
+    schema = load(path)
+    resolver = registry().resolver(base_uri=schema["$id"])
+    refs = list(_refs(schema))
+    for ref in refs:
+        resolver.lookup(ref)  # raises if the reference doesn't resolve
+
+
+@pytest.mark.parametrize(
+    "path", sorted(RUNNER_SCHEMAS.glob("*.schema.json")), ids=lambda path: path.name
+)
+def test_each_runner_schema_id_matches_its_file_name(path: Path) -> None:
+    assert load(path)["$id"] == f"https://troupe.run/protocol/runner/{path.name}"
+
+
+def _request(method: str, params: dict[str, Any], id_: int = 1) -> dict[str, Any]:
+    return {"jsonrpc": "2.0", "id": id_, "method": method, "params": params}
+
+
+def _notification(method: str, params: dict[str, Any]) -> dict[str, Any]:
+    return {"jsonrpc": "2.0", "method": method, "params": params}
+
+
+START = {
+    "runId": RUN_ID,
+    "instructions": "write hello.txt",
+    "workspace": "/workspace",
+    "options": {"anything": ["goes", 1]},
+    "limits": {"eventMaxBytes": 65536},
+}
+
+ERROR_DATA = {"code": "runner.unsupported-version", "problem": "p", "fix": "f"}
+
+# (schema, a valid example, an invalid example)
+EXAMPLES: list[tuple[str, object, object]] = [
+    (
+        "initialize.schema.json",
+        _request(
+            "initialize", {"protocolVersions": [1], "host": {"name": "troupe", "version": "1"}}
+        ),
+        _request(
+            "initialize", {"protocolVersions": [], "host": {"name": "troupe", "version": "1"}}
+        ),
+    ),
+    (
+        "initialize.schema.json#/$defs/result",
+        {
+            "protocolVersion": 1,
+            "runner": {"name": "scripted", "version": "0.1"},
+            "capabilities": {},
+        },
+        {"protocolVersion": 1, "runner": {"name": "scripted"}, "capabilities": {}},
+    ),
+    (
+        "run-start.schema.json",
+        _request("run/start", START),
+        _request("run/start", {**START, "runId": "has spaces"}),
+    ),
+    ("run-start.schema.json#/$defs/result", {"runId": RUN_ID}, {}),
+    (
+        "run-cancel.schema.json",
+        _request("run/cancel", {"runId": RUN_ID}),
+        _request("run/cancel", {}),
+    ),
+    ("run-cancel.schema.json#/$defs/result", {}, {"extra": True}),
+    ("shutdown.schema.json", _request("shutdown", {}), _request("shutdown", {"now": True})),
+    ("shutdown.schema.json#/$defs/result", {}, {"extra": True}),
+    (
+        "run-transcript.schema.json",
+        _notification("run/transcript", {"runId": RUN_ID, "record": '{"type":"x"}'}),
+        _notification("run/transcript", {"runId": RUN_ID, "record": "x", "encoding": "latin-1"}),
+    ),
+    (
+        "run-event.schema.json",
+        _notification(
+            "run/event",
+            {
+                "runId": RUN_ID,
+                "seq": 0,
+                "type": "init",
+                "runner": {"name": "s", "version": "1"},
+                "tools": [],
+            },
+        ),
+        _notification(
+            "run/event",
+            {
+                "runId": RUN_ID,
+                "seq": 1,
+                "type": "init",
+                "runner": {"name": "s", "version": "1"},
+                "tools": [],
+            },
+        ),
+    ),
+    (
+        "error-response.schema.json",
+        {"jsonrpc": "2.0", "id": 1, "error": {"code": -32000, "message": "m", "data": ERROR_DATA}},
+        {"jsonrpc": "2.0", "id": 1, "error": {"code": -32000, "message": "m"}},
+    ),
+    (
+        "jsonrpc.schema.json#/$defs/successResponse",
+        {"jsonrpc": "2.0", "id": 1, "result": {}},
+        {"jsonrpc": "1.0", "id": 1, "result": {}},
+    ),
+]
+
+
+@pytest.mark.parametrize(("ref", "valid", "invalid"), EXAMPLES, ids=[e[0] for e in EXAMPLES])
+def test_each_message_schema_accepts_a_valid_example_and_refuses_an_invalid_one(
+    ref: str, valid: object, invalid: object
+) -> None:
+    validate(valid, ref)
+    assert not is_valid(invalid, ref)
+
+
+EVENTS: dict[str, dict[str, Any]] = {
+    "init": {
+        "runner": {"name": "s", "version": "1"},
+        "tools": ["Write"],
+        "engine": {"name": "claude-code", "version": "2.1.281", "model": "m"},
+        "native": {"type": "system", "subtype": "init"},
+    },
+    "turn": {"role": "assistant", "text": "hello"},
+    "tool_call": {"callId": "c1", "tool": "Write", "inputSummary": "out/hello.txt"},
+    "tool_result": {"callId": "c1", "isError": False, "outputSummary": "ok", "outputBytes": 2},
+    "retry": {"attempt": 1, "maxAttempts": 10, "delayMs": 500, "reason": "authentication"},
+    "log": {"level": "info", "message": "starting"},
+    "result": {
+        "status": "error",
+        "message": "401",
+        "turns": 1,
+        "durationMs": 10,
+        "usage": {"inputTokens": 3},
+        "costUsd": 0.0,
+    },
+}
+
+
+@pytest.mark.parametrize("type_", sorted(EVENTS))
+def test_each_run_event_type_is_accepted_with_its_fields(type_: str) -> None:
+    seq = 0 if type_ == "init" else 3
+    event = {"runId": RUN_ID, "seq": seq, "type": type_, **EVENTS[type_]}
+    validate(event, "run-event.schema.json#/$defs/event")
+    validate(_notification("run/event", event), "message.schema.json#/$defs/fromRunner")
+
+
+def test_an_event_of_an_unknown_type_is_refused() -> None:
+    event = {"runId": RUN_ID, "seq": 2, "type": "thought", "text": "hmm"}
+    assert not is_valid(event, "run-event.schema.json#/$defs/event")
+
+
+def test_the_oversized_event_is_a_host_event_but_never_a_runner_event() -> None:
+    event = {
+        "runId": RUN_ID,
+        "seq": 4,
+        "type": "oversized",
+        "originalType": "tool_result",
+        "bytes": 70000,
+        "ref": HASH,
+    }
+    validate(event, "run-event.schema.json#/$defs/hostEvent")
+    assert not is_valid(event, "run-event.schema.json#/$defs/event")
+
+
+# Requirement: The contract is not specific to one engine
+
+
+def _event_defs() -> dict[str, dict[str, Any]]:
+    defs: dict[str, dict[str, Any]] = load(RUNNER_SCHEMAS / "run-event.schema.json")["$defs"]
+    return {name: defs[name] for name in EVENTS}
+
+
+def test_no_event_type_requires_engine_specific_fields() -> None:
+    for name, schema in _event_defs().items():
+        assert {"native", "engine"}.isdisjoint(schema["required"]), name
+
+
+def _strategy(schema: dict[str, Any]) -> st.SearchStrategy[Any]:
+    """Values for the small subset of JSON Schema the required event fields use."""
+    if "$ref" in schema:
+        ref = schema["$ref"]
+        if ref.endswith("/runId"):
+            return st.from_regex(r"\A[A-Za-z0-9._-]{1,20}\Z")
+        if ref.endswith("/named"):
+            return st.fixed_dictionaries(
+                {"name": st.text(min_size=1), "version": st.text(min_size=1)}
+            )
+        if ref.endswith("/seq"):
+            return st.integers(min_value=1)
+        raise AssertionError(f"no strategy for {ref}")
+    if "const" in schema:
+        return st.just(schema["const"])
+    if "enum" in schema:
+        return st.sampled_from(schema["enum"])
+    kind = schema["type"]
+    if kind == "string":
+        return st.text(min_size=schema.get("minLength", 0))
+    if kind == "integer":
+        return st.integers(min_value=schema.get("minimum", 0))
+    if kind == "boolean":
+        return st.booleans()
+    if kind == "array":
+        return st.lists(_strategy(schema["items"]), max_size=3)
+    raise AssertionError(f"no strategy for {schema}")
+
+
+def _minimal_events() -> st.SearchStrategy[dict[str, Any]]:
+    """Events with only their required fields, filled with generic, engine-free values."""
+    choices = [
+        st.fixed_dictionaries(
+            {field: _strategy(schema["properties"][field]) for field in schema["required"]}
+        )
+        for schema in _event_defs().values()
+    ]
+    return st.one_of(choices)
+
+
+@settings(max_examples=200, deadline=None)
+@given(event=_minimal_events())
+def test_every_event_type_is_valid_with_only_generic_required_fields(event: dict[str, Any]) -> None:
+    validate(event, "run-event.schema.json#/$defs/event")
+
+
+def test_an_init_event_from_a_runner_without_a_model_or_engine_is_valid() -> None:
+    event = {
+        "runId": RUN_ID,
+        "seq": 0,
+        "type": "init",
+        "runner": {"name": "scripted", "version": "0.1.0"},
+        "tools": [],
+    }
+    validate(event, "run-event.schema.json#/$defs/event")

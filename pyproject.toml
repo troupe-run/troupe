@@ -46,7 +46,7 @@ strict = true
 python_version = "3.12"
 files = ["packages/troupe/src", "packages/troupe/tests", "scripts"]
 explicit_package_bases = true
-mypy_path = ["packages/troupe/src", "scripts", "scripts/tests"]
+mypy_path = ["packages/troupe/src", "packages/troupe/tests", "scripts", "scripts/tests"]
 
 [tool.pytest.ini_options]
 testpaths = ["packages/troupe/tests", "scripts/tests"]

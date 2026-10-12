@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/runner/error-response.schema.json",
+  "title": "Error response",
+  "description": "A request that failed. The data is troupe's structured error, so every surface can render it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["jsonrpc", "id", "error"],
+  "properties": {
+    "jsonrpc": {"$ref": "jsonrpc.schema.json#/$defs/jsonrpc"},
+    "id": {
+      "description": "The failed request's id, or null when the request could not be read.",
+      "anyOf": [{"$ref": "jsonrpc.schema.json#/$defs/id"}, {"type": "null"}]
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "data"],
+      "properties": {
+        "code": {
+          "description": "JSON-RPC error code: the standard values (-32700 to -32600), or -32000 when the runner refuses a valid request.",
+          "type": "integer"
+        },
+        "message": {"type": "string", "minLength": 1},
+        "data": {"$ref": "../error.schema.json"}
+      }
+    }
+  }
+}
