@@ -122,9 +122,10 @@
 
 - [ ] 9.1 Add `troupe.platform.interrupts`: a context manager that calls back on `SIGINT`, and `SIGBREAK` on Windows,
   restoring the previous handlers on exit (design D10). Add `signal` use here to the platform contract's allowance.
-  Verify a test that sends the interrupt to a real child Python process on each OS in CI (`CTRL_C_EVENT` to a new
-  console process group on Windows) and observes the callback, and that the previous handler is restored
-- [ ] 9.2 Document interrupts in `docs/platform.md`. Verify `test_platform_docs.py` passes
+  Verify a test that sends the interrupt to a real child Python process on each OS in CI (`CTRL_BREAK_EVENT` to a new
+  console process group on Windows, which disables Ctrl-C for it) and observes the callback, and that the previous
+  handler is restored
+- [x] 9.2 Document interrupts in `docs/platform.md`. Verify `test_platform_docs.py` passes
 
 ## 10. The CLI
 
