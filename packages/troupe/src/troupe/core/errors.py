@@ -60,6 +60,8 @@ CODES: dict[str, ExitCode] = {
     "policy.invalid-value": ExitCode.FAILURE,
     "stage.unknown": ExitCode.FAILURE,
     "stage.effects-unenforced": ExitCode.FAILURE,
+    "theatre.not-found": ExitCode.FAILURE,
+    "runner.unknown": ExitCode.FAILURE,
 }
 
 

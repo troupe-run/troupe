@@ -42,12 +42,16 @@ def test_the_run_events_table_lists_exactly_the_event_types_in_the_schema() -> N
 
 def test_every_outcome_and_runner_error_code_is_documented() -> None:
     documented = set(re.findall(r"`([a-z.-]+)`", _section("Outcomes")))
-    runner_codes = {code for code in CODES if code.split(".")[0] in {"run", "runner"}}
+    # Codes for perform, status and logs are documented in docs/runs.md (test_runs_doc.py).
+    runs_doc = (DOC.parent / "runs.md").read_text(encoding="utf-8")
+    elsewhere = set(re.findall(r"^\| `([a-z]+\.[a-z.-]+)` \|", runs_doc, re.M))
+    runner_codes = {code for code in CODES if code.split(".")[0] in {"run", "runner"}} - elsewhere
     assert {str(outcome) for outcome in Outcome} <= documented
     assert runner_codes <= documented
 
 
 def test_every_runner_notice_code_is_documented() -> None:
+    runs_doc = (DOC.parent / "runs.md").read_text(encoding="utf-8")
     runner_notices = {code for code in NOTICE_CODES if code.split(".")[0] in {"run", "runner"}}
     assert runner_notices
-    assert all(f"`{code}`" in TEXT for code in runner_notices)
+    assert all(f"`{code}`" in TEXT or f"| `{code}` |" in runs_doc for code in runner_notices)

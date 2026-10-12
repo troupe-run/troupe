@@ -52,11 +52,11 @@
 
 ## 5. Theatre and interim names
 
-- [ ] 5.1 Add `troupe.core.theatre.find_theatre(start)`: the nearest ancestor containing `.troupe/`, else
+- [x] 5.1 Add `troupe.core.theatre.find_theatre(start)`: the nearest ancestor containing `.troupe/`, else
   `theatre.not-found` naming the start directory (design D3). Verify tests for the start directory itself, a
   subdirectory, a directory with no theatre above it (nothing created), and a `.troupe` that is a file rather than a
   directory (not a theatre)
-- [ ] 5.2 Add `troupe.core.interim` with `RUNNERS` (`scripted` → `[sys.executable, "-m", "troupe_runner_scripted"]`)
+- [x] 5.2 Add `troupe.core.interim` with `RUNNERS` (`scripted` → `[sys.executable, "-m", "troupe_runner_scripted"]`)
   and `runner.unknown` (design D4). Verify a test that `scripted` resolves to a command that passes the runner
   conformance suite, and that an unknown name fails naming the known ones
 
