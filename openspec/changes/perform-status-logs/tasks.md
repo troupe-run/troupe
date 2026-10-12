@@ -109,8 +109,7 @@
   `troupe.core.defaults`) or the request's `limit`, and one run's summary; run id resolution by full id or a unique
   prefix of at least 8 hex digits, with `run.not-found` and `run.ambiguous-id` (design D13). Verify tests for each,
   including two runs sharing an 8-digit prefix, and that the store's notices come back with the result
-- [x] 8.3 Implement the `logs` query, with `follow` streaming `event` updates, reading the store every
-  `SUBSCRIBE_POLL_SECONDS` (its subscription's interval) until
+- [x] 8.3 Implement the `logs` query, with `follow` streaming `event` updates until
   the run's end, or until the run stops being `running` (design D13). Verify tests that following from a second
   process sees each event as it is recorded and stops on the end, and that following an `interrupted` run returns at
   once with its notice
@@ -118,13 +117,19 @@
   `docs/runners.md` and `docs/event-store.md`. Verify the doc test (states, notice and error codes, default limit)
   passes
 
+- [x] 8.5 Make `--follow` show events as they're recorded, like `tail -f` (owner, 2026-10-12): look every
+  `LOGS_FOLLOW_POLL_SECONDS` (0.1 s, in `troupe.core.defaults` and `docs/runs.md`), not the subscription's 1 s
+  (design D13). Verify a test that a follower in another process receives each event well within a second of its
+  recorded time (median under 0.4 s), and fails with the subscription's 1 s interval
+
 ## 9. Platform: interrupts
 
 - [ ] 9.1 Add `troupe.platform.interrupts`: a context manager that calls back on `SIGINT`, and `SIGBREAK` on Windows,
   restoring the previous handlers on exit (design D10). Add `signal` use here to the platform contract's allowance.
   Verify a test that sends the interrupt to a real child Python process on each OS in CI (`CTRL_BREAK_EVENT` to a new
   console process group on Windows, which disables Ctrl-C for it) and observes the callback, and that the previous
-  handler is restored
+  handler is restored. On Windows also verify a real Ctrl-C: a child with a console of its own sends `CTRL_C_EVENT`
+  to it, and the callback runs
 - [x] 9.2 Document interrupts in `docs/platform.md`. Verify `test_platform_docs.py` passes
 
 ## 10. The CLI

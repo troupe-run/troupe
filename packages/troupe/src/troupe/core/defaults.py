@@ -88,3 +88,7 @@ ARTIFACT_STORE = "local"
 
 STATUS_RUNS_LIMIT = 20
 """How many runs status lists, newest first, when the request doesn't say."""
+
+LOGS_FOLLOW_POLL_SECONDS = 0.1
+"""How often logs --follow looks for new events, so they appear as they're recorded, as lines do
+in tail -f. Each look is cheap: the store stats its segments and reads only bytes it hasn't seen."""

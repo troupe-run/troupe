@@ -6,6 +6,7 @@ import subprocess
 import sys
 import threading
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -274,3 +275,31 @@ def test_following_stops_when_cancelled(tmp_path: Path) -> None:
         assert result.run.state == "running"
     finally:
         child.kill()
+
+
+def test_following_shows_each_event_within_a_few_tenths_of_a_second_of_its_recording(
+    tmp_path: Path,
+) -> None:
+    repo = theatre(tmp_path)
+    gaps = [{"wait": {"ms": 700}}, turn("a"), {"wait": {"ms": 700}}, turn("b")]
+    child = Child(repo, script(INIT, *gaps, {"wait": {"ms": 700}}, OK))
+    received: dict[int, float] = {}
+
+    class Timing(Harness):
+        def send(self, update: Any) -> None:  # noqa: ANN401
+            data = update.to_data()
+            if data["kind"] == "event":
+                received[data["seq"]] = time.time()
+
+    Timing(repo).logs(run=child.run_id, follow=True)
+    child.finish()
+    history = git_service(repo).history(UUID(child.run_id))
+    recorded = {
+        json.loads(r.state)["seq"]: datetime.fromisoformat(r.lineage["at"]).timestamp()
+        for r in history
+        if r.topic.endswith("Run.Reported") and r.lineage is not None
+    }
+    # seq 0 was recorded before following began; every later one arrived while following.
+    lags = sorted(received[seq] - recorded[seq] for seq in recorded if seq > 0)
+    assert len(lags) == 3
+    assert lags[len(lags) // 2] < 0.4, lags
