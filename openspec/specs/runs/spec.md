@@ -1,0 +1,179 @@
+# runs Specification
+
+## Purpose
+
+Records each run of an actor in the theatre's event store, with lineage, from its first runner event to its derived
+outcome, and reads runs back as projections so a person can see what is happening and what happened.
+
+## Requirements
+
+### Requirement: Perform runs one actor and records the run
+`perform` SHALL run one actor through its runner on its stage, and record the run in the event store. The run id SHALL
+be a new UUID, in canonical lowercase form, minted by `perform`.
+
+#### Scenario: A successful run is recorded
+- **WHEN** a person performs an actor whose scripted runner sends `init`, two `turn`s and an `ok` result, and whose
+  effect check passes
+- **THEN** the run's stream holds, in order, the run's start, one event for each of the four run events in `seq`
+  order, and the run's end with outcome `succeeded`
+
+### Requirement: A run is its own stream
+Each run SHALL be recorded in its own stream, identified by its run id. The runner's `seq` SHALL be kept in each run
+event's payload and SHALL NOT be used as the stream's version.
+
+#### Scenario: Seq is payload
+- **WHEN** a run's events are read back
+- **THEN** the run's start is version 1, the event with `seq` 0 is version 2, and each event's payload holds its
+  `seq`
+
+### Requirement: Init is recorded first
+The run's start SHALL be recorded when the runner's `init` event arrives, holding the runner's name and version from
+`init`, and `init` SHALL be the first run event recorded. A run that ends without `init` SHALL still record its start,
+with no runner name or version, followed by its end.
+
+#### Scenario: The runner's name and version
+- **WHEN** a runner's `init` names runner `scripted`, version `0.1.0`
+- **THEN** the run's start records that name and version
+
+#### Scenario: A runner that never starts
+- **WHEN** a person performs an actor whose runner can't be started
+- **THEN** the run's stream holds its start, with no runner name or version, and its end with outcome
+  `could-not-start`
+
+### Requirement: Recording a run event out of sequence is refused
+A run event whose `seq` isn't the next one the run expects SHALL be refused, and nothing SHALL be written for it. So
+SHALL a run event before the run's start or after its end, and a second start or end. These are faults, never
+retried.
+
+#### Scenario: A repeated seq
+- **WHEN** the run event with `seq` 3 is recorded twice
+- **THEN** the second is refused with `run.out-of-sequence`
+- **AND** the stream is unchanged
+
+#### Scenario: A gap
+- **WHEN** a run event with `seq` 5 is recorded after `seq` 3
+- **THEN** it is refused with `run.out-of-sequence`
+
+### Requirement: Who started a run and who acted in it are both recorded
+The run's start SHALL have the person who ran `perform` as its actor, resolved through the identity chain, with via
+`cli`. The run's events and its end SHALL have the agent being run as their actor (`kind` `agent`, the actor's name as
+`id`, source `troupe`), with via `runner`. All of them SHALL share one change id, with the command as their cause.
+
+#### Scenario: Lineage of a run
+- **WHEN** a person whose identity resolves to `ada@example.com` from the `vcs` source performs actor `tester`
+- **THEN** the run's start has actor `human` `ada@example.com` from `vcs`, via `cli`
+- **AND** every run event and the run's end has actor `agent` `tester` from `troupe`, via `runner`
+- **AND** all of them have the same change id, and a command cause naming it
+
+#### Scenario: No identity, no run
+- **WHEN** a person performs an actor and no identity source answers
+- **THEN** `perform` fails with `identity.unresolved`
+- **AND** no runner is started and nothing is recorded
+
+### Requirement: The derived outcome is recorded
+The run's end SHALL record the outcome the run host derived, with its error, the result, the exit code, how the
+runner ended, the transcript's and standard error's references, and the limits in effect.
+
+#### Scenario: A failed run's end
+- **WHEN** a run's runner sends an `error` result
+- **THEN** the run's end records outcome `failed`, error `run.error-result`, and the transcript's `sha256:` reference
+
+### Requirement: What a run was asked to do is kept
+The run's start SHALL record the actor's name, the runner requested and the effect check. The instructions and the
+runner's options SHALL be stored as artifacts, and the run's start SHALL reference them by hash.
+
+#### Scenario: Options are referenced, not inlined
+- **WHEN** a run is performed with runner options holding an inline script
+- **THEN** the run's start holds a `sha256:` reference whose artifact is those options, byte for byte as canonical
+  JSON
+- **AND** no event in the run's stream holds the script itself
+
+### Requirement: Ctrl-C cancels the run, and the cancel is recorded
+An interrupt during `perform` SHALL cancel the run through the run host, and `perform` SHALL record the run's end.
+Further interrupts while it is cancelling SHALL be announced and SHALL NOT stop `perform` before the run's end is
+recorded.
+
+#### Scenario: One Ctrl-C
+- **WHEN** a person presses Ctrl-C while a run is hanging
+- **THEN** the notice `run.cancelling` is shown
+- **AND** the run's end records outcome `cancelled`
+
+#### Scenario: Ctrl-C twice
+- **WHEN** a person presses Ctrl-C twice while a runner ignores cancel
+- **THEN** the notice is shown again
+- **AND** the runner is killed after `RUNNER_CANCEL_GRACE_SECONDS`, and the run's end is recorded
+
+### Requirement: A recording failure stops the run and is reported
+If a run event can't be recorded, `perform` SHALL cancel the run, record no further run events, and still try to
+record the run's end, noting the first `seq` that wasn't recorded and why. It SHALL then fail with
+`run.recording-failed`, naming the run, the error and the transcript's reference.
+
+#### Scenario: The store refuses a write mid-run
+- **WHEN** recording the run event with `seq` 2 fails
+- **THEN** the run is cancelled
+- **AND** the run's end records that recording failed at `seq` 2, with the error
+- **AND** `perform` fails with `run.recording-failed`
+
+### Requirement: A run's state is derived, never recorded as running
+A run SHALL be `ended` when its end is recorded. Otherwise it SHALL be `running` while the `perform` that runs it is
+alive in this clone, `interrupted` when that `perform` has gone without recording an end, and `unfinished-elsewhere`
+when it was started in another clone. Nothing SHALL be recorded on behalf of an interrupted run.
+
+#### Scenario: Perform is killed
+- **WHEN** the process running `perform` is killed while its run is going
+- **THEN** `status` shows the run as `interrupted`, with the notice `run.interrupted`
+- **AND** no end is recorded for it
+
+#### Scenario: A run from another clone
+- **WHEN** a run's start and events arrive by a merge, with no end, from a clone where it was started
+- **THEN** `status` shows the run as `unfinished-elsewhere`, with the notice `run.unfinished-elsewhere`
+
+### Requirement: Status reads runs from a projection
+`status` SHALL list the most recent runs, newest first, up to a named default limit that a request can lower or
+raise. Given a run, it SHALL show that run's summary: its actor, who started it, its runner, its stage, its state,
+its outcome and error, its event count, its times, and its transcript and standard error references.
+
+#### Scenario: Status while a run is going
+- **WHEN** a person runs `status` in another terminal while a run is going
+- **THEN** the run is listed with state `running` and the number of events recorded so far
+
+#### Scenario: Status after the run
+- **WHEN** a person runs `status <run>` after the run ended `failed`
+- **THEN** it shows the outcome `failed` and the run's error
+
+### Requirement: Logs read a run's events in order
+`logs` SHALL return a run's events in `seq` order, each with the time it was recorded. With `follow`, it SHALL send
+each new event as an update as it is recorded, and SHALL stop when the run ends or stops being `running`, saying why.
+
+#### Scenario: Logs of an ended run
+- **WHEN** a person asks for the logs of a run with five events
+- **THEN** the five events are returned in `seq` order
+
+#### Scenario: Following a run
+- **WHEN** a person follows the logs of a running run from another terminal
+- **THEN** each event is shown as it is recorded
+- **AND** following stops when the run's end is recorded
+
+#### Scenario: Following shows events as they are recorded
+- **WHEN** a person follows a running run's logs and the runner sends an event
+- **THEN** the event is shown within `LOGS_FOLLOW_POLL_SECONDS` of being recorded, plus the time to read it
+
+#### Scenario: Following an interrupted run
+- **WHEN** a person follows the logs of a run that is `interrupted`
+- **THEN** the recorded events are shown and following stops at once with the notice `run.interrupted`
+
+### Requirement: Runs are named by id or unique prefix
+A query SHALL accept a run's full id, or a prefix of at least 8 hex digits that matches exactly one run. A prefix that
+matches none SHALL be refused with `run.not-found`, and one that matches several with `run.ambiguous-id`, listing
+them.
+
+#### Scenario: An ambiguous prefix
+- **WHEN** two runs' ids both start with `1a2b3c4d` and a person asks for `status 1a2b3c4d`
+- **THEN** it is refused with `run.ambiguous-id`, listing both runs
+
+### Requirement: Run settings are named
+Every limit or default `status` and `logs` use SHALL be a named setting with its default in one place.
+
+#### Scenario: The status limit
+- **WHEN** `status` lists runs without a limit in its request
+- **THEN** it lists at most `STATUS_RUNS_LIMIT` runs

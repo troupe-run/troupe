@@ -166,4 +166,5 @@
 - Open the PR with `Closes #36` and `Closes #3`, then run `/opsx:archive` on the branch before merging.
 - After the merge, comment on #36 and #3 with the PR and the archived change, and on #14 with what this change
   settled for the skeleton (no server; the client protocol in `protocol/schemas/client/`).
-- #46 (the project constraint that overclaims what JSON-RPC enforces) is a separate fix and isn't in this change.
+- #46 (the project constraint that overclaimed what JSON-RPC enforces) was fixed separately on main (fix-effects-constraint),
+  and now agrees with this change's local stage.
