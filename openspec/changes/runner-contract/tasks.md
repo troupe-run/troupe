@@ -75,7 +75,7 @@
 ## 9. Integration
 
 - [ ] 9.1 Run `uv run scripts/check.py` locally and confirm every gate passes, then push and confirm all CI jobs pass on Linux, macOS and Windows with no skipped runner or platform tests (`pytest -rs`); record per-job durations for comparison with the bootstrap's
-- [ ] 9.2 Re-read the event-format assumptions in design.md against the event-store change (#35) as it stands at the time, and record on #34 any assumption that no longer holds and what was changed for it
+- [x] 9.2 Re-read the event-format assumptions in design.md against the event-store change (#35) as it stands at the time, and record on #34 any assumption that no longer holds and what was changed for it
 
 ## Workflow follow-up
 
