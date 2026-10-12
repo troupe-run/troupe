@@ -66,5 +66,5 @@ layers = ["troupe.cli", "troupe.core", "troupe.platform"]
 name = "only troupe.platform imports OS-specific modules"
 type = "forbidden"
 source_modules = ["troupe"]
-forbidden_modules = ["fcntl", "msvcrt", "termios", "signal", "winreg", "pwd", "grp"]
+forbidden_modules = ["fcntl", "msvcrt", "termios", "signal", "winreg", "pwd", "grp", "ctypes"]
 ignore_imports = ["troupe.platform.** -> *"]

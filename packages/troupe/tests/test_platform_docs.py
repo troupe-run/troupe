@@ -17,3 +17,17 @@ def test_platform_doc_lists_exactly_the_defaults_and_their_values() -> None:
         if name.isupper() and isinstance(value, int | float)
     }
     assert documented == actual
+
+
+def test_platform_doc_has_a_row_for_every_platform_module() -> None:
+    modules = {
+        path.name
+        for path in (DOC.parents[1] / "packages" / "troupe" / "src" / "troupe" / "platform").glob(
+            "*.py"
+        )
+        if path.name not in {"__init__.py", "errors.py"}
+    }
+    documented = set(
+        re.findall(r"^\| [^|]+ \| `platform/(\w+\.py)` \|", DOC.read_text(encoding="utf-8"), re.M)
+    )
+    assert documented == modules
