@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/runner/run-transcript.schema.json",
+  "title": "run/transcript",
+  "description": "One record of the engine's native output, unchanged, in the order produced. troupe stores the records as the run's transcript and does not interpret them.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["jsonrpc", "method", "params"],
+  "properties": {
+    "jsonrpc": {"$ref": "jsonrpc.schema.json#/$defs/jsonrpc"},
+    "method": {"const": "run/transcript"},
+    "params": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId", "record"],
+      "properties": {
+        "runId": {"$ref": "jsonrpc.schema.json#/$defs/runId"},
+        "record": {
+          "description": "One native record, without its line ending.",
+          "type": "string"
+        },
+        "encoding": {
+          "description": "utf-8 (the default): the record is the text. base64: the record is base64 of bytes that aren't text.",
+          "enum": ["utf-8", "base64"]
+        }
+      }
+    }
+  }
+}

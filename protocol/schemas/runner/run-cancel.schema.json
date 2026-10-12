@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/runner/run-cancel.schema.json",
+  "title": "run/cancel",
+  "description": "Asks the runner to stop the actor and exit. The runner answers once it has begun stopping. A final result is allowed but not required.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["jsonrpc", "id", "method", "params"],
+  "properties": {
+    "jsonrpc": {"$ref": "jsonrpc.schema.json#/$defs/jsonrpc"},
+    "id": {"$ref": "jsonrpc.schema.json#/$defs/id"},
+    "method": {"const": "run/cancel"},
+    "params": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId"],
+      "properties": {"runId": {"$ref": "jsonrpc.schema.json#/$defs/runId"}}
+    }
+  },
+  "$defs": {
+    "result": {"$ref": "jsonrpc.schema.json#/$defs/emptyResult"}
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/runner/message.schema.json",
+  "title": "Runner contract message",
+  "description": "Any single line either side of the runner contract may send. A success response's result is checked further against its method's result schema.",
+  "$defs": {
+    "fromHost": {
+      "title": "Message from troupe to a runner",
+      "oneOf": [
+        {"$ref": "initialize.schema.json"},
+        {"$ref": "run-start.schema.json"},
+        {"$ref": "run-cancel.schema.json"},
+        {"$ref": "shutdown.schema.json"}
+      ]
+    },
+    "fromRunner": {
+      "title": "Message from a runner to troupe",
+      "oneOf": [
+        {"$ref": "run-event.schema.json"},
+        {"$ref": "run-transcript.schema.json"},
+        {"$ref": "jsonrpc.schema.json#/$defs/successResponse"},
+        {"$ref": "error-response.schema.json"}
+      ]
+    }
+  },
+  "oneOf": [{"$ref": "#/$defs/fromHost"}, {"$ref": "#/$defs/fromRunner"}]
+}

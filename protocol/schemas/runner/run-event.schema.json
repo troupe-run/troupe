@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/runner/run-event.schema.json",
+  "title": "run/event",
+  "description": "One run event, reported by the runner as the actor works. The first event is init; a run that ends on its own ends with exactly one result.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["jsonrpc", "method", "params"],
+  "properties": {
+    "jsonrpc": {"$ref": "jsonrpc.schema.json#/$defs/jsonrpc"},
+    "method": {"const": "run/event"},
+    "params": {"$ref": "#/$defs/event"}
+  },
+  "$defs": {
+    "event": {
+      "title": "Run event",
+      "description": "Every event carries the run id, a seq that starts at 0 and increases by one, and a type.",
+      "oneOf": [
+        {"$ref": "#/$defs/init"},
+        {"$ref": "#/$defs/turn"},
+        {"$ref": "#/$defs/tool_call"},
+        {"$ref": "#/$defs/tool_result"},
+        {"$ref": "#/$defs/retry"},
+        {"$ref": "#/$defs/log"},
+        {"$ref": "#/$defs/result"}
+      ]
+    },
+    "hostEvent": {
+      "title": "Run event as troupe passes it on",
+      "description": "A run event, or the oversized event troupe writes in place of one larger than the maximum event size.",
+      "oneOf": [{"$ref": "#/$defs/event"}, {"$ref": "#/$defs/oversized"}]
+    },
+    "seq": {"type": "integer", "minimum": 0},
+    "native": {
+      "title": "Native detail",
+      "description": "Engine- or vendor-specific detail, kept as the engine reported it. Never required.",
+      "type": "object"
+    },
+    "init": {
+      "title": "init",
+      "description": "Always seq 0: what the actor runs with.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId", "seq", "type", "runner", "tools"],
+      "properties": {
+        "runId": {"$ref": "jsonrpc.schema.json#/$defs/runId"},
+        "seq": {"const": 0},
+        "type": {"const": "init"},
+        "runner": {"$ref": "jsonrpc.schema.json#/$defs/named"},
+        "engine": {
+          "description": "The engine the runner drives, where there is one.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name"],
+          "properties": {
+            "name": {"type": "string", "minLength": 1},
+            "version": {"type": "string", "minLength": 1},
+            "model": {"type": "string", "minLength": 1}
+          }
+        },
+        "tools": {
+          "description": "The tools available to the actor.",
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "native": {"$ref": "#/$defs/native"}
+      }
+    },
+    "turn": {
+      "title": "turn",
+      "description": "One message turn, summarised.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId", "seq", "type", "role", "text"],
+      "properties": {
+        "runId": {"$ref": "jsonrpc.schema.json#/$defs/runId"},
+        "seq": {"$ref": "#/$defs/seq"},
+        "type": {"const": "turn"},
+        "role": {"enum": ["assistant", "user"]},
+        "text": {"type": "string"},
+        "native": {"$ref": "#/$defs/native"}
+      }
+    },
+    "tool_call": {
+      "title": "tool_call",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId", "seq", "type", "callId", "tool", "inputSummary"],
+      "properties": {
+        "runId": {"$ref": "jsonrpc.schema.json#/$defs/runId"},
+        "seq": {"$ref": "#/$defs/seq"},
+        "type": {"const": "tool_call"},
+        "callId": {"type": "string", "minLength": 1},
+        "tool": {"type": "string", "minLength": 1},
+        "inputSummary": {"type": "string"},
+        "native": {"$ref": "#/$defs/native"}
+      }
+    },
+    "tool_result": {
+      "title": "tool_result",
+      "description": "The result of an earlier tool_call with the same callId. The full output belongs in the transcript.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId", "seq", "type", "callId", "isError", "outputSummary", "outputBytes"],
+      "properties": {
+        "runId": {"$ref": "jsonrpc.schema.json#/$defs/runId"},
+        "seq": {"$ref": "#/$defs/seq"},
+        "type": {"const": "tool_result"},
+        "callId": {"type": "string", "minLength": 1},
+        "isError": {"type": "boolean"},
+        "outputSummary": {"type": "string"},
+        "outputBytes": {"type": "integer", "minimum": 0}
+      }
+    },
+    "retry": {
+      "title": "retry",
+      "description": "The engine is retrying, for example an API call.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId", "seq", "type", "attempt", "delayMs", "reason"],
+      "properties": {
+        "runId": {"$ref": "jsonrpc.schema.json#/$defs/runId"},
+        "seq": {"$ref": "#/$defs/seq"},
+        "type": {"const": "retry"},
+        "attempt": {"type": "integer", "minimum": 1},
+        "maxAttempts": {"type": "integer", "minimum": 1},
+        "delayMs": {"type": "integer", "minimum": 0},
+        "reason": {"enum": ["authentication", "rate-limit", "network", "server", "other"]},
+        "message": {"type": "string"}
+      }
+    },
+    "log": {
+      "title": "log",
+      "description": "A runner diagnostic worth keeping with the run.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId", "seq", "type", "level", "message"],
+      "properties": {
+        "runId": {"$ref": "jsonrpc.schema.json#/$defs/runId"},
+        "seq": {"$ref": "#/$defs/seq"},
+        "type": {"const": "log"},
+        "level": {"enum": ["debug", "info", "warning", "error"]},
+        "message": {"type": "string"}
+      }
+    },
+    "result": {
+      "title": "result",
+      "description": "What the runner saw at the end. status is error whenever the engine reported an error, whatever else it reported alongside it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId", "seq", "type", "status", "message"],
+      "properties": {
+        "runId": {"$ref": "jsonrpc.schema.json#/$defs/runId"},
+        "seq": {"$ref": "#/$defs/seq"},
+        "type": {"const": "result"},
+        "status": {"enum": ["ok", "error"]},
+        "message": {"type": "string"},
+        "turns": {"type": "integer", "minimum": 0},
+        "durationMs": {"type": "integer", "minimum": 0},
+        "usage": {
+          "description": "Counts such as inputTokens and outputTokens, by name.",
+          "type": "object",
+          "additionalProperties": {"type": "integer", "minimum": 0}
+        },
+        "costUsd": {"type": "number", "minimum": 0},
+        "native": {"$ref": "#/$defs/native"}
+      }
+    },
+    "oversized": {
+      "title": "oversized",
+      "description": "Written by troupe, never by a runner: stands in for an event larger than the maximum event size. The original is in the artifact store under ref.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId", "seq", "type", "originalType", "bytes", "ref"],
+      "properties": {
+        "runId": {"$ref": "jsonrpc.schema.json#/$defs/runId"},
+        "seq": {"$ref": "#/$defs/seq"},
+        "type": {"const": "oversized"},
+        "originalType": {"enum": ["init", "turn", "tool_call", "tool_result", "retry", "log", "result"]},
+        "bytes": {"type": "integer", "minimum": 1},
+        "ref": {"$ref": "jsonrpc.schema.json#/$defs/sha256Ref"}
+      }
+    }
+  }
+}

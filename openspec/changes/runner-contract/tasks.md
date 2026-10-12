@@ -2,9 +2,9 @@
 
 ## 1. The contract in protocol/ (spec: runner-protocol)
 
-- [ ] 1.1 Add `protocol/schemas/runner/` with one schema per message (`initialize`, `run/start`, `run/event`, `run/transcript`, `run/cancel`, `shutdown`, their results and the JSON-RPC error envelope whose `data` references `error.schema.json`) and `run-event.schema.json` with a `oneOf` over the event types (design D2, D3); verify with a test that every schema is valid draft 2020-12, every `$ref` resolves, and a hand-written valid and invalid example of each message passes and fails as expected
-- [ ] 1.2 Add property tests (hypothesis) that generate run events from the schema's shapes and check that no event type requires an engine-specific field, and that an `init` without `engine` is valid; verify the "A runner without a model" scenario
-- [ ] 1.3 Update `protocol/README.md` with the runner schemas, and write `docs/runners.md` (framing, message sequence, event types, cancel and end-of-input rules, the error envelope, the Claude Code mapping table from design D3) so a runner can be written from it alone; verify with a test that every method and event type named in the schemas appears in `docs/runners.md` and vice versa
+- [x] 1.1 Add `protocol/schemas/runner/` with one schema per message (`initialize`, `run/start`, `run/event`, `run/transcript`, `run/cancel`, `shutdown`, their results and the JSON-RPC error envelope whose `data` references `error.schema.json`) and `run-event.schema.json` with a `oneOf` over the event types (design D2, D3); verify with a test that every schema is valid draft 2020-12, every `$ref` resolves, and a hand-written valid and invalid example of each message passes and fails as expected
+- [x] 1.2 Add property tests (hypothesis) that generate run events from the schema's shapes and check that no event type requires an engine-specific field, and that an `init` without `engine` is valid; verify the "A runner without a model" scenario
+- [x] 1.3 Update `protocol/README.md` with the runner schemas, and write `docs/runners.md` (framing, message sequence, event types, cancel and end-of-input rules, the error envelope, the Claude Code mapping table from design D3) so a runner can be written from it alone; verify with a test that every method and event type named in the schemas appears in `docs/runners.md` and vice versa
 
 ## 2. Child processes in the platform seam (spec: platform)
 
