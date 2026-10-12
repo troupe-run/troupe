@@ -84,6 +84,25 @@ the record without its line ending. `encoding` is `utf-8` (the default) or `base
 troupe stores the records, each followed by `\n`, as the run's transcript, and never interprets them. For Claude
 Code, that reproduces its stream-json output byte for byte.
 
+### Where transcripts are kept
+
+Transcripts can be large, and they hold whatever the actor's tools read, secrets included, so they stay out of
+git (decision [#4](https://github.com/troupe-run/troupe/issues/4)). troupe keeps them in an **artifact store**
+and records only their reference.
+
+- **References** are `sha256:` followed by the lowercase hex SHA-256 of the artifact's bytes. The same bytes
+  always get the same reference, and any copy can be checked against it.
+- **Reads are verified.** If a stored file's bytes no longer match its reference, reading fails with
+  `artifact.corrupt` instead of returning them. A reference that isn't in the store fails with
+  `artifact.missing`.
+- **The local store** is a directory: `sha256/<first two hex digits>/<hex>`. It writes its own `.gitignore`
+  (containing `*`) the first time it is used, so git ignores it without any change to your own `.gitignore`.
+- **Writes are atomic.** An artifact is streamed into `tmp/` and moved into place when finished; until then it
+  can't be read. If troupe is killed mid-write, the temporary file stays in `tmp/`; it is never mistaken for an
+  artifact, and is safe to delete when no troupe command is running.
+- The store is a port: another store (object storage, a hosted store) can replace the local one without changing
+  anything that uses it.
+
 ### Cancel, end of input and shutdown
 
 - **`run/cancel`** may arrive at any time after `run/start`. Answer it, stop the actor and exit. You may send a

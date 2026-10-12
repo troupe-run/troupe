@@ -237,8 +237,10 @@ continues. The limit is also sent to the runner in `run/start`, so a well-behave
 ### D10. Artifact store and effect check
 
 **Store:** a port (`ArtifactStore`: `open_writer()` → writer with `write(bytes)`, `finish() -> ref`, `abort()`;
-`read(ref) -> bytes`; `open_reader(ref)`; `contains(ref)`), with `LocalArtifactStore(root)` and an in-memory store
-for tests.
+`put(bytes) -> ref`; `read(ref) -> bytes`; `contains(ref)`), with `LocalArtifactStore(root)` and an in-memory store
+for tests. There is no streaming reader: it would hand back bytes before it could detect a hash mismatch, and the
+spec says corrupted bytes are never returned. A streaming, verify-at-end reader can be added when a caller needs
+one.
 
 - Layout: `<root>/sha256/<first two hex>/<hex>`. A writer streams into `<root>/tmp/<random>` while hashing, fsyncs,
   then moves the file to its final name. If the final name already exists, the same bytes are already stored, so the
