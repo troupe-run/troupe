@@ -24,9 +24,9 @@
 
 ## 4. Core types, limits and outcomes (spec: actor-runners)
 
-- [ ] 4.1 Add the runner limits to `troupe.core.defaults` (design D8) and a `RunLimits` value that defaults every field from there; verify "Defaults come from one place" and "Caller overrides a limit" at the value level, and extend `docs/platform.md`'s defaults table (or `docs/runners.md`) with the new settings, checked by a test against `troupe.core.defaults`
-- [ ] 4.2 Add the error codes from design D15 to `CODES`; verify the existing error-schema test covers each new code
-- [ ] 4.3 Implement the protocol types in `troupe.core.runners.protocol` as frozen dataclasses with `to_data()` and `from_data()` (design D11); verify with tests that every type's `to_data()` validates against its schema, and a hypothesis round-trip test (`from_data(to_data(x)) == x`)
+- [x] 4.1 Add the runner limits to `troupe.core.defaults` (design D8) and a `RunLimits` value that defaults every field from there; verify "Defaults come from one place" and "Caller overrides a limit" at the value level, and extend `docs/platform.md`'s defaults table (or `docs/runners.md`) with the new settings, checked by a test against `troupe.core.defaults`
+- [x] 4.2 Add the error codes from design D15 to `CODES`; verify the existing error-schema test covers each new code
+- [x] 4.3 Implement the protocol types in `troupe.core.runners.protocol` as frozen dataclasses with `to_data()` and `from_data()` (design D11); verify with tests that every type's `to_data()` validates against its schema, and a hypothesis round-trip test (`from_data(to_data(x)) == x`)
 - [ ] 4.4 Implement the outcome derivation as a pure function (design D4); verify each row of the D4 table with a named test, "Error result with exit code 0", "Success result with a non-zero exit code", "Runner exits mid-run", "Cancelled runner sends no result", and a hypothesis test that every combination of facts yields exactly one outcome and that `succeeded` is returned only with an `ok` result and a passing effect check
 - [ ] 4.5 Implement the effect-check port with `NoEffectExpected` and `ExpectedFiles` (design D10); verify "Result ok but declared output missing" and "Result ok and declared output written" at the derivation level, plus `ExpectedFiles` failing for an unchanged existing file
 

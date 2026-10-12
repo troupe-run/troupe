@@ -133,3 +133,19 @@ fixtures pin it.
 | `system/api_retry` | `retry`: `authentication_failed` → `authentication`, HTTP 429 → `rate-limit`, connection errors → `network`, 5xx → `server` |
 | `result` | `result`, with `status` `error` whenever `is_error` is true, whatever `subtype` says |
 | every line | one `run/transcript` record, verbatim |
+
+## Limits
+
+Every limit has its default in `troupe.core.defaults`, and each can be overridden per run (`RunLimits`).
+
+| Setting | Default | What it limits |
+|---|---|---|
+| `RUNNER_START_TIMEOUT_SECONDS` | 30 | Starting the runner and answering `initialize` |
+| `RUN_TIMEOUT_SECONDS` | 3600 | The whole run; past it, the run is cancelled and ends `timed-out` |
+| `RUNNER_CANCEL_GRACE_SECONDS` | 10 | How long a runner has to exit after `run/cancel` or `shutdown` before it and its children are killed |
+| `RUN_SILENCE_ANNOUNCE_SECONDS` | 30 | How long a run may go without an event before troupe says so |
+| `RUNNER_MAX_MESSAGE_BYTES` | 67108864 | One protocol message (64 MiB) |
+| `RUN_EVENT_MAX_BYTES` | 65536 | One run event kept inline (64 KiB); larger ones are stored and referenced |
+| `RUN_TRANSCRIPT_MAX_BYTES` | 1073741824 | One run's transcript (1 GiB); past it, the run is cancelled and ends `failed` |
+| `RUNNER_STDERR_MAX_BYTES` | 1048576 | The runner's standard error kept (1 MiB): its first and last halves, with a marker between |
+| `RUNNER_FAIL_FAST_ON_AUTH_RETRY` | true | Whether a `retry` with reason `authentication` cancels the run at once |
