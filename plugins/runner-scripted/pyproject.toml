@@ -1,0 +1,21 @@
+[project]
+name = "troupe-runner-scripted"
+version = "0.0.1.dev0"
+description = "A deterministic actor runner for troupe's tests: plays a script or replays a recording."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+# Standard library only. A plugin imports nothing from troupe; it speaks the runner contract.
+dependencies = []
+
+[project.urls]
+Homepage = "https://troupe.run"
+Repository = "https://github.com/troupe-run/troupe"
+
+[project.scripts]
+troupe-runner-scripted = "troupe_runner_scripted.runner:main"
+
+[build-system]
+requires = ["uv_build>=0.13.0,<0.14"]
+build-backend = "uv_build"
