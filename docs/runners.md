@@ -215,3 +215,19 @@ Every limit has its default in `troupe.core.defaults`, and each can be overridde
 | `RUN_TRANSCRIPT_MAX_BYTES` | 1073741824 | One run's transcript (1 GiB); past it, the run is cancelled and ends `failed` |
 | `RUNNER_STDERR_MAX_BYTES` | 1048576 | The runner's standard error kept (1 MiB): its first and last halves, with a marker between |
 | `RUNNER_FAIL_FAST_ON_AUTH_RETRY` | true | Whether a `retry` with reason `authentication` cancels the run at once |
+
+## Checking a runner
+
+troupe's conformance suite checks a runner against this contract: the handshake, refusing a protocol version it
+doesn't support, refusing a second `run/start`, acknowledging `run/cancel` and exiting, exiting when its input
+closes, and a whole run (`init` first, gap-free `seq`, one `result`, then `shutdown`). Each check starts the runner
+afresh. Give it the runner's command line as a JSON array, and the `run/start` options for a short run that
+succeeds:
+
+```console
+TROUPE_CONFORMANCE_RUNNER='["python", "-m", "troupe_runner_scripted"]' \
+TROUPE_CONFORMANCE_OPTIONS='{"script": {"steps": [{"event": {"type": "init", "runner": {"name": "scripted", "version": "0"}, "tools": []}}, {"event": {"type": "result", "status": "ok", "message": "done"}}]}}' \
+uv run pytest packages/troupe/tests/test_runner_conformance.py -k environment
+```
+
+The same checks are available to code as `troupe.core.runners.conformance.check_runner`.
