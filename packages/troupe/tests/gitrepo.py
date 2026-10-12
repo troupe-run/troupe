@@ -71,3 +71,15 @@ def make_repo(root: Path, name: str = "theatre", branch: str = "main") -> Repo:
     repo = Repo(path, isolated_environment(root / f"{name}-home"))
     repo.git("init", "-q", "-b", branch)
     return repo
+
+
+def clone(repo: Repo, root: Path, name: str) -> Repo:
+    """A clone of ``repo`` at ``root / name``, sharing its isolated environment."""
+    path = root / name
+    subprocess.run(
+        ["git", "clone", "-q", str(repo.path), str(path)],  # noqa: S607
+        env={**repo.env, **AUTHOR},
+        check=True,
+        capture_output=True,
+    )
+    return Repo(path, repo.env)
