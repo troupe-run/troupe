@@ -55,6 +55,16 @@ export TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE=true
 - Unset or empty means the default.
 - Lineage records where the value came from (`env` or `default`) for every run it allowed.
 
+## Notices and errors
+
+| Error | When |
+|---|---|
+| `theatre.not-found` | No directory from here upwards holds `.troupe/` |
+| `runner.unknown` | `--runner` names a runner troupe doesn't know |
+| `stage.unknown` | No stage of that name is installed |
+| `stage.effects-unenforced` | The stage can't enforce the actor's effects, and policy doesn't allow running it anyway |
+| `policy.invalid-value` | A policy variable is set to something other than `true` or `false` |
+
 ## Defaults
 
 Every limit and default runs use has its default in `troupe.core.defaults`.
