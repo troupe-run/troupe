@@ -30,3 +30,10 @@ def test_the_policy_section_names_the_variable_the_code_reads() -> None:
 def test_every_relative_link_resolves() -> None:
     for target in re.findall(r"\]\(((?:\.\./|[a-z])[^)#:]*)(?:#[^)]*)?\)", TEXT):
         assert (DOC.parent / target).exists(), target
+
+
+def test_the_stages_section_names_the_local_stages_refusal_and_its_setting() -> None:
+    section = _section("Stages")
+    assert "`stage.effects-unenforced`" in section
+    assert f"`{ALLOW_UNENFORCED_LOCAL_STAGE}`" in section
+    assert "including an actor that declares none" in section

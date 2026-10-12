@@ -40,14 +40,14 @@
 
 ## 4. Stages
 
-- [ ] 4.1 Add the stage port, `Admission`, and `load_stage(name)` in `troupe.core.stages`, with `stage.unknown`, and
+- [x] 4.1 Add the stage port, `Admission`, and `load_stage(name)` in `troupe.core.stages`, with `stage.unknown`, and
   `STAGE = "local"` in `troupe.core.defaults` (design D5). Verify with a test that an unknown name fails with
   `stage.unknown` naming the installed stages
-- [ ] 4.2 Implement the local stage in `troupe_stage_local`: workspace is the theatre root; `admit` refuses with
+- [x] 4.2 Implement the local stage in `troupe_stage_local`: workspace is the theatre root; `admit` refuses with
   `stage.effects-unenforced` unless the policy allows it, and otherwise admits as `unenforced`, allowed by the setting
   and its source. Verify tests for the default refusal (with the fix naming the setting and the variable), an allowed
   admission's record, and the registration test (found by name through the entry point)
-- [ ] 4.3 Document the local stage and #3's rule (including why an actor that declares nothing is refused) in
+- [x] 4.3 Document the local stage and #3's rule (including why an actor that declares nothing is refused) in
   `docs/runs.md`. Verify the doc test passes
 
 ## 5. Theatre and interim names
