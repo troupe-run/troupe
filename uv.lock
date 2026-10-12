@@ -10,6 +10,7 @@ resolution-markers = [
 members = [
     "troupe",
     "troupe-artifacts-local",
+    "troupe-runner-scripted",
     "troupe-workspace",
 ]
 
@@ -734,6 +735,11 @@ dependencies = [
 requires-dist = [{ name = "troupe", editable = "packages/troupe" }]
 
 [[package]]
+name = "troupe-runner-scripted"
+version = "0.0.1.dev0"
+source = { editable = "plugins/runner-scripted" }
+
+[[package]]
 name = "troupe-workspace"
 version = "0"
 source = { virtual = "." }
@@ -748,6 +754,7 @@ dev = [
     { name = "ruff" },
     { name = "troupe" },
     { name = "troupe-artifacts-local" },
+    { name = "troupe-runner-scripted" },
     { name = "types-jsonschema" },
 ]
 
@@ -763,6 +770,7 @@ dev = [
     { name = "ruff", specifier = ">=0.17" },
     { name = "troupe", editable = "packages/troupe" },
     { name = "troupe-artifacts-local", editable = "packages/troupe-artifacts-local" },
+    { name = "troupe-runner-scripted", editable = "plugins/runner-scripted" },
     { name = "types-jsonschema", specifier = ">=4.26" },
 ]
 

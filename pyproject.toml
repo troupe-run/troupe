@@ -9,16 +9,18 @@ requires-python = ">=3.12"
 package = false
 
 [tool.uv.workspace]
-members = ["packages/*"]
+members = ["packages/*", "plugins/*"]
 
 [tool.uv.sources]
 troupe = { workspace = true }
 troupe-artifacts-local = { workspace = true }
+troupe-runner-scripted = { workspace = true }
 
 [dependency-groups]
 dev = [
     "troupe",
     "troupe-artifacts-local",
+    "troupe-runner-scripted",
     "ruff>=0.17",
     "mypy>=2.4",
     "pytest>=9.1",
@@ -36,6 +38,8 @@ src = [
     "packages/troupe/tests",
     "packages/troupe-artifacts-local/src",
     "packages/troupe-artifacts-local/tests",
+    "plugins/runner-scripted/src",
+    "plugins/runner-scripted/tests",
     "scripts",
 ]
 
@@ -49,6 +53,7 @@ extend-immutable-calls = ["troupe.core.runners.protocol._json"]
 [tool.ruff.lint.per-file-ignores]
 # Tests assert, and drive the CLI and helper processes through subprocess with trusted arguments.
 "packages/*/tests/**" = ["S101", "S603"]
+"plugins/*/tests/**" = ["S101", "S603"]
 "scripts/tests/**" = ["S101", "S603", "S607"]
 # Repository scripts run the project's own tools (git, uv) from PATH with fixed arguments.
 "scripts/**" = ["S603", "S607"]
@@ -61,6 +66,8 @@ files = [
     "packages/troupe/tests",
     "packages/troupe-artifacts-local/src",
     "packages/troupe-artifacts-local/tests",
+    "plugins/runner-scripted/src",
+    "plugins/runner-scripted/tests",
     "scripts",
 ]
 explicit_package_bases = true
@@ -68,17 +75,24 @@ mypy_path = [
     "packages/troupe/src",
     "packages/troupe/tests",
     "packages/troupe-artifacts-local/src",
+    "plugins/runner-scripted/src",
+    "plugins/runner-scripted/tests",
     "scripts",
     "scripts/tests",
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["packages/troupe/tests", "packages/troupe-artifacts-local/tests", "scripts/tests"]
+testpaths = [
+    "packages/troupe/tests",
+    "packages/troupe-artifacts-local/tests",
+    "plugins/runner-scripted/tests",
+    "scripts/tests",
+]
 addopts = ["-ra", "--strict-markers", "--strict-config"]
 xfail_strict = true
 
 [tool.importlinter]
-root_packages = ["troupe", "troupe_artifacts_local"]
+root_packages = ["troupe", "troupe_artifacts_local", "troupe_runner_scripted"]
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
@@ -99,3 +113,11 @@ name = "troupe never imports a store package"
 type = "forbidden"
 source_modules = ["troupe"]
 forbidden_modules = ["troupe_artifacts_local"]
+
+[[tool.importlinter.contracts]]
+# Plugins see troupe exactly as a third party would: they speak the protocol and import nothing of troupe's
+# (plugins/README.md; bootstrap design D7.3).
+name = "plugins import nothing from troupe"
+type = "forbidden"
+source_modules = ["troupe_runner_scripted"]
+forbidden_modules = ["troupe", "troupe_artifacts_local"]
