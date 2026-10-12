@@ -40,3 +40,10 @@ class LineTooLongError(PlatformError):
     def __init__(self, limit: int) -> None:
         super().__init__(f"a line of output was longer than the limit of {limit} bytes")
         self.limit = limit
+
+
+class EnvironmentPolicyError(PlatformError):
+    def __init__(self, name: str, reason: str) -> None:
+        super().__init__(f"environment variable {name!r}: {reason}")
+        self.name = name
+        self.reason = reason

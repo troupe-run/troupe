@@ -217,10 +217,13 @@ environment; nothing is inherited implicitly. What it gets is a per-port decisio
 
 - `EnvironmentPolicy` (frozen): `names` (exact), `prefixes`, `never` (names) and `never_prefixes`.
   `build_environment(policy, source=os.environ, explicit={})` returns the platform minimum, plus the variables of
-  `source` the policy selects, minus the never-passed ones, plus `explicit`. An explicit value can't bring back a
-  never-passed name. Names match case-insensitively on Windows, where the environment is case-insensitive.
-- `policy.narrow(drop_names=..., drop_prefixes=..., never=...)` only removes; asking it to select something new is
-  refused. That is how "tightenable, never loosenable" is enforced until the `settings` capability exists.
+  `source` the policy selects, minus the never-passed ones, plus `explicit`. An explicit value for a never-passed
+  name is refused with `EnvironmentPolicyError`: the caller and the policy disagree, and guessing which is right
+  could leak or lose a variable (D1a). Names match case-insensitively on Windows, where the environment is
+  case-insensitive.
+- `policy.narrow(names=..., prefixes=..., never=..., never_prefixes=...)` keeps the given subset of what the policy
+  selects (a prefix may be lengthened, never shortened) and adds never-passed names and prefixes. Asking it to
+  select anything the policy doesn't already select is refused. That is how "tightenable, never loosenable" is enforced until the `settings` capability exists.
 - Each port or adapter declares its policy once, as a named default in `troupe.core.defaults`. This change adds
   `RUNNER_ENVIRONMENT`, which selects nothing: a runner gets only what its caller names. The event-store change adds
   `GIT_ENVIRONMENT` (what git needs for config, credentials and SSH, minus the hook-time repository-location
