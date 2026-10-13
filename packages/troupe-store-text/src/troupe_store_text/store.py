@@ -697,6 +697,11 @@ def _rebuilt(path: Path, gone: int) -> Notice:
     )
 
 
+_REPORT_GRACE_SECONDS = 1.0
+"""How long a check waits for the watch to report an event the check found, before counting it as
+missed. Far longer than any platform takes to deliver, far shorter than SUBSCRIBE_CHECK_SECONDS."""
+
+
 class _Subscription:
     """The thread that tells a store's listeners of other writers' events (watch-event-segments
     design D3 to D5). It waits on a watch of the segments directory; a wake costs one incremental
@@ -732,6 +737,8 @@ class _Subscription:
         reported = False  # whether the watch reported anything since the last check
         next_check = time.monotonic() + store.check_seconds
         try:
+            if self._watch is not None:
+                store._deliver()  # anything recorded between the start's read and the watch
             while not self._stopped.is_set():
                 current = self._watch
                 if current is None:  # polling: refused, or found to miss writes
@@ -751,7 +758,7 @@ class _Subscription:
                         self._rearm(current)
                     store._deliver()
                 if time.monotonic() >= next_check:
-                    if store._deliver() and not reported:
+                    if store._deliver() and not reported and not self._reports_late(current):
                         self._fall_back(
                             "watch-missed-write",
                             "an event was recorded that the watch didn't report",
@@ -762,6 +769,14 @@ class _Subscription:
             with store._lock:
                 if self._watch is not None:
                     self._watch.close()
+
+    def _reports_late(self, current: DirectoryWatch) -> bool:
+        """Whether the watch reports a change within _REPORT_GRACE_SECONDS: an event recorded just
+        before a check may be read before its notification arrives, and isn't a miss."""
+        try:
+            return current.wait(_REPORT_GRACE_SECONDS)
+        except WatchDirectoryMissingError:
+            return True
 
     def _rearm(self, current: DirectoryWatch) -> None:
         """Move the watch nearer the segments directory once a nearer directory exists."""
