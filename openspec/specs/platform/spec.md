@@ -2,8 +2,8 @@
 
 ## Purpose
 
-The single seam for OS-specific behaviour, so that troupe's file writes, locking and path display behave the same
-on Linux, macOS and Windows. Later: processes and signals, daemon IPC and file watching.
+The single seam for OS-specific behaviour, so that troupe's file writes, locking, child processes, interrupts,
+directory watching and path display behave the same on Linux, macOS and Windows. Later: daemon IPC.
 
 ## Requirements
 

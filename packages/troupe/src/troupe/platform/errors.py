@@ -63,3 +63,16 @@ class OutputTooLargeError(PlatformError):
         super().__init__(f"{command} wrote more than the limit of {limit} bytes and was stopped")
         self.command = command
         self.limit = limit
+
+
+class WatchDirectoryMissingError(PlatformError):
+    def __init__(self, directory: Path) -> None:
+        super().__init__(f"{directory} can't be watched: it doesn't exist")
+        self.directory = directory
+
+
+class WatchUnavailableError(PlatformError):
+    def __init__(self, directory: Path, reason: str) -> None:
+        super().__init__(f"{directory} can't be watched: {reason}")
+        self.directory = directory
+        self.reason = reason

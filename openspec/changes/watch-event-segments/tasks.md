@@ -4,26 +4,26 @@ Group 2 builds the ctypes backends the owner chose for design D1 (2026-10-13).
 
 ## 1. The watching primitive's interface
 
-- [ ] 1.1 Add `WatchDirectoryMissingError(directory)` and `WatchUnavailableError(directory, reason)` to
+- [x] 1.1 Add `WatchDirectoryMissingError(directory)` and `WatchUnavailableError(directory, reason)` to
   `troupe/platform/errors.py`, and `troupe/platform/watching.py` with `watch(directory)` and `DirectoryWatch`
   (`wait(timeout) -> bool`, `close()`, context manager) as in design D2, choosing the backend by platform. Verify
   `uv run scripts/check.py` passes (mypy strict, ruff, import contracts: `ctypes` stays inside `troupe.platform`)
-- [ ] 1.2 Write `packages/troupe/tests/test_platform_watching.py` against the interface, for every scenario in the
+- [x] 1.2 Write `packages/troupe/tests/test_platform_watching.py` against the interface, for every scenario in the
   platform delta: another process's append (median of five under 0.25 s, timed from when the child's append returned,
   by wall clock, design D7), another process's create, a removal, a change between waits returning at once, a timeout
   with nothing changed, 10,000 files with one appended to, `close` waking a waiting thread, a missing directory. Verify
   the tests are collected and fail only for want of a backend (record the output for the PR)
-- [ ] 1.3 Add the watching row, its errors and its limitations (a file system that accepts watches but doesn't
+- [x] 1.3 Add the watching row, its errors and its limitations (a file system that accepts watches but doesn't
   deliver them; FSEvents being recursive) to `docs/platform.md`, and update the platform spec's Purpose so it no longer
   lists file watching as later. Verify `test_platform_docs.py` passes, including the row-per-module test
 
 ## 2. The backends (design D1 and D2)
 
-- [ ] 2.1 Linux: inotify through libc via ctypes (`inotify_init1`, `inotify_add_watch` with the D2 mask), waiting with
+- [x] 2.1 Linux: inotify through libc via ctypes (`inotify_init1`, `inotify_add_watch` with the D2 mask), waiting with
   `select.poll` on the fd and a self-pipe, mapping `ENOSPC`, `EMFILE` and `ENOENT` to the D2 errors. Verify
   `test_platform_watching.py` passes on Linux, plus a test that a refused watch (simulated at the OS call:
   `inotify_add_watch` returning `ENOSPC`) fails naming the directory and `fs.inotify.max_user_watches`
-- [ ] 2.2 macOS: FSEvents through CoreServices and CoreFoundation via ctypes (`argtypes` and `restype` on every call),
+- [x] 2.2 macOS: FSEvents through CoreServices and CoreFoundation via ctypes (`argtypes` and `restype` on every call),
   scheduled on a private serial dispatch queue with file events, no-defer and watch-root, latency 0. The callback is
   kept referenced by the watch. Verify `test_platform_watching.py` passes on macOS, plus a test that a refused watch
   (simulated at the OS call: `FSEventStreamStart` returning false) fails naming the directory and the reason
@@ -96,5 +96,7 @@ Group 2 builds the ctypes backends the owner chose for design D1 (2026-10-13).
 - After the merge, comment on #54 with the PR and the archived change, and close it.
 - Rebase #72 (strict-schemas) onto `main` and re-check it on all three platforms.
 - The owner decides whether to retitle and reword #54 at the port, as its 2026-10-13 framing comment proposes.
+- In troupe-run/infrastructure, record the platform spec's new Purpose in `oob/troupe-spec-purposes.json` and
+  check `cap:platform`'s description still fits (`scripts/oob.py` reports the change once this is on `main`).
 - File the Feature for the writer's per-event `git` cost (cache the branch and HEAD behind `branch_token`), as #54's
   comment set out.
