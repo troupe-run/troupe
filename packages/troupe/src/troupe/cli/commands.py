@@ -180,7 +180,7 @@ def _run_perform(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) 
     if run["outcome"] == "cancelled":
         print(f"troupe: run {run['runId']} was cancelled.", file=stderr)
         return ExitCode.CANCELLED
-    error = TroupeError(**run["error"])
+    error = TroupeError(**run["error"])  # every outcome but succeeded and cancelled has one
     print(f"{render_error(error)}\n  run: {run['runId']} ({run['outcome']})", file=stderr)
     return ExitCode.FAILURE
 
@@ -255,7 +255,7 @@ def _run_logs(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> 
         for event in result["events"][shown:]:
             print(render_event(event), file=stdout)
         run = result["run"]
-        print(f"run {run['runId']}: {run['outcome'] or run['state']}", file=stdout)
+        print(f"run {run['runId']}: {run.get('outcome', run['state'])}", file=stdout)
     return ExitCode.CANCELLED if session.cancel.requested else ExitCode.OK
 
 

@@ -49,8 +49,9 @@ def render_event(logged: Mapping[str, Any]) -> str:
 
 
 def render_run(run: Mapping[str, Any]) -> list[str]:
-    """A run's summary (run.schema.json#/$defs/summary data), one fact per line."""
-    reported = run["runner"]["reported"]
+    """A run's summary (run.schema.json#/$defs/summary data), one fact per line. A field the
+    summary leaves out has nothing to say, so its line is left out too (or shows -)."""
+    reported = run["runner"].get("reported")
     started_by = run["startedBy"]
     lines = [
         f"run {run['runId']}",
@@ -60,18 +61,18 @@ def render_run(run: Mapping[str, Any]) -> list[str]:
         + (f" ({reported['name']} {reported['version']})" if reported else ""),
         f"  stage: {run['stage']['name']}, effects {run['stage']['effects']}",
         f"  state: {run['state']}",
-        f"  outcome: {run['outcome'] or '-'}",
+        f"  outcome: {run.get('outcome', '-')}",
         f"  events: {run['events']}",
     ]
-    if run["error"]:
+    if "error" in run:
         lines.append(f"  error: {run['error']['code']}: {run['error']['problem']}")
-    if run["endedAt"]:
+    if "endedAt" in run:
         lines.append(f"  ended: {run['endedAt']}")
-    if run["transcript"]:
+    if "transcript" in run:
         lines.append(f"  transcript: {run['transcript']}")
-    if run["stderr"]:
+    if "stderr" in run:
         lines.append(f"  stderr: {run['stderr']}")
-    if run["recording"]:
+    if "recording" in run:
         failed = run["recording"]
         lines.append(
             f"  recording stopped at event {failed['failedAt']}: {failed['error']['code']}"

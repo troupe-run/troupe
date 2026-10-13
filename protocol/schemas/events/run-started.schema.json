@@ -12,7 +12,6 @@
     "run_id",
     "actor",
     "runner_requested",
-    "runner_reported",
     "stage",
     "effect_check",
     "instructions",
@@ -39,15 +38,8 @@
       "$ref": "../client/run.schema.json#/$defs/runnerName"
     },
     "runner_reported": {
-      "description": "The runner's name and version from its init, or null when it never sent one.",
-      "anyOf": [
-        {
-          "$ref": "../runner/jsonrpc.schema.json#/$defs/named"
-        },
-        {
-          "type": "null"
-        }
-      ]
+      "description": "The runner's name and version from its init. Absent: the runner never sent one.",
+      "$ref": "../runner/jsonrpc.schema.json#/$defs/named"
     },
     "stage": {
       "$ref": "../lineage.schema.json#/$defs/stage"

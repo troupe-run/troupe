@@ -9,6 +9,10 @@ A run is its own stream, keyed by its run id (a UUID minted by perform). Its eve
   ``seq`` is payload, never the stream's version (the library numbers versions from 1).
 - ``Run.Ended``: the outcome the run host derived, and whether recording failed part-way.
 
+A field with nothing to say (no init, so no reported runner; recording that didn't fail) is left
+out of the stored event, so each such parameter defaults to None and the event reads back without
+it (omit-nulls design D4).
+
 The aggregate refuses a ``seq`` that isn't the next one, a report before the start or after the end,
 and a second end: each is a fault (a bug or a replay), never retried. The topics are these classes'
 import paths, so this module isn't moved without registering the old topics with the library.
@@ -45,11 +49,11 @@ class Run(Aggregate):
         run_id: str,
         actor: str,
         runner_requested: str,
-        runner_reported: dict[str, Any] | None,
         stage: dict[str, Any],
         effect_check: dict[str, Any],
         instructions: str,
         options: str,
+        runner_reported: dict[str, Any] | None = None,
     ) -> None:
         self.run_id = run_id
         self.actor = actor
@@ -88,7 +92,7 @@ class Run(Aggregate):
         self._ended(outcome=outcome, recording=recording)
 
     @event("Ended")
-    def _ended(self, outcome: dict[str, Any], recording: dict[str, Any] | None) -> None:
+    def _ended(self, outcome: dict[str, Any], recording: dict[str, Any] | None = None) -> None:
         self.ended = True
 
 

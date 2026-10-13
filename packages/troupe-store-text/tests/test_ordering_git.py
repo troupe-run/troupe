@@ -179,3 +179,18 @@ def test_two_clones_making_the_same_change_record_one_event_with_both_lineages(
     lineages = [r.lineage for r in reader.recordings(single.id)]
     assert sorted(lineage["actor"] for lineage in lineages if lineage) == ["ada", "grace"]
     assert reader.max_notification_id() == 1
+
+
+def test_uncommitted_events_made_with_no_branch_are_reported_without_a_branch(repo: Repo) -> None:
+    stream = uuid4()
+    repo.git("switch", "-q", "--detach", "HEAD")
+    store(repo).insert([event(stream, 1, made="on a detached HEAD, never committed")])
+    [segment] = segments(repo.path)
+    repo.git("switch", "-q", "main")  # the untracked segment travels with the switch
+    reader = store(repo)
+    assert reader.select(stream) == []
+    [notice] = reader.notices()
+    assert notice.code == "events.other-branch"
+    assert notice.path == str(segment.absolute())
+    assert "branch" not in notice.details
+    assert "detached HEAD" in notice.problem

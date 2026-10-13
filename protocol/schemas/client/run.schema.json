@@ -82,10 +82,7 @@
       "title": "Run summary",
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "runId", "actor", "startedBy", "runner", "stage", "effectCheck", "state", "outcome", "error",
-        "events", "startedAt", "endedAt", "transcript", "stderr", "recording"
-      ],
+      "required": ["runId", "actor", "startedBy", "runner", "stage", "effectCheck", "state", "events", "startedAt"],
       "properties": {
         "runId": {"$ref": "#/$defs/runId"},
         "actor": {"$ref": "#/$defs/actorName"},
@@ -93,52 +90,45 @@
         "runner": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["requested", "reported"],
+          "required": ["requested"],
           "properties": {
             "requested": {"$ref": "#/$defs/runnerName"},
             "reported": {
-              "description": "The runner's name and version from its init event; null when it sent none.",
-              "oneOf": [
-                {"type": "null"},
-                {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": ["name", "version"],
-                  "properties": {
-                    "name": {"type": "string", "minLength": 1},
-                    "version": {"type": "string", "minLength": 1}
-                  }
-                }
-              ]
+              "description": "The runner's name and version from its init event. Absent: it sent none.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "version"],
+              "properties": {
+                "name": {"type": "string", "minLength": 1},
+                "version": {"type": "string", "minLength": 1}
+              }
             }
           }
         },
         "stage": {"$ref": "../lineage.schema.json#/$defs/stage"},
         "effectCheck": {"$ref": "#/$defs/effectCheck"},
         "state": {"$ref": "#/$defs/state"},
-        "outcome": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/outcome"}]},
-        "error": {"oneOf": [{"type": "null"}, {"$ref": "../error.schema.json"}]},
+        "outcome": {"description": "How the run ended. Present exactly when state is ended.", "$ref": "#/$defs/outcome"},
+        "error": {"description": "Why the run didn't succeed. Absent: the outcome has no error, or the run hasn't ended.", "$ref": "../error.schema.json"},
         "events": {"description": "How many run events are recorded.", "type": "integer", "minimum": 0},
         "startedAt": {"$ref": "#/$defs/timestamp"},
-        "endedAt": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/timestamp"}]},
-        "transcript": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/hash"}]},
-        "stderr": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/hash"}]},
+        "endedAt": {"description": "When the run's end was recorded. Present exactly when state is ended.", "$ref": "#/$defs/timestamp"},
+        "transcript": {"description": "The transcript's artifact reference. Absent: the run hasn't ended, or its runner never started.", "$ref": "#/$defs/hash"},
+        "stderr": {"description": "The artifact reference of the runner's standard error. Absent: the run hasn't ended, or its runner never started.", "$ref": "#/$defs/hash"},
         "recording": {
-          "description": "null unless recording the run's events failed: then the first seq that wasn't recorded, and why.",
-          "oneOf": [
-            {"type": "null"},
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["failedAt", "error"],
-              "properties": {
-                "failedAt": {"type": "integer", "minimum": 0},
-                "error": {"$ref": "../error.schema.json"}
-              }
-            }
-          ]
+          "description": "The first seq that wasn't recorded, and why. Absent: recording the run's events didn't fail.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["failedAt", "error"],
+          "properties": {
+            "failedAt": {"type": "integer", "minimum": 0},
+            "error": {"$ref": "../error.schema.json"}
+          }
         }
-      }
+      },
+      "if": {"properties": {"state": {"const": "ended"}}},
+      "then": {"required": ["outcome", "endedAt"]},
+      "else": {"properties": {"outcome": false, "endedAt": false}}
     },
     "loggedEvent": {
       "title": "Logged run event",

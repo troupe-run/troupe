@@ -663,13 +663,19 @@ class TextStore:
 
 
 def _other_branch(segment: Segment, header: Header) -> Notice:
+    details: dict[str, object] = {"session": header.session}
+    if header.branch is None:
+        made, back = "with no branch checked out (a detached HEAD)", "that commit"
+    else:
+        made, back = f"on branch {header.branch!r}", repr(header.branch)
+        details["branch"] = header.branch
     return Notice(
         "events.other-branch",
-        problem=f"Events made on branch {header.branch!r} and not committed were left out.",
-        fix=f"To keep them, switch back to {header.branch!r} and commit them. If you don't want "
-        "them, delete the file.",
+        problem=f"Events made {made} and not committed were left out.",
+        fix=f"To keep them, switch back to {back} and commit them. If you don't want them, "
+        "delete the file.",
         path=str(segment.path.absolute()),
-        details={"branch": header.branch, "session": header.session},
+        details=details,
     )
 
 

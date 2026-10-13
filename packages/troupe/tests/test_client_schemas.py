@@ -42,7 +42,6 @@ SUMMARY: dict[str, Any] = {
     "endedAt": AT,
     "transcript": HASH,
     "stderr": HASH,
-    "recording": None,
 }
 EVENT: dict[str, Any] = {
     "kind": "event",
@@ -115,10 +114,10 @@ ACCEPTED = [
         {
             "run": changed(
                 SUMMARY,
-                runner={"requested": "scripted", "reported": None},
+                runner={"requested": "scripted"},
                 outcome="could-not-start",
-                transcript=None,
-                stderr=None,
+                drop_transcript=None,
+                drop_stderr=None,
             )
         },
         "a run whose runner never started",
@@ -131,7 +130,11 @@ ACCEPTED = [
     (
         "status-result.schema.json",
         {
-            "runs": [changed(SUMMARY, state="running", outcome=None, error=None, endedAt=None)],
+            "runs": [
+                changed(
+                    SUMMARY, state="running", drop_outcome=None, drop_error=None, drop_endedAt=None
+                )
+            ],
             "notices": [NOTICE["notice"]],
         },
         "a running run",
@@ -210,8 +213,36 @@ REFUSED = [
     ("perform-result.schema.json", {"run": changed(SUMMARY, state="done")}, "an unknown state"),
     (
         "perform-result.schema.json",
-        {"run": changed(SUMMARY, drop_recording=None)},
+        {"run": changed(SUMMARY, drop_startedAt=None)},
         "a summary missing a field",
+    ),
+    (
+        "status-result.schema.json",
+        {"runs": [changed(SUMMARY, state="interrupted", drop_endedAt=None)], "notices": []},
+        "an interrupted run with an outcome",
+    ),
+    (
+        "status-result.schema.json",
+        {"runs": [changed(SUMMARY, drop_endedAt=None)], "notices": []},
+        "an ended run without endedAt",
+    ),
+    (
+        "status-result.schema.json",
+        {"runs": [changed(SUMMARY, drop_outcome=None)], "notices": []},
+        "an ended run without an outcome",
+    ),
+    *[
+        (
+            "perform-result.schema.json",
+            {"run": changed(SUMMARY, **{field: None})},
+            f"a null {field}",
+        )
+        for field in ("outcome", "error", "endedAt", "transcript", "stderr", "recording")
+    ],
+    (
+        "perform-result.schema.json",
+        {"run": changed(SUMMARY, runner={"requested": "scripted", "reported": None})},
+        "a null reported runner",
     ),
     ("status-request.schema.json", {"run": "0f8fad5"}, "a prefix shorter than 8"),
     ("status-request.schema.json", {"run": "0F8FAD5B"}, "a prefix in capitals"),

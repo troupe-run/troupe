@@ -38,51 +38,51 @@
 
 ## 3. Event store: segment header and the event-field rule
 
-- [ ] 3.1 `event-record.schema.json` header: `branch` optional with its absence described. `codec.py`:
+- [x] 3.1 `event-record.schema.json` header: `branch` optional with its absence described. `codec.py`:
   `encode_header` leaves out `None`; `_header` accepts `{session, vcs}` or with a non-empty `branch`, and refuses
   `"branch": null` as `events.malformed-record`. Verify store tests: a detached-HEAD session's header has no
   `branch`, a header with `"branch": null` fails naming file and line, and every header line validates
-- [ ] 3.2 `notice.schema.json` `events.other-branch`: `branch` optional; `store.py` leaves it out when the header has
+- [x] 3.2 `notice.schema.json` `events.other-branch`: `branch` optional; `store.py` leaves it out when the header has
   none. Verify a store test on a branchless uncommitted segment gives a notice whose details have no `branch` and
   validate (the guard checks it)
-- [ ] 3.3 `EventStore._stored` removes top-level `null` keys from the state (design D4), and a test walks every
+- [x] 3.3 `EventStore._stored` removes top-level `null` keys from the state (design D4), and a test walks every
   aggregate's `@event` methods and `__init__` asserting each parameter typed `X | None` defaults to `None`. Verify
   that test passes and fails when a default is removed (run it once against a temporary edit)
 
 ## 4. Runs: start, end and recording failure
 
-- [ ] 4.1 `events/run-started.schema.json`: `runner_reported` optional, absence described. `Run.__init__`:
+- [x] 4.1 `events/run-started.schema.json`: `runner_reported` optional, absence described. `Run.__init__`:
   `runner_reported` defaults to `None`. `projections.py` reads it with `.get`. Verify a perform test where the
   runner exits before init: the recorded start has no `runner_reported`, validates, and the aggregate loads back
-- [ ] 4.2 `events/run-ended.schema.json`: `recording` optional; outcome `error` and `result` optional; `exitCode`,
+- [x] 4.2 `events/run-ended.schema.json`: `recording` optional; outcome `error` and `result` optional; `exitCode`,
   `transcript`, `stderr` tied to `ending` by `if`/`then`/`else` (D3). `Run.end`/`_ended`: `recording` defaults to
   `None`. `RunOutcome.to_data` leaves out `None`. Verify: schema tests that an `exited` end without `exitCode` and a
   `never-started` end with a `transcript` don't validate; perform tests for a never-started run (error, no
   exit code/transcript/stderr/result/recording) and a succeeded run (exit code 0, transcript, stderr, result, no
   error/recording), both validating and loading back
-- [ ] 4.3 `error.schema.json`: `runner.crashed` and `run.unclean-exit` `exitCode` tied to `ending`;
+- [x] 4.3 `error.schema.json`: `runner.crashed` and `run.unclean-exit` `exitCode` tied to `ending`;
   `run.recording-failed` `failedAt`, `endError`, `transcript` optional. `outcome.py` and `_recording_failed` leave
   out `None`. Verify `test_run_outcome.py` and `test_perform.py`: end-only failure has `endError` and no
   `failedAt`; seq-2 failure with a recorded end has `failedAt` 2 and no `endError`; every error validates (guard)
-- [ ] 4.4 `notice.schema.json` `run.retrying`: `maxAttempts` optional. `host.py` leaves it out when the runner
+- [x] 4.4 `notice.schema.json` `run.retrying`: `maxAttempts` optional. `host.py` leaves it out when the runner
   didn't say. Verify a run-host test with a `retry` event without `maxAttempts` gives a notice with no
   `maxAttempts` that validates
-- [ ] 4.5 Verify the event-store spec's scenario end to end: a test records a run whose runner can't start, reads
+- [x] 4.5 Verify the event-store spec's scenario end to end: a test records a run whose runner can't start, reads
   its segment lines back, finds no `null` at any depth, and each payload validates by topic
 
 ## 5. Client protocol and CLI
 
-- [ ] 5.1 `client/run.schema.json` summary: `outcome`/`endedAt` tied to `state` (D3); `error`, `transcript`,
+- [x] 5.1 `client/run.schema.json` summary: `outcome`/`endedAt` tied to `state` (D3); `error`, `transcript`,
   `stderr`, `recording`, `runner.reported` optional with absence described. Verify schema tests: `interrupted` with
   an `outcome`, and `ended` without `endedAt`, don't validate
-- [ ] 5.2 Remove `nullable` from `json_field` and `_decode` (`core/messages.py`); the eight fields in
+- [x] 5.2 Remove `nullable` from `json_field` and `_decode` (`core/messages.py`); the eight fields in
   `core/client/messages.py` become `default=None`. Verify `test_client_messages.py`: a summary for a running run has
   no `outcome`/`endedAt`; an ended one has both; reading a summary with any of the eight fields `null` fails naming
   the field
-- [ ] 5.3 `cli/render.py` and `cli/commands.py` read optional summary fields with `.get`. Verify `test_cli_runs.py`:
+- [x] 5.3 `cli/render.py` and `cli/commands.py` read optional summary fields with `.get`. Verify `test_cli_runs.py`:
   `status` for a running run, and `perform` for a never-started run, render as before, and `--json` output has no
   `null` and validates against the client schema
-- [ ] 5.4 `cli/parser.py` leaves out `suggestion` when there is none. Verify a CLI test of an unknown command with
+- [x] 5.4 `cli/parser.py` leaves out `suggestion` when there is none. Verify a CLI test of an unknown command with
   no close match: the error's details have only `command`, and validate
 
 ## 6. Runner contract: the one marked null

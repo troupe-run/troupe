@@ -42,7 +42,6 @@
           "additionalProperties": false,
           "required": [
             "attempt",
-            "maxAttempts",
             "delayMs",
             "reason"
           ],
@@ -52,15 +51,9 @@
               "minimum": 1
             },
             "maxAttempts": {
-              "anyOf": [
-                {
-                  "type": "integer",
-                  "minimum": 1
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "description": "How many attempts the engine will make in all. Absent: the runner didn't say.",
+              "type": "integer",
+              "minimum": 1
             },
             "delayMs": {
               "type": "integer",
@@ -85,15 +78,12 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "branch",
             "session"
           ],
           "properties": {
             "branch": {
-              "type": [
-                "string",
-                "null"
-              ],
+              "description": "The branch the left-out segment was written on. Absent: it was written with no branch (a detached HEAD).",
+              "type": "string",
               "minLength": 1
             },
             "session": {

@@ -49,7 +49,9 @@ def _derive(**overrides: object) -> tuple[Outcome, str | None]:
 
 
 def test_a_runner_that_could_not_start_is_could_not_start() -> None:
-    assert derive_outcome(_facts(start_error=START_ERROR, ending=Ending.NEVER_STARTED)) == (
+    assert derive_outcome(
+        _facts(start_error=START_ERROR, ending=Ending.NEVER_STARTED, exit_code=None)
+    ) == (
         Outcome.COULD_NOT_START,
         START_ERROR,
     )
@@ -146,7 +148,7 @@ def test_an_ok_result_without_its_effect_verdict_is_a_bug_not_a_guess() -> None:
 @settings(max_examples=500, deadline=None)
 @given(
     ending=st.sampled_from(Ending),
-    exit_code=st.none() | st.integers(-15, 255),
+    exit_code=st.integers(-15, 255),
     start_error=st.none() | st.just(START_ERROR),
     violation=st.none() | st.just(VIOLATION),
     stop=st.none() | st.sampled_from(StopReason),
@@ -162,7 +164,9 @@ def test_every_combination_of_facts_yields_one_outcome_and_success_needs_all_thr
     result: ResultEvent | None,
     effect: EffectVerdict,
 ) -> None:
-    facts = RunFacts(LIMITS, ending, exit_code, start_error, violation, stop, result, effect)
+    # A runner that never started has no exit code; one that started always has one.
+    code = None if ending is Ending.NEVER_STARTED else exit_code
+    facts = RunFacts(LIMITS, ending, code, start_error, violation, stop, result, effect)
     outcome, error = derive_outcome(facts)
     assert outcome in Outcome
     assert (error is None) == (outcome in {Outcome.SUCCEEDED, Outcome.CANCELLED})
@@ -171,10 +175,21 @@ def test_every_combination_of_facts_yields_one_outcome_and_success_needs_all_thr
     if outcome is Outcome.SUCCEEDED:
         assert result is OK
         assert effect.passed
-        assert exit_code == 0
+        assert code == 0
         assert ending is Ending.EXITED
     if result is None:
         assert outcome is not Outcome.SUCCEEDED
+
+
+@pytest.mark.parametrize(
+    ("ending", "exit_code"),
+    [(Ending.NEVER_STARTED, 0), (Ending.EXITED, None), (Ending.KILLED, None)],
+)
+def test_an_exit_code_that_disagrees_with_how_the_runner_ended_is_refused(
+    ending: Ending, exit_code: int | None
+) -> None:
+    with pytest.raises(ValueError, match="exit code exactly when it started"):
+        RunFacts(LIMITS, ending, exit_code)
 
 
 def test_the_run_outcome_records_every_fact_as_data() -> None:

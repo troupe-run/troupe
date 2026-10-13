@@ -1,6 +1,7 @@
 """troupe perform, status and logs on the command line (spec: cli; perform-status-logs design D3,
 D4, D14)."""
 
+import importlib
 import io
 import json
 import os
@@ -24,7 +25,13 @@ from storetesting import git_service
 from test_run_queries import Child
 from troupe.cli import COMMANDS, commands, main
 from troupe.cli.parser import parse
+from troupe.cli.render import render_run
+from troupe.core.client import messages as m
 from troupe.core.errors import TroupeError
+
+# troupe.core.runs re-exports perform the function, so the module is reached by name.
+PERFORM = importlib.import_module("troupe.core.runs.perform")
+ALLOWANCE = {"setting": "allow_unenforced_local_stage", "source": "env"}
 
 TROUPE = [sys.executable, "-c", "import sys; from troupe.cli import main; sys.exit(main())"]
 
@@ -266,9 +273,59 @@ def test_status_json_is_the_status_result_as_its_schema_shapes_it(repo: Repo) ->
     for argv in (("status", "--json"), ("status", run_id[:8], "--json")):
         code, out, _ = cli(*argv)
         assert code == 0
+        assert "null" not in out
         result = json.loads(out)
         check(result, "status-result.schema.json")
         assert [r["runId"] for r in result["runs"]] == [run_id]
+
+
+def test_status_json_for_a_run_whose_runner_never_started_has_no_null_and_validates(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(PERFORM, "runner_command", lambda _: ["troupe-no-such-runner"])
+    name = options_file(repo, script(INIT, OK))
+    code, out, err = cli(
+        "perform", "tester", "--runner", "scripted", "--runner-options", name, "--no-effect-check"
+    )
+    assert code == 1
+    assert out == ""
+    assert "(could-not-start)" in err
+    run_id = err.split("  run: ")[1].split()[0]
+    code, out, _ = cli("status", run_id, "--json")
+    assert code == 0
+    assert "null" not in out
+    result = json.loads(out)
+    check(result, "status-result.schema.json")
+    [run] = result["runs"]
+    assert run["outcome"] == "could-not-start"
+    assert "transcript" not in run
+    assert "stderr" not in run
+    assert "reported" not in run["runner"]
+    code, out, _ = cli("status", run_id)
+    assert "outcome: could-not-start" in out
+    assert "error: runner.start-failed" in out
+    assert "transcript:" not in out
+    assert "stderr:" not in out
+
+
+def test_a_running_runs_summary_renders_no_outcome_end_transcript_or_stderr() -> None:
+    summary = m.RunSummary.from_data(
+        {
+            "runId": "0f8fad5b-d9cb-469f-a165-70867728950e",
+            "actor": "tester",
+            "startedBy": {"kind": "human", "id": "ada@example.com", "source": "env"},
+            "runner": {"requested": "scripted"},
+            "stage": {"name": "local", "effects": "unenforced", "allowedBy": ALLOWANCE},
+            "effectCheck": {"kind": "none"},
+            "state": "running",
+            "events": 0,
+            "startedAt": "2026-10-13T00:00:00.000Z",
+        }
+    )
+    lines = render_run(summary.to_data())
+    assert "  runner: scripted" in lines
+    assert "  outcome: -" in lines
+    assert not [line for line in lines if line.startswith(("  ended", "  transcript", "  stderr"))]
 
 
 def test_status_shows_one_run_and_lists_runs(repo: Repo) -> None:

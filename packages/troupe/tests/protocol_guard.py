@@ -59,7 +59,8 @@ def _problems(
 
     def in_branch(leaf: jsonschema.ValidationError) -> bool:
         path = list(leaf.absolute_schema_path)
-        return "oneOf" in path and path[path.index("oneOf") + 1] == branch
+        at = path.index("oneOf") if "oneOf" in path else len(path)
+        return at + 1 < len(path) and path[at + 1] == branch
 
     chosen = [leaf for leaf in leaves if in_branch(leaf)] or leaves
     return sorted(

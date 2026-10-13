@@ -235,11 +235,16 @@ class EventStore:
             raise _cause_unknown(cause.id)
 
     def _stored(self, event: DomainEventProtocol[UUID], lineage: dict[str, Any]) -> StoredEvent:
+        """The event as stored: its state with lineage added, and with any field that is None left
+        out (spec: protocol; omit-nulls design D4). The library gives every parameter of an event
+        method a field, so leaving one out has to happen here; each such parameter defaults to None,
+        so the event reads back without it. Nested values are stored as built."""
         stored = self.mapper.to_stored_event(event)
         state = strict_json.loads(stored.state)
         if not isinstance(state, dict):
             msg = "an event's state must be a JSON object"
             raise TypeError(msg)
+        state = {key: value for key, value in state.items() if value is not None}
         state["lineage"] = lineage
         return StoredEvent(
             originator_id=stored.originator_id,

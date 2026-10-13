@@ -6,6 +6,8 @@ hand-written strategies of the schemas' shapes. Each generated message is first 
 schema, so the property covers exactly what the schema accepts that the strategies reach.
 """
 
+import copy
+import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -41,11 +43,9 @@ ERRORS = st.fixed_dictionaries(
         "code": st.just("runner.crashed"),
         "problem": TEXT,
         "fix": TEXT,
-        "details": st.fixed_dictionaries(
-            {
-                "exitCode": st.none() | st.integers(-9, 255),
-                "ending": st.sampled_from(["exited", "killed", "never-started"]),
-            }
+        "details": st.just({"ending": "never-started"})
+        | st.fixed_dictionaries(
+            {"exitCode": st.integers(-9, 255), "ending": st.sampled_from(["exited", "killed"])}
         ),
     }
 )
@@ -64,12 +64,12 @@ NOTICES = st.fixed_dictionaries(
         "details": st.fixed_dictionaries(
             {
                 "attempt": st.integers(1, 9),
-                "maxAttempts": st.none() | st.integers(1, 9),
                 "delayMs": st.integers(0, 10**5),
                 "reason": st.sampled_from(
                     ["authentication", "rate-limit", "network", "server", "other"]
                 ),
-            }
+            },
+            optional={"maxAttempts": st.integers(1, 9)},
         ),
     }
 )
@@ -83,34 +83,50 @@ STAGES = st.just({"name": "docker", "effects": "enforced"}) | st.just(
         "allowedBy": {"setting": "allow_unenforced_local_stage", "source": "env"},
     }
 )
-SUMMARIES = st.fixed_dictionaries(
-    {
-        "runId": RUN_IDS,
-        "actor": NAMES,
-        "startedBy": ACTORS,
-        "runner": st.fixed_dictionaries(
-            {
-                "requested": NAMES,
-                "reported": st.none() | st.fixed_dictionaries({"name": TEXT, "version": TEXT}),
-            }
-        ),
-        "stage": STAGES,
-        "effectCheck": EFFECT_CHECKS,
-        "state": st.sampled_from(["running", "ended", "interrupted", "unfinished-elsewhere"]),
-        "outcome": st.none()
-        | st.sampled_from(
-            ["succeeded", "failed", "cancelled", "timed-out", "crashed", "could-not-start"]
-        ),
-        "error": st.none() | ERRORS,
-        "events": st.integers(0, 10**6),
-        "startedAt": TIMES,
-        "endedAt": st.none() | TIMES,
-        "transcript": st.none() | HASHES,
-        "stderr": st.none() | HASHES,
-        "recording": st.none()
-        | st.fixed_dictionaries({"failedAt": st.integers(0, 99), "error": ERRORS}),
-    }
+OUTCOMES = st.sampled_from(
+    ["succeeded", "failed", "cancelled", "timed-out", "crashed", "could-not-start"]
 )
+
+
+@st.composite
+def summaries(draw: st.DrawFn) -> dict[str, Any]:
+    """A run summary: an ended run has an outcome and an end time, and only an ended one does;
+    every other optional field may be absent (omit-nulls design D3)."""
+    summary = draw(
+        st.fixed_dictionaries(
+            {
+                "runId": RUN_IDS,
+                "actor": NAMES,
+                "startedBy": ACTORS,
+                "runner": st.fixed_dictionaries(
+                    {"requested": NAMES},
+                    optional={"reported": st.fixed_dictionaries({"name": TEXT, "version": TEXT})},
+                ),
+                "stage": STAGES,
+                "effectCheck": EFFECT_CHECKS,
+                "state": st.sampled_from(
+                    ["running", "ended", "interrupted", "unfinished-elsewhere"]
+                ),
+                "events": st.integers(0, 10**6),
+                "startedAt": TIMES,
+            },
+            optional={
+                "error": ERRORS,
+                "transcript": HASHES,
+                "stderr": HASHES,
+                "recording": st.fixed_dictionaries(
+                    {"failedAt": st.integers(0, 99), "error": ERRORS}
+                ),
+            },
+        )
+    )
+    if summary["state"] == "ended":
+        summary["outcome"] = draw(OUTCOMES)
+        summary["endedAt"] = draw(TIMES)
+    return summary
+
+
+SUMMARIES = summaries()
 
 
 @st.composite
@@ -288,3 +304,88 @@ def test_an_unknown_notice_code_is_refused_when_turned_into_a_notice() -> None:
     data = m.NoticeData.from_data({"code": "run.made-up", "problem": "p", "fix": "f"})
     with pytest.raises(ProtocolError, match=r"run\.made-up"):
         data.to_notice()
+
+
+# A run summary carries what its state knows (spec: client-protocol; omit-nulls design D3).
+
+ENDED_SUMMARY: dict[str, Any] = {
+    "runId": "0f8fad5b-d9cb-469f-a165-70867728950e",
+    "actor": "tester",
+    "startedBy": {"kind": "unknown"},
+    "runner": {"requested": "scripted", "reported": {"name": "scripted", "version": "0"}},
+    "stage": {"name": "docker", "effects": "enforced"},
+    "effectCheck": {"kind": "none"},
+    "state": "ended",
+    "outcome": "failed",
+    "error": {"code": "run.error-result", "problem": "p", "fix": "f", "details": {"message": "m"}},
+    "events": 1,
+    "startedAt": "2026-10-13T00:00:00.000Z",
+    "endedAt": "2026-10-13T00:00:01.000Z",
+    "transcript": "sha256:" + "a" * 64,
+    "stderr": "sha256:" + "b" * 64,
+    "recording": {
+        "failedAt": 0,
+        "error": {
+            "code": "run.error-result",
+            "problem": "p",
+            "fix": "f",
+            "details": {"message": "m"},
+        },
+    },
+}
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["outcome", "error", "endedAt", "transcript", "stderr", "recording", "runner.reported"],
+)
+def test_reading_a_summary_with_a_null_field_fails_naming_the_field(field: str) -> None:
+    data = copy.deepcopy(ENDED_SUMMARY)
+    if field == "runner.reported":
+        data["runner"]["reported"] = None
+    else:
+        data[field] = None
+    with pytest.raises(ProtocolError, match=rf"RunSummary\.{re.escape(field)}"):
+        m.RunSummary.from_data(data)
+
+
+def test_the_stage_s_allowance_null_is_refused_naming_it() -> None:
+    data = copy.deepcopy(ENDED_SUMMARY)
+    data["stage"]["allowedBy"] = None
+    with pytest.raises(ProtocolError, match=r"RunSummary\.stage\.allowedBy"):
+        m.RunSummary.from_data(data)
+
+
+@pytest.mark.parametrize(
+    ("changes", "label"),
+    [
+        ({"state": "interrupted"}, "a run that hasn't ended, with an outcome and end time"),
+        ({"endedAt": None}, "an ended run without an end time"),
+        ({"outcome": None}, "an ended run without an outcome"),
+    ],
+)
+def test_a_summary_whose_outcome_and_end_disagree_with_its_state_is_refused(
+    changes: dict[str, Any], label: str
+) -> None:
+    data = copy.deepcopy(ENDED_SUMMARY)
+    for key, value in changes.items():
+        if value is None:
+            del data[key]
+        else:
+            data[key] = value
+    with pytest.raises(ProtocolError, match="present exactly when state is ended"):
+        m.RunSummary.from_data(data)
+
+
+def test_a_running_runs_summary_has_no_outcome_or_end_and_round_trips() -> None:
+    data = {
+        key: value
+        for key, value in ENDED_SUMMARY.items()
+        if key not in ("outcome", "endedAt", "error", "transcript", "stderr", "recording")
+    }
+    data["state"] = "running"
+    summary = m.RunSummary.from_data(data)
+    assert summary.outcome is None
+    assert summary.ended_at is None
+    assert summary.to_data() == data
+    check({"run": data}, "perform-result.schema.json")

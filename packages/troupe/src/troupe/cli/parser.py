@@ -212,6 +212,11 @@ def _suggest(token: str, candidates: Sequence[str]) -> str | None:
     return bare[matches[0]] if matches else None
 
 
+def _with_suggestion(details: dict[str, object], suggestion: str | None) -> dict[str, object]:
+    """``details``, with the suggestion when there is one; left out when nothing was close."""
+    return details if suggestion is None else {**details, "suggestion": suggestion}
+
+
 def _looks_like_a_flag(token: str) -> bool:
     return token.startswith("--") or (
         token.startswith("-") and len(token) >= 2 and token[1].isalpha()
@@ -233,7 +238,7 @@ def _unknown_flag(token: str, known: Sequence[str], command: str | None) -> Trou
         "usage.unknown-flag",
         problem=f"`{token}` is not {where}.",
         fix=f"{hint}If `{token}` is a value, put `--` before it.",
-        details={"flag": token, "suggestion": suggestion, "command": command},
+        details=_with_suggestion({"flag": token, "command": command}, suggestion),
     )
 
 
@@ -254,7 +259,7 @@ def _unknown_command(token: str, commands: Sequence[Command], flags: Sequence[st
         if token
         else ("An empty argument is not a troupe command."),
         fix=f"Did you mean `{suggestion}`?" if suggestion else HELP_FIX,
-        details={"command": token, "suggestion": suggestion},
+        details=_with_suggestion({"command": token}, suggestion),
     )
 
 
@@ -265,7 +270,7 @@ def _separator_before_command() -> TroupeError:
         "usage.unknown-command",
         problem="`--` comes before any command.",
         fix="Put the command first; `--` goes after it, before values that start with `-`.",
-        details={"command": "--", "suggestion": None},
+        details={"command": "--"},
     )
 
 

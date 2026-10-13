@@ -58,6 +58,12 @@ class RunFacts:
     effect: EffectVerdict | None = None
     """Checked only when the result's status is ok."""
 
+    def __post_init__(self) -> None:
+        if (self.exit_code is None) != (self.ending is Ending.NEVER_STARTED):
+            raise ValueError(
+                "a runner has an exit code exactly when it started (ending isn't never-started)"
+            )
+
 
 def derive_outcome(facts: RunFacts) -> tuple[Outcome, TroupeError | None]:
     """The run's outcome and, for every outcome but succeeded and cancelled, its error.
@@ -108,7 +114,7 @@ def derive_outcome(facts: RunFacts) -> tuple[Outcome, TroupeError | None]:
                 problem=f"The runner reported success but {ended}, so the run's state is "
                 "uncertain.",
                 fix="Check the run's effects and transcript before relying on them.",
-                details={"exitCode": facts.exit_code, "ending": str(facts.ending)},
+                details=_exit_details(facts),
             )
         return Outcome.SUCCEEDED, None
     if facts.stop is StopReason.RUN_TIMEOUT:
@@ -126,8 +132,17 @@ def derive_outcome(facts: RunFacts) -> tuple[Outcome, TroupeError | None]:
         problem="The runner stopped without reporting a result"
         + (f" (exit code {facts.exit_code})." if facts.exit_code is not None else "."),
         fix="Check the run's standard error and transcript for why it stopped.",
-        details={"exitCode": facts.exit_code, "ending": str(facts.ending)},
+        details=_exit_details(facts),
     )
+
+
+def _exit_details(facts: RunFacts) -> dict[str, object]:
+    """How the runner ended, and its exit code when it has one: a runner that never started has
+    none, so the field is left out (omit-nulls design D3)."""
+    details: dict[str, object] = {"ending": str(facts.ending)}
+    if facts.exit_code is not None:
+        details["exitCode"] = facts.exit_code
+    return details
 
 
 @dataclass(frozen=True)
@@ -146,14 +161,22 @@ class RunOutcome:
     limits: RunLimits
 
     def to_data(self) -> dict[str, Any]:
-        return {
+        """The outcome as recorded, leaving out what didn't happen: no error, no result, and for
+        a runner that never started, no exit code, transcript or standard error."""
+        data: dict[str, Any] = {
             "runId": self.run_id,
             "outcome": str(self.outcome),
-            "error": None if self.error is None else self.error.to_data(),
-            "result": None if self.result is None else self.result.to_data(),
-            "exitCode": self.exit_code,
             "ending": str(self.ending),
-            "transcript": self.transcript,
-            "stderr": self.stderr,
             "limits": self.limits.to_data(),
         }
+        if self.error is not None:
+            data["error"] = self.error.to_data()
+        if self.result is not None:
+            data["result"] = self.result.to_data()
+        if self.exit_code is not None:
+            data["exitCode"] = self.exit_code
+        if self.transcript is not None:
+            data["transcript"] = self.transcript
+        if self.stderr is not None:
+            data["stderr"] = self.stderr
+        return data
