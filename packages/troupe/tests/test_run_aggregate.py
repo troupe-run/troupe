@@ -12,7 +12,23 @@ from hypothesis import strategies as st
 from storetesting import files_service, snapshot
 from troupe.core.errors import TroupeError
 from troupe.core.events import EventStore
+from troupe.core.runners.limits import RunLimits
 from troupe.core.runs.aggregate import ENDED, REPORTED, STARTED, Run
+
+
+def outcome(name: str) -> dict[str, Any]:
+    """An outcome as the run host derives it (Run.Ended's schema), for a run that ended ``name``."""
+    return {
+        "outcome": name,
+        "error": None,
+        "result": None,
+        "exitCode": 0,
+        "ending": "exited",
+        "transcript": None,
+        "stderr": None,
+        "limits": RunLimits().to_data(),
+    }
+
 
 STAGE = {
     "name": "local",
@@ -73,7 +89,7 @@ def test_an_event_whose_own_seq_disagrees_with_the_report_is_refused(tmp_path: P
 
 def test_a_report_after_the_end_is_refused(tmp_path: Path) -> None:
     _, run = recorded(tmp_path)
-    run.end({"outcome": "succeeded"}, None)
+    run.end(outcome("succeeded"), None)
     run.collect_events()
     with pytest.raises(TroupeError) as caught:
         run.report(2, log(run, 2))
@@ -83,10 +99,10 @@ def test_a_report_after_the_end_is_refused(tmp_path: Path) -> None:
 
 def test_a_second_end_is_refused(tmp_path: Path) -> None:
     _, run = recorded(tmp_path)
-    run.end({"outcome": "succeeded"}, None)
+    run.end(outcome("succeeded"), None)
     run.collect_events()
     with pytest.raises(TroupeError) as caught:
-        run.end({"outcome": "failed"}, None)
+        run.end(outcome("failed"), None)
     assert caught.value.code == "run.out-of-sequence"
 
 
@@ -115,7 +131,7 @@ def test_any_gap_free_sequence_is_accepted_and_reads_back_in_order(
         run.report(seq, log(run, seq))
         store.command(via="runner").record(run.collect_events())
     if end:
-        run.end({"outcome": "succeeded"}, None)
+        run.end(outcome("succeeded"), None)
         store.command(via="runner").record(run.collect_events())
     history = store.history(UUID(run.run_id))
     assert [r.topic for r in history] == [STARTED, *[REPORTED] * count, *([ENDED] if end else [])]

@@ -51,7 +51,10 @@ def test_every_recorded_line_carries_lineage_that_the_schema_accepts(tmp_path: P
     service = files_service(tmp_path)
     service.command(via="cli").record(Counter(value=1).collect_events())
     [line] = recorded_lines(tmp_path)
-    assert is_valid(line, "event-record.schema.json#/$defs/troupeEvent")
+    # Counter is a test aggregate, so its topic isn't one troupe defines and its line isn't an
+    # event record troupe's schema accepts; test_event_payloads.py checks troupe's own topics
+    # from real runs. Its lineage is checked here.
+    assert is_valid(line["state"]["lineage"], "lineage.schema.json")
 
 
 def test_an_invalid_lineage_names_the_field_and_writes_nothing(tmp_path: Path) -> None:

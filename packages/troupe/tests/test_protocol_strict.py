@@ -214,9 +214,6 @@ def test_every_reference_in_each_shipped_schema_resolves(path: Path) -> None:
 # Requirement: Every object is closed; Every value is typed
 
 
-@pytest.mark.xfail(
-    strict=True, reason="open fields on main, closed by groups 2 to 6 of strict-schemas"
-)
 def test_every_shipped_schema_is_strict() -> None:
     documents = {load(path)["$id"]: load(path) for path in schema_files()}
     assert [str(problem) for problem in check(documents)] == []

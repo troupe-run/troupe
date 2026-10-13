@@ -41,3 +41,14 @@ def test_the_lineage_table_names_every_field_the_lineage_schema_requires() -> No
     section = TEXT.split("## Lineage", 1)[1].split("\n## ", 1)[0]
     listed = set(re.findall(r"^\| `([a-z]+)` \|", section, re.MULTILINE))
     assert listed == set(schema["required"])
+
+
+def test_the_payload_table_lists_exactly_the_topics_the_event_record_schema_defines() -> None:
+    record = json.loads(
+        (DOC.parents[1] / "protocol" / "schemas" / "event-record.schema.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    defined = set(record["$defs"]["troupeEvent"]["properties"]["topic"]["enum"])
+    documented = set(re.findall(r"^\s*\| `(troupe\.[^`]+)` \|", TEXT, re.M))
+    assert documented == defined

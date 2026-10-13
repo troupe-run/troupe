@@ -43,6 +43,17 @@ A segment's first line is its header; every later line is one event. Lines are s
 - **Readable payloads.** troupe's own events are canonical JSON (sorted keys, no spaces), so their state is written
   inline and reads well in a diff. Any other payload (encrypted, compressed, or not canonical) is written as
   `state_b64`, so every payload reads back byte for byte.
+- **Every payload has a schema.** Each topic troupe records has a closed schema for its payload in
+  [`protocol/schemas/events/`](../protocol/schemas/events/), including the fields the event-sourcing library adds
+  (`timestamp`, and `originator_topic` on a stream's first event). The event-record schema picks the payload's
+  schema by topic; an inline payload under a topic troupe doesn't define doesn't validate, and troupe's own topics
+  are never held as `state_b64`. Field names are as recorded.
+
+  | Topic | Payload schema |
+  |---|---|
+  | `troupe.core.runs.aggregate:Run.Started` | [`events/run-started.schema.json`](../protocol/schemas/events/run-started.schema.json) |
+  | `troupe.core.runs.aggregate:Run.Reported` | [`events/run-reported.schema.json`](../protocol/schemas/events/run-reported.schema.json) |
+  | `troupe.core.runs.aggregate:Run.Ended` | [`events/run-ended.schema.json`](../protocol/schemas/events/run-ended.schema.json) |
 - **Batches are all or nothing.** A batch is written with one fsynced append, and each line names its batch. A
   write that was interrupted leaves an incomplete batch at the end of its segment; reads leave it out and report
   `events.incomplete-batch`. It never took effect.

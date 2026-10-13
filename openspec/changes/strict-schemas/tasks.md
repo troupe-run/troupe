@@ -69,23 +69,23 @@
 
 ## 5. Recorded events: a payload schema per topic
 
-- [ ] 5.1 Add `protocol/schemas/events/run-started.schema.json`, `run-reported.schema.json` and
+- [x] 5.1 Add `protocol/schemas/events/run-started.schema.json`, `run-reported.schema.json` and
   `run-ended.schema.json`, describing what a run records today (design D6). Verify each against payloads from a real
   recorded run (perform with the scripted runner in a test theatre), not hand-written examples
-- [ ] 5.2 Make `event-record.schema.json` `oneOf` header, troupe event (topic-chosen state) and opaque event; drop
+- [x] 5.2 Make `event-record.schema.json` `oneOf` header, troupe event (topic-chosen state) and opaque event; drop
   `troupeEvent`. Verify schema tests: each run topic validates; an unknown topic with inline state doesn't; a
   `state_b64` line still validates; the existing event-record tests, updated, pass
-- [ ] 5.3 Add the test that `aggregate.TOPICS` and the schema's topics agree both ways. Verify it fails on a
+- [x] 5.3 Add the test that `aggregate.TOPICS` and the schema's topics agree both ways. Verify it fails on a
   deliberately added topic (record the output for the PR)
-- [ ] 5.4 Add the guard's recording hook in troupe's event service (design D4). Verify a test that recording a
+- [x] 5.4 Add the guard's recording hook in troupe's event service (design D4). Verify a test that recording a
   `Run.Reported` with a payload field its schema doesn't define fails under the guard naming the topic, and that the
   store package's recorder-suite tests are unaffected
-- [ ] 5.5 Document the payload schemas in `docs/event-store.md` and `protocol/README.md`. Verify
+- [x] 5.5 Document the payload schemas in `docs/event-store.md` and `protocol/README.md`. Verify
   `test_event_store_doc.py` passes
 
 ## 6. Integration
 
-- [ ] 6.1 Remove the `xfail` from the strictness test (1.3). Verify it passes over every shipped schema, and that
+- [x] 6.1 Remove the `xfail` from the strictness test (1.3). Verify it passes over every shipped schema, and that
   re-adding `"type": "object"` to any one field makes it fail naming that field
 - [ ] 6.2 Run `uv run scripts/check.py` (ruff, format, mypy --strict, import-linter, the full suite). Verify it passes
   locally and on CI on Linux, macOS and Windows

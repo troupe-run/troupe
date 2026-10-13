@@ -3,7 +3,14 @@
   "$id": "https://troupe.run/protocol/event-record.schema.json",
   "title": "Event record",
   "description": "One line of an event segment (.troupe/events/<session>.jsonl). A segment starts with a header line, followed by one line per event. Lines are strict JSON: no duplicate keys, no NaN or Infinity.",
-  "oneOf": [{"$ref": "#/$defs/header"}, {"$ref": "#/$defs/event"}],
+  "oneOf": [
+    {
+      "$ref": "#/$defs/header"
+    },
+    {
+      "$ref": "#/$defs/event"
+    }
+  ],
   "$defs": {
     "format": {
       "title": "Format",
@@ -15,72 +22,237 @@
       "description": "The first line of a segment: the session that wrote it, and the branch it was written on. A segment holds one session's events on one branch.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["format", "segment"],
+      "required": [
+        "format",
+        "segment"
+      ],
       "properties": {
-        "format": {"$ref": "#/$defs/format"},
+        "format": {
+          "$ref": "#/$defs/format"
+        },
         "segment": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["session", "vcs", "branch"],
+          "required": [
+            "session",
+            "vcs",
+            "branch"
+          ],
           "properties": {
-            "session": {"$ref": "lineage.schema.json#/$defs/ulid"},
-            "vcs": {"type": "string", "minLength": 1},
-            "branch": {"type": ["string", "null"], "minLength": 1}
+            "session": {
+              "$ref": "lineage.schema.json#/$defs/ulid"
+            },
+            "vcs": {
+              "type": "string",
+              "minLength": 1
+            },
+            "branch": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1
+            }
           }
         }
       }
     },
     "event": {
       "title": "Event",
-      "description": "One recorded event. Its id is the content hash of stream, stream_type, version, topic, parents and state, leaving out the state's timestamp and lineage. state is inline JSON when its bytes are canonical JSON; otherwise state_b64 holds the bytes.",
+      "description": "One recorded event: one troupe defines, with its payload inline as JSON, or one whose payload bytes aren't canonical JSON, held as base64.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/troupeEvent"
+        },
+        {
+          "$ref": "#/$defs/opaqueEvent"
+        }
+      ]
+    },
+    "envelope": {
+      "title": "Event envelope",
+      "description": "What every event line holds besides its payload. Its id is the content hash of stream, stream_type, version, topic, parents and state, leaving out the state's timestamp and lineage.",
       "type": "object",
-      "additionalProperties": false,
-      "required": ["format", "id", "stream", "stream_type", "version", "topic", "parents", "batch"],
-      "oneOf": [{"required": ["state"]}, {"required": ["state_b64"]}],
+      "required": [
+        "format",
+        "id",
+        "stream",
+        "stream_type",
+        "version",
+        "topic",
+        "parents",
+        "batch"
+      ],
       "properties": {
-        "format": {"$ref": "#/$defs/format"},
-        "id": {"$ref": "lineage.schema.json#/$defs/hash"},
-        "stream": {"type": "string", "minLength": 1},
-        "stream_type": {"enum": ["uuid", "str"]},
-        "version": {"type": "integer"},
-        "topic": {"type": "string", "minLength": 1},
+        "format": {
+          "$ref": "#/$defs/format"
+        },
+        "id": {
+          "$ref": "lineage.schema.json#/$defs/hash"
+        },
+        "stream": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stream_type": {
+          "enum": [
+            "uuid",
+            "str"
+          ]
+        },
+        "version": {
+          "type": "integer"
+        },
+        "topic": {
+          "type": "string",
+          "minLength": 1
+        },
         "parents": {
           "description": "The ids of the stream's heads this event follows. Empty for a stream's first event; two or more for a settling event.",
           "type": "array",
-          "items": {"$ref": "lineage.schema.json#/$defs/hash"},
+          "items": {
+            "$ref": "lineage.schema.json#/$defs/hash"
+          },
           "uniqueItems": true
         },
-        "state": {"type": "object"},
-        "state_b64": {"type": "string", "pattern": "^[A-Za-z0-9+/]*={0,2}$"},
         "batch": {
           "description": "The batch this line belongs to. A batch is all or nothing: a reader leaves out a batch whose lines aren't all present.",
           "type": "object",
           "additionalProperties": false,
-          "required": ["id", "index", "size"],
+          "required": [
+            "id",
+            "index",
+            "size"
+          ],
           "properties": {
-            "id": {"$ref": "lineage.schema.json#/$defs/ulid"},
-            "index": {"type": "integer", "minimum": 0},
-            "size": {"type": "integer", "minimum": 1}
+            "id": {
+              "$ref": "lineage.schema.json#/$defs/ulid"
+            },
+            "index": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 1
+            }
           }
         }
       }
     },
     "troupeEvent": {
-      "title": "Event troupe recorded",
-      "description": "An event troupe itself recorded: inline state that carries lineage.",
+      "title": "Event troupe defines",
+      "description": "An event whose topic troupe defines. Its payload is inline JSON, checked against the schema for its topic, and carries lineage.",
+      "$ref": "#/$defs/envelope",
+      "unevaluatedProperties": false,
+      "required": [
+        "state"
+      ],
+      "properties": {
+        "topic": {
+          "enum": [
+            "troupe.core.runs.aggregate:Run.Started",
+            "troupe.core.runs.aggregate:Run.Reported",
+            "troupe.core.runs.aggregate:Run.Ended"
+          ]
+        }
+      },
       "allOf": [
-        {"$ref": "#/$defs/event"},
         {
-          "required": ["state"],
-          "properties": {
-            "state": {
-              "type": "object",
-              "required": ["lineage"],
-              "properties": {"lineage": {"$ref": "lineage.schema.json"}}
+          "if": {
+            "properties": {
+              "topic": {
+                "const": "troupe.core.runs.aggregate:Run.Started"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "state": {
+                "$ref": "events/run-started.schema.json"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "topic": {
+                "const": "troupe.core.runs.aggregate:Run.Reported"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "state": {
+                "$ref": "events/run-reported.schema.json"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "topic": {
+                "const": "troupe.core.runs.aggregate:Run.Ended"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "state": {
+                "$ref": "events/run-ended.schema.json"
+              }
             }
           }
         }
       ]
+    },
+    "opaqueEvent": {
+      "title": "Event with opaque payload",
+      "description": "An event whose payload bytes aren't canonical JSON (for example encrypted or compressed), held as base64 so they read back byte for byte. troupe's own events are never held this way.",
+      "$ref": "#/$defs/envelope",
+      "unevaluatedProperties": false,
+      "required": [
+        "state_b64"
+      ],
+      "properties": {
+        "state_b64": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/]*={0,2}$"
+        }
+      },
+      "not": {
+        "properties": {
+          "topic": {
+            "enum": [
+              "troupe.core.runs.aggregate:Run.Started",
+              "troupe.core.runs.aggregate:Run.Reported",
+              "troupe.core.runs.aggregate:Run.Ended"
+            ]
+          }
+        }
+      }
+    },
+    "libraryTimestamp": {
+      "title": "Library timestamp",
+      "description": "When the event-sourcing library created the event, as its transcoder writes a datetime.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "_type_",
+        "_data_"
+      ],
+      "properties": {
+        "_type_": {
+          "const": "datetime_iso"
+        },
+        "_data_": {
+          "description": "An ISO 8601 date and time with its UTC offset.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
     }
   }
 }
