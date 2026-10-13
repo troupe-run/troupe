@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from scripted_harness import Session
+from scripted_harness import Session, validate
 
 INIT = {"type": "init", "runner": {"name": "scripted", "version": "0.0.1"}, "tools": ["Write"]}
 OK = {"type": "result", "status": "ok", "message": "done"}
@@ -350,3 +350,26 @@ def test_write_file_refuses_every_path_that_could_leave_the_workspace(
     assert error["data"]["code"] == "scripted.invalid-script"
     assert "workspace" in error["data"]["problem"]
     assert not (session.workspace.parent / "outside.txt").exists()
+
+
+# Requirement: An error response's id is null only when the request couldn't be read
+
+
+def test_a_line_that_isnt_json_is_answered_with_a_parse_error_and_a_null_id(
+    session: Session,
+) -> None:
+    session.send_raw(b"this is not json\n")
+    answer = session.message()
+    assert answer["error"]["data"]["code"] == "runner.parse-error"
+    assert answer["id"] is None
+    validate(answer, "error-response.schema.json")
+
+
+def test_a_refused_request_that_could_be_read_is_answered_with_its_own_id(
+    session: Session,
+) -> None:
+    session.initialize()
+    answer = session.request("run/pause", {})
+    assert answer["error"]["data"]["code"] == "runner.unknown-method"
+    assert answer["id"] == session.sent[-1]["id"]
+    validate(answer, "error-response.schema.json")
