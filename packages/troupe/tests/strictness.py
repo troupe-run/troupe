@@ -13,9 +13,13 @@ Conditions (``if`` and ``not``) never widen what is accepted, so they aren't hel
 nor to the null rule.
 
 A node that accepts null (by ``type``, ``const`` or ``enum``) must carry the null marker, saying
-which kind of null it is and what it means (spec: protocol; omit-nulls design D1). A node that
-declares an object (its ``type`` includes ``object``) must describe each property it doesn't
-require, since that description is where absence is defined (omit-nulls design D2).
+which kind of null it is and what it means (spec: protocol; omit-nulls design D1). Every property a
+node declares must be required there or described, since the description is where absence is
+defined (omit-nulls design D2), unless a node that always applies to the same value already
+requires or describes it: an enclosing node, or what it reaches by reference or ``allOf``. So a
+branch that only refines a field (each error code's ``code``) needn't repeat its description, while
+a field that appears only in a ``oneOf`` or ``then`` branch must carry its own. The walk carries
+those already-covered names down, cleared where a keyword describes a new instance.
 Definitions are checked where they're used, and any definition nothing uses is checked on its own.
 A keyword the walk doesn't know fails, so nothing is skipped by accident.
 """
@@ -133,7 +137,7 @@ class _Walk:
     def __init__(self, documents: Mapping[str, Mapping[str, Any]]) -> None:
         self.documents = documents
         self.problems: set[Problem] = set()
-        self.seen: set[tuple[str, str, bool, bool, bool]] = set()
+        self.seen: set[tuple[str, str, bool, bool, bool, frozenset[str]]] = set()
         self.reached: set[tuple[str, str]] = set()
 
     def report(self, uri: str, pointer: str, rule: str) -> None:
@@ -156,9 +160,16 @@ class _Walk:
         return None
 
     def walk(
-        self, uri: str, pointer: str, *, closed: bool, typed: bool, condition: bool = False
+        self,
+        uri: str,
+        pointer: str,
+        *,
+        closed: bool,
+        typed: bool,
+        condition: bool = False,
+        covered: frozenset[str] = frozenset(),
     ) -> None:
-        key = (uri, pointer, closed, typed, condition)
+        key = (uri, pointer, closed, typed, condition, covered)
         if key in self.seen:
             return
         self.seen.add(key)
@@ -173,9 +184,12 @@ class _Walk:
             self.report(uri, pointer, "isn't a schema")
             return
         self.check(uri, pointer, node, closed=closed, typed=typed)
+        covered = covered | self.always(uri, node)
         if not condition:
-            self.check_values(uri, pointer, node)
-        self.descend(uri, pointer, node, closed=closed, typed=typed, condition=condition)
+            self.check_values(uri, pointer, node, covered)
+        self.descend(
+            uri, pointer, node, closed=closed, typed=typed, condition=condition, covered=covered
+        )
 
     def check(
         self, uri: str, pointer: str, node: Mapping[str, Any], *, closed: bool, typed: bool
@@ -199,7 +213,37 @@ class _Walk:
             if key not in SUBSCHEMA_KEYWORDS:
                 self.report(uri, f"{pointer}/{_escape(key)}", "is a keyword the check doesn't know")
 
-    def check_values(self, uri: str, pointer: str, node: Mapping[str, Any]) -> None:
+    def always(
+        self, uri: str, node: Mapping[str, Any], seen: frozenset[tuple[str, int]] = frozenset()
+    ) -> frozenset[str]:
+        """The property names ``node`` requires or describes, with those of what always applies
+        with it: its references and its ``allOf``."""
+        if (uri, id(node)) in seen:
+            return frozenset()
+        seen = seen | {(uri, id(node))}
+        names = set(node.get("required", []))
+        properties = node.get("properties")
+        if isinstance(properties, dict):
+            names |= {
+                name
+                for name, schema in properties.items()
+                if isinstance(schema, dict) and "description" in schema
+            }
+        for key in REFERENCES:
+            if isinstance(node.get(key), str):
+                target = self.resolve(uri, node[key])
+                if target is not None:
+                    found = _pointer(self.documents[target[0]], target[1])
+                    if isinstance(found, dict):
+                        names |= self.always(target[0], found, seen)
+        for item in node.get("allOf", []):
+            if isinstance(item, dict):
+                names |= self.always(uri, item, seen)
+        return frozenset(names)
+
+    def check_values(
+        self, uri: str, pointer: str, node: Mapping[str, Any], covered: frozenset[str]
+    ) -> None:
         """The rules for what an accepting node (one outside a condition) lets through."""
         marked = NULL_MARKER in node
         if accepts_null(node) and not marked:
@@ -209,10 +253,9 @@ class _Walk:
         if marked and not _well_formed_marker(node[NULL_MARKER]):
             self.report(uri, f"{pointer}/{NULL_MARKER}", "has a malformed null marker")
         properties = node.get("properties")
-        if "object" in _types(node) and isinstance(properties, dict):
-            required = set(node.get("required", []))
+        if isinstance(properties, dict):
             for name, schema in properties.items():
-                if name in required or schema is False:
+                if name in covered or schema is False:
                     continue
                 if not (isinstance(schema, dict) and "description" in schema):
                     self.report(
@@ -230,6 +273,7 @@ class _Walk:
         closed: bool,
         typed: bool,
         condition: bool,
+        covered: frozenset[str],
     ) -> None:
         here_closed = (
             closed
@@ -245,7 +289,13 @@ class _Walk:
                         uri, f"{pointer}/{key}", f"refers to {node[key]!r}, which doesn't resolve"
                     )
                 else:
-                    self.walk(*target, closed=here_closed, typed=typed, condition=condition)
+                    self.walk(
+                        *target,
+                        closed=here_closed,
+                        typed=typed,
+                        condition=condition,
+                        covered=covered,
+                    )
         for key in SAME_INSTANCE_LISTS:
             for index, _ in enumerate(node.get(key, [])):
                 self.walk(
@@ -254,6 +304,7 @@ class _Walk:
                     closed=here_closed,
                     typed=here_typed,
                     condition=condition,
+                    covered=covered,
                 )
         for key in SAME_INSTANCE:
             if key in node:
@@ -263,6 +314,7 @@ class _Walk:
                     closed=here_closed,
                     typed=here_typed,
                     condition=condition,
+                    covered=covered,
                 )
         for key in node.get("dependentSchemas", {}):
             self.walk(
@@ -271,6 +323,7 @@ class _Walk:
                 closed=here_closed,
                 typed=here_typed,
                 condition=condition,
+                covered=covered,
             )
         for key in CONDITIONS:
             if key in node:

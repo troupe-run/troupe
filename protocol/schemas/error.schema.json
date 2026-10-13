@@ -381,6 +381,7 @@
           "const": "runner.start-failed"
         },
         "details": {
+          "description": "What failed to start: the command that couldn't be run, or the runner's own error. Absent: the runner ended before answering.",
           "type": "object",
           "additionalProperties": false,
           "maxProperties": 1,
@@ -449,6 +450,7 @@
           "const": "runner.protocol"
         },
         "details": {
+          "description": "Where the contract was broken. Absent: the violation isn't tied to a line of the runner's output.",
           "type": "object",
           "additionalProperties": false,
           "properties": {
