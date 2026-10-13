@@ -58,7 +58,9 @@ The scan and check walk the line once; problems are reported in this order:
 
 1. The pre-scan's own errors, in the order it meets the tokens (unchanged): unknown command, unknown flag, dash value.
 2. `usage.missing-value`: an option that takes a value is the last token, or is followed by `--` or by a token that
-   looks like a flag (`_looks_like_a_flag`). The pre-scan no longer swallows that token as the value.
+   looks like a flag (`_looks_like_a_flag`). The pre-scan no longer swallows that token as the value; it records the
+   option and carries on, so `--help` and `--version` later in the line still answer first, as they do for any
+   incomplete line.
 3. `usage.conflicting-options`: two different options of one exclusive group were given. The same option given twice
    (`--expect a --expect b`) is not a conflict.
 4. `usage.extra-argument`: more positional values than the command's positionals take; the first value that has no
@@ -112,9 +114,10 @@ destination in angle brackets (`<run>`). Problems:
 | `usage.unknown-flag` | `` `--bogus` is not an option of `troupe status`. `` (unchanged before a command) |
 
 The fix is `Run \`troupe <command> --help\` to see its options.` after a command is chosen, and the existing
-`HELP_FIX` before one. `usage.missing-value` and `usage.extra-argument` add the dash hint where it applies ("If the
-value starts with `-`, write `--limit=<value>`" and "If it was meant as a value, check the command takes one").
-`usage.unknown-flag` keeps its suggestion and `--` hint.
+`HELP_FIX` before one. Three codes give a more specific fix: `usage.missing-value` says how to give the value,
+including `--limit=<value>` for one that starts with `-`; `usage.conflicting-options` says to remove one, then
+points at the help; `usage.invalid-value` points at the help for what the argument takes. `usage.unknown-flag`
+keeps its suggestion and `--` hint.
 
 ### D6. Details name the command by its name; the schema closes every shape
 

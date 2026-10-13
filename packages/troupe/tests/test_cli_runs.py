@@ -22,7 +22,9 @@ from gitrepo import Repo
 from runtesting import ADA, ALLOW, INIT, OK, script, theatre, turn
 from storetesting import git_service
 from test_run_queries import Child
-from troupe.cli import commands, main
+from troupe.cli import COMMANDS, commands, main
+from troupe.cli.parser import parse
+from troupe.core.errors import TroupeError
 
 TROUPE = [sys.executable, "-c", "import sys; from troupe.cli import main; sys.exit(main())"]
 
@@ -58,26 +60,34 @@ def started(repo: Repo, run_id: str) -> dict[str, Any]:
 # 10.2: perform's command line.
 
 
+def usage_code(*argv: str) -> str:
+    with pytest.raises(TroupeError) as caught:
+        parse(list(argv), COMMANDS)
+    return caught.value.code
+
+
 def test_perform_needs_one_of_expect_or_no_effect_check(repo: Repo) -> None:
-    code, out, err = cli("perform", "tester", "--runner", "scripted")
-    assert code == 2
-    assert out == ""
-    assert "--expect" in err
-    assert "--no-effect-check" in err
+    argv = ("perform", "tester", "--runner", "scripted")
+    code, out, err = cli(*argv)
+    assert (code, out) == (2, "")
+    assert usage_code(*argv) == "usage.missing-one-of"
+    assert "needs one of --expect or --no-effect-check" in err
 
 
 def test_perform_refuses_both_effect_check_flags(repo: Repo) -> None:
-    code, _, err = cli(
-        "perform", "tester", "--runner", "scripted", "--expect", "a", "--no-effect-check"
-    )
+    argv = ("perform", "tester", "--runner", "scripted", "--expect", "a", "--no-effect-check")
+    code, _, err = cli(*argv)
     assert code == 2
-    assert "not allowed with" in err
+    assert usage_code(*argv) == "usage.conflicting-options"
+    assert "takes --expect or --no-effect-check, not both" in err
 
 
 def test_perform_needs_a_runner(repo: Repo) -> None:
-    code, _, err = cli("perform", "tester", "--no-effect-check")
+    argv = ("perform", "tester", "--no-effect-check")
+    code, _, err = cli(*argv)
     assert code == 2
-    assert "--runner" in err
+    assert usage_code(*argv) == "usage.missing-argument"
+    assert "needs --runner" in err
 
 
 def test_an_unknown_runner_is_refused_naming_the_known_ones(repo: Repo) -> None:
