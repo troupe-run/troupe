@@ -18,6 +18,7 @@ troupe calls it and sees one behaviour on Linux, macOS and Windows. An import co
 | Starting a child process | `platform/processes.py` | A new session, so the child leads its own process group. Only the caller's variables are passed. | A new process group, and the child is assigned at once to a new job object created with kill-on-close. `SYSTEMROOT` is always passed, because Python and sockets need it. |
 | Killing a child and everything it started | `platform/processes.py` | `SIGKILL` to the process group | The job is terminated. If troupe itself dies, the job's last handle closes and the tree dies with it. |
 | Reading a child's output | `platform/processes.py` | Line by line, with a caller-set maximum; a longer line is an error naming the maximum, never a hang | The same |
+| Watching a directory for changes | `platform/watching.py` | inotify on Linux, one watch on the directory; FSEvents on macOS, one stream with file events, no defer and latency 0 | `ReadDirectoryChangesW` on the directory, kept outstanding with overlapped I/O |
 | Catching Ctrl-C | `platform/interrupts.py` | `SIGINT`, through `signal.signal`, calls back instead of raising `KeyboardInterrupt` | `SIGINT` and `SIGBREAK` (Ctrl-Break: a process in its own console process group gets only that). The previous handlers come back when the block ends |
 
 ## Locks
@@ -51,6 +52,24 @@ troupe calls it and sees one behaviour on Linux, macOS and Windows. An import co
   child still holds its output open counts as still running.
 - **Stopping:** `kill_tree()` kills the child and everything it started. Asking a child to stop gracefully is a
   protocol matter (for runners, `run/cancel`), not a signal, because Windows has no `SIGTERM`.
+
+## Watching
+
+- **One question:** `watch(directory).wait(timeout)` says whether anything in the directory changed since the last
+  wait returned: a file created, written, renamed, replaced or removed, or the directory itself removed. It never
+  says what changed, because callers rescan anyway. It may report a change that wasn't one, never miss one.
+- **Nothing is lost between waits:** the OS buffers changes, so a change made while nobody waits makes the next
+  wait return at once.
+- **Fixed resources:** a watch holds the same few handles however many files the directory has, so a directory of
+  10,000 files is watched within a 256-file open limit.
+- **It fails clearly or not at all:** a missing directory raises `WatchDirectoryMissingError`, and one the OS won't
+  watch raises `WatchUnavailableError` with the OS's reason (on Linux, for example, the inotify watch limit
+  `fs.inotify.max_user_watches`). A watch is never returned that wouldn't wake. If the directory is removed later,
+  the next wait raises `WatchDirectoryMissingError`.
+- **Closing wakes:** `close()` from another thread wakes a waiting thread at once, then releases the handles.
+
+All three are reached through ctypes inside `troupe.platform`, with no compiled code and no dependency (decision on
+#54, 2026-10-13).
 
 ## Defaults
 
@@ -102,5 +121,10 @@ under `~`.
   instant would leave it outside the job. Runners start nothing before they read their first message.
 - **Network file systems:** `flock` over NFS and SMB is unreliable. A theatre on a network share is not
   supported.
+- **Watching on file systems that don't notify:** some (container bind mounts written from the host, network
+  shares) accept a watch and then don't report other machines' writes. Nothing at set-up tells. The event store
+  catches it with a periodic check and falls back to an announced poll ([docs/event-store.md](event-store.md)).
+- **FSEvents watches subdirectories too,** and can report one spurious change for a directory made just before
+  the watch. Both are harmless: a reported change is only a cue to rescan.
 - **Windows permission bits:** Windows keeps only the read-only flag. That flag is preserved; other POSIX bits
   have no Windows equivalent.
