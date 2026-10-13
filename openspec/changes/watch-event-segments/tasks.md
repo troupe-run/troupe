@@ -85,7 +85,7 @@ Group 2 builds the ctypes backends the owner chose for design D1 (2026-10-13).
 ## 5. Integration
 
 - [x] 5.1 Run `uv run scripts/check.py` and the full suite locally. Verify both pass, and record the output
-- [ ] 5.2 Open the PR closing #54 and verify every CI job passes on Linux, macOS and Windows for Python 3.12 and 3.13.
+- [x] 5.2 Open the PR closing #54 and verify every CI job passes on Linux, macOS and Windows for Python 3.12 and 3.13.
   Rerun the wake tests five times on each platform (a matrix rerun or a loop), so a flake like #72's shows up before
   merging. Record the delays
 - [x] 5.3 Verify `openspec validate watch-event-segments --strict` passes
