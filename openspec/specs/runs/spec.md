@@ -155,8 +155,10 @@ each new event as an update as it is recorded, and SHALL stop when the run ends 
 - **AND** following stops when the run's end is recorded
 
 #### Scenario: Following shows events as they are recorded
-- **WHEN** a person follows a running run's logs and the runner sends an event
-- **THEN** the event is shown within `LOGS_FOLLOW_POLL_SECONDS` of being recorded, plus the time to read it
+- **WHEN** a person follows a running run's logs, with the store's fallback poll interval set to 60 s, and the
+  runner sends three events
+- **THEN** each event is shown, and the median delay, measured from when the writer's append returned rather than
+  from the event's recorded time, is under 0.5 s
 
 #### Scenario: Following an interrupted run
 - **WHEN** a person follows the logs of a run that is `interrupted`
@@ -177,3 +179,34 @@ Every limit or default `status` and `logs` use SHALL be a named setting with its
 #### Scenario: The status limit
 - **WHEN** `status` lists runs without a limit in its request
 - **THEN** it lists at most `STATUS_RUNS_LIMIT` runs
+
+### Requirement: Following subscribes to the store's events
+Following SHALL subscribe to the event store's events through the store port, and SHALL have no timer of its own for
+finding new events. How the store learns of other writers' events is the store's concern, not following's.
+
+#### Scenario: Nothing is recorded while following
+- **WHEN** a person follows a running run's logs, with `SUBSCRIBE_CHECK_SECONDS` set to 60 s, and the run records
+  nothing for 2 s
+- **THEN** no segment is read in that time
+
+#### Scenario: The store's subscription can only poll
+- **WHEN** a person follows a running run's logs and the store's subscription can only poll
+- **THEN** the notice `events.subscription-polling` is sent as an update when following starts, and is in the result
+- **AND** each event is still sent as it is found by the store's fallback poll
+
+### Requirement: Following notices a run that stops without an end
+While following, a run whose `perform` stops without recording an end SHALL be noticed within
+`LOGS_LEASE_CHECK_SECONDS`, though nothing was written. Following SHALL then stop with the notice `run.interrupted`.
+
+#### Scenario: Perform dies while the run is followed
+- **WHEN** a person follows a running run's logs and its `perform` is killed
+- **THEN** following stops within `LOGS_LEASE_CHECK_SECONDS`, plus the time to read the run, with the run `interrupted`
+  and the notice `run.interrupted`
+
+### Requirement: Following's limits are named settings
+The interval at which following checks a run's lease SHALL be the setting `LOGS_LEASE_CHECK_SECONDS`, with its
+default in troupe's one named place for defaults, and overridable. Following SHALL have no poll interval of its own.
+
+#### Scenario: The documentation lists following's defaults
+- **WHEN** the runs documentation is checked against the defaults
+- **THEN** it lists `LOGS_LEASE_CHECK_SECONDS` with its value, and no `LOGS_FOLLOW_POLL_SECONDS`
