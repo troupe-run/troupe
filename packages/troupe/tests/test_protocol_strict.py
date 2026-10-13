@@ -7,7 +7,7 @@ import jsonschema
 import pytest
 
 from protocol_schemas import ROOT, expected_id, load, schema_files
-from strictness import Problem, check
+from strictness import NULL_MARKER, Problem, accepts_null, check
 
 URI = "https://troupe.run/protocol/test.schema.json"
 DRAFT = "https://json-schema.org/draft/2020-12/schema"
@@ -331,9 +331,37 @@ def test_every_reference_in_each_shipped_schema_resolves(path: Path) -> None:
 # Requirement: Every object is closed; Every value is typed
 
 
-@pytest.mark.xfail(
-    strict=True, reason="nulls and undescribed optional fields on main, closed by groups 2 to 6"
-)
 def test_every_shipped_schema_is_strict() -> None:
     documents = {load(path)["$id"]: load(path) for path in schema_files()}
     assert [str(problem) for problem in check(documents)] == []
+
+
+# Requirement: The JSON-RPC error id is the one marked null
+
+
+def _null_nodes(node: object, pointer: str = "") -> list[tuple[str, object]]:
+    found: list[tuple[str, object]] = []
+    if isinstance(node, dict):
+        if accepts_null(node):
+            found.append((pointer, node.get(NULL_MARKER)))
+        for key, value in node.items():
+            if key not in ("enum", "const", "examples", "default", NULL_MARKER):
+                found.extend(_null_nodes(value, f"{pointer}/{key}"))
+    elif isinstance(node, list):
+        for index, item in enumerate(node):
+            found.extend(_null_nodes(item, f"{pointer}/{index}"))
+    return found
+
+
+def test_the_only_null_in_the_shipped_schemas_is_the_error_responses_external_id() -> None:
+    found = [
+        (_ids(path), pointer, marker)
+        for path in schema_files()
+        for pointer, marker in _null_nodes(load(path))
+    ]
+    assert [(where, pointer) for where, pointer, _ in found] == [
+        ("protocol/schemas/runner/error-response.schema.json", "/properties/id/anyOf/1")
+    ]
+    [(_, _, marker)] = found
+    assert isinstance(marker, dict)
+    assert marker["kind"] == "external"

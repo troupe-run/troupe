@@ -87,18 +87,18 @@
 
 ## 6. Runner contract: the one marked null
 
-- [ ] 6.1 `runner/error-response.schema.json` `id`: the null branch carries
+- [x] 6.1 `runner/error-response.schema.json` `id`: the null branch carries
   `"x-troupe-null": {"kind": "external", ...}` (D1). Verify a scripted-runner test sends an unparseable line, gets
   `runner.parse-error` with `"id": null`, and the reply validates; and a refused readable request carries its id
-- [ ] 6.2 Remove the `xfail` from the shipped-schema strictness test. Verify it passes, with the error-response `id`
+- [x] 6.2 Remove the `xfail` from the shipped-schema strictness test. Verify it passes, with the error-response `id`
   as the only node accepting `null`
 
 ## 7. Whole change
 
-- [ ] 7.1 Search `packages/` and `plugins/` sources for `None` written into payload dicts (`: None`, `else None`
+- [x] 7.1 Search `packages/` and `plugins/` sources for `None` written into payload dicts (`: None`, `else None`
   inside `details=` / `to_data`) and confirm each remaining one is not serialised; list them in the PR. Verify by
   the search output
-- [ ] 7.2 Run `uv run scripts/check.py`. Verify it passes (ruff, mypy --strict, the full test suite)
+- [x] 7.2 Run `uv run scripts/check.py`. Verify it passes (ruff, mypy --strict, the full test suite)
 - [ ] 7.3 Push and verify every CI job passes on Linux, macOS and Windows
 
 ## Workflow follow-up

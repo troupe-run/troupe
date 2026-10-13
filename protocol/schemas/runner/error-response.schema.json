@@ -10,7 +10,16 @@
     "jsonrpc": {"$ref": "jsonrpc.schema.json#/$defs/jsonrpc"},
     "id": {
       "description": "The failed request's id, or null when the request could not be read.",
-      "anyOf": [{"$ref": "jsonrpc.schema.json#/$defs/id"}, {"type": "null"}]
+      "anyOf": [
+        {"$ref": "jsonrpc.schema.json#/$defs/id"},
+        {
+          "type": "null",
+          "x-troupe-null": {
+            "kind": "external",
+            "means": "The request couldn't be read, so it has no id to answer; JSON-RPC 2.0 requires id null here."
+          }
+        }
+      ]
     },
     "error": {
       "type": "object",

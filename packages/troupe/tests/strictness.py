@@ -100,7 +100,8 @@ def _anchors(node: Any, pointer: str = "") -> Iterator[tuple[str, str]]:  # noqa
             yield from _anchors(item, f"{pointer}/{index}")
 
 
-def _accepts_null(node: Mapping[str, Any]) -> bool:
+def accepts_null(node: Mapping[str, Any]) -> bool:
+    """Whether ``node`` itself lets null through, by ``type``, ``const`` or ``enum``."""
     enum = node.get("enum")
     return (
         "null" in _types(node)
@@ -201,9 +202,9 @@ class _Walk:
     def check_values(self, uri: str, pointer: str, node: Mapping[str, Any]) -> None:
         """The rules for what an accepting node (one outside a condition) lets through."""
         marked = NULL_MARKER in node
-        if _accepts_null(node) and not marked:
+        if accepts_null(node) and not marked:
             self.report(uri, pointer, "accepts null without saying why")
-        if marked and not _accepts_null(node):
+        if marked and not accepts_null(node):
             self.report(uri, pointer, "marks a null it doesn't accept")
         if marked and not _well_formed_marker(node[NULL_MARKER]):
             self.report(uri, f"{pointer}/{NULL_MARKER}", "has a malformed null marker")
