@@ -1,22 +1,30 @@
 """The store across processes (spec: event-store, "Versions are unique within a stream" and
 "Writers wait for each other, bounded and announced"; design D10)."""
 
+import statistics
 import subprocess
 import sys
 import threading
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from uuid import UUID, uuid4
 
+import jsonschema
 import pytest
 from eventsourcing.persistence import Notification
 
 from gitrepo import make_repo
+from runner_schemas import SCHEMAS, load
 from storetesting import event
 from troupe.core.files import directory_lock
 from troupe.core.vcs import load_vcs
+from troupe.platform import watching
+from troupe.platform.errors import WatchUnavailableError
+from troupe.platform.watching import DirectoryWatch
 from troupe_store_text import TextApplicationRecorder, open_store
-from troupe_store_text.store import shared_store
+from troupe_store_text.store import TextStore, shared_store
 from troupe_vcs_git import GitAdapter
 
 CHILD = """
@@ -52,6 +60,7 @@ else:
 """
 
 TESTS = str(Path(__file__).resolve().parents[2] / "troupe" / "tests")
+NOTICE_SCHEMA = load(SCHEMAS / "notice.schema.json")
 
 
 def child(
@@ -137,7 +146,10 @@ def test_a_writer_waiting_for_another_process_announces_it_and_times_out(
 
 
 def test_another_processs_write_wakes_this_processs_subscription(tmp_path: Path) -> None:
-    store = shared_store(tmp_path, lambda: load_vcs("files", tmp_path), poll_seconds=0.05)
+    # The poll and the check are far longer than the test, so only a notification can wake it.
+    store = shared_store(
+        tmp_path, lambda: load_vcs("files", tmp_path), poll_seconds=60, check_seconds=60
+    )
     recorder = TextApplicationRecorder(store)
     received: list[Notification] = []
     with recorder.subscribe(gt=0) as subscription:
@@ -167,3 +179,211 @@ def test_recording_in_a_git_theatre_leaves_no_lock_or_local_file_for_git_to_see(
     assert ".troupe/.gitignore" in paths
     assert any(p.startswith(".troupe/events/") and p.endswith(".jsonl") for p in paths)
     assert not any("local" in p or p.endswith(".lock") for p in paths)
+
+
+# Subscriptions across processes (spec: event-store, "A subscription delivers other writers'
+# events as they're recorded", "A subscription that can only poll says so", "A subscription that
+# finds it missed an event says so"; watch-event-segments design D3 to D5, D7).
+
+TIMED_WRITER = """
+import sys, time
+from pathlib import Path
+from uuid import UUID, uuid4
+sys.path.insert(0, {tests!r})
+from storetesting import event
+from troupe.core.vcs import load_vcs
+import troupe_store_text.store as text_store
+
+append = text_store.append_bytes
+
+def timed(path, data, *args, **kwargs):
+    result = append(path, data, *args, **kwargs)
+    print("APPENDED", repr(time.time()), flush=True)
+    return result
+
+text_store.append_bytes = timed
+theatre = Path({theatre!r})
+store = text_store.TextStore(theatre, load_vcs("files", theatre))
+stream = uuid4()
+for version, _ in enumerate(sys.stdin, start=1):
+    time.sleep(0.1)
+    store.insert([event(stream, version)])
+    print("recorded", flush=True)
+"""
+"""Records one event per line read, in one session (so the first creates a segment and later ones
+append to it), printing the wall-clock time each segment append returned (design D7)."""
+
+BOUND = 0.25  # seconds: a quarter of the 1 s subscription poll this replaces
+
+
+class Writer:
+    def __init__(self, theatre: Path) -> None:
+        code = TIMED_WRITER.format(tests=TESTS, theatre=str(theatre))
+        self.process = subprocess.Popen(
+            [sys.executable, "-c", code],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+    def record(self) -> None:
+        assert self.process.stdin is not None
+        self.process.stdin.write("record\n")
+        self.process.stdin.flush()
+
+    def appended_at(self) -> float:
+        """When the last recording's append returned, once it has been recorded."""
+        assert self.process.stdout is not None
+        appended: float | None = None
+        while (line := self.process.stdout.readline()) != "recorded\n":
+            assert line.startswith("APPENDED "), (line, self.stderr())
+            appended = float(line.split()[1])
+        assert appended is not None
+        return appended
+
+    def stderr(self) -> str:
+        return self.process.stderr.read() if self.process.stderr else ""
+
+    def close(self) -> None:
+        assert self.process.stdin is not None
+        self.process.stdin.close()
+        assert self.process.wait(timeout=30) == 0, self.stderr()
+
+
+@pytest.fixture
+def writer(tmp_path: Path) -> Iterator[Writer]:
+    process = Writer(tmp_path)
+    yield process
+    process.close()
+
+
+@contextmanager
+def listened(store: TextStore) -> Iterator[threading.Event]:
+    heard = threading.Event()
+    store.listen(heard)
+    try:
+        yield heard
+    finally:
+        store.unlisten(heard)
+
+
+class Silent(watching._Backend):
+    """A watch that is set up but never reports, as on a file system that doesn't deliver."""
+
+    def __init__(self) -> None:
+        self._stop = threading.Event()
+
+    def wait(self, timeout: float | None) -> bool:
+        self._stop.wait(timeout)
+        return False
+
+    def interrupt(self) -> None:
+        self._stop.set()
+
+    def release(self) -> None:
+        pass
+
+
+def silent(directory: Path) -> DirectoryWatch:
+    return DirectoryWatch(directory, Silent())
+
+
+def refusing(directory: Path) -> DirectoryWatch:
+    raise WatchUnavailableError(directory, "the platform refused (a test)")
+
+
+def store_for(theatre: Path, **options: object) -> TextStore:
+    return TextStore(theatre, load_vcs("files", theatre), **options)  # type: ignore[arg-type]
+
+
+def test_another_processs_events_each_reach_a_listener_with_a_median_delay_under_the_bound(
+    tmp_path: Path, writer: Writer
+) -> None:
+    writer.record()  # the segment and events/ exist before listening; later events append
+    writer.appended_at()
+    store = store_for(tmp_path, poll_seconds=60, check_seconds=60)
+    delays: list[float] = []
+    with listened(store) as heard:
+        for count in range(2, 7):
+            heard.clear()
+            writer.record()
+            assert heard.wait(10)
+            woke = time.time()
+            delays.append(woke - writer.appended_at())
+            assert store.max_notification_id() == count
+    assert statistics.median(delays) < BOUND, delays
+
+
+def test_the_first_event_reaches_a_listener_that_subscribed_before_events_existed(
+    tmp_path: Path, writer: Writer
+) -> None:
+    store = store_for(tmp_path, poll_seconds=60, check_seconds=60)
+    assert not store.events_dir.exists()
+    with listened(store) as heard:
+        writer.record()
+        writer.appended_at()
+        assert heard.wait(10)
+        assert store.max_notification_id() == 1
+
+
+def test_a_listened_store_reads_no_segment_while_nothing_is_recorded(
+    tmp_path: Path, writer: Writer, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    writer.record()
+    writer.appended_at()
+    store = store_for(tmp_path, poll_seconds=60, check_seconds=60)
+    looks: list[float] = []
+    sizes = store._sizes
+
+    def counted() -> dict[str, int]:
+        looks.append(time.monotonic())
+        return sizes()
+
+    monkeypatch.setattr(store, "_sizes", counted)
+    with listened(store):
+        time.sleep(0.5)  # listening reads once, and a fresh watch may wake once
+        looks.clear()
+        time.sleep(2)
+        assert looks == []
+
+
+def test_a_refused_watch_falls_back_to_an_announced_poll_that_still_delivers(
+    tmp_path: Path, writer: Writer
+) -> None:
+    store = store_for(tmp_path, poll_seconds=0.2, check_seconds=60, watcher=refusing)
+    with listened(store) as heard:
+        [notice] = [n for n in store.notices() if n.code == "events.subscription-polling"]
+        assert notice.details["reason"] == "watch-refused"
+        assert "the platform refused (a test)" in notice.details["detail"]
+        assert notice.path == str(store.events_dir.absolute())
+        jsonschema.validate(notice.to_data(), NOTICE_SCHEMA)
+        writer.record()
+        appended = writer.appended_at()
+        assert heard.wait(10)
+        assert time.time() - appended < 0.2 + 1.0
+        codes = [n.code for n in store.notices()]
+        assert codes.count("events.subscription-polling") == 1  # it lasts as the polling does
+    assert "events.subscription-polling" not in [n.code for n in store.notices()]
+
+
+def test_a_watch_that_never_reports_is_caught_by_the_check_then_the_store_polls(
+    tmp_path: Path, writer: Writer
+) -> None:
+    writer.record()
+    writer.appended_at()
+    store = store_for(tmp_path, poll_seconds=0.2, check_seconds=1.0, watcher=silent)
+    with listened(store) as heard:
+        assert "events.subscription-polling" not in [n.code for n in store.notices()]
+        writer.record()
+        appended = writer.appended_at()
+        assert heard.wait(10)
+        assert time.time() - appended < 1.0 + 1.0
+        [notice] = [n for n in store.notices() if n.code == "events.subscription-polling"]
+        assert notice.details["reason"] == "watch-missed-write"
+        jsonschema.validate(notice.to_data(), NOTICE_SCHEMA)
+        heard.clear()
+        writer.record()
+        appended = writer.appended_at()
+        assert heard.wait(10)
+        assert time.time() - appended < 0.2 + 1.0

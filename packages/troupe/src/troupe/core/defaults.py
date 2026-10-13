@@ -57,10 +57,16 @@ IDENTITY_CHAIN: tuple[str, ...] = ("env", "vcs", "os-login")
 """The identity sources asked, in order, for who is acting (#9, agreed 2026-10-12): the TROUPE_ACTOR
 override, then the identity the VCS is configured with (git's user.email), then the OS login."""
 
-# The event store (spec: event-store; event-store design D10). docs/event-store.md lists it.
+# The event store (spec: event-store; event-store design D10; watch-event-segments design D5).
+# docs/event-store.md lists them.
 
 SUBSCRIBE_POLL_SECONDS = 1.0
-"""How often a subscription looks for events another process recorded."""
+"""How often a subscription looks for events another process recorded, when the store can't be
+told of them as they're recorded (it then says so with events.subscription-polling)."""
+
+SUBSCRIBE_CHECK_SECONDS = 30.0
+"""How often a store with subscribers looks for other processes' events itself, to catch a file
+system that accepts watches but doesn't deliver them (watch-event-segments design D5)."""
 
 # Policy (spec: policy; perform-status-logs design D6). docs/runs.md lists it.
 

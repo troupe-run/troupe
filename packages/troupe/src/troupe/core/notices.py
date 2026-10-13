@@ -15,6 +15,8 @@ CODES: dict[str, str] = {
     "events.other-branch": "Uncommitted events made on another branch were left out of a read.",
     "events.order-rebuilt": "The local notification order was rebuilt, so followers start again.",
     "events.incomplete-batch": "A segment ends in an interrupted batch, which was left out.",
+    "events.subscription-polling": "A subscription can't be told of other writers' events as "
+    "they're recorded, so it looks for them on a timer.",
     # Runs (perform-status-logs design D10, D11). docs/runs.md lists them.
     "run.cancelling": "Cancel was asked for, and the run is stopping within its grace period.",
     "run.interrupted": "A run has no recorded end, and the perform that ran it has stopped.",

@@ -1,4 +1,4 @@
-"""The text event store (spec: event-store; design D2-D7, D10).
+"""The text event store (spec: event-store; design D2-D7, D10; watch-event-segments D3-D5).
 
 One TextStore per theatre directory and purpose in a process; the eventsourcing recorders in
 recorders.py are views of it. It keeps:
@@ -11,11 +11,16 @@ recorders.py are views of it. It keeps:
 
 Every call takes a thread lock first, then (for a write) the theatre's write lock in ``local/``,
 so threads queue in the process and processes queue across the theatre (design D10).
+
+Listeners are told of every new event, whoever wrote it. Writes in this process tell them at once;
+other processes' writes and segments git brings in are heard by watching ``events/`` through
+troupe.platform, with an announced poll when it can't be watched (watch-event-segments D3-D5).
 """
 
 import heapq
 import os
 import threading
+import time
 import weakref
 from collections.abc import Callable, Hashable, Iterable, Iterator, Sequence
 from contextlib import contextmanager
@@ -31,8 +36,10 @@ from troupe.core.files import directory_lock, replace_file
 from troupe.core.notices import Notice
 from troupe.core.ulid import new_ulid
 from troupe.core.vcs import Vcs
+from troupe.platform.errors import WatchDirectoryMissingError, WatchUnavailableError
 from troupe.platform.files import WaitCallback, append_bytes
 from troupe.platform.paths import friendly as display
+from troupe.platform.watching import DirectoryWatch, watch
 from troupe_store_text.codec import Header, Record, encode_event, encode_header
 from troupe_store_text.local import OrderLog, TrackingLog, branch_key
 from troupe_store_text.segments import Segment
@@ -43,6 +50,9 @@ GITIGNORE = b"# troupe's local state: derived, per clone, never committed.\nloca
 GITATTRIBUTES = (
     b"# Event segments are byte-exact: never convert their line endings.\nevents/** -text\n"
 )
+
+Watcher = Callable[[Path], DirectoryWatch]
+"""Starts watching a directory: troupe.platform.watching.watch, unless a test gives another."""
 
 
 @dataclass(frozen=True)
@@ -66,6 +76,8 @@ class TextStore:
         lock_announce_after: float = defaults.LOCK_ANNOUNCE_AFTER_SECONDS,
         on_wait: WaitCallback | None = None,
         poll_seconds: float = defaults.SUBSCRIBE_POLL_SECONDS,
+        check_seconds: float = defaults.SUBSCRIBE_CHECK_SECONDS,
+        watcher: Watcher = watch,
     ) -> None:
         self.theatre = theatre
         self.vcs = vcs
@@ -80,6 +92,8 @@ class TextStore:
         self.lock_announce_after = lock_announce_after
         self.on_wait = on_wait
         self.poll_seconds = poll_seconds
+        self.check_seconds = check_seconds
+        self.watcher = watcher
 
         self._lock = threading.RLock()
         self._holding = False
@@ -95,7 +109,9 @@ class TextStore:
         self._order_key = ""
         self._rebuilt: list[Notice] = []
         self._listeners: set[threading.Event] = set()
-        self._poller: threading.Thread | None = None
+        self._subscription: _Subscription | None = None
+        self._delivered = 0  # the notification ids listeners have been told of
+        self._polling: Notice | None = None  # while the subscription can only poll
         self._reset_index()
 
     # The index of visible events.
@@ -200,6 +216,8 @@ class TextStore:
                     found.append(_other_branch(segment, segment.header))
                 if segment.incomplete and name not in self._own and self._torn(segment):
                     found.append(_incomplete(segment))
+            if self._polling is not None:
+                found.append(self._polling)
             found.extend(self._rebuilt)
             self._rebuilt = []
             return found
@@ -446,6 +464,7 @@ class TextStore:
                 self.refresh()
             order, positions = self._local()
             numbers = order.append(batch_ids)
+            self._delivered = len(order.ids)  # listeners here are told below, at once
             if tracking is not None:
                 epoch = order.ensure_epoch()
                 positions.append(epoch, tracking.application_name, tracking.notification_id)
@@ -546,35 +565,51 @@ class TextStore:
             if not (self.root / name).exists():
                 replace_file(self.root / name, content)
 
-    # Subscriptions (design D10): writes here set listeners; a poll finds other processes' writes.
+    # Subscriptions (watch-event-segments design D3 to D5): the port's guarantee is that every new
+    # event reaches a listener, whoever wrote it. Writes here notify at once. Other processes'
+    # writes, and segments git brings in, are heard by watching the segments directory; when it
+    # can't be watched, or its watch is found to miss a write, a poll takes over and says so.
 
     def listen(self, event: threading.Event) -> None:
         with self._lock:
             self._listeners.add(event)
-            if self._poller is None or not self._poller.is_alive():
-                self._poller = threading.Thread(target=self._poll, daemon=True)
-                self._poller.start()
+            if self._subscription is None:
+                self._subscription = _Subscription(self)
+                self._subscription.start()
 
     def unlisten(self, event: threading.Event) -> None:
         with self._lock:
             self._listeners.discard(event)
+            if not self._listeners and self._subscription is not None:
+                self._subscription.stop()
+                self._subscription = None
+                self._polling = None
 
     def _notify(self) -> None:
         for listener in list(self._listeners):
             listener.set()
 
-    def _poll(self) -> None:
-        seen = self.max_notification_id() or 0
-        while True:
-            with self._lock:
-                if not self._listeners:
-                    self._poller = None
-                    return
-            threading.Event().wait(self.poll_seconds)
+    def _deliver(self) -> bool:
+        """Notify listeners if the order has changed since they were last told. Whether it had."""
+        with self._lock:
             current = self.max_notification_id() or 0
-            if current > seen:
-                seen = current
-                self._notify()
+            if current == self._delivered:
+                return False
+            self._delivered = current
+            self._notify()
+            return True
+
+    def _watch_nearest(self) -> tuple[DirectoryWatch, bool]:
+        """A watch on the segments directory, or while it doesn't exist yet, on its nearest
+        existing ancestor in the theatre; and whether it is on the segments directory itself."""
+        target = self.events_dir
+        while True:
+            try:
+                return self.watcher(target), target == self.events_dir
+            except WatchDirectoryMissingError:
+                if target == self.theatre or target.parent == target:
+                    raise
+                target = target.parent
 
     # Errors.
 
@@ -662,6 +697,139 @@ def _rebuilt(path: Path, gone: int) -> Notice:
     )
 
 
+class _Subscription:
+    """The thread that tells a store's listeners of other writers' events (watch-event-segments
+    design D3 to D5). It waits on a watch of the segments directory; a wake costs one incremental
+    refresh. Every ``check_seconds`` it refreshes anyway, and a new event its watch didn't report
+    means the file system doesn't deliver: it then polls every ``poll_seconds``, and says so."""
+
+    def __init__(self, store: TextStore) -> None:
+        self.store = store
+        self._stopped = threading.Event()
+        self._watch: DirectoryWatch | None = None
+        self._on_events = False
+        self._thread = threading.Thread(target=self._run, daemon=True, name="troupe-subscription")
+
+    def start(self) -> None:
+        """Set up the watch before returning, so a refusal is in the store's notices at once.
+        Called with the store's lock held."""
+        store = self.store
+        store._delivered = store.max_notification_id() or 0
+        try:
+            self._watch, self._on_events = store._watch_nearest()
+        except (WatchUnavailableError, WatchDirectoryMissingError) as error:
+            store._polling = _subscription_polling(store, "watch-refused", str(error))
+        self._thread.start()
+
+    def stop(self) -> None:
+        """Called with the store's lock held."""
+        self._stopped.set()
+        if self._watch is not None:
+            self._watch.close()
+
+    def _run(self) -> None:
+        store = self.store
+        reported = False  # whether the watch reported anything since the last check
+        next_check = time.monotonic() + store.check_seconds
+        try:
+            while not self._stopped.is_set():
+                current = self._watch
+                if current is None:  # polling: refused, or found to miss writes
+                    if not self._stopped.wait(store.poll_seconds):
+                        store._deliver()
+                    continue
+                try:
+                    changed = current.wait(max(0.0, next_check - time.monotonic()))
+                except WatchDirectoryMissingError:
+                    changed = True  # the watched directory went: watch its nearest ancestor
+                    self._on_events = False
+                if self._stopped.is_set():
+                    return
+                if changed:
+                    reported = True
+                    if not self._on_events:
+                        self._rearm(current)
+                    store._deliver()
+                if time.monotonic() >= next_check:
+                    if store._deliver() and not reported:
+                        self._fall_back(
+                            "watch-missed-write",
+                            "an event was recorded that the watch didn't report",
+                        )
+                    reported = False
+                    next_check = time.monotonic() + store.check_seconds
+        finally:
+            with store._lock:
+                if self._watch is not None:
+                    self._watch.close()
+
+    def _rearm(self, current: DirectoryWatch) -> None:
+        """Move the watch nearer the segments directory once a nearer directory exists."""
+        store = self.store
+        nearest = store.events_dir
+        while not nearest.is_dir() and nearest != store.theatre and nearest.parent != nearest:
+            nearest = nearest.parent
+        if nearest == current.directory and current.directory.is_dir():
+            return
+        try:
+            replacement, on_events = store._watch_nearest()
+        except (WatchUnavailableError, WatchDirectoryMissingError) as error:
+            self._fall_back("watch-refused", str(error))
+            return
+        with store._lock:
+            if self._stopped.is_set():
+                replacement.close()
+                return
+            self._watch, self._on_events = replacement, on_events
+        current.close()
+
+    def _fall_back(self, reason: str, detail: str) -> None:
+        store = self.store
+        with store._lock:
+            if self._watch is not None:
+                self._watch.close()
+            self._watch = None
+            if not self._stopped.is_set():
+                store._polling = _subscription_polling(store, reason, detail)
+
+
+def _subscription_polling(store: TextStore, reason: str, detail: str) -> Notice:
+    """events.subscription-polling, with the text store's reason (watch-event-segments D5)."""
+    directory = display(store.events_dir)
+    every = f"{store.poll_seconds:g}"
+    if reason == "watch-refused":
+        problem = (
+            f"troupe can't watch {directory} for events other processes record ({detail}), so "
+            f"it looks for them every {every} s instead."
+        )
+        fix = (
+            "Events still arrive, up to SUBSCRIBE_POLL_SECONDS late. To be told of them at once, "
+            + (
+                "raise the limit the reason names."
+                if "max_user" in detail
+                else "keep the theatre on a local disk."
+            )
+        )
+    else:
+        problem = (
+            f"An event another process recorded wasn't reported by the watch on {directory}: "
+            f"this file system accepts watches but doesn't deliver them, so troupe looks for "
+            f"new events every {every} s instead."
+        )
+        fix = (
+            "Events still arrive, up to SUBSCRIBE_POLL_SECONDS late. To be told of them at once, "
+            "keep the theatre on a local file system, not a container bind mount or a network "
+            "share."
+        )
+    return Notice(
+        "events.subscription-polling",
+        problem=problem,
+        fix=fix,
+        path=str(store.events_dir.absolute()),
+        details={"reason": reason, "detail": detail, "poll_seconds": store.poll_seconds},
+    )
+
+
 _stores: "weakref.WeakValueDictionary[tuple[str, str], TextStore]" = weakref.WeakValueDictionary()
 _stores_guard = threading.Lock()
 
@@ -672,6 +840,8 @@ def shared_store(
     purpose: str = "events",
     *,
     poll_seconds: float = defaults.SUBSCRIBE_POLL_SECONDS,
+    check_seconds: float = defaults.SUBSCRIBE_CHECK_SECONDS,
+    watcher: Watcher = watch,
 ) -> TextStore:
     """The one TextStore for this theatre and purpose in this process, so every recorder over the
     same directory shares one lock and one index."""
@@ -679,6 +849,13 @@ def shared_store(
     with _stores_guard:
         store = _stores.get(key)
         if store is None:
-            store = TextStore(theatre, vcs_factory(), purpose=purpose, poll_seconds=poll_seconds)
+            store = TextStore(
+                theatre,
+                vcs_factory(),
+                purpose=purpose,
+                poll_seconds=poll_seconds,
+                check_seconds=check_seconds,
+                watcher=watcher,
+            )
             _stores[key] = store
         return store

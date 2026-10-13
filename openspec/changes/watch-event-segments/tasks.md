@@ -27,40 +27,40 @@ Group 2 builds the ctypes backends the owner chose for design D1 (2026-10-13).
   scheduled on a private serial dispatch queue with file events, no-defer and watch-root, latency 0. The callback is
   kept referenced by the watch. Verify `test_platform_watching.py` passes on macOS, plus a test that a refused watch
   (simulated at the OS call: `FSEventStreamStart` returning false) fails naming the directory and the reason
-- [ ] 2.3 Windows: `CreateFileW` with backup semantics and overlapped I/O, an outstanding `ReadDirectoryChangesW`
+- [x] 2.3 Windows: `CreateFileW` with backup semantics and overlapped I/O, an outstanding `ReadDirectoryChangesW`
   (`FILE_NAME | SIZE | LAST_WRITE`), and `WaitForMultipleObjects` on its event and a close event. A zero-byte
   completion (overflow) counts as a change, and the read is re-issued after each completion. Verify
   `test_platform_watching.py` passes on Windows, plus a test that a refused watch (simulated at the OS call:
   `ReadDirectoryChangesW` failing with `ERROR_INVALID_FUNCTION`) fails naming the directory and the reason
-- [ ] 2.4 Push the branch and verify the platform suite passes on Linux, macOS and Windows in CI, with no watching test
+- [x] 2.4 Push the branch and verify the platform suite passes on Linux, macOS and Windows in CI, with no watching test
   skipped on any platform (record the run for the PR)
 
 ## 3. The port's guarantee, met by the text store (design D0, D3 to D5)
 
-- [ ] 3.1 Add `SUBSCRIBE_CHECK_SECONDS = 30.0` to `troupe.core.defaults`, and redefine `SUBSCRIBE_POLL_SECONDS`'s
+- [x] 3.1 Add `SUBSCRIBE_CHECK_SECONDS = 30.0` to `troupe.core.defaults`, and redefine `SUBSCRIBE_POLL_SECONDS`'s
   docstring as the fallback's interval. Add `listen` and `unlisten` to `EventRecorder` in
   `troupe/core/events/port.py`. Verify `uv run scripts/check.py` passes, which shows the text recorder still satisfies
   the protocol
-- [ ] 3.2 Give `TextStore` and `shared_store` a `watcher` (default `watching.watch`) and a `check_seconds`. Replace
+- [x] 3.2 Give `TextStore` and `shared_store` a `watcher` (default `watching.watch`) and a `check_seconds`. Replace
   `_poll` with the D3 loop: the watch set up synchronously in the first `listen`, refresh on a wake, notify when the
   id grew, the nearest existing ancestor watched until `events/` exists, and the watch closed by the last `unlisten`.
   Verify `test_library_suite.py` (including the opt-in subscription case) and `test_processes.py` pass
-- [ ] 3.3 Add the fallback and the check (D5): `events.subscription-polling` with `details.reason` `watch-refused` or
+- [x] 3.3 Add the fallback and the check (D5): `events.subscription-polling` with `details.reason` `watch-refused` or
   `watch-missed-write`, kept in `notices()` while the fallback lasts. Verify `test_notices.py` validates the new notice
   against `notice.schema.json`
-- [ ] 3.4 Add store tests to `packages/troupe-store-text/tests/test_processes.py`, one per event-store delta scenario:
+- [x] 3.4 Add store tests to `packages/troupe-store-text/tests/test_processes.py`, one per event-store delta scenario:
   another process's five writes wake the listener (median under 0.25 s from the append, poll and check at 60 s); the
   first write, which creates `events/`, wakes a listener; no segment is read in 2 s of quiet (counting `scandir`
   calls); a refusing watcher falls back, gives the notice on every read, and still wakes within
   `SUBSCRIBE_POLL_SECONDS`; a silent watcher is caught within the check interval (set small) and then falls back.
   Replace `test_another_processs_write_wakes_this_processs_subscription`'s `poll_seconds=0.05`, so it no longer passes
   by polling. Verify they pass, and that the wake test fails with a watcher that never reports (record the output)
-- [ ] 3.5 Add `packages/troupe/tests/test_event_subscription.py` (design D0, D7): load the installed store by name
+- [x] 3.5 Add `packages/troupe/tests/test_event_subscription.py` (design D0, D7): load the installed store by name
   through `troupe.core.events.port` with its defaults, subscribe, and have a child process record five events.
   Verify the median delay from the child's record call returning is under 0.25 s, that the test imports nothing from
   `troupe_store_text` or `troupe.platform`, and that it fails against the store with a watcher that never reports
   (record the output)
-- [ ] 3.6 Update `docs/event-store.md`: the ordering section's subscription sentence, the notices table
+- [x] 3.6 Update `docs/event-store.md`: the ordering section's subscription sentence, the notices table
   (`events.subscription-polling`), the defaults table (`SUBSCRIBE_CHECK_SECONDS`, `SUBSCRIBE_POLL_SECONDS` as the
   fallback), what doesn't wake it (D4), and the layering (D0): subscribers see the port's guarantee, and watching is
   how the text store meets it. Verify `test_event_store_doc.py` and `test_platform_docs.py`'s defaults test pass

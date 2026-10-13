@@ -1,4 +1,4 @@
-"""The event store port (spec: event-store; design D1).
+"""The event store port (spec: event-store; design D1; watch-event-segments design D0).
 
 The text store in troupe-store-text implements it and is found by name through the ``troupe.store``
 entry point group; troupe never imports it. Every write troupe makes goes through the service in
@@ -7,6 +7,7 @@ troupe.core.events, which checks lineage first.
 
 import importlib.metadata
 import os
+import threading
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Protocol
@@ -82,6 +83,16 @@ class EventRecorder(Protocol):
     ) -> Sequence[tuple[int, RecordedEvent]]: ...
     def max_notification_id(self) -> int | None: ...
     def notices(self) -> list[Notice]: ...
+
+    def listen(self, event: threading.Event) -> None:
+        """Set ``event`` whenever a new event is recorded, whoever wrote it, within a bound and
+        without the caller looking on a timer. A store that can only poll says so in its notices
+        (``events.subscription-polling``) for as long as it does (watch-event-segments D0)."""
+        ...
+
+    def unlisten(self, event: threading.Event) -> None:
+        """Stop setting ``event``."""
+        ...
 
 
 def installed_stores() -> dict[str, importlib.metadata.EntryPoint]:

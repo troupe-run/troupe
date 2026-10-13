@@ -62,8 +62,30 @@ keeps its own order in `local/order/`, so nothing that orders events is ever in 
   the old epoch no longer count, so every projection is rebuilt from the beginning. Nothing is lost: the order is
   derived from the events.
 - **Writers queue.** Within a process, calls queue on a lock; across processes, writers queue on
-  `.troupe/local/.lock`, announcing a wait and giving up after the platform's lock timeout. A subscription hears
-  another process's writes by polling every `SUBSCRIBE_POLL_SECONDS`.
+  `.troupe/local/.lock`, announcing a wait and giving up after the platform's lock timeout.
+
+## Subscriptions
+
+Anything that waits for new events (`troupe logs --follow`, and later the house's live projections and reactions)
+subscribes to the store through the port's `listen` and `unlisten`. The guarantee is the port's: every new event
+reaches a subscriber, whoever wrote it, as it's recorded, and the store says so when it can only poll. Subscribers
+never see how a store learns of writes.
+
+The text store meets it like this:
+
+- **Writes in the same process** tell subscribers at once.
+- **Other processes' writes, and segments git brings in** (`pull`, `merge`, `checkout`), are heard by watching
+  `events/` through the platform ([docs/platform.md](platform.md#watching)). Until `events/` exists, the store
+  watches its nearest existing parent, and moves to `events/` once it appears. A wake costs one incremental read;
+  while nothing changes, no segment is read.
+- **When `events/` can't be watched,** the store looks for new events every `SUBSCRIBE_POLL_SECONDS` instead, and
+  its notices include `events.subscription-polling` (reason `watch-refused`) for as long as it does.
+- **A file system that accepts watches but doesn't deliver them** (some container bind mounts and network shares)
+  can't be told apart when the watch is set up. So every `SUBSCRIBE_CHECK_SECONDS` a store with subscribers looks for
+  itself. If it finds an event its watch didn't report, it delivers it, polls from then on, and gives the same notice
+  (reason `watch-missed-write`).
+- **What doesn't wake a subscriber:** a branch switch that changes no file in `events/`. It can change which
+  uncommitted segments are visible, but nothing new was recorded; the next read or wake sees the new branch.
 
 ## Forks and settling
 
@@ -159,6 +181,7 @@ path ([`notice.schema.json`](../protocol/schemas/notice.schema.json)).
 | `events.other-branch` | Uncommitted events made on another branch were left out |
 | `events.order-rebuilt` | An ordered event is no longer here, so the order was rebuilt and followers start again |
 | `events.incomplete-batch` | A segment ends in a batch whose write was interrupted; it was left out |
+| `events.subscription-polling` | Subscribers can't be told of other writers' events as they're recorded, so the store looks for them every `SUBSCRIBE_POLL_SECONDS` |
 
 | Error | When |
 |---|---|
@@ -196,8 +219,10 @@ compact committed segments.
 
 Every limit has its default in `troupe.core.defaults`, and each can be overridden by the caller. The store's write
 lock uses the platform's lock defaults (`LOCK_TIMEOUT_SECONDS`, `LOCK_ANNOUNCE_AFTER_SECONDS`), and the identity
-chain is `IDENTITY_CHAIN`.
+chain is `IDENTITY_CHAIN`. `SUBSCRIBE_POLL_SECONDS` is how often a subscription looks for new events when it can only
+poll, and `SUBSCRIBE_CHECK_SECONDS` how often a store with subscribers checks that its watch is delivering.
 
 | Setting | Default |
 |---|---|
 | `SUBSCRIBE_POLL_SECONDS` | 1 |
+| `SUBSCRIBE_CHECK_SECONDS` | 30 |
