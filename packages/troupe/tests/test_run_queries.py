@@ -201,7 +201,9 @@ def test_a_prefix_two_runs_share_is_refused_listing_both(tmp_path: Path) -> None
 
 
 def test_the_stores_notices_come_back_with_the_result(tmp_path: Path) -> None:
-    notice = Notice("events.order-rebuilt", problem="Rebuilt.", fix="Nothing to do.")
+    notice = Notice(
+        "events.order-rebuilt", problem="Rebuilt.", fix="Nothing to do.", details={"gone": 2}
+    )
 
     def with_notice(store: EventStore) -> EventStore:
         store.notices = lambda: [notice]  # type: ignore[method-assign]

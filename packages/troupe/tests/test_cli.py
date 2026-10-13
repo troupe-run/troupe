@@ -3,24 +3,20 @@ it returns is one of the documented codes ("Every returned code is documented").
 
 import argparse
 import io
-import json
 import shutil
 import subprocess
 import sys
 from importlib.metadata import version
 from pathlib import Path
-from typing import Any, TextIO
+from typing import TextIO
 
-import jsonschema
 import pytest
 
+from protocol_schemas import check_error
 from troupe.cli import main
 from troupe.cli.parser import Command, parse
 from troupe.core.errors import TroupeError
 from troupe.core.exit_codes import ExitCode
-
-SCHEMA_PATH = Path(__file__).resolve().parents[3] / "protocol" / "schemas" / "error.schema.json"
-SCHEMA: dict[str, Any] = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
 
 
 def _configure_echo(parser: argparse.ArgumentParser) -> None:
@@ -40,6 +36,7 @@ def _run_failing(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) 
         problem="timed out waiting for the theatre lock",
         fix="Wait for the other troupe command to finish, then try again.",
         path=str(Path.home() / "theatre" / ".troupe"),
+        details={"waitedSeconds": 5.0},
     )
 
 
@@ -155,15 +152,15 @@ def test_an_unexpected_exception_is_reported_as_a_structured_internal_error() ->
     ids=["unknown-command", "unknown-flag", "dash-value", "missing-argument", "extra-argument"],
 )
 def test_usage_error_data_matches_the_protocol_schema(argv: tuple[str, ...]) -> None:
-    jsonschema.validate(usage_error(*argv).to_data(), SCHEMA)
+    check_error(usage_error(*argv).to_data())
 
 
 def test_internal_and_command_error_data_matches_the_protocol_schema() -> None:
     with pytest.raises(TroupeError) as caught:
         _run_failing(argparse.Namespace(), io.StringIO(), io.StringIO())
-    jsonschema.validate(caught.value.to_data(), SCHEMA)
+    check_error(caught.value.to_data())
     internal = TroupeError("internal.unexpected", problem="p", fix="f")
-    jsonschema.validate(internal.to_data(), SCHEMA)
+    check_error(internal.to_data())
 
 
 # Requirement: Usage errors and unknown commands

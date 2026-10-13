@@ -14,6 +14,7 @@ from hypothesis import strategies as st
 from troupe.core import files as core_files
 from troupe.core.errors import TroupeError
 from troupe.platform import files
+from troupe.platform.errors import FileInUseError
 
 WINDOWS = sys.platform == "win32"
 
@@ -223,3 +224,24 @@ def test_commit_file_does_not_wait_for_an_existing_target_held_open_by_a_reader(
         )
     assert waits == []
     assert not temp.exists()
+
+
+def test_a_file_held_open_elsewhere_is_replace_in_use_naming_the_wait_on_every_platform(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Only Windows holds a file open against replacement, so the platform's answer is stood in
+    # for here; the Windows-only test above checks the platform really gives it.
+    def held(path: Path, *_: object, **__: object) -> None:
+        raise FileInUseError(Path(path), 2.5)
+
+    monkeypatch.setattr(files, "replace_bytes", held)
+    monkeypatch.setattr(files, "read_bytes", held)
+    target = tmp_path / "held.txt"
+    for attempt in (
+        lambda: core_files.replace_file(target, b"x"),
+        lambda: core_files.read_file(target),
+    ):
+        with pytest.raises(TroupeError) as caught:
+            attempt()
+        assert caught.value.code == "replace.in-use"
+        assert caught.value.details == {"waitedSeconds": 2.5}

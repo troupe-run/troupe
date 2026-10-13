@@ -27,7 +27,16 @@ class Refusing:
     hint = "fix it"
 
     def resolve(self, context: IdentityContext) -> Identity | None:
-        raise TroupeError("identity.ambiguous", problem="two answers", fix="keep one")
+        raise TroupeError(
+            "identity.ambiguous",
+            problem="two answers",
+            fix="keep one",
+            details={
+                "source": "vcs",
+                "adapter": "git",
+                "values": ["a@example.com", "b@example.com"],
+            },
+        )
 
 
 @pytest.fixture

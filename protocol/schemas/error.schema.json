@@ -2,22 +2,1519 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://troupe.run/protocol/error.schema.json",
   "title": "Error",
-  "description": "A failure, as structured data. Each surface (CLI, run server, UI) renders it in its own words; the code identifies it.",
+  "description": "A failure, as structured data. Each surface (CLI, run server, UI) renders it in its own words; the code identifies it. Every code troupe can produce is listed, with what its details hold; a code with no details schema carries none.",
   "$ref": "#/$defs/fields",
   "unevaluatedProperties": false,
-  "properties": {
-    "details": {
-      "title": "Details",
-      "description": "Extra structured facts about this error, keyed by name.",
-      "type": "object"
+  "oneOf": [
+    {
+      "properties": {
+        "code": {
+          "const": "internal.unexpected"
+        },
+        "details": false
+      }
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "usage.invalid"
+        },
+        "details": false
+      }
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "usage.unknown-command"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "command",
+            "suggestion"
+          ],
+          "properties": {
+            "command": {
+              "type": "string",
+              "minLength": 1
+            },
+            "suggestion": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "usage.unknown-flag"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "flag",
+            "suggestion"
+          ],
+          "properties": {
+            "flag": {
+              "type": "string",
+              "minLength": 1
+            },
+            "suggestion": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "usage.dash-value"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value"
+          ],
+          "properties": {
+            "value": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "lock.timeout"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "waitedSeconds"
+          ],
+          "properties": {
+            "waitedSeconds": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "lock.already-held"
+        },
+        "details": false
+      }
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "replace.in-use"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "waitedSeconds"
+          ],
+          "properties": {
+            "waitedSeconds": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "replace.failed"
+        },
+        "details": false
+      }
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "runner.start-failed"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "maxProperties": 1,
+          "properties": {
+            "command": {
+              "description": "The runner command that couldn't be started.",
+              "type": "string"
+            },
+            "runnerError": {
+              "description": "The error the runner answered with.",
+              "$ref": "runner/errors.schema.json#/$defs/anyError"
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "runner.incompatible"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "runnerError"
+          ],
+          "properties": {
+            "runnerError": {
+              "description": "The error the runner answered the handshake with.",
+              "$ref": "runner/errors.schema.json#/$defs/anyError"
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "runner.start-timeout"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "limitSeconds"
+          ],
+          "properties": {
+            "limitSeconds": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "runner.protocol"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "line": {
+              "description": "The line of the runner's output that broke the contract.",
+              "type": "integer",
+              "minimum": 1
+            },
+            "limitBytes": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "runner.crashed"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "exitCode",
+            "ending"
+          ],
+          "properties": {
+            "exitCode": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ending": {
+              "enum": [
+                "exited",
+                "killed",
+                "never-started"
+              ]
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "run.error-result"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "message"
+          ],
+          "properties": {
+            "message": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "run.effect-missing"
+        },
+        "details": false
+      }
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "run.timeout"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "limitSeconds"
+          ],
+          "properties": {
+            "limitSeconds": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "run.authentication"
+        },
+        "details": false
+      }
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "run.transcript-too-large"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "limitBytes"
+          ],
+          "properties": {
+            "limitBytes": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "run.unclean-exit"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "exitCode",
+            "ending"
+          ],
+          "properties": {
+            "exitCode": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ending": {
+              "enum": [
+                "exited",
+                "killed",
+                "never-started"
+              ]
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "artifact.missing"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "ref"
+          ],
+          "properties": {
+            "ref": {
+              "$ref": "lineage.schema.json#/$defs/hash"
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "artifact.corrupt"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "ref",
+            "actual"
+          ],
+          "properties": {
+            "ref": {
+              "$ref": "lineage.schema.json#/$defs/hash"
+            },
+            "actual": {
+              "$ref": "lineage.schema.json#/$defs/hash"
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "artifact.write-failed"
+        },
+        "details": false
+      }
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "artifact.unknown-store"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "store",
+            "installed"
+          ],
+          "properties": {
+            "store": {
+              "type": "string",
+              "minLength": 1
+            },
+            "installed": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "events.version-conflict"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "reason"
+          ],
+          "properties": {
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "events.stream-forked"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "stream",
+            "heads"
+          ],
+          "properties": {
+            "stream": {
+              "type": "string",
+              "minLength": 1
+            },
+            "heads": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "version",
+                  "file",
+                  "line"
+                ],
+                "properties": {
+                  "id": {
+                    "$ref": "lineage.schema.json#/$defs/hash"
+                  },
+                  "version": {
+                    "type": "integer"
+                  },
+                  "file": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "line": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "events.settle-incomplete"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "stream",
+            "heads",
+            "leftOut",
+            "unknown"
+          ],
+          "properties": {
+            "stream": {
+              "type": "string",
+              "minLength": 1
+            },
+            "heads": {
+              "type": "array",
+              "items": {
+                "$ref": "lineage.schema.json#/$defs/hash"
+              }
+            },
+            "leftOut": {
+              "type": "array",
+              "items": {
+                "$ref": "lineage.schema.json#/$defs/hash"
+              }
+            },
+            "unknown": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "events.missing-parent"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "line",
+            "event",
+            "missingParent",
+            "onlyIn"
+          ],
+          "properties": {
+            "line": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "event": {
+              "$ref": "lineage.schema.json#/$defs/hash"
+            },
+            "missingParent": {
+              "$ref": "lineage.schema.json#/$defs/hash"
+            },
+            "onlyIn": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "events.malformed-record"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "line",
+            "reason"
+          ],
+          "properties": {
+            "line": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "events.unknown-format"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "line",
+            "format"
+          ],
+          "properties": {
+            "line": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "format": {
+              "description": "The record's format, as JSON text.",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "events.lineage-invalid"
+        },
+        "details": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "problem"
+              ],
+              "properties": {
+                "problem": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "cause",
+                "change"
+              ],
+              "properties": {
+                "cause": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "change": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          ]
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "events.cause-unknown"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "cause"
+          ],
+          "properties": {
+            "cause": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "events.unknown-store"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "store",
+            "installed"
+          ],
+          "properties": {
+            "store": {
+              "type": "string",
+              "minLength": 1
+            },
+            "installed": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "identity.unresolved"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "tried"
+          ],
+          "properties": {
+            "tried": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "identity.invalid-override"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "source",
+            "variable",
+            "value"
+          ],
+          "properties": {
+            "source": {
+              "const": "env"
+            },
+            "variable": {
+              "type": "string",
+              "minLength": 1
+            },
+            "value": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "identity.ambiguous"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "source",
+            "adapter",
+            "values"
+          ],
+          "properties": {
+            "source": {
+              "const": "vcs"
+            },
+            "adapter": {
+              "type": "string",
+              "minLength": 1
+            },
+            "values": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "identity.unknown-source"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "unknown",
+            "installed",
+            "chain"
+          ],
+          "properties": {
+            "unknown": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "installed": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "chain": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "vcs.unknown-adapter"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "adapter",
+            "installed"
+          ],
+          "properties": {
+            "adapter": {
+              "type": "string",
+              "minLength": 1
+            },
+            "installed": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "vcs.failed"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "command",
+            "exitStatus"
+          ],
+          "properties": {
+            "command": {
+              "type": "string",
+              "minLength": 1
+            },
+            "exitStatus": {
+              "type": "integer"
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "command.timeout"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "command",
+            "timeoutSeconds"
+          ],
+          "properties": {
+            "command": {
+              "type": "string",
+              "minLength": 1
+            },
+            "timeoutSeconds": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "command.not-found"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "command"
+          ],
+          "properties": {
+            "command": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "command.output-too-large"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "command",
+            "limitBytes"
+          ],
+          "properties": {
+            "command": {
+              "type": "string",
+              "minLength": 1
+            },
+            "limitBytes": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "environment.policy-invalid"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "reason"
+          ],
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "policy.invalid-value"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "variable",
+            "value",
+            "accepted"
+          ],
+          "properties": {
+            "variable": {
+              "type": "string",
+              "minLength": 1
+            },
+            "value": {
+              "type": "string"
+            },
+            "accepted": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "stage.unknown"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "stage",
+            "installed"
+          ],
+          "properties": {
+            "stage": {
+              "type": "string",
+              "minLength": 1
+            },
+            "installed": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "stage.effects-unenforced"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "stage",
+            "setting",
+            "source",
+            "variable"
+          ],
+          "properties": {
+            "stage": {
+              "type": "string",
+              "minLength": 1
+            },
+            "setting": {
+              "type": "string",
+              "minLength": 1
+            },
+            "source": {
+              "type": "string",
+              "minLength": 1
+            },
+            "variable": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "theatre.not-found"
+        },
+        "details": false
+      }
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "runner.unknown"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "runner",
+            "known"
+          ],
+          "properties": {
+            "runner": {
+              "type": "string",
+              "minLength": 1
+            },
+            "known": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "run.out-of-sequence"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "run"
+          ],
+          "properties": {
+            "run": {
+              "type": "string",
+              "minLength": 1
+            },
+            "seq": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "expected": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "run.recording-failed"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "run",
+            "failedAt",
+            "error",
+            "endError",
+            "transcript"
+          ],
+          "properties": {
+            "run": {
+              "type": "string",
+              "minLength": 1
+            },
+            "failedAt": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "error": {
+              "$ref": "#"
+            },
+            "endError": {
+              "anyOf": [
+                {
+                  "$ref": "#"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "transcript": {
+              "anyOf": [
+                {
+                  "$ref": "lineage.schema.json#/$defs/hash"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "run.not-found"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "run"
+          ],
+          "properties": {
+            "run": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "run.ambiguous-id"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "run",
+            "matches"
+          ],
+          "properties": {
+            "run": {
+              "type": "string",
+              "minLength": 1
+            },
+            "matches": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "client.invalid-request"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "method",
+            "reason"
+          ],
+          "properties": {
+            "method": {
+              "type": "string",
+              "minLength": 1
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "client.unknown-method"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "method",
+            "known"
+          ],
+          "properties": {
+            "method": {
+              "type": "string",
+              "minLength": 1
+            },
+            "known": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "perform.options-invalid"
+        },
+        "details": false
+      }
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "perform.path-outside-theatre"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path"
+          ],
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
     }
-  },
+  ],
   "$defs": {
     "fields": {
       "title": "Error fields",
       "description": "The fields every error and notice has. Each catalogue of codes closes the object and says what each code's details are.",
       "type": "object",
-      "required": ["code", "problem", "fix"],
+      "required": [
+        "code",
+        "problem",
+        "fix"
+      ],
       "properties": {
         "code": {
           "title": "Code",

@@ -82,3 +82,18 @@ def bound(uri: str, runner: str) -> dict[str, Any]:
             "errors": {"$dynamicAnchor": "runnerErrors", "$ref": f"{own}errors.schema.json"},
         },
     }
+
+
+SCRIPTED = "runner-scripted"
+"""troupe's tests drive the scripted runner, so its own error codes can appear inside troupe's
+errors (``runner.start-failed`` keeps the runner's answer)."""
+
+
+def check_error(data: object) -> None:
+    """Validate ``data`` as an error, against its code's details schema."""
+    validator_for(PROTOCOL_BASE + "error.schema.json", SCRIPTED).validate(data)
+
+
+def check_notice(data: object) -> None:
+    """Validate ``data`` as a notice, against its code's details schema."""
+    validator_for(PROTOCOL_BASE + "notice.schema.json").validate(data)

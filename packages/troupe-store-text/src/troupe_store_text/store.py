@@ -511,7 +511,7 @@ class TextStore:
                 details={
                     "stream": str(stream),
                     "heads": sorted(heads),
-                    "left_out": left_out,
+                    "leftOut": left_out,
                     "unknown": unknown,
                 },
             )
@@ -656,8 +656,8 @@ class TextStore:
             details={
                 "line": record.line,
                 "event": record.id,
-                "missing_parent": parent,
-                "only_in": [str(p) for p in elsewhere],
+                "missingParent": parent,
+                "onlyIn": [str(p) for p in elsewhere],
             },
         )
 

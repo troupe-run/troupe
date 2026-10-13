@@ -93,7 +93,7 @@ def test_a_settling_event_must_name_every_head(tmp_path: Path) -> None:
             [_settled(one, 3)], command.lineage(), settling_parents=[heads[0].id]
         )
     assert caught.value.code == "events.settle-incomplete"
-    assert caught.value.details["left_out"] == [heads[1].id]
+    assert caught.value.details["leftOut"] == [heads[1].id]
 
 
 def test_a_settled_streams_history_keeps_both_branches_and_the_settling_event(

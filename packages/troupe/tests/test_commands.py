@@ -65,7 +65,7 @@ def test_a_command_past_its_timeout_is_command_timeout_naming_it(tmp_path: Path)
     with pytest.raises(TroupeError) as caught:
         run([PYTHON, "-c", "import time; time.sleep(30)"], tmp_path, timeout=0.5)
     assert caught.value.code == "command.timeout"
-    assert caught.value.details["timeout_seconds"] == 0.5
+    assert caught.value.details["timeoutSeconds"] == 0.5
     assert "time.sleep(30)" in caught.value.details["command"]
 
 
@@ -75,7 +75,7 @@ def test_a_command_writing_past_its_limit_is_command_output_too_large_naming_it(
     with pytest.raises(TroupeError) as caught:
         run([PYTHON, "-c", "print('x' * 100000)"], tmp_path, max_output_bytes=1000)
     assert caught.value.code == "command.output-too-large"
-    assert caught.value.details["limit_bytes"] == 1000
+    assert caught.value.details["limitBytes"] == 1000
     assert PYTHON in caught.value.details["command"]
 
 

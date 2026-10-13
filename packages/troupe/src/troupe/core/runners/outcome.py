@@ -82,7 +82,7 @@ def derive_outcome(facts: RunFacts) -> tuple[Outcome, TroupeError | None]:
             problem=f"The run's transcript passed its limit of {limit} bytes, so the run was "
             "stopped. The transcript up to that point was kept.",
             fix="Raise RUN_TRANSCRIPT_MAX_BYTES for this run if that much output is expected.",
-            details={"limit_bytes": limit},
+            details={"limitBytes": limit},
         )
     result = facts.result
     if result is not None and result.status == "error":
@@ -108,7 +108,7 @@ def derive_outcome(facts: RunFacts) -> tuple[Outcome, TroupeError | None]:
                 problem=f"The runner reported success but {ended}, so the run's state is "
                 "uncertain.",
                 fix="Check the run's effects and transcript before relying on them.",
-                details={"exit_code": facts.exit_code, "ending": str(facts.ending)},
+                details={"exitCode": facts.exit_code, "ending": str(facts.ending)},
             )
         return Outcome.SUCCEEDED, None
     if facts.stop is StopReason.RUN_TIMEOUT:
@@ -117,7 +117,7 @@ def derive_outcome(facts: RunFacts) -> tuple[Outcome, TroupeError | None]:
             "run.timeout",
             problem=f"The run was still going after its limit of {timeout:g}s, so it was stopped.",
             fix="Raise RUN_TIMEOUT_SECONDS for this run if it needs longer.",
-            details={"limit_seconds": timeout},
+            details={"limitSeconds": timeout},
         )
     if facts.stop is StopReason.CALLER:
         return Outcome.CANCELLED, None
@@ -126,7 +126,7 @@ def derive_outcome(facts: RunFacts) -> tuple[Outcome, TroupeError | None]:
         problem="The runner stopped without reporting a result"
         + (f" (exit code {facts.exit_code})." if facts.exit_code is not None else "."),
         fix="Check the run's standard error and transcript for why it stopped.",
-        details={"exit_code": facts.exit_code, "ending": str(facts.ending)},
+        details={"exitCode": facts.exit_code, "ending": str(facts.ending)},
     )
 
 

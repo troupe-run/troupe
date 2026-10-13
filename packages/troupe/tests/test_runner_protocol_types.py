@@ -14,7 +14,6 @@ RUN_IDS = st.uuids().map(str)
 RUN = "0f8fad5b-d9cb-469f-a165-70867728950e"
 TEXT = st.text(max_size=30)
 NAME = st.text(min_size=1, max_size=20)
-NATIVE = st.dictionaries(st.text(max_size=8), st.integers() | st.text(max_size=8), max_size=3)
 NAMED = st.fixed_dictionaries({"name": NAME, "version": NAME})
 
 
@@ -210,14 +209,33 @@ CASES: list[tuple[type[p.Message], str, st.SearchStrategy[Any]]] = [
     ),
     (
         p.ErrorData,
-        "../error.schema.json",
+        "errors.schema.json#/$defs/anyError",
         _with_optional(
             {
-                "code": st.sampled_from(["runner.unsupported-version", "run.x"]),
+                "code": st.sampled_from(["runner.invalid-params", "runner.already-started"]),
                 "problem": NAME,
                 "fix": NAME,
             },
-            {"path": NAME, "details": NATIVE},
+            {"path": NAME},
+        )
+        | _with_optional(
+            {
+                "code": st.just("runner.unsupported-version"),
+                "problem": NAME,
+                "fix": NAME,
+                "details": st.fixed_dictionaries(
+                    {"supportedVersions": st.lists(st.integers(1, 9), min_size=1, unique=True)}
+                ),
+            },
+            {"path": NAME},
+        )
+        | st.fixed_dictionaries(
+            {
+                "code": st.sampled_from(["scripted.invalid-script", "scripted.unknown-option"]),
+                "problem": NAME,
+                "fix": NAME,
+                "details": st.fixed_dictionaries({"where": NAME}),
+            }
         ),
     ),
 ]

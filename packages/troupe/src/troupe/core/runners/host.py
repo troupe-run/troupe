@@ -195,7 +195,7 @@ class _Run:
             raise _violation(
                 f"a message was longer than the limit of {error.limit} bytes",
                 self.line_number + 1,
-                limit_bytes=error.limit,
+                limitBytes=error.limit,
             ) from error
         if not line:
             return None
@@ -437,7 +437,7 @@ async def run_actor(
             f"The runner didn't answer the handshake within {limits.start_timeout:g}s.",
             "Check the runner starts and reads its standard input; raise "
             "RUNNER_START_TIMEOUT_SECONDS if it is just slow to start.",
-            limit_seconds=limits.start_timeout,
+            limitSeconds=limits.start_timeout,
         )
     except _Violation as violation:
         run.violation = violation.error
@@ -521,7 +521,7 @@ async def _start(run: _Run) -> TroupeError | None:
             code,
             f"The runner refused the handshake: {data.problem}",
             data.fix,
-            runner_error=data.to_data(),
+            runnerError=data.to_data(),
         )
     try:
         result = p.InitializeResult.from_data(answer.result)
@@ -560,7 +560,7 @@ async def _start(run: _Run) -> TroupeError | None:
             "runner.start-failed",
             f"The runner refused the run: {data.problem}",
             data.fix,
-            runner_error=data.to_data(),
+            runnerError=data.to_data(),
         )
     try:
         started = p.RunStartResult.from_data(answer.result)

@@ -23,9 +23,11 @@ from troupe.core.events import (
     StageLineage,
     Unknown,
     VcsState,
+    load_store,
 )
 from troupe.core.events.lineage import timestamp
 from troupe.core.identity import Identity
+from troupe.core.vcs import load_vcs
 from troupe_identity_local import EnvSource, OsLoginSource, VcsSource
 
 
@@ -387,3 +389,13 @@ def test_each_recorded_event_carries_the_time_its_lineage_records(tmp_path: Path
     assert recorded
     for each in recorded:
         assert each.at == lineage_of(tmp_path, each.event_id)["at"]
+
+
+def test_an_event_store_that_is_not_installed_is_refused_naming_the_installed_ones(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(TroupeError) as caught:
+        load_store("nope", tmp_path, load_vcs("files", tmp_path))
+    assert caught.value.code == "events.unknown-store"
+    assert caught.value.details["store"] == "nope"
+    assert "text" in caught.value.details["installed"]
