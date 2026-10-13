@@ -139,6 +139,65 @@ def test_closing_stdin_lets_a_child_read_end_of_file() -> None:
     assert asyncio.run(main()).strip() == b"3"
 
 
+# Requirement: A child's end says whether troupe's kill ended it
+
+KILL_STATUS = processes.KILLED_EXIT_CODE if WINDOWS else -9
+"""The exit status troupe's kill gives a child: its named code on Windows, SIGKILL elsewhere."""
+
+ENDS_ITSELF_LIKE_A_KILL = (
+    f"import os; os._exit({KILL_STATUS})"
+    if WINDOWS
+    else "import os, signal; os.kill(os.getpid(), signal.SIGKILL)"
+)
+
+
+def _ended(code: str, *, kill: bool) -> tuple[int, bool]:
+    """Start a child, kill it once it has said it is running (when ``kill``), and return its exit
+    code and whether the seam says the kill ended it."""
+
+    async def main() -> tuple[int, bool]:
+        child = await processes.start(_python(code), cwd=Path.cwd(), env={}, line_limit=LIMIT)
+        try:
+            await asyncio.wait_for(child.stdout.readline(), timeout=30)
+            if kill:
+                child.kill_tree()
+            exit_code = await asyncio.wait_for(child.wait(), timeout=30)
+            return exit_code, child.ended_by_kill(exit_code)
+        finally:
+            child.kill_tree()
+            await child.wait()
+            child.release()
+
+    return asyncio.run(main())
+
+
+def test_a_running_child_troupe_killed_was_ended_by_the_kill() -> None:
+    exit_code, by_kill = _ended("import time; print('up', flush=True); time.sleep(120)", kill=True)
+    assert (exit_code, by_kill) == (KILL_STATUS, True)
+
+
+def test_a_kill_sent_after_the_child_exited_by_itself_did_not_end_it() -> None:
+    async def main() -> tuple[int, bool]:
+        child = await processes.start(_python("pass"), cwd=Path.cwd(), env={}, line_limit=LIMIT)
+        try:
+            deadline = time.monotonic() + 30
+            while child.returncode is None and time.monotonic() < deadline:
+                await asyncio.sleep(0.05)
+            assert child.returncode == 0
+            child.kill_tree()
+            exit_code = await child.wait()
+            return exit_code, child.ended_by_kill(exit_code)
+        finally:
+            child.release()
+
+    assert asyncio.run(main()) == (0, False)
+
+
+def test_a_child_that_ends_itself_with_the_kills_status_was_not_ended_by_a_kill() -> None:
+    exit_code, by_kill = _ended(f"print('up', flush=True); {ENDS_ITSELF_LIKE_A_KILL}", kill=False)
+    assert (exit_code, by_kill) == (KILL_STATUS, False)
+
+
 # Requirement: Child output lines are not limited to 64 KiB
 
 

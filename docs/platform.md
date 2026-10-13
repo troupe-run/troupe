@@ -52,6 +52,13 @@ troupe calls it and sees one behaviour on Linux, macOS and Windows. An import co
   child still holds its output open counts as still running.
 - **Stopping:** `kill_tree()` kills the child and everything it started. Asking a child to stop gracefully is a
   protocol matter (for runners, `run/cancel`), not a signal, because Windows has no `SIGTERM`.
+- **Whether the kill ended it:** once `wait()` has returned the exit code, `ended_by_kill(exit_code)` says whether
+  troupe's kill is what ended the child: `kill_tree()` was called and the exit status is the one a kill gives. A
+  child that exited by itself before the kill landed keeps its own code, so it reads as having exited, however the
+  timing fell. On Linux and macOS a kill is `SIGKILL`, exit status `-9`. On Windows, terminating a job sets an exit
+  code the caller chooses, so troupe uses `KILLED_EXIT_CODE`, `0x74726B6C` (1953655660, "trkl" in ASCII). No
+  program commonly exits with it and it isn't an NTSTATUS crash code. A program that exits with exactly that code
+  while troupe's kill is in flight would be read as killed.
 
 ## Watching
 
