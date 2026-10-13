@@ -87,7 +87,8 @@ combinations nobody tests. `troupe-runner-scripted` is outside the group. Plugin
 of troupe's, and are meant to move to their own repos, where they'll version on their own anyway.
 
 `protocol/` is a component of its own, `protocol`, in the same linked group (owner, 2026-10-14). It uses
-release-please's `simple` release type, which writes `protocol/CHANGELOG.md` and `protocol/version.txt`. A contract
+release-please's `simple` release type, which writes `protocol/CHANGELOG.md`. (It would also bump a
+`protocol/version.txt`, but only one that exists, and none does: the manifest and the tag hold the version.) A contract
 change then bumps the whole group, because the `linked-versions` plugin releases every component of a group when
 any one of them has a release, and it's listed in the protocol's own changelog, where readers of the contract look.
 The release is tagged `protocol-v<version>`. The protocol's version is the release it shipped in. It isn't a
