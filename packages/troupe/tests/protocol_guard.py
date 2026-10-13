@@ -1,10 +1,11 @@
-"""A pytest plugin that checks every error and notice against the protocol as tests make them
-(spec: protocol; strict-schemas design D4).
+"""A pytest plugin that checks every error, notice and recorded event against the protocol as tests
+make them (spec: protocol; strict-schemas design D4).
 
 Loaded for every test path through ``addopts`` in pyproject.toml. Each ``TroupeError`` and
 ``Notice`` is validated against its code's details schema the moment it's constructed, so a raise
-site whose details drift from the schema fails the test that reached it. A test that builds an
-invalid one on purpose does so inside ``unchecked()``.
+site whose details drift from the schema fails the test that reached it. Each payload troupe's
+event service records under a topic troupe defines is validated against that topic's schema the
+same way. A test that builds an invalid one on purpose does so inside ``unchecked()``.
 
 It also records every code troupe's own source constructs (not the tests). At the end of a full
 run (every test path, no ``-k`` or ``-m``), a catalogued code nothing raised fails the session:
@@ -12,6 +13,7 @@ each code's schema has to be exercised by real code.
 """
 
 import contextlib
+import json
 import sys
 from collections.abc import Iterator
 from pathlib import Path
@@ -21,8 +23,9 @@ import jsonschema
 import pytest
 
 from catalogues import branches
-from protocol_schemas import PROTOCOL_BASE, SCRIPTED, validator_for
+from protocol_schemas import PROTOCOL_BASE, SCHEMAS, SCRIPTED, load, validator_for
 from troupe.core import errors, notices
+from troupe.core.events import EventStore
 
 _checking = True
 _seen: set[str] = set()
@@ -93,9 +96,40 @@ def _guard(cls: type[Any], catalogue: str, runner: str | None) -> None:
     cls.__post_init__ = __post_init__
 
 
+def _guard_recording() -> None:
+    """Check each payload troupe's event service is about to record, for the topics troupe defines
+    (design D4). The hook sits in troupe's service, not the text store, whose own tests run the
+    event-sourcing library's recorder suite with topics of its own."""
+    record = load(SCHEMAS / "event-record.schema.json")["$defs"]["troupeEvent"]["allOf"]
+    schemas = {
+        branch["if"]["properties"]["topic"]["const"]: validator_for(
+            PROTOCOL_BASE + branch["then"]["properties"]["state"]["$ref"], SCRIPTED
+        )
+        for branch in record
+    }
+    original = EventStore._stored
+
+    def _stored(self: EventStore, event: Any, lineage: dict[str, Any]) -> Any:  # noqa: ANN401
+        stored = original(self, event, lineage)
+        validator = schemas.get(stored.topic)
+        if validator is not None and _checking:
+            state = json.loads(stored.state)
+            if not validator.is_valid(state):
+                problems = "; ".join(_problems(validator, state, None))
+                msg = (
+                    f"the payload of {stored.topic!r} doesn't match its schema: {problems}. Fix "
+                    "what the aggregate records, or the topic's schema in protocol/schemas/events/."
+                )
+                raise ProtocolGuardError(msg)
+        return stored
+
+    EventStore._stored = _stored  # type: ignore[method-assign]
+
+
 def pytest_configure(config: pytest.Config) -> None:
     _guard(errors.TroupeError, "error.schema.json", SCRIPTED)
     _guard(notices.Notice, "notice.schema.json", None)
+    _guard_recording()
 
 
 def _is_full_run(session: pytest.Session) -> bool:

@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/events/run-started.schema.json",
+  "title": "Run.Started",
+  "description": "The payload of a run's first event (topic troupe.core.runs.aggregate:Run.Started): who and what the run is, recorded when the runner's init arrives, or at the end of a run that never sent one. Field names are as recorded.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "lineage",
+    "timestamp",
+    "originator_topic",
+    "run_id",
+    "actor",
+    "runner_requested",
+    "runner_reported",
+    "stage",
+    "effect_check",
+    "instructions",
+    "options"
+  ],
+  "properties": {
+    "lineage": {
+      "$ref": "../lineage.schema.json"
+    },
+    "timestamp": {
+      "$ref": "../event-record.schema.json#/$defs/libraryTimestamp"
+    },
+    "originator_topic": {
+      "description": "The event-sourcing library's name for the aggregate the stream holds.",
+      "const": "troupe.core.runs.aggregate:Run"
+    },
+    "run_id": {
+      "$ref": "../runner/jsonrpc.schema.json#/$defs/runId"
+    },
+    "actor": {
+      "$ref": "../client/run.schema.json#/$defs/actorName"
+    },
+    "runner_requested": {
+      "$ref": "../client/run.schema.json#/$defs/runnerName"
+    },
+    "runner_reported": {
+      "description": "The runner's name and version from its init, or null when it never sent one.",
+      "anyOf": [
+        {
+          "$ref": "../runner/jsonrpc.schema.json#/$defs/named"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "stage": {
+      "$ref": "../lineage.schema.json#/$defs/stage"
+    },
+    "effect_check": {
+      "$ref": "../client/run.schema.json#/$defs/effectCheck"
+    },
+    "instructions": {
+      "description": "The artifact reference of the instructions the actor was given.",
+      "$ref": "../lineage.schema.json#/$defs/hash"
+    },
+    "options": {
+      "description": "The artifact reference of the runner options, as canonical JSON.",
+      "$ref": "../lineage.schema.json#/$defs/hash"
+    }
+  }
+}

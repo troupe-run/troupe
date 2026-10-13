@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/events/run-ended.schema.json",
+  "title": "Run.Ended",
+  "description": "The payload of a run's last event (topic troupe.core.runs.aggregate:Run.Ended): the outcome the run host derived, and whether recording failed part-way.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "lineage",
+    "timestamp",
+    "outcome",
+    "recording"
+  ],
+  "properties": {
+    "lineage": {
+      "$ref": "../lineage.schema.json"
+    },
+    "timestamp": {
+      "$ref": "../event-record.schema.json#/$defs/libraryTimestamp"
+    },
+    "outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outcome",
+        "error",
+        "result",
+        "exitCode",
+        "ending",
+        "transcript",
+        "stderr",
+        "limits"
+      ],
+      "properties": {
+        "outcome": {
+          "enum": [
+            "succeeded",
+            "failed",
+            "cancelled",
+            "timed-out",
+            "crashed",
+            "could-not-start"
+          ]
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "../error.schema.json"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "result": {
+          "anyOf": [
+            {
+              "$ref": "../runner/run-event.schema.json#/$defs/result"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "exitCode": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ending": {
+          "enum": [
+            "exited",
+            "killed",
+            "never-started"
+          ]
+        },
+        "transcript": {
+          "anyOf": [
+            {
+              "$ref": "../lineage.schema.json#/$defs/hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "stderr": {
+          "anyOf": [
+            {
+              "$ref": "../lineage.schema.json#/$defs/hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "limits": {
+          "description": "The limits the run ran under, by setting.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "start_timeout",
+            "run_timeout",
+            "cancel_grace",
+            "silence_announce",
+            "max_message_bytes",
+            "event_max_bytes",
+            "transcript_max_bytes",
+            "stderr_max_bytes",
+            "fail_fast_on_auth_retry"
+          ],
+          "properties": {
+            "start_timeout": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "run_timeout": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "cancel_grace": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "silence_announce": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "max_message_bytes": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "event_max_bytes": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "transcript_max_bytes": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "stderr_max_bytes": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "fail_fast_on_auth_retry": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "recording": {
+      "description": "null, or where recording the run's events failed and why.",
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "failedAt",
+            "error"
+          ],
+          "properties": {
+            "failedAt": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "error": {
+              "$ref": "../error.schema.json"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

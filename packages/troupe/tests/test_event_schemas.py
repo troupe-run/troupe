@@ -25,9 +25,20 @@ EVENT: dict[str, Any] = {
     "stream": "6c1e2a3b-0000-4000-8000-000000000001",
     "stream_type": "uuid",
     "version": 1,
-    "topic": "tests:Thing.Created",
+    "topic": "troupe.core.runs.aggregate:Run.Reported",
     "parents": [],
-    "state": {"lineage": LINEAGE, "timestamp": AT, "name": "x"},
+    "state": {
+        "lineage": LINEAGE,
+        "timestamp": {"_type_": "datetime_iso", "_data_": "2026-10-12T03:04:05.678000+00:00"},
+        "seq": 0,
+        "event": {
+            "runId": "6c1e2a3b-0000-4000-8000-000000000001",
+            "seq": 0,
+            "type": "init",
+            "runner": {"name": "scripted", "version": "0"},
+            "tools": [],
+        },
+    },
     "batch": {"id": ULID, "index": 0, "size": 1},
 }
 
@@ -192,8 +203,26 @@ def test_an_event_troupe_recorded_must_carry_valid_lineage() -> None:
 
 
 def test_a_library_event_without_lineage_is_still_a_record() -> None:
-    raw = without(EVENT, "state") | {"state_b64": "c3RhdGUx"}
+    raw = without(EVENT, "state") | {"topic": "tests:Thing.Created", "state_b64": "c3RhdGUx"}
     assert is_valid(raw, "event-record.schema.json")
+
+
+# Requirement: Each event troupe defines has a payload schema
+
+
+def test_an_inline_payload_under_a_topic_troupe_does_not_define_is_refused() -> None:
+    assert not is_valid(EVENT | {"topic": "tests:Thing.Created"}, "event-record.schema.json")
+
+
+def test_a_troupe_topic_held_as_opaque_bytes_is_refused() -> None:
+    raw = without(EVENT, "state") | {"state_b64": "c3RhdGUx"}
+    assert not is_valid(raw, "event-record.schema.json")
+
+
+def test_a_payload_field_its_topic_does_not_define_is_refused() -> None:
+    changed = copy.deepcopy(EVENT)
+    changed["state"]["colour"] = "blue"
+    assert not is_valid(changed, "event-record.schema.json")
 
 
 @pytest.mark.parametrize(
