@@ -1,0 +1,11 @@
+{
+  "packages/troupe": "0.0.0",
+  "packages/troupe-artifacts-local": "0.0.0",
+  "packages/troupe-identity-local": "0.0.0",
+  "packages/troupe-stage-local": "0.0.0",
+  "packages/troupe-store-text": "0.0.0",
+  "packages/troupe-vcs-files": "0.0.0",
+  "packages/troupe-vcs-git": "0.0.0",
+  "plugins/runner-scripted": "0.0.0",
+  "protocol": "0.0.0"
+}

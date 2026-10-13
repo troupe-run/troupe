@@ -1,0 +1,124 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/v17.11.2/schemas/config.json",
+  "bump-minor-pre-major": true,
+  "include-component-in-tag": true,
+  "signoff": "troupe-run-release[bot] <341990208+troupe-run-release[bot]@users.noreply.github.com>",
+  "plugins": [
+    {
+      "type": "linked-versions",
+      "groupName": "troupe",
+      "components": [
+        "troupe",
+        "troupe-artifacts-local",
+        "troupe-identity-local",
+        "troupe-stage-local",
+        "troupe-store-text",
+        "troupe-vcs-files",
+        "troupe-vcs-git",
+        "protocol"
+      ]
+    }
+  ],
+  "packages": {
+    "packages/troupe": {
+      "release-type": "python",
+      "package-name": "troupe",
+      "component": "troupe",
+      "extra-files": [
+        {
+          "type": "toml",
+          "path": "/uv.lock",
+          "jsonpath": "$.package[?(@.name.value=='troupe')].version"
+        }
+      ]
+    },
+    "packages/troupe-artifacts-local": {
+      "release-type": "python",
+      "package-name": "troupe-artifacts-local",
+      "component": "troupe-artifacts-local",
+      "extra-files": [
+        {
+          "type": "toml",
+          "path": "/uv.lock",
+          "jsonpath": "$.package[?(@.name.value=='troupe-artifacts-local')].version"
+        }
+      ]
+    },
+    "packages/troupe-identity-local": {
+      "release-type": "python",
+      "package-name": "troupe-identity-local",
+      "component": "troupe-identity-local",
+      "extra-files": [
+        {
+          "type": "toml",
+          "path": "/uv.lock",
+          "jsonpath": "$.package[?(@.name.value=='troupe-identity-local')].version"
+        }
+      ]
+    },
+    "packages/troupe-stage-local": {
+      "release-type": "python",
+      "package-name": "troupe-stage-local",
+      "component": "troupe-stage-local",
+      "extra-files": [
+        {
+          "type": "toml",
+          "path": "/uv.lock",
+          "jsonpath": "$.package[?(@.name.value=='troupe-stage-local')].version"
+        }
+      ]
+    },
+    "packages/troupe-store-text": {
+      "release-type": "python",
+      "package-name": "troupe-store-text",
+      "component": "troupe-store-text",
+      "extra-files": [
+        {
+          "type": "toml",
+          "path": "/uv.lock",
+          "jsonpath": "$.package[?(@.name.value=='troupe-store-text')].version"
+        }
+      ]
+    },
+    "packages/troupe-vcs-files": {
+      "release-type": "python",
+      "package-name": "troupe-vcs-files",
+      "component": "troupe-vcs-files",
+      "extra-files": [
+        {
+          "type": "toml",
+          "path": "/uv.lock",
+          "jsonpath": "$.package[?(@.name.value=='troupe-vcs-files')].version"
+        }
+      ]
+    },
+    "packages/troupe-vcs-git": {
+      "release-type": "python",
+      "package-name": "troupe-vcs-git",
+      "component": "troupe-vcs-git",
+      "extra-files": [
+        {
+          "type": "toml",
+          "path": "/uv.lock",
+          "jsonpath": "$.package[?(@.name.value=='troupe-vcs-git')].version"
+        }
+      ]
+    },
+    "plugins/runner-scripted": {
+      "release-type": "python",
+      "package-name": "troupe-runner-scripted",
+      "component": "troupe-runner-scripted",
+      "extra-files": [
+        {
+          "type": "toml",
+          "path": "/uv.lock",
+          "jsonpath": "$.package[?(@.name.value=='troupe-runner-scripted')].version"
+        }
+      ]
+    },
+    "protocol": {
+      "release-type": "simple",
+      "component": "protocol"
+    }
+  }
+}

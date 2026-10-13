@@ -81,13 +81,21 @@ adapters run in-process together and are installed together, so different versio
 combinations nobody tests. `troupe-runner-scripted` is outside the group. Plugins speak the protocol, import nothing
 of troupe's, and are meant to move to their own repos, where they'll version on their own anyway.
 
-`protocol/` is added to the `troupe` package's paths (release-please's `additional-paths`). A contract change then
-bumps the group and appears in `troupe`'s changelog. That's where readers of the contract look, and the core
-implements it. This is an assumption, recorded here: if the protocol gets its own version later (the runner
-contract already has one, version 0), it can become its own component.
+`protocol/` is a component of its own, `protocol`, in the same linked group (owner, 2026-10-14). It uses
+release-please's `simple` release type, which writes `protocol/CHANGELOG.md` and `protocol/version.txt`. A contract
+change then bumps the whole group, because the `linked-versions` plugin releases every component of a group when
+any one of them has a release, and it's listed in the protocol's own changelog, where readers of the contract look.
+The release is tagged `protocol-v<version>`. The protocol's version is the release it shipped in. It isn't a
+contract version: the runner contract keeps its own (version 0), set in its schemas.
+
+Found while building it: release-please assigns a commit to a component only by the component's own path, and
+v17.11.2 has no way to add paths to a component (no `additional-paths`, in its schema or source). The first plan, to
+add `protocol/` to `troupe`'s paths, wasn't possible. Alternatives offered: count a `protocol/`-only commit
+nowhere, so a schema-only contract change wouldn't release; or move `protocol/` under `packages/troupe/`, against
+the constraint that it stays top-level and language-neutral.
 
 `separate-pull-requests: false` (the default) keeps one release PR for all components. Tags are
-`<component>-v<version>` (release-please's default for a manifest), for example `troupe-v0.1.0` and
+`<component>-v<version>` (release-please's default for a manifest), for example `troupe-v0.1.0`, `protocol-v0.1.0` and
 `troupe-runner-scripted-v0.1.0`.
 
 Alternatives (offered to the owner): every package independent, which gives seven adapter versions that drift apart
@@ -188,12 +196,13 @@ skips bots, which the org config doesn't promise.
 them, and reads each member's `[project] name`. It asserts:
 
 - each member path has an entry in `release-please-config.json` and in `.release-please-manifest.json`, and no
-  entry names a path that isn't a member;
+  entry names a path that isn't a member, apart from `protocol`;
 - each entry's `package-name` and `component` equal the project name;
-- the linked group's components are exactly the `packages/*` members;
+- the linked group's components are exactly the `packages/*` members plus `protocol`;
 - each entry's `uv.lock` extra file uses the JSONPath for its own name, and `uv.lock` has exactly one package with
   that name, so the path matches one entry;
-- `protocol` is in `troupe`'s `additional-paths`.
+- `protocol` has an entry with `release-type: simple` and `component: protocol`, and no `uv.lock` extra file
+  (it isn't a Python package).
 
 Each failure message names the member and the file to fix (spec: "Every workspace member is configured for
 release"). It runs inside `scripts/check.py`'s `tests` gate. It uses only the standard library (`tomllib` and

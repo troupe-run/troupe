@@ -13,25 +13,27 @@
   metadata read, with selected repositories) and `gh api repos/troupe-run/troupe/environments/release/secrets`
   (the secret's name is listed). Record the bot's user ID for 2.1. Done 2026-10-14: App 5300488, those four
   permissions, `selected`; the secret is listed; `gh api 'users/troupe-run-release%5Bbot%5D'` gives ID 341990208
-- [ ] 1.3 Rebase this branch onto `main`, which carries the delivered guard (`dca700d`). Verify the delivered
+- [x] 1.3 Rebase this branch onto `main`, which carries the delivered guard (`dca700d`). Verify the delivered
   `scripts/guard.py ci` with `--repository` against a scratch `release-please--branches--main` range, for each case
   in design D7: commits authored only by the bot with `troupe-run/troupe` passes; the same with another repository
   fails `commit-branch-change`; a commit by any other author fails it; and a PR title that isn't a Conventional Commit
-  fails `commit-message`. Record the output in the PR
+  fails `commit-message`. Record the output in the PR. Done 2026-10-14: rebased onto `dca700d`; the four cases gave
+  exit 0, then exit 1 `commit-branch-change` twice, then exit 1 `commit-message` (table for the PR description)
 
 ## 2. Release configuration and its test
 
-- [ ] 2.1 Add `release-please-config.json` and `.release-please-manifest.json` (design D1 to D4, D9). Eight package
+- [x] 2.1 Add `release-please-config.json` and `.release-please-manifest.json` (design D1 to D4, D9). Eight package
   entries, each with `release-type: python`, `package-name` and `component` set to the project name, and the
-  `uv.lock` extra file for its own name. Top level: `bump-minor-pre-major: true`, `signoff` as in design D9, the `linked-versions` plugin grouping the seven `packages/*` components as `troupe`, and
-  `additional-paths: ["protocol"]` on `packages/troupe`. Every manifest version is `0.0.0`. Verify both files parse
+  `uv.lock` extra file for its own name. A `protocol` entry with `release-type: simple` and `component: protocol`
+  (design D3). Top level: `bump-minor-pre-major: true`, `signoff` as in design D9, and the `linked-versions` plugin
+  grouping the seven `packages/*` components and `protocol` as `troupe`. Every manifest version is `0.0.0`. Verify both files parse
   (`python -m json.tool`)
-- [ ] 2.2 Add `scripts/tests/test_release_config.py` (design D10). Add one test for each assertion, each named for
+- [x] 2.2 Add `scripts/tests/test_release_config.py` (design D10). Add one test for each assertion, each named for
   the property its body checks. Each one first runs against a temporary copy of the config with that one property
   broken, and then against the real files. Verify through `uv run scripts/check.py` that every test passes on the
   real files, and that each broken copy fails with a message naming the member and the file
 - [ ] 2.3 Write `docs/releasing.md`. Cover how a release happens (merging the release PR), what bumps what (pre-1.0
-  rules, the linked group, plugins on their own, `protocol/` counting as core), why scopes don't select packages,
+  rules, the linked group, plugins on their own, the protocol in the linked group with its own changelog), why scopes don't select packages,
   how to force a version (`release-as`), and the rollback and fix-forward rule. Link it from `README.md`. Verify
   every config key the doc names exists in `release-please-config.json`
 
@@ -41,7 +43,7 @@
   --repo-url troupe-run/troupe --target-branch main` with a read-only token), against this branch's config pushed
   to a scratch ref. Verify it reports one PR titled `chore: release main`
 - [ ] 3.2 From that dry run, verify that every package goes to 0.1.0 (design D2), that the seven `packages/*` share
-  it (D3), that `troupe`'s changelog includes a `protocol/`-only commit (D3), and that the `uv.lock` diff changes
+  it (D3), that a `protocol/`-only commit appears in `protocol/CHANGELOG.md` and the protocol shares the group's version (D3), and that the `uv.lock` diff changes
   exactly one `version` line per package (D4). Apply each fallback the design names (`release-as` for D2, the
   re-lock job for D4) only if its check fails, and record which one ran in the PR
 
