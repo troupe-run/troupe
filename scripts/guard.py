@@ -752,12 +752,46 @@ GH_API_OWNER_ONLY = tuple(
         (r".*/(secrets|variables)(/.*)?", "admin"),
     )
 )
-GH_MUTATIONS_ALLOWED = frozenset(
-    {
-        "updateIssue", "addSubIssue", "removeSubIssue", "addComment", "addProjectV2ItemById",
-        "updateProjectV2ItemFieldValue",
-    }
-)  # fmt: skip
+# Every everyday write has one way to do it, its gh command, so no GraphQL mutation is allowed
+# (guard-issue-mutations design D1). Add one here only for a write gh can't do.
+GH_MUTATIONS_ALLOWED: frozenset[str] = frozenset()
+# The gh command that does what a refused mutation does, named in its refusal's fix (design D2).
+# Only commands the guard allows; a mutation whose gh command is refused or owner-only has no entry.
+# Each name was checked against GitHub's GraphQL schema on 2026-10-13.
+GH_MUTATION_EQUIVALENTS: dict[str, tuple[str, ...]] = {
+    "updateIssue": ("gh issue edit <n>", "gh issue close <n>", "gh issue reopen <n>"),
+    "updateIssueIssueType": ("gh issue edit <n> --type <name>",),
+    "addBlockedBy": ("gh issue edit <n> --add-blocked-by <m>",),
+    "removeBlockedBy": ("gh issue edit <n> --remove-blocked-by <m>",),
+    "addSubIssue": ("gh issue edit <n> --add-sub-issue <m>",),
+    "removeSubIssue": ("gh issue edit <n> --remove-sub-issue <m>",),
+    "addComment": ("gh issue comment <n>", "gh pr comment <n>"),
+    "addProjectV2ItemById": ("gh project item-add <number> --owner <org> --url <url>",),
+    "updateProjectV2ItemFieldValue": (
+        "gh project item-edit --id <item> --field-id <field> --project-id <project> --text <value>",
+    ),
+    "addLabelsToLabelable": (
+        "gh issue edit <n> --add-label <name>", "gh pr edit <n> --add-label <name>",
+    ),
+    "removeLabelsFromLabelable": (
+        "gh issue edit <n> --remove-label <name>", "gh pr edit <n> --remove-label <name>",
+    ),
+    "addAssigneesToAssignable": (
+        "gh issue edit <n> --add-assignee <login>", "gh pr edit <n> --add-assignee <login>",
+    ),
+    "removeAssigneesFromAssignable": (
+        "gh issue edit <n> --remove-assignee <login>", "gh pr edit <n> --remove-assignee <login>",
+    ),
+    "closeIssue": ("gh issue close <n>",),
+    "reopenIssue": ("gh issue reopen <n>",),
+    "createIssue": ("gh issue create --title <title> --body-file <file>",),
+    "closePullRequest": ("gh pr close <n>",),
+    "reopenPullRequest": ("gh pr reopen <n>",),
+    "markPullRequestReadyForReview": ("gh pr ready <n>",),
+    "convertPullRequestToDraft": ("gh pr ready <n> --undo",),
+    "updatePullRequest": ("gh pr edit <n>",),
+    "createPullRequest": ("gh pr create --title <title> --body-file <file>",),
+}  # fmt: skip
 GH_MUTATIONS_OWNER_ONLY = {
     "mergePullRequest": "merge",
     "approveDeployments": "deployment", "rejectDeployments": "deployment",
@@ -996,8 +1030,25 @@ def _not_listed(what: str) -> Decision:
     return Decision("gh-allow-list", f"{what} isn't on the guard's gh allow-list.", NOT_LISTED_FIX)
 
 
-def _classify_api(rest: Sequence[str], cwd: Path) -> tuple[str, str | None, str | None]:
-    """('allow' | 'owner' | 'unlisted', owner group, repository) for a gh api call."""
+def _not_listed_mutations(names: Sequence[str]) -> Decision:
+    """Refuse unlisted GraphQL mutations by name, with the gh command for each that has one."""
+    unique = list(dict.fromkeys(names))
+    if len(unique) == 1:
+        problem = f"GraphQL mutation {unique[0]} isn't on the guard's gh allow-list."
+    else:
+        problem = f"GraphQL mutations {', '.join(unique)} aren't on the guard's gh allow-list."
+    hints = [
+        f"For {name}, run {' or '.join(GH_MUTATION_EQUIVALENTS[name])}, which the guard allows."
+        for name in unique
+        if name in GH_MUTATION_EQUIVALENTS
+    ]
+    fix = "Ask the owner, or add it to the list in troupe-run/infrastructure (scripts/guard.py)."
+    return Decision("gh-allow-list", problem, " ".join([*hints, fix]))
+
+
+def _classify_api(rest: Sequence[str], cwd: Path) -> tuple[str, str | None, str | None, list[str]]:
+    """('allow' | 'owner' | 'unlisted' | 'unreadable', owner group, repository, the unlisted
+    GraphQL mutations) for a gh api call."""
     endpoint = _api_endpoint(rest)
     method = _api_method(rest)
     repo_match = re.match(rf"repos/({_SEG}/{_SEG})", endpoint)
@@ -1005,28 +1056,29 @@ def _classify_api(rest: Sequence[str], cwd: Path) -> tuple[str, str | None, str 
     if endpoint == "graphql":
         queries = _graphql_queries(rest, cwd)
         if queries is None:
-            return "unreadable", None, None
+            return "unreadable", None, None, []
         names: list[str] = []
         for query in queries:
             found = graphql_mutations(query)
             if found is None:
-                return "unreadable", None, None
+                return "unreadable", None, None, []
             names.extend(found)
         for name in names:
             if name in GH_MUTATIONS_OWNER_ONLY:
-                return "owner", GH_MUTATIONS_OWNER_ONLY[name], None
-        if all(name in GH_MUTATIONS_ALLOWED for name in names):
-            return "allow", None, None
-        return "unlisted", None, None
+                return "owner", GH_MUTATIONS_OWNER_ONLY[name], None, []
+        unlisted = [name for name in names if name not in GH_MUTATIONS_ALLOWED]
+        if not unlisted:
+            return "allow", None, None, []
+        return "unlisted", None, None, unlisted
     if method in ("GET", "HEAD"):
-        return "allow", None, repository
+        return "allow", None, repository, []
     for pattern, group in GH_API_OWNER_ONLY:
         if pattern.fullmatch(endpoint) and method in _WRITES:
-            return "owner", group, repository
+            return "owner", group, repository, []
     for pattern, methods in GH_API_WORKFLOW_WRITES:
         if pattern.fullmatch(endpoint) and method in methods:
-            return "allow", None, repository
-    return "unlisted", None, repository
+            return "allow", None, repository, []
+    return "unlisted", None, repository, []
 
 
 def gh_decision(words: Sequence[str], cwd: Path) -> Decision:
@@ -1048,7 +1100,7 @@ def gh_decision(words: Sequence[str], cwd: Path) -> Decision:
     if group == "search":
         return ALLOW
     if group == "api":
-        verdict, owner_group, repository = _classify_api(call_args, cwd)
+        verdict, owner_group, repository, mutations = _classify_api(call_args, cwd)
         repository = repository or _gh_repository(words, call_args)
         kind = throwaway_kind(repository)
         if verdict == "allow":
@@ -1067,6 +1119,8 @@ def gh_decision(words: Sequence[str], cwd: Path) -> Decision:
                 return ALLOW
         if verdict == "owner" and owner_group is not None:
             return _owner_only(owner_group)
+        if mutations:
+            return _not_listed_mutations(mutations)
         return _not_listed(f"gh api {_api_method(call_args)} {_api_endpoint(call_args) or '?'}")
     sub = call_args[0] if call_args and not call_args[0].startswith("-") else None
     rest = call_args[1:] if sub is not None else call_args
