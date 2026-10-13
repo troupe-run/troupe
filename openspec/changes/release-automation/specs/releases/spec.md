@@ -34,8 +34,8 @@ bump at most its minor version. The first release of every package SHALL be 0.1.
 - **THEN** every package it releases is at version 0.1.0
 
 ### Requirement: Core and its bundled adapters share one version
-Every package under `packages/` SHALL belong to one linked group: when any of them releases, all of them release at
-the same version. Commits under `protocol/` SHALL count as changes to that group.
+Every package under `packages/`, and the protocol under `protocol/`, SHALL belong to one linked group: when any of
+them releases, all of them release at the same version.
 
 #### Scenario: Only one adapter changed
 - **WHEN** the only releasable commit since the last release changes `packages/troupe-store-text/`
@@ -43,7 +43,8 @@ the same version. Commits under `protocol/` SHALL count as changes to that group
 
 #### Scenario: A protocol change
 - **WHEN** a `feat!` commit changes only files under `protocol/`
-- **THEN** the release pull request bumps the linked group's version and lists the commit in `troupe`'s changelog
+- **THEN** the release pull request bumps the linked group's version and lists the commit in
+  `protocol/CHANGELOG.md`
 
 ### Requirement: Each plugin has its own version
 Each package under `plugins/` SHALL have its own version and release, unaffected by changes to other packages.

@@ -20,7 +20,8 @@ changed.
   It runs from a `release` workflow on every push to `main`.
 - **Versioning follows the repo's layout.** Core and its bundled adapters (`packages/*`) share one linked version.
   Each plugin (`plugins/*`) has its own version, so it can be split into its own repo later. Every package has its
-  own `CHANGELOG.md`. Commits under `protocol/` count towards the core version.
+  own `CHANGELOG.md`. The protocol (`protocol/`) is in the core's linked group with a changelog of its own, so a
+  contract change releases the core.
 - **Pre-1.0 semver:** a breaking change bumps the minor version, and the first release is 0.1.0 for every package.
 - **The release PR is opened with a dedicated GitHub App's token**, so the required CI runs on it (a PR opened with
   `GITHUB_TOKEN` triggers no workflows). The App is new and narrow: contents, pull requests and issues on
@@ -68,5 +69,5 @@ troupe-run/infrastructure.)
   `release branches` ruleset are applied.
 - Owner, by hand: done. The owner created the App, which can't be done through the API, and set its private key as
   the `release` environment's secret. Secret values are never managed by OpenTofu.
-- Tags: `<package>-v<version>` per package. A core release tags all seven linked packages, plus one tag per plugin
-  that released.
+- Tags: `<component>-v<version>` per component. A core release tags all seven linked packages and the protocol,
+  plus one tag per plugin that released.
