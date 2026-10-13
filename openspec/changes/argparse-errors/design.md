@@ -58,7 +58,8 @@ The scan and check walk the line once; problems are reported in this order:
 
 1. The pre-scan's own errors, in the order it meets the tokens (unchanged): unknown command, unknown flag, dash value.
 2. `usage.missing-value`: an option that takes a value is the last token, or is followed by `--` or by a token that
-   looks like a flag (`_looks_like_a_flag`). The pre-scan no longer swallows that token as the value; it records the
+   looks like a flag (`_looks_like_a_flag`) and has no space in it. Text with a space is a value even when it starts
+   with `-` (`--instructions "--dry-run first"`), which is argparse's own rule and what main accepted. The pre-scan no longer swallows that token as the value; it records the
    option and carries on, so `--help` and `--version` later in the line still answer first, as they do for any
    incomplete line.
 3. `usage.conflicting-options`: two different options of one exclusive group were given. The same option given twice
@@ -145,6 +146,17 @@ structured, prefix-free error that names the command and exits 2. The two argpar
 `parse_args`, and `_Parser.error`) both build `usage.invalid` without a prefix. `_Parser.error` can't know the chosen
 command, so it raises an internal marker that `parse` turns into `usage.invalid` with the command it chose. A test
 reaches the backstop through a test command whose argument uses a custom action that fails in argparse only.
+
+### D8. Two edges the property test found at the command's position
+
+- **`--` before any command is refused** as `usage.unknown-command` (`command: "--"`). On main the scan stopped there
+  and argparse took the next value as the command, but still read flags after it, so the `--` protected nothing and
+  any missing argument fell through to the backstop with no command named. Refusing is the choice that can't run a
+  command with arguments read differently from what was meant. `troupe --` alone, which printed the help, is refused
+  too.
+- **An empty argument where the command goes** (`troupe '' status`) is `usage.unknown-command` with
+  `command: ""`, phrased "An empty argument is not a troupe command." Its schema required `minLength: 1`, so on main
+  the error broke its own schema; the field now accepts any string, since the empty string is what was given.
 
 ## Risks / Trade-offs
 
