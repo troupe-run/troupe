@@ -12,7 +12,7 @@ See proposal.md for why. What exists on main (a527b43):
 - Python types mirror the schemas by hand and tests validate them both ways (runner-contract D11, perform-status-logs
   D3). `jsonschema` is a dev dependency only; troupe's runtime depends on `eventsourcing` alone. Three test helpers
   (`runner_schemas.py`, `client_schemas.py`, `event_schemas.py`) each build their own registry.
-- 62 error codes in `troupe.core.errors.CODES` (each with its exit code) and 8 notice codes in
+- 56 error codes in `troupe.core.errors.CODES` (each with its exit code) and 8 notice codes in
   `troupe.core.notices.CODES`, raised from about 60 sites, with `details` as a free dict. Detail keys mix
   snake_case (`exit_code`, `limit_bytes`) and camelCase (`maxAttempts`). Nothing reads detail keys
   programmatically; the CLI doesn't render them.
@@ -94,7 +94,9 @@ depending on who loads it.
 ### D3. A runner publishes its schemas as files in its plugin
 
 A runner ships `schemas/options.schema.json` and `schemas/errors.schema.json`, with `$id`s under
-`https://troupe.run/plugins/<runner>/`. They pass the strictness check like troupe's own. The scripted runner's
+`https://troupe.run/plugins/<plugin directory>/`. The scripted runner's event steps refer to the contract's field
+definitions for each event type, with `runId` and `seq` optional because the runner fills them in unless a step
+breaks the contract on purpose; a test keeps each step's fields equal to the contract's. They pass the strictness check like troupe's own. The scripted runner's
 options schema covers its options (`script` or `scriptPath`, `replayDelays`) and every step and field a script can
 hold, which `script.py` already enforces by hand; its errors schema lists `scripted.invalid-script` and
 `scripted.unknown-option` with their details. The plugin's tests validate every script and recording it ships against
@@ -115,7 +117,10 @@ in `packages/troupe/tests`, already on `pythonpath`), wraps three points for the
 - the event service's recording path in `troupe.core.events`: each event's payload is validated against its topic's
   schema.
 
-A failure raises inside the test that produced it, naming the code or topic. The event hook sits in troupe's service,
+A failure raises inside the test that produced it, naming the code or topic and the failing detail, taken from
+the catalogue branch for that code rather than every branch it missed. The session-end check (Risks) counts a code
+only when troupe's own source constructs it, since tests that build every code by hand would otherwise make it pass
+vacuously. The event hook sits in troupe's service,
 not in the text store, because the store's own tests run the `eventsourcing` library's recorder suite, which records
 arbitrary topics on purpose.
 
@@ -134,9 +139,10 @@ A code with no details has a branch that forbids `details` (`"details": false`).
 Detail schemas are written from the raise sites, one per code; where several codes share a shape (`*.unknown-*`:
 `{name, installed}`), they share a definition.
 
-The runner contract's protocol codes go in a new `runner/errors.schema.json`, built the same way. A runner error's
-`data` is `oneOf` the contract's codes and `{"$dynamicRef": "#runnerErrors"}`, whose default is `false`, so a code
-the runner hasn't published doesn't validate (D2, D3).
+The runner contract's protocol codes go in a new `runner/errors.schema.json`, built the same way. Its
+`$defs/anyError` is `oneOf` the contract's codes and `{"$dynamicRef": "#runnerErrors"}`, whose default is `false`,
+so a code the runner hasn't published doesn't validate (D2, D3). A runner error's `data` refers to it, and so does
+`runner.start-failed`'s `runnerError` detail, which keeps the runner's answer.
 
 The Python catalogues stay where they are (`CODES`, with exit codes for errors) and a test checks that they and the
 schema list the same codes. Detail keys are renamed to camelCase at every raise site as each code's schema is
