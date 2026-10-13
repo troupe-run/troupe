@@ -160,7 +160,6 @@ class _Run:
         self.violation: TroupeError | None = None
         self.stop: StopReason | None = None
         self.stopping = False
-        self.killed = False
         self.last_event = time.monotonic()
         self.silence_announced = False
 
@@ -344,8 +343,9 @@ class _Run:
 
     def kill(self) -> None:
         child = self._child()
+        # Only for pid reuse: once asyncio has reaped the runner, its process group id may belong to
+        # another group. Whether the run ends killed is decided from the exit status, not from here.
         if child.returncode is None:
-            self.killed = True
             child.kill_tree()
 
     async def watchdog(self, started: float) -> None:
@@ -453,7 +453,7 @@ async def run_actor(
         transcript_ref = run.transcript.finish()
         stderr_ref = run.stderr.finish()
         run._child().release()
-    ending = Ending.KILLED if run.killed else Ending.EXITED
+    ending = Ending.KILLED if run._child().ended_by_kill(exit_code) else Ending.EXITED
     verdict: EffectVerdict | None = None
     if run.result is not None and run.result.status == "ok" and start_error is None:
         verdict = effect.after()

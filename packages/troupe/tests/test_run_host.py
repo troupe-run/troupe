@@ -224,15 +224,6 @@ def test_an_ok_result_followed_by_an_unclean_exit_fails_as_uncertain(tmp_path: P
         ([{"event": INIT}, {"event": {**OK, "seq": 0}}, {"hang": True}], "should have been 1"),
         ([{"event": {**OK, "seq": 0}}, {"hang": True}], "not 'init'"),
         (
-            [
-                {"event": INIT},
-                {"event": OK},
-                {"event": {"type": "log", "level": "info", "message": "late"}},
-                {"hang": True},
-            ],
-            "after its result",
-        ),
-        (
             [{"rawStdout": '{"jsonrpc":"2.0","method":"run/pause","params":{}}'}, {"hang": True}],
             "doesn't define",
         ),
@@ -278,7 +269,6 @@ def test_an_ok_result_followed_by_an_unclean_exit_fails_as_uncertain(tmp_path: P
         "seq gap",
         "seq repeat",
         "before init",
-        "after result",
         "unknown method",
         "tool result without call",
         "invalid base64",
@@ -295,6 +285,28 @@ def test_each_protocol_violation_crashes_the_run_naming_it(
     assert expected in ran.outcome.error.problem
     assert "line" in ran.outcome.error.problem
     assert ran.outcome.ending is Ending.KILLED
+
+
+KILL_STATUS = processes.KILLED_EXIT_CODE if sys.platform == "win32" else -9
+"""The exit status troupe's kill gives a runner: its named code on Windows, SIGKILL elsewhere."""
+
+
+def test_a_late_event_after_the_result_crashes_the_run_whether_the_runner_answers_shutdown_first(
+    tmp_path: Path,
+) -> None:
+    # The host sends shutdown on the result, and the hanging runner answers it by exiting 0. That
+    # exit and the host's kill for the late event race, so either can end the runner, and the
+    # ending must say which did.
+    late = {"event": {"type": "log", "level": "info", "message": "late"}}
+    ran = _run(tmp_path, {"steps": [{"event": INIT}, {"event": OK}, late, {"hang": True}]})
+    assert (ran.outcome.outcome, _code(ran)) == (Outcome.CRASHED, "runner.protocol")
+    assert ran.outcome.error is not None
+    assert "after its result" in ran.outcome.error.problem
+    assert "line" in ran.outcome.error.problem
+    assert (ran.outcome.ending, ran.outcome.exit_code) in {
+        (Ending.KILLED, KILL_STATUS),
+        (Ending.EXITED, 0),
+    }
 
 
 def test_nothing_is_written_to_the_transcript_for_an_invalid_base64_record(tmp_path: Path) -> None:
