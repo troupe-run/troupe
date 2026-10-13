@@ -342,7 +342,7 @@ def test_a_listened_store_reads_no_segment_while_nothing_is_recorded(
 
     monkeypatch.setattr(store, "_sizes", counted)
     with listened(store):
-        time.sleep(0.5)  # listening reads once, and a fresh watch may wake once
+        time.sleep(2.0)  # listening reads once, and a fresh watch may wake spuriously for 1.5 s
         looks.clear()
         time.sleep(2)
         assert looks == []

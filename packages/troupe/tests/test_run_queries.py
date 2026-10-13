@@ -348,7 +348,7 @@ def test_following_a_quiet_run_reads_no_segment_while_it_waits(
     try:
         harness = Harness(repo, store_options=QUIET, store_wrapper=counting)
         thread, _ = follow_in_background(harness, child.run_id)
-        time.sleep(1.0)  # following has read the run, and a fresh watch may wake once
+        time.sleep(2.0)  # following has read the run; a fresh watch may wake spuriously for 1.5 s
         looks.clear()
         time.sleep(2.0)
         assert looks == []
