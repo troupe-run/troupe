@@ -89,6 +89,8 @@
   re-adding `"type": "object"` to any one field makes it fail naming that field
 - [x] 6.2 Run `uv run scripts/check.py` (ruff, format, mypy --strict, import-linter, the full suite). Verify it passes
   locally and on CI on Linux, macOS and Windows
+- [x] 6.3 Renumber the runner contract version 0 (design D9): `PROTOCOL_VERSION`, the scripted runner, the
+  schemas' minimums, the handshake requirement and `docs/runners.md`. Verify the full check passes
 
 ## Workflow follow-up
 

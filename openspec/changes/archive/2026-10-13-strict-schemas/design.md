@@ -172,8 +172,8 @@ unknown fields, so a runner still sending it is a protocol violation. Fixtures a
 fields; the Claude Code mapping in `docs/runners.md` says `system/init` maps to `init` with the engine's name,
 version and model, and the whole record stays in the transcript.
 
-The contract stays at version 1, changed in place: the only runner is in this repository, and pre-alpha has no
-compatibility promise. The change is listed as **BREAKING** in the proposal and the runner docs' history.
+The contract is changed in place rather than given a new number: the only runner is in this repository, and
+pre-alpha has no compatibility promise. D9 makes that explicit by renumbering it 0. The change is listed as **BREAKING** in the proposal and the runner docs' history.
 
 *Alternatives.* The runner publishing a schema for its native records would pin troupe to a vendor's format: Claude
 Code adds stream-json fields between releases, so a closed schema would turn every Claude Code upgrade into failed
@@ -186,6 +186,16 @@ unchanged and stored by hash, so nothing is lost.
   result for `run/cancel` and `shutdown`). They're disjoint, since each is closed.
 - `usage` names `inputTokens`, `outputTokens`, `cacheReadTokens` and `cacheWriteTokens`, each an optional
   non-negative integer. The Claude Code runner (#55) maps Claude Code's cache counters onto the last two.
+
+### D9. The runner contract is version 0 until troupe commits to it
+
+The owner's call in review: version 0 is the draft contract, changed in place with no compatibility promise; version
+1 is the first one troupe commits to. `PROTOCOL_VERSION`, the scripted runner and the schemas' minimums move from 1
+to 0, and the handshake requirement says what 0 means.
+
+*Alternatives.* Semver (0.1, 0.2, …) was considered. The version is negotiated: troupe offers the versions it
+speaks and the runner picks one. With closed schemas every addition is breaking for a strict reader, so minor and
+patch numbers would never be used. A whole number, starting at 0 for the draft, says the same thing more simply.
 
 ## Risks / Trade-offs
 

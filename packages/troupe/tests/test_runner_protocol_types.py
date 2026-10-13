@@ -44,7 +44,7 @@ CASES: list[tuple[type[p.Message], str, st.SearchStrategy[Any]]] = [
         "initialize.schema.json#/properties/params",
         st.fixed_dictionaries(
             {
-                "protocolVersions": st.lists(st.integers(1, 9), min_size=1, unique=True),
+                "protocolVersions": st.lists(st.integers(0, 9), min_size=1, unique=True),
                 "host": NAMED,
                 "capabilities": st.lists(NAME, unique=True, max_size=3),
             }
@@ -55,7 +55,7 @@ CASES: list[tuple[type[p.Message], str, st.SearchStrategy[Any]]] = [
         "initialize.schema.json#/$defs/result",
         st.fixed_dictionaries(
             {
-                "protocolVersion": st.integers(1, 9),
+                "protocolVersion": st.integers(0, 9),
                 "runner": NAMED,
                 "capabilities": st.lists(NAME, unique=True, max_size=3),
             }
@@ -224,7 +224,7 @@ CASES: list[tuple[type[p.Message], str, st.SearchStrategy[Any]]] = [
                 "problem": NAME,
                 "fix": NAME,
                 "details": st.fixed_dictionaries(
-                    {"supportedVersions": st.lists(st.integers(1, 9), min_size=1, unique=True)}
+                    {"supportedVersions": st.lists(st.integers(0, 9), min_size=1, unique=True)}
                 ),
             },
             {"path": NAME},
@@ -402,7 +402,7 @@ def test_parse_line_refuses_anything_a_runner_may_not_send(line: bytes) -> None:
 
 def test_messages_the_host_builds_validate_as_host_messages() -> None:
     sent = [
-        p.request(1, "initialize", p.InitializeParams([1], p.Named("troupe", "0.0.1"), [])),
+        p.request(1, "initialize", p.InitializeParams([0], p.Named("troupe", "0.0.1"), [])),
         p.request(
             2,
             "run/start",

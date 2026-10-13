@@ -34,9 +34,10 @@ produce every outcome on demand. A Claude Code runner and a local-model runner f
 
 A run goes like this:
 
-1. troupe sends `initialize` with the protocol versions it supports (version 1 today) and the capability names
+1. troupe sends `initialize` with the protocol versions it supports (version 0 today: the draft contract, which changes in place with no
+   compatibility promise until troupe commits to version 1) and the capability names
    it supports. The runner answers with one of the offered versions, its name and version, and the capabilities
-   it will use, each one from the offer (version 1 defines none, so the offer and the answer are empty lists). A
+   it will use, each one from the offer (version 0 defines none, so the offer and the answer are empty lists). A
    version or capability troupe didn't offer is a protocol violation. If the runner supports none of the offered
    versions, it answers with an error whose `details` name the versions it does support, and troupe starts no
    run.

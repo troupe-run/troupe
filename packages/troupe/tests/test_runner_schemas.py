@@ -51,7 +51,7 @@ ERROR_DATA = {
     "code": "runner.unsupported-version",
     "problem": "p",
     "fix": "f",
-    "details": {"supportedVersions": [1]},
+    "details": {"supportedVersions": [0]},
 }
 
 # (schema, a valid example, an invalid example)
@@ -61,7 +61,7 @@ EXAMPLES: list[tuple[str, object, object]] = [
         _request(
             "initialize",
             {
-                "protocolVersions": [1],
+                "protocolVersions": [0],
                 "host": {"name": "troupe", "version": "1"},
                 "capabilities": [],
             },
@@ -78,12 +78,12 @@ EXAMPLES: list[tuple[str, object, object]] = [
     (
         "initialize.schema.json#/$defs/result",
         {
-            "protocolVersion": 1,
+            "protocolVersion": 0,
             "runner": {"name": "scripted", "version": "0.1"},
             "capabilities": ["resume"],
         },
         {
-            "protocolVersion": 1,
+            "protocolVersion": 0,
             "runner": {"name": "scripted", "version": "0.1"},
             "capabilities": ["resume", "resume"],
         },
@@ -303,7 +303,7 @@ SUCCESS = "jsonrpc.schema.json#/$defs/successResponse"
 @pytest.mark.parametrize(
     "result",
     [
-        {"protocolVersion": 1, "runner": {"name": "s", "version": "1"}, "capabilities": []},
+        {"protocolVersion": 0, "runner": {"name": "s", "version": "1"}, "capabilities": []},
         {"runId": RUN_ID},
         {},
     ],
@@ -355,7 +355,7 @@ def test_each_contract_error_code_without_details_validates_and_refuses_details(
 def test_unsupported_version_must_name_the_versions_the_runner_supports() -> None:
     data = {"code": "runner.unsupported-version", "problem": "p", "fix": "f"}
     assert not is_valid(_error_response(data), ERROR_RESPONSE)
-    validate(_error_response({**data, "details": {"supportedVersions": [1, 2]}}), ERROR_RESPONSE)
+    validate(_error_response({**data, "details": {"supportedVersions": [0, 1]}}), ERROR_RESPONSE)
 
 
 def test_a_code_the_runner_has_not_published_does_not_validate_against_the_contract_alone() -> None:

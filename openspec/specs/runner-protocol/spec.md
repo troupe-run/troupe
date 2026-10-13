@@ -39,8 +39,8 @@ will use, each one the host offered. A runner that supports none of the offered 
 error, and the host SHALL NOT start a run.
 
 #### Scenario: Compatible runner
-- **WHEN** the host offers protocol version 1 and the runner supports it
-- **THEN** the runner's answer names version 1, the runner's name and version, and its capabilities
+- **WHEN** the host offers protocol version 0 and the runner supports it
+- **THEN** the runner's answer names version 0, the runner's name and version, and its capabilities
 
 #### Scenario: Capability the host didn't offer
 - **WHEN** a runner's answer names a capability that was not in the host's offer
@@ -236,3 +236,11 @@ contract's methods: `initialize`, `run/start`, `run/cancel` or `shutdown`.
 #### Scenario: A result no method defines
 - **WHEN** a runner answers a request with a result object that matches none of the contract's result schemas
 - **THEN** it does not validate against the contract's schema, and the host treats it as a protocol violation
+
+### Requirement: Version 0 is the draft contract
+The contract's version SHALL be 0 until troupe commits to a stable contract, which SHALL be version 1. Version 0 MAY
+change in place, with no compatibility promise and no new version number.
+
+#### Scenario: troupe offers the draft
+- **WHEN** troupe sends `initialize`
+- **THEN** the versions it offers are `[0]`

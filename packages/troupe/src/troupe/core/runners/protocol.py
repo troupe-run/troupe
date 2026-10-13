@@ -19,8 +19,9 @@ from troupe.core.messages import Message as Message
 from troupe.core.messages import ProtocolError as ProtocolError
 from troupe.core.messages import fail, json_field
 
-PROTOCOL_VERSION = 1
-"""The protocol version this troupe speaks."""
+PROTOCOL_VERSION = 0
+"""The protocol version this troupe speaks. Version 0 is the draft contract: it changes in place,
+with no compatibility promise, until troupe commits to version 1 (strict-schemas design D9)."""
 
 RUN_ID_PATTERN = re.compile(r"\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\Z")
 """Run ids are UUIDs in canonical lowercase form (design D11)."""
@@ -50,15 +51,15 @@ class InitializeParams(Message):
     capabilities: list[str] = json_field("capabilities", unique=True)
 
     def _check(self, where: str) -> None:
-        if any(version < 1 for version in self.protocol_versions):
-            raise fail(where, "protocol versions start at 1")
+        if any(version < 0 for version in self.protocol_versions):
+            raise fail(where, "protocol versions start at 0")
         if any(not name for name in self.capabilities):
             raise fail(where, "capability names must not be empty")
 
 
 @dataclass(frozen=True)
 class InitializeResult(Message):
-    protocol_version: int = json_field("protocolVersion", minimum=1)
+    protocol_version: int = json_field("protocolVersion", minimum=0)
     runner: Named = json_field("runner")
     capabilities: list[str] = json_field("capabilities", unique=True)
 

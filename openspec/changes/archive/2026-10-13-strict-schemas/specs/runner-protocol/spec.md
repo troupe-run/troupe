@@ -95,7 +95,34 @@ only in the native transcript or in the runner-specific options.
 - **WHEN** a runner drives an engine that reports records the run events don't model
 - **THEN** those records reach troupe only as `run/transcript` records, never inside a run event
 
+### Requirement: Handshake before anything else
+The host's first message SHALL be an `initialize` request carrying the protocol versions and the capabilities it
+supports. The runner SHALL answer with one of the offered versions, its name and version, and the capabilities it
+will use, each one the host offered. A runner that supports none of the offered versions SHALL answer with an
+error, and the host SHALL NOT start a run.
+
+#### Scenario: Compatible runner
+- **WHEN** the host offers protocol version 0 and the runner supports it
+- **THEN** the runner's answer names version 0, the runner's name and version, and its capabilities
+
+#### Scenario: Capability the host didn't offer
+- **WHEN** a runner's answer names a capability that was not in the host's offer
+- **THEN** the host treats it as a protocol violation and starts no run
+
+#### Scenario: Incompatible runner
+- **WHEN** the host offers only versions the runner does not support
+- **THEN** the runner answers with an error naming the versions it supports
+- **AND** no run is started
+
 ## ADDED Requirements
+
+### Requirement: Version 0 is the draft contract
+The contract's version SHALL be 0 until troupe commits to a stable contract, which SHALL be version 1. Version 0 MAY
+change in place, with no compatibility promise and no new version number.
+
+#### Scenario: troupe offers the draft
+- **WHEN** troupe sends `initialize`
+- **THEN** the versions it offers are `[0]`
 
 ### Requirement: A runner publishes schemas for its options and its own error codes
 A runner SHALL publish a JSON Schema for its options, and one listing each error code of its own with the schema

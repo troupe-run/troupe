@@ -26,7 +26,7 @@ from troupe_runner_scripted.script import (
     workspace_relative,
 )
 
-PROTOCOL_VERSIONS = (1,)
+PROTOCOL_VERSIONS = (0,)
 INVALID_REQUEST = -32600
 METHOD_NOT_FOUND = -32601
 INVALID_PARAMS = -32602

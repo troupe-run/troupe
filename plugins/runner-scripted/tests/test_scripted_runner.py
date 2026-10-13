@@ -32,7 +32,7 @@ def _events(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def test_initialize_answers_version_1_its_name_and_no_capabilities(session: Session) -> None:
     answer = session.initialize()
     assert answer["result"] == {
-        "protocolVersion": 1,
+        "protocolVersion": 0,
         "runner": {"name": "scripted", "version": "0.0.1.dev0"},
         "capabilities": [],
     }
@@ -47,7 +47,7 @@ def test_initialize_offering_no_supported_version_is_refused_naming_the_supporte
         {"protocolVersions": [7], "host": {"name": "t", "version": "1"}, "capabilities": []},
     )
     assert answer["error"]["data"]["code"] == "runner.unsupported-version"
-    assert answer["error"]["data"]["details"] == {"supportedVersions": [1]}
+    assert answer["error"]["data"]["details"] == {"supportedVersions": [0]}
     session.validate_all()
 
 
