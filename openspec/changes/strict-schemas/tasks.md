@@ -35,18 +35,18 @@
 
 ## 3. Runner options as an extension point, and the scripted runner's schemas
 
-- [ ] 3.1 Make `options` in `runner/run-start.schema.json` and `client/perform-request.schema.json` a `$dynamicRef`
+- [x] 3.1 Make `options` in `runner/run-start.schema.json` and `client/perform-request.schema.json` a `$dynamicRef`
   with a closed default (design D2). Verify schema tests: the contract alone accepts `{}` options and refuses
   `{"script": ...}`; a binding to a test runner schema accepts that runner's options and refuses an unknown key
-- [ ] 3.2 Add `plugins/runner-scripted/schemas/options.schema.json`, covering every option, step and step field
+- [x] 3.2 Add `plugins/runner-scripted/schemas/options.schema.json`, covering every option, step and step field
   `script.py` accepts (design D3), and `schemas/errors.schema.json` for `scripted.invalid-script` and
   `scripted.unknown-option`. Verify plugin tests: every script and recording the plugin ships validates against the
   bound `run/start`; each invalid-script case the existing tests cover also fails the schema; every error the runner
   sends in its tests validates against the bound error-response
-- [ ] 3.3 Add the conformance check "refuses options holding a key outside its schema" to
+- [x] 3.3 Add the conformance check "refuses options holding a key outside its schema" to
   `troupe.core.runners.conformance` (design D3). Verify the conformance suite passes against the scripted runner,
   and fails against a fake runner that ignores unknown option keys
-- [ ] 3.4 Document the scripted runner's schemas in its README. Verify the README's option list matches the schema's
+- [x] 3.4 Document the scripted runner's schemas in its README. Verify the README's option list matches the schema's
   properties in a test
 
 ## 4. Errors and notices: catalogued codes and closed details

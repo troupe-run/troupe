@@ -209,3 +209,12 @@ REFUSED = [
 @pytest.mark.parametrize(("schema", "value", "label"), REFUSED, ids=[r[2] for r in REFUSED])
 def test_the_schema_refuses(schema: str, value: dict[str, Any], label: str) -> None:
     assert not is_valid(value, schema), label
+
+
+# perform's options are the runner's extension point (strict-schemas design D2)
+
+
+def test_perform_options_validate_against_the_contract_alone_only_when_empty() -> None:
+    assert is_valid({**PERFORM, "options": {}}, "perform-request.schema.json", runner=None)
+    assert not is_valid(PERFORM, "perform-request.schema.json", runner=None)
+    assert is_valid(PERFORM, "perform-request.schema.json")  # the scripted runner's schema bound

@@ -13,7 +13,7 @@ from typing import Any
 import jsonschema
 import pytest
 
-from runner_schemas import SCHEMAS, load, validate
+from runner_schemas import SCHEMAS, is_valid, load, validate
 from troupe.core.artifacts import ArtifactStore, MemoryArtifactStore, load_store
 from troupe.core.notices import Notice
 from troupe.core.runners import protocol as p
@@ -66,7 +66,11 @@ def _run(
     env: dict[str, str] | None = None,
     cancel_after: float | None = None,
     options: dict[str, Any] | None = None,
+    valid_options: bool = True,
 ) -> Ran:
+    """Run the scripted runner (or ``argv``) and check every message troupe sent against the
+    contract, with the scripted runner's schemas bound. ``valid_options=False`` marks options the
+    runner must refuse, which its options schema must refuse too."""
     store = store if store is not None else MemoryArtifactStore()
     command = RunnerCommand(
         argv or [sys.executable, "-m", "troupe_runner_scripted"], cwd=tmp_path, env=env or {}
@@ -109,7 +113,10 @@ def _run(
     for notice in result.notices:
         jsonschema.validate(notice.to_data(), NOTICE_SCHEMA)
     for message in result.sent:
-        validate(message, "message.schema.json#/$defs/fromHost")
+        if message.get("method") == "run/start" and not valid_options:
+            assert not is_valid(message, "message.schema.json#/$defs/fromHost")
+        else:
+            validate(message, "message.schema.json#/$defs/fromHost")
     return result
 
 
@@ -359,7 +366,7 @@ def test_an_incompatible_runner_could_not_start_and_no_run_is_started(tmp_path: 
 
 
 def test_a_runner_that_refuses_run_start_could_not_start_with_its_reason(tmp_path: Path) -> None:
-    ran = _run(tmp_path, options={"script": {"steps": []}, "speed": 2})
+    ran = _run(tmp_path, options={"script": {"steps": []}, "speed": 2}, valid_options=False)
     assert (ran.outcome.outcome, _code(ran)) == (Outcome.COULD_NOT_START, "runner.start-failed")
     assert ran.outcome.error is not None
     assert "'speed'" in ran.outcome.error.problem

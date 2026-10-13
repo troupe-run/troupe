@@ -43,7 +43,7 @@ def test_the_scripted_runner_passes_every_conformance_check(tmp_path: Path) -> N
     )
     failed = {name: r.problem for name, r in results.items() if not r.passed}
     assert failed == {}
-    assert len(results) == 6
+    assert len(results) == 7
 
 
 def test_a_runner_whose_run_has_no_init_fails_the_whole_run_check(tmp_path: Path) -> None:
@@ -60,6 +60,14 @@ def test_a_runner_with_a_seq_gap_fails_the_whole_run_check(tmp_path: Path) -> No
     assert not check.passed
     assert check.problem is not None
     assert "should have been 1" in check.problem
+
+
+def test_a_runner_that_ignores_an_unknown_option_fails_that_check(tmp_path: Path) -> None:
+    results = _check([sys.executable, str(FAKE), "ignore-options"], {}, tmp_path)
+    check = results["unknown option refused"]
+    assert not check.passed
+    assert check.problem is not None
+    assert "troupeConformanceUnknownOption" in check.problem
 
 
 def test_a_runner_that_does_not_exit_on_end_of_input_fails_that_check(tmp_path: Path) -> None:

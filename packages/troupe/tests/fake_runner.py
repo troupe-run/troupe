@@ -1,6 +1,8 @@
 """A test-only runner that misbehaves in ways the scripted runner can't, chosen by its argument.
 
-Usage: python fake_runner.py <mode>. Not collected by pytest.
+Usage: python fake_runner.py <mode>. Not collected by pytest. Every mode ignores run/start's
+options; ``ignore-options`` does nothing else unusual, for checks that a runner refuses an unknown
+option.
 """
 
 import json

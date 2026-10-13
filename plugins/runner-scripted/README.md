@@ -14,6 +14,24 @@ python -m troupe_runner_scripted
 `run/start` options take exactly one of `script` (the script inline) or `scriptPath` (a JSON file), and optionally
 `replayDelays` (`true` to replay a recording's timing). Any other option is refused, with an error naming it.
 
+| Option | What it is |
+|---|---|
+| `script` | The script, inline (below) |
+| `scriptPath` | The path of a JSON file holding the script |
+| `replayDelays` | `true` to keep a recording's delays between records; default `false` |
+
+## Schemas
+
+The runner publishes its schemas in [`schemas/`](schemas/), as every runner does
+([Publishing a runner's schemas](../../docs/runners.md#publishing-a-runners-schemas)):
+
+- [`options.schema.json`](schemas/options.schema.json): the options, every step and its fields, and a recording's
+  lines (`$defs/recordingLine`). An event step is checked as the contract's run event, without `runId` and with
+  `seq` optional. At run time the runner itself checks only that an event step has a `type`, so a test can still
+  send a broken event on purpose with `rawStdout`.
+- [`errors.schema.json`](schemas/errors.schema.json): its own error codes, `scripted.invalid-script` and
+  `scripted.unknown-option`, each with `details.where`, naming where in the options or script the problem is.
+
 ## Scripts
 
 ```json
@@ -58,5 +76,7 @@ Code runner's mapping is tested against them.
 
 ## Tests
 
-The tests validate every message the runner sends against the schemas in `protocol/` at the repository root. If
-this plugin moves to its own repository, the schemas come with it as a copy.
+The tests validate every message either side sends against the schemas in `protocol/` at the repository root, with
+this runner's own schemas filling the contract's extension points. Options a test sends invalid on purpose must be
+refused by the options schema too. If this plugin moves to its own repository, the contract's schemas come with it
+as a copy.

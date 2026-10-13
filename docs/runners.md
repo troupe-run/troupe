@@ -272,7 +272,8 @@ Every limit has its default in `troupe.core.defaults`, and each can be overridde
 ## Checking a runner
 
 troupe's conformance suite checks a runner against this contract: the handshake, refusing a protocol version it
-doesn't support, refusing a second `run/start`, acknowledging `run/cancel` and exiting, exiting when its input
+doesn't support, refusing a second `run/start`, refusing an option it doesn't define (the suite adds
+`troupeConformanceUnknownOption`), acknowledging `run/cancel` and exiting, exiting when its input
 closes, and a whole run (`init` first, gap-free `seq`, one `result`, then `shutdown`). Each check starts the runner
 afresh. Give it the runner's command line as a JSON array, and the `run/start` options for a short run that
 succeeds:

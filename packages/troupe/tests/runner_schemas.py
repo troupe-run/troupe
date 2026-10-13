@@ -2,6 +2,10 @@
 
 The schemas in protocol/schemas/ are the source of truth (decision #7), loaded once by
 protocol_schemas, so references between them, including the shared error schema, resolve.
+
+troupe's tests drive the scripted runner, so by default its published schemas fill the contract's
+extension points (its options and its own error codes). Pass ``runner=None`` to check against the
+contract alone.
 """
 
 from pathlib import Path
@@ -18,6 +22,7 @@ __all__ = [
     "RESULT_SCHEMAS",
     "RUNNER_SCHEMAS",
     "SCHEMAS",
+    "SCRIPTED",
     "is_valid",
     "load",
     "registry",
@@ -28,6 +33,7 @@ __all__ = [
 ]
 
 RUNNER_SCHEMAS = SCHEMAS / "runner"
+SCRIPTED = "runner-scripted"
 BASE = "https://troupe.run/protocol/runner/"
 
 RESULT_SCHEMAS = {
@@ -47,17 +53,17 @@ def registry() -> Registry[Any]:
     return protocol_schemas.registry()
 
 
-def validator(ref: str) -> jsonschema.Draft202012Validator:
+def validator(ref: str, runner: str | None = SCRIPTED) -> jsonschema.Draft202012Validator:
     """A validator for ``ref``, relative to the runner schemas (``file.schema.json#/$defs/x``)."""
-    return protocol_schemas.validator_for(urljoin(BASE, ref))
+    return protocol_schemas.validator_for(urljoin(BASE, ref), runner)
 
 
-def validate(instance: object, ref: str) -> None:
-    validator(ref).validate(instance)
+def validate(instance: object, ref: str, runner: str | None = SCRIPTED) -> None:
+    validator(ref, runner).validate(instance)
 
 
-def is_valid(instance: object, ref: str) -> bool:
-    return validator(ref).is_valid(instance)
+def is_valid(instance: object, ref: str, runner: str | None = SCRIPTED) -> bool:
+    return validator(ref, runner).is_valid(instance)
 
 
 def validate_exchange(sent: list[dict[str, Any]], received: list[dict[str, Any]]) -> None:
