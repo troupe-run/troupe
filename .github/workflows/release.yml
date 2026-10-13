@@ -1,0 +1,42 @@
+name: release
+
+# Opens or updates the release pull request from the Conventional Commits on main, and tags and
+# releases what a merged release pull request released (docs/releasing.md; release-automation
+# design D5). Every write uses the release App's token: a pull request opened with GITHUB_TOKEN
+# starts no workflows, so the required checks would never run on it (design D6).
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  # Two pushes must not race to write the release pull request, and none is cancelled midway.
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    name: release-please
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Its deployment branches are limited to main, so no other branch's workflow can read the key.
+    environment: release
+    steps:
+      - name: Mint the release App's token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          # Only what release-please uses: the branch and tags, the pull request, and its labels.
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+      - name: Open or update the release pull request, or release a merged one
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json

@@ -41,20 +41,34 @@
 
 ## 3. Dry run before anything writes
 
-- [ ] 3.1 Run release-please locally, without writing (`npx release-please@<pinned> release-pr --dry-run
-  --repo-url troupe-run/troupe --target-branch main` with a read-only token), against this branch's config pushed
-  to a scratch ref. Verify it reports one PR titled `chore: release main`
-- [ ] 3.2 From that dry run, verify that every package goes to 0.1.0 (design D2), that the seven `packages/*` share
-  it (D3), that a `protocol/`-only commit appears in `protocol/CHANGELOG.md` and the protocol shares the group's version (D3), and that the `uv.lock` diff changes
-  exactly one `version` line per package (D4). Apply each fallback the design names (`release-as` for D2, the
-  re-lock job for D4) only if its check fails, and record which one ran in the PR
+- [x] 3.1 Run release-please locally, without writing (`npx release-please@<pinned> release-pr --dry-run --repo-url
+  troupe-run/troupe --target-branch main` with a read-only token), against this branch's config pushed to a scratch
+  ref. Verify it reports one PR titled `chore: release main`. Done 2026-10-14, against `release-automation` itself
+  rather than a scratch ref (owner's choice: the branch had to be pushed for the PR anyway), with the owner's `gh`
+  token and `--dry-run`, which writes nothing; no read-only token was to hand. One PR, `chore: release
+  release-automation`, which is `chore: release main` on `main`
+- [x] 3.2 From that dry run, verify that every package goes to 0.1.0 (design D2), that the seven `packages/*` share it
+  (D3), that a `protocol/`-only commit appears in `protocol/CHANGELOG.md` and the protocol shares the group's
+  version (D3), and that the `uv.lock` diff changes exactly one `version` line per package (D4). Apply each fallback
+  the design names (`release-as` for D2, the re-lock job for D4) only if its check fails, and record which one ran
+  in the PR. Done 2026-10-14. The first run proposed 1.0.0 for the linked group, so `initial-version: "0.1.0"` was
+  added (design D2); the re-run gives all nine components 0.1.0. Applying release-please's own updaters to this
+  branch changes exactly one `version` line per package in `uv.lock` (eight), and `uv lock --check` passes on the
+  result; the `__init__.py` files are unchanged. No commit in the history touches only `protocol/`, so that exact
+  case wasn't observable: `protocol/CHANGELOG.md` lists the 24 changes from commits touching `protocol/`, the
+  protocol shares the group's 0.1.0, and linked-versions releases every group member when any has a release (its
+  source). Neither named fallback ran: `initial-version` replaced D2's `release-as`, and D4's re-lock job wasn't
+  needed
 
 ## 4. The release workflow
 
-- [ ] 4.1 Add `.github/workflows/release.yml` (design D5): runs on push to `main`, `concurrency: release` without
+- [x] 4.1 Add `.github/workflows/release.yml` (design D5): runs on push to `main`, `concurrency: release` without
   cancelling, `permissions: contents: read`, the `release` environment, `actions/create-github-app-token` and
   `googleapis/release-please-action` pinned by commit SHA with the version in a comment, as `ci.yml` does. Verify
-  with `actionlint`, or `uvx zizmor` if `actionlint` isn't available, and that every `uses:` is pinned to a 40-character SHA
+  with `actionlint`, or `uvx zizmor` if `actionlint` isn't available, and that every `uses:` is pinned to a
+  40-character SHA. Done 2026-10-14: actionlint isn't installed, and `zizmor` reports no findings; both `uses:` are
+  pinned to 40-character SHAs (`create-github-app-token` v3.3.0, `release-please-action` v5.0.0, which bundles
+  release-please 17.6.0: the updaters were re-run with 17.6.0 and give the same versions and `uv.lock`)
 - [ ] 4.2 Verify the whole change with `uv run scripts/check.py` locally, and that CI passes on Linux, macOS and
   Windows on the PR, together with `DCO` and `guard`. The PR closes troupe-run/troupe#23
 
