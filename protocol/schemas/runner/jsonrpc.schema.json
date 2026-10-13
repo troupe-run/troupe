@@ -42,14 +42,20 @@
     },
     "successResponse": {
       "title": "Success response",
-      "description": "A response to a request. Its result is checked against the result schema of the request's method.",
+      "description": "A response to a request. Its result is one of the methods' results; the host also checks it against the result schema of the request's own method.",
       "type": "object",
       "additionalProperties": false,
       "required": ["jsonrpc", "id", "result"],
       "properties": {
         "jsonrpc": {"$ref": "#/$defs/jsonrpc"},
         "id": {"$ref": "#/$defs/id"},
-        "result": {"type": "object"}
+        "result": {
+          "oneOf": [
+            {"$ref": "initialize.schema.json#/$defs/result"},
+            {"$ref": "run-start.schema.json#/$defs/result"},
+            {"$ref": "#/$defs/emptyResult"}
+          ]
+        }
       }
     }
   }

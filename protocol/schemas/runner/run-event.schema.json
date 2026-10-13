@@ -31,11 +31,6 @@
       "oneOf": [{"$ref": "#/$defs/event"}, {"$ref": "#/$defs/oversized"}]
     },
     "seq": {"type": "integer", "minimum": 0},
-    "native": {
-      "title": "Native detail",
-      "description": "Engine- or vendor-specific detail, kept as the engine reported it. Never required.",
-      "type": "object"
-    },
     "init": {
       "title": "init",
       "description": "Always seq 0: what the actor runs with.",
@@ -62,8 +57,7 @@
           "description": "The tools available to the actor.",
           "type": "array",
           "items": {"type": "string", "minLength": 1}
-        },
-        "native": {"$ref": "#/$defs/native"}
+        }
       }
     },
     "turn": {
@@ -77,8 +71,7 @@
         "seq": {"$ref": "#/$defs/seq"},
         "type": {"const": "turn"},
         "role": {"enum": ["assistant", "user"]},
-        "text": {"type": "string"},
-        "native": {"$ref": "#/$defs/native"}
+        "text": {"type": "string"}
       }
     },
     "tool_call": {
@@ -92,8 +85,7 @@
         "type": {"const": "tool_call"},
         "callId": {"type": "string", "minLength": 1},
         "tool": {"type": "string", "minLength": 1},
-        "inputSummary": {"type": "string"},
-        "native": {"$ref": "#/$defs/native"}
+        "inputSummary": {"type": "string"}
       }
     },
     "tool_result": {
@@ -158,12 +150,17 @@
         "turns": {"type": "integer", "minimum": 0},
         "durationMs": {"type": "integer", "minimum": 0},
         "usage": {
-          "description": "Counts such as inputTokens and outputTokens, by name.",
+          "description": "Token counts, where the engine reports them.",
           "type": "object",
-          "additionalProperties": {"type": "integer", "minimum": 0}
+          "additionalProperties": false,
+          "properties": {
+            "inputTokens": {"type": "integer", "minimum": 0},
+            "outputTokens": {"type": "integer", "minimum": 0},
+            "cacheReadTokens": {"description": "Input tokens read from the engine's prompt cache.", "type": "integer", "minimum": 0},
+            "cacheWriteTokens": {"description": "Input tokens written to the engine's prompt cache.", "type": "integer", "minimum": 0}
+          }
         },
-        "costUsd": {"type": "number", "minimum": 0},
-        "native": {"$ref": "#/$defs/native"}
+        "costUsd": {"type": "number", "minimum": 0}
       }
     },
     "oversized": {

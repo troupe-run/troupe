@@ -95,7 +95,6 @@ CASES: list[tuple[type[p.Message], str, st.SearchStrategy[Any]]] = [
             required={"runner": NAMED, "tools": st.lists(NAME, max_size=3)},
             optional={
                 "engine": _with_optional({"name": NAME}, {"version": NAME, "model": NAME}),
-                "native": NATIVE,
             },
         ),
     ),
@@ -106,7 +105,6 @@ CASES: list[tuple[type[p.Message], str, st.SearchStrategy[Any]]] = [
             "turn",
             SEQ,
             required={"role": st.sampled_from(["assistant", "user"]), "text": TEXT},
-            optional={"native": NATIVE},
         ),
     ),
     (
@@ -116,7 +114,6 @@ CASES: list[tuple[type[p.Message], str, st.SearchStrategy[Any]]] = [
             "tool_call",
             SEQ,
             required={"callId": NAME, "tool": NAME, "inputSummary": TEXT},
-            optional={"native": NATIVE},
         ),
     ),
     (
@@ -171,9 +168,19 @@ CASES: list[tuple[type[p.Message], str, st.SearchStrategy[Any]]] = [
             optional={
                 "turns": st.integers(0, 999),
                 "durationMs": st.integers(0, 10**9),
-                "usage": st.dictionaries(NAME, st.integers(0, 10**9), max_size=3),
+                "usage": _with_optional(
+                    {},
+                    {
+                        key: st.integers(0, 10**9)
+                        for key in (
+                            "inputTokens",
+                            "outputTokens",
+                            "cacheReadTokens",
+                            "cacheWriteTokens",
+                        )
+                    },
+                ),
                 "costUsd": st.floats(0, 1000, allow_nan=False),
-                "native": NATIVE,
             },
         ),
     ),
@@ -245,6 +252,25 @@ INIT = {
 
 REFUSED: list[tuple[str, type[p.Message], dict[str, Any], str]] = [
     ("unknown field", p.InitEvent, {**INIT, "colour": "red"}, "unknown field"),
+    (
+        "native on init",
+        p.InitEvent,
+        {**INIT, "native": {"type": "system", "subtype": "init"}},
+        "unknown field",
+    ),
+    (
+        "unnamed usage counter",
+        p.ResultEvent,
+        {
+            "runId": RUN,
+            "seq": 1,
+            "type": "result",
+            "status": "ok",
+            "message": "",
+            "usage": {"reasoningTokens": 3},
+        },
+        "unknown field",
+    ),
     ("missing field", p.InitEvent, {k: v for k, v in INIT.items() if k != "tools"}, "missing"),
     ("wrong type", p.InitEvent, {**INIT, "tools": "Write"}, "must be an array"),
     ("init not first", p.InitEvent, {**INIT, "seq": 3}, "seq is always 0"),

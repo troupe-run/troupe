@@ -22,8 +22,19 @@
           "type": "integer"
         },
         "message": {"type": "string", "minLength": 1},
-        "data": {"$ref": "../error.schema.json"}
+        "data": {
+          "description": "One of the contract's own errors (errors.schema.json), or one of the runner's own codes, which the runner publishes and which fill the runnerErrors extension point.",
+          "oneOf": [{"$ref": "errors.schema.json"}, {"$dynamicRef": "#runnerErrors"}]
+        }
       }
+    }
+  },
+  "$defs": {
+    "runnerErrors": {
+      "title": "The runner's own errors",
+      "description": "An extension point: a runner's published errors schema fills it. Without one, no code beyond the contract's validates.",
+      "$dynamicAnchor": "runnerErrors",
+      "allOf": [false]
     }
   }
 }

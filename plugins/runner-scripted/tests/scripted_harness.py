@@ -1,7 +1,9 @@
 """Drive the scripted runner over pipes, as troupe would, and check every message against the
 schemas.
 
-Self-contained: no troupe imports. The schemas are read from protocol/ at the repository root.
+Self-contained: no troupe imports. The contract's schemas are read from protocol/ at the repository
+root, and the runner's own from its schemas/ directory. Messages are validated with the runner's
+schemas filling the contract's extension points, as troupe would see them.
 """
 
 import json
@@ -20,7 +22,9 @@ from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT202012
 
 SCHEMAS = Path(__file__).resolve().parents[3] / "protocol" / "schemas"
+RUNNER_SCHEMAS = Path(__file__).resolve().parents[1] / "schemas"
 BASE = "https://troupe.run/protocol/runner/"
+OWN = "https://troupe.run/plugins/runner-scripted/"
 RESULTS = {
     "initialize": "initialize.schema.json#/$defs/result",
     "run/start": "run-start.schema.json#/$defs/result",
@@ -32,17 +36,34 @@ TIMEOUT = 30.0
 
 @cache
 def _registry() -> Registry[Any]:
-    paths = [SCHEMAS / "error.schema.json", *sorted((SCHEMAS / "runner").glob("*.schema.json"))]
+    paths = [
+        SCHEMAS / "error.schema.json",
+        *sorted((SCHEMAS / "runner").glob("*.schema.json")),
+        *sorted(RUNNER_SCHEMAS.glob("*.schema.json")),
+    ]
     schemas = [json.loads(path.read_text(encoding="utf-8")) for path in paths]
     return Registry().with_resources(
         (s["$id"], Resource.from_contents(s, default_specification=DRAFT202012)) for s in schemas
     )
 
 
+def bound(ref: str) -> dict[str, Any]:
+    """The contract's schema at ``ref``, with this runner's schemas filling its extension points."""
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": urljoin(OWN, "bound.schema.json"),
+        "$ref": urljoin(BASE, ref),
+        "$defs": {
+            "errors": {
+                "$dynamicAnchor": "runnerErrors",
+                "$ref": urljoin(OWN, "errors.schema.json"),
+            },
+        },
+    }
+
+
 def validate(instance: object, ref: str) -> None:
-    jsonschema.Draft202012Validator({"$ref": urljoin(BASE, ref)}, registry=_registry()).validate(
-        instance
-    )
+    jsonschema.Draft202012Validator(bound(ref), registry=_registry()).validate(instance)
 
 
 def new_run_id() -> str:

@@ -49,8 +49,9 @@ A run goes like this:
    and exits.
 
 `run/start` carries everything the runner may use from troupe. `options` holds runner-specific settings, which
-troupe passes through without looking inside them. A runner refuses an option it doesn't define, with an error
-naming it, rather than ignoring it. `limits.eventMaxBytes` is the largest serialised event troupe
+troupe passes through without looking inside them. The runner publishes their schema (see
+[Publishing a runner's schemas](#publishing-a-runners-schemas)), and refuses an option it doesn't define, with an
+error naming it, rather than ignoring it. `limits.eventMaxBytes` is the largest serialised event troupe
 keeps inline: summarise below it.
 
 ### Run events
@@ -60,20 +61,21 @@ repeats.
 
 | Type | Fields | Rules |
 |---|---|---|
-| `init` | `runner {name, version}`, `tools`, `engine {name, version, model}` (optional), `native` (optional) | Always the first event, `seq` 0. |
-| `turn` | `role` (`assistant` or `user`), `text`, `native` (optional) | One message turn, summarised. |
-| `tool_call` | `callId`, `tool`, `inputSummary`, `native` (optional) | |
+| `init` | `runner {name, version}`, `tools`, `engine {name, version, model}` (optional) | Always the first event, `seq` 0. |
+| `turn` | `role` (`assistant` or `user`), `text` | One message turn, summarised. |
+| `tool_call` | `callId`, `tool`, `inputSummary` | |
 | `tool_result` | `callId`, `isError`, `outputSummary`, `outputBytes` | `callId` matches an earlier `tool_call`. The full output belongs in the transcript. |
 | `retry` | `attempt`, `maxAttempts` (optional), `delayMs`, `reason`, `message` (optional) | `reason` is `authentication`, `rate-limit`, `network`, `server` or `other`. Send one each time the engine retries. |
 | `log` | `level` (`debug`, `info`, `warning`, `error`), `message` | A diagnostic worth keeping with the run. |
-| `result` | `status` (`ok` or `error`), `message`, `turns`, `durationMs`, `usage`, `costUsd`, `native` (all but the first two optional) | Exactly one, last, for a run that ends on its own. |
+| `result` | `status` (`ok` or `error`), `message`, `turns`, `durationMs`, `usage {inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens}`, `costUsd` (all but the first two optional, and each `usage` counter too) | Exactly one, last, for a run that ends on its own. |
 | `oversized` | `originalType`, `bytes`, `ref` | Written by troupe, never by a runner (see [Oversized events](#oversized-events)). |
 
 - **`result.status` is `error` whenever the engine reported an error,** whatever else it reported alongside it.
   Claude Code, for example, reports failures with `"subtype": "success"` and `"is_error": true`; that is an
   `error`.
-- **Nothing is required that only one engine has.** Engine-specific detail goes under `native`, or in the
-  runner's own `options`. A runner with no model leaves out `engine`.
+- **Nothing is required that only one engine has.** Engine-specific detail goes in the transcript, which keeps
+  every native record, or in the runner's own `options`. A run event carries no field the contract doesn't
+  define. A runner with no model leaves out `engine`.
 - **Events are summaries.** Full tool inputs and outputs go in the transcript.
 
 ### Oversized events
@@ -133,9 +135,57 @@ runner and every process it started.
 
 ### Errors
 
-A JSON-RPC error's `data` is troupe's structured error ([`error.schema.json`](../protocol/schemas/error.schema.json)):
-a dotted `code`, the `problem`, the `fix`, and optionally a `path` and `details`. The JSON-RPC `code` is a standard
-value (-32700 to -32600), or -32000 when the runner refuses a valid request (such as a second `run/start`).
+A JSON-RPC error's `data` is troupe's structured error shape
+([`error.schema.json`](../protocol/schemas/error.schema.json)): a dotted `code`, the `problem`, the `fix`, and
+optionally a `path` and `details`. The JSON-RPC `code` is a standard value (-32700 to -32600), or -32000 when the
+runner refuses a valid request (such as a second `run/start`).
+
+The contract defines these codes ([`runner/errors.schema.json`](../protocol/schemas/runner/errors.schema.json)).
+Only `runner.unsupported-version` carries `details`:
+
+| Code | JSON-RPC code | When |
+|---|---|---|
+| `runner.parse-error` | -32700 | The request isn't JSON |
+| `runner.invalid-request` | -32600 | The message isn't a JSON-RPC 2.0 request |
+| `runner.not-initialized` | -32600 | A request other than `initialize` came first |
+| `runner.unknown-method` | -32601 | The method isn't one the runner serves |
+| `runner.unsupported-version` | -32000 | None of the offered versions is supported; `details.supportedVersions` names the ones that are |
+| `runner.already-started` | -32000 | A second `run/start` |
+| `runner.invalid-params` | -32602 | The params aren't the ones the contract defines |
+
+Any other code is the runner's own, and the runner publishes it (next section).
+
+### Publishing a runner's schemas
+
+Every schema troupe ships is strict: each object closed, each value typed. A runner publishes two JSON Schemas
+(draft 2020-12), held to the same rule, in a `schemas/` directory beside its code:
+
+- **`options.schema.json`**, for its `run/start` options. A runner with no options publishes one that accepts only
+  `{}`.
+- **`errors.schema.json`**, for its own error codes and each code's `details`. It refers to the shared error fields
+  (`error.schema.json#/$defs/fields`), closes the object with `unevaluatedProperties: false`, and lists one `oneOf`
+  branch per code.
+
+The contract leaves room for them with two extension points: `options` in `run/start` is
+`{"$dynamicRef": "#runnerOptions"}`, and a runner error's `data` is the contract's codes or
+`{"$dynamicRef": "#runnerErrors"}`. On their own they accept only `{}` options and only the contract's codes. To
+validate a runner's messages, bind its schemas in a schema that sets each `$dynamicAnchor` and refers to the
+contract:
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/my-runner/bound.schema.json",
+  "$ref": "https://troupe.run/protocol/runner/message.schema.json",
+  "$defs": {
+    "options": {"$dynamicAnchor": "runnerOptions", "$ref": "https://example.com/my-runner/options.schema.json"},
+    "errors": {"$dynamicAnchor": "runnerErrors", "$ref": "https://example.com/my-runner/errors.schema.json"}
+  }
+}
+```
+
+The [scripted runner's schemas](../plugins/runner-scripted/schemas/) are a worked example. troupe doesn't load a
+runner's schemas at run time yet; how it will is decided with config ([#60](https://github.com/troupe-run/troupe/issues/60)).
 
 ### Mapping an engine: Claude Code
 
@@ -144,12 +194,12 @@ fixtures pin it.
 
 | stream-json record | Run event |
 |---|---|
-| `system/init` | `init`, with the whole record under `native` |
+| `system/init` | `init`, with the engine's name, version and model; the whole record stays in the transcript |
 | `assistant` message | A `turn` for its text, if it has any, then one `tool_call` per `tool_use` block. An API failure arrives this way too, as an `assistant` message with `error` set and the error's text as its content |
 | `rate_limit_event` | None while its status is `allowed` (the transcript keeps it); otherwise a `log` warning naming the status |
 | `user` message with `tool_result` blocks | one `tool_result` per block |
 | `system/api_retry` | `retry`: `authentication_failed` → `authentication`, HTTP 429 → `rate-limit`, connection errors → `network`, 5xx → `server` |
-| `result` | `result`, with `status` `error` whenever `is_error` is true, whatever `subtype` says |
+| `result` | `result`, with `status` `error` whenever `is_error` is true, whatever `subtype` says. Its `usage` maps `input_tokens`, `output_tokens`, `cache_read_input_tokens` and `cache_creation_input_tokens` onto `inputTokens`, `outputTokens`, `cacheReadTokens` and `cacheWriteTokens` |
 | every line | one `run/transcript` record, verbatim |
 
 ## How troupe runs a runner

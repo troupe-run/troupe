@@ -110,6 +110,16 @@ class Engine(Message):
 
 
 @dataclass(frozen=True)
+class Usage(Message):
+    """Token counts, where the engine reports them."""
+
+    input_tokens: int | None = json_field("inputTokens", default=None, minimum=0)
+    output_tokens: int | None = json_field("outputTokens", default=None, minimum=0)
+    cache_read_tokens: int | None = json_field("cacheReadTokens", default=None, minimum=0)
+    cache_write_tokens: int | None = json_field("cacheWriteTokens", default=None, minimum=0)
+
+
+@dataclass(frozen=True)
 class RunEvent(Message):
     """Every run event: the run id, its seq, and (as TYPE) its type."""
 
@@ -123,7 +133,6 @@ class InitEvent(RunEvent):
     runner: Named = json_field("runner")
     tools: list[str] = json_field("tools")
     engine: Engine | None = json_field("engine", default=None)
-    native: dict[str, object] | None = json_field("native", default=None)
 
     def _check(self, where: str) -> None:
         if self.seq != 0:
@@ -137,7 +146,6 @@ class TurnEvent(RunEvent):
     TYPE: ClassVar[str | None] = "turn"
     role: Literal["assistant", "user"] = json_field("role")
     text: str = json_field("text")
-    native: dict[str, object] | None = json_field("native", default=None)
 
 
 @dataclass(frozen=True)
@@ -146,7 +154,6 @@ class ToolCallEvent(RunEvent):
     call_id: str = json_field("callId", min_length=1)
     tool: str = json_field("tool", min_length=1)
     input_summary: str = json_field("inputSummary")
-    native: dict[str, object] | None = json_field("native", default=None)
 
 
 @dataclass(frozen=True)
@@ -185,9 +192,8 @@ class ResultEvent(RunEvent):
     message: str = json_field("message")
     turns: int | None = json_field("turns", default=None, minimum=0)
     duration_ms: int | None = json_field("durationMs", default=None, minimum=0)
-    usage: dict[str, int] | None = json_field("usage", default=None, minimum=0)
+    usage: Usage | None = json_field("usage", default=None)
     cost_usd: float | None = json_field("costUsd", default=None, minimum=0)
-    native: dict[str, object] | None = json_field("native", default=None)
 
 
 EventType = Literal["init", "turn", "tool_call", "tool_result", "retry", "log", "result"]

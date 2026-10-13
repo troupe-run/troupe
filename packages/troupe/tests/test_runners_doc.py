@@ -55,3 +55,9 @@ def test_every_runner_notice_code_is_documented() -> None:
     runner_notices = {code for code in NOTICE_CODES if code.split(".")[0] in {"run", "runner"}}
     assert runner_notices
     assert all(f"`{code}`" in TEXT or f"| `{code}` |" in runs_doc for code in runner_notices)
+
+
+def test_the_errors_table_lists_exactly_the_contracts_error_codes() -> None:
+    schema = load(RUNNER_SCHEMAS / "errors.schema.json")
+    codes = {branch["properties"]["code"]["const"] for branch in schema["oneOf"]}
+    assert _first_column(_section("Errors")) == codes
