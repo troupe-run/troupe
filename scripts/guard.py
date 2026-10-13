@@ -29,6 +29,7 @@ import shlex
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from collections.abc import Callable, Iterable, Sequence
@@ -721,6 +722,15 @@ GH_WORKFLOW_WRITES = frozenset(
         ("workflow", "run"), ("run", "rerun"), ("run", "cancel"),
     }
 )  # fmt: skip
+# What the hook grants, so it runs without a prompt or auto mode's check (guard-grants-gh
+# design D1). A grant skips auto mode's classifier entirely, so this is narrower than the
+# allow-list: merging, checking out, starting or stopping runs, and reads that write local files
+# anywhere keep Claude Code's own check, and so does gh api.
+GH_NOT_GRANTED = frozenset(
+    {("pr", "merge"), ("pr", "checkout"), ("workflow", "run"), ("run", "rerun"), ("run", "cancel"),
+     ("run", "download"), ("repo", "clone")}
+)  # fmt: skip
+GH_GRANTED = (GH_READS | GH_WORKFLOW_WRITES) - GH_NOT_GRANTED
 GH_OWNER_ONLY = {
     ("secret", "set"): "admin", ("secret", "delete"): "admin",
     ("variable", "set"): "admin", ("variable", "delete"): "admin",
@@ -1223,6 +1233,89 @@ def shell_decisions(command: str, cwd: Path) -> list[Decision]:
     return decisions or [ALLOW]
 
 
+# --- grants (guard-grants-gh design D2) ------------------------------------------------------
+
+# Outside quotes, any of these makes a command more than one plain gh command: chaining,
+# substitution, variables, redirection, globs, history, comments, escapes, subshells.
+UNQUOTED_SHELL_SYNTAX = frozenset("$`\\<>|&;(){}*?[]~!#\n")
+# Inside double quotes, these still expand.
+DOUBLE_QUOTED_SHELL_SYNTAX = frozenset("$`")
+# The flags of granted commands that read a local file and send its contents to GitHub.
+GH_FILE_FLAGS = ("--body-file", "-F", "--input")
+
+
+def _plain_shell_text(command: str) -> bool:
+    """True if the command has no shell syntax beyond words and quotes (design D2)."""
+    quote: str | None = None
+    for char in command:
+        if quote == "'":
+            if char == "'":
+                quote = None
+        elif quote == '"':
+            if char == '"':
+                quote = None
+            elif char in DOUBLE_QUOTED_SHELL_SYNTAX:
+                return False
+        elif char in "'\"":
+            quote = char
+        elif char in UNQUOTED_SHELL_SYNTAX:
+            return False
+    return quote is None
+
+
+def _files_read(words: Sequence[str]) -> list[str] | None:
+    """The local files a gh command's file flags name; None if one can't be known."""
+    files: list[str] = []
+    for index, word in enumerate(words):
+        name, equals, inline = word.partition("=")
+        if name not in GH_FILE_FLAGS:
+            continue
+        value = inline if equals else (words[index + 1] if index + 1 < len(words) else "")
+        if value in ("", "-"):
+            return None
+        files.append(value)
+    return files
+
+
+def _within(path: Path, *roots: Path) -> bool:
+    resolved = path.resolve()
+    return any(resolved.is_relative_to(root.resolve()) for root in roots)
+
+
+def grantable(command: str, cwd: Path, root: Path) -> bool:
+    """True if the hook may grant this Bash command: exactly one plain gh command in GH_GRANTED,
+    refused by no rule, reading files only inside the repository or the temp directory (design D2).
+    Anything unusual is no grant, and Claude Code decides as it would without the guard."""
+    if not _plain_shell_text(command):
+        return False
+    try:
+        words = shlex.split(command, posix=True)
+    except ValueError:
+        return False
+    if len(words) < 3 or words[0] != "gh" or words[1].startswith("-") or words[2].startswith("-"):
+        return False
+    if (words[1], words[2]) not in GH_GRANTED:
+        return False
+    if any(decision.refused for decision in shell_decisions(command, cwd)):
+        return False
+    files = _files_read(words[3:])
+    if files is None:
+        return False
+    temp = Path(tempfile.gettempdir())
+    return all(_within(Path(f) if Path(f).is_absolute() else cwd / f, root, temp) for f in files)
+
+
+def guard_is_reviewed(root: Path, running: Path = Path(__file__)) -> bool:
+    """True if the running guard is byte-identical to scripts/guard.py on origin/main, so a guard
+    edited on a branch can refuse but never grant (design D3). Any doubt is False."""
+    try:
+        here = git(root, "hash-object", "--", str(running))
+        reviewed = git(root, "rev-parse", "--verify", "--quiet", "origin/main:scripts/guard.py")
+    except (RuntimeError, OSError):
+        return False
+    return bool(here) and here == reviewed
+
+
 def edit_decision(root: Path, file_path: str, branch: str | None) -> Decision:
     target = Path(file_path)
     target = target if target.is_absolute() else root / target
@@ -1584,6 +1677,22 @@ def run_claude_pre_tool_use(payload: dict[str, object], stdout: TextIO | None = 
             }
         }
         print(json.dumps(deny), file=out)
+        return 0
+    # A grant comes only after every refusal, never for an override-excused command (grantable
+    # re-reads the rules), and only from the reviewed guard (design D4).
+    command = str(tool_input.get("command", ""))
+    if tool == "Bash" and grantable(command, cwd, root) and guard_is_reviewed(root):
+        words = shlex.split(command, posix=True)
+        allow = {
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "allow",
+                "permissionDecisionReason": (
+                    f"guard: gh {words[1]} {words[2]} is on the guard's allow-list (granted)."
+                ),
+            }
+        }
+        print(json.dumps(allow), file=out)
     return 0
 
 
