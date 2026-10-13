@@ -13,6 +13,8 @@ from typing import Any, TextIO
 
 import jsonschema
 import pytest
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from protocol_schemas import check_error
 from troupe.cli import COMMANDS, main
@@ -239,6 +241,24 @@ def test_unknown_subcommand_near_a_command_suggests_the_command() -> None:
     assert "Did you mean `echo`?" in run_cli("ecoh", "x")[2]
 
 
+def test_an_empty_argument_as_the_command_is_an_unknown_command_naming_it_empty() -> None:
+    error = usage_error("", "echo")
+    check_error(error.to_data())
+    assert error.problem == "An empty argument is not a troupe command."
+    assert error.details == {"command": "", "suggestion": None}
+
+
+@pytest.mark.parametrize("argv", [("--",), ("--", "echo", "x"), ("--version", "--", "echo")])
+def test_a_separator_before_any_command_is_refused_as_an_unknown_command(
+    argv: tuple[str, ...],
+) -> None:
+    error = usage_error(*argv)
+    check_error(error.to_data())
+    assert error.code == "usage.unknown-command"
+    assert error.problem == "`--` comes before any command."
+    assert error.details == {"command": "--", "suggestion": None}
+
+
 def test_unknown_subcommand_with_no_near_match_points_at_help() -> None:
     error = usage_error("zzzzzz")
     assert error.code == "usage.unknown-command"
@@ -457,6 +477,12 @@ def test_a_dash_leading_option_value_still_reaches_argparse_as_a_value() -> None
     assert parse(["status", "--limit", "-5"], COMMANDS).arguments.limit == -5
 
 
+def test_a_dash_leading_option_value_with_a_space_is_still_taken_as_the_value() -> None:
+    argv = ["perform", "tester", "--runner", "scripted", "--no-effect-check"]
+    parsed = parse([*argv, "--instructions", "--dry-run first"], COMMANDS)
+    assert parsed.arguments.instructions == "--dry-run first"
+
+
 def test_a_value_its_type_rejects_is_an_invalid_value_naming_it() -> None:
     error = refused("status", "--limit", "notanumber")
     assert error.code == "usage.invalid-value"
@@ -569,3 +595,46 @@ def test_declared_refuses_an_argument_the_checks_cannot_read(
         _declared(parser)
     assert caught.value.code == "internal.unexpected"
     assert "`troupe odd`" in caught.value.problem
+
+
+# Property: troupe's checks and argparse agree (design: Risks)
+
+# Commands whose every refusal troupe's own checks should make: the real ones, and test ones with
+# choices, a typed positional and a required positional. ODD is left out: it refuses inside
+# argparse on purpose, to reach the backstop.
+CHECKED = (*COMMANDS, ECHO, CHOOSE)
+VALUES = [
+    *("x", "5", "-5", "red", "green", "", "--", "-", "--bogus", "-q"),
+    *("--limit=x", "a=b", "--dry-run first", "-x y"),
+]
+
+
+@st.composite
+def command_lines(draw: st.DrawFn) -> list[str]:
+    command = draw(st.sampled_from(CHECKED))
+    parser = argparse.ArgumentParser(add_help=False)
+    command.configure(parser)
+    flags = [*sorted(_declared(parser).strings), "--help", "--version"]
+    tokens = draw(st.lists(st.sampled_from(flags + VALUES), max_size=8))
+    # Half the time the command comes first; otherwise flags and values may come before it.
+    first = draw(st.booleans())
+    at = 0 if first else draw(st.integers(min_value=0, max_value=len(tokens)))
+    return [*tokens[:at], command.name, *tokens[at:]]
+
+
+@settings(max_examples=500, deadline=None)
+@given(command_lines())
+def test_every_refusal_is_a_named_usage_shape_with_no_prefix(argv: list[str]) -> None:
+    refusal: TroupeError | None = None
+    try:
+        parsed = parse(argv, CHECKED)
+    except TroupeError as error:
+        refusal = error
+    if refusal is None:
+        assert isinstance(parsed.arguments, argparse.Namespace)
+        return
+    assert refusal.code.startswith("usage."), (argv, refusal)
+    assert refusal.code != "usage.invalid", f"argparse refused {argv} after the checks: {refusal}"
+    assert refusal.exit_code is ExitCode.USAGE
+    assert not refusal.problem.startswith("troupe:")
+    check_error(refusal.to_data())

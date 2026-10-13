@@ -63,15 +63,15 @@ wording, the fix naming `troupe <command> --help`, exit 2, empty stdout and sche
 
 ## 6. Property test and docs
 
-- [ ] 6.1 Add a property test (hypothesis) generating command lines over the test commands' declared arguments:
+- [x] 6.1 Add a property test (hypothesis) generating command lines over the test commands' declared arguments:
   every refusal is a catalogued `usage.*` code, exit 2, with no `troupe:` prefix in its problem; every acceptance
   parses to a namespace. Verify it passes, and that reintroducing the prefix in one builder makes it fail
-- [ ] 6.2 Add a command usage-error example to `docs/cli/README.md` (the `perform` one-of case) and say a command's
+- [x] 6.2 Add a command usage-error example to `docs/cli/README.md` (the `perform` one-of case) and say a command's
   errors point at its own help. Verify `test_cli_docs.py` passes and the example's text matches the CLI's output
 
 ## 7. Integration
 
-- [ ] 7.1 Run each of the issue's reproduction lines and the six shapes from the proposal with `uv run troupe`, and
+- [x] 7.1 Run each of the issue's reproduction lines and the six shapes from the proposal with `uv run troupe`, and
   record the output for the PR. Verify none prints `troupe: troupe:` and each fix names its command's help
 - [ ] 7.2 Run `uv run scripts/check.py` (ruff, format, mypy --strict, import-linter, the full suite). Verify it passes
   locally and on CI on Linux, macOS and Windows

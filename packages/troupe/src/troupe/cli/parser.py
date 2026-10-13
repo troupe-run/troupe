@@ -218,6 +218,13 @@ def _looks_like_a_flag(token: str) -> bool:
     )
 
 
+def _is_a_value(arg: str) -> bool:
+    """Whether ``token``, after an option that takes a value, is that value. argparse's own rule:
+    ``--`` and flag-like tokens aren't, but text with a space is, even if it starts with ``-``
+    (``--instructions "--dry-run first"``)."""
+    return arg != "--" and (" " in arg or not _looks_like_a_flag(arg))
+
+
 def _unknown_flag(token: str, known: Sequence[str], command: str | None) -> TroupeError:
     suggestion = _suggest(token, known)
     hint = f"Did you mean `{suggestion}`? " if suggestion else f"{_help_fix(command)} "
@@ -243,9 +250,22 @@ def _unknown_command(token: str, commands: Sequence[Command], flags: Sequence[st
     suggestion = _suggest(token, [command.name for command in commands] + list(flags))
     return TroupeError(
         "usage.unknown-command",
-        problem=f"`{token}` is not a troupe command.",
+        problem=f"`{token}` is not a troupe command."
+        if token
+        else ("An empty argument is not a troupe command."),
         fix=f"Did you mean `{suggestion}`?" if suggestion else HELP_FIX,
         details={"command": token, "suggestion": suggestion},
+    )
+
+
+def _separator_before_command() -> TroupeError:
+    # argparse would take the next value as the command and still read flags after it, so the
+    # `--` would protect nothing. Refuse rather than guess what was meant.
+    return TroupeError(
+        "usage.unknown-command",
+        problem="`--` comes before any command.",
+        fix="Put the command first; `--` goes after it, before values that start with `-`.",
+        details={"command": "--", "suggestion": None},
     )
 
 
@@ -339,8 +359,9 @@ def _scan(
         arg = argv[at]
         at += 1
         if arg == "--":
-            if scan.chosen is not None:
-                scan.positionals.extend(argv[at:])
+            if scan.chosen is None:
+                raise _separator_before_command()
+            scan.positionals.extend(argv[at:])
             break
         if arg.startswith("-"):
             name, has_inline, inline = arg.partition("=") if arg.startswith("--") else (arg, "", "")
@@ -354,7 +375,7 @@ def _scan(
                 continue
             if has_inline:
                 values.append(inline)
-            elif at < len(argv) and argv[at] != "--" and not _looks_like_a_flag(argv[at]):
+            elif at < len(argv) and _is_a_value(argv[at]):
                 values.append(argv[at])
                 at += 1
             elif scan.without_value is None:

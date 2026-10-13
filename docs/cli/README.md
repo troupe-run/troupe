@@ -83,6 +83,14 @@ troupe: `--bogus` is not a troupe option.
   fix: Run `troupe --help` to see the commands and options. If `--bogus` is a value, put `--` before it.
 ```
 
+A command's usage errors name the command and point at its own help:
+
+```console
+$ troupe perform tester --runner scripted
+troupe: `troupe perform` needs one of --expect or --no-effect-check.
+  fix: Run `troupe perform --help` to see its options.
+```
+
 Behind the text, each error is structured data with a stable `code` (for example `usage.unknown-command`), the
 problem, the fix, and an optional path and details. Its shape is defined once, in
 [`protocol/schemas/error.schema.json`](../../protocol/schemas/error.schema.json), which lists every code with what

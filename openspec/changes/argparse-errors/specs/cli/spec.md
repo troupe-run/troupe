@@ -22,6 +22,16 @@ what was not recognised and, where one exists, the closest valid alternative.
 - **AND** the message names `--bogus` and `troupe status`
 - **AND** the fix, when there is no near match, points at `troupe status --help`
 
+#### Scenario: A separator before any command
+- **WHEN** a user runs `troupe -- echo x`, with `--` before the command
+- **THEN** the exit code is 2
+- **AND** the message says `--` comes before any command, and the fix says to put the command first
+
+#### Scenario: An empty argument where the command goes
+- **WHEN** a user runs `troupe '' status`
+- **THEN** the exit code is 2
+- **AND** the error says an empty argument is not a troupe command, and validates against the protocol's error schema
+
 ## ADDED Requirements
 
 ### Requirement: A usage problem carries no surface prefix
