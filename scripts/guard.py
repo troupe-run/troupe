@@ -64,13 +64,18 @@ DELIVERY_LIST = ".github/guard-delivery.json"
 """Present only in a repository that receives the guard: the files delivered to it."""
 DELIVERY_AUTHOR_EMAIL = "340938853+troupe-run-infrastructure[bot]@users.noreply.github.com"
 """The infrastructure App's bot account, which makes every delivery commit."""
-RELEASE_AUTHOR_EMAIL: str | None = None
-"""The release App's bot account, which makes release-please's commits. None until the App exists:
-then fill in "<id>+troupe-run-release[bot]@users.noreply.github.com", with the id from
-GET /users/troupe-run-release%5Bbot%5D, and only once the ruleset that lets only the App write
-release-please--* branches is applied (troupe-run/infrastructure#34). While None, no branch is
-exempt from the branch-change rule (release-please-prs design D2, D5)."""
+RELEASE_AUTHOR_EMAIL: str | None = "341990208+troupe-run-release[bot]@users.noreply.github.com"
+"""The release App's bot account, which makes release-please's commits; the id is from
+GET /users/troupe-run-release%5Bbot%5D. Filled once troupe's "release branches" ruleset, which lets
+only the App create, update or delete release-please--* branches, was applied (#41). That ruleset
+is the hard check: a commit's author is self-declared, so this check alone isn't, and it's trusted
+only in RELEASE_REPOSITORIES. None closes the exemption everywhere (release-please-prs design D2,
+D5; open-release-exemption design D3)."""
 RELEASE_BRANCH_PREFIX = "release-please--"
+RELEASE_REPOSITORIES = frozenset({"troupe-run/troupe"})
+"""Where a ruleset lets only the release App write release-please--* branches (tofu/release.tf).
+The exemption trusts a commit's author only in these; anywhere else the author would be the only
+check (open-release-exemption design D1)."""
 GUARD_DIR = "troupe-guard"
 CHECK_TIMEOUT_SECONDS = 600.0
 """How long the pre-commit check may run before the commit is refused. The default lives here
@@ -1461,13 +1466,21 @@ def delivered_changes_by_others(
     return _delivered_refusal(bad, "commits not made by the delivery change delivered files")
 
 
-def release_branch_by_the_bot(root: Path, head: str, branch: str | None) -> bool:
-    """A release-please branch whose commits not on main are all the release bot's, and there's at
-    least one. Judged by what the branch adds to main, not the event's range: release-please
-    force-pushes when main moves, and a push's range then holds main's new commits too
-    (release-please-prs design D1). The name and the author are both self-declared; a ruleset
-    that lets only the App write these branches is the hard check (design D5)."""
-    if RELEASE_AUTHOR_EMAIL is None or not (branch or "").startswith(RELEASE_BRANCH_PREFIX):
+def release_branch_by_the_bot(
+    root: Path, head: str, branch: str | None, repository: str | None
+) -> bool:
+    """A release-please branch, living in one of RELEASE_REPOSITORIES, whose commits not on main
+    are all the release bot's, and there's at least one. Judged by what the branch adds to main,
+    not the event's range: release-please force-pushes when main moves, and a push's range then
+    holds main's new commits too (release-please-prs design D1). The name and the author are both
+    self-declared; the ruleset that lets only the App write these branches is the hard check
+    (design D5), so a repository without it, or none named, exempts nothing
+    (open-release-exemption design D1, D2)."""
+    if (
+        RELEASE_AUTHOR_EMAIL is None
+        or repository not in RELEASE_REPOSITORIES
+        or not (branch or "").startswith(RELEASE_BRANCH_PREFIX)
+    ):
         return False
     result = subprocess.run(
         ["git", "log", "--format=%ae", head, "--not", "origin/main"],
@@ -1482,15 +1495,25 @@ def release_branch_by_the_bot(root: Path, head: str, branch: str | None) -> bool
 
 
 def run_ci(
-    root: Path, base: str | None, head: str, branch: str | None, title: str | None = None
+    root: Path,
+    base: str | None,
+    head: str,
+    branch: str | None,
+    title: str | None = None,
+    repository: str | None = None,
 ) -> list[Decision]:
     """The git-level rules, re-checked on GitHub for a push or a pull request (design D11), and a
-    pull request's title when there is one."""
+    pull request's title when there is one. The repository is the one the branch lives in, which
+    decides whether a release branch can be exempt (open-release-exemption design D2)."""
     commits = commits_in_range(root, base, head)
     decisions = [nonconforming_commits(root, commits)]
     if title is not None:
         decisions.append(pr_title(title))
-    if branch and branch != "main" and not release_branch_by_the_bot(root, head, branch):
+    if (
+        branch
+        and branch != "main"
+        and not release_branch_by_the_bot(root, head, branch, repository)
+    ):
         decisions.append(commit_branch_change(root, branch))
     changed: list[str] = []
     for sha in commits:
@@ -1555,6 +1578,26 @@ class UnreadableTitleError(Exception):
     """A pull_request event whose payload has no string title: malformed input, not "no title"."""
 
 
+class UnreadableHeadRepositoryError(Exception):
+    """A pull_request event whose head repository is present but isn't an object with a string
+    full_name: malformed input, not "no repository" (open-release-exemption design D2)."""
+
+
+def _head_repository(pull_request: dict[str, object]) -> str | None:
+    """The repository a pull request's branch lives in: a fork's name for a fork. None when the
+    payload names none, as for a deleted fork, whose head.repo is null."""
+    head = pull_request.get("head")
+    repo = head.get("repo") if isinstance(head, dict) else None
+    if repo is None:
+        return None
+    full_name = repo.get("full_name") if isinstance(repo, dict) else None
+    if not isinstance(full_name, str):
+        raise UnreadableHeadRepositoryError(
+            os.environ.get("GITHUB_EVENT_PATH", "no GITHUB_EVENT_PATH")
+        )
+    return full_name
+
+
 def _event_payload() -> dict[str, object]:
     event_path = os.environ.get("GITHUB_EVENT_PATH")
     if event_path and Path(event_path).is_file():
@@ -1564,9 +1607,12 @@ def _event_payload() -> dict[str, object]:
     return {}
 
 
-def github_ci_inputs(root: Path) -> tuple[str | None, str, str | None, str | None]:
-    """The range, branch and pull request title for this GitHub Actions run (design D11;
-    release-please-prs design D3). A push has no title."""
+def github_ci_inputs(
+    root: Path,
+) -> tuple[str | None, str, str | None, str | None, str | None]:
+    """The range, branch, pull request title and the branch's repository for this GitHub Actions
+    run (design D11; release-please-prs design D3; open-release-exemption design D2). A push has
+    no title, and its repository is the run's; a pull request's is its head repository."""
     event = os.environ.get("GITHUB_EVENT_NAME", "")
     payload = _event_payload()
     head = git(root, "rev-parse", "HEAD")
@@ -1577,12 +1623,13 @@ def github_ci_inputs(root: Path) -> tuple[str | None, str, str | None, str | Non
             raise UnreadableTitleError(os.environ.get("GITHUB_EVENT_PATH", "no GITHUB_EVENT_PATH"))
         base_branch = os.environ.get("GITHUB_BASE_REF", "main")
         base = git(root, "merge-base", f"origin/{base_branch}", head, check=False) or None
-        return base, head, os.environ.get("GITHUB_HEAD_REF"), title
+        repository = _head_repository(pull_request) if isinstance(pull_request, dict) else None
+        return base, head, os.environ.get("GITHUB_HEAD_REF"), title, repository
     before = payload.get("before")
     branch = os.environ.get("GITHUB_REF_NAME")
     if not isinstance(before, str) or not before or _is_null(before):
         before = git(root, "merge-base", "origin/main", head, check=False) or None
-    return before, head, branch, None
+    return before, head, branch, None, os.environ.get("GITHUB_REPOSITORY") or None
 
 
 def run_ci_entry(
@@ -1591,10 +1638,11 @@ def run_ci_entry(
     head: str | None,
     branch: str | None,
     title: str | None = None,
+    repository: str | None = None,
 ) -> int:
     if head is None:
         try:
-            base, head, branch, title = github_ci_inputs(root)
+            base, head, branch, title, repository = github_ci_inputs(root)
         except UnreadableTitleError as error:
             refusal = Decision(
                 "commit-message",
@@ -1604,7 +1652,17 @@ def run_ci_entry(
             )
             print(refusal.text(), file=sys.stderr)
             return 1
-    refusals = run_ci(root, base, head, branch, title)
+        except UnreadableHeadRepositoryError as error:
+            refusal = Decision(
+                "commit-branch-change",
+                "couldn't read the pull request's head repository from the event payload "
+                f"({error}).",
+                "Re-run the check. If it fails again, the event payload is malformed: tell the "
+                "owner, with the run's URL.",
+            )
+            print(refusal.text(), file=sys.stderr)
+            return 1
+    refusals = run_ci(root, base, head, branch, title, repository)
     for refusal in refusals:
         print(refusal.text(), file=sys.stderr)
     if not refusals:
@@ -1766,6 +1824,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     ci.add_argument("--head", help="end of the range (default: from GitHub)")
     ci.add_argument("--branch", help="branch the range belongs to (default: from GitHub)")
     ci.add_argument("--title", help="a pull request's title to check (default: from GitHub)")
+    ci.add_argument(
+        "--repository",
+        help="owner/name of the repository the branch lives in (default: from GitHub)",
+    )
     grant = sub.add_parser("override", help="grant one override (a person, in a terminal)")
     grant.add_argument("rule", choices=OVERRIDABLE_RULES)
     grant.add_argument("--reason", required=True)
@@ -1788,7 +1850,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.entry == "pre-push":
         return run_pre_push(root, sys.stdin.read().splitlines())
     if args.entry == "ci":
-        return run_ci_entry(root, args.base, args.head, args.branch, args.title)
+        return run_ci_entry(root, args.base, args.head, args.branch, args.title, args.repository)
     path = grant_override(root, args.rule, args.reason)
     print(f"guard: override granted for '{args.rule}' (one action). Recorded in {path.parent}.")
     return 0
