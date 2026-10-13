@@ -43,11 +43,33 @@ class Parsed:
     help_text: str
 
 
+class _RefusedError(Exception):
+    """argparse refused the line. ``parse`` turns it into ``usage.invalid``, naming the command it
+    chose, which the parser that refused can't know."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
+
+
 class _Parser(argparse.ArgumentParser):
-    """An ArgumentParser that raises TroupeError instead of printing and exiting."""
+    """An ArgumentParser that raises instead of printing and exiting."""
 
     def error(self, message: str) -> NoReturn:
-        raise TroupeError("usage.invalid", problem=f"{self.prog}: {message}", fix=HELP_FIX)
+        raise _RefusedError(message)
+
+
+def _help_fix(command: str | None) -> str:
+    return HELP_FIX if command is None else f"Run `troupe {command} --help` to see its options."
+
+
+def _invalid(message: str, command: str | None) -> TroupeError:
+    """The backstop: argparse refused a line troupe's own checks accepted (design D7)."""
+    return TroupeError(
+        "usage.invalid",
+        problem=message if command is None else f"`troupe {command}`: {message}",
+        fix=_help_fix(command),
+    )
 
 
 def _global_options() -> _Parser:
@@ -192,7 +214,9 @@ def parse(argv: Sequence[str], commands: Sequence[Command]) -> Parsed:
     try:
         arguments = root.parse_args(argv)
     except argparse.ArgumentError as error:
-        raise TroupeError("usage.invalid", problem=f"troupe: {error}", fix=HELP_FIX) from error
+        raise _invalid(str(error), chosen) from error
+    except _RefusedError as refused:
+        raise _invalid(refused.message, chosen) from refused
 
     command = next((c for c in commands if c.name == chosen), None)
     return Parsed(

@@ -13,7 +13,7 @@ from typing import TextIO
 import pytest
 
 from protocol_schemas import check_error
-from troupe.cli import main
+from troupe.cli import COMMANDS, main
 from troupe.cli.parser import Command, parse
 from troupe.core.errors import TroupeError
 from troupe.core.exit_codes import ExitCode
@@ -225,3 +225,36 @@ def test_every_exit_code_the_cli_returns_is_in_the_exit_code_table(argv: tuple[s
 
 def test_version_flag_after_an_incomplete_subcommand_still_prints_the_version() -> None:
     assert run_cli("echo", "--version") == run_cli("--version")
+
+
+# Requirement: A usage problem carries no surface prefix
+
+# One command line per usage shape, through troupe's real commands.
+USAGE_SHAPES = {
+    "unknown-command": ("nosuchthing",),
+    "unknown-flag": ("status", "--bogus"),
+    "dash-value": ("logs", "-5"),
+    "missing-argument": ("perform", "tester", "--no-effect-check"),
+    "missing-one-of": ("perform", "tester", "--runner", "scripted"),
+    "conflicting-options": (
+        "perform", "tester", "--runner", "scripted", "--expect", "out.txt", "--no-effect-check",
+    ),
+    "extra-argument": ("status", "one", "two"),
+    "missing-value": ("status", "--limit"),
+    "invalid-value": ("status", "--limit", "notanumber"),
+}  # fmt: skip
+
+
+def test_a_command_s_usage_error_prints_the_troupe_prefix_once() -> None:
+    stdout, stderr = io.StringIO(), io.StringIO()
+    code = main(["perform", "tester", "--runner", "scripted"], stdout=stdout, stderr=stderr)
+    first_line = stderr.getvalue().splitlines()[0]
+    assert code == ExitCode.USAGE
+    assert first_line.startswith("troupe: ")
+    assert "troupe: troupe:" not in first_line
+
+
+@pytest.mark.parametrize("argv", USAGE_SHAPES.values(), ids=USAGE_SHAPES.keys())
+def test_no_usage_problem_starts_with_the_troupe_prefix(argv: tuple[str, ...]) -> None:
+    error = usage_error(*argv, commands=COMMANDS)
+    assert not error.problem.startswith("troupe:")
