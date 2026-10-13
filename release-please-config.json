@@ -1,6 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/v17.11.2/schemas/config.json",
   "bump-minor-pre-major": true,
+  "initial-version": "0.1.0",
   "include-component-in-tag": true,
   "signoff": "troupe-run-release[bot] <341990208+troupe-run-release[bot]@users.noreply.github.com>",
   "plugins": [

@@ -70,9 +70,14 @@ PR proposes 0.1.0. Every package already has `feat` commits.
 The release PR rewrites `version` in each `pyproject.toml` from `0.0.1.dev0` to `0.1.0`. Until it merges, the
 placeholder stays, so `main` never claims a version that hasn't been released.
 
+`initial-version: "0.1.0"` is set at the top level too. Found by the dry run (task 3.1): a component with no
+release yet doesn't bump from the manifest's version. It starts at `initial-version`, which defaults to 1.0.0, and
+the `linked-versions` plugin takes the group's highest version, so the linked group came out at 1.0.0. With
+`initial-version`, every component's first release is 0.1.0. It does nothing once a component has a release, so
+there's nothing to remove afterwards.
+
 Alternative: pin `release-as: 0.1.0` for the first release and remove it afterwards. It would add a follow-up commit
-that's easy to forget. The dry run in tasks (3.2) proves 0.1.0 without it. If the dry run proposes anything else,
-fall back to `release-as`.
+that's easy to forget, and `initial-version` makes it unnecessary.
 
 ### D3. A linked group for `packages/`, plugins on their own (owner, 2026-10-13)
 
