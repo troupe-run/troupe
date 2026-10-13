@@ -11,12 +11,11 @@ from contextlib import contextmanager
 from pathlib import Path
 from uuid import UUID, uuid4
 
-import jsonschema
 import pytest
 from eventsourcing.persistence import Notification
 
 from gitrepo import make_repo
-from runner_schemas import SCHEMAS, load
+from protocol_schemas import check_notice
 from storetesting import event
 from troupe.core.files import directory_lock
 from troupe.core.vcs import load_vcs
@@ -60,7 +59,6 @@ else:
 """
 
 TESTS = str(Path(__file__).resolve().parents[2] / "troupe" / "tests")
-NOTICE_SCHEMA = load(SCHEMAS / "notice.schema.json")
 
 
 def child(
@@ -357,7 +355,7 @@ def test_a_refused_watch_falls_back_to_an_announced_poll_that_still_delivers(
         assert notice.details["reason"] == "watch-refused"
         assert "the platform refused (a test)" in notice.details["detail"]
         assert notice.path == str(store.events_dir.absolute())
-        jsonschema.validate(notice.to_data(), NOTICE_SCHEMA)
+        check_notice(notice.to_data())
         writer.record()
         appended = writer.appended_at()
         assert heard.wait(10)
@@ -389,7 +387,7 @@ def test_a_watch_that_never_reports_is_caught_by_the_check_then_the_store_polls(
             time.sleep(0.1)
         [notice] = polling
         assert notice.details["reason"] == "watch-missed-write"
-        jsonschema.validate(notice.to_data(), NOTICE_SCHEMA)
+        check_notice(notice.to_data())
         heard.clear()
         writer.record()
         appended = writer.appended_at()
