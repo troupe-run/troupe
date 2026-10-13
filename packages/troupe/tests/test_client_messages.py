@@ -30,11 +30,48 @@ EFFECT_CHECKS = st.just({"kind": "none"}) | st.fixed_dictionaries(
     {"kind": st.just("files"), "paths": st.lists(PATHS, min_size=1, max_size=3, unique=True)}
 )
 ERRORS = st.fixed_dictionaries(
-    {"code": st.sampled_from(["run.error-result", "runner.crashed"]), "problem": TEXT, "fix": TEXT}
+    {
+        "code": st.just("run.error-result"),
+        "problem": TEXT,
+        "fix": TEXT,
+        "details": st.fixed_dictionaries({"message": TEXT}),
+    }
+) | st.fixed_dictionaries(
+    {
+        "code": st.just("runner.crashed"),
+        "problem": TEXT,
+        "fix": TEXT,
+        "details": st.fixed_dictionaries(
+            {
+                "exitCode": st.none() | st.integers(-9, 255),
+                "ending": st.sampled_from(["exited", "killed", "never-started"]),
+            }
+        ),
+    }
 )
 NOTICES = st.fixed_dictionaries(
-    {"code": st.sampled_from(["run.silent", "run.retrying"]), "problem": TEXT, "fix": TEXT},
-    optional={"details": st.dictionaries(NAMES, st.integers(), max_size=2)},
+    {
+        "code": st.just("run.silent"),
+        "problem": TEXT,
+        "fix": TEXT,
+        "details": st.fixed_dictionaries({"seconds": st.integers(0, 600)}),
+    }
+) | st.fixed_dictionaries(
+    {
+        "code": st.just("run.retrying"),
+        "problem": TEXT,
+        "fix": TEXT,
+        "details": st.fixed_dictionaries(
+            {
+                "attempt": st.integers(1, 9),
+                "maxAttempts": st.none() | st.integers(1, 9),
+                "delayMs": st.integers(0, 10**5),
+                "reason": st.sampled_from(
+                    ["authentication", "rate-limit", "network", "server", "other"]
+                ),
+            }
+        ),
+    }
 )
 ACTORS = st.just({"kind": "unknown"}) | st.fixed_dictionaries(
     {"kind": st.sampled_from(["human", "agent"]), "id": TEXT, "source": NAMES}

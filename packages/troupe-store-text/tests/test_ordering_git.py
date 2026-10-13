@@ -143,7 +143,7 @@ def test_a_parent_whose_file_was_removed_by_hand_is_refused_with_the_fix(repo: R
     assert caught.value.path == str(second.absolute())
     assert "Restore the file" in caught.value.fix
     assert "remove this file too" in caught.value.fix
-    assert caught.value.details["missing_parent"].startswith("sha256:")
+    assert caught.value.details["missingParent"].startswith("sha256:")
 
 
 def test_a_parent_only_in_another_branchs_uncommitted_segment_is_missing_and_named(
@@ -161,7 +161,7 @@ def test_a_parent_only_in_another_branchs_uncommitted_segment_is_missing_and_nam
     with pytest.raises(TroupeError) as caught:
         store(repo).select(stream)
     assert caught.value.code == "events.missing-parent"
-    assert caught.value.details["only_in"] == [str(parent_segment)]
+    assert caught.value.details["onlyIn"] == [str(parent_segment)]
 
 
 def test_two_clones_making_the_same_change_record_one_event_with_both_lineages(

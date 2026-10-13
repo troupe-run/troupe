@@ -2,12 +2,11 @@
 
 from pathlib import Path
 
-import jsonschema
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from runner_schemas import SCHEMAS, load
+from protocol_schemas import check_error
 from troupe.core.errors import TroupeError
 from troupe.core.runners.effects import EffectVerdict, ExpectedFiles, NoEffectExpected
 from troupe.core.runners.limits import RunLimits
@@ -21,7 +20,6 @@ from troupe.core.runners.outcome import (
 )
 from troupe.core.runners.protocol import ResultEvent
 
-ERROR_SCHEMA = load(SCHEMAS / "error.schema.json")
 RUN = "0f8fad5b-d9cb-469f-a165-70867728950e"
 LIMITS = RunLimits()
 OK = ResultEvent(RUN, 5, "ok", "done")
@@ -43,7 +41,7 @@ def _facts(**overrides: object) -> RunFacts:
 def _derive(**overrides: object) -> tuple[Outcome, str | None]:
     outcome, error = derive_outcome(_facts(**overrides))
     if error is not None:
-        jsonschema.validate(error.to_data(), ERROR_SCHEMA)
+        check_error(error.to_data())
     return outcome, None if error is None else error.code
 
 
@@ -169,7 +167,7 @@ def test_every_combination_of_facts_yields_one_outcome_and_success_needs_all_thr
     assert outcome in Outcome
     assert (error is None) == (outcome in {Outcome.SUCCEEDED, Outcome.CANCELLED})
     if error is not None:
-        jsonschema.validate(error.to_data(), ERROR_SCHEMA)
+        check_error(error.to_data())
     if outcome is Outcome.SUCCEEDED:
         assert result is OK
         assert effect.passed

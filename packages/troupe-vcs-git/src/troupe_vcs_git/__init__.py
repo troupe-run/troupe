@@ -72,7 +72,7 @@ class GitAdapter:
                 fix="Check that the theatre is a git repository and that git works there, then try "
                 "again.",
                 path=str(self.theatre.absolute()),
-                details={"command": shlex.join(argv), "exit_status": completed.returncode},
+                details={"command": shlex.join(argv), "exitStatus": completed.returncode},
             )
         return completed
 

@@ -74,7 +74,7 @@ def run_command(
             fix="Check for something holding the command up, such as a hook or a prompt, or raise "
             "the timeout setting for this command.",
             path=where,
-            details={"command": shown, "timeout_seconds": error.timeout},
+            details={"command": shown, "timeoutSeconds": error.timeout},
         ) from error
     except OutputTooLargeError as error:
         raise TroupeError(
@@ -83,7 +83,7 @@ def run_command(
             fix="Check why the command produced so much output, or raise the output limit "
             "setting for this command.",
             path=where,
-            details={"command": shown, "limit_bytes": error.limit},
+            details={"command": shown, "limitBytes": error.limit},
         ) from error
 
 

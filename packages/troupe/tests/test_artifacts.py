@@ -6,14 +6,11 @@ The local store is its own package and is tested there, behind the same port.
 import hashlib
 from pathlib import Path
 
-import jsonschema
 import pytest
 
-from runner_schemas import SCHEMAS, load
+from protocol_schemas import check_error
 from troupe.core.artifacts import MemoryArtifactStore, installed_stores, load_store, reference
 from troupe.core.errors import TroupeError
-
-ERROR_SCHEMA = load(SCHEMAS / "error.schema.json")
 
 
 def test_the_memory_store_references_bytes_by_their_sha256() -> None:
@@ -40,7 +37,7 @@ def test_a_reference_missing_from_the_memory_store_is_an_error_naming_it() -> No
     with pytest.raises(TroupeError) as caught:
         MemoryArtifactStore().read(reference(b"never"))
     assert caught.value.code == "artifact.missing"
-    jsonschema.validate(caught.value.to_data(), ERROR_SCHEMA)
+    check_error(caught.value.to_data())
 
 
 # Requirement: Stores are separately packaged and found by name
@@ -60,4 +57,4 @@ def test_asking_for_a_store_no_package_registers_names_it_and_the_installed_stor
     assert "'s3'" in error.problem
     assert "local" in error.problem
     assert error.details["installed"] == sorted(installed_stores())
-    jsonschema.validate(error.to_data(), ERROR_SCHEMA)
+    check_error(error.to_data())

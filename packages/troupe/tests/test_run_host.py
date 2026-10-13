@@ -10,10 +10,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import jsonschema
 import pytest
 
-from runner_schemas import SCHEMAS, is_valid, load, validate
+from protocol_schemas import check_error, check_notice
+from runner_schemas import is_valid, validate
 from troupe.core.artifacts import ArtifactStore, MemoryArtifactStore, load_store
 from troupe.core.notices import Notice
 from troupe.core.runners import protocol as p
@@ -23,8 +23,6 @@ from troupe.core.runners.limits import RunLimits
 from troupe.core.runners.outcome import Ending, Outcome, RunOutcome
 from troupe.platform import processes
 
-ERROR_SCHEMA = load(SCHEMAS / "error.schema.json")
-NOTICE_SCHEMA = load(SCHEMAS / "notice.schema.json")
 FAKE = Path(__file__).with_name("fake_runner.py")
 INIT = {"type": "init", "runner": {"name": "scripted", "version": "0.0.1"}, "tools": ["Write"]}
 OK = {"type": "result", "status": "ok", "message": "done"}
@@ -109,9 +107,9 @@ def _run(
     outcome = asyncio.run(main())
     result = Ran(outcome, store, **ran)
     if outcome.error is not None:
-        jsonschema.validate(outcome.error.to_data(), ERROR_SCHEMA)
+        check_error(outcome.error.to_data())
     for notice in result.notices:
-        jsonschema.validate(notice.to_data(), NOTICE_SCHEMA)
+        check_notice(notice.to_data())
     for message in result.sent:
         if message.get("method") == "run/start" and not valid_options:
             assert not is_valid(message, "message.schema.json#/$defs/fromHost")

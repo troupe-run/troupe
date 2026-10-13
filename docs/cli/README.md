@@ -85,7 +85,7 @@ troupe: `--bogus` is not a troupe option.
 
 Behind the text, each error is structured data with a stable `code` (for example `usage.unknown-command`), the
 problem, the fix, and an optional path and details. Its shape is defined once, in
-[`protocol/schemas/error.schema.json`](../../protocol/schemas/error.schema.json), so other surfaces can show the
-same error in their own words.
+[`protocol/schemas/error.schema.json`](../../protocol/schemas/error.schema.json), which lists every code with what
+its details hold, so other surfaces can show the same error in their own words.
 
 The exit codes are listed in [exit-codes.md](exit-codes.md).

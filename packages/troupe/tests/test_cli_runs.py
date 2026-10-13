@@ -10,6 +10,7 @@ import subprocess
 import sys
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -21,7 +22,7 @@ from gitrepo import Repo
 from runtesting import ADA, ALLOW, INIT, OK, script, theatre, turn
 from storetesting import git_service
 from test_run_queries import Child
-from troupe.cli import main
+from troupe.cli import commands, main
 
 TROUPE = [sys.executable, "-c", "import sys; from troupe.cli import main; sys.exit(main())"]
 
@@ -455,3 +456,24 @@ def test_logs_follow_in_another_process_shows_a_running_runs_events_and_exits_0_
     assert follow.returncode == 0, follow.stderr
     assert "turn: assistant: later" in follow.stdout
     assert follow.stdout.splitlines()[-1] == f"run {run_id}: succeeded"
+
+
+def test_each_ctrl_c_during_perform_announces_cancelling_and_counts_the_presses(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The real Ctrl-C is sent in a subprocess (test_platform_interrupts and below); here the core
+    # call is stood in for, so the notice perform prints is checked in this process.
+    def call(*args: object) -> dict[str, Any]:
+        on_cancel: Callable[[int], None] = args[-1]  # type: ignore[assignment]
+        on_cancel(1)
+        on_cancel(2)
+        return {"run": {"runId": "0f8fad5b-d9cb-469f-a165-70867728950e", "outcome": "cancelled"}}
+
+    monkeypatch.setattr(commands, "_call", call)
+    name = options_file(repo, script(INIT, OK))
+    code, _, err = cli(
+        "perform", "tester", "--runner", "scripted", "--runner-options", name, "--no-effect-check"
+    )
+    assert code == 130
+    assert err.count("Cancelling the run") == 2
+    assert "troupe is already cancelling it." in err

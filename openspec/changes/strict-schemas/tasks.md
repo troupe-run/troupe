@@ -51,20 +51,20 @@
 
 ## 4. Errors and notices: catalogued codes and closed details
 
-- [ ] 4.1 Restructure `error.schema.json` and `notice.schema.json` as common fields plus one `oneOf` branch per
+- [x] 4.1 Restructure `error.schema.json` and `notice.schema.json` as common fields plus one `oneOf` branch per
   code under `unevaluatedProperties: false`, with each code's details schema written from its raise sites and keys in
   camelCase (design D5). Verify the walker passes for both files
-- [ ] 4.2 Rename detail keys to camelCase at every raise site in `packages/` (about 60). Verify `git grep` finds no
+- [x] 4.2 Rename detail keys to camelCase at every raise site in `packages/` (about 60). Verify `git grep` finds no
   snake_case key in any `details=` mapping, and the existing error and notice tests pass
-- [ ] 4.3 Add tests that `troupe.core.errors.CODES` and `troupe.core.notices.CODES` list the same codes as their
+- [x] 4.3 Add tests that `troupe.core.errors.CODES` and `troupe.core.notices.CODES` list the same codes as their
   schemas, both ways, and that no details schema defines a key with an underscore. Verify each fails on a
   deliberately added code (record the output for the PR)
-- [ ] 4.4 Add the `protocol_guard` pytest plugin's error and notice hooks and load it for every test path with
+- [x] 4.4 Add the `protocol_guard` pytest plugin's error and notice hooks and load it for every test path with
   `addopts` (design D4). Verify a test that raising a `TroupeError` with an undeclared detail fails under the guard
   naming the code and the detail, and that the full suite passes
-- [ ] 4.5 Add the guard's session-end check that every catalogued code was raised (full runs only). Add a test for
+- [x] 4.5 Add the guard's session-end check that every catalogued code was raised (full runs only). Add a test for
   each code it reports unexercised. Verify a full `uv run pytest` passes and a `-k` run skips the check
-- [ ] 4.6 Update `protocol/README.md` and the error and notice tables in `docs/` to say where each code's details are
+- [x] 4.6 Update `protocol/README.md` and the error and notice tables in `docs/` to say where each code's details are
   defined. Verify the docs tests that list codes still pass
 
 ## 5. Recorded events: a payload schema per topic

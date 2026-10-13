@@ -38,7 +38,7 @@ def replace_file(
             ),
             fix="Close the program that has the file open, such as an editor, then try again.",
             path=str(error.path),
-            details={"waited_seconds": round(error.waited, 3)},
+            details={"waitedSeconds": round(error.waited, 3)},
         ) from error
     except OSError as error:
         raise TroupeError(
@@ -70,7 +70,7 @@ def read_file(
             ),
             fix="Close the program that has the file open, such as an editor, then try again.",
             path=str(error.path),
-            details={"waited_seconds": round(error.waited, 3)},
+            details={"waitedSeconds": round(error.waited, 3)},
         ) from error
 
 
@@ -94,7 +94,7 @@ def directory_lock(
             problem=f"Timed out after {error.waited:.1f}s waiting for another troupe process.",
             fix="Another troupe command is using this directory. Let it finish, then try again.",
             path=str(error.lock_path.absolute()),
-            details={"waited_seconds": round(error.waited, 3)},
+            details={"waitedSeconds": round(error.waited, 3)},
         ) from error
     except LockAlreadyHeldError as error:
         raise TroupeError(

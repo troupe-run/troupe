@@ -31,7 +31,12 @@ SUMMARY: dict[str, Any] = {
     "effectCheck": {"kind": "none"},
     "state": "ended",
     "outcome": "failed",
-    "error": {"code": "run.error-result", "problem": "It failed.", "fix": "Look."},
+    "error": {
+        "code": "run.error-result",
+        "problem": "It failed.",
+        "fix": "Look.",
+        "details": {"message": "401"},
+    },
     "events": 2,
     "startedAt": AT,
     "endedAt": AT,
@@ -52,7 +57,15 @@ EVENT: dict[str, Any] = {
         "tools": [],
     },
 }
-NOTICE = {"kind": "notice", "notice": {"code": "run.silent", "problem": "Quiet.", "fix": "Wait."}}
+NOTICE = {
+    "kind": "notice",
+    "notice": {
+        "code": "run.silent",
+        "problem": "Quiet.",
+        "fix": "Wait.",
+        "details": {"seconds": 30},
+    },
+}
 
 
 def changed(data: dict[str, Any], **changes: object) -> dict[str, Any]:
@@ -133,7 +146,12 @@ ACCEPTED = [
                 SUMMARY,
                 recording={
                     "failedAt": 2,
-                    "error": {"code": "events.version-conflict", "problem": "p", "fix": "f"},
+                    "error": {
+                        "code": "events.version-conflict",
+                        "problem": "p",
+                        "fix": "f",
+                        "details": {"reason": "another writer recorded first"},
+                    },
                 },
             )
         },

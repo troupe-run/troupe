@@ -159,7 +159,7 @@ def decode(raw: bytes, path: Path, line: int) -> Header | Record:
             f"format {FORMAT}.",
             fix="Upgrade troupe to a version that reads this format.",
             path=str(path.absolute()),
-            details={"line": line, "format": data.get("format")},
+            details={"line": line, "format": strict_json.dumps(data.get("format"))},
         )
     if set(data) == {"format", "segment"}:
         return _header(data["segment"], path, line)

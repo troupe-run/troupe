@@ -1,24 +1,17 @@
 """Tests for the local artifact store (spec: artifact-store), as a store behind the port."""
 
 import hashlib
-import json
 import subprocess
 from pathlib import Path
 
-import jsonschema
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from protocol_schemas import check_error
 from troupe.core.artifacts import ArtifactStore, MemoryArtifactStore, load_store, reference
 from troupe.core.errors import TroupeError
 from troupe_artifacts_local import LocalArtifactStore
-
-ERROR_SCHEMA = json.loads(
-    (Path(__file__).resolve().parents[3] / "protocol" / "schemas" / "error.schema.json").read_text(
-        encoding="utf-8"
-    )
-)
 
 
 def _stores(tmp_path: Path) -> list[ArtifactStore]:
@@ -145,7 +138,7 @@ def test_reading_an_artifact_altered_after_it_was_stored_fails_naming_the_refere
     assert error.code == "artifact.corrupt"
     assert ref in error.problem
     assert error.path == str(path.absolute())
-    jsonschema.validate(error.to_data(), ERROR_SCHEMA)
+    check_error(error.to_data())
 
 
 @pytest.mark.parametrize("kind", ["local", "memory"])
@@ -164,7 +157,7 @@ def test_reading_a_reference_not_in_the_store_fails_naming_the_reference(
         assert error.path == str(
             LocalArtifactStore(tmp_path / "artifacts").path_for(ref).absolute()
         )
-    jsonschema.validate(error.to_data(), ERROR_SCHEMA)
+    check_error(error.to_data())
 
 
 @pytest.mark.parametrize("bad", ["sha256:ABC", "md5:" + "0" * 32, "sha256:" + "0" * 63, ""])
@@ -181,7 +174,7 @@ def test_a_store_that_cannot_be_written_reports_the_path(tmp_path: Path) -> None
         LocalArtifactStore(blocker).put(b"x")
     assert caught.value.code == "artifact.write-failed"
     assert caught.value.path == str(blocker.absolute())
-    jsonschema.validate(caught.value.to_data(), ERROR_SCHEMA)
+    check_error(caught.value.to_data())
 
 
 # Requirement: The local store stays out of version control
