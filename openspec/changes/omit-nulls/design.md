@@ -80,12 +80,20 @@ The one use is `runner/error-response.schema.json`'s `id`:
 
 ### D2. Every optional property describes its absence, and the walker checks it
 
-A property that a node declaring an object (its `type` includes `object`) doesn't list in `required` must have
-a `description`. A branch that only refines a property the declaring node already has, such as each error code's
-`{"code": {"const": ...}}`, doesn't repeat it. A property required only under a condition (`if`/`then`) is still
-sometimes absent, so it still needs a description.
+Every property a node declares must be required there or have a `description`, unless a node that always
+applies to the same value already requires or describes it: an enclosing node, or what that node reaches by
+`$ref` or `allOf`. The walker carries those covered names down and clears them where a keyword describes a new
+value (a property's value, an array's items). So a branch that only refines a field the enclosing object
+declares, such as each error code's `{"code": {"const": ...}}`, doesn't repeat its description. A field that
+appears only inside a `oneOf` or `then` branch must carry its own, and a description in one `oneOf` branch
+doesn't cover a sibling branch. A property required only under a condition (`if`/`then`) is still sometimes
+absent, so it still needs a description.
 
-Today 39 optional properties have none:
+*Revised during apply.* The first version checked only nodes whose `type` includes `object`. That skipped a
+field declared only in a branch, which is the shape #60's config schemas are likely to use. The covered-names
+rule closes that gap, and found two more fields: `details` on `runner.start-failed` and on `runner.protocol`.
+
+Before this change, 39 optional properties had none (two more were found when the rule was revised):
 - 26 in the scripted runner's options: `runId`/`seq` in a script line, `maxAttempts`, `message`, `usage`, `costUsd`.
 - 9 in run events.
 - 3 in the error fields.

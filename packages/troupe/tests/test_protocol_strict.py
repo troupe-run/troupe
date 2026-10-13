@@ -117,7 +117,10 @@ def test_the_check_accepts_branch_properties_under_an_enclosing_unevaluated_prop
         "properties": {"code": {"type": "string"}},
         "unevaluatedProperties": False,
         "oneOf": [
-            {"properties": {"code": {"const": "a"}, "details": {"$ref": "#/$defs/a"}}},
+            {
+                "properties": {"code": {"const": "a"}, "details": {"$ref": "#/$defs/a"}},
+                "required": ["details"],
+            },
             {"properties": {"code": {"const": "b"}, "details": False}},
         ],
         "$defs": {
@@ -133,7 +136,10 @@ def test_the_check_accepts_branch_properties_under_an_enclosing_unevaluated_prop
 
 
 def test_the_check_reports_properties_in_a_branch_when_nothing_closes_the_object() -> None:
-    schema = {"type": "object", "oneOf": [{"properties": {"code": {"const": "a"}}}]}
+    schema = {
+        "type": "object",
+        "oneOf": [{"properties": {"code": {"const": "a"}}, "required": ["code"]}],
+    }
     assert _problems(schema) == [
         ("", "accepts an object that isn't closed"),
         ("/oneOf/0", "accepts an object that isn't closed"),
@@ -286,6 +292,43 @@ def test_the_check_accepts_a_described_optional_property_and_an_undescribed_requ
             "a": {"type": "string", "description": "Absent when there's nothing to say."},
             "b": {"type": "string"},
             "c": False,
+        },
+    }
+    assert _problems(schema) == []
+
+
+def test_a_field_only_a_branch_declares_must_say_what_its_absence_means() -> None:
+    schema = {
+        **CLOSED,
+        "required": ["kind"],
+        "properties": {"kind": {"enum": ["a", "b"]}},
+        "unevaluatedProperties": False,
+        "oneOf": [
+            {"properties": {"kind": {"const": "a"}, "note": {"type": "string"}}},
+            {
+                "properties": {
+                    "kind": {"const": "b"},
+                    "note": {"description": "Absent: nothing to add.", "type": "string"},
+                }
+            },
+        ],
+    }
+    assert _problems(schema) == [
+        ("/oneOf/0/properties/note", "is optional but doesn't say what its absence means")
+    ]
+
+
+def test_a_field_described_through_a_reference_or_all_of_is_covered_in_a_branch() -> None:
+    schema = {
+        **CLOSED,
+        "$ref": "#/$defs/base",
+        "allOf": [{"properties": {"extra": {"description": "Absent: none.", "type": "string"}}}],
+        "oneOf": [{"properties": {"note": {"const": "x"}, "extra": {"const": "y"}}}],
+        "$defs": {
+            "base": {
+                "type": "object",
+                "properties": {"note": {"description": "Absent: none.", "type": "string"}},
+            }
         },
     }
     assert _problems(schema) == []
