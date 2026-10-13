@@ -73,7 +73,7 @@ wording, the fix naming `troupe <command> --help`, exit 2, empty stdout and sche
 
 - [x] 7.1 Run each of the issue's reproduction lines and the six shapes from the proposal with `uv run troupe`, and
   record the output for the PR. Verify none prints `troupe: troupe:` and each fix names its command's help
-- [ ] 7.2 Run `uv run scripts/check.py` (ruff, format, mypy --strict, import-linter, the full suite). Verify it passes
+- [x] 7.2 Run `uv run scripts/check.py` (ruff, format, mypy --strict, import-linter, the full suite). Verify it passes
   locally and on CI on Linux, macOS and Windows
 
 ## Workflow follow-up
