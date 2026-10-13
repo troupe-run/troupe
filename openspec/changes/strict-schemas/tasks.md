@@ -87,7 +87,7 @@
 
 - [x] 6.1 Remove the `xfail` from the strictness test (1.3). Verify it passes over every shipped schema, and that
   re-adding `"type": "object"` to any one field makes it fail naming that field
-- [ ] 6.2 Run `uv run scripts/check.py` (ruff, format, mypy --strict, import-linter, the full suite). Verify it passes
+- [x] 6.2 Run `uv run scripts/check.py` (ruff, format, mypy --strict, import-linter, the full suite). Verify it passes
   locally and on CI on Linux, macOS and Windows
 
 ## Workflow follow-up
