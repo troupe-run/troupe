@@ -155,6 +155,44 @@
       ],
       "properties": {
         "code": {
+          "const": "events.subscription-polling"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "reason",
+            "detail",
+            "pollSeconds"
+          ],
+          "properties": {
+            "reason": {
+              "description": "Why the store polls: the platform refused the watch, or the watch accepted but missed a write.",
+              "enum": [
+                "watch-refused",
+                "watch-missed-write"
+              ]
+            },
+            "detail": {
+              "description": "What the platform said, or what was missed, in its own words.",
+              "type": "string",
+              "minLength": 1
+            },
+            "pollSeconds": {
+              "description": "How often the store looks for new events instead.",
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "required": [
+        "details"
+      ],
+      "properties": {
+        "code": {
           "const": "run.cancelling"
         },
         "details": {

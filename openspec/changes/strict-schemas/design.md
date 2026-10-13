@@ -13,7 +13,7 @@ See proposal.md for why. What exists on main (a527b43):
   D3). `jsonschema` is a dev dependency only; troupe's runtime depends on `eventsourcing` alone. Three test helpers
   (`runner_schemas.py`, `client_schemas.py`, `event_schemas.py`) each build their own registry.
 - 56 error codes in `troupe.core.errors.CODES` (each with its exit code) and 8 notice codes in
-  `troupe.core.notices.CODES`, raised from about 60 sites, with `details` as a free dict. Detail keys mix
+  `troupe.core.notices.CODES` (9 once #74 added `events.subscription-polling`, catalogued when this was rebased), raised from about 60 sites, with `details` as a free dict. Detail keys mix
   snake_case (`exit_code`, `limit_bytes`) and camelCase (`maxAttempts`). Nothing reads detail keys
   programmatically; the CLI doesn't render them.
 - The scripted runner sends its own error codes: seven protocol ones (`runner.parse-error`, `runner.invalid-request`,

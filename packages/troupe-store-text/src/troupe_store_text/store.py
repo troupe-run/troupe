@@ -841,7 +841,7 @@ def _subscription_polling(store: TextStore, reason: str, detail: str) -> Notice:
         problem=problem,
         fix=fix,
         path=str(store.events_dir.absolute()),
-        details={"reason": reason, "detail": detail, "poll_seconds": store.poll_seconds},
+        details={"reason": reason, "detail": detail, "pollSeconds": store.poll_seconds},
     )
 
 
