@@ -13,7 +13,7 @@ directory. A record SHALL be strict JSON, both written and read: no duplicate ke
 payload SHALL be readable JSON wherever it is JSON, not an opaque blob.
 
 #### Scenario: A recorded event is one readable line
-- **WHEN** an event whose payload is a JSON object is recorded
+- **WHEN** an event troupe defines, whose payload is a JSON object, is recorded
 - **THEN** the event directory holds exactly one new line for it
 - **AND** that line parses as JSON and validates against the protocol's event-record schema
 - **AND** the payload's fields appear in the line as JSON, not encoded
@@ -289,3 +289,22 @@ finds one that its notification didn't deliver in that interval, it SHALL delive
 - **THEN** the event reaches the subscriber within `SUBSCRIBE_CHECK_SECONDS`, plus the time to read it
 - **AND** the store's notices include `events.subscription-polling`, with the reason `watch-missed-write`
 - **AND** later events reach the subscriber within `SUBSCRIBE_POLL_SECONDS`
+
+### Requirement: Each event troupe defines has a payload schema
+Every event troupe defines SHALL have a closed JSON Schema for its payload in `protocol/`, named by the event's
+topic, including the fields the event-sourcing library adds. The event-record schema SHALL choose the payload schema
+by topic, and an inline payload whose topic troupe doesn't define SHALL NOT validate.
+
+#### Scenario: A run's events validate by topic
+- **WHEN** a run is recorded and its segment lines are read
+- **THEN** each line's payload validates against the schema for its topic: the run's start, a reported run event or
+  the run's end
+
+#### Scenario: An unknown topic
+- **WHEN** a segment line holds an inline payload under a topic troupe doesn't define
+- **THEN** it doesn't validate against the protocol's event-record schema
+
+#### Scenario: Every topic has a schema
+- **WHEN** troupe declares a topic its aggregates record and the protocol has no payload schema for it, or the
+  protocol has a payload schema for a topic troupe doesn't declare
+- **THEN** the build fails, naming the topic
