@@ -64,9 +64,18 @@ show how far it got. Lease directories stay in `.troupe/local/runs/` (they're lo
 events it has, its times, and its transcript's and standard error's references.
 
 `troupe logs <run>` shows a run's events in order, each with the time troupe recorded it. `--follow` then waits for
-more, showing each event as it's recorded (it looks every `LOGS_FOLLOW_POLL_SECONDS`, a tenth of a second, as `tail -f`
-does), and stops when the run's end is recorded, when it stops
-running, or at Ctrl-C, saying why.
+more, showing each event as it's recorded, and stops when the run's end is recorded, when it stops running, or at
+Ctrl-C, saying why.
+
+- **Woken by the write.** Following subscribes to the event store, which wakes it when anything is recorded, by
+  this process or another, so each event appears as soon as `perform` writes it. It never looks on a timer
+  ([docs/event-store.md](event-store.md#subscriptions)).
+- **Polling is announced.** If the store can only poll (its directory can't be watched, or its watch was found to
+  miss a write), the notice `events.subscription-polling` is shown as following starts, and events arrive up to
+  `SUBSCRIBE_POLL_SECONDS` late.
+- **A `perform` that dies is still noticed.** It writes nothing, so nothing wakes following. Every
+  `LOGS_LEASE_CHECK_SECONDS` following checks the run's lease, one try of a lock, and stops with `run.interrupted`
+  once nobody holds it.
 
 A run is named by its full id or by a prefix of at least 8 hex digits that matches exactly one run. Both commands
 work from another terminal while a run is going: they read the event store, which `perform` writes as it goes.
@@ -148,6 +157,6 @@ Every limit and default runs use has its default in `troupe.core.defaults`.
 
 | Setting | Default | What it is |
 |---|---|---|
-| `LOGS_FOLLOW_POLL_SECONDS` | 0.1 | How often `troupe logs --follow` looks for new events |
+| `LOGS_LEASE_CHECK_SECONDS` | 1 | How often `troupe logs --follow` checks that the run it follows is still running |
 | `STATUS_RUNS_LIMIT` | 20 | How many runs `troupe status` lists when it isn't given `--limit` |
 | `ALLOW_UNENFORCED_LOCAL_STAGE` | false | The policy setting `allow_unenforced_local_stage`, when nothing sets it |

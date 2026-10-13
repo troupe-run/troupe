@@ -90,11 +90,13 @@ EVENT_STORE = "text"
 ARTIFACT_STORE = "local"
 """The artifact store a theatre's transcripts and large payloads are kept in."""
 
-# Reading runs back (spec: runs; perform-status-logs design D13). docs/runs.md lists it.
+# Reading runs back (spec: runs; perform-status-logs design D13; watch-event-segments design D6).
+# docs/runs.md lists them.
 
 STATUS_RUNS_LIMIT = 20
 """How many runs status lists, newest first, when the request doesn't say."""
 
-LOGS_FOLLOW_POLL_SECONDS = 0.1
-"""How often logs --follow looks for new events, so they appear as they're recorded, as lines do
-in tail -f. Each look is cheap: the store stats its segments and reads only bytes it hasn't seen."""
+LOGS_LEASE_CHECK_SECONDS = 1.0
+"""How often logs --follow checks that the run it follows is still running, so a perform that dies
+without recording an end is noticed though it wrote nothing. One check is one try of a lock. New
+events wake following through the store's subscription, never a timer (watch-event-segments D6)."""

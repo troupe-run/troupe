@@ -67,18 +67,18 @@ Group 2 builds the ctypes backends the owner chose for design D1 (2026-10-13).
 
 ## 4. `logs --follow` waits on the subscription (design D6)
 
-- [ ] 4.1 Remove `LOGS_FOLLOW_POLL_SECONDS` and add `LOGS_LEASE_CHECK_SECONDS = 1.0` to `troupe.core.defaults`.
+- [x] 4.1 Remove `LOGS_FOLLOW_POLL_SECONDS` and add `LOGS_LEASE_CHECK_SECONDS = 1.0` to `troupe.core.defaults`.
   Rewrite the follow loop in `troupe/core/runs/queries.py` as D6 describes: listen through the port with an
   asyncio-bridging event, send `events.subscription-polling` as a `notice` update at the start, clear the wake before
   re-reading, re-read only when woken, check the lease on timeout, unlisten in `finally`, give each result notice once.
   Update the docstring. Verify `test_run_queries.py`'s existing follow, interrupted and cancel tests pass
-- [ ] 4.2 Delete `test_following_shows_each_event_within_a_few_tenths_of_a_second_of_its_recording`. Add tests named
+- [x] 4.2 Delete `test_following_shows_each_event_within_a_few_tenths_of_a_second_of_its_recording`. Add tests named
   for what they check: following wakes on another process's write (three events, median under 0.5 s from when the
   child's append returned, poll and check at 60 s, timed by a wrapper installed in the child helper, D7); no segment
   is read in 2 s of a quiet followed run; an unwatchable store sends `events.subscription-polling` as an update when
   following starts, includes it in the result, and still delivers each event; killing `perform` mid-follow stops
   following within `LOGS_LEASE_CHECK_SECONDS` plus the read, as `interrupted` with `run.interrupted`. Verify they pass
-- [ ] 4.3 Update `docs/runs.md`: how `--follow` waits (it subscribes through the port, any polling is announced,
+- [x] 4.3 Update `docs/runs.md`: how `--follow` waits (it subscribes through the port, any polling is announced,
   the lease check) and its defaults table (`LOGS_LEASE_CHECK_SECONDS`, no `LOGS_FOLLOW_POLL_SECONDS`). Verify
   `test_runs_doc.py` and the defaults test pass, and `grep -r LOGS_FOLLOW_POLL_SECONDS packages docs` finds nothing
 

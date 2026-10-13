@@ -2,6 +2,7 @@
 
 import hashlib
 from pathlib import Path
+from typing import Any
 from uuid import UUID, uuid4
 
 from eventsourcing.domain import Aggregate
@@ -71,7 +72,9 @@ def files_service(
     return EventStore(theatre, vcs=vcs, recorder=TextStore(theatre, vcs), env=env or ADA, **options)  # type: ignore[arg-type]
 
 
-def git_service(repo: Repo, env: dict[str, str] | None = None) -> EventStore:
-    """The event-store service over a git theatre, with git isolated from this machine."""
+def git_service(repo: Repo, env: dict[str, str] | None = None, **store: Any) -> EventStore:  # noqa: ANN401
+    """The event-store service over a git theatre, with git isolated from this machine. ``store``
+    passes options to the text store (poll_seconds, check_seconds, watcher)."""
     vcs = GitAdapter(repo.path, source=repo.env)
-    return EventStore(repo.path, vcs=vcs, recorder=TextStore(repo.path, vcs), env=env or ADA)
+    recorder = TextStore(repo.path, vcs, **store)
+    return EventStore(repo.path, vcs=vcs, recorder=recorder, env=env or ADA)
