@@ -66,11 +66,16 @@ def drain(watched: DirectoryWatch, quiet: float = 0.2) -> None:
         pass
 
 
+SETTLE = 1.5
+"""Seconds of quiet that end a new watch's spurious wakes. FSEvents reports a directory made just
+before it is watched: measured locally in 26 of 30 fresh directories, up to 0.49 s after the watch
+started, and CI runners are slower (a 0.3 s settle failed there once)."""
+
+
 def settled(directory: Path) -> DirectoryWatch:
-    """A watch on ``directory`` with any spurious first wake used up (FSEvents gives one for a
-    directory made just before it is watched)."""
+    """A watch on ``directory`` with its spurious first wakes used up."""
     watched = watch(directory)
-    drain(watched, 0.3)
+    drain(watched, SETTLE)
     return watched
 
 
@@ -151,11 +156,12 @@ def test_a_directory_of_10000_files_is_watched_within_a_256_file_limit_and_wakes
 
 def test_closing_a_watch_wakes_a_wait_in_another_thread_at_once(tmp_path: Path) -> None:
     watched = settled(tmp_path)
-    returned: list[tuple[bool, float]] = []
+    closed_wait_returned: list[float] = []
 
     def waiting() -> None:
-        changed = watched.wait(None)
-        returned.append((changed, time.monotonic()))
+        while watched.wait(None):
+            pass  # a spurious change (allowed) isn't the close; wait again
+        closed_wait_returned.append(time.monotonic())
 
     waiter = threading.Thread(target=waiting, daemon=True)
     waiter.start()
@@ -163,10 +169,8 @@ def test_closing_a_watch_wakes_a_wait_in_another_thread_at_once(tmp_path: Path) 
     closed = time.monotonic()
     watched.close()
     waiter.join(timeout=5)
-    assert len(returned) == 1
-    changed, at = returned[0]
-    assert not changed
-    assert at - closed < BOUND
+    assert len(closed_wait_returned) == 1, "the waiting thread never returned"
+    assert closed <= closed_wait_returned[0] < closed + BOUND
     assert not watched.wait(0)  # a closed watch reports nothing, and doesn't block
 
 
