@@ -134,15 +134,26 @@ def test_an_event_recorded_on_a_git_branch_names_the_adapter_branch_and_head(
     head = repo.commit_all()
     [recorded] = git_service(repo).command(via="cli").record(Counter(value=1).collect_events())
     vcs = lineage_of(repo.path, recorded.event_id)["vcs"]
-    assert vcs == {"adapter": "git", "branch": "main", "head": head, "source": None}
+    assert vcs == {"adapter": "git", "branch": "main", "head": head}
 
 
-def test_a_theatre_without_version_control_records_null_branch_and_head(
+def test_an_event_recorded_on_a_detached_head_names_the_adapter_and_head_and_no_branch(
+    tmp_path: Path,
+) -> None:
+    repo = make_repo(tmp_path)
+    head = repo.commit_all()
+    repo.git("switch", "-q", "--detach", head)
+    [recorded] = git_service(repo).command(via="cli").record(Counter(value=1).collect_events())
+    vcs = lineage_of(repo.path, recorded.event_id)["vcs"]
+    assert vcs == {"adapter": "git", "head": head}
+
+
+def test_a_theatre_without_version_control_records_no_branch_and_no_head(
     tmp_path: Path,
 ) -> None:
     [recorded] = files_service(tmp_path).command(via="cli").record(Counter().collect_events())
     vcs = lineage_of(tmp_path, recorded.event_id)["vcs"]
-    assert vcs == {"adapter": "files", "branch": None, "head": None, "source": None}
+    assert vcs == {"adapter": "files"}
 
 
 def test_with_no_identity_a_command_fails_before_anything_is_written(tmp_path: Path) -> None:
@@ -320,10 +331,61 @@ LOCAL = StageLineage(
 TESTER = Identity(kind="agent", id="tester", source="troupe")
 
 
-def test_an_event_recorded_outside_a_stage_has_a_null_stage(tmp_path: Path) -> None:
+def test_an_event_recorded_outside_a_stage_has_no_stage_and_no_reason(tmp_path: Path) -> None:
     service = files_service(tmp_path)
     [recorded] = service.command(via="cli").record(Counter(value=1).collect_events())
-    assert lineage_of(tmp_path, recorded.event_id)["stage"] is None
+    recorded_lineage = lineage_of(tmp_path, recorded.event_id)
+    assert "stage" not in recorded_lineage
+    assert "reason" not in recorded_lineage
+
+
+class _LineageWithANull(Lineage):
+    """Lineage whose data holds a null at ``path``, as a buggy builder might write it."""
+
+    path: tuple[str, ...] = ()
+
+    def to_data(self) -> dict[str, Any]:
+        data = super().to_data()
+        node = data
+        for key in self.path[:-1]:
+            node = node.setdefault(key, {"path": "x.yaml"})
+        node[self.path[-1]] = None
+        return data
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        ("reason",),
+        ("stage",),
+        ("vcs", "branch"),
+        ("vcs", "head"),
+        ("vcs", "source"),
+        ("vcs", "source", "before"),
+        ("vcs", "source", "after"),
+    ],
+    ids=".".join,
+)
+def test_a_null_in_lineage_is_refused_naming_the_field_and_writes_nothing(
+    tmp_path: Path, path: tuple[str, ...]
+) -> None:
+    service = files_service(tmp_path)
+    good = service.command(via="cli").lineage()
+    bad = _LineageWithANull(
+        actor=good.actor,
+        via=good.via,
+        at=good.at,
+        reason=None,
+        change=good.change,
+        cause=good.cause,
+        vcs=good.vcs,
+    )
+    object.__setattr__(bad, "path", path)
+    with pytest.raises(TroupeError) as caught:
+        service.record_with_lineage(Counter(value=1).collect_events(), bad)
+    assert caught.value.code == "events.lineage-invalid"
+    assert path[-1] in caught.value.problem
+    assert snapshot(tmp_path) == {}
 
 
 def test_a_commands_stage_is_recorded_in_the_lineage_of_every_event_it_records(

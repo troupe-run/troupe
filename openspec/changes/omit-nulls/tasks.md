@@ -24,16 +24,16 @@
 
 ## 2. Lineage
 
-- [ ] 2.1 `lineage.schema.json`: `reason`, `stage`, `vcs.branch`, `vcs.head`, `vcs.source`, `source.before`,
+- [x] 2.1 `lineage.schema.json`: `reason`, `stage`, `vcs.branch`, `vcs.head`, `vcs.source`, `source.before`,
   `source.after` leave `required` and lose their null branches; `stage`'s enforced branch has no `allowedBy` (D3);
   descriptions say what absence means, and the "absent is explicit" wording goes (D6). Verify the walker reports no
   finding in `lineage.schema.json`
-- [ ] 2.2 `core/events/lineage.py`: `to_data` methods leave out `None` fields; `lineage_problem`, `_vcs_problem` and
+- [x] 2.2 `core/events/lineage.py`: `to_data` methods leave out `None` fields; `lineage_problem`, `_vcs_problem` and
   `_stage_problem` accept absence and refuse `null` naming the field. Verify `test_lineage_types.py`, updated:
   every shape built validates against the schema, no-reason / no-stage / plain-filesystem / detached / new-file
   shapes have no such key, and each of `reason`, `stage`, `stage.allowedBy`, `vcs.branch`, `vcs.head`,
   `vcs.source`, `before`, `after` set to `null` is refused with `events.lineage-invalid` and writes nothing
-- [ ] 2.3 Update the lineage table in `docs/event-store.md` (`reason`, `stage`, `vcs`: left out when absent, and
+- [x] 2.3 Update the lineage table in `docs/event-store.md` (`reason`, `stage`, `vcs`: left out when absent, and
   what that means). Verify `test_event_store_doc.py` passes
 
 ## 3. Event store: segment header and the event-field rule

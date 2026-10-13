@@ -76,7 +76,7 @@ NOTICES = st.fixed_dictionaries(
 ACTORS = st.just({"kind": "unknown"}) | st.fixed_dictionaries(
     {"kind": st.sampled_from(["human", "agent"]), "id": TEXT, "source": NAMES}
 )
-STAGES = st.just({"name": "docker", "effects": "enforced", "allowedBy": None}) | st.just(
+STAGES = st.just({"name": "docker", "effects": "enforced"}) | st.just(
     {
         "name": "local",
         "effects": "unenforced",
