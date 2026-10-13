@@ -36,14 +36,14 @@
           "uniqueItems": true,
           "items": {
             "type": "integer",
-            "minimum": 1
+            "minimum": 0
           }
         },
         "host": {
           "$ref": "jsonrpc.schema.json#/$defs/named"
         },
         "capabilities": {
-          "description": "The capability names troupe supports. Version 1 defines none.",
+          "description": "The capability names troupe supports. Version 0 defines none.",
           "type": "array",
           "uniqueItems": true,
           "items": {
@@ -67,7 +67,7 @@
       "properties": {
         "protocolVersion": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 0
         },
         "runner": {
           "$ref": "jsonrpc.schema.json#/$defs/named"

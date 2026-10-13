@@ -146,7 +146,7 @@ class Session:
     def initialize(self) -> dict[str, Any]:
         return self.request(
             "initialize",
-            {"protocolVersions": [1], "host": {"name": "test", "version": "1"}, "capabilities": []},
+            {"protocolVersions": [0], "host": {"name": "test", "version": "1"}, "capabilities": []},
         )
 
     def start(self, options: dict[str, Any], *, valid: bool = True) -> dict[str, Any]:

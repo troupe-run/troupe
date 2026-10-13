@@ -41,7 +41,7 @@ def answer_initialize(message: dict[str, Any], **result: Any) -> None:  # noqa: 
             "jsonrpc": "2.0",
             "id": message["id"],
             "result": {
-                "protocolVersion": 1,
+                "protocolVersion": 0,
                 "runner": {"name": "fake", "version": "1"},
                 "capabilities": [],
                 **result,
@@ -76,7 +76,7 @@ def main(mode: str) -> None:
                 )
                 return
             if mode == "wrong-version":
-                answer_initialize(message, protocolVersion=2)
+                answer_initialize(message, protocolVersion=1)
             elif mode == "capability":
                 answer_initialize(message, capabilities=["resume"])
             else:

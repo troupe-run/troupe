@@ -37,9 +37,12 @@ first.
   schema fills it. The scripted runner publishes both. The host still passes options through unchanged at run time;
   validating them at run time, and how troupe obtains an installed runner's schemas, is the config model's call
   (#60), which is the first thing that needs them.
-- **`native` is removed from run events. BREAKING** for the runner contract (version 1, changed in place: no runner
-  outside this repo exists). Engine-specific detail lives only in the transcript, which already holds the engine's
+- **`native` is removed from run events. BREAKING** for the runner contract, changed in place (no runner outside this
+  repo exists). Engine-specific detail lives only in the transcript, which already holds the engine's
   every record, unchanged and stored by hash. Run events stay engine-neutral and closed.
+- **The runner contract is renumbered version 0, the draft**: it changes in place, with no compatibility
+  promise, until troupe commits to version 1 (design D9). **BREAKING** for a runner offering version 1; the only
+  one is in this repo.
 - **A JSON-RPC success result is one of the contract's result schemas**, not any object.
 - **`usage` names its counters:** `inputTokens`, `outputTokens`, `cacheReadTokens` and `cacheWriteTokens`.
 - Tests: in the test suite, every error, notice and recorded event troupe produces is validated against its

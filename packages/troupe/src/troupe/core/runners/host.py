@@ -46,7 +46,7 @@ MessageCallback = Callable[[str, Mapping[str, Any]], None]
 """Receives ("sent" or "received", message) for every protocol message, for tracing and tests."""
 
 OFFERED_CAPABILITIES: tuple[str, ...] = ()
-"""The capabilities this troupe offers runners. Version 1 defines none."""
+"""The capabilities this troupe offers runners. Version 0 defines none."""
 
 _POLL_SECONDS = 0.05
 _FIX_RUNNER_BUG = (

@@ -325,7 +325,7 @@ def test_a_message_over_the_maximum_size_is_a_violation_naming_the_limit(tmp_pat
 @pytest.mark.parametrize(
     ("mode", "expected"),
     [
-        ("wrong-version", "protocol version 2"),
+        ("wrong-version", "protocol version 1"),
         ("capability", "capabilities troupe didn't offer (resume)"),
         ("wrong-run-id", "not this run"),
         ("unsent-id", "never sent"),
@@ -352,9 +352,9 @@ def test_a_runner_that_never_answers_the_handshake_could_not_start(tmp_path: Pat
 
 def test_a_compatible_runner_is_offered_version_1_and_answers_it(tmp_path: Path) -> None:
     ran = _run(tmp_path, {"steps": [{"event": INIT}, {"event": OK}]})
-    assert ran.sent[0]["params"]["protocolVersions"] == [1]
+    assert ran.sent[0]["params"]["protocolVersions"] == [0]
     assert ran.sent[0]["params"]["capabilities"] == []
-    assert ran.received[0]["result"]["protocolVersion"] == 1
+    assert ran.received[0]["result"]["protocolVersion"] == 0
 
 
 def test_an_incompatible_runner_could_not_start_and_no_run_is_started(tmp_path: Path) -> None:
