@@ -444,14 +444,15 @@ async def run_actor(
     except _Violation as violation:
         run.violation = violation.error
     finally:
-        await _finish_process(run, stop_now=start_error is not None or run.violation is not None)
+        exit_code = await _finish_process(
+            run, stop_now=start_error is not None or run.violation is not None
+        )
         with contextlib.suppress(Exception):
             await asyncio.wait_for(stderr_task, limits.cancel_grace)
         stderr_task.cancel()
         transcript_ref = run.transcript.finish()
         stderr_ref = run.stderr.finish()
         run._child().release()
-    child = run._child()
     ending = Ending.KILLED if run.killed else Ending.EXITED
     verdict: EffectVerdict | None = None
     if run.result is not None and run.result.status == "ok" and start_error is None:
@@ -460,7 +461,7 @@ async def run_actor(
         RunFacts(
             limits=limits,
             ending=ending,
-            exit_code=child.returncode,
+            exit_code=exit_code,
             start_error=start_error,
             violation=run.violation,
             stop=run.stop,
@@ -473,7 +474,7 @@ async def run_actor(
         outcome,
         outcome_error,
         run.result,
-        child.returncode,
+        exit_code,
         ending,
         transcript_ref,
         stderr_ref,
@@ -594,15 +595,16 @@ async def _supervise(run: _Run) -> None:
             await watchdog
 
 
-async def _finish_process(run: _Run, *, stop_now: bool) -> None:
-    """Make sure the runner has ended: at once after a violation or a failed start, otherwise
-    within the grace period of its output ending."""
+async def _finish_process(run: _Run, *, stop_now: bool) -> int:
+    """Make sure the runner has ended, at once after a violation or a failed start, otherwise
+    within the grace period of its output ending, and return its exit code. A runner that started
+    always has one: this only returns once the process has been waited for."""
     child = run._child()
     if stop_now:
         run.kill()
     child.close_stdin()
     try:
-        await asyncio.wait_for(child.wait(), run.limits.cancel_grace)
+        return await asyncio.wait_for(child.wait(), run.limits.cancel_grace)
     except TimeoutError:
         run.kill()
-        await child.wait()
+        return await child.wait()
