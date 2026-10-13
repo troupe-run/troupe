@@ -23,6 +23,10 @@ from troupe.core.runners.limits import RunLimits
 from troupe.core.runners.outcome import Outcome
 from troupe.platform import processes
 
+UNKNOWN_OPTION = "troupeConformanceUnknownOption"
+"""An option key no runner defines: a runner refuses a key outside its options schema, never
+ignoring it (spec: runner-protocol; strict-schemas design D3)."""
+
 
 @dataclass(frozen=True)
 class CheckResult:
@@ -150,6 +154,15 @@ async def check_runner(
         if (await driver.start(options, workspace)).error is None:
             raise _Failed("it accepted a second run/start in the same process")
 
+    async def unknown_option(driver: _Driver) -> None:
+        _started(await driver.initialize([p.PROTOCOL_VERSION]), "initialize")
+        answer = await driver.start({**options, UNKNOWN_OPTION: True}, workspace)
+        if answer.error is None:
+            raise _Failed(
+                f"it accepted the option {UNKNOWN_OPTION!r}, which no runner defines, instead of "
+                "refusing it"
+            )
+
     async def cancel(driver: _Driver) -> None:
         _started(await driver.initialize([p.PROTOCOL_VERSION]), "initialize")
         start = await driver.start(options, workspace)
@@ -183,6 +196,7 @@ async def check_runner(
         ("handshake", handshake),
         ("version refusal", version_refusal),
         ("second run/start refused", second_start),
+        ("unknown option refused", unknown_option),
         ("cancel acknowledged, then exit", cancel),
         ("exit on end of input", end_of_input),
     ]

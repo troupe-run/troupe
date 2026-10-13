@@ -54,6 +54,10 @@ def bound(ref: str) -> dict[str, Any]:
         "$id": urljoin(OWN, "bound.schema.json"),
         "$ref": urljoin(BASE, ref),
         "$defs": {
+            "options": {
+                "$dynamicAnchor": "runnerOptions",
+                "$ref": urljoin(OWN, "options.schema.json"),
+            },
             "errors": {
                 "$dynamicAnchor": "runnerErrors",
                 "$ref": urljoin(OWN, "errors.schema.json"),
@@ -62,8 +66,12 @@ def bound(ref: str) -> dict[str, Any]:
     }
 
 
+def validator(ref: str) -> jsonschema.Draft202012Validator:
+    return jsonschema.Draft202012Validator(bound(ref), registry=_registry())
+
+
 def validate(instance: object, ref: str) -> None:
-    jsonschema.Draft202012Validator(bound(ref), registry=_registry()).validate(instance)
+    validator(ref).validate(instance)
 
 
 def new_run_id() -> str:
@@ -83,6 +91,8 @@ class Session:
             cwd=workspace,
         )
         self.sent: list[dict[str, Any]] = []
+        self.refused: set[int] = set()
+        """Ids of requests the test sent invalid on purpose: the schema must refuse them too."""
         self.received: list[dict[str, Any]] = []
         self.raw_lines: list[bytes] = []
         self._lines: queue.Queue[bytes] = queue.Queue()
@@ -139,8 +149,12 @@ class Session:
             {"protocolVersions": [1], "host": {"name": "test", "version": "1"}, "capabilities": []},
         )
 
-    def start(self, options: dict[str, Any]) -> dict[str, Any]:
+    def start(self, options: dict[str, Any], *, valid: bool = True) -> dict[str, Any]:
+        """Initialize, then send run/start with ``options``. ``valid=False`` marks options the
+        runner must refuse, which the runner's options schema must refuse as well."""
         self.initialize()
+        if not valid:
+            self.refused.add(self._next_id)
         return self.request(
             "run/start",
             {
@@ -152,8 +166,8 @@ class Session:
             },
         )
 
-    def play(self, script: dict[str, Any]) -> dict[str, Any]:
-        return self.start({"script": script})
+    def play(self, script: dict[str, Any], *, valid: bool = True) -> dict[str, Any]:
+        return self.start({"script": script}, valid=valid)
 
     def notifications(self, count: int) -> list[dict[str, Any]]:
         return [self.message() for _ in range(count)]
@@ -173,7 +187,10 @@ class Session:
         """Every message either side sent is valid, and each result matches its method."""
         methods: dict[object, str] = {}
         for message in self.sent:
-            validate(message, "message.schema.json#/$defs/fromHost")
+            if message["id"] in self.refused:
+                assert not validator("message.schema.json#/$defs/fromHost").is_valid(message)
+            else:
+                validate(message, "message.schema.json#/$defs/fromHost")
             methods[message["id"]] = message["method"]
         for message in self.received:
             validate(message, "message.schema.json#/$defs/fromRunner")

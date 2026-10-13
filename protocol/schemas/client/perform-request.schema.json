@@ -18,8 +18,8 @@
       "$ref": "run.schema.json#/$defs/runnerName"
     },
     "options": {
-      "description": "The runner's own options, passed to it untouched. Absent means {}.",
-      "type": "object"
+      "description": "The runner's own options, passed to it untouched. Absent means {}. An extension point: the runner's published options schema fills it, and without one only {} validates.",
+      "$dynamicRef": "#runnerOptions"
     },
     "instructions": {
       "description": "What the actor is asked to do. Absent means the empty string.",
@@ -27,6 +27,15 @@
     },
     "effectCheck": {
       "$ref": "run.schema.json#/$defs/effectCheck"
+    }
+  },
+  "$defs": {
+    "runnerOptions": {
+      "title": "The runner's options",
+      "description": "The default for the runnerOptions extension point: no options.",
+      "$dynamicAnchor": "runnerOptions",
+      "type": "object",
+      "additionalProperties": false
     }
   }
 }

@@ -39,11 +39,11 @@ def _notification(method: str, params: dict[str, Any]) -> dict[str, Any]:
     return {"jsonrpc": "2.0", "method": method, "params": params}
 
 
-START = {
+START: dict[str, Any] = {
     "runId": RUN_ID,
     "instructions": "write hello.txt",
     "workspace": "/workspace",
-    "options": {"anything": ["goes", 1]},
+    "options": {"script": {"steps": [{"wait": {"ms": 1}}]}},
     "limits": {"eventMaxBytes": 65536},
 }
 
@@ -365,4 +365,19 @@ def test_a_code_the_runner_has_not_published_does_not_validate_against_the_contr
         "fix": "f",
         "details": {"where": "options.script"},
     }
-    assert not is_valid(_error_response(data), ERROR_RESPONSE)
+    assert not is_valid(_error_response(data), ERROR_RESPONSE, runner=None)
+    validate(_error_response(data), ERROR_RESPONSE)  # with the scripted runner's codes bound
+
+
+# Requirement: Run start carries everything the runner may use (options are an extension point)
+
+
+def test_the_contract_alone_accepts_only_empty_options() -> None:
+    assert is_valid(_request("run/start", {**START, "options": {}}), "run-start.schema.json", None)
+    assert not is_valid(_request("run/start", START), "run-start.schema.json", runner=None)
+
+
+def test_with_a_runners_schema_bound_its_options_validate_and_an_unknown_key_does_not() -> None:
+    validate(_request("run/start", START), "run-start.schema.json")
+    unknown = {**START, "options": {**START["options"], "speed": 2}}
+    assert not is_valid(_request("run/start", unknown), "run-start.schema.json")

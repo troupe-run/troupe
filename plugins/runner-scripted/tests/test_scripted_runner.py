@@ -160,7 +160,7 @@ def test_a_script_is_read_from_the_file_the_options_name(session: Session, tmp_p
 def test_an_invalid_script_is_refused_naming_the_step_and_nothing_plays(
     session: Session, script: dict[str, Any], where: str
 ) -> None:
-    answer = session.play(script)
+    answer = session.play(script, valid=False)
     error = answer["error"]["data"]
     assert error["code"] == "scripted.invalid-script"
     assert where in error["problem"]
@@ -174,7 +174,7 @@ def test_an_invalid_script_is_refused_naming_the_step_and_nothing_plays(
 def test_an_unknown_option_is_refused_naming_the_key(
     session: Session, options: dict[str, Any]
 ) -> None:
-    error = session.start(options)["error"]["data"]
+    error = session.start(options, valid=False)["error"]["data"]
     assert error["code"] == "scripted.unknown-option"
     assert "'speed'" in error["problem"] or "'model'" in error["problem"]
     session.validate_all()

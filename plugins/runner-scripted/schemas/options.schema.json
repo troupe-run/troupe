@@ -1,0 +1,507 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/plugins/runner-scripted/options.schema.json",
+  "title": "Scripted runner options",
+  "description": "The run/start options the scripted runner takes: a script, inline or as a path to a JSON file, and whether to replay a recording's delays. They fill the runner contract's runnerOptions extension point.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "script": {
+      "$ref": "#/$defs/script"
+    },
+    "scriptPath": {
+      "description": "The path of a JSON file holding the script. Relative replay paths in it are found from the file's directory.",
+      "type": "string",
+      "minLength": 1
+    },
+    "replayDelays": {
+      "description": "Whether replay steps keep the recorded delays between records. Default false.",
+      "type": "boolean"
+    }
+  },
+  "oneOf": [
+    {
+      "required": [
+        "script"
+      ]
+    },
+    {
+      "required": [
+        "scriptPath"
+      ]
+    }
+  ],
+  "$defs": {
+    "script": {
+      "title": "Script",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "steps"
+      ],
+      "properties": {
+        "onCancel": {
+          "description": "What the runner does on run/cancel. Default honour.",
+          "enum": [
+            "honour",
+            "honour-with-result",
+            "ignore"
+          ]
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/step"
+          }
+        }
+      }
+    },
+    "step": {
+      "title": "Step",
+      "description": "An object with exactly one key, the step's kind.",
+      "oneOf": [
+        {
+          "description": "Send a run event. The runner fills in runId and seq unless the step gives them.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "event"
+          ],
+          "properties": {
+            "event": {
+              "$ref": "#/$defs/event"
+            }
+          }
+        },
+        {
+          "description": "Send a transcript record: the record itself, or the record and its encoding.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "transcript"
+          ],
+          "properties": {
+            "transcript": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "record"
+                  ],
+                  "properties": {
+                    "record": {
+                      "type": "string"
+                    },
+                    "encoding": {
+                      "enum": [
+                        "utf-8",
+                        "base64"
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "description": "Write to standard error.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "stderr"
+          ],
+          "properties": {
+            "stderr": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "description": "Write a raw line to standard output, as it is, for testing how troupe handles a broken runner.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "rawStdout"
+          ],
+          "properties": {
+            "rawStdout": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "description": "Replay a recording: the path of a JSON Lines file of recording lines.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "replay"
+          ],
+          "properties": {
+            "replay": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "description": "Wait, still answering troupe.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "wait"
+          ],
+          "properties": {
+            "wait": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "ms"
+              ],
+              "properties": {
+                "ms": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          }
+        },
+        {
+          "description": "Write a file in the workspace.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "writeFile"
+          ],
+          "properties": {
+            "writeFile": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "content"
+              ],
+              "properties": {
+                "path": {
+                  "description": "A relative path inside the workspace: no drive, no root, no '..'.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "content": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        {
+          "description": "Stop playing and wait until cancelled, shut down or input closes.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "hang"
+          ],
+          "properties": {
+            "hang": {
+              "const": true
+            }
+          }
+        },
+        {
+          "description": "Exit with this code.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "exit"
+          ],
+          "properties": {
+            "exit": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      ]
+    },
+    "event": {
+      "title": "Event step",
+      "description": "A run event as the contract defines it. The runner fills in runId and seq unless the step gives them, so a step can break the contract on purpose (another run's id, a gap in seq).",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/init"
+        },
+        {
+          "$ref": "#/$defs/turn"
+        },
+        {
+          "$ref": "#/$defs/tool_call"
+        },
+        {
+          "$ref": "#/$defs/tool_result"
+        },
+        {
+          "$ref": "#/$defs/retry"
+        },
+        {
+          "$ref": "#/$defs/log"
+        },
+        {
+          "$ref": "#/$defs/result"
+        }
+      ]
+    },
+    "init": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "runner",
+        "tools"
+      ],
+      "properties": {
+        "type": {
+          "const": "init"
+        },
+        "runId": {
+          "$ref": "https://troupe.run/protocol/runner/jsonrpc.schema.json#/$defs/runId"
+        },
+        "seq": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/seq"
+        },
+        "runner": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/init/properties/runner"
+        },
+        "engine": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/init/properties/engine"
+        },
+        "tools": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/init/properties/tools"
+        }
+      }
+    },
+    "turn": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "role",
+        "text"
+      ],
+      "properties": {
+        "type": {
+          "const": "turn"
+        },
+        "runId": {
+          "$ref": "https://troupe.run/protocol/runner/jsonrpc.schema.json#/$defs/runId"
+        },
+        "seq": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/seq"
+        },
+        "role": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/turn/properties/role"
+        },
+        "text": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/turn/properties/text"
+        }
+      }
+    },
+    "tool_call": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "callId",
+        "tool",
+        "inputSummary"
+      ],
+      "properties": {
+        "type": {
+          "const": "tool_call"
+        },
+        "runId": {
+          "$ref": "https://troupe.run/protocol/runner/jsonrpc.schema.json#/$defs/runId"
+        },
+        "seq": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/seq"
+        },
+        "callId": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/tool_call/properties/callId"
+        },
+        "tool": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/tool_call/properties/tool"
+        },
+        "inputSummary": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/tool_call/properties/inputSummary"
+        }
+      }
+    },
+    "tool_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "callId",
+        "isError",
+        "outputSummary",
+        "outputBytes"
+      ],
+      "properties": {
+        "type": {
+          "const": "tool_result"
+        },
+        "runId": {
+          "$ref": "https://troupe.run/protocol/runner/jsonrpc.schema.json#/$defs/runId"
+        },
+        "seq": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/seq"
+        },
+        "callId": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/tool_result/properties/callId"
+        },
+        "isError": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/tool_result/properties/isError"
+        },
+        "outputSummary": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/tool_result/properties/outputSummary"
+        },
+        "outputBytes": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/tool_result/properties/outputBytes"
+        }
+      }
+    },
+    "retry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "attempt",
+        "delayMs",
+        "reason"
+      ],
+      "properties": {
+        "type": {
+          "const": "retry"
+        },
+        "runId": {
+          "$ref": "https://troupe.run/protocol/runner/jsonrpc.schema.json#/$defs/runId"
+        },
+        "seq": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/seq"
+        },
+        "attempt": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/retry/properties/attempt"
+        },
+        "maxAttempts": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/retry/properties/maxAttempts"
+        },
+        "delayMs": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/retry/properties/delayMs"
+        },
+        "reason": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/retry/properties/reason"
+        },
+        "message": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/retry/properties/message"
+        }
+      }
+    },
+    "log": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "level",
+        "message"
+      ],
+      "properties": {
+        "type": {
+          "const": "log"
+        },
+        "runId": {
+          "$ref": "https://troupe.run/protocol/runner/jsonrpc.schema.json#/$defs/runId"
+        },
+        "seq": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/seq"
+        },
+        "level": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/log/properties/level"
+        },
+        "message": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/log/properties/message"
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "status",
+        "message"
+      ],
+      "properties": {
+        "type": {
+          "const": "result"
+        },
+        "runId": {
+          "$ref": "https://troupe.run/protocol/runner/jsonrpc.schema.json#/$defs/runId"
+        },
+        "seq": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/seq"
+        },
+        "status": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/result/properties/status"
+        },
+        "message": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/result/properties/message"
+        },
+        "turns": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/result/properties/turns"
+        },
+        "durationMs": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/result/properties/durationMs"
+        },
+        "usage": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/result/properties/usage"
+        },
+        "costUsd": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/result/properties/costUsd"
+        }
+      }
+    },
+    "recordingLine": {
+      "title": "Recording line",
+      "description": "One line of a recording the replay step plays: a run event exactly as sent (troupe replaces only its runId), or a transcript record, each optionally with the milliseconds since the recording started.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "event": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/event"
+        },
+        "transcript": {
+          "type": "string"
+        },
+        "atMs": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "event"
+          ]
+        },
+        {
+          "required": [
+            "transcript"
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -111,7 +111,10 @@ CASES: list[tuple[object, str, st.SearchStrategy[Any]]] = [
         st.fixed_dictionaries(
             {"actor": NAMES, "runner": NAMES, "effectCheck": EFFECT_CHECKS},
             optional={
-                "options": st.dictionaries(NAMES, st.integers() | TEXT, max_size=3),
+                "options": st.fixed_dictionaries(
+                    {"script": st.fixed_dictionaries({"steps": st.just([])})},
+                    optional={"replayDelays": st.booleans()},
+                ),
                 "instructions": st.text(max_size=20),
             },
         ),

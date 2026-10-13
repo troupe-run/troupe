@@ -24,17 +24,22 @@ MESSAGES = {
 """Each method's messages, by part."""
 
 
-__all__ = ["CLIENT_SCHEMAS", "MESSAGES", "check", "is_valid", "load", "validator"]
+__all__ = ["CLIENT_SCHEMAS", "MESSAGES", "SCRIPTED", "check", "is_valid", "load", "validator"]
 
 
-def validator(ref: str) -> jsonschema.Draft202012Validator:
+SCRIPTED = "runner-scripted"
+"""troupe's tests perform with the scripted runner, so its options schema fills perform's
+runnerOptions extension point. Pass ``runner=None`` to check against the protocol alone."""
+
+
+def validator(ref: str, runner: str | None = SCRIPTED) -> jsonschema.Draft202012Validator:
     """A validator for ``ref``, relative to the client schemas."""
-    return protocol_schemas.validator_for(urljoin(BASE, ref))
+    return protocol_schemas.validator_for(urljoin(BASE, ref), runner)
 
 
-def is_valid(instance: object, ref: str) -> bool:
-    return validator(ref).is_valid(instance)
+def is_valid(instance: object, ref: str, runner: str | None = SCRIPTED) -> bool:
+    return validator(ref, runner).is_valid(instance)
 
 
-def check(instance: object, ref: str) -> None:
-    validator(ref).validate(instance)
+def check(instance: object, ref: str, runner: str | None = SCRIPTED) -> None:
+    validator(ref, runner).validate(instance)

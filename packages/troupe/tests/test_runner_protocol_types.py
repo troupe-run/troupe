@@ -70,7 +70,10 @@ CASES: list[tuple[type[p.Message], str, st.SearchStrategy[Any]]] = [
                 "runId": RUN_IDS,
                 "instructions": TEXT,
                 "workspace": NAME,
-                "options": NATIVE,
+                "options": st.fixed_dictionaries(
+                    {"script": st.fixed_dictionaries({"steps": st.just([])})},
+                    optional={"replayDelays": st.booleans()},
+                ),
                 "limits": st.fixed_dictionaries({"eventMaxBytes": st.integers(1, 10**9)}),
             }
         ),
@@ -385,7 +388,7 @@ def test_messages_the_host_builds_validate_as_host_messages() -> None:
         p.request(
             2,
             "run/start",
-            p.RunStartParams(RUN, "go", "/w", {"script": []}, p.StartLimits(65536)),
+            p.RunStartParams(RUN, "go", "/w", {"script": {"steps": []}}, p.StartLimits(65536)),
         ),
         p.request(3, "run/cancel", p.RunCancelParams(RUN)),
         p.request(4, "shutdown", p.Empty()),

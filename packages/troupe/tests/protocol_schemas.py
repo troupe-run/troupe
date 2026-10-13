@@ -60,6 +60,25 @@ def validator(schema: dict[str, Any]) -> jsonschema.Draft202012Validator:
     return jsonschema.Draft202012Validator(schema, registry=registry())
 
 
-def validator_for(uri: str) -> jsonschema.Draft202012Validator:
-    """A validator for the schema at ``uri`` (an absolute $id, optionally with a fragment)."""
-    return validator({"$ref": uri})
+def validator_for(uri: str, runner: str | None = None) -> jsonschema.Draft202012Validator:
+    """A validator for the schema at ``uri`` (an absolute $id, optionally with a fragment).
+
+    With ``runner`` (a plugin directory, such as ``runner-scripted``), that runner's published
+    schemas fill the runner contract's extension points, as they would for its messages.
+    """
+    return validator(bound(uri, runner) if runner is not None else {"$ref": uri})
+
+
+def bound(uri: str, runner: str) -> dict[str, Any]:
+    """The schema at ``uri``, with ``runner``'s options and errors schemas bound to the contract's
+    ``runnerOptions`` and ``runnerErrors`` extension points (strict-schemas design D2)."""
+    own = f"{PLUGINS_BASE}{runner}/"
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": f"{own}bound.schema.json",
+        "$ref": uri,
+        "$defs": {
+            "options": {"$dynamicAnchor": "runnerOptions", "$ref": f"{own}options.schema.json"},
+            "errors": {"$dynamicAnchor": "runnerErrors", "$ref": f"{own}errors.schema.json"},
+        },
+    }
