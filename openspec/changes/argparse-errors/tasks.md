@@ -2,10 +2,10 @@
 
 ## 1. No prefix in any usage problem
 
-- [ ] 1.1 Add a test that `troupe perform tester --runner scripted` (through `main`, real commands) writes a first
+- [x] 1.1 Add a test that `troupe perform tester --runner scripted` (through `main`, real commands) writes a first
   stderr line starting `troupe: ` and never `troupe: troupe:`, and that no usage error's problem data starts with
   `troupe:`, parametrised over every usage shape in the spec. Verify it fails on main for the argparse-reported shapes
-- [ ] 1.2 Drop the prefix from `_Parser.error` and the `ArgumentError` wrapper in `parser.py`, building `usage.invalid`
+- [x] 1.2 Drop the prefix from `_Parser.error` and the `ArgumentError` wrapper in `parser.py`, building `usage.invalid`
   with the chosen command named and its help in the fix (design D5, D7); `_Parser.error` raises a marker that `parse`
   completes with the command. Verify 1.1 passes for the backstop path and the existing `test_cli.py` passes
 
