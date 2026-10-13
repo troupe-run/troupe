@@ -6,7 +6,6 @@ import subprocess
 import sys
 import threading
 import time
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -21,6 +20,8 @@ from troupe.core.errors import TroupeError
 from troupe.core.events import EventStore
 from troupe.core.notices import Notice
 from troupe.core.runs.aggregate import Run
+from troupe.platform.errors import WatchUnavailableError
+from troupe.platform.watching import DirectoryWatch
 
 CHILD = Path(__file__).with_name("perform_child.py")
 HANG = script(INIT, turn("one"), {"hang": True})
@@ -34,7 +35,9 @@ STAGE = {
 class Child:
     """perform running in another process."""
 
-    def __init__(self, repo: Repo, options: dict[str, Any]) -> None:
+    def __init__(self, repo: Repo, options: dict[str, Any], *, appends: Path | None = None) -> None:
+        """``appends``: a file outside the theatre where the child notes when each segment
+        append returned, and the run events it wrote (perform_child.py)."""
         self.process = subprocess.Popen(
             [
                 sys.executable,
@@ -42,6 +45,7 @@ class Child:
                 str(repo.path),
                 json.dumps(repo.env),
                 json.dumps(request(options)),
+                *([str(appends)] if appends is not None else []),
             ],
             stdout=subprocess.PIPE,
             text=True,
@@ -277,12 +281,32 @@ def test_following_stops_when_cancelled(tmp_path: Path) -> None:
         child.kill()
 
 
-def test_following_shows_each_event_within_a_few_tenths_of_a_second_of_its_recording(
+QUIET = {"poll_seconds": 60, "check_seconds": 60}
+"""Store settings under which only a notification can wake a follower within a test's bounds."""
+
+
+def refusing(directory: Path) -> DirectoryWatch:
+    raise WatchUnavailableError(directory, "the platform refused (a test)")
+
+
+def follow_in_background(harness: Harness, run_id: str) -> tuple[threading.Thread, list[Any]]:
+    result: list[Any] = []
+
+    def following() -> None:
+        result.append(harness.logs(run=run_id, follow=True))
+
+    thread = threading.Thread(target=following, daemon=True)
+    thread.start()
+    return thread, result
+
+
+def test_following_wakes_on_another_processs_write_timed_from_when_the_append_returned(
     tmp_path: Path,
 ) -> None:
-    repo = theatre(tmp_path)
+    repo = theatre(tmp_path / "theatre")
+    appends = tmp_path / "appends.txt"
     gaps = [{"wait": {"ms": 700}}, turn("a"), {"wait": {"ms": 700}}, turn("b")]
-    child = Child(repo, script(INIT, *gaps, {"wait": {"ms": 700}}, OK))
+    child = Child(repo, script(INIT, *gaps, {"wait": {"ms": 700}}, OK), appends=appends)
     received: dict[int, float] = {}
 
     class Timing(Harness):
@@ -291,15 +315,79 @@ def test_following_shows_each_event_within_a_few_tenths_of_a_second_of_its_recor
             if data["kind"] == "event":
                 received[data["seq"]] = time.time()
 
-    Timing(repo).logs(run=child.run_id, follow=True)
-    child.finish()
-    history = git_service(repo).history(UUID(child.run_id))
-    recorded = {
-        json.loads(r.state)["seq"]: datetime.fromisoformat(r.lineage["at"]).timestamp()
-        for r in history
-        if r.topic.endswith("Run.Reported") and r.lineage is not None
-    }
+    Timing(repo, store_options=QUIET).logs(run=child.run_id, follow=True)
+    assert "ENDED succeeded" in child.finish()
+    appended: dict[int, float] = {}
+    for line in appends.read_text(encoding="utf-8").splitlines():
+        at, *seqs = line.split()
+        for seq in seqs:
+            appended[int(seq)] = float(at)
     # seq 0 was recorded before following began; every later one arrived while following.
-    lags = sorted(received[seq] - recorded[seq] for seq in recorded if seq > 0)
-    assert len(lags) == 3
-    assert lags[len(lags) // 2] < 0.4, lags
+    delays = sorted(received[seq] - appended[seq] for seq in appended if seq > 0)
+    assert len(delays) == 3
+    assert delays[1] < 0.5, delays
+
+
+def test_following_a_quiet_run_reads_no_segment_while_it_waits(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = theatre(tmp_path)
+    child = Child(repo, HANG)
+    looks: list[float] = []
+
+    def counting(store: EventStore) -> EventStore:
+        sizes = store.recorder._sizes  # type: ignore[attr-defined]
+
+        def counted() -> dict[str, int]:
+            looks.append(time.monotonic())
+            return sizes()  # type: ignore[no-any-return]
+
+        monkeypatch.setattr(store.recorder, "_sizes", counted)
+        return store
+
+    try:
+        harness = Harness(repo, store_options=QUIET, store_wrapper=counting)
+        thread, _ = follow_in_background(harness, child.run_id)
+        time.sleep(1.0)  # following has read the run, and a fresh watch may wake once
+        looks.clear()
+        time.sleep(2.0)
+        assert looks == []
+        harness.cancel.request()
+        thread.join(timeout=10)
+    finally:
+        child.kill()
+
+
+def test_following_an_unwatchable_store_sends_its_polling_notice_first_and_still_delivers(
+    tmp_path: Path,
+) -> None:
+    repo = theatre(tmp_path)
+    child = Child(repo, script(INIT, {"wait": {"ms": 500}}, turn("a"), OK))
+    harness = Harness(repo, store_options={"poll_seconds": 0.2, "watcher": refusing})
+    result = harness.logs(run=child.run_id, follow=True)
+    assert "ENDED succeeded" in child.finish()
+    first = harness.updates[0]
+    assert first["kind"] == "notice"
+    assert first["notice"]["code"] == "events.subscription-polling"
+    assert first["notice"]["details"]["reason"] == "watch-refused"
+    followed = [u["seq"] for u in harness.updates if u["kind"] == "event"]
+    assert followed == [0, 1, 2]
+    assert [n.code for n in result.notices].count("events.subscription-polling") == 1
+    assert result.run.state == "ended"
+
+
+def test_killing_perform_while_its_run_is_followed_stops_following_within_the_lease_check(
+    tmp_path: Path,
+) -> None:
+    repo = theatre(tmp_path)
+    child = Child(repo, HANG)
+    harness = Harness(repo, store_options=QUIET)
+    thread, result = follow_in_background(harness, child.run_id)
+    time.sleep(1.0)
+    killed = time.monotonic()
+    child.kill()
+    thread.join(timeout=30)
+    assert result, "following didn't stop"
+    assert time.monotonic() - killed < defaults.LOGS_LEASE_CHECK_SECONDS + 3
+    assert result[0].run.state == "interrupted"
+    assert [n.code for n in result[0].notices] == ["run.interrupted"]

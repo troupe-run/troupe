@@ -1,15 +1,20 @@
 """status and logs: runs read back from projections (spec: runs; perform-status-logs design D11 to
-D13).
+D13; watch-event-segments design D6).
 
 Each query rebuilds what it needs from the event store with the folds in projections. A run's state
 is derived: ended when its end is recorded, otherwise from its lease in this clone. The lease is
 the platform's lock on ``.troupe/local/runs/<id>/``, which perform holds while the run goes and
 the OS releases if perform dies, so a lock nobody holds means the run was interrupted, and no lease
 at all means it was started in another clone. Nothing is ever recorded for an interrupted run.
+
+Following subscribes through the event store port: the store wakes it when anything is recorded,
+whoever wrote it. It has no timer for new events. Its one timer checks the lease, because a perform
+that dies writes nothing that could wake it.
 """
 
 import asyncio
 import contextlib
+import threading
 from collections.abc import Iterator
 from pathlib import Path
 from uuid import UUID
@@ -143,21 +148,73 @@ def _log(store: EventStore, run_id: str) -> RunView:
     return view
 
 
+class _Wakeup(threading.Event):
+    """A listener for the store's subscription that also wakes a coroutine on ``loop``. The store
+    sets it from its own thread."""
+
+    def __init__(self, loop: asyncio.AbstractEventLoop, wake: asyncio.Event) -> None:
+        super().__init__()
+        self._loop = loop
+        self._wake = wake
+
+    def set(self) -> None:
+        super().set()
+        with contextlib.suppress(RuntimeError):  # the loop has already closed
+            self._loop.call_soon_threadsafe(self._wake.set)
+
+
+async def _woken(wake: asyncio.Event, cancel: asyncio.Event, timeout: float) -> bool:
+    """Wait for a wake, a cancel or ``timeout``. Whether it was a wake."""
+    waits = [asyncio.ensure_future(wake.wait()), asyncio.ensure_future(cancel.wait())]
+    _, pending = await asyncio.wait(waits, timeout=timeout, return_when=asyncio.FIRST_COMPLETED)
+    for waiting in pending:
+        waiting.cancel()
+    return wake.is_set()
+
+
+def _once(notices: list[Notice]) -> list[Notice]:
+    """Each notice once, by code and path, keeping the first."""
+    seen: set[tuple[str, str | None]] = set()
+    kept: list[Notice] = []
+    for notice in notices:
+        if (notice.code, notice.path) not in seen:
+            seen.add((notice.code, notice.path))
+            kept.append(notice)
+    return kept
+
+
 async def logs(
     request: m.LogsRequest, session: Session, send: Send, *, backends: Backends | None = None
 ) -> m.LogsResult:
     """A run's events in seq order. With follow, each new event is sent as it is recorded, until
-    the run ends or stops running. Following looks for new events every LOGS_FOLLOW_POLL_SECONDS:
-    the store stats its segments and reads only new bytes, so a look costs little and events
-    appear as they're recorded."""
+    the run ends or stops running. Following listens to the store's subscription, which wakes it
+    whenever anything is recorded; a wake re-reads the run. Every LOGS_LEASE_CHECK_SECONDS it also
+    checks that the run is still running. If the store can only poll, its notice is sent at once.
+    """
     backends = backends or Backends()
     store = await asyncio.to_thread(backends.event_store, session)
     runs = await asyncio.to_thread(read_runs, store)
     run_id = resolve(request.run, runs)
-    view = await asyncio.to_thread(_log, store, run_id)
-    notices: list[Notice] = []
-    if request.follow:
-        cancel = session.cancel.bind()
+    if not request.follow:
+        view = await asyncio.to_thread(_log, store, run_id)
+        notices: list[Notice] = []
+        summary = _summary(view, session.theatre, notices)
+        return m.LogsResult(
+            run=summary,
+            events=view.log,
+            notices=[m.NoticeData.of(n) for n in [*store.notices(), *notices]],
+        )
+    cancel = session.cancel.bind()
+    wake = asyncio.Event()
+    listener = _Wakeup(asyncio.get_running_loop(), wake)
+    # Listen before the first read, so nothing recorded between the two is missed.
+    await asyncio.to_thread(store.recorder.listen, listener)
+    try:
+        found = await asyncio.to_thread(store.notices)
+        for notice in found:
+            if notice.code == "events.subscription-polling":
+                send(m.NoticeUpdate(notice=m.NoticeData.of(notice)))
+        view = await asyncio.to_thread(_log, store, run_id)
         sent = 0
         while True:
             for event in view.log[sent:]:
@@ -171,12 +228,16 @@ async def logs(
                 for event in view.log[sent:]:
                     send(event)
                 break
-            with contextlib.suppress(TimeoutError):
-                await asyncio.wait_for(cancel.wait(), defaults.LOGS_FOLLOW_POLL_SECONDS)
-            view = await asyncio.to_thread(_log, store, run_id)
+            if await _woken(wake, cancel, defaults.LOGS_LEASE_CHECK_SECONDS):
+                wake.clear()  # before reading, so a write during the read wakes the next wait
+                view = await asyncio.to_thread(_log, store, run_id)
+        found.extend(await asyncio.to_thread(store.notices))
+    finally:
+        await asyncio.to_thread(store.recorder.unlisten, listener)
+    notices = []
     summary = _summary(view, session.theatre, notices)
     return m.LogsResult(
         run=summary,
         events=view.log,
-        notices=[m.NoticeData.of(n) for n in [*store.notices(), *notices]],
+        notices=[m.NoticeData.of(n) for n in _once([*found, *notices])],
     )

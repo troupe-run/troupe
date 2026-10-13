@@ -48,6 +48,7 @@ class Harness:
     env: dict[str, str] = field(default_factory=lambda: {**ADA, **ALLOW})
     limits: RunLimits = LIMITS
     store_wrapper: Callable[[EventStore], EventStore] | None = None
+    store_options: dict[str, Any] = field(default_factory=dict)
     identity_chain: tuple[str, ...] | None = None
     cancel: CancelSignal = field(default_factory=CancelSignal)
     updates: list[dict[str, Any]] = field(default_factory=list)
@@ -57,7 +58,7 @@ class Harness:
         return Session(theatre=self.repo.path, env=self.env, cancel=self.cancel)
 
     def event_store(self, _: Session) -> EventStore:
-        store = git_service(self.repo, env=self.env)
+        store = git_service(self.repo, env=self.env, **self.store_options)
         if self.identity_chain is not None:
             store.identity_chain = self.identity_chain
         store = self.store_wrapper(store) if self.store_wrapper else store
