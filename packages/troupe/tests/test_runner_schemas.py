@@ -47,7 +47,12 @@ START = {
     "limits": {"eventMaxBytes": 65536},
 }
 
-ERROR_DATA = {"code": "runner.unsupported-version", "problem": "p", "fix": "f"}
+ERROR_DATA = {
+    "code": "runner.unsupported-version",
+    "problem": "p",
+    "fix": "f",
+    "details": {"supportedVersions": [1]},
+}
 
 # (schema, a valid example, an invalid example)
 EXAMPLES: list[tuple[str, object, object]] = [
@@ -151,7 +156,6 @@ EVENTS: dict[str, dict[str, Any]] = {
         "runner": {"name": "s", "version": "1"},
         "tools": ["Write"],
         "engine": {"name": "claude-code", "version": "2.1.281", "model": "m"},
-        "native": {"type": "system", "subtype": "init"},
     },
     "turn": {"role": "assistant", "text": "hello"},
     "tool_call": {"callId": "c1", "tool": "Write", "inputSummary": "out/hello.txt"},
@@ -163,7 +167,7 @@ EVENTS: dict[str, dict[str, Any]] = {
         "message": "401",
         "turns": 1,
         "durationMs": 10,
-        "usage": {"inputTokens": 3},
+        "usage": {"inputTokens": 3, "outputTokens": 5, "cacheReadTokens": 0, "cacheWriteTokens": 1},
         "costUsd": 0.0,
     },
 }
@@ -205,7 +209,20 @@ def _event_defs() -> dict[str, dict[str, Any]]:
 
 def test_no_event_type_requires_engine_specific_fields() -> None:
     for name, schema in _event_defs().items():
-        assert {"native", "engine"}.isdisjoint(schema["required"]), name
+        assert "engine" not in schema["required"], name
+
+
+@pytest.mark.parametrize("type_", sorted(EVENTS))
+def test_no_run_event_type_accepts_native_engine_detail(type_: str) -> None:
+    seq = 0 if type_ == "init" else 3
+    event = {"runId": RUN_ID, "seq": seq, "type": type_, **EVENTS[type_], "native": {"k": 1}}
+    assert not is_valid(event, "run-event.schema.json#/$defs/event")
+
+
+def test_a_usage_counter_the_contract_doesnt_name_is_refused() -> None:
+    event = {"runId": RUN_ID, "seq": 3, "type": "result", **EVENTS["result"]}
+    event["usage"] = {"reasoningTokens": 2}
+    assert not is_valid(event, "run-event.schema.json#/$defs/event")
 
 
 def _strategy(schema: dict[str, Any]) -> st.SearchStrategy[Any]:
@@ -276,3 +293,76 @@ def test_a_run_start_whose_run_id_is_not_a_canonical_lowercase_uuid_does_not_val
 ) -> None:
     assert not is_valid(_request("run/start", {**START, "runId": run_id}), "run-start.schema.json")
     validate(_request("run/start", START), "run-start.schema.json")
+
+
+# Requirement: A success result matches its method's result schema
+
+SUCCESS = "jsonrpc.schema.json#/$defs/successResponse"
+
+
+@pytest.mark.parametrize(
+    "result",
+    [
+        {"protocolVersion": 1, "runner": {"name": "s", "version": "1"}, "capabilities": []},
+        {"runId": RUN_ID},
+        {},
+    ],
+    ids=["initialize", "run/start", "run/cancel and shutdown"],
+)
+def test_a_success_response_carrying_a_methods_real_result_is_accepted(
+    result: dict[str, Any],
+) -> None:
+    validate({"jsonrpc": "2.0", "id": 1, "result": result}, SUCCESS)
+
+
+@pytest.mark.parametrize(
+    "result",
+    [{"x": 1}, {"runId": RUN_ID, "extra": True}],
+    ids=["no method's result", "run/start result with an extra key"],
+)
+def test_a_success_response_whose_result_no_method_defines_is_refused(
+    result: dict[str, Any],
+) -> None:
+    assert not is_valid({"jsonrpc": "2.0", "id": 1, "result": result}, SUCCESS)
+
+
+# Requirement: Failures use the shared error shape
+
+ERROR_RESPONSE = "error-response.schema.json"
+
+
+def _error_response(data: dict[str, Any]) -> dict[str, Any]:
+    return {"jsonrpc": "2.0", "id": 1, "error": {"code": -32000, "message": "m", "data": data}}
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "runner.parse-error",
+        "runner.invalid-request",
+        "runner.not-initialized",
+        "runner.unknown-method",
+        "runner.already-started",
+        "runner.invalid-params",
+    ],
+)
+def test_each_contract_error_code_without_details_validates_and_refuses_details(code: str) -> None:
+    data = {"code": code, "problem": "p", "fix": "f"}
+    validate(_error_response(data), ERROR_RESPONSE)
+    assert not is_valid(_error_response({**data, "details": {"x": 1}}), ERROR_RESPONSE)
+
+
+def test_unsupported_version_must_name_the_versions_the_runner_supports() -> None:
+    data = {"code": "runner.unsupported-version", "problem": "p", "fix": "f"}
+    assert not is_valid(_error_response(data), ERROR_RESPONSE)
+    validate(_error_response({**data, "details": {"supportedVersions": [1, 2]}}), ERROR_RESPONSE)
+
+
+def test_a_code_the_runner_has_not_published_does_not_validate_against_the_contract_alone() -> None:
+    data = {
+        "code": "scripted.invalid-script",
+        "problem": "p",
+        "fix": "f",
+        "details": {"where": "options.script"},
+    }
+    assert not is_valid(_error_response(data), ERROR_RESPONSE)

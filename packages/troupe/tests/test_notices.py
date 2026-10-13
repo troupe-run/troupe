@@ -12,8 +12,9 @@ SCHEMA = load(SCHEMAS / "notice.schema.json")
 def test_the_notice_schema_is_a_valid_json_schema_with_the_error_schemas_fields() -> None:
     jsonschema.Draft202012Validator.check_schema(SCHEMA)
     error = load(SCHEMAS / "error.schema.json")
-    assert SCHEMA["properties"].keys() == error["properties"].keys()
-    assert SCHEMA["required"] == error["required"]
+    fields = error["$defs"]["fields"]
+    assert SCHEMA["properties"].keys() == {*fields["properties"], "details"}
+    assert SCHEMA["required"] == fields["required"]
 
 
 @pytest.mark.parametrize("code", sorted(CODES))

@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/plugins/runner-scripted/errors.schema.json",
+  "title": "Scripted runner errors",
+  "description": "The scripted runner's own error codes, beyond the runner contract's. They fill the contract's runnerErrors extension point.",
+  "$ref": "https://troupe.run/protocol/error.schema.json#/$defs/fields",
+  "unevaluatedProperties": false,
+  "oneOf": [
+    {
+      "description": "The script or recording is malformed, names an unknown step, or a step has a field the step doesn't define.",
+      "required": ["details"],
+      "properties": {"code": {"const": "scripted.invalid-script"}, "details": {"$ref": "#/$defs/where"}}
+    },
+    {
+      "description": "The run/start options hold a key other than script, scriptPath and replayDelays.",
+      "required": ["details"],
+      "properties": {"code": {"const": "scripted.unknown-option"}, "details": {"$ref": "#/$defs/where"}}
+    }
+  ],
+  "$defs": {
+    "where": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["where"],
+      "properties": {
+        "where": {
+          "description": "Where in the options or script the problem is, such as options.script.steps[2].",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

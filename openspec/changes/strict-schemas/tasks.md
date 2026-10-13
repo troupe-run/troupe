@@ -17,18 +17,18 @@
 
 ## 2. Runner contract: `native`, `usage`, results and its own error codes
 
-- [ ] 2.1 Remove `native` from `runner/run-event.schema.json` and from `troupe.core.runners.protocol`; name the four
+- [x] 2.1 Remove `native` from `runner/run-event.schema.json` and from `troupe.core.runners.protocol`; name the four
   `usage` counters in both (design D7, D8). Verify the runner schema and protocol-type tests, updated for the new
   shapes, pass, and a test that an `init` carrying `native` fails validation and is refused by `from_data`
-- [ ] 2.2 Remove `native` from the scripted runner's fixtures and recordings, and from `capture_claude.py`'s
+- [x] 2.2 Remove `native` from the scripted runner's fixtures and recordings, and from `capture_claude.py`'s
   documentation of what is hand-written. Verify `test_claude_fixtures.py`, `test_scripted_fixtures.py` and the
   fixture secret check pass
-- [ ] 2.3 Close `successResponse.result` as `oneOf` the method results (design D8). Verify schema tests: each
+- [x] 2.3 Close `successResponse.result` as `oneOf` the method results (design D8). Verify schema tests: each
   method's real result validates, and `{"x": 1}` and a `run/start` result with an extra key don't
-- [ ] 2.4 Add `runner/errors.schema.json` with the contract's seven codes and their details, and make
+- [x] 2.4 Add `runner/errors.schema.json` with the contract's seven codes and their details, and make
   `error-response.schema.json`'s `data` `oneOf` those and `{"$dynamicRef": "#runnerErrors"}` with a `false` default
   (design D5). Verify a schema test that a contract error validates and an unpublished code doesn't
-- [ ] 2.5 Update `docs/runners.md`: no `native` (event table, "not specific to one engine", the Claude Code
+- [x] 2.5 Update `docs/runners.md`: no `native` (event table, "not specific to one engine", the Claude Code
   mapping: `system/init` stays in the transcript), the named `usage` counters, the contract's error codes table, and
   a "Publishing a runner's schemas" section (design D3). Verify `test_runners_doc.py`, extended to check the error
   codes table against `runner/errors.schema.json`, passes
