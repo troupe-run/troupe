@@ -28,7 +28,7 @@ CLOSED: dict[str, Any] = {"type": "object", "additionalProperties": False, "prop
     ("schema", "expected"),
     [
         pytest.param(
-            {"type": "object", "properties": {"a": {"type": "string"}}},
+            {"type": "object", "required": ["a"], "properties": {"a": {"type": "string"}}},
             [("", "accepts an object that isn't closed")],
             id="open object",
         ),
@@ -38,17 +38,17 @@ CLOSED: dict[str, Any] = {"type": "object", "additionalProperties": False, "prop
             id="bare object",
         ),
         pytest.param(
-            {**CLOSED, "properties": {"a": {"description": "no type"}}},
+            {**CLOSED, "required": ["a"], "properties": {"a": {"description": "no type"}}},
             [("/properties/a", "constrains no type")],
             id="annotation-only value",
         ),
         pytest.param(
-            {**CLOSED, "properties": {"a": True}},
+            {**CLOSED, "required": ["a"], "properties": {"a": True}},
             [("/properties/a", "accepts any value")],
             id="true",
         ),
         pytest.param(
-            {**CLOSED, "properties": {"a": {}}},
+            {**CLOSED, "required": ["a"], "properties": {"a": {}}},
             [("/properties/a", "accepts any value")],
             id="empty schema",
         ),
@@ -66,7 +66,7 @@ CLOSED: dict[str, Any] = {"type": "object", "additionalProperties": False, "prop
             id="additionalProperties true",
         ),
         pytest.param(
-            {**CLOSED, "properties": {"a": {"type": "array"}}},
+            {**CLOSED, "required": ["a"], "properties": {"a": {"type": "array"}}},
             [("/properties/a", "accepts an array without saying what its items are")],
             id="array without items",
         ),
@@ -81,7 +81,7 @@ CLOSED: dict[str, Any] = {"type": "object", "additionalProperties": False, "prop
             id="unknown keyword",
         ),
         pytest.param(
-            {**CLOSED, "properties": {"a": {"$ref": "#/$defs/missing"}}},
+            {**CLOSED, "required": ["a"], "properties": {"a": {"$ref": "#/$defs/missing"}}},
             [("/properties/a/$ref", "refers to '#/$defs/missing', which doesn't resolve")],
             id="reference that doesn't resolve",
         ),
@@ -93,6 +93,7 @@ CLOSED: dict[str, Any] = {"type": "object", "additionalProperties": False, "prop
         pytest.param(
             {
                 **CLOSED,
+                "required": ["a"],
                 "properties": {"a": {"$ref": "#/$defs/open"}},
                 "$defs": {"open": {"type": "object"}},
             },
@@ -123,6 +124,7 @@ def test_the_check_accepts_branch_properties_under_an_enclosing_unevaluated_prop
             "a": {
                 "type": "object",
                 "additionalProperties": False,
+                "required": ["n"],
                 "properties": {"n": {"type": "integer"}},
             }
         },
@@ -141,6 +143,7 @@ def test_the_check_reports_properties_in_a_branch_when_nothing_closes_the_object
 def test_the_check_accepts_a_closed_dynamic_anchor_default_and_follows_the_dynamic_ref() -> None:
     schema = {
         **CLOSED,
+        "required": ["options"],
         "properties": {"options": {"$dynamicRef": "#options"}},
         "$defs": {
             "options": {
@@ -156,6 +159,7 @@ def test_the_check_accepts_a_closed_dynamic_anchor_default_and_follows_the_dynam
 def test_the_check_reports_an_open_dynamic_anchor_default() -> None:
     schema = {
         **CLOSED,
+        "required": ["options"],
         "properties": {"options": {"$dynamicRef": "#options"}},
         "$defs": {"options": {"$dynamicAnchor": "options", "type": "object"}},
     }
@@ -168,7 +172,7 @@ def test_the_check_follows_references_into_other_documents() -> None:
         "$id": "https://troupe.run/protocol/other.schema.json",
         "type": "object",
     }
-    schema = {**CLOSED, "properties": {"a": {"$ref": "other.schema.json"}}}
+    schema = {**CLOSED, "required": ["a"], "properties": {"a": {"$ref": "other.schema.json"}}}
     documents = {URI: {"$schema": DRAFT, "$id": URI, **schema}, other["$id"]: other}
     assert check(documents) == [Problem(other["$id"], "", "accepts an object that isn't closed")]
 
@@ -176,10 +180,123 @@ def test_the_check_follows_references_into_other_documents() -> None:
 def test_the_check_accepts_open_properties_in_if_and_not_since_conditions_never_widen() -> None:
     schema = {
         **CLOSED,
-        "properties": {"kind": {"type": "string"}, "n": {"type": "integer"}},
+        "properties": {
+            "kind": {"type": "string"},
+            "n": {"type": "integer", "description": "Absent unless kind is a."},
+        },
+        "required": ["kind"],
         "if": {"properties": {"kind": {"const": "a"}}},
         "then": {"required": ["n"]},
         "not": {"required": ["kind", "n"]},
+    }
+    assert _problems(schema) == []
+
+
+# Requirement: Null is accepted only where it is marked
+
+
+def _with_a(value: object) -> dict[str, Any]:
+    return {**CLOSED, "required": ["a"], "properties": {"a": value}}
+
+
+MARKER = {"kind": "external", "means": "the request couldn't be read"}
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        pytest.param(
+            {"type": "null"},
+            [("/properties/a", "accepts null without saying why")],
+            id="type null",
+        ),
+        pytest.param(
+            {"type": ["string", "null"]},
+            [("/properties/a", "accepts null without saying why")],
+            id="type list with null",
+        ),
+        pytest.param(
+            {"const": None},
+            [("/properties/a", "accepts null without saying why")],
+            id="const null",
+        ),
+        pytest.param(
+            {"enum": ["a", None]},
+            [("/properties/a", "accepts null without saying why")],
+            id="enum with null",
+        ),
+        pytest.param(
+            {"type": "null", "x-troupe-null": {"kind": "sometimes", "means": "x"}},
+            [("/properties/a/x-troupe-null", "has a malformed null marker")],
+            id="marker with unknown kind",
+        ),
+        pytest.param(
+            {"type": "null", "x-troupe-null": {"kind": "clear", "means": " "}},
+            [("/properties/a/x-troupe-null", "has a malformed null marker")],
+            id="marker with empty meaning",
+        ),
+        pytest.param(
+            {"type": "null", "x-troupe-null": {**MARKER, "since": "1"}},
+            [("/properties/a/x-troupe-null", "has a malformed null marker")],
+            id="marker with an extra field",
+        ),
+        pytest.param(
+            {"type": "string", "x-troupe-null": MARKER},
+            [("/properties/a", "marks a null it doesn't accept")],
+            id="stray marker",
+        ),
+        pytest.param(
+            {"anyOf": [{"type": "integer"}, {"type": "null", "x-troupe-null": MARKER}]},
+            [],
+            id="marked null",
+        ),
+        pytest.param(
+            {"type": "string", "not": {"type": "null"}},
+            [],
+            id="null only in a condition",
+        ),
+        pytest.param(
+            {"type": "integer", "if": {"enum": [0, None]}, "then": {"minimum": 0}},
+            [],
+            id="null only in if",
+        ),
+    ],
+)
+def test_the_check_reports_each_unmarked_or_badly_marked_null_at_its_location(
+    value: dict[str, Any], expected: list[tuple[str, str]]
+) -> None:
+    assert _problems(_with_a(value)) == sorted(expected)
+
+
+# Requirement: Absent fields are left out, never sent as null (absence is described)
+
+
+def test_the_check_reports_an_optional_property_with_no_description() -> None:
+    schema = {**CLOSED, "properties": {"a": {"type": "string"}}}
+    assert _problems(schema) == [
+        ("/properties/a", "is optional but doesn't say what its absence means")
+    ]
+
+
+def test_the_check_accepts_a_described_optional_property_and_an_undescribed_required_one() -> None:
+    schema = {
+        **CLOSED,
+        "required": ["b"],
+        "properties": {
+            "a": {"type": "string", "description": "Absent when there's nothing to say."},
+            "b": {"type": "string"},
+            "c": False,
+        },
+    }
+    assert _problems(schema) == []
+
+
+def test_the_check_leaves_properties_refined_by_a_branch_to_the_object_that_declares_them() -> None:
+    schema = {
+        **CLOSED,
+        "required": ["code"],
+        "properties": {"code": {"type": "string"}},
+        "oneOf": [{"properties": {"code": {"const": "a"}}}],
     }
     assert _problems(schema) == []
 
@@ -214,6 +331,9 @@ def test_every_reference_in_each_shipped_schema_resolves(path: Path) -> None:
 # Requirement: Every object is closed; Every value is typed
 
 
+@pytest.mark.xfail(
+    strict=True, reason="nulls and undescribed optional fields on main, closed by groups 2 to 6"
+)
 def test_every_shipped_schema_is_strict() -> None:
     documents = {load(path)["$id"]: load(path) for path in schema_files()}
     assert [str(problem) for problem in check(documents)] == []

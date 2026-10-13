@@ -49,8 +49,8 @@
           "required": ["name"],
           "properties": {
             "name": {"type": "string", "minLength": 1},
-            "version": {"type": "string", "minLength": 1},
-            "model": {"type": "string", "minLength": 1}
+            "version": {"description": "The engine's version. Absent: the runner doesn't know it.", "type": "string", "minLength": 1},
+            "model": {"description": "The model the engine runs. Absent: it has none, or the runner doesn't know it.", "type": "string", "minLength": 1}
           }
         },
         "tools": {
@@ -115,10 +115,10 @@
         "seq": {"$ref": "#/$defs/seq"},
         "type": {"const": "retry"},
         "attempt": {"type": "integer", "minimum": 1},
-        "maxAttempts": {"type": "integer", "minimum": 1},
+        "maxAttempts": {"description": "How many attempts the engine will make in all. Absent: the engine doesn't say.", "type": "integer", "minimum": 1},
         "delayMs": {"type": "integer", "minimum": 0},
         "reason": {"enum": ["authentication", "rate-limit", "network", "server", "other"]},
-        "message": {"type": "string"}
+        "message": {"description": "The engine's own words about the retry. Absent: it gave none.", "type": "string"}
       }
     },
     "log": {
@@ -147,20 +147,20 @@
         "type": {"const": "result"},
         "status": {"enum": ["ok", "error"]},
         "message": {"type": "string"},
-        "turns": {"type": "integer", "minimum": 0},
-        "durationMs": {"type": "integer", "minimum": 0},
+        "turns": {"description": "How many turns the engine took. Absent: the engine doesn't count them.", "type": "integer", "minimum": 0},
+        "durationMs": {"description": "How long the run took, by the engine's clock. Absent: the engine doesn't report it.", "type": "integer", "minimum": 0},
         "usage": {
           "description": "Token counts, where the engine reports them.",
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "inputTokens": {"type": "integer", "minimum": 0},
-            "outputTokens": {"type": "integer", "minimum": 0},
+            "inputTokens": {"description": "Input tokens the engine used. Absent: the engine doesn't report them.", "type": "integer", "minimum": 0},
+            "outputTokens": {"description": "Output tokens the engine used. Absent: the engine doesn't report them.", "type": "integer", "minimum": 0},
             "cacheReadTokens": {"description": "Input tokens read from the engine's prompt cache.", "type": "integer", "minimum": 0},
             "cacheWriteTokens": {"description": "Input tokens written to the engine's prompt cache.", "type": "integer", "minimum": 0}
           }
         },
-        "costUsd": {"type": "number", "minimum": 0}
+        "costUsd": {"description": "What the run cost in US dollars, as the engine reports it. Absent: the engine reports no cost.", "type": "number", "minimum": 0}
       }
     },
     "oversized": {

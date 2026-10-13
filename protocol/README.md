@@ -8,7 +8,7 @@ Language-neutral contracts between troupe and everything that talks to it: the C
 |---|---|
 | [`schemas/error.schema.json`](schemas/error.schema.json) | The structured error every surface renders: a stable `code`, the `problem`, the `fix`, and an optional `path` and `details`. It lists every code troupe can produce, each with the schema of its `details` (or none allowed) |
 | [`schemas/notice.schema.json`](schemas/notice.schema.json) | Something a person should know while troupe works, such as a wait or a retry: the same fields as an error, with its own codes, each listed with the schema of its `details` |
-| [`schemas/lineage.schema.json`](schemas/lineage.schema.json) | Where an event came from: actor (never null), via, time, reason, change (the correlation id), cause, approvals, the version-control state, and for a run, the stage it ran on and whether its effects were enforced. Every event troupe records carries it |
+| [`schemas/lineage.schema.json`](schemas/lineage.schema.json) | Where an event came from: actor (never absent), via, time, reason (when one was given), change (the correlation id), cause, approvals, the version-control state, and for a run, the stage it ran on and whether its effects were enforced. Every event troupe records carries it |
 | [`schemas/event-record.schema.json`](schemas/event-record.schema.json) | One line of an event segment in `.troupe/events/`: the segment header, or an event with its content-hash id, parents and batch. [docs/event-store.md](../docs/event-store.md) explains the store. An event troupe defines has its payload checked against its topic's schema |
 | [`schemas/events/`](schemas/events/) | The payload of each event troupe records, one schema per topic: a run's start, each reported run event, and its end |
 | [`schemas/client/`](schemas/client/) | The client protocol: the commands and queries every surface calls the core through (`perform`, `status`, `logs`). One schema per message (each method's request, its updates while it runs, and its result), and `run.schema.json` for what they share. Transport-free: the CLI calls them in process, and a run server will serve the same messages. A request never carries a host path, a command line or a policy value. [docs/runs.md](../docs/runs.md) explains runs |
@@ -35,6 +35,23 @@ Every schema here, and every schema a plugin publishes, is strict (decision [#7]
   them ([docs/runners.md](../docs/runners.md#publishing-a-runners-schemas)).
 - **Codes are catalogued:** the error and notice schemas list every code, so an unlisted code doesn't validate,
   and each code's `details` keys are camelCase.
+
+## Nulls and absent fields
+
+A field with nothing to say is left out, never sent as `null` (issue
+[#76](https://github.com/troupe-run/troupe/issues/76)):
+
+- **Absent means "nothing to say".** Every optional property's description says what its absence means, for
+  example "Absent: the file didn't exist".
+- **A meaningful value beats absence.** Where a real value has its own meaning, it is used. Where one field decides
+  whether another exists, the schema says so: a run's end has an `exitCode`, `transcript` and `stderr` exactly
+  when the runner started, and a run summary has an `outcome` and `endedAt` exactly when the run has ended.
+- **No sentinels.** `""`, `-1` and the like never stand in for absence.
+- **`null` only where it says what absence can't.** The node then carries a marker:
+  `"x-troupe-null": {"kind": "clear" | "external", "means": "..."}`. `clear` is "clear this" in an update, where
+  `{"x": null}` and `{}` mean different things. `external` is a format troupe doesn't own requiring it. The one
+  null today is external: a runner's error response has `"id": null` when the request couldn't be read, as
+  JSON-RPC 2.0 requires.
 
 `packages/troupe/tests/test_protocol_strict.py` checks every schema against these rules, and fails naming the file
 and the location that breaks one. In the tests, every error and notice troupe constructs is validated against its

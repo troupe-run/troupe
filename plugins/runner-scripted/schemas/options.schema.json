@@ -7,6 +7,7 @@
   "additionalProperties": false,
   "properties": {
     "script": {
+      "description": "The script, inline. Absent: scriptPath names the file that holds it. Exactly one of the two is given.",
       "$ref": "#/$defs/script"
     },
     "scriptPath": {
@@ -97,6 +98,7 @@
                       "type": "string"
                     },
                     "encoding": {
+                      "description": "How record is encoded. Absent: utf-8.",
                       "enum": [
                         "utf-8",
                         "base64"
@@ -267,15 +269,18 @@
           "const": "init"
         },
         "runId": {
+          "description": "The run id to send. Absent: the run's own id. A script sets one only to test how a wrong id is handled.",
           "$ref": "https://troupe.run/protocol/runner/jsonrpc.schema.json#/$defs/runId"
         },
         "seq": {
+          "description": "The sequence number to send. Absent: the one after the last event sent.",
           "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/seq"
         },
         "runner": {
           "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/init/properties/runner"
         },
         "engine": {
+          "description": "The engine to report. Absent: the init names no engine.",
           "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/init/properties/engine"
         },
         "tools": {
@@ -296,9 +301,11 @@
           "const": "turn"
         },
         "runId": {
+          "description": "The run id to send. Absent: the run's own id. A script sets one only to test how a wrong id is handled.",
           "$ref": "https://troupe.run/protocol/runner/jsonrpc.schema.json#/$defs/runId"
         },
         "seq": {
+          "description": "The sequence number to send. Absent: the one after the last event sent.",
           "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/seq"
         },
         "role": {
@@ -323,9 +330,11 @@
           "const": "tool_call"
         },
         "runId": {
+          "description": "The run id to send. Absent: the run's own id. A script sets one only to test how a wrong id is handled.",
           "$ref": "https://troupe.run/protocol/runner/jsonrpc.schema.json#/$defs/runId"
         },
         "seq": {
+          "description": "The sequence number to send. Absent: the one after the last event sent.",
           "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/seq"
         },
         "callId": {
@@ -354,9 +363,11 @@
           "const": "tool_result"
         },
         "runId": {
+          "description": "The run id to send. Absent: the run's own id. A script sets one only to test how a wrong id is handled.",
           "$ref": "https://troupe.run/protocol/runner/jsonrpc.schema.json#/$defs/runId"
         },
         "seq": {
+          "description": "The sequence number to send. Absent: the one after the last event sent.",
           "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/seq"
         },
         "callId": {
@@ -387,15 +398,18 @@
           "const": "retry"
         },
         "runId": {
+          "description": "The run id to send. Absent: the run's own id. A script sets one only to test how a wrong id is handled.",
           "$ref": "https://troupe.run/protocol/runner/jsonrpc.schema.json#/$defs/runId"
         },
         "seq": {
+          "description": "The sequence number to send. Absent: the one after the last event sent.",
           "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/seq"
         },
         "attempt": {
           "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/retry/properties/attempt"
         },
         "maxAttempts": {
+          "description": "How many attempts the retry reports in all. Absent: the retry doesn't say.",
           "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/retry/properties/maxAttempts"
         },
         "delayMs": {
@@ -405,6 +419,7 @@
           "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/retry/properties/reason"
         },
         "message": {
+          "description": "The retry's message. Absent: it sends none.",
           "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/retry/properties/message"
         }
       }
@@ -422,9 +437,11 @@
           "const": "log"
         },
         "runId": {
+          "description": "The run id to send. Absent: the run's own id. A script sets one only to test how a wrong id is handled.",
           "$ref": "https://troupe.run/protocol/runner/jsonrpc.schema.json#/$defs/runId"
         },
         "seq": {
+          "description": "The sequence number to send. Absent: the one after the last event sent.",
           "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/seq"
         },
         "level": {
@@ -448,9 +465,11 @@
           "const": "result"
         },
         "runId": {
+          "description": "The run id to send. Absent: the run's own id. A script sets one only to test how a wrong id is handled.",
           "$ref": "https://troupe.run/protocol/runner/jsonrpc.schema.json#/$defs/runId"
         },
         "seq": {
+          "description": "The sequence number to send. Absent: the one after the last event sent.",
           "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/seq"
         },
         "status": {
@@ -460,15 +479,19 @@
           "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/result/properties/message"
         },
         "turns": {
+          "description": "The turn count to report. Absent: the result reports none.",
           "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/result/properties/turns"
         },
         "durationMs": {
+          "description": "The duration to report. Absent: the result reports none.",
           "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/result/properties/durationMs"
         },
         "usage": {
+          "description": "The token counts to report. Absent: the result reports none.",
           "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/result/properties/usage"
         },
         "costUsd": {
+          "description": "The cost to report. Absent: the result reports none.",
           "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/result/properties/costUsd"
         }
       }
@@ -480,12 +503,15 @@
       "additionalProperties": false,
       "properties": {
         "event": {
+          "description": "A run event exactly as it was sent. Absent on a transcript line.",
           "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/event"
         },
         "transcript": {
+          "description": "A transcript record. Absent on an event line.",
           "type": "string"
         },
         "atMs": {
+          "description": "Milliseconds since the recording started. Absent: the line has no recorded time, so it plays without a delay.",
           "type": "integer",
           "minimum": 0
         }

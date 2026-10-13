@@ -80,11 +80,18 @@ The one use is `runner/error-response.schema.json`'s `id`:
 
 ### D2. Every optional property describes its absence, and the walker checks it
 
-A property that isn't in the same node's `required` list must have a `description`. The rule is per node on
-purpose. A property required only under a condition (`if`/`then`) is still sometimes absent, so it still needs a
-description. Today 138 optional properties have none. Most are runner event and scripted-runner fields such as
-`runId`/`seq` in a script, and `message`, `usage` and `costUsd`. Each gets a description that says what its absence
-means.
+A property that a node declaring an object (its `type` includes `object`) doesn't list in `required` must have
+a `description`. A branch that only refines a property the declaring node already has, such as each error code's
+`{"code": {"const": ...}}`, doesn't repeat it. A property required only under a condition (`if`/`then`) is still
+sometimes absent, so it still needs a description.
+
+Today 39 optional properties have none:
+- 26 in the scripted runner's options: `runId`/`seq` in a script line, `maxAttempts`, `message`, `usage`, `costUsd`.
+- 9 in run events.
+- 3 in the error fields.
+- 1 in `status`'s request.
+
+Each gets a description that says what its absence means.
 
 The walker checks that a description exists, not what it says. A human reviews the wording.
 
@@ -181,7 +188,7 @@ the runner contract's version 0 does (strict-schemas D9).
   fixtures.
 - [`_stored` removing top-level nulls hides a field the aggregate forgot to default] → The test on `@event`
   parameter defaults (D4) fails first. The round-trip tests load each run aggregate back from the store.
-- [138 new descriptions are written quickly and say nothing] → Each must say what absence means, not restate the
+- [39 new descriptions are written quickly and say nothing] → Each must say what absence means, not restate the
   name. Review reads them as a list (`tasks.md` 1.4 prints them).
 - [`if`/`then`/`else` schemas give worse validation messages] → The guard's failures name the schema location.
   Python gives its own messages and doesn't use the schema to explain them.
