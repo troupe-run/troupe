@@ -20,12 +20,10 @@ def outcome(name: str) -> dict[str, Any]:
     """An outcome as the run host derives it (Run.Ended's schema), for a run that ended ``name``."""
     return {
         "outcome": name,
-        "error": None,
-        "result": None,
         "exitCode": 0,
         "ending": "exited",
-        "transcript": None,
-        "stderr": None,
+        "transcript": "sha256:" + "a" * 64,
+        "stderr": "sha256:" + "b" * 64,
         "limits": RunLimits().to_data(),
     }
 

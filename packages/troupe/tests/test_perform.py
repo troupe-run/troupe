@@ -15,7 +15,7 @@ from troupe.core import defaults, strict_json
 from troupe.core.errors import TroupeError
 from troupe.core.files import directory_lock
 from troupe.core.runners.limits import RunLimits
-from troupe.core.runs.aggregate import ENDED, REPORTED, STARTED
+from troupe.core.runs.aggregate import ENDED, REPORTED, STARTED, Run
 from troupe.core.runs.perform import lease_dir
 
 AGENT = {"kind": "agent", "id": "tester", "source": "troupe"}
@@ -186,7 +186,8 @@ def test_the_runs_end_records_the_outcome_and_error_the_host_derived(
     result = harness.perform(request(options, effect=effect))
     ended = states(history(harness, result.run.run_id))[-1]["outcome"]
     assert ended["outcome"] == outcome == result.run.outcome
-    assert (ended["error"] or {}).get("code") == code
+    assert ended.get("error", {}).get("code") == code
+    assert ("error" in ended) == (code is not None)
     assert (result.run.error.code if result.run.error else None) == code
 
 
@@ -205,9 +206,13 @@ def test_a_run_that_never_sends_init_records_its_start_without_a_runner_then_its
     result = harness.perform(request(script(INIT, OK)))
     records = history(harness, result.run.run_id)
     assert [r.topic for r in records] == [STARTED, ENDED]
-    assert states(records)[0]["runner_reported"] is None
+    assert "runner_reported" not in states(records)[0]
     assert result.run.runner.reported is None
+    assert "reported" not in result.run.to_data()["runner"]
     assert result.run.outcome == "could-not-start"
+    loaded = harness.stores[-1].load(UUID(result.run.run_id))
+    assert isinstance(loaded, Run)
+    assert loaded.runner_reported is None
 
 
 # 7.5: refusals leave nothing behind.
@@ -272,7 +277,7 @@ def test_a_failure_to_record_an_event_cancels_the_run_and_its_end_says_where_it_
     assert error.code == "run.recording-failed"
     assert error.details["failedAt"] == 2
     assert error.details["error"]["code"] == "artifact.write-failed"
-    assert error.details["endError"] is None
+    assert "endError" not in error.details
     run_id = error.details["run"]
     records = history(harness, run_id)
     assert [r.topic for r in records] == [STARTED, REPORTED, REPORTED, ENDED]
@@ -282,6 +287,21 @@ def test_a_failure_to_record_an_event_cancels_the_run_and_its_end_says_where_it_
     assert end["recording"]["error"]["code"] == "artifact.write-failed"
     transcript = end["outcome"]["transcript"]
     assert transcript in error.fix
+
+
+def test_when_only_the_end_cannot_be_recorded_the_error_has_an_end_error_and_no_failed_at(
+    tmp_path: Path,
+) -> None:
+    harness = Harness(theatre(tmp_path), store_wrapper=failing_at(-1, end_too=True))
+    with pytest.raises(TroupeError) as caught:
+        harness.perform(request(script(INIT, turn("one"), OK)))
+    error = caught.value
+    assert error.code == "run.recording-failed"
+    assert error.details["endError"]["code"] == "artifact.write-failed"
+    assert "failedAt" not in error.details
+    assert error.details["transcript"].startswith("sha256:")
+    records = history(harness, error.details["run"])
+    assert [r.topic for r in records] == [STARTED, REPORTED, REPORTED, REPORTED]
 
 
 def test_when_the_end_cannot_be_recorded_either_the_error_says_so_and_no_end_is_written(

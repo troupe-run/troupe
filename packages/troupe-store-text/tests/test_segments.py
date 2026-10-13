@@ -32,7 +32,7 @@ def test_a_session_writes_its_header_with_its_first_batch_and_appends_after(
     header, first, second = lines(segment)
     assert header == {
         "format": 1,
-        "segment": {"session": segment.stem, "vcs": "files", "branch": None},
+        "segment": {"session": segment.stem, "vcs": "files"},
     }
     assert (first["version"], second["version"]) == (1, 2)
     assert second["parents"] == [first["id"]]

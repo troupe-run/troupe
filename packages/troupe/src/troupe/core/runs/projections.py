@@ -82,28 +82,34 @@ class RunView:
             raise ValueError(f"run {self.run_id} has no recorded start to summarise")
         started = self.started
         outcome: dict[str, Any] = (self.ended or {}).get("outcome") or {}
-        return m.RunSummary.from_data(
-            {
-                "runId": self.run_id,
-                "actor": started["actor"],
-                "startedBy": self.started_by,
-                "runner": {
+        summary = {
+            "runId": self.run_id,
+            "actor": started["actor"],
+            "startedBy": self.started_by,
+            "runner": _present(
+                {
                     "requested": started["runner_requested"],
-                    "reported": started["runner_reported"],
-                },
-                "stage": started["stage"],
-                "effectCheck": started["effect_check"],
-                "state": state,
-                "outcome": outcome.get("outcome"),
-                "error": outcome.get("error"),
-                "events": self.events,
-                "startedAt": self.started_at,
-                "endedAt": self.ended_at,
-                "transcript": outcome.get("transcript"),
-                "stderr": outcome.get("stderr"),
-                "recording": (self.ended or {}).get("recording"),
-            }
-        )
+                    "reported": started.get("runner_reported"),
+                }
+            ),
+            "stage": started["stage"],
+            "effectCheck": started["effect_check"],
+            "state": state,
+            "outcome": outcome.get("outcome"),
+            "error": outcome.get("error"),
+            "events": self.events,
+            "startedAt": self.started_at,
+            "endedAt": self.ended_at,
+            "transcript": outcome.get("transcript"),
+            "stderr": outcome.get("stderr"),
+            "recording": (self.ended or {}).get("recording"),
+        }
+        return m.RunSummary.from_data(_present(summary))
+
+
+def _present(data: dict[str, Any]) -> dict[str, Any]:
+    """``data`` without the fields that have nothing to say: absent, never null (omit-nulls)."""
+    return {key: value for key, value in data.items() if value is not None}
 
 
 def logged(run_id: str, reported: Mapping[str, Any], at: str) -> m.LoggedEvent:

@@ -419,7 +419,22 @@ def test_a_retry_is_announced_with_its_attempt_and_reason(tmp_path: Path) -> Non
     (notice,) = ran.notices
     assert notice.code == "run.retrying"
     assert notice.details["attempt"] == 1
+    assert notice.details["maxAttempts"] == 10
     assert notice.details["reason"] == "rate-limit"
+
+
+def test_a_retry_that_doesnt_say_how_many_attempts_is_announced_without_max_attempts(
+    tmp_path: Path,
+) -> None:
+    retry = {key: value for key, value in RETRY.items() if key != "maxAttempts"}
+    ran = _run(
+        tmp_path,
+        {"steps": [{"event": INIT}, {"event": {**retry, "reason": "network"}}, {"event": OK}]},
+    )
+    (notice,) = ran.notices
+    assert notice.code == "run.retrying"
+    assert "maxAttempts" not in notice.details
+    assert "attempt 1," in notice.problem
 
 
 def test_an_authentication_retry_cancels_the_run_at_once_and_fails_it(tmp_path: Path) -> None:

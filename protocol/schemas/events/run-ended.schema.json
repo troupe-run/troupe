@@ -8,8 +8,7 @@
   "required": [
     "lineage",
     "timestamp",
-    "outcome",
-    "recording"
+    "outcome"
   ],
   "properties": {
     "lineage": {
@@ -23,12 +22,7 @@
       "additionalProperties": false,
       "required": [
         "outcome",
-        "error",
-        "result",
-        "exitCode",
         "ending",
-        "transcript",
-        "stderr",
         "limits"
       ],
       "properties": {
@@ -43,34 +37,16 @@
           ]
         },
         "error": {
-          "anyOf": [
-            {
-              "$ref": "../error.schema.json"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "description": "Why the run didn't succeed. Absent: the outcome has no error.",
+          "$ref": "../error.schema.json"
         },
         "result": {
-          "anyOf": [
-            {
-              "$ref": "../runner/run-event.schema.json#/$defs/result"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "description": "The result event the runner sent. Absent: it sent none, or never started.",
+          "$ref": "../runner/run-event.schema.json#/$defs/result"
         },
         "exitCode": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "description": "The runner process's exit code. Present exactly when the runner started (ending isn't never-started).",
+          "type": "integer"
         },
         "ending": {
           "enum": [
@@ -80,24 +56,12 @@
           ]
         },
         "transcript": {
-          "anyOf": [
-            {
-              "$ref": "../lineage.schema.json#/$defs/hash"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "description": "The transcript's artifact reference. Present exactly when the runner started.",
+          "$ref": "../lineage.schema.json#/$defs/hash"
         },
         "stderr": {
-          "anyOf": [
-            {
-              "$ref": "../lineage.schema.json#/$defs/hash"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "description": "The artifact reference of the runner's standard error. Present exactly when the runner started.",
+          "$ref": "../lineage.schema.json#/$defs/hash"
         },
         "limits": {
           "description": "The limits the run ran under, by setting.",
@@ -152,32 +116,47 @@
             }
           }
         }
+      },
+      "if": {
+        "properties": {
+          "ending": {
+            "const": "never-started"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "exitCode": false,
+          "transcript": false,
+          "stderr": false,
+          "result": false
+        }
+      },
+      "else": {
+        "required": [
+          "exitCode",
+          "transcript",
+          "stderr"
+        ]
       }
     },
     "recording": {
-      "description": "null, or where recording the run's events failed and why.",
-      "anyOf": [
-        {
-          "type": "null"
+      "description": "Where recording the run's events failed, and why. Absent: recording didn't fail.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "failedAt",
+        "error"
+      ],
+      "properties": {
+        "failedAt": {
+          "type": "integer",
+          "minimum": 0
         },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "failedAt",
-            "error"
-          ],
-          "properties": {
-            "failedAt": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "error": {
-              "$ref": "../error.schema.json"
-            }
-          }
+        "error": {
+          "$ref": "../error.schema.json"
         }
-      ]
+      }
     }
   }
 }

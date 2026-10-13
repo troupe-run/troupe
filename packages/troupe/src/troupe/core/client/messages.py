@@ -119,7 +119,7 @@ class ReportedRunner(Message):
 @dataclass(frozen=True)
 class RunnerData(Message):
     requested: str = json_field("requested", pattern=RUNNER_NAME)
-    reported: ReportedRunner | None = json_field("reported", nullable=True)
+    reported: ReportedRunner | None = json_field("reported", default=None)
 
 
 @dataclass(frozen=True)
@@ -128,8 +128,11 @@ class RecordingFailure(Message):
     error: p.ErrorData = json_field("error")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class RunSummary(Message):
+    """A run as status, logs and perform report it. A field with nothing to say is left out; an
+    ended run, and only an ended one, has an outcome and an end time."""
+
     run_id: str = json_field("runId", pattern=p.RUN_ID_PATTERN)
     actor: str = json_field("actor", pattern=ACTOR_NAME)
     started_by: ActorData = json_field("startedBy")
@@ -137,14 +140,19 @@ class RunSummary(Message):
     stage: StageData = json_field("stage")
     effect_check: EffectCheck = json_field("effectCheck")
     state: State = json_field("state")
-    outcome: OutcomeName | None = json_field("outcome", nullable=True)
-    error: p.ErrorData | None = json_field("error", nullable=True)
+    outcome: OutcomeName | None = json_field("outcome", default=None)
+    error: p.ErrorData | None = json_field("error", default=None)
     events: int = json_field("events", minimum=0)
     started_at: str = json_field("startedAt", pattern=TIME)
-    ended_at: str | None = json_field("endedAt", nullable=True, pattern=TIME)
-    transcript: str | None = json_field("transcript", nullable=True, pattern=p.REF_PATTERN)
-    stderr: str | None = json_field("stderr", nullable=True, pattern=p.REF_PATTERN)
-    recording: RecordingFailure | None = json_field("recording", nullable=True)
+    ended_at: str | None = json_field("endedAt", default=None, pattern=TIME)
+    transcript: str | None = json_field("transcript", default=None, pattern=p.REF_PATTERN)
+    stderr: str | None = json_field("stderr", default=None, pattern=p.REF_PATTERN)
+    recording: RecordingFailure | None = json_field("recording", default=None)
+
+    def _check(self, where: str) -> None:
+        ended = self.state == "ended"
+        if ended != (self.outcome is not None) or ended != (self.ended_at is not None):
+            raise fail(where, "outcome and endedAt are present exactly when state is ended")
 
 
 HostEvent = (

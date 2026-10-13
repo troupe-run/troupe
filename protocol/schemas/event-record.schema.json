@@ -35,8 +35,7 @@
           "additionalProperties": false,
           "required": [
             "session",
-            "vcs",
-            "branch"
+            "vcs"
           ],
           "properties": {
             "session": {
@@ -47,10 +46,8 @@
               "minLength": 1
             },
             "branch": {
-              "type": [
-                "string",
-                "null"
-              ],
+              "description": "The branch the segment was written on. Absent: it was written with no branch (a detached HEAD, or an adapter without branches).",
+              "type": "string",
               "minLength": 1
             }
           }

@@ -29,7 +29,8 @@ LEFT_OUT_OF_THE_HASH = ("timestamp", "lineage")
 
 @dataclass(frozen=True)
 class Header:
-    """A segment's first line: who wrote it, and on which branch."""
+    """A segment's first line: who wrote it, and on which branch (None, and left out of the line,
+    for a segment written with no branch)."""
 
     session: str
     vcs: str
@@ -107,10 +108,10 @@ def content_id(
 
 
 def encode_header(header: Header) -> bytes:
-    line = {
-        "format": FORMAT,
-        "segment": {"session": header.session, "vcs": header.vcs, "branch": header.branch},
-    }
+    segment = {"session": header.session, "vcs": header.vcs}
+    if header.branch is not None:
+        segment["branch"] = header.branch
+    line = {"format": FORMAT, "segment": segment}
     return strict_json.dumps(line).encode("utf-8") + b"\n"
 
 
@@ -167,13 +168,23 @@ def decode(raw: bytes, path: Path, line: int) -> Header | Record:
 
 
 def _header(segment: object, path: Path, line: int) -> Header:
-    if not isinstance(segment, dict) or set(segment) != {"session", "vcs", "branch"}:
-        raise malformed(path, line, "a header's segment must have session, vcs and branch")
-    session, vcs, branch = segment["session"], segment["vcs"], segment["branch"]
+    if not isinstance(segment, dict) or set(segment) not in (
+        {"session", "vcs"},
+        {"session", "vcs", "branch"},
+    ):
+        raise malformed(
+            path, line, "a header's segment must have session and vcs, and may have branch"
+        )
+    session, vcs = segment["session"], segment["vcs"]
     if not (isinstance(session, str) and isinstance(vcs, str) and session and vcs):
         raise malformed(path, line, "a header's session and vcs must be non-empty strings")
-    if branch is not None and (not isinstance(branch, str) or not branch):
-        raise malformed(path, line, "a header's branch must be a non-empty string or null")
+    branch = segment.get("branch")
+    if "branch" in segment and not (isinstance(branch, str) and branch):
+        raise malformed(
+            path,
+            line,
+            "a header's branch must be a non-empty string, or left out when there is none",
+        )
     return Header(session=session, vcs=vcs, branch=branch)
 
 

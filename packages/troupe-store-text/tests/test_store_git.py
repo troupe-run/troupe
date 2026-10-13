@@ -5,6 +5,7 @@ import time
 from pathlib import Path
 from uuid import uuid4
 
+from event_schemas import is_valid
 from gitrepo import Repo, make_repo
 from storetesting import event, segments
 from troupe_store_text.store import TextStore
@@ -43,3 +44,15 @@ def test_switching_branches_mid_session_starts_a_new_segment(tmp_path: Path) -> 
         for path in segments(repo.path)
     ]
     assert sorted(branches) == ["feature", "main"]
+
+
+def test_a_session_on_a_detached_head_writes_a_header_with_no_branch(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path)
+    head = repo.commit_all()
+    repo.git("switch", "-q", "--detach", head)
+    store, _ = git_store(repo)
+    store.insert([event(uuid4(), 1)])
+    [segment] = segments(repo.path)
+    header = json.loads(segment.read_bytes().splitlines()[0])
+    assert header["segment"] == {"session": segment.stem, "vcs": "git"}
+    assert is_valid(header, "event-record.schema.json")

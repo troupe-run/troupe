@@ -263,6 +263,15 @@ def test_unknown_subcommand_with_no_near_match_points_at_help() -> None:
     error = usage_error("zzzzzz")
     assert error.code == "usage.unknown-command"
     assert "troupe --help" in error.fix
+    assert error.details == {"command": "zzzzzz"}
+
+
+def test_unknown_subcommand_near_a_command_names_the_suggestion_in_its_details() -> None:
+    assert usage_error("ecoh", "x").details == {"command": "ecoh", "suggestion": "echo"}
+
+
+def test_unknown_flag_with_no_near_match_has_no_suggestion_in_its_details() -> None:
+    assert usage_error("echo", "x", "--zzzzzz").details == {"flag": "--zzzzzz"}
 
 
 def test_unknown_flag_is_a_usage_error_that_names_the_flag() -> None:

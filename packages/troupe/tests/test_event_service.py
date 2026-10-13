@@ -2,13 +2,20 @@
 abandoned edits)."""
 
 import hashlib
+import importlib
+import inspect
 import json
+import pkgutil
+import typing
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
 import pytest
+from eventsourcing.domain import Aggregate, decorated_funcs, event
 
+import troupe.core
 from event_schemas import is_valid
 from gitrepo import make_repo
 from storetesting import ADA, Counter, files_service, git_service, segments, snapshot
@@ -464,3 +471,75 @@ def test_an_event_store_that_is_not_installed_is_refused_naming_the_installed_on
     assert caught.value.code == "events.unknown-store"
     assert caught.value.details["store"] == "nope"
     assert "text" in caught.value.details["installed"]
+
+
+# An event field that is None is left out when stored (spec: protocol; omit-nulls design D4).
+
+
+class Note(Aggregate):
+    """A test aggregate with an optional event field."""
+
+    @event("Written")
+    def __init__(self, text: str | None = None) -> None:
+        self.text = text
+
+
+def _troupe_aggregates() -> list[type[Aggregate]]:
+    for module in pkgutil.walk_packages(troupe.core.__path__, "troupe.core."):
+        importlib.import_module(module.name)
+    found: list[type[Aggregate]] = []
+    pending = list(Aggregate.__subclasses__())
+    while pending:
+        cls = pending.pop()
+        pending.extend(cls.__subclasses__())
+        if cls.__module__.startswith("troupe."):
+            found.append(cls)
+    return found
+
+
+def _event_methods(aggregate: type[Aggregate]) -> list[Callable[..., object]]:
+    methods: list[Callable[..., object]] = [aggregate.__init__]
+    for value in vars(aggregate).values():
+        if isinstance(value, type) and value in decorated_funcs:
+            methods.append(decorated_funcs[value])
+    return methods
+
+
+def _optional_without_a_default(method: Callable[..., object]) -> list[str]:
+    hints = typing.get_type_hints(method)
+    return [
+        name
+        for name, parameter in inspect.signature(method).parameters.items()
+        if name in hints
+        and type(None) in typing.get_args(hints[name])
+        and parameter.default is not None
+    ]
+
+
+def test_every_optional_event_field_defaults_to_none_so_a_record_without_it_reads_back() -> None:
+    aggregates = _troupe_aggregates()
+    assert aggregates, "found no troupe aggregate to check"
+    missing = {
+        f"{aggregate.__name__}.{method.__name__}": names
+        for aggregate in aggregates
+        for method in _event_methods(aggregate)
+        if (names := _optional_without_a_default(method))
+    }
+    assert missing == {}
+
+
+def test_an_event_field_that_is_none_is_left_out_of_the_stored_state(tmp_path: Path) -> None:
+    service = files_service(tmp_path)
+    service.command(via="cli").record(Note(text=None).collect_events())
+    [line] = recorded_lines(tmp_path)
+    assert "text" not in line["state"]
+    assert "null" not in json.dumps(line)
+
+
+def test_an_event_stored_without_its_none_field_reads_back(tmp_path: Path) -> None:
+    service = files_service(tmp_path)
+    note = Note(text=None)
+    service.command(via="cli").record(note.collect_events())
+    loaded = service.load(note.id)
+    assert isinstance(loaded, Note)
+    assert loaded.text is None

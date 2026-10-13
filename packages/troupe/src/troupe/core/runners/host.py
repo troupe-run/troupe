@@ -306,6 +306,13 @@ class _Run:
 
     def announce_retry(self, event: p.RetryEvent) -> None:
         of = f" of {event.max_attempts}" if event.max_attempts is not None else ""
+        details: dict[str, object] = {
+            "attempt": event.attempt,
+            "delayMs": event.delay_ms,
+            "reason": event.reason,
+        }
+        if event.max_attempts is not None:
+            details["maxAttempts"] = event.max_attempts
         self.notice(
             Notice(
                 "run.retrying",
@@ -313,12 +320,7 @@ class _Run:
                 f"{event.reason}), next in {event.delay_ms / 1000:g}s.",
                 fix="Wait; troupe stops the run at its limits. Check the credential if the reason "
                 "is authentication.",
-                details={
-                    "attempt": event.attempt,
-                    "maxAttempts": event.max_attempts,
-                    "delayMs": event.delay_ms,
-                    "reason": event.reason,
-                },
+                details=details,
             )
         )
 

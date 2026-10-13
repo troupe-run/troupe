@@ -33,10 +33,9 @@ def json_field(
     pattern: re.Pattern[str] | None = None,
     min_items: int | None = None,
     unique: bool = False,
-    nullable: bool = False,
 ) -> Any:  # noqa: ANN401 - dataclasses.field returns Any
-    """A field's JSON name and constraints. ``nullable`` accepts an explicit null; without it, an
-    optional field may be left out but never sent as null."""
+    """A field's JSON name and constraints. A field whose default is None is optional: it is left
+    out when it has nothing to say, and never sent or accepted as null (omit-nulls)."""
     metadata = {
         "json": name,
         "min_length": min_length,
@@ -44,7 +43,6 @@ def json_field(
         "pattern": pattern,
         "min_items": min_items,
         "unique": unique,
-        "nullable": nullable,
     }
     if default is MISSING:
         return field(metadata=metadata)
@@ -56,8 +54,6 @@ def fail(where: str, problem: str) -> ProtocolError:
 
 
 def _decode(value: object, hint: object, where: str, meta: Mapping[str, Any]) -> object:
-    if value is None and meta.get("nullable"):
-        return None
     origin = get_origin(hint)
     if origin in (types.UnionType, typing.Union):
         choices = [arg for arg in get_args(hint) if arg is not type(None)]

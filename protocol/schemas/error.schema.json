@@ -53,23 +53,16 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "command",
-            "suggestion"
+            "command"
           ],
           "properties": {
             "command": {
               "type": "string"
             },
             "suggestion": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "minLength": 1
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "description": "The closest known name. Absent: nothing was close enough to suggest.",
+              "type": "string",
+              "minLength": 1
             }
           }
         }
@@ -88,7 +81,6 @@
           "additionalProperties": false,
           "required": [
             "flag",
-            "suggestion",
             "command"
           ],
           "properties": {
@@ -97,15 +89,9 @@
               "minLength": 1
             },
             "suggestion": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "minLength": 1
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "description": "The closest known name. Absent: nothing was close enough to suggest.",
+              "type": "string",
+              "minLength": 1
             },
             "command": {
               "anyOf": [
@@ -489,19 +475,12 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "exitCode",
             "ending"
           ],
           "properties": {
             "exitCode": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "description": "The runner process's exit code. Present exactly when the runner started (ending isn't never-started).",
+              "type": "integer"
             },
             "ending": {
               "enum": [
@@ -510,6 +489,23 @@
                 "never-started"
               ]
             }
+          },
+          "if": {
+            "properties": {
+              "ending": {
+                "const": "never-started"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "exitCode": false
+            }
+          },
+          "else": {
+            "required": [
+              "exitCode"
+            ]
           }
         }
       },
@@ -610,19 +606,12 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "exitCode",
             "ending"
           ],
           "properties": {
             "exitCode": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "description": "The runner process's exit code. Present exactly when the runner started (ending isn't never-started).",
+              "type": "integer"
             },
             "ending": {
               "enum": [
@@ -631,6 +620,23 @@
                 "never-started"
               ]
             }
+          },
+          "if": {
+            "properties": {
+              "ending": {
+                "const": "never-started"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "exitCode": false
+            }
+          },
+          "else": {
+            "required": [
+              "exitCode"
+            ]
           }
         }
       },
@@ -1524,10 +1530,7 @@
           "additionalProperties": false,
           "required": [
             "run",
-            "failedAt",
-            "error",
-            "endError",
-            "transcript"
+            "error"
           ],
           "properties": {
             "run": {
@@ -1535,38 +1538,20 @@
               "minLength": 1
             },
             "failedAt": {
-              "anyOf": [
-                {
-                  "type": "integer",
-                  "minimum": 0
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "description": "The first run event's seq that wasn't recorded. Absent: every run event was recorded, and only the run's end failed.",
+              "type": "integer",
+              "minimum": 0
             },
             "error": {
               "$ref": "#"
             },
             "endError": {
-              "anyOf": [
-                {
-                  "$ref": "#"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "description": "Why the run's end couldn't be recorded either. Absent: the end was recorded.",
+              "$ref": "#"
             },
             "transcript": {
-              "anyOf": [
-                {
-                  "$ref": "lineage.schema.json#/$defs/hash"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "description": "The transcript's artifact reference, which is kept. Absent: the runner never started, so there is none.",
+              "$ref": "lineage.schema.json#/$defs/hash"
             }
           }
         }

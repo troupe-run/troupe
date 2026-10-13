@@ -259,14 +259,28 @@ def _recording_failed(
         problem=f"Run {run_id} couldn't be recorded {where}: {first.problem} The run was "
         f"stopped. {end}",
         fix=f"{first.fix} The run's transcript is kept as {transcript or 'nothing'}.",
-        details={
-            "run": run_id,
-            "failedAt": None if failure is None else failure[0],
-            "error": first.to_data(),
-            "endError": None if ended is None else ended.to_data(),
-            "transcript": transcript,
-        },
+        details=_recording_details(run_id, failure, first, transcript, ended=ended),
     )
+
+
+def _recording_details(
+    run_id: str,
+    failure: tuple[int, TroupeError] | None,
+    first: TroupeError,
+    transcript: str | None,
+    *,
+    ended: TroupeError | None,
+) -> dict[str, object]:
+    """run.recording-failed's details, leaving out what it can't name: no seq when only the end
+    failed, no end error when the end was recorded, no transcript when the runner never started."""
+    details: dict[str, object] = {"run": run_id, "error": first.to_data()}
+    if failure is not None:
+        details["failedAt"] = failure[0]
+    if ended is not None:
+        details["endError"] = ended.to_data()
+    if transcript is not None:
+        details["transcript"] = transcript
+    return details
 
 
 def _notice(notice: Notice) -> m.NoticeUpdate:
