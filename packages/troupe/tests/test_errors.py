@@ -53,8 +53,8 @@ def test_no_error_details_schema_defines_a_key_with_an_underscore(code: str) -> 
 
 
 def test_error_data_leaves_out_path_and_details_when_absent() -> None:
-    data = TroupeError("usage.invalid", problem="p", fix="f").to_data()
-    assert data == {"code": "usage.invalid", "problem": "p", "fix": "f"}
+    data = TroupeError("internal.unexpected", problem="p", fix="f").to_data()
+    assert data == {"code": "internal.unexpected", "problem": "p", "fix": "f"}
 
 
 def test_an_undeclared_error_code_is_refused() -> None:
@@ -64,7 +64,8 @@ def test_an_undeclared_error_code_is_refused() -> None:
 
 def test_each_error_code_maps_to_a_defined_exit_code() -> None:
     assert all(isinstance(exit_code, ExitCode) for exit_code in CODES.values())
-    assert TroupeError("usage.invalid", problem="p", fix="f").exit_code is ExitCode.USAGE
+    usage = TroupeError("usage.invalid", problem="p", fix="f", details={"command": None})
+    assert usage.exit_code is ExitCode.USAGE
 
 
 # Requirement: Every error, notice and recorded event is checked as tests make it

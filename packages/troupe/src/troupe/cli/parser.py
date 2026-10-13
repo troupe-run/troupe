@@ -6,16 +6,22 @@ Rules (spec: cli):
   guessing whether a value or an option was meant.
 - Unknown commands and flags are usage errors that name what wasn't recognised and suggest the
   closest valid alternative.
+- Every usage shape has its own code, names the command it concerns and points at its help. A
+  problem never carries a surface prefix such as ``troupe:``; the surface adds its own.
 
-argparse does the parsing (design D2). A pre-scan runs first, because argparse on its own accepts
-some dash-leading values as positionals (``-5``) and reports unknown names as untyped messages.
+argparse does the parsing (design D2 of bootstrap-repo). troupe judges the line first: a scan
+refuses unknown names and unseparated dash-leading values, because argparse on its own accepts
+some as positionals (``-5``), and a check compares the line with the command's declared arguments,
+because argparse reports what is missing or too much as untyped English that changes between
+Python versions (argparse-errors D1). argparse then only turns an accepted line into a namespace;
+if it still refuses, that is ``usage.invalid``, the backstop.
 """
 
 import argparse
 import difflib
-from collections.abc import Callable, Sequence
-from dataclasses import dataclass
-from typing import NoReturn, TextIO
+from collections.abc import Callable, Iterable, Sequence
+from dataclasses import dataclass, field
+from typing import Any, NoReturn, TextIO
 
 from troupe.core.errors import TroupeError
 from troupe.core.exit_codes import ExitCode
@@ -59,6 +65,133 @@ class _Parser(argparse.ArgumentParser):
         raise _RefusedError(message)
 
 
+# What a command declares (design D4)
+
+
+@dataclass(frozen=True)
+class _Option:
+    dest: str
+    name: str  # the option as the help shows it, such as ``--runner``
+    takes_value: bool
+    required: bool
+    convert: Callable[[str], Any] | None
+    choices: Iterable[Any] | None
+
+
+@dataclass(frozen=True)
+class _Positional:
+    dest: str
+    name: str  # as the usage line shows it, such as ``<run>``
+    least: int
+    most: int | None  # None: no limit
+    convert: Callable[[str], Any] | None
+    choices: Iterable[Any] | None
+
+
+@dataclass(frozen=True)
+class _Group:
+    dests: tuple[str, ...]
+    required: bool
+
+
+@dataclass(frozen=True)
+class _Declared:
+    options: tuple[_Option, ...]  # in declaration order
+    strings: dict[str, _Option]  # each option by every one of its strings
+    positionals: tuple[_Positional, ...]
+    groups: tuple[_Group, ...]
+
+    def name_of(self, dest: str) -> str:
+        return next(option.name for option in self.options if option.dest == dest)
+
+
+def _unsupported(
+    parser: argparse.ArgumentParser, action: argparse.Action, what: str
+) -> TroupeError:
+    return TroupeError(
+        "internal.unexpected",
+        problem=(
+            f"`{parser.prog}` declares `{'/'.join(action.option_strings) or action.dest}` with "
+            f"{what}, which troupe's command-line checks can't read."
+        ),
+        fix="This is a bug in troupe: declare the argument in a shape parser.py supports.",
+    )
+
+
+def _converter(
+    parser: argparse.ArgumentParser, action: argparse.Action
+) -> Callable[[str], Any] | None:
+    kind = action.type
+    if kind is None:
+        return None
+    if isinstance(kind, argparse.FileType) or not callable(kind):
+        # A FileType would open the file twice, once here and once in argparse (design D3).
+        raise _unsupported(parser, action, f"the type {kind!r}")
+    return kind
+
+
+def _declared(parser: argparse.ArgumentParser) -> _Declared:
+    """Everything troupe's checks need about ``parser``'s arguments. argparse keeps them private,
+    so this is the one place troupe reads its internals; a test pins it to the real commands."""
+    options: list[_Option] = []
+    strings: dict[str, _Option] = {}
+    positionals: list[_Positional] = []
+    for action in parser._actions:
+        if action.option_strings:
+            if action.nargs not in (None, 0):
+                raise _unsupported(parser, action, f"nargs={action.nargs!r}")
+            longs = [string for string in action.option_strings if string.startswith("--")]
+            option = _Option(
+                dest=action.dest,
+                name=(longs or list(action.option_strings))[0],
+                takes_value=action.nargs is None,
+                required=action.required,
+                convert=_converter(parser, action),
+                choices=action.choices if action.nargs is None else None,
+            )
+            options.append(option)
+            for string in action.option_strings:
+                strings[string] = option
+        elif action.nargs == argparse.PARSER:
+            continue  # the subcommand's slot, which the scan handles itself
+        else:
+            least, most = _counts(parser, action)
+            metavar = action.metavar if isinstance(action.metavar, str) else action.dest
+            positionals.append(
+                _Positional(
+                    dest=action.dest,
+                    name=f"<{metavar}>",
+                    least=least,
+                    most=most,
+                    convert=_converter(parser, action),
+                    choices=action.choices,
+                )
+            )
+    groups = tuple(
+        _Group(tuple(action.dest for action in group._group_actions), group.required)
+        for group in parser._mutually_exclusive_groups
+    )
+    return _Declared(tuple(options), strings, tuple(positionals), groups)
+
+
+def _counts(parser: argparse.ArgumentParser, action: argparse.Action) -> tuple[int, int | None]:
+    nargs = action.nargs
+    if nargs is None:
+        return 1, 1
+    if nargs == argparse.OPTIONAL:
+        return 0, 1
+    if nargs == argparse.ZERO_OR_MORE:
+        return 0, None
+    if nargs == argparse.ONE_OR_MORE:
+        return 1, None
+    if isinstance(nargs, int) and nargs >= 1:
+        return nargs, nargs
+    raise _unsupported(parser, action, f"nargs={nargs!r}")
+
+
+# The usage errors, each worded once (design D5)
+
+
 def _help_fix(command: str | None) -> str:
     return HELP_FIX if command is None else f"Run `troupe {command} --help` to see its options."
 
@@ -69,36 +202,8 @@ def _invalid(message: str, command: str | None) -> TroupeError:
         "usage.invalid",
         problem=message if command is None else f"`troupe {command}`: {message}",
         fix=_help_fix(command),
+        details={"command": command},
     )
-
-
-def _global_options() -> _Parser:
-    options = _Parser(add_help=False)
-    # SUPPRESS: a flag missing from the subcommand's part of the line must not reset one given
-    # before the subcommand.
-    options.add_argument(
-        "--version", action="store_true", default=argparse.SUPPRESS, help="show the version"
-    )
-    options.add_argument(
-        "-h", "--help", action="store_true", default=argparse.SUPPRESS, help="show this help"
-    )
-    return options
-
-
-def _new_parser(prog: str, description: str, parents: list[_Parser]) -> _Parser:
-    return _Parser(
-        prog=prog,
-        description=description,
-        parents=parents,
-        add_help=False,
-        allow_abbrev=False,
-        exit_on_error=False,
-    )
-
-
-def _options_of(parser: argparse.ArgumentParser) -> dict[str, argparse.Action]:
-    # argparse keeps its option table private; this is the one place troupe reads it.
-    return dict(parser._option_string_actions)
 
 
 def _suggest(token: str, candidates: Sequence[str]) -> str | None:
@@ -108,17 +213,20 @@ def _suggest(token: str, candidates: Sequence[str]) -> str | None:
 
 
 def _looks_like_a_flag(token: str) -> bool:
-    return token.startswith("--") or (len(token) >= 2 and token[1].isalpha())
+    return token.startswith("--") or (
+        token.startswith("-") and len(token) >= 2 and token[1].isalpha()
+    )
 
 
-def _unknown_flag(token: str, known: Sequence[str]) -> TroupeError:
+def _unknown_flag(token: str, known: Sequence[str], command: str | None) -> TroupeError:
     suggestion = _suggest(token, known)
-    hint = f"Did you mean `{suggestion}`? " if suggestion else f"{HELP_FIX} "
+    hint = f"Did you mean `{suggestion}`? " if suggestion else f"{_help_fix(command)} "
+    where = "a troupe option" if command is None else f"an option of `troupe {command}`"
     return TroupeError(
         "usage.unknown-flag",
-        problem=f"`{token}` is not a troupe option.",
+        problem=f"`{token}` is not {where}.",
         fix=f"{hint}If `{token}` is a value, put `--` before it.",
-        details={"flag": token, "suggestion": suggestion},
+        details={"flag": token, "suggestion": suggestion, "command": command},
     )
 
 
@@ -141,49 +249,206 @@ def _unknown_command(token: str, commands: Sequence[Command], flags: Sequence[st
     )
 
 
-def _prescan(
+def _missing_value(command: str, option: str) -> TroupeError:
+    return TroupeError(
+        "usage.missing-value",
+        problem=f"`troupe {command}` needs a value after {option}.",
+        fix=(
+            f"Give {option} a value, as `{option} <value>`, or as `{option}=<value>` if the "
+            "value starts with `-`."
+        ),
+        details={"command": command, "option": option},
+    )
+
+
+def _either(names: Sequence[str]) -> str:
+    return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} or {names[-1]}"
+
+
+def _conflicting(command: str, options: Sequence[str]) -> TroupeError:
+    return TroupeError(
+        "usage.conflicting-options",
+        problem=f"`troupe {command}` takes {_either(options)}, not both.",
+        fix=f"Remove one of them. {_help_fix(command)}",
+        details={"command": command, "options": list(options)},
+    )
+
+
+def _extra(command: str, value: str) -> TroupeError:
+    return TroupeError(
+        "usage.extra-argument",
+        problem=f"`troupe {command}` got an extra value, `{value}`.",
+        fix=_help_fix(command),
+        details={"command": command, "value": value},
+    )
+
+
+def _missing(command: str, name: str, argument: str) -> TroupeError:
+    return TroupeError(
+        "usage.missing-argument",
+        problem=f"`troupe {command}` needs {name}.",
+        fix=_help_fix(command),
+        details={"command": command, "argument": argument},
+    )
+
+
+def _missing_one_of(command: str, options: Sequence[str]) -> TroupeError:
+    return TroupeError(
+        "usage.missing-one-of",
+        problem=f"`troupe {command}` needs one of {_either(options)}.",
+        fix=_help_fix(command),
+        details={"command": command, "options": list(options)},
+    )
+
+
+def _invalid_value(command: str, name: str, value: str) -> TroupeError:
+    return TroupeError(
+        "usage.invalid-value",
+        problem=f"`troupe {command}` can't use `{value}` for {name}.",
+        fix=f"Run `troupe {command} --help` to see what {name} takes.",
+        details={"command": command, "argument": name, "value": value},
+    )
+
+
+# The scan and the check
+
+
+@dataclass
+class _Scan:
+    """What the line gave: the command, the options in the order given with their raw values, the
+    positional values, and the first option left without a value."""
+
+    chosen: str | None = None
+    given: dict[str, list[str]] = field(default_factory=dict)  # dest -> values, in line order
+    positionals: list[str] = field(default_factory=list)
+    without_value: str | None = None
+
+
+def _scan(
     argv: Sequence[str],
     root: argparse.ArgumentParser,
     subparsers: dict[str, argparse.ArgumentParser],
     commands: Sequence[Command],
-) -> tuple[str | None, set[str]]:
-    """Refuse unknown commands, unknown flags and unseparated dash-leading values.
-
-    Returns the chosen subcommand (if any) and the destinations of the options given.
-    """
-    known = _options_of(root)
-    chosen: str | None = None
-    given: set[str] = set()
-    args = iter(argv)
-    for arg in args:
+) -> _Scan:
+    """Refuse unknown commands, unknown flags and unseparated dash-leading values, in the order the
+    line meets them, and record what the line gave for the check."""
+    known = _declared(root).strings
+    scan = _Scan()
+    at = 0
+    while at < len(argv):
+        arg = argv[at]
+        at += 1
         if arg == "--":
+            if scan.chosen is not None:
+                scan.positionals.extend(argv[at:])
             break
         if arg.startswith("-"):
-            name = arg.split("=", 1)[0] if arg.startswith("--") else arg
-            action = known.get(name)
-            if action is None:
+            name, has_inline, inline = arg.partition("=") if arg.startswith("--") else (arg, "", "")
+            option = known.get(name)
+            if option is None:
                 if _looks_like_a_flag(arg):
-                    raise _unknown_flag(arg, sorted(known))
+                    raise _unknown_flag(arg, sorted(known), scan.chosen)
                 raise _dash_value(arg)
-            given.add(action.dest)
-            if action.nargs != 0 and "=" not in arg:
-                next(args, None)  # the option's value
+            values = scan.given.setdefault(option.dest, [])
+            if not option.takes_value:
+                continue
+            if has_inline:
+                values.append(inline)
+            elif at < len(argv) and argv[at] != "--" and not _looks_like_a_flag(argv[at]):
+                values.append(argv[at])
+                at += 1
+            elif scan.without_value is None:
+                scan.without_value = name
             continue
-        if chosen is None:
+        if scan.chosen is None:
             if arg not in subparsers:
                 raise _unknown_command(arg, commands, sorted(known))
-            chosen = arg
-            known = _options_of(subparsers[arg])
-    return chosen, given
+            scan.chosen = arg
+            known = _declared(subparsers[arg]).strings
+            continue
+        scan.positionals.append(arg)
+    return scan
+
+
+def _assign(
+    positionals: Sequence[_Positional], values: Sequence[str]
+) -> tuple[list[tuple[_Positional, list[str]]], list[str]]:
+    """Share ``values`` among ``positionals`` in order, each taking as many as it can while
+    leaving enough for those after it. Returns the shares and what is left over."""
+    shares: list[tuple[_Positional, list[str]]] = []
+    at = 0
+    for index, positional in enumerate(positionals):
+        later = sum(each.least for each in positionals[index + 1 :])
+        room = max(len(values) - at - later, 0)
+        take = room if positional.most is None else min(room, positional.most)
+        shares.append((positional, list(values[at : at + take])))
+        at += take
+    return shares, list(values[at:])
+
+
+def _converts(
+    convert: Callable[[str], Any] | None, choices: Iterable[Any] | None, value: str
+) -> bool:
+    try:
+        converted = value if convert is None else convert(value)
+    except (argparse.ArgumentTypeError, TypeError, ValueError):
+        return False
+    return choices is None or converted in choices
+
+
+def _check(command: str, declared: _Declared, scan: _Scan) -> None:
+    """Raise the first problem with the line, in the order of design D2."""
+    if scan.without_value is not None:
+        raise _missing_value(command, scan.without_value)
+    for group in declared.groups:
+        given = [dest for dest in scan.given if dest in group.dests]
+        if len(given) > 1:
+            raise _conflicting(command, [declared.name_of(dest) for dest in given[:2]])
+    shares, extra = _assign(declared.positionals, scan.positionals)
+    if extra:
+        raise _extra(command, extra[0])
+    for option in declared.options:
+        if option.required and option.dest not in scan.given:
+            raise _missing(command, option.name, option.name)
+    for positional, share in shares:
+        if len(share) < positional.least:
+            raise _missing(command, positional.name, positional.dest)
+    for group in declared.groups:
+        if group.required and not any(dest in scan.given for dest in group.dests):
+            raise _missing_one_of(command, [declared.name_of(dest) for dest in group.dests])
+    for option in declared.options:
+        for value in scan.given.get(option.dest, []):
+            if not _converts(option.convert, option.choices, value):
+                raise _invalid_value(command, option.name, value)
+    for positional, share in shares:
+        for value in share:
+            if not _converts(positional.convert, positional.choices, value):
+                raise _invalid_value(command, positional.name, value)
+
+
+def _global_options() -> _Parser:
+    options = _Parser(add_help=False)
+    # SUPPRESS: a flag missing from the subcommand's part of the line must not reset one given
+    # before the subcommand.
+    options.add_argument(
+        "--version", action="store_true", default=argparse.SUPPRESS, help="show the version"
+    )
+    options.add_argument(
+        "-h", "--help", action="store_true", default=argparse.SUPPRESS, help="show this help"
+    )
+    return options
 
 
 def parse(argv: Sequence[str], commands: Sequence[Command]) -> Parsed:
     """Parse ``argv`` against ``commands``. Raises TroupeError for any usage problem."""
     global_options = _global_options()
-    root = _new_parser(
-        "troupe",
-        "Run your development process with agents and people in named roles.",
-        [global_options],
+    root = _Parser(
+        prog="troupe",
+        description="Run your development process with agents and people in named roles.",
+        parents=[global_options],
+        add_help=False,
+        allow_abbrev=False,
+        exit_on_error=False,
     )
     subparsers: dict[str, argparse.ArgumentParser] = {}
     if commands:
@@ -201,24 +466,26 @@ def parse(argv: Sequence[str], commands: Sequence[Command]) -> Parsed:
             each.configure(sub)
             subparsers[each.name] = sub
 
-    chosen, given = _prescan(argv, root, subparsers, commands)
-    if given & {"help", "version"}:
+    scan = _scan(argv, root, subparsers, commands)
+    if scan.given.keys() & {"help", "version"}:
         # Help and version answer before anything else, so they work on an incomplete command line.
-        parser_for_help = subparsers[chosen] if chosen is not None else root
+        parser_for_help = subparsers[scan.chosen] if scan.chosen is not None else root
         return Parsed(
-            show_version="version" in given,
+            show_version="version" in scan.given,
             command=None,
             arguments=argparse.Namespace(),
             help_text=parser_for_help.format_help(),
         )
+    if scan.chosen is not None:
+        _check(scan.chosen, _declared(subparsers[scan.chosen]), scan)
     try:
         arguments = root.parse_args(argv)
     except argparse.ArgumentError as error:
-        raise _invalid(str(error), chosen) from error
+        raise _invalid(str(error), scan.chosen) from error
     except _RefusedError as refused:
-        raise _invalid(refused.message, chosen) from refused
+        raise _invalid(refused.message, scan.chosen) from refused
 
-    command = next((c for c in commands if c.name == chosen), None)
+    command = next((c for c in commands if c.name == scan.chosen), None)
     return Parsed(
         show_version=False,
         command=command,

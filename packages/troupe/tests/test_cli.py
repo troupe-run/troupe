@@ -6,15 +6,18 @@ import io
 import shutil
 import subprocess
 import sys
+from collections.abc import Callable, Sequence
 from importlib.metadata import version
 from pathlib import Path
-from typing import TextIO
+from typing import Any, TextIO
 
+import jsonschema
 import pytest
 
 from protocol_schemas import check_error
 from troupe.cli import COMMANDS, main
-from troupe.cli.parser import Command, parse
+from troupe.cli.parser import HELP_FIX, Command, _Declared, _declared, parse
+from troupe.cli.render import render_error
 from troupe.core.errors import TroupeError
 from troupe.core.exit_codes import ExitCode
 
@@ -44,10 +47,52 @@ def _run_crashing(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO)
     raise RuntimeError("boom")
 
 
+def _configure_choose(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--colour", choices=["red", "blue"])
+    parser.add_argument("count", nargs="?", type=int)
+
+
+class _RaisesInArgparse(argparse.Action):
+    """Fails only once argparse runs it, which troupe's own checks can't see."""
+
+    def __call__(
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values: str | Sequence[Any] | None,
+        option_string: str | None = None,
+    ) -> None:
+        raise argparse.ArgumentError(self, "refused by its action")
+
+
+class _ErrorsInArgparse(argparse.Action):
+    """Reports through the parser's ``error`` only once argparse runs it."""
+
+    def __call__(
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values: str | Sequence[Any] | None,
+        option_string: str | None = None,
+    ) -> None:
+        parser.error("refused by its action")
+
+
+def _configure_odd(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--raises", action=_RaisesInArgparse)
+    parser.add_argument("--errors", action=_ErrorsInArgparse)
+
+
+def _never_runs(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
+    raise AssertionError("a test-only command that only tests parsing ran")
+
+
 ECHO = Command("echo", "Print a value (test only).", _configure_echo, _run_echo)
 FAILING = Command("failing", "Fail with a path (test only).", lambda parser: None, _run_failing)
 CRASHING = Command("crashing", "Crash (test only).", lambda parser: None, _run_crashing)
-TEST_COMMANDS = (ECHO, FAILING, CRASHING)
+CHOOSE = Command("choose", "Take a choice and a count (test only).", _configure_choose, _never_runs)
+ODD = Command("odd", "Refuse only inside argparse (test only).", _configure_odd, _never_runs)
+TEST_COMMANDS = (ECHO, FAILING, CRASHING, CHOOSE, ODD)
 
 
 def run_cli(*argv: str, commands: tuple[Command, ...] = TEST_COMMANDS) -> tuple[int, str, str]:
@@ -155,6 +200,22 @@ def test_usage_error_data_matches_the_protocol_schema(argv: tuple[str, ...]) -> 
     check_error(usage_error(*argv).to_data())
 
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"code": "usage.invalid", "problem": "p", "fix": "f"},
+        {"code": "usage.unknown-flag", "problem": "p", "fix": "f",
+         "details": {"flag": "--x", "suggestion": None}},
+    ],
+    ids=["usage.invalid", "usage.unknown-flag"],
+)  # fmt: skip
+def test_usage_error_data_without_its_command_does_not_match_the_protocol_schema(
+    data: dict[str, object],
+) -> None:
+    with pytest.raises(jsonschema.ValidationError):
+        check_error(data)
+
+
 def test_internal_and_command_error_data_matches_the_protocol_schema() -> None:
     with pytest.raises(TroupeError) as caught:
         _run_failing(argparse.Namespace(), io.StringIO(), io.StringIO())
@@ -188,7 +249,7 @@ def test_unknown_flag_is_a_usage_error_that_names_the_flag() -> None:
     code, out, err = run_cli("echo", "x", "--bogus")
     assert code == ExitCode.USAGE
     assert out == ""
-    assert "`--bogus` is not a troupe option" in err
+    assert "`--bogus` is not an option of `troupe echo`" in err
 
 
 def test_unknown_flag_near_a_known_flag_suggests_it() -> None:
@@ -258,3 +319,253 @@ def test_a_command_s_usage_error_prints_the_troupe_prefix_once() -> None:
 def test_no_usage_problem_starts_with_the_troupe_prefix(argv: tuple[str, ...]) -> None:
     error = usage_error(*argv, commands=COMMANDS)
     assert not error.problem.startswith("troupe:")
+
+
+def refused(*argv: str) -> TroupeError:
+    """The usage error troupe's real commands give for ``argv``, after checking that running it
+    exits 2, prints nothing on stdout, renders exactly that error and matches the schema."""
+    error = usage_error(*argv, commands=COMMANDS)
+    check_error(error.to_data())
+    stdout, stderr = io.StringIO(), io.StringIO()
+    code = main(list(argv), stdout=stdout, stderr=stderr)
+    assert (code, stdout.getvalue()) == (ExitCode.USAGE, "")
+    assert stderr.getvalue() == render_error(error) + "\n"
+    return error
+
+
+# Requirement: A usage error names the command it concerns and points at its help
+
+
+def test_a_command_s_usage_error_names_the_command_and_points_at_its_help() -> None:
+    error = refused("logs")
+    assert "`troupe logs`" in error.problem
+    assert error.fix == "Run `troupe logs --help` to see its options."
+
+
+def test_an_error_before_any_command_points_at_the_root_help() -> None:
+    assert refused("nosuchthing").fix == HELP_FIX
+
+
+def test_unknown_flag_after_a_command_names_the_command_and_points_at_its_help() -> None:
+    error = refused("status", "--bogus")
+    assert error.code == "usage.unknown-flag"
+    assert error.problem == "`--bogus` is not an option of `troupe status`."
+    assert error.fix.startswith("Run `troupe status --help` to see its options. ")
+    assert error.details == {"flag": "--bogus", "suggestion": None, "command": "status"}
+
+
+def test_unknown_flag_before_any_command_has_no_command_and_points_at_the_root_help() -> None:
+    error = refused("--bogus")
+    assert error.problem == "`--bogus` is not a troupe option."
+    assert error.fix.startswith(HELP_FIX)
+    assert error.details == {"flag": "--bogus", "suggestion": None, "command": None}
+
+
+# Requirement: Each usage shape has its own code
+
+
+def test_a_missing_required_option_is_a_missing_argument_naming_it() -> None:
+    error = refused("perform", "tester", "--no-effect-check")
+    assert error.code == "usage.missing-argument"
+    assert error.problem == "`troupe perform` needs --runner."
+    assert error.fix == "Run `troupe perform --help` to see its options."
+    assert error.details == {"command": "perform", "argument": "--runner"}
+
+
+def test_a_missing_required_positional_is_a_missing_argument_naming_it() -> None:
+    error = refused("logs")
+    assert error.code == "usage.missing-argument"
+    assert error.problem == "`troupe logs` needs <run>."
+    assert error.details == {"command": "logs", "argument": "run"}
+
+
+def test_missing_arguments_are_reported_in_declaration_order() -> None:
+    error = refused("perform")
+    assert error.details == {"command": "perform", "argument": "--runner"}
+    assert refused("perform", "--runner", "scripted", "--no-effect-check").details == {
+        "command": "perform",
+        "argument": "actor",
+    }
+
+
+def test_a_required_group_with_none_given_is_a_missing_one_of_in_the_issue_s_words() -> None:
+    error = refused("perform", "tester", "--runner", "scripted")
+    assert error.code == "usage.missing-one-of"
+    assert error.details == {"command": "perform", "options": ["--expect", "--no-effect-check"]}
+    assert render_error(error) == (
+        "troupe: `troupe perform` needs one of --expect or --no-effect-check.\n"
+        "  fix: Run `troupe perform --help` to see its options."
+    )
+
+
+def test_two_options_of_an_exclusive_group_are_conflicting_options_naming_both() -> None:
+    error = refused(
+        "perform", "tester", "--runner", "scripted", "--expect", "out.txt", "--no-effect-check"
+    )
+    assert error.code == "usage.conflicting-options"
+    assert error.problem == "`troupe perform` takes --expect or --no-effect-check, not both."
+    assert error.details == {"command": "perform", "options": ["--expect", "--no-effect-check"]}
+
+
+def test_a_repeatable_option_given_twice_is_not_a_conflict() -> None:
+    parsed = parse(
+        ["perform", "tester", "--runner", "scripted", "--expect", "a.txt", "--expect", "b.txt"],
+        COMMANDS,
+    )
+    assert parsed.arguments.expect == ["a.txt", "b.txt"]
+
+
+@pytest.mark.parametrize(
+    ("argv", "command", "value"),
+    [
+        (("status", "one", "two"), "status", "two"),
+        (("logs", "abc", "def"), "logs", "def"),
+        (("status", "--", "-5", "-6"), "status", "-6"),
+    ],
+    ids=["status", "logs", "after-separator"],
+)
+def test_too_many_positional_values_is_an_extra_argument_naming_the_first_extra(
+    argv: tuple[str, ...], command: str, value: str
+) -> None:
+    error = refused(*argv)
+    assert error.code == "usage.extra-argument"
+    assert error.problem == f"`troupe {command}` got an extra value, `{value}`."
+    assert error.details == {"command": command, "value": value}
+
+
+@pytest.mark.parametrize(
+    ("argv", "option"),
+    [
+        (("status", "--limit"), "--limit"),
+        (("status", "--limit", "--json"), "--limit"),
+        (("status", "--limit", "--"), "--limit"),
+        (("perform", "tester", "--runner"), "--runner"),
+    ],
+    ids=["last", "before-a-flag", "before-the-separator", "perform"],
+)
+def test_an_option_with_no_value_is_a_missing_value_naming_it(
+    argv: tuple[str, ...], option: str
+) -> None:
+    error = refused(*argv)
+    assert error.code == "usage.missing-value"
+    assert error.problem == f"`troupe {argv[0]}` needs a value after {option}."
+    assert f"`{option}=<value>`" in error.fix
+    assert error.details == {"command": argv[0], "option": option}
+
+
+def test_a_dash_leading_option_value_still_reaches_argparse_as_a_value() -> None:
+    assert parse(["status", "--limit", "-5"], COMMANDS).arguments.limit == -5
+
+
+def test_a_value_its_type_rejects_is_an_invalid_value_naming_it() -> None:
+    error = refused("status", "--limit", "notanumber")
+    assert error.code == "usage.invalid-value"
+    assert error.problem == "`troupe status` can't use `notanumber` for --limit."
+    assert error.fix == "Run `troupe status --help` to see what --limit takes."
+    assert error.details == {"command": "status", "argument": "--limit", "value": "notanumber"}
+
+
+def test_a_value_outside_its_choices_is_an_invalid_value() -> None:
+    error = usage_error("choose", "--colour", "green")
+    check_error(error.to_data())
+    assert error.code == "usage.invalid-value"
+    assert error.details == {"command": "choose", "argument": "--colour", "value": "green"}
+
+
+def test_a_typed_positional_value_its_type_rejects_is_an_invalid_value() -> None:
+    error = usage_error("choose", "--colour", "red", "many")
+    assert error.code == "usage.invalid-value"
+    assert error.details == {"command": "choose", "argument": "<count>", "value": "many"}
+
+
+def test_what_was_typed_wrong_is_reported_before_what_is_missing() -> None:
+    error = refused("perform", "tester", "extra", "--no-effect-check")
+    assert error.code == "usage.extra-argument"
+    assert error.details == {"command": "perform", "value": "extra"}
+
+
+def test_help_still_answers_a_line_with_an_option_missing_its_value() -> None:
+    parsed = parse(["status", "--limit", "--help"], COMMANDS)
+    assert parsed.command is None
+    assert "--limit" in parsed.help_text
+
+
+# Requirement: An unanticipated usage problem is still reported as structured data
+
+
+@pytest.mark.parametrize("flag", ["--raises", "--errors"])
+def test_a_refusal_only_argparse_makes_is_usage_invalid_naming_the_command(flag: str) -> None:
+    code, out, err = run_cli("odd", flag, "x")
+    error = usage_error("odd", flag, "x")
+    check_error(error.to_data())
+    assert (code, out) == (ExitCode.USAGE, "")
+    assert error.code == "usage.invalid"
+    assert error.problem.startswith("`troupe odd`: ")
+    assert "refused by its action" in error.problem
+    assert error.fix == "Run `troupe odd --help` to see its options."
+    assert error.details == {"command": "odd"}
+    assert err.count("troupe:") == 1
+
+
+# What troupe reads from argparse (design D4)
+
+
+def _declared_for(command: Command) -> _Declared:
+    parser = argparse.ArgumentParser(prog=f"troupe {command.name}", add_help=False)
+    command.configure(parser)
+    return _declared(parser)
+
+
+def _shape(declared: _Declared) -> dict[str, object]:
+    return {
+        "options": [(o.name, o.takes_value, o.required, o.convert) for o in declared.options],
+        "positionals": [(p.dest, p.name, p.least, p.most) for p in declared.positionals],
+        "groups": [(g.dests, g.required) for g in declared.groups],
+    }
+
+
+def test_declared_reads_perform_status_and_logs_as_they_declare_their_arguments() -> None:
+    by_name = {command.name: _shape(_declared_for(command)) for command in COMMANDS}
+    assert by_name == {
+        "perform": {
+            "options": [
+                ("--runner", True, True, None),
+                ("--runner-options", True, False, None),
+                ("--instructions", True, False, None),
+                ("--expect", True, False, None),
+                ("--no-effect-check", False, False, None),
+            ],
+            "positionals": [("actor", "<actor>", 1, 1)],
+            "groups": [(("expect", "no_effect_check"), True)],
+        },
+        "status": {
+            "options": [("--limit", True, False, int), ("--json", False, False, None)],
+            "positionals": [("run", "<run>", 0, 1)],
+            "groups": [],
+        },
+        "logs": {
+            "options": [("--follow", False, False, None), ("--json", False, False, None)],
+            "positionals": [("run", "<run>", 1, 1)],
+            "groups": [],
+        },
+    }
+
+
+@pytest.mark.parametrize(
+    "declare",
+    [
+        lambda parser: parser.add_argument("--many", nargs="+"),
+        lambda parser: parser.add_argument("rest", nargs=argparse.REMAINDER),
+        lambda parser: parser.add_argument("--file", type=argparse.FileType("r")),
+    ],
+    ids=["option-nargs", "remainder", "file-type"],
+)
+def test_declared_refuses_an_argument_the_checks_cannot_read(
+    declare: Callable[[argparse.ArgumentParser], object],
+) -> None:
+    parser = argparse.ArgumentParser(prog="troupe odd", add_help=False)
+    declare(parser)
+    with pytest.raises(TroupeError) as caught:
+        _declared(parser)
+    assert caught.value.code == "internal.unexpected"
+    assert "`troupe odd`" in caught.value.problem
