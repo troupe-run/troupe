@@ -1,20 +1,32 @@
-"""The runner contract's JSON Schemas, loaded for validation in tests (spec: runner-protocol).
+"""The runner contract's JSON Schemas, for validation in tests (spec: runner-protocol).
 
-The schemas in protocol/schemas/ are the source of truth (decision #7). Every schema is registered
-under its $id, so relative $refs between them, including the shared error schema, resolve.
+The schemas in protocol/schemas/ are the source of truth (decision #7), loaded once by
+protocol_schemas, so references between them, including the shared error schema, resolve.
 """
 
-import json
-from functools import cache
 from pathlib import Path
 from typing import Any
 from urllib.parse import urljoin
 
 import jsonschema
-from referencing import Registry, Resource
-from referencing.jsonschema import DRAFT202012
+from referencing import Registry
 
-SCHEMAS = Path(__file__).resolve().parents[3] / "protocol" / "schemas"
+import protocol_schemas
+from protocol_schemas import SCHEMAS, load
+
+__all__ = [
+    "RESULT_SCHEMAS",
+    "RUNNER_SCHEMAS",
+    "SCHEMAS",
+    "is_valid",
+    "load",
+    "registry",
+    "schema_files",
+    "validate",
+    "validate_exchange",
+    "validator",
+]
+
 RUNNER_SCHEMAS = SCHEMAS / "runner"
 BASE = "https://troupe.run/protocol/runner/"
 
@@ -31,23 +43,13 @@ def schema_files() -> list[Path]:
     return sorted([SCHEMAS / "error.schema.json", *RUNNER_SCHEMAS.glob("*.schema.json")])
 
 
-def load(path: Path) -> dict[str, Any]:
-    data: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
-    return data
-
-
-@cache
 def registry() -> Registry[Any]:
-    resources = [
-        (schema["$id"], Resource.from_contents(schema, default_specification=DRAFT202012))
-        for schema in map(load, schema_files())
-    ]
-    return Registry().with_resources(resources)
+    return protocol_schemas.registry()
 
 
 def validator(ref: str) -> jsonschema.Draft202012Validator:
     """A validator for ``ref``, relative to the runner schemas (``file.schema.json#/$defs/x``)."""
-    return jsonschema.Draft202012Validator({"$ref": urljoin(BASE, ref)}, registry=registry())
+    return protocol_schemas.validator_for(urljoin(BASE, ref))
 
 
 def validate(instance: object, ref: str) -> None:

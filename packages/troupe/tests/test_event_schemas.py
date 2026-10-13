@@ -4,13 +4,11 @@
 import copy
 from typing import Any
 
-import jsonschema
 import pytest
 
 from event_schemas import (
     AT,
     ENFORCED,
-    FILES,
     HASH,
     LINEAGE,
     OTHER_HASH,
@@ -18,7 +16,6 @@ from event_schemas import (
     UNENFORCED_LOCAL,
     is_valid,
     lineage,
-    load,
     without,
 )
 
@@ -33,11 +30,6 @@ EVENT: dict[str, Any] = {
     "state": {"lineage": LINEAGE, "timestamp": AT, "name": "x"},
     "batch": {"id": ULID, "index": 0, "size": 1},
 }
-
-
-@pytest.mark.parametrize("name", FILES)
-def test_each_schema_is_a_valid_draft_2020_12_schema(name: str) -> None:
-    jsonschema.Draft202012Validator.check_schema(load(name))
 
 
 @pytest.mark.parametrize(

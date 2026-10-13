@@ -1,15 +1,13 @@
 """Tests for the runner contract's schemas (spec: runner-protocol)."""
 
 from collections.abc import Iterator
-from pathlib import Path
 from typing import Any
 
-import jsonschema
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from runner_schemas import RUNNER_SCHEMAS, is_valid, load, registry, schema_files, validate
+from runner_schemas import RUNNER_SCHEMAS, is_valid, load, validate
 
 RUN_ID = "0f8fad5b-d9cb-469f-a165-70867728950e"
 HASH = "sha256:" + "ab" * 32
@@ -30,27 +28,7 @@ def _refs(node: object) -> Iterator[str]:
 # Requirement: The contract is JSON Schema in the protocol directory
 
 
-@pytest.mark.parametrize("path", schema_files(), ids=lambda path: path.name)
-def test_each_schema_is_a_valid_draft_2020_12_schema(path: Path) -> None:
-    jsonschema.Draft202012Validator.check_schema(load(path))
-
-
-@pytest.mark.parametrize(
-    "path", sorted(RUNNER_SCHEMAS.glob("*.schema.json")), ids=lambda path: path.name
-)
-def test_every_ref_in_each_runner_schema_resolves(path: Path) -> None:
-    schema = load(path)
-    resolver = registry().resolver(base_uri=schema["$id"])
-    refs = list(_refs(schema))
-    for ref in refs:
-        resolver.lookup(ref)  # raises if the reference doesn't resolve
-
-
-@pytest.mark.parametrize(
-    "path", sorted(RUNNER_SCHEMAS.glob("*.schema.json")), ids=lambda path: path.name
-)
-def test_each_runner_schema_id_matches_its_file_name(path: Path) -> None:
-    assert load(path)["$id"] == f"https://troupe.run/protocol/runner/{path.name}"
+# The draft, $id and reference checks for every schema are in test_protocol_strict.py.
 
 
 def _request(method: str, params: dict[str, Any], id_: int = 1) -> dict[str, Any]:

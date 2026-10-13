@@ -4,10 +4,9 @@ client-protocol; perform-status-logs design D2)."""
 import copy
 from typing import Any
 
-import jsonschema
 import pytest
 
-from client_schemas import CLIENT_SCHEMAS, MESSAGES, is_valid, load
+from client_schemas import CLIENT_SCHEMAS, MESSAGES, is_valid
 
 RUN_ID = "0f8fad5b-d9cb-469f-a165-70867728950e"
 HASH = "sha256:" + "ab" * 32
@@ -70,13 +69,6 @@ def test_each_method_has_exactly_its_message_schemas() -> None:
     files = {path.name for path in CLIENT_SCHEMAS.glob("*.schema.json")}
     expected = {name for parts in MESSAGES.values() for name in parts.values()}
     assert files == expected | {"run.schema.json"}
-
-
-@pytest.mark.parametrize("path", sorted(CLIENT_SCHEMAS.glob("*.schema.json")), ids=lambda p: p.name)
-def test_each_schema_is_a_valid_draft_2020_12_schema_with_its_id(path: Any) -> None:  # noqa: ANN401
-    schema = load(path)
-    jsonschema.Draft202012Validator.check_schema(schema)
-    assert schema["$id"] == f"https://troupe.run/protocol/client/{path.name}"
 
 
 ACCEPTED = [
