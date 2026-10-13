@@ -39,7 +39,7 @@ as a hand edit to a file), and SHALL NOT be used when identity resolution fails.
 
 ### Requirement: Lineage says how, when and why
 Lineage SHALL record `via` (the surface the event came through, such as `cli`, `file` or `runner`), the time in UTC,
-the reason (which may be absent, recorded as an explicit null), the change ID (the correlation ID shared by every
+the reason (left out when none was given, never recorded as null), the change ID (the correlation ID shared by every
 event that follows from one command), the cause, and the approvals given (an empty list when none).
 
 #### Scenario: Events from one command share a change ID
@@ -50,6 +50,14 @@ event that follows from one command), the cause, and the approvals given (an emp
 #### Scenario: Time is UTC
 - **WHEN** an event is recorded
 - **THEN** its lineage time is an RFC 3339 timestamp in UTC
+
+#### Scenario: No reason given
+- **WHEN** a command records an event without a reason
+- **THEN** its lineage has no `reason` field
+
+#### Scenario: A null reason is refused
+- **WHEN** an event is recorded with lineage whose `reason` is `null`
+- **THEN** recording fails with `events.lineage-invalid`, and nothing is written
 
 ### Requirement: Lineage names each event's cause
 Lineage SHALL name the event's cause, never null. An event a command records directly SHALL have a command cause
@@ -79,10 +87,11 @@ ID, and SHALL carry that event's change ID, so correlation follows a chain of re
 - **THEN** recording fails, and nothing is written
 
 ### Requirement: Lineage records the version-control state
-Lineage SHALL record the VCS adapter in use, the branch (null when detached or when the adapter has no branches)
-and HEAD (null when there is no commit). An event made from a file SHALL also record the file's theatre-relative
-path and the content hashes of the file before and after the change (null for a file that didn't exist, or no
-longer exists).
+Lineage SHALL record the VCS adapter in use, the branch (left out when HEAD is detached or the adapter has no
+branches; the adapter tells which) and HEAD (left out when there is no commit). An event made from a file SHALL also
+record the file's theatre-relative path and the content hashes of the file before and after the change (each left
+out for a file that didn't exist, or no longer exists). An event not made from a file SHALL have no `source`. None
+of these SHALL be recorded as null.
 
 #### Scenario: An event recorded on a git branch
 - **WHEN** an event is recorded in a git theatre on branch `main`
@@ -93,9 +102,22 @@ longer exists).
 - **THEN** its lineage holds the file's path relative to the theatre, with `/` separators, and the before and
   after content hashes
 
+#### Scenario: An event made from a new file
+- **WHEN** an event records a file that didn't exist before
+- **THEN** its lineage's `source` has the path and `after`, and no `before`
+
 #### Scenario: A theatre with no version control
 - **WHEN** an event is recorded in a theatre using the plain filesystem adapter
-- **THEN** its lineage names that adapter, with null branch and HEAD
+- **THEN** its lineage names that adapter, with no `branch` and no `head`
+
+#### Scenario: A detached HEAD
+- **WHEN** an event is recorded in a git theatre whose HEAD is detached
+- **THEN** its lineage names the git adapter and HEAD, with no `branch`
+
+#### Scenario: A null in the version-control state is refused
+- **WHEN** an event is recorded with lineage whose `vcs.branch`, `vcs.head`, `vcs.source`, `vcs.source.before` or
+  `vcs.source.after` is `null`
+- **THEN** recording fails with `events.lineage-invalid`, and nothing is written
 
 ### Requirement: Lineage is defined once, language-neutrally
 The lineage shape SHALL be defined as JSON Schema in the protocol, and troupe's own types SHALL be checked against
@@ -105,23 +127,27 @@ it, so the two can't drift.
 - **WHEN** lineage built by troupe for each actor kind and each via is serialised
 - **THEN** it validates against the lineage schema
 
-### Requirement: Lineage records the stage and whether effects were enforced
-Lineage SHALL record `stage`: null for an event recorded outside a stage, or the stage's name and whether the actor's
-effects were `enforced` or `unenforced`. An unenforced stage SHALL name the policy setting, and its source, that
-allowed it; an enforced one SHALL name none.
+### Requirement: Lineage records the stage an event's run was on
+Lineage SHALL record `stage` for an event recorded on a stage: the stage's name and whether the actor's effects were
+`enforced` or `unenforced`. An event recorded outside a stage SHALL have no `stage`. An unenforced stage SHALL name
+the policy setting, and its source, that allowed it, in `allowedBy`; an enforced one SHALL have no `allowedBy`.
 
 #### Scenario: An event recorded outside a stage
 - **WHEN** a command records an event that isn't part of a run
-- **THEN** its lineage has `stage` null
+- **THEN** its lineage has no `stage` field
 
 #### Scenario: A run on the local stage
 - **WHEN** a run on the local stage, allowed by `allow_unenforced_local_stage` from `env`, records an event
 - **THEN** its lineage's `stage` names `local`, effects `unenforced`, and the setting and source that allowed it
 
+#### Scenario: An enforced stage
+- **WHEN** a run on a stage that enforces its effects records an event
+- **THEN** its lineage's `stage` names the stage and effects `enforced`, with no `allowedBy`
+
 #### Scenario: Unenforced without an allowance is refused
 - **WHEN** an event is recorded with a `stage` whose effects are `unenforced` and that names nothing that allowed it
 - **THEN** recording fails with `events.lineage-invalid`, and nothing is written
 
-#### Scenario: Stage is never missing
-- **WHEN** an event is recorded with lineage that has no `stage` field
-- **THEN** recording fails with `events.lineage-invalid`
+#### Scenario: A null stage is refused
+- **WHEN** an event is recorded with lineage whose `stage` or `stage.allowedBy` is `null`
+- **THEN** recording fails with `events.lineage-invalid`, and nothing is written
