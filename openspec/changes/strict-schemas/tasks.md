@@ -2,15 +2,15 @@
 
 ## 1. The strictness check
 
-- [ ] 1.1 Add `packages/troupe/tests/protocol_schemas.py`: one registry of every schema in `protocol/schemas/` and
+- [x] 1.1 Add `packages/troupe/tests/protocol_schemas.py`: one registry of every schema in `protocol/schemas/` and
   `plugins/*/schemas/`, registered under their `$id`s (design D4). Make `runner_schemas.py`, `client_schemas.py` and
   `event_schemas.py` delegate to it, keeping their public functions. Verify the existing schema tests pass unchanged
-- [ ] 1.2 Add the walker (design D1) with its evaluation-context flag, and `test_protocol_strict.py`: one test per
+- [x] 1.2 Add the walker (design D1) with its evaluation-context flag, and `test_protocol_strict.py`: one test per
   bad-schema fixture (open object, annotation-only value, `true`, `{}`, map without `propertyNames`, array without
   `items`, an unknown subschema-holding keyword), each asserting the walker reports that fixture at the expected JSON
   Pointer; and one accepting a `oneOf` branch with properties under an enclosing `unevaluatedProperties: false`.
   Verify the fixtures' tests pass
-- [ ] 1.3 Add the test that runs the walker over every shipped schema, plus the draft 2020-12, `$id`-matches-path and
+- [x] 1.3 Add the test that runs the walker over every shipped schema, plus the draft 2020-12, `$id`-matches-path and
   references-resolve checks for every file (moving the runner-only versions of those into it). Mark it
   `xfail(strict=True)` with the reason "open fields on main, closed by groups 2 to 6". Verify it xfails, listing
   exactly the fields in design Context and no others (record the list for the PR)

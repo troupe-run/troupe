@@ -1,20 +1,16 @@
 """The client protocol's JSON Schemas, loaded for validation in tests (spec: client-protocol).
 
-Every schema under protocol/schemas/ is registered under its $id, so the client schemas' references
+Every schema is loaded once by protocol_schemas, under its $id, so the client schemas' references
 to lineage, errors, notices and run events resolve.
 """
 
-import json
-from functools import cache
-from pathlib import Path
-from typing import Any
 from urllib.parse import urljoin
 
 import jsonschema
-from referencing import Registry, Resource
-from referencing.jsonschema import DRAFT202012
 
-SCHEMAS = Path(__file__).resolve().parents[3] / "protocol" / "schemas"
+import protocol_schemas
+from protocol_schemas import SCHEMAS, load
+
 CLIENT_SCHEMAS = SCHEMAS / "client"
 BASE = "https://troupe.run/protocol/client/"
 MESSAGES = {
@@ -28,22 +24,12 @@ MESSAGES = {
 """Each method's messages, by part."""
 
 
-def load(path: Path) -> dict[str, Any]:
-    data: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
-    return data
-
-
-@cache
-def registry() -> Registry[Any]:
-    return Registry().with_resources(
-        (schema["$id"], Resource.from_contents(schema, default_specification=DRAFT202012))
-        for schema in map(load, sorted(SCHEMAS.rglob("*.schema.json")))
-    )
+__all__ = ["CLIENT_SCHEMAS", "MESSAGES", "check", "is_valid", "load", "validator"]
 
 
 def validator(ref: str) -> jsonschema.Draft202012Validator:
     """A validator for ``ref``, relative to the client schemas."""
-    return jsonschema.Draft202012Validator({"$ref": urljoin(BASE, ref)}, registry=registry())
+    return protocol_schemas.validator_for(urljoin(BASE, ref))
 
 
 def is_valid(instance: object, ref: str) -> bool:
