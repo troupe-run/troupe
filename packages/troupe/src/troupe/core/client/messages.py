@@ -103,7 +103,7 @@ class StageData(Message):
 
     name: str = json_field("name", pattern=STAGE_NAME)
     effects: Literal["enforced", "unenforced"] = json_field("effects")
-    allowed_by: AllowanceData | None = json_field("allowedBy", nullable=True)
+    allowed_by: AllowanceData | None = json_field("allowedBy", default=None)
 
     def _check(self, where: str) -> None:
         if (self.effects == "unenforced") != (self.allowed_by is not None):

@@ -2,11 +2,12 @@
 
 The Python types mirror the schema, and lineage_problem checks data against the same rules by hand
 (jsonschema is a development dependency only); a test validates every shape built here against the
-schema, so the two can't drift.
+schema, so the two can't drift. A field with nothing to say is left out, never written as null
+(spec: protocol; omit-nulls).
 """
 
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Set
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal
@@ -79,14 +80,19 @@ class VcsState:
     source: Source | None = None
 
     def to_data(self) -> dict[str, Any]:
-        source = None
+        data: dict[str, Any] = {"adapter": self.adapter}
+        if self.branch is not None:
+            data["branch"] = self.branch
+        if self.head is not None:
+            data["head"] = self.head
         if self.source is not None:
-            source = {
-                "path": self.source.path,
-                "before": self.source.before,
-                "after": self.source.after,
-            }
-        return {"adapter": self.adapter, "branch": self.branch, "head": self.head, "source": source}
+            source = {"path": self.source.path}
+            if self.source.before is not None:
+                source["before"] = self.source.before
+            if self.source.after is not None:
+                source["after"] = self.source.after
+            data["source"] = source
+        return data
 
 
 Effects = Literal["enforced", "unenforced"]
@@ -118,10 +124,13 @@ class StageLineage:
             )
 
     def to_data(self) -> dict[str, Any]:
-        allowed = None
+        data: dict[str, Any] = {"name": self.name, "effects": self.effects}
         if self.allowed_by is not None:
-            allowed = {"setting": self.allowed_by.setting, "source": self.allowed_by.source}
-        return {"name": self.name, "effects": self.effects, "allowedBy": allowed}
+            data["allowedBy"] = {
+                "setting": self.allowed_by.setting,
+                "source": self.allowed_by.source,
+            }
+        return data
 
 
 @dataclass(frozen=True)
@@ -145,19 +154,22 @@ class Lineage:
     """None for an event recorded outside a stage."""
 
     def to_data(self) -> dict[str, Any]:
-        return {
+        data: dict[str, Any] = {
             "actor": actor_data(self.actor),
             "via": self.via,
             "at": self.at,
-            "reason": self.reason,
             "change": self.change,
             "cause": self.cause.to_data(),
             "approvals": [
                 {"actor": actor_data(a.actor), "role": a.role, "at": a.at} for a in self.approvals
             ],
             "vcs": self.vcs.to_data(),
-            "stage": None if self.stage is None else self.stage.to_data(),
         }
+        if self.reason is not None:
+            data["reason"] = self.reason
+        if self.stage is not None:
+            data["stage"] = self.stage.to_data()
+        return data
 
 
 def timestamp(moment: datetime) -> str:
@@ -174,27 +186,35 @@ def lineage_problem(data: object) -> str | None:
     """What is wrong with ``data`` as lineage, naming the field, or None if it is valid."""
     if not isinstance(data, Mapping):
         return "lineage must be an object"
-    expected = {"actor", "via", "at", "reason", "change", "cause", "approvals", "vcs", "stage"}
-    if set(data) != expected:
-        return _fields("lineage", set(data), expected)
+    problem = _fields("lineage", set(data), _LINEAGE_REQUIRED, {"reason", "stage"})
+    if problem:
+        return problem
     checks = (
         _actor_problem("actor", data["actor"]),
         None if data["via"] in VIA else f"via must be one of {', '.join(VIA)}",
         _match("at", data["at"], TIME, "an RFC 3339 UTC time with milliseconds and Z"),
         None
-        if data["reason"] is None or (isinstance(data["reason"], str) and data["reason"])
-        else "reason must be a non-empty string or null",
+        if "reason" not in data or _nonempty(data["reason"])
+        else "reason must be a non-empty string, or left out when none was given",
         _match("change", data["change"], ULID, "a ULID"),
         _cause_problem(data["cause"]),
         _approvals_problem(data["approvals"]),
         _vcs_problem(data["vcs"]),
-        _stage_problem(data["stage"]),
+        _stage_problem(data["stage"]) if "stage" in data else None,
     )
     return next((problem for problem in checks if problem), None)
 
 
-def _fields(where: str, found: set[str], expected: set[str]) -> str:
-    missing, extra = sorted(expected - found), sorted(found - expected)
+_LINEAGE_REQUIRED = frozenset({"actor", "via", "at", "change", "cause", "approvals", "vcs"})
+
+
+def _fields(
+    where: str, found: Set[str], required: Set[str], optional: Set[str] = frozenset()
+) -> str | None:
+    """What is wrong with an object's keys: a required one missing, or one it doesn't have."""
+    missing, extra = sorted(required - found), sorted(found - required - optional)
+    if not missing and not extra:
+        return None
     parts = [
         f"missing {', '.join(missing)}" if missing else "",
         f"unexpected {', '.join(extra)}" if extra else "",
@@ -220,8 +240,9 @@ def _actor_problem(name: str, actor: object) -> str | None:
         return None if set(actor) == {"kind"} else f"{name}: an unknown actor has only a kind"
     if kind not in ("human", "agent"):
         return f"{name}.kind must be human, agent or unknown"
-    if set(actor) != {"kind", "id", "source"}:
-        return _fields(name, set(actor), {"kind", "id", "source"})
+    problem = _fields(name, set(actor), {"kind", "id", "source"})
+    if problem:
+        return problem
     if not _nonempty(actor["id"]) or not _nonempty(actor["source"]):
         return f"{name}.id and {name}.source must be non-empty strings"
     return None
@@ -255,42 +276,51 @@ def _approvals_problem(approvals: object) -> str | None:
 
 
 def _vcs_problem(vcs: object) -> str | None:
-    if not isinstance(vcs, Mapping) or set(vcs) != {"adapter", "branch", "head", "source"}:
-        return "vcs must be {adapter, branch, head, source}"
+    if not isinstance(vcs, Mapping):
+        return "vcs must be an object"
+    problem = _fields("vcs", set(vcs), {"adapter"}, {"branch", "head", "source"})
+    if problem:
+        return problem
     if not _nonempty(vcs["adapter"]):
         return "vcs.adapter must be a non-empty string"
     for name in ("branch", "head"):
-        if vcs[name] is not None and not _nonempty(vcs[name]):
-            return f"vcs.{name} must be a non-empty string or null"
-    source = vcs["source"]
-    if source is None:
+        if name in vcs and not _nonempty(vcs[name]):
+            return f"vcs.{name} must be a non-empty string, or left out when there is none"
+    if "source" not in vcs:
         return None
-    if not isinstance(source, Mapping) or set(source) != {"path", "before", "after"}:
-        return "vcs.source must be {path, before, after} or null"
+    source = vcs["source"]
+    if not isinstance(source, Mapping):
+        return "vcs.source must be an object, or left out for an event not made from a file"
+    problem = _fields("vcs.source", set(source), {"path"}, {"before", "after"})
+    if problem:
+        return problem
     path = source["path"]
     if not _nonempty(path) or not _theatre_relative(str(path)):
         return "vcs.source.path must be relative to the theatre, with / separators"
     for name in ("before", "after"):
-        if source[name] is not None and not (
-            isinstance(source[name], str) and HASH.match(source[name])
-        ):
-            return f"vcs.source.{name} must be a sha256: hash or null"
+        if name in source and not (isinstance(source[name], str) and HASH.match(source[name])):
+            return f"vcs.source.{name} must be a sha256: hash, or left out when there is no file"
     return None
 
 
 def _stage_problem(stage: object) -> str | None:
-    if stage is None:
-        return None
-    if not isinstance(stage, Mapping) or set(stage) != {"name", "effects", "allowedBy"}:
-        return "stage must be {name, effects, allowedBy} or null"
+    if not isinstance(stage, Mapping):
+        return "stage must be an object, or left out for an event recorded outside a stage"
+    problem = _fields("stage", set(stage), {"name", "effects"}, {"allowedBy"})
+    if problem:
+        return problem
     problem = _match("stage.name", stage["name"], STAGE_NAME, "a stage's registered name")
     if problem:
         return problem
-    allowed = stage["allowedBy"]
     if stage["effects"] == "enforced":
-        return None if allowed is None else "stage.allowedBy must be null when effects are enforced"
+        return (
+            None
+            if "allowedBy" not in stage
+            else "stage.allowedBy must be left out when effects are enforced"
+        )
     if stage["effects"] != "unenforced":
         return "stage.effects must be enforced or unenforced"
+    allowed = stage.get("allowedBy")
     if not isinstance(allowed, Mapping) or set(allowed) != {"setting", "source"}:
         return "stage.allowedBy must name the setting and source that allowed unenforced effects"
     return _match(

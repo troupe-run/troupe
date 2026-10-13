@@ -113,7 +113,7 @@ INVALID: list[dict[str, Any]] = [
     lineage(via="email"),
     lineage(at="2026-10-12T03:04:05+10:00"),
     lineage(at=float("nan")),
-    without(LINEAGE, "reason"),
+    lineage(reason=None),
     lineage(reason=""),
     lineage(cause=None),
     without(LINEAGE, "cause"),
@@ -122,44 +122,46 @@ INVALID: list[dict[str, Any]] = [
     lineage(cause={"kind": "command", "id": HASH}),
     lineage(change="not-a-ulid"),
     lineage(approvals=[{"actor": {"kind": "unknown"}, "role": "", "at": LINEAGE["at"]}]),
-    lineage(vcs={"adapter": "git", "branch": "", "head": None, "source": None}),
+    lineage(vcs={"adapter": "git", "branch": ""}),
+    lineage(vcs={"adapter": "git", "branch": None}),
+    lineage(vcs={"adapter": "git", "head": None}),
+    lineage(vcs={"adapter": "git", "source": None}),
+    lineage(vcs={"branch": "main"}),
+    lineage(vcs={"adapter": "git", "source": {"path": "x.yaml", "before": None, "after": HASH}}),
+    lineage(vcs={"adapter": "git", "source": {"path": "x.yaml", "before": HASH, "after": None}}),
+    lineage(vcs={"adapter": "git", "source": {"before": HASH}}),
     lineage(
         vcs={
             "adapter": "git",
             "branch": "main",
-            "head": None,
-            "source": {"path": "/abs/x.yaml", "before": None, "after": HASH},
+            "source": {"path": "/abs/x.yaml", "after": HASH},
         }
     ),
     lineage(
         vcs={
             "adapter": "git",
             "branch": "main",
-            "head": None,
-            "source": {"path": "a\\b.yaml", "before": None, "after": HASH},
+            "source": {"path": "a\\b.yaml", "after": HASH},
         }
     ),
     lineage(
         vcs={
             "adapter": "git",
             "branch": "main",
-            "head": None,
-            "source": {"path": "../x.yaml", "before": None, "after": HASH},
+            "source": {"path": "../x.yaml", "after": HASH},
         }
     ),
     lineage(
         vcs={
             "adapter": "git",
             "branch": "main",
-            "head": None,
-            "source": {"path": "C:x.yaml", "before": None, "after": HASH},
+            "source": {"path": "C:x.yaml", "after": HASH},
         }
     ),
     lineage(
         vcs={
             "adapter": "git",
             "branch": "main",
-            "head": None,
             "source": {"path": "x.yaml", "before": "md5:abc", "after": HASH},
         }
     ),
@@ -167,8 +169,10 @@ INVALID: list[dict[str, Any]] = [
 
 
 INVALID += [
-    without(LINEAGE, "stage"),
+    lineage(stage=None),
+    lineage(stage={**ENFORCED, "allowedBy": None}),
     lineage(stage={**UNENFORCED_LOCAL, "allowedBy": None}),
+    lineage(stage=without(UNENFORCED_LOCAL, "allowedBy")),
     lineage(stage={**ENFORCED, "allowedBy": UNENFORCED_LOCAL["allowedBy"]}),
     lineage(stage={**ENFORCED, "effects": "partly"}),
     lineage(stage={**ENFORCED, "name": "Local Stage"}),
@@ -185,6 +189,98 @@ def test_the_hand_written_check_refuses_exactly_what_the_schema_refuses(
 ) -> None:
     assert not is_valid(data, "lineage.schema.json")
     assert lineage_problem(data) is not None
+
+
+@pytest.mark.parametrize(
+    ("data", "field"),
+    [
+        pytest.param(lineage(reason=None), "reason", id="reason"),
+        pytest.param(lineage(stage=None), "stage", id="stage"),
+        pytest.param(lineage(stage={**ENFORCED, "allowedBy": None}), "stage", id="allowedBy"),
+        pytest.param(lineage(vcs={"adapter": "git", "branch": None}), "vcs.branch", id="branch"),
+        pytest.param(lineage(vcs={"adapter": "git", "head": None}), "vcs.head", id="head"),
+        pytest.param(lineage(vcs={"adapter": "git", "source": None}), "vcs.source", id="source"),
+        pytest.param(
+            lineage(vcs={"adapter": "git", "source": {"path": "x", "before": None}}),
+            "vcs.source.before",
+            id="before",
+        ),
+        pytest.param(
+            lineage(vcs={"adapter": "git", "source": {"path": "x", "after": None}}),
+            "vcs.source.after",
+            id="after",
+        ),
+    ],
+)
+def test_a_null_where_a_field_should_be_left_out_is_refused_naming_the_field(
+    data: dict[str, Any], field: str
+) -> None:
+    assert not is_valid(data, "lineage.schema.json")
+    assert field in (lineage_problem(data) or "")
+
+
+def test_a_lineage_with_nothing_optional_to_say_leaves_those_fields_out() -> None:
+    change = new_ulid()
+    data = Lineage(
+        actor=ACTORS[0],
+        via="file",
+        at=timestamp(datetime(2026, 10, 12, tzinfo=UTC)),
+        reason=None,
+        change=change,
+        cause=CommandCause(change),
+        vcs=VcsState(adapter="files", branch=None, head=None),
+    ).to_data()
+    assert "reason" not in data
+    assert "stage" not in data
+    assert data["vcs"] == {"adapter": "files"}
+    assert is_valid(data, "lineage.schema.json")
+    assert lineage_problem(data) is None
+
+
+@pytest.mark.parametrize(
+    ("vcs", "expected"),
+    [
+        pytest.param(
+            VcsState(adapter="git", branch=None, head="a" * 40),
+            {"adapter": "git", "head": "a" * 40},
+            id="detached HEAD",
+        ),
+        pytest.param(
+            VcsState(adapter="git", branch="main", head=None),
+            {"adapter": "git", "branch": "main"},
+            id="no commit yet",
+        ),
+        pytest.param(
+            VcsState(adapter="git", branch="main", head="a" * 40, source=SOURCES[2]),
+            {
+                "adapter": "git",
+                "branch": "main",
+                "head": "a" * 40,
+                "source": {"path": "new.yaml", "after": HASH},
+            },
+            id="new file",
+        ),
+        pytest.param(
+            VcsState(adapter="git", branch="main", head="a" * 40, source=SOURCES[3]),
+            {
+                "adapter": "git",
+                "branch": "main",
+                "head": "a" * 40,
+                "source": {"path": "gone.yaml", "before": HASH},
+            },
+            id="deleted file",
+        ),
+    ],
+)
+def test_version_control_state_leaves_out_what_there_isnt(
+    vcs: VcsState, expected: dict[str, Any]
+) -> None:
+    assert vcs.to_data() == expected
+
+
+def test_an_enforced_stage_has_no_allowance_field() -> None:
+    data = StageLineage(name="docker", effects="enforced", allowed_by=None).to_data()
+    assert data == {"name": "docker", "effects": "enforced"}
 
 
 def test_the_hand_written_check_names_the_field_at_fault() -> None:

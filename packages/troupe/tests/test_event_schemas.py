@@ -58,7 +58,6 @@ EVENT: dict[str, Any] = {
                 vcs={
                     "adapter": "git",
                     "branch": "main",
-                    "head": None,
                     "source": {"path": "actors/tester.yaml", "before": HASH, "after": OTHER_HASH},
                 },
             ),
@@ -67,7 +66,7 @@ EVENT: dict[str, Any] = {
         pytest.param(lineage(cause={"kind": "event", "id": HASH}), id="event cause"),
         pytest.param(lineage(reason="tidy up"), id="a reason"),
         pytest.param(
-            lineage(vcs={"adapter": "files", "branch": None, "head": None, "source": None}),
+            lineage(vcs={"adapter": "files"}),
             id="no version control",
         ),
         pytest.param(
@@ -79,8 +78,7 @@ EVENT: dict[str, Any] = {
                 vcs={
                     "adapter": "git",
                     "branch": "main",
-                    "head": None,
-                    "source": {"path": "new.yaml", "before": None, "after": HASH},
+                    "source": {"path": "new.yaml", "after": HASH},
                 }
             ),
             id="a file that didn't exist before",
@@ -94,6 +92,12 @@ EVENT: dict[str, Any] = {
             id="a run on a stage that doesn't enforce effects, and what allowed it",
         ),
         pytest.param(lineage(stage=ENFORCED), id="a run on a stage that enforces effects"),
+        pytest.param(LINEAGE, id="an event recorded outside a stage, with no reason"),
+        pytest.param(lineage(vcs={"adapter": "git", "head": "a" * 40}), id="a detached HEAD"),
+        pytest.param(
+            lineage(vcs={"adapter": "git", "source": {"path": "gone.yaml", "before": HASH}}),
+            id="a file that no longer exists",
+        ),
     ],
 )
 def test_lineage_the_schema_accepts(value: dict[str, Any]) -> None:
@@ -112,7 +116,7 @@ def test_lineage_the_schema_accepts(value: dict[str, Any]) -> None:
         pytest.param(lineage(via="email"), id="a via outside the closed set"),
         pytest.param(lineage(at="2026-10-12T03:04:05+10:00"), id="a time not in UTC"),
         pytest.param(lineage(at=float("nan")), id="NaN time"),
-        pytest.param(without(LINEAGE, "reason"), id="missing reason"),
+        pytest.param(lineage(reason=None), id="null reason"),
         pytest.param(lineage(cause=None), id="null cause"),
         pytest.param(without(LINEAGE, "cause"), id="missing cause"),
         pytest.param(lineage(cause={"kind": "timer", "id": ULID}), id="unknown cause kind"),
@@ -124,8 +128,7 @@ def test_lineage_the_schema_accepts(value: dict[str, Any]) -> None:
                 vcs={
                     "adapter": "git",
                     "branch": "main",
-                    "head": None,
-                    "source": {"path": "/home/ada/theatre/x.yaml", "before": None, "after": HASH},
+                    "source": {"path": "/home/ada/theatre/x.yaml", "after": HASH},
                 }
             ),
             id="an absolute host path",
@@ -135,8 +138,7 @@ def test_lineage_the_schema_accepts(value: dict[str, Any]) -> None:
                 vcs={
                     "adapter": "git",
                     "branch": "main",
-                    "head": None,
-                    "source": {"path": "actors\\tester.yaml", "before": None, "after": HASH},
+                    "source": {"path": "actors\\tester.yaml", "after": HASH},
                 }
             ),
             id="a backslash path",
@@ -146,8 +148,7 @@ def test_lineage_the_schema_accepts(value: dict[str, Any]) -> None:
                 vcs={
                     "adapter": "git",
                     "branch": "main",
-                    "head": None,
-                    "source": {"path": "../outside.yaml", "before": None, "after": HASH},
+                    "source": {"path": "../outside.yaml", "after": HASH},
                 }
             ),
             id="a path outside the theatre",
@@ -157,13 +158,20 @@ def test_lineage_the_schema_accepts(value: dict[str, Any]) -> None:
                 vcs={
                     "adapter": "git",
                     "branch": "main",
-                    "head": None,
                     "source": {"path": "x.yaml", "before": "md5:abc", "after": HASH},
                 }
             ),
             id="a hash that isn't sha256",
         ),
-        pytest.param(without(LINEAGE, "stage"), id="missing stage"),
+        pytest.param(lineage(stage=None), id="null stage"),
+        pytest.param(lineage(stage={**ENFORCED, "allowedBy": None}), id="null allowedBy"),
+        pytest.param(lineage(vcs={"adapter": "git", "branch": None}), id="null branch"),
+        pytest.param(lineage(vcs={"adapter": "git", "head": None}), id="null head"),
+        pytest.param(lineage(vcs={"adapter": "git", "source": None}), id="null source"),
+        pytest.param(
+            lineage(vcs={"adapter": "git", "source": {"path": "x.yaml", "before": None}}),
+            id="null before",
+        ),
         pytest.param(
             lineage(stage={**UNENFORCED_LOCAL, "allowedBy": None}),
             id="an unenforced stage that names nothing that allowed it",

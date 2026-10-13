@@ -5,7 +5,7 @@
   "description": "Where an event came from: who made it, through what, when, why, as part of which command and in reaction to what, with whose approval, and in what version-control state. Every event troupe records carries it. It is left out of the event's content hash, so two clones that make the same change agree on the event's id.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["actor", "via", "at", "reason", "change", "cause", "approvals", "vcs", "stage"],
+  "required": ["actor", "via", "at", "change", "cause", "approvals", "vcs"],
   "properties": {
     "actor": {"$ref": "#/$defs/actor"},
     "via": {
@@ -16,8 +16,8 @@
     "at": {"$ref": "#/$defs/timestamp", "description": "When troupe recorded the event, in UTC."},
     "reason": {
       "title": "Reason",
-      "description": "Why, in the actor's words. null when none was given: absent is explicit, never a missing field.",
-      "type": ["string", "null"],
+      "description": "Why, in the actor's words. Absent: none was given.",
+      "type": "string",
       "minLength": 1
     },
     "change": {
@@ -33,7 +33,10 @@
       "items": {"$ref": "#/$defs/approval"}
     },
     "vcs": {"$ref": "#/$defs/vcs"},
-    "stage": {"$ref": "#/$defs/stage"}
+    "stage": {
+      "$ref": "#/$defs/stage",
+      "description": "Absent: the event was recorded outside a stage, such as by a person's command."
+    }
   },
   "$defs": {
     "hash": {
@@ -100,17 +103,15 @@
     },
     "stage": {
       "title": "Stage",
-      "description": "Where the actor whose run recorded this event ran, and whether troupe enforced its declared effects there. null for an event recorded outside a stage, such as one a person's command recorded. An unenforced stage names the policy setting, and the source of its value, that allowed the run; an enforced one names none.",
+      "description": "Where the actor whose run recorded this event ran, and whether troupe enforced its declared effects there. An unenforced stage names the policy setting, and the source of its value, that allowed the run; an enforced one has no allowedBy.",
       "oneOf": [
-        {"type": "null"},
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["name", "effects", "allowedBy"],
+          "required": ["name", "effects"],
           "properties": {
             "name": {"$ref": "#/$defs/stageName"},
-            "effects": {"const": "enforced"},
-            "allowedBy": {"type": "null"}
+            "effects": {"const": "enforced"}
           }
         },
         {
@@ -152,39 +153,43 @@
     },
     "vcs": {
       "title": "Version-control state",
-      "description": "The state the event was made in. branch is null when HEAD is detached or the adapter has no branches; head is null before the first commit or without version control. source is set only for an event made from a file.",
+      "description": "The state the event was made in.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["adapter", "branch", "head", "source"],
+      "required": ["adapter"],
       "properties": {
         "adapter": {"type": "string", "minLength": 1},
-        "branch": {"type": ["string", "null"], "minLength": 1},
-        "head": {"type": ["string", "null"], "minLength": 1},
+        "branch": {
+          "description": "The branch. Absent: HEAD is detached, or the adapter has no branches; the adapter tells which.",
+          "type": "string",
+          "minLength": 1
+        },
+        "head": {
+          "description": "The current commit. Absent: there is no commit yet, or no version control.",
+          "type": "string",
+          "minLength": 1
+        },
         "source": {
-          "oneOf": [
-            {"type": "null"},
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["path", "before", "after"],
-              "properties": {
-                "path": {
-                  "description": "The file, relative to the theatre, with / separators. Never a host path.",
-                  "type": "string",
-                  "minLength": 1,
-                  "pattern": "^(?![/\\\\])(?![A-Za-z]:)(?!.*\\\\)(?!(.*/)?\\.\\.(/|$)).+$"
-                },
-                "before": {
-                  "description": "The file's content hash before the change; null when it didn't exist.",
-                  "oneOf": [{"type": "null"}, {"$ref": "#/$defs/hash"}]
-                },
-                "after": {
-                  "description": "The file's content hash after the change; null when it no longer exists.",
-                  "oneOf": [{"type": "null"}, {"$ref": "#/$defs/hash"}]
-                }
-              }
+          "description": "The file the event was made from. Absent: the event wasn't made from a file.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path"],
+          "properties": {
+            "path": {
+              "description": "The file, relative to the theatre, with / separators. Never a host path.",
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^(?![/\\\\])(?![A-Za-z]:)(?!.*\\\\)(?!(.*/)?\\.\\.(/|$)).+$"
+            },
+            "before": {
+              "description": "The file's content hash before the change. Absent: the file didn't exist.",
+              "$ref": "#/$defs/hash"
+            },
+            "after": {
+              "description": "The file's content hash after the change. Absent: the file no longer exists.",
+              "$ref": "#/$defs/hash"
             }
-          ]
+          }
         }
       }
     }

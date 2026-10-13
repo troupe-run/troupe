@@ -34,13 +34,13 @@ def test_the_benchmark_the_doc_cites_exists() -> None:
     assert (DOC.parents[1] / "scripts" / "benchmark_event_store.py").is_file()
 
 
-def test_the_lineage_table_names_every_field_the_lineage_schema_requires() -> None:
+def test_the_lineage_table_names_every_field_the_lineage_schema_defines() -> None:
     schema = json.loads(
         (DOC.parents[1] / "protocol" / "schemas" / "lineage.schema.json").read_text("utf-8")
     )
     section = TEXT.split("## Lineage", 1)[1].split("\n## ", 1)[0]
     listed = set(re.findall(r"^\| `([a-z]+)` \|", section, re.MULTILINE))
-    assert listed == set(schema["required"])
+    assert listed == set(schema["properties"])
 
 
 def test_the_payload_table_lists_exactly_the_topics_the_event_record_schema_defines() -> None:

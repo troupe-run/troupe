@@ -125,19 +125,20 @@ state is belongs to the aggregate: config's three-way merge decides it for confi
 ## Lineage
 
 Every event troupe records carries lineage ([`lineage.schema.json`](../protocol/schemas/lineage.schema.json)). An
-event without valid lineage is refused before anything is written (`events.lineage-invalid`).
+event without valid lineage is refused before anything is written (`events.lineage-invalid`). A field with nothing to
+say is left out, never written as `null`.
 
 | Field | What it says |
 |---|---|
-| `actor` | `human` or `agent` with an id and the source that resolved it, or an explicit `{kind: unknown}` (for a hand edit). Never null. |
+| `actor` | `human` or `agent` with an id and the source that resolved it, or an explicit `{kind: unknown}` (for a hand edit). Always present. |
 | `via` | `cli`, `file`, `runner` or `server` |
 | `at` | When troupe recorded it, in UTC with milliseconds |
-| `reason` | Why, or `null` |
+| `reason` | Why, in the actor's words. Left out when none was given |
 | `change` | The correlation id: minted by a command, and carried by every event that follows from it |
 | `cause` | `{kind: command, id: <change>}` for a command's own events, or `{kind: event, id: <id>}` for a reaction |
 | `approvals` | Who approved it, in which role; empty until gates exist |
-| `vcs` | The adapter, branch and HEAD, and for an event made from a file, its theatre-relative path and its before and after content hashes |
-| `stage` | For an event a run recorded, the stage the actor ran on and whether its effects were `enforced` or `unenforced`; for an unenforced run, the policy setting and source that allowed it. `null` for every other event |
+| `vcs` | The adapter; the branch, left out when HEAD is detached or the adapter has no branches; HEAD, left out before the first commit; and for an event made from a file, its theatre-relative path and its before and after content hashes, each left out when the file didn't exist or no longer does |
+| `stage` | For an event a run recorded, the stage the actor ran on and whether its effects were `enforced` or `unenforced`; for an unenforced run, the policy setting and source that allowed it (`allowedBy`). Left out for every other event |
 
 **Correlation and cause.** If a command records E1, and E2, E3 and E4 are recorded in reaction to E1, all four
 carry the command's change id, and E2 to E4 name E1 as their cause. A reaction to E2 still carries the same change
