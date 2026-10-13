@@ -99,7 +99,7 @@
   inside `details=` / `to_data`) and confirm each remaining one is not serialised; list them in the PR. Verify by
   the search output
 - [x] 7.2 Run `uv run scripts/check.py`. Verify it passes (ruff, mypy --strict, the full test suite)
-- [ ] 7.3 Push and verify every CI job passes on Linux, macOS and Windows
+- [x] 7.3 Push and verify every CI job passes on Linux, macOS and Windows
 
 ## Workflow follow-up
 
