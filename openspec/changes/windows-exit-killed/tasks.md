@@ -2,16 +2,16 @@
 
 ## 1. The seam says whether its kill ended a child
 
-- [ ] 1.1 Write the three seam tests from design D3 in `test_platform_processes.py` first: a killed running child
+- [x] 1.1 Write the three seam tests from design D3 in `test_platform_processes.py` first: a killed running child
   (`ended_by_kill` true); a child that exited 0 and was then killed before `wait()` (exit code 0, `ended_by_kill`
   false); a child that ends itself with the kill's status and was never killed (`ended_by_kill` false). Verify they
   fail on main for the missing API only (an `AttributeError`, not a wrong value)
-- [ ] 1.2 In `platform/processes.py`, add `KILLED_EXIT_CODE = 0x74726B6C` and pass it to `TerminateJobObject` in
+- [x] 1.2 In `platform/processes.py`, add `KILLED_EXIT_CODE = 0x74726B6C` and pass it to `TerminateJobObject` in
   `_kill_job` (design D2). `ChildProcess.kill_tree()` records that a kill was sent, and add
   `ChildProcess.ended_by_kill(exit_code: int) -> bool` (Linux and macOS: `-SIGKILL`; Windows: `KILLED_EXIT_CODE`),
   with docstrings saying what each one means. Verify the 1.1 tests and the existing `test_platform_processes.py`
   pass locally
-- [ ] 1.3 Document it in `docs/platform.md`: the Stopping bullet says how each platform tells a kill apart, and names
+- [x] 1.3 Document it in `docs/platform.md`: the Stopping bullet says how each platform tells a kill apart, and names
   `KILLED_EXIT_CODE` and its value. Verify by reading the rendered section against design D2
 
 ## 2. The host records how the runner ended

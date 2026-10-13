@@ -8,9 +8,9 @@ Platform differences, handled here so callers see one behaviour:
   SIGKILL to the group. A grandchild that starts its own session escapes the group: a documented
   limitation (docs/platform.md).
 - Windows: the child starts in a new process group and is assigned at once to a new job object
-  created with kill-on-close. Killing the tree terminates the job, and the tree also dies if troupe
-  does, because the job's last handle closes with it. Windows needs ``SYSTEMROOT`` to start Python
-  and use sockets, so it is always passed.
+  created with kill-on-close. Killing the tree terminates the job with KILLED_EXIT_CODE, and the
+  tree also dies if troupe does, because the job's last handle closes with it. Windows needs
+  ``SYSTEMROOT`` to start Python and use sockets, so it is always passed.
 - Both: the command is resolved to an absolute path before starting, using the caller's search
   path, so the child doesn't need ``PATH`` itself.
 """
@@ -40,6 +40,12 @@ _WINDOWS = sys.platform == "win32"
 
 MINIMUM_ENVIRONMENT: tuple[str, ...] = ("SYSTEMROOT",) if _WINDOWS else ()
 """The variables passed to every child, whatever the caller names, when the parent has them."""
+
+KILLED_EXIT_CODE = 0x74726B6C
+"""The exit code a kill gives a Windows child: "trkl" in ASCII, 1953655660. Terminating a job
+sets whatever code the caller names, so troupe names one no program commonly exits with and that
+isn't an NTSTATUS crash code, to tell its kill apart from a child that exited by itself. On
+Linux and macOS a kill is SIGKILL, which no exit code can be mistaken for."""
 
 
 def _key(name: str) -> str:
@@ -221,8 +227,10 @@ if sys.platform == "win32":
             _kernel32.CloseHandle(process)
         return int(job)
 
+    _KILL_STATUS = KILLED_EXIT_CODE
+
     def _kill_job(job: int) -> None:
-        _kernel32.TerminateJobObject(job, 1)
+        _kernel32.TerminateJobObject(job, KILLED_EXIT_CODE)
 
     def _close_job(job: int) -> None:
         _kernel32.CloseHandle(job)
@@ -245,6 +253,8 @@ if sys.platform == "win32":
 
 else:
     import signal
+
+    _KILL_STATUS = -signal.SIGKILL
 
     def _new_job_for(pid: int) -> int:
         raise NotImplementedError("job objects exist only on Windows")
@@ -276,6 +286,7 @@ class ChildProcess:
     def __init__(self, process: asyncio.subprocess.Process, job: int | None) -> None:
         self._process = process
         self._job = job
+        self._kill_sent = False
         if process.stdin is None or process.stdout is None or process.stderr is None:
             raise RuntimeError("a child process must be started with all three streams piped")
         self.stdin: asyncio.StreamWriter = process.stdin
@@ -301,10 +312,20 @@ class ChildProcess:
 
     def kill_tree(self) -> None:
         """Kill the child and every process it started. Safe to call more than once."""
+        self._kill_sent = True
         if self._job is not None:
             _kill_job(self._job)
         else:
             _kill_group(self._process.pid)
+
+    def ended_by_kill(self, exit_code: int) -> bool:
+        """Whether troupe's kill is what ended the child, given the exit code ``wait()`` returned.
+
+        True only when ``kill_tree()`` was called and the exit status is the one a kill gives. A
+        child that exited by itself before the kill landed keeps its own code, so this is false
+        for it, however the timing of the kill and of seeing the exit fell.
+        """
+        return self._kill_sent and exit_code == _KILL_STATUS
 
     def release(self) -> None:
         """Let go of the platform resources held for the child. Call once it has exited.
