@@ -64,7 +64,7 @@ def test_an_undeclared_error_code_is_refused() -> None:
 
 def test_each_error_code_maps_to_a_defined_exit_code() -> None:
     assert all(isinstance(exit_code, ExitCode) for exit_code in CODES.values())
-    usage = TroupeError("usage.invalid", problem="p", fix="f", details={"command": None})
+    usage = TroupeError("usage.invalid", problem="p", fix="f")
     assert usage.exit_code is ExitCode.USAGE
 
 

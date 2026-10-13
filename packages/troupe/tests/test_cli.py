@@ -205,17 +205,35 @@ def test_usage_error_data_matches_the_protocol_schema(argv: tuple[str, ...]) -> 
 @pytest.mark.parametrize(
     "data",
     [
-        {"code": "usage.invalid", "problem": "p", "fix": "f"},
+        {"code": "usage.invalid", "problem": "p", "fix": "f", "details": {"command": None}},
+        {"code": "usage.invalid", "problem": "p", "fix": "f", "details": {}},
+        {"code": "usage.unknown-flag", "problem": "p", "fix": "f",
+         "details": {"flag": "--x", "command": None}},
         {"code": "usage.unknown-flag", "problem": "p", "fix": "f",
          "details": {"flag": "--x", "suggestion": None}},
     ],
-    ids=["usage.invalid", "usage.unknown-flag"],
+    ids=["usage.invalid null", "usage.invalid empty", "unknown-flag null command",
+         "unknown-flag null suggestion"],
 )  # fmt: skip
-def test_usage_error_data_without_its_command_does_not_match_the_protocol_schema(
+def test_usage_error_data_with_a_null_or_empty_command_does_not_match_the_protocol_schema(
     data: dict[str, object],
 ) -> None:
     with pytest.raises(jsonschema.ValidationError):
         check_error(data)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"code": "usage.invalid", "problem": "p", "fix": "f"},
+        {"code": "usage.unknown-flag", "problem": "p", "fix": "f", "details": {"flag": "--x"}},
+    ],
+    ids=["usage.invalid", "usage.unknown-flag"],
+)
+def test_usage_error_data_before_any_command_leaves_the_command_out_and_matches(
+    data: dict[str, object],
+) -> None:
+    check_error(data)
 
 
 def test_internal_and_command_error_data_matches_the_protocol_schema() -> None:
@@ -245,7 +263,7 @@ def test_an_empty_argument_as_the_command_is_an_unknown_command_naming_it_empty(
     error = usage_error("", "echo")
     check_error(error.to_data())
     assert error.problem == "An empty argument is not a troupe command."
-    assert error.details == {"command": "", "suggestion": None}
+    assert error.details == {"command": ""}
 
 
 @pytest.mark.parametrize("argv", [("--",), ("--", "echo", "x"), ("--version", "--", "echo")])
@@ -256,7 +274,7 @@ def test_a_separator_before_any_command_is_refused_as_an_unknown_command(
     check_error(error.to_data())
     assert error.code == "usage.unknown-command"
     assert error.problem == "`--` comes before any command."
-    assert error.details == {"command": "--", "suggestion": None}
+    assert error.details == {"command": "--"}
 
 
 def test_unknown_subcommand_with_no_near_match_points_at_help() -> None:
@@ -271,7 +289,7 @@ def test_unknown_subcommand_near_a_command_names_the_suggestion_in_its_details()
 
 
 def test_unknown_flag_with_no_near_match_has_no_suggestion_in_its_details() -> None:
-    assert usage_error("echo", "x", "--zzzzzz").details == {"flag": "--zzzzzz"}
+    assert usage_error("echo", "x", "--zzzzzz").details == {"flag": "--zzzzzz", "command": "echo"}
 
 
 def test_unknown_flag_is_a_usage_error_that_names_the_flag() -> None:
@@ -380,14 +398,14 @@ def test_unknown_flag_after_a_command_names_the_command_and_points_at_its_help()
     assert error.code == "usage.unknown-flag"
     assert error.problem == "`--bogus` is not an option of `troupe status`."
     assert error.fix.startswith("Run `troupe status --help` to see its options. ")
-    assert error.details == {"flag": "--bogus", "suggestion": None, "command": "status"}
+    assert error.details == {"flag": "--bogus", "command": "status"}
 
 
 def test_unknown_flag_before_any_command_has_no_command_and_points_at_the_root_help() -> None:
     error = refused("--bogus")
     assert error.problem == "`--bogus` is not a troupe option."
     assert error.fix.startswith(HELP_FIX)
-    assert error.details == {"flag": "--bogus", "suggestion": None, "command": None}
+    assert error.details == {"flag": "--bogus"}
 
 
 # Requirement: Each usage shape has its own code

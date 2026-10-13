@@ -20,6 +20,7 @@
           "const": "usage.invalid"
         },
         "details": {
+          "description": "The command the line names. Absent: the problem came before any command.",
           "type": "object",
           "additionalProperties": false,
           "required": [
@@ -27,22 +28,12 @@
           ],
           "properties": {
             "command": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "minLength": 1
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "type": "string",
+              "minLength": 1
             }
           }
         }
-      },
-      "required": [
-        "details"
-      ]
+      }
     },
     {
       "properties": {
@@ -80,8 +71,7 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "flag",
-            "command"
+            "flag"
           ],
           "properties": {
             "flag": {
@@ -94,15 +84,9 @@
               "minLength": 1
             },
             "command": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "minLength": 1
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "description": "The command whose options the flag was checked against. Absent: the flag came before any command, so it was checked against troupe's own options.",
+              "type": "string",
+              "minLength": 1
             }
           }
         }
