@@ -379,7 +379,15 @@ def test_a_watch_that_never_reports_is_caught_by_the_check_then_the_store_polls(
         appended = writer.appended_at()
         assert heard.wait(10)
         assert time.time() - appended < 1.0 + 1.0
-        [notice] = [n for n in store.notices() if n.code == "events.subscription-polling"]
+        # The event is delivered at once; the store falls back once the watch has had a grace
+        # period to report it late.
+        deadline = time.monotonic() + 5
+        while not (
+            polling := [n for n in store.notices() if n.code == "events.subscription-polling"]
+        ):
+            assert time.monotonic() < deadline, "the store never said it was polling"
+            time.sleep(0.1)
+        [notice] = polling
         assert notice.details["reason"] == "watch-missed-write"
         jsonschema.validate(notice.to_data(), NOTICE_SCHEMA)
         heard.clear()
@@ -387,3 +395,65 @@ def test_a_watch_that_never_reports_is_caught_by_the_check_then_the_store_polls(
         appended = writer.appended_at()
         assert heard.wait(10)
         assert time.time() - appended < 0.2 + 1.0
+
+
+class Manual(watching._Backend):
+    """A watch that reports a change only when the test says so."""
+
+    def __init__(self) -> None:
+        self.reported = threading.Event()
+        self._stopped = False
+
+    def wait(self, timeout: float | None) -> bool:
+        changed = self.reported.wait(timeout)
+        self.reported.clear()
+        return changed and not self._stopped
+
+    def interrupt(self) -> None:
+        self._stopped = True
+        self.reported.set()
+
+    def release(self) -> None:
+        pass
+
+
+def test_a_watch_that_reports_an_event_just_after_a_check_found_it_isnt_counted_as_missing(
+    tmp_path: Path, writer: Writer
+) -> None:
+    writer.record()
+    writer.appended_at()
+    manual = Manual()
+    store = store_for(
+        tmp_path,
+        poll_seconds=60,
+        check_seconds=0.5,
+        watcher=lambda directory: DirectoryWatch(directory, manual),
+    )
+    with listened(store) as heard:
+        time.sleep(0.2)
+        heard.clear()
+        writer.record()
+        writer.appended_at()
+        assert heard.wait(5)  # the check found it before the watch reported it
+        manual.reported.set()  # the notification arrives late, within the grace period
+        time.sleep(1.5)
+        assert "events.subscription-polling" not in [n.code for n in store.notices()]
+
+
+def test_an_event_recorded_while_the_watch_is_being_set_up_reaches_the_listener_at_once(
+    tmp_path: Path,
+) -> None:
+    other = store_for(tmp_path)  # another session, as another process would be
+    other.insert([event(uuid4(), 1)])
+
+    def recording_first(directory: Path) -> DirectoryWatch:
+        other.insert([event(uuid4(), 1)])  # after the listener's read, before its watch
+        # A watch that never reports: some platforms also report a write made just before a
+        # watch starts, which would hide a store that doesn't look again once it is watching.
+        return DirectoryWatch(directory, Manual())
+
+    store = store_for(tmp_path, poll_seconds=60, check_seconds=60, watcher=recording_first)
+    with listened(store) as heard:
+        assert heard.wait(2)
+        assert store.max_notification_id() == 2
+        assert "events.subscription-polling" not in [n.code for n in store.notices()]

@@ -187,8 +187,13 @@ There are two ways notification fails, and both give `events.subscription-pollin
 - **Why the check exists:** a file system can accept a watch and then never deliver other writers' changes, as with
   some container bind mounts. Nothing at set-up time tells us. The check is the only way to keep the issue's "never
   silent", and at 30 s it stats segments 120 times an hour instead of 36,000 (0.1 s).
-- **When the check counts a write as missed:** it counts one only when the id grew and the watch reported nothing
-  at all since the previous check, so a write landing as the check runs isn't mistaken for a miss.
+- **When the check counts a write as missed:** only when the id grew, the watch reported nothing at all since the
+  previous check, and it still reports nothing within a one-second grace (`_REPORT_GRACE_SECONDS`, internal to the
+  text store). An event recorded just before a check can be read before its notification arrives; the grace keeps
+  that from counting as a miss.
+- **Nothing recorded during set-up is lost or miscounted:** the subscription delivers once as soon as its watch is
+  set up, so an event recorded between the first read and the watch reaches listeners at once, rather than at the
+  next check, where it would have looked like a miss.
 - **No probe write at set-up:** reads create nothing (event-store spec), so we don't write a test file into `events/`
   to see whether it's reported.
 
