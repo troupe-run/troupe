@@ -16,17 +16,17 @@
 
 ## 2. The host records how the runner ended
 
-- [ ] 2.1 Before changing the host, confirm the checks that must pass on main and after it. A runner that ignores
+- [x] 2.1 Before changing the host, confirm the checks that must pass on main and after it. A runner that ignores
   `run/cancel` or `shutdown` past the grace period still ends `killed`: the existing
   `test_a_runner_ignoring_cancel_is_killed_with_the_process_it_started` and
   `test_a_runner_that_ignores_shutdown_after_its_result_is_killed_and_fails_as_uncertain`. A clean `ok` run still ends
   `exited` 0 `succeeded`: add an assertion on `ending` and `exit_code` if no host test checks it yet. Verify they pass
   on main
-- [ ] 2.2 In `core/runners/host.py`, remove `_Run.killed` and set `ending` from `child.ended_by_kill(exit_code)`
+- [x] 2.2 In `core/runners/host.py`, remove `_Run.killed` and set `ending` from `child.ended_by_kill(exit_code)`
   (design D1). Keep `kill()`'s `returncode is None` guard with a comment that it protects against pid reuse and no
   longer decides `ending`. Update `Ending.KILLED`'s docstring in `outcome.py` to say troupe's kill ended the
   process, whichever path sent it. Verify the 2.1 tests still pass
-- [ ] 2.3 Split the violation test (design D3): remove `after result` from
+- [x] 2.3 Split the violation test (design D3): remove `after result` from
   `test_each_protocol_violation_crashes_the_run_naming_it`, which keeps `ending is Ending.KILLED` for the ten
   remaining cases. Add
   `test_a_late_event_after_the_result_crashes_the_run_whether_the_runner_answers_shutdown_first`, asserting
@@ -34,13 +34,13 @@
   `(ending, exit_code) == (KILLED, <kill status>)` or `(EXITED, 0)`. Verify both tests pass, and run the new one
   100 times locally (`for i in $(seq 100); do uv run pytest -q "<node id>" || break; done`), recording how often
   each ending occurred
-- [ ] 2.4 Document `ending` in `docs/runners.md` where the outcome lists what it records: `killed` means troupe's kill
+- [x] 2.4 Document `ending` in `docs/runners.md` where the outcome lists what it records: `killed` means troupe's kill
   ended the runner, and a runner that exits by itself first is `exited` with its own code. Verify the paragraph
   matches the `actor-runners` requirement "A run's ending records how the runner ended"
 
 ## 3. Whole change
 
-- [ ] 3.1 Search `packages/` and `plugins/` for other readers of `returncode` that decide something about a kill
+- [x] 3.1 Search `packages/` and `plugins/` for other readers of `returncode` that decide something about a kill
   (`grep -rn "returncode" packages plugins`) and confirm none does, or fix it under D1. Verify by the search output,
   listed in the PR
 - [ ] 3.2 Run `uv run scripts/check.py`. Verify it passes (ruff, mypy --strict, the full test suite)

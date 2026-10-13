@@ -251,6 +251,13 @@ Success takes all three signals together. The exit code alone never makes a run 
 without a `result` has `crashed`. The outcome also records the exit code, whether the runner exited or was
 killed, the transcript's and standard error's references, and the limits in effect.
 
+**`ending`** is `killed` only when troupe's kill is what ended the runner, and then the exit code says nothing about
+the run. A runner that exits by itself is `exited`, with its own exit code, even if troupe had decided to kill it or
+had already sent the kill. troupe decides this from the exit status once the process has ended, so the timing of
+the kill doesn't change it (see [Child processes](platform.md#child-processes)). For example, a runner that sends
+an event after its `result` has broken the contract and crashes the run. If it has already answered `shutdown` by
+exiting 0, its ending is `exited` with code 0.
+
 **The effect check** has no default, so a caller can't forget it. `ExpectedFiles(paths)` needs each file to exist
 after the run and to differ from before it; `NoEffectExpected` is for a run with nothing to check.
 

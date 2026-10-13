@@ -30,7 +30,8 @@ class Ending(StrEnum):
 
     EXITED = "exited"
     KILLED = "killed"
-    """Killed by troupe after the grace period, so its exit code says nothing."""
+    """Troupe's kill ended it (after a violation, a failed start or a grace period), so its exit
+    code says nothing. A runner that exited by itself before the kill landed is EXITED."""
     NEVER_STARTED = "never-started"
 
 
