@@ -32,10 +32,12 @@
   the property its body checks. Each one first runs against a temporary copy of the config with that one property
   broken, and then against the real files. Verify through `uv run scripts/check.py` that every test passes on the
   real files, and that each broken copy fails with a message naming the member and the file
-- [ ] 2.3 Write `docs/releasing.md`. Cover how a release happens (merging the release PR), what bumps what (pre-1.0
-  rules, the linked group, plugins on their own, the protocol in the linked group with its own changelog), why scopes don't select packages,
-  how to force a version (`release-as`), and the rollback and fix-forward rule. Link it from `README.md`. Verify
-  every config key the doc names exists in `release-please-config.json`
+- [x] 2.3 Write `docs/releasing.md`. Cover how a release happens (merging the release PR), what bumps what (pre-1.0
+  rules, the linked group, plugins on their own, the protocol in the linked group with its own changelog), why
+  scopes don't select packages, how to force a version (`release-as`), and the rollback and fix-forward rule. Link
+  it from `README.md`. Verify every config key the doc names exists in `release-please-config.json`. Done
+  2026-10-14: `bump-minor-pre-major` is in the config; `release-as` is described as optional and added only for one
+  release, and exists in release-please's schema and source
 
 ## 3. Dry run before anything writes
 
