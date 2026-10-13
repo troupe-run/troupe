@@ -9,7 +9,13 @@ that apply to the same instance:
 - typed: an enclosing node already says what the value is, so a branch may only refine it.
 
 Both are cleared where a keyword describes a new instance (a property's value, an array's items).
-Conditions (``if`` and ``not``) never widen what is accepted, so they aren't held to either rule.
+Conditions (``if`` and ``not``) never widen what is accepted, so they aren't held to either rule,
+nor to the null rule.
+
+A node that accepts null (by ``type``, ``const`` or ``enum``) must carry the null marker, saying
+which kind of null it is and what it means (spec: protocol; omit-nulls design D1). A node that
+declares an object (its ``type`` includes ``object``) must describe each property it doesn't
+require, since that description is where absence is defined (omit-nulls design D2).
 Definitions are checked where they're used, and any definition nothing uses is checked on its own.
 A keyword the walk doesn't know fails, so nothing is skipped by accident.
 """
@@ -39,6 +45,7 @@ VALUE_KEYWORDS = frozenset(
         "format", "pattern", "minLength", "maxLength", "minimum", "maximum", "exclusiveMinimum",
         "exclusiveMaximum", "multipleOf", "minItems", "maxItems", "uniqueItems", "minProperties",
         "maxProperties", "required", "dependentRequired", "contentEncoding", "contentMediaType",
+        "x-troupe-null",
     }
 )  # fmt: skip
 """Keywords whose values are data or annotations, not subschemas."""
@@ -50,6 +57,10 @@ SUBSCHEMA_KEYWORDS = frozenset(
 )  # fmt: skip
 """Keywords whose values are subschemas the walk follows."""
 TYPING = ("type", "const", "enum", *REFERENCES, *SAME_INSTANCE_LISTS)
+NULL_MARKER = "x-troupe-null"
+NULL_KINDS = ("clear", "external")
+"""``clear``: "clear this" in an update, which absence can't say. ``external``: a format troupe
+doesn't own requires the null."""
 
 
 @dataclass(frozen=True, order=True)
@@ -89,6 +100,25 @@ def _anchors(node: Any, pointer: str = "") -> Iterator[tuple[str, str]]:  # noqa
             yield from _anchors(item, f"{pointer}/{index}")
 
 
+def _accepts_null(node: Mapping[str, Any]) -> bool:
+    enum = node.get("enum")
+    return (
+        "null" in _types(node)
+        or ("const" in node and node["const"] is None)
+        or (isinstance(enum, list) and None in enum)
+    )
+
+
+def _well_formed_marker(marker: object) -> bool:
+    return (
+        isinstance(marker, dict)
+        and set(marker) == {"kind", "means"}
+        and marker["kind"] in NULL_KINDS
+        and isinstance(marker["means"], str)
+        and marker["means"].strip() != ""
+    )
+
+
 def _types(node: Mapping[str, Any]) -> set[str]:
     declared = node.get("type")
     if isinstance(declared, str):
@@ -102,7 +132,7 @@ class _Walk:
     def __init__(self, documents: Mapping[str, Mapping[str, Any]]) -> None:
         self.documents = documents
         self.problems: set[Problem] = set()
-        self.seen: set[tuple[str, str, bool, bool]] = set()
+        self.seen: set[tuple[str, str, bool, bool, bool]] = set()
         self.reached: set[tuple[str, str]] = set()
 
     def report(self, uri: str, pointer: str, rule: str) -> None:
@@ -124,8 +154,10 @@ class _Walk:
                 return target, pointer
         return None
 
-    def walk(self, uri: str, pointer: str, *, closed: bool, typed: bool) -> None:
-        key = (uri, pointer, closed, typed)
+    def walk(
+        self, uri: str, pointer: str, *, closed: bool, typed: bool, condition: bool = False
+    ) -> None:
+        key = (uri, pointer, closed, typed, condition)
         if key in self.seen:
             return
         self.seen.add(key)
@@ -140,7 +172,9 @@ class _Walk:
             self.report(uri, pointer, "isn't a schema")
             return
         self.check(uri, pointer, node, closed=closed, typed=typed)
-        self.descend(uri, pointer, node, closed=closed, typed=typed)
+        if not condition:
+            self.check_values(uri, pointer, node)
+        self.descend(uri, pointer, node, closed=closed, typed=typed, condition=condition)
 
     def check(
         self, uri: str, pointer: str, node: Mapping[str, Any], *, closed: bool, typed: bool
@@ -164,8 +198,37 @@ class _Walk:
             if key not in SUBSCHEMA_KEYWORDS:
                 self.report(uri, f"{pointer}/{_escape(key)}", "is a keyword the check doesn't know")
 
+    def check_values(self, uri: str, pointer: str, node: Mapping[str, Any]) -> None:
+        """The rules for what an accepting node (one outside a condition) lets through."""
+        marked = NULL_MARKER in node
+        if _accepts_null(node) and not marked:
+            self.report(uri, pointer, "accepts null without saying why")
+        if marked and not _accepts_null(node):
+            self.report(uri, pointer, "marks a null it doesn't accept")
+        if marked and not _well_formed_marker(node[NULL_MARKER]):
+            self.report(uri, f"{pointer}/{NULL_MARKER}", "has a malformed null marker")
+        properties = node.get("properties")
+        if "object" in _types(node) and isinstance(properties, dict):
+            required = set(node.get("required", []))
+            for name, schema in properties.items():
+                if name in required or schema is False:
+                    continue
+                if not (isinstance(schema, dict) and "description" in schema):
+                    self.report(
+                        uri,
+                        f"{pointer}/properties/{_escape(name)}",
+                        "is optional but doesn't say what its absence means",
+                    )
+
     def descend(
-        self, uri: str, pointer: str, node: Mapping[str, Any], *, closed: bool, typed: bool
+        self,
+        uri: str,
+        pointer: str,
+        node: Mapping[str, Any],
+        *,
+        closed: bool,
+        typed: bool,
+        condition: bool,
     ) -> None:
         here_closed = (
             closed
@@ -181,37 +244,64 @@ class _Walk:
                         uri, f"{pointer}/{key}", f"refers to {node[key]!r}, which doesn't resolve"
                     )
                 else:
-                    self.walk(*target, closed=here_closed, typed=typed)
+                    self.walk(*target, closed=here_closed, typed=typed, condition=condition)
         for key in SAME_INSTANCE_LISTS:
             for index, _ in enumerate(node.get(key, [])):
-                self.walk(uri, f"{pointer}/{key}/{index}", closed=here_closed, typed=here_typed)
+                self.walk(
+                    uri,
+                    f"{pointer}/{key}/{index}",
+                    closed=here_closed,
+                    typed=here_typed,
+                    condition=condition,
+                )
         for key in SAME_INSTANCE:
             if key in node:
-                self.walk(uri, f"{pointer}/{key}", closed=here_closed, typed=here_typed)
+                self.walk(
+                    uri,
+                    f"{pointer}/{key}",
+                    closed=here_closed,
+                    typed=here_typed,
+                    condition=condition,
+                )
         for key in node.get("dependentSchemas", {}):
             self.walk(
                 uri,
                 f"{pointer}/dependentSchemas/{_escape(key)}",
                 closed=here_closed,
                 typed=here_typed,
+                condition=condition,
             )
         for key in CONDITIONS:
             if key in node:
-                self.walk(uri, f"{pointer}/{key}", closed=True, typed=True)
+                self.walk(uri, f"{pointer}/{key}", closed=True, typed=True, condition=True)
         for key in NEW_INSTANCE_MAPS:
             for name in node.get(key, {}):
-                self.walk(uri, f"{pointer}/{key}/{_escape(name)}", closed=False, typed=False)
+                self.walk(
+                    uri,
+                    f"{pointer}/{key}/{_escape(name)}",
+                    closed=False,
+                    typed=False,
+                    condition=condition,
+                )
         for key in NEW_INSTANCE:
             if key in node and node[key] is not False:
                 if key in ("additionalProperties", "unevaluatedProperties") and node[key] is True:
                     self.report(uri, f"{pointer}/{key}", "accepts any value")
                     continue
-                self.walk(uri, f"{pointer}/{key}", closed=False, typed=False)
+                self.walk(uri, f"{pointer}/{key}", closed=False, typed=False, condition=condition)
         for index, _ in enumerate(node.get("prefixItems", [])):
-            self.walk(uri, f"{pointer}/prefixItems/{index}", closed=False, typed=False)
+            self.walk(
+                uri,
+                f"{pointer}/prefixItems/{index}",
+                closed=False,
+                typed=False,
+                condition=condition,
+            )
         if "propertyNames" in node:
             # A property name is always a string, so a pattern alone is enough to type it.
-            self.walk(uri, f"{pointer}/propertyNames", closed=False, typed=True)
+            self.walk(
+                uri, f"{pointer}/propertyNames", closed=False, typed=True, condition=condition
+            )
 
     def definitions(self, uri: str, node: Any, pointer: str = "") -> Iterator[str]:  # noqa: ANN401
         if isinstance(node, dict):

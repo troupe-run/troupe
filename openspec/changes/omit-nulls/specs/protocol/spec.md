@@ -12,8 +12,8 @@ such as `""` or `-1`, SHALL NOT stand in for absence.
 - **THEN** the field is left out of the payload, and is never present with the value `null`
 
 #### Scenario: An optional property with no description
-- **WHEN** a schema declares a property that isn't in the same node's `required` list, and the property's schema
-  has no `description`
+- **WHEN** a schema node declaring an object has a property that isn't in that node's `required` list, and the
+  property's schema has no `description`
 - **THEN** the build fails, naming the file and the property
 
 ### Requirement: Null is accepted only where it is marked

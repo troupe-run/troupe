@@ -2,22 +2,22 @@
 
 ## 1. The rule in the walker
 
-- [ ] 1.1 Add the null rule and the `x-troupe-null` marker to `tests/strictness.py` (design D1): `x-troupe-null` is
+- [x] 1.1 Add the null rule and the `x-troupe-null` marker to `tests/strictness.py` (design D1): `x-troupe-null` is
   a value keyword; on accepting nodes (not inside `if`/`not`) report an unmarked null (`type` string or list,
   `const`, `enum`), a stray marker and a malformed marker. Add one `test_protocol_strict.py` fixture per case
   (four null forms, marker with unknown kind, empty `means`, extra field, stray marker) asserting the rule and JSON
   Pointer, plus one accepting a marked null and one accepting `{"not": {"type": "null"}}`. Verify those tests pass
-- [ ] 1.2 Add the optional-property description rule (design D2) with a bad-schema fixture (a property not in
+- [x] 1.2 Add the optional-property description rule (design D2) with a bad-schema fixture (a property not in
   `required` with no `description`) and a good one (the same with a description, and a required property without
   one). Verify they pass
-- [ ] 1.3 Run the walker over every shipped schema and record its findings: mark the shipped-schema strictness test
+- [x] 1.3 Run the walker over every shipped schema and record its findings: mark the shipped-schema strictness test
   `xfail(strict=True)` with the reason "nulls and undescribed optional fields on main, closed by groups 2 to 6".
   Verify it xfails and that the null findings are exactly the 33 nodes in design Context (32 from #76 plus
   lineage `stage`), and record both lists for the PR
-- [ ] 1.4 Add a description to each of the 138 optional properties the walker reports (design D2), each saying what
+- [x] 1.4 Add a description to each of the 39 optional properties the walker reports (design D2), each saying what
   absence means; print the list of property → description for review. Verify the walker reports no description
   finding for any schema, and `test_runner_schemas.py`, `test_client_schemas.py` and `test_event_schemas.py` pass
-- [ ] 1.5 State the rule in the protocol: a "Nulls and absent fields" section in `protocol/README.md` (absence is
+- [x] 1.5 State the rule in the protocol: a "Nulls and absent fields" section in `protocol/README.md` (absence is
   "nothing to say", meaningful values over absence, no sentinels, the marker and its two kinds, the one external
   exception). Verify the README's schema table still matches the files (`test_protocol_strict.py`'s README check, or
   by listing both)

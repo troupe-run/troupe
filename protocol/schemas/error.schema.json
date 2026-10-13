@@ -472,6 +472,7 @@
               "minimum": 1
             },
             "limitBytes": {
+              "description": "The message size limit the line went over. Absent: the line broke the contract some other way.",
               "type": "integer",
               "minimum": 1
             }
@@ -1497,10 +1498,12 @@
               "minLength": 1
             },
             "seq": {
+              "description": "The run event's sequence number. Absent: the refusal is about the run's end.",
               "type": "integer",
               "minimum": 0
             },
             "expected": {
+              "description": "The sequence number the run expects next. Absent: the event arrived after the run ended, or the refusal is about the run's end.",
               "type": "integer",
               "minimum": 0
             }
