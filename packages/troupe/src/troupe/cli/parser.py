@@ -202,7 +202,7 @@ def _invalid(message: str, command: str | None) -> TroupeError:
         "usage.invalid",
         problem=message if command is None else f"`troupe {command}`: {message}",
         fix=_help_fix(command),
-        details={"command": command},
+        details=_details(command=command),
     )
 
 
@@ -212,9 +212,10 @@ def _suggest(token: str, candidates: Sequence[str]) -> str | None:
     return bare[matches[0]] if matches else None
 
 
-def _with_suggestion(details: dict[str, object], suggestion: str | None) -> dict[str, object]:
-    """``details``, with the suggestion when there is one; left out when nothing was close."""
-    return details if suggestion is None else {**details, "suggestion": suggestion}
+def _details(**fields: object) -> dict[str, object]:
+    """A usage error's details, leaving out what it can't name: no suggestion when nothing was
+    close, no command when the problem came before one (omit-nulls)."""
+    return {name: value for name, value in fields.items() if value is not None}
 
 
 def _looks_like_a_flag(token: str) -> bool:
@@ -238,7 +239,7 @@ def _unknown_flag(token: str, known: Sequence[str], command: str | None) -> Trou
         "usage.unknown-flag",
         problem=f"`{token}` is not {where}.",
         fix=f"{hint}If `{token}` is a value, put `--` before it.",
-        details=_with_suggestion({"flag": token, "command": command}, suggestion),
+        details=_details(flag=token, suggestion=suggestion, command=command),
     )
 
 
@@ -259,7 +260,7 @@ def _unknown_command(token: str, commands: Sequence[Command], flags: Sequence[st
         if token
         else ("An empty argument is not a troupe command."),
         fix=f"Did you mean `{suggestion}`?" if suggestion else HELP_FIX,
-        details=_with_suggestion({"command": token}, suggestion),
+        details=_details(command=token, suggestion=suggestion),
     )
 
 

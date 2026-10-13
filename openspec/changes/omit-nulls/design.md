@@ -160,6 +160,7 @@ exists.
 | `endError` | The end was recorded | Left out |
 | `transcript` (`run.recording-failed`) | The runner never started | Left out |
 | `maxAttempts` (`run.retrying`) | The runner didn't say: unknown, not unbounded | Left out, as in the runner's own `retry` event |
+| `command` (`usage.invalid`, `usage.unknown-flag`; added by #53 after this change was proposed, met when rebasing) | The problem came before any command | Left out. `usage.invalid`'s details are then left out entirely, never an empty object |
 | `branch` (`events.other-branch`, header, lineage) | Detached HEAD, or an adapter without branches | Left out. The adapter (`vcs`) says which, and nothing reads the difference today |
 
 *Alternative for `branch`:* a `detached: true` flag. It would split one absence into two, but nothing consumes the
