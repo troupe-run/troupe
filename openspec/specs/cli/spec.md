@@ -50,7 +50,7 @@ in the language-neutral protocol, so other surfaces can render the same error th
 
 #### Scenario: Error data matches the protocol schema
 - **WHEN** any error the CLI can produce is serialised as data
-- **THEN** it validates against the protocol's error schema
+- **THEN** it validates against the protocol's error schema, including the details schema for its code
 
 ### Requirement: Usage errors and unknown commands
 A usage error SHALL exit with code 2. An unknown subcommand or flag SHALL be reported as a usage error that names
