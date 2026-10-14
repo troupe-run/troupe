@@ -69,8 +69,11 @@
   40-character SHA. Done 2026-10-14: actionlint isn't installed, and `zizmor` reports no findings; both `uses:` are
   pinned to 40-character SHAs (`create-github-app-token` v3.3.0, `release-please-action` v5.0.0, which bundles
   release-please 17.6.0: the updaters were re-run with 17.6.0 and give the same versions and `uv.lock`)
-- [ ] 4.2 Verify the whole change with `uv run scripts/check.py` locally, and that CI passes on Linux, macOS and
-  Windows on the PR, together with `DCO` and `guard`. The PR closes troupe-run/troupe#23
+- [x] 4.2 Verify the whole change with `uv run scripts/check.py` locally, and that CI passes on Linux, macOS and
+  Windows on the PR, together with `DCO` and `guard`. The PR closes troupe-run/troupe#23. Done 2026-10-14, after
+  rebasing onto `main` at `055ef30` (the fix for #86, which had failed the Windows jobs on `main` and on this PR):
+  `check.py` passes locally (1646 passed, 2 skipped), and on PR #85 at `574d3cd` all six `check` jobs (Linux, macOS
+  and Windows, Python 3.12 and 3.13), `DCO` and both `guard` runs pass (CI run 38506556575)
 
 ## Workflow follow-up
 
