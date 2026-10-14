@@ -4,6 +4,8 @@ import asyncio
 import contextlib
 import json
 import os
+import shutil
+import subprocess
 import sys
 import time
 import typing
@@ -482,3 +484,99 @@ def test_running_a_missing_command_names_it() -> None:
             max_output_bytes=1024,
             announce_after=5,
         )
+
+
+# Requirement: Whether a process has ended has one meaning on every platform
+
+SLEEP_A_MINUTE = "import time; time.sleep(60)"
+
+
+def _ended_by_kill(child: "subprocess.Popen[bytes]") -> None:
+    child.kill()
+    child.wait(timeout=30)
+
+
+def test_a_live_child_reads_as_running() -> None:
+    child = subprocess.Popen(_python(SLEEP_A_MINUTE))
+    try:
+        assert processes.is_running(child.pid)
+    finally:
+        _ended_by_kill(child)
+
+
+def test_a_child_that_has_exited_and_been_waited_for_reads_as_ended() -> None:
+    child = subprocess.Popen(_python("pass"))
+    child.wait(timeout=30)
+    assert not processes.is_running(child.pid)
+
+
+STILL_ACTIVE = 259
+"""The exit code Windows reports for a running process. A process can also exit with it."""
+
+SYSTEM_PID = 4
+"""The Windows System process: always running, and protected from most callers."""
+
+
+@pytest.mark.skipif(not WINDOWS, reason="pid 4 is the System process only on Windows")
+@pytest.mark.xfail(strict=True, reason="#92: fixed by group 3")
+def test_the_windows_system_process_reads_as_running() -> None:
+    assert processes.is_running(SYSTEM_PID)
+
+
+@pytest.mark.skipif(not WINDOWS, reason="a held handle to an exited process is Windows' own")
+@pytest.mark.xfail(strict=True, reason="#92: fixed by group 3")
+def test_a_child_that_exited_with_the_still_active_code_while_held_reads_as_ended() -> None:
+    child = subprocess.Popen(_python(f"import sys; sys.exit({STILL_ACTIVE})"))
+    _wait_until_exited_while_held(child)
+    assert not processes.is_running(child.pid)
+    child.wait(timeout=30)
+
+
+def _wait_until_exited_while_held(child: "subprocess.Popen[bytes]") -> None:
+    """Wait for the child to exit while ``child`` keeps its handle open.
+
+    ``Popen.poll`` reads the exit code through the handle it keeps, and can't tell 259 from
+    "still running" either, so this waits on the handle with ``Popen.wait``'s own primitive.
+    """
+    if sys.platform != "win32":
+        raise AssertionError("only Windows holds a handle to an exited child")
+    import _winapi
+
+    handle = child._handle  # type: ignore[attr-defined,unused-ignore]  # Popen's own
+    assert _winapi.WaitForSingleObject(handle, 30_000) == _winapi.WAIT_OBJECT_0
+
+
+@pytest.mark.skipif(WINDOWS, reason="pid 1 is init only on Linux and macOS")
+@pytest.mark.skipif(
+    sys.platform != "win32" and os.geteuid() == 0,
+    reason="root may signal pid 1, so the OS's refusal, which this test is about, never happens",
+)
+def test_pid_1_which_the_os_refuses_to_let_us_signal_reads_as_running() -> None:
+    with pytest.raises(PermissionError):
+        os.kill(1, 0)  # the refusal this test depends on
+    assert processes.is_running(1)
+
+
+@pytest.mark.skipif(WINDOWS, reason="a zombie is a Linux and macOS state")
+def test_an_unreaped_child_still_reads_as_running_on_posix_the_documented_limit() -> None:
+    child = subprocess.Popen(_python("pass"))
+    try:
+        _wait_until_zombie(child.pid)
+        assert processes.is_running(child.pid)
+    finally:
+        child.wait(timeout=30)
+
+
+def _wait_until_zombie(pid: int) -> None:
+    """Wait, without reaping, until ``ps`` shows the child as a zombie (state ``Z``)."""
+    ps = shutil.which("ps")
+    assert ps is not None
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        state = subprocess.run(
+            [ps, "-o", "stat=", "-p", str(pid)], capture_output=True, text=True, check=False
+        ).stdout.strip()
+        if state.startswith("Z"):
+            return
+        time.sleep(0.05)
+    raise AssertionError(f"process {pid} didn't become a zombie within 10s")
