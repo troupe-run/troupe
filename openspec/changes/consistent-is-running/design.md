@@ -2,16 +2,16 @@
 
 ## Context
 
-See proposal.md for why. What exists on main (69d6c27), in `packages/troupe/src/troupe/platform/processes.py`:
+See proposal.md for why. What exists on main (458300b), in `packages/troupe/src/troupe/platform/processes.py`:
 
-- **POSIX** (`is_running`, line 262): `os.kill(pid, 0)`. `ProcessLookupError` → `False`; `PermissionError` →
+- **POSIX** (`is_running`, line 272): `os.kill(pid, 0)`. `ProcessLookupError` → `False`; `PermissionError` →
   `True`; success → `True`. Any other `OSError` propagates unnamed. `pid` isn't checked, so `0` and negative values
   address process groups and read as `True`.
-- **Windows** (line 233): `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)`; any failure → `False`. Then
+- **Windows** (line 241): `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)`; any failure → `False`. Then
   `GetExitCodeProcess`; failure → `False`; otherwise `code == STILL_ACTIVE (259)`. So a process that exited with
   259 reads as running, and access denied reads as ended.
 - Callers: only tests. `_gone_within` and an `assert processes.is_running(grandchild)` in
-  `test_platform_processes.py`; polling loops then `assert not is_running(...)` in `test_run_host.py:386` and
+  `test_platform_processes.py`; polling loops then `assert not is_running(...)` in `test_run_host.py:398` and
   `troupe-vcs-git/tests/test_git_adapter.py:155`. `test_run_queries.py`'s "is_running" is an unrelated test name.
 - Platform errors live in `troupe.platform.errors` and are turned into `TroupeError`s at the core call site that
   catches them (for example `host.py` with `LineTooLongError`); there is no exhaustive table to extend.
