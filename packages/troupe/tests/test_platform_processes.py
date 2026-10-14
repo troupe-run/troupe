@@ -6,6 +6,8 @@ import json
 import os
 import sys
 import time
+import typing
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
@@ -181,29 +183,122 @@ def test_a_running_child_troupe_killed_was_ended_by_the_kill() -> None:
 EXITS_WHEN_TOLD = """
 import os, sys, time
 print("up", flush=True)
-deadline = time.monotonic() + 30
+deadline = time.monotonic() + 10
 while not os.path.exists(sys.argv[1]):
     if time.monotonic() > deadline:
         sys.exit(3)
     time.sleep(0.01)
 """
 """A child that says it's running, then exits 0 once the file named by its argument exists, or 3
-if it hasn't appeared within 30 s. It exits when the test says, not after a sleep."""
+if it hasn't appeared within 10 s. It exits when the test says, not after a sleep. Its 10 s sits
+well inside EXIT_BOUND_SECONDS, so a child that's never told ends with its own code first."""
 
 
-def _block_until_exited(pid: int) -> None:
-    """Wait, without yielding to the event loop, until the child has exited at the OS level, so
-    asyncio can't have recorded the exit yet. Linux: waitid without reaping (asyncio's pidfd watcher
-    can't reap it either while the loop is blocked). macOS: asyncio's watcher thread reaps it but
-    can't set returncode, so the pid disappearing shows the exit. Windows: is_running reads the
-    process's real exit code."""
-    if sys.platform == "linux":
-        with contextlib.suppress(ChildProcessError):  # a watcher thread reaped it first
-            os.waitid(os.P_PID, pid, os.WEXITED | os.WNOWAIT)
-        return
-    deadline = time.monotonic() + 30
-    while processes.is_running(pid) and time.monotonic() < deadline:
-        time.sleep(0.01)
+EXIT_BOUND_SECONDS = 30.0
+"""How long the race test waits for its child to exit at the OS level before it fails."""
+
+
+def _precondition(problem: str) -> typing.NoReturn:
+    """Fail the race test because the race it needs wasn't set up, which says nothing about the
+    seam. The prefix keeps it from being read as a wrong answer about the kill."""
+    pytest.fail(f"precondition not reached: {problem}", pytrace=False)
+
+
+def _not_exited(pid: int) -> typing.NoReturn:
+    _precondition(f"the child ({pid}) did not exit within {EXIT_BOUND_SECONDS} s of being told to")
+
+
+# Each _exit_of watches one child's exit at the OS level, without the seam under test, and yields
+# a wait that returns the exit status the OS recorded, or None where asyncio's watcher has already
+# taken it. Nothing in it yields to the event loop, so asyncio can't record the exit meanwhile.
+if sys.platform == "win32":
+    import ctypes
+    from ctypes import wintypes
+
+    _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    _kernel32.OpenProcess.restype = wintypes.HANDLE
+    _kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    _kernel32.WaitForSingleObject.restype = wintypes.DWORD
+    _kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+    _kernel32.GetExitCodeProcess.restype = wintypes.BOOL
+    _kernel32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+    _kernel32.CloseHandle.restype = wintypes.BOOL
+    _kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    _SYNCHRONIZE = 0x00100000
+    _PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+    _WAIT_OBJECT_0 = 0
+    _WAIT_TIMEOUT = 0x102
+
+    def _windows_error(doing: str) -> typing.NoReturn:
+        _precondition(f"{doing} failed: {ctypes.WinError(ctypes.get_last_error())}")
+
+    @contextlib.contextmanager
+    def _exit_of(pid: int) -> Iterator[Callable[[], int | None]]:
+        """A handle opened now, while the child runs, pins that process, so a reused pid can't
+        stand in for it. Waiting on it is one answer: exited, or not within the bound."""
+        handle = _kernel32.OpenProcess(
+            _SYNCHRONIZE | _PROCESS_QUERY_LIMITED_INFORMATION, False, pid
+        )
+        if not handle:
+            _windows_error(f"opening the child ({pid}) to watch its exit")
+
+        def wait() -> int | None:
+            waited = _kernel32.WaitForSingleObject(handle, int(EXIT_BOUND_SECONDS * 1000))
+            if waited == _WAIT_TIMEOUT:
+                _not_exited(pid)
+            if waited != _WAIT_OBJECT_0:
+                _windows_error(f"waiting for the child ({pid}) to exit")
+            code = wintypes.DWORD()
+            if not _kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+                _windows_error(f"reading the child's ({pid}) exit code")
+            return int(code.value)
+
+        try:
+            yield wait
+        finally:
+            _kernel32.CloseHandle(handle)
+
+elif sys.platform == "linux":
+
+    @contextlib.contextmanager
+    def _exit_of(pid: int) -> Iterator[Callable[[], int | None]]:
+        """waitid without reaping, polled to the bound: asyncio's pidfd watcher can't reap the
+        child while the loop is blocked, so the status is still there to read."""
+
+        def wait() -> int | None:
+            deadline = time.monotonic() + EXIT_BOUND_SECONDS
+            while True:
+                try:
+                    seen = os.waitid(os.P_PID, pid, os.WEXITED | os.WNOWAIT | os.WNOHANG)
+                except ChildProcessError:
+                    return None  # a watcher thread reaped it, which only an exit allows
+                if seen is not None:
+                    return seen.si_status if seen.si_code == os.CLD_EXITED else -seen.si_status
+                if time.monotonic() >= deadline:
+                    _not_exited(pid)
+                time.sleep(0.01)
+
+        yield wait
+
+else:
+
+    @contextlib.contextmanager
+    def _exit_of(pid: int) -> Iterator[Callable[[], int | None]]:
+        """asyncio's watcher thread reaps the child but can only schedule its returncode on the
+        blocked loop, so the pid disappearing proves the exit. The status went to asyncio."""
+
+        def wait() -> int | None:
+            deadline = time.monotonic() + EXIT_BOUND_SECONDS
+            while True:
+                try:
+                    os.kill(pid, 0)
+                except ProcessLookupError:
+                    return None
+                if time.monotonic() >= deadline:
+                    _not_exited(pid)
+                time.sleep(0.01)
+
+        yield wait
 
 
 @pytest.mark.parametrize("attempt", range(50))  # temporary: measuring #90, reverted before merge
@@ -212,24 +307,36 @@ def test_a_kill_sent_after_the_child_exited_but_before_asyncio_saw_it_did_not_en
 ) -> None:
     told = tmp_path / "exit-now"
 
-    async def main() -> tuple[int | None, int, bool]:
+    async def main() -> tuple[int, bool]:
         child = await processes.start(
             [*_python(EXITS_WHEN_TOLD), str(told)], cwd=Path.cwd(), env={}, line_limit=LIMIT
         )
         try:
             await asyncio.wait_for(child.stdout.readline(), timeout=30)
-            # Nothing below awaits until the kill, so the loop can't record the exit the file
-            # starts, however long the child takes to see it.
-            told.touch()
-            _block_until_exited(child.pid)
-            seen = child.returncode  # the race: exited, but not yet seen when troupe kills
+            if child.returncode is not None:
+                _precondition(f"the child ended ({child.returncode}) before it was told to")
+            with _exit_of(child.pid) as wait_for_exit:
+                # Nothing from here awaits until the kill, so the loop can't record the exit the
+                # file starts, however long the child takes to see it.
+                told.touch()
+                own_status = wait_for_exit()
+            if child.returncode is not None:
+                _precondition("asyncio saw the exit before the kill, so the race was not set up")
             child.kill_tree()
             exit_code = await asyncio.wait_for(child.wait(), timeout=30)
-            return seen, exit_code, child.ended_by_kill(exit_code)
+            if own_status is None:
+                # Reaped before the kill, so asyncio reports the child's own status, which the
+                # kill couldn't change.
+                own_status = exit_code
+            if own_status != 0:
+                _precondition(f"the child exited with {own_status} before the kill, not 0")
+            return exit_code, child.ended_by_kill(exit_code)
         finally:
+            child.kill_tree()
+            await asyncio.wait_for(child.wait(), timeout=30)
             child.release()
 
-    assert asyncio.run(main()) == (None, 0, False)
+    assert asyncio.run(main()) == (0, False)
 
 
 def test_a_child_that_ends_itself_with_the_kills_status_was_not_ended_by_a_kill() -> None:
