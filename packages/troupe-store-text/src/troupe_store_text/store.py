@@ -744,12 +744,12 @@ class _Subscription:
         next_check = time.monotonic() + store.check_seconds
         try:
             if self._watch is not None:
-                store._deliver()  # anything recorded between the start's read and the watch
+                self._deliver()  # anything recorded between the start's read and the watch
             while not self._stopped.is_set():
                 current = self._watch
                 if current is None:  # polling: refused, or found to miss writes
                     if not self._stopped.wait(store.poll_seconds):
-                        store._deliver()
+                        self._deliver()
                     continue
                 try:
                     changed = current.wait(max(0.0, next_check - time.monotonic()))
@@ -762,9 +762,9 @@ class _Subscription:
                     reported = True
                     if not self._on_events:
                         self._rearm(current)
-                    store._deliver()
+                    self._deliver()
                 if time.monotonic() >= next_check:
-                    if store._deliver() and not reported and not self._reports_late(current):
+                    if self._deliver() and not reported and not self._reports_late(current):
                         self._fall_back(
                             "watch-missed-write",
                             "an event was recorded that the watch didn't report",
@@ -775,6 +775,17 @@ class _Subscription:
             with store._lock:
                 if self._watch is not None:
                     self._watch.close()
+
+    def _deliver(self) -> bool:
+        """The store's delivery, unless the subscription has stopped (stopped-event-store D1).
+
+        ``stop`` sets ``_stopped`` with the store's lock held, and the store reads and writes only
+        with it held, so the check here is exact: a delivery that holds the lock ends before the
+        stop can begin, and one that takes it after the stop does nothing."""
+        with self.store._lock:
+            if self._stopped.is_set():
+                return False
+            return self.store._deliver()
 
     def _reports_late(self, current: DirectoryWatch) -> bool:
         """Whether the watch reports a change within _REPORT_GRACE_SECONDS: an event recorded just
@@ -791,6 +802,8 @@ class _Subscription:
         while not nearest.is_dir() and nearest != store.theatre and nearest.parent != nearest:
             nearest = nearest.parent
         if nearest == current.directory and current.directory.is_dir():
+            return
+        if self._stopped.is_set():  # don't open a watch the stop won't close (checked again below)
             return
         try:
             replacement, on_events = store._watch_nearest()
