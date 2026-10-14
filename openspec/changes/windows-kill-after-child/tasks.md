@@ -10,7 +10,7 @@
 
 ## 2. The child exits on the test's signal (design D1)
 
-- [ ] 2.1 Change the race test's child to print `up`, then poll for the file named by its argument for at most 30 s,
+- [x] 2.1 Change the race test's child to print `up`, then poll for the file named by its argument for at most 30 s,
   exiting 0 when it appears and 3 when it doesn't. Have the test await `up` and create the file (under `tmp_path`)
   with no await between that and the kill. Verify the test passes locally on macOS, and that `time.sleep(0.5)` no
   longer appears in it (`grep`)
