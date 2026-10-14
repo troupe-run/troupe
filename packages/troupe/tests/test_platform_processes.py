@@ -193,7 +193,10 @@ def _block_until_exited(pid: int) -> None:
         time.sleep(0.01)
 
 
-def test_a_kill_sent_after_the_child_exited_but_before_asyncio_saw_it_did_not_end_it() -> None:
+@pytest.mark.parametrize("attempt", range(50))  # temporary: measuring #90, reverted before merge
+def test_a_kill_sent_after_the_child_exited_but_before_asyncio_saw_it_did_not_end_it(
+    attempt: int,
+) -> None:
     async def main() -> tuple[int | None, int, bool]:
         # The sleep keeps the child running until the loop is blocked below.
         child = await processes.start(
