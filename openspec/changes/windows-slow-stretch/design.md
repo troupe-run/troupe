@@ -39,7 +39,9 @@ See proposal.md for why. What exists today:
 The requirement makes two promises about polling: the subscription looks every `SUBSCRIBE_POLL_SECONDS`, and an event
 that's there is found. The tests check each one directly, and keep a loose bound on the delay as a backstop:
 
-1. **Interval.** Every wait the poll loop makes asks for `poll_seconds`. This is exact, and load can't change it.
+1. **Interval.** Before each polled look, the loop waits exactly once, and for `poll_seconds`. This is exact, and
+   load can't change it. Checking each wait's timeout alone isn't enough: a loop that skips a look waits twice, each
+   time for `poll_seconds`, and every look it does make still delivers at once (found building task 2.3).
 2. **Next look.** For each of five events, the look that delivered it started no later than the first look that
    started after the writer's append returned. In other words, no look that started after the event was on disk
    came back empty-handed while the event waited for a later one. A look already in progress when the append
@@ -84,7 +86,8 @@ A test helper records, for the subscription under test:
   `(started, delivered)` for each call, where `started` is `time.time()` taken before the call, the same clock the
   writer prints, and `delivered` is what `_deliver` returned.
 - **Waits:** it installs, with `monkeypatch.setattr` on the store module, a subclass of `_Subscription` whose
-  `_stopped` is a `threading.Event` subclass that records each `wait`'s timeout before waiting. `listen()` constructs
+  `_stopped` is a `threading.Event` subclass that records, before waiting, how many looks came before the wait and
+  its timeout. `listen()` constructs
   `_Subscription` by its module name, so the subclass is in place before the thread starts and every wait is
   recorded, including the first.
 
@@ -103,17 +106,19 @@ and the private-method wrapping already has precedent in this file. Rejected.
 
 ### D3: Which waits and looks are checked
 
-- **Refused watch:** every wait recorded is a poll wait, so all of them must be `poll_seconds`, and there must be at
-  least five (one per event), so the check can't pass empty.
+- **Refused watch:** every wait recorded is a poll wait, so all of them must be `poll_seconds`. Every look from the
+  first wait on must have exactly one wait just before it, and there must be at least five such looks (one per
+  event), so the check can't pass empty.
 - **Never reports:** the silent backend's waits and the store's report-grace wait don't go through `_stopped`, so
-  every wait recorded is again a poll wait after the fallback. Same check. The next-look check and the loose median
-  bound cover only the five events recorded after the `events.subscription-polling` notice. The check-delivered event before it keeps its
+  every wait recorded is again a poll wait after the fallback, and the looks from the first wait on are the polled
+  ones. Same check. The next-look check and the loose median bound cover only the five events recorded after the
+  `events.subscription-polling` notice. The check-delivered event before it keeps its
   `check_seconds + STALL_SECONDS` bound unchanged.
 
 ### D4: Names and spec say what the bodies check
 
 - The refused-watch test becomes
-  `test_a_refused_watch_falls_back_to_an_announced_poll_at_its_interval_that_delivers_each_event_at_the_next_look`.
+  `test_a_refused_watch_falls_back_to_an_announced_poll_at_its_interval_and_delivers_at_next_look`.
   The never-reports test's name doesn't claim a timing and stays.
 - The `event-store` scenarios change with the tests (see specs/event-store/spec.md): the wait interval and
   next-look delivery are added, and the median's allowance becomes one for a loaded machine.
