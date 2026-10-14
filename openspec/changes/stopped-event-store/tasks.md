@@ -2,10 +2,10 @@
 
 ## 1. Reproduce #97 first (design D4, tests 1 and 5)
 
-- [ ] 1.1 Run the existing subscription tests on the unchanged code and record the result:
+- [x] 1.1 Run the existing subscription tests on the unchanged code and record the result:
   `uv run pytest packages/troupe-store-text/tests/test_processes.py packages/troupe-store-text/tests/test_library_suite.py`.
   Verify they pass. They're the non-goal baseline that D1 and D2 must not change
-- [ ] 1.2 Add `packages/troupe-store-text/tests/test_subscription_stop.py` with design D4 test 1 ("stopped before its
+- [x] 1.2 Add `packages/troupe-store-text/tests/test_subscription_stop.py` with design D4 test 1 ("stopped before its
   first delivery": `_run` delayed 0.5 s by `monkeypatch`, an event recorded through a second `TextStore` after
   `listen`, then `unlisten`, then a check that the thread has ended and the theatre's snapshot doesn't change for 1 s).
   Verify it **fails** on the unchanged code, and commit it with the failure output quoted in the message, marked
