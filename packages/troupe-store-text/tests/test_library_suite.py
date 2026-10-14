@@ -6,6 +6,7 @@ directory, with the plain filesystem VCS adapter (the git adapter's cases are in
 """
 
 import tempfile
+import threading
 from pathlib import Path
 
 from eventsourcing.persistence import InfrastructureFactory
@@ -35,7 +36,19 @@ class _Theatre:
     def setUp(self) -> None:
         self._directory = tempfile.TemporaryDirectory()
         self.addCleanup(self._directory.cleanup)  # type: ignore[attr-defined]
+        self._threads = set(threading.enumerate())
         super().setUp()  # type: ignore[misc]
+
+    def tearDown(self) -> None:
+        # Before the cleanup removes the theatre: a subscription the case stopped must have ended
+        # by then, or it may still write into the directory being removed (#97).
+        super().tearDown()  # type: ignore[misc]
+        running = [
+            t
+            for t in threading.enumerate()
+            if t.name == "troupe-subscription" and t not in self._threads
+        ]
+        assert not running, f"#97: a subscription's thread outlived the case: {running}"
 
     def store(self) -> TextStore:
         theatre = Path(self._directory.name)
