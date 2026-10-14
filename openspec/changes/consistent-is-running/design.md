@@ -120,8 +120,11 @@ In `test_platform_processes.py`, under the new requirement's heading:
   exited with 259 reads ended (held on Windows, waited for on POSIX); `0`, `-1` and `True` are refused.
 - **Windows only**: an exited child whose `Popen` still holds its handle reads ended; a child that gives its own
   process an empty DACL reads running (opening it is refused even to an elevated administrator, who holds
-  SeDebugPrivilege disabled); the System process (pid 4) reads running. The empty-DACL child is the
-  access-denied reproduction: pid 4 may be openable on CI (found while applying, from a side review).
+  SeDebugPrivilege disabled), asked from a helper child that first removes SeDebugPrivilege from its own token, because
+  CI's runner holds it enabled and it opens any process whatever its DACL; the System process (pid 4) reads running.
+  The test checks the refusal happened (error 5) before checking the answer, and prints the test process's
+  privileges if it didn't. Found while applying: pid 4 is openable on CI (a side review), and so was the
+  empty-DACL child when asked from the test process itself.
 - **POSIX only**: pid 1 reads running when not root (skipped as root, saying why, since root may signal it and the
   refusal branch wouldn't be reached); an unreaped child reads running, named as the documented limit.
 - **OS error path**: monkeypatching `os.kill` to raise `EINVAL` (POSIX) shows the real function raises

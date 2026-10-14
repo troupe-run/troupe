@@ -14,7 +14,9 @@
   while its `Popen` still holds it reads ended. Mark both `xfail(strict=True)` with the reason "#92: fixed by
   group 3". Add the System process (pid 4) reads running as a non-strict xfail, because CI's administrator may be
   able to open it and then main already answers right. Verify on Windows CI that the strict two xfail, and record
-  what main returned for pid 4 for the PR
+  what main returned for pid 4 for the PR. (Applying showed the empty-DACL xfail came from its setup: CI could still
+  open the process. Its reproduction is now the helper in 3.2, which proves the refusal happens; main returns
+  `False` for any failed open, so its answer there follows from its code.)
 
 ## 2. The decision tables (design D2, D5, D6)
 

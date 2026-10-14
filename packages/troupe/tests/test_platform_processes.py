@@ -551,30 +551,83 @@ time.sleep(60)
 holding an enabled SeDebugPrivilege, administrators included."""
 
 
+ASK_WITHOUT_DEBUG_PRIVILEGE = """
+import ctypes, json, sys
+from ctypes import wintypes
+pid = int(sys.argv[1])
+advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+kernel32.OpenProcess.restype = wintypes.HANDLE
+kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+token_out = ctypes.POINTER(wintypes.HANDLE)
+advapi32.OpenProcessToken.argtypes = [wintypes.HANDLE, wintypes.DWORD, token_out]
+
+class Luid(ctypes.Structure):
+    _fields_ = [("LowPart", wintypes.DWORD), ("HighPart", wintypes.LONG)]
+
+class Privilege(ctypes.Structure):
+    _fields_ = [("Luid", Luid), ("Attributes", wintypes.DWORD)]
+
+class Privileges(ctypes.Structure):
+    _fields_ = [("PrivilegeCount", wintypes.DWORD), ("Privileges", Privilege * 1)]
+
+token = wintypes.HANDLE()
+if not advapi32.OpenProcessToken(kernel32.GetCurrentProcess(), 0x28, ctypes.byref(token)):
+    sys.exit(f"OpenProcessToken failed: {ctypes.get_last_error()}")  # 0x28: adjust and query
+luid = Luid()
+if not advapi32.LookupPrivilegeValueW(None, "SeDebugPrivilege", ctypes.byref(luid)):
+    sys.exit(f"LookupPrivilegeValueW failed: {ctypes.get_last_error()}")
+remove = Privileges(1)
+remove.Privileges[0].Luid = luid
+remove.Privileges[0].Attributes = 0x4  # SE_PRIVILEGE_REMOVED
+if not advapi32.AdjustTokenPrivileges(token, False, ctypes.byref(remove), 0, None, None):
+    sys.exit(f"AdjustTokenPrivileges failed: {ctypes.get_last_error()}")
+handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+open_error = 0 if handle else ctypes.get_last_error()
+if handle:
+    kernel32.CloseHandle(handle)
+
+from troupe.platform import processes
+
+print(json.dumps({"open_error": open_error, "running": processes.is_running(pid)}))
+"""
+"""Asks about a pid from a process that has given up SeDebugPrivilege, which lets an administrator
+open any process whatever its DACL. Prints the error opening it (0 if it opened) and the answer."""
+
+
 @pytest.mark.skipif(not WINDOWS, reason="a process's DACL is Windows' own")
 def test_a_windows_process_that_refuses_to_be_opened_reads_as_running() -> None:
     child = subprocess.Popen(_python(DENY_EVERYONE_THEN_SLEEP), stdout=subprocess.PIPE)
     try:
         assert child.stdout is not None
         assert child.stdout.readline().strip() == b"denied"
-        _assert_opening_is_refused(child.pid)  # the refusal this test is about
-        assert processes.is_running(child.pid)
+        asked = subprocess.run(
+            [*_python(ASK_WITHOUT_DEBUG_PRIVILEGE), str(child.pid)],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        assert asked.returncode == 0, asked.stderr
+        answer = json.loads(asked.stdout)
+        # The refusal this test is about. If it didn't happen, say what the test process holds.
+        assert answer["open_error"] == 5, (  # ERROR_ACCESS_DENIED
+            f"opening process {child.pid} gave error {answer['open_error']}, not access denied; "
+            f"privileges:\n{_privileges()}"
+        )
+        assert answer["running"] is True
     finally:
         _ended_by_kill(child)
 
 
-def _assert_opening_is_refused(pid: int) -> None:
-    if sys.platform != "win32":
-        raise AssertionError("only Windows refuses to open a process by its DACL")
-    import ctypes
-
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    kernel32.OpenProcess.restype = ctypes.c_void_p
-    handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
-    if handle:
-        kernel32.CloseHandle(ctypes.c_void_p(handle))
-        raise AssertionError(f"process {pid} could still be opened, so nothing was refused")
-    assert ctypes.get_last_error() == 5  # ERROR_ACCESS_DENIED
+def _privileges() -> str:
+    whoami = shutil.which("whoami")
+    if whoami is None:
+        return "whoami not found"
+    return subprocess.run(
+        [whoami, "/priv"], capture_output=True, text=True, check=False
+    ).stdout.strip()
 
 
 def test_a_child_that_exited_with_the_still_active_code_reads_as_ended() -> None:
