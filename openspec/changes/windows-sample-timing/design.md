@@ -59,8 +59,9 @@ it's checked.
 ### D3: The check-delivered event stays one sample, with a named stall allowance
 
 The never-reports test's first event can be delivered only by the check, and only once: after it, the store polls.
-So it can't be repeated for a median. Its bound becomes `check_seconds + STALL_SECONDS`, a new constant set to 3.0 s,
-about three times the largest stall seen, with a comment saying why it's loose. It still sits well inside the 10 s
+So it can't be repeated for a median. Its bound becomes `check_seconds + STALL_SECONDS`, a new constant set to 5.0 s,
+with a comment saying why it's loose. CI saw a 1.06 s stall (#81). Reproducing it locally under load (task 1.1) saw
+a single polled delivery take 3.40 s, so 3.0 s, the first figure considered, would have left too little margin. It still sits well inside the 10 s
 `heard.wait`, so a store whose check never delivers fails it.
 
 That delivery came from the check, and not from anything else, is shown separately and already asserted: the watch is
@@ -108,7 +109,7 @@ behaviour is right, and the spec doesn't change for this decision.
   already make. A delivery that never comes still fails, through the 10 s wait.
 - [Five events make each test about a second slower] → Accepted. Each record sleeps 0.1 s in the writer and waits at
   most a 0.2 s poll.
-- [A stall longer than 3 s at the check could still fail the never-reports test] → The bound is a named constant
+- [A stall longer than 5 s at the check could still fail the never-reports test] → The bound is a named constant
   with its reason beside it, so it's one place to change if CI shows it.
 - [The start-up gate in D6 reaches into the store's private `_deliver`] → The sibling test
   `test_a_listened_store_reads_no_segment_while_nothing_is_recorded` already wraps `_sizes` the same way. If
