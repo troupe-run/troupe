@@ -1,7 +1,9 @@
 """Tests for child processes (spec: platform)."""
 
 import asyncio
+import contextlib
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -176,21 +178,37 @@ def test_a_running_child_troupe_killed_was_ended_by_the_kill() -> None:
     assert (exit_code, by_kill) == (KILL_STATUS, True)
 
 
-def test_a_kill_sent_after_the_child_exited_by_itself_did_not_end_it() -> None:
-    async def main() -> tuple[int, bool]:
-        child = await processes.start(_python("pass"), cwd=Path.cwd(), env={}, line_limit=LIMIT)
+def _block_until_exited(pid: int) -> None:
+    """Wait, without yielding to the event loop, until the child has exited at the OS level, so
+    asyncio can't have recorded the exit yet. Linux: waitid without reaping (asyncio's pidfd watcher
+    can't reap it either while the loop is blocked). macOS: asyncio's watcher thread reaps it but
+    can't set returncode, so the pid disappearing shows the exit. Windows: is_running reads the
+    process's real exit code."""
+    if hasattr(os, "waitid"):
+        with contextlib.suppress(ChildProcessError):  # a watcher thread reaped it first
+            os.waitid(os.P_PID, pid, os.WEXITED | os.WNOWAIT)
+        return
+    deadline = time.monotonic() + 30
+    while processes.is_running(pid) and time.monotonic() < deadline:
+        time.sleep(0.01)
+
+
+def test_a_kill_sent_after_the_child_exited_but_before_asyncio_saw_it_did_not_end_it() -> None:
+    async def main() -> tuple[int | None, int, bool]:
+        # The sleep keeps the child running until the loop is blocked below.
+        child = await processes.start(
+            _python("import time; time.sleep(0.5)"), cwd=Path.cwd(), env={}, line_limit=LIMIT
+        )
         try:
-            deadline = time.monotonic() + 30
-            while child.returncode is None and time.monotonic() < deadline:
-                await asyncio.sleep(0.05)
-            assert child.returncode == 0
+            _block_until_exited(child.pid)
+            seen = child.returncode  # the race: exited, but not yet seen when troupe kills
             child.kill_tree()
-            exit_code = await child.wait()
-            return exit_code, child.ended_by_kill(exit_code)
+            exit_code = await asyncio.wait_for(child.wait(), timeout=30)
+            return seen, exit_code, child.ended_by_kill(exit_code)
         finally:
             child.release()
 
-    assert asyncio.run(main()) == (0, False)
+    assert asyncio.run(main()) == (None, 0, False)
 
 
 def test_a_child_that_ends_itself_with_the_kills_status_was_not_ended_by_a_kill() -> None:

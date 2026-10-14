@@ -88,9 +88,13 @@ the one platform where it fails most.
 - Each direction of the race gets a deterministic test at the seam (`test_platform_processes.py`), which is where
   the decision now lives:
   1. kill a running child, then wait: `ended_by_kill` is true.
-  2. a child prints a line and exits 0. Read to end of output, poll `is_running` until it's gone, then call
-     `kill_tree()` before `wait()`. The exit code is 0 and `ended_by_kill` is false. This is the "late kill" in both
-     host directions.
+  2. a child exits 0 by itself, and troupe kills it after it has exited but before asyncio has seen the exit:
+     the race itself. The test blocks the event loop and waits at the OS level for the exit, then asserts
+     `returncode` is still `None` before calling `kill_tree()`. On Linux it uses `waitid` with `WNOWAIT`, which
+     doesn't reap. On macOS asyncio's watcher thread reaps the child, but it can't set `returncode` while the loop
+     is blocked. On Windows `is_running` reads the real exit code. The exit code is 0 and `ended_by_kill` is false.
+     This is the "late kill" in both host directions. (Added in review. A first version waited until asyncio had
+     seen the exit, which is the calmer case, not the race the platform scenario describes.)
   3. a child ends itself with the kill's status (`os.kill(os.getpid(), SIGKILL)` on Linux and macOS,
      `os._exit(KILLED_EXIT_CODE)` on Windows) with no kill sent: `ended_by_kill` is false.
 - The host's `ok`-result-at-grace scenario can't be timed deterministically through a real process. It is covered by
