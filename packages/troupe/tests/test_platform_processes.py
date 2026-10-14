@@ -178,6 +178,19 @@ def test_a_running_child_troupe_killed_was_ended_by_the_kill() -> None:
     assert (exit_code, by_kill) == (KILL_STATUS, True)
 
 
+EXITS_WHEN_TOLD = """
+import os, sys, time
+print("up", flush=True)
+deadline = time.monotonic() + 30
+while not os.path.exists(sys.argv[1]):
+    if time.monotonic() > deadline:
+        sys.exit(3)
+    time.sleep(0.01)
+"""
+"""A child that says it's running, then exits 0 once the file named by its argument exists, or 3
+if it hasn't appeared within 30 s. It exits when the test says, not after a sleep."""
+
+
 def _block_until_exited(pid: int) -> None:
     """Wait, without yielding to the event loop, until the child has exited at the OS level, so
     asyncio can't have recorded the exit yet. Linux: waitid without reaping (asyncio's pidfd watcher
@@ -195,14 +208,19 @@ def _block_until_exited(pid: int) -> None:
 
 @pytest.mark.parametrize("attempt", range(50))  # temporary: measuring #90, reverted before merge
 def test_a_kill_sent_after_the_child_exited_but_before_asyncio_saw_it_did_not_end_it(
-    attempt: int,
+    attempt: int, tmp_path: Path
 ) -> None:
+    told = tmp_path / "exit-now"
+
     async def main() -> tuple[int | None, int, bool]:
-        # The sleep keeps the child running until the loop is blocked below.
         child = await processes.start(
-            _python("import time; time.sleep(0.5)"), cwd=Path.cwd(), env={}, line_limit=LIMIT
+            [*_python(EXITS_WHEN_TOLD), str(told)], cwd=Path.cwd(), env={}, line_limit=LIMIT
         )
         try:
+            await asyncio.wait_for(child.stdout.readline(), timeout=30)
+            # Nothing below awaits until the kill, so the loop can't record the exit the file
+            # starts, however long the child takes to see it.
+            told.touch()
             _block_until_exited(child.pid)
             seen = child.returncode  # the race: exited, but not yet seen when troupe kills
             child.kill_tree()
