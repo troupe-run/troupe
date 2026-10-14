@@ -528,7 +528,7 @@ def test_the_windows_system_process_reads_as_running() -> None:
 
 
 DENY_EVERYONE_THEN_SLEEP = """
-import ctypes, sys, time
+import ctypes, os, sys, time
 from ctypes import wintypes
 advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
 kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
@@ -544,11 +544,12 @@ error = advapi32.SetSecurityInfo(
 )
 if error:
     sys.exit(f"SetSecurityInfo failed: {error}")
-print("denied", flush=True)
+print("denied", os.getpid(), flush=True)
 time.sleep(60)
 """
 """A child that gives its own process an empty DACL, so opening it is refused to everyone not
-holding an enabled SeDebugPrivilege, administrators included."""
+holding an enabled SeDebugPrivilege, administrators included. It prints its own pid, because a
+venv's python.exe on Windows is a launcher that runs the interpreter as a child of its own."""
 
 
 ASK_WITHOUT_DEBUG_PRIVILEGE = """
@@ -601,9 +602,10 @@ def test_a_windows_process_that_refuses_to_be_opened_reads_as_running() -> None:
     child = subprocess.Popen(_python(DENY_EVERYONE_THEN_SLEEP), stdout=subprocess.PIPE)
     try:
         assert child.stdout is not None
-        assert child.stdout.readline().strip() == b"denied"
+        said, pid = child.stdout.readline().split()
+        assert said == b"denied"
         asked = subprocess.run(
-            [*_python(ASK_WITHOUT_DEBUG_PRIVILEGE), str(child.pid)],
+            [*_python(ASK_WITHOUT_DEBUG_PRIVILEGE), pid.decode()],
             capture_output=True,
             text=True,
             timeout=60,
@@ -613,7 +615,7 @@ def test_a_windows_process_that_refuses_to_be_opened_reads_as_running() -> None:
         answer = json.loads(asked.stdout)
         # The refusal this test is about. If it didn't happen, say what the test process holds.
         assert answer["open_error"] == 5, (  # ERROR_ACCESS_DENIED
-            f"opening process {child.pid} gave error {answer['open_error']}, not access denied; "
+            f"opening process {pid.decode()} gave error {answer['open_error']}, not access denied; "
             f"privileges:\n{_privileges()}"
         )
         assert answer["running"] is True
