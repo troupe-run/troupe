@@ -213,6 +213,12 @@ append to it), printing the wall-clock time each segment append returned (design
 
 BOUND = 0.25  # seconds: a quarter of the 1 s subscription poll this replaces
 
+STALL_SECONDS = 5.0
+"""How late a single timed delivery may be beyond its interval. Only for a delivery that happens
+once, so can't be bounded by a median: one scheduling stall on a loaded machine has taken 1.06 s
+in CI (#81) and 3.40 s locally. Well inside the 10 s wait, which is what fails a store that never
+delivers."""
+
 
 class Writer:
     def __init__(self, theatre: Path) -> None:
@@ -295,22 +301,30 @@ def store_for(theatre: Path, **options: object) -> TextStore:
     return TextStore(theatre, load_vcs("files", theatre), **options)  # type: ignore[arg-type]
 
 
+def delays(store: TextStore, heard: threading.Event, writer: Writer, count: int = 5) -> list[float]:
+    """How long each of ``count`` events the writer records takes to reach the listener, from when
+    its append returned. Each must arrive, and be the one event the store's order gained."""
+    measured: list[float] = []
+    for _ in range(count):
+        before = store.max_notification_id() or 0
+        heard.clear()
+        writer.record()
+        assert heard.wait(10)
+        woke = time.time()
+        measured.append(woke - writer.appended_at())
+        assert store.max_notification_id() == before + 1
+    return measured
+
+
 def test_another_processs_events_each_reach_a_listener_with_a_median_delay_under_the_bound(
     tmp_path: Path, writer: Writer
 ) -> None:
     writer.record()  # the segment and events/ exist before listening; later events append
     writer.appended_at()
     store = store_for(tmp_path, poll_seconds=60, check_seconds=60)
-    delays: list[float] = []
     with listened(store) as heard:
-        for count in range(2, 7):
-            heard.clear()
-            writer.record()
-            assert heard.wait(10)
-            woke = time.time()
-            delays.append(woke - writer.appended_at())
-            assert store.max_notification_id() == count
-    assert statistics.median(delays) < BOUND, delays
+        woken = delays(store, heard, writer)
+    assert statistics.median(woken) < BOUND, woken
 
 
 def test_the_first_event_reaches_a_listener_that_subscribed_before_events_existed(
@@ -346,7 +360,7 @@ def test_a_listened_store_reads_no_segment_while_nothing_is_recorded(
         assert looks == []
 
 
-def test_a_refused_watch_falls_back_to_an_announced_poll_that_still_delivers(
+def test_a_refused_watch_falls_back_to_an_announced_poll_with_a_median_delay_under_the_bound(
     tmp_path: Path, writer: Writer
 ) -> None:
     store = store_for(tmp_path, poll_seconds=0.2, check_seconds=60, watcher=refusing)
@@ -356,27 +370,38 @@ def test_a_refused_watch_falls_back_to_an_announced_poll_that_still_delivers(
         assert "the platform refused (a test)" in notice.details["detail"]
         assert notice.path == str(store.events_dir.absolute())
         check_notice(notice.to_data())
-        writer.record()
-        appended = writer.appended_at()
-        assert heard.wait(10)
-        assert time.time() - appended < 0.2 + 1.0
+        polled = delays(store, heard, writer)
+        assert statistics.median(polled) < 0.2 + BOUND, polled
         codes = [n.code for n in store.notices()]
         assert codes.count("events.subscription-polling") == 1  # it lasts as the polling does
     assert "events.subscription-polling" not in [n.code for n in store.notices()]
 
 
 def test_a_watch_that_never_reports_is_caught_by_the_check_then_the_store_polls(
-    tmp_path: Path, writer: Writer
+    tmp_path: Path, writer: Writer, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     writer.record()
     writer.appended_at()
     store = store_for(tmp_path, poll_seconds=0.2, check_seconds=1.0, watcher=silent)
+    started = threading.Event()
+    deliver = store._deliver
+
+    def noted() -> bool:
+        try:
+            return deliver()
+        finally:
+            started.set()
+
+    monkeypatch.setattr(store, "_deliver", noted)
     with listened(store) as heard:
         assert "events.subscription-polling" not in [n.code for n in store.notices()]
+        # The subscription delivers once as it starts, for writes made while its watch was set up.
+        # Recording before that has run would let it deliver this event, and no check would miss it.
+        assert started.wait(5), "the subscription never made its start-up delivery"
         writer.record()
         appended = writer.appended_at()
         assert heard.wait(10)
-        assert time.time() - appended < 1.0 + 1.0
+        assert time.time() - appended < 1.0 + STALL_SECONDS  # only the check can deliver it
         # The event is delivered at once; the store falls back once the watch has had a grace
         # period to report it late.
         deadline = time.monotonic() + 5
@@ -388,11 +413,8 @@ def test_a_watch_that_never_reports_is_caught_by_the_check_then_the_store_polls(
         [notice] = polling
         assert notice.details["reason"] == "watch-missed-write"
         check_notice(notice.to_data())
-        heard.clear()
-        writer.record()
-        appended = writer.appended_at()
-        assert heard.wait(10)
-        assert time.time() - appended < 0.2 + 1.0
+        polled = delays(store, heard, writer)
+        assert statistics.median(polled) < 0.2 + BOUND, polled
 
 
 class Manual(watching._Backend):
