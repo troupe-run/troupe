@@ -206,6 +206,7 @@ path ([`notice.schema.json`](../protocol/schemas/notice.schema.json)).
 | `events.lineage-invalid` | An event's lineage isn't valid |
 | `events.cause-unknown` | A reaction names a cause that isn't recorded here |
 | `events.unknown-store` | No event store of that name is installed |
+| `events.subscription-not-stopped` | A stopped subscription's thread didn't end within `SUBSCRIBE_STOP_TIMEOUT_SECONDS` |
 | `identity.unresolved` | No identity source answered |
 | `identity.invalid-override` | `TROUPE_ACTOR` isn't `human:<id>` or `agent:<id>` |
 | `identity.ambiguous` | A source found more than one identity |
@@ -233,8 +234,11 @@ Every limit has its default in `troupe.core.defaults`, and each can be overridde
 lock uses the platform's lock defaults (`LOCK_TIMEOUT_SECONDS`, `LOCK_ANNOUNCE_AFTER_SECONDS`), and the identity
 chain is `IDENTITY_CHAIN`. `SUBSCRIBE_POLL_SECONDS` is how often a subscription looks for new events when it can only
 poll, and `SUBSCRIBE_CHECK_SECONDS` how often a store with subscribers checks that its watch is delivering.
+`SUBSCRIBE_STOP_TIMEOUT_SECONDS` bounds how long stopping a subscription waits for its thread to end: once the stop
+returns, the subscription neither reads nor writes the store.
 
 | Setting | Default |
 |---|---|
 | `SUBSCRIBE_POLL_SECONDS` | 1 |
 | `SUBSCRIBE_CHECK_SECONDS` | 30 |
+| `SUBSCRIBE_STOP_TIMEOUT_SECONDS` | 5 |

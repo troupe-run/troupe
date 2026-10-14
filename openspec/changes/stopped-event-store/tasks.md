@@ -21,18 +21,18 @@
 
 ## 3. Stopping waits for the thread, bounded and announced (design D2, D3)
 
-- [ ] 3.1 Add `SUBSCRIBE_STOP_TIMEOUT_SECONDS = 5.0` with its docstring to `troupe.core.defaults`, a `stop_timeout`
+- [x] 3.1 Add `SUBSCRIBE_STOP_TIMEOUT_SECONDS = 5.0` with its docstring to `troupe.core.defaults`, a `stop_timeout`
   parameter defaulting to it on `TextStore` and `shared_store`, and the setting to the defaults table and paragraph
   in `docs/event-store.md`. Verify `test_platform_docs.py` and the event-store doc tests pass
-- [ ] 3.2 Add `events.subscription-not-stopped` to the error registry (`ExitCode.FAILURE`), to
-  `protocol/schemas/error.schema.json` as a closed entry with the `waitedSeconds` and `timeoutSeconds` details, and to
+- [x] 3.2 Add `events.subscription-not-stopped` to the error registry (`ExitCode.FAILURE`), to
+  `protocol/schemas/error.schema.json` as a closed entry with the `waitedSeconds` and `limitSeconds` details, and to
   the errors table in `docs/event-store.md`. Verify `uv run pytest packages/troupe/tests/test_errors.py
   packages/troupe/tests/test_event_store_doc.py` passes
-- [ ] 3.3 Change `TextStore.unlisten` to stop and detach the subscription with the lock held, then release the lock and
+- [x] 3.3 Change `TextStore.unlisten` to stop and detach the subscription with the lock held, then release the lock and
   join the thread in steps: call `on_wait(events_dir, waited)` once at `lock_announce_after`, and raise
   `events.subscription-not-stopped` at `stop_timeout` (design D3's problem, fix, path and details). Remove 1.2's
   `xfail` marker. Verify test 1 now passes, and that 1.1's tests pass unchanged
-- [ ] 3.4 Add design D4 test 2 ("stopped while it delivers") and test 3 ("the bound", including `check_error` on the
+- [x] 3.4 Add design D4 test 2 ("stopped while it delivers") and test 3 ("the bound", including `check_error` on the
   raised error and exactly one `on_wait` call naming the events directory). Verify both pass. Verify test 2 catches
   a broken implementation: temporarily join *inside* the lock and show test 2 failing with the error from the bound
   rather than hanging. Then do the same with the D1 check removed from the wrapper, and show test 1 failing. Revert

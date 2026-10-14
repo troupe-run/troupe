@@ -81,9 +81,9 @@ with its own thread. The two can't interfere: the old thread can no longer act o
 - If it reaches the bound, `unlisten` raises `TroupeError("events.subscription-not-stopped", ...)`. The problem names
   the events directory and the seconds waited. The fix says the subscription's thread is still running, that the
   store can't be treated as quiet, and to report it as a bug with the thread's stack. `details` carries
-  `{"waitedSeconds": ..., "timeoutSeconds": ...}` and `path` is the events directory. The code is added to the error
-  registry with `ExitCode.FAILURE`, to `protocol/schemas/error.schema.json` as a closed entry, and to
-  `docs/event-store.md`.
+  `{"waitedSeconds": ..., "limitSeconds": ...}`, the names `lock.timeout` and `runner.start-timeout` already use,
+  and `path` is the events directory. The code is added to the error registry with `ExitCode.FAILURE`, to
+  `protocol/schemas/error.schema.json` as a closed entry, and to `docs/event-store.md`.
 
 **Recorded assumption, open for the owner to change:** at the bound this raises rather than returning with a notice.
 Under D1 a thread that outlives the bound still can't touch the store, but it may still hold a watch handle. The
@@ -98,12 +98,15 @@ thread is stuck, which is a bug worth surfacing.
 All tests are in `packages/troupe-store-text/tests/` (a new `test_subscription_stop.py`), on a `files` theatre unless
 stated otherwise.
 
-1. **Stopped before its first delivery** (reproduces #97 and fails on `main`): wrap `_Subscription._run` so it sleeps
-   0.5 s before running. `listen`. Record one event through a second `TextStore` over the same theatre (a separate
-   object, so this store hasn't ordered it). `unlisten`. Assert that no thread named `troupe-subscription` started
-   by this store is alive. Snapshot every path under the theatre with its size and `mtime_ns`, wait 1 s, and assert
-   the snapshot hasn't changed. On `main`, `unlisten` returns at once, and 0.5 s later the thread extends the order
-   under `local/`, so the snapshot changes.
+1. **Stopped before its first delivery** (reproduces #97 and fails on `main`): wrap `_Subscription._run` so it waits
+   (bounded) for `_stopped` before running, so its first delivery always comes after the stop. `listen`. Record one
+   event through a second `TextStore` over the same theatre (a separate object, so this store hasn't ordered it).
+   Snapshot every file under the theatre with a hash of its bytes, then `unlisten`. Assert that the thread has ended,
+   wait 1 s, and assert the snapshot hasn't changed. Taking the snapshot *before* the stop matters. On `main`,
+   `unlisten` returns while the thread is running, and the thread then extends the order under `local/`. With D2's
+   join but without D1's check, the thread extends the order before `unlisten` returns, and only a snapshot taken
+   before the stop sees that. (The first version slept 0.5 s and took the snapshot after `unlisten`. That missed the
+   second case, and was replaced while applying task 3.4.)
 2. **Stopped while it delivers**: wrap the store's `max_notification_id` so that on the subscription thread it sets
    `entered` and waits (bounded) for `proceed`. `listen` and wait for `entered`. Call `unlisten` on a helper thread,
    and assert it hasn't returned 0.2 s later. Set `proceed`. Assert `unlisten` returns within 2 s and the thread has
@@ -132,8 +135,5 @@ issue suggests) would have to be reverted, and a test that depends on a reverted
   `with store._lock:` block). The `RLock` would still be held during the join, so D1's wrapper couldn't get it. The
   bound turns that into `events.subscription-not-stopped` after 5 s rather than a hang, and the error's details point
   at the stop. No caller does this today (see Context).
-- **Test 1 depends on timing**: a sleep of 0.5 s and an observation window of 1 s. On a loaded runner a slow thread
-  only makes the `main` failure *more* likely to show, and the fixed code doesn't depend on the timing, because the
-  join waits. So the test can't pass on a broken implementation by accident, but on `main` it could in principle miss
-  the write if the runner stalls for over 1.5 s. That's acceptable for a reproduction. The guarantee itself is checked
-  by tests 2 and 4.
+- **Test 1's 1 s window** after the stop is the only timing in it. The thread is held on `_stopped`, not a sleep,
+  so on a slow runner a broken implementation fails later rather than passing by accident.

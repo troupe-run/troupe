@@ -52,6 +52,7 @@ CODES: dict[str, ExitCode] = {
     "events.lineage-invalid": ExitCode.FAILURE,
     "events.cause-unknown": ExitCode.FAILURE,
     "events.unknown-store": ExitCode.FAILURE,
+    "events.subscription-not-stopped": ExitCode.FAILURE,
     "identity.unresolved": ExitCode.FAILURE,
     "identity.invalid-override": ExitCode.FAILURE,
     "identity.ambiguous": ExitCode.FAILURE,

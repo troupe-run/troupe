@@ -77,6 +77,7 @@ class TextStore:
         on_wait: WaitCallback | None = None,
         poll_seconds: float = defaults.SUBSCRIBE_POLL_SECONDS,
         check_seconds: float = defaults.SUBSCRIBE_CHECK_SECONDS,
+        stop_timeout: float = defaults.SUBSCRIBE_STOP_TIMEOUT_SECONDS,
         watcher: Watcher = watch,
     ) -> None:
         self.theatre = theatre
@@ -93,6 +94,7 @@ class TextStore:
         self.on_wait = on_wait
         self.poll_seconds = poll_seconds
         self.check_seconds = check_seconds
+        self.stop_timeout = stop_timeout
         self.watcher = watcher
 
         self._lock = threading.RLock()
@@ -578,12 +580,17 @@ class TextStore:
                 self._subscription.start()
 
     def unlisten(self, event: threading.Event) -> None:
+        """Stop telling ``event``. When it was the last listener, this returns only once the
+        subscription's thread has ended, so the store is then quiet (stopped-event-store D2, D3)."""
         with self._lock:
             self._listeners.discard(event)
-            if not self._listeners and self._subscription is not None:
-                self._subscription.stop()
-                self._subscription = None
-                self._polling = None
+            if self._listeners or self._subscription is None:
+                return
+            stopped = self._subscription
+            stopped.stop()
+            self._subscription = None
+            self._polling = None
+        stopped.join()  # with the lock released: the thread may be waiting for it to see the stop
 
     def _notify(self) -> None:
         for listener in list(self._listeners):
@@ -738,6 +745,25 @@ class _Subscription:
         if self._watch is not None:
             self._watch.close()
 
+    def join(self) -> None:
+        """Wait for the stopped thread to end: announced through the store's ``on_wait`` once it has
+        lasted ``lock_announce_after``, and failing at ``stop_timeout`` (stopped-event-store D3).
+        Never called with the store's lock held, which the thread may need to see the stop."""
+        store = self.store
+        started = time.monotonic()
+        deadline = started + store.stop_timeout
+        announce_at = started + store.lock_announce_after
+        announced = False
+        while self._thread.is_alive():
+            now = time.monotonic()
+            if now >= deadline:
+                raise _not_stopped(store, now - started)
+            if not announced and now >= announce_at:
+                announced = True
+                if store.on_wait is not None:
+                    store.on_wait(store.events_dir, now - started)
+            self._thread.join((deadline if announced else min(deadline, announce_at)) - now)
+
     def _run(self) -> None:
         store = self.store
         reported = False  # whether the watch reported anything since the last check
@@ -827,6 +853,19 @@ class _Subscription:
                 store._polling = _subscription_polling(store, reason, detail)
 
 
+def _not_stopped(store: TextStore, waited: float) -> TroupeError:
+    """events.subscription-not-stopped (stopped-event-store D3)."""
+    return TroupeError(
+        "events.subscription-not-stopped",
+        problem=f"A subscription to {display(store.events_dir)} was stopped, but its thread was "
+        f"still running {waited:.1f}s later, so troupe can't promise the store is quiet.",
+        fix="This is a bug in troupe. Report it with the stack of the thread named "
+        "troupe-subscription; until that thread ends, don't move or delete the theatre.",
+        path=str(store.events_dir.absolute()),
+        details={"waitedSeconds": round(waited, 3), "limitSeconds": store.stop_timeout},
+    )
+
+
 def _subscription_polling(store: TextStore, reason: str, detail: str) -> Notice:
     """events.subscription-polling, with the text store's reason (watch-event-segments D5)."""
     directory = display(store.events_dir)
@@ -875,6 +914,7 @@ def shared_store(
     *,
     poll_seconds: float = defaults.SUBSCRIBE_POLL_SECONDS,
     check_seconds: float = defaults.SUBSCRIBE_CHECK_SECONDS,
+    stop_timeout: float = defaults.SUBSCRIBE_STOP_TIMEOUT_SECONDS,
     watcher: Watcher = watch,
 ) -> TextStore:
     """The one TextStore for this theatre and purpose in this process, so every recorder over the
@@ -889,6 +929,7 @@ def shared_store(
                 purpose=purpose,
                 poll_seconds=poll_seconds,
                 check_seconds=check_seconds,
+                stop_timeout=stop_timeout,
                 watcher=watcher,
             )
             _stores[key] = store
