@@ -2,8 +2,10 @@
 
 import asyncio
 import contextlib
+import errno
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -13,12 +15,15 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
 from troupe.platform import processes
 from troupe.platform.errors import (
     CommandNotFoundError,
     LineTooLongError,
     OutputTooLargeError,
+    ProcessStateUnknownError,
     ProcessTimeoutError,
 )
 
@@ -518,9 +523,63 @@ SYSTEM_PID = 4
 
 
 @pytest.mark.skipif(not WINDOWS, reason="pid 4 is the System process only on Windows")
-@pytest.mark.xfail(strict=True, reason="#92: fixed by group 3")
+@pytest.mark.xfail(
+    strict=False,
+    reason="#92: main reads it as ended only when it can't open it, which an administrator may",
+)
 def test_the_windows_system_process_reads_as_running() -> None:
     assert processes.is_running(SYSTEM_PID)
+
+
+DENY_EVERYONE_THEN_SLEEP = """
+import ctypes, sys, time
+from ctypes import wintypes
+advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+advapi32.SetSecurityInfo.restype = wintypes.DWORD
+handle_kind_info = [wintypes.HANDLE, ctypes.c_int, wintypes.DWORD]
+advapi32.SetSecurityInfo.argtypes = handle_kind_info + [ctypes.c_void_p] * 4
+acl = ctypes.create_string_buffer(64)
+if not advapi32.InitializeAcl(acl, 64, 2):  # ACL_REVISION: an ACL with no entries denies everyone
+    sys.exit(f"InitializeAcl failed: {ctypes.get_last_error()}")
+error = advapi32.SetSecurityInfo(
+    kernel32.GetCurrentProcess(), 6, 4, None, None, acl, None  # kernel object, its DACL
+)
+if error:
+    sys.exit(f"SetSecurityInfo failed: {error}")
+print("denied", flush=True)
+time.sleep(60)
+"""
+"""A child that gives its own process an empty DACL, so opening it is refused to everyone not
+holding an enabled SeDebugPrivilege, administrators included."""
+
+
+@pytest.mark.skipif(not WINDOWS, reason="a process's DACL is Windows' own")
+@pytest.mark.xfail(strict=True, reason="#92: fixed by group 3")
+def test_a_windows_process_that_refuses_to_be_opened_reads_as_running() -> None:
+    child = subprocess.Popen(_python(DENY_EVERYONE_THEN_SLEEP), stdout=subprocess.PIPE)
+    try:
+        assert child.stdout is not None
+        assert child.stdout.readline().strip() == b"denied"
+        _assert_opening_is_refused(child.pid)  # the refusal this test is about
+        assert processes.is_running(child.pid)
+    finally:
+        _ended_by_kill(child)
+
+
+def _assert_opening_is_refused(pid: int) -> None:
+    if sys.platform != "win32":
+        raise AssertionError("only Windows refuses to open a process by its DACL")
+    import ctypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.restype = ctypes.c_void_p
+    handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+    if handle:
+        kernel32.CloseHandle(ctypes.c_void_p(handle))
+        raise AssertionError(f"process {pid} could still be opened, so nothing was refused")
+    assert ctypes.get_last_error() == 5  # ERROR_ACCESS_DENIED
 
 
 @pytest.mark.skipif(not WINDOWS, reason="a held handle to an exited process is Windows' own")
@@ -580,3 +639,105 @@ def _wait_until_zombie(pid: int) -> None:
             return
         time.sleep(0.05)
     raise AssertionError(f"process {pid} didn't become a zombie within 10s")
+
+
+def test_the_unknown_state_error_names_the_pid_the_os_text_and_the_code() -> None:
+    error = ProcessStateUnknownError(4321, 22, "Invalid argument")
+    assert str(error) == "can't tell whether process 4321 has ended: Invalid argument (error 22)"
+    assert (error.pid, error.code, error.text) == (4321, 22, "Invalid argument")
+
+
+def _os_error(code: int) -> OSError:
+    return OSError(code, os.strerror(code))
+
+
+@pytest.mark.parametrize(
+    ("error", "running"),
+    [(None, True), (_os_error(errno.EPERM), True), (_os_error(errno.ESRCH), False)],
+    ids=["signalled", "refused", "no-such-process"],
+)
+def test_the_posix_table_reads_success_and_refusal_as_running_and_no_such_process_as_ended(
+    error: OSError | None, running: bool
+) -> None:
+    assert processes._posix_outcome(1234, error) is running
+
+
+@given(
+    st.integers(min_value=1, max_value=4096).filter(lambda c: c not in {errno.EPERM, errno.ESRCH})
+)
+def test_any_other_posix_error_is_an_unknown_state_naming_the_pid_and_the_code(code: int) -> None:
+    with pytest.raises(ProcessStateUnknownError) as caught:
+        processes._posix_outcome(1234, OSError(code, "some failure"))
+    assert (caught.value.pid, caught.value.code, caught.value.text) == (1234, code, "some failure")
+
+
+@pytest.mark.parametrize(
+    ("open_error", "wait_result", "running"),
+    [
+        (87, None, False),  # ERROR_INVALID_PARAMETER: no such process
+        (5, None, True),  # ERROR_ACCESS_DENIED: it exists
+        (None, 0x0, False),  # WAIT_OBJECT_0: the handle is signalled, it has exited
+        (None, 0x102, True),  # WAIT_TIMEOUT: not signalled, still running
+    ],
+    ids=["no-such-process", "access-denied", "signalled", "not-signalled"],
+)
+def test_the_windows_table_reads_each_known_answer(
+    open_error: int | None, wait_result: int | None, running: bool
+) -> None:
+    outcome = processes._windows_outcome(
+        1234, open_error=open_error, wait_result=wait_result, wait_error=None
+    )
+    assert outcome is running
+
+
+@given(st.integers(min_value=0, max_value=0xFFFFFFFF).filter(lambda c: c not in {5, 87}))
+def test_any_other_windows_open_error_is_an_unknown_state_naming_the_pid_and_the_code(
+    code: int,
+) -> None:
+    with pytest.raises(ProcessStateUnknownError) as caught:
+        processes._windows_outcome(1234, open_error=code, wait_result=None, wait_error=None)
+    assert (caught.value.pid, caught.value.code) == (1234, code)
+
+
+def test_a_failed_windows_wait_is_an_unknown_state_carrying_the_wait_error() -> None:
+    with pytest.raises(ProcessStateUnknownError) as caught:
+        processes._windows_outcome(1234, open_error=None, wait_result=0xFFFFFFFF, wait_error=6)
+    assert (caught.value.pid, caught.value.code) == (1234, 6)
+    assert caught.value.text.startswith("waiting on the process failed: ")
+
+
+@given(
+    st.integers(min_value=0, max_value=0xFFFFFFFF).filter(
+        lambda r: r not in {0x0, 0x102, 0xFFFFFFFF}
+    )
+)
+def test_any_other_windows_wait_result_is_an_unknown_state_naming_it(result: int) -> None:
+    with pytest.raises(ProcessStateUnknownError) as caught:
+        processes._windows_outcome(1234, open_error=None, wait_result=result, wait_error=None)
+    assert caught.value.pid == 1234
+    assert caught.value.text == f"waiting on the process returned {result!r}"
+
+
+NOT_A_PID = [0, -1, processes.PID_MAX + 1, True]
+
+
+@pytest.fixture
+def no_os_query(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fail the test if is_running reaches the OS."""
+
+    def reached(*_: object) -> typing.NoReturn:
+        raise AssertionError("is_running asked the OS about a value that isn't a pid")
+
+    if sys.platform == "win32":
+        monkeypatch.setattr(processes._kernel32, "OpenProcess", reached)
+    else:
+        monkeypatch.setattr(os, "kill", reached)
+
+
+@pytest.mark.usefixtures("no_os_query")
+@pytest.mark.parametrize("value", NOT_A_PID, ids=repr)
+def test_a_value_that_cant_name_one_process_is_refused_naming_it_without_asking_the_os(
+    value: int,
+) -> None:
+    with pytest.raises(ValueError, match=re.escape(f"{value!r} isn't a process id")):
+        processes.is_running(value)

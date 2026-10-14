@@ -76,3 +76,14 @@ class WatchUnavailableError(PlatformError):
         super().__init__(f"{directory} can't be watched: {reason}")
         self.directory = directory
         self.reason = reason
+
+
+class ProcessStateUnknownError(PlatformError):
+    """The OS couldn't say whether a process has ended, so no answer is guessed."""
+
+    def __init__(self, pid: int, code: int | None, text: str) -> None:
+        error = "no error code" if code is None else f"error {code}"
+        super().__init__(f"can't tell whether process {pid} has ended: {text} ({error})")
+        self.pid = pid
+        self.code = code
+        self.text = text
