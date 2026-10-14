@@ -3,8 +3,10 @@
 One mechanism on every platform: ``signal.signal`` for SIGINT, and on Windows also SIGBREAK, which
 is what Ctrl-Break sends (and the only console event a process in its own process group receives).
 The handlers run in the main thread, between bytecodes, so the callback must be quick and safe to
-call there: it asks for something to happen, it doesn't do it. The previous handlers come back when
-the block ends, however it ends.
+call there: it asks for something to happen, it doesn't do it. That means no I/O, ``print``
+included: a handler can run inside the caller's own write to a stream, and writing to that stream
+again raises ``RuntimeError: reentrant call`` (#96). The previous handlers come back when the block
+ends, however it ends.
 """
 
 import signal
