@@ -47,7 +47,7 @@
   are the check that matches the issue. Unloaded, the change adds about 1.9 s to the suite (four more events in each
   of the two tests)
 - [x] 5.3 Run `uv run scripts/check.py`. Verify every gate passes
-- [ ] 5.4 Open the PR (`Closes #81`) and verify all CI jobs pass on Linux, macOS and Windows. Re-run the Windows job
+- [x] 5.4 Open the PR (`Closes #81`) and verify all CI jobs pass on Linux, macOS and Windows. Re-run the Windows job
   twice more and verify it passes each time, recording the run ids for the PR. #86 currently fails the Windows job
   on `main` (`test_run_host.py`, unrelated to this change). If that is the only failure, record it in the PR and
   rerun once #86 is fixed; the task isn't ticked until Windows is green
