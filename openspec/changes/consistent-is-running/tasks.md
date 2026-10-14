@@ -9,7 +9,7 @@
   the new requirement: a live child reads running; a waited-for child reads ended; POSIX pid 1 reads running when
   not root (skipped as root, saying why); a POSIX unreaped child reads running, named as the documented limit.
   Verify they pass against main's `is_running`, before any change to it
-- [ ] 1.3 Add the Windows tests that fail on main: a child that denies everyone access to its own process (an
+- [x] 1.3 Add the Windows tests that fail on main: a child that denies everyone access to its own process (an
   empty DACL, which refuses an elevated administrator too) reads running, and a child that exited with code 259
   while its `Popen` still holds it reads ended. Mark both `xfail(strict=True)` with the reason "#92: fixed by
   group 3". Add the System process (pid 4) reads running as a non-strict xfail, because CI's administrator may be
@@ -34,11 +34,11 @@
 - [x] 3.1 POSIX `is_running`: check the pid, call `os.kill(pid, 0)`, pass the result to `_posix_outcome`. Verify
   group 1's tests still pass, and a test that monkeypatches `os.kill` to raise `OSError(EINVAL)` gets
   `ProcessStateUnknownError` naming the pid and `EINVAL`
-- [ ] 3.2 Windows `is_running`: bind `WaitForSingleObject`, open with `PROCESS_QUERY_LIMITED_INFORMATION |
+- [x] 3.2 Windows `is_running`: bind `WaitForSingleObject`, open with `PROCESS_QUERY_LIMITED_INFORMATION |
   SYNCHRONIZE`, take `ctypes.get_last_error()` at each failing call, close the handle in every path, pass the
   results to `_windows_outcome`. Remove the `xfail`s from 1.3. Verify on Windows CI that all three tests pass, and
   record which branch pid 4 took (access denied or wait) for the PR
-- [ ] 3.3 Add the cross-platform test that a child exiting with code 259 reads ended (waited for on POSIX, held on
+- [x] 3.3 Add the cross-platform test that a child exiting with code 259 reads ended (waited for on POSIX, held on
   Windows). Verify it passes on all three CI platforms
 - [x] 3.4 Update both `is_running` docstrings and the module docstring's platform list to the one meaning, the
   three outcomes and the POSIX zombie limit. Verify they match the spec requirement's wording
@@ -52,10 +52,10 @@
 
 ## 5. Integration
 
-- [ ] 5.1 Verify the existing callers pass unchanged on all three platforms: the kill-tree tests in
+- [x] 5.1 Verify the existing callers pass unchanged on all three platforms: the kill-tree tests in
   `test_platform_processes.py`, `test_a_runner_ignoring_cancel_is_killed_with_the_process_it_started` in
   `test_run_host.py`, and `test_a_hung_git_times_out_and_its_whole_tree_is_stopped` in `test_git_adapter.py`
-- [ ] 5.2 Run `uv run scripts/check.py` (ruff, format, mypy --strict, import-linter, the full suite). Verify it
+- [x] 5.2 Run `uv run scripts/check.py` (ruff, format, mypy --strict, import-linter, the full suite). Verify it
   passes locally and on CI on Linux, macOS and Windows
 
 ## Workflow follow-up
