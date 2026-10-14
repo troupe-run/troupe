@@ -40,7 +40,7 @@
 
 ## 4. The library suite proves its cleanup (design D4, test 4)
 
-- [ ] 4.1 In `test_library_suite.py`, have `_Theatre.tearDown` assert that no `troupe-subscription` thread is alive
+- [x] 4.1 In `test_library_suite.py`, have `_Theatre.tearDown` assert that no `troupe-subscription` thread is alive
   before the temporary directory is removed, with a message naming #97. Verify the whole module passes, and that
   with D2's join temporarily removed `test_insert_subscribe` fails on that assertion. Revert and show it reverted
   with `git diff --stat`
