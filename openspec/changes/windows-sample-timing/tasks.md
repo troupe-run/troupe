@@ -39,8 +39,14 @@
 - [x] 5.1 Confirm the delta in `specs/event-store/spec.md` states exactly what the changed tests check (median of
   five, `SUBSCRIBE_POLL_SECONDS` plus 0.25 s, the check allowance), and run `openspec validate windows-sample-timing --strict`.
   Verify it passes
-- [ ] 5.2 Repeat 1.1's loaded runs (20 each) against the changed tests. Verify none fail, and record the medians seen
-- [ ] 5.3 Run `uv run scripts/check.py`. Verify every gate passes
+- 5.2 (dropped by the owner, 2026-10-14; not a tracked task) Repeat 1.1's loaded runs against the changed tests. It
+  ran once: 17 of 20 failed, mostly an event not arriving within the 10 s wait at all. The machine's other load
+  (load average 220 to 245, against about 180 during 1.1) starved processes for over 30 s, so the writer couldn't
+  even exit in time, in code this change doesn't touch. That's far harsher than the done-when in #81, a loaded CI
+  runner, where the stall seen was about 1 s, and the two runs weren't under the same conditions. The CI runs in 5.4
+  are the check that matches the issue. Unloaded, the change adds about 1.9 s to the suite (four more events in each
+  of the two tests)
+- [x] 5.3 Run `uv run scripts/check.py`. Verify every gate passes
 - [ ] 5.4 Open the PR (`Closes #81`) and verify all CI jobs pass on Linux, macOS and Windows. Re-run the Windows job
   twice more and verify it passes each time, recording the run ids for the PR. #86 currently fails the Windows job
   on `main` (`test_run_host.py`, unrelated to this change). If that is the only failure, record it in the PR and
