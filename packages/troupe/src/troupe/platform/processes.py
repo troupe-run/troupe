@@ -17,6 +17,7 @@ Platform differences, handled here so callers see one behaviour:
 
 import asyncio
 import contextlib
+import errno
 import os
 import shutil
 import subprocess
@@ -33,6 +34,7 @@ from troupe.platform.errors import (
     EnvironmentPolicyError,
     LineTooLongError,
     OutputTooLargeError,
+    ProcessStateUnknownError,
     ProcessTimeoutError,
 )
 
@@ -131,6 +133,77 @@ def build_environment(
             raise EnvironmentPolicyError(name, "this policy never passes it")
         environment[name] = value
     return environment
+
+
+PID_MAX = 2**31 - 1
+"""The largest pid any supported platform can name (POSIX ``pid_t`` is a signed 32-bit integer)."""
+
+_ERROR_ACCESS_DENIED = 5
+_ERROR_INVALID_PARAMETER = 87
+_WAIT_OBJECT_0 = 0x0
+_WAIT_TIMEOUT = 0x102
+_WAIT_FAILED = 0xFFFFFFFF
+
+
+def _check_pid(pid: int) -> None:
+    """Refuse a value that can't name one process, before any OS call.
+
+    On POSIX ``0`` and negative values address process groups, and on Windows ``0`` is the System
+    Idle Process. A larger value would overflow ``pid_t``, or be truncated to another pid on
+    Windows. A ``bool`` is an ``int`` to Python, but never a pid.
+    """
+    if isinstance(pid, bool) or not isinstance(pid, int) or not 0 < pid <= PID_MAX:
+        raise ValueError(f"{pid!r} isn't a process id: a pid is an integer from 1 to {PID_MAX}")
+
+
+def _posix_outcome(pid: int, error: OSError | None) -> bool:
+    """Whether ``pid`` is running, from what ``kill(pid, 0)`` said.
+
+    Success, or a refusal (``EPERM``), means it exists; ``ESRCH`` means it has ended. Anything else
+    can't tell, and raises ProcessStateUnknownError.
+    """
+    if error is None or error.errno == errno.EPERM:
+        return True
+    if error.errno == errno.ESRCH:
+        return False
+    raise ProcessStateUnknownError(pid, error.errno, error.strerror or str(error))
+
+
+def _windows_outcome(
+    pid: int, *, open_error: int | None, wait_result: int | None, wait_error: int | None
+) -> bool:
+    """Whether ``pid`` is running, from what ``OpenProcess`` and ``WaitForSingleObject`` said.
+
+    A failed open means ended for ``ERROR_INVALID_PARAMETER`` (no such process) and running for
+    ``ERROR_ACCESS_DENIED`` (it exists). An opened process has ended exactly when its handle is
+    signalled, which, unlike its exit code, has no value a process can also exit with. Anything
+    else can't tell, and raises ProcessStateUnknownError.
+    """
+    if open_error is not None:
+        if open_error == _ERROR_INVALID_PARAMETER:
+            return False
+        if open_error == _ERROR_ACCESS_DENIED:
+            return True
+        raise ProcessStateUnknownError(pid, open_error, _windows_error_text(open_error))
+    if wait_result == _WAIT_OBJECT_0:
+        return False
+    if wait_result == _WAIT_TIMEOUT:
+        return True
+    if wait_result == _WAIT_FAILED:
+        text = "waiting on the process failed"
+        if wait_error is not None:
+            text = f"{text}: {_windows_error_text(wait_error)}"
+        raise ProcessStateUnknownError(pid, wait_error, text)
+    raise ProcessStateUnknownError(pid, None, f"waiting on the process returned {wait_result!r}")
+
+
+def _windows_error_text(code: int) -> str:
+    """The OS's description of a Windows error code, where the OS can describe it."""
+    if sys.platform == "win32":
+        import ctypes
+
+        return ctypes.FormatError(code).strip()
+    return f"Windows error {code}"
 
 
 if sys.platform == "win32":
@@ -240,6 +313,7 @@ if sys.platform == "win32":
 
     def is_running(pid: int) -> bool:
         """Whether a process with this id is running."""
+        _check_pid(pid)
         process = _kernel32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
         if not process:
             return False
@@ -271,6 +345,7 @@ else:
 
     def is_running(pid: int) -> bool:
         """Whether a process with this id is running (a zombie awaiting its parent counts)."""
+        _check_pid(pid)
         try:
             os.kill(pid, 0)
         except ProcessLookupError:

@@ -9,19 +9,22 @@
   the new requirement: a live child reads running; a waited-for child reads ended; POSIX pid 1 reads running when
   not root (skipped as root, saying why); a POSIX unreaped child reads running, named as the documented limit.
   Verify they pass against main's `is_running`, before any change to it
-- [ ] 1.3 Add the Windows tests that fail on main: the System process (pid 4) reads running, and a child that
-  exited with code 259 while its `Popen` still holds it reads ended. Mark both `xfail(strict=True)` with the reason
-  "#92: fixed by group 3". Verify on Windows CI that both xfail (record what main returned for the PR)
+- [ ] 1.3 Add the Windows tests that fail on main: a child that denies everyone access to its own process (an
+  empty DACL, which refuses an elevated administrator too) reads running, and a child that exited with code 259
+  while its `Popen` still holds it reads ended. Mark both `xfail(strict=True)` with the reason "#92: fixed by
+  group 3". Add the System process (pid 4) reads running as a non-strict xfail, because CI's administrator may be
+  able to open it and then main already answers right. Verify on Windows CI that the strict two xfail, and record
+  what main returned for pid 4 for the PR
 
 ## 2. The decision tables (design D2, D5, D6)
 
-- [ ] 2.1 Add `ProcessStateUnknownError(pid, code, text)` to `troupe.platform.errors` (design D6). Verify a test
+- [x] 2.1 Add `ProcessStateUnknownError(pid, code, text)` to `troupe.platform.errors` (design D6). Verify a test
   that its message names the pid, the text and the code
-- [ ] 2.2 Add the module-level `_posix_outcome` and `_windows_outcome` to `processes.py`, and the pid check
+- [x] 2.2 Add the module-level `_posix_outcome` and `_windows_outcome` to `processes.py`, and the pid check
   (design D5). Verify parametrised tests for every row of both tables pass on every platform, and a Hypothesis
   property that any errno or Windows error outside the known ones raises `ProcessStateUnknownError` with that pid
   and code
-- [ ] 2.3 Verify tests that `0`, `-1` and `True` raise `ValueError` naming the value, and that no OS call is made
+- [x] 2.3 Verify tests that `0`, `-1`, `2**31` and `True` raise `ValueError` naming the value, and that no OS call is made
   (by monkeypatching `os.kill` on POSIX and the open call on Windows to fail the test if reached)
 
 ## 3. Wire each platform's OS calls to its table (design D3)
@@ -31,7 +34,7 @@
   `ProcessStateUnknownError` naming the pid and `EINVAL`
 - [ ] 3.2 Windows `is_running`: bind `WaitForSingleObject`, open with `PROCESS_QUERY_LIMITED_INFORMATION |
   SYNCHRONIZE`, take `ctypes.get_last_error()` at each failing call, close the handle in every path, pass the
-  results to `_windows_outcome`. Remove the `xfail`s from 1.3. Verify on Windows CI that both tests pass, and
+  results to `_windows_outcome`. Remove the `xfail`s from 1.3. Verify on Windows CI that all three tests pass, and
   record which branch pid 4 took (access denied or wait) for the PR
 - [ ] 3.3 Add the cross-platform test that a child exiting with code 259 reads ended (waited for on POSIX, held on
   Windows). Verify it passes on all three CI platforms

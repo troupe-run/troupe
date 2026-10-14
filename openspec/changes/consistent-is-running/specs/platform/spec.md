@@ -34,7 +34,7 @@ the OS error, never a guess.
 - **THEN** the query fails with an error naming the process id and the OS error
 
 #### Scenario: A pid that can't name one process is refused
-- **WHEN** the id asked about is zero, negative, or not an integer
+- **WHEN** the id asked about is zero, negative, larger than any platform's process ids, or not an integer
 - **THEN** the query fails with an error naming the value, and no signal is sent
 
 #### Scenario: An unreaped child on Linux and macOS is a documented limit

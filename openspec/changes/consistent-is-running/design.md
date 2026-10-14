@@ -97,7 +97,9 @@ POSIX-only test pins it under a name that says it is the limit.
 
 ### D5. A pid that can't name one process is a `ValueError`, checked before any OS call
 
-`pid` must be an `int`, not a `bool`, and greater than zero. On POSIX `0` and negatives signal a process group;
+`pid` must be an `int`, not a `bool`, from 1 to `2**31 - 1` (POSIX `pid_t` is a signed 32-bit integer; `os.kill`
+would raise `OverflowError` past it, and ctypes would silently truncate it on Windows, asking about a different
+pid). Found while applying: the bound was not in the first draft. On POSIX `0` and negatives signal a process group;
 on Windows `0` is the System Idle Process. The message names the value and says a pid is a positive integer. It is
 a `ValueError`, not a `PlatformError`, because it is the caller's mistake, not the OS's.
 
@@ -116,8 +118,10 @@ In `test_platform_processes.py`, under the new requirement's heading:
   code.
 - **Real processes, every platform**: a live child reads running; a waited-for child reads ended; a child that
   exited with 259 reads ended (held on Windows, waited for on POSIX); `0`, `-1` and `True` are refused.
-- **Windows only**: an exited child whose `Popen` still holds its handle reads ended; the System process (pid 4)
-  reads running.
+- **Windows only**: an exited child whose `Popen` still holds its handle reads ended; a child that gives its own
+  process an empty DACL reads running (opening it is refused even to an elevated administrator, who holds
+  SeDebugPrivilege disabled); the System process (pid 4) reads running. The empty-DACL child is the
+  access-denied reproduction: pid 4 may be openable on CI (found while applying, from a side review).
 - **POSIX only**: pid 1 reads running when not root (skipped as root, saying why, since root may signal it and the
   refusal branch wouldn't be reached); an unreaped child reads running, named as the documented limit.
 - **OS error path**: monkeypatching `os.kill` to raise `EINVAL` (POSIX) shows the real function raises
@@ -130,8 +134,9 @@ The existing callers' tests stay unchanged and must still pass on all three plat
 - [A reaped pid is reused before the "ended" test asserts] → assert at once after the wait; the reuse window on
   every OS is far longer than that. A failure would read as "running", which is visible, not a false pass.
 - [Windows CI is elevated, so pid 4 may open successfully and take the wait path, not the access-denied one] →
-  the test's name claims only that the System process reads running, which is true on either path; the
-  access-denied mapping is covered by the D2 table. The PR records which path CI took.
+  the test's name claims only that the System process reads running, which is true on either path, and it is a
+  non-strict xfail before the fix so main's answer is reported either way. The empty-DACL child produces the
+  refusal for certain, and the D2 table covers the mapping. The PR records which path pid 4 took.
 - [A test that relied on `is_running` never raising now fails with `ProcessStateUnknownError`] → intended: that
   test was passing on a guess. Investigate rather than catch.
 
