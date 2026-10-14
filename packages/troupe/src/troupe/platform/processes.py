@@ -207,7 +207,8 @@ def _windows_error_text(code: int) -> str:
     if sys.platform == "win32":
         import ctypes
 
-        return ctypes.FormatError(code).strip()
+        # FormatError takes a C long; a Windows error code is a DWORD, so pass its bits signed.
+        return ctypes.FormatError(ctypes.c_long(code).value).strip()
     return f"Windows error {code}"
 
 

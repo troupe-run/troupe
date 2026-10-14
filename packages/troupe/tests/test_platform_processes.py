@@ -15,7 +15,7 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
-from hypothesis import given
+from hypothesis import example, given
 from hypothesis import strategies as st
 
 from troupe.platform import processes
@@ -689,6 +689,7 @@ def test_the_windows_table_reads_each_known_answer(
 
 
 @given(st.integers(min_value=0, max_value=0xFFFFFFFF).filter(lambda c: c not in {5, 87}))
+@example(2**31)  # FormatError takes a C long: found by this property on Windows CI
 def test_any_other_windows_open_error_is_an_unknown_state_naming_the_pid_and_the_code(
     code: int,
 ) -> None:
