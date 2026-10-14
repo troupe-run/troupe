@@ -13,6 +13,11 @@ Platform differences, handled here so callers see one behaviour:
   ``SYSTEMROOT`` to start Python and use sockets, so it is always passed.
 - Both: the command is resolved to an absolute path before starting, using the caller's search
   path, so the child doesn't need ``PATH`` itself.
+- Both: ``is_running`` answers one question, has the process ended? A process the OS refuses
+  access to is running; one is ended only when the OS says there is no such process or that it
+  has exited; anything else raises ProcessStateUnknownError rather than guessing. POSIX asks with
+  ``kill(pid, 0)``, which can't see that an unreaped child (a zombie) has exited: a documented
+  limitation (docs/platform.md). Windows asks whether the process handle is signalled.
 """
 
 import asyncio
@@ -217,7 +222,7 @@ if sys.platform == "win32":
     _PROCESS_TERMINATE = 0x0001
     _PROCESS_SET_QUOTA = 0x0100
     _PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-    _STILL_ACTIVE = 259
+    _SYNCHRONIZE = 0x00100000
 
     class _BasicLimits(ctypes.Structure):
         _fields_ = [  # the layout of JOBOBJECT_BASIC_LIMIT_INFORMATION
@@ -270,8 +275,8 @@ if sys.platform == "win32":
     _kernel32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
     _kernel32.TerminateJobObject.restype = wintypes.BOOL
     _kernel32.TerminateJobObject.argtypes = [wintypes.HANDLE, wintypes.UINT]
-    _kernel32.GetExitCodeProcess.restype = wintypes.BOOL
-    _kernel32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+    _kernel32.WaitForSingleObject.restype = wintypes.DWORD
+    _kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
     _kernel32.CloseHandle.restype = wintypes.BOOL
     _kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
 
@@ -312,18 +317,27 @@ if sys.platform == "win32":
         raise NotImplementedError("Windows children are killed through their job")
 
     def is_running(pid: int) -> bool:
-        """Whether a process with this id is running."""
+        """Whether the process with this id hasn't ended (spec: platform).
+
+        Read from whether its handle is signalled, not from its exit code, which a process can
+        exit with 259 (``STILL_ACTIVE``) and so can't tell apart from running. A process the OS
+        refuses to open exists, so it is running. Raises ProcessStateUnknownError when the OS
+        can't say, and ValueError for a value that can't name one process.
+        """
         _check_pid(pid)
-        process = _kernel32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        process = _kernel32.OpenProcess(
+            _PROCESS_QUERY_LIMITED_INFORMATION | _SYNCHRONIZE, False, pid
+        )
         if not process:
-            return False
+            return _windows_outcome(
+                pid, open_error=ctypes.get_last_error(), wait_result=None, wait_error=None
+            )
         try:
-            code = wintypes.DWORD()
-            if not _kernel32.GetExitCodeProcess(process, ctypes.byref(code)):
-                return False
-            return code.value == _STILL_ACTIVE
+            result = _kernel32.WaitForSingleObject(process, 0)
+            error = ctypes.get_last_error() if result == _WAIT_FAILED else None
         finally:
             _kernel32.CloseHandle(process)
+        return _windows_outcome(pid, open_error=None, wait_result=result, wait_error=error)
 
 else:
     import signal
@@ -344,15 +358,19 @@ else:
             os.killpg(pid, signal.SIGKILL)
 
     def is_running(pid: int) -> bool:
-        """Whether a process with this id is running (a zombie awaiting its parent counts)."""
+        """Whether the process with this id hasn't ended (spec: platform).
+
+        A process the OS refuses to let us signal exists, so it is running. One that has exited
+        but hasn't been waited for by its parent (a zombie) still reads as running: a documented
+        limit (docs/platform.md). Raises ProcessStateUnknownError when the OS can't say, and
+        ValueError for a value that can't name one process.
+        """
         _check_pid(pid)
         try:
             os.kill(pid, 0)
-        except ProcessLookupError:
-            return False
-        except PermissionError:
-            return True  # it exists, owned by someone else
-        return True
+        except OSError as error:
+            return _posix_outcome(pid, error)
+        return _posix_outcome(pid, None)
 
 
 class ChildProcess:
