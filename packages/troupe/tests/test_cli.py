@@ -13,7 +13,7 @@ from typing import Any, TextIO
 
 import jsonschema
 import pytest
-from hypothesis import given, settings
+from hypothesis import assume, example, given, settings
 from hypothesis import strategies as st
 
 from protocol_schemas import check_error
@@ -468,8 +468,9 @@ def test_a_repeatable_option_given_twice_is_not_a_conflict() -> None:
         (("status", "one", "two"), "status", "two"),
         (("logs", "abc", "def"), "logs", "def"),
         (("status", "--", "-5", "-6"), "status", "-6"),
+        (("status", "x", "--", "--"), "status", "--"),
     ],
-    ids=["status", "logs", "after-separator"],
+    ids=["status", "logs", "after-separator", "separator-after-separator"],
 )
 def test_too_many_positional_values_is_an_extra_argument_naming_the_first_extra(
     argv: tuple[str, ...], command: str, value: str
@@ -665,3 +666,44 @@ def test_every_refusal_is_a_named_usage_shape_with_no_prefix(argv: list[str]) ->
     assert refusal.exit_code is ExitCode.USAGE
     assert not refusal.problem.startswith("troupe:")
     check_error(refusal.to_data())
+
+
+# A separator with nothing after it changes nothing (status-refused, #82)
+
+
+def _outcome(argv: list[str]) -> tuple[object, ...]:
+    """What ``parse`` makes of ``argv``: everything a parsed line carries, or the refusal's code and
+    details."""
+    try:
+        parsed = parse(argv, CHECKED)
+    except TroupeError as error:
+        return ("refused", error.code, error.details)
+    command = parsed.command.name if parsed.command is not None else None
+    return ("parsed", parsed.show_version, command, vars(parsed.arguments), parsed.help_text)
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["status", "x", "--json"],
+        ["status", "x", "--limit", "5"],
+        ["logs", "x", "--follow"],
+        ["perform", "x", "--runner", "x", "--no-effect-check"],
+        ["echo", "x", "--upper"],
+        ["choose", "5", "--colour", "red"],
+    ],
+    ids=["status-json", "status-limit", "logs", "perform", "echo", "choose"],
+)
+def test_a_trailing_separator_after_the_filled_positionals_parses_as_the_line_without_it(
+    argv: list[str],
+) -> None:
+    with_separator = parse([*argv, "--"], CHECKED)
+    assert vars(with_separator.arguments) == vars(parse(argv, CHECKED).arguments)
+
+
+@settings(max_examples=500, deadline=None)
+@given(command_lines())
+@example(["status", "x", "--json"])
+def test_a_trailing_separator_never_changes_the_outcome(argv: list[str]) -> None:
+    assume("--" not in argv)
+    assert _outcome([*argv, "--"]) == _outcome(argv)

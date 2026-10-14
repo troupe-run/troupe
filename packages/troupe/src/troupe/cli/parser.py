@@ -4,6 +4,7 @@ Rules (spec: cli):
 - Global flags are accepted anywhere, before or after the subcommand.
 - A value that starts with ``-`` must come after ``--``. Without it, troupe refuses rather than
   guessing whether a value or an option was meant.
+- A ``--`` with nothing after it changes nothing: the line means what it means without it.
 - Unknown commands and flags are usage errors that name what wasn't recognised and suggest the
   closest valid alternative.
 - Every usage shape has its own code, names the command it concerns and points at its help. A
@@ -14,7 +15,9 @@ refuses unknown names and unseparated dash-leading values, because argparse on i
 some as positionals (``-5``), and a check compares the line with the command's declared arguments,
 because argparse reports what is missing or too much as untyped English that changes between
 Python versions (argparse-errors D1). argparse then only turns an accepted line into a namespace;
-if it still refuses, that is ``usage.invalid``, the backstop.
+if it still refuses, that is ``usage.invalid``, the backstop. argparse consumes ``--`` only
+alongside positionals, so once they're filled before an option it refuses a trailing ``--``
+(``status x --json --``); ``parse`` drops that separator first (status-refused D2).
 """
 
 import argparse
@@ -342,12 +345,13 @@ def _invalid_value(command: str, name: str, value: str) -> TroupeError:
 @dataclass
 class _Scan:
     """What the line gave: the command, the options in the order given with their raw values, the
-    positional values, and the first option left without a value."""
+    positional values, the first option left without a value, and where the separator is."""
 
     chosen: str | None = None
     given: dict[str, list[str]] = field(default_factory=dict)  # dest -> values, in line order
     positionals: list[str] = field(default_factory=list)
     without_value: str | None = None
+    separator: int | None = None  # the index of the ``--`` read as the separator
 
 
 def _scan(
@@ -367,6 +371,7 @@ def _scan(
         if arg == "--":
             if scan.chosen is None:
                 raise _separator_before_command()
+            scan.separator = at - 1
             scan.positionals.extend(argv[at:])
             break
         if arg.startswith("-"):
@@ -505,8 +510,11 @@ def parse(argv: Sequence[str], commands: Sequence[Command]) -> Parsed:
         )
     if scan.chosen is not None:
         _check(scan.chosen, _declared(subparsers[scan.chosen]), scan)
+    # A separator with nothing after it separates nothing, and argparse would refuse it once the
+    # positionals are filled before an option (design D2 of status-refused).
+    trailing = scan.separator == len(argv) - 1
     try:
-        arguments = root.parse_args(argv)
+        arguments = root.parse_args(argv[:-1] if trailing else argv)
     except argparse.ArgumentError as error:
         raise _invalid(str(error), scan.chosen) from error
     except _RefusedError as refused:
