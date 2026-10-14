@@ -21,7 +21,7 @@ task, and shown reverted with `git diff --stat` (no change to `store.py`). None 
 
 ## 2. The refused-watch test checks the interval and the next look (design D1, D2, D3, D4)
 
-- [ ] 2.1 Add the recorder (design D2): a `_Subscription` subclass, installed with `monkeypatch.setattr` on the store
+- [x] 2.1 Add the recorder (design D2): a `_Subscription` subclass, installed with `monkeypatch.setattr` on the store
   module, whose `_stopped` records each `wait` timeout, and a `_deliver` wrapper that records `(started, delivered)`
   with `time.time()`. Add `polled(store, heard, writer, looks, count=5)`, which records five events as `delays()`
   does (each arrives within 10 s, the order grows by one) and returns each event's append time, its wall-clock delay
@@ -69,9 +69,12 @@ task, and shown reverted with `git diff --stat` (no change to `store.py`). None 
 
   Recorded: the file's 14 tests pass, and every gate passes (1646 passed, 2 skipped). Over three runs each, the two
   tests take the same time as on `origin/main`: about 1.25 s (refused watch) and 3.26 s (never reports).
-- [ ] 4.3 Open the PR (`Closes #91`) and verify all CI jobs pass on Linux, macOS and Windows. Re-run the Windows job
+- [x] 4.3 Open the PR (`Closes #91`) and verify all CI jobs pass on Linux, macOS and Windows. Re-run the Windows job
   twice more and verify it passes each time, recording the run ids in the PR. If #90 is the only failure, record it
   in the PR and re-run; the task isn't ticked until Windows is green
+
+  Recorded: PR #95, CI run 38521322181. Every job passed on attempt 1. Attempt 2 reran Windows Python 3.12 only;
+  attempts 3 and 4 reran the whole run. All passed: Windows 3.12 four times, Windows 3.13 three times.
 
 ## Workflow follow-up
 
