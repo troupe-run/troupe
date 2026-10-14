@@ -1035,6 +1035,34 @@
     {
       "properties": {
         "code": {
+          "const": "events.subscription-not-stopped"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "waitedSeconds",
+            "limitSeconds"
+          ],
+          "properties": {
+            "waitedSeconds": {
+              "type": "number",
+              "minimum": 0
+            },
+            "limitSeconds": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
           "const": "identity.unresolved"
         },
         "details": {

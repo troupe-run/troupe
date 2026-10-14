@@ -68,6 +68,10 @@ SUBSCRIBE_CHECK_SECONDS = 30.0
 """How often a store with subscribers looks for other processes' events itself, to catch a file
 system that accepts watches but doesn't deliver them (watch-event-segments design D5)."""
 
+SUBSCRIBE_STOP_TIMEOUT_SECONDS = 5.0
+"""How long stopping a subscription waits for its thread to end before failing with
+events.subscription-not-stopped (stopped-event-store design D3). The thread needs milliseconds."""
+
 # Policy (spec: policy; perform-status-logs design D6). docs/runs.md lists it.
 
 ALLOW_UNENFORCED_LOCAL_STAGE = False
