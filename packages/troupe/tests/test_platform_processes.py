@@ -184,7 +184,7 @@ def _block_until_exited(pid: int) -> None:
     can't reap it either while the loop is blocked). macOS: asyncio's watcher thread reaps it but
     can't set returncode, so the pid disappearing shows the exit. Windows: is_running reads the
     process's real exit code."""
-    if hasattr(os, "waitid"):
+    if sys.platform == "linux":
         with contextlib.suppress(ChildProcessError):  # a watcher thread reaped it first
             os.waitid(os.P_PID, pid, os.WEXITED | os.WNOWAIT)
         return
