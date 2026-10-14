@@ -23,7 +23,8 @@ doesn't come back under the sibling test's name, as #88 did for #81.
 
 - Both tests stop bounding the wall-clock delay of polled deliveries tightly. Instead they record each look the
   subscription makes while polling, and check:
-  - each wait between looks asks for exactly `poll_seconds`, so the store polls at the interval it announces;
+  - before each look the subscription waits exactly once, for `poll_seconds`, so the store polls at the interval it
+    announces;
   - each of five events is delivered by the first look that started after its append returned, or an earlier one
     still in progress, so polling never misses an event it could have seen;
   - each event reaches the listener (the existing 10 s wait) and is the one event the store's order gained;

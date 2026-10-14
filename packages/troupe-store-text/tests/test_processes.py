@@ -8,6 +8,7 @@ import threading
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -23,6 +24,7 @@ from troupe.platform import watching
 from troupe.platform.errors import WatchUnavailableError
 from troupe.platform.watching import DirectoryWatch
 from troupe_store_text import TextApplicationRecorder, open_store
+from troupe_store_text import store as store_module
 from troupe_store_text.store import TextStore, shared_store
 from troupe_vcs_git import GitAdapter
 
@@ -214,10 +216,11 @@ append to it), printing the wall-clock time each segment append returned (design
 BOUND = 0.25  # seconds: a quarter of the 1 s subscription poll this replaces
 
 STALL_SECONDS = 5.0
-"""How late a single timed delivery may be beyond its interval. Only for a delivery that happens
-once, so can't be bounded by a median: one scheduling stall on a loaded machine has taken 1.06 s
-in CI (#81) and 3.40 s locally. Well inside the 10 s wait, which is what fails a store that never
-delivers."""
+"""How much a loaded machine may add to a timed delivery beyond its interval: to a delivery that
+happens once, which a median can't cover, and to the median of polled deliveries, where a slow
+stretch can cover most of the samples (#91). One scheduling stall has taken 1.06 s in CI (#81) and
+3.40 s locally; #91's slow stretch had a median of 0.52 s. Well inside the 10 s wait, which is
+what fails a store that never delivers."""
 
 
 class Writer:
@@ -316,6 +319,107 @@ def delays(store: TextStore, heard: threading.Event, writer: Writer, count: int 
     return measured
 
 
+class Recording:
+    """What a store's subscription did (design D2 of windows-slow-stretch): each wait it made
+    between polled looks, as the number of looks before it and its timeout, and each look, as when
+    it started (by ``time.time()``, the clock the writer prints) and whether it delivered."""
+
+    def __init__(self) -> None:
+        self.waits: list[tuple[int, float | None]] = []
+        self.looks: list[tuple[float, bool]] = []
+        self._changed = threading.Condition()
+
+    def looked(self, started: float, delivered: bool) -> None:
+        with self._changed:
+            self.looks.append((started, delivered))
+            self._changed.notify_all()
+
+    def wait_for_looks(self, count: int, timeout: float) -> bool:
+        with self._changed:
+            return self._changed.wait_for(lambda: len(self.looks) >= count, timeout)
+
+    def wait_for_deliveries(self, count: int, timeout: float) -> bool:
+        with self._changed:
+            return self._changed.wait_for(lambda: len(self.deliveries()) >= count, timeout)
+
+    def deliveries(self) -> list[int]:
+        """The indexes of the looks that delivered."""
+        return [index for index, (_, delivered) in enumerate(self.looks) if delivered]
+
+    def waits_before_each_polled_look(self) -> list[int]:
+        """How many waits came just before each look from the first wait on: polling waits once
+        before each look."""
+        if not self.waits:
+            return []
+        marks = [looks_before for looks_before, _ in self.waits]
+        return [marks.count(look) for look in range(marks[0], len(self.looks))]
+
+    def first_look_after(self, moment: float) -> int:
+        """The index of the first look that started after ``moment``, or past the last look."""
+        return next(
+            (index for index, (started, _) in enumerate(self.looks) if started > moment),
+            len(self.looks),
+        )
+
+
+def recorded(store: TextStore, monkeypatch: pytest.MonkeyPatch) -> Recording:
+    """Record ``store``'s subscription from its start: call before ``listen``."""
+    recording = Recording()
+
+    class Waits(threading.Event):
+        def wait(self, timeout: float | None = None) -> bool:
+            recording.waits.append((len(recording.looks), timeout))
+            return super().wait(timeout)
+
+    class Subscription(store_module._Subscription):
+        def __init__(self, store: TextStore) -> None:
+            super().__init__(store)
+            self._stopped = Waits()
+
+    deliver = store._deliver
+
+    def look() -> bool:
+        started = time.time()
+        delivered = deliver()
+        recording.looked(started, delivered)
+        return delivered
+
+    monkeypatch.setattr(store_module, "_Subscription", Subscription)
+    monkeypatch.setattr(store, "_deliver", look)
+    return recording
+
+
+@dataclass(frozen=True)
+class Polled:
+    appended: float
+    """When the writer's append returned."""
+    delay: float
+    """From then until the listener woke."""
+    look: int
+    """The index of the recorded look that delivered it."""
+
+
+def polled(
+    store: TextStore, heard: threading.Event, writer: Writer, recording: Recording, count: int = 5
+) -> list[Polled]:
+    """Each of ``count`` events the writer records, as ``delays()`` measures them (each must arrive
+    and be the one event the store's order gained), with the look that delivered it."""
+    measured: list[Polled] = []
+    for _ in range(count):
+        before = store.max_notification_id() or 0
+        delivered = len(recording.deliveries())
+        heard.clear()
+        writer.record()
+        assert heard.wait(10)
+        woke = time.time()
+        appended = writer.appended_at()
+        # The listener is told inside the look, before the look is recorded as delivering.
+        assert recording.wait_for_deliveries(delivered + 1, 10), recording.looks
+        measured.append(Polled(appended, woke - appended, recording.deliveries()[delivered]))
+        assert store.max_notification_id() == before + 1
+    return measured
+
+
 def test_another_processs_events_each_reach_a_listener_with_a_median_delay_under_the_bound(
     tmp_path: Path, writer: Writer
 ) -> None:
@@ -360,18 +464,28 @@ def test_a_listened_store_reads_no_segment_while_nothing_is_recorded(
         assert looks == []
 
 
-def test_a_refused_watch_falls_back_to_an_announced_poll_with_a_median_delay_under_the_bound(
-    tmp_path: Path, writer: Writer
+def test_a_refused_watch_falls_back_to_an_announced_poll_at_its_interval_and_delivers_at_next_look(
+    tmp_path: Path, writer: Writer, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     store = store_for(tmp_path, poll_seconds=0.2, check_seconds=60, watcher=refusing)
+    recording = recorded(store, monkeypatch)
     with listened(store) as heard:
         [notice] = [n for n in store.notices() if n.code == "events.subscription-polling"]
         assert notice.details["reason"] == "watch-refused"
         assert "the platform refused (a test)" in notice.details["detail"]
         assert notice.path == str(store.events_dir.absolute())
         check_notice(notice.to_data())
-        polled = delays(store, heard, writer)
-        assert statistics.median(polled) < 0.2 + BOUND, polled
+        events = polled(store, heard, writer, recording)
+        waits = recording.waits_before_each_polled_look()
+        assert len(waits) >= 5, (recording.waits, recording.looks)
+        assert set(waits) == {1}, (recording.waits, recording.looks)
+        assert {timeout for _, timeout in recording.waits} == {0.2}, recording.waits
+        for event in events:
+            assert event.look <= recording.first_look_after(event.appended), (
+                event,
+                recording.looks,
+            )
+        assert statistics.median(e.delay for e in events) < 0.2 + STALL_SECONDS, events
         codes = [n.code for n in store.notices()]
         assert codes.count("events.subscription-polling") == 1  # it lasts as the polling does
     assert "events.subscription-polling" not in [n.code for n in store.notices()]
@@ -383,21 +497,12 @@ def test_a_watch_that_never_reports_is_caught_by_the_check_then_the_store_polls(
     writer.record()
     writer.appended_at()
     store = store_for(tmp_path, poll_seconds=0.2, check_seconds=1.0, watcher=silent)
-    started = threading.Event()
-    deliver = store._deliver
-
-    def noted() -> bool:
-        try:
-            return deliver()
-        finally:
-            started.set()
-
-    monkeypatch.setattr(store, "_deliver", noted)
+    recording = recorded(store, monkeypatch)
     with listened(store) as heard:
         assert "events.subscription-polling" not in [n.code for n in store.notices()]
         # The subscription delivers once as it starts, for writes made while its watch was set up.
         # Recording before that has run would let it deliver this event, and no check would miss it.
-        assert started.wait(5), "the subscription never made its start-up delivery"
+        assert recording.wait_for_looks(1, 5), "the subscription never made its start-up delivery"
         writer.record()
         appended = writer.appended_at()
         assert heard.wait(10)
@@ -413,8 +518,17 @@ def test_a_watch_that_never_reports_is_caught_by_the_check_then_the_store_polls(
         [notice] = polling
         assert notice.details["reason"] == "watch-missed-write"
         check_notice(notice.to_data())
-        polled = delays(store, heard, writer)
-        assert statistics.median(polled) < 0.2 + BOUND, polled
+        events = polled(store, heard, writer, recording)
+        waits = recording.waits_before_each_polled_look()
+        assert len(waits) >= 5, (recording.waits, recording.looks)
+        assert set(waits) == {1}, (recording.waits, recording.looks)
+        assert {timeout for _, timeout in recording.waits} == {0.2}, recording.waits
+        for event in events:
+            assert event.look <= recording.first_look_after(event.appended), (
+                event,
+                recording.looks,
+            )
+        assert statistics.median(e.delay for e in events) < 0.2 + STALL_SECONDS, events
 
 
 class Manual(watching._Backend):

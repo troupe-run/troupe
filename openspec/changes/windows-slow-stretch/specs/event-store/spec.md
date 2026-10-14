@@ -12,7 +12,7 @@ silently.
 - **WHEN** a process subscribes to a text store and the platform refuses to watch its events directory
 - **THEN** the store's notices include `events.subscription-polling`, with the reason `watch-refused`, the directory
   and the platform's reason
-- **AND** each wait the subscription makes between its looks is for `SUBSCRIBE_POLL_SECONDS`
+- **AND** before each look, the subscription waits once, for `SUBSCRIBE_POLL_SECONDS`
 - **AND** when another process records an event, five times, each event reaches the subscriber, delivered no later
   than the first look the subscription started after the writer's append returned
 - **AND** the median delay of the five, measured from when the writer's append returned, is within
@@ -33,7 +33,7 @@ finds one that its notification didn't deliver in that interval, it SHALL delive
 - **THEN** the event reaches the subscriber within `SUBSCRIBE_CHECK_SECONDS`, plus an allowance for the time to read
   it on a loaded machine
 - **AND** the store's notices include `events.subscription-polling`, with the reason `watch-missed-write`
-- **AND** each wait the subscription then makes between its looks is for `SUBSCRIBE_POLL_SECONDS`
+- **AND** before each look it then makes, the subscription waits once, for `SUBSCRIBE_POLL_SECONDS`
 - **AND** when another process then records an event, five times, each event reaches the subscriber, delivered no
   later than the first look the subscription started after the writer's append returned
 - **AND** the median delay of the five, measured from when the writer's append returned, is within
