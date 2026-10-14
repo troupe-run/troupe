@@ -13,7 +13,7 @@
 
 ## 2. The thread does nothing to the store once stopped (design D1)
 
-- [ ] 2.1 Add `_Subscription._deliver()`, which takes the store's lock, returns False when `_stopped` is set, and
+- [x] 2.1 Add `_Subscription._deliver()`, which takes the store's lock, returns False when `_stopped` is set, and
   otherwise calls `store._deliver()`. Route every delivery in `_run` through it: the start-up one, the polling one,
   the one after a wake and the one at a check. Make `_rearm` check `_stopped` before it creates a replacement watch.
   Verify with `grep` that `_run` and the methods it calls no longer call `store._deliver()` directly, and that 1.1's
