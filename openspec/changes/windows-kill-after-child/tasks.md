@@ -17,20 +17,20 @@
 
 ## 3. The exit is proven before the kill (design D2, D3)
 
-- [ ] 3.1 Replace `_block_until_exited` with `_wait_for_exit`, bounded by a named `EXIT_BOUND_SECONDS = 30`: a
+- [x] 3.1 Replace `_block_until_exited` with `_exit_of` (a context manager yielding `wait_for_exit`), bounded by a named `EXIT_BOUND_SECONDS = 30`: a
   `ctypes` handle wait and `GetExitCodeProcess` on Windows (the handle opened before the file is created and closed
   in `finally`), `waitid` with `WNOWAIT | WNOHANG` polled on Linux, and `os.kill(pid, 0)` polled on macOS. Verify
   `uv run pytest packages/troupe/tests/test_platform_processes.py` passes locally, and that the module no longer
   calls `processes.is_running` from this test or its helper (`grep`)
-- [ ] 3.2 Add the precondition checks in D3's order, each failing with a message starting `precondition not
+- [x] 3.2 Add the precondition checks in D3's order, each failing with a message starting `precondition not
   reached:`, and assert `(exit_code, ended_by_kill) == (0, False)` only after them. Verify each message fires on its
   own, with temporary edits reverted and shown reverted with `git diff --stat`: not creating the file gives "exited
   with 3"; an `await asyncio.sleep(1)` after creating the file gives "asyncio saw the exit"; a bound of 0.01 s with
   the child sleeping first gives "did not exit within"
-- [ ] 3.3 Verify the test still catches #87's regression: with `ended_by_kill` temporarily returning `self._kill_sent`
+- [x] 3.3 Verify the test still catches #87's regression: with `ended_by_kill` temporarily returning `self._kill_sent`
   alone, the test fails on the kill assertion, not on a precondition. Revert and show it reverted with
   `git diff --stat`
-- [ ] 3.4 Run `uv run scripts/check.py`. Verify every gate passes (mypy `--strict` included, on the `ctypes` code
+- [x] 3.4 Run `uv run scripts/check.py`. Verify every gate passes (mypy `--strict` included, on the `ctypes` code
   behind `if WINDOWS`)
 
 ## 4. Measure the changed test on Windows CI, then remove the repetition (design D4)

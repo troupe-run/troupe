@@ -47,8 +47,9 @@ blocked the loop (which would have failed differently, with `seen == 0`, so it w
 
 ### D1: The child exits when the test creates a file, not after a sleep
 
-The child is `python -c CODE PATH`. It prints `up`, then polls every 10 ms for `PATH` to exist, for at most 30 s. It
-exits 0 when the file appears, or 3 if it never does. The test awaits the `up` line, so asyncio has started the child
+The child is `python -c CODE PATH`. It prints `up`, then polls every 10 ms for `PATH` to exist, for at most 10 s. It
+exits 0 when the file appears, or 3 if it never does. 10 s sits well inside the test's 30 s bound (D2), so a child
+that's never told ends with its own code before the test gives up on it. The test awaits the `up` line, so asyncio has started the child
 and the child is running. It then stops awaiting and creates the file from the test's own thread. From that point the
 loop can't run, so asyncio can't record the exit, however long the child takes to see the file.
 
@@ -95,9 +96,13 @@ In order, with no await between creating the file and `kill_tree()`:
 2. `_wait_for_exit` returns (D2), or fails with "the child did not exit within 30 s".
 3. `child.returncode is None` still. Otherwise fail with "asyncio saw the exit before the kill, so the race was not
    set up".
-4. The OS status is `0` or `None`. Otherwise fail with "the child exited with N before the kill, not 0". A 3 here
-   means it never saw the file.
-5. `kill_tree()`, then `await child.wait()` with a 30 s timeout. Assert `(exit_code, ended_by_kill) == (0, False)`.
+4. `kill_tree()`, then `await child.wait()` with a 30 s timeout.
+5. The child's own status is `0`. Otherwise fail with "the child exited with N before the kill, not 0". A 3 here
+   means it never saw the file. Where the OS gave a status (Windows, and Linux unless a watcher thread reaped the
+   child), that's the one read before the kill. Where it gave `None`, the child was reaped before the kill, so the
+   code `wait()` returns is its own, and the kill couldn't have changed it. That's why this check comes after the
+   wait: on macOS the status can't be read any earlier.
+6. Assert `(exit_code, ended_by_kill) == (0, False)`.
 
 Every precondition failure starts with `precondition not reached:`, so in a CI log it can't be mistaken for the
 seam answering wrongly. They fail rather than skip, as #90 asks: a skipped race test would quietly stop testing the
@@ -122,7 +127,7 @@ Windows.
   that becomes its own issue.
 - [The Windows `ctypes` declarations duplicate a few of the seam's] → Accepted. The test needs `WaitForSingleObject`,
   which the seam doesn't declare, and sharing declarations with the code under test would weaken the check.
-- [The child polls for the file every 10 ms] → Bounded at 30 s, and it ends with its own distinct code (3), so it
+- [The child polls for the file every 10 ms] → Bounded at 10 s, and it ends with its own distinct code (3), so it
   can't hang or pass by accident.
 
 ## Migration Plan
