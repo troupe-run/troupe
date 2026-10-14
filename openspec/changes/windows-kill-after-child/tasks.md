@@ -40,7 +40,7 @@
   record its message and run id and take it to the owner
   (Done without re-applying: the repetition from 1.1 stayed in place under tasks 2 and 3, so run
   38521541280 measured the changed test. 100 of 100 Windows runs passed, recorded in the PR.)
-- [ ] 4.2 Revert the repetition in its own commit, saying why. Verify `range(50)` no longer appears in the module
+- [x] 4.2 Revert the repetition in its own commit, saying why. Verify `range(50)` no longer appears in the module
   (`grep`), and that all CI jobs pass on Linux, macOS and Windows for the PR's final commit
 
 ## Workflow follow-up
