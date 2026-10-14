@@ -43,8 +43,8 @@
 - [x] 3.1 Search `packages/` and `plugins/` for other readers of `returncode` that decide something about a kill
   (`grep -rn "returncode" packages plugins`) and confirm none does, or fix it under D1. Verify by the search output,
   listed in the PR
-- [ ] 3.2 Run `uv run scripts/check.py`. Verify it passes (ruff, mypy --strict, the full test suite)
-- [ ] 3.3 Push and verify every CI job passes on Linux, macOS and Windows. Then re-run the Windows jobs twice more
+- [x] 3.2 Run `uv run scripts/check.py`. Verify it passes (ruff, mypy --strict, the full test suite)
+- [x] 3.3 Push and verify every CI job passes on Linux, macOS and Windows. Then re-run the Windows jobs twice more
   (Windows failed 5 of 6 runs before this change) and verify all three attempts pass
 
 ## Workflow follow-up
