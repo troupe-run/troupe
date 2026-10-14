@@ -2,7 +2,7 @@
 
 ## 1. Measure the unchanged test on Windows CI (design D4)
 
-- [ ] 1.1 Commit a temporary `@pytest.mark.parametrize("attempt", range(50))` on the unchanged race test, with a
+- [x] 1.1 Commit a temporary `@pytest.mark.parametrize("attempt", range(50))` on the unchanged race test, with a
   message saying it's a measurement for #90 and will be reverted. Open the PR as a draft (`Closes #90`) and record, for
   each `windows-latest` job (Python 3.12 and 3.13), the run id and how many of the 50 runs failed, with the failing
   tuples. Verify by the recorded counts, whatever they are. No failure is recorded as "not reproduced on CI", not
