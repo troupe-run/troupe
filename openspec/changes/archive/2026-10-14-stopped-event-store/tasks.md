@@ -47,9 +47,9 @@
 
 ## 5. Check and CI
 
-- [ ] 5.1 Run `uv run scripts/check.py`. Verify every gate passes, including mypy `--strict`, ruff and the full test
+- [x] 5.1 Run `uv run scripts/check.py`. Verify every gate passes, including mypy `--strict`, ruff and the full test
   suite
-- [ ] 5.2 Open the PR (`Closes #97`). Verify every CI job passes on Linux, macOS and Windows, Python 3.12 and 3.13,
+- [x] 5.2 Open the PR (`Closes #97`). Verify every CI job passes on Linux, macOS and Windows, Python 3.12 and 3.13,
   for the PR's final commit, and record the run id in the PR
 
 ## Workflow follow-up
