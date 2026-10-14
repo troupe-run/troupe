@@ -271,8 +271,11 @@ silently.
 - **WHEN** a process subscribes to a text store and the platform refuses to watch its events directory
 - **THEN** the store's notices include `events.subscription-polling`, with the reason `watch-refused`, the directory
   and the platform's reason
-- **AND** when another process records an event, five times, each event still reaches the subscriber, and the median
-  delay, measured from when the writer's append returned, is under `SUBSCRIBE_POLL_SECONDS` plus 0.25 s
+- **AND** before each look, the subscription waits once, for `SUBSCRIBE_POLL_SECONDS`
+- **AND** when another process records an event, five times, each event reaches the subscriber, delivered no later
+  than the first look the subscription started after the writer's append returned
+- **AND** the median delay of the five, measured from when the writer's append returned, is within
+  `SUBSCRIBE_POLL_SECONDS` plus an allowance for a loaded machine
 
 #### Scenario: The notice lasts as long as the polling
 - **WHEN** the store's notices are read twice while its subscription is polling
@@ -289,8 +292,11 @@ finds one that its notification didn't deliver in that interval, it SHALL delive
 - **THEN** the event reaches the subscriber within `SUBSCRIBE_CHECK_SECONDS`, plus an allowance for the time to read
   it on a loaded machine
 - **AND** the store's notices include `events.subscription-polling`, with the reason `watch-missed-write`
-- **AND** when another process then records an event, five times, each event reaches the subscriber, and the median
-  delay, measured from when the writer's append returned, is under `SUBSCRIBE_POLL_SECONDS` plus 0.25 s
+- **AND** before each look it then makes, the subscription waits once, for `SUBSCRIBE_POLL_SECONDS`
+- **AND** when another process then records an event, five times, each event reaches the subscriber, delivered no
+  later than the first look the subscription started after the writer's append returned
+- **AND** the median delay of the five, measured from when the writer's append returned, is within
+  `SUBSCRIBE_POLL_SECONDS` plus an allowance for a loaded machine
 
 ### Requirement: Each event troupe defines has a payload schema
 Every event troupe defines SHALL have a closed JSON Schema for its payload in `protocol/`, named by the event's
