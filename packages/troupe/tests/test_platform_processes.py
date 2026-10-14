@@ -301,9 +301,8 @@ else:
         yield wait
 
 
-@pytest.mark.parametrize("attempt", range(50))  # temporary: measuring #90, reverted before merge
 def test_a_kill_sent_after_the_child_exited_but_before_asyncio_saw_it_did_not_end_it(
-    attempt: int, tmp_path: Path
+    tmp_path: Path,
 ) -> None:
     told = tmp_path / "exit-now"
 
