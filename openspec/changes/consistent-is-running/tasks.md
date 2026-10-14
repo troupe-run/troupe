@@ -29,7 +29,7 @@
 
 ## 3. Wire each platform's OS calls to its table (design D3)
 
-- [ ] 3.1 POSIX `is_running`: check the pid, call `os.kill(pid, 0)`, pass the result to `_posix_outcome`. Verify
+- [x] 3.1 POSIX `is_running`: check the pid, call `os.kill(pid, 0)`, pass the result to `_posix_outcome`. Verify
   group 1's tests still pass, and a test that monkeypatches `os.kill` to raise `OSError(EINVAL)` gets
   `ProcessStateUnknownError` naming the pid and `EINVAL`
 - [ ] 3.2 Windows `is_running`: bind `WaitForSingleObject`, open with `PROCESS_QUERY_LIMITED_INFORMATION |
@@ -38,12 +38,12 @@
   record which branch pid 4 took (access denied or wait) for the PR
 - [ ] 3.3 Add the cross-platform test that a child exiting with code 259 reads ended (waited for on POSIX, held on
   Windows). Verify it passes on all three CI platforms
-- [ ] 3.4 Update both `is_running` docstrings and the module docstring's platform list to the one meaning, the
+- [x] 3.4 Update both `is_running` docstrings and the module docstring's platform list to the one meaning, the
   three outcomes and the POSIX zombie limit. Verify they match the spec requirement's wording
 
 ## 4. Documentation
 
-- [ ] 4.1 `docs/platform.md`: add a row to the platform table for "Whether a process has ended" (POSIX `kill(pid,
+- [x] 4.1 `docs/platform.md`: add a row to the platform table for "Whether a process has ended" (POSIX `kill(pid,
   0)`; Windows the signalled handle), a bullet under Child processes for the three outcomes and the pid check, and
   the unreaped-zombie entry under Known limitations with why no caller is affected (design D4). Verify each claim
   against the code and tests from groups 2 and 3

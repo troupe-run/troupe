@@ -523,10 +523,6 @@ SYSTEM_PID = 4
 
 
 @pytest.mark.skipif(not WINDOWS, reason="pid 4 is the System process only on Windows")
-@pytest.mark.xfail(
-    strict=False,
-    reason="#92: main reads it as ended only when it can't open it, which an administrator may",
-)
 def test_the_windows_system_process_reads_as_running() -> None:
     assert processes.is_running(SYSTEM_PID)
 
@@ -556,7 +552,6 @@ holding an enabled SeDebugPrivilege, administrators included."""
 
 
 @pytest.mark.skipif(not WINDOWS, reason="a process's DACL is Windows' own")
-@pytest.mark.xfail(strict=True, reason="#92: fixed by group 3")
 def test_a_windows_process_that_refuses_to_be_opened_reads_as_running() -> None:
     child = subprocess.Popen(_python(DENY_EVERYONE_THEN_SLEEP), stdout=subprocess.PIPE)
     try:
@@ -582,13 +577,16 @@ def _assert_opening_is_refused(pid: int) -> None:
     assert ctypes.get_last_error() == 5  # ERROR_ACCESS_DENIED
 
 
-@pytest.mark.skipif(not WINDOWS, reason="a held handle to an exited process is Windows' own")
-@pytest.mark.xfail(strict=True, reason="#92: fixed by group 3")
-def test_a_child_that_exited_with_the_still_active_code_while_held_reads_as_ended() -> None:
+def test_a_child_that_exited_with_the_still_active_code_reads_as_ended() -> None:
+    """Held open by its parent on Windows, where the code is ambiguous; waited for elsewhere."""
     child = subprocess.Popen(_python(f"import sys; sys.exit({STILL_ACTIVE})"))
-    _wait_until_exited_while_held(child)
-    assert not processes.is_running(child.pid)
-    child.wait(timeout=30)
+    if WINDOWS:
+        _wait_until_exited_while_held(child)
+        assert not processes.is_running(child.pid)
+        assert child.wait(timeout=30) == STILL_ACTIVE
+    else:
+        child.wait(timeout=30)
+        assert not processes.is_running(child.pid)
 
 
 def _wait_until_exited_while_held(child: "subprocess.Popen[bytes]") -> None:
@@ -741,3 +739,17 @@ def test_a_value_that_cant_name_one_process_is_refused_naming_it_without_asking_
 ) -> None:
     with pytest.raises(ValueError, match=re.escape(f"{value!r} isn't a process id")):
         processes.is_running(value)
+
+
+@pytest.mark.skipif(WINDOWS, reason="kill(pid, 0) is how Linux and macOS ask")
+def test_an_os_error_that_isnt_a_refusal_or_no_such_process_fails_naming_the_pid_and_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fails(pid: int, signal: int) -> None:
+        raise OSError(errno.EINVAL, os.strerror(errno.EINVAL))
+
+    monkeypatch.setattr(os, "kill", fails)
+    with pytest.raises(ProcessStateUnknownError) as caught:
+        processes.is_running(1234)
+    assert (caught.value.pid, caught.value.code) == (1234, errno.EINVAL)
+    assert str(caught.value).startswith("can't tell whether process 1234 has ended: ")
