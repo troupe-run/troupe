@@ -617,6 +617,25 @@ def test_an_interrupt_stops_the_rounds_and_the_load_and_summarises_what_finished
     assert gone_within(grandchildren + summary(out)["loadPids"], 5) == []
 
 
+@pytest.mark.skipif(not WINDOWS, reason="Ctrl-C as a console event is Windows' own")
+def test_on_windows_a_rounds_tests_still_get_a_real_ctrl_c(tmp_path: Path) -> None:
+    # A round started in a new process group has Ctrl-C turned off, and so does everything it
+    # starts: this test failed in every round of the owner's first Windows hunt (#100).
+    real = (
+        "packages/troupe/tests/test_platform_interrupts.py"
+        "::test_a_real_ctrl_c_on_windows_calls_back_too"
+    )
+    out = tmp_path / "out"
+    completed = subprocess.run(
+        [sys.executable, str(SCRIPT), "--out", str(out), real],
+        capture_output=True,
+        timeout=120,
+        check=False,
+    )
+    assert completed.returncode == 0, text(completed)
+    assert [each["tests"] for each in results(out)] == [1]
+
+
 @pytest.mark.skipif(not WINDOWS, reason="a killed hunt ends its rounds through a Windows job")
 def test_on_windows_killing_the_hunt_itself_ends_its_rounds_trees(tmp_path: Path) -> None:
     root, pids = hanging_root(tmp_path)

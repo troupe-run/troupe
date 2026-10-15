@@ -40,8 +40,8 @@ so each fixture is the shape pytest actually produces. None of these tasks runs 
 ## 2. Load, timeouts and stopping (spec: flake-hunt; design D4, D5, D6, D10)
 
 - [x] 2.1 Start each round and load process so its whole tree can be stopped: on POSIX a new session, stopped with
-  `SIGKILL` to the group; on Windows a kill-on-close job, the process started with `CREATE_SUSPENDED |
-  CREATE_NEW_PROCESS_GROUP`, assigned to the job and then resumed (`NtResumeProcess`), stopped by terminating the
+  `SIGKILL` to the group; on Windows a kill-on-close job, the process started with `CREATE_SUSPENDED` (not in a
+  new process group, which turns Ctrl-C off in everything the round starts), assigned to the job and then resumed (`NtResumeProcess`), stopped by terminating the
   job. If the job can't be created or assigned, refuse to start, naming the Windows error. Verify with a test whose
   written test starts a child that starts a sleeping grandchild, records the grandchild's pid, and exits: after the
   round is stopped, the grandchild is gone (on Windows, too, where its parent has already exited)
