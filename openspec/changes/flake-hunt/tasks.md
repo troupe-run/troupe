@@ -63,7 +63,7 @@ so each fixture is the shape pytest actually produces. None of these tasks runs 
 
 ## 3. Running it on each platform (spec: flake-hunt "The hunt runs on every platform"; design D8, D10)
 
-- [ ] 3.1 Add `scripts/flake_hunt.Dockerfile` (uv on a current Debian, git, a non-root user, the repository copied in
+- [x] 3.1 Add `scripts/flake_hunt.Dockerfile` (uv on a current Debian, git, a non-root user, the repository copied in
   from `git archive HEAD`, `uv sync --locked` for a `PY` build argument). Verify by building it for 3.12 and 3.13 and
   checking, inside the container, that the user isn't root and that `git rev-parse --local-env-vars` lists nothing
   the git adapter's list lacks
