@@ -12,13 +12,25 @@ for the open decisions and what's next.
 
 ## Development
 
-You need [uv](https://docs.astral.sh/uv/). It installs the right Python (3.12 or later) for you. troupe is
-developed and tested on Linux, macOS and Windows.
+You need [uv](https://docs.astral.sh/uv/). It installs the right Python for you. troupe is developed and tested
+on Linux, macOS and Windows.
 
 ```console
 uv sync
 uv run scripts/check.py
 ```
+
+troupe supports Python 3.12 and 3.13, exactly the versions CI tests. Every `pyproject.toml` says so
+(`requires-python = ">=3.12,<3.14"`), and uv refuses any other version, naming the bound. Plain `uv run` uses
+3.12, the lowest. To run on another supported version, name it:
+
+```console
+uv run scripts/on.py 3.13 scripts/check.py
+```
+
+Each version gets its own environment in `.venvs/`, so switching back and forth rebuilds nothing. Delete
+`.venvs/` whenever you like. To support a new Python version, widen the bound and add the version to CI's matrix
+in the same change. `scripts/check.py` fails if either moves without the other.
 
 `scripts/check.py` runs every gate in order, and stops at the first failure: ruff (lint and format), `mypy
 --strict`, the import contracts, and the tests. CI runs the same script on all three platforms, and every job
