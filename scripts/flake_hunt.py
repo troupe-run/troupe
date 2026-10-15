@@ -100,13 +100,20 @@ def _whole(name: str, minimum: int) -> Callable[[str], int]:
 
 
 WORKERS_AUTO_SHARE = 0.75
-"""--workers auto: three quarters of the CPUs the hunt may use, rounded down, and at least 1."""
+"""--workers auto: three quarters of the CPUs the hunt may use, less the load, and at least 1, so a
+hunt with load adds busy CPUs to the same share of the machine rather than oversubscribing it."""
+AUTO = 0
+"""What parse_workers returns for auto, resolved once the load is known."""
+
+
+def auto_workers(load: int) -> int:
+    return max(1, int(usable_cpus() * WORKERS_AUTO_SHARE) - load)
 
 
 def parse_workers(text: str) -> int:
-    """A number of workers, 1 or more, or auto."""
+    """A number of workers, 1 or more, or auto (AUTO, resolved with the load by auto_workers)."""
     if text == "auto":
-        return max(1, int(usable_cpus() * WORKERS_AUTO_SHARE))
+        return AUTO
     try:
         value = int(text, 10)
     except ValueError:
@@ -192,7 +199,7 @@ def parse_options(argv: Sequence[str]) -> Options:
         if not (root / path.split("::", 1)[0]).exists():
             parser.error(f"{path!r} doesn't exist under {root}: name a test file or directory")
     return Options(
-        workers=parsed.workers,
+        workers=parsed.workers if parsed.workers != AUTO else auto_workers(parsed.load),
         rounds=parsed.rounds,
         load=parsed.load,
         round_timeout=parsed.round_timeout,

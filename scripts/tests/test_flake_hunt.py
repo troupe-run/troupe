@@ -130,12 +130,25 @@ def test_a_malformed_option_is_refused_naming_it_and_nothing_runs(
     assert not out.exists()
 
 
-def test_workers_auto_is_three_quarters_of_the_usable_cpus_and_at_least_one(
-    monkeypatch: pytest.MonkeyPatch,
+def test_workers_auto_is_three_quarters_of_the_usable_cpus_less_the_load_and_at_least_one(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    for cpus, workers in ((8, 6), (10, 7), (4, 3), (1, 1), (2, 1)):
+    cases = (
+        (8, 0, 6),
+        (8, 2, 4),
+        (10, 0, 7),
+        (10, 2, 5),
+        (4, 0, 3),
+        (4, 3, 1),
+        (1, 0, 1),
+        (2, 1, 1),
+    )
+    for cpus, load, workers in cases:
         monkeypatch.setattr(flake_hunt, "usable_cpus", lambda cpus=cpus: cpus)
-        assert flake_hunt.parse_workers("auto") == workers
+        chosen = flake_hunt.parse_options(
+            ["--root", str(tmp_path), "--workers", "auto", "--load", str(load)]
+        )
+        assert chosen.workers == workers, (cpus, load)
     assert flake_hunt.parse_workers("5") == 5
     with pytest.raises(Exception, match="--workers must be a whole number, 1 or more, or auto"):
         flake_hunt.parse_workers("lots")

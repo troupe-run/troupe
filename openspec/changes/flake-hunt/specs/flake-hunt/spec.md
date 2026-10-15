@@ -99,7 +99,8 @@ anything runs, with an error naming the option, the value and what is allowed.
 
 #### Scenario: Workers chosen for the machine
 - **WHEN** the hunt is given `--workers auto` on a machine that lets it use 8 CPUs
-- **THEN** it runs 6 workers: three quarters of the CPUs, rounded down, and at least 1
+- **THEN** it runs 6 workers without load, and 4 with a load of 2: three quarters of the CPUs, rounded down, less
+  the load, and at least 1
 
 #### Scenario: Too much load
 - **WHEN** the hunt is asked for more load than the CPUs it may use
