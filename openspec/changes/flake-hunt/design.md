@@ -78,8 +78,8 @@ Found on the draft PR's first CI run, where the database test failed on every pl
 Each round and each load process is started so that it and everything it starts can be killed together:
 
 - **Linux and macOS:** a new session, so the process leads its own group, killed with `SIGKILL` to the group.
-- **Windows:** a job object created with kill-on-close. The process is started with `CREATE_SUSPENDED` and
-  `CREATE_NEW_PROCESS_GROUP`, assigned to the job, then resumed (`NtResumeProcess`, through ctypes), so nothing it
+- **Windows:** a job object created with kill-on-close. The process is started with `CREATE_SUSPENDED`, assigned to
+  the job, then resumed (`NtResumeProcess`, through ctypes), so nothing it
   starts can run before it is in the job. Stopping it terminates the job. If the hunt itself dies, its job handles
   close and the trees die with it. The suspended start matters on Windows in particular: `sys.executable` in a uv
   virtual environment is a launcher that starts the real interpreter as its child (#90's trap), and a test's
@@ -107,8 +107,11 @@ that finished. Load processes start before the first round, and stop in a `final
   `join()` can't be interrupted, so Ctrl-C would wait for the whole hunt.
 - On Windows, Ctrl-Break (`SIGBREAK`) stops the hunt the same way. A process in its own console process group gets
   only Ctrl-Break, and the hunt's own test sends it that way.
-- Rounds don't share the hunt's console group, so a person's Ctrl-C reaches only the hunt, which then stops the
-  rounds itself, in order.
+- Rounds stay in the hunt's console process group, as pytest does in CI. A new group would turn Ctrl-C off in the
+  round and in everything it starts, which the owner's first Windows hunt showed:
+  `test_a_real_ctrl_c_on_windows_calls_back_too` failed in every round, because its child never got the Ctrl-C it
+  sent itself. A person's Ctrl-C then reaches the rounds as well as the hunt, which is harmless: the hunt stops
+  them all, and a round ended by a stop is never recorded.
 
 ### D6: Load is busy interpreter processes, bounded by the CPU count
 

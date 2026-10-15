@@ -176,7 +176,8 @@ if sys.platform == "win32":
     _ntdll = ctypes.WinDLL("ntdll")
 
     _CREATE_SUSPENDED = 0x00000004
-    _CREATE_NEW_PROCESS_GROUP = 0x00000200
+    # Not CREATE_NEW_PROCESS_GROUP: it turns Ctrl-C off in the new process, every process it starts
+    # inherits that, and a round's tests that send themselves a real Ctrl-C would never get it.
     _JOB_OBJECT_EXTENDED_LIMIT_INFORMATION_CLASS = 9
     _JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000
     _PROCESS_TERMINATE = 0x0001
@@ -288,7 +289,7 @@ class Tree:
                     stdin=subprocess.DEVNULL,
                     stdout=output,
                     stderr=subprocess.STDOUT,
-                    creationflags=_CREATE_SUSPENDED | _CREATE_NEW_PROCESS_GROUP,
+                    creationflags=_CREATE_SUSPENDED,
                 )
             except BaseException:
                 _kernel32.CloseHandle(self._job)
