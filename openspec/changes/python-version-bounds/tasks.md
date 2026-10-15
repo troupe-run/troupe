@@ -58,6 +58,7 @@
 
 ## Workflow follow-up
 
-- Open the PR saying it's *part of* #104 (not `Closes`), since Part 2 follows. Card stays In Progress.
-- Archive on the branch before merging. After merging, comment on #104 with the PR and the archived change, then
-  propose Part 2 (3.14 and 3.15 in CI, bound `<3.16`) as its own change.
+- Open the PR with `Closes #105` (Part 1's sub-issue of #104). #104 and its card stay open and In Progress.
+- Archive on the branch before merging. After merging, check that #105 is closed and its card says Done, and comment
+  on #105 with the PR and the archived change. Then open Part 2's sub-issue of #104 (3.14 and 3.15 in CI, bound
+  `<3.16`) and propose it as its own change.

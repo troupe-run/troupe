@@ -7,8 +7,9 @@ only 3.12 and 3.13. During the flake hunt (#100), a Windows PC with Python 3.15 
 version CI has never run, and nothing said so. Issue #104 asks for the supported versions to be exactly the ones CI
 tests, with the build enforcing that.
 
-This change is Part 1 of #104: enforce the versions CI tests today. Part 2 (adding 3.14 and 3.15 to CI and widening
-the bound) is a separate change that follows. Part 1 doesn't depend on it, and the issue lets Part 1 land first.
+This change is Part 1 of #104, tracked as its sub-issue #105: enforce the versions CI tests today. Part 2
+(adding 3.14 and 3.15 to CI and widening the bound) is a separate change that follows. Part 1 doesn't depend on
+it, and the issue lets Part 1 land first.
 
 ## What Changes
 
@@ -52,10 +53,11 @@ None.
 ## Impact
 
 - **Files:** the nine `pyproject.toml` files, `uv.lock`, a new `.python-version`, new `scripts/python_versions.py`
-  and `scripts/on.py` with their tests in `scripts/tests/`, `.gitignore` (for `.venvs/`), and `README.md`. `.github/workflows/ci.yml` isn't changed. The check reads it.
+  and `scripts/on.py` with their tests in `scripts/tests/`, `.gitignore` (for `.venvs/`), and `README.md`.
+  `.github/workflows/ci.yml` isn't changed. The check reads it.
 - **Developers:** an existing `.venv` built on 3.14 or later is replaced by uv with a 3.12 one on the next
   `uv run` or `uv sync`. uv installs 3.12 if it's missing.
 - **CI:** no new jobs. `setup-uv`'s `python-version` input sets `UV_PYTHON`, which takes precedence over
   `.python-version`, so the 3.13 jobs still run on 3.13.
-- **Issues:** the pull request is *part of* #104, not a close, because Part 2 is still to come. It also blocks
-  nothing new. troupe-run/infrastructure#43 waits on Part 2.
+- **Issues:** the pull request closes #105, the sub-issue for Part 1. #104 stays open until Part 2's sub-issue
+  closes too. troupe-run/infrastructure#43 waits on Part 2.
