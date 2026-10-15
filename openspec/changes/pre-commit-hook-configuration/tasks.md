@@ -82,10 +82,12 @@
 
 ## 4. Docs
 
-- [ ] 4.1 Update the README's Development section. Say that a commit runs only what its staged paths need, by
+- [x] 4.1 Update the README's Development section. Say that a commit runs only what its staged paths need, by
   `scripts/check-paths.toml`: nothing for `openspec/` alone, the doc tests for docs alone, everything otherwise. Say
   how to run a scope by hand (`uv run scripts/check.py --scope docs`), and that every test run checks the tags.
   Verify that the commands run as written
+  - *Result:* `uv run scripts/check.py --scope docs`, as written in the README: every gate passed, and the tests
+    gave 26 passed, 1715 deselected.
 
 ## 5. Evidence on real commits
 
