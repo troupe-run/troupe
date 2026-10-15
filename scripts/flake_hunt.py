@@ -43,6 +43,10 @@ JOIN_SECONDS = 0.5
 STOP_ANNOUNCE_SECONDS = 2.0
 STOP_TIMEOUT_SECONDS = 30.0
 """How long a stop waits for the workers before giving up on them, announcing the wait first."""
+STALL_SECONDS = 300.0
+"""A single test running this long is taken to be stuck: pytest's faulthandler then writes every
+thread's stack to the round's output, unbuffered, so a hung round's log names the test. Without
+it a killed round's buffered output is lost (#100: a hung Windows round left an empty log)."""
 TAIL_CHARACTERS = 4000
 """How much of a crashed round's output the summary shows."""
 LOAD_PROGRAM = "while True: pass"
@@ -73,6 +77,7 @@ class Options:
     rounds: int
     load: int
     round_timeout: float
+    stall_seconds: float
     out: Path
     root: Path
     keyword: str | None
@@ -94,16 +99,19 @@ def _whole(name: str, minimum: int) -> Callable[[str], int]:
     return parse
 
 
-def _seconds(text: str) -> float:
-    try:
-        value = float(text)
-    except ValueError:
-        value = None
-    if value is None or not value > 0 or value == float("inf"):
-        raise argparse.ArgumentTypeError(
-            f"{text!r} isn't allowed: the round timeout must be a number of seconds above 0"
-        )
-    return value
+def _seconds(name: str) -> Callable[[str], float]:
+    def parse(text: str) -> float:
+        try:
+            value = float(text)
+        except ValueError:
+            value = None
+        if value is None or not value > 0 or value == float("inf"):
+            raise argparse.ArgumentTypeError(
+                f"{text!r} isn't allowed: {name} must be a number of seconds above 0"
+            )
+        return value
+
+    return parse
 
 
 def _default_out() -> Path:
@@ -127,10 +135,18 @@ def parse_options(argv: Sequence[str]) -> Options:
     )
     parser.add_argument(
         "--round-timeout",
-        type=_seconds,
+        type=_seconds("--round-timeout"),
         default=1200.0,
         metavar="SECONDS",
         help="a round running longer is stopped and reported as hung (default: 1200)",
+    )
+    parser.add_argument(
+        "--stall",
+        type=_seconds("--stall"),
+        default=STALL_SECONDS,
+        metavar="SECONDS",
+        help="a single test running longer has every thread's stack written to the round's "
+        f"output (default: {STALL_SECONDS:g})",
     )
     parser.add_argument(
         "--out", type=Path, help="where results go (default: a new directory under the temp dir)"
@@ -158,6 +174,7 @@ def parse_options(argv: Sequence[str]) -> Options:
         rounds=parsed.rounds,
         load=parsed.load,
         round_timeout=parsed.round_timeout,
+        stall_seconds=parsed.stall,
         out=(parsed.out or _default_out()).resolve(),
         root=root,
         keyword=parsed.keyword,
@@ -410,12 +427,20 @@ def decode(data: bytes) -> str:
     return data.decode("utf-8", errors="backslashreplace")
 
 
+DUMP_CHARACTERS = 20000
+"""How much of a stall dump the summary keeps, from its start, where the stuck test is named."""
+
+
 def tail(path: Path) -> str:
+    """The end of a round's output, or, when a test stalled, the stack dump from its start."""
     try:
-        data = path.read_bytes()
+        text = decode(path.read_bytes())
     except FileNotFoundError:
         return ""
-    return decode(data)[-TAIL_CHARACTERS:]
+    dump = text.rfind("Timeout (")
+    if dump >= 0:
+        return text[dump : dump + DUMP_CHARACTERS]
+    return text[-TAIL_CHARACTERS:]
 
 
 def test_id(case: ET.Element) -> str:
@@ -464,6 +489,8 @@ def round_command(options: Options, basetemp: Path, report: Path) -> list[str]:
         f"--junitxml={report}",
         "-o",
         "junit_family=xunit1",
+        "-o",
+        f"faulthandler_timeout={options.stall_seconds:g}",
     ]
     if options.keyword is not None:
         command += ["-k", options.keyword]
@@ -615,7 +642,8 @@ def print_summary(summary: dict[str, Any], out: Path) -> None:
     for each in summary["roundsWithoutReport"]:
         print()
         print(f"Round {each['round']} {each['status']} (exit code {each['exitCode']}). It ended:")
-        for line in each["outputTail"].splitlines()[-40:]:
+        lines = each["outputTail"].splitlines()
+        for line in lines[:60] if each["outputTail"].startswith("Timeout (") else lines[-40:]:
             print(f"    {line}")
     print()
     print(f"Results: {out}")

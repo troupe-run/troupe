@@ -114,6 +114,7 @@ PASSING = {"test_one.py": "def test_passes():\n    pass\n"}
         (["--rounds", "two"], "--rounds: 'two' isn't allowed"),
         (["--rounds", "1.5"], "--rounds: '1.5' isn't allowed"),
         (["--round-timeout", "0"], "--round-timeout: '0' isn't allowed"),
+        (["--stall", "-1"], "--stall: '-1' isn't allowed"),
         (["--load", str(flake_hunt.usable_cpus() + 1)], "lets the hunt use"),
         (["missing_test.py"], "'missing_test.py' doesn't exist"),
     ],
@@ -435,6 +436,22 @@ def test_a_round_past_its_timeout_is_stopped_reported_hung_and_the_next_still_ru
     assert elapsed < 2 * 4 + 20, f"two 4 s rounds took {elapsed:.1f}s"
     assert "Round w0r1 hung" in text(completed)
     assert gone_within(pids_in(pids), 5) == []
+
+
+def test_a_test_stuck_past_the_stall_limit_has_its_stack_in_the_hung_rounds_output(
+    tmp_path: Path,
+) -> None:
+    root = make_root(
+        tmp_path,
+        {"test_stuck.py": "import time\n\ndef test_stuck_here():\n    time.sleep(120)\n"},
+    )
+    out = tmp_path / "out"
+    completed = run_hunt(root, out, "--stall", "2", "--round-timeout", "8")
+    assert completed.returncode == 1
+    [record] = results(out)
+    assert record["status"] == "hung"
+    assert "Timeout (0:00:02)!" in record["outputTail"]
+    assert "in test_stuck_here" in record["outputTail"]
 
 
 # Requirement: The hunt can load the machine

@@ -489,7 +489,11 @@ def report_markdown(data: dict[str, Any]) -> str:
                 f"(exit code {each['exitCode']}). It ended:",
                 "",
                 "```",
-                "\n".join(each["outputTail"].splitlines()[-30:]),
+                "\n".join(
+                    each["outputTail"].splitlines()[:60]
+                    if each["outputTail"].startswith("Timeout (")
+                    else each["outputTail"].splitlines()[-30:]
+                ),
                 "```",
             ]
     return "\n".join(lines) + "\n"
