@@ -10,7 +10,7 @@
   and 3.15 are installed)
 - [x] 1.3 Verify the refusal (spec: an unsupported interpreter is refused): `uv run --python 3.14 scripts/check.py`
   and `UV_PYTHON=3.15 uv run python -V` both fail, naming `>=3.12, <3.14`. Record the output in the PR
-- [ ] 1.4 After the PR's CI runs, confirm from the logs that the 3.13 jobs ran on 3.13 and the 3.12 jobs on 3.12
+- [x] 1.4 After the PR's CI runs, confirm from the logs that the 3.13 jobs ran on 3.13 and the 3.12 jobs on 3.12
   (design D4: `UV_PYTHON` overrides `.python-version`)
 
 ## 2. One decision, checked in one place
