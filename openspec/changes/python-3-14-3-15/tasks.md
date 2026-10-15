@@ -6,7 +6,7 @@
   supported versions from the repository (design D3). Verify all of `uv run pytest scripts/tests` passes against
   the current `>=3.12,<3.14`. Then verify the same tests pass in a scratch copy widened to `<3.16`, where 19 failed
   before
-- [ ] 1.2 Widen `requires-python` to `>=3.12,<3.16` in all nine `pyproject.toml` files, set `ci.yml`'s matrix to
+- [x] 1.2 Widen `requires-python` to `>=3.12,<3.16` in all nine `pyproject.toml` files, set `ci.yml`'s matrix to
   `["3.12", "3.13", "3.14", "3.15"]`, and re-lock (design D1). Verify `uv sync --locked` succeeds,
   `uv run pytest scripts/tests` passes, and `uv.lock`'s diff only adds 3.14+ wheels and `resolution-markers`
 - [ ] 1.3 After the PR's first CI run, record every 3.14 and 3.15 job's result, and whether the macOS 3.15 jobs built
