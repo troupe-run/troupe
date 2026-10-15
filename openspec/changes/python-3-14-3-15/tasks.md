@@ -2,7 +2,7 @@
 
 ## 1. Make the tests version-independent, then widen
 
-- [ ] 1.1 Rewrite `scripts/tests/test_python_versions.py` and `scripts/tests/test_on.py` to read the bound and the
+- [x] 1.1 Rewrite `scripts/tests/test_python_versions.py` and `scripts/tests/test_on.py` to read the bound and the
   supported versions from the repository (design D3). Verify all of `uv run pytest scripts/tests` passes against
   the current `>=3.12,<3.14`. Then verify the same tests pass in a scratch copy widened to `<3.16`, where 19 failed
   before
