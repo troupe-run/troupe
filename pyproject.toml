@@ -134,7 +134,17 @@ testpaths = [
 ]
 # Shared test helpers (theatres in real git repositories) live beside troupe's own tests.
 pythonpath = ["packages/troupe/tests", "scripts"]
-addopts = ["-ra", "--strict-markers", "--strict-config", "-p", "protocol_guard", "-p", "guard_pytest", "-p", "hypothesis_profiles"]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "-p",
+    "protocol_guard",
+    "-p",
+    "guard_pytest",
+    "-p",
+    "hypothesis_profiles",
+]
 xfail_strict = true
 
 [tool.importlinter]

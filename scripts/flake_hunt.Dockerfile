@@ -8,7 +8,7 @@
 #   docker run --init --name hunt troupe-hunt:3.12 --workers 3 --rounds 10
 
 ARG PY=3.12
-FROM ghcr.io/astral-sh/uv:0.9.5-python${PY}-trixie
+FROM ghcr.io/astral-sh/uv:0.13.1-python${PY}-trixie
 
 # Debian trixie's git (2.47) prints the same --local-env-vars the git adapter excludes.
 RUN apt-get update \

@@ -213,8 +213,10 @@ def test_a_path_and_a_keyword_select_exactly_what_pytest_selects(tmp_path: Path)
 
 
 def test_a_round_gets_the_hunts_environment_plus_only_its_hypothesis_directory(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # A hunt's own tests can run inside a hunt's round, which already has the variable set.
+    monkeypatch.delenv("HYPOTHESIS_STORAGE_DIRECTORY", raising=False)
     options = flake_hunt.parse_options(["--root", str(tmp_path), "--out", str(tmp_path / "out")])
     env = flake_hunt.round_environment(options, "w0r0")
     assert {name: value for name, value in env.items() if name in os.environ} == dict(os.environ)
