@@ -105,8 +105,11 @@
     the full check (scripts/check-paths.toml; gives up after 600s)...`. Every gate ran, and the tests collected 1741,
     deselected 1715 and passed 26. Then: `guard: scripts/check.py --scope docs passed in 11s.` That's in a fresh
     clone, with mypy's cache cold. The warm run in 3.3 took 1.55 s.
-- [ ] 5.3 Open the PR with `Closes #108`. Verify that all six CI jobs pass with the plugin loaded (design, Risks: the
+- [x] 5.3 Open the PR with `Closes #108`. Verify that all six CI jobs pass with the plugin loaded (design, Risks: the
   plugin's first runs on macOS and Windows), and record the run here
+  - *Result:* PR #111, run 38736541308. All six `check` jobs passed with the plugin loaded: ubuntu 3.12 3m16s,
+    ubuntu 3.13 3m10s, macos 3.12 5m24s, macos 3.13 5m25s, windows 3.12 6m40s, windows 3.13 6m22s. `guard` and DCO
+    passed too.
 
 ## Workflow follow-up
 
