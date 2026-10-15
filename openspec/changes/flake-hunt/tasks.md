@@ -103,15 +103,29 @@ so each fixture is the shape pytest actually produces. None of these tasks runs 
   (`git diff --stat`)
 - [x] 4.4 Run every scripted-runner and run-host test, and `openspec validate flake-hunt --strict`. Verify they pass
 
-## 5. The hunt, on every platform
+## 5. The agreed campaign, from one command (spec: flake-hunt, the campaign requirements; design D11)
 
-- [ ] 5.1 Agree on #100 the number of rounds and the load for "done". Then run that hunt on macOS and in Docker
-  (3.12 and 3.13), with and without load, and record each summary on #100. Each failure found becomes a task appended
-  here and a line on #100, fixed by its kind
-- [ ] 5.2 The owner runs the same hunt on the Windows PC (3.12 and 3.13) and records the summaries on #100. Each
-  failure found becomes a task here, as in 5.1
-- [ ] 5.3 Run `uv run scripts/check.py`, mark the PR ready for review, and verify all CI jobs pass on Linux, macOS and
-  Windows
+- [x] 5.1 Add `scripts/flake_campaign.py`: the plan (CI's Python versions from `ci.yml`, refused naming the file when
+  missing; loads 0 and 2; 3 workers × 10 rounds; direct, then Docker with `--docker`), the selection patterns and
+  `--all`, the refusal of uncommitted changes with `--docker`, running each hunt in turn, and the report
+  (`report.md`, `campaign.json`) written after every hunt. Verify with tests: the plan's versions equal the real
+  `ci.yml`'s; a workflow with no matrix line is refused naming it; each selection pattern matches a file; the direct
+  and Docker command lines are what D11 says; a dirty tree with `--docker` is refused naming the files; a report built
+  from real hunt summaries names each hunt, its failing tests with runs and failures, and the commit; and one direct
+  campaign of 1 worker × 1 round on the running Python, over one test file, runs end to end into a report, with its
+  environment outside `.venv`
+- [x] 5.2 Stop on Ctrl-C (Ctrl-Break on Windows): the running hunt stops itself, the campaign waits for it (bounded),
+  runs no more hunts, marks it stopped, and writes the report. Verify with a test that interrupts a campaign during
+  its first hunt and checks the report and the exit code (130)
+- [x] 5.3 Document the campaign in `docs/flake-hunt.md` (the command on each platform, with and without `--docker`,
+  how long it takes, and what to post on #100), and verify the documented command runs on macOS with `--rounds 1`
+- [ ] 5.4 Agree the campaign on #100 as the bar for "done" (3 workers × 10 rounds, load 0 and 2, CI's Pythons,
+  direct and Docker). Run it on macOS with `--docker`, and post its report on #100. Each failure found becomes a task
+  appended here and a line on #100, fixed by its kind
+- [ ] 5.5 The owner runs the same campaign on the Windows PC, direct and with `--docker` (Docker Desktop's Linux
+  containers), and posts its report on #100. Each failure found becomes a task here, as in 5.4
+- [ ] 5.6 Rebase the branch onto `main`, run `uv run scripts/check.py`, mark the PR ready for review, and verify all CI
+  jobs pass on Linux, macOS and Windows
 
 ## Workflow follow-up
 
