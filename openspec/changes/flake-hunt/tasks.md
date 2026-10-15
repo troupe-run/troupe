@@ -205,11 +205,14 @@ spec scenario where behaviour changes.
   versions through `on.py`. Workers default to `auto` (three quarters of the usable CPUs, less the load; owner, 2026-10-15). Verified
   by the campaign's and the hunt's tests, including
   `test_workers_auto_is_three_quarters_of_the_usable_cpus_less_the_load_and_at_least_one`
-- [ ] 6.11 **`test_pid_1_which_the_os_refuses_to_let_us_signal_reads_as_running`: the refusal doesn't happen in the
+- [x] 6.11 **`test_pid_1_which_the_os_refuses_to_let_us_signal_reads_as_running`: the refusal doesn't happen in the
   hunt's container** (an environment gap, not a flake: 480 of 480 Docker rounds in the overnight macOS campaign at
   `9d0d856`). With `USER hunter` and `--init`, the container's init runs as `hunter`, so `hunter` may signal pid 1.
   The test skipped only for root; it now skips whenever this process may signal pid 1, the precondition itself, and
   still asserts the refusal where it runs (CI's runners and macOS, where pid 1 is root's)
+
+  Done in `c9fad3d`: it passes on macOS, and a Docker hunt of `test_platform_processes.py` from that commit
+  (3 workers × 3 rounds, Python 3.12) ran 9 of 9 rounds clean
 
 ## Workflow follow-up
 
