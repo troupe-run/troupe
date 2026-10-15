@@ -298,5 +298,7 @@ def test_a_wait_returns_after_its_timeout_even_when_the_platform_gives_up_early(
     started = time.monotonic()
     assert not watched.wait(0.3)
     assert time.monotonic() - started >= 0.3
-    assert len(backend.asked) == 3  # asked again, twice, for what was left
+    # Asked again for what was left: at least past the two early returns, and more if the fake's
+    # own sleep for the remainder ends early too, as Windows' timer can (CI run 38734673892).
+    assert len(backend.asked) >= 3
     assert all(each is not None and 0 <= each <= 0.3 for each in backend.asked)
