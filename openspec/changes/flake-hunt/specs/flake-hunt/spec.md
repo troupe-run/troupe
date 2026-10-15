@@ -131,7 +131,7 @@ environment of its own, SHALL be documented.
 
 ### Requirement: The agreed campaign runs from one command
 `scripts/flake_campaign.py` SHALL run, one hunt at a time, the campaign #100 agreed: every supported Python version,
-each without load and with load, run directly and, when asked, in the Linux container. It SHALL take the versions
+each without load and with load, run directly and, when asked, in the Linux container too, or only there. It SHALL take the versions
 from the supported range (python-support), and SHALL refuse to start, naming the problem, if that range is
 malformed.
 
@@ -145,10 +145,14 @@ malformed.
 - **THEN** it runs every direct hunt, then builds the Linux image for each Python version from the committed tree and
   runs the same hunts in it
 
+#### Scenario: Only in Docker
+- **WHEN** the campaign runs with Docker only asked for
+- **THEN** it runs no direct hunt, and runs every hunt in the Linux image built from the committed tree
+
 #### Scenario: Uncommitted changes with Docker
 - **WHEN** Docker is asked for and the working tree has uncommitted changes
-- **THEN** the campaign refuses to start, naming the changed files, because the container would hunt the commit
-  while the direct hunts hunted the working tree
+- **THEN** the campaign refuses to start, naming the changed files, because the container would hunt the commit, not
+  the working tree the direct hunts hunt
 
 ### Requirement: The campaign's selection is the OS-sensitive tests, named in one place
 By default the campaign SHALL hunt the tests that depend on time, processes, signals or file watching, named as path

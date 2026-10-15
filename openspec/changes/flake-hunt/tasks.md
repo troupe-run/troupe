@@ -213,6 +213,10 @@ spec scenario where behaviour changes.
 
   Done in `c9fad3d`: it passes on macOS, and a Docker hunt of `test_platform_processes.py` from that commit
   (3 workers × 3 rounds, Python 3.12) ran 9 of 9 rounds clean
+- [ ] 6.12 The campaign's `--docker-only` hunts only in the Linux container, so the Linux hunts can be rerun alone, and
+  run from Windows through Docker Desktop (owner, 2026-10-16). Verify with
+  `test_docker_only_runs_just_the_docker_hunts_and_refuses_beside_docker`, then by a `--docker-only` campaign from
+  this commit that passes cleanly, which also closes 6.11's Linux half
 
 ## Workflow follow-up
 

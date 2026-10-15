@@ -66,6 +66,22 @@ def test_the_plan_is_every_python_by_every_load_direct_then_in_docker() -> None:
     ]
 
 
+def test_docker_only_runs_just_the_docker_hunts_and_refuses_beside_docker(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    plan = options("--pythons", "3.12,3.13", "--loads", "0,2", "--docker-only").hunts()
+    assert [hunt.name for hunt in plan] == [
+        "docker-3.12-load0",
+        "docker-3.12-load2",
+        "docker-3.13-load0",
+        "docker-3.13-load2",
+    ]
+    with pytest.raises(SystemExit) as refused:
+        options("--docker", "--docker-only")
+    assert refused.value.code == 2
+    assert "not allowed with argument --docker" in capsys.readouterr().err
+
+
 @pytest.mark.usefixtures("a_dir_that_exists")
 def test_the_command_lines_are_what_the_design_says(tmp_path: Path) -> None:
     chosen = options(

@@ -196,7 +196,7 @@ test that runs in the Windows CI job (the hunt's tests run in `check.py` on all 
 ### D11: The agreed campaign is a script of its own, that runs the hunt as a subprocess
 
 `scripts/flake_campaign.py` runs the matrix #100 agreed (`--workers auto` × 10 rounds; load 0 and 2; every supported
-Python; direct, then Docker with `--docker`), one hunt after another, never two at once. Two hunts at once would load
+Python; direct, then Docker with `--docker`, or only Docker with `--docker-only`), one hunt after another, never two at once. Two hunts at once would load
 each other, and an unattended run that fans out is what this project avoids. Each hunt is `flake_hunt.py` itself:
 
 - **Direct:** `uv sync --locked --python <version>` into `.venvs/<version>`, the environment `scripts/on.py` uses,
@@ -206,7 +206,9 @@ each other, and an unattended run that fans out is what this project avoids. Eac
 - **Docker:** the image for each version is built once per campaign from `git archive HEAD`, then each hunt is
   `docker run --init` in a container named for the campaign and the hunt. Its results are copied out with
   `docker cp`, and the container is removed. Docker hunts the commit while direct hunts hunt the working tree, so
-  uncommitted changes refuse the campaign when `--docker` is given.
+  uncommitted changes refuse the campaign when `--docker` or `--docker-only` is given. `--docker-only` hunts only
+  Linux, for a machine whose direct hunts have already run, or to hunt Linux from Windows or macOS (owner,
+  2026-10-16).
 - **The Python versions are the supported range**, from `python_versions.supported()` (python-version-bounds), the
   one place they're decided. Its check keeps them equal to CI's matrix, so when #104's Part 2 widens both, the
   campaign widens with them. A malformed bound refuses the campaign, naming the problem.
