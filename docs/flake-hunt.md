@@ -35,8 +35,9 @@ The same commands work in PowerShell on Windows, where `--docker` uses Docker De
 - **With `--docker`, commit first.** The image is built from the commit, so the campaign refuses to start over
   uncommitted changes, and lists them. Otherwise the direct and Docker hunts would hunt different code.
 - **How long:** each hunt takes about 10 rounds of the selection. That's roughly 25 minutes on a laptop for the
-  OS-sensitive tests, so a direct campaign on two Pythons is about 2 hours, and about 4 with `--docker`. Leave it
-  running. Ctrl-C (or Ctrl-Break) stops the running hunt cleanly, runs no more, and still writes the report.
+  OS-sensitive tests. With four supported Pythons (3.12 to 3.15) and two loads, that's 8 hunts: about 3.5 hours
+  direct, and about 7 with `--docker`. Leave it running. Ctrl-C (or Ctrl-Break) stops the running hunt cleanly, runs
+  no more, and still writes the report.
 - **The report** is written after every hunt, to `report.md` (Markdown, ready to paste on #100) and `campaign.json`,
   in the directory printed at the start, by default `flake-campaign/<timestamp>` under the system temp directory.
   It names the commit, the machine, each hunt with its result, and every failing test with its runs, failures and
