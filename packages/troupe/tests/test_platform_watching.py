@@ -22,6 +22,11 @@ from troupe.platform.watching import DirectoryWatch, watch
 
 CHILD = Path(__file__).with_name("watch_child.py")
 BOUND = 0.25  # seconds: a quarter of the 1 s subscription poll this replaces
+STALL_SECONDS = 5.0
+"""How much a loaded machine may add to the median of five watched deliveries (#100: a Windows CI
+run's medians reached 0.40 s and 0.52 s). The fastest of the five still has to beat BOUND: a watch
+that is slow by design is slow every time, and load doesn't slow every sample (the fastest in
+those runs took 0.08 s and 0.12 s)."""
 
 
 class Changer:
@@ -79,7 +84,7 @@ def settled(directory: Path) -> DirectoryWatch:
     return watched
 
 
-def test_another_processs_appends_each_wake_a_wait_with_a_median_delay_under_the_bound(
+def test_another_processs_appends_each_wake_a_wait_the_fastest_under_the_bound(
     tmp_path: Path, changer: Changer
 ) -> None:
     segment = tmp_path / "segment.jsonl"
@@ -92,7 +97,8 @@ def test_another_processs_appends_each_wake_a_wait_with_a_median_delay_under_the
             woke = time.time()
             delays.append(woke - changer.done_at())
             drain(watched)
-    assert statistics.median(delays) < BOUND, delays
+    assert min(delays) < BOUND, delays
+    assert statistics.median(delays) < BOUND + STALL_SECONDS, delays
 
 
 def test_another_processs_new_file_wakes_a_wait(tmp_path: Path, changer: Changer) -> None:

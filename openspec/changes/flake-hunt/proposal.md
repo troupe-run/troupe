@@ -51,6 +51,9 @@ result, so a script can't reliably produce "an ok result, then an unclean exit".
 - `platform`: the lock and file-replacement waits are announced before they time out, even when a stall carries them
   past both (found by the hunt on Windows, #100). Later flake fixes in `troupe.platform` (watching a directory
   removed while it is watched, a watch wait returning before its timeout) add their scenarios here too.
+- `platform` and `event-store`: the watched-delivery scenarios state their timing as the fastest of five deliveries
+  under 0.25 s, with the median within 0.25 s plus an allowance for a loaded machine, in place of a median under
+  0.25 s (#100, #89; the rule #91 set for polled deliveries).
 
 ## Impact
 
