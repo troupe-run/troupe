@@ -59,8 +59,8 @@ SHALL take a timeout and SHALL say whether anything changed. It MAY report a cha
 
 #### Scenario: Another process appends to a file
 - **WHEN** a process waits on a watched directory and another process appends a line to a file in it, five times
-- **THEN** each wait returns saying something changed, and the median delay, measured from when the append returned,
-  is under 0.25 s
+- **THEN** each wait returns saying something changed, the fastest of the five delays, measured from when the
+  append returned, is under 0.25 s, and their median is within 0.25 s plus an allowance for a loaded machine
 
 #### Scenario: Another process creates a file
 - **WHEN** a process waits on a watched directory and another process creates a file in it

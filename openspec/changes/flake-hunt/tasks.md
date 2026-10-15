@@ -191,8 +191,14 @@ spec scenario where behaviour changes.
   `STALL_ALLOWANCE` (30 s)
 - [ ] 6.8 **A round hung for 20 minutes, test unknown** (1 of 65). Run the campaign with 6.1's stall dump to name the
   test, then add its own task here
-- [ ] 6.9 **Store: another process's events can miss the listener's median bound** (a wall-clock bound; #100, release
+- [x] 6.9 **Store: another process's events can miss the listener's median bound** (a wall-clock bound; #100, release
   PR #89). The same treatment #91 got: check the interval and the next look, and keep a loose median bound
+
+  Done for all three watched-delivery tests of this shape (the store's, the port subscription's and the platform
+  watch's). Polling is set to 60 s in each, so every delivery inside the 10 s wait is the watch's, exactly. Each now
+  asserts the fastest of five under `BOUND` (0.25 s), which a watch slow by design fails every time, and the median
+  under `BOUND + STALL_SECONDS`. Renamed to say so (`..._the_fastest_under_the_bound`), with their spec scenarios.
+  #89's delays `[0.12, 0.08, 0.40, 0.65, 1.49]` pass, with the fastest at 0.08 s
 
 - [x] 6.10 The campaign follows python-version-bounds (#104, merged first): its versions are
   `python_versions.supported()`, its environments `.venvs/<version>` as `scripts/on.py` uses, and the docs run other
