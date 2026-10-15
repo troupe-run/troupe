@@ -20,12 +20,12 @@ uv sync
 uv run scripts/check.py
 ```
 
-troupe supports Python 3.12 and 3.13, exactly the versions CI tests. Every `pyproject.toml` says so
-(`requires-python = ">=3.12,<3.14"`), and uv refuses any other version, naming the bound. Plain `uv run` uses
+troupe supports Python 3.12 to 3.15, exactly the versions CI tests. Every `pyproject.toml` says so
+(`requires-python = ">=3.12,<3.16"`), and uv refuses any other version, naming the bound. Plain `uv run` uses
 3.12, the lowest. To run on another supported version, name it:
 
 ```console
-uv run scripts/on.py 3.13 scripts/check.py
+uv run scripts/on.py 3.15 scripts/check.py
 ```
 
 Each version gets its own environment in `.venvs/`, so switching back and forth rebuilds nothing. Delete
