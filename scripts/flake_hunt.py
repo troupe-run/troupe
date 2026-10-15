@@ -176,8 +176,10 @@ if sys.platform == "win32":
     _ntdll = ctypes.WinDLL("ntdll")
 
     _CREATE_SUSPENDED = 0x00000004
-    # Not CREATE_NEW_PROCESS_GROUP: it turns Ctrl-C off in the new process, every process it starts
-    # inherits that, and a round's tests that send themselves a real Ctrl-C would never get it.
+    # A round gets a console of its own, with no window, so a Ctrl-C typed at the hunt reaches only
+    # the hunt, which stops the rounds itself. Not CREATE_NEW_PROCESS_GROUP: that turns Ctrl-C off
+    # in the round and everything it starts, so a test that sends itself one never gets it (#100).
+    _CREATE_NO_WINDOW = 0x08000000
     _JOB_OBJECT_EXTENDED_LIMIT_INFORMATION_CLASS = 9
     _JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000
     _PROCESS_TERMINATE = 0x0001
@@ -289,7 +291,7 @@ class Tree:
                     stdin=subprocess.DEVNULL,
                     stdout=output,
                     stderr=subprocess.STDOUT,
-                    creationflags=_CREATE_SUSPENDED,
+                    creationflags=_CREATE_SUSPENDED | _CREATE_NO_WINDOW,
                 )
             except BaseException:
                 _kernel32.CloseHandle(self._job)
