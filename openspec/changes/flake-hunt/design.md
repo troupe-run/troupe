@@ -186,8 +186,8 @@ test that runs in the Windows CI job (the hunt's tests run in `check.py` on all 
 - **Paths stay short.** The run directory under `%TEMP%` is named `fh-<6 characters>`, and each round's basetemp is
   `w<n>r<n>` under it. pytest's own nesting then stays well under 260 characters from a default `%TEMP%`.
 - **One environment per Python version.** `uv run --python 3.13` re-syncs the project's `.venv` to 3.13, replacing
-  the 3.12 environment the person develops in. The docs run each version in its own environment
-  (`UV_PROJECT_ENVIRONMENT=.venv-3.13`), on every platform. The summary names the interpreter it ran.
+  the environment the person develops in. The docs run other versions through `scripts/on.py` (python-version-bounds,
+  #104), which gives each its own `.venvs/<version>`, on every platform. The summary names the interpreter it ran.
 - **The docs cover what only Windows has:** PowerShell commands; Git for Windows on the PATH (the git adapter's tests
   need it); QuickEdit mode, where a click in a console window pauses everything that writes to it, so use Windows
   Terminal or don't click in the window during a hunt; and recording whether Microsoft Defender real-time
@@ -195,19 +195,24 @@ test that runs in the Windows CI job (the hunt's tests run in `check.py` on all 
 
 ### D11: The agreed campaign is a script of its own, that runs the hunt as a subprocess
 
-`scripts/flake_campaign.py` runs the matrix #100 agreed (3 workers × 10 rounds; load 0 and 2; every Python in CI's
-matrix; direct, then Docker with `--docker`), one hunt after another, never two at once. Two hunts at once would load
+`scripts/flake_campaign.py` runs the matrix #100 agreed (`--workers auto` × 10 rounds; load 0 and 2; every supported
+Python; direct, then Docker with `--docker`), one hunt after another, never two at once. Two hunts at once would load
 each other, and an unattended run that fans out is what this project avoids. Each hunt is `flake_hunt.py` itself:
 
-- **Direct:** `uv run --python <version> scripts/flake_hunt.py ...`, with `UV_PROJECT_ENVIRONMENT` set to
-  `.venv-<version>` for every version, 3.12 included. `.venv` is never touched, whatever Python it holds.
+- **Direct:** `uv sync --locked --python <version>` into `.venvs/<version>`, the environment `scripts/on.py` uses,
+  then that environment's interpreter runs `flake_hunt.py` itself. Not `on.py` and `uv run`: a Ctrl-C has to reach
+  the hunt with no uv process in between that might end before the hunt has written its summary. `.venv` is never
+  touched, whatever Python it holds.
 - **Docker:** the image for each version is built once per campaign from `git archive HEAD`, then each hunt is
   `docker run --init` in a container named for the campaign and the hunt. Its results are copied out with
   `docker cp`, and the container is removed. Docker hunts the commit while direct hunts hunt the working tree, so
   uncommitted changes refuse the campaign when `--docker` is given.
-- **The Python versions are read from `ci.yml`'s matrix line** (`python: ["3.12", "3.13"]`), with no YAML parser, and
-  a missing or unreadable line refuses the campaign, naming the file. When troupe#104 widens the matrix, the campaign
-  widens with it.
+- **The Python versions are the supported range**, from `python_versions.supported()` (python-version-bounds), the
+  one place they're decided. Its check keeps them equal to CI's matrix, so when #104's Part 2 widens both, the
+  campaign widens with them. A malformed bound refuses the campaign, naming the problem.
+- **Workers are `auto`**: three quarters of the CPUs the hunt may use, rounded down, and at least 1 (owner,
+  2026-10-15). The first Windows hunts used 10 workers on 8 logical CPUs, which loads the machine well past what a
+  person's own runs do. Each hunt resolves `auto` itself, so a container counts its own CPUs.
 - **The selection** (spec: "The campaign's selection is the OS-sensitive tests, named in one place") is a tuple of
   glob patterns in the campaign script: `test_platform_*.py`, the run host, CLI runs, the store, the git adapter and
   the scripted runner. That's the selection #100's hunts used, and it's what the owner typed by hand on Windows.

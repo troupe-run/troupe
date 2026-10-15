@@ -1,11 +1,12 @@
 """Run the flake-hunt campaign #100 agreed, one hunt after another (spec: flake-hunt; design D11).
 
-Usage: uv run scripts/flake_campaign.py [--docker] [--all] [--workers N] [--rounds N] [--loads 0,2]
-                                        [--pythons 3.12,3.13] [--out DIR] [PATH ...]
+Usage: uv run scripts/flake_campaign.py [--docker] [--all] [--workers N|auto] [--rounds N]
+                                        [--loads 0,2] [--pythons 3.12,3.13] [--out DIR] [PATH ...]
 
-For every Python version CI's matrix names, and each load, it runs scripts/flake_hunt.py directly,
-then (with --docker) the same hunts in the Linux container. Each direct hunt runs in its own
-.venv-<version>, so .venv is never touched. The report, report.md for #100 and campaign.json, is
+For every supported Python version (python_versions.py, which ties the bound to CI's matrix), and
+each load, it runs scripts/flake_hunt.py directly, then (with --docker) the same hunts in the Linux
+container. Each direct hunt runs in that version's .venvs/<version>, as scripts/on.py does, so
+.venv is never touched. The report, report.md for #100 and campaign.json, is
 written after every hunt, so a stopped campaign still says what it found. docs/flake-hunt.md says
 how to run it on each platform.
 """
@@ -28,15 +29,20 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
+import flake_hunt
+import on
+import python_versions
+
 ROOT = Path(__file__).resolve().parent.parent
-CI_WORKFLOW = ".github/workflows/ci.yml"
 DOCKERFILE = "scripts/flake_hunt.Dockerfile"
 CONTAINER_OUT = "/home/hunter/out"
 
-WORKERS = 3
+WORKERS = "auto"
 ROUNDS = 10
 LOADS = (0, 2)
-"""The campaign #100 agreed: 3 workers by 10 rounds, without load and with 2 CPUs busy."""
+"""The campaign #100 agreed: 10 rounds, without load and with 2 CPUs busy, in as many workers as
+three quarters of the CPUs (flake_hunt.py's --workers auto, resolved by each hunt where it runs,
+so a container counts its own CPUs)."""
 
 SELECTION = (
     "packages/troupe/tests/test_platform_*.py",
@@ -59,22 +65,19 @@ class CampaignError(Exception):
     """Something that stops the campaign before it starts, with the fix."""
 
 
-def ci_pythons(workflow: Path) -> list[str]:
-    """The Python versions CI's matrix tests, read from its ``python: [...]`` line."""
+def supported_pythons(root: Path) -> list[str]:
+    """Every supported Python version, from the root's bound, which python_versions.py's check
+    keeps equal to CI's matrix."""
     try:
-        text = workflow.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        raise CampaignError(
-            f"{workflow} doesn't exist, so CI's Python versions are unknown"
-        ) from None
-    lines = re.findall(r"^\s*python:\s*\[([^\]]*)\]", text, flags=re.MULTILINE)
-    versions = [v for line in lines for v in re.findall(r"""["']?(\d+\.\d+)["']?""", line)]
-    if len(lines) != 1 or not versions:
-        raise CampaignError(
-            f'{workflow} doesn\'t have exactly one matrix line like python: ["3.12", "3.13"], '
-            "so CI's Python versions are unknown. Fix the workflow, or name them with --pythons"
-        )
-    return versions
+        return python_versions.supported(root)
+    except python_versions.BoundError as error:
+        raise CampaignError(str(error)) from None
+
+
+def _workers(text: str) -> str:
+    """A number of workers, or auto: checked here, resolved by each hunt where it runs."""
+    flake_hunt.parse_workers(text)
+    return text
 
 
 def expand(root: Path, patterns: Sequence[str]) -> list[str]:
@@ -104,7 +107,7 @@ class Hunt:
 
 @dataclasses.dataclass(frozen=True)
 class Options:
-    workers: int
+    workers: str
     rounds: int
     loads: tuple[int, ...]
     pythons: tuple[str, ...]
@@ -161,18 +164,20 @@ def parse_options(argv: Sequence[str]) -> Options:
     )
     parser.add_argument("--docker", action="store_true", help="also hunt in the Linux container")
     parser.add_argument("--all", action="store_true", help="hunt the whole suite")
-    parser.add_argument("--workers", type=_whole("--workers", 1), default=WORKERS)
+    parser.add_argument("--workers", type=_workers, default=WORKERS, help="a number, or auto")
     parser.add_argument("--rounds", type=_whole("--rounds", 1), default=ROUNDS)
     parser.add_argument("--loads", type=_list("--loads", _whole("--loads", 0)), default=LOADS)
     parser.add_argument(
-        "--pythons", type=_list("--pythons", _version), help="instead of CI's (default: ci.yml's)"
+        "--pythons",
+        type=_list("--pythons", _version),
+        help="instead of every supported version (default: python_versions.py's)",
     )
     parser.add_argument("--out", type=Path, help="where the report goes (default: the temp dir)")
     parser.add_argument(
         "--environments",
         type=Path,
-        default=ROOT,
-        help="where each version's .venv-<version> lives (default: the repository)",
+        default=ROOT / on.ENVIRONMENTS,
+        help="where each version's environment lives (default: .venvs, as scripts/on.py uses)",
     )
     parser.add_argument(
         "--hunt-root",
@@ -190,7 +195,7 @@ def parse_options(argv: Sequence[str]) -> Options:
         )
     tests_root = hunt_root or ROOT
     try:
-        pythons = tuple(parsed.pythons or ci_pythons(ROOT / CI_WORKFLOW))
+        pythons = tuple(parsed.pythons or supported_pythons(ROOT))
         if parsed.all:
             selection: tuple[str, ...] = ()
             label = "the whole suite"
@@ -247,7 +252,7 @@ def sync_command(uv: str, hunt: Hunt) -> list[str]:
 
 
 def direct_command(options: Options, hunt: Hunt, out: Path) -> list[str]:
-    environment = options.environments / f".venv-{hunt.python}"
+    environment = options.environments / hunt.python
     script = str(options.root / "scripts" / "flake_hunt.py")
     python = str(environment_python(environment))
     where = ["--root", str(options.hunt_root)] if options.hunt_root is not None else []
@@ -351,8 +356,8 @@ def outcome_of(hunt: Hunt, code: int, out: Path) -> Outcome:
 
 
 def run_direct(options: Options, hunt: Hunt, uv: str, out: Path) -> Outcome:
-    env = dict(os.environ)
-    env["UV_PROJECT_ENVIRONMENT"] = str(options.environments / f".venv-{hunt.python}")
+    env = {key: value for key, value in os.environ.items() if key != "VIRTUAL_ENV"}  # as on.py
+    env["UV_PROJECT_ENVIRONMENT"] = str(options.environments / hunt.python)
     print(f"flake_campaign: {hunt.name}: syncing Python {hunt.python}", flush=True)
     sync = subprocess.run(sync_command(uv, hunt), cwd=options.root, env=env, check=False)
     if sync.returncode != 0:

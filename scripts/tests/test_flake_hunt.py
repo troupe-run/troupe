@@ -130,6 +130,17 @@ def test_a_malformed_option_is_refused_naming_it_and_nothing_runs(
     assert not out.exists()
 
 
+def test_workers_auto_is_three_quarters_of_the_usable_cpus_and_at_least_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for cpus, workers in ((8, 6), (10, 7), (4, 3), (1, 1), (2, 1)):
+        monkeypatch.setattr(flake_hunt, "usable_cpus", lambda cpus=cpus: cpus)
+        assert flake_hunt.parse_workers("auto") == workers
+    assert flake_hunt.parse_workers("5") == 5
+    with pytest.raises(Exception, match="--workers must be a whole number, 1 or more, or auto"):
+        flake_hunt.parse_workers("lots")
+
+
 # Requirement: The hunt repeats tests in overlapping rounds
 
 

@@ -13,8 +13,9 @@ It doesn't run in PR CI. Its own tests do, on all three platforms.
 
 ## The campaign: the agreed hunt, in one command
 
-`scripts/flake_campaign.py` runs the hunt #100 agreed as "done", one hunt after another: 3 workers × 10 rounds,
-without load and with `--load 2`, on every Python version CI's matrix names (read from `.github/workflows/ci.yml`).
+`scripts/flake_campaign.py` runs the hunt #100 agreed as "done", one hunt after another: `--workers auto` × 10
+rounds, without load and with `--load 2`, on every supported Python version (`scripts/python_versions.py`, whose
+check keeps them equal to CI's matrix).
 With `--docker` it then runs the same hunts in the Linux container. It hunts the OS-sensitive tests below unless you
 pass `--all` (the whole suite) or test paths.
 
@@ -25,8 +26,10 @@ uv run scripts/flake_campaign.py --docker     # direct, then in Docker
 
 The same commands work in PowerShell on Windows, where `--docker` uses Docker Desktop's Linux containers.
 
-- **Each Python version gets an environment of its own**, `.venv-<version>`, synced before its hunts. `.venv` is never
-  touched, whatever Python it holds.
+- **Each Python version gets its own environment**, `.venvs/<version>`, the one `scripts/on.py` uses, synced before
+  its hunts. `.venv` is never touched, whatever Python it holds.
+- **Workers:** `auto` by default, three quarters of the CPUs the hunt may use (6 on 8 logical CPUs). In Docker, each
+  hunt counts the container's own CPUs. The report shows the number each hunt used.
 - **With `--docker`, commit first.** The image is built from the commit, so the campaign refuses to start over
   uncommitted changes, and lists them. Otherwise the direct and Docker hunts would hunt different code.
 - **How long:** each hunt takes about 10 rounds of the selection. That's roughly 25 minutes on a laptop for the
@@ -46,7 +49,7 @@ something out. The agreed campaign is the default.
 
 | Option | Meaning | Default |
 |---|---|---|
-| `--workers N` | Rounds run at once | 1 |
+| `--workers N` | Rounds run at once: a number, or `auto` for three quarters of the CPUs the hunt may use | 1 |
 | `--rounds N` | Rounds each worker runs, back to back | 1 |
 | `--load N` | CPUs to keep busy for the whole hunt (at most the CPUs it may use) | 0 |
 | `--round-timeout SECONDS` | A round running longer is stopped and reported as hung | 1200 |
@@ -104,18 +107,18 @@ exited. On Windows that holds even if the hunt itself is killed.
 ## macOS and Linux
 
 ```console
-uv run scripts/flake_hunt.py --workers 3 --rounds 10 <selection>
-uv run scripts/flake_hunt.py --workers 3 --rounds 10 --load 2 <selection>
+uv run scripts/flake_hunt.py --workers auto --rounds 10 <selection>
+uv run scripts/flake_hunt.py --workers auto --rounds 10 --load 2 <selection>
 ```
 
-To hunt on Python 3.13 without touching the 3.12 environment you develop in, give 3.13 an environment of its own.
-`uv run --python 3.13` alone would re-sync `.venv` to 3.13.
+`--workers auto` picks three quarters of the CPUs the hunt may use.
+
+To hunt on another supported Python without touching the environment you develop in, run it through `scripts/on.py`,
+which gives each version its own environment in `.venvs/<version>`:
 
 ```console
-UV_PROJECT_ENVIRONMENT=.venv-3.13 uv run --python 3.13 scripts/flake_hunt.py --workers 3 --rounds 10 <selection>
+uv run scripts/on.py 3.13 scripts/flake_hunt.py --workers auto --rounds 10 <selection>
 ```
-
-`.venv-*/` is ignored by git, so ruff skips it too.
 
 ## Linux in Docker
 
@@ -124,7 +127,7 @@ works on its own copy: a bind mount from the host would change how file locking 
 
 ```console
 git archive HEAD | docker build -t troupe-hunt:3.12 --build-arg PY=3.12 -f scripts/flake_hunt.Dockerfile -
-docker run --init --name hunt troupe-hunt:3.12 --workers 3 --rounds 10 <selection>
+docker run --init --name hunt troupe-hunt:3.12 --workers auto --rounds 10 <selection>
 docker cp hunt:/home/hunter/out ./flake-hunt-out
 docker rm hunt
 ```
@@ -145,16 +148,14 @@ You need [uv](https://docs.astral.sh/uv/) and [Git for Windows](https://gitforwi
 from PowerShell, at the repository root:
 
 ```powershell
-uv run scripts/flake_hunt.py --workers 3 --rounds 10 <selection>
-uv run scripts/flake_hunt.py --workers 3 --rounds 10 --load 2 <selection>
+uv run scripts/flake_hunt.py --workers auto --rounds 10 <selection>
+uv run scripts/flake_hunt.py --workers auto --rounds 10 --load 2 <selection>
 ```
 
-For Python 3.13, in an environment of its own:
+For Python 3.13, in its own environment:
 
 ```powershell
-$env:UV_PROJECT_ENVIRONMENT = ".venv-3.13"
-uv run --python 3.13 scripts/flake_hunt.py --workers 3 --rounds 10 <selection>
-Remove-Item Env:UV_PROJECT_ENVIRONMENT
+uv run scripts/on.py 3.13 scripts/flake_hunt.py --workers auto --rounds 10 <selection>
 ```
 
 - **Use Windows Terminal**, or don't click in the console window during a hunt. A classic console window has

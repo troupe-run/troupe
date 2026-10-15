@@ -119,7 +119,7 @@ so each fixture is the shape pytest actually produces. None of these tasks runs 
   its first hunt and checks the report and the exit code (130)
 - [x] 5.3 Document the campaign in `docs/flake-hunt.md` (the command on each platform, with and without `--docker`,
   how long it takes, and what to post on #100), and verify the documented command runs on macOS with `--rounds 1`
-- [ ] 5.4 Agree the campaign on #100 as the bar for "done" (3 workers × 10 rounds, load 0 and 2, CI's Pythons,
+- [ ] 5.4 Agree the campaign on #100 as the bar for "done" (`--workers auto` × 10 rounds, load 0 and 2, the supported Pythons,
   direct and Docker). Run it on macOS with `--docker`, and post its report on #100. Each failure found becomes a task
   appended here and a line on #100, fixed by its kind
 - [ ] 5.5 The owner runs the same campaign on the Windows PC, direct and with `--docker` (Docker Desktop's Linux
@@ -165,6 +165,11 @@ spec scenario where behaviour changes.
   test, then add its own task here
 - [ ] 6.9 **Store: another process's events can miss the listener's median bound** (a wall-clock bound; #100, release
   PR #89). The same treatment #91 got: check the interval and the next look, and keep a loose median bound
+
+- [x] 6.10 The campaign follows python-version-bounds (#104, merged first): its versions are
+  `python_versions.supported()`, its environments `.venvs/<version>` as `scripts/on.py` uses, and the docs run other
+  versions through `on.py`. Workers default to `auto` (three quarters of the usable CPUs; owner, 2026-10-15). Verified
+  by the campaign's and the hunt's tests, including `test_workers_auto_is_three_quarters_of_the_usable_cpus_and_at_least_one`
 
 ## Workflow follow-up
 
