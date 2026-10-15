@@ -91,12 +91,20 @@
 
 ## 5. Evidence on real commits
 
-- [ ] 5.1 Once 3.1 is committed, commit a task tick that stages only this change's `tasks.md`. Verify that the guard
+- [x] 5.1 Once 3.1 is committed, commit a task tick that stages only this change's `tasks.md`. Verify that the guard
   prints that the check is skipped, naming `openspec/**` and `scripts/check-paths.toml`. Record the output here
   (design D5)
-- [ ] 5.2 Commit a change that stages only files under `docs/` (or the scripted runner's README). It needs a real
+  - *Result:* `7faab47`, which staged only `tasks.md`, printed `guard: only openspec/** is staged; the check is
+    skipped (scripts/check-paths.toml).` The commit took 0.45 s, against 218 to 227 s for this branch's full checks.
+- [x] 5.2 Commit a change that stages only files under `docs/` (or the scripted runner's README). It needs a real
   docs edit; don't make one up. If the change has none by then, demonstrate it in a scratch clone instead. Verify
   that the guard runs `scripts/check.py --scope docs`, and that it passes. Record the output and time here
+  - *Result (scratch clone):* this change has no real `docs/` edit, so it was shown in a throwaway clone of this
+    branch at `571ec81`, with hooks on, by appending a line to `docs/platform.md`. Nothing was pushed, and the clone
+    was deleted. The guard printed `guard: only docs/** is staged; running scripts/check.py --scope docs instead of
+    the full check (scripts/check-paths.toml; gives up after 600s)...`. Every gate ran, and the tests collected 1741,
+    deselected 1715 and passed 26. Then: `guard: scripts/check.py --scope docs passed in 11s.` That's in a fresh
+    clone, with mypy's cache cold. The warm run in 3.3 took 1.55 s.
 - [ ] 5.3 Open the PR with `Closes #108`. Verify that all six CI jobs pass with the plugin loaded (design, Risks: the
   plugin's first runs on macOS and Windows), and record the run here
 
