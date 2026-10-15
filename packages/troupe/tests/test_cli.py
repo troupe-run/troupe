@@ -605,12 +605,23 @@ def test_declared_reads_perform_status_and_logs_as_they_declare_their_arguments(
     }
 
 
+def _declare_a_file_type(parser: argparse.ArgumentParser) -> None:
+    """Python 3.14 deprecated FileType (python-3-14-3-15 design D4). troupe never uses one, so
+    this test expects the warning rather than letting it reach every run's output."""
+    if sys.version_info >= (3, 14):
+        with pytest.warns(PendingDeprecationWarning, match="FileType is deprecated"):
+            kind = argparse.FileType("r")
+    else:
+        kind = argparse.FileType("r")
+    parser.add_argument("--file", type=kind)
+
+
 @pytest.mark.parametrize(
     "declare",
     [
         lambda parser: parser.add_argument("--many", nargs="+"),
         lambda parser: parser.add_argument("rest", nargs=argparse.REMAINDER),
-        lambda parser: parser.add_argument("--file", type=argparse.FileType("r")),
+        _declare_a_file_type,
     ],
     ids=["option-nargs", "remainder", "file-type"],
 )

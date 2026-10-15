@@ -20,7 +20,7 @@
   3.15 here (`uv run scripts/on.py <v> pytest packages/troupe/tests/test_platform_processes.py`). Then verify, by
   temporarily forcing each helper, that the `waitid` helper fails the precondition on a child that never exits
   (mutation check)
-- [ ] 2.2 Wrap the `FileType` construction in `test_cli.py`'s file-type case in
+- [x] 2.2 Wrap the `FileType` construction in `test_cli.py`'s file-type case in
   `pytest.warns(PendingDeprecationWarning)` on 3.14 and later (design D4). Verify the test passes on all four
   versions and the warning no longer appears in the 3.14 and 3.15 test summaries
 
