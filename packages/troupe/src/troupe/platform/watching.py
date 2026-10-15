@@ -366,6 +366,7 @@ elif sys.platform == "win32":
     _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
 
     _FILE_LIST_DIRECTORY = 0x0001
+    _FILE_READ_ATTRIBUTES = 0x0080
     _FILE_SHARE_ALL = 0x00000001 | 0x00000002 | 0x00000004  # read, write, delete
     _OPEN_EXISTING = 3
     _FILE_FLAG_BACKUP_SEMANTICS = 0x02000000
@@ -387,6 +388,16 @@ elif sys.platform == "win32":
     _ERROR_FILE_NOT_FOUND = 2
     _ERROR_PATH_NOT_FOUND = 3
     _BUFFER_BYTES = 65536  # the most a network share accepts; a fuller burst is an overflow
+    _FILE_STANDARD_INFO_CLASS = 1  # FileStandardInfo
+
+    class _StandardInfo(ctypes.Structure):
+        _fields_ = [  # the layout of FILE_STANDARD_INFO
+            ("AllocationSize", ctypes.c_int64),
+            ("EndOfFile", ctypes.c_int64),
+            ("NumberOfLinks", wintypes.DWORD),
+            ("DeletePending", wintypes.BOOLEAN),
+            ("Directory", wintypes.BOOLEAN),
+        ]
 
     class _Overlapped(ctypes.Structure):
         _fields_ = [  # the layout of OVERLAPPED, with its offset union as two DWORDs
@@ -439,6 +450,13 @@ elif sys.platform == "win32":
         wintypes.BOOL,
         wintypes.DWORD,
     ]
+    _kernel32.GetFileInformationByHandleEx.restype = wintypes.BOOL
+    _kernel32.GetFileInformationByHandleEx.argtypes = [
+        wintypes.HANDLE,
+        ctypes.c_int,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+    ]
     _kernel32.CancelIoEx.restype = wintypes.BOOL
     _kernel32.CancelIoEx.argtypes = [wintypes.HANDLE, ctypes.POINTER(_Overlapped)]
     for _name in ("ResetEvent", "SetEvent", "CloseHandle"):
@@ -458,7 +476,7 @@ elif sys.platform == "win32":
             self._directory = directory
             self._handle = _kernel32.CreateFileW(
                 str(directory),
-                _FILE_LIST_DIRECTORY,
+                _FILE_LIST_DIRECTORY | _FILE_READ_ATTRIBUTES,
                 _FILE_SHARE_ALL,
                 None,
                 _OPEN_EXISTING,
@@ -483,11 +501,24 @@ elif sys.platform == "win32":
             _read_directory_changes(self._handle, self._buffer, self._overlapped)
             self._outstanding = True
 
+        def _delete_pending(self) -> bool:
+            """Whether the watched directory was deleted while this watch holds it open. Windows
+            keeps it, pending deletion, until the last handle closes, and refuses to watch it
+            (ERROR_ACCESS_DENIED), so the refusal alone can't tell missing from unwatchable."""
+            info = _StandardInfo()
+            if not _kernel32.GetFileInformationByHandleEx(
+                self._handle, _FILE_STANDARD_INFO_CLASS, ctypes.byref(info), ctypes.sizeof(info)
+            ):
+                return False  # can't tell: the refusal stands as unwatchable, never a guess
+            return bool(info.DeletePending)
+
         def wait(self, timeout: float | None) -> bool:
             if not self._outstanding:  # re-issuing failed after the last change: try once more
                 try:
                     self._issue()
                 except OSError as error:
+                    if self._delete_pending():
+                        raise WatchDirectoryMissingError(self._directory) from error
                     raise WatchUnavailableError(self._directory, str(error)) from error
             handles = (wintypes.HANDLE * 2)(self._changed_event, self._close_event)
             milliseconds = _milliseconds(timeout)
