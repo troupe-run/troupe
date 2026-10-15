@@ -1,1 +1,1 @@
-{"files":[".claude/settings.json",".githooks/commit-msg",".githooks/pre-commit",".githooks/pre-push",".github/guard-delivery.json",".github/workflows/guard.yml","scripts/guard.py"],"source":"troupe-run/infrastructure"}
+{"files":[".claude/settings.json",".githooks/commit-msg",".githooks/pre-commit",".githooks/pre-push",".github/guard-delivery.json",".github/workflows/guard.yml","scripts/guard.py","scripts/guard_pytest.py"],"source":"troupe-run/infrastructure"}
