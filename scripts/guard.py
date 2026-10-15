@@ -66,18 +66,12 @@ DELIVERY_LIST = ".github/guard-delivery.json"
 """Present only in a repository that receives the guard: the files delivered to it."""
 DELIVERY_AUTHOR_EMAIL = "340938853+troupe-run-infrastructure[bot]@users.noreply.github.com"
 """The infrastructure App's bot account, which makes every delivery commit."""
-RELEASE_AUTHOR_EMAIL: str | None = "341990208+troupe-run-release[bot]@users.noreply.github.com"
-"""The release App's bot account, which makes release-please's commits; the id is from
-GET /users/troupe-run-release%5Bbot%5D. Filled once troupe's "release branches" ruleset, which lets
-only the App create, update or delete release-please--* branches, was applied (#41). That ruleset
-is the hard check: a commit's author is self-declared, so this check alone isn't, and it's trusted
-only in RELEASE_REPOSITORIES. None closes the exemption everywhere (release-please-prs design D2,
-D5; open-release-exemption design D3)."""
 RELEASE_BRANCH_PREFIX = "release-please--"
 RELEASE_REPOSITORIES = frozenset({"troupe-run/troupe"})
-"""Where a ruleset lets only the release App write release-please--* branches (tofu/release.tf).
-The exemption trusts a commit's author only in these; anywhere else the author would be the only
-check (open-release-exemption design D1)."""
+"""Where a ruleset lets only the release App create or update release-please--* branches
+(tofu/release.tf). There, GitHub enforces who writes such a branch, so its name is proof; anywhere
+else, a fork included, anyone can use the name (open-release-exemption design D1;
+drop-forgery-resistance design D1)."""
 GUARD_DIR = "troupe-guard"
 CHECK_TIMEOUT_SECONDS = 600.0
 """How long the pre-commit check may run before the commit is refused. The default lives here
@@ -1713,32 +1707,12 @@ def delivered_changes_by_others(
     return _delivered_refusal(bad, "commits not made by the delivery change delivered files")
 
 
-def release_branch_by_the_bot(
-    root: Path, head: str, branch: str | None, repository: str | None
-) -> bool:
-    """A release-please branch, living in one of RELEASE_REPOSITORIES, whose commits not on main
-    are all the release bot's, and there's at least one. Judged by what the branch adds to main,
-    not the event's range: release-please force-pushes when main moves, and a push's range then
-    holds main's new commits too (release-please-prs design D1). The name and the author are both
-    self-declared; the ruleset that lets only the App write these branches is the hard check
-    (design D5), so a repository without it, or none named, exempts nothing
-    (open-release-exemption design D1, D2)."""
-    if (
-        RELEASE_AUTHOR_EMAIL is None
-        or repository not in RELEASE_REPOSITORIES
-        or not (branch or "").startswith(RELEASE_BRANCH_PREFIX)
-    ):
-        return False
-    result = subprocess.run(
-        ["git", "log", "--format=%ae", head, "--not", "origin/main"],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-        env=_git_env(),
-    )
-    authors = result.stdout.splitlines()
-    return result.returncode == 0 and bool(authors) and set(authors) == {RELEASE_AUTHOR_EMAIL}
+def reserved_release_branch(branch: str | None, repository: str | None) -> bool:
+    """A release-please branch in a repository where GitHub lets only the release App create or
+    update it. The name is the whole test: who authored the commits isn't asked, because a pusher
+    writes that, and GitHub sees the owner and their agents as one identity (#47;
+    drop-forgery-resistance design D1). With no repository named, nothing is exempt."""
+    return repository in RELEASE_REPOSITORIES and (branch or "").startswith(RELEASE_BRANCH_PREFIX)
 
 
 def run_ci(
@@ -1751,16 +1725,13 @@ def run_ci(
 ) -> list[Decision]:
     """The git-level rules, re-checked on GitHub for a push or a pull request (design D11), and a
     pull request's title when there is one. The repository is the one the branch lives in, which
-    decides whether a release branch can be exempt (open-release-exemption design D2)."""
+    decides whether a release branch's name exempts it from the branch rule (open-release-exemption
+    design D2; drop-forgery-resistance design D1, #47)."""
     commits = commits_in_range(root, base, head)
     decisions = [nonconforming_commits(root, commits)]
     if title is not None:
         decisions.append(pr_title(title))
-    if (
-        branch
-        and branch != "main"
-        and not release_branch_by_the_bot(root, head, branch, repository)
-    ):
+    if branch and branch != "main" and not reserved_release_branch(branch, repository):
         decisions.append(commit_branch_change(root, branch))
     changed: list[str] = []
     for sha in commits:
