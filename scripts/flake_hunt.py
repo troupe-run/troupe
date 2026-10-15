@@ -454,6 +454,9 @@ def round_command(options: Options, basetemp: Path, report: Path) -> list[str]:
         "-q",
         "-p",
         "no:cacheprovider",
+        # Hypothesis loads its "ci" profile (fixed seeds, no database) when it sees CI set; the
+        # hunt's rounds must explore new examples wherever it runs (design D3).
+        "--hypothesis-profile=default",
         f"--basetemp={basetemp}",
         f"--junitxml={report}",
         "-o",
@@ -500,6 +503,8 @@ def run_round(
                     break
                 time.sleep(POLL_SECONDS)
             exit_code = tree.stop()  # also stops anything the round left running
+    if stop.is_set():  # killed by the stop, or ended as it came: either way, not a finished round
+        return None
     seconds = round(time.monotonic() - started, 1)
     found = read_report(report)
     if hung:
