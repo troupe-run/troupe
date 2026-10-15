@@ -265,18 +265,32 @@ if sys.platform == "win32":
         finally:
             _kernel32.CloseHandle(handle)
 
-elif sys.platform == "linux":
+elif hasattr(os, "waitid"):
+    # Chosen by what os offers, not the platform: who reaps the child depends on the Python
+    # version (python-3-14-3-15 design D2). Linux's pidfd watcher, and the threaded watcher on
+    # macOS from 3.14, reap on the loop, so a blocked loop leaves a zombie whose status waitid
+    # reads. On macOS 3.13 the watcher thread reaps, and waitid says so with ChildProcessError.
+
+    class _Waited(typing.Protocol):
+        si_code: int
+        si_status: int
+
+    # typeshed declares waitid for Linux only, but macOS has it from Python 3.13.
+    _waitid = typing.cast(
+        Callable[[int, int, int], _Waited | None],
+        getattr(os, "waitid"),  # noqa: B009
+    )
 
     @contextlib.contextmanager
     def _exit_of(pid: int) -> Iterator[Callable[[], int | None]]:
-        """waitid without reaping, polled to the bound: asyncio's pidfd watcher can't reap the
-        child while the loop is blocked, so the status is still there to read."""
+        """waitid without reaping, polled to the bound: the status is there to read until the
+        loop reaps, unless a watcher thread already has."""
 
         def wait() -> int | None:
             deadline = time.monotonic() + EXIT_BOUND_SECONDS
             while True:
                 try:
-                    seen = os.waitid(os.P_PID, pid, os.WEXITED | os.WNOWAIT | os.WNOHANG)
+                    seen = _waitid(os.P_PID, pid, os.WEXITED | os.WNOWAIT | os.WNOHANG)
                 except ChildProcessError:
                     return None  # a watcher thread reaped it, which only an exit allows
                 if seen is not None:
@@ -288,6 +302,7 @@ elif sys.platform == "linux":
         yield wait
 
 else:
+    # No waitid: macOS on 3.12, where asyncio's watcher thread reaps the child itself.
 
     @contextlib.contextmanager
     def _exit_of(pid: int) -> Iterator[Callable[[], int | None]]:
