@@ -64,12 +64,21 @@ class DirectoryWatch:
     def wait(self, timeout: float | None) -> bool:
         """Whether anything in the directory changed since the last wait returned, waiting up to
         ``timeout`` seconds (None: until a change or ``close``) for something to."""
+        deadline = None if timeout is None else time.monotonic() + timeout
         with self._waiting:
-            if self._closed:
-                return False
-            if not self.directory.is_dir():
-                raise WatchDirectoryMissingError(self.directory)
-            return self._backend.wait(timeout)
+            while True:
+                if self._closed:
+                    return False
+                if not self.directory.is_dir():
+                    raise WatchDirectoryMissingError(self.directory)
+                remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
+                if self._backend.wait(remaining):
+                    return True
+                if deadline is not None and time.monotonic() >= deadline:
+                    return False
+                # The platform gave up early: Windows' wait runs on its own timer, which can end
+                # before time.monotonic's, and Linux's poll can say ready with nothing to read.
+                # Wait again for what's left, so returning after the timeout holds everywhere.
 
     def close(self) -> None:
         """Release the watch's handles, waking a wait in another thread first."""
