@@ -43,7 +43,19 @@ git config core.hooksPath .githooks
 ```
 
 They refuse commits on `main`, commits on a branch with no matching OpenSpec change, messages that aren't
-Conventional Commits, and commits whose checks fail. The rules are maintained in `troupe-run/infrastructure`, and
+Conventional Commits, and commits whose checks fail.
+
+A commit runs only what its staged paths need, as `scripts/check-paths.toml` declares. A commit that changes only
+`openspec/` skips the check. One that changes only `docs/` (or the scripted runner's README) runs every gate, but
+only the tests that check the docs against the code. Anything else runs the full check. To run the docs tests the
+same way by hand:
+
+```console
+uv run scripts/check.py --scope docs
+```
+
+Every test run also checks the declaration. A test that reads a `docs` path without `@pytest.mark.docs`, or that
+reads anything under `openspec/`, fails and is named. The rules are maintained in `troupe-run/infrastructure`, and
 [development-workflow.md](https://github.com/troupe-run/infrastructure/blob/main/docs/development-workflow.md) lists every rule and how an override works.
 
 | Where | What |
