@@ -137,11 +137,16 @@ spec scenario where behaviour changes.
   killed round loses it. Each round now passes pytest's `faulthandler_timeout` (`--stall`, 300 s), so a stuck test's
   stack reaches the log, and the summary keeps the dump from its start. Verified by
   `test_a_test_stuck_past_the_stall_limit_has_its_stack_in_the_hung_rounds_output`
-- [ ] 6.2 **Windows: removing a watched directory during a wait reads as unwatchable, not missing** (platform
+- [x] 6.2 **Windows: removing a watched directory during a wait reads as unwatchable, not missing** (platform
   behaviour; 11 of 65 rounds). A directory deleted while a handle is open stays visible, pending deletion, so
   re-issuing `ReadDirectoryChangesW` fails with `ERROR_ACCESS_DENIED` (WinError 5), and `wait` raises
   `WatchUnavailableError`. Fix it in `troupe.platform.watching`: a refusal on a directory that is pending deletion is
   `WatchDirectoryMissingError`. Pin it with a Windows test that holds the race open, rather than relying on timing
+
+  Reproduced first: `test_on_windows_a_watched_directory_pending_deletion_is_named_missing_not_unwatchable` failed on
+  both Windows jobs (CI run 38729806710) with the hunt's error. Fixed by asking Windows about the watch's own handle
+  (`GetFileInformationByHandleEx`, `FileStandardInfo.DeletePending`) when re-issuing is refused, not by reading the
+  error code as missing
 - [ ] 6.3 **Windows and Linux: a watch wait can return before its timeout** (platform behaviour; #100, CI run
   38568514789). One deadline loop in `DirectoryWatch.wait`, on `time.monotonic()`, for every backend, including
   Linux's `poll` reporting ready with nothing to read. Pin it with a test of a backend that returns early

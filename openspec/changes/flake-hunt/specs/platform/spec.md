@@ -33,3 +33,21 @@ timeout with an error naming the lock and the fix. It SHALL NOT wait silently or
 #### Scenario: A stall past the timeout is still announced
 - **WHEN** the waiting process is stalled past both the announce time and the timeout before it could announce
 - **THEN** it reports which lock it is waiting for before it fails with the error naming the lock
+
+### Requirement: A directory that can't be watched fails clearly
+When a directory can't be watched (it doesn't exist, the OS refuses the watch or has no watches left, or the
+platform's watching service won't start), watching SHALL fail with an error naming the directory and the reason,
+never return a watch that doesn't wake.
+
+#### Scenario: The directory doesn't exist
+- **WHEN** a directory that doesn't exist is watched
+- **THEN** watching fails with an error naming the directory
+
+#### Scenario: The OS refuses the watch
+- **WHEN** the OS refuses to set up the watch
+- **THEN** watching fails with an error naming the directory and the OS's reason
+
+#### Scenario: The watched directory is removed
+- **WHEN** the watched directory is removed, including on Windows while the watch still holds it open and it is
+  pending deletion
+- **THEN** the next wait fails with an error saying the directory is missing, not that it can't be watched
