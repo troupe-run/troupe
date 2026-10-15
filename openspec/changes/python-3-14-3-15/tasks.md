@@ -26,7 +26,7 @@
 
 ## 3. Docs
 
-- [ ] 3.1 Update the README's supported versions to 3.12–3.15 and its `requires-python` example to
+- [x] 3.1 Update the README's supported versions to 3.12–3.15 and its `requires-python` example to
   `>=3.12,<3.16`. Verify each command in the section runs as written, including `uv run scripts/on.py 3.15 python -V`
 
 ## 4. Integration
