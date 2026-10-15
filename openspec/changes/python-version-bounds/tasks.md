@@ -31,15 +31,15 @@
 
 ## 3. Switch versions in one command
 
-- [ ] 3.1 Write `scripts/tests/test_on.py` first. Cover: a malformed version (`3.x`, `3`, `3.13.1`, empty) is refused
+- [x] 3.1 Write `scripts/tests/test_on.py` first. Cover: a malformed version (`3.x`, `3`, `3.13.1`, empty) is refused
   with the form shown and nothing run; an unsupported version (`3.15`) is refused listing 3.12, 3.13 and the bound,
   and uv isn't invoked; a supported version builds the uv command with `--python 3.13` and
   `UV_PROJECT_ENVIRONMENT=<repo>/.venvs/3.13`, runs from the repository root, and forwards arguments unchanged
   (including ones starting with `-`); the exit code is passed through. Verify they fail before 3.2
-- [ ] 3.2 Implement `scripts/on.py` (design D5) with a PEP 723 header and no dependencies. Add `.venvs/` to
+- [x] 3.2 Implement `scripts/on.py` (design D5) with a PEP 723 header and no dependencies. Add `.venvs/` to
   `.gitignore`. Verify 3.1's tests pass, `git status` stays clean after a run, and `uv run ruff check .` doesn't lint
   inside `.venvs/`
-- [ ] 3.3 End-to-end on this machine (spec: switching back and forth): run `uv run scripts/on.py 3.13 python -V`, then
+- [x] 3.3 End-to-end on this machine (spec: switching back and forth): run `uv run scripts/on.py 3.13 python -V`, then
   `uv run python -V`, then `on.py 3.13` again. Verify the versions reported are 3.13, 3.12 and 3.13, `.venv` and
   `.venvs/3.13` both exist, and the second 3.13 run doesn't recreate the environment (no "Creating virtual
   environment" line). Then run `uv run scripts/on.py 3.13 scripts/check.py` to a pass
