@@ -1,14 +1,15 @@
 """Run the flake-hunt campaign #100 agreed, one hunt after another (spec: flake-hunt; design D11).
 
-Usage: uv run scripts/flake_campaign.py [--docker] [--all] [--workers N|auto] [--rounds N]
-                                        [--loads 0,2] [--pythons 3.12,3.13] [--out DIR] [PATH ...]
+Usage: uv run scripts/flake_campaign.py [--docker | --docker-only] [--all] [--workers N|auto]
+                                        [--rounds N] [--loads 0,2] [--pythons 3.12,3.13]
+                                        [--out DIR] [PATH ...]
 
 For every supported Python version (python_versions.py, which ties the bound to CI's matrix), and
 each load, it runs scripts/flake_hunt.py directly, then (with --docker) the same hunts in the Linux
-container. Each direct hunt runs in that version's .venvs/<version>, as scripts/on.py does, so
-.venv is never touched. The report, report.md for #100 and campaign.json, is
-written after every hunt, so a stopped campaign still says what it found. docs/flake-hunt.md says
-how to run it on each platform.
+container, or with --docker-only only those. Each direct hunt runs in that version's
+.venvs/<version>, as scripts/on.py does, so .venv is never touched. The report, report.md for #100
+and campaign.json, is written after every hunt, so a stopped campaign still says what it found.
+docs/flake-hunt.md says how to run it on each platform.
 """
 
 import argparse
@@ -118,9 +119,12 @@ class Options:
     environments: Path
     root: Path
     hunt_root: Path | None = None  # where pytest runs, when not this repository (tests use it)
+    direct: bool = True
 
     def hunts(self) -> list[Hunt]:
-        plan = [Hunt(p, load, False) for p in self.pythons for load in self.loads]
+        plan: list[Hunt] = []
+        if self.direct:
+            plan += [Hunt(p, load, False) for p in self.pythons for load in self.loads]
         if self.docker:
             plan += [Hunt(p, load, True) for p in self.pythons for load in self.loads]
         return plan
@@ -162,7 +166,11 @@ def parse_options(argv: Sequence[str]) -> Options:
         prog="flake_campaign.py",
         description="Run the agreed flake-hunt campaign (docs/flake-hunt.md).",
     )
-    parser.add_argument("--docker", action="store_true", help="also hunt in the Linux container")
+    where = parser.add_mutually_exclusive_group()
+    where.add_argument("--docker", action="store_true", help="also hunt in the Linux container")
+    where.add_argument(
+        "--docker-only", action="store_true", help="hunt only in the Linux container"
+    )
     parser.add_argument("--all", action="store_true", help="hunt the whole suite")
     parser.add_argument("--workers", type=_workers, default=WORKERS, help="a number, or auto")
     parser.add_argument("--rounds", type=_whole("--rounds", 1), default=ROUNDS)
@@ -189,9 +197,11 @@ def parse_options(argv: Sequence[str]) -> Options:
     if parsed.all and parsed.paths:
         parser.error("--all and test paths can't both be given: --all hunts the whole suite")
     hunt_root = parsed.hunt_root.resolve() if parsed.hunt_root else None
-    if hunt_root is not None and parsed.docker:
+    docker = parsed.docker or parsed.docker_only
+    if hunt_root is not None and docker:
+        given = "--docker-only" if parsed.docker_only else "--docker"
         parser.error(
-            "--hunt-root and --docker can't both be given: the image hunts this repository"
+            f"--hunt-root and {given} can't both be given: the image hunts this repository"
         )
     tests_root = hunt_root or ROOT
     try:
@@ -216,13 +226,14 @@ def parse_options(argv: Sequence[str]) -> Options:
         rounds=parsed.rounds,
         loads=parsed.loads,
         pythons=pythons,
-        docker=parsed.docker,
+        docker=docker,
         selection=selection,
         selection_label=label,
         out=out.resolve(),
         environments=parsed.environments.resolve(),
         root=ROOT,
         hunt_root=hunt_root,
+        direct=not parsed.docker_only,
     )
 
 
@@ -432,6 +443,7 @@ def report_data(
         "rounds": options.rounds,
         "loads": list(options.loads),
         "pythons": list(options.pythons),
+        "direct": options.direct,
         "docker": options.docker,
         "selection": options.selection_label,
         "paths": list(options.selection),
@@ -539,7 +551,7 @@ def require_committed(changes: list[str]) -> None:
         listed = "\n  ".join(changes)
         raise CampaignError(
             "the working tree has uncommitted changes, and the Docker hunts would hunt the "
-            f"commit while the direct hunts hunt the working tree:\n  {listed}\n"
+            f"commit, not the working tree:\n  {listed}\n"
             "Commit or stash them (git stash --include-untracked), then run the campaign again"
         )
 
