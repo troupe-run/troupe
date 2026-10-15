@@ -67,7 +67,7 @@ so each fixture is the shape pytest actually produces. None of these tasks runs 
   from `git archive HEAD`, `uv sync --locked` for a `PY` build argument). Verify by building it for 3.12 and 3.13 and
   checking, inside the container, that the user isn't root and that `git rev-parse --local-env-vars` lists nothing
   the git adapter's list lacks
-- [ ] 3.2 Write `docs/flake-hunt.md`: what the hunt is for and what it reports; how to read the summary; what to put
+- [x] 3.2 Write `docs/flake-hunt.md`: what the hunt is for and what it reports; how to read the summary; what to put
   on #100 for a finding; the narrowed selection used on #100; and per platform:
   - macOS and Linux: the commands, each Python version in its own environment (`UV_PROJECT_ENVIRONMENT=.venv-3.13
     uv run --python 3.13 ...`);
