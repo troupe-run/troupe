@@ -2,13 +2,13 @@
 
 ## 1. Declare and enforce the bound
 
-- [ ] 1.1 Set `requires-python = ">=3.12,<3.14"` in all nine `pyproject.toml` files (root, the seven under
+- [x] 1.1 Set `requires-python = ">=3.12,<3.14"` in all nine `pyproject.toml` files (root, the seven under
   `packages/`, `plugins/runner-scripted/`). Re-lock with `uv lock`. Verify with
   `grep -rn requires-python --include=pyproject.toml .` (nine identical lines), `uv sync --locked` succeeding, and
   `uv.lock`'s `requires-python` reading `>=3.12, <3.14`
-- [ ] 1.2 Add `.python-version` holding `3.12`. Verify `uv run python -V` reports 3.12 on this machine (3.13, 3.14
+- [x] 1.2 Add `.python-version` holding `3.12`. Verify `uv run python -V` reports 3.12 on this machine (3.13, 3.14
   and 3.15 are installed)
-- [ ] 1.3 Verify the refusal (spec: an unsupported interpreter is refused): `uv run --python 3.14 scripts/check.py`
+- [x] 1.3 Verify the refusal (spec: an unsupported interpreter is refused): `uv run --python 3.14 scripts/check.py`
   and `UV_PYTHON=3.15 uv run python -V` both fail, naming `>=3.12, <3.14`. Record the output in the PR
 - [ ] 1.4 After the PR's CI runs, confirm from the logs that the 3.13 jobs ran on 3.13 and the 3.12 jobs on 3.12
   (design D4: `UV_PYTHON` overrides `.python-version`)
