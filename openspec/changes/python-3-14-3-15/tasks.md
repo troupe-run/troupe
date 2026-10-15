@@ -14,7 +14,7 @@
 
 ## 2. Fix what 3.14 and 3.15 break
 
-- [ ] 2.1 Choose the race test's exit watcher by `hasattr(os, "waitid")` instead of `sys.platform == "linux"`
+- [x] 2.1 Choose the race test's exit watcher by `hasattr(os, "waitid")` instead of `sys.platform == "linux"`
   (design D2), and update its docstrings to say who reaps on which version. Verify
   `test_a_kill_sent_after_the_child_exited_but_before_asyncio_saw_it_did_not_end_it` passes on 3.12, 3.13, 3.14 and
   3.15 here (`uv run scripts/on.py <v> pytest packages/troupe/tests/test_platform_processes.py`). Then verify, by
