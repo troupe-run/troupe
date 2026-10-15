@@ -3,10 +3,14 @@
 import re
 from pathlib import Path
 
+import pytest
+
 from runner_schemas import RUNNER_SCHEMAS, load
 from troupe.core.errors import CODES
 from troupe.core.notices import CODES as NOTICE_CODES
 from troupe.core.runners.outcome import Outcome
+
+pytestmark = pytest.mark.docs  # reads docs/ (scripts/check-paths.toml)
 
 DOC = Path(__file__).resolve().parents[3] / "docs" / "runners.md"
 TEXT = DOC.read_text(encoding="utf-8")

@@ -2,8 +2,12 @@ import re
 from pathlib import Path
 from types import ModuleType
 
+import pytest
+
 from troupe.core import defaults
 from troupe_vcs_git import defaults as git_defaults
+
+pytestmark = pytest.mark.docs  # reads docs/ (scripts/check-paths.toml)
 
 DOCS = Path(__file__).resolve().parents[3] / "docs"
 DOC = DOCS / "platform.md"

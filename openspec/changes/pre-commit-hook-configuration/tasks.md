@@ -36,26 +36,48 @@
 
 ## 3. The declaration, the plugin and the tags
 
-- [ ] 3.1 Add `scripts/check-paths.toml`: `version = 1`, `[skip] paths = ["openspec/**"]`, and
+- [x] 3.1 Add `scripts/check-paths.toml`: `version = 1`, `[skip] paths = ["openspec/**"]`, and
   `[scopes.docs] paths = ["docs/**", "plugins/runner-scripted/README.md"]`. Give each group a comment saying why
   it's safe, and that a `docs` test must read in-process or be tagged by hand (design, Risks). Verify
   `uv run --no-project python -c "import sys; sys.path.insert(0,'scripts'); import guard, pathlib; print(guard.check_paths(pathlib.Path('scripts/check-paths.toml').read_text()))"`
   parses it
-- [ ] 3.2 Load the plugin (design D4): add `"scripts"` to `pythonpath` and `"-p", "guard_pytest"` to `addopts` in
+  - *Result:* `CheckPaths(skip=('openspec/**',), scopes=(('docs', ('docs/**', 'plugins/runner-scripted/README.md')),))`
+- [x] 3.2 Load the plugin (design D4): add `"scripts"` to `pythonpath` and `"-p", "guard_pytest"` to `addopts` in
   the root `pyproject.toml`. Run the full suite with no tags yet (design D3). Verify that the failures are exactly
   the tests that read `docs/**` untagged, and that none reads `openspec/`. Record the failing tests here, and compare
   them with the design's expected list
+  - *Result:* `uv run pytest` with the plugin loaded and no tags gave 1737 passed, 4 skipped and 26 errors, in
+    218.7 s. Each error was the plugin's teardown failure for a `docs` read, by module: `test_cli_docs` 5,
+    `test_event_store_doc` 5, `test_exit_codes_doc` 1, `test_platform_docs` 2, `test_runners_doc` 5, `test_runs_doc`
+    7, and `test_scripted_schemas.py::test_the_readmes_options_table_lists_exactly_the_options_schemas_properties`.
+    That's exactly the design's expected list, with nothing more. No message mentions `openspec`. Each of the six
+    modules collects exactly as many tests as it had errors, so every test in them reads the docs, and a
+    module-level tag fits (design D2).
 - [ ] 3.3 Tag what 3.2 found (design D2): `pytestmark = pytest.mark.docs` on the six doc modules, and
   `@pytest.mark.docs` on
   `test_the_readmes_options_table_lists_exactly_the_options_schemas_properties`, plus anything else 3.2 found.
   Verify that the full `uv run scripts/check.py` passes, and that `uv run scripts/check.py --scope docs` runs every
   gate and only the tagged tests. Record the test count and time of each
-- [ ] 3.4 Measure the plugin's cost. Time the full suite on the same machine as 1.1, with the plugin. Verify that
+  - *Scoped:* `uv run scripts/check.py --scope docs` ran ruff lint, ruff format, mypy, the import contracts and
+    tests. The tests gate collected 1741, deselected 1715 and passed 26, in 1.0 s, and the whole check took 1.55 s.
+  - *Full:* the full check is the commit guard's run on the commit that lands this group. It's recorded under 5.1.
+- [x] 3.4 Measure the plugin's cost. Time the full suite on the same machine as 1.1, with the plugin. Verify that
   the difference from 1.1 is recorded here, and that it's under about 5% (design, Risks). If it isn't, stop and
   raise it in troupe-run/infrastructure
-- [ ] 3.5 Prove the tag check catches drift (spec: every test run keeps the declaration true). Temporarily remove
+  - *Full suite:* with the plugin (3.2's untagged run), 218.7 s. Without it, 220.9 s (1.1) and 207.1 s (the
+    group 2 commit). The run-to-run spread without the plugin, about 7%, is larger than the threshold. So it was also
+    measured directly:
+  - *Controlled:* the store-text and vcs-git suites (127 tests, file-heavy), run back to back, alternating. With
+    the plugin they took 60.1 s and 64.1 s; without it (`-o addopts=...` minus `-p guard_pytest`), 67.6 s and
+    62.4 s. There's no measurable cost: the noise is larger than any difference.
+- [x] 3.5 Prove the tag check catches drift (spec: every test run keeps the declaration true). Temporarily remove
   the `docs` tag from one doc module and run that module. Verify that it fails, naming the test, the docs file and
   the `docs` tag. Restore the tag, and don't commit the removal. Record the message here
+  - *Result:* with `pytestmark` removed from `test_exit_codes_doc.py`, its test ran with 1 passed and 1 error:
+    `guard: packages/troupe/tests/test_exit_codes_doc.py::test_exit_code_document_lists_exactly_the_codes_in_the_enum
+    reads docs/cli/exit-codes.md, which scripts/check-paths.toml puts in scope `docs`, so a change to it wouldn't run
+    this test. Tag the test `docs` (pytest: @pytest.mark.<name>).` The tag was restored from a copy, and
+    `git diff` shows only the intended tagging.
 
 ## 4. Docs
 

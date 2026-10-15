@@ -1,7 +1,11 @@
 import re
 from pathlib import Path
 
+import pytest
+
 from troupe.core.exit_codes import ExitCode
+
+pytestmark = pytest.mark.docs  # reads docs/ (scripts/check-paths.toml)
 
 DOC = Path(__file__).resolve().parents[3] / "docs" / "cli" / "exit-codes.md"
 ROW = re.compile(r"^\| (\d+) \| `([A-Z_]+)` \|", re.MULTILINE)

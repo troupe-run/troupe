@@ -13,6 +13,8 @@ import pytest
 
 from troupe.cli import main
 
+pytestmark = pytest.mark.docs  # reads docs/ (scripts/check-paths.toml)
+
 DOC = Path(__file__).resolve().parents[3] / "docs" / "cli" / "README.md"
 BLOCK = re.compile(r"```console\n(.*?)```", re.DOTALL)
 
