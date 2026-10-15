@@ -153,10 +153,15 @@ spec scenario where behaviour changes.
 
   `test_a_wait_returns_after_its_timeout_even_when_the_platform_gives_up_early` failed before the loop (it returned
   after 20 µs) and passes with it, on every platform
-- [ ] 6.4 **`test_concurrent_no_conflicts` (eventsourcing's suite): reader threads outlive the test** (threads that
+- [x] 6.4 **`test_concurrent_no_conflicts` (eventsourcing's suite): reader threads outlive the test** (threads that
   outlive the test, #97's family; 1 of 65). Its reader threads are never joined, and one still holds
   `.troupe/local` while `TemporaryDirectory.cleanup` runs: WinError 145, "the directory is not empty". Make the
   library suite's tear-down wait (bounded) for every thread the test started, not only `troupe-subscription`
+
+  Done: the tear-down joins every thread the case started (`THREADS_END_SECONDS`, 10 s in all), then asserts none is
+  left. With a reader slowed by a temporary 0.5 s sleep in `select_notifications`, the assertion without the join
+  named both of eventsourcing's reader threads, and with the join the case passed. The sleep was reverted, and the
+  library suite passes three times running
 - [x] 6.5 **`test_a_hung_git_times_out_and_its_whole_tree_is_stopped`: the pid file isn't there yet** (a missing
   precondition; 4 of 65). On Windows the 1 s timeout has to cover `git.cmd`, `cmd.exe`, the venv launcher, the
   interpreter and its child before the child writes its pid. The test then reads a file that doesn't exist. The fake

@@ -7,6 +7,7 @@ directory, with the plain filesystem VCS adapter (the git adapter's cases are in
 
 import tempfile
 import threading
+import time
 from pathlib import Path
 
 from eventsourcing.persistence import InfrastructureFactory
@@ -31,6 +32,9 @@ from troupe_store_text import (
 )
 from troupe_store_text.store import TextStore
 
+THREADS_END_SECONDS = 10.0
+"""How long a case's own threads have, once it ends, to finish what they're doing."""
+
 
 class _Theatre:
     def setUp(self) -> None:
@@ -40,15 +44,18 @@ class _Theatre:
         super().setUp()  # type: ignore[misc]
 
     def tearDown(self) -> None:
-        # Before the cleanup removes the theatre: a subscription the case stopped must have ended
-        # by then, or it may still write into the directory being removed (#97).
+        # Before the cleanup removes the theatre, every thread the case started must have ended,
+        # or it may still be reading or writing the directory being removed. A subscription the
+        # case stopped (#97), and the library's own reader threads, which
+        # test_concurrent_no_conflicts stops but never joins: on Windows one still held
+        # .troupe/local when the cleanup ran, "the directory is not empty" (#100).
         super().tearDown()  # type: ignore[misc]
-        running = [
-            t
-            for t in threading.enumerate()
-            if t.name == "troupe-subscription" and t not in self._threads
-        ]
-        assert not running, f"#97: a subscription's thread outlived the case: {running}"
+        started = [t for t in threading.enumerate() if t not in self._threads]
+        deadline = time.monotonic() + THREADS_END_SECONDS
+        for thread in started:
+            thread.join(max(0.0, deadline - time.monotonic()))
+        running = [t for t in started if t.is_alive()]
+        assert not running, f"threads the case started outlived it: {running}"
 
     def store(self) -> TextStore:
         theatre = Path(self._directory.name)
