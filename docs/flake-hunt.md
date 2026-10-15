@@ -50,6 +50,7 @@ something out. The agreed campaign is the default.
 | `--rounds N` | Rounds each worker runs, back to back | 1 |
 | `--load N` | CPUs to keep busy for the whole hunt (at most the CPUs it may use) | 0 |
 | `--round-timeout SECONDS` | A round running longer is stopped and reported as hung | 1200 |
+| `--stall SECONDS` | A single test running longer has every thread's stack written to the round's output, so a hung round names its test | 300 |
 | `--out DIR` | Where the results go | a new directory under the system temp directory |
 | `-k EXPRESSION` | Passed to pytest's `-k` | none |
 | `PATH ...` | Test files, directories or ids | the whole suite |

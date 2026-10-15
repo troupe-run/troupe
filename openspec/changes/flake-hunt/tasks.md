@@ -127,6 +127,45 @@ so each fixture is the shape pytest actually produces. None of these tasks runs 
 - [ ] 5.6 Rebase the branch onto `main`, run `uv run scripts/check.py`, mark the PR ready for review, and verify all CI
   jobs pass on Linux, macOS and Windows
 
+## 6. Flakes the hunts found, each fixed by its kind (#100)
+
+The owner's first Windows hunts (2026-10-15, Surface Pro 8, 10 workers, Python 3.15.0 then 3.12) and #100's earlier
+list. Rates are from the 3.12 run's 65 rounds. Each fix is its own commit, with a test that fails before it, and a
+spec scenario where behaviour changes.
+
+- [x] 6.1 The hunt: a round that hung for 20 minutes left an empty log, because a round's output is buffered and a
+  killed round loses it. Each round now passes pytest's `faulthandler_timeout` (`--stall`, 300 s), so a stuck test's
+  stack reaches the log, and the summary keeps the dump from its start. Verified by
+  `test_a_test_stuck_past_the_stall_limit_has_its_stack_in_the_hung_rounds_output`
+- [ ] 6.2 **Windows: removing a watched directory during a wait reads as unwatchable, not missing** (platform
+  behaviour; 11 of 65 rounds). A directory deleted while a handle is open stays visible, pending deletion, so
+  re-issuing `ReadDirectoryChangesW` fails with `ERROR_ACCESS_DENIED` (WinError 5), and `wait` raises
+  `WatchUnavailableError`. Fix it in `troupe.platform.watching`: a refusal on a directory that is pending deletion is
+  `WatchDirectoryMissingError`. Pin it with a Windows test that holds the race open, rather than relying on timing
+- [ ] 6.3 **Windows and Linux: a watch wait can return before its timeout** (platform behaviour; #100, CI run
+  38568514789). One deadline loop in `DirectoryWatch.wait`, on `time.monotonic()`, for every backend, including
+  Linux's `poll` reporting ready with nothing to read. Pin it with a test of a backend that returns early
+- [ ] 6.4 **`test_concurrent_no_conflicts` (eventsourcing's suite): reader threads outlive the test** (threads that
+  outlive the test, #97's family; 1 of 65). Its reader threads are never joined, and one still holds
+  `.troupe/local` while `TemporaryDirectory.cleanup` runs: WinError 145, "the directory is not empty". Make the
+  library suite's tear-down wait (bounded) for every thread the test started, not only `troupe-subscription`
+- [ ] 6.5 **`test_a_hung_git_times_out_and_its_whole_tree_is_stopped`: the pid file isn't there yet** (a missing
+  precondition; 4 of 65). On Windows the 1 s timeout has to cover `git.cmd`, `cmd.exe`, the venv launcher, the
+  interpreter and its child before the child writes its pid. The test then reads a file that doesn't exist. The fake
+  git's child confirms it has started before the timeout can matter, and the test asserts the file exists before
+  reading it
+- [ ] 6.6 **`test_appends_are_kept_byte_for_byte_with_line_feeds_untranslated`: hypothesis's 200 ms deadline** (the
+  hypothesis deadline on a loaded machine; 2 of 65; one example took 564 ms). CI's `ci` profile has no deadline, but
+  local runs and the commit hook do. Decide on #100 (owner) between `deadline=None` on every I/O-bound hypothesis test
+  and one project profile in `conftest.py` that drops the deadline but keeps CI's fixed seeds, then apply it
+- [ ] 6.7 **`test_waiting_for_a_lock_held_by_another_process_is_announced_then_times_out`: a wall-clock upper bound**
+  (1 of 65; 10.8 s against `< 5.0`, at 10 workers on 8 logical CPUs). Check the mechanism (announced once, then
+  `LockTimeoutError` after the timeout), and keep at most a loose upper bound with one named allowance
+- [ ] 6.8 **A round hung for 20 minutes, test unknown** (1 of 65). Run the campaign with 6.1's stall dump to name the
+  test, then add its own task here
+- [ ] 6.9 **Store: another process's events can miss the listener's median bound** (a wall-clock bound; #100, release
+  PR #89). The same treatment #91 got: check the interval and the next look, and keep a loose median bound
+
 ## Workflow follow-up
 
 - Run `/opsx:archive` on the branch before merging, so the PR lands the script, the runner change and the synced

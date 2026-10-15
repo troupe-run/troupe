@@ -56,6 +56,11 @@ hunt. JUnit XML is pytest's own stable report format, so no plugin is needed.
   its parent created first. A long base path changes behaviour: on macOS a Unix socket path is limited to 104 bytes,
   and on Windows paths over 260 characters fail without the long-path prefix.
 - The cache provider is off, so rounds don't share `--lf` state and don't write `.pytest_cache`.
+- Each round also passes `-o faulthandler_timeout=<--stall>` (300 s by default), pytest's own option. A test that
+  runs past it has every thread's stack written straight to the round's output, unbuffered. A round's output goes to
+  a file, so pytest's own output is block-buffered, and a round killed at its timeout loses it. The owner's Windows
+  hunt had a round hang for 20 minutes and leave an empty log. The summary keeps a stall dump from its start, where
+  the stuck test is named, instead of the output's last 4,000 characters.
 - **Alternative: pytest-xdist or pytest-repeat.** New dependencies (#83 is the separate question of parallel
   tests), and both run many tests in one process, so one crash ends the round's other tests and one leaked thread
   reaches the next test.
