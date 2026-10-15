@@ -147,9 +147,12 @@ spec scenario where behaviour changes.
   both Windows jobs (CI run 38729806710) with the hunt's error. Fixed by asking Windows about the watch's own handle
   (`GetFileInformationByHandleEx`, `FileStandardInfo.DeletePending`) when re-issuing is refused, not by reading the
   error code as missing
-- [ ] 6.3 **Windows and Linux: a watch wait can return before its timeout** (platform behaviour; #100, CI run
+- [x] 6.3 **Windows and Linux: a watch wait can return before its timeout** (platform behaviour; #100, CI run
   38568514789). One deadline loop in `DirectoryWatch.wait`, on `time.monotonic()`, for every backend, including
   Linux's `poll` reporting ready with nothing to read. Pin it with a test of a backend that returns early
+
+  `test_a_wait_returns_after_its_timeout_even_when_the_platform_gives_up_early` failed before the loop (it returned
+  after 20 µs) and passes with it, on every platform
 - [ ] 6.4 **`test_concurrent_no_conflicts` (eventsourcing's suite): reader threads outlive the test** (threads that
   outlive the test, #97's family; 1 of 65). Its reader threads are never joined, and one still holds
   `.troupe/local` while `TemporaryDirectory.cleanup` runs: WinError 145, "the directory is not empty". Make the

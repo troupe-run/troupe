@@ -258,3 +258,39 @@ def test_a_refused_watch_simulated_at_the_os_call_fails_naming_the_directory_and
     assert raised.value.directory == tmp_path
     assert refused in raised.value.reason
     assert str(tmp_path) in str(raised.value)
+
+
+class _EarlyBackend(watching._Backend):
+    """A backend whose wait gives up early twice, as Windows' timer and Linux's empty poll can."""
+
+    def __init__(self) -> None:
+        self.asked: list[float | None] = []
+
+    def wait(self, timeout: float | None) -> bool:
+        self.asked.append(timeout)
+        if len(self.asked) <= 2:
+            return False  # "timed out", well before the timeout it was given
+        if timeout is not None:
+            time.sleep(timeout)
+        return False
+
+    def interrupt(self) -> None:
+        pass
+
+    def release(self) -> None:
+        pass
+
+
+def test_a_wait_returns_after_its_timeout_even_when_the_platform_gives_up_early(
+    tmp_path: Path,
+) -> None:
+    # Windows' WaitForMultipleObjects can time out a little before time.monotonic says the timeout
+    # has passed (#100, CI run 38568514789), and Linux's poll can report ready with nothing to
+    # read. "Returns after its timeout" is DirectoryWatch's promise, kept on every platform.
+    backend = _EarlyBackend()
+    watched = DirectoryWatch(tmp_path, backend)
+    started = time.monotonic()
+    assert not watched.wait(0.3)
+    assert time.monotonic() - started >= 0.3
+    assert len(backend.asked) == 3  # asked again, twice, for what was left
+    assert all(each is not None and 0 <= each <= 0.3 for each in backend.asked)
