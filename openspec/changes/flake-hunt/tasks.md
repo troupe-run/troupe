@@ -5,52 +5,52 @@ so each fixture is the shape pytest actually produces. None of these tasks runs 
 
 ## 1. The hunt runs rounds and reports them (spec: flake-hunt; design D1, D2, D3, D5, D7, D10)
 
-- [ ] 1.1 Add `scripts/flake_hunt.py` with its options (`--workers`, `--rounds`, `--load`, `--round-timeout`,
+- [x] 1.1 Add `scripts/flake_hunt.py` with its options (`--workers`, `--rounds`, `--load`, `--round-timeout`,
   `--out`, `-k`, test paths) and their validation: a value that isn't a whole number, is below its minimum, or (for
   `--load`) exceeds the CPUs the hunt may use (`os.process_cpu_count()`, else the affinity, else `os.cpu_count()`)
   is refused before anything runs, naming the option, the value and what's allowed. Verify with tests for each
   refusal, including 0 rounds and too much load, that nothing ran and the exit is non-zero
-- [ ] 1.2 Run the rounds: a thread per worker, each running its rounds back to back as
+- [x] 1.2 Run the rounds: a thread per worker, each running its rounds back to back as
   `sys.executable -m pytest -p no:cacheprovider --basetemp=<short dir> --junitxml=<file>` from the repository root,
   with the round's environment the hunt's own plus `HYPOTHESIS_STORAGE_DIRECTORY` (a new directory per round), and
   the basetemp under `<tmp>/fh-<6 characters>/w<n>r<n>` with its parent created first. Print each round as it ends.
   Verify with a test that 2 workers × 2 rounds over a written file of one passing test runs 4 rounds, that a `-k` and
   a path select exactly what pytest selects, that a `tmp_path` test passes in every round (the scratch run's basetemp
   bug), and that the round's environment has no variable the hunt's lacks other than the hypothesis directory
-- [ ] 1.3 Read each round's JUnit report into failures (test id, message, traceback), and report a round with no
+- [x] 1.3 Read each round's JUnit report into failures (test id, message, traceback), and report a round with no
   report as a failed round with the end of its output, decoded as UTF-8 with `errors="backslashreplace"`. Keep each
   round's output as bytes in its log, unchanged. Verify with tests over real pytest runs of a failing test, an
   erroring fixture, a file that crashes pytest (`os._exit(3)` at import), and a crash whose output holds bytes that
   aren't UTF-8
-- [ ] 1.4 Write `results.jsonl` (one record per round, appended as each ends), `summary.json` (both UTF-8) and each
+- [x] 1.4 Write `results.jsonl` (one record per round, appended as each ends), `summary.json` (both UTF-8) and each
   round's output and report to `--out`, defaulting to `<tmp>/flake-hunt/<UTC timestamp>`. Print the path at the
   start and the end, then the summary: platform, the interpreter's path and version, workers, rounds, load (from
   `os.getloadavg()`, or "not available" where it doesn't exist), and per failing test its runs, failures, and the
   first failure's message and traceback. Exit 0 only when no round failed. Verify with tests: a test that fails only
   in alternate rounds (it counts its runs in a file) is summarised with its run and failure counts, and a clean hunt
   says none failed and exits 0
-- [ ] 1.5 Reconfigure the hunt's standard output and error with `errors="backslashreplace"`, so the summary prints
+- [x] 1.5 Reconfigure the hunt's standard output and error with `errors="backslashreplace"`, so the summary prints
   on a console whose encoding can't show a failure's text. Verify with a test that runs the hunt with
   `PYTHONIOENCODING=cp1252` over a written test that fails with `assert "ünïcødé ✓" == ""`: the summary prints, the
   check mark is escaped in it, and `summary.json` holds the text unchanged
-- [ ] 1.6 Verify each round's hypothesis database is private: with a written hypothesis test that always fails,
+- [x] 1.6 Verify each round's hypothesis database is private: with a written hypothesis test that always fails,
   every round reports it, the falsifying example is in the summary's traceback, and the repository's `.hypothesis/`
   is unchanged (compare its file list before and after)
 
 ## 2. Load, timeouts and stopping (spec: flake-hunt; design D4, D5, D6, D10)
 
-- [ ] 2.1 Start each round and load process so its whole tree can be stopped: on POSIX a new session, stopped with
+- [x] 2.1 Start each round and load process so its whole tree can be stopped: on POSIX a new session, stopped with
   `SIGKILL` to the group; on Windows a kill-on-close job, the process started with `CREATE_SUSPENDED |
   CREATE_NEW_PROCESS_GROUP`, assigned to the job and then resumed (`NtResumeProcess`), stopped by terminating the
   job. If the job can't be created or assigned, refuse to start, naming the Windows error. Verify with a test whose
   written test starts a child that starts a sleeping grandchild, records the grandchild's pid, and exits: after the
   round is stopped, the grandchild is gone (on Windows, too, where its parent has already exited)
-- [ ] 2.2 Kill a round past `--round-timeout` and report it as hung, with its output so far. Verify with a written test
+- [x] 2.2 Kill a round past `--round-timeout` and report it as hung, with its output so far. Verify with a written test
   that sleeps past a 5 s timeout: the round is reported hung within a few seconds of the timeout, the next round
   still runs, and nothing the hung round started is left running
-- [ ] 2.3 Start `--load N` busy processes before the first round and stop them in a `finally`. Verify with a test that
+- [x] 2.3 Start `--load N` busy processes before the first round and stop them in a `finally`. Verify with a test that
   the N processes run during the rounds and are gone when the hunt returns, both after a normal end and after a stop
-- [ ] 2.4 Stop on Ctrl-C, and on Windows on Ctrl-Break: set the stop flag, kill the running rounds and the load, join
+- [x] 2.4 Stop on Ctrl-C, and on Windows on Ctrl-Break: set the stop flag, kill the running rounds and the load, join
   the workers in waits of at most 0.5 s (bounded overall, and announced if slow), and print the summary of the
   finished rounds. Verify with a test that interrupts a hunt part-way (`SIGINT` on POSIX; on Windows,
   `CTRL_BREAK_EVENT` to a hunt started in its own process group) and checks that it stops within 5 s, the finished
