@@ -469,6 +469,29 @@ def test_the_load_runs_during_the_rounds_and_is_gone_when_the_hunt_returns(
 # Stopping part-way (Ctrl-C, or Ctrl-Break on Windows)
 
 
+def test_a_round_killed_by_a_stop_is_not_recorded_as_a_crash(tmp_path: Path) -> None:
+    root = make_root(
+        tmp_path, {"test_sleeps.py": "import time\n\ndef test_sleeps():\n    time.sleep(120)\n"}
+    )
+    options = flake_hunt.parse_options(["--root", str(root), "--out", str(tmp_path / "out")])
+    (options.out / "rounds").mkdir(parents=True)
+    stop = threading.Event()
+    running = flake_hunt._Running()
+    outcome: list[flake_hunt.Round | None] = []
+    worker = threading.Thread(
+        target=lambda: outcome.append(flake_hunt.run_round(options, tmp_path, 0, 0, stop, running))
+    )
+    worker.start()
+    deadline = time.monotonic() + 30
+    while not running._trees:
+        assert time.monotonic() < deadline, "the round never started"
+        time.sleep(0.05)
+    stop.set()  # as the hunt's main thread does: the flag first, then the kill
+    running.stop_all()
+    worker.join(30)
+    assert outcome == [None]
+
+
 class Lines:
     """The hunt's output, read on a thread so a test can wait for a line with a deadline."""
 

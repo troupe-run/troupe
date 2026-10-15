@@ -68,6 +68,11 @@ new examples and none replays one saved earlier. The repository's `.hypothesis/`
 failure there would replay in every later local commit. A hypothesis failure's falsifying example is in its
 traceback, which the summary keeps.
 
+Each round also passes `--hypothesis-profile=default`. Hypothesis loads its own `ci` profile (fixed seeds, no
+database) whenever it sees `CI` set, as on GitHub Actions or in a shell that exports it, and the rounds would then
+replay the same examples every time. The option is pytest's own, so the rounds' environment stays the hunt's (D10).
+Found on the draft PR's first CI run, where the database test failed on every platform.
+
 ### D4: The hunt starts and stops its own processes, without `troupe.platform`
 
 Each round and each load process is started so that it and everything it starts can be killed together:
