@@ -187,6 +187,29 @@ def test_removing_the_watched_directory_during_a_wait_wakes_it_and_the_next_wait
     assert raised.value.directory == directory
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="a deleted directory held open is Windows' own")
+def test_on_windows_a_watched_directory_pending_deletion_is_named_missing_not_unwatchable(
+    tmp_path: Path,
+) -> None:
+    # The watch's own handle keeps the removed directory, pending deletion, until it closes, so
+    # its path can still look like a directory, and re-issuing the watch is refused
+    # (ERROR_ACCESS_DENIED). The backend is asked directly, past DirectoryWatch's own is_dir()
+    # check, which is what let this pass only some of the time (#100: 11 of 65 Windows rounds).
+    directory = tmp_path / "events"
+    directory.mkdir()
+    with settled(directory) as watched:
+        directory.rmdir()
+        backend = watched._backend
+
+        def wait_past_the_removal() -> None:
+            for _ in range(3):  # the removal's own change, then the refused re-issue
+                backend.wait(2.0)
+
+        with pytest.raises(WatchDirectoryMissingError) as raised:
+            wait_past_the_removal()
+    assert raised.value.directory == directory
+
+
 def test_watching_a_directory_that_doesnt_exist_fails_naming_it(tmp_path: Path) -> None:
     missing = tmp_path / "events"
     with pytest.raises(WatchDirectoryMissingError) as raised:
