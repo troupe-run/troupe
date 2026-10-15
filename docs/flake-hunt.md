@@ -28,8 +28,10 @@ The same commands work in PowerShell on Windows, where `--docker` uses Docker De
 
 - **Each Python version gets its own environment**, `.venvs/<version>`, the one `scripts/on.py` uses, synced before
   its hunts. `.venv` is never touched, whatever Python it holds.
-- **Workers:** `auto` by default, three quarters of the CPUs the hunt may use (6 on 8 logical CPUs). In Docker, each
-  hunt counts the container's own CPUs. The report shows the number each hunt used.
+- **Workers:** `auto` by default: three quarters of the CPUs the hunt may use, less the load. On 8 logical CPUs that's
+  6 workers without load, and 4 workers plus 2 busy CPUs with load, so the load adds to the same share of the
+  machine instead of oversubscribing it. In Docker, each hunt counts the container's own CPUs. The report shows the
+  number each hunt used.
 - **With `--docker`, commit first.** The image is built from the commit, so the campaign refuses to start over
   uncommitted changes, and lists them. Otherwise the direct and Docker hunts would hunt different code.
 - **How long:** each hunt takes about 10 rounds of the selection. That's roughly 25 minutes on a laptop for the
@@ -49,7 +51,7 @@ something out. The agreed campaign is the default.
 
 | Option | Meaning | Default |
 |---|---|---|
-| `--workers N` | Rounds run at once: a number, or `auto` for three quarters of the CPUs the hunt may use | 1 |
+| `--workers N` | Rounds run at once: a number, or `auto` for three quarters of the CPUs the hunt may use, less the load | 1 |
 | `--rounds N` | Rounds each worker runs, back to back | 1 |
 | `--load N` | CPUs to keep busy for the whole hunt (at most the CPUs it may use) | 0 |
 | `--round-timeout SECONDS` | A round running longer is stopped and reported as hung | 1200 |
@@ -111,7 +113,7 @@ uv run scripts/flake_hunt.py --workers auto --rounds 10 <selection>
 uv run scripts/flake_hunt.py --workers auto --rounds 10 --load 2 <selection>
 ```
 
-`--workers auto` picks three quarters of the CPUs the hunt may use.
+`--workers auto` picks three quarters of the CPUs the hunt may use, less the load.
 
 To hunt on another supported Python without touching the environment you develop in, run it through `scripts/on.py`,
 which gives each version its own environment in `.venvs/<version>`:

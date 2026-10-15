@@ -210,8 +210,9 @@ each other, and an unattended run that fans out is what this project avoids. Eac
 - **The Python versions are the supported range**, from `python_versions.supported()` (python-version-bounds), the
   one place they're decided. Its check keeps them equal to CI's matrix, so when #104's Part 2 widens both, the
   campaign widens with them. A malformed bound refuses the campaign, naming the problem.
-- **Workers are `auto`**: three quarters of the CPUs the hunt may use, rounded down, and at least 1 (owner,
-  2026-10-15). The first Windows hunts used 10 workers on 8 logical CPUs, which loads the machine well past what a
+- **Workers are `auto`**: three quarters of the CPUs the hunt may use, rounded down, less the load, and at least 1
+  (owner, 2026-10-15). Counting the load inside the share keeps a with-load hunt from oversubscribing the machine:
+  on 8 CPUs, 6 workers alone, or 4 workers and 2 busy CPUs. The first Windows hunts used 10 workers on 8 logical CPUs, which loads the machine well past what a
   person's own runs do. Each hunt resolves `auto` itself, so a container counts its own CPUs.
 - **The selection** (spec: "The campaign's selection is the OS-sensitive tests, named in one place") is a tuple of
   glob patterns in the campaign script: `test_platform_*.py`, the run host, CLI runs, the store, the git adapter and

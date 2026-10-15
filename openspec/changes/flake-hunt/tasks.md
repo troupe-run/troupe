@@ -168,8 +168,9 @@ spec scenario where behaviour changes.
 
 - [x] 6.10 The campaign follows python-version-bounds (#104, merged first): its versions are
   `python_versions.supported()`, its environments `.venvs/<version>` as `scripts/on.py` uses, and the docs run other
-  versions through `on.py`. Workers default to `auto` (three quarters of the usable CPUs; owner, 2026-10-15). Verified
-  by the campaign's and the hunt's tests, including `test_workers_auto_is_three_quarters_of_the_usable_cpus_and_at_least_one`
+  versions through `on.py`. Workers default to `auto` (three quarters of the usable CPUs, less the load; owner, 2026-10-15). Verified
+  by the campaign's and the hunt's tests, including
+  `test_workers_auto_is_three_quarters_of_the_usable_cpus_less_the_load_and_at_least_one`
 
 ## Workflow follow-up
 
