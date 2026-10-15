@@ -111,11 +111,18 @@
     ubuntu 3.13 3m10s, macos 3.12 5m24s, macos 3.13 5m25s, windows 3.12 6m40s, windows 3.13 6m22s. `guard` and DCO
     passed too.
   - *Rebased onto `main` at `20e8cd0` (Python 3.14 and 3.15, widened bound), after the run above.* The rebase was
-    clean, and the commit ids above are the rebased ones. The rebase doesn't run the hook, so the combination was
+    clean. The commit ids above are the rebased ones, but the timings were measured on the same commits before the
+    rebase, which differ only by main's changes. The rebase doesn't run the hook, so the combination was
     checked separately. `uv run scripts/on.py <v> scripts/check.py --scope docs` passed on 3.12, 3.14 and 3.15
     (26 tests each), and `scripts/tests` passed on each (78 tests). With the tag removed from
     `test_exit_codes_doc.py`, the plugin failed that test on 3.14 and 3.15, as it does on 3.12. CI's matrix is now
     12 jobs, and its run on the rebased branch is recorded below.
+  - *Result after the rebase:* run 38739097317 on `55061d0`. Eleven of the 12 `check` jobs passed first time.
+    `check (windows-latest, Python 3.14)` failed in
+    `test_platform_watching.py::test_a_wait_with_nothing_changing_returns_after_its_timeout_saying_nothing_changed`:
+    a 0.5 s wait measured 0.4999561 s by `time.monotonic()`. That's a Windows clock-skew flake in code this change
+    doesn't touch, filed as #112. On re-run that job passed (job 116442967506). All 15 checks are green: 12 `check`,
+    2 `guard` and DCO.
 
 ## Workflow follow-up
 
