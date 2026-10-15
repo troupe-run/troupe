@@ -23,7 +23,11 @@ result, so a script can't reliably produce "an ok result, then an unclean exit".
     and traceback, with the platform, Python version and load;
   - writes the same results as JSON, so a finding can go on an issue as evidence;
   - refuses malformed options with an error that names the option and the fix;
-  - stops its workers and load cleanly on Ctrl-C, and leaves nothing running.
+  - stops its workers and load cleanly on Ctrl-C (and Ctrl-Break on Windows), and leaves nothing running, a hung
+    round included;
+  - treats Windows as the main target, since that's where most flakes are: each round's process tree is held in a
+    job from before it runs (so the venv launcher's interpreter and orphaned grandchildren can't escape), a
+    traceback the console can't encode still prints, and each Python version gets its own environment.
 - **How to run it,** in `docs/`: on macOS, on Linux in Docker, and on Windows. The Docker image runs as an ordinary
   user with `--init`, because without an init that reaps orphans, killed runners' children stay zombies and the
   kill-the-tree tests fail for a reason CI never has (#100).

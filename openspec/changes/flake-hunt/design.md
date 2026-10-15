@@ -23,10 +23,12 @@ See proposal.md for why, and the two specs for what. What exists today:
 - The hunt keeps working when the code it hunts in is broken: it doesn't import `troupe`.
 - Never waits silently or without limit: every round is announced as it ends, and a hung round is killed and
   reported.
+- Nothing the hunt starts outlives it, on any platform: not when a round ends, not on Ctrl-C, and on Windows not
+  even when the hunt itself is killed.
 - A script's steps play the same way whenever troupe's messages arrive.
 
 **Non-Goals:**
-- Running in PR CI, or on a self-hosted runner.
+- Running hunts in PR CI, or on a self-hosted runner. The hunt's own tests do run in CI, on all three platforms.
 - Retrying or quarantining flaky tests. The hunt finds them; each is fixed by its kind (#100).
 - Fixing the other suspects #100 lists from reading. They join this change as tasks when the hunt shows them fail.
 
@@ -68,28 +70,49 @@ traceback, which the summary keeps.
 
 ### D4: The hunt starts and stops its own processes, without `troupe.platform`
 
-Rounds and load processes start in their own process group: a new session on Linux and macOS, and
-`CREATE_NEW_PROCESS_GROUP` on Windows. Stopping one kills the group with `SIGKILL` on POSIX, or runs
-`taskkill /T /F /PID` on Windows, which ends the process and everything it started. A round past `--round-timeout`
-(default 20 minutes, the CI job's limit) is killed and reported as hung, with its output so far.
+Each round and each load process is started so that it and everything it starts can be killed together:
 
-- **Alternative: `troupe.platform.processes`.** It already kills trees well, but `run_to_completion` can't be
-  cancelled from another thread, which is how Ctrl-C reaches the workers. And the hunt shouldn't depend on the seam it
-  is hunting flakes in: if that seam breaks, the hunt should still run and report it.
+- **Linux and macOS:** a new session, so the process leads its own group, killed with `SIGKILL` to the group.
+- **Windows:** a job object created with kill-on-close. The process is started with `CREATE_SUSPENDED` and
+  `CREATE_NEW_PROCESS_GROUP`, assigned to the job, then resumed (`NtResumeProcess`, through ctypes), so nothing it
+  starts can run before it is in the job. Stopping it terminates the job. If the hunt itself dies, its job handles
+  close and the trees die with it. The suspended start matters on Windows in particular: `sys.executable` in a uv
+  virtual environment is a launcher that starts the real interpreter as its child (#90's trap), and a test's
+  grandchild can outlive its parent. A job holds both.
+
+A round past `--round-timeout` (default 20 minutes, the CI job's limit) is killed and reported as hung, with its
+output so far.
+
+- **Alternative on Windows: `taskkill /T /F /PID`.** It walks the tree by parent pid, so it misses a process whose
+  parent has already exited, and it can't take back a tree when the hunt is killed.
+- **Alternative on Windows: assign the job after the process starts.** That's the gap #100 found in
+  `troupe.platform.processes`: a child started before the assignment escapes the job.
+- **Alternative: `troupe.platform.processes`.** `run_to_completion` can't be cancelled from another thread, which is
+  how Ctrl-C reaches the workers. The hunt shouldn't depend on the seam it is hunting flakes in either: if that seam
+  breaks, the hunt should still run and report it. The two kinds of tree kill are about 60 lines of the script.
 
 ### D5: Workers are threads, and the main thread owns stopping
 
 Each worker is a thread that runs its rounds in turn and appends each result to the results file as the round ends.
 The main thread waits on the workers, and on Ctrl-C (`KeyboardInterrupt`) it sets a stop flag, kills every running
-round's group and the load, joins the workers (bounded, and announced if slow), then prints the summary of the
-rounds that finished. Load processes start before the first round, and stop in a `finally`, however the hunt ends.
+round's tree and the load, joins the workers (bounded, and announced if slow), then prints the summary of the rounds
+that finished. Load processes start before the first round, and stop in a `finally`, however the hunt ends.
+
+- The main thread waits in joins of at most 0.5 s at a time, never one join with no timeout. On Windows a blocking
+  `join()` can't be interrupted, so Ctrl-C would wait for the whole hunt.
+- On Windows, Ctrl-Break (`SIGBREAK`) stops the hunt the same way. A process in its own console process group gets
+  only Ctrl-Break, and the hunt's own test sends it that way.
+- Rounds don't share the hunt's console group, so a person's Ctrl-C reaches only the hunt, which then stops the
+  rounds itself, in order.
 
 ### D6: Load is busy interpreter processes, bounded by the CPU count
 
-`--load N` starts N processes of `sys.executable -c "while True: pass"`. N above `os.cpu_count()` is refused (see
-spec), because past that the hunt measures the scheduler rather than the tests, and the person asked not to saturate
-the machine. Load is reported with the platform: `os.getloadavg()` where it exists, and "not available" on Windows,
-never a made-up number.
+`--load N` starts N processes of `sys.executable -c "while True: pass"`. N above the CPUs the hunt may use is refused
+(see spec), because past that the hunt measures the scheduler rather than the tests, and the person asked not to
+saturate the machine. The CPUs it may use come from `os.process_cpu_count()` where it exists (Python 3.13, which
+honours affinity and a container's CPU limit), and `len(os.sched_getaffinity(0))` or `os.cpu_count()` otherwise.
+Load is reported with the platform: `os.getloadavg()` where it exists, and "not available" on Windows, never a
+made-up number.
 
 ### D7: Output goes to a directory outside the repository by default
 
@@ -132,13 +155,40 @@ error, raw output, file writes, exit) play back to back.
   the next waiting step or the end. Every scripted outcome is still reachable. "A cancel that is honoured" and "a
   cancel that is ignored" are both built on `hang` or `wait`, and those still answer at once.
 
+### D10: Windows is a first-class platform for the hunt, not a port
+
+The Windows PC is where most of the flakes are (#100: 9 of 11 in CI), so these are part of the design, each with a
+test that runs in the Windows CI job (the hunt's tests run in `check.py` on all three platforms):
+
+- **Output is bytes until it's printed.** A round's output is kept as bytes and written to its log file unchanged.
+  It's decoded as UTF-8 with `errors="backslashreplace"` only to read the end of a crashed round. The hunt
+  reconfigures its own standard output and error the same way, so a traceback holding text the console's code page
+  can't show (the suite has `ünïcødé` tests, and a Windows console is often cp1252) still prints, instead of
+  crashing the summary. The JSON files are written as UTF-8 whatever the console is.
+- **The rounds' environment is the hunt's, unchanged.** Setting `PYTHONUTF8` or `PYTHONIOENCODING` for the rounds
+  would make them unlike a CI run, which is the thing being reproduced.
+- **Paths stay short.** The run directory under `%TEMP%` is named `fh-<6 characters>`, and each round's basetemp is
+  `w<n>r<n>` under it. pytest's own nesting then stays well under 260 characters from a default `%TEMP%`.
+- **One environment per Python version.** `uv run --python 3.13` re-syncs the project's `.venv` to 3.13, replacing
+  the 3.12 environment the person develops in. The docs run each version in its own environment
+  (`UV_PROJECT_ENVIRONMENT=.venv-3.13`), on every platform. The summary names the interpreter it ran.
+- **The docs cover what only Windows has:** PowerShell commands; Git for Windows on the PATH (the git adapter's tests
+  need it); QuickEdit mode, where a click in a console window pauses everything that writes to it, so use Windows
+  Terminal or don't click in the window during a hunt; and recording whether Microsoft Defender real-time
+  protection is on, because it slows file operations and is part of the evidence.
+
 ## Risks / Trade-offs
 
 - [A clean hunt on macOS and Linux finds little, as on #100] → It's a tool for the Windows PC too, and the per-test
   summary makes the Windows rounds as cheap to read as the others. The number of rounds for "done" is agreed on #100.
-- [`taskkill` isn't on the PATH] → It's in `System32` on every supported Windows. The hunt resolves it from
-  `SYSTEMROOT` and refuses to start, naming it, if it isn't there, rather than leaving trees running.
-- [A round's grandchild escapes its group] → It's a test that started its own session. The hunt reports the round
-  normally. A leaked process like that is itself a finding for #100, and the docs say to look for one after a hunt.
+- [The Windows job and suspended start are ctypes code in a script, outside the seam's tests] → Its tests run on the
+  Windows CI job: a round's grandchild that outlives its parent is gone once the round is stopped, and so is the tree
+  of a round that is still running when the hunt is killed.
+- [A nested job is refused] → Windows 8 and later allow nested jobs, and CI's Windows runners already run the hunt's
+  tests inside the runner's own job. If assignment is refused, the hunt names the error and doesn't start, rather than
+  running rounds it can't stop.
+- [A round's grandchild escapes its group on POSIX] → It's a test that started its own session. The hunt reports the
+  round normally. A leaked process like that is itself a finding for #100, and the docs say to look for one after a
+  hunt.
 - [Changing when the runner answers delays a cancel during a long run of instant steps] → Instant steps take
   microseconds, and any script that runs long has a `wait` or `hang`, which answers at once.
