@@ -9,7 +9,7 @@
 - [x] 1.2 Widen `requires-python` to `>=3.12,<3.16` in all nine `pyproject.toml` files, set `ci.yml`'s matrix to
   `["3.12", "3.13", "3.14", "3.15"]`, and re-lock (design D1). Verify `uv sync --locked` succeeds,
   `uv run pytest scripts/tests` passes, and `uv.lock`'s diff only adds 3.14+ wheels and `resolution-markers`
-- [ ] 1.3 After the PR's first CI run, record every 3.14 and 3.15 job's result, and whether the macOS 3.15 jobs built
+- [x] 1.3 After the PR's first CI run, record every 3.14 and 3.15 job's result, and whether the macOS 3.15 jobs built
   `grimp` from source (design D5). Investigate any failure before the PR is ready, and record it in design.md
 
 ## 2. Fix what 3.14 and 3.15 break

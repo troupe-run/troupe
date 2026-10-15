@@ -21,6 +21,18 @@ kept outside it: the copy has no `.git`, so ruff wouldn't apply `.gitignore` to 
 
 Linux and Windows on 3.14 and 3.15 weren't run locally. CI is their first run (task 1.3).
 
+PR #110's first CI run (38733866261) passed all 12 jobs, each on its own version:
+
+| | 3.14 | 3.15 |
+|---|---|---|
+| Linux | 3.14.8: 1723 passed | 3.15.0: 1723 passed |
+| macOS | 3.14.7: 1723 passed | 3.15.0: 1723 passed, `grimp` built from source |
+| Windows | 3.14.8: 1721 passed | 3.15.0: 1721 passed |
+
+Each had 4 skipped. Windows collects 1725 tests on every version, so 1721 there matches 3.12 and 3.13. None of the
+3.14 or 3.15 jobs logged a warning. The macOS 3.15 job built `grimp` 3.17 with the runner's Rust toolchain and took
+6m49s, against 5m6s for macOS 3.14 (D5).
+
 ## Goals / Non-Goals
 
 **Goals:**
