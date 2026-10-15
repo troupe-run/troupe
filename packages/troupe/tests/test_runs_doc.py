@@ -5,12 +5,16 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import get_args
 
+import pytest
+
 from troupe.core import defaults
 from troupe.core.client.messages import State
 from troupe.core.errors import CODES
 from troupe.core.notices import CODES as NOTICE_CODES
 from troupe.core.policy import ALLOW_UNENFORCED_LOCAL_STAGE, env_name
 from troupe.core.runs.aggregate import TOPICS
+
+pytestmark = pytest.mark.docs  # reads docs/ (scripts/check-paths.toml)
 
 DOC = Path(__file__).resolve().parents[3] / "docs" / "runs.md"
 TEXT = DOC.read_text(encoding="utf-8")

@@ -1,0 +1,15 @@
+# What a change to these paths needs from scripts/check.py. Read by scripts/guard.py, before each commit and for
+# CI (`guard.py check-scope`), and by the guard_pytest plugin on every test run (spec: quality-check). A path in no
+# group needs the full check. This file is troupe's own; it isn't delivered. Changing it runs the full check.
+version = 1
+
+# No gate reads these: ruff and mypy read Python, and the tests build their OpenSpec trees in temporary directories.
+# guard_pytest fails any test that reads a file here, so this stays true.
+[skip]
+paths = ["openspec/**"]
+
+# The tests that check the docs against the code, tagged `docs` (pytest.mark.docs). guard_pytest fails a test that
+# reads one of these paths without the tag. It sees only reads made in the test's own process, so a test that reads
+# them through a subprocess must be tagged by hand.
+[scopes.docs]
+paths = ["docs/**", "plugins/runner-scripted/README.md"]

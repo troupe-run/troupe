@@ -94,6 +94,7 @@ def test_options_outside_the_schema_do_not_validate(options: dict[str, Any]) -> 
     assert not _validator("options.schema.json").is_valid(options)
 
 
+@pytest.mark.docs  # reads the README (scripts/check-paths.toml)
 def test_the_readmes_options_table_lists_exactly_the_options_schemas_properties() -> None:
     readme = (Path(__file__).resolve().parents[1] / "README.md").read_text(encoding="utf-8")
     section = readme.split("## Options", 1)[1].split("\n## ", 1)[0]

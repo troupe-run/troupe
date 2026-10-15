@@ -5,8 +5,12 @@ import json
 import re
 from pathlib import Path
 
+import pytest
+
 from troupe.core.errors import CODES
 from troupe.core.notices import CODES as NOTICE_CODES
+
+pytestmark = pytest.mark.docs  # reads docs/ (scripts/check-paths.toml)
 
 DOC = Path(__file__).resolve().parents[3] / "docs" / "event-store.md"
 TEXT = DOC.read_text(encoding="utf-8")
