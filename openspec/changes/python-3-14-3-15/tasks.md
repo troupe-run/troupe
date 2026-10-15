@@ -31,7 +31,7 @@
 
 ## 4. Integration
 
-- [ ] 4.1 Run the full `scripts/check.py` on 3.12 (plain `uv run`), then on 3.13, 3.14 and 3.15 through
+- [x] 4.1 Run the full `scripts/check.py` on 3.12 (plain `uv run`), then on 3.13, 3.14 and 3.15 through
   `scripts/on.py`, one after another, each to a pass. Then run `openspec validate python-3-14-3-15 --strict`
   to a pass
 
