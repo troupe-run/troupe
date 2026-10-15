@@ -2,16 +2,20 @@
 
 ## 1. Baseline
 
-- [ ] 1.1 Record the baseline: `uv run scripts/check.py` on this machine, with the total and the tests gate's time.
+- [x] 1.1 Record the baseline: `uv run scripts/check.py` on this machine, with the total and the tests gate's time.
   Verify by recording both times in this task. This is the "before" number for 3.4. Ask the owner before running it:
   it saturates the CPU for about four minutes
-- [ ] 1.2 Check that `scripts` on pytest's `pythonpath` shadows nothing (design D4). No module named `check`,
+  - *Done without an extra run:* the planning commit (`134732b`) ran the full check through the guard, because no
+    declaration existed yet. On this Mac: tests gate 220.9 s (1723 passed, 4 skipped), check 227 s in total.
+- [x] 1.2 Check that `scripts` on pytest's `pythonpath` shadows nothing (design D4). No module named `check`,
   `guard`, `guard_pytest`, `on`, `python_versions` or `release_config` exists under any `testpaths` directory or
   `packages/troupe/tests`. Verify with a `git ls-files` search, and record the result here
+  - *Result:* `git ls-files | grep -E '(^|/)(check|guard|guard_pytest|on|python_versions|release_config)(\.py|/__init__\.py)$'`
+    finds only the six files in `scripts/`, so nothing is shadowed.
 
 ## 2. `check.py --scope`
 
-- [ ] 2.1 Write `scripts/tests/test_check_scope.py` first, in `test_check_activation.py`'s style, each test named
+- [x] 2.1 Write `scripts/tests/test_check_scope.py` first, in `test_check_activation.py`'s style, each test named
   for what its body asserts. Cover:
   - `requested_scopes` sorts and deduplicates (`["docs", "docs"]` gives `("docs",)`);
   - an undeclared scope exits naming the scope and `scripts/check-paths.toml`;
@@ -24,7 +28,7 @@
 
   Use temporary directories and small `python -c` commands as stand-in gates, not the real suite. Verify the tests
   fail before 2.2 for the right reason
-- [ ] 2.2 Change `scripts/check.py` to infrastructure's reference shape (design D1): `argparse` with
+- [x] 2.2 Change `scripts/check.py` to infrastructure's reference shape (design D1): `argparse` with
   `--scope action="append"`, `requested_scopes`, `gates(scopes)`, `run_gates` with `NO_TESTS_RAN`, and `import guard`
   at the top. Update the module docstring's usage line. Verify 2.1's tests and `test_check_activation.py` pass, and
   that `uv run scripts/check.py --scope nope` exits before printing `==> ruff lint` (spec: an undeclared scope is
