@@ -107,11 +107,14 @@ that finished. Load processes start before the first round, and stop in a `final
   `join()` can't be interrupted, so Ctrl-C would wait for the whole hunt.
 - On Windows, Ctrl-Break (`SIGBREAK`) stops the hunt the same way. A process in its own console process group gets
   only Ctrl-Break, and the hunt's own test sends it that way.
-- Rounds stay in the hunt's console process group, as pytest does in CI. A new group would turn Ctrl-C off in the
-  round and in everything it starts, which the owner's first Windows hunt showed:
-  `test_a_real_ctrl_c_on_windows_calls_back_too` failed in every round, because its child never got the Ctrl-C it
-  sent itself. A person's Ctrl-C then reaches the rounds as well as the hunt, which is harmless: the hunt stops
-  them all, and a round ended by a stop is never recorded.
+- On Windows each round gets a console of its own, with no window (`CREATE_NO_WINDOW`), so a Ctrl-C typed at the
+  hunt reaches only the hunt, which then stops the rounds itself. Two alternatives failed:
+  - **A new process group** turns Ctrl-C off in the round and in everything it starts. The owner's first Windows
+    hunt showed it: `test_a_real_ctrl_c_on_windows_calls_back_too` failed in every round, because its child never
+    got the Ctrl-C it sent itself.
+  - **The hunt's own console and group** let the person's Ctrl-C reach a round's pytest too. pytest exits at once,
+    before the hunt's main thread has seen the interrupt, so the round was recorded as a crash. The interrupt
+    test caught that on Windows CI.
 
 ### D6: Load is busy interpreter processes, bounded by the CPU count
 
