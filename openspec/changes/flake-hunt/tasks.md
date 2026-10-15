@@ -163,9 +163,15 @@ spec scenario where behaviour changes.
   through `addopts`, re-registers hypothesis's `default` profile with no deadline; `ci` keeps its fixed seeds and no
   database. `test_hypothesis_profiles.py` checks both profiles, and runs a 300 ms example that fails on the deadline
   under a bare configuration and passes under the project's
-- [ ] 6.7 **`test_waiting_for_a_lock_held_by_another_process_is_announced_then_times_out`: a wall-clock upper bound**
+- [x] 6.7 **`test_waiting_for_a_lock_held_by_another_process_is_announced_then_times_out`: a wall-clock upper bound**
   (1 of 65; 10.8 s against `< 5.0`, at 10 workers on 8 logical CPUs). Check the mechanism (announced once, then
   `LockTimeoutError` after the timeout), and keep at most a loose upper bound with one named allowance
+
+  Done, and it found a product gap: a stall past both the announce time and the timeout gave up without announcing,
+  in the lock wait and in the file replace and read waits ("never silent", platform spec). All three now announce
+  before any timeout, pinned by fake-clock tests that failed before the fix on every platform. The lock test checks
+  one announcement, not before `announce_after`, no later than the timeout, and an upper bound of the timeout plus
+  `STALL_ALLOWANCE` (30 s)
 - [ ] 6.8 **A round hung for 20 minutes, test unknown** (1 of 65). Run the campaign with 6.1's stall dump to name the
   test, then add its own task here
 - [ ] 6.9 **Store: another process's events can miss the listener's median bound** (a wall-clock bound; #100, release

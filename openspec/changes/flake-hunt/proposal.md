@@ -48,6 +48,9 @@ result, so a script can't reliably produce "an ok result, then an unclean exit".
 
 - `scripted-runner`: "A script is a list of steps played in order" says when the runner reads troupe's messages while
   it plays a script: at a step that waits, at a hang, and at the end, not between instant steps.
+- `platform`: the lock and file-replacement waits are announced before they time out, even when a stall carries them
+  past both (found by the hunt on Windows, #100). Later flake fixes in `troupe.platform` (watching a directory
+  removed while it is watched, a watch wait returning before its timeout) add their scenarios here too.
 
 ## Impact
 

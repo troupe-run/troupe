@@ -5,6 +5,7 @@ import stat
 import subprocess
 import sys
 import textwrap
+import time
 from pathlib import Path
 
 import pytest
@@ -245,3 +246,51 @@ def test_a_file_held_open_elsewhere_is_replace_in_use_naming_the_wait_on_every_p
             attempt()
         assert caught.value.code == "replace.in-use"
         assert caught.value.details == {"waitedSeconds": 2.5}
+
+
+class _StallingClock:
+    """time.monotonic on a machine that stalls for ``stall`` seconds after the first look."""
+
+    def __init__(self, stall: float) -> None:
+        self.now = 1000.0
+        self.stall = stall
+        self.looks = 0
+
+    def __call__(self) -> float:
+        self.looks += 1
+        if self.looks == 2:
+            self.now += self.stall
+        return self.now
+
+
+def _refused(*args: object, **kwargs: object) -> None:
+    raise PermissionError(13, "The process cannot access the file (a test)")
+
+
+@pytest.mark.parametrize("operation", ["replace", "read"])
+def test_a_stall_past_the_timeout_still_announces_a_file_wait_before_giving_up(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, operation: str
+) -> None:
+    # The Windows retry path, on every platform: the file stays refused, and the waiter stalls
+    # past its timeout before its first announcement. It must still not end silently (#100).
+    target = tmp_path / "held.json"
+    target.write_bytes(b"old")
+    monkeypatch.setattr(files, "_WINDOWS", True)
+    monkeypatch.setattr(os, "replace", _refused)
+    monkeypatch.setattr(Path, "read_bytes", _refused)
+    monkeypatch.setattr(time, "monotonic", _StallingClock(10.0))
+    monkeypatch.setattr(time, "sleep", lambda seconds: None)
+    waits: list[tuple[Path, float]] = []
+
+    def note(path: Path, waited: float) -> None:
+        waits.append((path, waited))
+
+    def wait() -> None:
+        if operation == "replace":
+            files.replace_bytes(target, b"new", timeout=0.8, announce_after=0.2, on_wait=note)
+        else:
+            files.read_bytes(target, timeout=0.8, announce_after=0.2, on_wait=note)
+
+    with pytest.raises(FileInUseError):
+        wait()
+    assert waits == [(target, 10.0)]

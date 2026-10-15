@@ -125,14 +125,15 @@ def _replace(
             if read_only:
                 with contextlib.suppress(OSError):
                     os.chmod(target, stat.S_IREAD)
-        # Windows: the target is open in another process (sharing violation). Wait, bounded.
+        # Windows: the target is open in another process (sharing violation). Wait, bounded,
+        # and announced before any timeout, so a stall past both never ends a wait silently.
         waited = time.monotonic() - started
-        if waited >= timeout:
-            raise FileInUseError(target, waited)
-        if not announced and waited >= announce_after:
+        if not announced and (waited >= announce_after or waited >= timeout):
             announced = True
             if on_wait is not None:
                 on_wait(target, waited)
+        if waited >= timeout:
+            raise FileInUseError(target, waited)
         time.sleep(min(delay, max(timeout - waited, 0.0)))
         delay = min(delay * 2, 0.25)
 
@@ -155,14 +156,15 @@ def read_bytes(
         except PermissionError:
             if not _WINDOWS:
                 raise
-        # Windows: the file is mid-replace or held without read sharing. Wait, bounded.
+        # Windows: the file is mid-replace or held without read sharing. Wait, bounded, and
+        # announced before any timeout, so a stall past both never ends a wait silently.
         waited = time.monotonic() - started
-        if waited >= timeout:
-            raise FileInUseError(target, waited)
-        if not announced and waited >= announce_after:
+        if not announced and (waited >= announce_after or waited >= timeout):
             announced = True
             if on_wait is not None:
                 on_wait(target, waited)
+        if waited >= timeout:
+            raise FileInUseError(target, waited)
         time.sleep(min(delay, max(timeout - waited, 0.0)))
         delay = min(delay * 2, 0.25)
 
