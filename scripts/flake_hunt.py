@@ -99,6 +99,25 @@ def _whole(name: str, minimum: int) -> Callable[[str], int]:
     return parse
 
 
+WORKERS_AUTO_SHARE = 0.75
+"""--workers auto: three quarters of the CPUs the hunt may use, rounded down, and at least 1."""
+
+
+def parse_workers(text: str) -> int:
+    """A number of workers, 1 or more, or auto."""
+    if text == "auto":
+        return max(1, int(usable_cpus() * WORKERS_AUTO_SHARE))
+    try:
+        value = int(text, 10)
+    except ValueError:
+        value = None
+    if value is None or value < 1:
+        raise argparse.ArgumentTypeError(
+            f"{text!r} isn't allowed: --workers must be a whole number, 1 or more, or auto"
+        )
+    return value
+
+
 def _seconds(name: str) -> Callable[[str], float]:
     def parse(text: str) -> float:
         try:
@@ -125,7 +144,10 @@ def parse_options(argv: Sequence[str]) -> Options:
         description="Repeat tests in overlapping rounds to find flaky ones (docs/flake-hunt.md).",
     )
     parser.add_argument(
-        "--workers", type=_whole("--workers", 1), default=1, help="rounds run at once"
+        "--workers",
+        type=parse_workers,
+        default=1,
+        help="rounds run at once: a number, or auto for three quarters of the CPUs",
     )
     parser.add_argument(
         "--rounds", type=_whole("--rounds", 1), default=1, help="rounds each worker runs"

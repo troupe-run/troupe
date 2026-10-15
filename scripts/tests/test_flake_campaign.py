@@ -28,20 +28,25 @@ def options(*argv: str) -> flake_campaign.Options:
 # Requirement: The agreed campaign runs from one command
 
 
-def test_the_campaigns_python_versions_are_exactly_ci_matrixs() -> None:
-    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-    [line] = [each for each in workflow.splitlines() if each.strip().startswith("python: [")]
-    assert options().pythons == tuple(json.loads(line.split(":", 1)[1]))
+def test_the_campaigns_python_versions_are_every_supported_version() -> None:
+    import python_versions
+
+    assert options().pythons == tuple(python_versions.supported(ROOT))
 
 
-def test_a_workflow_without_one_matrix_line_is_refused_naming_it(tmp_path: Path) -> None:
-    workflow = tmp_path / "ci.yml"
-    workflow.write_text("jobs:\n  check:\n    runs-on: ubuntu-latest\n")
-    with pytest.raises(CampaignError, match=r"ci\.yml doesn't have exactly one matrix line"):
-        flake_campaign.ci_pythons(workflow)
-    workflow.write_text('python: ["3.12"]\nother:\n  python: ["3.13"]\n')
-    with pytest.raises(CampaignError, match="exactly one matrix line"):
-        flake_campaign.ci_pythons(workflow)
+def test_a_malformed_bound_is_refused_before_anything_runs(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import python_versions
+
+    def malformed(root: Path) -> list[str]:
+        raise python_versions.BoundError('pyproject.toml has requires-python = ">=3.12": ...')
+
+    monkeypatch.setattr(python_versions, "supported", malformed)
+    with pytest.raises(SystemExit) as refused:
+        options()
+    assert refused.value.code == 2
+    assert 'requires-python = ">=3.12"' in capsys.readouterr().err
 
 
 def test_the_plan_is_every_python_by_every_load_direct_then_in_docker() -> None:
@@ -63,9 +68,12 @@ def test_the_plan_is_every_python_by_every_load_direct_then_in_docker() -> None:
 
 @pytest.mark.usefixtures("a_dir_that_exists")
 def test_the_command_lines_are_what_the_design_says(tmp_path: Path) -> None:
-    chosen = options("--pythons", "3.13", "--environments", str(tmp_path), "a_dir_that_exists")
+    chosen = options(
+        *["--pythons", "3.13", "--workers", "3", "--environments", str(tmp_path)],
+        "a_dir_that_exists",
+    )
     hunt = Hunt("3.13", 2, docker=False)
-    python = tmp_path / ".venv-3.13" / ("Scripts/python.exe" if WINDOWS else "bin/python")
+    python = tmp_path / "3.13" / ("Scripts/python.exe" if WINDOWS else "bin/python")
     out = tmp_path / "out"
     assert flake_campaign.direct_command(chosen, hunt, out) == [
         str(python),
@@ -93,9 +101,7 @@ def a_dir_that_exists(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """A test path the command-line test can name: paths are checked against the root."""
     (tmp_path / "a_dir_that_exists").mkdir()
     monkeypatch.setattr(flake_campaign, "ROOT", tmp_path)
-    monkeypatch.setattr(
-        flake_campaign, "ci_pythons", lambda workflow: ["3.12", "3.13"], raising=True
-    )
+    monkeypatch.setattr(flake_campaign, "supported_pythons", lambda root: ["3.12", "3.13"])
 
 
 def test_uncommitted_changes_are_listed_and_refuse_a_docker_campaign(tmp_path: Path) -> None:
@@ -201,7 +207,7 @@ def test_the_report_names_each_hunt_its_failing_tests_and_the_commit(tmp_path: P
 
 @pytest.fixture(scope="module")
 def environments(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """Where the end-to-end campaigns' .venv-<version> lives: synced once, never the repo's."""
+    """Where the end-to-end campaigns' environments live: synced once, never the repo's."""
     return tmp_path_factory.mktemp("environments")
 
 
@@ -243,7 +249,7 @@ def test_a_direct_campaign_runs_end_to_end_into_a_report(
     report = (out / "report.md").read_text(encoding="utf-8")
     assert f"| direct-{RUNNING}-load0 |" in report
     assert "| clean |" in report
-    assert (environments / f".venv-{RUNNING}").is_dir()
+    assert (environments / RUNNING).is_dir()
     data = json.loads((out / "campaign.json").read_text(encoding="utf-8"))
     assert [hunt["status"] for hunt in data["hunts"]] == ["clean"]
     if venv_before:

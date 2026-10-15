@@ -93,9 +93,13 @@ Python version and options. A hunt in which any round failed SHALL exit non-zero
 - **THEN** its output directory holds the JSON results and each round's pytest output, and the hunt prints where
 
 ### Requirement: The hunt refuses malformed options
-A number of workers, rounds or load that isn't a whole number, is below its minimum (1 worker, 1 round, 0 load) or
+A number of workers (other than `auto`), rounds or load that isn't a whole number, is below its minimum (1 worker, 1 round, 0 load) or
 asks for more load than the CPUs the hunt may use (its affinity, or a container's limit) SHALL be refused before
 anything runs, with an error naming the option, the value and what is allowed.
+
+#### Scenario: Workers chosen for the machine
+- **WHEN** the hunt is given `--workers auto` on a machine that lets it use 8 CPUs
+- **THEN** it runs 6 workers: three quarters of the CPUs, rounded down, and at least 1
 
 #### Scenario: Too much load
 - **WHEN** the hunt is asked for more load than the CPUs it may use
@@ -125,13 +129,15 @@ environment of its own, SHALL be documented.
   repository inside the container
 
 ### Requirement: The agreed campaign runs from one command
-`scripts/flake_campaign.py` SHALL run, one hunt at a time, the campaign #100 agreed: every Python version CI's matrix
-names, each without load and with load, run directly and, when asked, in the Linux container. It SHALL read the
-Python versions from the CI workflow, and SHALL refuse to start, naming the file, if it can't find them there.
+`scripts/flake_campaign.py` SHALL run, one hunt at a time, the campaign #100 agreed: every supported Python version,
+each without load and with load, run directly and, when asked, in the Linux container. It SHALL take the versions
+from the supported range (python-support), and SHALL refuse to start, naming the problem, if that range is
+malformed.
 
-#### Scenario: The versions come from CI
-- **WHEN** the campaign runs with the CI workflow testing 3.12 and 3.13
-- **THEN** it runs hunts on exactly 3.12 and 3.13, each in an environment of its own, and leaves `.venv` as it was
+#### Scenario: The versions are the supported ones
+- **WHEN** the campaign runs while the supported range is 3.12 and 3.13
+- **THEN** it runs hunts on exactly 3.12 and 3.13, each in that version's own environment, and leaves `.venv` as it
+  was
 
 #### Scenario: Directly and in Docker
 - **WHEN** the campaign runs with Docker asked for
