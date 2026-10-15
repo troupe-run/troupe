@@ -301,4 +301,6 @@ def test_a_wait_returns_after_its_timeout_even_when_the_platform_gives_up_early(
     # Asked again for what was left: at least past the two early returns, and more if the fake's
     # own sleep for the remainder ends early too, as Windows' timer can (CI run 38734673892).
     assert len(backend.asked) >= 3
-    assert all(each is not None and 0 <= each <= 0.3 for each in backend.asked)
+    # Never more than the timeout, give or take float rounding: (t + 0.3) - t can come out as
+    # 0.30000000000000004 when time.monotonic hasn't ticked, as on Windows Python 3.12 (15.6 ms).
+    assert all(each is not None and 0 <= each <= 0.3 + 1e-9 for each in backend.asked)
