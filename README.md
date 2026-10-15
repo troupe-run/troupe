@@ -64,7 +64,7 @@ reads anything under `openspec/`, fails and is named. The rules are maintained i
 | `plugins/` | Out-of-process plugins ([why they're separate](plugins/README.md)) |
 | `protocol/` | Language-neutral contracts, as JSON Schema ([more](protocol/README.md)) |
 | `openspec/` | Specs and changes ([OpenSpec](https://github.com/Fission-AI/OpenSpec)) |
-| `docs/` | Reference for [the command line](docs/cli/README.md), [the platform seam](docs/platform.md), [the event store](docs/event-store.md) and [releasing](docs/releasing.md) |
+| `docs/` | Reference for [the command line](docs/cli/README.md), [the platform seam](docs/platform.md), [the event store](docs/event-store.md), [releasing](docs/releasing.md) and [hunting flaky tests](docs/flake-hunt.md) |
 
 How work flows, from issue to OpenSpec change to pull request, is in the
 [contributing guide](https://github.com/troupe-run/.github/blob/main/CONTRIBUTING.md). Contributions are signed
