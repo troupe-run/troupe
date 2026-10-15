@@ -55,11 +55,16 @@ so each fixture is the shape pytest actually produces. None of these tasks runs 
   finished rounds. Verify with a test that interrupts a hunt part-way (`SIGINT` on POSIX; on Windows,
   `CTRL_BREAK_EVENT` to a hunt started in its own process group) and checks that it stops within 5 s, the finished
   rounds are summarised and no process the hunt started is left
-- [ ] 2.5 Windows only: verify that killing the hunt's own process (`TerminateProcess`, so no `finally` runs) while a
+- [x] 2.5 Windows only: verify that killing the hunt's own process (`TerminateProcess`, so no `finally` runs) while a
   round runs ends the round's tree, because the job's last handle closes. Mark the test to skip elsewhere, with the
   reason
-- [ ] 2.6 Run `uv run scripts/check.py`, push the branch and open a draft PR (`Closes #100`), so the hunt's tests run
+- [x] 2.6 Run `uv run scripts/check.py`, push the branch and open a draft PR (`Closes #100`), so the hunt's tests run
   on the Windows CI jobs. Verify every job passes on Linux, macOS and Windows, both Pythons, and record the run id
+
+  Recorded: PR #103. The first run (38709557921) failed on five jobs and found two hunt bugs: hypothesis's CI
+  profile (fixed seeds, no database) replayed the same examples every round, and a round the stop killed could be
+  recorded as crashed. Both were fixed in 62148fc, and run 38711141945 passed on all six jobs. On Windows, 2.5's test
+  ran (not skipped).
 
 ## 3. Running it on each platform (spec: flake-hunt "The hunt runs on every platform"; design D8, D10)
 
@@ -78,7 +83,7 @@ so each fixture is the shape pytest actually produces. None of these tasks runs 
 
   Link it from the README's docs list. Verify each macOS and Docker command runs as written with 1 worker and 1
   round, and that running the 3.13 command leaves `.venv`'s Python at 3.12
-- [ ] 3.3 Record in a comment on #100 that the hunt is ready on the branch, with the Windows commands from the docs and
+- [x] 3.3 Record in a comment on #100 that the hunt is ready on the branch, with the Windows commands from the docs and
   the draft PR's green Windows run, so the owner can run it on the Windows PC
 
 ## 4. The scripted runner reads messages only where a step waits (spec: scripted-runner; design D9)
