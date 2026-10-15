@@ -35,9 +35,26 @@ however it ends. With no load given, it SHALL add none.
   running afterwards
 
 #### Scenario: Stopped part-way
-- **WHEN** the person presses Ctrl-C during a hunt
+- **WHEN** the person presses Ctrl-C during a hunt, or Ctrl-Break on Windows
 - **THEN** the running rounds and the load stop, the summary of the rounds that finished is printed, and no process
   the hunt started is left running
+
+### Requirement: Nothing a round starts outlives it
+Stopping a round SHALL stop every process the round started, including a child whose own parent has already exited.
+On Windows this SHALL also hold when the hunt itself is killed. A round that runs past its timeout SHALL be stopped
+and reported as hung, with its output so far.
+
+#### Scenario: An orphaned grandchild
+- **WHEN** a round's test starts a child, which starts a grandchild and exits, and the round is then stopped
+- **THEN** the grandchild is no longer running
+
+#### Scenario: A hung round
+- **WHEN** a round runs past the round timeout
+- **THEN** it is stopped, reported as hung with its output so far, and the hunt carries on with the next round
+
+#### Scenario: The hunt is killed on Windows
+- **WHEN** the hunt's own process is terminated on Windows while a round runs
+- **THEN** the round and everything it started end with it
 
 ### Requirement: Every round explores new randomised inputs
 Each round SHALL give hypothesis its own empty example database, so no round replays an example an earlier round or
@@ -77,12 +94,12 @@ Python version and options. A hunt in which any round failed SHALL exit non-zero
 
 ### Requirement: The hunt refuses malformed options
 A number of workers, rounds or load that isn't a whole number, is below its minimum (1 worker, 1 round, 0 load) or
-asks for more load than the machine has CPUs SHALL be refused before anything runs, with an error naming the option,
-the value and what is allowed.
+asks for more load than the CPUs the hunt may use (its affinity, or a container's limit) SHALL be refused before
+anything runs, with an error naming the option, the value and what is allowed.
 
 #### Scenario: Too much load
-- **WHEN** the hunt is asked for more load than the machine has CPUs
-- **THEN** it runs nothing and exits with an error naming the load, the value and the number of CPUs
+- **WHEN** the hunt is asked for more load than the CPUs it may use
+- **THEN** it runs nothing and exits with an error naming the load, the value and the number of CPUs it may use
 
 #### Scenario: Zero rounds
 - **WHEN** the hunt is asked for 0 rounds
@@ -90,7 +107,17 @@ the value and what is allowed.
 
 ### Requirement: The hunt runs on every platform
 The hunt SHALL run on Linux, macOS and Windows with the same options and output. How to run it on each, including
-Linux in Docker as an ordinary user with an init process that reaps orphans, SHALL be documented.
+Linux in Docker as an ordinary user with an init process that reaps orphans, and each supported Python version in an
+environment of its own, SHALL be documented.
+
+#### Scenario: Text the console can't show
+- **WHEN** a failure's message or traceback holds characters the console's encoding can't represent, as on a
+  Windows console using a legacy code page
+- **THEN** the summary still prints, showing those characters escaped, and the JSON results hold them unchanged
+
+#### Scenario: A second Python version
+- **WHEN** someone follows the documented steps to hunt on Python 3.13 after hunting on 3.12
+- **THEN** the hunt runs on 3.13, and the 3.12 environment they develop in is left as it was
 
 #### Scenario: Linux in Docker
 - **WHEN** someone follows the documented steps for Linux
