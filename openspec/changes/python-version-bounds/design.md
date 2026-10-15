@@ -54,7 +54,8 @@ exactly the problem this change fixes.
 ### D3. The CI matrix is read from one line, strictly
 
 `ci.yml`'s matrix line is `python: ["3.12", "3.13"]`. The check finds exactly one line matching
-`python: [ ... ]` under the `matrix:` key and reads the quoted versions. Zero matches, more than one, or an entry
+`python: [ ... ]` anywhere in the file (today only the matrix has one) and reads the quoted versions. Quoting is
+required because, unquoted, YAML reads 3.10 as the number 3.1. Zero matches, more than one, or an entry
 that isn't a quoted `3.N` is an error naming `ci.yml` and the expected shape. The check doesn't fall back to "no
 versions".
 

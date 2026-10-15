@@ -15,17 +15,17 @@
 
 ## 2. One decision, checked in one place
 
-- [ ] 2.1 Write `scripts/tests/test_python_versions.py` first, in `test_release_config.py`'s style (break one
+- [x] 2.1 Write `scripts/tests/test_python_versions.py` first, in `test_release_config.py`'s style (break one
   property in a copy of the real files, assert the exact message). Cover: a member that differs (names its file and
   the root's bound); a root bound with no upper limit, and one not of the form `>=3.X,<3.Y` (`~=3.12`, `<3.12,>=3.14`
   inverted); a CI matrix missing a version, with an extra version, with no `python:` line, and with two; an entry
   that isn't a quoted `3.N`; `.python-version` above the lowest; ruff `target-version` and mypy `python_version` not
   the lowest; and the real repository having no problems. Verify they fail before 2.2 for the right reason (missing
   module)
-- [ ] 2.2 Implement `scripts/python_versions.py` (standard library only): `supported(root)` parsing the root's bound
+- [x] 2.2 Implement `scripts/python_versions.py` (standard library only): `supported(root)` parsing the root's bound
   (design D2), and `problems(root)` per design D1/D3, reusing `release_config.members` for the member list. Verify
   2.1's tests pass and `uv run scripts/check.py` passes
-- [ ] 2.3 Add a hypothesis property test for the bound parser: for any X < Y, `>=3.X,<3.Y` (with arbitrary spaces)
+- [x] 2.3 Add a hypothesis property test for the bound parser: for any X < Y, `>=3.X,<3.Y` (with arbitrary spaces)
   gives exactly X..Y-1, and any generated string not of that form raises an error naming `pyproject.toml`. Verify it
   passes under `uv run pytest scripts/tests`
 
