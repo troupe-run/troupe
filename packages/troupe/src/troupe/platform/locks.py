@@ -7,7 +7,8 @@ there is never a stale lock to clean up. The file is created when missing and ne
 deleting it would race with another process waiting on it.
 
 Waiting is bounded and announced: the waiter polls, reports through ``on_wait`` once
-``announce_after`` has passed, and raises LockTimeoutError after ``timeout``. Taking a lock
+``announce_after`` has passed, and raises LockTimeoutError after ``timeout``, announcing first if a
+stall carried it past both before it could. Taking a lock
 this process already holds raises LockAlreadyHeldError at once, rather than deadlocking.
 """
 
@@ -100,11 +101,12 @@ def _acquire(
     announced = False
     while not _try_lock(fd):
         waited = time.monotonic() - started
-        if waited >= timeout:
-            raise LockTimeoutError(lock_path, waited)
-        if not announced and waited >= announce_after:
+        # Announced before any timeout, so a stall past both still never ends a wait silently.
+        if not announced and (waited >= announce_after or waited >= timeout):
             announced = True
             if on_wait is not None:
                 on_wait(lock_path, waited)
+        if waited >= timeout:
+            raise LockTimeoutError(lock_path, waited)
         time.sleep(min(delay, max(timeout - waited, 0.0)))
         delay = min(delay * 2, 0.25)
