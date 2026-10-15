@@ -10,6 +10,7 @@ the rules, honour a person-granted override, and refuse or allow:
     guard.py claude-session-start    Claude Code SessionStart hook
     guard.py pre-push                git hook (.githooks/pre-push)
     guard.py ci                      the same rules on GitHub, for a push or pull request
+    guard.py check-scope             CI: what changed paths (stdin) need from scripts/check.py
     guard.py override RULE --reason  a person grants one override, from their own terminal
 
 Standard library only, so it runs under `uv run --no-project` without installing anything.
@@ -32,11 +33,12 @@ import sys
 import tempfile
 import threading
 import time
+import tomllib
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TextIO
+from typing import ClassVar, TextIO
 
 # Rule ids, as named in refusals, overrides and the rules doc (design D7).
 OVERRIDABLE_RULES = (
@@ -311,6 +313,223 @@ def delivered_file_staged(staged: Iterable[str], delivered: frozenset[str]) -> D
     return _delivered_refusal(touched, "this commit changes delivered files")
 
 
+CHECK_PATHS = "scripts/check-paths.toml"
+"""Each repository's own declaration of what a change to its paths needs from scripts/check.py:
+nothing (skip), named scopes, or, for a path it doesn't name, the full check. Not delivered
+(commit-check-paths design D1)."""
+SCOPE_NAME = re.compile(r"[a-z][a-z0-9_]*\Z")
+"""A valid tag in any test runner: a Python attribute, a word in `pytest -m`, a JS identifier."""
+RESERVED_SCOPES = frozenset({"none", "full"})
+"""check-scope's other answers, so no scope may be called by them (design D6)."""
+CHECK_PATHS_FIX = (
+    f"Fix {CHECK_PATHS}: `version = 1`, then `[skip]` and `[scopes.<name>]` tables, each holding "
+    "only `paths`, a list of exact paths or `dir/**`, with no path both skipped and in a scope. Or "
+    "delete it to run the full check on every commit."
+)
+
+
+class CheckPathsError(ValueError):
+    """The declaration is present but malformed: an error, never treated as absent (design D5)."""
+
+    def __init__(self, problem: str, fix: str = CHECK_PATHS_FIX) -> None:
+        super().__init__(problem)
+        self.problem = problem
+        self.fix = fix
+
+    def decision(self) -> Decision:
+        return Decision("commit-checks", f"{CHECK_PATHS} is malformed: {self.problem}", self.fix)
+
+
+@dataclass(frozen=True)
+class CheckPaths:
+    """A parsed declaration: the skipped entries, and each scope's entries, in file order."""
+
+    skip: tuple[str, ...]
+    scopes: tuple[tuple[str, tuple[str, ...]], ...]
+
+
+@dataclass(frozen=True)
+class Scope:
+    """What a change needs: the full check, or the named scopes (none at all means skip)."""
+
+    full: bool
+    names: tuple[str, ...] = ()
+    matched: tuple[str, ...] = ()
+    """The declared entries the paths matched, as written, for the announcement."""
+
+    @property
+    def label(self) -> str:
+        return "full" if self.full else ",".join(self.names) or "none"
+
+    @property
+    def args(self) -> tuple[str, ...]:
+        return tuple(word for name in self.names for word in ("--scope", name))
+
+
+FULL_CHECK = Scope(full=True)
+
+
+def _check_paths_entry(entry: object, where: str) -> str:
+    """An exact relative path, or a directory written `dir/**` (design D2)."""
+    if not isinstance(entry, str):
+        raise CheckPathsError(f"{where} is not a string.")
+    base = entry.removesuffix("/**")
+    problem = None
+    if not base or base == "**":
+        problem = "is empty" if not entry else "covers every path"
+    elif "\\" in base:
+        problem = "uses a backslash; write paths with `/`"
+    elif any(char in base for char in "*?["):
+        problem = "uses a wildcard other than a trailing `/**`"
+    elif base.startswith("/"):
+        problem = "is absolute; write it relative to the repository root"
+    elif any(segment in ("", ".", "..") for segment in base.split("/")):
+        problem = "has an empty, `.` or `..` segment"
+    if problem is not None:
+        raise CheckPathsError(f"{where} `{entry}` {problem}.")
+    return entry
+
+
+def _check_paths_group(table: object, where: str) -> tuple[str, ...]:
+    if not isinstance(table, dict):
+        raise CheckPathsError(f"{where} is not a table.")
+    unknown = sorted(set(table) - {"paths"})
+    if unknown:
+        raise CheckPathsError(f"{where} has an unknown key `{unknown[0]}`; only `paths` is read.")
+    if "paths" not in table:
+        raise CheckPathsError(f"{where}.paths is missing.")
+    paths = table["paths"]
+    if not isinstance(paths, list):
+        raise CheckPathsError(f"{where}.paths is not a list.")
+    return tuple(
+        _check_paths_entry(entry, f"{where}.paths[{index}]") for index, entry in enumerate(paths)
+    )
+
+
+def _entries_overlap(first: str, second: str) -> bool:
+    """Whether some path matches both entries. Exact for the two forms D2 allows."""
+    first_dir, second_dir = first.endswith("/**"), second.endswith("/**")
+    if first_dir and second_dir:
+        return first[:-2].startswith(second[:-2]) or second[:-2].startswith(first[:-2])
+    if first_dir:
+        return second.startswith(first[:-2])
+    if second_dir:
+        return first.startswith(second[:-2])
+    return first == second
+
+
+def check_paths(text: str) -> CheckPaths:
+    """Parse and validate a declaration, or raise CheckPathsError naming what's wrong."""
+    try:
+        data = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as error:
+        raise CheckPathsError(f"it isn't valid TOML ({error}).") from None
+    unknown = sorted(set(data) - {"version", "skip", "scopes"})
+    if unknown:
+        raise CheckPathsError(
+            f"unknown key `{unknown[0]}`; only `version`, `skip` and `scopes` are read."
+        )
+    version = data.get("version")
+    if type(version) is not int or version != 1:
+        raise CheckPathsError(f"`version` must be 1, not {version!r}.")
+    skip = _check_paths_group(data["skip"], "skip") if "skip" in data else ()
+    scopes_table = data.get("scopes", {})
+    if not isinstance(scopes_table, dict):
+        raise CheckPathsError("scopes is not a table of `[scopes.<name>]` tables.")
+    scopes = []
+    for name, table in scopes_table.items():
+        if not SCOPE_NAME.match(name) or name in RESERVED_SCOPES:
+            raise CheckPathsError(
+                f"scope name `{name}` must match [a-z][a-z0-9_]* and not be `none` or `full`."
+            )
+        scopes.append((name, _check_paths_group(table, f"scopes.{name}")))
+    # Scopes may overlap one another (a path then runs each), but not the skip list (design D2).
+    for name, entries in scopes:
+        for entry in entries:
+            for skipped in skip:
+                if _entries_overlap(skipped, entry):
+                    raise CheckPathsError(
+                        f"`{skipped}` in skip overlaps `{entry}` in scopes.{name}: a path can't "
+                        "be both unread and read by a scope's tests.",
+                        f"Take the path out of skip or out of scopes.{name}, in {CHECK_PATHS}.",
+                    )
+    return CheckPaths(skip=skip, scopes=tuple(scopes))
+
+
+def _matches(entry: str, path: str) -> bool:
+    return path.startswith(entry[:-2]) if entry.endswith("/**") else path == entry
+
+
+def check_scope(paths: Iterable[str], declaration: CheckPaths | None) -> Scope:
+    """What a change to these paths needs from scripts/check.py (design D4).
+
+    The full check, unless there's a declaration, at least one path, the declaration isn't among
+    them, and every path is skipped or in a scope. Then every scope any path is in, sorted (none
+    means skip): scopes may overlap, and a path in two runs both.
+    """
+    changed = [path for path in paths if path]
+    if declaration is None or not changed or CHECK_PATHS in changed:
+        return FULL_CHECK
+    groups = [(None, entry) for entry in declaration.skip] + [
+        (name, entry) for name, entries in declaration.scopes for entry in entries
+    ]
+    names: set[str] = set()
+    matched: set[str] = set()
+    for path in changed:
+        found = [(name, entry) for name, entry in groups if _matches(entry, path)]
+        if not found:
+            return FULL_CHECK
+        for name, entry in found:
+            matched.add(entry)
+            if name is not None:
+                names.add(name)
+    return Scope(full=False, names=tuple(sorted(names)), matched=tuple(sorted(matched)))
+
+
+def marker_expression(names: Iterable[str]) -> str:
+    """pytest's `-m` expression selecting the tests tagged with any of these scopes (design D8)."""
+    return " or ".join(names)
+
+
+@dataclass(frozen=True)
+class TestReads:
+    """What one test read, from any test runner: its id, its tags, and the repository-relative
+    POSIX paths it opened (design D9). A runner's adapter collects it; tag_violations judges it."""
+
+    __test__: ClassVar[bool] = False  # not a pytest test class, despite the name
+
+    test: str
+    tags: frozenset[str]
+    reads: frozenset[str]
+
+
+def tag_violations(test: TestReads, declaration: CheckPaths) -> list[str]:
+    """Each read the test's tags don't cover: a skipped path, or a scope's path without its tag.
+
+    Paths in no group are fine: the full check covers them (design D9).
+    """
+    found = []
+    for path in sorted(test.reads):
+        skipped = next((entry for entry in declaration.skip if _matches(entry, path)), None)
+        if skipped is not None:
+            found.append(
+                f"{test.test} reads {path}, but {CHECK_PATHS} skips `{skipped}`, so a change to it "
+                "would run no test. Take it out of skip (and into a scope), or don't read it."
+            )
+            continue
+        needed = sorted(
+            {name for name, entries in declaration.scopes for e in entries if _matches(e, path)}
+        )
+        missing = [name for name in needed if name not in test.tags]
+        if missing:
+            tags = " and ".join(f"`{name}`" for name in missing)
+            found.append(
+                f"{test.test} reads {path}, which {CHECK_PATHS} puts in scope {tags}, so a change "
+                f"to it wouldn't run this test. Tag the test {tags} (pytest: @pytest.mark.<name>)."
+            )
+    return found
+
+
 def read_working_tree(root: Path) -> Callable[[str], str | None]:
     def read(path: str) -> str | None:
         target = root / path
@@ -357,6 +576,8 @@ def commit_checks(
 ) -> Decision:
     """Refuse unless the tracked work equals what's staged and scripts/check.py passes (D4).
 
+    What runs is what the staged paths need, by the repository's check-paths declaration:
+    nothing, `check.py --scope <name>...`, or the full check (commit-check-paths design D4, D8).
     The check never runs silently: it is announced, its output is streamed to ``progress``
     (stderr by default) as it runs, and it is stopped after ``timeout`` seconds.
     """
@@ -370,16 +591,42 @@ def commit_checks(
             "being committed.",
             "Stage them (git add) or set them aside (git stash --keep-index), then commit again.",
         )
+    staged = git(root, "diff", "--cached", "--name-only", "--no-renames").splitlines()
+    text = ReadStaged(root)(CHECK_PATHS)
+    try:
+        scope = check_scope(staged, None if text is None else check_paths(text))
+    except CheckPathsError as error:
+        return error.decision()
+    if not scope.full:
+        *rest, last = scope.matched
+        listed = f"{', '.join(rest)} and {last}" if rest else last
+        verb = "are" if rest else "is"
+        if not scope.names:
+            print(
+                f"guard: only {listed} {verb} staged; the check is skipped ({CHECK_PATHS}).",
+                file=out,
+                flush=True,
+            )
+            return ALLOW
+        command = " ".join(("scripts/check.py", *scope.args))
+        print(
+            f"guard: only {listed} {verb} staged; running {command} instead of the full check "
+            f"({CHECK_PATHS}; gives up after {timeout:.0f}s)...",
+            file=out,
+            flush=True,
+        )
+    else:
+        command = "scripts/check.py"
+        print(
+            f"guard: running scripts/check.py, the same check CI runs (gives up after "
+            f"{timeout:.0f}s)...",
+            file=out,
+            flush=True,
+        )
     check = root / "scripts" / "check.py"
-    print(
-        f"guard: running scripts/check.py, the same check CI runs (gives up after "
-        f"{timeout:.0f}s)...",
-        file=out,
-        flush=True,
-    )
     started = time.monotonic()
     process = subprocess.Popen(
-        ["uv", "run", "--quiet", str(check)],
+        ["uv", "run", "--quiet", str(check), *scope.args],
         cwd=root,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -409,8 +656,7 @@ def commit_checks(
         return Decision(
             "commit-checks",
             f"the check was still running after {timeout:.0f}s, so it was stopped.",
-            "Run `uv run scripts/check.py` on its own to see what is slow or stuck, then commit "
-            "again.",
+            f"Run `uv run {command}` on its own to see what is slow or stuck, then commit again.",
         )
     if process.returncode != 0:
         failed = re.search(r"^check: (.+?) failed", "".join(output), re.MULTILINE)
@@ -418,9 +664,10 @@ def commit_checks(
         return Decision(
             "commit-checks",
             f"the {gate} gate failed.",
-            "Run `uv run scripts/check.py`, fix what it reports, then commit again.",
+            f"Run `uv run {command}`, fix what it reports, then commit again.",
         )
-    print(f"guard: the check passed in {elapsed:.0f}s.", file=out, flush=True)
+    what = "the check" if scope.full else command
+    print(f"guard: {what} passed in {elapsed:.0f}s.", file=out, flush=True)
     return ALLOW
 
 
@@ -1692,6 +1939,23 @@ def run_pre_commit(root: Path) -> int:
     return 0
 
 
+def run_check_scope(root: Path, paths: Iterable[str], stdout: TextIO | None = None) -> int:
+    """CI's entry to the commit hook's decision: `scope=` and `check-args=` for $GITHUB_OUTPUT.
+
+    Reads the declaration from the working tree, which CI has checked out at the head. No paths
+    means the full check; a malformed declaration fails and answers nothing (design D6).
+    """
+    out = sys.stdout if stdout is None else stdout
+    text = read_working_tree(root)(CHECK_PATHS)
+    try:
+        scope = check_scope(paths, None if text is None else check_paths(text))
+    except CheckPathsError as error:
+        print(error.decision().text(), file=sys.stderr)
+        return 1
+    print(f"scope={scope.label}\ncheck-args={' '.join(scope.args)}", file=out)
+    return 0
+
+
 def run_commit_msg(root: Path, message_file: Path) -> int:
     message = message_file.read_text(encoding="utf-8")
     first = next((line for line in message.splitlines() if line.strip()), "")
@@ -1828,6 +2092,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--repository",
         help="owner/name of the repository the branch lives in (default: from GitHub)",
     )
+    sub.add_parser(
+        "check-scope", help="what changed paths (stdin) need from scripts/check.py, for CI"
+    )
     grant = sub.add_parser("override", help="grant one override (a person, in a terminal)")
     grant.add_argument("rule", choices=OVERRIDABLE_RULES)
     grant.add_argument("--reason", required=True)
@@ -1851,6 +2118,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run_pre_push(root, sys.stdin.read().splitlines())
     if args.entry == "ci":
         return run_ci_entry(root, args.base, args.head, args.branch, args.title, args.repository)
+    if args.entry == "check-scope":
+        return run_check_scope(root, sys.stdin.read().splitlines())
     path = grant_override(root, args.rule, args.reason)
     print(f"guard: override granted for '{args.rule}' (one action). Recorded in {path.parent}.")
     return 0
