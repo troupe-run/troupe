@@ -1,5 +1,6 @@
 """Tests for the scripted runner, driven over pipes as troupe drives it (spec: scripted-runner)."""
 
+import io
 import json
 from collections.abc import Iterator
 from pathlib import Path
@@ -373,3 +374,82 @@ def test_a_refused_request_that_could_be_read_is_answered_with_its_own_id(
     assert answer["error"]["data"]["code"] == "runner.unknown-method"
     assert answer["id"] == session.sent[-1]["id"]
     validate(answer, "error-response.schema.json")
+
+
+# Requirement: A script is a list of steps played in order (when troupe's messages are read)
+
+
+def _played_with_everything_queued(
+    tmp_path: Path, script: dict[str, Any], *after_start: dict[str, Any]
+) -> tuple[int, list[dict[str, Any]]]:
+    """Serve one run in this process with troupe's messages already waiting, including
+    ``after_start``, before the runner plays anything: the ordering a loaded machine can produce
+    by chance, made certain."""
+    from troupe_runner_scripted.runner import Runner
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    messages = [
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersions": [0],
+                "host": {"name": "test", "version": "1"},
+                "capabilities": [],
+            },
+        },
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "run/start",
+            "params": {
+                "runId": "0b9f4c1e-5f7c-4a39-9a43-3d2a3f1d0c11",
+                "instructions": "test",
+                "workspace": str(workspace),
+                "options": {"script": script},
+                "limits": {"eventMaxBytes": 65536},
+            },
+        },
+        *({"jsonrpc": "2.0", "id": 3 + n, **m} for n, m in enumerate(after_start)),
+    ]
+    stdin = io.BytesIO(b"".join(json.dumps(m).encode() + b"\n" for m in messages))
+    stdout = io.BytesIO()
+    runner = Runner(stdin, stdout, io.BytesIO())
+    runner._read()  # every message is in the inbox before the first step
+    code = runner.serve()
+    return code, [json.loads(line) for line in stdout.getvalue().splitlines()]
+
+
+def test_steps_after_a_result_play_before_a_waiting_shutdown_is_answered(tmp_path: Path) -> None:
+    code, sent = _played_with_everything_queued(
+        tmp_path,
+        {"steps": [{"event": INIT}, {"event": OK}, {"exit": 3}]},
+        {"method": "shutdown", "params": {}},
+    )
+    assert code == 3
+    assert [e["type"] for e in _events(sent)] == ["init", "result"]
+    assert not [m for m in sent if m.get("id") == 3], "shutdown was answered"
+
+
+def test_a_cancel_waiting_during_instant_steps_is_answered_at_the_hang_after_them(
+    tmp_path: Path,
+) -> None:
+    code, sent = _played_with_everything_queued(
+        tmp_path,
+        {
+            "onCancel": "honour",
+            "steps": [
+                {"event": INIT},
+                {"transcript": "one"},
+                {"transcript": "two"},
+                {"hang": True},
+            ],
+        },
+        {"method": "run/cancel", "params": {"runId": "0b9f4c1e-5f7c-4a39-9a43-3d2a3f1d0c11"}},
+    )
+    assert code == 0
+    played = [m.get("method") for m in sent if "method" in m]
+    assert played == ["run/event", "run/transcript", "run/transcript"]
+    assert [m for m in sent if m.get("id") == 3] == [{"jsonrpc": "2.0", "id": 3, "result": {}}]
