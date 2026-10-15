@@ -281,8 +281,8 @@ def test_an_interrupted_campaign_stops_its_hunt_runs_no_more_and_reports(
             assert process.poll() is None, "the campaign ended before its hunt's test started"
             assert time.monotonic() < deadline, "the first hunt's test never started"
             time.sleep(0.1)
-        if WINDOWS:
-            os.kill(process.pid, signal.CTRL_BREAK_EVENT)  # type: ignore[attr-defined,unused-ignore]
+        if sys.platform == "win32":
+            os.kill(process.pid, signal.CTRL_BREAK_EVENT)
         else:
             os.killpg(process.pid, signal.SIGINT)  # as a terminal's Ctrl-C reaches the group
         code = process.wait(60)
