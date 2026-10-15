@@ -5,7 +5,7 @@ description = "troupe's git adapter: branch, HEAD, what is committed and the con
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.14"
 dependencies = ["troupe"]
 
 [project.urls]

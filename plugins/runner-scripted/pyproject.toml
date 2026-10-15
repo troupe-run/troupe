@@ -5,7 +5,7 @@ description = "A deterministic actor runner for troupe's tests: plays a script o
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.14"
 # Standard library only. A plugin imports nothing from troupe; it speaks the runner contract.
 dependencies = []
 
