@@ -157,11 +157,15 @@ spec scenario where behaviour changes.
   outlive the test, #97's family; 1 of 65). Its reader threads are never joined, and one still holds
   `.troupe/local` while `TemporaryDirectory.cleanup` runs: WinError 145, "the directory is not empty". Make the
   library suite's tear-down wait (bounded) for every thread the test started, not only `troupe-subscription`
-- [ ] 6.5 **`test_a_hung_git_times_out_and_its_whole_tree_is_stopped`: the pid file isn't there yet** (a missing
+- [x] 6.5 **`test_a_hung_git_times_out_and_its_whole_tree_is_stopped`: the pid file isn't there yet** (a missing
   precondition; 4 of 65). On Windows the 1 s timeout has to cover `git.cmd`, `cmd.exe`, the venv launcher, the
   interpreter and its child before the child writes its pid. The test then reads a file that doesn't exist. The fake
   git's child confirms it has started before the timeout can matter, and the test asserts the file exists before
   reading it
+
+  Done: the child's pid is written atomically (a temporary file, then `os.replace`), the timeout is
+  `HUNG_GIT_TIMEOUT_SECONDS` (5 s, which covers Windows' start-up chain) instead of 1 s, and the test asserts the pid
+  file exists, naming the precondition, before reading it. The test now takes about 5 s
 - [x] 6.6 **`test_appends_are_kept_byte_for_byte_with_line_feeds_untranslated`: hypothesis's 200 ms deadline** (the
   hypothesis deadline on a loaded machine; 2 of 65; one example took 564 ms). CI's `ci` profile has no deadline, but
   local runs and the commit hook do. Decide on #100 (owner) between `deadline=None` on every I/O-bound hypothesis test

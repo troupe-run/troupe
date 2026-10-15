@@ -120,13 +120,21 @@ def test_git_missing_from_the_path_is_command_not_found(repo: Repo, tmp_path: Pa
     assert "git" in caught.value.problem
 
 
+HUNG_GIT_TIMEOUT_SECONDS = 5.0
+"""Long enough for the stand-in git to start its child before the timeout kills it. On Windows that
+is git.cmd, cmd.exe, the venv's launcher, the interpreter, then the child: 1 s missed it in 4 of 65
+rounds of the owner's Windows hunt (#100), and the test then read a pid file that didn't exist."""
+
+
 def _hanging_git(directory: Path, pid_file: Path) -> None:
     """A stand-in git that starts a child of its own, records the child's id, and never ends."""
     script = directory / "hang.py"
     script.write_text(
-        "import subprocess, sys, time\n"
+        "import os, subprocess, sys, time\n"
         f"child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])\n"
-        f"open({str(pid_file)!r}, 'w').write(str(child.pid))\n"
+        # Written whole or not at all, so a kill mid-write can't leave a partial pid behind.
+        f"open({str(pid_file) + '.tmp'!r}, 'w').write(str(child.pid))\n"
+        f"os.replace({str(pid_file) + '.tmp'!r}, {str(pid_file)!r})\n"
         "time.sleep(60)\n",
         encoding="utf-8",
     )
@@ -145,11 +153,17 @@ def test_a_hung_git_times_out_and_its_whole_tree_is_stopped(repo: Repo, tmp_path
     bin_dir.mkdir()
     pid_file = tmp_path / "grandchild.pid"
     _hanging_git(bin_dir, pid_file)
-    git = GitAdapter(repo.path, source={**repo.env, "PATH": str(bin_dir)}, timeout=1.0)
+    git = GitAdapter(
+        repo.path, source={**repo.env, "PATH": str(bin_dir)}, timeout=HUNG_GIT_TIMEOUT_SECONDS
+    )
     with pytest.raises(TroupeError) as caught:
         git.branch()
     assert caught.value.code == "command.timeout"
     assert "git symbolic-ref" in caught.value.details["command"]
+    assert pid_file.exists(), (
+        f"the stand-in git hadn't started its child within {HUNG_GIT_TIMEOUT_SECONDS} s, so "
+        "there was no tree to check: the precondition this test depends on"
+    )
     grandchild = int(pid_file.read_text(encoding="utf-8"))
     deadline = time.monotonic() + 5.0
     while is_running(grandchild) and time.monotonic() < deadline:
