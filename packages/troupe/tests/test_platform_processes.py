@@ -673,10 +673,20 @@ def _wait_until_exited_while_held(child: "subprocess.Popen[bytes]") -> None:
     assert _winapi.WaitForSingleObject(handle, 30_000) == _winapi.WAIT_OBJECT_0
 
 
+def _may_signal_pid_1() -> bool:
+    """Whether the OS lets us signal pid 1: as root, or in a container whose init runs as us."""
+    try:
+        os.kill(1, 0)
+    except PermissionError:
+        return False
+    return True
+
+
 @pytest.mark.skipif(WINDOWS, reason="pid 1 is init only on Linux and macOS")
 @pytest.mark.skipif(
-    sys.platform != "win32" and os.geteuid() == 0,
-    reason="root may signal pid 1, so the OS's refusal, which this test is about, never happens",
+    not WINDOWS and _may_signal_pid_1(),
+    reason="we may signal pid 1 here (root, or a container's init running as us), so the OS's "
+    "refusal, which this test is about, never happens",
 )
 def test_pid_1_which_the_os_refuses_to_let_us_signal_reads_as_running() -> None:
     with pytest.raises(PermissionError):
