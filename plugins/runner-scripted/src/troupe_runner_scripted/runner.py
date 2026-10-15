@@ -306,25 +306,20 @@ class Runner:
         for record in records:
             if options.replay_delays and record.at_ms is not None:
                 self._pause(max(0.0, started + record.at_ms / 1000 - time.monotonic()))
-            else:
-                self._drain()
             if record.event is not None:
                 self._event({**record.event, "runId": self._run_id})
             elif record.transcript is not None:
                 self._transcript(record.transcript)
-
-    def _drain(self) -> None:
-        """Answer anything troupe has sent, without waiting."""
-        while (message := self._next(0)) is not None:
-            self._handle(message)
 
     def serve(self) -> int:
         threading.Thread(target=self._read, daemon=True).start()
         try:
             while self._options is None:
                 self._handle(self._next(None))
+            # Steps that don't wait play back to back. Troupe's messages are answered where a step
+            # waits (a wait, a replay's delays, a hang) and after the last step, so a script plays
+            # the same way whenever they arrive (spec: scripted-runner).
             for step in self._options.script.steps:
-                self._drain()
                 self._play(step)
             while True:
                 self._handle(self._next(None))

@@ -89,19 +89,19 @@ so each fixture is the shape pytest actually produces. None of these tasks runs 
 
 ## 4. The scripted runner reads messages only where a step waits (spec: scripted-runner; design D9)
 
-- [ ] 4.1 Reproduce the race without a delay: a scripted-runner test that queues `initialize`, `run/start` (script:
+- [x] 4.1 Reproduce the race without a delay: a scripted-runner test that queues `initialize`, `run/start` (script:
   `init`, ok `result`, `exit 3`) and `shutdown` on the runner's input before it plays anything, then checks it exits
   3 with `init` and `result` sent and `shutdown` unanswered. Run it on the current runner and verify it fails (exit 0)
-- [ ] 4.2 Stop `serve()` and a replay without delays from draining between steps, so messages are answered at a
+- [x] 4.2 Stop `serve()` and a replay without delays from draining between steps, so messages are answered at a
   `wait`, during replay delays, at a `hang` and after the last step. Verify 4.1 passes, and add a test that a
   `run/cancel` queued during instant steps followed by a `hang` is answered at the `hang`, after every instant step
   played
-- [ ] 4.3 Verify the run host's tests that depended on the race now hold under the delay that reproduced it on #100:
+- [x] 4.3 Verify the run host's tests that depended on the race now hold under the delay that reproduced it on #100:
   with a temporary `time.sleep(0.2)` in the runner's step loop, `test_an_ok_result_followed_by_an_unclean_exit_fails_as_uncertain`,
   `test_a_late_event_after_the_result_crashes_the_run_whether_the_runner_answers_shutdown_first` and
   `test_a_cancelled_run_keeps_every_transcript_record_received` all pass. Revert the sleep and show it reverted
   (`git diff --stat`)
-- [ ] 4.4 Run every scripted-runner and run-host test, and `openspec validate flake-hunt --strict`. Verify they pass
+- [x] 4.4 Run every scripted-runner and run-host test, and `openspec validate flake-hunt --strict`. Verify they pass
 
 ## 5. The hunt, on every platform
 
