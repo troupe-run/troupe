@@ -53,14 +53,15 @@
     That's exactly the design's expected list, with nothing more. No message mentions `openspec`. Each of the six
     modules collects exactly as many tests as it had errors, so every test in them reads the docs, and a
     module-level tag fits (design D2).
-- [ ] 3.3 Tag what 3.2 found (design D2): `pytestmark = pytest.mark.docs` on the six doc modules, and
+- [x] 3.3 Tag what 3.2 found (design D2): `pytestmark = pytest.mark.docs` on the six doc modules, and
   `@pytest.mark.docs` on
   `test_the_readmes_options_table_lists_exactly_the_options_schemas_properties`, plus anything else 3.2 found.
   Verify that the full `uv run scripts/check.py` passes, and that `uv run scripts/check.py --scope docs` runs every
   gate and only the tagged tests. Record the test count and time of each
   - *Scoped:* `uv run scripts/check.py --scope docs` ran ruff lint, ruff format, mypy, the import contracts and
     tests. The tests gate collected 1741, deselected 1715 and passed 26, in 1.0 s, and the whole check took 1.55 s.
-  - *Full:* the full check is the commit guard's run on the commit that lands this group. It's recorded under 5.1.
+  - *Full:* the guard's full check on `6526000`, which staged the declaration and so ran everything, with the
+    plugin and tags: every gate passed, and the tests gave 1737 passed, 4 skipped in 224.0 s (225 s in total).
 - [x] 3.4 Measure the plugin's cost. Time the full suite on the same machine as 1.1, with the plugin. Verify that
   the difference from 1.1 is recorded here, and that it's under about 5% (design, Risks). If it isn't, stop and
   raise it in troupe-run/infrastructure
