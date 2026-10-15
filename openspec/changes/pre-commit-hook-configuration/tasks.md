@@ -5,7 +5,7 @@
 - [x] 1.1 Record the baseline: `uv run scripts/check.py` on this machine, with the total and the tests gate's time.
   Verify by recording both times in this task. This is the "before" number for 3.4. Ask the owner before running it:
   it saturates the CPU for about four minutes
-  - *Done without an extra run:* the planning commit (`134732b`) ran the full check through the guard, because no
+  - *Done without an extra run:* the planning commit (`35f7e85`) ran the full check through the guard, because no
     declaration existed yet. On this Mac: tests gate 220.9 s (1723 passed, 4 skipped), check 227 s in total.
 - [x] 1.2 Check that `scripts` on pytest's `pythonpath` shadows nothing (design D4). No module named `check`,
   `guard`, `guard_pytest`, `on`, `python_versions` or `release_config` exists under any `testpaths` directory or
@@ -60,7 +60,7 @@
   gate and only the tagged tests. Record the test count and time of each
   - *Scoped:* `uv run scripts/check.py --scope docs` ran ruff lint, ruff format, mypy, the import contracts and
     tests. The tests gate collected 1741, deselected 1715 and passed 26, in 1.0 s, and the whole check took 1.55 s.
-  - *Full:* the guard's full check on `6526000`, which staged the declaration and so ran everything, with the
+  - *Full:* the guard's full check on `0cf12be`, which staged the declaration and so ran everything, with the
     plugin and tags: every gate passed, and the tests gave 1737 passed, 4 skipped in 224.0 s (225 s in total).
 - [x] 3.4 Measure the plugin's cost. Time the full suite on the same machine as 1.1, with the plugin. Verify that
   the difference from 1.1 is recorded here, and that it's under about 5% (design, Risks). If it isn't, stop and
@@ -94,13 +94,13 @@
 - [x] 5.1 Once 3.1 is committed, commit a task tick that stages only this change's `tasks.md`. Verify that the guard
   prints that the check is skipped, naming `openspec/**` and `scripts/check-paths.toml`. Record the output here
   (design D5)
-  - *Result:* `7faab47`, which staged only `tasks.md`, printed `guard: only openspec/** is staged; the check is
+  - *Result:* `90424ec`, which staged only `tasks.md`, printed `guard: only openspec/** is staged; the check is
     skipped (scripts/check-paths.toml).` The commit took 0.45 s, against 218 to 227 s for this branch's full checks.
 - [x] 5.2 Commit a change that stages only files under `docs/` (or the scripted runner's README). It needs a real
   docs edit; don't make one up. If the change has none by then, demonstrate it in a scratch clone instead. Verify
   that the guard runs `scripts/check.py --scope docs`, and that it passes. Record the output and time here
   - *Result (scratch clone):* this change has no real `docs/` edit, so it was shown in a throwaway clone of this
-    branch at `571ec81`, with hooks on, by appending a line to `docs/platform.md`. Nothing was pushed, and the clone
+    branch at `8feacfe`, with hooks on, by appending a line to `docs/platform.md`. Nothing was pushed, and the clone
     was deleted. The guard printed `guard: only docs/** is staged; running scripts/check.py --scope docs instead of
     the full check (scripts/check-paths.toml; gives up after 600s)...`. Every gate ran, and the tests collected 1741,
     deselected 1715 and passed 26. Then: `guard: scripts/check.py --scope docs passed in 11s.` That's in a fresh
@@ -110,6 +110,12 @@
   - *Result:* PR #111, run 38736541308. All six `check` jobs passed with the plugin loaded: ubuntu 3.12 3m16s,
     ubuntu 3.13 3m10s, macos 3.12 5m24s, macos 3.13 5m25s, windows 3.12 6m40s, windows 3.13 6m22s. `guard` and DCO
     passed too.
+  - *Rebased onto `main` at `20e8cd0` (Python 3.14 and 3.15, widened bound), after the run above.* The rebase was
+    clean, and the commit ids above are the rebased ones. The rebase doesn't run the hook, so the combination was
+    checked separately. `uv run scripts/on.py <v> scripts/check.py --scope docs` passed on 3.12, 3.14 and 3.15
+    (26 tests each), and `scripts/tests` passed on each (78 tests). With the tag removed from
+    `test_exit_codes_doc.py`, the plugin failed that test on 3.14 and 3.15, as it does on 3.12. CI's matrix is now
+    12 jobs, and its run on the rebased branch is recorded below.
 
 ## Workflow follow-up
 
