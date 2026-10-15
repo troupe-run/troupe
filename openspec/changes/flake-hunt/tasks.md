@@ -154,10 +154,15 @@ spec scenario where behaviour changes.
   interpreter and its child before the child writes its pid. The test then reads a file that doesn't exist. The fake
   git's child confirms it has started before the timeout can matter, and the test asserts the file exists before
   reading it
-- [ ] 6.6 **`test_appends_are_kept_byte_for_byte_with_line_feeds_untranslated`: hypothesis's 200 ms deadline** (the
+- [x] 6.6 **`test_appends_are_kept_byte_for_byte_with_line_feeds_untranslated`: hypothesis's 200 ms deadline** (the
   hypothesis deadline on a loaded machine; 2 of 65; one example took 564 ms). CI's `ci` profile has no deadline, but
   local runs and the commit hook do. Decide on #100 (owner) between `deadline=None` on every I/O-bound hypothesis test
   and one project profile in `conftest.py` that drops the deadline but keeps CI's fixed seeds, then apply it
+
+  Decided (owner, 2026-10-15): one profile. `packages/troupe/tests/hypothesis_profiles.py`, loaded for every test path
+  through `addopts`, re-registers hypothesis's `default` profile with no deadline; `ci` keeps its fixed seeds and no
+  database. `test_hypothesis_profiles.py` checks both profiles, and runs a 300 ms example that fails on the deadline
+  under a bare configuration and passes under the project's
 - [ ] 6.7 **`test_waiting_for_a_lock_held_by_another_process_is_announced_then_times_out`: a wall-clock upper bound**
   (1 of 65; 10.8 s against `< 5.0`, at 10 workers on 8 logical CPUs). Check the mechanism (announced once, then
   `LockTimeoutError` after the timeout), and keep at most a loose upper bound with one named allowance
