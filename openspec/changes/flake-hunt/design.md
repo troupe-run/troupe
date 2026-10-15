@@ -188,6 +188,34 @@ test that runs in the Windows CI job (the hunt's tests run in `check.py` on all 
   Terminal or don't click in the window during a hunt; and recording whether Microsoft Defender real-time
   protection is on, because it slows file operations and is part of the evidence.
 
+### D11: The agreed campaign is a script of its own, that runs the hunt as a subprocess
+
+`scripts/flake_campaign.py` runs the matrix #100 agreed (3 workers × 10 rounds; load 0 and 2; every Python in CI's
+matrix; direct, then Docker with `--docker`), one hunt after another, never two at once. Two hunts at once would load
+each other, and an unattended run that fans out is what this project avoids. Each hunt is `flake_hunt.py` itself:
+
+- **Direct:** `uv run --python <version> scripts/flake_hunt.py ...`, with `UV_PROJECT_ENVIRONMENT` set to
+  `.venv-<version>` for every version, 3.12 included. `.venv` is never touched, whatever Python it holds.
+- **Docker:** the image for each version is built once per campaign from `git archive HEAD`, then each hunt is
+  `docker run --init` in a container named for the campaign and the hunt. Its results are copied out with
+  `docker cp`, and the container is removed. Docker hunts the commit while direct hunts hunt the working tree, so
+  uncommitted changes refuse the campaign when `--docker` is given.
+- **The Python versions are read from `ci.yml`'s matrix line** (`python: ["3.12", "3.13"]`), with no YAML parser, and
+  a missing or unreadable line refuses the campaign, naming the file. When troupe#104 widens the matrix, the campaign
+  widens with it.
+- **The selection** (spec: "The campaign's selection is the OS-sensitive tests, named in one place") is a tuple of
+  glob patterns in the campaign script: `test_platform_*.py`, the run host, CLI runs, the store, the git adapter and
+  the scripted runner. That's the selection #100's hunts used, and it's what the owner typed by hand on Windows.
+  Patterns, not a file list, so a new platform test file joins without an edit. A test checks each pattern still
+  matches. `--all` hunts the whole suite instead. This differs from D1 only for the campaign: a full-suite campaign
+  is most of a day on Windows, while a single hunt's default stays the whole suite.
+- **The report** reads each hunt's `summary.json` and writes `report.md` (for #100) and `campaign.json`, with the
+  commit (`git rev-parse HEAD`, and whether the tree was clean), the machine and the options. It's written after every
+  hunt, so a stopped or crashed campaign still leaves the report of what ran.
+- **Ctrl-C** reaches the running hunt as it would anyway (it's in the same console or process group, and `docker run`
+  forwards it), so the hunt stops itself and writes its summary. The campaign waits for it, bounded, runs nothing
+  more, and writes the report.
+
 ## Risks / Trade-offs
 
 - [A clean hunt on macOS and Linux finds little, as on #100] → It's a tool for the Windows PC too, and the per-test

@@ -11,6 +11,37 @@ commit. The repository's `.hypothesis/` is left alone.
 
 It doesn't run in PR CI. Its own tests do, on all three platforms.
 
+## The campaign: the agreed hunt, in one command
+
+`scripts/flake_campaign.py` runs the hunt #100 agreed as "done", one hunt after another: 3 workers × 10 rounds,
+without load and with `--load 2`, on every Python version CI's matrix names (read from `.github/workflows/ci.yml`).
+With `--docker` it then runs the same hunts in the Linux container. It hunts the OS-sensitive tests below unless you
+pass `--all` (the whole suite) or test paths.
+
+```console
+uv run scripts/flake_campaign.py              # direct only
+uv run scripts/flake_campaign.py --docker     # direct, then in Docker
+```
+
+The same commands work in PowerShell on Windows, where `--docker` uses Docker Desktop's Linux containers.
+
+- **Each Python version gets an environment of its own**, `.venv-<version>`, synced before its hunts. `.venv` is never
+  touched, whatever Python it holds.
+- **With `--docker`, commit first.** The image is built from the commit, so the campaign refuses to start over
+  uncommitted changes, and lists them. Otherwise the direct and Docker hunts would hunt different code.
+- **How long:** each hunt takes about 10 rounds of the selection. That's roughly 25 minutes on a laptop for the
+  OS-sensitive tests, so a direct campaign on two Pythons is about 2 hours, and about 4 with `--docker`. Leave it
+  running. Ctrl-C (or Ctrl-Break) stops the running hunt cleanly, runs no more, and still writes the report.
+- **The report** is written after every hunt, to `report.md` (Markdown, ready to paste on #100) and `campaign.json`,
+  in the directory printed at the start, by default `flake-campaign/<timestamp>` under the system temp directory.
+  It names the commit, the machine, each hunt with its result, and every failing test with its runs, failures and
+  first traceback. Each hunt's own results are in a subdirectory named after it, such as `direct-3.12-load2`.
+- The campaign exits 0 only when every hunt was clean, 1 when one failed or didn't run, 2 when it refused to start,
+  and 130 when it was stopped.
+
+Options: `--workers`, `--rounds`, `--loads 0,2` and `--pythons 3.12,3.13` change the plan. Change it only to try
+something out. The agreed campaign is the default.
+
 ## Options
 
 | Option | Meaning | Default |
@@ -25,7 +56,8 @@ It doesn't run in PR CI. Its own tests do, on all three platforms.
 
 A malformed option is refused before anything runs, naming the option, the value and what's allowed.
 
-**The selection used on #100**, the tests that depend on time, processes, signals or file watching:
+**The selection used on #100**, the tests that depend on time, processes, signals or file watching. The campaign
+hunts these by default: its `SELECTION` names them as patterns, so a new `test_platform_*.py` file joins on its own.
 
 ```
 packages/troupe/tests/test_platform_append.py packages/troupe/tests/test_platform_environment.py
@@ -134,6 +166,8 @@ Remove-Item Env:UV_PROJECT_ENVIRONMENT
   them unchanged.
 
 ## Putting a finding on #100
+
+After a campaign, post its `report.md` on #100 as it is. Then add a line for each new failure, as below.
 
 For each test that failed, add a line to #100's "Found so far" list with:
 

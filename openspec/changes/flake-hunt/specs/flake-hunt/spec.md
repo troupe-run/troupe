@@ -123,3 +123,47 @@ environment of its own, SHALL be documented.
 - **WHEN** someone follows the documented steps for Linux
 - **THEN** the hunt runs in a container as a user other than root, with an init process as PID 1, on a copy of the
   repository inside the container
+
+### Requirement: The agreed campaign runs from one command
+`scripts/flake_campaign.py` SHALL run, one hunt at a time, the campaign #100 agreed: every Python version CI's matrix
+names, each without load and with load, run directly and, when asked, in the Linux container. It SHALL read the
+Python versions from the CI workflow, and SHALL refuse to start, naming the file, if it can't find them there.
+
+#### Scenario: The versions come from CI
+- **WHEN** the campaign runs with the CI workflow testing 3.12 and 3.13
+- **THEN** it runs hunts on exactly 3.12 and 3.13, each in an environment of its own, and leaves `.venv` as it was
+
+#### Scenario: Directly and in Docker
+- **WHEN** the campaign runs with Docker asked for
+- **THEN** it runs every direct hunt, then builds the Linux image for each Python version from the committed tree and
+  runs the same hunts in it
+
+#### Scenario: Uncommitted changes with Docker
+- **WHEN** Docker is asked for and the working tree has uncommitted changes
+- **THEN** the campaign refuses to start, naming the changed files, because the container would hunt the commit
+  while the direct hunts hunted the working tree
+
+### Requirement: The campaign's selection is the OS-sensitive tests, named in one place
+By default the campaign SHALL hunt the tests that depend on time, processes, signals or file watching, named as path
+patterns in one place, and SHALL be able to hunt the whole suite instead. Each pattern SHALL match at least one test
+file, checked by a test.
+
+#### Scenario: A new platform test file
+- **WHEN** a new `packages/troupe/tests/test_platform_*.py` file is added
+- **THEN** the campaign hunts it without any change to the campaign
+
+### Requirement: The campaign reports every hunt together
+When the campaign ends, however it ends, it SHALL write one report, as Markdown ready for #100 and as JSON. For
+each hunt (Python version, load, direct or Docker) the report SHALL say whether it ran clean, which tests failed with
+their runs and failures, and the first failure's message, and SHALL name the commit, the machine and the options. A
+campaign in which any hunt failed or didn't run SHALL exit non-zero.
+
+#### Scenario: One hunt finds a flake
+- **WHEN** one of eight hunts reports a test failing in 2 of 30 runs
+- **THEN** the report lists all eight hunts, seven clean, and names that test with 2 of 30 under the hunt that found
+  it, with its first message
+
+#### Scenario: Stopped part-way
+- **WHEN** the person presses Ctrl-C during the third hunt
+- **THEN** the campaign stops that hunt, runs no more, and writes the report of the hunts that ran, marking the third
+  as stopped

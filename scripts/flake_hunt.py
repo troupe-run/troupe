@@ -670,6 +670,7 @@ def hunt(options: Options) -> Hunt:
             errors.append(error)
             stop.set()
 
+    previous_interrupt = signal.getsignal(signal.SIGINT)
     previous_break: Any = None
     if sys.platform == "win32":  # Ctrl-Break is all a process in its own console group receives
         previous_break = signal.signal(signal.SIGBREAK, _raise_interrupt)
@@ -699,6 +700,11 @@ def hunt(options: Options) -> Hunt:
                 each.join(JOIN_SECONDS)
     except KeyboardInterrupt:
         state.stopped = True
+        # A second Ctrl-C (a terminal, the campaign and uv can each pass one on) mustn't cut the
+        # stop short and leave rounds running.
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        if sys.platform == "win32":
+            signal.signal(signal.SIGBREAK, signal.SIG_IGN)
         print("\nflake_hunt: stopping", flush=True)
         stop.set()
         running.stop_all()
@@ -708,6 +714,8 @@ def hunt(options: Options) -> Hunt:
         running.stop_all()
         for busy in load:
             busy.stop()
+        if previous_interrupt is not None:
+            signal.signal(signal.SIGINT, previous_interrupt)
         if sys.platform == "win32" and previous_break is not None:
             signal.signal(signal.SIGBREAK, previous_break)
         shutil.rmtree(temp_root, ignore_errors=True)
