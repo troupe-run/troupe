@@ -46,14 +46,14 @@
 
 ## 4. Docs
 
-- [ ] 4.1 Update the README's Development section: the supported versions (3.12 and 3.13) are exactly what CI tests
+- [x] 4.1 Update the README's Development section: the supported versions (3.12 and 3.13) are exactly what CI tests
   and uv refuses others; plain `uv run` uses 3.12; `uv run scripts/on.py 3.13 <command>` runs on another supported
   version in `.venvs/3.13`, which is safe to delete; and adding a version means changing the bound and the CI matrix
   together, which the check enforces. Verify each command in the section runs as written
 
 ## 5. Integration
 
-- [ ] 5.1 Run `uv run scripts/check.py` to a pass on a clean `uv sync --locked`, and `openspec validate
+- [x] 5.1 Run `uv run scripts/check.py` to a pass on a clean `uv sync --locked`, and `openspec validate
   python-version-bounds --strict` to a pass
 
 ## Workflow follow-up
