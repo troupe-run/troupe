@@ -3,7 +3,7 @@
 [project]
 name = "troupe-workspace"
 version = "0"
-requires-python = ">=3.12,<3.14"
+requires-python = ">=3.12,<3.16"
 
 [tool.uv]
 package = false

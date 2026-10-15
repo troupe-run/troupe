@@ -5,7 +5,7 @@ description = "Run your development process with agents and people in named role
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
-requires-python = ">=3.12,<3.14"
+requires-python = ">=3.12,<3.16"
 dependencies = ["eventsourcing>=9.5.5,<9.6"]
 
 [project.urls]

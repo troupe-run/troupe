@@ -5,7 +5,7 @@ description = "troupe's local stage: runs an actor on the host, in the theatre, 
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
-requires-python = ">=3.12,<3.14"
+requires-python = ">=3.12,<3.16"
 dependencies = ["troupe"]
 
 [project.urls]
