@@ -47,6 +47,10 @@ wait silently or indefinitely, and SHALL NOT leave a partial file.
 - **AND** if the file is still held when the timeout passes, the replacement fails with an error naming the path
 - **AND** the original file is unchanged and no temporary file is left
 
+#### Scenario: A stall past the timeout is still announced
+- **WHEN** the waiting process is stalled past both the announce time and the timeout before it could announce
+- **THEN** it reports which file it is waiting for before it fails with the error naming the path
+
 ### Requirement: Lock waits are bounded and announced
 A process waiting for a lock held by another process SHALL say what it is waiting for, and SHALL give up after a
 timeout with an error naming the lock and the fix. It SHALL NOT wait silently or indefinitely.
@@ -59,6 +63,10 @@ timeout with an error naming the lock and the fix. It SHALL NOT wait silently or
 #### Scenario: Timeout comes from a named setting
 - **WHEN** the lock timeout is read
 - **THEN** its default value is defined in one named place and can be overridden
+
+#### Scenario: A stall past the timeout is still announced
+- **WHEN** the waiting process is stalled past both the announce time and the timeout before it could announce
+- **THEN** it reports which lock it is waiting for before it fails with the error naming the lock
 
 ### Requirement: A process cannot deadlock on its own lock
 Taking a lock that the same process already holds SHALL fail immediately with an error, rather than wait.
@@ -236,8 +244,8 @@ SHALL take a timeout and SHALL say whether anything changed. It MAY report a cha
 
 #### Scenario: Another process appends to a file
 - **WHEN** a process waits on a watched directory and another process appends a line to a file in it, five times
-- **THEN** each wait returns saying something changed, and the median delay, measured from when the append returned,
-  is under 0.25 s
+- **THEN** each wait returns saying something changed, the fastest of the five delays, measured from when the
+  append returned, is under 0.25 s, and their median is within 0.25 s plus an allowance for a loaded machine
 
 #### Scenario: Another process creates a file
 - **WHEN** a process waits on a watched directory and another process creates a file in it
@@ -254,6 +262,11 @@ SHALL take a timeout and SHALL say whether anything changed. It MAY report a cha
 #### Scenario: Nothing changes
 - **WHEN** a process waits on a watched directory with a timeout and nothing in it changes
 - **THEN** the wait returns after the timeout, saying nothing changed
+
+#### Scenario: The platform's own wait ends early
+- **WHEN** the platform's wait gives up before the timeout has passed by `time.monotonic()`, as Windows' timer can,
+  or reports ready with nothing to read, as Linux's `poll` can
+- **THEN** the wait waits again for what is left, and returns no earlier than its timeout
 
 ### Requirement: Watching uses bounded resources
 Watching a directory SHALL hold a fixed number of OS handles, whatever the number of files in the directory.
@@ -280,3 +293,8 @@ never return a watch that doesn't wake.
 #### Scenario: The OS refuses the watch
 - **WHEN** the OS refuses to set up the watch
 - **THEN** watching fails with an error naming the directory and the OS's reason
+
+#### Scenario: The watched directory is removed
+- **WHEN** the watched directory is removed, including on Windows while the watch still holds it open and it is
+  pending deletion
+- **THEN** the next wait fails with an error saying the directory is missing, not that it can't be watched

@@ -119,9 +119,12 @@ so each fixture is the shape pytest actually produces. None of these tasks runs 
   its first hunt and checks the report and the exit code (130)
 - [x] 5.3 Document the campaign in `docs/flake-hunt.md` (the command on each platform, with and without `--docker`,
   how long it takes, and what to post on #100), and verify the documented command runs on macOS with `--rounds 1`
-- [ ] 5.4 Agree the campaign on #100 as the bar for "done" (`--workers auto` × 10 rounds, load 0 and 2, the supported Pythons,
+- [x] 5.4 Agree the campaign on #100 as the bar for "done" (`--workers auto` × 10 rounds, load 0 and 2, the supported Pythons,
   direct and Docker). Run it on macOS with `--docker`, and post its report on #100. Each failure found becomes a task
   appended here and a line on #100, fixed by its kind
+
+  Done: the owner agreed the bar on #100 (2026-10-16). The macOS campaign at `9d0d856` was clean direct (480 rounds).
+  Its Docker half found 6.11, and was clean after the fix (`380dea4`, 480 rounds, 6.12). All three reports are on #100
 - [x] 5.5 The owner runs the same campaign on the Windows PC, direct and with `--docker` (Docker Desktop's Linux
   containers), and posts its report on #100. Each failure found becomes a task here, as in 5.4
 
