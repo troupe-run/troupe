@@ -131,8 +131,11 @@ so each fixture is the shape pytest actually produces. None of these tasks runs 
   Done, direct only: Docker isn't set up on the Windows PC, and the owner chose to leave it (2026-10-16), since Linux
   passed in Docker on macOS (6.12). At `380dea4` on a Surface Pro 8 (Windows 11), all 8 hunts were clean, 400 rounds,
   with no failures, errors, stalls or warnings in any round's log or XML. Posted on #100
-- [ ] 5.6 Rebase the branch onto `main`, run `uv run scripts/check.py`, mark the PR ready for review, and verify all CI
+- [x] 5.6 Rebase the branch onto `main`, run `uv run scripts/check.py`, mark the PR ready for review, and verify all CI
   jobs pass on Linux, macOS and Windows
+
+  Done at `01a6fdf`: `main` hadn't moved, so the branch was already on it. The check passed (1792 passed, 7 skipped),
+  PR #103 was marked ready, and CI run 38866268260 passed all 12 jobs (Linux, macOS and Windows, Python 3.12 to 3.15)
 
 ## 6. Flakes the hunts found, each fixed by its kind (#100)
 
