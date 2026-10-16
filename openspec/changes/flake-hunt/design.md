@@ -229,6 +229,25 @@ each other, and an unattended run that fans out is what this project avoids. Eac
   forwards it), so the hunt stops itself and writes its summary. The campaign waits for it, bounded, runs nothing
   more, and writes the report.
 
+### D12: A watch wait keeps its timeout by looping, not by a looser test
+
+A wait with nothing changing returned 20 µs (#100, CI run 38568514789) and then 44 µs (#112, CI run 38739097317)
+before its timeout by `time.monotonic()`, on Windows. `WaitForMultipleObjects` times out on its own timer, which can
+end before `time.monotonic()`'s, and Linux's `poll` can report ready with nothing to read. `DirectoryWatch.wait` now
+keeps a `time.monotonic()` deadline and asks the backend again for what's left, so "returns after its timeout" holds
+on every platform, as macOS's backend already did. The test keeps its name, because the name now states what the
+body checks.
+
+- **Callers were checked:** the only one in production, the text store's subscription loop, measures its own
+  `next_check` with `time.monotonic()` and would only go round once more on an early wake. So nothing depended on
+  the promise. It's kept because it costs one loop in one place, and a wait that keeps the promise it's documented
+  with is simpler to reason about than one that keeps it "to within the clocks' skew".
+- **Alternative: allow the skew in the test, and rename it "about its timeout".** That loosens the promise to fit
+  one OS's timer, and every new caller would have to know the skew. The size of the skew isn't documented either,
+  so a tolerance would only be a guess.
+- **Alternative: loop in the Windows backend only.** Linux's empty `poll` returns early too, for a different reason.
+  One loop above every backend covers both, and any backend added later.
+
 ## Risks / Trade-offs
 
 - [A clean hunt on macOS and Linux finds little, as on #100] → It's a tool for the Windows PC too, and the per-test
