@@ -148,11 +148,12 @@ spec scenario where behaviour changes.
   (`GetFileInformationByHandleEx`, `FileStandardInfo.DeletePending`) when re-issuing is refused, not by reading the
   error code as missing
 - [x] 6.3 **Windows and Linux: a watch wait can return before its timeout** (platform behaviour; #100, CI run
-  38568514789). One deadline loop in `DirectoryWatch.wait`, on `time.monotonic()`, for every backend, including
-  Linux's `poll` reporting ready with nothing to read. Pin it with a test of a backend that returns early
+  38568514789; again on #112, CI run 38739097317, on a branch without the fix). One deadline loop in
+  `DirectoryWatch.wait`, on `time.monotonic()`, for every backend, including Linux's `poll` reporting ready with
+  nothing to read. Pin it with a test of a backend that returns early
 
   `test_a_wait_returns_after_its_timeout_even_when_the_platform_gives_up_early` failed before the loop (it returned
-  after 20 µs) and passes with it, on every platform
+  after 20 µs) and passes with it, on every platform. The choice of side is design D12
 - [x] 6.4 **`test_concurrent_no_conflicts` (eventsourcing's suite): reader threads outlive the test** (threads that
   outlive the test, #97's family; 1 of 65). Its reader threads are never joined, and one still holds
   `.troupe/local` while `TemporaryDirectory.cleanup` runs: WinError 145, "the directory is not empty". Make the
