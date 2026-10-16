@@ -122,8 +122,12 @@ so each fixture is the shape pytest actually produces. None of these tasks runs 
 - [ ] 5.4 Agree the campaign on #100 as the bar for "done" (`--workers auto` × 10 rounds, load 0 and 2, the supported Pythons,
   direct and Docker). Run it on macOS with `--docker`, and post its report on #100. Each failure found becomes a task
   appended here and a line on #100, fixed by its kind
-- [ ] 5.5 The owner runs the same campaign on the Windows PC, direct and with `--docker` (Docker Desktop's Linux
+- [x] 5.5 The owner runs the same campaign on the Windows PC, direct and with `--docker` (Docker Desktop's Linux
   containers), and posts its report on #100. Each failure found becomes a task here, as in 5.4
+
+  Done, direct only: Docker isn't set up on the Windows PC, and the owner chose to leave it (2026-10-16), since Linux
+  passed in Docker on macOS (6.12). At `380dea4` on a Surface Pro 8 (Windows 11), all 8 hunts were clean, 400 rounds,
+  with no failures, errors, stalls or warnings in any round's log or XML. Posted on #100
 - [ ] 5.6 Rebase the branch onto `main`, run `uv run scripts/check.py`, mark the PR ready for review, and verify all CI
   jobs pass on Linux, macOS and Windows
 
@@ -190,8 +194,12 @@ spec scenario where behaviour changes.
   before any timeout, pinned by fake-clock tests that failed before the fix on every platform. The lock test checks
   one announcement, not before `announce_after`, no later than the timeout, and an upper bound of the timeout plus
   `STALL_ALLOWANCE` (30 s)
-- [ ] 6.8 **A round hung for 20 minutes, test unknown** (1 of 65). Run the campaign with 6.1's stall dump to name the
+- [x] 6.8 **A round hung for 20 minutes, test unknown** (1 of 65). Run the campaign with 6.1's stall dump to name the
   test, then add its own task here
+
+  Not reproduced: the Windows campaign at `380dea4` ran 400 rounds with no stall dump and no timeout, and its longest
+  round took 6.5 minutes. The owner thinks the hang was most likely the laptop suspending, not a test (2026-10-16).
+  Closed without a fix. The stall dump stays, so a recurrence names its test
 - [x] 6.9 **Store: another process's events can miss the listener's median bound** (a wall-clock bound; #100, release
   PR #89). The same treatment #91 got: check the interval and the next look, and keep a loose median bound
 
