@@ -1,6 +1,6 @@
 [project]
 name = "troupe"
-version = "0.0.1.dev0"
+version = "0.1.0"
 description = "Run your development process with agents and people in named roles."
 readme = "README.md"
 license = "Apache-2.0"

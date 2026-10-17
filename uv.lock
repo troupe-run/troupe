@@ -772,7 +772,7 @@ wheels = [
 
 [[package]]
 name = "troupe"
-version = "0.0.1.dev0"
+version = "0.1.0"
 source = { editable = "packages/troupe" }
 dependencies = [
     { name = "eventsourcing" },
@@ -783,7 +783,7 @@ requires-dist = [{ name = "eventsourcing", specifier = ">=9.5.5,<9.6" }]
 
 [[package]]
 name = "troupe-artifacts-local"
-version = "0.0.1.dev0"
+version = "0.1.0"
 source = { editable = "packages/troupe-artifacts-local" }
 dependencies = [
     { name = "troupe" },
@@ -794,7 +794,7 @@ requires-dist = [{ name = "troupe", editable = "packages/troupe" }]
 
 [[package]]
 name = "troupe-identity-local"
-version = "0.0.1.dev0"
+version = "0.1.0"
 source = { editable = "packages/troupe-identity-local" }
 dependencies = [
     { name = "troupe" },
@@ -805,12 +805,12 @@ requires-dist = [{ name = "troupe", editable = "packages/troupe" }]
 
 [[package]]
 name = "troupe-runner-scripted"
-version = "0.0.1.dev0"
+version = "0.1.0"
 source = { editable = "plugins/runner-scripted" }
 
 [[package]]
 name = "troupe-stage-local"
-version = "0.0.1.dev0"
+version = "0.1.0"
 source = { editable = "packages/troupe-stage-local" }
 dependencies = [
     { name = "troupe" },
@@ -821,7 +821,7 @@ requires-dist = [{ name = "troupe", editable = "packages/troupe" }]
 
 [[package]]
 name = "troupe-store-text"
-version = "0.0.1.dev0"
+version = "0.1.0"
 source = { editable = "packages/troupe-store-text" }
 dependencies = [
     { name = "eventsourcing" },
@@ -836,7 +836,7 @@ requires-dist = [
 
 [[package]]
 name = "troupe-vcs-files"
-version = "0.0.1.dev0"
+version = "0.1.0"
 source = { editable = "packages/troupe-vcs-files" }
 dependencies = [
     { name = "troupe" },
@@ -847,7 +847,7 @@ requires-dist = [{ name = "troupe", editable = "packages/troupe" }]
 
 [[package]]
 name = "troupe-vcs-git"
-version = "0.0.1.dev0"
+version = "0.1.0"
 source = { editable = "packages/troupe-vcs-git" }
 dependencies = [
     { name = "troupe" },
