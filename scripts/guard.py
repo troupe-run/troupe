@@ -2001,18 +2001,48 @@ WORKFLOW_SUMMARY = (
 
 
 def activate_hooks(root: Path) -> str | None:
-    """Turn the repository's git hooks on if they aren't; return a notice when it changed them.
+    """Turn the repository's git hooks on if they aren't; return a notice when it changed them, or
+    when git would skip one of them.
 
     The one place hook activation lives: the session-start hook and scripts/check.py both call it.
     """
+    notices = []
     configured = git(root, "config", "--get", "core.hooksPath", check=False)
-    if configured == HOOKS_PATH:
-        return None
-    git(root, "config", "core.hooksPath", HOOKS_PATH)
-    return (
-        f"Activated the repository's git hooks (core.hooksPath was "
-        f"{configured or 'unset'}; now {HOOKS_PATH})."
-    )
+    if configured != HOOKS_PATH:
+        git(root, "config", "core.hooksPath", HOOKS_PATH)
+        notices.append(
+            f"Activated the repository's git hooks (core.hooksPath was "
+            f"{configured or 'unset'}; now {HOOKS_PATH})."
+        )
+    notices += skipped_hook_notices(root)
+    return " ".join(notices) or None
+
+
+def skipped_hook_notices(root: Path) -> list[str]:
+    """A notice for each hook git skips because it isn't executable (spec: development-workflow).
+
+    Only a notice: refusing would block a repository whose fix is made elsewhere, and changing the
+    mode here would leave a change in the clone. Git for Windows has no executable bit; it runs a
+    hook that starts with #!, so there is nothing to report there (executable-hooks design D6).
+    """
+    hooks = root / HOOKS_PATH
+    if os.name == "nt" or not hooks.is_dir():
+        return []
+    delivered = delivered_paths(read_working_tree(root))
+    notices = []
+    for hook in sorted(hooks.iterdir()):
+        if not hook.is_file() or os.access(hook, os.X_OK):
+            continue
+        path = f"{HOOKS_PATH}/{hook.name}"
+        if path in delivered:
+            fix = (
+                f"It's delivered from {SOURCE_REPOSITORY}, where the next plan sets its mode; "
+                "don't change it here."
+            )
+        else:
+            fix = f"Make it executable: git update-index --chmod=+x {path}, then commit."
+        notices.append(f"Git skips {path}: it isn't executable. {fix}")
+    return notices
 
 
 def run_claude_session_start(root: Path, stdout: TextIO | None = None) -> int:
