@@ -1,4 +1,5 @@
-"""troupe-stage-local is found by name through its entry point group (design D1)."""
+"""troupe-stage-local is found by name through its entry point group (perform-status-logs design
+D1)."""
 
 import importlib.metadata
 
