@@ -35,48 +35,52 @@ runs a repeated or load-heavy local loop without asking the owner first. The rep
 
 ## 3. The commit guard's tag rule holds in a parallel run (spec: quality-check; design D5)
 
-- [ ] 3.1 Add a pytester test in `scripts/tests/`. In a temporary directory with a `scripts/check-paths.toml` that
+- [x] 3.1 Add a pytester test in `scripts/tests/`. In a temporary directory with a `scripts/check-paths.toml` that
   declares a `docs` scope over `docs/**` and a `docs/x.md`, a run with `-n 2 -p guard_pytest` fails the test that reads
   `docs/x.md` untagged (its report names the test, `docs/x.md` and the `docs` tag), and passes the tagged test that
   reads it. Add a second case that reads a file under `openspec/`. Verify the same file run without `-n` gives the same
   outcomes
-- [ ] 3.2 If 3.1 shows `guard_pytest` doesn't hold under xdist, stop. Open an issue in troupe-run/infrastructure (on
+- [x] 3.2 If 3.1 shows `guard_pytest` doesn't hold under xdist, stop. Open an issue in troupe-run/infrastructure (on
   the roadmap board) with the pytester reproduction, and wait for the fix to be delivered. Don't edit the copy here.
   Verify by the delivered `guard_pytest.py` passing 3.1. (Skip, and say so, if 3.1 passes on first run.)
+  Not needed: 3.1 passed on its first run against the delivered `guard_pytest.py`. The guard fails a test in its
+  teardown report, which pytest counts as an error, in one process and across workers alike
 
 ## 4. `check.py` runs the tests in parallel (spec: quality-check; design D1, D2, D3)
 
-- [ ] 4.1 In `gates()`, add `-n auto --dist worksteal` to the tests command, before any `-m`. Update the module
+- [x] 4.1 In `gates()`, add `-n auto --dist worksteal` to the tests command, before any `-m`. Update the module
   docstring to say the tests run in parallel and that `PYTEST_XDIST_AUTO_NUM_WORKERS` sets the worker count. Verify
   that `uv run scripts/check.py` prints xdist's worker line and passes
-- [ ] 4.2 Update `scripts/tests/test_check_scope.py`. The full tests command carries `-n auto --dist worksteal`, and
+- [x] 4.2 Update `scripts/tests/test_check_scope.py`. The full tests command carries `-n auto --dist worksteal`, and
   the scoped command is still exactly the full command plus `-m <expression>`. Rename any test whose name no longer
   matches what it asserts. Verify the tests fail with 4.1 reverted, and pass with it
-- [ ] 4.3 Add a test that `pyproject.toml`'s pytest `addopts` turns on no xdist option (`-n`, `--numprocesses`,
+- [x] 4.3 Add a test that `pyproject.toml`'s pytest `addopts` turns on no xdist option (`-n`, `--numprocesses`,
   `--dist`), named for that, so running pytest directly stays one process (spec: "Running pytest directly stays one
   process"). Verify it fails when `-n auto` is added to `addopts`
-- [ ] 4.4 Add pytester tests of the tests command's behaviour under xdist, which `run_gates` relies on. A run with
+- [x] 4.4 Add pytester tests of the tests command's behaviour under xdist, which `run_gates` relies on. A run with
   `-n 2 -m <unused marker>` exits `NO_TESTS_RAN` (5). A run with one failing test among passing ones exits 1, and its
   summary names the failing test. Then `run_gates` given a tests step that exits 5 in a scoped check passes, and says
   nothing was tagged, as it already does in one process. Verify each case against real xdist runs
-- [ ] 4.5 Document it in `README.md` next to the description of the gates: the tests run in parallel, one worker per
+- [x] 4.5 Document it in `README.md` next to the description of the gates: the tests run in parallel, one worker per
   CPU, `PYTEST_XDIST_AUTO_NUM_WORKERS` changes the count, and plain `uv run pytest ...` stays one process for
   debugging. Verify `uv run scripts/check.py --scope docs` passes (the README isn't in the docs scope, so also run the
   full check)
 
 ## 5. Shared state, and the time it saves (spec: quality-check; design D6, D7)
 
-- [ ] 5.1 Run `uv run scripts/check.py` locally once, in parallel. Fix every test that fails only in parallel at its
+- [x] 5.1 Run `uv run scripts/check.py` locally once, in parallel. Fix every test that fails only in parallel at its
   cause (its own `tmp_path`, `monkeypatch`, or a timing bound that holds under load), each in its own commit that names
   the shared state. Verify by the next full parallel run passing, and `git status` showing no file the run created
   outside ignored paths
-- [ ] 5.2 Confirm from hypothesis's documentation that `DirectoryBasedExampleDatabase` is safe for several processes
+- [x] 5.2 Confirm from hypothesis's documentation that `DirectoryBasedExampleDatabase` is safe for several processes
   sharing one directory, and cite the passage in design D6. If it isn't, give each worker its own database directory
-  under `.hypothesis/` in `hypothesis_profiles.py`, with a test. Verify by the citation, or by the test
+  under `.hypothesis/` in `hypothesis_profiles.py`, with a test. Verify by the citation, or by the test.
+  Done: the documentation is silent on concurrent processes, so D6 cites the source instead (atomic rename on save,
+  tolerant fetch and delete) and the fact that xdist runs each test in exactly one worker. The database stays shared
 - [ ] 5.3 Time `uv run scripts/check.py --scope docs` in parallel and in one process (one run each, macOS). If parallel
   is clearly slower, update design D1 and the spec before changing `gates()` (design Risks). Verify the two timings are
   in the scratch notes, with the decision
-- [ ] 5.4 If any test can't share the machine honestly, stop and update the design (D6) and the spec before code
+- [x] 5.4 If any test can't share the machine honestly, stop and update the design (D6) and the spec before code
   depends on it. Verify by the design naming each such test and why, or by 5.1 to 5.3 finding none
 
 ## 6. Verification on CI (spec: quality-check; design D7)

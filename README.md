@@ -36,6 +36,10 @@ in the same change. `scripts/check.py` fails if either moves without the other.
 --strict`, the import contracts, and the tests. CI runs the same script on all three platforms, and every job
 must pass.
 
+The check runs the tests in parallel with pytest-xdist, one worker for each CPU it may use. Set
+`PYTEST_XDIST_AUTO_NUM_WORKERS` to change the count. Running pytest yourself (`uv run pytest ...`) stays in one
+process, which is easier for narrowing to one test or stepping through it in a debugger.
+
 Turn on the repository's git hooks once per clone (Claude Code sessions do this for you):
 
 ```console

@@ -6,6 +6,9 @@ With --scope, every gate still runs, but the tests narrow to those marked with a
 declared in scripts/check-paths.toml. The guard passes scopes when a commit stages only paths
 they cover (spec: quality-check; troupe-run/infrastructure commit-check-paths design D8).
 
+The tests run in parallel, one pytest-xdist worker per CPU this process may use; set
+PYTEST_XDIST_AUTO_NUM_WORKERS to change the count. Running pytest directly stays one process.
+
 The same script runs locally and in CI on Linux, macOS and Windows, so the two can't
 diverge. It is Python rather than shell for that reason.
 """
@@ -45,8 +48,13 @@ def requested_scopes(names: Sequence[str], declaration: guard.CheckPaths | None)
     return tuple(sorted(set(names)))
 
 
+PARALLEL = ["-n", "auto", "--dist", "worksteal"]
+"""How the tests gate runs the suite: a worker per CPU, and an idle worker takes work from a busy
+one, because a few tests wait for seconds while most take milliseconds (parallel-tests D1-D3)."""
+
+
 def gates(scopes: tuple[str, ...] = ()) -> list[tuple[str, list[str]]]:
-    pytest = [tool("pytest")]
+    pytest = [tool("pytest"), *PARALLEL]
     if scopes:
         pytest += ["-m", guard.marker_expression(scopes)]
     return [

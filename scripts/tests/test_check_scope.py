@@ -2,6 +2,7 @@
 (spec: quality-check; commit-check-paths design D8)."""
 
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -120,6 +121,21 @@ def test_the_unscoped_gates_are_the_full_check_with_no_marker_expression() -> No
     labels = [label for label, _ in check.gates()]
     assert labels == ["ruff lint", "ruff format", "mypy --strict", "import contracts", "tests"]
     assert "-m" not in dict(check.gates())["tests"]
+
+
+@pytest.mark.parametrize("scopes", [(), ("docs",)], ids=["full", "scoped"])
+def test_the_tests_gate_runs_pytest_across_a_worker_per_cpu_with_work_stealing(
+    scopes: tuple[str, ...],
+) -> None:
+    tests = dict(check.gates(scopes))["tests"]
+    assert tests[1:5] == ["-n", "auto", "--dist", "worksteal"]
+
+
+def test_the_pytest_configuration_turns_on_no_xdist_option_so_pytest_stays_one_process() -> None:
+    pyproject = Path(check.ROOT, "pyproject.toml").read_text(encoding="utf-8")
+    addopts = tomllib.loads(pyproject)["tool"]["pytest"]["ini_options"]["addopts"]
+    xdist = ("-n", "--numprocesses", "--dist", "--maxprocesses")
+    assert [opt for opt in addopts if opt.split("=")[0] in xdist or opt.startswith("-n")] == []
 
 
 def test_a_scoped_check_runs_every_gate_and_narrows_only_the_tests() -> None:
