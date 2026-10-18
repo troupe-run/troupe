@@ -58,9 +58,13 @@
   Done in `cae693a` (a real docstring fix in `scripts/tests/test_check_paths_reach.py`): `guard: only scripts/tests/**
   is staged; running scripts/check.py --scope scripts instead of the full check`. Every gate ran; the tests were
   173 passed and 2 skipped, the 175-test scripts suite only, in 21 s (the full suite takes about 50 s in parallel).
-- [ ] 4.2 A commit staging only one leaf package's files shows the guard running that package's scope and the suites
+- [x] 4.2 A commit staging only one leaf package's files shows the guard running that package's scope and the suites
   the table names. Record the guard's line and the collected suites. If no real change to a leaf package is due, ask
   the owner which change to use rather than making one up.
+  Done in `280ee5c` (the owner asked for a small real fix: the stage-local registration test cited "design D1"
+  without naming the design): `guard: only packages/troupe-stage-local/tests/** is staged; running scripts/check.py
+  --scope stage_local instead of the full check`. Every gate ran; the tests were 1,419 passed and 5 skipped, which is
+  3.3's 1,424: the core and stage-local suites and the 3 real-tree reach tests. 40 s.
 - [ ] 4.3 Open the PR (`Closes #109`) and confirm every CI job passes on Linux, macOS and Windows.
 
 ## Workflow follow-up
