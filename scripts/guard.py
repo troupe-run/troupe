@@ -315,10 +315,13 @@ SCOPE_NAME = re.compile(r"[a-z][a-z0-9_]*\Z")
 """A valid tag in any test runner: a Python attribute, a word in `pytest -m`, a JS identifier."""
 RESERVED_SCOPES = frozenset({"none", "full"})
 """check-scope's other answers, so no scope may be called by them (design D6)."""
+SCOPE_KEYS = frozenset({"paths", "tests"})
+"""What a `[scopes.<name>]` table may hold; `[skip]` holds only `paths`."""
 CHECK_PATHS_FIX = (
     f"Fix {CHECK_PATHS}: `version = 1`, then `[skip]` and `[scopes.<name>]` tables, each holding "
-    "only `paths`, a list of exact paths or `dir/**`, with no path both skipped and in a scope. Or "
-    "delete it to run the full check on every commit."
+    "`paths`, a list of exact paths or `dir/**`, with no path both skipped and in a scope. A scope "
+    "may also hold `tests`, a list of the test directories it runs, each `dir/**`. Or delete it to "
+    "run the full check on every commit."
 )
 
 
@@ -340,6 +343,9 @@ class CheckPaths:
 
     skip: tuple[str, ...]
     scopes: tuple[tuple[str, tuple[str, ...]], ...]
+    tests: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    """Each scope that declares `tests`, with its test directories, in file order. Kept apart from
+    `scopes`, whose `(name, paths)` shape every check.py reads (scope-test-directories D3)."""
 
 
 @dataclass(frozen=True)
@@ -384,12 +390,18 @@ def _check_paths_entry(entry: object, where: str) -> str:
     return entry
 
 
-def _check_paths_group(table: object, where: str) -> tuple[str, ...]:
+def _check_paths_group(
+    table: object, where: str, keys: frozenset[str] = frozenset({"paths"})
+) -> tuple[str, ...]:
     if not isinstance(table, dict):
         raise CheckPathsError(f"{where} is not a table.")
-    unknown = sorted(set(table) - {"paths"})
+    unknown = sorted(set(table) - keys)
     if unknown:
-        raise CheckPathsError(f"{where} has an unknown key `{unknown[0]}`; only `paths` is read.")
+        read = " and ".join(f"`{key}`" for key in sorted(keys))
+        verb = "is" if len(keys) == 1 else "are"
+        raise CheckPathsError(
+            f"{where} has an unknown key `{unknown[0]}`; only {read} {verb} read."
+        )
     if "paths" not in table:
         raise CheckPathsError(f"{where}.paths is missing.")
     paths = table["paths"]
@@ -398,6 +410,28 @@ def _check_paths_group(table: object, where: str) -> tuple[str, ...]:
     return tuple(
         _check_paths_entry(entry, f"{where}.paths[{index}]") for index, entry in enumerate(paths)
     )
+
+
+def _check_paths_tests(table: dict[str, object], where: str) -> tuple[str, ...] | None:
+    """A scope's test directories, each `dir/**` (scope-test-directories design D2), or None."""
+    if "tests" not in table:
+        return None
+    tests = table["tests"]
+    if not isinstance(tests, list):
+        raise CheckPathsError(f"{where}.tests is not a list.")
+    if not tests:
+        raise CheckPathsError(f"{where}.tests is empty; leave `tests` out instead.")
+    entries = []
+    for index, entry in enumerate(tests):
+        place = f"{where}.tests[{index}]"
+        entry = _check_paths_entry(entry, place)
+        if not entry.endswith("/**"):
+            raise CheckPathsError(
+                f"{place} `{entry}` is a file; `tests` names directories, written `dir/**`. Tag a "
+                "single test file with a marker in it instead."
+            )
+        entries.append(entry)
+    return tuple(entries)
 
 
 def _entries_overlap(first: str, second: str) -> bool:
@@ -431,12 +465,16 @@ def check_paths(text: str) -> CheckPaths:
     if not isinstance(scopes_table, dict):
         raise CheckPathsError("scopes is not a table of `[scopes.<name>]` tables.")
     scopes = []
+    tests = []
     for name, table in scopes_table.items():
         if not SCOPE_NAME.match(name) or name in RESERVED_SCOPES:
             raise CheckPathsError(
                 f"scope name `{name}` must match [a-z][a-z0-9_]* and not be `none` or `full`."
             )
-        scopes.append((name, _check_paths_group(table, f"scopes.{name}")))
+        scopes.append((name, _check_paths_group(table, f"scopes.{name}", SCOPE_KEYS)))
+        directories = _check_paths_tests(table, f"scopes.{name}")
+        if directories is not None:
+            tests.append((name, directories))
     # Scopes may overlap one another (a path then runs each), but not the skip list (design D2).
     for name, entries in scopes:
         for entry in entries:
@@ -447,7 +485,7 @@ def check_paths(text: str) -> CheckPaths:
                         "be both unread and read by a scope's tests.",
                         f"Take the path out of skip or out of scopes.{name}, in {CHECK_PATHS}.",
                     )
-    return CheckPaths(skip=skip, scopes=tuple(scopes))
+    return CheckPaths(skip=skip, scopes=tuple(scopes), tests=tuple(tests))
 
 
 def _matches(entry: str, path: str) -> bool:
@@ -521,6 +559,66 @@ def tag_violations(test: TestReads, declaration: CheckPaths) -> list[str]:
                 f"{test.test} reads {path}, which {CHECK_PATHS} puts in scope {tags}, so a change "
                 f"to it wouldn't run this test. Tag the test {tags} (pytest: @pytest.mark.<name>)."
             )
+    return found
+
+
+def directory_tags(path: str, declaration: CheckPaths) -> frozenset[str]:
+    """The scopes whose `tests` directories hold this test file, a repository-relative POSIX path.
+
+    A runner's adapter adds them to the test's own tags, before it selects by tag, so a scope
+    selects whole suites and tag_violations counts them like any other tag (scope-test-directories
+    design D4).
+    """
+    return frozenset(
+        name for name, entries in declaration.tests if any(_matches(e, path) for e in entries)
+    )
+
+
+@dataclass(frozen=True)
+class UnmatchedTests:
+    """A scope's `tests` entry that no collected test is under."""
+
+    scope: str
+    index: int
+    entry: str
+
+    @property
+    def place(self) -> str:
+        return f"scopes.{self.scope}.tests[{self.index}]"
+
+    @property
+    def message(self) -> str:
+        return (
+            f"{CHECK_PATHS}: scope `{self.scope}` runs the tests under `{self.entry}` "
+            f"({self.place}), but no collected test is there, so `--scope {self.scope}` would "
+            "quietly stop running them. Correct the entry if the directory moved, or take it out."
+        )
+
+
+def _under_root(path: str, root: str) -> bool:
+    """Whether a repository-relative path is the root or under it ("" is the repository)."""
+    return root == "" or path == root or path.startswith(root + "/")
+
+
+def unmatched_tests(
+    test_files: Iterable[str], roots: Iterable[str], declaration: CheckPaths
+) -> list[UnmatchedTests]:
+    """Each `tests` entry inside the run's roots that none of the collected test files is under.
+
+    The roots are what the run was asked to collect, as repository-relative POSIX paths ("" for
+    the repository). An entry outside every root isn't checked, so running one file or one suite
+    never fails for another (scope-test-directories design D6).
+    """
+    files = list(test_files)
+    run_roots = list(roots)
+    found = []
+    for name, entries in declaration.tests:
+        for index, entry in enumerate(entries):
+            directory = entry.removesuffix("/**")
+            if not any(_under_root(directory, root) for root in run_roots):
+                continue
+            if not any(_matches(entry, path) for path in files):
+                found.append(UnmatchedTests(scope=name, index=index, entry=entry))
     return found
 
 
