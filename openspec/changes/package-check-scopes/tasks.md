@@ -20,7 +20,7 @@
 - [x] 1.5 Test the comparison against a declaration: equal passes; a missing suite and an extra suite each fail with a
   message naming the scope, the suite and the `tests = [...]` line to paste; a scope with no `tests` is reported the
   same way. Verify with tests on parsed in-memory declarations (no `tests` key needed in the real file yet).
-- [ ] 1.6 Run `uv run scripts/check.py` and commit (`feat(scripts): compute each test suite's reach`).
+- [x] 1.6 Run `uv run scripts/check.py` and commit (`feat(scripts): compute each test suite's reach`).
 
 ## 2. The `tests` key (troupe-run/infrastructure#86)
 
