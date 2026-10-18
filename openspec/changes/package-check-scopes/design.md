@@ -22,8 +22,9 @@ Constraints found while planning (on `c0634ec`):
   suite that validates against it reads the scripted runner's schemas.
 - **The core suite starts the scripted runner** (`python -m troupe_runner_scripted` in `test_runner_conformance` and
   `test_run_host`) and reads its `fixtures/` (`test_claude_fixtures`).
-- **The in-flight `parallel-tests` change** runs the tests gate with `-n auto`. Nothing here changes `check.py`, and
-  #86 asks for the `tests` key to be proved under xdist.
+- **`parallel-tests` has landed** (archived 2026-10-18): the tests gate runs with `-n auto`, scoped or not. Nothing
+  here changes `check.py`, and #86 proves the `tests` key under xdist. The times below are from one serial run on
+  `c0634ec`, before it landed: they compare suites with each other, not wall times. Task 3.4 re-measures.
 
 ### Measured time per suite
 

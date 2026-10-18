@@ -26,9 +26,9 @@ requirements below name. Any other path SHALL be in neither group, so a change t
 - **THEN** the commit guard runs the full check
 
 ### Requirement: Every test run keeps the declaration true
-Every pytest run in this repository, full or scoped, SHALL fail a test that reads a file under a scope's paths
-without that scope's tag, or reads a file under `openspec/`. The failure SHALL name the test, the file, and the tag
-to add or the skip entry it contradicts.
+Every pytest run in this repository, full or scoped, in one process or in parallel, SHALL fail a test that reads a file
+under a scope's paths without that scope's tag, or reads a file under `openspec/`. The failure SHALL name the test, the
+file, and the tag to add or the skip entry it contradicts.
 
 #### Scenario: A new doc test without its tag
 - **WHEN** a test reads `docs/runs.md` and isn't tagged `docs`
@@ -42,6 +42,10 @@ to add or the skip entry it contradicts.
 #### Scenario: A test that reads OpenSpec artifacts
 - **WHEN** a test reads a file under `openspec/`
 - **THEN** that test fails, naming the file and the `openspec/**` skip entry
+
+#### Scenario: An untagged doc read in a parallel run
+- **WHEN** the tests run in parallel and a test in any worker reads `docs/runs.md` without the `docs` tag
+- **THEN** that test fails, naming itself, `docs/runs.md` and the `docs` tag, as it does in one process
 
 ## ADDED Requirements
 
