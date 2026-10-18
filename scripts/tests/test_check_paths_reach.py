@@ -1,8 +1,9 @@
 """Each suite's reach is worked out from the source, and a scope's `tests` must equal it.
 
-Spec: quality-check. Design: package-check-scopes D3. Each rule is shown on a small temporary
-workspace with two packages, `alpha` and `beta`, and a core, `troupe`; the last tests run the
-analysis on the real tree."""
+Spec: quality-check. Design: package-check-scopes D3 and D4. Each rule is shown on a small
+temporary workspace with a core, `troupe`, and packages such as `alpha` and `beta`. The tests
+marked @reads_every_package run the analysis on the real tree instead, and carry every package
+scope's tag."""
 
 import textwrap
 from collections.abc import Callable
