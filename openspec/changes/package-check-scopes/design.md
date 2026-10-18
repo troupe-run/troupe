@@ -96,8 +96,18 @@ tasks re-measure on the branch and record the final tables.
 
 One scope per non-core package, named after the distribution without `troupe-`, with `_` for `-`
 (`SCOPE_NAME` allows only `[a-z][a-z0-9_]*`): `artifacts_local`, `identity_local`, `stage_local`, `store_text`,
-`vcs_files`, `vcs_git`, `runner_scripted`. Each covers its whole directory (`packages/troupe-<name>/**`,
-`plugins/runner-scripted/**`), its tests and `pyproject.toml` included.
+`vcs_files`, `vcs_git`, `runner_scripted`. Each covers its package's directories as `dir/**` (`src`, `tests`, and for
+the scripted runner `fixtures`, `schemas` and `tools`) and its other files by exact path (`README.md`, `LICENSE`),
+but not `pyproject.toml`.
+
+`pyproject.toml` stays in no scope, so changing it runs the full check. Found while applying: `release_config.py` and
+`python_versions.py` read every workspace member's `pyproject.toml`, and the scripts suite runs them on the real
+files. With the whole directory in the scope, the scripts suite would reach every package and every package scope
+would run it too (+37 s each, so `stage_local` would save 29% rather than 43%). The static analysis also can't see
+those reads, because the paths come from the root's workspace `members` and not from the code. A full check is the
+right answer for `pyproject.toml` anyway: it holds the dependencies and entry points, so a change to it can change
+what reaches the package. The owner chose this (2026-10-18). A new top-level file in a package runs the full check
+until it's declared.
 
 `scripts` lists its files one by one, because the schema has no exclusions and `check.py`, `guard.py`,
 `guard_pytest.py` and `check-paths.toml` must run the full check. Exact paths also mean a new script runs the full
@@ -135,10 +145,10 @@ The analysis, using `ast` only:
 2. **Imports** are every `import` and `from` statement anywhere in that code, including inside functions and
    `TYPE_CHECKING` blocks, mapped to a workspace package by its `src/<module>` directory. Each package reached adds
    its own sources' imports and its `pyproject.toml` workspace `dependencies`, transitively.
-3. **Entry points:** a suite whose reach includes a core loader module (by the module-level import closure through
-   core's sources) reaches every package that registers in that loader's group, read from each `pyproject.toml`. The
-   analysis also fails if any workspace source calls `entry_points(` outside the five known loaders, so a new loader
-   can't go unseen.
+3. **Entry points:** a suite whose import closure includes a loader module reaches every package that registers in
+   that loader's group, read from each `pyproject.toml`. A loader is any workspace module that calls `entry_points(`;
+   its group is read from the call's `group=` argument, a string or a module-level string constant. A call whose
+   group can't be read that way fails the analysis, naming the file and line, so a new loader can't go unseen.
 4. **Named reach:** a string literal in the suite's code equal to a package's directory name (`runner-scripted`),
    its top-level module (`troupe_runner_scripted`), or `plugins` or `packages` used as a path segment (a glob over
    every plugin or package) reaches that package or all of them. This finds the subprocess and fixture reach without

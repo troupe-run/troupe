@@ -47,8 +47,9 @@ to add or the skip entry it contradicts.
 
 ### Requirement: Each package outside core has a scope
 troupe SHALL declare one scope per workspace package other than core: `artifacts_local`, `identity_local`,
-`stage_local`, `store_text`, `vcs_files` and `vcs_git` for `packages/troupe-<name>/**`, and `runner_scripted` for
-`plugins/runner-scripted/**`. Core, `packages/troupe/**`, SHALL be in no scope, so a change to it runs the full check.
+`stage_local`, `store_text`, `vcs_files` and `vcs_git` for `packages/troupe-<name>/`, and `runner_scripted` for
+`plugins/runner-scripted/`. Each SHALL cover its package's files except `pyproject.toml`. Core, `packages/troupe/**`,
+and every package's `pyproject.toml` SHALL be in no scope, so a change to them runs the full check.
 
 #### Scenario: A commit that changes one leaf package
 - **WHEN** a commit stages only files under `packages/troupe-stage-local/`, possibly with files under `openspec/`
@@ -62,6 +63,11 @@ troupe SHALL declare one scope per workspace package other than core: `artifacts
 
 #### Scenario: A commit that changes core
 - **WHEN** a commit stages any file under `packages/troupe/`, including core's shared test helpers
+- **THEN** the commit guard runs the full check
+
+#### Scenario: A commit that changes a package's pyproject.toml
+- **WHEN** a commit stages `packages/troupe-stage-local/pyproject.toml`, which can change the package's dependencies
+  or entry points and so what reaches it
 - **THEN** the commit guard runs the full check
 
 #### Scenario: A package added later
