@@ -99,17 +99,27 @@ tests now show both sides: a one-string path naming a package reaches it, and on
 (`"packages/"`) or names no package (`"packages/gone"`) reaches nothing.
 
 So the scripts suite runs with `store_text`, `vcs_files`, `vcs_git` and `runner_scripted`, and the saving for those
-scopes nearly vanishes:
+scopes nearly vanishes.
+
+### Measured on the branch (task 3.4)
+
+One serial run with the declaration in place (`pytest --junitxml`, macOS, 1,847 passed and 7 skipped, 270 s wall),
+test time summed per suite and per scope's `tests`. This replaces the projected tables above. The scripts suite grew
+to 175 tests (41.7 s) with this change's own 41; the real-tree reach tests that every package scope runs take 1.4 s.
+The check now runs the tests across xdist workers, so wall times are shorter than these sums, but the proportions
+hold.
 
 | Scope | Suites it runs | Test time | Saved |
 |---|---|---:|---:|
-| `scripts` | scripts | 36.8 s | 86% |
-| `artifacts_local` | core, artifacts-local | 150.5 s | 43% |
-| `stage_local` | core, stage-local | 149.7 s | 43% |
-| `identity_local` | core, store-text, stage-local, identity-local | 213.6 s | 19% |
-| `store_text` | core, store-text, stage-local, scripts | 248.9 s | 5% |
-| `runner_scripted` | core, store-text, artifacts-local, runner-scripted | 215.8 s | 18% |
-| `vcs_git`, `vcs_files` | core, store-text, stage-local, identity-local, vcs-git, vcs-files, scripts | 258.8 s | 1% |
+| `scripts` | scripts | 41.7 s | 84% |
+| `artifacts_local` | core, artifacts-local | 151.4 s | 44% |
+| `stage_local` | core, stage-local | 150.8 s | 44% |
+| `identity_local` | core, store-text, stage-local, identity-local | 214.3 s | 20% |
+| `store_text` | core, store-text, stage-local, scripts | 254.6 s | 5% |
+| `runner_scripted` | core, store-text, artifacts-local, runner-scripted, scripts | 258.1 s | 4% |
+| `vcs_git`, `vcs_files` | core, store-text, stage-local, identity-local, vcs-git, vcs-files, scripts | 264.8 s | 1% |
+
+All: 268.4 s of test time.
 
 Getting it back is a change to the scripts tests, not to the analysis: the checks that look at the real tree's
 package paths (the campaign selection, the release configuration on real files) could move to a module of their
@@ -171,6 +181,12 @@ The owner chose this (2026-10-18) over:
 
 `tag_violations` is unchanged, so the read check keeps working: a directory tag counts like a marker.
 
+As delivered (infrastructure#91, `scope-test-directories`): `tests` entries are `dir/**` only, the declaration stays
+`version = 1`, and the parsed declaration keeps them in `CheckPaths.tests`, apart from `scopes`, listing only the
+scopes that declare them. `guard_pytest` tags in a `tryfirst` `pytest_collection_modifyitems`, the same in every
+xdist worker, and reports an entry no collected test is under as a failing test carrying that scope's marker, so the
+full run and the scope's own run both fail. None of that changes this design.
+
 ### D3. Reach is computed statically and compared with the declaration
 
 A troupe-owned module, `scripts/check_paths_reach.py`, computes each suite's reach, and
@@ -217,13 +233,14 @@ The failure message names the scope, the suites added or missing, and the full `
   every adapter scope run the store-text suite, losing 62 s on `stage_local` and `artifacts_local`. The per-loader
   rule is still sound because of the `entry_points(` check in step 3.
 
-### D4. The reach test tags itself with every package scope
+### D4. The real-tree reach tests carry every package scope
 
-`test_check_paths_reach.py` reads every package's sources and `pyproject.toml`, so `guard_pytest` would fail it
-untagged, and it should run whenever any package changes, since a change can alter the reach. Its `pytestmark` is
-built from the declaration (every scope except `docs`), so adding a scope needs no edit here. So every package
-scope runs this one test from the scripts suite as well, which costs well under a second. It also reads
-`scripts/` files, which `scripts/tests/**` in the `scripts` scope's `tests` already covers.
+The tests in `test_check_paths_reach.py` that run the analysis on the real tree (the comparison with the declaration,
+the loaders, and each suite reaching its own package) read every package's sources and tests. A change to any
+package can change its reach, so they run with every package scope. Each carries every declared scope's marker
+except `docs`, built from the declaration, so a new scope needs no edit there. The module's other tests build their
+own temporary workspaces, read nothing in the packages, and run only with `scripts`, through the directory tag. (The
+first draft tagged the whole module, which would have run ~40 unrelated tests in every package scope.)
 
 ### D5. Order of work
 
