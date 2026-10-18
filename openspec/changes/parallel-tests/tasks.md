@@ -77,7 +77,7 @@ runs a repeated or load-heavy local loop without asking the owner first. The rep
   under `.hypothesis/` in `hypothesis_profiles.py`, with a test. Verify by the citation, or by the test.
   Done: the documentation is silent on concurrent processes, so D6 cites the source instead (atomic rename on save,
   tolerant fetch and delete) and the fact that xdist runs each test in exactly one worker. The database stays shared
-- [ ] 5.3 Time `uv run scripts/check.py --scope docs` in parallel and in one process (one run each, macOS). If parallel
+- [x] 5.3 Time `uv run scripts/check.py --scope docs` in parallel and in one process (one run each, macOS). If parallel
   is clearly slower, update design D1 and the spec before changing `gates()` (design Risks). Verify the two timings are
   in the scratch notes, with the decision
 - [x] 5.4 If any test can't share the machine honestly, stop and update the design (D6) and the spec before code

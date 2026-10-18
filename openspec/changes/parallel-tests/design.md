@@ -137,8 +137,9 @@ not a local stress loop. Load-heavy local runs need the owner's go-ahead first.
   measured. #84 is where that test gets shorter, with a stated reason.
 - [Worker start-up (importing troupe and the guards in each worker) costs a few seconds, which may make the small
   `--scope docs` run slower than one process] → It's accepted for one command shape. The commit's time is dominated by
-  mypy and the gates before the tests. Tasks measure the scoped run. If it's clearly slower, the scoped run goes back
-  to one process, as a design update.
+  mypy and the gates before the tests. Measured on macOS with 10 workers: the scoped tests gate took 3.9 s in
+  parallel, against about 2 s in one process. The owner chose to keep it parallel, for one command shape
+  (2026-10-18).
 - [Windows paths get longer under xdist (`popen-gwN/` inside the base temp)] → troupe already handles paths through
   the platform seam. A failure here is a real bug for users with deep paths, and gets fixed rather than worked around.
 - [`-ra` and failure output arrive from several workers] → xdist forwards each report to the controller, so the
