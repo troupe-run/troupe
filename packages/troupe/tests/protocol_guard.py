@@ -10,6 +10,12 @@ same way. A test that builds an invalid one on purpose does so inside ``unchecke
 It also records every code troupe's own source constructs (not the tests). At the end of a full
 run (every test path, no ``-k`` or ``-m``), a catalogued code nothing raised fails the session:
 each code's schema has to be exercised by real code.
+
+When the tests run in parallel (pytest-xdist, as scripts/check.py runs them), each worker records
+only its own share. A worker doesn't check: it hands the codes it saw to the controller through
+xdist's ``workeroutput``, and the controller checks once, on every worker's codes together
+(parallel-tests design D4). A worker that ends without handing them over fails a run that
+otherwise passed, by name, so a short tally can't blame codes another worker raised.
 """
 
 import contextlib
@@ -17,7 +23,7 @@ import json
 import sys
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 import jsonschema
 import pytest
@@ -29,8 +35,26 @@ from troupe.core.events import EventStore
 
 _checking = True
 _seen: set[str] = set()
-"""Codes troupe's own source constructed during the session."""
+"""Codes troupe's own source constructed during the session: in this process, and on an xdist
+controller, in every worker too."""
+_silent: list[str] = []
+"""Workers that ended without handing over the codes they saw."""
 SOURCE = "src"
+SEEN_KEY = "protocol_guard_seen"
+"""Where a worker puts its codes in xdist's ``workeroutput``."""
+
+
+class _Gateway(Protocol):
+    @property
+    def id(self) -> str: ...
+
+
+class _Worker(Protocol):
+    """What the guard reads of an xdist worker node. Its ``workeroutput`` exists only once the
+    worker has finished cleanly, so it's read with getattr."""
+
+    @property
+    def gateway(self) -> _Gateway: ...
 
 
 class ProtocolGuardError(AssertionError):
@@ -143,16 +167,44 @@ def _is_full_run(session: pytest.Session) -> bool:
     return sorted(args) == sorted(testpaths) or not session.config.args
 
 
+def unraised() -> list[str]:
+    """The catalogued codes nothing in troupe's source constructed, sorted."""
+    return sorted((set(errors.CODES) | set(notices.CODES)) - _seen)
+
+
+@pytest.hookimpl(optionalhook=True)
+def pytest_testnodedown(node: _Worker, error: object) -> None:
+    """On the controller, as each xdist worker ends: add the codes it saw."""
+    codes = getattr(node, "workeroutput", {}).get(SEEN_KEY)
+    if codes is None:
+        _silent.append(node.gateway.id)
+    else:
+        _seen.update(codes)
+
+
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
+    workeroutput = getattr(session.config, "workeroutput", None)
+    if workeroutput is not None:  # an xdist worker: the controller checks
+        workeroutput[SEEN_KEY] = sorted(_seen)
+        return
     if not _is_full_run(session) or exitstatus != pytest.ExitCode.OK:
         return
-    unraised = sorted((set(errors.CODES) | set(notices.CODES)) - _seen)
-    if unraised:
-        reporter = session.config.pluginmanager.get_plugin("terminalreporter")
+    reporter = session.config.pluginmanager.get_plugin("terminalreporter")
+    if _silent:
+        if reporter is not None:
+            reporter.write_line(
+                "protocol_guard: these workers ended without reporting the codes they raised, so "
+                f"no code can be called unexercised: {', '.join(sorted(_silent))}",
+                red=True,
+            )
+        session.exitstatus = pytest.ExitCode.TESTS_FAILED
+        return
+    missing = unraised()
+    if missing:
         if reporter is not None:
             reporter.write_line(
                 "protocol_guard: no test raised these codes, so their details schemas are "
-                f"unexercised: {', '.join(unraised)}",
+                f"unexercised: {', '.join(missing)}",
                 red=True,
             )
         session.exitstatus = pytest.ExitCode.TESTS_FAILED
