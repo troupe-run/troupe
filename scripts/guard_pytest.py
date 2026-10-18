@@ -6,14 +6,18 @@ Load it from the repository's pytest configuration, with scripts/ on pytest's py
     addopts = ["-p", "guard_pytest"]
 
 It reads scripts/check-paths.toml, registers each scope as a marker (so --strict-markers accepts
-them and the declaration is the one list), and records every file inside the repository opened
-for a test, through Python's `open` audit event. A test's reads are what it opens during its own
-setup, call and teardown, what its module and the collectors above it open while being collected
-(a module-level `TEXT = DOC.read_text()`, or parameters built from a file), and what each fixture
-it uses opens while being set up, even when an earlier test set that fixture up. A test that
-reads a skipped path, or a scope's path without that scope's marker, then fails at teardown with
-the guard's message. The rule itself is guard.tag_violations, which takes plain data so another
-runner's adapter can use it too (commit-check-paths design D9).
+them and the declaration is the one list), and adds a scope's marker to every collected test under
+one of its `tests` directories, before `-m` selects, so a scope can run whole suites. A `tests`
+entry that no collected test is under is reported as a failing test carrying that scope's marker,
+so the full run and the scope's own run both fail (scope-test-directories design D5). It also
+records every file inside the repository opened for a test, through Python's `open` audit event. A
+test's reads are what it opens during its own setup, call and teardown, what its module and the
+collectors above it open while being collected (a module-level `TEXT = DOC.read_text()`, or
+parameters built from a file), and what each fixture it uses opens while being set up, even when an
+earlier test set that fixture up. A test that reads a skipped path, or a scope's path without that
+scope's marker, then fails at teardown with the guard's message. The rule itself is
+guard.tag_violations, which takes plain data so another runner's adapter can use it too
+(commit-check-paths design D9).
 
 Reads made by a subprocess the test starts aren't seen: the hook watches this process only.
 """
@@ -51,10 +55,9 @@ def _record(event: str, args: tuple[object, ...]) -> None:
         path = args[0]
         if not isinstance(path, str | os.PathLike):
             return  # a file descriptor, or bytes
-        real = os.path.realpath(os.fspath(path))
-        if real == _ROOT or not real.startswith(_ROOT + os.sep):
-            return
-        relative = Path(os.path.relpath(real, _ROOT)).as_posix()
+        relative = _relative(path)
+        if not relative:
+            return  # outside the repository, or the repository itself
         for reads in _RECORDING:
             reads.add(relative)
 
@@ -80,12 +83,89 @@ def pytest_configure(config: pytest.Config) -> None:
         _DECLARATION = guard.check_paths(text)
     except guard.CheckPathsError as error:
         raise pytest.UsageError(error.decision().text()) from None
+    directories = dict(_DECLARATION.tests)
     for name, entries in _DECLARATION.scopes:
+        runs = f"; runs {', '.join(directories[name])}" if name in directories else ""
         config.addinivalue_line(
-            "markers", f"{name}: reads {', '.join(entries)} ({guard.CHECK_PATHS})"
+            "markers", f"{name}: reads {', '.join(entries)}{runs} ({guard.CHECK_PATHS})"
         )
     _ROOT = os.path.realpath(root)
     sys.addaudithook(_record)  # one per process; it can't be removed, so it checks _RECORDING
+
+
+def _relative(path: str | os.PathLike[str]) -> str | None:
+    """A path as the repository-relative POSIX path guard's rules take ("" for the root), or None
+    when it's outside the repository or there's no declaration."""
+    if _ROOT is None:
+        return None
+    real = os.path.realpath(os.fspath(path))
+    if real == _ROOT:
+        return ""
+    if not real.startswith(_ROOT + os.sep):
+        return None
+    return Path(os.path.relpath(real, _ROOT)).as_posix()
+
+
+def _roots(config: pytest.Config) -> list[str]:
+    """What the run was asked to collect (D6): its path arguments, or the whole repository when it
+    was given none. `testpaths` then lists the suites, and a stale `tests` entry is outside every
+    one of them, so checking only inside `testpaths` would miss the renamed directory it's for."""
+    if config.args_source is not pytest.Config.ArgsSource.ARGS:
+        return [""]
+    roots = []
+    for arg in config.args:
+        target = Path(config.invocation_params.dir, arg.split("::", 1)[0])
+        relative = _relative(target)
+        if relative is not None:
+            roots.append(relative)
+    return roots
+
+
+class _UnmatchedTests(pytest.Item):
+    """A scope's `tests` entry that no collected test is under. It fails, naming the entry."""
+
+    unmatched: guard.UnmatchedTests
+
+    def runtest(self) -> None:
+        raise AssertionError(self.unmatched.message)
+
+    def repr_failure(
+        self, excinfo: pytest.ExceptionInfo[BaseException], style: object = None
+    ) -> str:
+        return f"guard: {self.unmatched.message}"
+
+    def reportinfo(self) -> tuple[Path, None, str]:
+        return self.path, None, f"{guard.CHECK_PATHS}::{self.unmatched.place}"
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_collection_modifyitems(
+    session: pytest.Session, config: pytest.Config, items: list[pytest.Item]
+) -> None:
+    """Tag each test with the scopes whose `tests` hold its file, before `-m` deselects (D5).
+
+    Every xdist worker collects the same files and so does the same, in the same order, which the
+    controller requires of them.
+    """
+    if _DECLARATION is None or not _DECLARATION.tests:
+        return
+    files = []
+    for item in items:
+        relative = _relative(item.path)
+        if relative is None:
+            continue
+        files.append(relative)
+        for name in sorted(guard.directory_tags(relative, _DECLARATION)):
+            item.add_marker(name)
+    failing = []
+    for unmatched in guard.unmatched_tests(files, _roots(config), _DECLARATION):
+        item = _UnmatchedTests.from_parent(
+            session, name=unmatched.place, nodeid=f"{guard.CHECK_PATHS}::{unmatched.place}"
+        )
+        item.unmatched = unmatched
+        item.add_marker(unmatched.scope)
+        failing.append(item)
+    items[:0] = failing
 
 
 @pytest.hookimpl(wrapper=True)
