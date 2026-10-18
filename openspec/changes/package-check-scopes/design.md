@@ -57,7 +57,7 @@ it also counts imports inside functions. Every suite but runner-scripted's reach
 | vcs-git, vcs-files | vcs-git, vcs-files | the vcs loader |
 | artifacts-local | artifacts-local, runner-scripted | artifacts loader; `protocol_schemas` |
 | runner-scripted | runner-scripted | self-contained |
-| scripts | scripts | `test_flake_hunt` imports core's platform code only |
+| scripts | scripts, runner-scripted | `test_flake_hunt` imports core's platform code only; see the static result below |
 
 ### Projected saving, per scope
 
@@ -70,12 +70,28 @@ Test time of the suites each scope runs, against 262.6 s for all. Gates other th
 | `stage_local` | core, stage-local | 149.7 s | 43% |
 | `store_text` | core, store-text, stage-local | 212.1 s | 19% |
 | `identity_local` | core, store-text, stage-local, identity-local | 213.6 s | 19% |
-| `runner_scripted` | core, store-text, artifacts-local, runner-scripted | 215.8 s | 18% |
+| `runner_scripted` | core, store-text, artifacts-local, runner-scripted, scripts | 252.6 s | 4% |
 | `vcs_git`, `vcs_files` | core, store-text, stage-local, identity-local, vcs-git, vcs-files | 222.0 s | 15% |
 
 Of the last 284 commits, 114 needed no check and 139 needed the full one. Under these scopes, 26 of the remaining 31
 would have run scoped: 8 `scripts`, 7 `docs` with `scripts`, 8 `store_text`, 2 `vcs_git`, 1 `runner_scripted`. The
 tasks re-measure on the branch and record the final tables.
+
+### The static result (task 1.4)
+
+`uv run scripts/check_paths_reach.py` on this branch agrees with the projected map for every suite but one: the
+scripts suite also reaches `runner_scripted`. `scripts/tests/test_release_config.py` writes the string
+`"troupe-runner-scripted"`, which is the scripted runner's console script as well as its distribution name, and
+rule 4 counts a console-script name because a test can start it as a command. Here it's a release-configuration
+entry, so the reach is wider than real. It's kept: telling a command from a configuration value would need a guess
+about how the string is used, and the cost is one suite (37 s) on the rarest scope (1 commit in 284). The table above
+includes it.
+
+Two narrowings came out of the first run on the real tree, both in rule 4. Counting a bare distribution name, a bare
+directory name (for most packages it's the same string) or a quoted `packages/<name>` key put the scripts suite in
+the `store_text`, `vcs_files` and `vcs_git` scopes as well. `test_release_config.py` names packages that way, but
+it reads only the release configuration, the lock file and `pyproject.toml`, none of which is in a package scope.
+Directory names still count in path expressions, which is how the fixtures and schema reads name them.
 
 ## Goals / Non-Goals
 
@@ -147,12 +163,17 @@ The analysis, using `ast` only:
    its own sources' imports and its `pyproject.toml` workspace `dependencies`, transitively.
 3. **Entry points:** a suite whose import closure includes a loader module reaches every package that registers in
    that loader's group, read from each `pyproject.toml`. A loader is any workspace module that calls `entry_points(`;
-   its group is read from the call's `group=` argument, a string or a module-level string constant. A call whose
-   group can't be read that way fails the analysis, naming the file and line, so a new loader can't go unseen.
-4. **Named reach:** a string literal in the suite's code equal to a package's directory name (`runner-scripted`),
-   its top-level module (`troupe_runner_scripted`), or `plugins` or `packages` used as a path segment (a glob over
-   every plugin or package) reaches that package or all of them. This finds the subprocess and fixture reach without
-   a hand list.
+   its group is read from the call's `group=` argument, a string or a module-level string constant (its own or one
+   it imports), or failing those from the group names written in the same module (the registration tests pass the
+   group as a parameter). A call with none of those fails the analysis, naming the file and line, so a new loader
+   can't go unseen.
+4. **Named reach:** test-side code (outside every `src/`) reaches a package it names. A string equal to the
+   package's top-level module (`troupe_runner_scripted`, for `-m`) or one of its console scripts counts anywhere. A
+   path expression (`/`, `Path()`, `join()`) that goes into a workspace root counts too: if it names a package
+   right after the root (`/ "plugins" / "runner-scripted" / "fixtures"`) it reaches that package, and if it stops
+   there or globs (`ROOT / "plugins"`) it reaches every package under the root. Bare directory and distribution
+   names don't count, nor do quoted `packages/<name>` keys: they name a package in configuration, which is outside
+   its scope. This finds the subprocess and fixture reach without a hand list.
 5. **Scripts:** a module under `scripts/` that a suite imports, or the `scripts/` directory itself, reaches the
    `scripts` scope, except the four full-check files.
 
