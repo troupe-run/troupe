@@ -65,7 +65,7 @@
   without naming the design): `guard: only packages/troupe-stage-local/tests/** is staged; running scripts/check.py
   --scope stage_local instead of the full check`. Every gate ran; the tests were 1,419 passed and 5 skipped, which is
   3.3's 1,424: the core and stage-local suites and the 3 real-tree reach tests. 40 s.
-- [ ] 4.3 Open the PR (`Closes #109`) and confirm every CI job passes on Linux, macOS and Windows.
+- [x] 4.3 Open the PR (`Closes #109`) and confirm every CI job passes on Linux, macOS and Windows.
 
 ## 5. The scripts tests that name package paths, apart (design D6; owner, 2026-10-18)
 
@@ -77,7 +77,7 @@
   the scripts suite collects 177 tests as before (115 + 62, none twice); `scripts/tests` reaches only `scripts`;
   `pytest -m store_text --collect-only` picks the 62 workspace tests and none of the other 115. Done: as stated, and
   `-m stage_local` is unchanged at 1,424.
-- [ ] 5.3 Record the new savings in the design, run the full check and commit. Verify the commit runs the full check
+- [x] 5.3 Record the new savings in the design, run the full check and commit. Verify the commit runs the full check
   and passes, then that CI passes on every job of #116.
 
 ## Workflow follow-up
