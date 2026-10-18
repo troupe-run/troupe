@@ -2,22 +2,22 @@
 
 ## 1. Reach analysis (needs nothing from infrastructure)
 
-- [ ] 1.1 Write `scripts/check_paths_reach.py` (design D3): suites from `testpaths`, a suite's code and helpers through
+- [x] 1.1 Write `scripts/check_paths_reach.py` (design D3): suites from `testpaths`, a suite's code and helpers through
   `pythonpath`, `ast` imports anywhere in a module mapped to workspace packages by `src/<module>`, package sources and
   `pyproject.toml` workspace dependencies followed transitively. Verify with unit tests in
   `scripts/tests/test_check_paths_reach.py` on small temporary workspaces: a function-level import counts, a
   `TYPE_CHECKING` import counts, a transitive dependency counts, a helper's import counts for the suite that imports it.
-- [ ] 1.2 Add the entry-point rule: each loader module's group, each package's registered groups from its
+- [x] 1.2 Add the entry-point rule: each loader module's group, each package's registered groups from its
   `pyproject.toml`, and a suite reaching a loader through core's module-level import closure reaching every package in
   that group. Fail, naming the file and line, when any workspace source calls `entry_points(` outside a known loader.
   Verify with temporary-workspace tests for both, and that the real tree's five loaders are found.
-- [ ] 1.3 Add named reach (string literals naming a package directory, module, or `plugins`/`packages` as a path
+- [x] 1.3 Add named reach (string literals naming a package directory, module, or `plugins`/`packages` as a path
   segment) and the `scripts` rule, with the four full-check files left out. Verify with temporary-workspace tests,
   including a subprocess command `[sys.executable, "-m", "<module>"]` and a `ROOT / "plugins"` glob.
-- [ ] 1.4 Run the analysis on the real tree and compare it with the projected map in design.md. Record every
+- [x] 1.4 Run the analysis on the real tree and compare it with the projected map in design.md. Record every
   difference in design.md with its cause (expected: only imports inside functions widening it). Verify by pasting the
   table the analysis prints.
-- [ ] 1.5 Test the comparison against a declaration: equal passes; a missing suite and an extra suite each fail with a
+- [x] 1.5 Test the comparison against a declaration: equal passes; a missing suite and an extra suite each fail with a
   message naming the scope, the suite and the `tests = [...]` line to paste; a scope with no `tests` is reported the
   same way. Verify with tests on parsed in-memory declarations (no `tests` key needed in the real file yet).
 - [ ] 1.6 Run `uv run scripts/check.py` and commit (`feat(scripts): compute each test suite's reach`).
