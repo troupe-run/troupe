@@ -51,15 +51,18 @@ Conventional Commits, and commits whose checks fail.
 
 A commit runs only what its staged paths need, as `scripts/check-paths.toml` declares. A commit that changes only
 `openspec/` skips the check. One that changes only `docs/` (or the scripted runner's README) runs every gate, but
-only the tests that check the docs against the code. Anything else runs the full check. To run the docs tests the
-same way by hand:
+only the tests that check the docs against the code. One that changes only one package outside core, or only
+`scripts/`, runs every gate, but only the test suites that reach what it changed. Anything else runs the full check,
+including core, any package's `pyproject.toml`, and `check.py` and the guard files. To run a scope by hand:
 
 ```console
 uv run scripts/check.py --scope docs
+uv run scripts/check.py --scope store_text
 ```
 
-Every test run also checks the declaration. A test that reads a `docs` path without `@pytest.mark.docs`, or that
-reads anything under `openspec/`, fails and is named. The rules are maintained in `troupe-run/infrastructure`, and
+Every test run also checks the declaration. A test that reads a scope's path without that scope's tag, or that reads
+anything under `openspec/`, fails and is named. A full run also fails when a scope's `tests` aren't exactly the suites
+that reach its package; `uv run scripts/check_paths_reach.py` prints the lists to declare. The rules are maintained in `troupe-run/infrastructure`, and
 [development-workflow.md](https://github.com/troupe-run/infrastructure/blob/main/docs/development-workflow.md) lists every rule and how an override works.
 
 | Where | What |

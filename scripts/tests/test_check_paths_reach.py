@@ -5,13 +5,29 @@ workspace with two packages, `alpha` and `beta`, and a core, `troupe`; the last 
 analysis on the real tree."""
 
 import textwrap
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 from conftest import REPO
 
 import check_paths_reach
+import guard
 from check_paths_reach import ReachError, Workspace, disagreements, expected_tests, reach
+
+DECLARATION = guard.check_paths((REPO / guard.CHECK_PATHS).read_text(encoding="utf-8"))
+READS_EVERY_PACKAGE = [
+    getattr(pytest.mark, name) for name, _ in DECLARATION.scopes if name != "docs"
+]
+"""The tests that run the analysis on the real tree read every package's sources and tests, and a
+change to any package can change its reach, so they carry every package scope's tag (design D4).
+Built from the declaration, so a new scope needs no edit here."""
+
+
+def reads_every_package[F: Callable[..., object]](test: F) -> F:
+    for mark in READS_EVERY_PACKAGE:
+        test = mark(test)
+    return test
 
 
 class Tree:
@@ -215,6 +231,7 @@ def test_an_unreadable_group_is_an_error_naming_the_file_and_line(tree: Tree) ->
         tree.reach(SUITE)
 
 
+@reads_every_package
 def test_the_real_trees_loaders_are_the_five_core_groups() -> None:
     analysis = check_paths_reach._Analysis(check_paths_reach.load_workspace(REPO))
     found = {group for file in analysis.names for group in analysis.groups(file)}
@@ -403,6 +420,7 @@ def test_scopes_the_analysis_doesnt_cover_and_scopes_not_declared_are_left_alone
 # The real tree.
 
 
+@reads_every_package
 def test_on_the_real_tree_every_suite_reaches_its_own_package() -> None:
     workspace = check_paths_reach.load_workspace(REPO)
     reached = reach(workspace)
@@ -411,3 +429,12 @@ def test_on_the_real_tree_every_suite_reaches_its_own_package() -> None:
         if package.scope is not None and suite in reached:
             assert package.scope in reached[suite], suite
     assert "scripts" in reached["scripts/tests"]
+
+
+@reads_every_package
+def test_every_declared_scopes_tests_are_the_suites_that_reach_it() -> None:
+    tests = dict(DECLARATION.tests)
+    declared = {name: tests.get(name) for name, _ in DECLARATION.scopes}
+    expected = expected_tests(check_paths_reach.load_workspace(REPO))
+    problems = disagreements(declared, expected)
+    assert not problems, "\n".join(problems)

@@ -13,3 +13,132 @@ paths = ["openspec/**"]
 # them through a subprocess must be tagged by hand.
 [scopes.docs]
 paths = ["docs/**", "plugins/runner-scripted/README.md"]
+
+# One scope per package outside core (spec: quality-check; package-check-scopes design D1). Each covers its package's
+# files except pyproject.toml, which holds the dependencies and entry points, so changing it runs the full check, as
+# does core (packages/troupe) and any file a scope doesn't list. `tests` names every suite that reaches the package,
+# and guard_pytest tags the tests there with the scope. scripts/check_paths_reach.py works the reach out from the
+# source, and scripts/tests/test_check_paths_reach.py fails a full run when a `tests` list disagrees with it: run
+# `uv run scripts/check_paths_reach.py` for the lists to declare.
+
+# Reached by core's artifacts loader.
+[scopes.artifacts_local]
+paths = [
+    "packages/troupe-artifacts-local/src/**",
+    "packages/troupe-artifacts-local/tests/**",
+    "packages/troupe-artifacts-local/README.md",
+    "packages/troupe-artifacts-local/LICENSE",
+]
+tests = ["packages/troupe/tests/**", "packages/troupe-artifacts-local/tests/**"]
+
+# Reached by core's identity loader, which the store-text and stage-local suites use.
+[scopes.identity_local]
+paths = [
+    "packages/troupe-identity-local/src/**",
+    "packages/troupe-identity-local/tests/**",
+    "packages/troupe-identity-local/README.md",
+    "packages/troupe-identity-local/LICENSE",
+]
+tests = [
+    "packages/troupe/tests/**",
+    "packages/troupe-identity-local/tests/**",
+    "packages/troupe-stage-local/tests/**",
+    "packages/troupe-store-text/tests/**",
+]
+
+# Reached by core's stages loader.
+[scopes.stage_local]
+paths = [
+    "packages/troupe-stage-local/src/**",
+    "packages/troupe-stage-local/tests/**",
+    "packages/troupe-stage-local/README.md",
+    "packages/troupe-stage-local/LICENSE",
+]
+tests = ["packages/troupe/tests/**", "packages/troupe-stage-local/tests/**"]
+
+# Reached by core's store loader, which the stage-local suite uses, and named by the flake campaign's selection.
+[scopes.store_text]
+paths = [
+    "packages/troupe-store-text/src/**",
+    "packages/troupe-store-text/tests/**",
+    "packages/troupe-store-text/README.md",
+    "packages/troupe-store-text/LICENSE",
+]
+tests = [
+    "packages/troupe/tests/**",
+    "packages/troupe-stage-local/tests/**",
+    "packages/troupe-store-text/tests/**",
+    "scripts/tests/**",
+]
+
+# Reached by core's vcs loader, which loads both adapters, and named by the release configuration's tests.
+[scopes.vcs_files]
+paths = [
+    "packages/troupe-vcs-files/src/**",
+    "packages/troupe-vcs-files/tests/**",
+    "packages/troupe-vcs-files/README.md",
+    "packages/troupe-vcs-files/LICENSE",
+]
+tests = [
+    "packages/troupe/tests/**",
+    "packages/troupe-identity-local/tests/**",
+    "packages/troupe-stage-local/tests/**",
+    "packages/troupe-store-text/tests/**",
+    "packages/troupe-vcs-files/tests/**",
+    "packages/troupe-vcs-git/tests/**",
+    "scripts/tests/**",
+]
+
+# As vcs_files, and imported directly by the identity-local and store-text suites.
+[scopes.vcs_git]
+paths = [
+    "packages/troupe-vcs-git/src/**",
+    "packages/troupe-vcs-git/tests/**",
+    "packages/troupe-vcs-git/README.md",
+    "packages/troupe-vcs-git/LICENSE",
+]
+tests = [
+    "packages/troupe/tests/**",
+    "packages/troupe-identity-local/tests/**",
+    "packages/troupe-stage-local/tests/**",
+    "packages/troupe-store-text/tests/**",
+    "packages/troupe-vcs-files/tests/**",
+    "packages/troupe-vcs-git/tests/**",
+    "scripts/tests/**",
+]
+
+# Started as a subprocess by the core suite, and its schemas read through core's protocol_schemas helper. Its README
+# is in `docs` too, so a change to it runs both.
+[scopes.runner_scripted]
+paths = [
+    "plugins/runner-scripted/src/**",
+    "plugins/runner-scripted/tests/**",
+    "plugins/runner-scripted/fixtures/**",
+    "plugins/runner-scripted/schemas/**",
+    "plugins/runner-scripted/tools/**",
+    "plugins/runner-scripted/README.md",
+    "plugins/runner-scripted/LICENSE",
+]
+tests = [
+    "packages/troupe/tests/**",
+    "packages/troupe-artifacts-local/tests/**",
+    "packages/troupe-store-text/tests/**",
+    "plugins/runner-scripted/tests/**",
+    "scripts/tests/**",
+]
+
+# The repository's own scripts, one by one, so check.py, guard.py, guard_pytest.py and this file run the full check,
+# and so does a new script until it's listed here.
+[scopes.scripts]
+paths = [
+    "scripts/benchmark_event_store.py",
+    "scripts/check_paths_reach.py",
+    "scripts/flake_campaign.py",
+    "scripts/flake_hunt.Dockerfile",
+    "scripts/flake_hunt.py",
+    "scripts/on.py",
+    "scripts/python_versions.py",
+    "scripts/release_config.py",
+    "scripts/tests/**",
+]
+tests = ["scripts/tests/**"]

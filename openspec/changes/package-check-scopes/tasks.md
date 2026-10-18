@@ -24,31 +24,31 @@
 
 ## 2. The `tests` key (troupe-run/infrastructure#86)
 
-- [ ] 2.1 Confirm #86 is merged and delivered to troupe (a `chore(guard): deliver` commit on `main`), and rebase this
+- [x] 2.1 Confirm #86 is merged and delivered to troupe (a `chore(guard): deliver` commit on `main`), and rebase this
   branch onto it. Verify: `guard.check_paths` accepts a `tests` key and `guard_pytest` applies it, by reading the
   delivered files and the archived infrastructure design.
-- [ ] 2.2 If #86's final shape differs from design D2 (entry form, version, how an unmatched entry is reported),
+- [x] 2.2 If #86's final shape differs from design D2 (entry form, version, how an unmatched entry is reported),
   update design.md and the spec delta before going on, and say so in the commit.
 
 ## 3. The scopes
 
-- [ ] 3.1 Add the seven package scopes and `scripts` to `scripts/check-paths.toml` (design D1), with `tests` set from
+- [x] 3.1 Add the seven package scopes and `scripts` to `scripts/check-paths.toml` (design D1), with `tests` set from
   the analysis's table and a comment on each saying what reaches it. Verify with `uv run scripts/guard.py check-scope`
   (or `guard.check_scope`) for: a stage-local file (`stage_local`), a vcs-git plus store-text pair (both), a
   `scripts/on.py` change (`scripts`), `scripts/check.py` (full), a core file (full), a package's
   `pyproject.toml` (full), a new `scripts/new.py` (full),
   `plugins/runner-scripted/README.md` (`docs` and `runner_scripted`).
-- [ ] 3.2 Make the reach test compare the real declaration and give its module the `pytestmark` built from the
+- [x] 3.2 Make the reach test compare the real declaration and give its module the `pytestmark` built from the
   declaration (design D4). Verify: it passes on the real tree; a full run shows no `guard_pytest` violations; and,
   temporarily, removing one suite from one scope's `tests` fails it with the expected message (record the output,
   then restore).
-- [ ] 3.3 Check each scope's selection: `uv run pytest -m <scope> --collect-only -q` for every scope, and confirm the
+- [x] 3.3 Check each scope's selection: `uv run pytest -m <scope> --collect-only -q` for every scope, and confirm the
   collected directories are exactly the scope's `tests` plus the reach test. Record the counts.
-- [ ] 3.4 Re-measure: one serial run with `--junitxml`, summed per suite, and each scope's test time from it. Replace
+- [x] 3.4 Re-measure: one serial run with `--junitxml`, summed per suite, and each scope's test time from it. Replace
   the projected tables in design.md with the measured ones. Ask the owner before running it if the machine is busy.
 - [ ] 3.5 Run the full check and commit the declaration (`feat(check): scope each package's tests to the suites that
   reach it`); the guard runs the full check because the declaration is staged.
-- [ ] 3.6 Update the header comment in `check-paths.toml`, and any mention of the declaration in `docs/` or the README
+- [x] 3.6 Update the header comment in `check-paths.toml`, and any mention of the declaration in `docs/` or the README
   that names only `docs` and `openspec/**` (search for `check-paths`). Verify the `docs` tests pass.
 
 ## 4. Proved on real commits
