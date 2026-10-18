@@ -35,7 +35,8 @@
 - [ ] 3.1 Add the seven package scopes and `scripts` to `scripts/check-paths.toml` (design D1), with `tests` set from
   the analysis's table and a comment on each saying what reaches it. Verify with `uv run scripts/guard.py check-scope`
   (or `guard.check_scope`) for: a stage-local file (`stage_local`), a vcs-git plus store-text pair (both), a
-  `scripts/on.py` change (`scripts`), `scripts/check.py` (full), a core file (full), a new `scripts/new.py` (full),
+  `scripts/on.py` change (`scripts`), `scripts/check.py` (full), a core file (full), a package's
+  `pyproject.toml` (full), a new `scripts/new.py` (full),
   `plugins/runner-scripted/README.md` (`docs` and `runner_scripted`).
 - [ ] 3.2 Make the reach test compare the real declaration and give its module the `pytestmark` built from the
   declaration (design D4). Verify: it passes on the real tree; a full run shows no `guard_pytest` violations; and,
