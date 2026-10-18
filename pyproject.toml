@@ -40,6 +40,7 @@ dev = [
     "types-jsonschema>=4.26",
     # The eventsourcing recorder test suite imports AESCipher at module scope (design: prior art).
     "pycryptodome>=3.23",
+    "pytest-xdist>=3.8",
 ]
 
 [tool.ruff]
