@@ -20,3 +20,18 @@ Local, macOS, one run of `uv run scripts/check.py` at 3839355: the tests gate to
 ## After
 
 Filled in from the five verification runs (task 6.2).
+
+## Local, parallel (macOS, 10 workers)
+
+- `uv run pytest -n auto --dist worksteal`, whole suite: 47 s (1,797 passed, 7 skipped).
+- `uv run scripts/check.py`, tests gate: 60 s (1,806 passed, 7 skipped), against 293 s in one process.
+
+## The docs scope (task 5.3)
+
+One run each, macOS:
+
+- `uv run scripts/check.py --scope docs`, parallel: the tests gate took 3.9 s (26 tests).
+- The same 26 tests in one process (`uv run pytest -m docs`): 0.7 s inside pytest, about 2 s from the command
+  starting.
+
+Parallel is about 2 s slower here, all of it starting the 10 workers.

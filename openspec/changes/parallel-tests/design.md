@@ -112,9 +112,13 @@ need a second, serial pytest run in `check.py`. That changes D1 and D3, so it co
 code depends on it. It's not planned.
 
 - **Hypothesis's example database:** in CI the `ci` profile has none. Locally, workers share `.hypothesis/`.
-  Hypothesis's directory database keeps each example in its own file under a key directory and is meant for concurrent
-  use (a task confirms this in hypothesis's documentation). A failure saved by one worker replays in whichever worker
-  next runs that test, which is the behaviour we want. The memory rule stands: a saved failure is fixed, never cleared.
+  Hypothesis's documentation doesn't say whether its directory database is safe for several processes, so this
+  rests on two facts. First, xdist runs each test in exactly one worker per run, so no two workers read or write the
+  same test's key directory. The only key they share is the database's index of keys. Second, the source (hypothesis
+  6.168, `DirectoryBasedExampleDatabase`) makes each example its own file, written to a temporary file and renamed
+  into place, so no reader sees a half-written example. `fetch` and `delete` ignore a file or directory that vanishes
+  underneath them, so the shared index tolerates concurrent saves and deletes. A failure saved by one worker replays
+  in whichever worker next runs that test, which is the behaviour we want. The memory rule stands: a saved failure is fixed, never cleared.
 
 ### D7: The evidence is the check step's time per platform, from GitHub's job API
 
