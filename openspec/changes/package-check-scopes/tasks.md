@@ -53,8 +53,11 @@
 
 ## 4. Proved on real commits
 
-- [ ] 4.1 A commit staging only `scripts/` files (not the four full-check files), such as a docstring fix found in 1.x,
+- [x] 4.1 A commit staging only `scripts/` files (not the four full-check files), such as a docstring fix found in 1.x,
   shows the guard running `--scope scripts` and only the scripts suite. Record the guard's line and the test count.
+  Done in `cae693a` (a real docstring fix in `scripts/tests/test_check_paths_reach.py`): `guard: only scripts/tests/**
+  is staged; running scripts/check.py --scope scripts instead of the full check`. Every gate ran; the tests were
+  173 passed and 2 skipped, the 175-test scripts suite only, in 21 s (the full suite takes about 50 s in parallel).
 - [ ] 4.2 A commit staging only one leaf package's files shows the guard running that package's scope and the suites
   the table names. Record the guard's line and the collected suites. If no real change to a leaf package is due, ask
   the owner which change to use rather than making one up.
