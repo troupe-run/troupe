@@ -4,8 +4,9 @@
 
 See proposal.md, Why. The generated files come from the OpenSpec CLI's Claude Code integration. `openspec update`
 rewrites every file it owns for the tools configured in the project. Here that is Claude Code only, with the six
-default workflows. The CLI installed locally is Homebrew's 1.14.2 (`/opt/homebrew/Cellar/openspec/1.14.2`), and
-Homebrew doesn't have 1.14.3 yet. npm does (`@fission-ai/openspec@1.14.3`, published 2026-10-17).
+default workflows. When the files were regenerated, the CLI installed locally was Homebrew's 1.14.2 and Homebrew
+didn't have 1.14.3 yet. npm did (`@fission-ai/openspec@1.14.3`, published 2026-10-17). The owner then upgraded
+Homebrew's to 1.14.3 the same day.
 
 ## Goals / Non-Goals
 
@@ -18,8 +19,7 @@ Homebrew doesn't have 1.14.3 yet. npm does (`@fission-ai/openspec@1.14.3`, publi
   offers. That is a profile change, not a version bump.
 - Skipping `.claude/**` in `scripts/check-paths.toml`. It would save the full check on future regenerations, but
   it's a separate decision about the declaration (spec: quality-check).
-- Changing how OpenSpec is installed on the machine. Homebrew's 1.14.2 stays until Homebrew ships 1.14.3 (owner,
-  2026-10-18).
+- Changing how OpenSpec is installed on the machine. It stays Homebrew's (owner, 2026-10-18).
 
 ## Decisions
 
@@ -49,8 +49,7 @@ separate scratch repository. Any difference stops the change and is reported, no
   `git status` against the expected list. Revert any extra file and report it. None was touched.
 - [troupe runs 1.14.3's instructions while the website and infrastructure run 1.14.2's] → accepted by the owner.
   Each repository moves in its own pull request (proposal, Impact).
-- [The installed CLI (1.14.2) is older than the skills (1.14.3)] → the skills call `openspec status`,
-  `instructions` and similar commands. The only fields 1.14.3's new text reads, `changeRoot` and
-  `resolvedOutputPath`, are already in 1.14.2's JSON (seen while planning this change). The CLI itself wasn't
-  compared. Homebrew's upgrade removes the gap.
+- [The installed CLI was older than the skills (1.14.2 against 1.14.3)] → resolved. The owner upgraded Homebrew's
+  OpenSpec to 1.14.3 on 2026-10-18. `openspec update` run with it then reported every tool up to date and left the
+  repository unchanged, which confirms the npx output a second way.
 - [The full check (~4.5 min) runs for a change no gate reads] → accepted. See Non-Goals.
