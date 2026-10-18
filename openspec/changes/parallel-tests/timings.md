@@ -19,7 +19,17 @@ Local, macOS, one run of `uv run scripts/check.py` at 3839355: the tests gate to
 
 ## After
 
-Filled in from the five verification runs (task 6.2).
+The five verification runs on PR #115, all 12 jobs green in each: run 39117293215 (at 2eb1c0e), and run 39118202120
+(at 481e23a, which changes only OpenSpec files) attempts 1 to 4, the whole workflow re-run each time.
+
+| Platform | Jobs | Min | Median | Max |
+|---|---|---|---|---|
+| Ubuntu | 20 | 1.0 | 1.4 | 1.5 |
+| macOS | 20 | 1.9 | 2.3 | 2.9 |
+| Windows | 20 | 2.0 | 2.6 | 2.9 |
+
+Medians fall by a little over half on every platform: Ubuntu from 3.0 to 1.4 minutes, macOS from 5.1 to 2.3, Windows
+from 5.2 to 2.6. The worst case falls further: Windows from 8.0 to 2.9 minutes.
 
 ## Local, parallel (macOS, 10 workers)
 
