@@ -22,7 +22,7 @@
 
 ## 3. Verify and commit
 
-- [ ] 3.1 Run `uv run scripts/check.py` and verify it passes. Commit as
+- [x] 3.1 Run `uv run scripts/check.py` and verify it passes. Commit as
   `chore(openspec): regenerate the skills with OpenSpec 1.14.3, and ignore .claude/settings.local.json`, with
   `openspec validate openspec-1-14-2` passing first.
 
