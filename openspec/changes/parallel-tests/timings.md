@@ -35,3 +35,4 @@ One run each, macOS:
   starting.
 
 Parallel is about 2 s slower here, all of it starting the 10 workers.
+The owner chose to keep the scoped check parallel, for one command shape (design Risks).
