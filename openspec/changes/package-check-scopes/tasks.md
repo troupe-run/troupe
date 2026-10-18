@@ -46,7 +46,7 @@
   collected directories are exactly the scope's `tests` plus the reach test. Record the counts.
 - [x] 3.4 Re-measure: one serial run with `--junitxml`, summed per suite, and each scope's test time from it. Replace
   the projected tables in design.md with the measured ones. Ask the owner before running it if the machine is busy.
-- [ ] 3.5 Run the full check and commit the declaration (`feat(check): scope each package's tests to the suites that
+- [x] 3.5 Run the full check and commit the declaration (`feat(check): scope each package's tests to the suites that
   reach it`); the guard runs the full check because the declaration is staged.
 - [x] 3.6 Update the header comment in `check-paths.toml`, and any mention of the declaration in `docs/` or the README
   that names only `docs` and `openspec/**` (search for `check-paths`). Verify the `docs` tests pass.
