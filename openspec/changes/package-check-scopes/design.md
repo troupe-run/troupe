@@ -57,7 +57,7 @@ it also counts imports inside functions. Every suite but runner-scripted's reach
 | vcs-git, vcs-files | vcs-git, vcs-files | the vcs loader |
 | artifacts-local | artifacts-local, runner-scripted | artifacts loader; `protocol_schemas` |
 | runner-scripted | runner-scripted | self-contained |
-| scripts | scripts, runner-scripted | `test_flake_hunt` imports core's platform code only; see the static result below |
+| scripts | scripts | `test_flake_hunt` imports core's platform code only (but see the static result below) |
 
 ### Projected saving, per scope
 
@@ -70,7 +70,7 @@ Test time of the suites each scope runs, against 262.6 s for all. Gates other th
 | `stage_local` | core, stage-local | 149.7 s | 43% |
 | `store_text` | core, store-text, stage-local | 212.1 s | 19% |
 | `identity_local` | core, store-text, stage-local, identity-local | 213.6 s | 19% |
-| `runner_scripted` | core, store-text, artifacts-local, runner-scripted, scripts | 252.6 s | 4% |
+| `runner_scripted` | core, store-text, artifacts-local, runner-scripted | 215.8 s | 18% |
 | `vcs_git`, `vcs_files` | core, store-text, stage-local, identity-local, vcs-git, vcs-files | 222.0 s | 15% |
 
 Of the last 284 commits, 114 needed no check and 139 needed the full one. Under these scopes, 26 of the remaining 31
@@ -80,18 +80,40 @@ tasks re-measure on the branch and record the final tables.
 ### The static result (task 1.4)
 
 `uv run scripts/check_paths_reach.py` on this branch agrees with the projected map for every suite but one: the
-scripts suite also reaches `runner_scripted`. `scripts/tests/test_release_config.py` writes the string
-`"troupe-runner-scripted"`, which is the scripted runner's console script as well as its distribution name, and
-rule 4 counts a console-script name because a test can start it as a command. Here it's a release-configuration
-entry, so the reach is wider than real. It's kept: telling a command from a configuration value would need a guess
-about how the string is used, and the cost is one suite (37 s) on the rarest scope (1 commit in 284). The table above
-includes it.
+scripts suite also reaches `store_text`, `vcs_files`, `vcs_git` and `runner_scripted`. The causes, all in rule 4:
+- `scripts/flake_campaign.py`'s `SELECTION` names `packages/troupe-store-text/tests`, `packages/troupe-vcs-git/tests`
+  and `plugins/runner-scripted/tests`, and `test_each_selection_pattern_matches_something_in_the_repository` checks
+  each still exists in the real tree. That's real reach: a commit that only renames one of those directories must
+  run it. The runtime projection missed it because it's a glob, not an import or an `open`.
+- `scripts/tests/test_release_config.py` and `test_python_versions.py` write package paths
+  (`"packages/troupe-vcs-git"`, `"packages/troupe-vcs-files"`, `"plugins/runner-scripted/pyproject.toml"`) as
+  configuration keys and member paths, and `"troupe-runner-scripted"`, the runner's console script. These are wider
+  than real: the tests read only the release configuration, the lock file and `pyproject.toml`. They're kept, because
+  how a string is used can't be told from the source, and guessing is how the analysis would start missing things.
 
-Two narrowings came out of the first run on the real tree, both in rule 4. Counting a bare distribution name, a bare
-directory name (for most packages it's the same string) or a quoted `packages/<name>` key put the scripts suite in
-the `store_text`, `vcs_files` and `vcs_git` scopes as well. `test_release_config.py` names packages that way, but
-it reads only the release configuration, the lock file and `pyproject.toml`, none of which is in a package scope.
-Directory names still count in path expressions, which is how the fixtures and schema reads name them.
+The first run on the real tree used a narrower rule 4, which ignored a path written as one string and counted only
+paths built in code. It put the scripts suite in no package scope. It was dropped before the scopes depended on it:
+it missed the `SELECTION` reach above, which nothing else would have caught (a review note pointed at the risk). The
+tests now show both sides: a one-string path naming a package reaches it, and one that stops at the root
+(`"packages/"`) or names no package (`"packages/gone"`) reaches nothing.
+
+So the scripts suite runs with `store_text`, `vcs_files`, `vcs_git` and `runner_scripted`, and the saving for those
+scopes nearly vanishes:
+
+| Scope | Suites it runs | Test time | Saved |
+|---|---|---:|---:|
+| `scripts` | scripts | 36.8 s | 86% |
+| `artifacts_local` | core, artifacts-local | 150.5 s | 43% |
+| `stage_local` | core, stage-local | 149.7 s | 43% |
+| `identity_local` | core, store-text, stage-local, identity-local | 213.6 s | 19% |
+| `store_text` | core, store-text, stage-local, scripts | 248.9 s | 5% |
+| `runner_scripted` | core, store-text, artifacts-local, runner-scripted | 215.8 s | 18% |
+| `vcs_git`, `vcs_files` | core, store-text, stage-local, identity-local, vcs-git, vcs-files, scripts | 258.8 s | 1% |
+
+Getting it back is a change to the scripts tests, not to the analysis: the checks that look at the real tree's
+package paths (the campaign selection, the release configuration on real files) could move to a module of their
+own, outside `scripts/tests`, so that only it joins those scopes. That's out of this change's scope and is offered to
+the owner as a follow-up.
 
 ## Goals / Non-Goals
 
@@ -168,12 +190,14 @@ The analysis, using `ast` only:
    group as a parameter). A call with none of those fails the analysis, naming the file and line, so a new loader
    can't go unseen.
 4. **Named reach:** test-side code (outside every `src/`) reaches a package it names. A string equal to the
-   package's top-level module (`troupe_runner_scripted`, for `-m`) or one of its console scripts counts anywhere. A
-   path expression (`/`, `Path()`, `join()`) that goes into a workspace root counts too: if it names a package
-   right after the root (`/ "plugins" / "runner-scripted" / "fixtures"`) it reaches that package, and if it stops
-   there or globs (`ROOT / "plugins"`) it reaches every package under the root. Bare directory and distribution
-   names don't count, nor do quoted `packages/<name>` keys: they name a package in configuration, which is outside
-   its scope. This finds the subprocess and fixture reach without a hand list.
+   package's top-level module (`troupe_runner_scripted`, for `-m`) or one of its console scripts counts anywhere. So
+   does a path into a workspace root that names the package right after the root, whether built in code
+   (`/ "plugins" / "runner-scripted" / "fixtures"`) or written as one string (`"packages/troupe-vcs-git/tests"`,
+   even as a configuration key). A path that globs after the root reaches every package there, and so does a path
+   expression that stops at the root (`ROOT / "plugins"`, globbed in another call). Bare words don't count: not
+   `"packages"` alone, nor a bare directory or distribution name. A single string that stops at the root
+   (`"packages/"`, a prefix) or names no package (`"packages/gone"`) reaches nothing. This finds the subprocess,
+   fixture and selection reach without a hand list.
 5. **Scripts:** a module under `scripts/` that a suite imports, or the `scripts/` directory itself, reaches the
    `scripts` scope, except the four full-check files.
 
@@ -211,8 +235,10 @@ the evidence: one staging only a script runs `--scope scripts`, one staging only
 
 - [The analysis under-approximates in a way nobody notices] → Rules 2–4 err wide, unclassifiable code counts as
   reaching everything, a new loader fails the analysis, and `guard_pytest` still catches first reads. Remaining gap:
-  a subprocess started by a command built at run time from non-literal parts. None exists today; the test module's
-  docstring says so.
+  a path or command built at run time from non-literal parts, such as a variable holding `"plugins"`, or a directory
+  listed from data. The one case of the second today is `python_versions.py` and `release_config.py` reading every
+  workspace member's `pyproject.toml`, which is in no scope, so it needs nothing. The module's docstring names the
+  gap. "Proved by a test" means proved against these rules, not against every way code can reach a file.
 - [Static reach is wider than runtime reach] → It may tag a suite that never uses a package, costing time, not
   safety. The tasks compare the static map with the projected one above and record any difference.
 - [Order-dependent read violations] → `guard_pytest` attributes a first import to whichever test triggers it. With

@@ -96,8 +96,7 @@ SHALL be in no scope. A file added under `scripts/` SHALL be in no scope until i
 Each package and `scripts` scope SHALL name the test suites it runs, and a scoped check SHALL run every test in those
 suites. A suite reaches a package when its tests or the helpers they use import the package, directly or through
 other packages' imports and dependencies; when they use core code that loads an entry-point group the package
-registers in; or when they name the package's directory, module or command, as a file they read or a process they
-start.
+registers in; or when they name the package's module or command, or a path into its directory, written in the code.
 
 #### Scenario: The core suite reaches every adapter
 - **WHEN** a scoped check runs for any package scope

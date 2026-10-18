@@ -17,19 +17,23 @@ already imported, nor subprocesses. So the reach is computed here, statically, w
    new loader can't go unseen.
 4. Test-side code (anything outside a package's `src/`) also reaches a package it names: a string
    equal to the package's module or console-script name (a subprocess's `-m` module or command),
-   or a path expression (`/`, `Path()`, `join()`) that goes into a workspace root. A path
-   that names a package after the root (`ROOT / "plugins" / "runner-scripted"`) reaches that
-   package; one that doesn't (`ROOT / "plugins"`, then a glob) reaches every package there.
-   A bare directory or distribution name doesn't count (for most packages they're the same
-   string), nor does a quoted `packages/<name>` key: they name a package in configuration or
-   metadata, which lives outside the package's scope (`pyproject.toml`, the
-   release configuration), not its code.
+   or a path into a workspace root. A path that names a package right after the root reaches it,
+   whether it's built in code (`ROOT / "plugins" / "runner-scripted"`) or written as one string
+   (`"packages/troupe-vcs-git/tests"`, even as a configuration key: how a string is used can't be
+   told from the source, so it counts). A path that globs after the root reaches every package
+   there, and so does a path expression that stops at the root (`ROOT / "plugins"`, globbed in
+   another call). A bare word doesn't count: not `"packages"` alone (a key, in this repository),
+   nor a bare directory or distribution name (`"troupe-vcs-git"`, which names a package in
+   metadata or configuration but isn't a path to its files).
 5. A module under scripts/, other than the four files that run the full check, reaches the
    `scripts` scope.
 
 Rules 1, 3 and 4 err wide: an unneeded suite costs time, a missing one costs a missed failure.
-What this can't see is a subprocess whose command is built at run time from non-literal parts;
-none exists today. guard_pytest's read check still catches a scope's file opened untagged.
+What this can't see: a path or command built at run time from non-literal parts (a variable
+holding "plugins", a directory listed from data, such as the workspace members python_versions.py
+and release_config.py read). The members they read are each package's pyproject.toml, which is in
+no scope, so those reads need nothing here. guard_pytest's read check still catches a scope's file
+opened untagged, and a case found later is fixed here, with a test.
 
 Run it to print each suite's reach and the `tests` each scope should declare:
 
@@ -388,15 +392,28 @@ class _Analysis:
         packages = self.workspace.packages
         found = {p for p in packages if module.strings & (p.modules | p.commands)}
         for segments in module.paths:
-            for index, segment in enumerate(segments):
-                if segment not in self.workspace.roots:
-                    continue
-                after = next((s for s in segments[index + 1 :] if s != ""), None)
-                under = [p for p in packages if p.path.startswith(f"{segment}/")]
-                if after is None or _GLOB.search(after):
-                    found.update(under)
-                else:
-                    found.update(p for p in under if p.directory == after)
+            found |= self._into_root(segments, ends_everywhere=True)
+        for text in module.strings:
+            if "/" in text:
+                found |= self._into_root(_segments(text), ends_everywhere=False)
+        return found
+
+    def _into_root(self, segments: list[str | None], ends_everywhere: bool) -> set[Package]:
+        """The packages a path reaches through a workspace root: the one it names after the root,
+        or every one there when it globs. A path expression that stops at the root (`ROOT /
+        "plugins"`, then a glob in another call) reaches every one too; a single string that
+        stops there (`"packages/"`, a prefix to match) or names no package (`"packages/gone"`)
+        reaches none."""
+        found: set[Package] = set()
+        for index, segment in enumerate(segments):
+            if segment not in self.workspace.roots:
+                continue
+            after = next((s for s in segments[index + 1 :] if s != ""), None)
+            under = [p for p in self.workspace.packages if p.path.startswith(f"{segment}/")]
+            if (after is None and ends_everywhere) or (after is not None and _GLOB.search(after)):
+                found.update(under)
+            else:
+                found.update(p for p in under if p.directory == after)
         return found
 
     def reach(self, suite: str) -> frozenset[str]:

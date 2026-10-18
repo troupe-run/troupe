@@ -275,15 +275,45 @@ def test_a_glob_after_the_root_reaches_every_package_there(tree: Tree) -> None:
     assert tree.reach(SUITE) == {"alpha", "beta"}
 
 
-def test_a_package_named_only_as_a_configuration_key_or_distribution_isnt_reached(
-    tree: Tree,
-) -> None:
+def test_a_bare_root_or_distribution_name_isnt_a_path_and_reaches_nothing(tree: Tree) -> None:
     tree.package("troupe-alpha")
     tree.test(
         "scripts/tests",
         "test_config",
-        "CONFIG = {'packages/troupe-alpha': {}}\nNAME = 'troupe-alpha'\n"
-        "def test(c):\n    c['packages'].pop('packages/troupe-alpha')\n",
+        "NAME = 'troupe-alpha'\ndef test(c):\n    c['packages'].clear()\n",
+    )
+    assert tree.reach("scripts/tests") == {"scripts"}
+
+
+def test_a_path_written_as_one_string_reaches_the_package_it_names_even_as_a_key(
+    tree: Tree,
+) -> None:
+    tree.package("troupe-alpha")
+    tree.package("troupe-beta")
+    tree.test(
+        "scripts/tests",
+        "test_config",
+        "SELECTION = ('packages/troupe-alpha/tests',)\n"
+        "def test(c):\n    c['packages'].pop('packages/troupe-beta')\n",
+    )
+    assert tree.reach("scripts/tests") == {"scripts", "alpha", "beta"}
+
+
+def test_a_string_that_globs_after_the_root_reaches_every_package_there(tree: Tree) -> None:
+    tree.package("alpha", under="plugins")
+    tree.package("beta", under="plugins")
+    tree.package("gamma")
+    tree.test("scripts/tests", "test_glob", "PATTERN = 'plugins/*/schemas/*.json'\n")
+    assert tree.reach("scripts/tests") == {"scripts", "alpha", "beta"}
+
+
+@pytest.mark.parametrize("text", ["packages/", "packages/gone", "packages/gone/tests"])
+def test_a_string_that_stops_at_the_root_or_names_no_package_reaches_nothing(
+    tree: Tree, text: str
+) -> None:
+    tree.package("alpha")
+    tree.test(
+        "scripts/tests", "test_prefix", f"def f(path):\n    return path.startswith({text!r})\n"
     )
     assert tree.reach("scripts/tests") == {"scripts"}
 
