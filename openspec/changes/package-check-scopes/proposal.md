@@ -50,6 +50,6 @@ None.
   because it reads every package's sources and `pyproject.toml`.
 - `scripts/guard.py` and `scripts/guard_pytest.py` change only by delivery from troupe-run/infrastructure (#86).
 - `scripts/check.py` is unchanged; `--scope` already takes several names.
-- Interacts with the in-flight `parallel-tests` change (pytest-xdist in `check.py`): the scopes select the same tests
-  whichever lands first, and #86 asks for the `tests` key to be proved under xdist.
+- Builds on `parallel-tests` (archived 2026-10-18), which runs the tests gate across pytest-xdist workers, scoped runs
+  included. The scopes select the same tests either way, and #86 proves the `tests` key under xdist.
 - Out of scope: CI's use of `check-scope` (#101); splitting the core suite further.
