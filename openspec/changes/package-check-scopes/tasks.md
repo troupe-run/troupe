@@ -67,6 +67,19 @@
   3.3's 1,424: the core and stage-local suites and the 3 real-tree reach tests. 40 s.
 - [ ] 4.3 Open the PR (`Closes #109`) and confirm every CI job passes on Linux, macOS and Windows.
 
+## 5. The scripts tests that name package paths, apart (design D6; owner, 2026-10-18)
+
+- [x] 5.1 Teach the analysis that a nested suite's modules aren't the outer suite's, and that a suite's code includes
+  the `conftest.py` files above it. Verify with a temporary-workspace test for each, and that each fails when its
+  rule is removed. Done: 43 tests pass, and removing either rule fails one.
+- [x] 5.2 Move `test_flake_campaign.py`, `test_release_config.py` and `test_python_versions.py` to
+  `scripts/tests/workspace/`, add it to `testpaths`, and set the declaration's `tests` from the analysis. Verify:
+  the scripts suite collects 177 tests as before (115 + 62, none twice); `scripts/tests` reaches only `scripts`;
+  `pytest -m store_text --collect-only` picks the 62 workspace tests and none of the other 115. Done: as stated, and
+  `-m stage_local` is unchanged at 1,424.
+- [ ] 5.3 Record the new savings in the design, run the full check and commit. Verify the commit runs the full check
+  and passes, then that CI passes on every job of #116.
+
 ## Workflow follow-up
 
 - Archive the change on the branch before merging (`/opsx:archive`).

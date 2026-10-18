@@ -170,6 +170,24 @@ def test_import_module_with_a_computed_name_reaches_every_package(tree: Tree) ->
     assert tree.reach(SUITE) == {"alpha", "beta"}
 
 
+def test_a_nested_suites_modules_belong_to_it_and_not_to_the_suite_around_it(tree: Tree) -> None:
+    tree.package("alpha")
+    tree.test("scripts/tests", "test_plain", "def test(): pass\n")
+    tree.test("scripts/tests/workspace", "test_named", "import alpha\n")
+    reached = reach(tree.workspace())
+    assert reached["scripts/tests"] == {"scripts"}
+    assert reached["scripts/tests/workspace"] == {"scripts", "alpha"}
+
+
+def test_a_conftest_above_a_suite_counts_for_it(tree: Tree) -> None:
+    tree.package("alpha")
+    tree.write("scripts/tests/conftest.py", "import alpha\n")
+    tree.test("scripts/tests", "test_plain", "def test(): pass\n")
+    tree.test("scripts/tests/workspace", "test_inner", "def test(): pass\n")
+    reached = reach(tree.workspace())
+    assert reached["scripts/tests/workspace"] == {"scripts", "alpha"}
+
+
 # Rule 3: entry points.
 
 LOADER = """\

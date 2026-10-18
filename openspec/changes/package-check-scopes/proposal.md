@@ -6,8 +6,8 @@
 code change still runs all ~1,800 tests (263 s of test time, measured on `main` at `c0634ec`). Most suites reach only
 part of the workspace, so a commit that changes one package can run its own suite and the suites that reach it. The
 owner chose package-level granularity (2026-10-15), and #109 asks for it: the clear win is `scripts/` (37 s instead of
-263 s). Among the packages, `stage_local` and `artifacts_local` save 43% and `identity_local` 19%; the scripts suite
-names the other packages' paths, so their scopes run it and save 1–5% (design: the static result).
+263 s). Among the packages, `stage_local` and `artifacts_local` save 43–44% and the others 15–20% (design: after the
+split).
 
 ## What Changes
 
@@ -30,6 +30,8 @@ names the other packages' paths, so their scopes run it and save 1–5% (design:
   another package. It fails a full run when any scope's `tests` differs from the suites that reach it, printing the
   tables to paste. `guard_pytest`'s read check stays as a second net for file reads.
 - **Measured saving recorded in the design**, per scope, from a per-suite `--durations` run.
+- **The scripts tests that name package paths move to `scripts/tests/workspace/`**, a suite of their own, so only
+  they run with the packages they name (owner, 2026-10-18; design D6).
 
 ## Capabilities
 

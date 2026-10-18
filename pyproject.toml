@@ -132,6 +132,9 @@ testpaths = [
     "packages/troupe-vcs-git/tests",
     "plugins/runner-scripted/tests",
     "scripts/tests",
+    # The scripts' tests that name packages' paths (the flake campaign's selection, the release configuration, the
+    # members' Python bounds), apart so only they run with those packages' scopes (package-check-scopes design D6).
+    "scripts/tests/workspace",
 ]
 # Shared test helpers (theatres in real git repositories) live beside troupe's own tests.
 pythonpath = ["packages/troupe/tests", "scripts"]
