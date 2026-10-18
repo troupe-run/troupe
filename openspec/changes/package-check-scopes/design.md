@@ -121,10 +121,23 @@ hold.
 
 All: 268.4 s of test time.
 
-Getting it back is a change to the scripts tests, not to the analysis: the checks that look at the real tree's
-package paths (the campaign selection, the release configuration on real files) could move to a module of their
-own, outside `scripts/tests`, so that only it joins those scopes. That's out of this change's scope and is offered to
-the owner as a follow-up.
+### After the split (D6)
+
+The owner asked for the time back in this change (2026-10-18). The three scripts test modules that name package paths
+moved into `scripts/tests/workspace/`, a suite of their own (D6). Same run, the moved modules' time counted to the new
+suite (5.2 s; the rest of the scripts suite is 36.5 s):
+
+| Scope | Suites it runs | Test time | Saved |
+|---|---|---:|---:|
+| `scripts` | scripts, scripts-workspace | 41.7 s | 84% |
+| `stage_local` | core, stage-local | 151.3 s | 44% |
+| `artifacts_local` | core, artifacts-local | 152.0 s | 43% |
+| `identity_local` | core, store-text, stage-local, identity-local | 214.9 s | 20% |
+| `store_text` | core, store-text, stage-local, scripts-workspace | 218.6 s | 19% |
+| `runner_scripted` | core, store-text, artifacts-local, runner-scripted, scripts-workspace | 222.2 s | 17% |
+| `vcs_git`, `vcs_files` | core, store-text, stage-local, identity-local, vcs-git, vcs-files, scripts-workspace | 228.9 s | 15% |
+
+Package scopes without the scripts suite also run the 3 real-tree reach tests (D4), about 0.6 s, included above.
 
 ## Goals / Non-Goals
 
@@ -241,6 +254,27 @@ package can change its reach, so they run with every package scope. Each carries
 except `docs`, built from the declaration, so a new scope needs no edit there. The module's other tests build their
 own temporary workspaces, read nothing in the packages, and run only with `scripts`, through the directory tag. (The
 first draft tagged the whole module, which would have run ~40 unrelated tests in every package scope.)
+
+### D6. The scripts tests that name package paths are a suite of their own
+
+`test_flake_campaign.py`, `test_release_config.py` and `test_python_versions.py` moved from `scripts/tests/` to
+`scripts/tests/workspace/`, listed in `testpaths` after `scripts/tests`. They're the only scripts tests whose code
+(or, for the campaign, the module it imports) names a package's path, so only they run with `store_text`,
+`vcs_files`, `vcs_git` and `runner_scripted`. The rest of the scripts suite (36.5 s, `test_flake_hunt` most of it)
+runs only with `scripts`.
+
+A nested `testpaths` entry: pytest collects each test once (checked serially and under xdist), and the moved tests
+keep using `scripts/tests/conftest.py`, which pytest loads for the directory below it. The analysis learned two
+things for it, each with a test: a suite's own modules leave out those of a suite nested inside it, and a suite's
+code includes the `conftest.py` files above it. The `scripts` scope's `tests` lists both suites, as equality with the
+analysis requires; `scripts/tests/**` already covers the nested one.
+
+*Alternatives:*
+- **A sibling directory (`scripts/workspace_tests/`).** It would need its own `conftest.py`, and mypy (which checks
+  `scripts/` recursively) refuses two modules named `conftest`; the shared helpers would have to move into a new
+  module on the path.
+- **Move `SELECTION` out of `flake_campaign.py` into data.** The analysis can't read paths from data, so that would
+  hide the reach rather than separate it.
 
 ### D5. Order of work
 

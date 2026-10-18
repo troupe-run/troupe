@@ -56,7 +56,8 @@ paths = [
 ]
 tests = ["packages/troupe/tests/**", "packages/troupe-stage-local/tests/**"]
 
-# Reached by core's store loader, which the stage-local suite uses, and named by the flake campaign's selection.
+# Reached by core's store loader, which the stage-local suite uses, and named by the flake campaign's selection
+# (scripts/tests/workspace).
 [scopes.store_text]
 paths = [
     "packages/troupe-store-text/src/**",
@@ -68,10 +69,11 @@ tests = [
     "packages/troupe/tests/**",
     "packages/troupe-stage-local/tests/**",
     "packages/troupe-store-text/tests/**",
-    "scripts/tests/**",
+    "scripts/tests/workspace/**",
 ]
 
-# Reached by core's vcs loader, which loads both adapters, and named by the release configuration's tests.
+# Reached by core's vcs loader, which loads both adapters, and named by the release configuration's tests
+# (scripts/tests/workspace).
 [scopes.vcs_files]
 paths = [
     "packages/troupe-vcs-files/src/**",
@@ -86,7 +88,7 @@ tests = [
     "packages/troupe-store-text/tests/**",
     "packages/troupe-vcs-files/tests/**",
     "packages/troupe-vcs-git/tests/**",
-    "scripts/tests/**",
+    "scripts/tests/workspace/**",
 ]
 
 # As vcs_files, and imported directly by the identity-local and store-text suites.
@@ -104,7 +106,7 @@ tests = [
     "packages/troupe-store-text/tests/**",
     "packages/troupe-vcs-files/tests/**",
     "packages/troupe-vcs-git/tests/**",
-    "scripts/tests/**",
+    "scripts/tests/workspace/**",
 ]
 
 # Started as a subprocess by the core suite, and its schemas read through core's protocol_schemas helper. Its README
@@ -124,7 +126,7 @@ tests = [
     "packages/troupe-artifacts-local/tests/**",
     "packages/troupe-store-text/tests/**",
     "plugins/runner-scripted/tests/**",
-    "scripts/tests/**",
+    "scripts/tests/workspace/**",
 ]
 
 # The repository's own scripts, one by one, so check.py, guard.py, guard_pytest.py and this file run the full check,
@@ -141,4 +143,4 @@ paths = [
     "scripts/release_config.py",
     "scripts/tests/**",
 ]
-tests = ["scripts/tests/**"]
+tests = ["scripts/tests/**", "scripts/tests/workspace/**"]

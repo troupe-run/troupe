@@ -5,8 +5,10 @@ exactly the suites that reach the package (package-check-scopes design D3). guar
 prove that: it sees a module's first import, not later ones, nor entry-point loads of modules
 already imported, nor subprocesses. So the reach is computed here, statically, with `ast`:
 
-1. A suite is a `testpaths` directory. Its code is every module in it, plus each module those
-   import, followed transitively: helpers on pytest's `pythonpath`, and workspace packages'
+1. A suite is a `testpaths` directory. Its code is every module in it, except those in a nested
+   suite (another `testpaths` directory inside it, which pytest collects once), plus the
+   `conftest.py` files above it that pytest loads for it, plus each module those import, followed
+   transitively: helpers on pytest's `pythonpath`, and workspace packages'
    sources. Every import counts, including those inside functions and `TYPE_CHECKING` blocks, and
    `importlib.import_module` with a literal name. One with a computed name reaches every package.
 2. A suite reaches each package that owns a module in its closure, and each package's workspace
@@ -338,10 +340,25 @@ class _Analysis:
                 return flat if "." not in name else None
         return self.dotted.get(self._absolute(importer, level, name))
 
+    def own_files(self, suite: str) -> list[str]:
+        """A suite's own modules: those under its directory but not under a nested suite, and the
+        conftest.py files in the directories above it, which pytest loads for its tests."""
+        nested = [s for s in self.workspace.suites if s.startswith(suite + "/")]
+        files = []
+        for found in sorted((self.root / suite).rglob("*.py")):
+            relative = found.relative_to(self.root).as_posix()
+            if not any(relative.startswith(n + "/") for n in nested):
+                files.append(relative)
+        parts = suite.split("/")
+        for depth in range(len(parts) - 1, -1, -1):
+            conftest = "/".join([*parts[:depth], "conftest.py"])
+            if (self.root / conftest).is_file():
+                files.append(conftest)
+        return files
+
     def closure(self, suite: str) -> set[str]:
         """Every workspace file a suite's modules load, its own included."""
-        directory = self.root / suite
-        pending = [f.relative_to(self.root).as_posix() for f in sorted(directory.rglob("*.py"))]
+        pending = self.own_files(suite)
         seen = set(pending)
         while pending:
             file = pending.pop()
