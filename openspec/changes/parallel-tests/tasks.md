@@ -85,10 +85,10 @@ runs a repeated or load-heavy local loop without asking the owner first. The rep
 
 ## 6. Verification on CI (spec: quality-check; design D7)
 
-- [ ] 6.1 Push the branch, open the PR (`Closes #83`), and get CI to pass on all 12 jobs five times. That means the
+- [x] 6.1 Push the branch, open the PR (`Closes #83`), and get CI to pass on all 12 jobs five times. That means the
   first run, then four re-runs of the whole workflow (`gh run rerun <id>`). Any failure is fixed per design D6, and the
   count starts again. Verify by listing the five run ids with every job green
-- [ ] 6.2 Read the "after" check-step times from the five runs with the same `gh api` query as 1.2, and add the
+- [x] 6.2 Read the "after" check-step times from the five runs with the same `gh api` query as 1.2, and add the
   before/after table per platform, with the local macOS times, to the PR description. Verify the PR shows both columns
   for Ubuntu, macOS and Windows
 
