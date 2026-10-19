@@ -33,8 +33,11 @@ Each version gets its own environment in `.venvs/`, so switching back and forth 
 in the same change. `scripts/check.py` fails if either moves without the other.
 
 `scripts/check.py` runs every gate in order, and stops at the first failure: ruff (lint and format), `mypy
---strict`, the import contracts, and the tests. CI runs the same script on all three platforms, and every job
-must pass.
+--strict`, the import contracts, and the tests. CI runs the same script on all three platforms and every
+supported Python version. A pull request runs what its changed paths need, as a commit does: nothing for a change
+only to `openspec/`, the scoped check for scoped paths, and the full check otherwise. `main` runs the full check
+after every merge. The one required check, `check`, passes when every platform's run passed, or when none was
+needed.
 
 The check runs the tests in parallel with pytest-xdist, one worker for each CPU it may use. Set
 `PYTEST_XDIST_AUTO_NUM_WORKERS` to change the count. Running pytest yourself (`uv run pytest ...`) stays in one
