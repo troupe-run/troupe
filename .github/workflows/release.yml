@@ -40,3 +40,31 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  notify-website:
+    name: notify troupe.run
+    # troupe.run's /docs is built from docs/ here, one version per release, so every push to main rebuilds it
+    # (troupe-run/website#23; website-docs-notice design D1). After release-please, so a tag this push released
+    # exists when the website builds; and even when release-please fails, since main's docs changed either way.
+    needs: release-please
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Limited to main, like release; it holds only the troupe-run-docs App's key (troupe-run/infrastructure#110).
+    environment: docs
+    # Nothing is checked out and no code from this repository runs: the token's one use is the dispatch (design D2).
+    permissions: {}
+    steps:
+      - name: Mint the troupe-run-docs App's token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.DOCS_APP_CLIENT_ID }}
+          private-key: ${{ secrets.DOCS_APP_PRIVATE_KEY }}
+          owner: troupe-run
+          repositories: website
+          permission-actions: write
+      - name: Dispatch troupe.run's deploy
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: gh workflow run deploy.yml -R troupe-run/website --ref main
