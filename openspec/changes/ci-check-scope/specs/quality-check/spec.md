@@ -3,9 +3,10 @@
 ## ADDED Requirements
 
 ### Requirement: A pull request's CI runs only what its changed paths need
-CI SHALL work out a pull request's changed paths, from its base to its head, and ask the declaration in
-`scripts/check-paths.toml` what they need, through the same decision the commit guard makes. Every leg of the test
-matrix SHALL then skip the check, run the scoped check, or run the full check, as that answer says.
+CI SHALL work out a pull request's changed paths, since the last push whose `check` passed, or from its base when no
+earlier push passed, and ask the declaration in `scripts/check-paths.toml` what they need, through the same decision
+the commit guard makes. Every leg of the test matrix SHALL then skip the check, run the scoped check, or run the full
+check, as that answer says.
 
 #### Scenario: A pull request that changes only OpenSpec artifacts
 - **WHEN** a pull request's changes are all under `openspec/`, such as a change's archive and its task ticks
@@ -25,6 +26,39 @@ matrix SHALL then skip the check, run the scoped check, or run the full check, a
   or the root `README.md`
 - **THEN** every leg runs the full check
 
+### Requirement: A push is checked against the last push that passed
+When a push adds to an open pull request and the previous head's `check`, reported by GitHub Actions, passed, CI SHALL
+work out the changed paths by comparing the previous head's tree with the new head's. Otherwise it SHALL use every
+path the pull request changes from its base.
+
+#### Scenario: An archive push after a green code push
+- **WHEN** a pull request's code changes passed `check`, and the next push only moves files under `openspec/`
+- **THEN** no leg installs the project or runs `scripts/check.py`
+- **AND** every required check passes
+
+#### Scenario: A push after a run that didn't pass
+- **WHEN** the previous head's `check` failed, was cancelled, hasn't finished or never ran, and the next push changes
+  only files under `openspec/`
+- **THEN** CI uses every path the pull request changes, and runs the check those paths need
+
+#### Scenario: A docs-only push after a green code push
+- **WHEN** a pull request's code changes passed `check`, and the next push changes only files under `docs/`
+- **THEN** every leg runs `scripts/check.py --scope docs`
+
+#### Scenario: A force push
+- **WHEN** a pull request whose head passed `check` is force-pushed with a rewritten history, and the new head's tree
+  differs from the old one only under `openspec/`
+- **THEN** no leg runs `scripts/check.py`, and every required check passes
+
+#### Scenario: The previous head is gone
+- **WHEN** the previous head can't be found in the repository
+- **THEN** CI uses every path the pull request changes
+
+#### Scenario: A check of the same name from another app
+- **WHEN** the previous head has a passing check named `check` reported by an app other than GitHub Actions, and none
+  from GitHub Actions
+- **THEN** CI uses every path the pull request changes
+
 ### Requirement: CI runs the full check when the changed paths are unknown
 When CI can't work out a pull request's changed paths, or can't get an answer from the declaration, every leg SHALL
 run the full check. A skip SHALL happen only when the changed paths are known and every one is skipped.
@@ -32,6 +66,10 @@ run the full check. A skip SHALL happen only when the changed paths are known an
 #### Scenario: The changed paths can't be worked out
 - **WHEN** the step that lists a pull request's changed paths fails, or lists none
 - **THEN** every leg runs the full check
+
+#### Scenario: A malformed input to the decision
+- **WHEN** a sha CI is given isn't a 40-character hexadecimal sha, or the event's action isn't one CI runs on
+- **THEN** the step that decides fails, naming the input and what's valid, and every leg runs the full check
 
 #### Scenario: A malformed declaration
 - **WHEN** a pull request makes `scripts/check-paths.toml` malformed

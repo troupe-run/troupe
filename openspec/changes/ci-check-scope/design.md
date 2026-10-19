@@ -20,6 +20,9 @@ See proposal.md for why. What exists today:
   throwaway repository that a matrix job skipped by its job-level `if` reports one check run under its unexpanded
   name, and that a result job with `if: always()` can stand in for the legs as the required check. This design copies
   that shape.
+- A `pull_request` event's payload carries `before`, the previous head's sha, on `synchronize`, and none on
+  `opened` and `reopened`. The workflow's concurrency group cancels a pull request's running CI when the next push
+  arrives.
 - `ruff format --check .` formats the Python blocks in Markdown. It reads 326 files under `openspec/` today (`ruff
   format --check -v .`), and a badly formatted block in `docs/a.md` fails it (checked in a scratch tree with troupe's
   `pyproject.toml`).
@@ -30,6 +33,8 @@ See proposal.md for why. What exists today:
 - Every required check reports on every pull request, whether the legs run or not.
 - An unknown answer runs everything, and so does every push to `main`.
 - One copy of the path rule: CI asks `check-scope`, and reads nothing else from the declaration.
+- A push that changes only `openspec/` skips the legs even when the pull request also changes code, once the push
+  before it passed.
 
 **Non-Goals:**
 - Changing `guard.yml`, `check-scope` or any delivered file.
@@ -38,13 +43,19 @@ See proposal.md for why. What exists today:
 
 ## Decisions
 
-### D1. A `changes` job asks `check-scope`, on pull requests only
+### D1. `changes` diffs from the last push that passed, or from the base
+
+#101's case is a push, not a pull request: #99's archive commit moved only OpenSpec files, but the pull request
+around it also changed code. A diff from the base sees that code on every push, so the archive push would still run
+the full check on all 12 legs. So `changes` diffs from the pull request's previous head when that head is proven,
+and from the base otherwise.
 
 ```yaml
 changes:
   name: what does it need?
   if: github.event_name == 'pull_request'
   runs-on: ubuntu-latest
+  permissions: { contents: read, checks: read }
   outputs:
     scope: ${{ steps.paths.outputs.scope }}
     check-args: ${{ steps.paths.outputs['check-args'] }}
@@ -52,30 +63,68 @@ changes:
     - checkout, fetch-depth: 0, ref: the pull request's head sha
     - setup-uv
     - id: paths
-      env: { BASE: <pull_request.base.sha>, HEAD: <pull_request.head.sha> }
+      env: { ACTION, BEFORE (event.before), BASE, HEAD, REPO, GH_TOKEN }
       run: |
-        git diff --name-only --no-renames "$BASE...$HEAD" > "$RUNNER_TEMP/paths"
+        CONCLUSION=""
+        if [ -n "$BEFORE" ] && git cat-file -e "$BEFORE^{commit}"; then
+          CONCLUSION=$(gh api "repos/$REPO/commits/$BEFORE/check-runs?check_name=check&app_id=15368" \
+            --jq '.check_runs[0].conclusion // ""')
+        fi
+        REVISIONS=$(python3 scripts/check_range.py "$ACTION" "$BEFORE" "$BASE" "$HEAD" "$CONCLUSION")
+        echo "diffing $REVISIONS"
+        git diff --name-only --no-renames $REVISIONS > "$RUNNER_TEMP/paths"
         uv run --no-project scripts/guard.py check-scope < "$RUNNER_TEMP/paths" >> "$GITHUB_OUTPUT"
 ```
 
-This is the entry the guard's design gave CI (commit-check-paths D6), and infrastructure's `changes` job, less its
-`guard_tests_needed.py` line. The three-dot diff is from the merge base, so commits on `main` since the branch forked
-aren't counted as the pull request's. `--no-renames` lists both sides of a rename, as the commit hook does. `bash`
-runs every step here: it's on Linux. `set -e` (the default for `run`) fails the step if `git diff` fails.
+**The decision is `scripts/check_range.py`**, standard library only, beside `check_result.py`. It takes the
+event's action, `before`, the base and head shas, and `before`'s `check` conclusion, and prints the revisions to
+diff, which split on the space (shas hold none):
 
-How each way of not knowing the paths ends:
+| Action | `before`'s `check` | Prints |
+|---|---|---|
+| `synchronize` | `success` | `<before> <head>`: the two trees, compared directly |
+| `synchronize` | anything else, or none | `<base>...<head>`: the pull request's whole diff |
+| `opened`, `reopened` | (not looked up) | `<base>...<head>` |
 
-- **`git diff` fails** (a base sha missing from the clone): the step fails, `changes` fails, and its outputs are
-  empty. The legs run with no `check-args`, which is the full check (D2).
-- **`git diff` lists nothing** (a pull request with no file changes): `check-scope` answers `full`.
+A sha that isn't 40 lowercase hex characters, or an action outside those three, is an error naming the input and
+what's valid, on stderr, with exit 1 (a malformed input is never a fall-through). The step fails, and the legs run
+the full check.
+
+**Why a passing `before` lets the push's diff decide.** `before`'s `check` passes only when its tree passed what its
+own changes needed, against a tree that was itself proven, back to a run that diffed from the base. The new head's
+tree differs from `before`'s only in the paths this diff lists, so it needs only what those paths need. That holds
+for a chain of archive and task-tick pushes (each skip is checked against a proven tree), and for a docs push after
+a green full run (`--scope docs`). A `before` whose `check` failed, was cancelled (the concurrency group cancels a
+run when the next push arrives) or hasn't finished proves nothing, and the whole diff decides.
+
+**Finding `before`'s `check`.** The check-runs API for `before`, filtered by name and by the github-actions app (id
+15368), so another app reporting a check called `check` can't stand in for it. `filter=latest`, the default, gives
+the latest run of it, so a rerun that passed counts. A failed lookup fails the step under `set -e`, `changes` fails,
+and the legs run the full check.
+
+**A force push.** The two-tree diff (`git diff <before> <head>`, not `before...head`) compares content, not history,
+so a rewritten history changes nothing: the paths that differ are the paths that differ. If `before` is gone from the
+clone (unreachable after the force push, and collected), `git cat-file -e` fails, no conclusion is looked up, and
+the whole diff decides.
+
+The three-dot diff from the base is from the merge base, so commits on `main` since the branch forked aren't
+counted as the pull request's. `--no-renames` lists both sides of a rename, as the commit hook does. `bash` runs
+every step here: it's on Linux.
+
+How each other way of not knowing the paths ends:
+
+- **`git diff` fails**: the step fails, `changes` fails, and its outputs are empty. The legs run with no
+  `check-args`, which is the full check (D2).
+- **`git diff` lists nothing** (a push that changes no file, or a pull request with none): `check-scope` answers
+  `full`.
 - **A malformed declaration**: `check-scope` exits 1, `changes` fails, and the legs run the full check. That fails at
   `guard_pytest`'s session start, naming the file. The pull request is blocked either way.
-- **A force push** changes the head sha, and the new event carries it. The base is still the pull request's base, so
-  the diff is still the whole pull request.
 
-*Alternatives:* `paths-ignore` on the workflow (a workflow that never starts reports no check, and required checks
-wait forever); deciding in each leg (12 runners, macOS and Windows among them, each starting up to do nothing, and 12
-copies of the decision); `dorny/paths-filter` or similar (a second copy of the rule, which #101 rules out).
+*Alternatives:* `before...head` (wrong after a force push: it diffs from a merge base that may be far back);
+comparing tree hashes outside `openspec/` (says only "same or not", so a docs push couldn't be scoped);
+`paths-ignore` on the workflow (a workflow that never starts reports no check, and required checks wait forever);
+deciding in each leg (12 runners, macOS and Windows among them, each starting up to do nothing, and 12 copies of the
+decision); `dorny/paths-filter` or similar (a second copy of the rule, which #101 rules out).
 
 ### D2. The legs need `changes`, skip on `none`, and run the check with its `check-args`
 
@@ -165,16 +214,25 @@ a run that includes the test.
 
 ### D6. Proving it before the merge, on a throwaway repository
 
-The done-when needs a pull request that changes only `openspec/**` and passes every required check without running
-the tests. This pull request can't show that: it changes `ci.yml`, so it runs the full check on itself. A probe branch
-in troupe would be refused by the guard (no OpenSpec change of its own), and the ruleset can't require `check` until
-D7.
+The done-when needs a push that changes only `openspec/**` to pass every required check without running the tests.
+This pull request can't show that: it changes `ci.yml`, so it runs the full check on itself. A probe branch in troupe
+would be refused by the guard (no OpenSpec change of its own), and the ruleset can't require `check` until D7.
 
-So the evidence task pushes this branch to a throwaway repository, `troupe-run/troupe-probe-ci-check-scope`, with a
-ruleset requiring `check` and `guard (workflow rules)` off, and opens three pull requests there against it:
-`openspec/`-only (legs skipped, `check` passes), `docs/`-only (12 legs run `--scope docs`), and core code (12 legs run
-the full check). The run links go in tasks.md and the pull request, and the repository is deleted after. The repo is
-created and deleted only with the owner's go-ahead, as infrastructure's probe was.
+So the evidence task pushes this branch to a throwaway repository, `troupe-run/troupe-probe-ci-check-scope`, as its
+`main`, with a ruleset requiring `check`, and runs this sequence there:
+
+| Pull request | Push | Expected |
+|---|---|---|
+| A | a core change (opens it) | the whole diff: 12 legs run the full check, `check` passes |
+| A | then only `openspec/` | `before` passed: legs skipped, `check` passes, mergeable |
+| A | then only `docs/runs.md` | `before` passed: 12 legs run `--scope docs` |
+| A | a force push: history rewritten, same code, one more `openspec/` file | the trees differ only in `openspec/`: legs skipped |
+| B | a core change that fails a test | the full check fails, `check` fails |
+| B | then only `openspec/` | `before` failed: the whole diff, so the full check runs (and fails again) |
+| C | `changes` made to fail (a malformed sha, in that probe's copy of the workflow only) | `changes` fails, the legs run the full check |
+
+The run links go in tasks.md and the pull request, and the repository is deleted after. The repo is created and
+deleted only with the owner's go-ahead, as infrastructure's probe was.
 
 ### D7. troupe's required checks change in infrastructure, after this merges
 
@@ -187,9 +245,12 @@ order matters:
    the owner approves the apply.
 
 The other order blocks every troupe pull request: the ruleset would require `check` before any run reports it.
-Between 1 and 2, a troupe pull request that changes only `openspec/` skips its legs, and the 12 required contexts
-never report, so it waits until the apply. Pull requests that change anything else run the legs and pass the old
-ruleset. The window is as long as the infrastructure review.
+Between 1 and 2, any push that skips the legs leaves the 12 required contexts unreported for its head, so the pull
+request can't merge until the apply. Since D1 skips per push, that includes the archive push that ends almost every
+pull request, not only pull requests that change nothing but `openspec/`. The window is as long as the
+infrastructure review, so infrastructure's pull request is opened, ready to merge, before this one merges, and
+merged and applied straight after. A pull request that needs to merge inside the window gets a push outside
+`openspec/` after its archive (or its CI rerun by hand once the apply lands).
 
 The issue for it is opened in troupe-run/infrastructure and added to the roadmap board when this change's pull
 request is opened. It's linked from this change's pull request.
@@ -209,16 +270,22 @@ request is opened. It's linked from this change's pull request.
   trusts.
 - [`check` is a single job that must always run] → `if: always()`, no setup beyond checkout, and it fails on any
   result it doesn't recognise.
-- [The window between the merge and the apply (D7)] → Only `openspec/`-only pull requests wait in it. Nothing merges
+- [The window between the merge and the apply (D7)] → Every pull request whose last push skips the legs waits in
+  it. Infrastructure's pull request is ready before this one merges, and lands straight after. Nothing merges
   untested.
+- [A skipped push isn't re-tested against a `main` that has moved since `before` ran] → A pull request's run tests
+  its merge with `main` as it was then. `main` doesn't require branches to be up to date, so pull request runs don't
+  guarantee this today either. D5's full run on `main` after every merge catches it.
+- [Trusting `before`'s `check`] → Only the github-actions app's `check`, and only `success`. Anything else (failed,
+  cancelled, unfinished, absent, a lookup error) takes the whole diff or the full check, never a skip.
 
 ## Migration Plan
 
 1. Prove the workflow on the throwaway repository (D6), and delete it.
-2. Merge this pull request.
+2. Open infrastructure's pull request (D7), ready to merge. Then merge this pull request.
 3. Merge infrastructure's pull request changing troupe's required checks to `check`, and the owner approves the
    apply.
-4. The next `openspec/`-only pull request in troupe shows it working in place: legs skipped, `check` green, mergeable.
+4. The next archive push in troupe shows it working in place: legs skipped, `check` green, mergeable.
 
 Rollback, in the opposite order: first put troupe's 12 contexts back in infrastructure and apply. troupe's legs
 still run under their names on every pull request that changes more than `openspec/`, so nothing blocks. Then revert

@@ -3,17 +3,18 @@
 ## Why
 
 Every pull request runs the full `scripts/check.py` on all 12 required legs (Linux, macOS and Windows, Python 3.12
-to 3.15), whatever it changes (#101). A pull request whose only changes are archive commits, task ticks or evidence
-still costs the full suite on every leg. Each of those runs is another chance for an unrelated timing flake to fail
-it, as one did on #99, in store-text on Windows 3.13. The commit guard already skips or narrows the check by path
-(#108, #111, #116). CI doesn't ask yet.
+to 3.15), whatever it changes (#101). A push that only archives a change, ticks tasks or records evidence still costs
+the full suite on every leg, and almost every pull request ends with one. Each of those runs is another chance for
+an unrelated timing flake to fail it, as one did on #99, in store-text on Windows 3.13. The commit guard already
+skips or narrows the check by path (#108, #111, #116). CI doesn't ask yet.
 
 ## What Changes
 
-- **A `changes` job** works out the pull request's changed paths (`git diff --name-only --no-renames
-  "$BASE...$HEAD"`) and pipes them to `guard.py check-scope`, which answers `scope=none|full|<a>,<b>` and
-  `check-args`. It reads troupe's `scripts/check-paths.toml`, so troupe keeps one copy of the rule, and this change
-  adds no second reader.
+- **A `changes` job** works out what each push changed, and pipes those paths to `guard.py check-scope`. When the
+  push adds to a pull request whose previous head passed `check`, it compares the previous head's tree with the new
+  one's, so an archive push after green code changes is judged on its own. Otherwise it takes every path the pull
+  request changes from its base. The answer is `scope=none|full|<a>,<b>` and `check-args`. It reads troupe's
+  `scripts/check-paths.toml`, so troupe keeps one copy of the rule, and this change adds no second reader.
 - **The 12 legs** need `changes`. They're skipped when it answers `none`. They run `check.py` with its `check-args`
   for a scoped answer, and the full check otherwise. A failed `changes` job, or one that can't work out the paths,
   gives no answer, and no answer means the full check.
@@ -56,8 +57,10 @@ None.
 
 ## Impact
 
-- `.github/workflows/ci.yml`: the `changes` job, the legs' `needs` and `if`, the scoped `check.py` call, and the
-  `check` result job.
+- `.github/workflows/ci.yml`: the `changes` job (with `checks: read`, to look up the previous head's `check`), the
+  legs' `needs` and `if`, the scoped `check.py` call, and the `check` result job.
+- A new `scripts/check_range.py` (standard library only) that decides which revisions to diff, with its tests and its
+  `scopes.scripts` entry.
 - A new `scripts/check_result.py` (standard library only, run with the runner's `python3`) that judges the legs'
   result, with its tests in `scripts/tests/`, and its entry in `scopes.scripts` in `scripts/check-paths.toml`.
 - `pyproject.toml`: ruff's `extend-exclude`. A test shows a badly formatted block under `openspec/` no longer fails
