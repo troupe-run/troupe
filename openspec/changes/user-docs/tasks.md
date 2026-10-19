@@ -35,12 +35,16 @@
 
 ## 2. The front matter check and the moved written pages (design D2; spec: user-docs)
 
-- [ ] 2.1 Add `packages/troupe/tests/test_user_docs_front_matter.py` (tagged `docs`). It checks D2's closed key set
+- [x] 2.1 Add `packages/troupe/tests/test_user_docs_front_matter.py` (tagged `docs`). It checks D2's closed key set
   and types, `planned` pages with a `purpose` and no body, and `written` pages with a body and an explicit
   `prerelease`. Duplicate YAML keys are refused, and every failure names the page and the key. Give each spec
   scenario a test against a page written to `tmp_path`: missing description, unknown key, planned page with text,
   written page without `prerelease`. Verify each fails before the check exists and passes after.
-- [ ] 2.2 Copy the written pages from `troupe-run/website` `origin/main` as they are: `programme/what-is-troupe.md`,
+  - Done 2026-10-19: the parser is a strict subset of YAML (design D2, updated), with no new dependency. Run against
+    the tree before 2.2, the real-tree test failed on `cli/README.md` and `cli/exit-codes.md` ("doesn't start with
+    front matter"), and each scenario test asserts its exact message. Both CLI pages got front matter ahead of 5.2,
+    and their H1s became their titles. `48 passed`.
+- [x] 2.2 Copy the written pages from `troupe-run/website` `origin/main` as they are: `programme/what-is-troupe.md`,
   `programme/principles.md`, `backstage/licensing.md` and `prompt-book/glossary.md`.
   - Set `prerelease: true` explicitly on what-is-troupe and principles, and leave licensing and the glossary
     `false`.
@@ -49,10 +53,14 @@
 
   Verify `diff` against `git -C ../website show origin/main:<path>` shows only those edits, and the front-matter test
   passes.
-- [ ] 2.3 Add the 21 other placeholder pages as they are on the website (`status: planned`, their `purpose`), so the
+  - Done 2026-10-19 from website `32269c7`: the diffs show only `prerelease: true` on the two programme pages and the
+    `system` row.
+- [x] 2.3 Add the 21 other placeholder pages as they are on the website (`status: planned`, their `purpose`), so the
   tree is complete before any is written. Change two things: first-theatre's purpose says "an existing project
   directory", and the guests page's title is "Guests". Verify the front-matter test passes, and that `find docs -name
   '*.md'` lists the 29 pages: 25 placeholders, plus the four written pages, which include the glossary.
+  - Done 2026-10-19: 29 pages from the website, plus `docs/cli/`'s two until 5.2 (31). first-theatre's `description`
+    also said "a repo", so it says "a project directory" too. The diffs show only these edits.
 
 ## 3. The vocabulary and link checks (design D5, D7; spec: user-docs)
 

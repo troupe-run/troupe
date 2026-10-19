@@ -70,7 +70,15 @@ with: they're history.
 
 ### D2. The front matter is the site's schema, closed
 
-The docs check reads each page's front matter with a YAML loader that refuses duplicate keys. It allows exactly
+The docs check reads each page's front matter as a strict subset of YAML (`packages/troupe/tests/userdocs.py`):
+- one `key: value` per line;
+- each value is a double-quoted string (with JSON's escapes), a single-quoted string, `true`, `false`, or a plain
+  scalar that YAML reads as the same string;
+- a key set twice, or a value YAML would read as something else (`yes`, `12`, `a: b`, `[a]`), is refused with how to
+  quote it.
+
+troupe has no YAML library, and a subset that refuses everything else means the same to the site's loader without
+adding one. It allows exactly
 `title`, `description`, `status`, `prerelease` and `purpose`, with the types and rules in the spec. That's stricter
 than the site in three ways:
 - Unknown keys fail, where Zod would strip them silently.

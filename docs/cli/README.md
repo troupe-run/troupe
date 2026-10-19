@@ -1,4 +1,9 @@
-# The `troupe` command line
+---
+title: The troupe command line
+description: How the command line works, and the commands it offers.
+status: written
+prerelease: false
+---
 
 The command line is a thin client. Every command it offers is a command or query in troupe's core, which the run
 server and UIs will also call, so nothing here behaves differently from any other surface.
