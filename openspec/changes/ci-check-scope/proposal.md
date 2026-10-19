@@ -24,7 +24,7 @@ skips or narrows the check by path (#108, #111, #116). CI doesn't ask yet.
   passed, or when they were all skipped because `changes` answered `none`. It fails on anything else.
 - **The required checks change in troupe-run/infrastructure.** `tofu/required-checks.json` lists `check` for troupe
   instead of the 12 legs. That's infrastructure's file, so it gets its own issue and pull request, merged and applied
-  after this one (design D7).
+  just before this one (design D7).
 - **`main` keeps everything.** A push to `main` runs no `changes` job, so every leg runs the full check.
 - **ruff stops reading `openspec/`.** `ruff format --check .` formats the Python blocks in Markdown, and today it
   reads every file under `openspec/`. That contradicts the skip list's comment that no gate reads them. With CI

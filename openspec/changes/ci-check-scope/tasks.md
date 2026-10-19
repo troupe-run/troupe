@@ -112,19 +112,21 @@
 
 ## 5. The required checks in infrastructure (design D7)
 
-- [ ] 5.1 Open an issue in troupe-run/infrastructure for troupe's required checks to become `check` (`--project
-  "troupe roadmap"`), saying it merges straight after this change's pull request, and why: until it's applied, every
-  push that skips the legs blocks its pull request (design D7). Open its pull request ready to merge before this one
-  merges. Verify it's on the board with `gh issue view <n> -R troupe-run/infrastructure --json projectItems`, and link
-  it from this change's pull request.
-  - Opened 2026-10-19: troupe-run/infrastructure#104, on the board as Todo (`gh issue view 104 -R
-    troupe-run/infrastructure --json projectItems`). Ticked once this change's pull request links it.
+- [x] 5.1 Open an issue in troupe-run/infrastructure for troupe's required checks to become `check` (`--project
+  "troupe roadmap"`), saying it merges and is applied straight before this change's pull request, and why: under
+  the old ruleset this pull request's own archive push skips the legs and can't merge (design D7). Verify it's on
+  the board with `gh issue view <n> -R troupe-run/infrastructure --json projectItems`, and link it from this
+  change's pull request.
+  - Opened 2026-10-19: troupe-run/infrastructure#104, linked from troupe#117. Done by troupe-run/infrastructure#106
+    (merged 2026-10-19), its card Done. `gh api repos/troupe-run/troupe/rules/branches/main` then required
+    `check` (integration 15368), `DCO` and `guard (workflow rules)`, and none of the 12 legs; #117 at `d47991d`
+    showed `mergeable: MERGEABLE`, `mergeStateStatus: CLEAN`.
 
 ## Workflow follow-up
 
 - Open this change's pull request with `Closes #101` and the probe evidence from 4.2, 4.3 and 4.3b. Its own run
   reports the 12 legs (it changes `ci.yml`) and the new `check`.
 - Archive the change on the branch before merging.
-- Before this merges, the infrastructure change from 5.1 has its own OpenSpec change and pull request, ready to
-  merge. Straight after this merges, it merges and the owner approves the apply.
+- Before this merges, the infrastructure change from 5.1 merges and the owner approves the apply (design D7). This
+  merges straight after.
 - After the apply: link on #101 the first troupe archive push whose legs were skipped.
