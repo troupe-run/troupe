@@ -262,10 +262,20 @@ A built claim with an example is checked by a docs test, as `test_cli_docs` chec
 
 ## 8. Integration
 
-- [ ] 8.1 Run `uv run scripts/check.py` and `uv run scripts/check.py --scope docs`. Verify that both pass, and that
+- [x] 8.1 Run `uv run scripts/check.py` and `uv run scripts/check.py --scope docs`. Verify that both pass, and that
   the scoped run runs exactly the `docs`-tagged tests: 1.1's, plus the new ones.
-- [ ] 8.2 Verify that a commit staging only a page under `docs/` runs `--scope docs` through the commit guard, and
+  - Done 2026-10-19 at `9815400`: both checks passed all gates. The scoped run collects 139 `docs` tests: 1.1's 26
+    (cli 5, event store 5, exit codes 1, platform 2, runners 5, runs 7, the scripted runner's README 1), plus 113 new
+    (changelog 4, front matter 46, links 26, pages 8, reference 16, vocabulary 13).
+- [x] 8.2 Verify that a commit staging only a page under `docs/` runs `--scope docs` through the commit guard, and
   that one staging only `scripts/docs_reference.py` runs the full check.
+  - Done 2026-10-19, through `scripts/guard.py check-scope`, the decision the commit guard and CI share:
+    - `docs/the-company/theatres.md` gave `scope=docs`, `check-args=--scope docs`;
+    - `contributing/runs.md` with `openspec/x.md` gave the same;
+    - `scripts/docs_reference.py` gave `scope=full`.
+
+    No commit on this branch staged only `docs/`, so `check-scope` shows the guard's answer rather than a commit does.
+    Every docs commit here also staged core tests, and ran the full check.
 
 ## Workflow follow-up
 
