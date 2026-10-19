@@ -24,4 +24,4 @@ by an agent or a person, and your process runs through them: specify, build, tes
 
 ## Where it is now
 
-troupe is pre-alpha. See [Status and roadmap](/docs/programme/status-and-roadmap/).
+troupe is pre-alpha. See [Status and roadmap](https://troupe.run/docs/programme/status-and-roadmap/).

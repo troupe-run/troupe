@@ -21,7 +21,7 @@ troupe never creates one for you; without one, a command fails with `theatre.not
 | `troupe status [<run>] [--limit <n>] [--json]` | Lists the most recent runs, newest first, or shows one run |
 | `troupe logs <run> [--follow] [--json]` | Shows a run's events in order; `--follow` waits for more until the run ends |
 
-A run is named by its full id or by its first 8 or more characters. [contributing/runs.md](../../contributing/runs.md) describes runs, their
+A run is named by its full id or by its first 8 or more characters. [contributing/runs.md](https://github.com/troupe-run/troupe/blob/main/contributing/runs.md) describes runs, their
 states and what is recorded.
 
 **`perform`'s flags are interim.** Until actors are configured, you say how to run one:
@@ -35,7 +35,7 @@ states and what is recorded.
 | `--no-effect-check` | Check nothing after the run. One of `--expect` or this is required: there's no default |
 
 The local stage runs an actor only when policy allows it (`TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE=true`; see
-[contributing/runs.md](../../contributing/runs.md#policy)).
+[contributing/runs.md](https://github.com/troupe-run/troupe/blob/main/contributing/runs.md#policy)).
 
 ```text
 troupe perform tester --runner scripted --runner-options hello.json --expect out/hello.txt
@@ -47,7 +47,7 @@ troupe status 1a2b3c4d
 troupe is already cancelling: the run is stopped within its grace period either way.
 
 **`--json`** on `status` and `logs` prints the query's result exactly in its protocol shape
-([`protocol/schemas/client/`](../../protocol/schemas/client/)). With `--follow`, each update is printed on its own line
+([`protocol/schemas/client/`](https://github.com/troupe-run/troupe/tree/main/protocol/schemas/client/)). With `--follow`, each update is printed on its own line
 first.
 
 ## Global flags
@@ -98,7 +98,7 @@ troupe: `troupe perform` needs one of --expect or --no-effect-check.
 
 Behind the text, each error is structured data with a stable `code` (for example `usage.unknown-command`), the
 problem, the fix, and an optional path and details. Its shape is defined once, in
-[`protocol/schemas/error.schema.json`](../../protocol/schemas/error.schema.json), which lists every code with what
+[`protocol/schemas/error.schema.json`](https://github.com/troupe-run/troupe/blob/main/protocol/schemas/error.schema.json), which lists every code with what
 its details hold, so other surfaces can show the same error in their own words.
 
 The exit codes are listed in [exit-codes.md](exit-codes.md).

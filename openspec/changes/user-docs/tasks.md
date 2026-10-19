@@ -64,7 +64,7 @@
 
 ## 3. The vocabulary and link checks (design D5, D7; spec: user-docs)
 
-- [ ] 3.1 Add `packages/troupe/tests/test_user_docs_vocabulary.py` (tagged `docs`), porting the website's docs rules
+- [x] 3.1 Add `packages/troupe/tests/test_user_docs_vocabulary.py` (tagged `docs`), porting the website's docs rules
   as D5 lists them. The recorded uses start with the moved pages' "project" lines, carrying the website's reasons.
   Give each spec scenario a test against `tmp_path` pages:
   - a new "project";
@@ -74,11 +74,23 @@
   - a missing glossary term.
 
   Verify that the code-font test fails against the unfixed `system` row (the website's text), and passes on 2.2's.
-- [ ] 3.2 Add `packages/troupe/tests/test_user_docs_links.py` (tagged `docs`), as D7. Test the slugger against
+  - Done 2026-10-19: `13 passed`. Against website `32269c7`'s glossary, `glossary_problems` gave "the term
+    '`system`' is in code font..." and "the glossary has no row for system". Against 2.2's glossary it gives nothing.
+- [x] 3.2 Add `packages/troupe/tests/test_user_docs_links.py` (tagged `docs`), as D7. Test the slugger against
   github-slugger's documented cases, including punctuation, code spans and repeats. Give each spec scenario a test: a
   missing page, a missing anchor, and a relative link out of `docs/`. Verify all pass on the tree as it stands.
-- [ ] 3.3 Run `uv run scripts/check.py --scope docs`. Verify that the new tests run with 1.1's, and that guard_pytest
+  - Done 2026-10-19: `26 passed`. On its first run against the tree, the check found two real problems:
+    - `docs/cli/README.md` linked `../../contributing/runs.md` and `../../protocol/...` out of `docs/`. They're now
+      GitHub URLs.
+    - `programme/what-is-troupe.md` linked the site path `/docs/programme/status-and-roadmap/`. That page stays with
+      the website and moves out of `/docs` (website#23), so a site path is now refused with a fix, and the link is
+      `https://troupe.run/docs/programme/status-and-roadmap/`. website#23 must keep that URL or redirect it: this
+      goes in the PR's list for website#23.
+
+    The slugger first dropped the underscores of `troupe_vcs_git` inside a code span, and its tests caught that.
+- [x] 3.3 Run `uv run scripts/check.py --scope docs`. Verify that the new tests run with 1.1's, and that guard_pytest
   reports no untagged read.
+  - Done 2026-10-19: all gates passed, `113 passed` (74 + 13 + 26), with no guard_pytest failure.
 
 ## 4. Placeholder issues for the undecided subjects (design D6)
 
