@@ -46,6 +46,9 @@ dev = [
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# ruff format checks the Python blocks in Markdown, and no gate may read openspec/: CI skips the check for a change
+# to it alone (scripts/check-paths.toml; ci-check-scope design D4).
+extend-exclude = ["openspec"]
 src = [
     "packages/troupe/src",
     "packages/troupe/tests",
