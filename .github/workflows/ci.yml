@@ -98,14 +98,22 @@ jobs:
           enable-cache: true
       - name: Install
         run: uv sync --locked
+      # Each OS keeps its own shell (D2): troupe's real-Ctrl-C tests fail on Windows under Git Bash.
       - name: Check (the same script as local runs)
-        # bash on Windows too: PowerShell would pass `--scope docs` as one argument.
-        shell: bash
+        if: runner.os != 'Windows'
         env:
           # `--scope <name>` words, or nothing for the full check. Scope names are [a-z][a-z0-9_]*,
           # so they split on spaces safely.
           CHECK_ARGS: ${{ needs.changes.outputs['check-args'] }}
         run: uv run scripts/check.py $CHECK_ARGS
+      - name: Check (the same script as local runs)
+        if: runner.os == 'Windows'
+        env:
+          CHECK_ARGS: ${{ needs.changes.outputs['check-args'] }}
+        # PowerShell doesn't split on spaces: split the words, and pass none for the full check.
+        run: |
+          $checkArgs = if ($env:CHECK_ARGS) { -split $env:CHECK_ARGS } else { @() }
+          uv run scripts/check.py @checkArgs
 
   check:
     name: check
