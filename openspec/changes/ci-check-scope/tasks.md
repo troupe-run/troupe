@@ -21,14 +21,14 @@
 - [x] 2.2 Add `scripts/check_result.py` to `scopes.scripts` in `scripts/check-paths.toml`. Verify `printf
   'scripts/check_result.py\nscripts/tests/test_check_result.py\n' | uv run --no-project scripts/guard.py check-scope`
   answers `scope=scripts`, and the reach check (`uv run scripts/check_paths_reach.py`) agrees with the declaration.
-- [ ] 2.3 Run `uv run scripts/check.py` and commit (`feat(ci): judge the check legs' result in one script`).
+- [x] 2.3 Run `uv run scripts/check.py` and commit (`feat(ci): judge the check legs' result in one script`).
 
-- [ ] 2.4 Write `scripts/check_range.py`, standard library only: five arguments (the action, `before`, the base,
+- [x] 2.4 Write `scripts/check_range.py`, standard library only: five arguments (the action, `before`, the base,
   the head, `before`'s `check` conclusion), printing the revisions to diff as design D1's table has them. Test each
   row in `scripts/tests/test_check_range.py`, and each refusal: a sha that isn't 40 lowercase hex characters (in each
   sha position, an empty `before` on `synchronize` included), an unknown action, a wrong number of arguments. Each
   refusal exits 1 naming the input and what's valid, and prints nothing on stdout. Verify the tests pass.
-- [ ] 2.5 Add `scripts/check_range.py` to `scopes.scripts` in `scripts/check-paths.toml`. Verify `check-scope`
+- [x] 2.5 Add `scripts/check_range.py` to `scopes.scripts` in `scripts/check-paths.toml`. Verify `check-scope`
   answers `scope=scripts` for it and its test, and the reach check agrees with the declaration.
 - [ ] 2.6 Run `uv run scripts/check.py` and commit (`feat(ci): decide which revisions a push's check diffs`).
 
