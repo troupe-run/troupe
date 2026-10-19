@@ -23,6 +23,7 @@ refers to troupe's archived workflow-guardrails change, which holds the reasonin
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import re
@@ -767,71 +768,847 @@ def commit_checks(
 
 # --- Claude Code rules -----------------------------------------------------------------------
 
-HEREDOC = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][\w-]*)\1")
-OPERATORS = ("&&", "||", ";", "|", "&", "\n")
+# Reading a shell command (spec: development-workflow, "The rules reach every command a shell line
+# runs"; read-nested-commands design D1-D4). The reader returns every simple command a Bash
+# command would run: each outer command, then the commands nested in it. An outer command keeps
+# each substitution's text in its word, so pr-closes-issue still sees a --body built by the shell.
+
+HEREDOC_OPERATOR = re.compile(r"(?<!<)<<(?!<)(-?)[ \t]*((?:[\w-]|\\[\w-]|'[^'\n]*'|\"[^\"\n]*\")+)")
+HEREDOC_MARK = "\x01"
+SPAN_MARK = "\x02"
+MARKED = re.compile(f"([{HEREDOC_MARK}{SPAN_MARK}])(\\d+)[{HEREDOC_MARK}{SPAN_MARK}]")
+OPERATORS = ("&&", "||", "|&", ";", "|", "&", "\n", "(", ")")
+ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:\[[^\]]*\])?\+?=")
+ARRAY_START = re.compile(r"(?:^|\s)[A-Za-z_][A-Za-z0-9_]*(?:\[[^\]]*\])?\+?=$")
+REDIRECTION = re.compile(r"^\d*(?:>>?|<>?|&>>?|>&|<&|>\|)(.*)$")
+RESERVED_WORDS = frozenset({"!", "{", "}", "if", "then", "elif", "else", "while", "until", "do"})
+MAX_DEPTH = 16
+COMMAND_START = re.compile(r"^\s*$|(?:^|[\s;])(?:if|while|until|then|do|else|elif|!|\{|time)\s*$")
+CASE_STATEMENT = re.compile(r"(?:^|[;&|(\n{]|\b(?:then|do|else))\s*case\s")
+
+SHELL_WRAPPERS: dict[str, tuple[frozenset[str], frozenset[str]]] = {
+    "command": (frozenset({"-p"}), frozenset()),
+    "builtin": (frozenset(), frozenset()),
+    "exec": (frozenset({"-c", "-l"}), frozenset({"-a"})),
+    "env": (
+        frozenset({"-i", "-", "--ignore-environment"}),
+        frozenset({"-u", "--unset", "-C", "--chdir"}),
+    ),
+    "nice": (frozenset(), frozenset({"-n", "--adjustment"})),
+    "nohup": (frozenset(), frozenset()),
+    "noglob": (frozenset(), frozenset()),
+    "nocorrect": (frozenset(), frozenset()),
+    # The shell's time keyword takes -p; /usr/bin/time (BSD and GNU) takes the rest.
+    "time": (
+        frozenset({"-p", "-l", "-a", "-h", "-v", "--verbose", "--portability", "--append"}),
+        frozenset({"-o", "--output", "-f", "--format"}),
+    ),
+    "timeout": (
+        frozenset({"--foreground", "--preserve-status", "-v", "--verbose"}),
+        frozenset({"-s", "--signal", "-k", "--kill-after"}),
+    ),
+}  # fmt: skip
+"""Programs that run the rest of their words as a command, as written (design D3): each maps to the
+options it accepts without a value, and those that take one. `command -v`/`-V` only print, so they
+are data. An option not listed here makes the command unreadable, so a wrong guess about a
+wrapper's options can't skip past a git or gh word. `timeout` takes a duration after its options."""
+SHELLS = frozenset({"bash", "sh", "zsh", "dash", "ksh"})
+"""Shells whose -c string, or stdin heredoc, is read as commands (design D3)."""
+DATA_PROGRAMS = frozenset(
+    {"echo", "printf", "which", "type", "whereis", "man", "grep", "egrep", "fgrep", "rg",
+     "for", "select", "case", "done", "fi", "esac"}
+)  # fmt: skip
+"""Programs that never run a word they're given, so a git or gh word among their arguments only
+names it (design D3, from the 2026-10-19 survey of agents' commands). A program earns a place here
+only if no option of it runs one of its words. `command -v` and `command -V` are data too."""
+
+
+@dataclass(frozen=True)
+class _Heredoc:
+    operator: str
+    """As it reads once quotes are removed, such as `<<EOF` or `<<-EOF`."""
+    raw: str
+    """As written, such as `<<'EOF'`."""
+    quoted: bool
+    body: str
+
+
+@dataclass
+class ShellReading:
+    """Every simple command a shell command would run, and what couldn't be read (design D1, D5)."""
+
+    commands: list[list[str]]
+    unreadable: list[str]
+
+
+class _ShellReader:
+    def __init__(self) -> None:
+        self.heredocs: list[_Heredoc] = []
+        self.spans: list[str] = []
+        self.reading = ShellReading([], [])
+
+    # Heredocs (design D4): bodies come out first, so they're never read as shell words.
+
+    def take_heredocs(self, text: str) -> str:
+        out: list[str] = []
+        lines = text.split("\n")
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            found: list[re.Match[str]] = []
+
+            def mark(match: re.Match[str], found: list[re.Match[str]] = found) -> str:
+                raw_word = match.group(2)
+                word = re.sub(r"[\\'\"]", "", raw_word)
+                if not re.fullmatch(r"[A-Za-z_][\w-]*", word):
+                    return match.group(0)
+                index = len(self.heredocs) + len(found)
+                found.append(match)
+                return f"{HEREDOC_MARK}{index}{HEREDOC_MARK}"
+
+            out.append(HEREDOC_OPERATOR.sub(mark, line))
+            i += 1
+            for match in found:
+                word = re.sub(r"[\\'\"]", "", match.group(2))
+                quoted = word != match.group(2)
+                body: list[str] = []
+                while i < len(lines) and lines[i].strip() != word:
+                    body.append(lines[i])
+                    i += 1
+                i += 1  # the delimiter line itself
+                operator = f"<<{match.group(1)}{word}"
+                self.heredocs.append(_Heredoc(operator, match.group(0), quoted, "\n".join(body)))
+        return "\n".join(out)
+
+    def _unmark(self, text: str, raw: bool) -> str:
+        def restore(match: re.Match[str]) -> str:
+            index = int(match.group(2))
+            if match.group(1) == SPAN_MARK:
+                return self.spans[index]
+            heredoc = self.heredocs[index]
+            return heredoc.raw if raw else heredoc.operator
+
+        return MARKED.sub(restore, text)
+
+    # Finding where nested text ends (design D2).
+
+    @staticmethod
+    def _backtick_end(text: str, start: int) -> int:
+        i = start
+        while i < len(text):
+            if text[i] == "\\":
+                i += 1
+            elif text[i] == "`":
+                return i + 1
+            i += 1
+        raise ValueError("an unclosed backtick")
+
+    @classmethod
+    def _closing(cls, text: str, start: int, opener: str = "(", depth: int = 1) -> int:
+        """The index just after the bracket that closes the one before `start`."""
+        closer = ")" if opener == "(" else "}"
+        quote: str | None = None
+        i = start
+        while i < len(text):
+            char = text[i]
+            if quote == "'":
+                if char == "'":
+                    quote = None
+            elif char == "\\":
+                i += 1
+            elif quote == '"':
+                if char == '"':
+                    quote = None
+                elif text.startswith("$(", i):
+                    i = cls._closing(text, i + 2) - 1
+                elif char == "`":
+                    i = cls._backtick_end(text, i + 1) - 1
+            elif char in "'\"":
+                quote = char
+            elif char == "`":
+                i = cls._backtick_end(text, i + 1) - 1
+            elif opener == "{" and text.startswith("$(", i):
+                i = cls._closing(text, i + 2) - 1
+            elif char == opener:
+                depth += 1
+            elif char == closer:
+                depth -= 1
+                if depth == 0:
+                    return i + 1
+            i += 1
+        raise ValueError(f"an unclosed {'$(...)' if opener == '(' else '${...}'}")
+
+    def _span(
+        self, text: str, i: int, quote: str | None, word: str
+    ) -> tuple[int, list[str]] | None:
+        """If a substitution or other nested text starts at `i`, its end and the commands in it."""
+        if text.startswith("$((", i):
+            end = self._closing(text, i + 3, depth=2)
+            return end, self.heredoc_substitutions(text[i + 3 : end - 2])
+        if text.startswith("$(", i):
+            end = self._closing(text, i + 2)
+            return end, [text[i + 2 : end - 1]]
+        if text.startswith("${", i):
+            end = self._closing(text, i + 2, "{")
+            return end, self.substitutions(text[i + 2 : end - 1])
+        if text[i] == "`":
+            end = self._backtick_end(text, i + 1)
+            inner = re.sub(r"\\([`\\$])", r"\1", text[i + 1 : end - 1])
+            return end, [inner]
+        if quote is not None:
+            return None
+        if text.startswith("((", i) and COMMAND_START.search(word):  # an arithmetic command
+            end = self._closing(text, i + 2, depth=2)
+            return end, self.heredoc_substitutions(text[i + 2 : end - 2])
+        if text[i] in "<>" and text.startswith("(", i + 1):
+            end = self._closing(text, i + 2)
+            return end, [text[i + 2 : end - 1]]
+        if text.startswith("=(", i) and (not word or word[-1].isspace()):  # zsh's =(...)
+            end = self._closing(text, i + 2)
+            return end, [text[i + 2 : end - 1]]
+        if text[i] == "(" and ARRAY_START.search(word):
+            end = self._closing(text, i + 1)
+            return end, self.substitutions(text[i + 1 : end - 1])
+        return None
+
+    # Splitting into simple commands (design D3's operators).
+
+    def split(self, text: str) -> list[tuple[str, list[str]]]:
+        """Each simple command's text, with nested text marked, and the commands nested in it."""
+        pieces: list[tuple[str, list[str]]] = []
+        current: list[str] = []
+        nested: list[str] = []
+        quote: str | None = None
+        i = 0
+        while i < len(text):
+            char = text[i]
+            if quote == "'":
+                current.append(char)
+                if char == "'":
+                    quote = None
+                i += 1
+                continue
+            if char == "\\" and i + 1 < len(text):
+                current.append(text[i : i + 2])
+                i += 2
+                continue
+            span = self._span(text, i, quote, "".join(current))
+            if span is not None:
+                end, inner = span
+                self.spans.append(self._unmark(text[i:end], raw=True))
+                current.append(f"{SPAN_MARK}{len(self.spans) - 1}{SPAN_MARK}")
+                nested.extend(inner)
+                i = end
+                continue
+            if quote == '"':
+                current.append(char)
+                if char == '"':
+                    quote = None
+                i += 1
+                continue
+            if char in "'\"":
+                quote = char
+                current.append(char)
+                i += 1
+                continue
+            operator = next((op for op in OPERATORS if text.startswith(op, i)), None)
+            redirects = operator == "&" and (
+                (i > 0 and text[i - 1] in "<>") or text.startswith(">", i + 1)
+            )
+            if operator is None or redirects:
+                current.append(char)
+                i += 1
+                continue
+            pieces.append(("".join(current), nested))
+            current, nested = [], []
+            i += len(operator)
+        if quote:
+            raise ValueError("unbalanced quotes")
+        pieces.append(("".join(current), nested))
+        return pieces
+
+    def words(self, piece: str) -> tuple[list[str], list[_Heredoc]]:
+        marked = shlex.split(piece, posix=True)
+        heredocs = [
+            self.heredocs[int(m.group(2))]
+            for word in marked
+            for m in MARKED.finditer(word)
+            if m.group(1) == HEREDOC_MARK
+        ]
+        return [self._unmark(word, raw=False) for word in marked], heredocs
+
+    def substitutions(self, text: str) -> list[str]:
+        """The commands substituted in text that isn't itself a command (arithmetic, ${...})."""
+        return [inner for _, nested in self.split(text) for inner in nested]
+
+    @staticmethod
+    def heredoc_substitutions(body: str) -> list[str]:
+        """The commands substituted in an unquoted heredoc's body, or in arithmetic: text where
+        quotes are literal and only $(...), backticks and ${...} hold commands."""
+        return _ShellReader._expand(body)[0]
+
+    @staticmethod
+    def _expand(body: str) -> tuple[list[str], str]:
+        """`heredoc_substitutions`, and the body as the shell passes it on: each expansion is a
+        word whose value isn't known, and the expansion's escapes are gone."""
+        found: list[str] = []
+        out: list[str] = []
+        i = 0
+        while i < len(body):
+            if body[i] == "\\" and i + 1 < len(body):
+                out.append(body[i + 1] if body[i + 1] in "`\\$" else body[i : i + 2])
+                i += 2
+                continue
+            if body.startswith("$((", i):
+                end = _ShellReader._closing(body, i + 3, depth=2)
+                found.extend(_ShellReader._expand(body[i + 3 : end - 2])[0])
+            elif body.startswith("$(", i):
+                end = _ShellReader._closing(body, i + 2)
+                found.append(body[i + 2 : end - 1])
+            elif body.startswith("${", i):
+                end = _ShellReader._closing(body, i + 2, "{")
+                found.extend(_ShellReader._expand(body[i + 2 : end - 1])[0])
+            elif body[i] == "`":
+                end = _ShellReader._backtick_end(body, i + 1)
+                found.append(re.sub(r"\\([`\\$])", r"\1", body[i + 1 : end - 1]))
+            else:
+                out.append(body[i])
+                i += 1
+                continue
+            out.append("_")
+            i = end
+        return found, "".join(out)
+
+    # Reading (design D1).
+
+    def read(self, text: str, depth: int = 0) -> None:
+        if depth > MAX_DEPTH:
+            self.reading.unreadable.append(f"commands nested more than {MAX_DEPTH} deep")
+            return
+        for piece, nested in self.split(self.take_heredocs(text)):
+            words, heredocs = self.words(piece)
+            scripts = self.command(words, heredocs, depth) if words else False
+            for heredoc in heredocs:
+                if not heredoc.quoted and not scripts:
+                    for inner in self.heredoc_substitutions(heredoc.body):
+                        self.nested(inner, depth)
+            for inner in nested:
+                self.nested(inner, depth)
+
+    def nested(self, text: str, depth: int) -> None:
+        if CASE_STATEMENT.search(text):
+            self.reading.unreadable.append("a case statement inside a substitution")
+            return
+        self.read(text, depth + 1)
+
+    def command(self, words: list[str], heredocs: list[_Heredoc], depth: int) -> bool:
+        """Emit one simple command, after what comes before its program (design D3). True if a
+        shell ran its heredocs as its script, which reads their substitutions too."""
+        assignments: list[str] = []
+        i = 0
+        while i < len(words):
+            word = words[i]
+            if ASSIGNMENT.match(word):
+                assignments.append(word)
+            elif (redirection := REDIRECTION.match(word)) is not None:
+                if not redirection.group(1):
+                    i += 1  # the operator's target is the next word
+            elif word in RESERVED_WORDS:
+                pass
+            elif word == "function":
+                i += 1  # its name
+            else:
+                name = Path(word).name.lower().removesuffix(".exe")
+                if name not in SHELL_WRAPPERS:
+                    break
+                skipped = self._wrapper_options(name, words, i + 1, assignments)
+                if skipped is None:
+                    self.reading.commands.append([*assignments, *words[i:]])
+                    return False
+                i = skipped
+                continue
+            i += 1
+        rest = words[i:]
+        if not rest:
+            return False
+        self.reading.commands.append([*assignments, *rest])
+        name = Path(rest[0]).name.lower().removesuffix(".exe")
+        if "$" in rest[0] or "`" in rest[0]:
+            self.reading.unreadable.append(f"its program is the expansion {rest[0]}")
+        elif name == "alias" and any("=" in word for word in rest[1:]):
+            self.reading.unreadable.append("it defines an alias")
+        elif name == "eval":
+            self.read(" ".join(rest[1:]), depth + 1)
+        elif name in SHELLS:
+            return self._shell(rest, heredocs, depth)
+        elif name not in ("git", "gh") and not _is_data(rest):
+            self._git_or_gh_given_to(name, rest[1:])
+        return False
+
+    def _git_or_gh_given_to(self, program: str, args: Sequence[str]) -> None:
+        """A program the guard can't follow that's given git or gh may run it (design D5)."""
+        named = next((word for word in args if _names_git_or_gh(word)), None)
+        if named is not None:
+            self.reading.unreadable.append(f"{named} is given to {program}, which may run it")
+
+    def _wrapper_options(
+        self, name: str, words: list[str], i: int, assignments: list[str]
+    ) -> int | None:
+        """The index of the wrapped command's first word, or None if the wrapper runs nothing.
+        An option the wrapper's entry doesn't list makes the command unreadable."""
+        flags, valued = SHELL_WRAPPERS[name]
+        while i < len(words):
+            if not words[i].startswith("-") or (words[i] == "-" and name != "env"):
+                break
+            option, _, _ = words[i].partition("=")
+            if words[i] == "--":
+                i += 1
+                break
+            if name == "command" and words[i] in ("-v", "-V"):
+                return None
+            if words[i] in flags:
+                i += 1
+            elif option in valued:
+                i += 1 if "=" in words[i] else 2
+            elif name == "nice" and re.fullmatch(r"-n?\d+", words[i]):
+                i += 1
+            else:
+                self.reading.unreadable.append(
+                    f"an option of {name} the guard doesn't know ({words[i]})"
+                )
+                return None
+        if name == "env":
+            while i < len(words) and ASSIGNMENT.match(words[i]):
+                assignments.append(words[i])
+                i += 1
+        if name == "timeout" and i < len(words):
+            i += 1  # the duration
+        return i
+
+    def _shell(self, words: list[str], heredocs: list[_Heredoc], depth: int) -> bool:
+        """A shell's -c string, or the heredoc it reads as its script (design D3). True if it
+        reads its heredocs as its script."""
+        # Redirections and here-strings first, each with its target when that's a separate word.
+        here_string = False
+        rest: list[str] = []
+        i = 1
+        while i < len(words):
+            word = words[i]
+            redirection = REDIRECTION.match(word)
+            if word.startswith("<<<"):
+                here_string = True
+                i += 1 if word != "<<<" else 2
+            elif redirection is not None:
+                i += 1 if redirection.group(1) else 2
+            else:
+                rest.append(word)
+                i += 1
+        command_string = stdin = False
+        i = 0
+        while i < len(rest):
+            word = rest[i]
+            if word == "--":
+                i += 1
+                break
+            if word in ("-o", "+o"):
+                i += 2
+                continue
+            if word.startswith("--"):
+                i += 1
+                continue
+            if not word.startswith(("-", "+")) or word in ("-", "+"):
+                break
+            command_string = command_string or "c" in word[1:]
+            stdin = stdin or "s" in word[1:]
+            i += 1
+        operands = rest[i:]
+        if command_string:
+            if operands:
+                self.read(operands[0], depth + 1)
+                self._git_or_gh_given_to(words[0], operands[1:])
+            return False
+        if operands and not stdin:
+            # A script file: what it runs isn't in the command (a non-goal).
+            self._git_or_gh_given_to(words[0], operands)
+            return False
+        if heredocs:
+            # An unquoted body is expanded before the shell reads it: what it substitutes runs
+            # first, and the script holds only the results, whose text isn't known.
+            for heredoc in heredocs:
+                if heredoc.quoted:
+                    self.read(heredoc.body, depth + 1)
+                    continue
+                substituted, script = self._expand(heredoc.body)
+                for inner in substituted:
+                    self.nested(inner, depth)
+                self.read(script, depth + 1)
+            return True
+        if here_string:
+            self.reading.unreadable.append(f"{words[0]} reading its commands from a here-string")
+        else:
+            self.reading.unreadable.append(f"{words[0]} reading its commands from a pipe")
+        return False
+
+
+def _names_git_or_gh(word: str) -> bool:
+    return Path(word).name.lower().removesuffix(".exe") in ("git", "gh")
+
+
+def _is_data(words: Sequence[str]) -> bool:
+    """True for a command whose words only name things (DATA_PROGRAMS, `command -v`)."""
+    name = Path(words[0]).name.lower().removesuffix(".exe")
+    return name in DATA_PROGRAMS or (name == "command" and words[1:2] in (["-v"], ["-V"]))
+
+
+# PowerShell, read with its own rules (read-nested-commands design D7). A statement runs a program
+# only when it starts with a bare word or a call operator (& or .); one that starts with a
+# variable, a string, a number or a bracket is an expression, though what it substitutes runs.
+
+POWERSHELL_OPERATORS = ("&&", "||", ";", "|", "\n")
+POWERSHELL_ASSIGNMENTS = frozenset({"=", "+=", "-=", "*=", "/=", "%=", "??="})
+POWERSHELL_EXPRESSION_START = tuple("$'\"([@0123456789-{")
+POWERSHELL_DATA_PROGRAMS = frozenset(
+    {"write-output", "echo", "write-host", "get-command", "gcm", "select-string", "sls",
+     "if", "elseif", "else", "foreach", "for", "while", "do", "until", "switch", "try", "catch",
+     "finally", "function", "filter", "param", "return", "throw", "trap"}
+)  # fmt: skip
+"""Like DATA_PROGRAMS, for PowerShell: commands and keywords that never run a word they're given.
+A keyword's conditions and blocks are read as commands of their own."""
+POWERSHELL_STRING_COMMANDS = frozenset({"invoke-expression", "iex"})
+POWERSHELL_SHELLS = frozenset({"pwsh", "powershell"})
+POWERSHELL_VALUE_OPTIONS = frozenset(
+    {"-executionpolicy", "-ex", "-ep", "-windowstyle", "-w", "-workingdirectory", "-wd",
+     "-inputformat", "-if", "-outputformat", "-of", "-o", "-configurationname", "-config",
+     "-custompipename", "-settingsfile", "-settings"}
+)  # fmt: skip
+
+
+@dataclass
+class _Token:
+    text: str
+    """With quotes and escapes removed, and nested text restored as written."""
+    raw: str
+    """As written."""
+
+
+class _PowerShellReader:
+    def __init__(self, reading: ShellReading) -> None:
+        self.reading = reading
+        self.spans: list[str] = []
+
+    @staticmethod
+    def _closing(text: str, start: int, opener: str) -> int:
+        """The index just after the bracket that closes the one before `start`."""
+        closer = {"(": ")", "{": "}"}[opener]
+        depth = 1
+        quote: str | None = None
+        i = start
+        while i < len(text):
+            char = text[i]
+            if char == "`":
+                i += 2
+                continue
+            if quote:
+                if char == quote:
+                    quote = None
+            elif char in "'\"":
+                quote = char
+            elif char == opener:
+                depth += 1
+            elif char == closer:
+                depth -= 1
+                if depth == 0:
+                    return i + 1
+            i += 1
+        raise ValueError(f"an unclosed {opener}")
+
+    @classmethod
+    def expandable(cls, text: str) -> list[str]:
+        """The commands in $(...) in text PowerShell expands: a "..." string or @"..."@."""
+        found: list[str] = []
+        i = 0
+        while i < len(text):
+            if text[i] == "`":
+                i += 2
+            elif text.startswith("$(", i):
+                end = cls._closing(text, i + 2, "(")
+                found.append(text[i + 2 : end - 1])
+                i = end
+            else:
+                i += 1
+        return found
+
+    def split(self, text: str) -> list[tuple[list[_Token], list[str]]]:
+        """Each statement's tokens, and the commands nested in it."""
+        statements: list[tuple[list[_Token], list[str]]] = []
+        tokens: list[_Token] = []
+        nested: list[str] = []
+        word: list[str] = []
+        raw: list[str] = []
+        started = False
+
+        def end_word() -> None:
+            nonlocal word, raw, started
+            if started:
+                tokens.append(_Token("".join(word), "".join(raw)))
+            word, raw, started = [], [], False
+
+        def end_statement() -> None:
+            nonlocal tokens, nested
+            end_word()
+            statements.append((tokens, nested))
+            tokens, nested = [], []
+
+        def span(end: int, start: int, inner: list[str]) -> None:
+            nonlocal started
+            self.spans.append(text[start:end])
+            word.append(text[start:end])
+            raw.append(text[start:end])
+            nested.extend(inner)
+            started = True
+
+        i = 0
+        while i < len(text):
+            char = text[i]
+            if char == "`":  # an escape, or a line continuation
+                if i + 1 < len(text) and text[i + 1] != "\n":
+                    word.append(text[i + 1])
+                    raw.append(text[i : i + 2])
+                    started = True
+                i += 2
+                continue
+            if not started and char == "#":
+                newline = text.find("\n", i)
+                i = len(text) if newline < 0 else newline
+                continue
+            if not started and text.startswith("<#", i):
+                close = text.find("#>", i + 2)
+                i = len(text) if close < 0 else close + 2
+                continue
+            here = re.match(r"@(['\"])[ \t]*\r?\n", text[i:]) if not started else None
+            if here is not None:
+                closer = "\n" + here.group(1) + "@"
+                close = text.find(closer, i)
+                if close < 0:
+                    raise ValueError("an unclosed here-string")
+                body = text[i + here.end() : close]
+                span(close + len(closer), i, self.expandable(body) if here.group(1) == '"' else [])
+                i = close + len(closer)
+                continue
+            if char == "'":
+                close = i + 1
+                while True:
+                    close = text.find("'", close)
+                    if close < 0:
+                        raise ValueError("unbalanced quotes")
+                    if text.startswith("''", close):
+                        close += 2
+                        continue
+                    break
+                word.append(text[i + 1 : close].replace("''", "'"))
+                raw.append(text[i : close + 1])
+                started = True
+                i = close + 1
+                continue
+            if char == '"':
+                j = i + 1
+                content: list[str] = []
+                while j < len(text) and text[j] != '"':
+                    if text[j] == "`" and j + 1 < len(text):
+                        content.append(text[j + 1])
+                        j += 2
+                    elif text.startswith("$(", j):
+                        end = self._closing(text, j + 2, "(")
+                        nested.append(text[j + 2 : end - 1])
+                        content.append(text[j:end])
+                        j = end
+                    else:
+                        content.append(text[j])
+                        j += 1
+                if j >= len(text):
+                    raise ValueError("unbalanced quotes")
+                word.append("".join(content))
+                raw.append(text[i : j + 1])
+                started = True
+                i = j + 1
+                continue
+            opener = next((o for o in ("$(", "@(", "@{", "(", "{") if text.startswith(o, i)), None)
+            if opener is not None:
+                end = self._closing(text, i + len(opener), opener[-1])
+                span(end, i, [text[i + len(opener) : end - 1]])
+                i = end
+                continue
+            operator = next((op for op in POWERSHELL_OPERATORS if text.startswith(op, i)), None)
+            if operator is not None:
+                end_statement()
+                i += len(operator)
+                continue
+            if char == "&" and not started:
+                # A call operator before a command, or a background job at the end.
+                end_word()
+                rest = text[i + 1 :].lstrip(" \t")
+                if not rest or rest[0] in ";\n|":
+                    end_statement()
+                else:
+                    tokens.append(_Token("&", "&"))
+                i += 1
+                continue
+            if char.isspace():
+                end_word()
+                i += 1
+                continue
+            word.append(char)
+            raw.append(char)
+            started = True
+            i += 1
+        end_statement()
+        return statements
+
+    def read(self, text: str, depth: int = 0) -> None:
+        if depth > MAX_DEPTH:
+            self.reading.unreadable.append(f"commands nested more than {MAX_DEPTH} deep")
+            return
+        for tokens, nested in self.split(text):
+            self.statement(tokens, depth)
+            for inner in nested:
+                self.read(inner, depth + 1)
+
+    def statement(self, tokens: list[_Token], depth: int) -> None:
+        while (
+            len(tokens) > 1
+            and tokens[0].raw.startswith("$")
+            and tokens[1].raw in POWERSHELL_ASSIGNMENTS
+        ):
+            tokens = tokens[2:]  # an assignment: what's on the right may be a command
+        if not tokens:
+            return
+        if tokens[0].raw in ("&", "."):
+            if len(tokens) < 2 or tokens[1].raw.startswith("{"):
+                return  # a script block, read with the nested commands
+            target = tokens[1]
+            if target.raw.startswith(("$", "(", "@")):
+                self.reading.commands.append([t.text for t in tokens[1:]])
+                self.reading.unreadable.append(f"its program is the expression {target.raw}")
+                return
+            tokens = tokens[1:]
+        elif tokens[0].raw.startswith(POWERSHELL_EXPRESSION_START):
+            return  # an expression; what it substitutes is read with the nested commands
+        words = [t.text for t in tokens]
+        self.reading.commands.append(words)
+        name = Path(words[0].replace("\\", "/")).name.lower().removesuffix(".exe")
+        args = words[1:]
+        if name in POWERSHELL_STRING_COMMANDS:
+            strings = [w for w in args if w.lower() != "-command"]
+            self.read(" ".join(strings), depth + 1)
+        elif name in POWERSHELL_SHELLS:
+            self._powershell(name, args, depth)
+        elif name == "cmd":
+            self._cmd(args, depth)
+        elif name not in ("git", "gh") and name not in POWERSHELL_DATA_PROGRAMS:
+            named = next((w for w in args if _names_git_or_gh(w.replace("\\", "/"))), None)
+            if named is not None:
+                self.reading.unreadable.append(f"{named} is given to {name}, which may run it")
+
+    def _powershell(self, name: str, args: list[str], depth: int) -> None:
+        """pwsh's or powershell's -Command or -EncodedCommand, read as PowerShell."""
+        i = 0
+        while i < len(args):
+            option = args[i].lower()
+            if option in ("-command", "-c"):
+                if args[i + 1 : i + 2] == ["-"]:
+                    break
+                self.read(" ".join(args[i + 1 :]), depth + 1)
+                return
+            if option in ("-encodedcommand", "-ec", "-e", "-enc"):
+                try:
+                    decoded = base64.b64decode(args[i + 1], validate=True).decode("utf-16-le")
+                except (IndexError, ValueError):
+                    self.reading.unreadable.append(f"{name} -EncodedCommand that doesn't decode")
+                    return
+                self.read(decoded, depth + 1)
+                return
+            if option in ("-file", "-f"):
+                return  # a script file: what it runs isn't in the command (a non-goal)
+            if option in POWERSHELL_VALUE_OPTIONS:
+                i += 2
+                continue
+            if not option.startswith("-"):
+                self.read(" ".join(args[i:]), depth + 1)  # a command with no -Command
+                return
+            i += 1
+        self.reading.unreadable.append(f"{name} reading its commands from a pipe")
+
+    def _cmd(self, args: list[str], depth: int) -> None:
+        """cmd /c or /k: the rest is a cmd command line, split on & && || | outside quotes."""
+        for i, arg in enumerate(args):
+            if arg.lower() in ("/c", "/k"):
+                line = " ".join(args[i + 1 :])
+                break
+        else:
+            return
+        pieces: list[str] = []
+        current: list[str] = []
+        quoted = False
+        j = 0
+        while j < len(line):
+            char = line[j]
+            if char == "^" and j + 1 < len(line):
+                current.append(line[j + 1])
+                j += 2
+                continue
+            if char == '"':
+                quoted = not quoted
+            elif not quoted and char in "&|":
+                pieces.append("".join(current))
+                current = []
+                j += 2 if line.startswith(char * 2, j) else 1
+                continue
+            current.append(char)
+            j += 1
+        pieces.append("".join(current))
+        for piece in pieces:
+            words = [w.replace('"', "") for w in re.findall(r'(?:[^\s"]|"[^"]*")+', piece)]
+            if words:
+                self.statement([_Token(w, w) for w in words], depth + 1)
+
+
+def read_shell(command: str, tool: str = "Bash") -> ShellReading:
+    """Every simple command `command` would run, outer ones first, read by the rules of the tool's
+    shell. Raises ValueError when the text can't be split at all (unbalanced quotes, or a
+    substitution with no end)."""
+    if tool == "PowerShell":
+        reading = ShellReading([], [])
+        _PowerShellReader(reading).read(command)
+        return reading
+    reader = _ShellReader()
+    reader.read(command)
+    return reader.reading
+
+
+def commands_run(command: str, tool: str = "Bash") -> list[list[str]]:
+    return read_shell(command, tool).commands
 
 
 def strip_heredocs(command: str) -> str:
     """Drop heredoc bodies: they are data (often commit messages), not shell words."""
-    out: list[str] = []
-    lines = command.split("\n")
-    i = 0
-    while i < len(lines):
-        line = lines[i]
-        out.append(line)
-        delimiters = [m.group(2) for m in HEREDOC.finditer(line)]
-        i += 1
-        for delimiter in delimiters:
-            while i < len(lines) and lines[i].strip() != delimiter:
-                i += 1
-            i += 1  # the delimiter line itself
-    return "\n".join(out)
+    reader = _ShellReader()
+    return reader._unmark(reader.take_heredocs(command), raw=True)
 
 
 def split_command(command: str) -> list[list[str]]:
-    """Split a shell command into its simple commands, each as a list of words.
+    """Split a shell command into its outer simple commands, each as a list of words.
 
     Raises ValueError when the text can't be parsed (for example, unbalanced quotes).
     """
-    text = strip_heredocs(command)
-    segments: list[str] = []
-    current: list[str] = []
-    quote: str | None = None
-    i = 0
-    while i < len(text):
-        char = text[i]
-        if quote:
-            current.append(char)
-            if char == "\\" and quote == '"' and i + 1 < len(text):
-                current.append(text[i + 1])
-                i += 1
-            elif char == quote:
-                quote = None
-        elif char in "'\"":
-            quote = char
-            current.append(char)
-        elif char == "\\" and i + 1 < len(text):
-            current.append(text[i : i + 2])
-            i += 1
-        else:
-            operator = next((op for op in OPERATORS if text.startswith(op, i)), None)
-            if operator is None:
-                current.append(char)
-            else:
-                segments.append("".join(current))
-                current = []
-                i += len(operator) - 1
-        i += 1
-    if quote:
-        raise ValueError("unbalanced quotes")
-    segments.append("".join(current))
-    return [words for segment in segments if (words := shlex.split(segment, posix=True))]
+    reader = _ShellReader()
+    pieces = reader.split(reader.take_heredocs(command))
+    return [words for piece, _ in pieces if (words := reader.words(piece)[0])]
 
 
 def _program(words: Sequence[str]) -> tuple[str, list[str]]:
     """The program name and its arguments, after any leading VAR=value assignments."""
     index = 0
-    while index < len(words) and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", words[index]):
+    while index < len(words) and ASSIGNMENT.match(words[index]):
         index += 1
     if index >= len(words):
         return "", []
@@ -1637,14 +2414,17 @@ def guard_tamper(words: Sequence[str]) -> Decision:
     return ALLOW
 
 
-def shell_decisions(command: str, cwd: Path) -> list[Decision]:
+def shell_decisions(command: str, cwd: Path, tool: str = "Bash") -> list[Decision]:
+    """Every rule's decision on every git and gh command a shell command would run, nested ones
+    included (read-nested-commands design D1)."""
     text = strip_heredocs(command)
     try:
-        simple_commands = split_command(command)
+        reading = read_shell(command, tool)
     except ValueError as error:
         if GUARD_DIR in text.lower() or re.search(r"guard\.py\S*\s+override\b", text.lower()):
             return [TAMPER]
-        if not re.search(r"\b(git|gh)\b", text):
+        # The whole command, heredoc bodies included: a shell may run one as its script.
+        if not re.search(r"\b(git|gh)\b", command):
             return [ALLOW]
         return [
             Decision(
@@ -1655,7 +2435,7 @@ def shell_decisions(command: str, cwd: Path) -> list[Decision]:
             )
         ]
     decisions: list[Decision] = []
-    for words in simple_commands:
+    for words in reading.commands:
         tamper = guard_tamper(words)
         if tamper.refused:
             return [tamper]
@@ -1664,6 +2444,16 @@ def shell_decisions(command: str, cwd: Path) -> list[Decision]:
             continue  # it only prints help, whatever the command would be refused for
         decisions.append(pr_closes_issue(words, cwd))
         decisions.append(gh_decision(words, cwd))
+    if reading.unreadable and re.search(r"\b(git|gh)\b", command):
+        decisions.append(
+            Decision(
+                "command-unparseable",
+                "this command runs git or gh where the guardrails can't read it "
+                f"({reading.unreadable[0]}).",
+                "Run the git or gh command on its own, as a separate Bash command, not through "
+                "another program, a variable or a pipe into a shell.",
+            )
+        )
     return decisions or [ALLOW]
 
 
@@ -2152,7 +2942,7 @@ def run_claude_pre_tool_use(payload: dict[str, object], stdout: TextIO | None = 
         action = f"{tool} {file_path}"
     elif tool in SHELL_TOOLS:
         command = str(tool_input.get("command", ""))
-        decisions = shell_decisions(command, cwd)
+        decisions = shell_decisions(command, cwd, tool)
         action = f"{tool}: {command[:200]}"
     else:
         return 0
