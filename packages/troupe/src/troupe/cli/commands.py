@@ -84,7 +84,8 @@ def _configure_perform(parser: argparse.ArgumentParser) -> None:
         "--expect",
         action="append",
         metavar="PATH",
-        help="a file the run must create or change (repeatable)",
+        help="a file the run must create or change, relative to where you are and inside the "
+        "theatre (repeatable)",
     )
     check.add_argument(
         "--no-effect-check",

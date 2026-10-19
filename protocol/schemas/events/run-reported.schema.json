@@ -19,6 +19,7 @@
       "$ref": "../event-record.schema.json#/$defs/libraryTimestamp"
     },
     "seq": {
+      "description": "The runner's number for the event, counting from 0. Each run event is recorded in seq order, and one that isn't the next is refused.",
       "type": "integer",
       "minimum": 0
     },

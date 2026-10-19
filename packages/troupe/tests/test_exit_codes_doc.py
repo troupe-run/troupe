@@ -7,7 +7,7 @@ from troupe.core.exit_codes import ExitCode
 
 pytestmark = pytest.mark.docs  # reads docs/ (scripts/check-paths.toml)
 
-DOC = Path(__file__).resolve().parents[3] / "docs" / "cli" / "exit-codes.md"
+DOC = Path(__file__).resolve().parents[3] / "docs" / "prompt-book" / "cli.md"
 ROW = re.compile(r"^\| (\d+) \| `([A-Z_]+)` \|", re.MULTILINE)
 
 
