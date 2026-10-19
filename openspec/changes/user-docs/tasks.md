@@ -2,11 +2,15 @@
 
 ## 1. The contributor docs move to `contributing/` (design D1; spec: quality-check)
 
-- [ ] 1.1 Before moving anything, run `uv run scripts/check.py --scope docs` on this branch and record which tests ran
+- [x] 1.1 Before moving anything, run `uv run scripts/check.py --scope docs` on this branch and record which tests ran
   and passed. They are the non-goal "every existing doc test still holds", and must still run and pass after the move.
-- [ ] 1.2 `git mv` `docs/runs.md`, `runners.md`, `event-store.md`, `platform.md`, `releasing.md` and `flake-hunt.md` to
+  - Done 2026-10-19 at `b8ece57`: every gate passed, `26 passed`. The 26 are `test_cli_docs` (5), `test_event_store_doc`
+    (5), `test_exit_codes_doc` (1), `test_platform_docs` (2), `test_runners_doc` (5), `test_runs_doc` (7) and the
+    scripted runner's `test_scripted_schemas::test_the_readmes_options_table_lists_exactly_the_options_schemas_properties`
+    (1).
+- [x] 1.2 `git mv` `docs/runs.md`, `runners.md`, `event-store.md`, `platform.md`, `releasing.md` and `flake-hunt.md` to
   `contributing/`. Leave `docs/cli/` for group 5. Verify `git log --follow contributing/runs.md` shows its history.
-- [ ] 1.3 Update every reference to the moved paths outside `openspec/changes/archive/`:
+- [x] 1.3 Update every reference to the moved paths outside `openspec/changes/archive/`:
   - the root and package READMEs, `plugins/README.md`, `protocol/README.md` and `errors.schema.json`'s description;
   - the comments in `troupe.core.defaults`, `errors`, `notices` and `troupe.platform.processes`;
   - the scripts and `flake_hunt.Dockerfile`, `release.yml`'s comment, and the fixtures' `provenance.json`;
@@ -14,10 +18,20 @@
 
   Verify `git grep -n -E "docs/(runs|runners|event-store|platform|releasing|flake-hunt)\.md" -- ':!openspec/changes/archive'`
   prints nothing, and every relative link in `contributing/` resolves (a one-off script, its output recorded here).
-- [ ] 1.4 Add `contributing/**` to `[scopes.docs]` in `scripts/check-paths.toml`, updating its comment. Verify that
+  - Done 2026-10-19: the grep prints only `openspec/specs/quality-check/spec.md`'s scenarios, which this change's delta
+    updates (see its "Every test run keeps the declaration true"). `docs/cli/README.md`'s two links to runs point at
+    `../../contributing/runs.md` until 5.2 folds the page. The link script over `contributing/*.md`, `docs/cli/*.md`
+    and every README printed `broken: 0`.
+- [x] 1.4 Add `contributing/**` to `[scopes.docs]` in `scripts/check-paths.toml`, updating its comment. Verify that
   `uv run scripts/guard.py check-scope` (or the command `scripts/tests/test_check_scope.py` uses) answers
   `--scope docs` for a path list holding only `contributing/runs.md`. Add that case to the declaration's tests. Then
   run the full check and record it passing.
+  - Done 2026-10-19: `test_troupes_declaration_scopes_the_user_and_contributor_docs_to_docs` (in
+    `scripts/tests/test_check_scope.py`) asks `guard.check_scope` about troupe's own declaration for
+    `contributing/runs.md`, a `docs/` page and `contributing/` with `openspec/`: `("docs",)` each time. With the old
+    declaration, `contributing/runs.md` answered `Scope(full=True, ...)`. The quality-check delta also carries
+    "Every test run keeps the declaration true" with `contributing/runs.md` in its scenarios. Full check: all gates
+    passed, `1898 passed, 7 skipped`.
 
 ## 2. The front matter check and the moved written pages (design D2; spec: user-docs)
 

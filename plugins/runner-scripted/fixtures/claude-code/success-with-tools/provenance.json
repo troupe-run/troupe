@@ -44,5 +44,5 @@
     "messaging_socket_path (a host path outside the workspace) -> '<host path>'",
     "rate_limit_info: every utilization -> 0.5, every resetsAt -> 1790000000 (the account's usage isn't published)"
   ],
-  "events": "written by hand from the native lines, following the mapping in docs/runners.md, and reviewed"
+  "events": "written by hand from the native lines, following the mapping in contributing/runners.md, and reviewed"
 }

@@ -1,4 +1,4 @@
-"""docs/runs.md describes runs, stages and policy as the code defines them."""
+"""contributing/runs.md describes runs, stages and policy as the code defines them."""
 
 import re
 from collections.abc import Iterable
@@ -16,17 +16,17 @@ from troupe.core.runs.aggregate import TOPICS
 
 pytestmark = pytest.mark.docs  # reads docs/ (scripts/check-paths.toml)
 
-DOC = Path(__file__).resolve().parents[3] / "docs" / "runs.md"
+DOC = Path(__file__).resolve().parents[3] / "contributing" / "runs.md"
 TEXT = DOC.read_text(encoding="utf-8")
 RUNNERS_DOC = (DOC.parent / "runners.md").read_text(encoding="utf-8")
 PREFIXES = {"client", "perform", "policy", "stage", "theatre"}
 """Codes only runs use. run. and runner. codes are shared with the run host, whose own are in
-docs/runners.md; every other one is documented here."""
+contributing/runners.md; every other one is documented here."""
 
 
 def _section(heading: str) -> str:
     match = re.search(rf"^## {re.escape(heading)}\n(.*?)(?=^## |\Z)", TEXT, re.M | re.S)
-    assert match is not None, f"docs/runs.md has no section {heading!r}"
+    assert match is not None, f"contributing/runs.md has no section {heading!r}"
     return match.group(1)
 
 

@@ -35,5 +35,5 @@
     "the fake API's port -> 8080",
     "every UUID (session ids, message ids) -> 00000000-0000-4000-8000-<n>, consistently"
   ],
-  "events": "written by hand from the native lines, following the mapping in docs/runners.md, and reviewed"
+  "events": "written by hand from the native lines, following the mapping in contributing/runners.md, and reviewed"
 }

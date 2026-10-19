@@ -180,3 +180,19 @@ def test_a_scoped_check_still_fails_on_a_failing_test_gate(
 ) -> None:
     assert check.run_gates([("tests", exit_code(1))], Path.cwd(), ("docs",)) == 1
     assert "check: tests failed (exit 1)" in capfd.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "paths",
+    [
+        ["contributing/runs.md"],
+        ["docs/the-company/theatres.md"],
+        ["contributing/runs.md", "openspec/x.md"],
+    ],
+    ids=["contributor-doc", "user-doc", "with-openspec"],
+)
+def test_troupes_declaration_scopes_the_user_and_contributor_docs_to_docs(paths: list[str]) -> None:
+    declaration = guard.check_paths(
+        (Path(__file__).resolve().parents[2] / guard.CHECK_PATHS).read_text(encoding="utf-8")
+    )
+    assert guard.check_scope(paths, declaration).names == ("docs",)

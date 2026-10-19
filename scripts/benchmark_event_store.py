@@ -9,7 +9,7 @@ in a new store as a new troupe process would:
 - the first read, which reads every segment and writes the local notification order;
 - a later read, which reads every segment and finds the order already written.
 
-docs/event-store.md records the result, so the file count is judged on a number.
+contributing/event-store.md records the result, so the file count is judged on a number.
 """
 
 import shutil

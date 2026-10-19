@@ -1,4 +1,4 @@
-# The flake hunt on Linux (docs/flake-hunt.md; flake-hunt design D8). Build it from the committed tree,
+# The flake hunt on Linux (contributing/flake-hunt.md; flake-hunt design D8). Build it from the committed tree,
 # so the container holds its own copy and nothing is bind-mounted from the host:
 #
 #   git archive HEAD | docker build -t troupe-hunt:3.12 --build-arg PY=3.12 -f scripts/flake_hunt.Dockerfile -

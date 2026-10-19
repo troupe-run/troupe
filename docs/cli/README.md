@@ -16,7 +16,7 @@ troupe never creates one for you; without one, a command fails with `theatre.not
 | `troupe status [<run>] [--limit <n>] [--json]` | Lists the most recent runs, newest first, or shows one run |
 | `troupe logs <run> [--follow] [--json]` | Shows a run's events in order; `--follow` waits for more until the run ends |
 
-A run is named by its full id or by its first 8 or more characters. [docs/runs.md](../runs.md) describes runs, their
+A run is named by its full id or by its first 8 or more characters. [contributing/runs.md](../../contributing/runs.md) describes runs, their
 states and what is recorded.
 
 **`perform`'s flags are interim.** Until actors are configured, you say how to run one:
@@ -30,7 +30,7 @@ states and what is recorded.
 | `--no-effect-check` | Check nothing after the run. One of `--expect` or this is required: there's no default |
 
 The local stage runs an actor only when policy allows it (`TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE=true`; see
-[docs/runs.md](../runs.md#policy)).
+[contributing/runs.md](../../contributing/runs.md#policy)).
 
 ```text
 troupe perform tester --runner scripted --runner-options hello.json --expect out/hello.txt

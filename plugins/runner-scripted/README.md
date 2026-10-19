@@ -1,6 +1,6 @@
 # troupe-runner-scripted
 
-A deterministic actor runner for troupe's tests. It speaks the [runner contract](../../docs/runners.md) over
+A deterministic actor runner for troupe's tests. It speaks the [runner contract](../../contributing/runners.md) over
 standard input and output, imports nothing from troupe, and plays a script, or replays a recording, so that tests
 can produce every run outcome on demand: offline, instantly and for free (decision
 [#16](https://github.com/troupe-run/troupe/issues/16)).
@@ -23,7 +23,7 @@ python -m troupe_runner_scripted
 ## Schemas
 
 The runner publishes its schemas in [`schemas/`](schemas/), as every runner does
-([Publishing a runner's schemas](../../docs/runners.md#publishing-a-runners-schemas)):
+([Publishing a runner's schemas](../../contributing/runners.md#publishing-a-runners-schemas)):
 
 - [`options.schema.json`](schemas/options.schema.json): the options, every step and its fields, and a recording's
   lines (`$defs/recordingLine`). An event step is checked as the contract's run event, without `runId` and with

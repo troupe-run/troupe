@@ -18,7 +18,8 @@ REPLACE_TIMEOUT_SECONDS = 10.0
 REPLACE_ANNOUNCE_AFTER_SECONDS = 1.0
 """How long a blocked replacement lasts before troupe says which file it is waiting for."""
 
-# Actor runners (spec: actor-runners; runner-contract design D8). docs/runners.md lists them.
+# Actor runners (spec: actor-runners; runner-contract design D8). contributing/runners.md lists
+# them.
 
 RUNNER_START_TIMEOUT_SECONDS = 30.0
 """How long a runner has to start and answer the handshake."""
@@ -51,14 +52,14 @@ RUNNER_ENVIRONMENT = EnvironmentPolicy()
 """What a runner receives from troupe's environment: nothing. It gets only the variables its caller
 names, plus the platform minimum (design D6)."""
 
-# Identity (spec: identity; event-store design D9). docs/event-store.md lists it.
+# Identity (spec: identity; event-store design D9). contributing/event-store.md lists it.
 
 IDENTITY_CHAIN: tuple[str, ...] = ("env", "vcs", "os-login")
 """The identity sources asked, in order, for who is acting (#9, agreed 2026-10-12): the TROUPE_ACTOR
 override, then the identity the VCS is configured with (git's user.email), then the OS login."""
 
 # The event store (spec: event-store; event-store design D10; watch-event-segments design D5).
-# docs/event-store.md lists them.
+# contributing/event-store.md lists them.
 
 SUBSCRIBE_POLL_SECONDS = 1.0
 """How often a subscription looks for events another process recorded, when the store can't be
@@ -72,7 +73,7 @@ SUBSCRIBE_STOP_TIMEOUT_SECONDS = 5.0
 """How long stopping a subscription waits for its thread to end before failing with
 events.subscription-not-stopped (stopped-event-store design D3). The thread needs milliseconds."""
 
-# Policy (spec: policy; perform-status-logs design D6). docs/runs.md lists it.
+# Policy (spec: policy; perform-status-logs design D6). contributing/runs.md lists it.
 
 ALLOW_UNENFORCED_LOCAL_STAGE = False
 """Whether a stage that can't enforce an actor's declared effects may run it anyway (decision #3,
@@ -95,7 +96,7 @@ ARTIFACT_STORE = "local"
 """The artifact store a theatre's transcripts and large payloads are kept in."""
 
 # Reading runs back (spec: runs; perform-status-logs design D13; watch-event-segments design D6).
-# docs/runs.md lists them.
+# contributing/runs.md lists them.
 
 STATUS_RUNS_LIMIT = 20
 """How many runs status lists, newest first, when the request doesn't say."""

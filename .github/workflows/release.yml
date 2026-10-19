@@ -1,7 +1,7 @@
 name: release
 
 # Opens or updates the release pull request from the Conventional Commits on main, and tags and
-# releases what a merged release pull request released (docs/releasing.md; release-automation
+# releases what a merged release pull request released (contributing/releasing.md; release-automation
 # design D5). Every write uses the release App's token: a pull request opened with GITHUB_TOKEN
 # starts no workflows, so the required checks would never run on it (design D6).
 on:

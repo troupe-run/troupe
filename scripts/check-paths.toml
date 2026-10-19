@@ -8,11 +8,12 @@ version = 1
 [skip]
 paths = ["openspec/**"]
 
-# The tests that check the docs against the code, tagged `docs` (pytest.mark.docs). guard_pytest fails a test that
-# reads one of these paths without the tag. It sees only reads made in the test's own process, so a test that reads
-# them through a subprocess must be tagged by hand.
+# The tests that check the docs against the code, tagged `docs` (pytest.mark.docs): the user docs in docs/ and the
+# contributor docs in contributing/ (user-docs design D1). guard_pytest fails a test that reads one of these paths
+# without the tag. It sees only reads made in the test's own process, so a test that reads them through a subprocess
+# must be tagged by hand.
 [scopes.docs]
-paths = ["docs/**", "plugins/runner-scripted/README.md"]
+paths = ["docs/**", "contributing/**", "plugins/runner-scripted/README.md"]
 
 # One scope per package outside core (spec: quality-check; package-check-scopes design D1). Each covers its package's
 # files except pyproject.toml, which holds the dependencies and entry points, so changing it runs the full check, as
