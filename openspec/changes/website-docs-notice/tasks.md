@@ -14,8 +14,9 @@
 
 ## 3. Pull request
 
-- [ ] 3.1 Open the pull request, citing troupe-run/website#23, and saying it merges after the website's pull request is
+- [x] 3.1 Open the pull request, citing troupe-run/website#23, and saying it merges after the website's pull request is
   deployed. Verify: every CI job passes.
+  Done 2026-10-20: #129, all 34 checks passing.
 
 ## Workflow follow-up
 
