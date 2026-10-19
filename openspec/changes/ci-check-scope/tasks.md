@@ -2,11 +2,11 @@
 
 ## 1. ruff stops reading `openspec/` (design D4)
 
-- [ ] 1.1 Write the test first, in `scripts/tests/`: copy the repository's `pyproject.toml` into a temporary tree,
+- [x] 1.1 Write the test first, in `scripts/tests/`: copy the repository's `pyproject.toml` into a temporary tree,
   write the same badly formatted Python block to `openspec/changes/x/design.md` and to `docs/x.md`, and run `ruff
   format --check .` there. Assert the run fails naming `docs/x.md` and doesn't name the `openspec/` file. Verify it
   fails on this branch before 1.2, on the `openspec/` half only.
-- [ ] 1.2 Add `extend-exclude = ["openspec"]` to `[tool.ruff]` in `pyproject.toml`. Verify the test from 1.1 passes,
+- [x] 1.2 Add `extend-exclude = ["openspec"]` to `[tool.ruff]` in `pyproject.toml`. Verify the test from 1.1 passes,
   and `uv run ruff format --check -v .` lists no file under `openspec/`.
 - [ ] 1.3 Run `uv run scripts/check.py` and commit (`build(ruff): stop formatting the code blocks in OpenSpec
   artifacts`).
