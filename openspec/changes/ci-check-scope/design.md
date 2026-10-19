@@ -249,23 +249,26 @@ So the evidence task pushes this branch to a throwaway repository, `troupe-run/i
 The run links go in tasks.md and the pull request, and the repository is deleted after. The repo is created and
 deleted only with the owner's go-ahead, as infrastructure's probe was.
 
-### D7. troupe's required checks change in infrastructure, after this merges
+### D7. troupe's required checks change in infrastructure, before this merges
 
 troupe-run/infrastructure's `tofu/required-checks.json` lists troupe's 12 contexts. It must list `check` instead. The
 order matters:
 
-1. **This pull request merges first.** Its own run reports all 12 legs (it changes `ci.yml`, so it runs the full
-   check), which satisfies the old ruleset, and it adds the `check` job.
-2. **Then infrastructure's pull request** changes troupe's entry to `check`. Its plan updates troupe's ruleset, and
-   the owner approves the apply.
+1. **Infrastructure's pull request merges first**, and the owner approves the apply. troupe's ruleset then requires
+   `check`.
+2. **This pull request merges straight after.** Its runs already report `check`, because the job is in this branch's
+   `ci.yml`, so it can merge under the new ruleset.
 
-The other order blocks every troupe pull request: the ruleset would require `check` before any run reports it.
-Between 1 and 2, any push that skips the legs leaves the 12 required contexts unreported for its head, so the pull
-request can't merge until the apply. Since D1 skips per push, that includes the archive push that ends almost every
-pull request, not only pull requests that change nothing but `openspec/`. The window is as long as the
-infrastructure review, so infrastructure's pull request is opened, ready to merge, before this one merges, and
-merged and applied straight after. A pull request that needs to merge inside the window gets a push outside
-`openspec/` after its archive (or its CI rerun by hand once the apply lands).
+The first version of this decision had the order the other way round, and that deadlocks on this pull request
+itself. Its last pushes (the archive, task ticks) change only `openspec/` after a green head, so D1 skips the legs,
+the 12 contexts the old ruleset requires never report, and it can't merge without a bypass. Found after the pull
+request was opened, before anything merged, and the order was reversed (troupe-run/infrastructure#104, done by
+troupe-run/infrastructure#106).
+
+Between 1 and 2, other troupe pull requests run `main`'s `ci.yml`, which has no `check` job, so none of them can
+merge. The window is as long as it takes to merge this one, so this pull request is green and ready before
+infrastructure's merges, and merges straight after the apply. A pull request rebased onto `main` after 2 reports
+`check` and can merge.
 
 The issue for it is opened in troupe-run/infrastructure and added to the roadmap board when this change's pull
 request is opened. It's linked from this change's pull request.
@@ -285,9 +288,9 @@ request is opened. It's linked from this change's pull request.
   trusts.
 - [`check` is a single job that must always run] → `if: always()`, no setup beyond checkout, and it fails on any
   result it doesn't recognise.
-- [The window between the merge and the apply (D7)] → Every pull request whose last push skips the legs waits in
-  it. Infrastructure's pull request is ready before this one merges, and lands straight after. Nothing merges
-  untested.
+- [The window between the apply and this merge (D7)] → No troupe pull request but this one can merge in it, because
+  only this branch's `ci.yml` reports `check`. This one is green before the apply and merges straight after. Nothing
+  merges untested.
 - [A skipped push isn't re-tested against a `main` that has moved since `before` ran] → A pull request's run tests
   its merge with `main` as it was then. `main` doesn't require branches to be up to date, so pull request runs don't
   guarantee this today either. D5's full run on `main` after every merge catches it.
@@ -297,13 +300,14 @@ request is opened. It's linked from this change's pull request.
 ## Migration Plan
 
 1. Prove the workflow on the throwaway repository (D6), and delete it.
-2. Open infrastructure's pull request (D7), ready to merge. Then merge this pull request.
+2. Open this pull request and get it green. Open infrastructure's pull request (D7).
 3. Merge infrastructure's pull request changing troupe's required checks to `check`, and the owner approves the
    apply.
-4. The next archive push in troupe shows it working in place: legs skipped, `check` green, mergeable.
+4. Archive on this branch and merge this pull request straight after. The archive push shows it working in place:
+   legs skipped, `check` green, mergeable.
 
-Rollback, in the opposite order: first put troupe's 12 contexts back in infrastructure and apply. troupe's legs
-still run under their names on every pull request that changes more than `openspec/`, so nothing blocks. Then revert
-this change in troupe. Its pull request changes `ci.yml`, so it runs every leg, which the restored ruleset requires.
-Reverting troupe first would block its own revert: the run would no longer report `check`, which the ruleset still
-requires.
+Rollback, the same way round as the migration: infrastructure first. Put troupe's 12 contexts back and apply, then
+revert this change in troupe. A pull request runs its own `ci.yml`, so the revert's runs use the old one, which runs
+every leg on every push and satisfies the restored ruleset. Between the two, a troupe pull request whose last push
+skipped the legs waits for the revert to merge. Reverting troupe first would block its own revert: its runs would no
+longer report `check`, which the ruleset still requires.
