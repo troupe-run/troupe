@@ -181,20 +181,20 @@ A page mixing kinds is `prerelease: true`, and its built parts are held to the c
 | `prompt-book/cli` | code (generated) | D3 | |
 | `prompt-book/events` | code (generated) | D3 | |
 | `prompt-book/config-schema` | intent (generated region empty) | The rules: JSON Schema is the source, one schema per file kind, strict, `$schema` in every file (#6, #7) | #60 |
-| `prompt-book/guest-manifest` | undecided | Guests bring their own file kinds and schemas, registered by path pattern (#6, #7). Acquired plugins run over JSON-RPC (#37), named and pinned in config (#38) | A new issue for guests |
+| `prompt-book/guest-manifest` | undecided | Guests bring their own file kinds and schemas, registered by path pattern (#6, #7). Acquired plugins run over JSON-RPC (#37), named and pinned in config (#38) | #127 |
 | `stagecraft/bring-your-own-agent` | code + intent | The runner contract, publishing a runner's schemas, the conformance suite. Claude Code next (#55), then a local model (#56). Plugins over JSON-RPC (#37), the SDK (#58) | #38 and #67 (naming a runner in config), #55 |
-| `stagecraft/build-a-flow` | undecided | The principle "tasks fork, join, swarm and loop". A flow can stop at a gate (#62) | A new issue for flows |
+| `stagecraft/build-a-flow` | undecided | The principle "tasks fork, join, swarm and loop". A flow can stop at a gate (#62) | #124 |
 | `stagecraft/configure-roles` | intent | Work flows to roles, not to people or agents. Holders and the role are recorded in lineage (#15, #61). Agents' identity comes from the actor (#9). The identity chain today | #44, #61 |
 | `stagecraft/hand-edit-config` | intent | Net change at command boundaries, formatting and comments kept (#5, #119). Until #119, a hand-edited file is refused with a fix (#60) | #119, #45 |
 | `stagecraft/read-the-lineage` | code + intent | `status`, `logs` and `--json` for runs, and each lineage field. Who approved what comes with gates | #62, #61 |
 | `stagecraft/route-decisions` | intent | Gates, escalations and cues are addressed to a role, and whoever holds it picks them up (#15, #62) | #61, #44, #12 |
-| `stagecraft/write-a-guest` | undecided | As guest-manifest. Writing a runner plugin is the nearest built thing, linked | A new issue for guests |
-| `the-company/escalation` | undecided | Addressed to a role, research first, then a brief (#15, #62, the glossary) | A new issue for escalation and the decision brief |
-| `the-company/flows` | undecided | The principle only | A new issue for flows |
+| `stagecraft/write-a-guest` | undecided | As guest-manifest. Writing a runner plugin is the nearest built thing, linked | #127 |
+| `the-company/escalation` | undecided | Addressed to a role, research first, then a brief (#15, #62, the glossary) | #126 |
+| `the-company/flows` | undecided | The principle only | #124 |
 | `the-company/gates-and-decisions` | intent | Gates are addressed to a role, raise a cue, and record the answer with lineage. `approvals` is empty until gates exist (#15, #62, #73) | #62, #12 |
-| `the-company/guests` | undecided | The definition, and the name agreed "for now" (#15). Title "Guests": "pack" is a rejected name | A new issue for guests |
+| `the-company/guests` | undecided | The definition, and the name agreed "for now" (#15). Title "Guests": "pack" is a rejected name | #127 |
 | `the-company/lineage` | code + intent | Every field and rule, the identity chain, transcripts by hash (#4). Role and approvals to come | #44, #62 |
-| `the-company/notes` | undecided | The term (#15) and the glossary line | A new issue for notes |
+| `the-company/notes` | undecided | The term (#15) and the glossary line | #125 |
 | `the-company/performances-and-runs` | code + intent | Runs: events, states, outcomes, Ctrl-C (runs spec). Rehearsal (#15), the house supervising runs (#73), a worktree per run (#51). Says that `perform` runs one actor today | #63, #51 |
 | `the-company/roles-and-actors` | code + intent | Actors and their lineage kinds today. Roles, and the `system` kind (decided, not yet in the lineage schema) (#15) | #61, #44 |
 | `the-company/the-house` | intent | The only orchestrator, per user, auto-started with a notice, CLI and house as one unit, events stay the truth (#73). `~/.troupe/house.yml` (#2), the sweep (#5), the gateway (#14), turning auto-start off (#118). Command names "or similar" are given as provisional | #63 |
@@ -203,7 +203,8 @@ A page mixing kinds is `prerelease: true`, and its built parts are held to the c
 
 Four subjects have no issue at all: flows, notes, escalation's research steps and decision brief, and guests and
 their manifest. The spec requires an undecided page to link the issue that will decide it, so the apply opens one
-placeholder Feature issue for each of the four in troupe-run/troupe and adds it to the roadmap board. Each issue says
+placeholder Feature issue for each of the four in troupe-run/troupe and adds it to the roadmap board: #124 (flows),
+#125 (notes), #126 (escalation) and #127 (guests). Each issue says
 only what's decided and what's still to decide, and cites the page.
 
 The moved written pages keep their text, with these changes:
