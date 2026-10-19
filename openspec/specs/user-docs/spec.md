@@ -67,7 +67,7 @@ one when none exists, and SHALL NOT describe a design for it.
 
 #### Scenario: A page about the house
 - **WHEN** a reader opens the house's page before the house is built
-- **THEN** the site shows that the page describes intended behaviour
+- **THEN** the page says that the house isn't built yet
 - **AND** the page describes what #73 and #14 decided about the house, and links the open issue for what they leave
   open
 
