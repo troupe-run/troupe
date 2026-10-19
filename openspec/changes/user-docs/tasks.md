@@ -94,11 +94,13 @@
 
 ## 4. Placeholder issues for the undecided subjects (design D6)
 
-- [ ] 4.1 Open four placeholder Feature issues in troupe-run/troupe with `--project "troupe roadmap"`: flows (fork,
+- [x] 4.1 Open four placeholder Feature issues in troupe-run/troupe with `--project "troupe roadmap"`: flows (fork,
   join, swarm, loop), notes (improving between runs), escalation's research steps and decision brief, and guests and
   their manifest. Each holds only what D6's table cites as decided, the questions still to decide, and the pages that
   link it. Use `--body-file` with a file in the scratchpad. Verify each with `gh issue view <n> -R troupe-run/troupe
   --json projectItems`, and record the numbers in D6's table.
+  - Done 2026-10-19: #124 flows, #125 notes, #126 escalation, #127 guests, each a Feature with its `cap:` label, and
+    each `troupe roadmap: Todo` by `gh issue view --json projectItems`. Recorded in D6.
 
 ## 5. Generated reference (design D3; spec: user-docs)
 
