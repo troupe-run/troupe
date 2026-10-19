@@ -135,6 +135,7 @@ tests = [
 paths = [
     "scripts/benchmark_event_store.py",
     "scripts/check_paths_reach.py",
+    "scripts/check_range.py",
     "scripts/check_result.py",
     "scripts/flake_campaign.py",
     "scripts/flake_hunt.Dockerfile",
