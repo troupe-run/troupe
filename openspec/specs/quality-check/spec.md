@@ -9,15 +9,16 @@ paths need which part of the check. The commit guard and CI read that declaratio
 
 ### Requirement: The declaration skips OpenSpec artifacts and scopes the docs
 troupe SHALL declare in `scripts/check-paths.toml` that `openspec/**` needs no check. It SHALL declare a scope
-`docs`, covering `docs/**` and `plugins/runner-scripted/README.md`, and the package and `scripts` scopes that the
-requirements below name. Any other path SHALL be in neither group, so a change to it runs the full check.
+`docs`, covering `docs/**`, `contributing/**` and `plugins/runner-scripted/README.md`, and the package and `scripts`
+scopes that the requirements below name. Any other path SHALL be in neither group, so a change to it runs the full
+check.
 
 #### Scenario: A commit that stages only OpenSpec artifacts
 - **WHEN** a commit stages only files under `openspec/`, such as an archive or a task tick
 - **THEN** the commit guard skips the check, naming `openspec/**` and `scripts/check-paths.toml`
 
 #### Scenario: A commit that stages only documentation
-- **WHEN** a commit stages only files under `docs/`, possibly with files under `openspec/`
+- **WHEN** a commit stages only files under `docs/` or `contributing/`, possibly with files under `openspec/`
 - **THEN** the commit guard runs `scripts/check.py --scope docs` instead of the full check, and says so
 
 #### Scenario: A commit that changes the scripted runner's README
@@ -76,8 +77,9 @@ read nothing the scope covers.
 
 #### Scenario: The tests that check the docs against the code
 - **WHEN** `scripts/check.py --scope docs` runs
-- **THEN** the tests that compare `docs/` with the code run, including the CLI, runs, runners, event store, exit codes
-  and platform documentation tests, and the scripted runner's README options test
+- **THEN** the tests that compare `docs/` and `contributing/` with the code run, including the CLI reference, runs,
+  runners, event store, exit codes and platform documentation tests, and the scripted runner's README options test
+- **AND** the tests of the user docs' front matter, links, vocabulary, changelog page and generated regions run
 - **AND** no other test runs
 
 ### Requirement: Every test run keeps the declaration true
@@ -86,8 +88,8 @@ under a scope's paths without that scope's tag, or reads a file under `openspec/
 file, and the tag to add or the skip entry it contradicts.
 
 #### Scenario: A new doc test without its tag
-- **WHEN** a test reads `docs/runs.md` and isn't tagged `docs`
-- **THEN** that test fails, naming itself, `docs/runs.md` and the `docs` tag
+- **WHEN** a test reads `contributing/runs.md` and isn't tagged `docs`
+- **THEN** that test fails, naming itself, `contributing/runs.md` and the `docs` tag
 
 #### Scenario: A test that reads another package's files untagged
 - **WHEN** a test outside the scripted runner's reach reads a file under `plugins/runner-scripted/` and isn't tagged
@@ -99,8 +101,8 @@ file, and the tag to add or the skip entry it contradicts.
 - **THEN** that test fails, naming the file and the `openspec/**` skip entry
 
 #### Scenario: An untagged doc read in a parallel run
-- **WHEN** the tests run in parallel and a test in any worker reads `docs/runs.md` without the `docs` tag
-- **THEN** that test fails, naming itself, `docs/runs.md` and the `docs` tag, as it does in one process
+- **WHEN** the tests run in parallel and a test in any worker reads `contributing/runs.md` without the `docs` tag
+- **THEN** that test fails, naming itself, `contributing/runs.md` and the `docs` tag, as it does in one process
 
 ### Requirement: The check runs the tests in parallel
 `scripts/check.py` SHALL run the tests across several worker processes, one for each CPU it may use, on Linux, macOS
