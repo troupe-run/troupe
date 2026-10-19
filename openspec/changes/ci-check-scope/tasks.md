@@ -74,33 +74,54 @@
 
 ## 4. Proof before the merge (design D6)
 
-- [ ] 4.1 With the owner's go-ahead, create `troupe-run/infra-probe-ci-check-scope`, push this branch to it as
+- [x] 4.1 With the owner's go-ahead, create `troupe-run/infra-probe-ci-check-scope`, push this branch to it as
   `main`, and add a ruleset requiring `check`. Verify the push's run on its `main` runs `changes` skipped, 12 legs in
   full, and `check` green.
-- [ ] 4.2 On pull request A there, push in turn: a core change; then only an `openspec/` file; then only
+  - The probe repository is deleted in 4.4, so its run ids no longer resolve: the output quoted in 4.1 to 4.3b is the
+    record.
+  - Done 2026-10-19 on `troupe-run/infra-probe-ci-check-scope` (the guard allows agents `infra-probe-*` only, so not
+    `troupe-probe-*`), with a ruleset requiring `check` from GitHub Actions. First `main` push (run 39217455734):
+    `changes` skipped, Linux and macOS legs green, all four Windows legs red on the real-Ctrl-C tests, `check` "failed,
+    the legs' result is `failure`" (fixed in 3.9). After the fix (run 39224523012): `changes` skipped, 12 legs and
+    `check` green.
+- [x] 4.2 On pull request A there, push in turn: a core change; then only an `openspec/` file; then only
   `docs/runs.md`; then a force push that rewrites the history with the same code and one more `openspec/` file.
   Verify each push's run against design D6's table, and record its link here: the full check on 12 legs; legs skipped
   (one check run under the unexpanded name) with `check` green and the pull request mergeable; `--scope docs` on 12
   legs; legs skipped again.
-- [ ] 4.3 On pull request B, push a core change that fails a test, then only an `openspec/` file. Verify the second
+  - Done 2026-10-19 on pull request 1. Core push `99fdbe2` (run 39225475384): the previous head's run had been cancelled
+    (`check`: `failure`), so the whole diff, `scope=full`, 12 legs and `check` green. `openspec/` push `b73a684` (run
+    39226498058): previous `success`, diffed `99fdbe2 b73a684`, `scope=none`, one check run `check (${{ matrix.os }},
+    Python ${{ matrix.python }}) | skipped`, `check` green, `MERGEABLE`. Docs push `03dea82` (run 39226623041): previous
+    `success`, `scope=docs`, `CHECK_ARGS: --scope docs`, 26 tests on each leg (Windows, Ubuntu and macOS 3.13 read: `26
+    passed`). Force push `d52b51c` (old head not an ancestor, trees differ only in one `openspec/` file; run
+    39227017280): previous `success`, diffed `03dea82 d52b51c`, `scope=none`, legs skipped, `check` green. `gh pr merge
+    --rebase` merged it under the ruleset.
+- [x] 4.3 On pull request B, push a core change that fails a test, then only an `openspec/` file. Verify the second
   run diffs the whole pull request (its `changes` log says so) and runs the full check, and that `check` fails both
   times. Record the links.
-- [ ] 4.3b On pull request C, make `changes` fail (a malformed sha, in that probe's copy of the workflow only).
+  - Done 2026-10-19 on pull request 2. Failing core push `671986c` (run 39225475396): `scope=full`, 12 legs and `check`
+    red. `openspec/` push `8474826` (run 39226496369): previous `failure`, diffed `91c1a09...8474826`, `scope=full`, 12
+    legs red on `test_the_probe_fails_on_purpose` only, `check` red.
+- [x] 4.3b On pull request C, make `changes` fail (a malformed sha, in that probe's copy of the workflow only).
   Verify `changes` fails, all 12 legs run the full check, and `check` reports their result. Record the link.
+  - Done 2026-10-19 on pull request 3 (run 39225477433): `changes` failed with "check_range: BASE `not-a-sha` isn't a
+    sha: it must be 40 lowercase hex characters.", 12 legs ran the full check (green), `check` green.
 - [ ] 4.4 Delete the probe repository with the owner's go-ahead. Verify `gh repo view
   troupe-run/infra-probe-ci-check-scope` fails.
 
 ## 5. The required checks in infrastructure (design D7)
 
 - [ ] 5.1 Open an issue in troupe-run/infrastructure for troupe's required checks to become `check` (`--project
-  "troupe roadmap"`), saying it merges straight after this change's pull request, and why: until it's applied, every push that skips the
-  legs blocks its pull request (design D7). Open its pull request ready to merge before this one merges. Verify it's on the board with `gh
-  issue view <n> -R troupe-run/infrastructure --json projectItems`, and link it from this change's pull request.
+  "troupe roadmap"`), saying it merges straight after this change's pull request, and why: until it's applied, every
+  push that skips the legs blocks its pull request (design D7). Open its pull request ready to merge before this one
+  merges. Verify it's on the board with `gh issue view <n> -R troupe-run/infrastructure --json projectItems`, and link
+  it from this change's pull request.
 
 ## Workflow follow-up
 
-- Open this change's pull request with `Closes #101` and the probe evidence from 4.2, 4.3 and 4.3b. Its own run reports the
-  12 legs (it changes `ci.yml`) and the new `check`.
+- Open this change's pull request with `Closes #101` and the probe evidence from 4.2, 4.3 and 4.3b. Its own run
+  reports the 12 legs (it changes `ci.yml`) and the new `check`.
 - Archive the change on the branch before merging.
 - Before this merges, the infrastructure change from 5.1 has its own OpenSpec change and pull request, ready to
   merge. Straight after this merges, it merges and the owner approves the apply.
