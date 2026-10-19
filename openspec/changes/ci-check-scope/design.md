@@ -137,9 +137,15 @@ check-legs:
   if: ${{ !cancelled() && needs.changes.outputs.scope != 'none' }}
   ...
   - name: Check (the same script as local runs)
-    shell: bash
+    if: runner.os != 'Windows'          # bash, the default here
     env: { CHECK_ARGS: "${{ needs.changes.outputs['check-args'] }}" }
     run: uv run scripts/check.py $CHECK_ARGS
+  - name: Check (the same script as local runs)
+    if: runner.os == 'Windows'          # PowerShell, the default here
+    env: { CHECK_ARGS: "${{ needs.changes.outputs['check-args'] }}" }
+    run: |
+      $checkArgs = if ($env:CHECK_ARGS) { -split $env:CHECK_ARGS } else { @() }
+      uv run scripts/check.py @checkArgs
 ```
 
 - **`!cancelled()`** lets the legs run when `changes` failed or was skipped. Without it, a failed `needs` skips the
@@ -149,8 +155,15 @@ check-legs:
   doesn't recognise runs more, never less.
 - **`$CHECK_ARGS` is unquoted on purpose.** It's `--scope <a> --scope <b>` words, and scope names match
   `[a-z][a-z0-9_]*`, so splitting on spaces is safe. It's empty for the full check.
-- **`shell: bash` on that step**, because the Windows runner's default shell is PowerShell, which would pass
-  `--scope docs` as one argument. Git Bash is on every Windows runner. The other steps keep their default shell.
+- **Each OS keeps the shell the check ran under before this change**: bash on Linux and macOS, PowerShell on
+  Windows. PowerShell doesn't split `$env:CHECK_ARGS` on spaces, so the Windows step splits it into an array and
+  splats it, and passes no argument at all when it's empty (the full check). Found on the probe (D6): the first
+  version ran the step under `shell: bash` on every OS, and on Windows that put the tests under Git Bash, where
+  troupe's two real-Ctrl-C tests (`test_a_real_ctrl_c_on_windows_calls_back_too`, and the flake hunt's test that runs
+  it) fail on all four Windows legs: the console event they send doesn't reach them. troupe's own `main` passes
+  them under PowerShell. The shell a test runs under is part of what CI tests, so this change doesn't move it.
+  *Alternative:* PowerShell on every OS (one step, but Linux and macOS would leave the bash they test under today);
+  `check.py` reading its scopes from an environment variable (a second input path, only to suit CI).
 - **The legs keep their names**, so their history and the flake records that name them stay readable. The job's id
   changes from `check` to `check-legs`, because `check` becomes the result job's name (D3). Ids aren't shown.
 - **The matrix line is unchanged**, so `python_versions.py` keeps reading it.
@@ -220,7 +233,7 @@ The done-when needs a push that changes only `openspec/**` to pass every require
 This pull request can't show that: it changes `ci.yml`, so it runs the full check on itself. A probe branch in troupe
 would be refused by the guard (no OpenSpec change of its own), and the ruleset can't require `check` until D7.
 
-So the evidence task pushes this branch to a throwaway repository, `troupe-run/troupe-probe-ci-check-scope`, as its
+So the evidence task pushes this branch to a throwaway repository, `troupe-run/infra-probe-ci-check-scope`, as its
 `main`, with a ruleset requiring `check`, and runs this sequence there:
 
 | Pull request | Push | Expected |

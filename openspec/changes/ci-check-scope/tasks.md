@@ -62,11 +62,15 @@
     `check_name=check (ubuntu-latest, Python 3.13)` returns 1 run, `success`; the same with `app_id=1` returns 0.
 - [x] 3.7 Update `ci.yml`'s header comment and the README's CI sentence: a push is judged against the last push that
   passed, or the whole pull request when there's none. Verify `uv run scripts/check.py --scope docs` passes.
-- [ ] 3.8 Run `uv run scripts/check.py` and commit (`feat(ci): judge each push against the last one that passed`).
+- [x] 3.8 Run `uv run scripts/check.py` and commit (`feat(ci): judge each push against the last one that passed`).
+- [ ] 3.9 Keep each OS's shell for the check step (revised design D2): bash on Linux and macOS, PowerShell on Windows,
+  where `$env:CHECK_ARGS` is split and splatted. Verify with actionlint, run the full check and commit
+  (`fix(ci): run the check under each OS's own shell`), and verify on the probe's `main` push that all four Windows
+  legs pass the real-Ctrl-C tests that failed under `shell: bash`.
 
 ## 4. Proof before the merge (design D6)
 
-- [ ] 4.1 With the owner's go-ahead, create `troupe-run/troupe-probe-ci-check-scope`, push this branch to it as
+- [ ] 4.1 With the owner's go-ahead, create `troupe-run/infra-probe-ci-check-scope`, push this branch to it as
   `main`, and add a ruleset requiring `check`. Verify the push's run on its `main` runs `changes` skipped, 12 legs in
   full, and `check` green.
 - [ ] 4.2 On pull request A there, push in turn: a core change; then only an `openspec/` file; then only
@@ -80,7 +84,7 @@
 - [ ] 4.3b On pull request C, make `changes` fail (a malformed sha, in that probe's copy of the workflow only).
   Verify `changes` fails, all 12 legs run the full check, and `check` reports their result. Record the link.
 - [ ] 4.4 Delete the probe repository with the owner's go-ahead. Verify `gh repo view
-  troupe-run/troupe-probe-ci-check-scope` fails.
+  troupe-run/infra-probe-ci-check-scope` fails.
 
 ## 5. The required checks in infrastructure (design D7)
 
