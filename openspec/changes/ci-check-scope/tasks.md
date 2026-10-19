@@ -8,17 +8,17 @@
   fails on this branch before 1.2, on the `openspec/` half only.
 - [x] 1.2 Add `extend-exclude = ["openspec"]` to `[tool.ruff]` in `pyproject.toml`. Verify the test from 1.1 passes,
   and `uv run ruff format --check -v .` lists no file under `openspec/`.
-- [ ] 1.3 Run `uv run scripts/check.py` and commit (`build(ruff): stop formatting the code blocks in OpenSpec
+- [x] 1.3 Run `uv run scripts/check.py` and commit (`build(ruff): stop formatting the code blocks in OpenSpec
   artifacts`).
 
 ## 2. The result judgement (design D3)
 
-- [ ] 2.1 Write `scripts/check_result.py`, standard library only: three arguments (the legs' result, `changes`'
+- [x] 2.1 Write `scripts/check_result.py`, standard library only: three arguments (the legs' result, `changes`'
   result, the scope), exit 0 or 1, and one line saying why. Test each row of design D3's table in
   `scripts/tests/test_check_result.py`, including an unknown legs result and a wrong number of arguments (both fail,
   naming the input and what's valid). Verify the tests pass and `python3 scripts/check_result.py skipped success none`
   exits 0.
-- [ ] 2.2 Add `scripts/check_result.py` to `scopes.scripts` in `scripts/check-paths.toml`. Verify `printf
+- [x] 2.2 Add `scripts/check_result.py` to `scopes.scripts` in `scripts/check-paths.toml`. Verify `printf
   'scripts/check_result.py\nscripts/tests/test_check_result.py\n' | uv run --no-project scripts/guard.py check-scope`
   answers `scope=scripts`, and the reach check (`uv run scripts/check_paths_reach.py`) agrees with the declaration.
 - [ ] 2.3 Run `uv run scripts/check.py` and commit (`feat(ci): judge the check legs' result in one script`).
