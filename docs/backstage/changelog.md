@@ -1,6 +1,34 @@
 ---
 title: Changelog
-description: What changed.
-status: planned
-purpose: Changes in each release, once there are releases.
+description: What changed in each release.
+status: written
+prerelease: false
 ---
+
+Each part of troupe that's released has its own changelog, written by
+[release-please](https://github.com/googleapis/release-please) from the commits on troupe's `main`. Nobody edits
+them by hand, and a release's notes on GitHub are its changelog section. A change shows up in the changelog of the
+part it touched, grouped by kind: for example, features under **Features** and fixes under **Bug Fixes**.
+
+## troupe
+
+The core, its bundled adapters and the protocol release together, at one version: when any of them changes, all of
+them release. The core's changelog is the one to read for what changed in troupe as a whole. The others list the
+changes that touched them.
+
+- [troupe](https://github.com/troupe-run/troupe/blob/main/packages/troupe/CHANGELOG.md)
+- [troupe-artifacts-local](https://github.com/troupe-run/troupe/blob/main/packages/troupe-artifacts-local/CHANGELOG.md)
+- [troupe-identity-local](https://github.com/troupe-run/troupe/blob/main/packages/troupe-identity-local/CHANGELOG.md)
+- [troupe-stage-local](https://github.com/troupe-run/troupe/blob/main/packages/troupe-stage-local/CHANGELOG.md)
+- [troupe-store-text](https://github.com/troupe-run/troupe/blob/main/packages/troupe-store-text/CHANGELOG.md)
+- [troupe-vcs-files](https://github.com/troupe-run/troupe/blob/main/packages/troupe-vcs-files/CHANGELOG.md)
+- [troupe-vcs-git](https://github.com/troupe-run/troupe/blob/main/packages/troupe-vcs-git/CHANGELOG.md)
+- [protocol](https://github.com/troupe-run/troupe/blob/main/protocol/CHANGELOG.md)
+
+## Plugins
+
+Each plugin is released on its own, at its own version.
+
+- [troupe-runner-scripted](https://github.com/troupe-run/troupe/blob/main/plugins/runner-scripted/CHANGELOG.md)
+
+Every release is also on [GitHub's releases page](https://github.com/troupe-run/troupe/releases).
