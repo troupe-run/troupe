@@ -25,16 +25,16 @@
 
 ## 3. The workflow (design D1, D2, D3, D5)
 
-- [ ] 3.1 Add the `changes` job to `.github/workflows/ci.yml` as design D1 has it, pinned to the same action shas
+- [x] 3.1 Add the `changes` job to `.github/workflows/ci.yml` as design D1 has it, pinned to the same action shas
   the workflow already uses. Verify locally that the run block works on this branch: `git diff --name-only
   --no-renames main...HEAD | uv run --no-project scripts/guard.py check-scope` prints `scope=` and `check-args=`
   lines.
-- [ ] 3.2 Rename the matrix job's id to `check-legs`, keep its name, and add `needs: changes`, the `if` from design
+- [x] 3.2 Rename the matrix job's id to `check-legs`, keep its name, and add `needs: changes`, the `if` from design
   D2, and the check step with `shell: bash` and `CHECK_ARGS`. Verify `uv run scripts/check.py` still passes
   `python_versions`' matrix check (it reads the unchanged `python:` line).
-- [ ] 3.3 Add the `check` result job from design D3. Add a header comment to `ci.yml` saying what each job does and
+- [x] 3.3 Add the `check` result job from design D3. Add a header comment to `ci.yml` saying what each job does and
   why the legs aren't required themselves, as infrastructure's `ci.yml` does.
-- [ ] 3.4 Update `README.md`'s CI sentence: a pull request runs what its paths need on all three platforms, `main`
+- [x] 3.4 Update `README.md`'s CI sentence: a pull request runs what its paths need on all three platforms, `main`
   runs everything, and the required check is `check`. Verify the docs tests pass (`uv run scripts/check.py --scope
   docs`).
 - [ ] 3.5 Run `uv run scripts/check.py` and commit (`feat(ci): run only the check a pull request's paths need`).

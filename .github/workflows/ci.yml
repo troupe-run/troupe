@@ -1,5 +1,17 @@
 name: CI
 
+# A pull request runs what its changed paths need (#101; spec: quality-check; ci-check-scope design):
+#
+#   changes  what the changed paths need: guard.py check-scope reads scripts/check-paths.toml, the
+#            same declaration the commit guard reads, and answers none, full or the scopes
+#   check    the legs, on every OS and Python version troupe supports: skipped when only skipped
+#            paths changed, scoped when only scoped ones did, and otherwise the full check
+#   check    (the result job) the required check for the legs. It passes when every leg passed, or
+#            when they were all skipped because `changes` answered none. A skipped matrix job
+#            reports under its unexpanded name, so the legs themselves can't be required (D3).
+#
+# A failed `changes` runs everything (D1). main runs everything after every merge (D5): its merged
+# tree may be one no pull request tested.
 on:
   pull_request:
   push:
@@ -13,9 +25,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check:
-    # Every job is required: troupe supports Linux, macOS and Windows from the first commit (decision #17).
+  changes:
+    name: what does it need?
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      scope: ${{ steps.paths.outputs.scope }}
+      check-args: ${{ steps.paths.outputs['check-args'] }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The whole history, so the diff from the merge base can be worked out.
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: The pull request's changed paths
+        id: paths
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git diff --name-only --no-renames "$BASE...$HEAD" > "$RUNNER_TEMP/paths"
+          uv run --no-project scripts/guard.py check-scope < "$RUNNER_TEMP/paths" >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
+
+  check-legs:
+    # troupe supports Linux, macOS and Windows from the first commit (decision #17). Not required
+    # themselves: `check` below reports for them.
     name: check (${{ matrix.os }}, Python ${{ matrix.python }})
+    # Skipped only when `changes` succeeded and found only skipped paths. With no answer (a push
+    # to main, or a failed `changes`) the legs run the full check.
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.scope != 'none' }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:
@@ -32,4 +74,26 @@ jobs:
       - name: Install
         run: uv sync --locked
       - name: Check (the same script as local runs)
-        run: uv run scripts/check.py
+        # bash on Windows too: PowerShell would pass `--scope docs` as one argument.
+        shell: bash
+        env:
+          # `--scope <name>` words, or nothing for the full check. Scope names are [a-z][a-z0-9_]*,
+          # so they split on spaces safely.
+          CHECK_ARGS: ${{ needs.changes.outputs['check-args'] }}
+        run: uv run scripts/check.py $CHECK_ARGS
+
+  check:
+    name: check
+    # The required check for the legs (D3). always(): it must report whatever they did.
+    needs: [changes, check-legs]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: The legs' result
+        env:
+          LEGS: ${{ needs.check-legs.result }}
+          CHANGES: ${{ needs.changes.result }}
+          SCOPE: ${{ needs.changes.outputs.scope }}
+        run: python3 scripts/check_result.py "$LEGS" "$CHANGES" "$SCOPE"
