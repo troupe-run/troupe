@@ -54,6 +54,27 @@ USES = (
         "in an existing project directory, step by step",
         "a theatre is made from a project directory",
     ),
+    Use(
+        "opening-night/first-theatre.md",
+        "A theatre is a project directory with troupe config",
+        "explains what a theatre is",
+    ),
+    Use(
+        "opening-night/first-theatre.md",
+        "A fresh git repository",
+        "a git repository, as git means it",
+    ),
+    Use("opening-night/install.md", "a clone of its repository", "troupe's own git repository"),
+    Use(
+        "the-company/lineage.md",
+        "with a repository's own setting",
+        "a git repository's config, as git means it",
+    ),
+    Use(
+        "the-company/theatres.md",
+        "A theatre is a project directory with troupe config",
+        "explains what a theatre is",
+    ),
 )
 
 

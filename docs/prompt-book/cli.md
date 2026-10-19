@@ -21,7 +21,8 @@ troupe never creates one for you; without one, a command fails with `theatre.not
 - **`troupe status`** lists the most recent runs, newest first, or shows one run.
 - **`troupe logs`** shows a run's events in order; `--follow` waits for more until the run ends.
 
-A run is named by its full id or by its first 8 or more characters. [Runs](https://github.com/troupe-run/troupe/blob/main/contributing/runs.md) describes runs, their states and what is recorded.
+A run is named by its full id or by its first 8 or more characters. [Performances and
+runs](../the-company/performances-and-runs.md) describes runs, their states and what is recorded.
 
 **`perform`'s flags are interim.** Until actors are configured, you say how to run one: the runner by name
 (`scripted` is the only one so far), its options as a JSON file passed to it untouched (for the scripted runner,
@@ -30,7 +31,7 @@ A run is named by its full id or by its first 8 or more characters. [Runs](https
 required: there's no default.
 
 The local stage runs an actor only when policy allows it (`TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE=true`; see
-[Runs](https://github.com/troupe-run/troupe/blob/main/contributing/runs.md#policy)).
+[Policy](../the-company/performances-and-runs.md#policy)).
 
 ```text
 troupe perform tester --runner scripted --runner-options hello.json --expect out/hello.txt
@@ -138,8 +139,8 @@ troupe: `troupe perform` needs one of --expect or --no-effect-check.
   fix: Run `troupe perform --help` to see its options.
 ```
 
-Behind the text, each error is structured data with a stable `code` (for example `usage.unknown-command`), the
-problem, the fix, and an optional path and details. Its shape is defined once, in
+Behind the text, each error is structured data with a stable `code` (for example `usage.unknown-command`), the problem,
+the fix, and an optional path and details. Its shape is defined once, in
 [`protocol/schemas/error.schema.json`](https://github.com/troupe-run/troupe/blob/main/protocol/schemas/error.schema.json),
 which lists every code with what its details hold, so other surfaces can show the same error in their own words.
 
