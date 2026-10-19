@@ -34,8 +34,9 @@ in the same change. `scripts/check.py` fails if either moves without the other.
 
 `scripts/check.py` runs every gate in order, and stops at the first failure: ruff (lint and format), `mypy
 --strict`, the import contracts, and the tests. CI runs the same script on all three platforms and every
-supported Python version. A pull request runs what its changed paths need, as a commit does: nothing for a change
-only to `openspec/`, the scoped check for scoped paths, and the full check otherwise. `main` runs the full check
+supported Python version. Each push to a pull request runs what its changed paths need, as a commit does: nothing
+for a change only to `openspec/`, the scoped check for scoped paths, and the full check otherwise. Its paths are
+what it changed since the last push whose check passed, or the whole pull request's when no earlier push passed. `main` runs the full check
 after every merge. The one required check, `check`, passes when every platform's run passed, or when none was
 needed.
 

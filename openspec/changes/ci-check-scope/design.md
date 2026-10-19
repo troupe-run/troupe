@@ -66,7 +66,8 @@ changes:
       env: { ACTION, BEFORE (event.before), BASE, HEAD, REPO, GH_TOKEN }
       run: |
         CONCLUSION=""
-        if [ -n "$BEFORE" ] && git cat-file -e "$BEFORE^{commit}"; then
+        if [ -n "$BEFORE" ] && { git cat-file -e "$BEFORE^{commit}" 2>/dev/null ||
+          git fetch --quiet --no-tags origin "$BEFORE"; }; then
           CONCLUSION=$(gh api "repos/$REPO/commits/$BEFORE/check-runs?check_name=check&app_id=15368" \
             --jq '.check_runs[0].conclusion // ""')
         fi
@@ -103,9 +104,10 @@ the latest run of it, so a rerun that passed counts. A failed lookup fails the s
 and the legs run the full check.
 
 **A force push.** The two-tree diff (`git diff <before> <head>`, not `before...head`) compares content, not history,
-so a rewritten history changes nothing: the paths that differ are the paths that differ. If `before` is gone from the
-clone (unreachable after the force push, and collected), `git cat-file -e` fails, no conclusion is looked up, and
-the whole diff decides.
+so a rewritten history changes nothing: the paths that differ are the paths that differ. `actions/checkout` fetches
+branches and tags, not a head a force push left behind, so when `before` isn't in the clone the step fetches it by
+sha, which GitHub serves until the commit is collected (found while applying: without the fetch, nearly every force
+push would take the whole diff). If that fetch fails too, no conclusion is looked up, and the whole diff decides.
 
 The three-dot diff from the base is from the merge base, so commits on `main` since the branch forked aren't
 counted as the pull request's. `--no-renames` lists both sides of a rename, as the commit hook does. `bash` runs
