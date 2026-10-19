@@ -1,4 +1,9 @@
-# Exit codes
+---
+title: Exit codes
+description: Every exit code troupe can return.
+status: written
+prerelease: false
+---
 
 Every exit code `troupe` can return. The table is checked against the code (`troupe.core.exit_codes.ExitCode`)
 by a test, so it can't drift. When a command fails, standard output is empty and standard error says what went
