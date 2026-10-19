@@ -63,10 +63,14 @@
 - [x] 3.7 Update `ci.yml`'s header comment and the README's CI sentence: a push is judged against the last push that
   passed, or the whole pull request when there's none. Verify `uv run scripts/check.py --scope docs` passes.
 - [x] 3.8 Run `uv run scripts/check.py` and commit (`feat(ci): judge each push against the last one that passed`).
-- [ ] 3.9 Keep each OS's shell for the check step (revised design D2): bash on Linux and macOS, PowerShell on Windows,
+- [x] 3.9 Keep each OS's shell for the check step (revised design D2): bash on Linux and macOS, PowerShell on Windows,
   where `$env:CHECK_ARGS` is split and splatted. Verify with actionlint, run the full check and commit
   (`fix(ci): run the check under each OS's own shell`), and verify on the probe's `main` push that all four Windows
   legs pass the real-Ctrl-C tests that failed under `shell: bash`.
+  - Done 2026-10-19. Under `shell: bash`, the probe's `main` run 39217455734 failed both real-Ctrl-C tests on all four
+    Windows legs (`check`: "failed, the legs' result is `failure`"). After the fix, rebased onto `0708c07`, the run
+    on `91c1a09` (39224523012) passed: `changes` skipped, 12 legs and `check` green. The Windows 3.13 leg ran the
+    PowerShell step (`pwsh.EXE`, the bash step skipped) with no arguments: 1896 passed, 4 skipped.
 
 ## 4. Proof before the merge (design D6)
 
