@@ -6,7 +6,7 @@ minimum the platform needs, so that it and every process it starts can be killed
 Platform differences, handled here so callers see one behaviour:
 - POSIX: the child starts a new session (and so a new process group); killing the tree sends
   SIGKILL to the group. A grandchild that starts its own session escapes the group: a documented
-  limitation (docs/platform.md).
+  limitation (contributing/platform.md).
 - Windows: the child starts in a new process group and is assigned at once to a new job object
   created with kill-on-close. Killing the tree terminates the job with KILLED_EXIT_CODE, and the
   tree also dies if troupe does, because the job's last handle closes with it. Windows needs
@@ -17,7 +17,7 @@ Platform differences, handled here so callers see one behaviour:
   access to is running; one is ended only when the OS says there is no such process or that it
   has exited; anything else raises ProcessStateUnknownError rather than guessing. POSIX asks with
   ``kill(pid, 0)``, which can't see that an unreaped child (a zombie) has exited: a documented
-  limitation (docs/platform.md). Windows asks whether the process handle is signalled.
+  limitation (contributing/platform.md). Windows asks whether the process handle is signalled.
 """
 
 import asyncio
@@ -363,7 +363,7 @@ else:
 
         A process the OS refuses to let us signal exists, so it is running. One that has exited
         but hasn't been waited for by its parent (a zombie) still reads as running: a documented
-        limit (docs/platform.md). Raises ProcessStateUnknownError when the OS can't say, and
+        limit (contributing/platform.md). Raises ProcessStateUnknownError when the OS can't say, and
         ValueError for a value that can't name one process.
         """
         _check_pid(pid)

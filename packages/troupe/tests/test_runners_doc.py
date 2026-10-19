@@ -1,4 +1,4 @@
-"""docs/runners.md describes the runner contract exactly as the schemas define it."""
+"""contributing/runners.md describes the runner contract exactly as the schemas define it."""
 
 import re
 from pathlib import Path
@@ -12,13 +12,13 @@ from troupe.core.runners.outcome import Outcome
 
 pytestmark = pytest.mark.docs  # reads docs/ (scripts/check-paths.toml)
 
-DOC = Path(__file__).resolve().parents[3] / "docs" / "runners.md"
+DOC = Path(__file__).resolve().parents[3] / "contributing" / "runners.md"
 TEXT = DOC.read_text(encoding="utf-8")
 
 
 def _section(heading: str) -> str:
     match = re.search(rf"^### {re.escape(heading)}\n(.*?)(?=^#{{2,3}} )", TEXT, re.M | re.S)
-    assert match is not None, f"docs/runners.md has no section {heading!r}"
+    assert match is not None, f"contributing/runners.md has no section {heading!r}"
     return match.group(1)
 
 
@@ -46,7 +46,7 @@ def test_the_run_events_table_lists_exactly_the_event_types_in_the_schema() -> N
 
 def test_every_outcome_and_runner_error_code_is_documented() -> None:
     documented = set(re.findall(r"`([a-z.-]+)`", _section("Outcomes")))
-    # Codes for perform, status and logs are documented in docs/runs.md (test_runs_doc.py).
+    # Codes for perform, status and logs are documented in contributing/runs.md (test_runs_doc.py).
     runs_doc = (DOC.parent / "runs.md").read_text(encoding="utf-8")
     elsewhere = set(re.findall(r"^\| `([a-z]+\.[a-z.-]+)` \|", runs_doc, re.M))
     runner_codes = {code for code in CODES if code.split(".")[0] in {"run", "runner"}} - elsewhere

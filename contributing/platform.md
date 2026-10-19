@@ -141,7 +141,7 @@ under `~`.
   supported.
 - **Watching on file systems that don't notify:** some (container bind mounts written from the host, network
   shares) accept a watch and then don't report other machines' writes. Nothing at set-up tells. The event store
-  catches it with a periodic check and falls back to an announced poll ([docs/event-store.md](event-store.md)).
+  catches it with a periodic check and falls back to an announced poll ([contributing/event-store.md](event-store.md)).
 - **FSEvents watches subdirectories too,** and reports changes made to a directory just before it was watched,
   for up to about half a second after the watch starts. Both are harmless: a reported change is only a cue to
   rescan.

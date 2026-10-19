@@ -5,7 +5,7 @@ nothing in git is ever rewritten because of a merge. This page describes the sto
 change (#35); the decisions behind it are #1 (layout, ordering, forks, abandoned edits), #9 (identity) and #37
 (what runs in process).
 
-Runs are recorded here by `troupe perform`: see [docs/runs.md](runs.md).
+Runs are recorded here by `troupe perform`: see [contributing/runs.md](runs.md).
 
 ## Layout
 
@@ -86,7 +86,7 @@ The text store meets it like this:
 
 - **Writes in the same process** tell subscribers at once.
 - **Other processes' writes, and segments git brings in** (`pull`, `merge`, `checkout`), are heard by watching
-  `events/` through the platform ([docs/platform.md](platform.md#watching)). Until `events/` exists, the store
+  `events/` through the platform ([contributing/platform.md](platform.md#watching)). Until `events/` exists, the store
   watches its nearest existing parent, and moves to `events/` once it appears. A wake costs one incremental read;
   while nothing changes, no segment is read.
 - **When `events/` can't be watched,** the store looks for new events every `SUBSCRIBE_POLL_SECONDS` instead, and
@@ -181,7 +181,7 @@ imports them.
 
 The text store is also an `eventsourcing` persistence module (`PERSISTENCE_MODULE=troupe_store_text`, with
 `TROUPE_THEATRE` and `TROUPE_VCS`), and passes the library's own recorder test suite unmodified. The git adapter
-runs git with its own environment policy ([docs/platform.md](platform.md#the-git-adapter-troupe_vcs_gitdefaults)).
+runs git with its own environment policy ([contributing/platform.md](platform.md#the-git-adapter-troupe_vcs_gitdefaults)).
 
 ## Notices and errors
 

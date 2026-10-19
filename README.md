@@ -75,7 +75,8 @@ that reach its package; `uv run scripts/check_paths_reach.py` prints the lists t
 | `plugins/` | Out-of-process plugins ([why they're separate](plugins/README.md)) |
 | `protocol/` | Language-neutral contracts, as JSON Schema ([more](protocol/README.md)) |
 | `openspec/` | Specs and changes ([OpenSpec](https://github.com/Fission-AI/OpenSpec)) |
-| `docs/` | Reference for [the command line](docs/cli/README.md), [the platform seam](docs/platform.md), [the event store](docs/event-store.md), [releasing](docs/releasing.md) and [hunting flaky tests](docs/flake-hunt.md) |
+| `docs/` | The user docs, published at [troupe.run/docs](https://troupe.run/docs/): reference for [the command line](docs/cli/README.md) |
+| `contributing/` | For people working on troupe: [runs](contributing/runs.md), [runners](contributing/runners.md), [the platform seam](contributing/platform.md), [the event store](contributing/event-store.md), [releasing](contributing/releasing.md) and [hunting flaky tests](contributing/flake-hunt.md) |
 
 How work flows, from issue to OpenSpec change to pull request, is in the
 [contributing guide](https://github.com/troupe-run/.github/blob/main/CONTRIBUTING.md). Contributions are signed

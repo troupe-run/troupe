@@ -9,7 +9,7 @@ each load, it runs scripts/flake_hunt.py directly, then (with --docker) the same
 container, or with --docker-only only those. Each direct hunt runs in that version's
 .venvs/<version>, as scripts/on.py does, so .venv is never touched. The report, report.md for #100
 and campaign.json, is written after every hunt, so a stopped campaign still says what it found.
-docs/flake-hunt.md says how to run it on each platform.
+contributing/flake-hunt.md says how to run it on each platform.
 """
 
 import argparse
@@ -164,7 +164,7 @@ def _version(text: str) -> str:
 def parse_options(argv: Sequence[str]) -> Options:
     parser = argparse.ArgumentParser(
         prog="flake_campaign.py",
-        description="Run the agreed flake-hunt campaign (docs/flake-hunt.md).",
+        description="Run the agreed flake-hunt campaign (contributing/flake-hunt.md).",
     )
     where = parser.add_mutually_exclusive_group()
     where.add_argument("--docker", action="store_true", help="also hunt in the Linux container")

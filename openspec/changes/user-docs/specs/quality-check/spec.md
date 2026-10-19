@@ -35,3 +35,25 @@ read nothing the scope covers.
   runners, event store, exit codes and platform documentation tests, and the scripted runner's README options test
 - **AND** the tests of the user docs' front matter, links, vocabulary, changelog page and generated regions run
 - **AND** no other test runs
+
+### Requirement: Every test run keeps the declaration true
+Every pytest run in this repository, full or scoped, in one process or in parallel, SHALL fail a test that reads a file
+under a scope's paths without that scope's tag, or reads a file under `openspec/`. The failure SHALL name the test, the
+file, and the tag to add or the skip entry it contradicts.
+
+#### Scenario: A new doc test without its tag
+- **WHEN** a test reads `contributing/runs.md` and isn't tagged `docs`
+- **THEN** that test fails, naming itself, `contributing/runs.md` and the `docs` tag
+
+#### Scenario: A test that reads another package's files untagged
+- **WHEN** a test outside the scripted runner's reach reads a file under `plugins/runner-scripted/` and isn't tagged
+  `runner_scripted`
+- **THEN** that test fails, naming itself, the file and the `runner_scripted` tag
+
+#### Scenario: A test that reads OpenSpec artifacts
+- **WHEN** a test reads a file under `openspec/`
+- **THEN** that test fails, naming the file and the `openspec/**` skip entry
+
+#### Scenario: An untagged doc read in a parallel run
+- **WHEN** the tests run in parallel and a test in any worker reads `contributing/runs.md` without the `docs` tag
+- **THEN** that test fails, naming itself, `contributing/runs.md` and the `docs` tag, as it does in one process

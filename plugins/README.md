@@ -26,4 +26,4 @@ house. #37 gives every port a JSON-RPC transport too, so an adapter acquired by 
 |---|---|
 | [`runner-scripted/`](runner-scripted/README.md) | A deterministic actor runner for tests: plays a script or replays a recording, so every run outcome can be produced on demand (decision [#16](https://github.com/troupe-run/troupe/issues/16)) |
 
-How to write a runner is in [docs/runners.md](../docs/runners.md).
+How to write a runner is in [contributing/runners.md](../contributing/runners.md).

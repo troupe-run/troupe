@@ -8,7 +8,7 @@ messages in `protocol/`).
 ## A run
 
 `troupe perform <actor>` runs one actor through its runner, on its stage, and records the run in the theatre's
-event store ([docs/event-store.md](event-store.md)). The runner contract is in [docs/runners.md](runners.md).
+event store ([contributing/event-store.md](event-store.md)). The runner contract is in [contributing/runners.md](runners.md).
 
 1. **Everything that can refuse goes first:** who you are (the identity chain), the policy, the stage's admission,
    and the runner's name. A refused `perform` runs nothing and writes nothing.
@@ -69,7 +69,7 @@ Ctrl-C, saying why.
 
 - **Woken by the write.** Following subscribes to the event store, which wakes it when anything is recorded, by
   this process or another, so each event appears as soon as `perform` writes it. It never looks on a timer
-  ([docs/event-store.md](event-store.md#subscriptions)).
+  ([contributing/event-store.md](event-store.md#subscriptions)).
 - **Polling is announced.** If the store can only poll (its directory can't be watched, or its watch was found to
   miss a write), the notice `events.subscription-polling` is shown as following starts, and events arrive up to
   `SUBSCRIBE_POLL_SECONDS` late.

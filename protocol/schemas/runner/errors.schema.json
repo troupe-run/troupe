@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://troupe.run/protocol/runner/errors.schema.json",
   "title": "Runner contract errors",
-  "description": "The error codes the runner contract defines, for a runner to answer a request it can't serve. A runner's own codes are published by the runner (docs/runners.md, Publishing a runner's schemas).",
+  "description": "The error codes the runner contract defines, for a runner to answer a request it can't serve. A runner's own codes are published by the runner (contributing/runners.md, Publishing a runner's schemas).",
   "$ref": "../error.schema.json#/$defs/fields",
   "unevaluatedProperties": false,
   "oneOf": [

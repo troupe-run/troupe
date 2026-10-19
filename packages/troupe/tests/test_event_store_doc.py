@@ -1,5 +1,5 @@
-"""docs/event-store.md lists exactly the event store's notices and errors, and its links resolve
-(event-store task 9.5)."""
+"""contributing/event-store.md lists exactly the event store's notices and errors, and its links
+resolve (event-store task 9.5)."""
 
 import json
 import re
@@ -12,7 +12,7 @@ from troupe.core.notices import CODES as NOTICE_CODES
 
 pytestmark = pytest.mark.docs  # reads docs/ (scripts/check-paths.toml)
 
-DOC = Path(__file__).resolve().parents[3] / "docs" / "event-store.md"
+DOC = Path(__file__).resolve().parents[3] / "contributing" / "event-store.md"
 TEXT = DOC.read_text(encoding="utf-8")
 PREFIXES = {"events", "identity", "vcs"}
 

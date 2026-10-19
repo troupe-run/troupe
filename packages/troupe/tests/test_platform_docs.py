@@ -9,7 +9,7 @@ from troupe_vcs_git import defaults as git_defaults
 
 pytestmark = pytest.mark.docs  # reads docs/ (scripts/check-paths.toml)
 
-DOCS = Path(__file__).resolve().parents[3] / "docs"
+DOCS = Path(__file__).resolve().parents[3] / "contributing"
 DOC = DOCS / "platform.md"
 ROW = re.compile(r"^\| `([A-Z_]+)` \| ([0-9.]+|true|false) \|", re.MULTILINE)
 

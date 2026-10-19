@@ -7,8 +7,8 @@ Each worker runs its rounds back to back, so the workers' rounds overlap. A roun
 process over the selection (the whole suite when none is given), with a private hypothesis database,
 so every round explores new examples and the repository's .hypothesis/ is never touched. Each round
 is printed as it ends; the summary names every failing test with its runs, its failures and the
-first failure's traceback. docs/flake-hunt.md says how to run it on each platform, and what to put
-on #100 for a finding.
+first failure's traceback. contributing/flake-hunt.md says how to run it on each platform, and what
+to put on #100 for a finding.
 
 The hunt doesn't import troupe: it must still run, and report, when the code it hunts in is broken.
 """
@@ -148,7 +148,9 @@ def _default_out() -> Path:
 def parse_options(argv: Sequence[str]) -> Options:
     parser = argparse.ArgumentParser(
         prog="flake_hunt.py",
-        description="Repeat tests in overlapping rounds to find flaky ones (docs/flake-hunt.md).",
+        description=(
+            "Repeat tests in overlapping rounds to find flaky ones (contributing/flake-hunt.md)."
+        ),
     )
     parser.add_argument(
         "--workers",
