@@ -30,7 +30,7 @@
   refusal exits 1 naming the input and what's valid, and prints nothing on stdout. Verify the tests pass.
 - [x] 2.5 Add `scripts/check_range.py` to `scopes.scripts` in `scripts/check-paths.toml`. Verify `check-scope`
   answers `scope=scripts` for it and its test, and the reach check agrees with the declaration.
-- [ ] 2.6 Run `uv run scripts/check.py` and commit (`feat(ci): decide which revisions a push's check diffs`).
+- [x] 2.6 Run `uv run scripts/check.py` and commit (`feat(ci): decide which revisions a push's check diffs`).
 
 ## 3. The workflow (design D1, D2, D3, D5)
 
@@ -47,13 +47,20 @@
   runs everything, and the required check is `check`. Verify the docs tests pass (`uv run scripts/check.py --scope
   docs`).
 - [x] 3.5 Run `uv run scripts/check.py` and commit (`feat(ci): run only the check a pull request's paths need`).
-- [ ] 3.6 Rework the `changes` job as revised design D1 has it: `permissions: checks: read`, the event's action,
+- [x] 3.6 Rework the `changes` job as revised design D1 has it: `permissions: checks: read`, the event's action,
   `before`, base, head and repository in `env`, the `git cat-file -e` test, the check-runs lookup filtered by name
   and app id 15368, `check_range.py`, and `git diff` on its revisions. Verify it with actionlint, and run the step's
   script locally on this branch twice: with `synchronize`, `before` = `HEAD~1`, and the conclusion `success`
   (expect the paths of the last commit only), and with the conclusion `failure` (expect the whole branch's paths).
   Run the real lookup with `gh api` for this branch's pushed head and record what it returns.
-- [ ] 3.7 Update `ci.yml`'s header comment and the README's CI sentence: a push is judged against the last push that
+  - Done 2026-10-19. The step fetches `before` by sha when the clone lacks it (checkout doesn't fetch a head a force
+    push left behind; design D1 updated). Locally, under bash, for the `openspec/`-only commit `06ce1b8` against its
+    parent: conclusion `success` diffed `7c688c4 06ce1b8`, 4 paths, `scope=none`; conclusion `failure` diffed
+    `341f018...06ce1b8`, 12 paths (7 outside `openspec/`), `scope=full`. The branch isn't pushed yet, so the real
+    lookup ran against `main`'s head `341f018`: `check_name=check&app_id=15368` returns 0 runs and an empty
+    conclusion (no `check` job exists there yet, and the name matches exactly, so the legs' `check (…)` don't count);
+    `check_name=check (ubuntu-latest, Python 3.13)` returns 1 run, `success`; the same with `app_id=1` returns 0.
+- [x] 3.7 Update `ci.yml`'s header comment and the README's CI sentence: a push is judged against the last push that
   passed, or the whole pull request when there's none. Verify `uv run scripts/check.py --scope docs` passes.
 - [ ] 3.8 Run `uv run scripts/check.py` and commit (`feat(ci): judge each push against the last one that passed`).
 

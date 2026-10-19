@@ -1,9 +1,13 @@
 name: CI
 
-# A pull request runs what its changed paths need (#101; spec: quality-check; ci-check-scope design):
+# Each push to a pull request runs what its changed paths need (#101; spec: quality-check;
+# ci-check-scope design):
 #
-#   changes  what the changed paths need: guard.py check-scope reads scripts/check-paths.toml, the
-#            same declaration the commit guard reads, and answers none, full or the scopes
+#   changes  what the changed paths need. When the pull request's previous head passed `check`,
+#            only what this push changed decides, so an archive push after green code is judged on
+#            its own; otherwise every path the pull request changes does (D1). guard.py check-scope
+#            reads scripts/check-paths.toml, the same declaration the commit guard reads, and
+#            answers none, full or the scopes
 #   check    the legs, on every OS and Python version troupe supports: skipped when only skipped
 #            paths changed, scoped when only scoped ones did, and otherwise the full check
 #   check    (the result job) the required check for the legs. It passes when every leg passed, or
@@ -30,6 +34,10 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      # To read the previous head's `check` (D1).
+      checks: read
     outputs:
       scope: ${{ steps.paths.outputs.scope }}
       check-args: ${{ steps.paths.outputs['check-args'] }}
@@ -40,13 +48,30 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
-      - name: The pull request's changed paths
+      - name: What this push changed
         id: paths
         env:
+          ACTION: ${{ github.event.action }}
+          # The previous head, on `synchronize` only.
+          BEFORE: ${{ github.event.before }}
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          git diff --name-only --no-renames "$BASE...$HEAD" > "$RUNNER_TEMP/paths"
+          # The previous head's `check`, from GitHub Actions (app 15368) only, when the commit can
+          # be had: checkout doesn't fetch a head a force push left behind, so fetch it by sha.
+          CONCLUSION=""
+          if [ -n "$BEFORE" ] && { git cat-file -e "$BEFORE^{commit}" 2>/dev/null ||
+            git fetch --quiet --no-tags origin "$BEFORE"; }; then
+            CONCLUSION=$(gh api "repos/$REPO/commits/$BEFORE/check-runs?check_name=check&app_id=15368" \
+              --jq '.check_runs[0].conclusion // ""')
+          fi
+          echo "the previous head's check: ${CONCLUSION:-none}"
+          REVISIONS=$(python3 scripts/check_range.py "$ACTION" "$BEFORE" "$BASE" "$HEAD" "$CONCLUSION")
+          echo "diffing $REVISIONS"
+          # Unquoted: one revision range, or two shas.
+          git diff --name-only --no-renames $REVISIONS > "$RUNNER_TEMP/paths"
           uv run --no-project scripts/guard.py check-scope < "$RUNNER_TEMP/paths" >> "$GITHUB_OUTPUT"
           cat "$GITHUB_OUTPUT"
 
