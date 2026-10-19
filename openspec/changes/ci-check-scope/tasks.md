@@ -107,7 +107,7 @@
   Verify `changes` fails, all 12 legs run the full check, and `check` reports their result. Record the link.
   - Done 2026-10-19 on pull request 3 (run 39225477433): `changes` failed with "check_range: BASE `not-a-sha` isn't a
     sha: it must be 40 lowercase hex characters.", 12 legs ran the full check (green), `check` green.
-- [ ] 4.4 Delete the probe repository with the owner's go-ahead. Verify `gh repo view
+- [x] 4.4 Delete the probe repository with the owner's go-ahead. Verify `gh repo view
   troupe-run/infra-probe-ci-check-scope` fails.
 
 ## 5. The required checks in infrastructure (design D7)
@@ -117,6 +117,8 @@
   push that skips the legs blocks its pull request (design D7). Open its pull request ready to merge before this one
   merges. Verify it's on the board with `gh issue view <n> -R troupe-run/infrastructure --json projectItems`, and link
   it from this change's pull request.
+  - Opened 2026-10-19: troupe-run/infrastructure#104, on the board as Todo (`gh issue view 104 -R
+    troupe-run/infrastructure --json projectItems`). Ticked once this change's pull request links it.
 
 ## Workflow follow-up
 
