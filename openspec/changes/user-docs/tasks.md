@@ -180,21 +180,85 @@ parts:
 
 A built claim with an example is checked by a docs test, as `test_cli_docs` checks console examples.
 
-- [ ] 7.1 Opening night: `install`, `first-theatre` and `first-performance`. first-performance's console examples
+- [x] 7.1 Opening night: `install`, `first-theatre` and `first-performance`. first-performance's console examples
   run as written under a test (scripted runner, policy set, in a temporary theatre). Verify that test passes on
   every OS in CI.
-- [ ] 7.2 The company, built parts first: `theatres`, `performances-and-runs`, `lineage` and `roles-and-actors`.
+  - Done 2026-10-19 (CI on every OS runs with the pull request). `test_user_docs_pages.py`:
+    - `test_the_first_performance_runs_as_written_and_writes_its_file` takes the page's `hello.json` block and `sh`
+      lines in a fresh git theatre with the policy unset, runs `perform`, `status` and `logs` as written, and checks
+      the run succeeds and writes `out/hello.txt`;
+    - `..._is_refused_until_the_policy_is_set` shows the page's policy step is needed;
+    - `test_the_install_page_gives_the_python_versions_troupe_declares` checks the install page against
+      `requires-python`.
+
+    Review of unbuilt claims:
+    - install: no install method, #38 q4 (open); releases on GitHub with changelogs, releases spec (built); CLI and
+      house as one unit, #73; `~/.troupe/` and `TROUPE_HOME`, #2.
+    - first-theatre: config by convention, #6; `$schema`, #7; `troupe config set`, #60. The draft said git was
+      optional, but `perform` always uses git today (`defaults.VCS`), so that part was rewritten: plain files are
+      built but can't be chosen until #60, and #121 is open. The draft also said "a setup command arrives with #60",
+      which nothing decides. The page now says it's an open question on #60, raised there:
+      https://github.com/troupe-run/troupe/issues/60#issuecomment-6267832585.
+    - first-performance: the Claude Code runner, #55; the interim flags, #60; a whole-process performance needs flows,
+      roles and gates (#124, #61, #62). "The run fails if it wasn't [changed]" is the actor-runners spec ("Success
+      needs ... a passing effect check").
+- [x] 7.2 The company, built parts first: `theatres`, `performances-and-runs`, `lineage` and `roles-and-actors`.
   They say plainly that `perform` runs one actor today, and that `system` is decided but not yet recorded. Verify
   the lineage fields they list match `lineage.schema.json`, by a test or by linking the generated events page
   instead of repeating them.
-- [ ] 7.3 The company, intent: `the-house` and `gates-and-decisions`. Undecided: `escalation`, `flows`, `guests` and
+  - Done 2026-10-19. Tests in `test_user_docs_pages.py`:
+    - the runs page's states table equals `State`, its listed events equal the run aggregate's `TOPICS`, and its
+      policy row and variable equal `troupe.core.policy` and `defaults`;
+    - the lineage page names exactly the lineage schema's properties.
+
+    Review of unbuilt claims:
+    - theatres: config under `.troupe/`, #60; typed references, #6; `$schema` and per-kind schemas, #7; config only
+      in the theatre, #2; guests' own files, #6 and #7; policy files open, #8.
+    - performances-and-runs: rehearsal, #15; worktree per run, #51 (planned); Docker stage, #65 (planned); the house
+      supervising runs, #73.
+    - lineage: roles in lineage, #15 and #61; #44 open; approvals with gates, #62; `system` decided but not recorded
+      (`lineage.schema.json` allows `human` and `agent`, plus `unknown`).
+    - roles-and-actors: work to roles, holders and roles in lineage, and `system`, #15; config of holders, #61;
+      actor files, #6 and #60; #44 open.
+- [x] 7.3 The company, intent: `the-house` and `gates-and-decisions`. Undecided: `escalation`, `flows`, `guests` and
   `notes`, each linking its 4.1 issue. Verify each `prerelease: true` and the review record.
-- [ ] 7.4 Stagecraft: `bring-your-own-agent` (the runner contract and conformance suite, linking
+  - Done 2026-10-19. All six are `prerelease: true`, which the front-matter test reads.
+    - the-house: every point is from #73's decision (only orchestrator, exceptions, per user, B1 auto-start with a
+      notice, start/stop "or similar" as provisional names, one unit, events stay the truth); #2 (own settings and
+      store, `TROUPE_HOME`); #118 (auto-start off); #14 (gateway: localhost, token, refuses failing requests, pushed
+      updates, no policy in a request). The open details are #63's own list.
+    - gates-and-decisions: #15 (to roles, cues, notifications and inbox), #62 (a flow stops at a gate, the answer
+      with lineage), #73 (works with nobody at a terminal), #12 (open). Cut: "and carries on once it's given", which
+      #62 doesn't say.
+    - escalation: research then brief (principles, glossary); to a role and raising a cue (#15). The rest is on #126.
+    - flows: the principle, and #62's gate. The rest is on #124.
+    - guests: own files and schemas (#6, #7); acquired ones over JSON-RPC (#37). The draft stated #38's
+      direction (named and pinned in config) as decided; it's now a leaning, under "Not decided yet". The rest is on
+      #127.
+    - notes: the term (#15) and the glossary line. The rest is on #125.
+- [x] 7.4 Stagecraft: `bring-your-own-agent` (the runner contract and conformance suite, linking
   `contributing/runners.md` by its GitHub URL), `read-the-lineage`, `configure-roles`, `hand-edit-config`,
   `route-decisions`, `build-a-flow` and `write-a-guest`. Also the prompt book's `guest-manifest`. Verify each as
   above.
-- [ ] 7.5 Verify no page under `docs/` is still `status: planned`. A test asserts it, so a page added later in the
+  - Done 2026-10-19.
+    - bring-your-own-agent: the contract and the conformance suite are built (runner-protocol spec,
+      `contributing/runners.md`). That `perform` can't run your own runner yet is `troupe.core.interim.RUNNERS`. #55
+      and #56 are planned; JSON-RPC for all plugins and policy over transports, #37; SDK, #58; #38 and #67 open.
+    - read-the-lineage: a first draft said `logs --json` shows each event's change and cause. The client schemas say
+      otherwise: `loggedEvent` holds `seq`, `at` and the event, and `summary` holds `startedBy` and `stage`. The page
+      now says the full lineage is only in `.troupe/events/`, and that no command shows it yet. Cut: a bullet about
+      an undecided lineage command, which had no issue to link.
+    - configure-roles: #15, #61, #9 (an agent's identity from its actor), #6 and #60; #44 open.
+    - hand-edit-config: #5 (net change at command boundaries, no watching), #119 (mid-save guard, surgical write-back,
+      unknown author), #60 (a hand-edited file refused until #119), the project constraint that formatting is kept
+      whichever surface writes, #45 (keep or drop, asked: #1 named it).
+    - route-decisions: #15, #62, #73; #61, #44 and #12 open. Notification channels only as #12's leaning.
+    - guest-manifest: #6 and #7 only; the format is on #127. Cut: a promise that the page would be generated, which
+      nothing decides.
+- [x] 7.5 Verify no page under `docs/` is still `status: planned`. A test asserts it, so a page added later in the
   planned state must either be written or have that assertion relaxed in its own change.
+  - Done 2026-10-19: `test_no_page_is_still_planned` passes. The vocabulary list records five more uses, each with
+    its reason, and every relative link resolves (`test_user_docs_links`).
 
 ## 8. Integration
 
