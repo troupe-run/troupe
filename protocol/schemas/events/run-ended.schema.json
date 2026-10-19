@@ -18,6 +18,7 @@
       "$ref": "../event-record.schema.json#/$defs/libraryTimestamp"
     },
     "outcome": {
+      "description": "How the run ended, as the run host derived it from what the runner reported, never from its exit code alone: the outcome, whether the runner exited, was killed or never started, and the limits it ran under.",
       "type": "object",
       "additionalProperties": false,
       "required": [

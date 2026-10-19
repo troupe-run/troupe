@@ -1,4 +1,4 @@
-"""The examples in docs/cli/README.md are run as written.
+"""The examples in docs/prompt-book/cli.md are run as written.
 
 Each `$ troupe ...` line in a console block runs, and its documented output is compared with what
 troupe actually prints.
@@ -15,7 +15,7 @@ from troupe.cli import main
 
 pytestmark = pytest.mark.docs  # reads docs/ (scripts/check-paths.toml)
 
-DOC = Path(__file__).resolve().parents[3] / "docs" / "cli" / "README.md"
+DOC = Path(__file__).resolve().parents[3] / "docs" / "prompt-book" / "cli.md"
 BLOCK = re.compile(r"```console\n(.*?)```", re.DOTALL)
 
 

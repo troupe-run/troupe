@@ -104,12 +104,21 @@
 
 ## 5. Generated reference (design D3; spec: user-docs)
 
-- [ ] 5.1 Write `scripts/docs_reference.py` with the four regions in D3's table, and its `--check` mode. Rewriting
+- [x] 5.1 Write `scripts/docs_reference.py` with the four regions in D3's table, and its `--check` mode. Rewriting
   must change only the text between a region's markers. Add a test for that: a page whose prose surrounds a stale
   region keeps its prose byte for byte, and the CRLF and LF forms of the page give the same result on every OS.
   Verify that `uv run scripts/docs_reference.py --check` exits non-zero naming each stale region, and that a second
   run changes nothing.
-- [ ] 5.2 Build `docs/prompt-book/cli.md` from `docs/cli/README.md` (`git mv`) and `docs/cli/exit-codes.md`:
+  - Done 2026-10-19: `scripts/docs_reference.py`. Tests cover four things:
+    - prose kept byte for byte around a stale region, LF and CRLF;
+    - LF and CRLF giving the same text;
+    - a second run changing nothing;
+    - refusals: a missing region, a region on the wrong page, a field with no description, an exit code with no
+      docstring.
+
+    `--check` exits 1 naming each stale region and the command, and 2 for a refusal. The usage line and the tables are
+    built from the parsers' actions, never argparse's formatter, whose output changes between Python versions.
+- [x] 5.2 Build `docs/prompt-book/cli.md` from `docs/cli/README.md` (`git mv`) and `docs/cli/exit-codes.md`:
   - the prose sections are kept;
   - the `cli` and `exit-codes` regions replace the hand-written tables;
   - it gets the site's front matter, `prerelease: false`, with links fixed to GitHub URLs or user pages.
@@ -118,16 +127,35 @@
   - Review the help strings and the exit-code docstrings as reference prose (D3). Fix wording in the code, and
     verify that `test_cli.py`'s `--help` tests still pass.
   - Verify that `test_cli_docs`'s console examples pass, and that `docs/cli/` is gone.
-- [ ] 5.3 Write `docs/prompt-book/events.md`: an introduction to events and lineage, linking the lineage concept
+  - Done 2026-10-19: `docs/cli/README.md` moved to `docs/prompt-book/cli.md` (`git mv`) and `exit-codes.md` is
+    gone.
+    - The commands' and global flags' tables became the `cli` region, with what they said beyond the help strings kept
+      as prose.
+    - `--expect`'s help now says "relative to where you are and inside the theatre".
+    - CANCELLED's docstring now reads as the page did ("You cancelled...").
+    - The runs links point at `contributing/runs.md` by GitHub URL until 7.2 writes the performances-and-runs page.
+
+    `test_cli_docs` (5) and `test_exit_codes_doc` pass against the new page. No test pins the help strings, and the
+    full check at commit runs `test_cli.py`.
+- [x] 5.3 Write `docs/prompt-book/events.md`: an introduction to events and lineage, linking the lineage concept
   page, then the `events` region. Verify the region lists `Run.Started`, `Run.Reported` and `Run.Ended` with every
   field in their schemas.
-- [ ] 5.4 Write `docs/prompt-book/config-schema.md` as intent (D6), with the `config` region saying there's no config
+  - Done 2026-10-19. Generating the page found two fields with no description, `Run.Ended.outcome` and
+    `Run.Reported.seq`. Their schemas now describe them (`seq` from the runner contract: it starts at 0), and the
+    generator refuses a field with no description from now on. `test_the_events_page_lists_every_event_schema_with_every_field`
+    checks each event's title and every field.
+- [x] 5.4 Write `docs/prompt-book/config-schema.md` as intent (D6), with the `config` region saying there's no config
   schema yet. Verify the no-schema scenario. Then in a test, add a minimal schema under a temporary
   `protocol/schemas/config/` and check that `--check` fails until it's regenerated.
-- [ ] 5.5 Add `packages/troupe/tests/test_user_docs_reference.py` (tagged `docs`). It runs the `--check` mode and
+  - Done 2026-10-19: the page states what #6, #7 and #60 decide and that the rest is #60's design, and is
+    `prerelease: true`. `test_with_no_config_schema_the_region_says_so_and_a_new_schema_makes_it_stale` adds
+    `config/actor.schema.json` to a copy: `--check` fails naming the region, and regenerating lists the `runner` field.
+- [x] 5.5 Add `packages/troupe/tests/test_user_docs_reference.py` (tagged `docs`). It runs the `--check` mode and
   fails naming the page, the region and `uv run scripts/docs_reference.py`. Give each spec scenario a test: a new
   CLI option (a `Command` added in the test), an edit inside a region, and no config schema. Verify the full check
   passes.
+  - Done 2026-10-19: `16 passed`. `uv run scripts/check.py --scope docs`: all gates passed, `127 passed`. The full
+    check runs at this group's commit.
 
 ## 6. The changelog page (design D4; spec: user-docs)
 
