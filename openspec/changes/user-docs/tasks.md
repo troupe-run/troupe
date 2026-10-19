@@ -159,11 +159,16 @@
 
 ## 6. The changelog page (design D4; spec: user-docs)
 
-- [ ] 6.1 Write `docs/backstage/changelog.md` as D4 describes. Add
+- [x] 6.1 Write `docs/backstage/changelog.md` as D4 describes. Add
   `packages/troupe/tests/test_user_docs_changelog.py` (tagged `docs`), which compares the page's changelog paths
   with the packages in `release-please-config.json`, plus the misnamed-changelog scenario. Verify that it passes,
   and that it would still pass with the changes release PR #89 makes (rebase #89's files onto this branch in a
   throwaway worktree, run the test, and record the result).
+  - Done 2026-10-19. The page links the nine changelogs, grouped as the linked `troupe` release and the plugins
+    (`contributing/releasing.md`), and the test passes (4 tests).
+  - The check against #89 was lighter than the task says. #89 (fetched as `pull/89/head`) changes neither `docs/` nor
+    `release-please-config.json`, the only two files the test reads. So instead of rebasing, I ran `problems()`
+    against #89's config: `[]`. All nine `CHANGELOG.md` files #89 writes are among those the page links.
 
 ## 7. The written pages (design D6; spec: user-docs)
 
