@@ -37,7 +37,7 @@
 - [x] 3.4 Update `README.md`'s CI sentence: a pull request runs what its paths need on all three platforms, `main`
   runs everything, and the required check is `check`. Verify the docs tests pass (`uv run scripts/check.py --scope
   docs`).
-- [ ] 3.5 Run `uv run scripts/check.py` and commit (`feat(ci): run only the check a pull request's paths need`).
+- [x] 3.5 Run `uv run scripts/check.py` and commit (`feat(ci): run only the check a pull request's paths need`).
 
 ## 4. Proof before the merge (design D6)
 
