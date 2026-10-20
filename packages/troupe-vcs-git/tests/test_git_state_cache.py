@@ -6,7 +6,9 @@ reflogs on and off, because which of git's files a move touches depends on both.
 """
 
 import os
+import shutil
 import subprocess
+import tempfile
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -14,6 +16,9 @@ from functools import cache
 from pathlib import Path
 
 import pytest
+from hypothesis import HealthCheck, settings
+from hypothesis import strategies as st
+from hypothesis.stateful import RuleBasedStateMachine, invariant, rule
 
 from gitrepo import AUTHOR, Repo, isolated_environment, past_the_racy_window
 from troupe_vcs_git import GitAdapter
@@ -22,12 +27,13 @@ REFTABLE_NEEDS = "reftable needs git >= 2.45 (git init --ref-format=reftable)"
 
 
 @cache
-def reftable_supported(scratch: Path) -> bool:
-    completed = subprocess.run(
-        ["git", "init", "-q", "--ref-format=reftable", str(scratch / "probe")],  # noqa: S607
-        capture_output=True,
-        check=False,
-    )
+def reftable_supported() -> bool:
+    with tempfile.TemporaryDirectory() as scratch:
+        completed = subprocess.run(
+            ["git", "init", "-q", "--ref-format=reftable", scratch],  # noqa: S607
+            capture_output=True,
+            check=False,
+        )
     return completed.returncode == 0
 
 
@@ -49,7 +55,7 @@ LAYOUTS = [Layout(refs, reflogs) for refs in ("files", "reftable") for reflogs i
 def make_layout_repo(root: Path, layout: Layout) -> Repo:
     """A repository with two commits on ``main``, a branch ``other`` at the same commit (same
     tree), and a branch ``feature`` one commit ahead with a different tree."""
-    if layout.refs == "reftable" and not reftable_supported(root):
+    if layout.refs == "reftable" and not reftable_supported():
         if os.environ.get("CI"):
             pytest.fail(f"{REFTABLE_NEEDS}; CI must run the reftable cases, not skip them")
         pytest.skip(REFTABLE_NEEDS)
@@ -185,3 +191,102 @@ def test_every_move_of_the_branch_or_head_changes_the_token_and_the_answers_foll
     assert git.branch_token() != before
     now = fresh(repo)
     assert (git.branch(), git.head()) == (now.branch(), now.head())
+
+
+# The differential test (design D7 test 2): after any sequence of moves, the cached adapter answers
+# exactly as an adapter that caches nothing, which is what the adapter did before the cache.
+
+
+class Moves(RuleBasedStateMachine):
+    """Random moves of the branch and HEAD, checked against a fresh adapter after each one."""
+
+    layout = LAYOUTS[0]
+    now: Callable[[], int] = staticmethod(time.time_ns)
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.root = Path(tempfile.mkdtemp())
+        self.repo = make_layout_repo(self.root, self.layout)
+        self.branches = ["main", "other", "feature"]
+        self.linked = self.root / "linked"
+        self.repo.git("worktree", "add", "-q", "--detach", str(self.linked))
+        self.cached = GitAdapter(self.repo.path, source=self.repo.env, now=type(self).now)
+        self.renames = 0
+
+    def teardown(self) -> None:
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    @rule()
+    def commit(self) -> None:
+        commit(self.repo)
+
+    @rule()
+    def empty_commit(self) -> None:
+        empty_commit(self.repo)
+
+    @rule(pick=st.integers(min_value=0))
+    def switch(self, pick: int) -> None:
+        self.repo.git("switch", "-q", "--discard-changes", self.branches[pick % len(self.branches)])
+
+    @rule()
+    def detach(self) -> None:
+        detach(self.repo)
+
+    @rule(mode=st.sampled_from(["--soft", "--mixed", "--hard"]), pick=st.integers(min_value=0))
+    def reset(self, mode: str, pick: int) -> None:
+        self.repo.git("reset", "-q", mode, self.branches[pick % len(self.branches)])
+
+    @rule(pick=st.integers(min_value=0))
+    def merge(self, pick: int) -> None:
+        target = self.branches[pick % len(self.branches)]
+        self.repo.git("merge", "-q", "--no-ff", "--no-edit", "-X", "theirs", target)
+
+    @rule(pick=st.integers(min_value=0), to=st.integers(min_value=0))
+    def update_ref_from_a_linked_worktree(self, pick: int, to: int) -> None:
+        branch = self.branches[pick % len(self.branches)]
+        target = self.branches[to % len(self.branches)]
+        run_git(self.linked, self.repo, "update-ref", f"refs/heads/{branch}", target)
+
+    @rule()
+    def pack_refs(self) -> None:
+        self.repo.git("pack-refs", "--all")
+
+    @rule()
+    def rename_the_current_branch(self) -> None:
+        current = self.repo.git("branch", "--show-current").strip()
+        if not current:
+            return  # detached: nothing to rename
+        self.renames += 1
+        renamed = f"renamed-{self.renames}"
+        self.repo.git("branch", "-m", renamed)
+        self.branches[self.branches.index(current)] = renamed
+
+    @invariant()
+    def the_cached_answers_are_gits(self) -> None:
+        now = fresh(self.repo)
+        assert (self.cached.branch(), self.cached.head()) == (now.branch(), now.head())
+
+
+def _moves(layout: Layout, now: Callable[[], int]) -> type[Moves]:
+    machine: type[Moves] = type(
+        f"Moves_{layout.id}", (Moves,), {"layout": layout, "now": staticmethod(now)}
+    )
+    machine.TestCase.settings = settings(
+        max_examples=4,
+        stateful_step_count=10,
+        deadline=None,
+        suppress_health_check=[HealthCheck.too_slow],
+    )
+    return machine
+
+
+# Past the racy window, the stats alone must catch every move; with the real clock and the default
+# windows, this is the configuration troupe ships.
+TestMovesFilesReflogsOnStatsOnly = _moves(LAYOUTS[0], past_the_racy_window).TestCase
+TestMovesFilesReflogsOffStatsOnly = _moves(LAYOUTS[1], past_the_racy_window).TestCase
+TestMovesReftableReflogsOnStatsOnly = _moves(LAYOUTS[2], past_the_racy_window).TestCase
+TestMovesReftableReflogsOffStatsOnly = _moves(LAYOUTS[3], past_the_racy_window).TestCase
+TestMovesFilesReflogsOnAsShipped = _moves(LAYOUTS[0], time.time_ns).TestCase
+TestMovesFilesReflogsOffAsShipped = _moves(LAYOUTS[1], time.time_ns).TestCase
+TestMovesReftableReflogsOnAsShipped = _moves(LAYOUTS[2], time.time_ns).TestCase
+TestMovesReftableReflogsOffAsShipped = _moves(LAYOUTS[3], time.time_ns).TestCase
