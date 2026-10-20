@@ -41,7 +41,8 @@ after every merge. The one required check, `check`, passes when every platform's
 needed.
 
 The check runs the tests in parallel with pytest-xdist, one worker for each CPU it may use. Set
-`PYTEST_XDIST_AUTO_NUM_WORKERS` to change the count. Running pytest yourself (`uv run pytest ...`) stays in one
+`PYTEST_XDIST_AUTO_NUM_WORKERS` to change the count. Every run prints its 25 slowest tests, so a slowdown shows in
+the log with its cause. Running pytest yourself (`uv run pytest ...`) stays in one
 process, which is easier for narrowing to one test or stepping through it in a debugger.
 
 Turn on the repository's git hooks once per clone (Claude Code sessions do this for you):

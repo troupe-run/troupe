@@ -52,9 +52,13 @@ PARALLEL = ["-n", "auto", "--dist", "worksteal"]
 """How the tests gate runs the suite: a worker per CPU, and an idle worker takes work from a busy
 one, because a few tests wait for seconds while most take milliseconds (parallel-tests D1-D3)."""
 
+DURATIONS = ["--durations=25"]
+"""The tests gate prints its 25 slowest tests on every run, full or scoped, so a slowdown shows in
+the log with its cause (spec: quality-check; shorten-slow-tests design D4)."""
+
 
 def gates(scopes: tuple[str, ...] = ()) -> list[tuple[str, list[str]]]:
-    pytest = [tool("pytest"), *PARALLEL]
+    pytest = [tool("pytest"), *PARALLEL, *DURATIONS]
     if scopes:
         pytest += ["-m", guard.marker_expression(scopes)]
     return [
