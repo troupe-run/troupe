@@ -2,12 +2,12 @@
 
 ## 1. Pin today's behaviour and reproduce the token's misses (design D7)
 
-- [ ] 1.1 Add `packages/troupe-vcs-git/tests/test_git_state_cache.py` with the helpers the later tests share: a
+- [x] 1.1 Add `packages/troupe-vcs-git/tests/test_git_state_cache.py` with the helpers the later tests share: a
   repository fixture parametrised over ref storage (files, reftable) × reflogs (on, off), and the reftable rule from
   D7 test 5 (skip with "reftable needs git ≥ 2.45" when the installed git can't `init --ref-format=reftable`, fail
   when `CI` is set). Verify by running it with `uv run pytest packages/troupe-vcs-git/tests/test_git_state_cache.py`
   and seeing the matrix collected on this machine
-- [ ] 1.2 Add the D7 test 1 token scenarios (commit, empty commit, same-tree switch, detach, commit while detached,
+- [x] 1.2 Add the D7 test 1 token scenarios (commit, empty commit, same-tree switch, detach, commit while detached,
   `reset --soft/--mixed/--hard`, merge, `update-ref` from a linked worktree, `pack-refs --all` then a commit). Each
   asserts that the token changed and that `branch()`/`head()` equal a fresh adapter's. Verify that on the unchanged
   adapter the token assertions **fail** exactly in the cells the design's probe table marks "no", and pass elsewhere.
