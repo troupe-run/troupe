@@ -158,9 +158,13 @@ In `packages/troupe-vcs-git/tests/` (new `test_git_state_cache.py`), against rea
    stat logic alone is tested.
 2. **Differential (stateful hypothesis) test** over the same matrix. It runs random sequences of the operations
    above plus `branch -m` of the current branch. After each step it compares the cached adapter's `branch()` and
-   `head()` with a new `GitAdapter`'s. This is the "behaviour unchanged" check the learned rule asks for. The new
-   path is compared with the old path, which the fresh adapter still is. It also runs once with the real clock and
-   the default window, so the shipped configuration is covered too.
+   `head()` with git's own answers, from the two commands the adapter ran before it cached (`symbolic-ref --short`,
+   `rev-parse`). This is the "behaviour unchanged" check the learned rule asks for: the new path against the old
+   one. Four machines run with the clock past the racy window, one per layout, so the stats alone are tested. One
+   more runs with the real clock and default windows, in the layout git's files reveal least about (reftable,
+   reflogs off), so the shipped configuration is covered too. A machine per layout and clock (eight in all) added
+   about 140 CPU-seconds to every check, against #84's work on the suite's floor, so it was cut to five, each 4
+   examples of 10 steps.
 3. **Cost**: repeated reads with nothing moved run no command (non-racy clock). The existing
    `test_the_branch_token_costs_one_git_command_per_adapter_and_none_after` is renamed and re-counted: the first
    token now reads the state, so it costs 1 + 3, then nothing.
