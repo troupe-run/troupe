@@ -4,11 +4,16 @@ Every git command runs through troupe.core.commands with GIT_ENVIRONMENT, so git
 config, credentials and SSH agent, but never a hook's GIT_DIR or GIT_INDEX_FILE, and nothing else of
 troupe's environment. Only local commands run (symbolic-ref, rev-parse, ls-files, ls-tree, config),
 so git never starts a credential helper or ssh.
+
+The branch and HEAD are cached behind the branch token: the stats of every file git changes when
+either moves. They are read through git again only when one of those files has changed, so
+recording event after event runs no command while nothing moves (cache-vcs-state design D1, D3).
 """
 
 import os
 import shlex
 from collections.abc import Hashable, Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
 from troupe.core.commands import run_command
@@ -18,6 +23,29 @@ from troupe_vcs_git import defaults
 
 # Exit status 1 means "no answer" for these, not failure: an unborn or detached HEAD, a missing key.
 _NO_ANSWER = 1
+
+# The files git changes when the branch or HEAD moves (cache-vcs-state design D3), as --git-path
+# names them. Per worktree: HEAD, the index, HEAD's reflog and, under reftable, the table list that
+# holds HEAD. Common: packed-refs. The common reftable list and the branch's own loose ref are found
+# through --git-common-dir.
+_WATCHED = ("HEAD", "index", "logs/HEAD", "packed-refs", "reftable/tables.list")
+
+_Stat = tuple[int, int, int] | None
+
+
+@dataclass(frozen=True)
+class _State:
+    """The branch and HEAD, and the stats of the files that were watched when they were read."""
+
+    watched: tuple[_Stat, ...]
+    ref: Path | None
+    ref_stat: _Stat
+    branch: str | None
+    head: str | None
+
+    @property
+    def token(self) -> Hashable:
+        return (self.watched, self.ref_stat, self.branch, self.head)
 
 
 class GitAdapter:
@@ -44,6 +72,8 @@ class GitAdapter:
         self.commands_run = 0
         """How many git commands this adapter has run, so callers can check their cost."""
         self._watched: tuple[Path, ...] | None = None
+        self._common: Path | None = None
+        self._state: _State | None = None
 
     @property
     def name(self) -> str:
@@ -77,28 +107,63 @@ class GitAdapter:
         return completed
 
     def branch(self) -> str | None:
-        completed = self.git("symbolic-ref", "--quiet", "--short", "HEAD", allow=(0, _NO_ANSWER))
-        if completed.returncode == _NO_ANSWER:
-            return None  # detached
-        return completed.stdout.decode("utf-8").strip()
+        return self._current().branch
 
     def head(self) -> str | None:
+        return self._current().head
+
+    def branch_token(self) -> Hashable:
+        # The stats of every file git changes when the branch or HEAD moves, with the branch and
+        # HEAD read when they were taken: it changes exactly when they might have (design D1, D3).
+        return self._current().token
+
+    def _current(self) -> _State:
+        """The branch and HEAD, read through git only when a watched file has changed since the
+        last read (cache-vcs-state design D1)."""
+        common, paths = self._paths()
+        watched = tuple(_stat_token(path) for path in paths)
+        state = self._state
+        if (
+            state is not None
+            and state.watched == watched
+            and (state.ref is None or _stat_token(state.ref) == state.ref_stat)
+        ):
+            return state
+        # Stat before reading: a move during the read leaves the stats older than the answers, so
+        # the next call reads again. It never leaves the answers older than the stats.
+        full = self.git("symbolic-ref", "--quiet", "HEAD", allow=(0, _NO_ANSWER))
+        ref: Path | None = None
+        ref_stat: _Stat = None
+        branch: str | None = None
+        if full.returncode != _NO_ANSWER:  # detached, otherwise
+            ref = common / full.stdout.decode("utf-8").strip()
+            ref_stat = _stat_token(ref)
+            # The short name, as lineage has always recorded it (design D2).
+            short = self.git("symbolic-ref", "--quiet", "--short", "HEAD", allow=(0, _NO_ANSWER))
+            if short.returncode != _NO_ANSWER:
+                branch = short.stdout.decode("utf-8").strip()
+        state = _State(watched, ref, ref_stat, branch, self._read_head())
+        self._state = state
+        return state
+
+    def _read_head(self) -> str | None:
         completed = self.git("rev-parse", "--verify", "--quiet", "HEAD", allow=(0, _NO_ANSWER))
         if completed.returncode == _NO_ANSWER:
             return None  # no commit yet
         return completed.stdout.decode("ascii").strip()
 
-    def branch_token(self) -> Hashable:
-        # HEAD moves on a switch; the index is rewritten on add, commit, switch, merge and reset;
-        # the HEAD reflog grows whenever HEAD moves. Statting the three costs no command.
-        if self._watched is None:
-            out = self.git(
-                "rev-parse", "--git-path", "HEAD", "--git-path", "index", "--git-path", "logs/HEAD"
+    def _paths(self) -> tuple[Path, tuple[Path, ...]]:
+        """The common git directory and the watched files, found with one command per adapter."""
+        if self._common is None or self._watched is None:
+            args = [arg for name in _WATCHED for arg in ("--git-path", name)]
+            out = self.git("rev-parse", "--git-common-dir", *args).stdout.decode("utf-8")
+            common, *paths = out.splitlines()
+            self._common = self.theatre / common
+            self._watched = (
+                *(self.theatre / path for path in paths),
+                self._common / "reftable" / "tables.list",
             )
-            self._watched = tuple(
-                self.theatre / line for line in out.stdout.decode("utf-8").splitlines()
-            )
-        return tuple(_stat_token(path) for path in self._watched)
+        return self._common, self._watched
 
     def committed_under(self, directory: str) -> frozenset[str]:
         staged = self.git("ls-files", "-z", "--", directory)
@@ -132,9 +197,9 @@ def _nul_separated(data: bytes) -> list[str]:
     return [item for item in data.decode("utf-8").split("\0") if item]
 
 
-def _stat_token(path: Path) -> tuple[int, int, int] | None:
+def _stat_token(path: Path) -> _Stat:
     try:
         info = os.stat(path)
-    except FileNotFoundError:
-        return None
+    except (FileNotFoundError, NotADirectoryError):
+        return None  # under reftable, refs/heads is a file, so a path below it is not a directory
     return (info.st_mtime_ns, info.st_size, info.st_ino)

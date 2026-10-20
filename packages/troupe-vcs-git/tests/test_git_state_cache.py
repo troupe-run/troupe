@@ -173,39 +173,10 @@ def settle() -> None:
     time.sleep(0.02)
 
 
-# The moves today's token misses (#75): it watched only HEAD, the index and logs/HEAD.
-MISSED_TODAY = {
-    ("files-reflogs-on", "update-ref-from-a-linked-worktree"),
-    *(
-        ("files-reflogs-off", operation)
-        for operation in (
-            "empty-commit",
-            "reset-soft",
-            "update-ref-from-a-linked-worktree",
-            "pack-refs-then-commit",
-        )
-    ),
-    *(
-        (f"reftable-reflogs-{reflogs}", operation)
-        for reflogs in ("on", "off")
-        for operation in (
-            "empty-commit",
-            "detach",
-            "commit-while-detached",
-            "reset-soft",
-            "update-ref-from-a-linked-worktree",
-            "pack-refs-then-commit",
-        )
-    ),
-}
-
-
 @pytest.mark.parametrize("operation", OPERATIONS)
 def test_every_move_of_the_branch_or_head_changes_the_token_and_the_answers_follow(
-    repo: Repo, layout: Layout, operation: str, request: pytest.FixtureRequest
+    repo: Repo, operation: str
 ) -> None:
-    if (layout.id, operation) in MISSED_TODAY:
-        request.applymarker(pytest.mark.xfail(strict=True, reason="#75: the token misses it"))
     git = adapter(repo)
     before = git.branch_token()
     settle()

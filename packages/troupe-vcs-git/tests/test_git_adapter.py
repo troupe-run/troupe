@@ -159,7 +159,8 @@ def test_a_hung_git_times_out_and_its_whole_tree_is_stopped(repo: Repo, tmp_path
     with pytest.raises(TroupeError) as caught:
         git.branch()
     assert caught.value.code == "command.timeout"
-    assert "git symbolic-ref" in caught.value.details["command"]
+    # The first command branch() runs finds the files its token watches (cache-vcs-state D3).
+    assert caught.value.details["command"].startswith("git rev-parse --git-common-dir")
     assert pid_file.exists(), (
         f"the stand-in git hadn't started its child within {HUNG_GIT_TIMEOUT_SECONDS} s, so "
         "there was no tree to check: the precondition this test depends on"
@@ -237,14 +238,29 @@ def test_narrowing_the_git_policy_wider_is_environment_policy_invalid() -> None:
 # The branch token (design D4).
 
 
-def test_the_branch_token_costs_one_git_command_per_adapter_and_none_after(repo: Repo) -> None:
+def test_the_first_branch_token_runs_four_git_commands_and_none_after_while_nothing_moves(
+    repo: Repo,
+) -> None:
     repo.commit_all()
     git = adapter(repo)
     first = git.branch_token()
-    assert git.commands_run == 1
+    # One finds the watched files; three read the branch's full and short names and HEAD.
+    assert git.commands_run == 4
     for _ in range(20):
         assert git.branch_token() == first
-    assert git.commands_run == 1
+    assert git.commands_run == 4
+
+
+def test_reading_the_branch_and_head_again_runs_no_command_while_nothing_moves(
+    repo: Repo,
+) -> None:
+    commit = repo.commit_all()
+    git = adapter(repo)
+    assert (git.branch(), git.head()) == ("main", commit)
+    after_first = git.commands_run
+    for _ in range(20):
+        assert (git.branch(), git.head()) == ("main", commit)
+    assert git.commands_run == after_first
 
 
 def test_the_branch_token_changes_when_the_branch_is_switched(repo: Repo) -> None:
