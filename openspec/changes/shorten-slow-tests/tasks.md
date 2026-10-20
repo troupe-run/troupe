@@ -21,11 +21,11 @@
 
 ## 3. Ordering state machine (design D2)
 
-- [ ] 3.1 In `packages/troupe-store-text/tests/test_ordering_state_machine.py`, change `the_order_holds` to read the
+- [x] 3.1 In `packages/troupe-store-text/tests/test_ordering_state_machine.py`, change `the_order_holds` to read the
   notifications once and the branch once, keeping every assertion, and keeping `reader.notices()` after the read.
   Leave `max_examples` and `stateful_step_count` as they are. Verify: the test passes, and `--durations=0` shows it
   faster than the 23.9 s baseline.
-- [ ] 3.2 Differential check: with a temporary mutation that breaks the order (for example, the store skipping a
+- [x] 3.2 Differential check: with a temporary mutation that breaks the order (for example, the store skipping a
   notification number), confirm that the old invariant (on `main`) and the new one both fail. Revert without
   committing. Verify by noting the mutation and both failures in the PR.
 
