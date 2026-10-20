@@ -27,18 +27,27 @@ class Vcs(Protocol):
         ...
 
     def branch(self) -> str | None:
-        """The checked-out branch; None when HEAD is detached or there are no branches."""
+        """The checked-out branch; None when HEAD is detached or there are no branches.
+
+        It is the branch at the time of the call. An adapter may answer from a cache only while
+        its branch token is unchanged (cache-vcs-state design D5).
+        """
         ...
 
     def head(self) -> str | None:
-        """The HEAD commit; None before the first commit or without version control."""
+        """The HEAD commit; None before the first commit or without version control.
+
+        It is HEAD at the time of the call, cached only as ``branch`` may be.
+        """
         ...
 
     def branch_token(self) -> Hashable:
-        """A cheap value that changes whenever the branch, HEAD or what is committed might have.
+        """A cheap value that changes whenever the branch, HEAD or what is committed changes.
 
-        Comparing tokens costs no command, so a caller asks for the branch again only when the
-        token changes (design D4).
+        It changes whichever process made the change. Reading it runs no command while nothing has
+        moved, so a caller asks for the branch again only when the token changes (event-store
+        design D4). An adapter that can't promise this returns a value that never compares equal,
+        such as a fresh ``object()``, which turns its callers' caching off (cache-vcs-state D5).
         """
         ...
 

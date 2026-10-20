@@ -16,14 +16,14 @@
 
 ## 2. The wider token and the cached state (design D1, D2, D3, D5, D6)
 
-- [ ] 2.1 In `GitAdapter`, resolve the watched paths once with the single `rev-parse --git-common-dir --git-path …`
+- [x] 2.1 In `GitAdapter`, resolve the watched paths once with the single `rev-parse --git-common-dir --git-path …`
   command from D3, and make the stat helper treat `NotADirectoryError` as missing. Add the snapshot and the private
   fresh-snapshot method from D1, with the stat-before-read order, and route `branch()`, `head()` and `branch_token()`
   through it. The branch stays `--short`'s answer (D2). Verify by removing the 1.2 xfails: every cell passes
-- [ ] 2.2 Update the port's docstrings in `packages/troupe/src/troupe/core/vcs.py` (`branch_token`, `branch`, `head`)
+- [x] 2.2 Update the port's docstrings in `packages/troupe/src/troupe/core/vcs.py` (`branch_token`, `branch`, `head`)
   to D5's contract, and the git adapter's module docstring to name the cache. Verify by re-reading them against the
   spec delta's three requirements, and with `uv run mypy --strict` clean
-- [ ] 2.3 Rename `test_the_branch_token_costs_one_git_command_per_adapter_and_none_after` to say what it now checks
+- [x] 2.3 Rename `test_the_branch_token_costs_one_git_command_per_adapter_and_none_after` to say what it now checks
   (the first token reads the state, then nothing runs while nothing moves) and re-count it per D7 test 3. Add the
   "repeated reads cost nothing" test for `branch()` and `head()`. Verify `uv run pytest packages/troupe-vcs-git` passes
 - [ ] 2.4 Add D7 test 2, the stateful hypothesis differential test (random sequences of the 1.2 operations plus
