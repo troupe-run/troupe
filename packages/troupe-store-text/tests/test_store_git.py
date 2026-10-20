@@ -49,6 +49,28 @@ def test_switching_branches_mid_session_starts_a_new_segment(tmp_path: Path) -> 
     assert sorted(branches) == ["feature", "main"]
 
 
+def test_detaching_head_mid_session_on_reftable_starts_a_segment_with_no_branch(
+    tmp_path: Path,
+) -> None:
+    # Under reftable, detaching HEAD changes none of the files the token watched before #75, so the
+    # store went on writing to the branch's segment as if HEAD were still on it.
+    repo = make_repo(tmp_path, refs="reftable")
+    repo.commit_all()
+    # Past the racy window, so the token's stats alone must notice the detach.
+    vcs = GitAdapter(repo.path, source=repo.env, now=past_the_racy_window)
+    store = TextStore(repo.path, vcs)
+    store.insert([event(uuid4(), 1)])
+    time.sleep(0.01)
+    repo.git("switch", "-q", "--detach")
+    store.insert([event(uuid4(), 1)])
+    branches = [
+        json.loads(path.read_bytes().splitlines()[0])["segment"].get("branch")
+        for path in segments(repo.path)
+    ]
+    assert len(branches) == 2
+    assert set(branches) == {"main", None}
+
+
 def test_a_session_on_a_detached_head_writes_a_header_with_no_branch(tmp_path: Path) -> None:
     repo = make_repo(tmp_path)
     head = repo.commit_all()

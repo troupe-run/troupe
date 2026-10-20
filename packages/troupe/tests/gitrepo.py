@@ -7,8 +7,12 @@ into a test, and a test can set a global config of its own. Commits use a fixed 
 import os
 import subprocess
 import sys
+import tempfile
 import time
+from functools import cache
 from pathlib import Path
+
+import pytest
 
 AUTHOR = {
     "GIT_AUTHOR_NAME": "Test Author",
@@ -71,12 +75,40 @@ class Repo:
         return self.git("rev-parse", "HEAD").strip()
 
 
-def make_repo(root: Path, name: str = "theatre", branch: str = "main") -> Repo:
-    """A new repository at ``root / name``, with its own HOME at ``root / (name + '-home')``."""
+REFTABLE_NEEDS = "reftable needs git >= 2.45 (git init --ref-format=reftable)"
+
+
+@cache
+def reftable_supported() -> bool:
+    with tempfile.TemporaryDirectory() as scratch:
+        completed = subprocess.run(
+            ["git", "init", "-q", "--ref-format=reftable", scratch],  # noqa: S607
+            capture_output=True,
+            check=False,
+        )
+    return completed.returncode == 0
+
+
+def require_reftable() -> None:
+    """Skip when the installed git can't make a reftable repository, but fail in CI, so CI can't
+    lose the reftable cases quietly (cache-vcs-state design D7)."""
+    if reftable_supported():
+        return
+    if os.environ.get("CI"):
+        pytest.fail(f"{REFTABLE_NEEDS}; CI must run the reftable cases, not skip them")
+    pytest.skip(REFTABLE_NEEDS)
+
+
+def make_repo(root: Path, name: str = "theatre", branch: str = "main", refs: str = "files") -> Repo:
+    """A new repository at ``root / name``, with its own HOME at ``root / (name + '-home')``,
+    storing its refs as ``refs`` (``files`` or ``reftable``)."""
+    if refs == "reftable":
+        require_reftable()
     path = root / name
     path.mkdir(parents=True)
     repo = Repo(path, isolated_environment(root / f"{name}-home"))
-    repo.git("init", "-q", "-b", branch)
+    # Only reftable is named, so a git too old to know --ref-format still makes a files repository.
+    repo.git("init", "-q", "-b", branch, *([f"--ref-format={refs}"] if refs != "files" else []))
     return repo
 
 

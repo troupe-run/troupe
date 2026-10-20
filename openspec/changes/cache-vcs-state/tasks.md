@@ -40,24 +40,24 @@
   `uv run pytest packages/troupe/tests/test_platform_docs.py` passes, and that
   `test_following_from_another_process_sees_each_event_and_stops_at_the_end` passes again (it failed with a 2 s window
   everywhere)
-- [ ] 3.2 Add D7 test 4: within the window the second read runs git again; past it, no command runs; with whole-second
+- [x] 3.2 Add D7 test 4: within the window the second read runs git again; past it, no command runs; with whole-second
   timestamps (set with `os.utime`), a read past the short window but within the coarse one runs git again. Verify all
   pass, and that the first fails with the racy check disabled (revert before commit)
 
 ## 4. Recording events: cost and lineage (spec: event-store; design D7 tests 6–8)
 
-- [ ] 4.1 In `packages/troupe/tests/test_event_service.py`, add D7 test 6: recording 5 and then 50 events with the
+- [x] 4.1 In `packages/troupe/tests/test_event_service.py`, add D7 test 6: recording 5 and then 50 events with the
   actor given costs the same `commands_run` delta with git (non-racy clock), and runs no subprocess at all with the
   files adapter. Verify it passes, and that on `main`'s adapter (checked out into a scratch worktree) the git case
   fails with a delta that grows with N
-- [ ] 4.2 Add D7 test 7: lineage after a commit, a switch, a merge and a reset within one session, with the real
+- [x] 4.2 Add D7 test 7: lineage after a commit, a switch, a merge and a reset within one session, with the real
   clock and default window. Verify it passes
-- [ ] 4.3 Add D7 test 8: a child process holding one `EventStore` records an event per stdin line while the test
+- [x] 4.3 Add D7 test 8: a child process holding one `EventStore` records an event per stdin line while the test
   process commits, switches, merges and resets between lines, with bounded waits on the child. Every event's lineage
   matches `git rev-parse HEAD` and `git symbolic-ref --short HEAD` at that step. Verify it passes, and run it 20 times
   in a loop (`pytest --count` or a shell loop) without a failure
 
-- [ ] 4.4 In `packages/troupe-store-text/tests/test_store_git.py`, add the read-side regression for a reftable
+- [x] 4.4 In `packages/troupe-store-text/tests/test_store_git.py`, add the read-side regression for a reftable
   theatre: a store records an event on a branch, HEAD is detached, and the same store records again. The second event
   goes to a new segment whose header has no branch, as "Branch changes mid-session" requires. Verify it **fails** on
   `main`'s adapter (checked out into a scratch worktree) and passes here
@@ -67,6 +67,9 @@
 - [ ] 5.1 Measure what recording an event costs before and after, the way #54 measured it (the time per event over
   100 events in a git theatre, nothing moving). Quote both numbers in the PR description, and say there that the
   wider token also fixes the reftable read-side bug, with 4.4's test as evidence
+  - 2026-10-20, macOS, 100 events after a warm-up, nothing moving, median of 3 runs: `main` 62.5 ms per event
+    (62.5, 61.4, 64.7); this branch 3.8 ms (4.3, 3.7, 3.8). Git commands to record 5 and 50 events: `main` 12 and
+    102; this branch equal (4.1's test).
 - [ ] 5.2 Run `uv run scripts/check.py` and verify it passes. Open the PR with `Closes #75`, and verify every CI job
   passes on Linux, macOS and Windows, including the reftable cells (not skipped) on each runner
 

@@ -12,7 +12,6 @@ import tempfile
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from functools import cache
 from pathlib import Path
 
 import pytest
@@ -20,21 +19,8 @@ from hypothesis import HealthCheck, settings
 from hypothesis import strategies as st
 from hypothesis.stateful import RuleBasedStateMachine, invariant, rule
 
-from gitrepo import AUTHOR, Repo, isolated_environment, past_the_racy_window
+from gitrepo import AUTHOR, Repo, make_repo, past_the_racy_window
 from troupe_vcs_git import GitAdapter
-
-REFTABLE_NEEDS = "reftable needs git >= 2.45 (git init --ref-format=reftable)"
-
-
-@cache
-def reftable_supported() -> bool:
-    with tempfile.TemporaryDirectory() as scratch:
-        completed = subprocess.run(
-            ["git", "init", "-q", "--ref-format=reftable", scratch],  # noqa: S607
-            capture_output=True,
-            check=False,
-        )
-    return completed.returncode == 0
 
 
 @dataclass(frozen=True)
@@ -55,14 +41,7 @@ LAYOUTS = [Layout(refs, reflogs) for refs in ("files", "reftable") for reflogs i
 def make_layout_repo(root: Path, layout: Layout) -> Repo:
     """A repository with two commits on ``main``, a branch ``other`` at the same commit (same
     tree), and a branch ``feature`` one commit ahead with a different tree."""
-    if layout.refs == "reftable" and not reftable_supported():
-        if os.environ.get("CI"):
-            pytest.fail(f"{REFTABLE_NEEDS}; CI must run the reftable cases, not skip them")
-        pytest.skip(REFTABLE_NEEDS)
-    path = root / "theatre"
-    path.mkdir(parents=True)
-    repo = Repo(path, isolated_environment(root / "theatre-home"))
-    repo.git("init", "-q", "-b", "main", f"--ref-format={layout.refs}")
+    repo = make_repo(root, refs=layout.refs)
     repo.git("config", "core.logAllRefUpdates", "true" if layout.reflogs else "false")
     repo.write("a.txt", "a")
     repo.commit_all("one")
@@ -93,9 +72,26 @@ def adapter(repo: Repo) -> GitAdapter:
     return GitAdapter(repo.path, source=repo.env, now=past_the_racy_window)
 
 
-def fresh(repo: Repo) -> GitAdapter:
-    """An adapter that has cached nothing: what git reports now."""
-    return GitAdapter(repo.path, source=repo.env)
+def gits_answers(repo: Repo) -> tuple[str | None, str | None]:
+    """The branch and HEAD as git reports them now, by the two commands the adapter ran before it
+    cached anything."""
+    answers: list[str | None] = []
+    for args in (
+        ["symbolic-ref", "--quiet", "--short", "HEAD"],
+        ["rev-parse", "--verify", "-q", "HEAD"],
+    ):
+        completed = subprocess.run(
+            ["git", *args],  # noqa: S607 - git from the test environment's PATH
+            cwd=repo.path,
+            env=repo.env,
+            capture_output=True,
+            check=False,
+        )
+        assert completed.returncode in (0, 1), completed.stderr
+        answers.append(
+            completed.stdout.decode("utf-8").strip() if completed.returncode == 0 else None
+        )
+    return answers[0], answers[1]
 
 
 def run_git(cwd: Path, repo: Repo, *args: str) -> None:
@@ -189,8 +185,7 @@ def test_every_move_of_the_branch_or_head_changes_the_token_and_the_answers_foll
     settle()
     OPERATIONS[operation](repo)
     assert git.branch_token() != before
-    now = fresh(repo)
-    assert (git.branch(), git.head()) == (now.branch(), now.head())
+    assert (git.branch(), git.head()) == gits_answers(repo)
 
 
 # The differential test (design D7 test 2): after any sequence of moves, the cached adapter answers
@@ -239,6 +234,8 @@ class Moves(RuleBasedStateMachine):
     @rule(pick=st.integers(min_value=0))
     def merge(self, pick: int) -> None:
         target = self.branches[pick % len(self.branches)]
+        # A soft or mixed reset leaves changes git won't merge over. Dropping them moves no ref.
+        self.repo.git("reset", "-q", "--hard")
         self.repo.git("merge", "-q", "--no-ff", "--no-edit", "-X", "theirs", target)
 
     @rule(pick=st.integers(min_value=0), to=st.integers(min_value=0))
@@ -263,8 +260,7 @@ class Moves(RuleBasedStateMachine):
 
     @invariant()
     def the_cached_answers_are_gits(self) -> None:
-        now = fresh(self.repo)
-        assert (self.cached.branch(), self.cached.head()) == (now.branch(), now.head())
+        assert (self.cached.branch(), self.cached.head()) == gits_answers(self.repo)
 
 
 def _moves(layout: Layout, now: Callable[[], int]) -> type[Moves]:
@@ -280,13 +276,54 @@ def _moves(layout: Layout, now: Callable[[], int]) -> type[Moves]:
     return machine
 
 
-# Past the racy window, the stats alone must catch every move; with the real clock and the default
-# windows, this is the configuration troupe ships.
+# Past the racy window, the stats alone must catch every move, in every layout. Once more with the
+# real clock and the default windows, the configuration troupe ships, in the layout git's files
+# reveal least about (reftable, no reflogs).
 TestMovesFilesReflogsOnStatsOnly = _moves(LAYOUTS[0], past_the_racy_window).TestCase
 TestMovesFilesReflogsOffStatsOnly = _moves(LAYOUTS[1], past_the_racy_window).TestCase
 TestMovesReftableReflogsOnStatsOnly = _moves(LAYOUTS[2], past_the_racy_window).TestCase
 TestMovesReftableReflogsOffStatsOnly = _moves(LAYOUTS[3], past_the_racy_window).TestCase
-TestMovesFilesReflogsOnAsShipped = _moves(LAYOUTS[0], time.time_ns).TestCase
-TestMovesFilesReflogsOffAsShipped = _moves(LAYOUTS[1], time.time_ns).TestCase
-TestMovesReftableReflogsOnAsShipped = _moves(LAYOUTS[2], time.time_ns).TestCase
 TestMovesReftableReflogsOffAsShipped = _moves(LAYOUTS[3], time.time_ns).TestCase
+
+
+# The racy window (design D4). The clock is set relative to the newest file in the git directory,
+# which every watched file is in.
+
+SECOND = 1_000_000_000
+
+
+def newest_git_file(repo: Repo) -> int:
+    return max(
+        os.stat(Path(directory) / name).st_mtime_ns
+        for directory, _, names in os.walk(repo.path / ".git")
+        for name in names
+    )
+
+
+def reads_twice(repo: Repo, now: int) -> int:
+    """How many git commands a second read of the branch and HEAD runs, the clock at ``now``."""
+    git = GitAdapter(repo.path, source=repo.env, now=lambda: now)
+    git.branch_token()
+    before = git.commands_run
+    git.branch_token()
+    cost = git.commands_run - before
+    assert (git.branch(), git.head()) == gits_answers(repo)
+    return cost
+
+
+def test_a_read_within_the_racy_window_is_read_again(repo: Repo) -> None:
+    assert reads_twice(repo, newest_git_file(repo) + SECOND // 20) == 3
+
+
+def test_a_read_past_the_racy_window_is_reused(repo: Repo) -> None:
+    assert reads_twice(repo, newest_git_file(repo) + SECOND) == 0
+
+
+def test_whole_second_timestamps_get_the_coarse_window(repo: Repo) -> None:
+    whole = (newest_git_file(repo) // SECOND + 1) * SECOND
+    for directory, _, names in os.walk(repo.path / ".git"):
+        for name in names:
+            os.utime(Path(directory) / name, ns=(whole, whole))
+    # Past the 0.1 s window, but within the 2 s one that coarse timestamps get.
+    assert reads_twice(repo, whole + SECOND) == 3
+    assert reads_twice(repo, whole + 3 * SECOND) == 0
