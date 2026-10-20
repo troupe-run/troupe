@@ -31,7 +31,7 @@
 
 ## 4. Ctrl-C test (design D3)
 
-- [ ] 4.1 Add a comment above `test_ctrl_c_twice_shows_the_notice_twice_and_still_records_the_end` in
+- [x] 4.1 Add a comment above `test_ctrl_c_twice_shows_the_notice_twice_and_still_records_the_end` in
   `packages/troupe/tests/test_cli_runs.py`. Say that its ~10 s is the default `RUNNER_CANCEL_GRACE_SECONDS` in a real
   `troupe perform` subprocess, that the ignored cancel is what keeps the run cancelling for the second Ctrl-C, that
   `test_run_host`'s `test_a_runner_ignoring_cancel_is_killed_with_the_process_it_started` covers kill-after-grace
