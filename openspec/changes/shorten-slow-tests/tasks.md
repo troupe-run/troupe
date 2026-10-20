@@ -40,13 +40,13 @@
 
 ## 5. Durations on every run (spec: quality-check; design D4)
 
-- [ ] 5.1 Add `--durations=25` to the tests gate's command in `scripts/check.py` (before any `-m`), as a named
+- [x] 5.1 Add `--durations=25` to the tests gate's command in `scripts/check.py` (before any `-m`), as a named
   constant with a docstring next to `PARALLEL`. Verify: `uv run scripts/check.py --scope docs` prints a
   "slowest 25 durations" block.
-- [ ] 5.2 Add tests in `scripts/tests/test_check_parallel.py`: the gate's command (with `PARALLEL` and the durations
+- [x] 5.2 Add tests in `scripts/tests/test_check_parallel.py`: the gate's command (with `PARALLEL` and the durations
   option) prints the durations table across 2 workers for a passing suite and for a failing one, and `gates()` gives
   the option for a full and a scoped check. Verify: the new tests pass, and fail with the option removed.
-- [ ] 5.3 Add one sentence to the `README.md` paragraph about `scripts/check.py` saying the tests gate prints the 25
+- [x] 5.3 Add one sentence to the `README.md` paragraph about `scripts/check.py` saying the tests gate prints the 25
   slowest tests. Verify: the docs tests pass (`uv run scripts/check.py --scope docs`).
 
 ## 6. Integration
