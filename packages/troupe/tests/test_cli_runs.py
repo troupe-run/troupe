@@ -468,6 +468,12 @@ def test_one_ctrl_c_cancels_the_run_records_cancelled_and_exits_130(repo: Repo) 
     assert (run["state"], run["outcome"]) == ("ended", "cancelled")
 
 
+# About 10 s, and it can't get shorter as it is: the runner ignores the cancel so the run is still
+# cancelling when the second Ctrl-C lands, and the real `troupe perform` process then waits out the
+# default RUNNER_CANCEL_GRACE_SECONDS before killing it. No setting reaches that limit from outside
+# the process, and adding one is out of scope for #84. test_run_host's
+# test_a_runner_ignoring_cancel_is_killed_with_the_process_it_started covers the kill after the
+# grace in process, with a short grace.
 def test_ctrl_c_twice_shows_the_notice_twice_and_still_records_the_end(repo: Repo) -> None:
     name = options_file(repo, script(INIT, {"hang": True}, on_cancel="ignore"))
     troupe = Process(
