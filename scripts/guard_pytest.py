@@ -19,6 +19,11 @@ scope's marker, then fails at teardown with the guard's message. The rule itself
 guard.tag_violations, which takes plain data so another runner's adapter can use it too
 (commit-check-paths design D9).
 
+A file Hypothesis opens to collect constants isn't the test's read. Before a draw, it reads the
+source of every first-party module imported since its last draw, whichever test imported it
+(guard-hypothesis-reads design D1). What the test opens itself, in a @given body or a strategy,
+still counts.
+
 Reads made by a subprocess the test starts aren't seen: the hook watches this process only.
 """
 
@@ -29,6 +34,7 @@ import os
 import sys
 from collections.abc import Generator
 from pathlib import Path
+from types import FrameType
 
 import pytest
 
@@ -45,6 +51,9 @@ _COLLECTED: dict[str, frozenset[str]] = {}
 _FIXTURES: dict[int, set[str]] = {}
 """Reads made while each fixture definition (by id) was set up, over every setup."""
 _OWN_READS = pytest.StashKey[set[str]]()
+_HYPOTHESIS_CONSTANTS = "hypothesis/internal/constants_ast.py"
+"""Where Hypothesis reads a module's source for its constants (guard-hypothesis-reads design D1).
+An open made while it's on the stack is Hypothesis's own, not the test's."""
 
 
 def _record(event: str, args: tuple[object, ...]) -> None:
@@ -58,8 +67,20 @@ def _record(event: str, args: tuple[object, ...]) -> None:
         relative = _relative(path)
         if not relative:
             return  # outside the repository, or the repository itself
+        if _hypothesis_reading():
+            return
         for reads in _RECORDING:
             reads.add(relative)
+
+
+def _hypothesis_reading() -> bool:
+    """Whether Hypothesis's constant collection is on the stack of the open being recorded."""
+    frame: FrameType | None = sys._getframe(1)
+    while frame is not None:
+        if frame.f_code.co_filename.replace("\\", "/").endswith(_HYPOTHESIS_CONSTANTS):
+            return True
+        frame = frame.f_back
+    return False
 
 
 @contextlib.contextmanager
