@@ -53,7 +53,7 @@
 
 - [x] 6.1 Run the full `uv run scripts/check.py` and record the local "after" tests gate time alongside the baseline.
   Verify: every gate passes, and the durations table shows the four tests' new times.
-- [ ] 6.2 Open the PR (`Closes #84`), with the before and after suite times locally and for each CI platform, the
+- [x] 6.2 Open the PR (`Closes #84`), with the before and after suite times locally and for each CI platform, the
   findings from 2.2 and 3.2, and a note that the conformance waits were mostly `run_timeout`, not `cancel_grace`.
   Verify: every CI job passes on Linux, macOS and Windows, and the PR body has the after-times for each platform from
   that run.
