@@ -52,3 +52,14 @@ GIT_ANNOUNCE_AFTER_SECONDS = 1.0
 
 GIT_MAX_OUTPUT_BYTES = 16 * 1024 * 1024
 """The most output one git command may write, in both streams together, before it is stopped."""
+
+GIT_RACY_WINDOW_SECONDS = 0.1
+"""How recently a file the branch token watches may have changed before a read of the branch and
+HEAD is used only once (cache-vcs-state design D4). Two git operations within one timestamp tick can
+leave a file's mtime, size and inode as they were, so an answer read that close to a change is read
+again next time, as git does for its own index. 0.1 s is well above the tick fine timestamps come
+from: about 4 ms on Linux, 16 ms on Windows, nanoseconds on APFS."""
+
+GIT_COARSE_RACY_WINDOW_SECONDS = 2.0
+"""The racy window when every watched file's mtime is a whole second, as on a file system with
+coarse timestamps: FAT's are 2 s, HFS+'s 1 s."""

@@ -112,10 +112,20 @@ Without the rule, two git operations inside one timestamp tick could leave a fil
 (a loose ref is always 41 bytes) and, after a lock-and-rename, a reused inode. The token would then hide the second
 operation until something else moved.
 
-The default is **2.0 s**, which covers FAT's 2 s and HFS+'s 1 s timestamps with room to spare. It is a named setting
-in `troupe_vcs_git/defaults.py` and a constructor parameter, like the timeout. The cost is that the 2 s after any git
-operation run uncached: three commands per call, as today's two. A clock is injected (`now`, defaulting to
-`time.time_ns`) so tests can control the window without sleeping.
+The window follows the file system's timestamp resolution, read from the watched files themselves. When every
+watched file that exists has an mtime of whole seconds (`st_mtime_ns % 1_000_000_000 == 0`), the file system keeps
+coarse timestamps (FAT's 2 s, HFS+'s 1 s), and the window is `GIT_COARSE_RACY_WINDOW_SECONDS`, **2.0 s**. Otherwise
+it is `GIT_RACY_WINDOW_SECONDS`, **0.1 s**. That's well above the clock tick that fine timestamps are taken from
+(about 4 ms on Linux and 16 ms on Windows; nanoseconds on APFS). A fine file system whose every watched file happens
+to land on a whole second just gets the safer window. Both are named settings in `troupe_vcs_git/defaults.py` and
+constructor parameters, like the timeout. A clock is injected (`now`, defaulting to `time.time_ns`) so tests can
+control the window without sleeping.
+
+The cost: for the window after a git operation, every read of the token runs three commands. Reads cost none on
+`main`, so this does cost reads. A first version used 2 s everywhere, and `logs --follow`'s first event from a child
+process arrived about 0.8 s later (`test_following_from_another_process_sees_each_event_and_stops_at_the_end`
+failed), because the text store reads the token many times per event. With 0.1 s, that cost is confined to a tenth
+of a second after each git operation on every file system troupe supports (owner, 2026-10-20).
 
 *Alternative:* trust the stat alone, as today's read side does. The probe shows reflogs-on repositories always grow
 `logs/HEAD`, but with reflogs off or reftable the race is real. "Exactly as accurate" rules it out.
@@ -176,8 +186,8 @@ In `packages/troupe/tests/test_event_service.py` (lineage), parametrised over bo
 - [A filesystem whose clock is far behind the wall clock, such as a network share, would make files look old, so
   the racy rule wouldn't fire] → Only a same-tick race could still slip through, as it can for git's own index. The
   window and rule are named, so they're easy to change.
-- [The 2 s window means a burst of events right after a git operation runs uncached] → That's the cost of today's
-  code for 2 s, never worse. Recording a long run's events, the common case, is cached.
+- [For the racy window after a git operation, reads and writes run git on every call] → 0.1 s on fine-timestamp file
+  systems. Only coarse ones (FAT, HFS+) pay 2 s. Recording a long run's events, the common case, is cached.
 - [git might change which files a ref update touches] → The differential test runs against the installed git on
   every OS in CI. A future git that moves refs elsewhere fails it loudly, and doesn't leave lineage quietly wrong.
 - [The wider token makes the text store rebuild more often on reftable or reflogs-off repositories] → Only when

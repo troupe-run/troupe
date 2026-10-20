@@ -12,7 +12,8 @@ recording event after event runs no command while nothing moves (cache-vcs-state
 
 import os
 import shlex
-from collections.abc import Hashable, Mapping, Sequence
+import time
+from collections.abc import Callable, Hashable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -32,6 +33,8 @@ _WATCHED = ("HEAD", "index", "logs/HEAD", "packed-refs", "reftable/tables.list")
 
 _Stat = tuple[int, int, int] | None
 
+_SECOND = 1_000_000_000
+
 
 @dataclass(frozen=True)
 class _State:
@@ -42,6 +45,8 @@ class _State:
     ref_stat: _Stat
     branch: str | None
     head: str | None
+    racy: bool
+    """Whether a watched file changed within the racy window of the read: if so, it isn't reused."""
 
     @property
     def token(self) -> Hashable:
@@ -61,6 +66,9 @@ class GitAdapter:
         max_output_bytes: int = defaults.GIT_MAX_OUTPUT_BYTES,
         source: Mapping[str, str] | None = None,
         on_wait: ProcessWaitCallback | None = None,
+        racy_window: float = defaults.GIT_RACY_WINDOW_SECONDS,
+        coarse_racy_window: float = defaults.GIT_COARSE_RACY_WINDOW_SECONDS,
+        now: Callable[[], int] = time.time_ns,
     ) -> None:
         self.theatre = theatre
         self.policy = policy
@@ -69,6 +77,10 @@ class GitAdapter:
         self.max_output_bytes = max_output_bytes
         self.source = source
         self.on_wait = on_wait
+        self.racy_window = racy_window
+        self.coarse_racy_window = coarse_racy_window
+        self.now = now
+        """The wall clock, in nanoseconds, that file timestamps are compared with (design D4)."""
         self.commands_run = 0
         """How many git commands this adapter has run, so callers can check their cost."""
         self._watched: tuple[Path, ...] | None = None
@@ -121,10 +133,12 @@ class GitAdapter:
         """The branch and HEAD, read through git only when a watched file has changed since the
         last read (cache-vcs-state design D1)."""
         common, paths = self._paths()
+        read_at = self.now()
         watched = tuple(_stat_token(path) for path in paths)
         state = self._state
         if (
             state is not None
+            and not state.racy
             and state.watched == watched
             and (state.ref is None or _stat_token(state.ref) == state.ref_stat)
         ):
@@ -142,9 +156,20 @@ class GitAdapter:
             short = self.git("symbolic-ref", "--quiet", "--short", "HEAD", allow=(0, _NO_ANSWER))
             if short.returncode != _NO_ANSWER:
                 branch = short.stdout.decode("utf-8").strip()
-        state = _State(watched, ref, ref_stat, branch, self._read_head())
+        racy = self._racy(read_at, (*watched, ref_stat))
+        state = _State(watched, ref, ref_stat, branch, self._read_head(), racy)
         self._state = state
         return state
+
+    def _racy(self, read_at: int, stats: tuple[_Stat, ...]) -> bool:
+        """Git's own "racily clean" rule: an answer read within the window of a watched file's last
+        change could miss a second change in the same timestamp tick, so it's used once (D4). The
+        window is longer when every mtime is a whole second: coarse timestamps."""
+        mtimes = [stat[0] for stat in stats if stat is not None]
+        coarse = all(mtime % _SECOND == 0 for mtime in mtimes)
+        window = self.coarse_racy_window if coarse else self.racy_window
+        recent = read_at - int(window * _SECOND)
+        return any(mtime >= recent for mtime in mtimes)
 
     def _read_head(self) -> str | None:
         completed = self.git("rev-parse", "--verify", "--quiet", "HEAD", allow=(0, _NO_ANSWER))

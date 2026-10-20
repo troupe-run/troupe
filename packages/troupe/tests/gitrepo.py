@@ -7,6 +7,7 @@ into a test, and a test can set a global config of its own. Commits use a fixed 
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 AUTHOR = {
@@ -15,6 +16,12 @@ AUTHOR = {
     "GIT_COMMITTER_NAME": "Test Author",
     "GIT_COMMITTER_EMAIL": "author@example.com",
 }
+
+
+def past_the_racy_window() -> int:
+    """A wall clock an hour ahead, for a GitAdapter's ``now``: no file looks recently changed, so
+    no read is racy and the cache rests on the token's stats alone (cache-vcs-state design D4)."""
+    return time.time_ns() + 3600 * 1_000_000_000
 
 
 def isolated_environment(home: Path) -> dict[str, str]:

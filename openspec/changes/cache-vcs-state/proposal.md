@@ -28,8 +28,10 @@ before anything can rely on it. A wider token watching `packed-refs`, the branch
 - **The git adapter caches the branch and HEAD behind that token.** `branch()` and `head()` run git only when the
   token has changed since they last read. A change runs at most three commands, however many events follow.
 - **Racy timestamps are distrusted, as git distrusts its own index.** A state read while a watched file was modified
-  within a named window (`GIT_RACY_WINDOW_SECONDS`) is read again on the next call. Two git operations in one
-  timestamp tick, leaving a file the same size and on a reused inode, then can't hide a move.
+  within a short window is read again on the next call. Two git operations in one timestamp tick, leaving a file the
+  same size and on a reused inode, then can't hide a move. The window follows the file system's timestamp
+  resolution: 0.1 s (`GIT_RACY_WINDOW_SECONDS`), or 2 s (`GIT_COARSE_RACY_WINDOW_SECONDS`) when timestamps are whole
+  seconds.
 - **The port's contract says what a token must cover.** `Vcs.branch_token` changes whenever the branch or HEAD
   changes, by this process or another. An adapter may cache `branch()` and `head()` only behind it.
 - **The plain filesystem adapter** already runs no command. Its contract and cost are now tested alongside git's.
@@ -58,7 +60,7 @@ None.
 
 ## Impact
 
-- `packages/troupe-vcs-git/src/troupe_vcs_git/__init__.py` (token, cache) and `defaults.py` (the racy window).
+- `packages/troupe-vcs-git/src/troupe_vcs_git/__init__.py` (token, cache) and `defaults.py` (the racy windows).
 - `packages/troupe/src/troupe/core/vcs.py`: the port's docstrings, which are its contract.
 - `packages/troupe-vcs-git/tests/`: the token's existing cost test now allows the commands a change runs. New
   scenario tests, plus a differential test against an uncached adapter over git operations and both ref formats.
