@@ -64,14 +64,17 @@
 
 ## 5. Integration
 
-- [ ] 5.1 Measure what recording an event costs before and after, the way #54 measured it (the time per event over
+- [x] 5.1 Measure what recording an event costs before and after, the way #54 measured it (the time per event over
   100 events in a git theatre, nothing moving). Quote both numbers in the PR description, and say there that the
   wider token also fixes the reftable read-side bug, with 4.4's test as evidence
   - 2026-10-20, macOS, 100 events after a warm-up, nothing moving, median of 3 runs: `main` 62.5 ms per event
     (62.5, 61.4, 64.7); this branch 3.8 ms (4.3, 3.7, 3.8). Git commands to record 5 and 50 events: `main` 12 and
     102; this branch equal (4.1's test).
-- [ ] 5.2 Run `uv run scripts/check.py` and verify it passes. Open the PR with `Closes #75`, and verify every CI job
+- [x] 5.2 Run `uv run scripts/check.py` and verify it passes. Open the PR with `Closes #75`, and verify every CI job
   passes on Linux, macOS and Windows, including the reftable cells (not skipped) on each runner
+  - 2026-10-20, PR #134: every job passed on Linux, macOS and Windows, Python 3.12-3.15. git 2.55 (Ubuntu), 2.56
+    (macOS, Windows). No log mentions the reftable skip, and the reftable machines appear among the slowest tests on
+    each OS. Full suite on each: 2084 passed (Linux, macOS), 2085 (Windows).
 
 ## Workflow follow-up
 
