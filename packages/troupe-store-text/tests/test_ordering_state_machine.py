@@ -91,23 +91,30 @@ class Theatre(RuleBasedStateMachine):
 
     @invariant()
     def the_order_holds(self) -> None:
+        # Each value is read once per step: every read runs git, and a second read of the same
+        # repository sees the same answer (shorten-slow-tests design D2).
         reader = self.store()
-        ids = [r.id for _, r in reader.notifications(1, 100_000, None, ())]
-        numbers = [n for n, _ in reader.notifications(1, 100_000, None, ())]
+        branch = self.branch()
+        listed = list(reader.notifications(1, 100_000, None, ()))
+        ids = [r.id for _, r in listed]
+        numbers = [n for n, _ in listed]
         rebuilt = self.rebuilt or any(n.code == "events.order-rebuilt" for n in reader.notices())
         self.rebuilt = False
         assert numbers == list(range(1, len(ids) + 1))
         assert len(set(ids)) == len(ids)
         visible = {r.id for stream in STREAMS for r in reader.history(stream)}
         assert set(ids) == visible
-        before = self.issued.get(self.branch(), [])
+        before = self.issued.get(branch, [])
         if not rebuilt:
             assert ids[: len(before)] == before
-        self.issued[self.branch()] = ids
+        self.issued[branch] = ids
         assert self.repo.git("diff", "--name-only", "--diff-filter=U", "--", ".troupe") == ""
         assert all(path.suffix == ".jsonl" for path in segments(self.repo.path))
 
 
+# The longest test in the suite (about 20 s locally), and it can't get much shorter as it is: almost
+# all of it is git, run by every rule and by the store's refresh on each read the invariant needs.
+# Fewer examples or steps would trade away coverage, which needs a reason of its own (#84).
 Theatre.TestCase.settings = settings(
     max_examples=8,
     stateful_step_count=12,

@@ -66,7 +66,13 @@ inside `check_runner`, a product change that buys nothing here.
 `the_order_holds` takes `listed = list(reader.notifications(1, 100_000, None, ()))` once and derives `ids` and
 `numbers` from it. It reads `branch = self.branch()` once and uses that for both `issued` lookups. `reader.notices()`
 is still read after the notifications, so an `events.order-rebuilt` notice raised by that read is still seen. Every
-assertion stays as it is. Expected saving: about 5 s of 23.
+assertion stays as it is. Expected saving: about 5 s of 23, from the profile.
+
+Measured once built, with the same seeds for the old and new invariant: 23.8 → 21.8 s and 21.1 → 19.9 s. The
+saving is about 1.5 s, not 5. The profiler had inflated the cost of each subprocess, and each step still pays the
+store's refresh, which runs git, on the three `history` reads and the one notifications read the invariant needs.
+So the test also gets the comment #84 asks for when a test can't get faster. It says the remaining time is git,
+and that only fewer examples or steps would cut it, which is a coverage decision out of scope here.
 
 **Why not the counts:** the issue lists them as a coverage trade-off to change only with a stated reason. The repeated
 reads aren't coverage. They read the same unchanged repository twice.
