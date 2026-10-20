@@ -26,7 +26,7 @@
 - [x] 2.3 Rename `test_the_branch_token_costs_one_git_command_per_adapter_and_none_after` to say what it now checks
   (the first token reads the state, then nothing runs while nothing moves) and re-count it per D7 test 3. Add the
   "repeated reads cost nothing" test for `branch()` and `head()`. Verify `uv run pytest packages/troupe-vcs-git` passes
-- [ ] 2.4 Add D7 test 2, the stateful hypothesis differential test (random sequences of the 1.2 operations plus
+- [x] 2.4 Add D7 test 2, the stateful hypothesis differential test (random sequences of the 1.2 operations plus
   `branch -m`, cached adapter against a fresh one after each step), over the whole matrix, once with a non-racy clock
   and once with the real clock and default window. Use the project's hypothesis profiles. Verify it passes, and that
   it **fails** when 2.1's ref-file stat is temporarily removed (shows it can catch a regression; revert before commit)
