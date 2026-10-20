@@ -2,20 +2,20 @@
 
 ## 1. Baseline
 
-- [ ] 1.1 Record the "before" times: the local tests gate (`uv run scripts/check.py` on this branch before any code
+- [x] 1.1 Record the "before" times: the local tests gate (`uv run scripts/check.py` on this branch before any code
   change, the `tests passed in …s` line), and the tests gate time for each platform from the latest full CI run on
   `main`. Verify by writing them into a scratch note for the PR body, with the run's URL.
 
 ## 2. Conformance tests (design D1)
 
-- [ ] 2.1 In `packages/troupe/tests/test_runner_conformance.py`, add `EXPIRING = RunLimits(start_timeout=10.0,
+- [x] 2.1 In `packages/troupe/tests/test_runner_conformance.py`, add `EXPIRING = RunLimits(start_timeout=10.0,
   cancel_grace=1.0, run_timeout=1.0)` with a docstring saying it's for checks expected to fail by timing out, and why
   `LIMITS` stays generous for the rest. Give `_check` a `limits` parameter (default `LIMITS`), and pass `EXPIRING` from
   `test_a_runner_that_ignores_an_unknown_option_fails_that_check` and
   `test_a_runner_that_does_not_exit_on_end_of_input_fails_that_check`. Leave their assertions unchanged. Verify:
   `uv run pytest packages/troupe/tests/test_runner_conformance.py --durations=0` passes, and both tests take a few
   seconds, not 10 to 19.
-- [ ] 2.2 Show that both tests still fail when their check would pass: temporarily make the fake's `ignore-eof` mode
+- [x] 2.2 Show that both tests still fail when their check would pass: temporarily make the fake's `ignore-eof` mode
   exit on end of input, and its `ignore-options` mode refuse the unknown option. Each test must then fail. Revert
   without committing the change. Verify by noting both failures in the PR.
 
