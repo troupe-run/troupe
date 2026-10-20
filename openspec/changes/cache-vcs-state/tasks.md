@@ -33,12 +33,16 @@
 
 ## 3. Racy timestamps (design D4)
 
-- [ ] 3.1 Add `GIT_RACY_WINDOW_SECONDS = 2.0` with its docstring to `troupe_vcs_git/defaults.py`, a `racy_window`
-  and an injected `now` parameter on `GitAdapter`, and the racy mark on the snapshot. Add the setting to the git
-  adapter's table in `contributing/platform.md`. Verify `uv run pytest packages/troupe/tests/test_platform_docs.py`
-  passes
-- [ ] 3.2 Add D7 test 4: within the window the second read runs git again; past it, no command runs. Verify both pass,
-  and that the first fails with the racy check disabled (revert before commit)
+- [x] 3.1 Add `GIT_RACY_WINDOW_SECONDS = 0.1` and `GIT_COARSE_RACY_WINDOW_SECONDS = 2.0` with their docstrings to
+  `troupe_vcs_git/defaults.py`, matching `racy_window`/`coarse_racy_window` parameters and an injected `now` on
+  `GitAdapter`, and the racy mark on the snapshot, with the window chosen from the watched files' timestamps (design
+  D4). Add both settings to the git adapter's table in `contributing/platform.md`. Verify
+  `uv run pytest packages/troupe/tests/test_platform_docs.py` passes, and that
+  `test_following_from_another_process_sees_each_event_and_stops_at_the_end` passes again (it failed with a 2 s window
+  everywhere)
+- [ ] 3.2 Add D7 test 4: within the window the second read runs git again; past it, no command runs; with whole-second
+  timestamps (set with `os.utime`), a read past the short window but within the coarse one runs git again. Verify all
+  pass, and that the first fails with the racy check disabled (revert before commit)
 
 ## 4. Recording events: cost and lineage (spec: event-store; design D7 tests 6–8)
 

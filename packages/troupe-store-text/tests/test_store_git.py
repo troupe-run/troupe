@@ -6,7 +6,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from event_schemas import is_valid
-from gitrepo import Repo, make_repo
+from gitrepo import Repo, make_repo, past_the_racy_window
 from storetesting import event, segments
 from troupe_store_text.store import TextStore
 from troupe_vcs_git import GitAdapter
@@ -22,7 +22,10 @@ def test_a_session_runs_no_git_command_per_batch_while_the_branch_is_unchanged(
 ) -> None:
     repo = make_repo(tmp_path)
     repo.commit_all()
-    store, vcs = git_store(repo)
+    # The commit was just made, so a real clock would be within the racy window, where the git
+    # adapter reads again on purpose (cache-vcs-state D4). This is the steady state after it.
+    vcs = GitAdapter(repo.path, source=repo.env, now=past_the_racy_window)
+    store = TextStore(repo.path, vcs)
     stream = uuid4()
     store.insert([event(stream, 1)])
     after_first = vcs.commands_run

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from gitrepo import Repo, isolated_environment, make_repo
+from gitrepo import Repo, isolated_environment, make_repo, past_the_racy_window
 from troupe.core.commands import narrow_policy
 from troupe.core.errors import TroupeError
 from troupe.core.vcs import is_committed, load_vcs
@@ -242,7 +242,7 @@ def test_the_first_branch_token_runs_four_git_commands_and_none_after_while_noth
     repo: Repo,
 ) -> None:
     repo.commit_all()
-    git = adapter(repo)
+    git = GitAdapter(repo.path, source=repo.env, now=past_the_racy_window)
     first = git.branch_token()
     # One finds the watched files; three read the branch's full and short names and HEAD.
     assert git.commands_run == 4
@@ -255,7 +255,7 @@ def test_reading_the_branch_and_head_again_runs_no_command_while_nothing_moves(
     repo: Repo,
 ) -> None:
     commit = repo.commit_all()
-    git = adapter(repo)
+    git = GitAdapter(repo.path, source=repo.env, now=past_the_racy_window)
     assert (git.branch(), git.head()) == ("main", commit)
     after_first = git.commands_run
     for _ in range(20):

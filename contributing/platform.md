@@ -119,6 +119,14 @@ local commands, so git never starts a credential helper or `ssh`.
 | `GIT_TIMEOUT_SECONDS` | 10 |
 | `GIT_ANNOUNCE_AFTER_SECONDS` | 1 |
 | `GIT_MAX_OUTPUT_BYTES` | 16777216 |
+| `GIT_RACY_WINDOW_SECONDS` | 0.1 |
+| `GIT_COARSE_RACY_WINDOW_SECONDS` | 2 |
+
+The adapter caches the branch and HEAD, and asks git again only when one of the files git changes on a move has
+changed: `HEAD`, the index, `logs/HEAD`, `packed-refs`, the branch's own ref and the reftable table lists. An answer
+read within `GIT_RACY_WINDOW_SECONDS` of such a change is used only once, because two git operations in one
+timestamp tick can leave a file looking unchanged. Git treats its own index the same way. When every watched file's
+timestamp is a whole second, as on FAT or HFS+, the window is `GIT_COARSE_RACY_WINDOW_SECONDS` instead.
 
 ## Paths
 

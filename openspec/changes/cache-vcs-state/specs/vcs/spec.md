@@ -44,10 +44,9 @@ while the token says nothing has moved. The branch SHALL be reported in the same
 - **THEN** after each operation the adapter reports the same branch and HEAD as an adapter that caches nothing
 
 ### Requirement: A state read at a racy time is read again
-When the git adapter reads the branch and HEAD while one of the files its token watches was modified within a named
-window (a named setting with its default in one place), it SHALL NOT reuse that answer: the next call SHALL read
-again. This SHALL hold even when the token compares equal, because two git operations within one timestamp tick can
-leave a file's timestamp, size and inode unchanged.
+When the git adapter reads the branch and HEAD while one of the files its token watches was modified within a window,
+it SHALL NOT reuse that answer, even when the token compares equal: the next call SHALL read again. The window SHALL
+be longer when the watched files' timestamps are whole seconds, and each window SHALL be a named setting.
 
 #### Scenario: A read just after a git operation is not reused
 - **WHEN** the branch and HEAD are read within the window after a watched file was modified, and read again
@@ -57,3 +56,8 @@ leave a file's timestamp, size and inode unchanged.
 - **WHEN** the branch and HEAD are read when every watched file was last modified before the window, and read again
   with nothing moved
 - **THEN** the second read runs no command
+
+#### Scenario: Whole-second timestamps get the longer window
+- **WHEN** every watched file's timestamp is a whole second, as on a file system with coarse timestamps, and the
+  branch and HEAD are read later than the shorter window but within the longer one
+- **THEN** the next read runs git again

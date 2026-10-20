@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from gitrepo import AUTHOR, Repo, isolated_environment
+from gitrepo import AUTHOR, Repo, isolated_environment, past_the_racy_window
 from troupe_vcs_git import GitAdapter
 
 REFTABLE_NEEDS = "reftable needs git >= 2.45 (git init --ref-format=reftable)"
@@ -82,8 +82,9 @@ def repo(tmp_path: Path, layout: Layout) -> Repo:
 
 
 def adapter(repo: Repo) -> GitAdapter:
-    """The adapter under test."""
-    return GitAdapter(repo.path, source=repo.env)
+    """An adapter whose clock is past the racy window, so what it notices, it notices through the
+    token's stats alone (design D4)."""
+    return GitAdapter(repo.path, source=repo.env, now=past_the_racy_window)
 
 
 def fresh(repo: Repo) -> GitAdapter:
