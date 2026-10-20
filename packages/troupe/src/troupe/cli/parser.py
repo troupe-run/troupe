@@ -476,7 +476,9 @@ def parse(argv: Sequence[str], commands: Sequence[Command]) -> Parsed:
     global_options = _global_options()
     root = _Parser(
         prog="troupe",
-        description="Run your development process with agents and people in named roles.",
+        description=(
+            "Run your development process with a team of agents, asking only when it needs you."
+        ),
         parents=[global_options],
         add_help=False,
         allow_abbrev=False,

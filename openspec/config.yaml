@@ -9,9 +9,9 @@ schema: spec-driven
 #     Designs and tasks must cover Windows, macOS, and Linux
 #     Write all artifacts in Spanish
 context: |
-  troupe runs a software process with agents and people in named roles. It is local-first: config, history and
-  decisions live in the project's git repo. Pre-alpha; built in stages, and requirements will change. Build for the
-  current stage in a way that is easy to change.
+  troupe runs a software process with a team of agents, asking only when it needs you. It is local-first: config,
+  history and decisions live in the project's git repo. Pre-alpha; built in stages, and requirements will change.
+  Build for the current stage in a way that is easy to change.
 
   Fixed constraints:
   - Python 3.12+, managed with uv. Linux, macOS and Windows, all supported from the first commit and required in CI.

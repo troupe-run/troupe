@@ -1,1 +1,1 @@
-"""troupe: run your development process with agents and people in named roles."""
+"""troupe: run your development process with a team of agents, asking only when it needs you."""

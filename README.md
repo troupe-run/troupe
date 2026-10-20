@@ -2,13 +2,13 @@
 
 **Your agents need a director.**
 
-troupe runs your development process with agents and people in named roles. Work branches and loops, decisions
-go to whoever owns them, and every decision records who made it.
+troupe runs your development process with a team of agents, asking only when it needs you. Work branches and loops,
+decisions go to whoever owns them, and every decision records who made it.
 
-**Status: pre-alpha.** There's nothing to install yet. What exists so far is the repository's foundation: the
-workspace, the quality gates, and the first pieces of the command line and the platform seam. See
-[troupe.run](https://troupe.run) for the principles, and the [roadmap](https://github.com/orgs/troupe-run/projects/1)
-for the open decisions and what's next.
+Pre-alpha: there's nothing to install yet. What exists so far is the repository's foundation: the workspace, the
+quality gates, and the first pieces of the command line and the platform seam. See [troupe.run](https://troupe.run)
+for the principles, and the [roadmap](https://github.com/orgs/troupe-run/projects/1) for the open decisions and
+what's next.
 
 ## Development
 

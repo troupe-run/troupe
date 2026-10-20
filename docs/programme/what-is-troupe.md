@@ -1,11 +1,11 @@
 ---
 title: What is troupe?
-description: troupe runs your development process with agents and people in named roles.
+description: troupe runs your development process with a team of agents, asking only when it needs you.
 status: written
 prerelease: true
 ---
 
-troupe runs your development process with agents and people in named roles.
+troupe runs your development process with a team of agents, asking only when it needs you.
 
 ## The idea
 
