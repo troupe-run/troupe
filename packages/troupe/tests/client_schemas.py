@@ -19,6 +19,9 @@ MESSAGES = {
         "perform": ("request", "update", "result"),
         "status": ("request", "result"),
         "logs": ("request", "update", "result"),
+        "config-set": ("request", "update", "result"),
+        "config-get": ("request", "result"),
+        "flush": ("request", "update", "result"),
     }.items()
 }
 """Each method's messages, by part."""

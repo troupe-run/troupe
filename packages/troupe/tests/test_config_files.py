@@ -382,3 +382,23 @@ def test_a_malformed_line_before_the_last_is_refused_naming_the_record_and_the_f
     assert caught.value.path == str(record)
     assert "Delete the file" in caught.value.fix
     check_error(caught.value.to_data())
+
+
+def _reordered(value: object, draw: Any) -> object:  # noqa: ANN401
+    if isinstance(value, dict):
+        keys = draw(st.permutations(list(value)))
+        return {key: _reordered(value[key], draw) for key in keys}
+    if isinstance(value, list):
+        return [_reordered(item, draw) for item in value]
+    return value
+
+
+@given(st.dictionaries(st.text(min_size=1, max_size=4), JSON, max_size=4), st.data())
+def test_a_file_depends_only_on_what_config_holds_not_the_order_values_were_set_in(
+    options: dict[str, Any], data: st.DataObject
+) -> None:
+    # Replaying history sets an actor's values in another order than the command that set them.
+    actor = {"runner": "scripted", "options": options, "expect": [], "character": "C."}
+    reordered = _reordered(actor, data.draw)
+    assert isinstance(reordered, dict)
+    assert render_actor(reordered) == render_actor(actor)

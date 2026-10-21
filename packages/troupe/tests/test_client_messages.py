@@ -214,6 +214,96 @@ CASES: list[tuple[object, str, st.SearchStrategy[Any]]] = [
 ]
 
 
+# Config's messages (config-model design D10).
+
+KEYS = st.text(min_size=1, max_size=6)
+CONFIG_PATHS = st.lists(KEYS, min_size=1, max_size=3)
+JSON = st.recursive(
+    st.booleans() | st.integers() | st.text(max_size=6),
+    lambda inner: st.lists(inner, max_size=3) | st.dictionaries(KEYS, inner, max_size=3),
+    max_leaves=6,
+)
+VALUES = st.booleans() | st.integers() | st.text(max_size=6) | st.lists(JSON, max_size=3)
+ULIDS = st.from_regex(r"\A[0-9A-HJKMNP-TV-Z]{26}\Z")
+ENTRIES = st.fixed_dictionaries(
+    {"path": CONFIG_PATHS}, optional={"before": HASHES, "after": VALUES}
+).filter(lambda e: "before" in e or "after" in e)
+FILES = st.fixed_dictionaries(
+    {
+        "path": st.sampled_from([".troupe/actors/tester.yaml", ".troupe/actors/tester.md"]),
+        "action": st.sampled_from(["write", "remove", "finish", "discard"]),
+        "reason": st.text(min_size=1, max_size=10),
+    },
+    optional={"kept": HASHES},
+)
+CHANGES = st.fixed_dictionaries(
+    {"change": ULIDS, "actor": ACTORS, "at": TIMES, "entries": st.lists(ENTRIES, max_size=2)}
+)
+CONFLICTS = st.fixed_dictionaries(
+    {
+        "paths": st.lists(CONFIG_PATHS, min_size=1, max_size=2),
+        "changes": st.lists(CHANGES, min_size=2, max_size=3),
+    },
+    optional={"rule": st.text(min_size=1, max_size=10)},
+)
+OPERATIONS = st.fixed_dictionaries({"path": CONFIG_PATHS, "value": JSON}) | st.fixed_dictionaries(
+    {"path": CONFIG_PATHS, "unset": st.just(True)}
+)
+CASES += [
+    (
+        m.ConfigSetRequest,
+        "config-set-request.schema.json",
+        st.fixed_dictionaries(
+            {"operations": st.lists(OPERATIONS, min_size=1, max_size=3)},
+            optional={"reason": st.text(min_size=1, max_size=10), "rehearse": st.booleans()},
+        ),
+    ),
+    (m.ConfigUpdate, "config-set-update.schema.json", NOTICE_UPDATES),
+    (
+        m.ConfigSetResult,
+        "config-set-result.schema.json",
+        st.fixed_dictionaries(
+            {
+                "entries": st.lists(ENTRIES, max_size=3),
+                "files": st.lists(FILES, max_size=2),
+                "notices": st.lists(NOTICES, max_size=2),
+            },
+            optional={"change": ULIDS},
+        ),
+    ),
+    (
+        m.ConfigGetRequest,
+        "config-get-request.schema.json",
+        st.fixed_dictionaries({}, optional={"path": CONFIG_PATHS}),
+    ),
+    (
+        m.ConfigGetResult,
+        "config-get-result.schema.json",
+        st.fixed_dictionaries(
+            {
+                "conflicts": st.lists(CONFLICTS, max_size=2),
+                "heads": st.lists(HASHES, max_size=2),
+                "notices": st.lists(NOTICES, max_size=2),
+            },
+            optional={"value": JSON},
+        ),
+    ),
+    (
+        m.FlushRequest,
+        "flush-request.schema.json",
+        st.fixed_dictionaries({}, optional={"force": st.booleans(), "rehearse": st.booleans()}),
+    ),
+    (m.ConfigUpdate, "flush-update.schema.json", NOTICE_UPDATES),
+    (
+        m.FlushResult,
+        "flush-result.schema.json",
+        st.fixed_dictionaries(
+            {"files": st.lists(FILES, max_size=2), "notices": st.lists(NOTICES, max_size=2)}
+        ),
+    ),
+]
+
+
 def _parse(kind: object, data: object) -> Message:
     if isinstance(kind, type) and issubclass(kind, Message):
         return kind.from_data(data)

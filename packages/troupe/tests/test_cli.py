@@ -579,7 +579,8 @@ def _shape(declared: _Declared) -> dict[str, object]:
 
 
 def test_declared_reads_perform_status_and_logs_as_they_declare_their_arguments() -> None:
-    by_name = {command.name: _shape(_declared_for(command)) for command in COMMANDS}
+    runs = ("perform", "status", "logs")
+    by_name = {c.name: _shape(_declared_for(c)) for c in COMMANDS if c.name in runs}
     assert by_name == {
         "perform": {
             "options": [

@@ -1,0 +1,70 @@
+# Config
+
+A theatre's config is events: one `Config.Changed` per command that changes it, in one stream per theatre, merged
+across branches. The files under `.troupe/` are a projection that troupe writes and never reads back (yet). This
+page describes config as built by the `config-model` change (#60); the decisions behind it are #6 (layout), #7
+(schemas), #135 (values are never merged inside), #136 (config history) and #137 (`--rehearse`).
+
+## Events
+
+- **One stream per theatre**, with the same id everywhere (`troupe.core.config.aggregate.STREAM`).
+- **`Config.Changed`** holds `changes`, one entry per value the command changed, and `files`, every config file it
+  wrote (with the hash of the bytes) or removed (with none). Its payload schema is
+  [`events/config-changed.schema.json`](../protocol/schemas/events/config-changed.schema.json).
+- **An entry** is `{"path": [...keys], "before": "sha256:...", "after": value}`. `before` is the SHA-256 of the old
+  value's canonical JSON, absent when there was none; `after` is the new value, absent when it was removed, and never
+  an object, since an object is a group of values (#135). Removing a group is one entry addressed to it.
+- **`Config.Settled`** ends a fork in the config stream, recorded with the first change after a merge, in the same
+  batch ([`events/config-settled.schema.json`](../protocol/schemas/events/config-settled.schema.json)).
+
+`troupe.core.config.changes` builds entries from a command's operations (and a path changed twice in one command
+records its net change); `troupe.core.config.kinds` checks config before a change is recorded.
+
+## The merge
+
+Config is worked out from the stream's whole history, both sides of every fork, never with the library's `load`
+(`troupe.core.config.merge`):
+
+- **Points and latest writes.** Each path an entry names is a point; the writes that cover it are the entries at it
+  or at a group above it; its latest writes are those no later covering write follows.
+- **Each line's net change.** A latest write's line is the covering writes behind it that the other latest writes
+  don't descend from. A line whose writes are all at the point, and end where they began, drops out. Lines left
+  that leave the point differently conflict, as whole changes.
+- **Validation.** A merged config that breaks a rule is a conflict between the changes since the split that
+  touched what broke it, for an actor with no conflict already.
+- **Replay.** Config is every entry replayed in the history's order, leaving out the lines that dropped out and both
+  sides of every conflict. A settling event is read as a join, never for its state.
+
+Any conflict blocks every use of config but `config get`, until one change that sets or unsets every conflicting
+value resolves it (`troupe.core.config.stream`). Reads record nothing.
+
+## Files
+
+`troupe.core.config.projection` renders each actor to `actors/<name>.yaml` (its schema named twice, at troupe.run
+by major version; keys in the schema's order, groups' keys sorted, strings quoted so YAML 1.1 and 1.2 read them
+the same) and `actors/<name>.md` (the character's text exactly). Before replacing or removing a file it checks the
+file is troupe's:
+
+| On disk | Then |
+|---|---|
+| What troupe would write now | nothing to do |
+| A hash a `Config.Changed` recorded for that path, or this clone's record of files flush wrote (`.troupe/local/config/written.jsonl`) | written again, with `config.file-rewritten` |
+| Nothing | written again, with `config.file-rewritten` |
+| Anything else | refused with `config.file-not-troupes`, unless `--force`, which keeps its bytes in the artifact store |
+
+A change stages each new file beside its target (`.<name>.troupe~`), records the event with the files' hashes, then
+moves them into place with an atomic replace, all under the lock in `.troupe/local/config/`. A staged file an event
+vouches for is a write a crash cut short, and the next flush finishes it; one no event vouches for is removed.
+
+## Notices and errors
+
+| Code | When |
+|---|---|
+| `config.invalid` | A change would make config break a rule: an unknown field, an option its runner doesn't define, a missing effect check, a bad name. Names the path and the rule |
+| `config.conflict` | Branches' config changes conflict, so config can't be used until they're resolved |
+| `config.file-not-troupes` | A config file isn't one troupe wrote, so it won't be replaced |
+| `config.unknown-file` | A file in a config directory matches no kind of config file |
+| `config.local-malformed` | This clone's record of the files flush wrote has a malformed line before its last |
+| `schemas.plugin-missing` | A runner's package isn't installed, or ships no schemas |
+| `config.file-rewritten` | (notice) A config file troupe wrote was missing or older, and was written again |
+| `config.waiting` | (notice) Another troupe command is writing config files, and this one is waiting |

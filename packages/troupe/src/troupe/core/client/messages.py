@@ -261,6 +261,106 @@ class LogsResult(Message):
     notices: list[NoticeData] = json_field("notices")
 
 
+# Config (spec: config, config-files; config-model design D10).
+
+ULID = re.compile(r"\A[0-9A-HJKMNP-TV-Z]{26}\Z")
+HASH = re.compile(r"\Asha256:[0-9a-f]{64}\Z")
+
+
+def _check_path(path: list[str], where: str) -> None:
+    if not path:
+        raise fail(where, "must name at least one key")
+    for index, key in enumerate(path):
+        if not key:
+            raise fail(f"{where}[{index}]", "must not be empty")
+
+
+@dataclass(frozen=True)
+class ConfigOperation(Message):
+    """Set the value or group at ``path``, or unset it: exactly one of ``value`` and ``unset``."""
+
+    path: list[str] = json_field("path", min_items=1)
+    value: object | None = json_field("value", default=None)
+    unset: bool | None = json_field("unset", default=None)
+
+    def _check(self, where: str) -> None:
+        _check_path(self.path, f"{where}.path")
+        if self.unset is False:
+            raise fail(f"{where}.unset", "must be true: to set a value, give value instead")
+        if (self.value is None) == (self.unset is None):
+            raise fail(where, "give exactly one of value and unset")
+
+
+@dataclass(frozen=True)
+class ConfigSetRequest(Message):
+    operations: list[ConfigOperation] = json_field("operations", min_items=1)
+    reason: str | None = json_field("reason", default=None, min_length=1)
+    rehearse: bool | None = json_field("rehearse", default=None)
+
+
+@dataclass(frozen=True)
+class FileAction(Message):
+    path: str = json_field("path", pattern=THEATRE_PATH)
+    action: Literal["write", "remove", "finish", "discard"] = json_field("action")
+    reason: str = json_field("reason", min_length=1)
+    kept: str | None = json_field("kept", default=None, pattern=HASH)
+
+
+@dataclass(frozen=True)
+class ConfigSetResult(Message):
+    entries: list[dict[str, object]] = json_field("entries")
+    files: list[FileAction] = json_field("files")
+    notices: list[NoticeData] = json_field("notices")
+    change: str | None = json_field("change", default=None, pattern=ULID)
+
+
+@dataclass(frozen=True)
+class ConfigGetRequest(Message):
+    path: list[str] | None = json_field("path", default=None, min_items=1)
+
+    def _check(self, where: str) -> None:
+        if self.path is not None:
+            _check_path(self.path, f"{where}.path")
+
+
+@dataclass(frozen=True)
+class ConflictingChange(Message):
+    change: str = json_field("change", pattern=ULID)
+    actor: ActorData = json_field("actor")
+    at: str = json_field("at", pattern=TIME)
+    entries: list[dict[str, object]] = json_field("entries")
+
+
+@dataclass(frozen=True)
+class ConflictData(Message):
+    paths: list[list[str]] = json_field("paths", min_items=1)
+    changes: list[ConflictingChange] = json_field("changes", min_items=2)
+    rule: str | None = json_field("rule", default=None, min_length=1)
+
+
+@dataclass(frozen=True)
+class ConfigGetResult(Message):
+    conflicts: list[ConflictData] = json_field("conflicts")
+    heads: list[str] = json_field("heads")
+    notices: list[NoticeData] = json_field("notices")
+    value: object | None = json_field("value", default=None)
+
+
+@dataclass(frozen=True)
+class FlushRequest(Message):
+    force: bool | None = json_field("force", default=None)
+    rehearse: bool | None = json_field("rehearse", default=None)
+
+
+@dataclass(frozen=True)
+class FlushResult(Message):
+    files: list[FileAction] = json_field("files")
+    notices: list[NoticeData] = json_field("notices")
+
+
+ConfigUpdate = NoticeUpdate
+
+
 def parse_update(kind: object, data: object) -> Message:
     """An update for a method whose updates are ``kind`` (PerformUpdate or LogsUpdate)."""
     message = decode(kind, data, "update")

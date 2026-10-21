@@ -180,21 +180,36 @@
 
 ## 8. Commands, the client protocol and the CLI (design D10)
 
-- [ ] 8.1 Write the client-protocol schemas for `config.set` (set and unset entries, `reason`, `rehearse`),
-  `config.get` and `flush` (`force`, `rehearse`), and their hand-written message types in today's style. Verify the
+- [x] 8.1 Write the client-protocol schemas for `config-set` (set and unset entries, `reason`, `rehearse`),
+  `config-get` and `flush` (`force`, `rehearse`), and their hand-written message types in today's style. Verify the
   client-protocol schema tests cover them, including the random round trip
-- [ ] 8.2 Add the core commands behind the dispatcher, each flushing first and holding the projection lock while
+- [x] 8.2 Add the core commands behind the dispatcher, each flushing first and holding the projection lock while
   writing. Verify a dispatcher test for each method, that a refused change (from 5.3's cases) records nothing and
   writes no file, and that the import contract keeping `troupe.cli` to
   `troupe.core.client` still passes
-- [ ] 8.3 Add `troupe config set`, `troupe config unset`, `troupe config get [--json]` and `troupe flush [--force]`,
+- [x] 8.3 Add `troupe config set`, `troupe config unset`, `troupe config get [--json]` and `troupe flush [--force]`,
   with values typed by the schema at their path, `@<file>`, `--json` for values with no single type, and `--reason`.
   Verify with CLI tests for each scenario under "Config commands" and "Command-line values are typed by the schema"
-- [ ] 8.4 Write `docs/stagecraft/hand-edit-config.md` and `docs/the-company/theatres.md`'s config section as built:
+- [x] 8.4 Write `docs/stagecraft/hand-edit-config.md` and `docs/the-company/theatres.md`'s config section as built:
   files are written by troupe and checked before replacing, flush and `--force`, conflicts and how to resolve them.
   Generate the config section of `docs/prompt-book/config-schema.md` from `protocol/schemas/config/` with
   `scripts/docs_reference.py`, and regenerate the CLI reference. Verify the docs tests pass, including vocabulary and
   links
+  - Group 8 as built. Methods `config-set`, `config-get` and `flush` (named so, rather than `config.set`, because
+    the dispatcher names a method's schemas `<method>-request.schema.json`; the specs and design say so), with their
+    schemas in `protocol/schemas/client/` (shared definitions in `config.schema.json`) and hand-written message
+    types. The decoder learned "any JSON value but null" for a request's values. `troupe.core.config.commands`
+    writes in D9's order under the lock, and announces a wait with the notice `config.waiting`. The CLI's parser
+    gained two-word commands (`config set`): the scan reads the group, then its subcommand, and every usage rule and
+    code applies to the subcommand. `troupe.cli.values` types a value by the schema at its path (the actor schema,
+    or the actor's runner's options schema). The import contract now keeps the CLI out of `troupe.core.config`.
+  - Bugs found on the way, all fixed: rendering followed the order values were set in, so the same config could
+    render two ways (now a property test); the parser accepted a single argument `"config get"`, found by the
+    existing usage-shape property test; and calling `flush` inside the lock it takes would have deadlocked.
+  - Tests: `test_config_commands.py` (18, through the dispatcher, every message validated against its schema,
+    including 5.3's refused changes recording nothing and writing no file, a crash between recording and moving
+    finished by the next flush, and an announced wait), `test_cli_config.py` (19), and round-trip cases for the six
+    new messages in `test_client_messages.py`. `contributing/config.md` is new, with the codes table.
 
 ## 9. Rehearsals (design D15)
 

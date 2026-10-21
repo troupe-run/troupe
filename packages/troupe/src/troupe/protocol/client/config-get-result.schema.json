@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/client/config-get-result.schema.json",
+  "title": "config-get: result",
+  "description": "Config as the history works it out, with any conflicts, which config get shows rather than refuses.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "conflicts",
+    "heads",
+    "notices"
+  ],
+  "properties": {
+    "value": {
+      "description": "The value or group at the path, or the whole of config. Absent: there's nothing there.",
+      "$ref": "config.schema.json#/$defs/value"
+    },
+    "conflicts": {
+      "type": "array",
+      "items": {
+        "$ref": "config.schema.json#/$defs/conflict"
+      }
+    },
+    "heads": {
+      "description": "The config version: the ids of the config stream's heads, sorted. Empty: config has no changes yet.",
+      "type": "array",
+      "items": {
+        "$ref": "run.schema.json#/$defs/hash"
+      }
+    },
+    "notices": {
+      "type": "array",
+      "items": {
+        "$ref": "../notice.schema.json"
+      }
+    }
+  }
+}

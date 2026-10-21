@@ -58,7 +58,7 @@ exactly in its protocol shape.
 
 #### Scenario: Config get as JSON
 - **WHEN** a person runs `troupe config get --json`
-- **THEN** standard output is one JSON document that validates against the `config.get` result schema
+- **THEN** standard output is one JSON document that validates against the `config-get` result schema
 
 ## REMOVED Requirements
 

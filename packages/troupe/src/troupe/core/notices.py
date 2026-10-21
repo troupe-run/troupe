@@ -24,6 +24,7 @@ CODES: dict[str, str] = {
     # Config (config-model design D8). contributing/config.md lists them.
     "config.file-rewritten": "A config file troupe wrote was missing or older, so it was written "
     "again from config.",
+    "config.waiting": "Another troupe command is writing config files, and this one is waiting.",
 }
 """Every notice code, with what it means."""
 

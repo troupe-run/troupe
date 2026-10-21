@@ -243,11 +243,11 @@ source_modules = ["troupe_stage_local"]
 forbidden_modules = ["troupe.cli"]
 
 [[tool.importlinter.contracts]]
-# The CLI reaches perform, status and logs only through the client protocol's messages, so no behaviour exists in
-# the CLI alone (spec: client-protocol; perform-status-logs design D1).
-name = "the CLI reaches runs only through the client protocol"
+# The CLI reaches perform, status, logs, config-set, config-get and flush only through the client protocol's messages,
+# so no behaviour exists in the CLI alone (spec: client-protocol; perform-status-logs design D1; config-model D1).
+name = "the CLI reaches runs and config only through the client protocol"
 type = "forbidden"
 source_modules = ["troupe.cli"]
-forbidden_modules = ["troupe.core.runs", "troupe.core.stages", "troupe.core.policy"]
+forbidden_modules = ["troupe.core.runs", "troupe.core.stages", "troupe.core.policy", "troupe.core.config"]
 # troupe.core.client reaches them on the CLI's behalf; only a direct import bypasses the protocol.
 allow_indirect_imports = true

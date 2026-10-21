@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/client/config-set-request.schema.json",
+  "title": "config-set: request",
+  "description": "Change config: set or unset each path, in order, as one change recorded with lineage. A request never carries a host path, a command line or a policy value.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "operations"
+  ],
+  "properties": {
+    "operations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "config.schema.json#/$defs/operation"
+      }
+    },
+    "reason": {
+      "description": "Why, in the person's words, recorded in lineage. Absent: none was given.",
+      "type": "string",
+      "minLength": 1
+    },
+    "rehearse": {
+      "description": "Change nothing: report what would be recorded and written. Absent means false.",
+      "type": "boolean"
+    }
+  }
+}

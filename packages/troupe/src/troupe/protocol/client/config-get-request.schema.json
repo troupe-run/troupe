@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/client/config-get-request.schema.json",
+  "title": "config-get: request",
+  "description": "Show config, or the value or group at a path, with any conflicts.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "path": {
+      "description": "Where to look. Absent: the whole of config.",
+      "$ref": "config.schema.json#/$defs/path"
+    }
+  }
+}

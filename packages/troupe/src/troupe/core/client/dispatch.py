@@ -37,9 +37,10 @@ def handlers() -> Mapping[str, Method]:
     """Every method the core offers, by name."""
     # Imported here: troupe.core.runs builds its Methods from this module, so a top-level import
     # would be circular.
-    from troupe.core.runs import methods
+    from troupe.core.config.commands import methods as config_methods
+    from troupe.core.runs import methods as run_methods
 
-    return methods()
+    return {**run_methods(), **config_methods()}
 
 
 async def call(
