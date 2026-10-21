@@ -4,7 +4,8 @@ A run is its own stream, keyed by its run id (a UUID minted by perform). Its eve
 
 - ``Run.Started``: recorded when the runner's init arrives, or at the end of a run that never sent
   one. It holds the actor's name, the runner requested and the one init reported, the stage's
-  admission, the effect check, and the instructions and options as artifact references.
+  admission, the effect check, the direction as an artifact reference, and the config version the
+  run used (config-model design D14).
 - ``Run.Reported``: one per run event, holding the runner's ``seq`` and the event as received. The
   ``seq`` is payload, never the stream's version (the library numbers versions from 1).
 - ``Run.Ended``: the outcome the run host derived, and whether recording failed part-way.
@@ -51,8 +52,8 @@ class Run(Aggregate):
         runner_requested: str,
         stage: dict[str, Any],
         effect_check: dict[str, Any],
-        instructions: str,
-        options: str,
+        direction: str,
+        config: list[str],
         runner_reported: dict[str, Any] | None = None,
     ) -> None:
         self.run_id = run_id
@@ -61,8 +62,8 @@ class Run(Aggregate):
         self.runner_reported = runner_reported
         self.stage = stage
         self.effect_check = effect_check
-        self.instructions = instructions
-        self.options = options
+        self.direction = direction
+        self.config = config
         self.next_seq = 0
         self.ended = False
 

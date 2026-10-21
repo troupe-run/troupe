@@ -1690,37 +1690,6 @@
     {
       "properties": {
         "code": {
-          "const": "perform.options-invalid"
-        },
-        "details": false
-      }
-    },
-    {
-      "properties": {
-        "code": {
-          "const": "perform.path-outside-theatre"
-        },
-        "details": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "path"
-          ],
-          "properties": {
-            "path": {
-              "type": "string",
-              "minLength": 1
-            }
-          }
-        }
-      },
-      "required": [
-        "details"
-      ]
-    },
-    {
-      "properties": {
-        "code": {
           "const": "schemas.plugin-missing"
         },
         "details": {
@@ -1888,6 +1857,37 @@
         },
         "details": false
       }
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "config.unknown-actor"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "actor",
+            "known"
+          ],
+          "properties": {
+            "actor": {
+              "type": "string",
+              "minLength": 1
+            },
+            "known": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
     }
   ],
   "$defs": {

@@ -1,6 +1,7 @@
 """perform runs one actor and records the run (spec: runs, stages, policy; perform-status-logs
 design D5, D8, D9)."""
 
+import asyncio
 import hashlib
 import json
 from pathlib import Path
@@ -10,13 +11,17 @@ from uuid import UUID
 import pytest
 
 from runtesting import ADA, ALLOW, INIT, OK, Harness, failing_at, request, script, theatre, turn
-from storetesting import snapshot
-from troupe.core import defaults, strict_json
+from storetesting import git_service, snapshot
+from troupe.core import defaults, interim
+from troupe.core.client import messages as m
+from troupe.core.config import aggregate, projection
+from troupe.core.config.merge import merge
+from troupe.core.config.stream import read as read_config
 from troupe.core.errors import TroupeError
 from troupe.core.files import directory_lock
 from troupe.core.runners.limits import RunLimits
 from troupe.core.runs.aggregate import ENDED, REPORTED, STARTED, Run
-from troupe.core.runs.perform import lease_dir
+from troupe.core.runs.perform import lease_dir, perform
 
 AGENT = {"kind": "agent", "id": "tester", "source": "troupe"}
 ADA_ACTOR = {"kind": "human", "id": "ada@example.com", "source": "env"}
@@ -43,7 +48,7 @@ def test_a_successful_run_records_its_start_each_event_in_seq_order_then_its_end
 ) -> None:
     harness = Harness(theatre(tmp_path))
     options = script(INIT, turn("one"), turn("two"), OK)
-    result = harness.perform(request(options, instructions="say hello"))
+    result = harness.perform(request(options, direction="say hello"))
     run = result.run
     records = history(harness, run.run_id)
     assert [r.topic for r in records] == [STARTED, REPORTED, REPORTED, REPORTED, REPORTED, ENDED]
@@ -77,22 +82,41 @@ def test_the_start_is_the_persons_and_everything_else_the_agents_under_one_chang
     assert all(lineage["vcs"]["adapter"] == "git" for lineage in lineages)
 
 
-def test_the_instructions_and_options_are_artifacts_referenced_from_the_start(
+def test_the_direction_is_an_artifact_referenced_from_the_start(tmp_path: Path) -> None:
+    harness = Harness(theatre(tmp_path))
+    result = harness.perform(request(script(INIT, OK), direction="say hello"))
+    run_events = history(harness, result.run.run_id)
+    [started] = states(run_events)[:1]
+    assert started["direction"] == "sha256:" + hashlib.sha256(b"say hello").hexdigest()
+    store = harness.backends().artifact_store(harness.session())
+    assert store.read(started["direction"]) == b"say hello"
+    assert not any(b"say hello" in record.state for record in run_events)
+
+
+def test_the_options_are_referenced_through_the_config_version_the_run_used(
     tmp_path: Path,
 ) -> None:
     harness = Harness(theatre(tmp_path))
     options = script(INIT, OK)
-    result = harness.perform(request(options, instructions="say hello"))
-    [started] = states(history(harness, result.run.run_id))[:1]
-    canonical = strict_json.dumps(options).encode("utf-8")
-    assert started["options"] == "sha256:" + hashlib.sha256(canonical).hexdigest()
-    assert started["instructions"] == "sha256:" + hashlib.sha256(b"say hello").hexdigest()
-    store = harness.backends().artifact_store(harness.session())
-    assert store.read(started["options"]) == canonical
-    events_text = "".join(
-        p.read_text("utf-8") for p in (harness.repo.path / ".troupe" / "events").glob("*.jsonl")
-    )
-    assert '"steps"' not in events_text
+    result = harness.perform(request(options))
+    run_events = history(harness, result.run.run_id)
+    [started] = states(run_events)[:1]
+    config_events = git_service(harness.repo).history(aggregate.STREAM)
+    assert started["config"] == sorted(e.id for e in config_events[-1:])
+    at_version = merge([e for e in config_events if e.id in set(started["config"])] or [])
+    assert at_version.config["actors"]["tester"]["options"] == options
+    assert not any(b'"steps"' in record.state for record in run_events)
+    assert "options" not in started
+
+
+def test_a_later_config_change_doesnt_change_the_version_a_run_recorded(tmp_path: Path) -> None:
+    harness = Harness(theatre(tmp_path))
+    first = harness.perform(request(script(INIT, OK)))
+    harness.perform(request(script(INIT, turn("changed"), OK)))
+    [started] = states(history(harness, first.run.run_id))[:1]
+    config_events = git_service(harness.repo).history(aggregate.STREAM)
+    assert started["config"] == [config_events[0].id]
+    assert len(config_events) == 2
 
 
 def test_updates_are_the_run_id_first_then_each_event_as_recorded(tmp_path: Path) -> None:
@@ -218,16 +242,26 @@ def test_a_run_that_never_sends_init_records_its_start_without_a_runner_then_its
 # 7.5: refusals leave nothing behind.
 
 
-def nothing_written(harness: Harness) -> bool:
-    return snapshot(harness.repo.path / ".troupe") == {}
+def configured(harness: Harness, asked: dict[str, Any]) -> dict[str, str]:
+    """Define the actor in config, then snapshot .troupe/: what perform must leave as it is."""
+    harness.configure(asked)
+    projection.flush(
+        harness.repo.path, read_config(git_service(harness.repo)).config, {}
+    )  # the files too, so a refused perform has nothing to flush either
+    return snapshot(harness.repo.path / ".troupe")
+
+
+def nothing_written(harness: Harness, before: dict[str, str]) -> bool:
+    return snapshot(harness.repo.path / ".troupe") == before
 
 
 def test_no_identity_refuses_before_a_runner_starts_and_leaves_nothing(tmp_path: Path) -> None:
     harness = Harness(theatre(tmp_path), env=dict(ALLOW), identity_chain=("env",))
+    before = configured(harness, request(script(INIT, OK)))
     with pytest.raises(TroupeError) as caught:
         harness.perform(request(script(INIT, OK)))
     assert caught.value.code == "identity.unresolved"
-    assert nothing_written(harness)
+    assert nothing_written(harness, before)
     assert harness.updates == []
 
 
@@ -236,30 +270,63 @@ def test_no_identity_refuses_before_a_runner_starts_and_leaves_nothing(tmp_path:
     [
         ({**ADA, "TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE": "yes"}, {}, "policy.invalid-value"),
         (ADA, {}, "stage.effects-unenforced"),
-        ({**ADA, **ALLOW}, {"runner": "claude"}, "runner.unknown"),
     ],
-    ids=["malformed policy", "default policy", "unknown runner"],
+    ids=["malformed policy", "default policy"],
 )
 def test_a_refusal_leaves_no_event_artifact_or_lease(
     tmp_path: Path, env: dict[str, str], fields: dict[str, str], code: str
 ) -> None:
     harness = Harness(theatre(tmp_path), env=env)
+    before = configured(harness, {**request(script(INIT, OK)), **fields})
     with pytest.raises(TroupeError) as caught:
         harness.perform({**request(script(INIT, OK)), **fields})
     assert caught.value.code == code
-    assert nothing_written(harness)
+    assert nothing_written(harness, before)
     assert harness.updates == []
+
+
+def test_a_runner_troupe_no_longer_knows_is_refused_and_leaves_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Config refuses an unknown runner when it's set; a runner uninstalled since is refused here.
+    harness = Harness(theatre(tmp_path))
+    gone = {**interim.RUNNERS, "gone": interim.RUNNERS["scripted"]}
+    monkeypatch.setattr(interim, "RUNNERS", gone)
+    before = configured(harness, {**request(script(INIT, OK)), "runner": "gone"})
+    monkeypatch.undo()
+    with pytest.raises(TroupeError) as caught:
+        harness.perform(request(script(INIT, OK)) | {"runner": "gone"})
+    assert caught.value.code == "runner.unknown"
+    assert nothing_written(harness, before)
+
+
+def test_an_actor_config_doesnt_have_is_refused_naming_the_actors_it_has(tmp_path: Path) -> None:
+    harness = Harness(theatre(tmp_path))
+    before = configured(harness, request(script(INIT, OK)))
+    with pytest.raises(TroupeError) as caught:
+        asyncio.run(
+            perform(
+                m.PerformRequest.from_data({"actor": "nobody"}),
+                harness.session(),
+                harness.send,
+                backends=harness.backends(),
+            )
+        )
+    assert caught.value.code == "config.unknown-actor"
+    assert caught.value.details == {"actor": "nobody", "known": ["tester"]}
+    assert nothing_written(harness, before)
 
 
 def test_an_unknown_stage_leaves_no_event_artifact_or_lease(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(defaults, "STAGE", "docker")
     harness = Harness(theatre(tmp_path))
+    before = configured(harness, request(script(INIT, OK)))
+    monkeypatch.setattr(defaults, "STAGE", "docker")
     with pytest.raises(TroupeError) as caught:
         harness.perform(request(script(INIT, OK)))
     assert caught.value.code == "stage.unknown"
-    assert nothing_written(harness)
+    assert nothing_written(harness, before)
 
 
 # 7.4: a recording failure stops the run, and is reported.
@@ -316,3 +383,73 @@ def test_when_the_end_cannot_be_recorded_either_the_error_says_so_and_no_end_is_
     assert "interrupted" in error.problem
     records = history(harness, error.details["run"])
     assert [r.topic for r in records] == [STARTED, REPORTED]
+
+
+# Requirement: A run uses the actor as config defines it (spec: runs)
+
+CHARACTER = "You are the tester."
+CHARACTER_HASH = "sha256:" + hashlib.sha256(CHARACTER.encode()).hexdigest()
+
+
+def test_the_character_config_gives_the_actor_reaches_the_runner_unchanged(
+    tmp_path: Path,
+) -> None:
+    harness = Harness(theatre(tmp_path))
+    checked = script(INIT, {"checkCharacter": {"hash": CHARACTER_HASH}}, OK)
+    result = harness.perform({**request(checked), "character": CHARACTER})
+    assert result.run.outcome == "succeeded"
+
+
+def test_a_character_other_than_the_one_the_script_expects_fails_the_run(tmp_path: Path) -> None:
+    # The check above can fail: the runner really compares what it received.
+    harness = Harness(theatre(tmp_path))
+    checked = script(INIT, {"checkCharacter": {"hash": CHARACTER_HASH}}, OK)
+    result = harness.perform({**request(checked), "character": "Someone else."})
+    assert result.run.outcome == "failed"
+
+
+def test_a_run_after_a_config_change_uses_the_new_options(tmp_path: Path) -> None:
+    harness = Harness(theatre(tmp_path))
+    harness.perform(request(script(INIT, turn("first"), OK)))
+    second = harness.perform(request(script(INIT, turn("second"), OK)))
+    texts = [
+        e["event"].get("text") for e in states(history(harness, second.run.run_id)) if "event" in e
+    ]
+    assert "second" in texts
+    assert "first" not in texts
+
+
+def test_perform_writes_a_missing_config_file_before_the_run_starts(tmp_path: Path) -> None:
+    harness = Harness(theatre(tmp_path))
+    configured(harness, request(script(INIT, OK)))
+    actor_file = harness.repo.path / ".troupe" / "actors" / "tester.yaml"
+    actor_file.unlink()
+    harness.perform(request(script(INIT, OK)))
+    assert actor_file.exists()
+    assert any(u.get("notice", {}).get("code") == "config.file-rewritten" for u in harness.updates)
+
+
+def test_a_conflict_on_another_actor_refuses_the_perform(tmp_path: Path) -> None:
+    repo = theatre(tmp_path)
+    harness = Harness(repo)
+    reviewer = {**request(script(INIT, OK)), "actor": "reviewer"}
+    harness.configure(reviewer)
+    harness.configure(request(script(INIT, OK)))
+    repo.commit_all("actors")
+    repo.git("branch", "feature")
+    for branch, text in (("feature", "One."), ("main", "Two.")):
+        repo.git("switch", "-q", branch)
+        harness.configure({**request(script(INIT, OK)), "character": text})
+        repo.commit_all(text)
+    repo.git("merge", "-q", "--no-edit", "feature")
+    with pytest.raises(TroupeError) as caught:
+        asyncio.run(
+            perform(
+                m.PerformRequest.from_data({"actor": "reviewer"}),
+                harness.session(),
+                harness.send,
+                backends=harness.backends(),
+            )
+        )
+    assert caught.value.code == "config.conflict"
+    assert "actors.tester.character" in caught.value.problem

@@ -74,8 +74,8 @@ def recorded_start(store: EventStore, run_id: str) -> None:
         runner_reported={"name": "scripted", "version": "0.1.0"},
         stage=STAGE,
         effect_check={"kind": "none"},
-        instructions="sha256:" + "a" * 64,
-        options="sha256:" + "b" * 64,
+        direction="sha256:" + "a" * 64,
+        config=["sha256:" + "b" * 64],
     )
     store.command(via="cli").record(run.collect_events())
     run.report(0, {"runId": run_id, "seq": 0, "type": "log", "level": "info", "message": "m"})

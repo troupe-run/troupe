@@ -19,7 +19,7 @@ A runner is what runs an actor: it starts the agent and passes on what it does. 
 runner, which plays a script instead of running an agent. It's how you try troupe out offline, and how troupe's own
 tests run. A runner for Claude Code comes next ([#55](https://github.com/troupe-run/troupe/issues/55)).
 
-Write a script that writes a file, in your theatre:
+Write a script that writes a file, in your theatre. It's the scripted runner's options:
 
 ```json title="hello.json"
 {"script": {"steps": [
@@ -28,6 +28,18 @@ Write a script that writes a file, in your theatre:
   {"event": {"type": "result", "status": "ok", "message": "wrote out/hello.txt"}}
 ]}}
 ```
+
+## Define the actor
+
+An actor is config: its runner, the runner's options, and what a run of it is for. Set all three in one change:
+
+```sh
+troupe config set actors.tester.runner=scripted actors.tester.options=@hello.json 'actors.tester.expect=["out/hello.txt"]'
+```
+
+`actors.tester.options=@hello.json` reads the options from the file. `expect` is what the run is for: troupe checks
+afterwards that `out/hello.txt` was created or changed, and the run fails if it wasn't. troupe records the change
+with who made it, and writes `.troupe/actors/tester.yaml`, so you can read the actor, and review it as a diff.
 
 ## Allow the local stage
 
@@ -44,12 +56,11 @@ On Windows, in PowerShell, that's `$env:TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STA
 ## Perform
 
 ```sh
-troupe perform tester --runner scripted --runner-options hello.json --expect out/hello.txt
+troupe perform tester
 ```
 
-`tester` is the actor's name. `--expect out/hello.txt` is what the run is for: troupe checks afterwards that the
-file was created or changed, and the run fails if it wasn't. Until config arrives, you name the runner and its
-options on the command line each time ([#60](https://github.com/troupe-run/troupe/issues/60)).
+`tester` is the actor's name, and troupe takes the rest from config. Add `--direction "..."` to say what this run is
+for, and `--rehearse` to see what would run without starting anything.
 
 While it runs, troupe shows its progress on standard error. When it succeeds, standard output gets one line,
 `run <id> succeeded`, and `out/hello.txt` says `hello`.
@@ -65,6 +76,7 @@ troupe logs <run>
 troupe recorded it: name the run by its id or its first 8 characters. Add `--follow` to watch a run from another
 terminal while it's going.
 
-Everything you've seen is recorded in `.troupe/events/`, with who started the run, on which stage, and why it was
-allowed to run there. [Performances and runs](../the-company/performances-and-runs.md) says what a run records, and
-[Read the lineage](../stagecraft/read-the-lineage.md) how to answer questions from it.
+Everything you've seen is recorded in `.troupe/events/`, with who started the run, on which stage, why it was
+allowed to run there, and which version of config it used. [Performances and
+runs](../the-company/performances-and-runs.md) says what a run records, and [Read the
+lineage](../stagecraft/read-the-lineage.md) how to answer questions from it.

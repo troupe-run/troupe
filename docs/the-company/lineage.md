@@ -45,7 +45,7 @@ When troupe runs an agent, troupe gives it its identity, from the actor it runs.
 
 ## Large things are referenced, not copied
 
-A run's transcript, its instructions and the runner's options can be large, or hold what shouldn't be in git, such
+A run's transcript and its direction can be large, or hold what shouldn't be in git, such
 as secrets an actor's tools read. troupe keeps them out of git, in the theatre's own store, and lineage refers to
 each by the SHA-256 hash of its contents. The same contents always get the same reference, and reading one checks
 it still matches.

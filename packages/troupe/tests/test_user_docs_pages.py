@@ -65,25 +65,29 @@ def test_the_first_performance_runs_as_written_and_writes_its_file(
     (fresh.path / "hello.json").write_text(script, encoding="utf-8")
     lines = [line for lang, _, body in blocks(page) if lang == "sh" for line in body.splitlines()]
     assert lines == [
+        "troupe config set actors.tester.runner=scripted actors.tester.options=@hello.json "
+        "'actors.tester.expect=[\"out/hello.txt\"]'",
         "export TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE=true",
-        "troupe perform tester --runner scripted --runner-options hello.json "
-        "--expect out/hello.txt",
+        "troupe perform tester",
         "troupe status",
         "troupe logs <run>",
     ]
-    name, _, value = lines[0].removeprefix("export ").partition("=")
+    code, _, err = cli(*shlex.split(lines[0])[1:])
+    assert code == 0, err
+    assert (fresh.path / ".troupe" / "actors" / "tester.yaml").is_file()
+    name, _, value = lines[1].removeprefix("export ").partition("=")
     monkeypatch.setenv(name, value)
 
-    code, out, err = cli(*shlex.split(lines[1])[1:])
+    code, out, err = cli(*shlex.split(lines[2])[1:])
     assert code == 0, err
     run_id = out.split()[1]
     assert out == f"run {run_id} succeeded\n"
     assert (fresh.path / "out" / "hello.txt").read_text(encoding="utf-8") == "hello\n"
 
-    code, out, _ = cli(*shlex.split(lines[2])[1:])
+    code, out, _ = cli(*shlex.split(lines[3])[1:])
     assert code == 0
     assert run_id[:8] in out
-    code, out, _ = cli(*shlex.split(lines[3].replace("<run>", run_id[:8]))[1:])
+    code, out, _ = cli(*shlex.split(lines[4].replace("<run>", run_id[:8]))[1:])
     assert code == 0
     assert "wrote out/hello.txt" in out
 
@@ -92,16 +96,15 @@ def test_the_first_performance_is_refused_until_the_policy_is_set(fresh: Repo) -
     page = "opening-night/first-performance.md"
     (script,) = [body for _, meta, body in blocks(page) if meta == 'title="hello.json"']
     (fresh.path / "hello.json").write_text(script, encoding="utf-8")
-    code, out, err = cli(
-        "perform",
-        "tester",
-        "--runner",
-        "scripted",
-        "--runner-options",
-        "hello.json",
-        "--expect",
-        "out/hello.txt",
-    )
+    [define] = [
+        line
+        for lang, _, body in blocks(page)
+        if lang == "sh"
+        for line in body.splitlines()
+        if line.startswith("troupe config set")
+    ]
+    assert cli(*shlex.split(define)[1:])[0] == 0
+    code, out, err = cli("perform", "tester")
     assert code == 1
     assert out == ""
     assert "TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE=true" in err

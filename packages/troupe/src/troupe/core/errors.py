@@ -76,8 +76,6 @@ CODES: dict[str, ExitCode] = {
     # A request that isn't understood is a usage error from any surface (design D15).
     "client.invalid-request": ExitCode.USAGE,
     "client.unknown-method": ExitCode.USAGE,
-    "perform.options-invalid": ExitCode.FAILURE,
-    "perform.path-outside-theatre": ExitCode.USAGE,
     # Config (config-model design). contributing/config.md lists them.
     "schemas.plugin-missing": ExitCode.FAILURE,
     "config.invalid": ExitCode.FAILURE,
@@ -85,6 +83,7 @@ CODES: dict[str, ExitCode] = {
     "config.unknown-file": ExitCode.FAILURE,
     "config.file-not-troupes": ExitCode.FAILURE,
     "config.local-malformed": ExitCode.FAILURE,
+    "config.unknown-actor": ExitCode.FAILURE,
 }
 
 

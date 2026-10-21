@@ -43,8 +43,8 @@ def new_run(run_id: str | None = None) -> Run:
         runner_reported={"name": "scripted", "version": "0.1.0"},
         stage=STAGE,
         effect_check={"kind": "none"},
-        instructions="sha256:" + "a" * 64,
-        options="sha256:" + "b" * 64,
+        direction="sha256:" + "a" * 64,
+        config=["sha256:" + "b" * 64],
     )
 
 

@@ -1,9 +1,10 @@
 # Runs
 
 `troupe perform` runs one actor and records the run in the theatre's event store. `troupe status` and `troupe logs`
-read runs back. This page describes runs as built by the `perform-status-logs` change (#36); the decisions behind it
-are #3 (what a local stage does about declared effects) and #14 (no run server yet: commands and queries are
-messages in `protocol/`).
+read runs back. This page describes runs as built by the `perform-status-logs` change (#36), with the actor taken
+from config since `config-model` (#60, [contributing/config.md](config.md)); the decisions behind it are #3 (what a
+local stage does about declared effects) and #14 (no run server yet: commands and queries are messages in
+`protocol/`).
 
 ## A run
 
@@ -11,12 +12,16 @@ messages in `protocol/`).
 event store ([contributing/event-store.md](event-store.md)). The runner contract is in [contributing/runners.md](runners.md).
 
 1. **Everything that can refuse goes first:** who you are (the identity chain), the policy, the stage's admission,
-   and the runner's name. A refused `perform` runs nothing and writes nothing.
-2. **The run id** is a new UUID. `perform` shows it at once, so you can follow the run from another terminal.
-3. **The run's lease** is taken: a lock on `.troupe/local/runs/<run id>/`, held while `perform` runs.
-4. **The instructions and the runner's options** are stored as artifacts and referenced by hash, since they can be
-   large or hold what shouldn't be in git.
-5. **Each run event is recorded as it arrives,** then the run's end, with the outcome the run host derived.
+   config (a conflict, or an actor config doesn't have: `config.unknown-actor`), and the runner's name. A refused
+   `perform` runs nothing and writes nothing. With `rehearse`, perform stops here and returns what would run.
+2. **The actor comes from config:** its runner, the runner's options, its effect check (`expect`, each file once;
+   `[]` is none) and its character, which `run/start` carries apart from the direction. The config files are
+   flushed first, as every command that uses config does.
+3. **The run id** is a new UUID. `perform` shows it at once, so you can follow the run from another terminal.
+4. **The run's lease** is taken: a lock on `.troupe/local/runs/<run id>/`, held while `perform` runs.
+5. **The direction** is stored as an artifact and referenced by hash, since it can be large or hold what shouldn't
+   be in git. The options aren't stored again: the run's start records the config version, which holds them.
+6. **Each run event is recorded as it arrives,** then the run's end, with the outcome the run host derived.
 
 ### Run events
 
@@ -24,7 +29,7 @@ A run is its own stream, keyed by its run id. Its events, in order:
 
 | Event | When | Actor and via |
 |---|---|---|
-| `Run.Started` | When the runner's `init` arrives (or, if it never sends one, at the end). It holds the actor's name, the runner asked for and the name and version `init` reported, the stage's admission, the effect check, and the instructions' and options' references | You, through `cli` |
+| `Run.Started` | When the runner's `init` arrives (or, if it never sends one, at the end). It holds the actor's name, the runner asked for and the name and version `init` reported, the stage's admission, the effect check, the direction's reference, and the config version (the config stream's heads, sorted) | You, through `cli` |
 | `Run.Reported` | Once per run event, in `seq` order. It holds the event's `seq` and the event as received | The agent (`source: troupe`), through `runner` |
 | `Run.Ended` | Once, when the run host returns. It holds the outcome, its error, the result, the exit code, the transcript's and standard error's references and the limits; and, if recording failed part-way, where and why | The agent, through `runner` |
 
@@ -105,7 +110,7 @@ When policy allows it, every event the run records says so in its lineage:
           "allowedBy": {"setting": "allow_unenforced_local_stage", "source": "env"}}
 ```
 
-A run's effect check (`--expect`) isn't enforcement. It checks after the run that the actor produced what it was
+A run's effect check (the actor's `expect`) isn't enforcement. It checks after the run that the actor produced what it was
 for, and a passing check doesn't make the run's effects count as enforced. A stage that can enforce effects, such
 as a Docker stage, comes later.
 
@@ -135,7 +140,7 @@ export TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE=true
 | Code | When |
 |---|---|
 | `theatre.not-found` | No directory from here upwards holds `.troupe/` |
-| `runner.unknown` | `--runner` names a runner troupe doesn't know |
+| `runner.unknown` | The actor's runner isn't one troupe knows: it was uninstalled after it was configured |
 | `stage.unknown` | No stage of that name is installed |
 | `stage.effects-unenforced` | The stage can't enforce the actor's effects, and policy doesn't allow running it anyway |
 | `policy.invalid-value` | A policy variable is set to something other than `true` or `false` |
@@ -146,8 +151,6 @@ export TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE=true
 | `run.cancelling` | (notice) Ctrl-C was pressed: the run is stopping within its grace period |
 | `run.interrupted` | (notice) A run has no recorded end, and the `troupe perform` that ran it has stopped |
 | `run.unfinished-elsewhere` | (notice) A run started in another clone has no recorded end here |
-| `perform.options-invalid` | The file given to `--runner-options` can't be read, isn't strict JSON, or isn't a JSON object |
-| `perform.path-outside-theatre` | An `--expect` path isn't a file inside the theatre. Exits 2 |
 | `client.invalid-request` | A command's or query's request doesn't match its schema; it names the field. Exits 2 |
 | `client.unknown-method` | A surface called a command or query troupe doesn't offer. Exits 2 |
 

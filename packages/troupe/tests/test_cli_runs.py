@@ -1,6 +1,7 @@
 """troupe perform, status and logs on the command line (spec: cli; perform-status-logs design D3,
 D4, D14)."""
 
+import hashlib
 import importlib
 import io
 import json
@@ -27,7 +28,9 @@ from troupe.cli import COMMANDS, commands, main
 from troupe.cli.parser import parse
 from troupe.cli.render import render_run
 from troupe.core.client import messages as m
+from troupe.core.config import aggregate
 from troupe.core.errors import TroupeError
+from troupe.core.exit_codes import ExitCode
 
 # troupe.core.runs re-exports perform the function, so the module is reached by name.
 PERFORM = importlib.import_module("troupe.core.runs.perform")
@@ -52,10 +55,18 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Repo:
     return made
 
 
-def options_file(repo: Repo, options: dict[str, Any], name: str = "script.json") -> str:
-    path = repo.path / name
-    path.write_text(json.dumps(options), encoding="utf-8")
-    return name
+def configure(
+    repo: Repo,
+    options: dict[str, Any],
+    *,
+    expect: list[str] | None = None,
+    name: str = "actor.json",
+) -> None:
+    """Define the actor tester in config through the CLI, as a person would."""
+    actor = {"runner": "scripted", "options": options, "expect": expect or []}
+    (repo.path / name).write_text(json.dumps(actor), encoding="utf-8")
+    code, _, err = cli("config", "set", f"actors.tester=@{name}")
+    assert code == 0, err
 
 
 def started(repo: Repo, run_id: str) -> dict[str, Any]:
@@ -73,109 +84,66 @@ def usage_code(*argv: str) -> str:
     return caught.value.code
 
 
-def test_perform_needs_one_of_expect_or_no_effect_check(repo: Repo) -> None:
-    argv = ("perform", "tester", "--runner", "scripted")
-    code, out, err = cli(*argv)
-    assert (code, out) == (2, "")
-    assert usage_code(*argv) == "usage.missing-one-of"
-    assert "needs one of --expect or --no-effect-check" in err
-
-
-def test_perform_refuses_both_effect_check_flags(repo: Repo) -> None:
-    argv = ("perform", "tester", "--runner", "scripted", "--expect", "a", "--no-effect-check")
-    code, _, err = cli(*argv)
-    assert code == 2
-    assert usage_code(*argv) == "usage.conflicting-options"
-    assert "takes --expect or --no-effect-check, not both" in err
-
-
-def test_perform_needs_a_runner(repo: Repo) -> None:
-    argv = ("perform", "tester", "--no-effect-check")
-    code, _, err = cli(*argv)
-    assert code == 2
-    assert usage_code(*argv) == "usage.missing-argument"
-    assert "needs --runner" in err
-
-
-def test_an_unknown_runner_is_refused_naming_the_known_ones(repo: Repo) -> None:
-    code, out, err = cli("perform", "tester", "--runner", "claude", "--no-effect-check")
-    assert code == 1
-    assert out == ""
-    assert "'claude'" in err
-    assert "scripted" in err
+# Requirement: Perform names an actor from config (spec: cli)
 
 
 @pytest.mark.parametrize(
-    ("content", "said"),
-    [
-        ("[1, 2]", "a JSON list, not an object"),
-        ('{"script": 1, "script": 2}', "appears more than once"),
-        ('{"x": NaN}', "NaN"),
-        ("{not json", "isn't strict JSON"),
-    ],
-    ids=["array", "duplicate key", "NaN", "not JSON"],
+    "flag",
+    ["--runner", "--runner-options", "--expect", "--no-effect-check", "--instructions"],
 )
-def test_runner_options_that_arent_a_json_object_are_refused_naming_the_file(
-    repo: Repo, content: str, said: str
-) -> None:
-    (repo.path / "bad.json").write_text(content, encoding="utf-8")
-    code, out, err = cli(
-        "perform",
-        "tester",
-        "--runner",
-        "scripted",
-        "--runner-options",
-        "bad.json",
-        "--no-effect-check",
+def test_an_interim_flag_is_an_unknown_flag(repo: Repo, flag: str) -> None:
+    argv = (
+        ("perform", "tester", flag, "x")
+        if flag != "--no-effect-check"
+        else ("perform", "tester", flag)
     )
+    code, out, err = cli(*argv)
+    assert (code, out) == (2, "")
+    assert usage_code(*argv) == "usage.unknown-flag"
+    assert flag in err
+
+
+def test_an_actor_config_doesnt_have_is_refused_naming_the_actors_it_has(repo: Repo) -> None:
+    configure(repo, script(INIT, OK))
+    code, out, err = cli("perform", "nobody")
     assert code == 1
     assert out == ""
-    assert said in err
-    assert "bad.json" in err
+    assert "Config has no actor named 'nobody' (it has: tester)" in err
 
 
-def test_a_missing_runner_options_file_is_refused(repo: Repo) -> None:
-    code, _, err = cli(
-        "perform",
-        "tester",
-        "--runner",
-        "scripted",
-        "--runner-options",
-        "nope.json",
-        "--no-effect-check",
-    )
-    assert code == 1
-    assert "couldn't be read" in err
-
-
-def test_an_expected_path_is_read_from_the_working_directory(
-    repo: Repo, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_perform_uses_the_actors_effect_check_from_config(repo: Repo) -> None:
     write = {"writeFile": {"path": "src/out.txt", "content": "hi"}}
-    name = options_file(repo, script(INIT, write, OK))
-    (repo.path / "src").mkdir()
-    monkeypatch.chdir(repo.path / "src")
-    code, out, _ = cli(
-        "perform",
-        "tester",
-        "--runner",
-        "scripted",
-        "--runner-options",
-        f"../{name}",
-        "--expect",
-        "out.txt",
-    )
+    configure(repo, script(INIT, write, OK), expect=["src/out.txt"])
+    code, out, _ = cli("perform", "tester")
     assert code == 0
     run_id = out.split()[1]
     assert started(repo, run_id)["effect_check"] == {"kind": "files", "paths": ["src/out.txt"]}
 
 
-@pytest.mark.parametrize("path", ["../elsewhere.txt", "."], ids=["outside", "the theatre itself"])
-def test_an_expected_path_outside_the_theatre_is_refused(repo: Repo, path: str) -> None:
-    code, out, err = cli("perform", "tester", "--runner", "scripted", "--expect", path)
-    assert code == 2
-    assert out == ""
-    assert f"--expect {path}" in err
+def test_the_direction_is_recorded_by_reference(repo: Repo) -> None:
+    configure(repo, script(INIT, OK))
+    code, out, _ = cli("perform", "tester", "--direction", "write the hello file")
+    assert code == 0
+    run_id = out.split()[1]
+    digest = hashlib.sha256(b"write the hello file").hexdigest()
+    assert started(repo, run_id)["direction"] == f"sha256:{digest}"
+
+
+def test_rehearsing_a_perform_shows_what_would_run_and_starts_and_records_nothing(
+    repo: Repo,
+) -> None:
+    configure(repo, script(INIT, OK), expect=["out/hello.txt"])
+    before = len(git_service(repo).history(aggregate.STREAM))
+    code, out, _ = cli("perform", "tester", "--direction", "go", "--rehearse")
+    assert code == ExitCode.WOULD_CHANGE
+    assert "would perform tester" in out
+    assert "runner: scripted" in out
+    assert "stage: local, effects unenforced" in out
+    assert "effect check: out/hello.txt" in out
+    assert "direction: 2 characters" in out
+    assert "Rehearsal: nothing was started or recorded." in out
+    assert not (repo.path / ".troupe" / "local" / "runs").exists()
+    assert len(git_service(repo).history(aggregate.STREAM)) == before
 
 
 def test_with_no_theatre_perform_fails_naming_the_directory_and_creates_nothing(
@@ -184,7 +152,7 @@ def test_with_no_theatre_perform_fails_naming_the_directory_and_creates_nothing(
     nowhere = tmp_path / "nowhere"
     nowhere.mkdir()
     monkeypatch.chdir(nowhere)
-    code, out, err = cli("perform", "tester", "--runner", "scripted", "--no-effect-check")
+    code, out, err = cli("perform", "tester")
     assert code == 1
     assert out == ""
     assert "no .troupe directory" in err
@@ -192,10 +160,8 @@ def test_with_no_theatre_perform_fails_naming_the_directory_and_creates_nothing(
 
 
 def test_a_success_prints_progress_on_stderr_and_only_the_result_on_stdout(repo: Repo) -> None:
-    name = options_file(repo, script(INIT, turn("hello there"), OK))
-    code, out, err = cli(
-        "perform", "tester", "--runner", "scripted", "--runner-options", name, "--no-effect-check"
-    )
+    configure(repo, script(INIT, turn("hello there"), OK))
+    code, out, err = cli("perform", "tester")
     assert code == 0
     run_id = out.split()[1]
     assert out == f"run {run_id} succeeded\n"
@@ -208,10 +174,8 @@ def test_a_success_prints_progress_on_stderr_and_only_the_result_on_stdout(repo:
 
 def test_a_failed_run_leaves_stdout_empty_and_shows_the_error_with_the_run_id(repo: Repo) -> None:
     error = {"event": {"type": "result", "status": "error", "message": "it broke"}}
-    name = options_file(repo, script(INIT, error))
-    code, out, err = cli(
-        "perform", "tester", "--runner", "scripted", "--runner-options", name, "--no-effect-check"
-    )
+    configure(repo, script(INIT, error))
+    code, out, err = cli("perform", "tester")
     assert code == 1
     assert out == ""
     assert "The runner reported an error: it broke" in err
@@ -224,24 +188,19 @@ def test_the_default_policy_refuses_the_local_stage_naming_the_variable(
     repo: Repo, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.delenv("TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE")
-    code, out, err = cli("perform", "tester", "--runner", "scripted", "--no-effect-check")
+    code, out, err = cli("perform", "tester")
     assert code == 1
     assert out == ""
     assert "TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE=true" in err
 
 
 def test_perform_as_a_real_process_records_the_run_in_the_theatre(repo: Repo) -> None:
-    name = options_file(repo, script(INIT, OK))
+    configure(repo, script(INIT, OK))
     done = subprocess.run(
         [
             *TROUPE,
             "perform",
             "tester",
-            "--runner",
-            "scripted",
-            "--runner-options",
-            name,
-            "--no-effect-check",
         ],
         cwd=repo.path,
         env=dict(os.environ),
@@ -260,10 +219,8 @@ def test_perform_as_a_real_process_records_the_run_in_the_theatre(repo: Repo) ->
 
 
 def performed(repo: Repo, options: dict[str, Any]) -> str:
-    name = options_file(repo, options)
-    code, out, err = cli(
-        "perform", "tester", "--runner", "scripted", "--runner-options", name, "--no-effect-check"
-    )
+    configure(repo, options)
+    code, out, err = cli("perform", "tester")
     assert code == 0, err
     return out.split()[1]
 
@@ -283,10 +240,8 @@ def test_status_json_for_a_run_whose_runner_never_started_has_no_null_and_valida
     repo: Repo, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(PERFORM, "runner_command", lambda _: ["troupe-no-such-runner"])
-    name = options_file(repo, script(INIT, OK))
-    code, out, err = cli(
-        "perform", "tester", "--runner", "scripted", "--runner-options", name, "--no-effect-check"
-    )
+    configure(repo, script(INIT, OK))
+    code, out, err = cli("perform", "tester")
     assert code == 1
     assert out == ""
     assert "(could-not-start)" in err
@@ -446,16 +401,11 @@ class Process:
 
 
 def test_one_ctrl_c_cancels_the_run_records_cancelled_and_exits_130(repo: Repo) -> None:
-    name = options_file(repo, script(INIT, {"hang": True}))
+    configure(repo, script(INIT, {"hang": True}))
     troupe = Process(
         repo,
         "perform",
         "tester",
-        "--runner",
-        "scripted",
-        "--runner-options",
-        name,
-        "--no-effect-check",
     )
     run_id = troupe.wait_for("starting").split()[2]
     troupe.wait_for("init:")
@@ -475,16 +425,11 @@ def test_one_ctrl_c_cancels_the_run_records_cancelled_and_exits_130(repo: Repo) 
 # test_a_runner_ignoring_cancel_is_killed_with_the_process_it_started covers the kill after the
 # grace in process, with a short grace.
 def test_ctrl_c_twice_shows_the_notice_twice_and_still_records_the_end(repo: Repo) -> None:
-    name = options_file(repo, script(INIT, {"hang": True}, on_cancel="ignore"))
+    configure(repo, script(INIT, {"hang": True}, on_cancel="ignore"))
     troupe = Process(
         repo,
         "perform",
         "tester",
-        "--runner",
-        "scripted",
-        "--runner-options",
-        name,
-        "--no-effect-check",
     )
     run_id = troupe.wait_for("starting").split()[2]
     troupe.wait_for("init:")
@@ -503,16 +448,11 @@ def test_logs_follow_in_another_process_shows_a_running_runs_events_and_exits_0_
     repo: Repo,
 ) -> None:
     slow = script(INIT, {"wait": {"ms": 1500}}, turn("later"), OK)
-    name = options_file(repo, slow)
+    configure(repo, slow)
     troupe = Process(
         repo,
         "perform",
         "tester",
-        "--runner",
-        "scripted",
-        "--runner-options",
-        name,
-        "--no-effect-check",
     )
     run_id = troupe.wait_for("starting").split()[2]
     troupe.wait_for("init:")
@@ -543,10 +483,8 @@ def test_each_ctrl_c_during_perform_announces_cancelling_and_counts_the_presses(
         return {"run": {"runId": "0f8fad5b-d9cb-469f-a165-70867728950e", "outcome": "cancelled"}}
 
     monkeypatch.setattr(commands, "_call", call)
-    name = options_file(repo, script(INIT, OK))
-    code, _, err = cli(
-        "perform", "tester", "--runner", "scripted", "--runner-options", name, "--no-effect-check"
-    )
+    configure(repo, script(INIT, OK))
+    code, _, err = cli("perform", "tester")
     assert code == 130
     assert err.count("Cancelling the run") == 2
     assert "troupe is already cancelling it." in err

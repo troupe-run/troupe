@@ -78,8 +78,8 @@ The payload of a run's first event (topic troupe.core.runs.aggregate:Run.Started
 | `runner_reported` | object (Name and version) | No | The runner's name and version from its init. Absent: the runner never sent one. |
 | `stage` | object | Yes | Where the actor whose run recorded this event ran, and whether troupe enforced its declared effects there. An unenforced stage names the policy setting, and the source of its value, that allowed the run; an enforced one has no allowedBy. |
 | `effect_check` | object | Yes | How troupe checks, after a run, that it did what it was for. There is no default: none must be said explicitly. |
-| `instructions` | string | Yes | The artifact reference of the instructions the actor was given. |
-| `options` | string | Yes | The artifact reference of the runner options, as canonical JSON. |
+| `direction` | string | Yes | The artifact reference of the run's direction: what the actor was asked to do. |
+| `config` | list of string | Yes | The config version the run used: the ids of the config stream's heads, sorted. Working out config at that version gives the actor's runner, options, effect check and character. |
 
 ### Lineage
 

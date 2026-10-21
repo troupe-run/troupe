@@ -237,17 +237,33 @@
   - `{"checkCharacter": {"hash": "sha256:..."}}` or `{"checkCharacter": {"absent": true}}`, in the options schema,
     the parser, the runner and the plugin's README. Tests: a match plays on; a different character, none, or one
     where none was expected each end the run with an error result naming both, and no later step plays.
-- [ ] 10.3 Change `perform`'s request to `{actor, direction?, rehearse?}`, take the runner, options, effect check and
+- [x] 10.3 Change `perform`'s request to `{actor, direction?, rehearse?}`, take the runner, options, effect check and
   character from the merged config, record `config` (the sorted head ids) and the direction's artifact in
   `Run.Started` (dropping `instructions` and `options`), and refuse an unknown actor with `config.unknown-actor`.
   Update `run-started.schema.json`. Verify with tests for each scenario under "A run uses the actor as config defines
   it" and "What a run was asked to do is kept", including a run whose script checks the character it received
-- [ ] 10.4 Remove `--runner`, `--runner-options`, `--expect`, `--no-effect-check` and `--instructions` from the CLI, add
+- [x] 10.4 Remove `--runner`, `--runner-options`, `--expect`, `--no-effect-check` and `--instructions` from the CLI, add
   `--direction` and `--rehearse` to `perform`, and shrink `troupe.core.interim` to the runner table. Verify with CLI
   tests for each scenario under "Perform names an actor from config", and the rehearsal scenario for `perform`
-- [ ] 10.5 Add character and direction to the glossary, and widen rehearsal's meaning to every command's dry run (#137).
+  - 10.3 and 10.4 as built: `perform` reads the merged config through the same store it records in, refuses a
+    conflict or an unknown actor (`config.unknown-actor`), flushes the files first, and sends the character in
+    `run/start`; `Run.Started` records `direction` (an artifact) and `config` (the heads), and no longer `instructions`
+    or `options`. `perform --rehearse` returns a rehearsal (the result is now a run or a rehearsal) and the CLI exits
+    3. `troupe.core.stores` now opens a session's stores, so config and runs don't import each other.
+    `perform.options-invalid` and `perform.path-outside-theatre` are gone with the flags that raised them.
+  - Tests: the harness configures the actor before performing (`runtesting.Harness.configure`), and the refusal tests
+    snapshot after configuring, so they still show a refused perform writes nothing. New: the character reaching the
+    runner unchanged (and a wrong one failing the run), a later config change used by the next run, the config
+    version a run recorded, files flushed first, a conflict on another actor refusing, an uninstalled runner, an
+    unknown actor, the five removed flags as unknown flags, and a rehearsed perform. The parser-rule tests that used
+    perform's old flags as examples now use a test-only `launch` command with the same declaration.
+- [x] 10.5 Add character and direction to the glossary, and widen rehearsal's meaning to every command's dry run (#137).
   Update `contributing/runs.md` and `contributing/runners.md`. Rewrite `docs/opening-night/first-performance.md` and
   `first-theatre.md` for config. Verify the docs tests pass, including that the CLI page's examples run as written
+  - The first-performance page now defines the actor with `troupe config set`, and its test runs every command on the
+    page as written. Also updated: the CLI page (commands, typed values, `--rehearse`), performances and runs,
+    lineage, bring your own agent, and `contributing/runs.md` and `runners.md`. `first-theatre.md` needed no change:
+    nothing in it named perform's flags, and the setup command is still undecided.
 
 ## 11. Integration
 
