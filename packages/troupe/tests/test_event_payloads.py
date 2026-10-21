@@ -17,6 +17,7 @@ from protocol_guard import ProtocolGuardError
 from protocol_schemas import PROTOCOL_BASE, SCHEMAS, SCRIPTED, load, validator_for
 from runtesting import INIT, OK, Harness, failing_at, request, script, theatre, turn
 from storetesting import git_service, segments
+from troupe.core.config import aggregate as config_aggregate
 from troupe.core.errors import TroupeError
 from troupe.core.runs.aggregate import ENDED, REPORTED, STARTED, TOPICS, Run
 
@@ -229,7 +230,7 @@ def test_the_topics_troupe_records_and_the_topics_the_protocol_defines_are_the_s
         branch["if"]["properties"]["topic"]["const"]
         for branch in record["$defs"]["troupeEvent"]["allOf"]
     ]
-    assert set(defined) == set(chosen) == set(TOPICS)
+    assert set(defined) == set(chosen) == {*TOPICS, *config_aggregate.TOPICS}
 
 
 def test_each_payload_schema_names_its_topic_in_its_title() -> None:

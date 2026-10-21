@@ -150,7 +150,8 @@
           "enum": [
             "troupe.core.runs.aggregate:Run.Started",
             "troupe.core.runs.aggregate:Run.Reported",
-            "troupe.core.runs.aggregate:Run.Ended"
+            "troupe.core.runs.aggregate:Run.Ended",
+            "troupe.core.config.aggregate:Config.Changed"
           ]
         }
       },
@@ -202,6 +203,22 @@
               }
             }
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "topic": {
+                "const": "troupe.core.config.aggregate:Config.Changed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "state": {
+                "$ref": "events/config-changed.schema.json"
+              }
+            }
+          }
         }
       ]
     },
@@ -225,7 +242,8 @@
             "enum": [
               "troupe.core.runs.aggregate:Run.Started",
               "troupe.core.runs.aggregate:Run.Reported",
-              "troupe.core.runs.aggregate:Run.Ended"
+              "troupe.core.runs.aggregate:Run.Ended",
+              "troupe.core.config.aggregate:Config.Changed"
             ]
           }
         }

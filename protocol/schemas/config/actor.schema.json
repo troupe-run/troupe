@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/config/actor.schema.json",
+  "title": "Actor",
+  "description": "One actor's config file, .troupe/actors/<name>.yaml. The file's name is the actor's name. Its character, when it has one, is the whole of .troupe/actors/<name>.md. troupe writes this file from the theatre's config events, and every field is set with troupe config set.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "runner",
+    "expect"
+  ],
+  "properties": {
+    "$schema": {
+      "title": "Schema",
+      "description": "Where this file's schema is, relative to the file, so editors can check it. troupe writes it.",
+      "type": "string",
+      "pattern": "(^|/)config/actor\\.schema\\.json$"
+    },
+    "runner": {
+      "title": "Runner",
+      "description": "The runner that runs this actor, by name.",
+      "$ref": "../client/run.schema.json#/$defs/runnerName"
+    },
+    "options": {
+      "title": "Runner options",
+      "description": "The runner's own options, passed to it unchanged. Absent means {}. An extension point: the runner's published options schema fills it, and without one only {} validates.",
+      "$dynamicRef": "#runnerOptions"
+    },
+    "expect": {
+      "title": "Effect check",
+      "description": "Files, relative to the theatre's root, that a run must create or change: each must exist after the run, and differ from before it. A file named twice is checked once. An empty list means no effect check, and has to be written.",
+      "type": "array",
+      "items": {
+        "$ref": "../client/run.schema.json#/$defs/theatrePath"
+      }
+    }
+  },
+  "$defs": {
+    "runnerOptions": {
+      "title": "The runner's options",
+      "description": "The default for the runnerOptions extension point: no options.",
+      "$dynamicAnchor": "runnerOptions",
+      "type": "object",
+      "additionalProperties": false
+    }
+  }
+}

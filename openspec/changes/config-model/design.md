@@ -268,7 +268,16 @@ Every command that changes anything takes `--rehearse` (#137), and `config.set`,
   pydantic v2 models in `troupe.core.config.models`: strict, `extra="forbid"`, frozen. The generated file says it's
   generated and how to regenerate it.
 - **`scripts/generate_models.py`** writes the file, and its `--check` mode fails when the file isn't what the
-  schemas generate. `scripts/check.py` runs the check, so a schema can't change without its types.
+  schemas generate. A test runs the check (as for `docs_reference.py`), so a schema can't change without its types.
+- **The generator is given one bundled schema,** not the files: a reference to another file is replaced by a copy
+  of what it refers to (the generator would otherwise follow every reference in `client/run.schema.json`, through
+  schemas config doesn't use), the runner options extension point is typed as a JSON object (D6 checks it against
+  the runner's own schema), and the event store's `lineage` and `timestamp` are left out, since the store adds them.
+- **The models' base class** (`troupe.core.config.base.StrictModel`) validates strictly, with Python's regular
+  expressions as `jsonschema` uses, and refuses a field given as null, which the generated `X | None` fields would
+  otherwise accept.
+- **pydantic can't enforce `uniqueItems`,** and the generator drops it, so no config schema uses it: an actor's
+  `expect` may name a file twice, and the run's effect check names it once.
 - **A differential test** checks that each model accepts exactly what `jsonschema` accepts for its schema, on inputs
   generated from the schema and on near misses: unknown keys, wrong types, values outside a pattern.
 - **The pydantic mypy plugin** keeps `mypy --strict` meaningful over the models.

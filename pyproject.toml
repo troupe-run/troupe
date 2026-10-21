@@ -36,8 +36,9 @@ dev = [
     "pytest>=9.1",
     "hypothesis>=6.168",
     "import-linter>=2.15",
-    "jsonschema>=4.26",
     "types-jsonschema>=4.26",
+    # Generates troupe.core.config.models from the config schemas (scripts/generate_models.py).
+    "datamodel-code-generator>=0.86,<0.87",
     # The eventsourcing recorder test suite imports AESCipher at module scope (design: prior art).
     "pycryptodome>=3.23",
     "pytest-xdist>=3.8",
@@ -85,9 +86,12 @@ extend-immutable-calls = ["troupe.core.messages.json_field"]
 "scripts/tests/**" = ["S101", "S603", "S607"]
 # Repository scripts run the project's own tools (git, uv) from PATH with fixed arguments.
 "scripts/**" = ["S603", "S607"]
+# Generated from the config schemas (scripts/generate_models.py): docstrings are the schemas' descriptions, unwrapped.
+"packages/troupe/src/troupe/core/config/models.py" = ["E501", "UP007"]
 
 [tool.mypy]
 strict = true
+plugins = ["pydantic.mypy"]
 python_version = "3.12"
 files = [
     "packages/troupe/src",

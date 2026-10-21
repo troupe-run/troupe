@@ -2,27 +2,43 @@
 
 ## 1. Dependencies and the type generator (design D11)
 
-- [ ] 1.1 Add `pydantic`, `jsonschema` and `ruamel.yaml` to the `troupe` package's runtime dependencies (ruamel.yaml
+- [x] 1.1 Add `pydantic`, `jsonschema` and `ruamel.yaml` to the `troupe` package's runtime dependencies (ruamel.yaml
   pinned to a minor version), and `datamodel-code-generator` to the dev group. Enable the pydantic mypy plugin. Verify
   `uv sync` succeeds and `uv run scripts/check.py` passes unchanged
-- [ ] 1.2 Add `scripts/generate_models.py`, which generates `troupe.core.config.models` from `protocol/schemas/config/`
+- [x] 1.2 Add `scripts/generate_models.py`, which generates `troupe.core.config.models` from `protocol/schemas/config/`
   and `protocol/schemas/events/config-changed.schema.json` as strict, frozen pydantic v2 models with
   `extra="forbid"` and a "generated, don't edit" header, and whose `--check` mode fails, naming the file and the
   regenerate command, when the file differs. Run `--check` from `scripts/check.py` and declare it in
   `scripts/check-paths.toml`. Verify that changing a schema without regenerating fails the check
+  - Done as the repository already does for `docs_reference.py --check`: a test
+    (`test_the_models_are_what_the_schemas_generate`) runs `--check`, and `scripts/check.py` runs the tests. Nothing
+    is declared in `check-paths.toml`: an unlisted script runs the full check, which is right for one whose output
+    is core code. `test_a_schema_changed_without_its_models_fails_the_check_naming_the_fix` adds a field to a copy of
+    the actor schema and sees `--check` fail, naming the file and the command.
+  - The generator is given one bundled schema (design D11): cross-file references copied in, the runner options
+    extension point typed as a JSON object (checked against the runner's own schema at runtime, D6), and the event
+    store's `lineage` and `timestamp` left out. The models' base class (`troupe.core.config.base.StrictModel`)
+    validates strictly with Python's regex engine, as `jsonschema` does, and refuses a field given as null.
 
 ## 2. The schemas (design D2, D6)
 
-- [ ] 2.1 Write `protocol/schemas/config/actor.schema.json` (D6): `$schema`, `runner`, `options` as the runner
+- [x] 2.1 Write `protocol/schemas/config/actor.schema.json` (D6): `$schema`, `runner`, `options` as the runner
   extension point, `expect`, every field with a title and description. Verify the protocol strictness test passes
   over it, and that an unknown key, a missing `expect` and an absolute `expect` path each fail validation
-- [ ] 2.2 Write `protocol/schemas/events/config-changed.schema.json` (D2) and register the `Config.Changed` topic (and
-  the config stream's settling event) in the event-record schema's topic table. Verify the event-payload tests
-  accept a recorded change and refuse a null `before`, an object `after`, and a path with an empty key
-- [ ] 2.3 Generate the models and add the differential test: for each config schema, inputs generated from it and
+- [x] 2.2 Write `protocol/schemas/events/config-changed.schema.json` (D2) and register the `Config.Changed` topic in
+  the event-record schema's topic table. Verify the event-payload tests accept a recorded change and refuse a null
+  `before`, an object `after`, and a path with an empty key
+  - Checked against a hand-built record here (`test_a_config_change_record_validates_by_its_topic`, and ten
+    refusals); task 5.2 adds a test over the lines a real `config set` writes. The settling event's topic moved to
+    6.3, where its payload's shape (the merged config) is decided.
+- [x] 2.3 Generate the models and add the differential test: for each config schema, inputs generated from it and
   near misses (unknown keys, wrong types, values outside a pattern) are accepted or refused alike by the model and
   by `jsonschema`. Verify the test passes, and fails when a model is hand-edited to accept an unknown key (revert
   before commit)
+  - The differential test found two real disagreements before it passed, both fixed in the generator's inputs or
+    the base class, and both kept as fixed `@example`s: an object with a null inside a list value (the generator
+    typed nested objects as `dict[str, Any]`), and an optional field given as null. 5,000 examples per test then
+    agreed. With `Actor` hand-edited to `extra="allow"`, both the up-to-date check and the differential test failed.
 
 ## 3. The theatre's own files (design D12)
 
@@ -70,7 +86,8 @@
   must set or unset every conflicting path). Verify with tests for the window example, the runner-and-options
   example, `perform` refused by a conflict on another actor, and a change that resolves nothing being refused
 - [ ] 6.3 Record settling with the next write: one batch, a settling event naming every head with the merged config,
-  then the change. Reads record nothing. Verify with tests for a read after a merge (nothing recorded) and the first
+  then the change. Write the settling event's payload schema (the merged config) and register its topic in the
+  event-record schema's topic table. Reads record nothing. Verify with tests for a read after a merge (nothing recorded) and the first
   write after it (one head after)
 - [ ] 6.4 Add the property test (D3): generated histories with branches, merges (criss-cross included) and changes and
   changes back, delivered in every order to separate clones, check that every clone works out the same config and
