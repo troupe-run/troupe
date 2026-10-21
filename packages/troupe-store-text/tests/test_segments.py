@@ -149,14 +149,17 @@ def test_reading_a_theatre_with_no_events_creates_nothing(theatre: Path) -> None
     assert not (theatre / ".troupe").exists()
 
 
-def test_the_first_write_adds_troupes_gitignore_and_gitattributes_only_when_missing(
+def test_the_first_write_adds_troupes_git_patterns_and_keeps_a_persons_lines(
     theatre: Path,
 ) -> None:
     (theatre / ".troupe").mkdir()
     (theatre / ".troupe" / ".gitattributes").write_text("# mine\n", encoding="utf-8")
     fresh_store(theatre).insert([event(new_stream(), 1)])
-    assert (theatre / ".troupe" / ".gitignore").read_text(encoding="utf-8").endswith("local/\n")
-    assert (theatre / ".troupe" / ".gitattributes").read_text(encoding="utf-8") == "# mine\n"
+    ignore = (theatre / ".troupe" / ".gitignore").read_text(encoding="utf-8").splitlines()
+    assert "local/" in ignore
+    attributes = (theatre / ".troupe" / ".gitattributes").read_text(encoding="utf-8").splitlines()
+    assert attributes[0] == "# mine"
+    assert "events/** -text" in attributes
 
 
 def test_notification_ids_are_dense_and_survive_reopening(theatre: Path) -> None:

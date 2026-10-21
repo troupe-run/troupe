@@ -42,12 +42,12 @@
 
 ## 3. The theatre's own files (design D12)
 
-- [ ] 3.1 Add `troupe.core.theatre`'s required patterns (`.gitignore`: `local/`, `.*.troupe~`; `.gitattributes`:
+- [x] 3.1 Add `troupe.core.theatre`'s required patterns (`.gitignore`: `local/`, `.*.troupe~`; `.gitattributes`:
   `events/** -text`, `actors/** -text`) and the append-only rule: a missing pattern is appended under troupe's
   comment, and no existing line is changed, moved or removed. Make the text store use it instead of its own
   constants. Verify with tests for a missing file, a file holding a person's own lines (unchanged and in place), and
   a file missing one pattern, and that the event-store tests still pass
-- [ ] 3.2 Update `contributing/event-store.md`'s layout and `docs/the-company/theatres.md`'s file tree, including that
+- [x] 3.2 Update `contributing/event-store.md`'s layout and `docs/the-company/theatres.md`'s file tree, including that
   a deleted troupe line comes back on the next write. Verify the docs tests pass
 
 ## 4. The event store merges a fork through its aggregate (design D5)

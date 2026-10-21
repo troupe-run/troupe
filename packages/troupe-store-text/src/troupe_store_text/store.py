@@ -32,8 +32,9 @@ from eventsourcing.persistence import IntegrityError, StoredEvent, Tracking
 
 from troupe.core import defaults
 from troupe.core.errors import TroupeError
-from troupe.core.files import directory_lock, replace_file
+from troupe.core.files import directory_lock
 from troupe.core.notices import Notice
+from troupe.core.theatre import ensure_git_files
 from troupe.core.ulid import new_ulid
 from troupe.core.vcs import Vcs
 from troupe.platform.errors import WatchDirectoryMissingError, WatchUnavailableError
@@ -45,11 +46,6 @@ from troupe_store_text.local import OrderLog, TrackingLog, branch_key
 from troupe_store_text.segments import Segment
 
 _UNSET: Hashable = object()
-
-GITIGNORE = b"# troupe's local state: derived, per clone, never committed.\nlocal/\n"
-GITATTRIBUTES = (
-    b"# Event segments are byte-exact: never convert their line endings.\nevents/** -text\n"
-)
 
 Watcher = Callable[[Path], DirectoryWatch]
 """Starts watching a directory: troupe.platform.watching.watch, unless a test gives another."""
@@ -562,10 +558,7 @@ class TextStore:
     def _write_dotfiles(self) -> None:
         if self.purpose != "events":
             return
-        self.root.mkdir(parents=True, exist_ok=True)
-        for name, content in ((".gitignore", GITIGNORE), (".gitattributes", GITATTRIBUTES)):
-            if not (self.root / name).exists():
-                replace_file(self.root / name, content)
+        ensure_git_files(self.root)
 
     # Subscriptions (watch-event-segments design D3 to D5): the port's guarantee is that every new
     # event reaches a listener, whoever wrote it. Writes here notify at once. Other processes'
