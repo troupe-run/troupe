@@ -11,13 +11,7 @@ from client_schemas import CLIENT_SCHEMAS, MESSAGES, is_valid
 RUN_ID = "0f8fad5b-d9cb-469f-a165-70867728950e"
 HASH = "sha256:" + "ab" * 32
 AT = "2026-10-12T03:04:05.678Z"
-PERFORM: dict[str, Any] = {
-    "actor": "tester",
-    "runner": "scripted",
-    "options": {"script": {"steps": []}},
-    "instructions": "say hello",
-    "effectCheck": {"kind": "files", "paths": ["out/hello.txt"]},
-}
+PERFORM: dict[str, Any] = {"actor": "tester", "direction": "say hello", "rehearse": False}
 SUMMARY: dict[str, Any] = {
     "runId": RUN_ID,
     "actor": "tester",
@@ -85,10 +79,20 @@ def test_each_method_has_exactly_its_message_schemas() -> None:
 
 ACCEPTED = [
     ("perform-request.schema.json", PERFORM, "everything"),
+    ("perform-request.schema.json", {"actor": "t"}, "only what's required"),
     (
-        "perform-request.schema.json",
-        {"actor": "t", "runner": "scripted", "effectCheck": {"kind": "none"}},
-        "only what's required",
+        "perform-result.schema.json",
+        {
+            "rehearsal": {
+                "actor": "tester",
+                "runner": "scripted",
+                "stage": SUMMARY["stage"],
+                "effectCheck": {"kind": "none"},
+                "config": [HASH],
+                "direction": {"hash": HASH, "length": 9},
+            }
+        },
+        "a rehearsal",
     ),
     ("perform-update.schema.json", {"kind": "started", "runId": RUN_ID}, "started"),
     ("perform-update.schema.json", EVENT, "an event"),
@@ -169,44 +173,57 @@ def test_the_schema_accepts(schema: str, value: dict[str, Any], label: str) -> N
 
 
 def files(*paths: str) -> dict[str, Any]:
-    return changed(PERFORM, effectCheck={"kind": "files", "paths": list(paths)})
+    """A run summary whose effect check names ``paths``: the effect check's shape is shared by
+    summaries and rehearsals."""
+    return {"run": changed(SUMMARY, effectCheck={"kind": "files", "paths": list(paths)})}
 
 
 REFUSED = [
-    ("perform-request.schema.json", files("/etc/passwd"), "an absolute path"),
-    ("perform-request.schema.json", files("C:/x.txt"), "a drive"),
-    ("perform-request.schema.json", files("out\\x.txt"), "a backslash"),
-    ("perform-request.schema.json", files("../outside.txt"), "a path that leaves with .."),
-    ("perform-request.schema.json", files("a/../../b"), "a .. in the middle"),
-    ("perform-request.schema.json", files(), "a files check with no paths"),
-    ("perform-request.schema.json", files("a", "a"), "a repeated path"),
+    ("perform-result.schema.json", files("/etc/passwd"), "an absolute path"),
+    ("perform-result.schema.json", files("C:/x.txt"), "a drive"),
+    ("perform-result.schema.json", files("out\\x.txt"), "a backslash"),
+    ("perform-result.schema.json", files("../outside.txt"), "a path that leaves with .."),
+    ("perform-result.schema.json", files("a/../../b"), "a .. in the middle"),
+    ("perform-result.schema.json", files(), "a files check with no paths"),
+    ("perform-result.schema.json", files("a", "a"), "a repeated path"),
     (
-        "perform-request.schema.json",
-        changed(PERFORM, effectCheck={"kind": "maybe"}),
+        "perform-result.schema.json",
+        {"run": changed(SUMMARY, effectCheck={"kind": "maybe"})},
         "an effect check that is neither none nor files",
     ),
     (
-        "perform-request.schema.json",
-        changed(PERFORM, effectCheck={"kind": "none", "paths": ["a"]}),
+        "perform-result.schema.json",
+        {"run": changed(SUMMARY, effectCheck={"kind": "none", "paths": ["a"]})},
         "none with paths",
     ),
-    ("perform-request.schema.json", changed(PERFORM, drop_effectCheck=None), "no effect check"),
     ("perform-request.schema.json", changed(PERFORM, actor="Tester"), "an actor in capitals"),
     ("perform-request.schema.json", changed(PERFORM, actor="1tester"), "an actor from a digit"),
     ("perform-request.schema.json", changed(PERFORM, actor="t" * 65), "an actor too long"),
-    ("perform-request.schema.json", changed(PERFORM, runner="a b"), "a runner with a space"),
+    ("perform-request.schema.json", changed(PERFORM, runner="scripted"), "a runner: config's"),
     (
         "perform-request.schema.json",
-        changed(PERFORM, runner=["python", "-m", "x"]),
-        "a runner as a command line",
+        changed(PERFORM, options={"script": {"steps": []}}),
+        "options: config's",
     ),
+    (
+        "perform-request.schema.json",
+        changed(PERFORM, effectCheck={"kind": "none"}),
+        "an effect check: config's",
+    ),
+    ("perform-request.schema.json", changed(PERFORM, instructions="x"), "instructions, renamed"),
     ("perform-request.schema.json", changed(PERFORM, argv=["sh"]), "an unknown field: argv"),
     (
         "perform-request.schema.json",
         changed(PERFORM, allow_unenforced_local_stage=True),
         "an unknown field: a policy value",
     ),
-    ("perform-request.schema.json", changed(PERFORM, options=[]), "options that aren't an object"),
+    ("perform-request.schema.json", changed(PERFORM, direction=None), "a null direction"),
+    ("perform-result.schema.json", {}, "neither a run nor a rehearsal"),
+    (
+        "perform-result.schema.json",
+        {"run": SUMMARY, "rehearsal": {"actor": "tester"}},
+        "both a run and a rehearsal",
+    ),
     ("perform-update.schema.json", {"kind": "started"}, "started with no run id"),
     ("perform-update.schema.json", changed(EVENT, at="2026-10-12"), "an event with a bad time"),
     ("perform-update.schema.json", changed(EVENT, extra=1), "an unknown field in an update"),
@@ -258,12 +275,3 @@ REFUSED = [
 @pytest.mark.parametrize(("schema", "value", "label"), REFUSED, ids=[r[2] for r in REFUSED])
 def test_the_schema_refuses(schema: str, value: dict[str, Any], label: str) -> None:
     assert not is_valid(value, schema), label
-
-
-# perform's options are the runner's extension point (strict-schemas design D2)
-
-
-def test_perform_options_validate_against_the_contract_alone_only_when_empty() -> None:
-    assert is_valid({**PERFORM, "options": {}}, "perform-request.schema.json", runner=None)
-    assert not is_valid(PERFORM, "perform-request.schema.json", runner=None)
-    assert is_valid(PERFORM, "perform-request.schema.json")  # the scripted runner's schema bound

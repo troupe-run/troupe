@@ -162,14 +162,8 @@ CASES: list[tuple[object, str, st.SearchStrategy[Any]]] = [
         m.PerformRequest,
         "perform-request.schema.json",
         st.fixed_dictionaries(
-            {"actor": NAMES, "runner": NAMES, "effectCheck": EFFECT_CHECKS},
-            optional={
-                "options": st.fixed_dictionaries(
-                    {"script": st.fixed_dictionaries({"steps": st.just([])})},
-                    optional={"replayDelays": st.booleans()},
-                ),
-                "instructions": st.text(max_size=20),
-            },
+            {"actor": NAMES},
+            optional={"direction": st.text(max_size=20), "rehearse": st.booleans()},
         ),
     ),
     (
@@ -331,32 +325,21 @@ def _refused(kind: object, data: object) -> str:
     return str(caught.value)
 
 
-PERFORM = {"actor": "tester", "runner": "scripted", "effectCheck": {"kind": "none"}}
+PERFORM = {"actor": "tester", "direction": "go"}
 
 
 @pytest.mark.parametrize(
     ("data", "named"),
     [
         ({**PERFORM, "argv": ["sh"]}, "'argv'"),
-        ({"actor": "tester", "runner": "scripted"}, "'effectCheck'"),
+        ({**PERFORM, "runner": "scripted"}, "'runner'"),
+        ({**PERFORM, "effectCheck": {"kind": "none"}}, "'effectCheck'"),
+        ({**PERFORM, "instructions": "x"}, "'instructions'"),
+        ({"direction": "x"}, "'actor'"),
         ({**PERFORM, "actor": "Tester"}, "PerformRequest.actor"),
-        ({**PERFORM, "runner": 7}, "PerformRequest.runner"),
-        ({**PERFORM, "options": []}, "PerformRequest.options"),
-        ({**PERFORM, "effectCheck": {"kind": "maybe"}}, "PerformRequest.effectCheck"),
-        (
-            {**PERFORM, "effectCheck": {"kind": "files", "paths": ["../x"]}},
-            "PerformRequest.effectCheck.paths[0]",
-        ),
-        (
-            {**PERFORM, "effectCheck": {"kind": "files", "paths": ["/etc/passwd"]}},
-            "PerformRequest.effectCheck.paths[0]",
-        ),
-        (
-            {**PERFORM, "effectCheck": {"kind": "files", "paths": ["C:x"]}},
-            "PerformRequest.effectCheck.paths[0]",
-        ),
-        ({**PERFORM, "effectCheck": {"kind": "files", "paths": []}}, "PerformRequest.effectCheck"),
-        ({**PERFORM, "instructions": None}, "PerformRequest.instructions"),
+        ({**PERFORM, "direction": 7}, "PerformRequest.direction"),
+        ({**PERFORM, "direction": None}, "PerformRequest.direction"),
+        ({**PERFORM, "rehearse": "yes"}, "PerformRequest.rehearse"),
     ],
 )
 def test_a_malformed_perform_request_is_refused_naming_the_field(data: object, named: str) -> None:

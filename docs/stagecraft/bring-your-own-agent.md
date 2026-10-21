@@ -5,7 +5,7 @@ status: written
 prerelease: true
 ---
 
-troupe runs agents through **runners**. A runner starts an agent, passes it the instructions, and reports what it
+troupe runs agents through **runners**. A runner starts an agent, passes it the actor's character and the run's direction, and reports what it
 does back to troupe. Because troupe only ever talks to the runner, any agent can take part, whoever made it: you
 swap the agent by swapping its runner, and your process stays the same.
 
@@ -26,8 +26,8 @@ A runner is a program, in any language, that speaks troupe's runner contract ove
 
 - **JSON-RPC 2.0, one message per line.** Standard output carries the contract's messages and nothing else;
   standard error is yours, and troupe keeps it with the run.
-- **troupe starts the conversation.** It sends `initialize`, then one `run/start` with the instructions, the
-  workspace and your runner's options. One runner process serves one run.
+- **troupe starts the conversation.** It sends `initialize`, then one `run/start` with the run's direction, the
+  actor's character (when it has one), the workspace and your runner's options. One runner process serves one run.
 - **The runner reports as the agent works,** with `run/event` notifications (such as `init` first and one `result`
   last) and the engine's own output as `run/transcript`, which troupe keeps out of git.
 - **troupe ends it,** with `run/cancel` if you press Ctrl-C, and `shutdown` when the run's done.

@@ -254,10 +254,25 @@ def test_an_exit_code_without_a_docstring_is_refused(copy: Path) -> None:
 
 
 def test_the_usage_line_shows_required_groups_and_optional_values() -> None:
+    def configure(parser: argparse.ArgumentParser) -> None:
+        parser.add_argument("actor")
+        parser.add_argument("--runner", required=True)
+        parser.add_argument("--note")
+        check = parser.add_mutually_exclusive_group(required=True)
+        check.add_argument("--expect", metavar="PATH")
+        check.add_argument("--no-effect-check", action="store_true")
+
+    command = Command("demo", "do a demo.", configure, lambda arguments, out, err: ExitCode.OK)
+    assert reference._usage(command) == (
+        "troupe demo <actor> --runner <runner> [--note <note>] "
+        "(--expect <path> | --no-effect-check)"
+    )
+
+
+def test_perform_s_usage_line_names_the_actor_and_its_two_options() -> None:
     perform = next(command for command in COMMANDS if command.name == "perform")
-    assert reference._usage(perform) == (
-        "troupe perform <actor> --runner <runner> [--runner-options <file>] "
-        "[--instructions <instructions>] (--expect <path> | --no-effect-check)"
+    assert (
+        reference._usage(perform) == "troupe perform <actor> [--direction <direction>] [--rehearse]"
     )
 
 

@@ -26,7 +26,7 @@ produce every outcome on demand. A Claude Code runner and a local-model runner f
 | Method | Direction | Kind | Params | Result |
 |---|---|---|---|---|
 | `initialize` | troupe → runner | request | `protocolVersions`, `host {name, version}`, `capabilities` | `protocolVersion`, `runner {name, version}`, `capabilities` |
-| `run/start` | troupe → runner | request | `runId`, `instructions`, `workspace`, `options`, `limits {eventMaxBytes}` | `runId` |
+| `run/start` | troupe → runner | request | `runId`, `direction`, `character` (optional), `workspace`, `options`, `limits {eventMaxBytes}` | `runId` |
 | `run/event` | runner → troupe | notification | one run event | — |
 | `run/transcript` | runner → troupe | notification | `runId`, `record`, `encoding` (optional) | — |
 | `run/cancel` | troupe → runner | request | `runId` | `{}` |
@@ -49,7 +49,9 @@ A run goes like this:
 4. When the actor finishes, the runner sends one `result` event. troupe then sends `shutdown`; the runner answers
    and exits.
 
-`run/start` carries everything the runner may use from troupe. `options` holds runner-specific settings, which
+`run/start` carries everything the runner may use from troupe. `direction` is what the actor is asked to do in this
+run, and `character` who the actor is (its standing prompt), left out when it has none: keep them apart, as an
+engine's task and system prompt. `options` holds runner-specific settings, which
 troupe passes through without looking inside them. The runner publishes their schema (see
 [Publishing a runner's schemas](#publishing-a-runners-schemas)), and refuses an option it doesn't define, with an
 error naming it, rather than ignoring it. `limits.eventMaxBytes` is the largest serialised event troupe
@@ -208,8 +210,8 @@ fixtures pin it.
 ## How troupe runs a runner
 
 `troupe.core.runners.host.run_actor` starts the runner, performs the handshake, starts the run and supervises it.
-The caller gives it the runner's command, the run (a UUID run id, the instructions, the workspace and the runner's
-options), an artifact store, an effect check, and optionally the limits, an `on_event` callback, an `on_announce`
+The caller gives it the runner's command, the run (a UUID run id, the direction, the workspace, the runner's
+options and the character), an artifact store, an effect check, and optionally the limits, an `on_event` callback, an `on_announce`
 callback and a cancel signal.
 
 - **Events reach the caller as they arrive,** in `seq` order. `on_event` is awaited before the next message is read,

@@ -94,7 +94,25 @@ FAILING = Command("failing", "Fail with a path (test only).", lambda parser: Non
 CRASHING = Command("crashing", "Crash (test only).", lambda parser: None, _run_crashing)
 CHOOSE = Command("choose", "Take a choice and a count (test only).", _configure_choose, _never_runs)
 ODD = Command("odd", "Refuse only inside argparse (test only).", _configure_odd, _never_runs)
-TEST_COMMANDS = (ECHO, FAILING, CRASHING, CHOOSE, ODD)
+
+
+def _configure_launch(parser: argparse.ArgumentParser) -> None:
+    # A command with a required option, a repeatable one and a required exclusive group: what
+    # perform declared before config took its flags (config-model design D14), kept so the
+    # parser's rules for them stay tested.
+    parser.add_argument("actor")
+    parser.add_argument("--runner", required=True)
+    parser.add_argument("--runner-options", metavar="FILE")
+    parser.add_argument("--instructions")
+    check = parser.add_mutually_exclusive_group(required=True)
+    check.add_argument("--expect", action="append", metavar="PATH")
+    check.add_argument("--no-effect-check", action="store_true")
+
+
+LAUNCH = Command(
+    "launch", "Take a required option and a group (test only).", _configure_launch, _never_runs
+)
+TEST_COMMANDS = (ECHO, FAILING, CRASHING, CHOOSE, ODD, LAUNCH)
 
 
 def run_cli(*argv: str, commands: tuple[Command, ...] = TEST_COMMANDS) -> tuple[int, str, str]:
@@ -342,10 +360,12 @@ USAGE_SHAPES = {
     "unknown-command": ("nosuchthing",),
     "unknown-flag": ("status", "--bogus"),
     "dash-value": ("logs", "-5"),
-    "missing-argument": ("perform", "tester", "--no-effect-check"),
-    "missing-one-of": ("perform", "tester", "--runner", "scripted"),
+    "missing-argument": ("perform",),
+    # No real command declares a required group since config took perform's flags: the
+    # test-only launch command does (test_no_usage_problem_starts_with_the_troupe_prefix).
+    "missing-one-of": ("launch", "tester", "--runner", "scripted"),
     "conflicting-options": (
-        "perform", "tester", "--runner", "scripted", "--expect", "out.txt", "--no-effect-check",
+        "launch", "tester", "--runner", "scripted", "--expect", "out.txt", "--no-effect-check",
     ),
     "extra-argument": ("status", "one", "two"),
     "missing-value": ("status", "--limit"),
@@ -355,7 +375,7 @@ USAGE_SHAPES = {
 
 def test_a_command_s_usage_error_prints_the_troupe_prefix_once() -> None:
     stdout, stderr = io.StringIO(), io.StringIO()
-    code = main(["perform", "tester", "--runner", "scripted"], stdout=stdout, stderr=stderr)
+    code = main(["perform"], stdout=stdout, stderr=stderr)
     first_line = stderr.getvalue().splitlines()[0]
     assert code == ExitCode.USAGE
     assert first_line.startswith("troupe: ")
@@ -364,17 +384,18 @@ def test_a_command_s_usage_error_prints_the_troupe_prefix_once() -> None:
 
 @pytest.mark.parametrize("argv", USAGE_SHAPES.values(), ids=USAGE_SHAPES.keys())
 def test_no_usage_problem_starts_with_the_troupe_prefix(argv: tuple[str, ...]) -> None:
-    error = usage_error(*argv, commands=COMMANDS)
+    error = usage_error(*argv, commands=(*COMMANDS, LAUNCH))
     assert not error.problem.startswith("troupe:")
 
 
-def refused(*argv: str) -> TroupeError:
-    """The usage error troupe's real commands give for ``argv``, after checking that running it
-    exits 2, prints nothing on stdout, renders exactly that error and matches the schema."""
-    error = usage_error(*argv, commands=COMMANDS)
+def refused(*argv: str, commands: tuple[Command, ...] = COMMANDS) -> TroupeError:
+    """The usage error ``commands`` (troupe's real ones, unless given) give for ``argv``, after
+    checking that running it exits 2, prints nothing on stdout, renders exactly that error and
+    matches the schema."""
+    error = usage_error(*argv, commands=commands)
     check_error(error.to_data())
     stdout, stderr = io.StringIO(), io.StringIO()
-    code = main(list(argv), stdout=stdout, stderr=stderr)
+    code = main(list(argv), commands=commands, stdout=stdout, stderr=stderr)
     assert (code, stdout.getvalue()) == (ExitCode.USAGE, "")
     assert stderr.getvalue() == render_error(error) + "\n"
     return error
@@ -412,11 +433,11 @@ def test_unknown_flag_before_any_command_has_no_command_and_points_at_the_root_h
 
 
 def test_a_missing_required_option_is_a_missing_argument_naming_it() -> None:
-    error = refused("perform", "tester", "--no-effect-check")
+    error = refused("launch", "tester", "--no-effect-check", commands=TEST_COMMANDS)
     assert error.code == "usage.missing-argument"
-    assert error.problem == "`troupe perform` needs --runner."
-    assert error.fix == "Run `troupe perform --help` to see its options."
-    assert error.details == {"command": "perform", "argument": "--runner"}
+    assert error.problem == "`troupe launch` needs --runner."
+    assert error.fix == "Run `troupe launch --help` to see its options."
+    assert error.details == {"command": "launch", "argument": "--runner"}
 
 
 def test_a_missing_required_positional_is_a_missing_argument_naming_it() -> None:
@@ -427,37 +448,46 @@ def test_a_missing_required_positional_is_a_missing_argument_naming_it() -> None
 
 
 def test_missing_arguments_are_reported_in_declaration_order() -> None:
-    error = refused("perform")
-    assert error.details == {"command": "perform", "argument": "--runner"}
-    assert refused("perform", "--runner", "scripted", "--no-effect-check").details == {
-        "command": "perform",
+    error = refused("launch", commands=TEST_COMMANDS)
+    assert error.details == {"command": "launch", "argument": "--runner"}
+    assert refused(
+        "launch", "--runner", "scripted", "--no-effect-check", commands=TEST_COMMANDS
+    ).details == {
+        "command": "launch",
         "argument": "actor",
     }
 
 
 def test_a_required_group_with_none_given_is_a_missing_one_of_in_the_issue_s_words() -> None:
-    error = refused("perform", "tester", "--runner", "scripted")
+    error = refused("launch", "tester", "--runner", "scripted", commands=TEST_COMMANDS)
     assert error.code == "usage.missing-one-of"
-    assert error.details == {"command": "perform", "options": ["--expect", "--no-effect-check"]}
+    assert error.details == {"command": "launch", "options": ["--expect", "--no-effect-check"]}
     assert render_error(error) == (
-        "troupe: `troupe perform` needs one of --expect or --no-effect-check.\n"
-        "  fix: Run `troupe perform --help` to see its options."
+        "troupe: `troupe launch` needs one of --expect or --no-effect-check.\n"
+        "  fix: Run `troupe launch --help` to see its options."
     )
 
 
 def test_two_options_of_an_exclusive_group_are_conflicting_options_naming_both() -> None:
     error = refused(
-        "perform", "tester", "--runner", "scripted", "--expect", "out.txt", "--no-effect-check"
+        "launch",
+        "tester",
+        "--runner",
+        "scripted",
+        "--expect",
+        "out.txt",
+        "--no-effect-check",
+        commands=TEST_COMMANDS,
     )
     assert error.code == "usage.conflicting-options"
-    assert error.problem == "`troupe perform` takes --expect or --no-effect-check, not both."
-    assert error.details == {"command": "perform", "options": ["--expect", "--no-effect-check"]}
+    assert error.problem == "`troupe launch` takes --expect or --no-effect-check, not both."
+    assert error.details == {"command": "launch", "options": ["--expect", "--no-effect-check"]}
 
 
 def test_a_repeatable_option_given_twice_is_not_a_conflict() -> None:
     parsed = parse(
-        ["perform", "tester", "--runner", "scripted", "--expect", "a.txt", "--expect", "b.txt"],
-        COMMANDS,
+        ["launch", "tester", "--runner", "scripted", "--expect", "a.txt", "--expect", "b.txt"],
+        TEST_COMMANDS,
     )
     assert parsed.arguments.expect == ["a.txt", "b.txt"]
 
@@ -487,18 +517,19 @@ def test_too_many_positional_values_is_an_extra_argument_naming_the_first_extra(
         (("status", "--limit"), "--limit"),
         (("status", "--limit", "--json"), "--limit"),
         (("status", "--limit", "--"), "--limit"),
-        (("perform", "tester", "--runner"), "--runner"),
+        (("config", "set", "x=1", "--reason"), "--reason"),
     ],
-    ids=["last", "before-a-flag", "before-the-separator", "perform"],
+    ids=["last", "before-a-flag", "before-the-separator", "config-set"],
 )
 def test_an_option_with_no_value_is_a_missing_value_naming_it(
     argv: tuple[str, ...], option: str
 ) -> None:
     error = refused(*argv)
+    command = " ".join(argv[:2]) if argv[0] == "config" else argv[0]
     assert error.code == "usage.missing-value"
-    assert error.problem == f"`troupe {argv[0]}` needs a value after {option}."
+    assert error.problem == f"`troupe {command}` needs a value after {option}."
     assert f"`{option}=<value>`" in error.fix
-    assert error.details == {"command": argv[0], "option": option}
+    assert error.details == {"command": command, "option": option}
 
 
 def test_a_dash_leading_option_value_still_reaches_argparse_as_a_value() -> None:
@@ -506,8 +537,8 @@ def test_a_dash_leading_option_value_still_reaches_argparse_as_a_value() -> None
 
 
 def test_a_dash_leading_option_value_with_a_space_is_still_taken_as_the_value() -> None:
-    argv = ["perform", "tester", "--runner", "scripted", "--no-effect-check"]
-    parsed = parse([*argv, "--instructions", "--dry-run first"], COMMANDS)
+    argv = ["launch", "tester", "--runner", "scripted", "--no-effect-check"]
+    parsed = parse([*argv, "--instructions", "--dry-run first"], TEST_COMMANDS)
     assert parsed.arguments.instructions == "--dry-run first"
 
 
@@ -533,9 +564,9 @@ def test_a_typed_positional_value_its_type_rejects_is_an_invalid_value() -> None
 
 
 def test_what_was_typed_wrong_is_reported_before_what_is_missing() -> None:
-    error = refused("perform", "tester", "extra", "--no-effect-check")
+    error = refused("launch", "tester", "extra", "--no-effect-check", commands=TEST_COMMANDS)
     assert error.code == "usage.extra-argument"
-    assert error.details == {"command": "perform", "value": "extra"}
+    assert error.details == {"command": "launch", "value": "extra"}
 
 
 def test_help_still_answers_a_line_with_an_option_missing_its_value() -> None:
@@ -583,15 +614,9 @@ def test_declared_reads_perform_status_and_logs_as_they_declare_their_arguments(
     by_name = {c.name: _shape(_declared_for(c)) for c in COMMANDS if c.name in runs}
     assert by_name == {
         "perform": {
-            "options": [
-                ("--runner", True, True, None),
-                ("--runner-options", True, False, None),
-                ("--instructions", True, False, None),
-                ("--expect", True, False, None),
-                ("--no-effect-check", False, False, None),
-            ],
+            "options": [("--direction", True, False, None), ("--rehearse", False, False, None)],
             "positionals": [("actor", "<actor>", 1, 1)],
-            "groups": [(("expect", "no_effect_check"), True)],
+            "groups": [],
         },
         "status": {
             "options": [("--limit", True, False, int), ("--json", False, False, None)],
@@ -700,7 +725,7 @@ def _outcome(argv: list[str]) -> tuple[object, ...]:
         ["status", "x", "--json"],
         ["status", "x", "--limit", "5"],
         ["logs", "x", "--follow"],
-        ["perform", "x", "--runner", "x", "--no-effect-check"],
+        ["perform", "x", "--direction", "go"],
         ["echo", "x", "--upper"],
         ["choose", "5", "--colour", "red"],
     ],

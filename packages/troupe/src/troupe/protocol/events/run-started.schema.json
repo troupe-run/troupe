@@ -14,8 +14,8 @@
     "runner_requested",
     "stage",
     "effect_check",
-    "instructions",
-    "options"
+    "direction",
+    "config"
   ],
   "properties": {
     "lineage": {
@@ -47,13 +47,17 @@
     "effect_check": {
       "$ref": "../client/run.schema.json#/$defs/effectCheck"
     },
-    "instructions": {
-      "description": "The artifact reference of the instructions the actor was given.",
+    "direction": {
+      "description": "The artifact reference of the run's direction: what the actor was asked to do.",
       "$ref": "../lineage.schema.json#/$defs/hash"
     },
-    "options": {
-      "description": "The artifact reference of the runner options, as canonical JSON.",
-      "$ref": "../lineage.schema.json#/$defs/hash"
+    "config": {
+      "description": "The config version the run used: the ids of the config stream's heads, sorted. Working out config at that version gives the actor's runner, options, effect check and character.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "../lineage.schema.json#/$defs/hash"
+      }
     }
   }
 }

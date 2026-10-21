@@ -35,7 +35,7 @@ from troupe.core.config.stream import read, record, refuse_conflicts, refuse_unr
 from troupe.core.events import EventStore
 from troupe.core.messages import Message
 from troupe.core.notices import Notice
-from troupe.core.runs.perform import open_event_store
+from troupe.core.stores import open_event_store
 from troupe.core.theatre import THEATRE_DIR
 from troupe.platform.files import WaitCallback
 

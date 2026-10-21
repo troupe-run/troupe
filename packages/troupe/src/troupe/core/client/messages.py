@@ -66,11 +66,12 @@ EffectCheck = NoEffectCheck | FilesEffectCheck
 
 @dataclass(frozen=True)
 class PerformRequest(Message):
+    """Run an actor as config defines it: the request names only the actor, the run's direction
+    and whether to rehearse (config-model design D14)."""
+
     actor: str = json_field("actor", pattern=ACTOR_NAME)
-    runner: str = json_field("runner", pattern=RUNNER_NAME)
-    effect_check: EffectCheck = json_field("effectCheck")
-    options: dict[str, object] | None = json_field("options", default=None)
-    instructions: str | None = json_field("instructions", default=None)
+    direction: str | None = json_field("direction", default=None)
+    rehearse: bool | None = json_field("rehearse", default=None)
 
 
 # A run as status and logs report it.
@@ -226,8 +227,36 @@ LogsUpdate = LoggedEvent | NoticeUpdate
 
 
 @dataclass(frozen=True)
+class TextSummary(Message):
+    """Text a rehearsal names without showing: its hash and length."""
+
+    hash: str = json_field("hash", pattern=p.REF_PATTERN)
+    length: int = json_field("length", minimum=0)
+
+
+@dataclass(frozen=True)
+class Rehearsal(Message):
+    """What a perform would run, after every check it makes before starting the runner."""
+
+    actor: str = json_field("actor", pattern=ACTOR_NAME)
+    runner: str = json_field("runner", pattern=RUNNER_NAME)
+    stage: StageData = json_field("stage")
+    effect_check: EffectCheck = json_field("effectCheck")
+    config: list[str] = json_field("config", min_items=1)
+    character: TextSummary | None = json_field("character", default=None)
+    direction: TextSummary | None = json_field("direction", default=None)
+
+
+@dataclass(frozen=True)
 class PerformResult(Message):
-    run: RunSummary = json_field("run")
+    """The run as recorded, or, for a rehearsal, what would run: exactly one."""
+
+    run: RunSummary | None = json_field("run", default=None)
+    rehearsal: Rehearsal | None = json_field("rehearsal", default=None)
+
+    def _check(self, where: str) -> None:
+        if (self.run is None) == (self.rehearsal is None):
+            raise fail(where, "has exactly one of run and rehearsal")
 
 
 @dataclass(frozen=True)

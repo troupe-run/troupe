@@ -59,7 +59,7 @@ def test_every_line_a_succeeded_run_records_validates_by_topic(tmp_path: Path) -
     harness = Harness(theatre(tmp_path))
     harness.perform(request(script(INIT, turn("hello"), *TOOLS, OK)))
     lines = _lines(harness)
-    assert [line.get("topic") for line in lines if "topic" in line] == [
+    assert [line.get("topic") for line in lines if line.get("topic") in TOPICS] == [
         STARTED,
         *[REPORTED] * 5,
         ENDED,
@@ -80,13 +80,15 @@ def test_every_line_a_run_whose_runner_refused_it_records_validates_by_topic(
     tmp_path: Path,
 ) -> None:
     harness = Harness(theatre(tmp_path))
-    harness.perform(request({"script": {"steps": []}, "speed": 2}))
+    # Options its schema allows (a path is any non-empty string), which the runner refuses.
+    outside = {"writeFile": {"path": "/outside/the/workspace", "content": "x"}}
+    harness.perform(request({"script": {"steps": [outside]}}))
     lines = _lines(harness)
     started = next(line for line in lines if line.get("topic") == STARTED)
     ended = next(line for line in lines if line.get("topic") == ENDED)
     assert "runner_reported" not in started["state"]
     assert ended["state"]["outcome"]["error"]["details"]["runnerError"]["code"] == (
-        "scripted.unknown-option"
+        "scripted.invalid-script"
     )
     assert _problems(lines) == []
 
@@ -121,7 +123,7 @@ def test_a_run_whose_runner_never_started_records_no_null_and_validates_by_topic
     harness = Harness(theatre(tmp_path))
     result = harness.perform(request(script(INIT, OK)))
     lines = _lines(harness)
-    assert [line.get("topic") for line in lines if "topic" in line] == [STARTED, ENDED]
+    assert [line.get("topic") for line in lines if line.get("topic") in TOPICS] == [STARTED, ENDED]
     assert _nulls(lines) == []
     assert _problems(lines) == []
     ended = next(line for line in lines if line.get("topic") == ENDED)["state"]
@@ -267,8 +269,8 @@ def _run() -> Run:
         runner_reported=None,
         stage=STAGE,
         effect_check={"kind": "none"},
-        instructions=HASH,
-        options=HASH,
+        direction=HASH,
+        config=[HASH],
     )
 
 

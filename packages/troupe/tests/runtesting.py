@@ -12,6 +12,9 @@ from storetesting import git_service
 from troupe.core.artifacts import load_store
 from troupe.core.client import messages as m
 from troupe.core.client.session import CancelSignal, Session
+from troupe.core.config.changes import change
+from troupe.core.config.stream import read as read_config
+from troupe.core.config.stream import record as record_config
 from troupe.core.errors import TroupeError
 from troupe.core.events import EventStore
 from troupe.core.messages import Message
@@ -38,6 +41,13 @@ def theatre(root: Path) -> Repo:
     repo = make_repo(root)
     (repo.path / ".troupe").mkdir()
     return repo
+
+
+@dataclass(frozen=True)
+class Performed:
+    """A perform's run, for tests that ran one (not a rehearsal)."""
+
+    run: m.RunSummary
 
 
 @dataclass
@@ -77,8 +87,37 @@ class Harness:
     def send(self, update: Message) -> None:
         self.updates.append(update.to_data())
 
-    def perform(self, request: dict[str, Any]) -> m.PerformResult:
-        parsed = m.PerformRequest.from_data(request)
+    def configure(self, request: dict[str, Any]) -> None:
+        """Define the actor ``request`` names in config, as the old perform request described
+        it: its runner, options and effect check (config-model design D14)."""
+        check = request.get("effectCheck", {"kind": "none"})
+        actor: dict[str, Any] = {
+            "runner": request.get("runner", "scripted"),
+            "options": request.get("options", {}),
+            "expect": list(check.get("paths", [])),
+        }
+        if "character" in request:
+            actor["character"] = request["character"]
+        store = git_service(self.repo, env={**ADA, **self.env})
+        merged = read_config(store)
+        entries = change(merged.config, [(["actors", request["actor"]], actor)])
+        if entries:
+            record_config(store.command(via="cli"), merged, entries, [])
+
+    def perform(self, request: dict[str, Any]) -> "Performed":
+        """Configure the actor, then perform it: the run, as perform's result names it."""
+        self.configure(request)
+        asked = {k: request[k] for k in ("actor", "direction", "rehearse") if k in request}
+        parsed = m.PerformRequest.from_data(asked)
+        result = asyncio.run(perform(parsed, self.session(), self.send, backends=self.backends()))
+        assert result.run is not None, "a rehearsal: use perform_result"
+        return Performed(result.run)
+
+    def perform_result(self, request: dict[str, Any]) -> m.PerformResult:
+        """Configure the actor, then perform it, returning perform's whole result."""
+        self.configure(request)
+        asked = {k: request[k] for k in ("actor", "direction", "rehearse") if k in request}
+        parsed = m.PerformRequest.from_data(asked)
         return asyncio.run(perform(parsed, self.session(), self.send, backends=self.backends()))
 
     def status(self, **fields: Any) -> m.StatusResult:  # noqa: ANN401

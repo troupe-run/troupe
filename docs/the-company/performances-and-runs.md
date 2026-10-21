@@ -14,14 +14,19 @@ dry-run counterpart of a performance, and isn't built yet either.
 
 ## A run
 
-`troupe perform <actor>` runs one actor:
+`troupe perform <actor>` runs one actor, as config defines it: its runner, the runner's options, its effect check
+and its character. `--direction` says what this run is asked to do.
 
-1. **Everything that can refuse goes first:** who you are, the policy, whether the stage admits the actor, and the
-   runner's name. A refused `perform` runs nothing and records nothing.
-2. **The run gets an id,** shown at once, so you can follow it from another terminal.
-3. **The instructions and the runner's options are stored** and referred to by hash, since they can be large or
-   hold what shouldn't be in git.
-4. **Each event the runner reports is recorded as it arrives,** then the run's end, with its outcome.
+1. **Everything that can refuse goes first:** who you are, the policy, whether the stage admits the actor, the
+   actor's config (an actor config doesn't have, or config with a [conflict](../stagecraft/hand-edit-config.md#branches),
+   is refused), and the runner's name. A refused `perform` runs nothing and records nothing.
+2. **The config files are made what config says,** as every command that uses config does first.
+3. **The run gets an id,** shown at once, so you can follow it from another terminal.
+4. **The direction is stored** and referred to by hash, since it can be large or hold what shouldn't be in git.
+5. **Each event the runner reports is recorded as it arrives,** then the run's end, with its outcome.
+
+`troupe perform <actor> --rehearse` makes every check in step 1 and stops there: it shows what would run, and
+starts and records nothing.
 
 [Your first performance](../opening-night/first-performance.md) walks through one, and the [CLI](../prompt-book/cli.md)
 lists every option.
@@ -31,7 +36,8 @@ lists every option.
 A run is recorded as its own stream of [events](../prompt-book/events.md), all sharing one change id:
 
 - **`Run.Started`:** the actor, the runner you asked for and the one that answered, the stage and what allowed it,
-  the effect check, and references to the instructions and options. You started it, through the command line.
+  the effect check, a reference to the direction, and the config version the run used, so what the actor was then
+  can always be worked out. You started it, through the command line.
 - **`Run.Reported`:** one for each event the runner reports, in order. The agent reported it, through its runner.
 - **`Run.Ended`:** the outcome, its error, the runner's result, references to the transcript and standard error, and
   the limits the run ran under.

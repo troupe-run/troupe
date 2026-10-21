@@ -13,17 +13,22 @@ fails with run.recording-failed.
 """
 
 import asyncio
+import hashlib
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 from uuid import UUID, uuid4
 
-from troupe.core import defaults, strict_json
-from troupe.core.artifacts import ArtifactStore, load_store
+from troupe.core import defaults
+from troupe.core.artifacts import ArtifactStore
 from troupe.core.client import messages as m
 from troupe.core.client.dispatch import Send
 from troupe.core.client.session import Session
+from troupe.core.config.commands import sync_files
+from troupe.core.config.merge import Merged
+from troupe.core.config.projection import plan, refuse, render
+from troupe.core.config.stream import read, refuse_conflicts
 from troupe.core.errors import TroupeError
 from troupe.core.events import Command, EventStore
 from troupe.core.files import directory_lock
@@ -38,29 +43,12 @@ from troupe.core.runners.limits import RunLimits
 from troupe.core.runs.aggregate import Run
 from troupe.core.runs.projections import fold_runs
 from troupe.core.stages import load_stage
-
-
-def local_dir(theatre: Path) -> Path:
-    return theatre / ".troupe" / "local"
+from troupe.core.stores import local_dir, open_artifact_store, open_event_store
 
 
 def lease_dir(theatre: Path, run_id: str) -> Path:
     """Where a run's lease is held while its perform is alive (design D11)."""
     return local_dir(theatre) / "runs" / run_id
-
-
-def open_event_store(session: Session) -> EventStore:
-    return EventStore.open(
-        session.theatre,
-        vcs=defaults.VCS,
-        store=defaults.EVENT_STORE,
-        env=session.env,
-        clock=session.clock,
-    )
-
-
-def open_artifact_store(session: Session) -> ArtifactStore:
-    return load_store(defaults.ARTIFACT_STORE, local_dir(session.theatre) / "artifacts")
 
 
 @dataclass(frozen=True)
@@ -88,29 +76,75 @@ def _as_troupe_error(error: BaseException) -> TroupeError:
     )
 
 
+@dataclass(frozen=True)
+class _What:
+    """What a perform runs, as config defines the actor (config-model design D14)."""
+
+    actor: str
+    runner: str
+    options: dict[str, object]
+    effect_check: m.EffectCheck
+    character: str | None
+    config: tuple[str, ...]
+
+
+def _from_config(merged: Merged, name: str) -> _What:
+    """The actor ``name`` as config defines it. Refused when config has no such actor."""
+    actors = merged.config.get("actors", {})
+    actor = actors.get(name) if isinstance(actors, dict) else None
+    if not isinstance(actor, dict):
+        known = sorted(actors) if isinstance(actors, dict) else []
+        listed = ", ".join(known) or "none yet"
+        raise TroupeError(
+            "config.unknown-actor",
+            problem=f"Config has no actor named {name!r} (it has: {listed}).",
+            fix=f"Perform one of the actors config has, or define {name} with troupe config set "
+            f"actors.{name}.runner=... actors.{name}.expect=...",
+            details={"actor": name, "known": known},
+        )
+    paths = list(dict.fromkeys(actor["expect"]))
+    check: m.EffectCheck = m.FilesEffectCheck(paths=paths) if paths else m.NoEffectCheck()
+    character = actor.get("character")
+    return _What(
+        actor=name,
+        runner=str(actor["runner"]),
+        options=dict(actor.get("options", {})),
+        effect_check=check,
+        character=character if isinstance(character, str) else None,
+        config=merged.heads,
+    )
+
+
+def _summary(text: str | None) -> m.TextSummary | None:
+    if not text:
+        return None
+    digest = "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
+    return m.TextSummary(hash=digest, length=len(text))
+
+
 class _Recorder:
     """Records one run's events as they arrive, and its end."""
 
     def __init__(
         self,
         run_id: str,
-        request: m.PerformRequest,
+        what: "_What",
         store: EventStore,
         person: Command,
         agent: Command,
         admission: dict[str, Any],
-        refs: tuple[str, str],
+        direction_ref: str,
         send: Send,
         cancel: asyncio.Event,
     ) -> None:
         self.run_id = run_id
-        self.request = request
+        self.what = what
         self.store = store
         self.stale = False
         self.person = person
         self.agent = agent
         self.admission = admission
-        self.instructions_ref, self.options_ref = refs
+        self.direction_ref = direction_ref
         self.send = send
         self.cancel = cancel
         self.run: Run | None = None
@@ -122,13 +156,13 @@ class _Recorder:
             reported = {"name": init.runner.name, "version": init.runner.version}
         run = Run(
             run_id=self.run_id,
-            actor=self.request.actor,
-            runner_requested=self.request.runner,
+            actor=self.what.actor,
+            runner_requested=self.what.runner,
             runner_reported=reported,
             stage=self.admission,
-            effect_check=self.request.effect_check.to_data(),
-            instructions=self.instructions_ref,
-            options=self.options_ref,
+            effect_check=self.what.effect_check.to_data(),
+            direction=self.direction_ref,
+            config=list(self.what.config),
         )
         self.person.record(run.collect_events())
         self.run = run
@@ -190,7 +224,27 @@ async def perform(
     person_identity = await asyncio.to_thread(store.identify)
     stage = load_stage(defaults.STAGE)
     admission = stage.admit(read_policy(session.env))
-    argv = runner_command(request.runner)
+    merged = await asyncio.to_thread(read, store)
+    refuse_conflicts(merged)
+    what = _from_config(merged, request.actor)
+    argv = runner_command(what.runner)
+    direction = request.direction or ""
+    if request.rehearse:
+        # Every check a flush makes, without writing: a rehearsal changes nothing.
+        refuse(plan(theatre / ".troupe", render(merged.config), merged.files))
+        return m.PerformResult(
+            rehearsal=m.Rehearsal(
+                actor=what.actor,
+                runner=what.runner,
+                stage=m.StageData.from_data(admission.to_data()),
+                effect_check=what.effect_check,
+                config=list(what.config),
+                character=_summary(what.character),
+                direction=_summary(direction),
+            )
+        )
+    for notice in await asyncio.to_thread(sync_files, session, store, merged, send):
+        send(_notice(notice))
 
     run_id = str(uuid4())
     lease = lease_dir(theatre, run_id)
@@ -198,26 +252,21 @@ async def perform(
     with directory_lock(lease):
         send(m.Started(run_id=run_id))
         artifacts = backends.artifact_store(session)
-        instructions = request.instructions or ""
-        options: dict[str, object] = request.options or {}
-        refs = (
-            artifacts.put(instructions.encode("utf-8")),
-            artifacts.put(strict_json.dumps(options).encode("utf-8")),
-        )
+        direction_ref = artifacts.put(direction.encode("utf-8"))
         person = store.command(via="cli", actor=person_identity, stage=admission)
         agent = person.acting_as(
-            Identity(kind="agent", id=request.actor, source="troupe"), via="runner"
+            Identity(kind="agent", id=what.actor, source="troupe"), via="runner"
         )
         cancel = session.cancel.bind()
         recorder = _Recorder(
-            run_id, request, store, person, agent, admission.to_data(), refs, send, cancel
+            run_id, what, store, person, agent, admission.to_data(), direction_ref, send, cancel
         )
         workspace = stage.workspace(theatre)
         outcome = await run_actor(
             RunnerCommand(list(argv), cwd=workspace),
-            RunRequest(run_id, instructions, workspace, options),
+            RunRequest(run_id, direction, workspace, what.options, character=what.character),
             store=artifacts,
-            effect=effect_check_for(request.effect_check, theatre),
+            effect=effect_check_for(what.effect_check, theatre),
             limits=backends.limits,
             on_event=recorder.on_event,
             on_announce=lambda notice: send(_notice(notice)),

@@ -1,12 +1,10 @@
-"""perform, status and logs on the command line (spec: cli; perform-status-logs design D4, D14).
+"""perform, status and logs on the command line (spec: cli; perform-status-logs design D14;
+config-model design D14).
 
 Each command builds its request as data and calls the core through the client protocol's
 dispatcher, in process, then renders the updates and the result. Nothing here decides anything
-the core does: the CLI finds the theatre, reads the files a person names, and turns paths typed
-from the working directory into theatre-relative ones.
-
-``perform``'s flags for the runner, its options and the effect check are interim: config replaces
-them (design D4).
+the core does. ``perform`` names an actor and its direction: the runner, its options, the effect
+check and the character are the actor's config.
 """
 
 import argparse
@@ -14,12 +12,11 @@ import asyncio
 import json
 import os
 from collections.abc import Callable
-from pathlib import Path, PurePath
+from pathlib import Path
 from typing import Any, TextIO
 
 from troupe.cli.parser import Command
 from troupe.cli.render import render_error, render_event, render_notice, render_run, render_run_line
-from troupe.core import strict_json
 from troupe.core.client.dispatch import call
 from troupe.core.client.session import CancelSignal, Session
 from troupe.core.errors import TroupeError
@@ -69,83 +66,45 @@ def _call(
 
 
 def _configure_perform(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("actor", help="the actor's name")
+    parser.add_argument("actor", help="the actor's name, as config defines it")
+    parser.add_argument("--direction", help="what the actor is asked to do in this run")
     parser.add_argument(
-        "--runner", required=True, help="the runner to run it with (interim: config replaces it)"
-    )
-    parser.add_argument(
-        "--runner-options",
-        metavar="FILE",
-        help="a JSON file holding the runner's options, such as the scripted runner's script",
-    )
-    parser.add_argument("--instructions", help="what the actor is asked to do")
-    check = parser.add_mutually_exclusive_group(required=True)
-    check.add_argument(
-        "--expect",
-        action="append",
-        metavar="PATH",
-        help="a file the run must create or change, relative to where you are and inside the "
-        "theatre (repeatable)",
-    )
-    check.add_argument(
-        "--no-effect-check",
+        "--rehearse",
         action="store_true",
-        help="check nothing after the run; it must be said explicitly",
+        help="run every check and start nothing: show what would run",
     )
 
 
-def _read_options(path: str) -> dict[str, object]:
-    where = str(Path(path).absolute())
-    try:
-        data = strict_json.loads(Path(path).read_bytes())
-    except OSError as error:
-        problem = f"The runner options file couldn't be read: {error.strerror or error}."
-    except strict_json.StrictJSONError as error:
-        problem = f"The runner options file isn't strict JSON: {error}."
-    else:
-        if isinstance(data, dict):
-            return data
-        problem = f"The runner options file holds a JSON {type(data).__name__}, not an object."
-    raise TroupeError(
-        "perform.options-invalid",
-        problem=problem,
-        fix="Give --runner-options a file holding one JSON object, with no repeated keys and no "
-        "NaN or Infinity.",
-        path=where,
-    )
+def _text(summary: dict[str, Any] | None) -> str:
+    if summary is None:
+        return "none"
+    return f"{summary['length']} characters, {summary['hash']}"
 
 
-def theatre_path(typed: str, theatre: Path) -> str:
-    """``typed``, relative to the working directory, as a theatre-relative path with ``/``."""
-    absolute = Path(os.path.normpath(Path.cwd() / typed))
-    try:
-        relative = absolute.relative_to(theatre)
-    except ValueError:
-        relative = None
-    if relative is None or relative == PurePath():
-        raise TroupeError(
-            "perform.path-outside-theatre",
-            problem=f"--expect {typed} names {absolute}, which isn't a file inside the theatre "
-            f"({theatre}).",
-            fix="Name a file inside the theatre; the run's workspace is the theatre.",
-            path=str(absolute),
-            details={"path": typed},
-        )
-    return relative.as_posix()
+def _render_rehearsal(rehearsal: dict[str, Any], stdout: TextIO) -> None:
+    check = rehearsal["effectCheck"]
+    expect = ", ".join(check["paths"]) if check["kind"] == "files" else "no effect check"
+    stage = rehearsal["stage"]
+    lines = [
+        f"would perform {rehearsal['actor']}",
+        f"  runner: {rehearsal['runner']}",
+        f"  stage: {stage['name']}, effects {stage['effects']}",
+        f"  effect check: {expect}",
+        f"  character: {_text(rehearsal.get('character'))}",
+        f"  direction: {_text(rehearsal.get('direction'))}",
+        f"  config: {', '.join(rehearsal['config'])}",
+        "Rehearsal: nothing was started or recorded.",
+    ]
+    print("\n".join(lines), file=stdout)
 
 
 def _run_perform(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
     session = _session()
-    params: dict[str, Any] = {"actor": arguments.actor, "runner": arguments.runner}
-    if arguments.runner_options is not None:
-        params["options"] = _read_options(arguments.runner_options)
-    if arguments.instructions is not None:
-        params["instructions"] = arguments.instructions
-    if arguments.no_effect_check:
-        params["effectCheck"] = {"kind": "none"}
-    else:
-        paths = [theatre_path(typed, session.theatre) for typed in arguments.expect]
-        params["effectCheck"] = {"kind": "files", "paths": list(dict.fromkeys(paths))}
+    params: dict[str, Any] = {"actor": arguments.actor}
+    if arguments.direction is not None:
+        params["direction"] = arguments.direction
+    if arguments.rehearse:
+        params["rehearse"] = True
 
     def on_update(update: dict[str, Any]) -> None:
         if update["kind"] == "started":
@@ -174,6 +133,9 @@ def _run_perform(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) 
         print(render_notice(notice.to_data()), file=stderr, flush=True)
 
     result = _call("perform", params, session, on_update, on_cancel)
+    if "rehearsal" in result:
+        _render_rehearsal(result["rehearsal"], stdout)
+        return ExitCode.WOULD_CHANGE
     run = result["run"]
     if run["outcome"] == "succeeded":
         print(f"run {run['runId']} succeeded", file=stdout)

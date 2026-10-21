@@ -2,15 +2,93 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://troupe.run/protocol/client/perform-result.schema.json",
   "title": "perform: result",
-  "description": "The run as recorded once it ended. A run that ended badly is still a result: its outcome and error say how.",
+  "description": "The run as recorded once it ended, or, for a rehearsal, what would run. A run that ended badly is still a result: its outcome and error say how.",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "run"
-  ],
   "properties": {
     "run": {
+      "description": "The run, as recorded. Absent: this was a rehearsal.",
       "$ref": "run.schema.json#/$defs/summary"
+    },
+    "rehearsal": {
+      "description": "What would run. Absent: the actor ran.",
+      "$ref": "#/$defs/rehearsal"
+    }
+  },
+  "oneOf": [
+    {
+      "required": [
+        "run"
+      ]
+    },
+    {
+      "required": [
+        "rehearsal"
+      ]
+    }
+  ],
+  "$defs": {
+    "text": {
+      "title": "Text, summarised",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "hash",
+        "length"
+      ],
+      "properties": {
+        "hash": {
+          "$ref": "run.schema.json#/$defs/hash"
+        },
+        "length": {
+          "description": "Its length, in characters.",
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "rehearsal": {
+      "title": "Rehearsal",
+      "description": "What a perform would run, after every check it makes before starting the runner.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actor",
+        "runner",
+        "stage",
+        "effectCheck",
+        "config"
+      ],
+      "properties": {
+        "actor": {
+          "$ref": "run.schema.json#/$defs/actorName"
+        },
+        "runner": {
+          "$ref": "run.schema.json#/$defs/runnerName"
+        },
+        "stage": {
+          "$ref": "../lineage.schema.json#/$defs/stage"
+        },
+        "effectCheck": {
+          "$ref": "run.schema.json#/$defs/effectCheck"
+        },
+        "config": {
+          "description": "The config version it would use: the config stream's heads, sorted.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "run.schema.json#/$defs/hash"
+          }
+        },
+        "character": {
+          "description": "The actor's character, by hash and length. Absent: it has none.",
+          "$ref": "#/$defs/text"
+        },
+        "direction": {
+          "description": "The run's direction, by hash and length. Absent: none was given.",
+          "$ref": "#/$defs/text"
+        }
+      }
     }
   }
 }
