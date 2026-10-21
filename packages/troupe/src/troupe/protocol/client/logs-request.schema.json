@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/client/logs-request.schema.json",
+  "title": "logs: request",
+  "description": "A run's events in order. With follow, each new event is sent as an update as it is recorded, until the run ends or stops running.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "run"
+  ],
+  "properties": {
+    "run": {
+      "$ref": "run.schema.json#/$defs/runRef"
+    },
+    "follow": {
+      "description": "Absent means false.",
+      "type": "boolean"
+    }
+  }
+}

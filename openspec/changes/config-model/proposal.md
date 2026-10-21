@@ -30,7 +30,11 @@ branches' events, is fixed by the first event recorded and stays in git for ever
 - **The actor is the first kind of config:** its runner, the runner's options, its effect check and its
   **character** (its standing prompt). `actors/tester.yaml` and `actors/tester.md` are the actor `tester` (#6). Each
   file kind has a strict JSON Schema in `protocol/` (#7, #70), named in the file by both a `$schema:` key and a YAML
-  language-server comment, and copied to `.troupe/local/schemas/` for editors.
+  language-server comment, as its troupe.run URL (`https://troupe.run/protocol/0/config/actor.schema.json`), which
+  troupe-run/website#30 serves.
+- **troupe carries the schemas it was built with.** The troupe package holds a generated copy of `protocol/schemas/`,
+  held equal to the source by a test, and core reads schemas only from it, so an installed troupe never fetches one
+  (owner, 2026-10-21).
 - **Files are a one-way projection.** `troupe flush` writes each config file whole from config, and every command
   that uses config flushes first. troupe never reads a file's meaning in this change. Before replacing a file it
   checks the file is one troupe wrote, by hash, and refuses one that isn't, naming the file and the fix. `--force`
@@ -67,10 +71,13 @@ branches' events, is fixed by the first event recorded and stays in git for ever
 - `client-protocol`: the config and flush methods; `perform`'s request names the actor and direction only.
 - `event-store`: a stream's aggregate may merge its own forks when it's read (config does); settling is recorded
   with the next write.
+- `protocol`: troupe's package carries the protocol's schemas, and each plugin's published schemas are installed
+  with it.
 
 ## Impact
 
-- New: `protocol/schemas/config/` (the actor file kind), `protocol/schemas/events/config-changed.schema.json`,
+- New: `protocol/schemas/config/` (the actor file kind), the package's copy of `protocol/schemas/` and the script
+  and test that keep it equal, `troupe.core.schemas` (the one place core finds a schema), `protocol/schemas/events/config-changed.schema.json`,
   client-protocol schemas for the config and flush methods, `troupe.core.config` (the aggregate, the merge, the
   projection, the file-kind registry and flush), generated pydantic models, and their up-to-date check.
 - Changed: `troupe.core.runs.perform`, `troupe.core.interim` (only the runner table remains, until #38),
@@ -81,5 +88,5 @@ branches' events, is fixed by the first event recorded and stays in git for ever
   ruamel.yaml (to write YAML). datamodel-code-generator, for development only.
 - Out of scope: reading hand edits back and `troupe sync` (#119); renames and `troupe config mv` (#138); a root
   `troupe.yaml` (no location setting needs it yet); policy files (#71); roles and people (#61); a setup command
-  (still undecided); rehearsals that run stub actors (#137, later); publishing schemas at a URL; moving the
+  (still undecided); rehearsals that run stub actors (#137, later); serving the schemas at troupe.run (troupe-run/website#30); releasing the protocol on its own (#140); moving the
   hand-written runner and client types onto the generator.

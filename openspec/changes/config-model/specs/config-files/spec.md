@@ -22,26 +22,17 @@ Each actor in config SHALL be written to `.troupe/actors/<name>.yaml`, and its c
 - **THEN** its `.yaml` and `.md` files are removed
 
 ### Requirement: Each config file names its schema twice
-Each YAML config file SHALL begin with a `# yaml-language-server: $schema=<path>` comment and a `$schema: <path>`
-key, both naming the same path, relative to the file, to its kind's schema in `.troupe/local/schemas/`.
+Each YAML config file SHALL begin with a `# yaml-language-server: $schema=<url>` comment and a `$schema: <url>`
+key, both naming its kind's schema at troupe.run by major version.
 
 #### Scenario: An actor file names its schema
 - **WHEN** an actor file is written
 - **THEN** its first line is the language-server comment and its first key is `$schema`, both naming
-  `../local/schemas/config/actor.schema.json`
+  `https://troupe.run/protocol/0/config/actor.schema.json`
 
-### Requirement: troupe's schemas are copied into the theatre for editors
-Whenever troupe writes config files, it SHALL make `.troupe/local/schemas/` hold its config schemas as they are in
-this version of troupe, and the actor schema copied there SHALL check each actor's options against its runner's
-options schema.
-
-#### Scenario: A fresh clone
-- **WHEN** a person clones a theatre, whose `.troupe/local/` isn't in git, and runs `troupe flush`
-- **THEN** `.troupe/local/schemas/config/actor.schema.json` exists, and every config file's schema path resolves
-
-#### Scenario: An editor checks options
-- **WHEN** an actor file for the scripted runner holds an option the scripted runner doesn't define
-- **THEN** validating the file against the copied schema fails, naming the option
+#### Scenario: The file validates against its schema
+- **WHEN** a written actor file is validated against the actor schema troupe carries
+- **THEN** it is valid
 
 ### Requirement: Flush makes the files what config says
 `troupe flush` SHALL make every config file exactly what config would write, adding, replacing and removing files,

@@ -146,20 +146,6 @@ def test_a_parent_whose_file_was_removed_by_hand_is_refused_with_the_fix(repo: R
     assert caught.value.details["missingParent"].startswith("sha256:")
 
 
-def test_reading_a_streams_history_refuses_a_parent_whose_file_was_removed(repo: Repo) -> None:
-    # history is how an aggregate that merges its own forks reads its stream (config-model D5),
-    # so it keeps the rule every read of a stream keeps.
-    stream = uuid4()
-    store(repo).insert([event(stream, 1)])
-    store(repo).insert([event(stream, 2)])
-    first, second = segments(repo.path)
-    first.unlink()
-    with pytest.raises(TroupeError) as caught:
-        store(repo).history(stream)
-    assert caught.value.code == "events.missing-parent"
-    assert caught.value.path == str(second.absolute())
-
-
 def test_a_parent_only_in_another_branchs_uncommitted_segment_is_missing_and_named(
     repo: Repo,
 ) -> None:

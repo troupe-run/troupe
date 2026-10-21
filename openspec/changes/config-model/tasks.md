@@ -57,19 +57,34 @@
   current rule. Verify with tests for each scenario in the event-store delta, including two clones settling the
   same fork to one event id, and that every existing fork test still passes
   - The store already allowed most of it: `history` returns both sides of a fork, and a batch whose first event
-    settles gives the events after it that event as their parent. What changed: `history` now refuses a missing
-    parent (as `load` does, and as the spec says every read of a stream must), and `Command.record` takes
+    settles gives the events after it that event as their parent. What changed: `Command.record` takes
     `settles=`. An aggregate "declares" that it merges its forks by reading `history` instead of `load`; there's no
     flag to set. Tests: `test_forks.py` (history read whole, one batch settling and changing, all or nothing, two
-    clones settling to one event) and `test_ordering_git.py` (history refusing a missing parent).
+    clones settling to one event).
+  - `history` stays the store's lenient listing: refusing a missing parent there broke the ordering state machine,
+    which reads it as "every visible event" while it deletes segments, and the run queries read it too. So the
+    config merge checks parents itself (task 6.1), refusing with `events.missing-parent` as `load` would.
 - [x] 4.2 Update `contributing/event-store.md`'s "Forks and settling" section to say which aggregates merge their
   forks and that settling may share a batch. Verify the event-store doc test passes
 
 ## 5. The config aggregate and its changes (design D2, D6, D13)
 
-- [ ] 5.1 Ship the scripted runner's `schemas/` with its installed package, and give each `troupe.core.interim.RUNNERS`
+- [x] 5.1 Ship the scripted runner's `schemas/` with its installed package, and give each `troupe.core.interim.RUNNERS`
   entry the location of its options schema (D13). Verify a test reads the scripted runner's options schema from the
   installed plugin without starting it
+  - The schemas moved to `plugins/runner-scripted/src/troupe_runner_scripted/schemas/` (installed with the
+    plugin; references in tests, `check-paths.toml`, the plugin's README and `contributing/runners.md` updated).
+    `test_a_runners_options_schema_is_read_from_the_installed_runner_without_importing_it` runs a fresh interpreter
+    and checks the runner's package was never imported. The built plugin wheel holds both schemas.
+- [x] 5.1a Add `scripts/package_schemas.py`, which copies `protocol/schemas/` into `packages/troupe/src/troupe/protocol/`
+  with a `--check` mode, a test that runs the check, and `troupe.core.schemas`, the one place core finds a schema by
+  its `$id` (D17). Verify the test fails when a source schema changes without the copy, that a built wheel holds the
+  copy, and that a scripted runner's options are validated through `troupe.core.schemas` against its installed schema
+  - `test_schemas.py`: the copy check passes; a changed source schema and a stray copy each fail it, naming the file
+    and the command; every protocol schema is found by its `$id` from the copy; options are checked against the
+    runner's schema and the contract schemas it refers to. A wheel built with `uv build --package troupe` holds all
+    28 schemas, and installed with the runner's wheel into a fresh environment outside the checkout, it validated
+    the scripted runner's options (and refused an unknown key) without importing the runner (2026-10-21).
 - [ ] 5.2 Add `troupe.core.config.aggregate`: the config stream's fixed id, `Config.Changed` with array paths, `before`
   as the canonical-JSON hash and `after` as the value, group removal as one entry, setting a group from data, and no
   event when nothing changes. Verify with tests for each scenario under "A command records one change", "A change
@@ -85,7 +100,7 @@
 
 - [ ] 6.1 Add `troupe.core.config.merge`: config worked out from the stream's whole history, each line's net change
   per path since the split, agreement, a change and a change back, and group removal against a change inside the
-  group. Verify with tests for each scenario under "A merge combines each line's net change" and "Differing net
+  group. Refuse an event whose parent isn't here with `events.missing-parent`, naming its file, as `load` does. Verify with tests for each scenario under "A merge combines each line's net change" and "Differing net
   changes…", with branches made in a real git repository (the existing test helpers)
 - [ ] 6.2 Add conflicts from validation (a merged actor that fails its schema or its runner's options), conflicts
   reported as whole changes, the block on every config use except `config get`, and the resolution rule (a change
@@ -107,10 +122,8 @@
   named operating-system files. Verify with tests that a stray file in `actors/` is `config.unknown-file` and
   `.DS_Store` is ignored
 - [ ] 7.2 Render files (D9): YAML with ruamel.yaml, block style, keys in schema order, the language-server comment and
-  the `$schema` key first, and the character's text exactly. Copy troupe's schemas into `.troupe/local/schemas/`,
-  with the actor schema composed so each runner's options are checked by its own options schema. Verify a written
-  actor file validates against the copied schema with `jsonschema`, and that an unknown scripted-runner option in a
-  file fails it
+  the `$schema` key first, both naming `https://troupe.run/protocol/0/config/actor.schema.json`, and the character's
+  text exactly. Verify a written actor file validates against the actor schema troupe carries
 - [ ] 7.3 Add the check before replacing (D8): what config would write now, any hash in a change's `files`, the local
   written record (`.troupe/local/config/written.jsonl`, a torn last line trimmed), or no file. Anything else is
   `config.file-not-troupes`. Verify with tests for a hand edit (refused, nothing recorded), a file restored from an

@@ -22,14 +22,14 @@ python -m troupe_runner_scripted
 
 ## Schemas
 
-The runner publishes its schemas in [`schemas/`](schemas/), as every runner does
+The runner publishes its schemas in its package's [`schemas/`](src/troupe_runner_scripted/schemas/), installed with it, as every runner does
 ([Publishing a runner's schemas](../../contributing/runners.md#publishing-a-runners-schemas)):
 
-- [`options.schema.json`](schemas/options.schema.json): the options, every step and its fields, and a recording's
+- [`options.schema.json`](src/troupe_runner_scripted/schemas/options.schema.json): the options, every step and its fields, and a recording's
   lines (`$defs/recordingLine`). An event step is checked as the contract's run event, without `runId` and with
   `seq` optional. At run time the runner itself checks only that an event step has a `type`, so a test can still
   send a broken event on purpose with `rawStdout`.
-- [`errors.schema.json`](schemas/errors.schema.json): its own error codes, `scripted.invalid-script` and
+- [`errors.schema.json`](src/troupe_runner_scripted/schemas/errors.schema.json): its own error codes, `scripted.invalid-script` and
   `scripted.unknown-option`, each with `details.where`, naming where in the options or script the problem is.
 
 ## Scripts

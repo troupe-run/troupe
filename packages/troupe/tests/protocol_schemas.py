@@ -1,8 +1,8 @@
 """Every JSON Schema troupe ships, loaded once for validation in tests (spec: protocol).
 
 The schemas in protocol/schemas/ are the source of truth (decision #7), and each plugin publishes
-its own under plugins/<name>/schemas/. Every one is registered under its $id, so references between
-them resolve, across files and across protocol and plugins.
+its own under plugins/<name>/src/<package>/schemas/, installed with it. Every one is registered
+under its $id, so references between them resolve, across files and across protocol and plugins.
 """
 
 import json
@@ -31,7 +31,8 @@ def protocol_files() -> list[Path]:
 
 
 def plugin_files() -> list[Path]:
-    return sorted(PLUGINS.glob("*/schemas/*.schema.json"))
+    """Each plugin's published schemas, in its package's ``schemas/``, installed with it."""
+    return sorted(PLUGINS.glob("*/src/*/schemas/*.schema.json"))
 
 
 def schema_files() -> list[Path]:
@@ -43,8 +44,8 @@ def expected_id(path: Path) -> str:
     """The $id a schema file must have: its path under protocol/schemas/ or plugins/."""
     if path.is_relative_to(SCHEMAS):
         return PROTOCOL_BASE + path.relative_to(SCHEMAS).as_posix()
-    plugin, _, name = path.relative_to(PLUGINS).parts
-    return f"{PLUGINS_BASE}{plugin}/{name}"
+    parts = path.relative_to(PLUGINS).parts
+    return f"{PLUGINS_BASE}{parts[0]}/{parts[-1]}"
 
 
 @cache

@@ -44,7 +44,7 @@ RECORD = validator_for(PROTOCOL_BASE + "event-record.schema.json", SCRIPTED)
 
 SCRIPT = script(INIT, OK)
 ACTOR_FILE: dict[str, Any] = {
-    "$schema": "../local/schemas/config/actor.schema.json",
+    "$schema": "https://troupe.run/protocol/0/config/actor.schema.json",
     "runner": "scripted",
     "options": SCRIPT,
     "expect": ["out/hello.txt"],

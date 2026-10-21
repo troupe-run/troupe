@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/client/perform-update.schema.json",
+  "title": "perform: update",
+  "description": "Sent while perform runs, before its result: the run id once it is minted, each run event as it is recorded, and each notice.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "runId"
+      ],
+      "properties": {
+        "kind": {
+          "const": "started"
+        },
+        "runId": {
+          "$ref": "run.schema.json#/$defs/runId"
+        }
+      }
+    },
+    {
+      "$ref": "run.schema.json#/$defs/loggedEvent"
+    },
+    {
+      "$ref": "run.schema.json#/$defs/noticeUpdate"
+    }
+  ]
+}

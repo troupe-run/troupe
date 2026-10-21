@@ -119,8 +119,8 @@ config changes is read rather than refused, and reading it records nothing. Its 
 same batch: `Command.record(events, settles=heads)` records a settling event first, whose parents are those heads,
 and the events after it follow it. Settling events are content-addressed like any other, so two clones that settle
 a fork to the same state record one event. Runs don't merge their forks: a run is written by one `perform` in one
-clone, so a forked run is a fault, and loading it is refused. `history` still refuses a missing parent, as every
-read of a stream does.
+clone, so a forked run is a fault, and loading it is refused. `history` refuses nothing, so an aggregate that reads
+it checks that every parent is here itself, and refuses with `events.missing-parent` as `load` would.
 
 ## Visibility and abandoned edits
 

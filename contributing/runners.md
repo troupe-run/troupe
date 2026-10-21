@@ -159,7 +159,9 @@ Any other code is the runner's own, and the runner publishes it (next section).
 ### Publishing a runner's schemas
 
 Every schema troupe ships is strict: each object closed, each value typed. A runner publishes two JSON Schemas
-(draft 2020-12), held to the same rule, in a `schemas/` directory beside its code:
+(draft 2020-12), held to the same rule, in a `schemas/` directory beside its code and installed with it, so troupe
+can check an actor's options without starting the runner (for a Python runner, inside its package, as the scripted
+runner does):
 
 - **`options.schema.json`**, for its `run/start` options. A runner with no options publishes one that accepts only
   `{}`.

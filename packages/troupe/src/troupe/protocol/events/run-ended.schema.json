@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/events/run-ended.schema.json",
+  "title": "Run.Ended",
+  "description": "The payload of a run's last event (topic troupe.core.runs.aggregate:Run.Ended): the outcome the run host derived, and whether recording failed part-way.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "lineage",
+    "timestamp",
+    "outcome"
+  ],
+  "properties": {
+    "lineage": {
+      "$ref": "../lineage.schema.json"
+    },
+    "timestamp": {
+      "$ref": "../event-record.schema.json#/$defs/libraryTimestamp"
+    },
+    "outcome": {
+      "description": "How the run ended, as the run host derived it from what the runner reported, never from its exit code alone: the outcome, whether the runner exited, was killed or never started, and the limits it ran under.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outcome",
+        "ending",
+        "limits"
+      ],
+      "properties": {
+        "outcome": {
+          "enum": [
+            "succeeded",
+            "failed",
+            "cancelled",
+            "timed-out",
+            "crashed",
+            "could-not-start"
+          ]
+        },
+        "error": {
+          "description": "Why the run didn't succeed. Absent: the outcome has no error.",
+          "$ref": "../error.schema.json"
+        },
+        "result": {
+          "description": "The result event the runner sent. Absent: it sent none, or never started.",
+          "$ref": "../runner/run-event.schema.json#/$defs/result"
+        },
+        "exitCode": {
+          "description": "The runner process's exit code. Present exactly when the runner started (ending isn't never-started).",
+          "type": "integer"
+        },
+        "ending": {
+          "enum": [
+            "exited",
+            "killed",
+            "never-started"
+          ]
+        },
+        "transcript": {
+          "description": "The transcript's artifact reference. Present exactly when the runner started.",
+          "$ref": "../lineage.schema.json#/$defs/hash"
+        },
+        "stderr": {
+          "description": "The artifact reference of the runner's standard error. Present exactly when the runner started.",
+          "$ref": "../lineage.schema.json#/$defs/hash"
+        },
+        "limits": {
+          "description": "The limits the run ran under, by setting.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "start_timeout",
+            "run_timeout",
+            "cancel_grace",
+            "silence_announce",
+            "max_message_bytes",
+            "event_max_bytes",
+            "transcript_max_bytes",
+            "stderr_max_bytes",
+            "fail_fast_on_auth_retry"
+          ],
+          "properties": {
+            "start_timeout": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "run_timeout": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "cancel_grace": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "silence_announce": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "max_message_bytes": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "event_max_bytes": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "transcript_max_bytes": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "stderr_max_bytes": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "fail_fast_on_auth_retry": {
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      "if": {
+        "properties": {
+          "ending": {
+            "const": "never-started"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "exitCode": false,
+          "transcript": false,
+          "stderr": false,
+          "result": false
+        }
+      },
+      "else": {
+        "required": [
+          "exitCode",
+          "transcript",
+          "stderr"
+        ]
+      }
+    },
+    "recording": {
+      "description": "Where recording the run's events failed, and why. Absent: recording didn't fail.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "failedAt",
+        "error"
+      ],
+      "properties": {
+        "failedAt": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "error": {
+          "$ref": "../error.schema.json"
+        }
+      }
+    }
+  }
+}
