@@ -58,6 +58,7 @@ before anything plays.
 | `exit` | Exits at once with this code, without a `result`. |
 | `rawStdout` | Writes this line to standard output as it is, to break the contract on purpose. |
 | `replay` | Plays a recording (below). A relative path is found next to the script file, or in the workspace for an inline script. |
+| `checkCharacter` | `{"hash": "sha256:..."}` (the SHA-256 of the character's UTF-8) or `{"absent": true}`: checks the character `run/start` carried. On a mismatch, sends an error `result` naming both and plays no later step, so a test can prove the character reached the runner. |
 
 `onCancel` says what `run/cancel` does: `honour` (the default: answer and exit without a `result`, as Claude Code
 does), `honour-with-result` (answer, send a `result` with status `error`, exit) or `ignore` (answer and carry on,

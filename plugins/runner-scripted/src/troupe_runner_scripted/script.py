@@ -6,6 +6,7 @@ optionally with ``atMs``. Anything unknown is refused with an error naming it, n
 """
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any, Literal
@@ -108,6 +109,9 @@ def workspace_relative(path: str, where: str) -> PurePosixPath:
     return PurePosixPath(*parts)
 
 
+CHECK_CHARACTER = 'a checkCharacter step is {"hash": "sha256:..."} or {"absent": true}'
+
+
 def _step(data: Any, where: str) -> Step:  # noqa: ANN401
     if not isinstance(data, dict) or len(data) != 1:
         raise _invalid("a step is an object with exactly one key, the step's kind", where)
@@ -138,6 +142,19 @@ def _step(data: Any, where: str) -> Step:  # noqa: ANN401
             raise _invalid('a hang step is {"hang": true}', here)
     elif kind == "exit":
         _int(value, here, minimum=0)
+    elif kind == "checkCharacter":
+        if not isinstance(value, dict) or len(value) != 1:
+            raise _invalid(
+                'a checkCharacter step is {"hash": "sha256:..."} or {"absent": true}', here
+            )
+        if "hash" in value:
+            hash_ = _str(value["hash"], f"{here}.hash")
+            if not re.fullmatch(r"sha256:[0-9a-f]{64}", hash_):
+                raise _invalid("must be sha256: and 64 lowercase hex digits", f"{here}.hash")
+        elif value.get("absent") is not True:
+            raise _invalid(
+                'a checkCharacter step is {"hash": "sha256:..."} or {"absent": true}', here
+            )
     else:
         raise _invalid(f"unknown step {kind!r}", where)
     return Step(kind, value)

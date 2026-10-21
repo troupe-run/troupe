@@ -86,13 +86,16 @@ class _Driver:
             await self.send("initialize", p.InitializeParams(versions, host, []))
         )
 
-    async def start(self, options: Mapping[str, object], workspace: Path) -> p.Incoming:
+    async def start(
+        self, options: Mapping[str, object], workspace: Path, character: str | None = None
+    ) -> p.Incoming:
         params = p.RunStartParams(
-            str(uuid.uuid4()),
-            "conformance check",
-            str(workspace),
-            dict(options),
-            p.StartLimits(self.limits.event_max_bytes),
+            run_id=str(uuid.uuid4()),
+            direction="conformance check",
+            workspace=str(workspace),
+            options=dict(options),
+            limits=p.StartLimits(self.limits.event_max_bytes),
+            character=character,
         )
         return await self.answer(await self.send("run/start", params))
 
@@ -163,6 +166,13 @@ async def check_runner(
                 "refusing it"
             )
 
+    async def character(driver: _Driver) -> None:
+        # A run/start's character is the contract's own field: no runner may refuse it as unknown.
+        _started(await driver.initialize([p.PROTOCOL_VERSION]), "initialize")
+        _started(
+            await driver.start(options, workspace, "You are a conformance check."), "run/start"
+        )
+
     async def cancel(driver: _Driver) -> None:
         _started(await driver.initialize([p.PROTOCOL_VERSION]), "initialize")
         start = await driver.start(options, workspace)
@@ -197,6 +207,7 @@ async def check_runner(
         ("version refusal", version_refusal),
         ("second run/start refused", second_start),
         ("unknown option refused", unknown_option),
+        ("run/start with a character accepted", character),
         ("cancel acknowledged, then exit", cancel),
         ("exit on end of input", end_of_input),
     ]

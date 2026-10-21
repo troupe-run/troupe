@@ -2,7 +2,8 @@
 
 Usage: python fake_runner.py <mode>. Not collected by pytest. Every mode ignores run/start's
 options; ``ignore-options`` does nothing else unusual, for checks that a runner refuses an unknown
-option.
+option. ``refuse-character`` refuses a run/start that carries a character, as a runner that
+treats the contract's own field as unknown would.
 """
 
 import json
@@ -83,6 +84,20 @@ def main(mode: str) -> None:
                 answer_initialize(message)
         elif method == "run/start":
             RUN_ID = message["params"]["runId"]
+            if mode == "refuse-character" and "character" in message["params"]:
+                error = {
+                    "code": "runner.invalid-params",
+                    "problem": "unknown key character",
+                    "fix": "Leave it out.",
+                }
+                send(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": message["id"],
+                        "error": {"code": -32602, "message": "unknown key", "data": error},
+                    }
+                )
+                continue
             if mode == "wrong-run-id":
                 send(
                     {

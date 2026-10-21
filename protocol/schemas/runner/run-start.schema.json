@@ -5,19 +5,42 @@
   "description": "Starts the one run this runner process serves. It carries everything the runner may use.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["jsonrpc", "id", "method", "params"],
+  "required": [
+    "jsonrpc",
+    "id",
+    "method",
+    "params"
+  ],
   "properties": {
-    "jsonrpc": {"$ref": "jsonrpc.schema.json#/$defs/jsonrpc"},
-    "id": {"$ref": "jsonrpc.schema.json#/$defs/id"},
-    "method": {"const": "run/start"},
+    "jsonrpc": {
+      "$ref": "jsonrpc.schema.json#/$defs/jsonrpc"
+    },
+    "id": {
+      "$ref": "jsonrpc.schema.json#/$defs/id"
+    },
+    "method": {
+      "const": "run/start"
+    },
     "params": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["runId", "instructions", "workspace", "options", "limits"],
+      "required": [
+        "runId",
+        "direction",
+        "workspace",
+        "options",
+        "limits"
+      ],
       "properties": {
-        "runId": {"$ref": "jsonrpc.schema.json#/$defs/runId"},
-        "instructions": {
-          "description": "What the actor is asked to do.",
+        "runId": {
+          "$ref": "jsonrpc.schema.json#/$defs/runId"
+        },
+        "direction": {
+          "description": "What the actor is asked to do in this run: its direction.",
+          "type": "string"
+        },
+        "character": {
+          "description": "Who the actor is: its character, its standing prompt, kept apart from the direction. Absent: the actor has none.",
           "type": "string"
         },
         "workspace": {
@@ -32,7 +55,9 @@
         "limits": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["eventMaxBytes"],
+          "required": [
+            "eventMaxBytes"
+          ],
           "properties": {
             "eventMaxBytes": {
               "description": "The largest serialised run event troupe keeps inline. Summarise below it.",
@@ -56,8 +81,14 @@
       "title": "run/start result",
       "type": "object",
       "additionalProperties": false,
-      "required": ["runId"],
-      "properties": {"runId": {"$ref": "jsonrpc.schema.json#/$defs/runId"}}
+      "required": [
+        "runId"
+      ],
+      "properties": {
+        "runId": {
+          "$ref": "jsonrpc.schema.json#/$defs/runId"
+        }
+      }
     }
   }
 }

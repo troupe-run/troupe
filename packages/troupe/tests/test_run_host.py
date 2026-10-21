@@ -65,6 +65,8 @@ def _run(
     cancel_after: float | None = None,
     options: dict[str, Any] | None = None,
     valid_options: bool = True,
+    character: str | None = None,
+    direction: str = "test",
 ) -> Ran:
     """Run the scripted runner (or ``argv``) and check every message troupe sent against the
     contract, with the scripted runner's schemas bound. ``valid_options=False`` marks options the
@@ -75,9 +77,10 @@ def _run(
     )
     request = RunRequest(
         str(uuid.uuid4()),
-        "test",
+        direction,
         tmp_path,
         options if options is not None else {"script": script or {"steps": []}},
+        character=character,
     )
     ran: dict[str, Any] = {"events": [], "notices": [], "sent": [], "received": [], "times": []}
 
@@ -607,3 +610,31 @@ def test_every_message_the_host_sends_in_a_full_run_validates(tmp_path: Path) ->
     assert len(ran.sent) == 3
     for message in ran.received:
         validate(message, "message.schema.json#/$defs/fromRunner")
+
+
+# Requirement: Run start carries everything the runner may use (spec: runner-protocol)
+
+
+def _run_start(ran: Ran) -> dict[str, Any]:
+    [start] = [m for m in ran.sent if m.get("method") == "run/start"]
+    params: dict[str, Any] = start["params"]
+    return params
+
+
+def test_run_start_carries_the_direction_and_the_character_each_in_its_own_field(
+    tmp_path: Path,
+) -> None:
+    ran = _run(
+        tmp_path,
+        {"steps": [{"event": INIT}, {"event": OK}]},
+        character="You test.",
+        direction="test the hello file",
+    )
+    params = _run_start(ran)
+    assert params["direction"] == "test the hello file"
+    assert params["character"] == "You test."
+
+
+def test_an_actor_with_no_character_sends_none_rather_than_a_null(tmp_path: Path) -> None:
+    ran = _run(tmp_path, {"steps": [{"event": INIT}, {"event": OK}]})
+    assert "character" not in _run_start(ran)
