@@ -1,5 +1,6 @@
 """Tests for the scripted runner, driven over pipes as troupe drives it (spec: scripted-runner)."""
 
+import hashlib
 import io
 import json
 from collections.abc import Iterator
@@ -63,7 +64,7 @@ def test_a_second_run_start_is_refused_and_the_first_run_carries_on(session: Ses
         "run/start",
         {
             "runId": session.run_id,
-            "instructions": "",
+            "direction": "",
             "workspace": str(session.workspace),
             "options": {"script": {"steps": []}},
             "limits": {"eventMaxBytes": 1},
@@ -406,7 +407,7 @@ def _played_with_everything_queued(
             "method": "run/start",
             "params": {
                 "runId": "0b9f4c1e-5f7c-4a39-9a43-3d2a3f1d0c11",
-                "instructions": "test",
+                "direction": "test",
                 "workspace": str(workspace),
                 "options": {"script": script},
                 "limits": {"eventMaxBytes": 65536},
@@ -453,3 +454,54 @@ def test_a_cancel_waiting_during_instant_steps_is_answered_at_the_hang_after_the
     played = [m.get("method") for m in sent if "method" in m]
     assert played == ["run/event", "run/transcript", "run/transcript"]
     assert [m for m in sent if m.get("id") == 3] == [{"jsonrpc": "2.0", "id": 3, "result": {}}]
+
+
+# Requirement: A script can check the character it received
+
+CHARACTER = "You are the tester."
+CHARACTER_HASH = "sha256:" + hashlib.sha256(CHARACTER.encode()).hexdigest()
+OTHER_HASH = "sha256:" + "0" * 64
+
+
+def _check_then(step: dict[str, Any]) -> dict[str, Any]:
+    return {"steps": [{"event": INIT}, {"checkCharacter": step}, {"event": OK}]}
+
+
+def test_a_matching_character_plays_the_next_step(session: Session) -> None:
+    session.play(_check_then({"hash": CHARACTER_HASH}), character=CHARACTER)
+    events = _events(session.notifications(2))
+    assert [e["type"] for e in events] == ["init", "result"]
+    assert events[-1]["status"] == "ok"
+    session.validate_all()
+
+
+def test_no_character_matches_a_check_that_there_is_none(session: Session) -> None:
+    session.play(_check_then({"absent": True}))
+    events = _events(session.notifications(2))
+    assert events[-1]["status"] == "ok"
+
+
+@pytest.mark.parametrize(
+    ("step", "character", "got"),
+    [
+        pytest.param({"hash": OTHER_HASH}, CHARACTER, CHARACTER_HASH, id="a different character"),
+        pytest.param({"hash": CHARACTER_HASH}, None, "none", id="no character"),
+        pytest.param({"absent": True}, CHARACTER, CHARACTER_HASH, id="a character when none"),
+    ],
+)
+def test_a_character_that_doesnt_match_ends_the_run_with_an_error_naming_both(
+    session: Session, step: dict[str, Any], character: str | None, got: str
+) -> None:
+    session.play(_check_then(step), character=character)
+    init, result = _events(session.notifications(2))
+    assert init["type"] == "init"
+    assert result["status"] == "error"
+    assert got in result["message"]
+    assert (step.get("hash") or "none") in result["message"]
+    assert session.wait() == 0  # and the ok result after it was never sent
+    session.validate_all()
+
+
+def test_a_malformed_character_check_is_refused_as_an_invalid_script(session: Session) -> None:
+    answer = session.play({"steps": [{"checkCharacter": {"hash": "md5:abc"}}]}, valid=False)
+    assert answer["error"]["data"]["code"] == "scripted.invalid-script"

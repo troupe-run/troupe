@@ -67,7 +67,7 @@ CASES: list[tuple[type[p.Message], str, st.SearchStrategy[Any]]] = [
         st.fixed_dictionaries(
             {
                 "runId": RUN_IDS,
-                "instructions": TEXT,
+                "direction": TEXT,
                 "workspace": NAME,
                 "options": st.fixed_dictionaries(
                     {"script": st.fixed_dictionaries({"steps": st.just([])})},

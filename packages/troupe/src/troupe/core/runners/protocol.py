@@ -79,10 +79,11 @@ class StartLimits(Message):
 @dataclass(frozen=True)
 class RunStartParams(Message):
     run_id: str = json_field("runId", pattern=RUN_ID_PATTERN)
-    instructions: str = json_field("instructions")
+    direction: str = json_field("direction")
     workspace: str = json_field("workspace", min_length=1)
     options: dict[str, object] = json_field("options")
     limits: StartLimits = json_field("limits")
+    character: str | None = json_field("character", default=None)
 
 
 @dataclass(frozen=True)

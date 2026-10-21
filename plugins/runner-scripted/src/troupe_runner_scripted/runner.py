@@ -6,6 +6,7 @@ thread answers the handshake, plays the script and writes every message as one l
 """
 
 import contextlib
+import hashlib
 import json
 import os
 import queue
@@ -53,6 +54,7 @@ class Runner:
         self._initialized = False
         self._run_id: str | None = None
         self._options: Options | None = None
+        self._character: str | None = None
         self._workspace: Path | None = None
         self._next_seq = 0
         self._cancel_ignored = False
@@ -213,6 +215,8 @@ class Runner:
             return
         self._run_id = params["runId"]
         self._workspace = workspace
+        character = params.get("character")
+        self._character = character if isinstance(character, str) else None
         self._result(id_, {"runId": self._run_id})
 
     def _cancel(self, id_: object) -> None:
@@ -280,6 +284,27 @@ class Runner:
             raise _Exit(value)
         elif kind == "replay":
             self._replay(value)
+        elif kind == "checkCharacter":
+            self._check_character(value)
+
+    def _check_character(self, value: dict[str, Any]) -> None:
+        """End the run with an error result unless run/start's character is the one expected."""
+        got = (
+            "none"
+            if self._character is None
+            else "sha256:" + hashlib.sha256(self._character.encode("utf-8")).hexdigest()
+        )
+        wanted = value.get("hash", "none")
+        if got != wanted:
+            self._event(
+                {
+                    "type": "result",
+                    "status": "error",
+                    "message": f"the character run/start carried is {got}; the script expected "
+                    f"{wanted}",
+                }
+            )
+            raise _Exit(0)
 
     def _started(self) -> tuple[Options, Path]:
         if self._options is None or self._workspace is None:

@@ -224,11 +224,19 @@
 
 ## 10. Perform from config, character and direction (design D14, D16)
 
-- [ ] 10.1 Rename `instructions` to `direction` and add an optional `character` in the runner contract's `run/start`
+- [x] 10.1 Rename `instructions` to `direction` and add an optional `character` in the runner contract's `run/start`
   schema, the runner types and the run host. Add a conformance case that a runner receives both unchanged and never a
   null character. Verify the runner-protocol schema tests and the conformance suite pass against the scripted runner
-- [ ] 10.2 Add the scripted runner's character-check step to its options schema and runner. Verify with its tests for
+  - What a runner receives can't be seen from outside it, so the work is split. The conformance suite gains "run/start
+    with a character accepted" (a runner must not refuse the contract's own field as unknown), shown able to fail
+    with a fake runner that refuses it. The run host's tests check what troupe sends: the direction and the character
+    each in its own field, unchanged, and no `character` key at all for an actor that has none. That a character
+    arrives unchanged end to end is 10.3's test, through the scripted runner's `checkCharacter` step.
+- [x] 10.2 Add the scripted runner's character-check step to its options schema and runner. Verify with its tests for
   a matching hash, a different one and a missing character, and that every shipped script still validates
+  - `{"checkCharacter": {"hash": "sha256:..."}}` or `{"checkCharacter": {"absent": true}}`, in the options schema,
+    the parser, the runner and the plugin's README. Tests: a match plays on; a different character, none, or one
+    where none was expected each end the run with an error result naming both, and no later step plays.
 - [ ] 10.3 Change `perform`'s request to `{actor, direction?, rehearse?}`, take the runner, options, effect check and
   character from the merged config, record `config` (the sorted head ids) and the direction's artifact in
   `Run.Started` (dropping `instructions` and `options`), and refuse an unknown actor with `config.unknown-actor`.

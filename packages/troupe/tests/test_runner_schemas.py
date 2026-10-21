@@ -41,7 +41,7 @@ def _notification(method: str, params: dict[str, Any]) -> dict[str, Any]:
 
 START: dict[str, Any] = {
     "runId": RUN_ID,
-    "instructions": "write hello.txt",
+    "direction": "write hello.txt",
     "workspace": "/workspace",
     "options": {"script": {"steps": [{"wait": {"ms": 1}}]}},
     "limits": {"eventMaxBytes": 65536},

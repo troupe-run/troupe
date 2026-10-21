@@ -226,6 +226,47 @@
               "minimum": 0
             }
           }
+        },
+        {
+          "description": "Check the character run/start carried: its SHA-256 (of its UTF-8), or that it carried none. On a mismatch the run ends with an error result naming both, and no later step is played.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "checkCharacter"
+          ],
+          "properties": {
+            "checkCharacter": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "hash"
+                  ],
+                  "properties": {
+                    "hash": {
+                      "description": "sha256: and the lowercase hex SHA-256 of the character's UTF-8.",
+                      "type": "string",
+                      "pattern": "^sha256:[0-9a-f]{64}$"
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "absent"
+                  ],
+                  "properties": {
+                    "absent": {
+                      "description": "run/start carried no character.",
+                      "const": true
+                    }
+                  }
+                }
+              ]
+            }
+          }
         }
       ]
     },

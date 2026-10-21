@@ -68,9 +68,11 @@ class RunnerCommand:
 @dataclass(frozen=True)
 class RunRequest:
     run_id: str
-    instructions: str
+    direction: str
     workspace: Path
     options: Mapping[str, object] = field(default_factory=dict)
+    character: str | None = None
+    """Who the actor is, sent apart from the direction; None when it has no character."""
 
 
 class _Violation(Exception):  # noqa: N818 - it carries the protocol error, not a Python failure
@@ -543,11 +545,12 @@ async def _start(run: _Run) -> TroupeError | None:
     id_ = await run.send(
         "run/start",
         p.RunStartParams(
-            run.request.run_id,
-            run.request.instructions,
-            str(run.request.workspace),
-            dict(run.request.options),
-            p.StartLimits(run.limits.event_max_bytes),
+            run_id=run.request.run_id,
+            direction=run.request.direction,
+            workspace=str(run.request.workspace),
+            options=dict(run.request.options),
+            limits=p.StartLimits(run.limits.event_max_bytes),
+            character=run.request.character,
         ),
     )
     answer = await _await_response(run, id_)

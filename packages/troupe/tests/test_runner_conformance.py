@@ -53,7 +53,8 @@ def test_the_scripted_runner_passes_every_conformance_check(tmp_path: Path) -> N
     )
     failed = {name: r.problem for name, r in results.items() if not r.passed}
     assert failed == {}
-    assert len(results) == 7
+    assert len(results) == 8
+    assert "run/start with a character accepted" in results
 
 
 def test_a_runner_whose_run_has_no_init_fails_the_whole_run_check(tmp_path: Path) -> None:
@@ -100,3 +101,11 @@ def test_the_runner_named_in_the_environment_passes_every_conformance_check(
     options = json.loads(os.environ.get("TROUPE_CONFORMANCE_OPTIONS", "{}"))
     results = _check(argv, options, tmp_path)
     assert {name: r.problem for name, r in results.items() if not r.passed} == {}
+
+
+def test_a_runner_that_refuses_a_character_fails_that_check(tmp_path: Path) -> None:
+    results = _check([sys.executable, str(FAKE), "refuse-character"], {}, tmp_path, EXPIRING)
+    check = results["run/start with a character accepted"]
+    assert not check.passed
+    assert check.problem is not None
+    assert "refused run/start" in check.problem

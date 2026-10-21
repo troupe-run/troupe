@@ -149,25 +149,30 @@ class Session:
             {"protocolVersions": [0], "host": {"name": "test", "version": "1"}, "capabilities": []},
         )
 
-    def start(self, options: dict[str, Any], *, valid: bool = True) -> dict[str, Any]:
-        """Initialize, then send run/start with ``options``. ``valid=False`` marks options the
-        runner must refuse, which the runner's options schema must refuse as well."""
+    def start(
+        self, options: dict[str, Any], *, valid: bool = True, character: str | None = None
+    ) -> dict[str, Any]:
+        """Initialize, then send run/start with ``options`` (and ``character``, when given).
+        ``valid=False`` marks options the runner must refuse, which the runner's options schema
+        must refuse as well."""
         self.initialize()
         if not valid:
             self.refused.add(self._next_id)
-        return self.request(
-            "run/start",
-            {
-                "runId": self.run_id,
-                "instructions": "test",
-                "workspace": str(self.workspace),
-                "options": options,
-                "limits": {"eventMaxBytes": 65536},
-            },
-        )
+        params: dict[str, Any] = {
+            "runId": self.run_id,
+            "direction": "test",
+            "workspace": str(self.workspace),
+            "options": options,
+            "limits": {"eventMaxBytes": 65536},
+        }
+        if character is not None:
+            params["character"] = character
+        return self.request("run/start", params)
 
-    def play(self, script: dict[str, Any], *, valid: bool = True) -> dict[str, Any]:
-        return self.start({"script": script}, valid=valid)
+    def play(
+        self, script: dict[str, Any], *, valid: bool = True, character: str | None = None
+    ) -> dict[str, Any]:
+        return self.start({"script": script}, valid=valid, character=character)
 
     def notifications(self, count: int) -> list[dict[str, Any]]:
         return [self.message() for _ in range(count)]
