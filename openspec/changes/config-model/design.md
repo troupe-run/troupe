@@ -127,8 +127,14 @@ that isn't with `events.missing-parent`, as `load` would. With one head, this is
 A group removed on one line and a value in it changed on another is a conflict: their net changes disagree about
 the same path.
 
-The exact formulation of step 2 for criss-cross merges (two branches merged into each other more than once) is
-settled by tests, not here. A property test generates histories with branches and merges, delivers their events in
+As built (`troupe.core.config.merge`): each path an entry names is a **point**; the writes that cover it are the
+entries at it or at a group above it; its **latest** writes are those no later covering write follows. A latest
+write's **line** is the covering writes behind it that the other latest writes don't descend from, and a line whose
+writes are all at the point and end where they began drops out. Config is every entry **replayed** in the history's
+order, leaving out lines that dropped out and both sides of a conflict. A settling event is read as a **join** (its
+parents), never for its state. A validation conflict (step 3) is reported only for an actor with no conflict
+already, since resolving that changes its values. Criss-cross merges (two branches merged into each other more than
+once) need no special case: the rule is about ancestry, not about a merge base. A property test generates histories with branches and merges, delivers their events in
 every order, and checks that each clone works out the same config and the same conflicts. A conflict must be reported
 exactly when two lines' net changes to a value disagree.
 

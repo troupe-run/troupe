@@ -151,7 +151,8 @@
             "troupe.core.runs.aggregate:Run.Started",
             "troupe.core.runs.aggregate:Run.Reported",
             "troupe.core.runs.aggregate:Run.Ended",
-            "troupe.core.config.aggregate:Config.Changed"
+            "troupe.core.config.aggregate:Config.Changed",
+            "troupe.core.config.aggregate:Config.Settled"
           ]
         }
       },
@@ -219,6 +220,22 @@
               }
             }
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "topic": {
+                "const": "troupe.core.config.aggregate:Config.Settled"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "state": {
+                "$ref": "events/config-settled.schema.json"
+              }
+            }
+          }
         }
       ]
     },
@@ -243,7 +260,8 @@
               "troupe.core.runs.aggregate:Run.Started",
               "troupe.core.runs.aggregate:Run.Reported",
               "troupe.core.runs.aggregate:Run.Ended",
-              "troupe.core.config.aggregate:Config.Changed"
+              "troupe.core.config.aggregate:Config.Changed",
+              "troupe.core.config.aggregate:Config.Settled"
             ]
           }
         }

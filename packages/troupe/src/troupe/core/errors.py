@@ -81,6 +81,7 @@ CODES: dict[str, ExitCode] = {
     # Config (config-model design). contributing/config.md lists them.
     "schemas.plugin-missing": ExitCode.FAILURE,
     "config.invalid": ExitCode.FAILURE,
+    "config.conflict": ExitCode.FAILURE,
 }
 
 

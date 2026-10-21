@@ -30,6 +30,17 @@ The payload of one config change (topic troupe.core.config.aggregate:Config.Chan
 | `changes` | list of any | Yes | Each value the command changed, at most once each. A change that would change nothing isn't recorded. |
 | `files` | list of object (File written) | Yes | Each config file the change wrote or removed, so troupe can tell its own files from a person's. |
 
+### Config.Settled
+
+The payload of config's settling event (topic troupe.core.config.aggregate:Config.Settled), which ends a fork in the config stream: its parents are every head, and its state is the config the merge worked out from them. It's recorded with the first change after a merge, in the same batch. Field names are as recorded.
+
+| Field | Holds | Always there | What it is |
+|---|---|---|---|
+| `lineage` | object (Lineage) | Yes | Where an event came from: who made it, through what, when, why, as part of which command and in reaction to what, with whose approval, and in what version-control state. Every event troupe records carries it. It is left out of the event's content hash, so two clones that make the same change agree on the event's id. |
+| `timestamp` | object (Library timestamp) | Yes | When the event-sourcing library created the event, as its transcoder writes a datetime. |
+| `topic` | `"troupe.core.config.aggregate:Config"` | Yes | The aggregate whose stream the event settles: config's. |
+| `state` | object | Yes | The settled state: the config the merge worked out from every head. |
+
 ### Run.Ended
 
 The payload of a run's last event (topic troupe.core.runs.aggregate:Run.Ended): the outcome the run host derived, and whether recording failed part-way.

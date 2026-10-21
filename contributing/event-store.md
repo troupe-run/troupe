@@ -59,6 +59,7 @@ A segment's first line is its header; every later line is one event. Lines are s
   | `troupe.core.runs.aggregate:Run.Reported` | [`events/run-reported.schema.json`](../protocol/schemas/events/run-reported.schema.json) |
   | `troupe.core.runs.aggregate:Run.Ended` | [`events/run-ended.schema.json`](../protocol/schemas/events/run-ended.schema.json) |
   | `troupe.core.config.aggregate:Config.Changed` | [`events/config-changed.schema.json`](../protocol/schemas/events/config-changed.schema.json) |
+  | `troupe.core.config.aggregate:Config.Settled` | [`events/config-settled.schema.json`](../protocol/schemas/events/config-settled.schema.json) |
 - **Batches are all or nothing.** A batch is written with one fsynced append, and each line names its batch. A
   write that was interrupted leaves an incomplete batch at the end of its segment; reads leave it out and report
   `events.incomplete-batch`. It never took effect.

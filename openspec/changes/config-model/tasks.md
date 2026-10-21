@@ -106,23 +106,41 @@
 
 ## 6. Merging and conflicts (design D3, D4)
 
-- [ ] 6.1 Add `troupe.core.config.merge`: config worked out from the stream's whole history, each line's net change
+- [x] 6.1 Add `troupe.core.config.merge`: config worked out from the stream's whole history, each line's net change
   per path since the split, agreement, a change and a change back, and group removal against a change inside the
   group. Refuse an event whose parent isn't here with `events.missing-parent`, naming its file, as `load` does. Verify with tests for each scenario under "A merge combines each line's net change" and "Differing net
   changes…", with branches made in a real git repository (the existing test helpers)
-- [ ] 6.2 Add conflicts from validation (a merged actor that fails its schema or its runner's options), conflicts
+- [x] 6.2 Add conflicts from validation (a merged actor that fails its schema or its runner's options), conflicts
   reported as whole changes, the block on every config use except `config get`, and the resolution rule (a change
   must set or unset every conflicting path). Verify with tests for the window example, the runner-and-options
   example, `perform` refused by a conflict on another actor, and a change that resolves nothing being refused
-- [ ] 6.3 Record settling with the next write: one batch, a settling event naming every head with the merged config,
+- [x] 6.3 Record settling with the next write: one batch, a settling event naming every head with the merged config,
   then the change. Write the settling event's payload schema (the merged config) and register its topic in the
   event-record schema's topic table. Reads record nothing. Verify with tests for a read after a merge (nothing recorded) and the first
   write after it (one head after)
-- [ ] 6.4 Add the property test (D3): generated histories with branches, merges (criss-cross included) and changes and
+- [x] 6.4 Add the property test (D3): generated histories with branches, merges (criss-cross included) and changes and
   changes back, delivered in every order to separate clones, check that every clone works out the same config and
   conflicts, and that a conflict is reported exactly when two lines' net changes to a value differ. Use the project's
   hypothesis profiles. Verify it passes, and that it fails when the net-change rule is temporarily replaced by "latest
   writes differ" (revert before commit)
+  - Group 6 as built: `troupe.core.config.merge` (points, latest covering writes, each line's net change, replay
+    leaving out lines that dropped out and both sides of a conflict; settling events read as joins), and
+    `troupe.core.config.stream` (`read`, `refuse_conflicts`, and `record`, which checks, refuses an unresolved
+    conflict, and settles a fork in the change's batch). `config.conflict` is catalogued, and the settling event has
+    its own class (`Config.Settled`), payload schema (`events/config-settled.schema.json`) and topic in the
+    event-record table, so the store's tests can still settle a test aggregate under the generic `Settled` topic.
+  - `test_config_merge.py` (13 tests, on real git branches): the scenarios in 6.1 to 6.3, both merge directions,
+    the window conflicting whole, a group removed against a change inside it, options that stop suiting a second
+    runner (a fake `modelled` runner with its own options schema), the block naming the conflict, a read recording
+    nothing, a resolution recording who, a change that resolves nothing refused with nothing recorded, and the
+    first write after a merge settling in one batch with every line valid by its schema.
+  - `test_config_merge_properties.py`: generated histories with forks, changes back, settles and criss-cross
+    merges, delivered in other valid orders, give the same config, conflicts and heads; and an oracle that replays
+    each branch alone agrees on exactly which paths conflict and on every merged value. 150 and 200 examples in the
+    suite; a one-off run of 5,000 each passed (2026-10-22). With the net-change rule replaced by "latest writes
+    differ", the oracle test failed at once; restored.
+  - A validation conflict is reported only for an actor with no conflict already, since resolving that changes its
+    values (design D3).
 
 ## 7. Files: the registry, flush and the check before replacing (design D7, D8, D9)
 

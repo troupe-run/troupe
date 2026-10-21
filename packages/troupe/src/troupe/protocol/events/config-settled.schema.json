@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/events/config-settled.schema.json",
+  "title": "Config.Settled",
+  "description": "The payload of config's settling event (topic troupe.core.config.aggregate:Config.Settled), which ends a fork in the config stream: its parents are every head, and its state is the config the merge worked out from them. It's recorded with the first change after a merge, in the same batch. Field names are as recorded.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "lineage",
+    "timestamp",
+    "topic",
+    "state"
+  ],
+  "properties": {
+    "lineage": {
+      "$ref": "../lineage.schema.json"
+    },
+    "timestamp": {
+      "$ref": "../event-record.schema.json#/$defs/libraryTimestamp"
+    },
+    "topic": {
+      "description": "The aggregate whose stream the event settles: config's.",
+      "const": "troupe.core.config.aggregate:Config"
+    },
+    "state": {
+      "description": "The settled state: the config the merge worked out from every head.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "config"
+      ],
+      "properties": {
+        "config": {
+          "description": "The merged config, as groups of values.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "config-changed.schema.json#/$defs/json"
+          }
+        }
+      }
+    }
+  }
+}

@@ -22,6 +22,8 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 
 from eventsourcing.domain import Aggregate
 
+from troupe.core.events.settling import Settled
+
 STREAM: UUID = uuid5(NAMESPACE_URL, "https://troupe.run/streams/troupe.config")
 """The config stream's id, the same in every theatre."""
 
@@ -36,10 +38,16 @@ class Config(Aggregate):
         changes: list[dict[str, Any]]
         files: list[dict[str, Any]]
 
+    class Settled(Settled):
+        """Ends a fork in the config stream: its parents are every head, and its state is the
+        merged config. Its own class, so its topic and its payload's schema are config's."""
+
 
 CHANGED = "troupe.core.config.aggregate:Config.Changed"
-TOPICS = (CHANGED,)
-"""Every topic config records."""
+SETTLED = "troupe.core.config.aggregate:Config.Settled"
+TOPICS = (CHANGED, SETTLED)
+"""Every topic config records: its changes, and the settling event its first write after a merge
+records (config-model design D4)."""
 
 
 def changed(
