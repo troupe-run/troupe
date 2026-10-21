@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/client/config-set-update.schema.json",
+  "title": "config-set: update",
+  "description": "A notice while the change is made, such as a wait for another command writing config.",
+  "$ref": "run.schema.json#/$defs/noticeUpdate"
+}

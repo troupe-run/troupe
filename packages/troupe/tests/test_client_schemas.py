@@ -80,7 +80,7 @@ def changed(data: dict[str, Any], **changes: object) -> dict[str, Any]:
 def test_each_method_has_exactly_its_message_schemas() -> None:
     files = {path.name for path in CLIENT_SCHEMAS.glob("*.schema.json")}
     expected = {name for parts in MESSAGES.values() for name in parts.values()}
-    assert files == expected | {"run.schema.json"}
+    assert files == expected | {"run.schema.json", "config.schema.json"}
 
 
 ACCEPTED = [

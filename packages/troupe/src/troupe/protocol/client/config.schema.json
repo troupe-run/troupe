@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/client/config.schema.json",
+  "title": "Config: what the config methods share",
+  "description": "The definitions config-set, config-get and flush share: a value's path, a value, a change to make, a file written, and a conflict.",
+  "$defs": {
+    "path": {
+      "title": "Path",
+      "description": "A value's or a group's logical path, as keys from the top of config, such as [\"actors\", \"tester\", \"runner\"].",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "value": {
+      "title": "Value",
+      "description": "A value, or a group of values as an object: any JSON but null.",
+      "$ref": "../events/config-changed.schema.json#/$defs/json"
+    },
+    "operation": {
+      "title": "Operation",
+      "description": "Set the value or group at a path, or unset it. Exactly one of value and unset.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/path"
+        },
+        "value": {
+          "description": "What to set: a value, or an object to set a whole group. Absent: the path is unset.",
+          "$ref": "#/$defs/value"
+        },
+        "unset": {
+          "description": "Remove the value or group at the path. Absent: a value is given.",
+          "const": true
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "value"
+          ]
+        },
+        {
+          "required": [
+            "unset"
+          ]
+        }
+      ]
+    },
+    "file": {
+      "title": "File",
+      "description": "What a command did, or would do, to one config file.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "action",
+        "reason"
+      ],
+      "properties": {
+        "path": {
+          "description": "The file, relative to the theatre's root.",
+          "$ref": "run.schema.json#/$defs/theatrePath"
+        },
+        "action": {
+          "description": "write, remove, finish (a staged write troupe recorded and didn't finish) or discard (a staged write no change recorded).",
+          "enum": [
+            "write",
+            "remove",
+            "finish",
+            "discard"
+          ]
+        },
+        "reason": {
+          "description": "Why, in words.",
+          "type": "string",
+          "minLength": 1
+        },
+        "kept": {
+          "description": "For a file forced past: the artifact its bytes were kept under. Absent: it wasn't forced past.",
+          "$ref": "run.schema.json#/$defs/hash"
+        }
+      }
+    },
+    "change": {
+      "title": "Conflicting change",
+      "description": "One recorded change in a conflict, whole.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "change",
+        "actor",
+        "at",
+        "entries"
+      ],
+      "properties": {
+        "change": {
+          "description": "Its change id.",
+          "type": "string",
+          "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "actor": {
+          "$ref": "../lineage.schema.json#/$defs/actor"
+        },
+        "at": {
+          "$ref": "run.schema.json#/$defs/timestamp"
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "../events/config-changed.schema.json#/$defs/entry"
+          }
+        }
+      }
+    },
+    "conflict": {
+      "title": "Conflict",
+      "description": "Changes from lines of history that can't both hold.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "paths",
+        "changes"
+      ],
+      "properties": {
+        "paths": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/path"
+          }
+        },
+        "rule": {
+          "description": "The rule they break together. Absent: they set the same values differently.",
+          "type": "string",
+          "minLength": 1
+        },
+        "changes": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "$ref": "#/$defs/change"
+          }
+        }
+      }
+    }
+  }
+}

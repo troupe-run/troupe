@@ -72,11 +72,14 @@ def test_a_valid_request_reaches_its_handler_parsed_and_updates_and_result_retur
     assert result == {"runs": [], "notices": []}
 
 
-def test_the_core_offers_exactly_perform_status_and_logs_with_their_request_types() -> None:
+def test_the_core_offers_exactly_its_methods_with_their_request_types() -> None:
     assert {name: method.request for name, method in handlers().items()} == {
         "perform": m.PerformRequest,
         "status": m.StatusRequest,
         "logs": m.LogsRequest,
+        "config-set": m.ConfigSetRequest,
+        "config-get": m.ConfigGetRequest,
+        "flush": m.FlushRequest,
     }
 
 

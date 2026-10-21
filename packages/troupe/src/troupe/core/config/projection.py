@@ -98,12 +98,22 @@ def _yaml() -> YAML:
     return yaml
 
 
+def _sorted(value: object) -> object:
+    """``value`` with every group's keys sorted, so a file depends only on what config holds, never
+    on the order its values were set in (replaying history sets them in another order)."""
+    if isinstance(value, Mapping):
+        return {key: _sorted(value[key]) for key in sorted(value)}
+    if isinstance(value, list):
+        return [_sorted(item) for item in value]
+    return value
+
+
 def render_actor(actor: Mapping[str, Any]) -> dict[str, bytes]:
     """An actor's files, by their names (``<name>.yaml``, and ``<name>.md`` for a character)."""
     fields: dict[str, Any] = {"$schema": ACTOR_SCHEMA_URL}
     for key in FIELD_ORDER[1:]:
         if key in actor:
-            fields[key] = actor[key]
+            fields[key] = _sorted(actor[key])
     text = io.StringIO()
     text.write(f"# yaml-language-server: $schema={ACTOR_SCHEMA_URL}\n")
     _yaml().dump(fields, text)

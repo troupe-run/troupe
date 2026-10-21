@@ -5,26 +5,21 @@ status: written
 prerelease: true
 ---
 
-troupe's config isn't built yet: it arrives with [#60](https://github.com/troupe-run/troupe/issues/60). Until it
-does, `troupe perform` takes what config will hold on its command line (see the [CLI](cli.md)). This page says what
-has been decided about the schema, and lists the schema itself once it exists.
+A theatre's config is a set of files under `.troupe/`, one kind of file per kind of config, and each kind has a
+JSON Schema. This page lists them.
 
-## What's decided
-
-- **JSON Schema is the source.** Every file troupe reads has a JSON Schema in troupe's `protocol/`, and troupe's
-  own types are generated from it, so the schema and the code can't disagree.
-- **One schema per kind of file.** Config is laid out by convention: the filename is the identity, so
-  `actors/tester.yaml` (with `actors/tester.md` for its prompt) is the actor `tester`. Each kind of file has its
-  own schema, matched by its path.
-- **Every config file names its schema** with `$schema:`, so your editor can complete and check it as you type.
-  troupe keeps a copy of its schemas in `.troupe/local/schemas/`, outside git, and files point there by a relative
-  path that works on every clone.
+- **JSON Schema is the source.** Every file troupe reads or writes has a JSON Schema in troupe's `protocol/`, and
+  troupe's own types are generated from it, so the schema and the code can't disagree.
+- **One schema per kind of file.** The filename is the identity, so `actors/tester.yaml` (with `actors/tester.md`
+  for its character) is the actor `tester`.
+- **Every config file names its schema twice:** with a `# yaml-language-server: $schema=` comment and a `$schema:`
+  key, both naming it at troupe.run by major version, such as
+  `https://troupe.run/protocol/0/config/actor.schema.json`, so your editor can complete and check the file as you
+  type ([website#30](https://github.com/troupe-run/website/issues/30) serves them).
 - **Schemas are strict.** Every object is closed and every value is typed, so a misspelt key or a value of the
   wrong kind is an error that names it, never ignored.
-- **The first kind is the actor:** its runner, the runner's options, and the effect check.
-
-How a change addresses one value, how schemas are published at a URL, and how they're versioned aren't decided
-yet: they're part of [#60](https://github.com/troupe-run/troupe/issues/60)'s design.
+- **An actor's options are its runner's.** Each runner publishes a schema for its options, and `troupe config set`
+  checks an actor's options against it.
 
 ## The schema
 

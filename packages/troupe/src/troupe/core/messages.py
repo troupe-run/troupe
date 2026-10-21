@@ -65,6 +65,11 @@ def _decode(value: object, hint: object, where: str, meta: Mapping[str, Any]) ->
             allowed = ", ".join(repr(arg) for arg in get_args(hint))
             raise fail(where, f"must be one of {allowed}, not {value!r}")
         return value
+    if hint is object:
+        # Any JSON value but null, nested nulls included (spec: protocol, "Absent fields are left
+        # out, never sent as null"): config's values, as a request carries them.
+        _no_null(value, where)
+        return value
     if hint is str:
         if not isinstance(value, str):
             raise fail(where, f"must be a string, not {type(value).__name__}")
@@ -112,6 +117,17 @@ def _decode(value: object, hint: object, where: str, meta: Mapping[str, Any]) ->
     if isinstance(hint, type) and issubclass(hint, Message):
         return hint._decode(value, where)
     raise TypeError(f"no decoder for {hint!r}")  # a bug in this module, not in the message
+
+
+def _no_null(value: object, where: str) -> None:
+    if value is None:
+        raise fail(where, "must not be null: leave out a field with nothing to say")
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            _no_null(item, f"{where}[{index}]")
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            _no_null(item, f"{where}.{key}")
 
 
 def decode_one_of(choices: Sequence[object], value: object, where: str) -> "Message":

@@ -92,6 +92,58 @@ troupe logs <run> [--follow] [--json]
 | `--follow` | No | Wait for new events until the run ends |
 | `--json` | No | Print updates and the result as JSON |
 
+### `troupe config set`
+
+Set config values, as one change.
+
+```text
+troupe config set <path=value> [--reason <reason>] [--json]
+```
+
+| Argument | Required | What it is |
+|---|---|---|
+| `<path=value>` | Yes | A value to set, such as actors.tester.runner=scripted; path=@file reads it from a file |
+| `--reason <reason>` | No | Why, recorded with the change |
+| `--json` | No | Read every value as JSON, whatever its schema says |
+
+### `troupe config unset`
+
+Remove config values or groups, as one change.
+
+```text
+troupe config unset <path> [--reason <reason>]
+```
+
+| Argument | Required | What it is |
+|---|---|---|
+| `<path>` | Yes | A value or a group to remove, such as actors.tester |
+| `--reason <reason>` | No | Why, recorded with the change |
+
+### `troupe config get`
+
+Show config, or the value or group at a path.
+
+```text
+troupe config get [<path>] [--json]
+```
+
+| Argument | Required | What it is |
+|---|---|---|
+| `<path>` | No | A value or group, such as actors.tester |
+| `--json` | No | Print the result as JSON |
+
+### `troupe flush`
+
+Make the config files exactly what config says.
+
+```text
+troupe flush [--force]
+```
+
+| Argument | Required | What it is |
+|---|---|---|
+| `--force` | No | Replace files troupe didn't write too, keeping a copy of each |
+
 ### Global flags
 
 | Flag | What it does |

@@ -255,13 +255,13 @@ endings it was given. The file's hash is the SHA-256 of the bytes written.
 
 | CLI | Method | What it does |
 |---|---|---|
-| `troupe config set <path>=<value>…` | `config.set` | Records one change setting each value (D2). `<path>=@<file>` reads the value from a file |
-| `troupe config unset <path>…` | `config.set` (unset entries) | Records one change removing each value or group |
-| `troupe config get [<path>]` | `config.get` (a query) | Shows the merged config, or the value or group at a path, with notices |
+| `troupe config set <path>=<value>…` | `config-set` | Records one change setting each value (D2). `<path>=@<file>` reads the value from a file |
+| `troupe config unset <path>…` | `config-set` (unset entries) | Records one change removing each value or group |
+| `troupe config get [<path>]` | `config-get` (a query) | Shows the merged config, or the value or group at a path, with notices |
 | `troupe flush [--force]` | `flush` | Makes the files exactly what config says (D8, D9) |
 | `troupe perform <actor> [--direction <text>]` | `perform` | Runs the actor from config |
 
-Every command that changes anything takes `--rehearse` (#137), and `config.set`, `flush` and `perform` take
+Every command that changes anything takes `--rehearse` (#137), and `config-set`, `flush` and `perform` take
 `rehearse` in their requests.
 
 - **Every command that uses config flushes first,** so the files are right before anything reads config, and a

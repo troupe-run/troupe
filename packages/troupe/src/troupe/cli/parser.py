@@ -36,7 +36,9 @@ HELP_FIX = "Run `troupe --help` to see the commands and options."
 class Command:
     """A subcommand: its name, one line of help, how to declare its arguments, and how to run it.
     It runs with the parsed arguments, standard output for its result, and standard error for
-    progress and notices."""
+    progress and notices. A name of two words (``config set``) is a subcommand of a group: the
+    line names the group, then the subcommand, and every rule applies to the subcommand as to any
+    other."""
 
     name: str
     help: str
@@ -256,7 +258,8 @@ def _dash_value(token: str) -> TroupeError:
 
 
 def _unknown_command(token: str, commands: Sequence[Command], flags: Sequence[str]) -> TroupeError:
-    suggestion = _suggest(token, [command.name for command in commands] + list(flags))
+    names = list(dict.fromkeys(command.name.split(" ")[0] for command in commands))
+    suggestion = _suggest(token, names + list(flags))
     return TroupeError(
         "usage.unknown-command",
         problem=f"`{token}` is not a troupe command."
@@ -264,6 +267,27 @@ def _unknown_command(token: str, commands: Sequence[Command], flags: Sequence[st
         else ("An empty argument is not a troupe command."),
         fix=f"Did you mean `{suggestion}`?" if suggestion else HELP_FIX,
         details=_details(command=token, suggestion=suggestion),
+    )
+
+
+def _unknown_subcommand(group: str, token: str, names: Sequence[str]) -> TroupeError:
+    suggestion = _suggest(token, list(names))
+    return TroupeError(
+        "usage.unknown-command",
+        problem=f"`{token}` is not a `troupe {group}` command (they are: {', '.join(names)})."
+        if token
+        else f"An empty argument is not a `troupe {group}` command.",
+        fix=f"Did you mean `troupe {group} {suggestion}`?" if suggestion else _help_fix(group),
+        details=_details(command=f"{group} {token}", suggestion=suggestion),
+    )
+
+
+def _missing_subcommand(group: str, names: Sequence[str]) -> TroupeError:
+    return TroupeError(
+        "usage.missing-argument",
+        problem=f"`troupe {group}` needs a command: {_either(list(names))}.",
+        fix=_help_fix(group),
+        details={"command": group, "argument": "command"},
     )
 
 
@@ -348,6 +372,7 @@ class _Scan:
     positional values, the first option left without a value, and where the separator is."""
 
     chosen: str | None = None
+    group: str | None = None  # a group named, waiting for its subcommand
     given: dict[str, list[str]] = field(default_factory=dict)  # dest -> values, in line order
     positionals: list[str] = field(default_factory=list)
     without_value: str | None = None
@@ -369,6 +394,8 @@ def _scan(
         arg = argv[at]
         at += 1
         if arg == "--":
+            if scan.chosen is None and scan.group is not None:
+                raise _missing_subcommand(scan.group, _subcommands(scan.group, commands))
             if scan.chosen is None:
                 raise _separator_before_command()
             scan.separator = at - 1
@@ -392,14 +419,33 @@ def _scan(
             elif scan.without_value is None:
                 scan.without_value = name
             continue
+        if scan.chosen is None and scan.group is not None:
+            name = f"{scan.group} {arg}"
+            if name not in subparsers:
+                raise _unknown_subcommand(scan.group, arg, _subcommands(scan.group, commands))
+            scan.chosen = name
+            known = _declared(subparsers[name]).strings
+            continue
         if scan.chosen is None:
-            if arg not in subparsers:
+            if arg in _groups(commands):
+                scan.group = arg
+                continue
+            if arg not in subparsers or " " in arg:  # a two-word command is two arguments
                 raise _unknown_command(arg, commands, sorted(known))
             scan.chosen = arg
             known = _declared(subparsers[arg]).strings
             continue
         scan.positionals.append(arg)
     return scan
+
+
+def _groups(commands: Sequence[Command]) -> list[str]:
+    """Every group named by a two-word command, in the order first declared."""
+    return list(dict.fromkeys(c.name.split(" ")[0] for c in commands if " " in c.name))
+
+
+def _subcommands(group: str, commands: Sequence[Command]) -> list[str]:
+    return [c.name.split(" ", 1)[1] for c in commands if c.name.startswith(f"{group} ")]
 
 
 def _assign(
@@ -485,11 +531,30 @@ def parse(argv: Sequence[str], commands: Sequence[Command]) -> Parsed:
         exit_on_error=False,
     )
     subparsers: dict[str, argparse.ArgumentParser] = {}
+    groups: dict[str, Any] = {}  # each group's own subparsers action
     if commands:
         actions = root.add_subparsers(dest="command", metavar="<command>", parser_class=_Parser)
         for each in commands:
-            sub = actions.add_parser(
-                each.name,
+            name, _, subcommand = each.name.partition(" ")
+            target = actions
+            if subcommand:
+                if name not in groups:
+                    group = actions.add_parser(
+                        name,
+                        help=f"{name}: {', '.join(_subcommands(name, commands))}",
+                        description=f"troupe {name}'s commands.",
+                        parents=[global_options],
+                        add_help=False,
+                        allow_abbrev=False,
+                        exit_on_error=False,
+                    )
+                    subparsers[name] = group
+                    groups[name] = group.add_subparsers(
+                        dest=f"{name}_command", metavar="<command>", parser_class=_Parser
+                    )
+                target = groups[name]
+            sub = target.add_parser(
+                subcommand or name,
                 help=each.help,
                 description=each.help,
                 parents=[global_options],
@@ -503,13 +568,16 @@ def parse(argv: Sequence[str], commands: Sequence[Command]) -> Parsed:
     scan = _scan(argv, root, subparsers, commands)
     if scan.given.keys() & {"help", "version"}:
         # Help and version answer before anything else, so they work on an incomplete command line.
-        parser_for_help = subparsers[scan.chosen] if scan.chosen is not None else root
+        shown = scan.chosen if scan.chosen is not None else scan.group
+        parser_for_help = subparsers[shown] if shown is not None else root
         return Parsed(
             show_version="version" in scan.given,
             command=None,
             arguments=argparse.Namespace(),
             help_text=parser_for_help.format_help(),
         )
+    if scan.chosen is None and scan.group is not None:
+        raise _missing_subcommand(scan.group, _subcommands(scan.group, commands))
     if scan.chosen is not None:
         _check(scan.chosen, _declared(subparsers[scan.chosen]), scan)
     # A separator with nothing after it separates nothing, and argparse would refuse it once the

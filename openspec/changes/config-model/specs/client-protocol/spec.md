@@ -9,7 +9,7 @@ can't drift.
 
 #### Scenario: Messages validate against their schemas
 - **WHEN** any request, update or result that troupe builds or accepts for `perform`, `status`, `logs`,
-  `config.set`, `config.get` or `flush` is serialised
+  `config-set`, `config-get` or `flush` is serialised
 - **THEN** it validates against that message's schema in `protocol/`
 
 #### Scenario: Generated messages agree with the types
@@ -18,7 +18,7 @@ can't drift.
 
 ### Requirement: Surfaces reach the core only through the protocol's messages
 A surface SHALL call the core by sending a request as data and receiving updates and a result as data. The CLI SHALL
-reach `perform`, `status`, `logs`, `config.set`, `config.get` and `flush` only this way, in process.
+reach `perform`, `status`, `logs`, `config-set`, `config-get` and `flush` only this way, in process.
 
 #### Scenario: The CLI goes through the messages
 - **WHEN** the CLI runs `perform`, `status`, `logs`, `config set`, `config unset`, `config get` or `flush`
@@ -31,11 +31,11 @@ theatre, with `/`, and SHALL NOT leave it. The theatre, who is acting and policy
 surface establishes, never from the request.
 
 #### Scenario: An absolute path in a request
-- **WHEN** a `config.set` request sets an actor's `expect` to an absolute path, a drive, or a path containing `..`
+- **WHEN** a `config-set` request sets an actor's `expect` to an absolute path, a drive, or a path containing `..`
 - **THEN** it is refused, naming the path
 
 #### Scenario: No way to name a program
-- **WHEN** the `perform` and `config.set` requests are checked against their schemas
+- **WHEN** the `perform` and `config-set` requests are checked against their schemas
 - **THEN** neither has a field that holds a command line or a program to run, and an actor's `runner` is a name from
   troupe's runner table, never a command
 

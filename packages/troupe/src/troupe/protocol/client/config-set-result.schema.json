@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/client/config-set-result.schema.json",
+  "title": "config-set: result",
+  "description": "The change recorded (or that would be), and what was done to the config files.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "entries",
+    "files",
+    "notices"
+  ],
+  "properties": {
+    "change": {
+      "description": "The recorded change's id. Absent: nothing was recorded, because nothing changed, or it was a rehearsal.",
+      "type": "string",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "entries": {
+      "description": "The change's entries: empty when nothing changed.",
+      "type": "array",
+      "items": {
+        "$ref": "../events/config-changed.schema.json#/$defs/entry"
+      }
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "$ref": "config.schema.json#/$defs/file"
+      }
+    },
+    "notices": {
+      "type": "array",
+      "items": {
+        "$ref": "../notice.schema.json"
+      }
+    }
+  }
+}

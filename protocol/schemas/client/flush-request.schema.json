@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/client/flush-request.schema.json",
+  "title": "flush: request",
+  "description": "Make the config files exactly what config says.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "force": {
+      "description": "Replace files troupe didn't write too, keeping a copy of each. Absent means false.",
+      "type": "boolean"
+    },
+    "rehearse": {
+      "description": "Change nothing: report what would be written. Absent means false.",
+      "type": "boolean"
+    }
+  }
+}

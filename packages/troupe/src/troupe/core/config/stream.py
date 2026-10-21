@@ -48,6 +48,17 @@ def refuse_conflicts(merged: Merged) -> None:
     )
 
 
+def refuse_unrecordable(
+    store: EventStore, merged: Merged, entries: Sequence[dict[str, Any]]
+) -> None:
+    """Refuse, recording nothing, a change whose config breaks a rule, or that leaves a conflict
+    unresolved: it's merged as though recorded after every head, and must leave none."""
+    check(apply(merged.config, entries))
+    if merged.conflicts:
+        proposed = Change("proposed", "", {}, "", tuple(entries), ())
+        refuse_conflicts(merge(store.history(aggregate.STREAM), extra=proposed))
+
+
 def record(
     command: Command,
     merged: Merged,
@@ -57,11 +68,7 @@ def record(
     """Record ``entries`` as one ``Config.Changed`` after ``merged``, the config they were
     worked out from. Refused, recording nothing, when the config they make breaks a rule, or when
     there are conflicts it leaves unresolved."""
-    after = apply(merged.config, entries)
-    check(after)
-    if merged.conflicts:
-        proposed = Change("proposed", command.change, {}, "", tuple(entries), tuple(files))
-        refuse_conflicts(merge(command.store.history(aggregate.STREAM), extra=proposed))
+    refuse_unrecordable(command.store, merged, entries)
     version = merged.version + 1
     if len(merged.heads) > 1:
         settled = aggregate.Config.Settled(
