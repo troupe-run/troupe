@@ -21,7 +21,7 @@ theatre](../opening-night/first-theatre.md) sets one up.
 ```text
 .troupe/
   .gitignore         keeps local/ out of git
-  .gitattributes     keeps git from changing the event files' line endings
+  .gitattributes     keeps git from changing troupe's files' line endings
   events/            the theatre's history: committed
   local/             this clone's own state: never committed
 ```
@@ -31,6 +31,9 @@ theatre](../opening-night/first-theatre.md) sets one up.
   branch's, so two people's history merges in git without conflicts.
 - **`local/` belongs to this clone,** such as which runs are going right now and large files like transcripts,
   which lineage refers to by hash instead of putting them in git.
+- **`.gitignore` and `.gitattributes` keep your lines.** troupe adds the lines it needs to the end, with a comment
+  saying why, and never changes or removes one that's there. If you delete one of troupe's lines, troupe adds it back
+  the next time it writes, because it needs it.
 - **Nothing is made until it's needed.** troupe writes these the first time it records something. Reading never
   changes your history.
 

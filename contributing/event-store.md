@@ -11,8 +11,8 @@ Runs are recorded here by `troupe perform`: see [contributing/runs.md](runs.md).
 
 ```
 .troupe/
-  .gitignore         "local/": troupe writes it only if it is missing, and never rewrites it
-  .gitattributes     "events/** -text": git never converts an event file's line endings
+  .gitignore         "local/" (and config's ".*.troupe~"): git never sees this clone's own state
+  .gitattributes     "events/** -text" (and config's "actors/** -text"): git never converts line endings
   events/            committed: one <session>.jsonl segment per session per branch
   local/             gitignored: this clone's own state
     .lock            the write lock
@@ -23,6 +23,10 @@ Runs are recorded here by `troupe perform`: see [contributing/runs.md](runs.md).
 - **A session** is one opened store in one process: in practice, one troupe command. It writes its own segment,
   named by a ULID, and starts a new one if the branch changes, so no two sessions ever write the same file and
   branches never conflict over event files.
+- **The git files hold troupe's patterns, and keep yours.** Whenever troupe writes into `.troupe/`, it appends any
+  of its patterns that `.gitignore` or `.gitattributes` is missing, under a comment saying troupe added it and why,
+  and never changes, moves or removes a line that's there (`troupe.core.theatre.GIT_FILES`). A troupe line you
+  delete comes back on the next write, because troupe needs it.
 - **Reads create nothing.** Directories and files are created on the first write. Reading a theatre's events never
   changes anything in `events/`; at most it writes this clone's order under `local/`.
 

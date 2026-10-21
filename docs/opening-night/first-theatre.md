@@ -39,7 +39,7 @@ troupe writes into `.troupe/` the first time it records something. Reading never
 ```text
 .troupe/
   .gitignore         keeps local/ out of git
-  .gitattributes     keeps git from changing the event files' line endings
+  .gitattributes     keeps git from changing troupe's files' line endings
   events/            your theatre's history: commit it
   local/             this clone's own state, never committed
 ```
