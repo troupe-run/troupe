@@ -257,6 +257,8 @@ class _Schemas:
         resolved, where = self.resolve(node, base)
         if not isinstance(resolved, dict):
             return "any"
+        if "$dynamicRef" in resolved:
+            return "object (an extension point, filled by the runner's options schema)"
         if "const" in resolved:
             return f"`{json.dumps(resolved['const'])}`"
         if "enum" in resolved:

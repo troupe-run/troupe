@@ -29,5 +29,14 @@ yet: they're part of [#60](https://github.com/troupe-run/troupe/issues/60)'s des
 ## The schema
 
 <!-- generated: config (from protocol/schemas/config/; regenerate with `uv run scripts/docs_reference.py`) -->
-There is no config schema yet: config arrives with [#60](https://github.com/troupe-run/troupe/issues/60), and this section is generated from its schemas when it does.
+### Actor
+
+One actor's config file, .troupe/actors/<name>.yaml. The file's name is the actor's name. Its character, when it has one, is the whole of .troupe/actors/<name>.md. troupe writes this file from the theatre's config events, and every field is set with troupe config set.
+
+| Field | Holds | Always there | What it is |
+|---|---|---|---|
+| `$schema` | string | No | Where this file's schema is, relative to the file, so editors can check it. troupe writes it. |
+| `runner` | string | Yes | The runner that runs this actor, by name. |
+| `options` | object (an extension point, filled by the runner's options schema) | No | The runner's own options, passed to it unchanged. Absent means {}. An extension point: the runner's published options schema fills it, and without one only {} validates. |
+| `expect` | list of string | Yes | Files, relative to the theatre's root, that a run must create or change: each must exist after the run, and differ from before it. A file named twice is checked once. An empty list means no effect check, and has to be written. |
 <!-- end generated: config -->

@@ -130,9 +130,11 @@ def test_with_no_config_schema_the_region_says_so_and_a_new_schema_makes_it_stal
     copy: Path,
 ) -> None:
     page = copy / "docs" / "prompt-book" / "config-schema.md"
+    config = copy / "protocol" / "schemas" / "config"
+    shutil.rmtree(config)
+    assert reference.main([], sources=sources(copy)) == 0
     assert "There is no config schema yet" in page.read_text(encoding="utf-8")
     assert check(copy) == (0, "")
-    config = copy / "protocol" / "schemas" / "config"
     config.mkdir()
     (config / "actor.schema.json").write_text(
         json.dumps(
