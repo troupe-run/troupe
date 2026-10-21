@@ -257,7 +257,8 @@ class EventStore:
 
     def load(self, stream: UUID) -> Aggregate | None:
         """The stream's current state, from its latest settling event (or its start) to its single
-        head. A forked stream, or one missing a parent, is refused."""
+        head. A forked stream, or one missing a parent, is refused. An aggregate that merges its own
+        forks reads ``history`` instead (config-model design D5)."""
         aggregate: Aggregate | None = None
         for record in self.recorder.select(stream):
             event = self.mapper.to_domain_event(
@@ -273,7 +274,8 @@ class EventStore:
         return aggregate
 
     def history(self, stream: UUID) -> list[RecordedEvent]:
-        """Every event of the stream, both sides of any fork, in order."""
+        """Every event of the stream, both sides of any fork, in order: how an aggregate that
+        merges its own forks reads its stream. One missing a parent is refused."""
         return list(self.recorder.history(stream))
 
     def recordings(self, event: str) -> list[dict[str, Any] | None]:
@@ -333,10 +335,19 @@ class Command:
         )
 
     def record(
-        self, events: Sequence[DomainEventProtocol[UUID]], *, source: Source | None = None
+        self,
+        events: Sequence[DomainEventProtocol[UUID]],
+        *,
+        source: Source | None = None,
+        settles: Sequence[str] | None = None,
     ) -> list[Recorded]:
-        """Record ``events`` as this command's own, all or nothing."""
-        return self.store.record_with_lineage(events, self.lineage(source))
+        """Record ``events`` as this command's own, all or nothing. With ``settles``, the first
+        event is a settling event whose parents are those heads, every head of its stream, and the
+        events after it in that stream follow it: a fork is settled and changed in one batch, as an
+        aggregate that merges its own forks does (config-model design D5)."""
+        return self.store.record_with_lineage(
+            events, self.lineage(source), settling_parents=settles
+        )
 
     def settle(self, aggregate: Aggregate) -> Recorded:
         """End the fork in ``aggregate``'s stream with ``aggregate`` as the settled state: a

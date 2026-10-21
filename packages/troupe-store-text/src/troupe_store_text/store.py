@@ -381,9 +381,13 @@ class TextStore:
             return sorted((s for s, h in self._heads.items() if len(h) > 1), key=str)
 
     def history(self, stream: UUID | str) -> list[Record]:
-        """Every visible event of the stream, both sides of any fork, topologically."""
+        """Every visible event of the stream, both sides of any fork, topologically. A fork isn't
+        refused here: an aggregate that merges its own forks reads its stream this way (config
+        does; config-model design D5). A missing parent is, as for every read of a stream."""
         with self._lock:
             self.refresh()
+            if stream in self._streams:
+                self._check_parents(stream)
             return [
                 self._events[e] for e in self._replay_order(list(self._streams.get(stream, {})))
             ]

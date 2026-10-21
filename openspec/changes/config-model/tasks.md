@@ -52,11 +52,17 @@
 
 ## 4. The event store merges a fork through its aggregate (design D5)
 
-- [ ] 4.1 Let a stream's aggregate declare that it merges its own forks: such a stream is read through the merge
+- [x] 4.1 Let a stream's aggregate declare that it merges its own forks: such a stream is read through the merge
   instead of refused, and a batch may record a settling event followed by ordinary events. Run streams keep the
   current rule. Verify with tests for each scenario in the event-store delta, including two clones settling the
   same fork to one event id, and that every existing fork test still passes
-- [ ] 4.2 Update `contributing/event-store.md`'s "Forks and settling" section to say which aggregates merge their
+  - The store already allowed most of it: `history` returns both sides of a fork, and a batch whose first event
+    settles gives the events after it that event as their parent. What changed: `history` now refuses a missing
+    parent (as `load` does, and as the spec says every read of a stream must), and `Command.record` takes
+    `settles=`. An aggregate "declares" that it merges its forks by reading `history` instead of `load`; there's no
+    flag to set. Tests: `test_forks.py` (history read whole, one batch settling and changing, all or nothing, two
+    clones settling to one event) and `test_ordering_git.py` (history refusing a missing parent).
+- [x] 4.2 Update `contributing/event-store.md`'s "Forks and settling" section to say which aggregates merge their
   forks and that settling may share a batch. Verify the event-store doc test passes
 
 ## 5. The config aggregate and its changes (design D2, D6, D13)
