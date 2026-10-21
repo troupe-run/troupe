@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/runner/errors.schema.json",
+  "title": "Runner contract errors",
+  "description": "The error codes the runner contract defines, for a runner to answer a request it can't serve. A runner's own codes are published by the runner (contributing/runners.md, Publishing a runner's schemas).",
+  "$ref": "../error.schema.json#/$defs/fields",
+  "unevaluatedProperties": false,
+  "oneOf": [
+    {
+      "description": "The request isn't JSON. JSON-RPC code -32700.",
+      "properties": {
+        "code": {
+          "const": "runner.parse-error"
+        },
+        "details": false
+      }
+    },
+    {
+      "description": "The message isn't a JSON-RPC 2.0 request. JSON-RPC code -32600.",
+      "properties": {
+        "code": {
+          "const": "runner.invalid-request"
+        },
+        "details": false
+      }
+    },
+    {
+      "description": "A request other than initialize came before initialize. JSON-RPC code -32600.",
+      "properties": {
+        "code": {
+          "const": "runner.not-initialized"
+        },
+        "details": false
+      }
+    },
+    {
+      "description": "The method isn't one the runner serves. JSON-RPC code -32601.",
+      "properties": {
+        "code": {
+          "const": "runner.unknown-method"
+        },
+        "details": false
+      }
+    },
+    {
+      "description": "None of the offered protocol versions is one the runner supports. JSON-RPC code -32000.",
+      "required": [
+        "details"
+      ],
+      "properties": {
+        "code": {
+          "const": "runner.unsupported-version"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "supportedVersions"
+          ],
+          "properties": {
+            "supportedVersions": {
+              "description": "The protocol versions the runner supports.",
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "A second run/start to a runner process already serving a run. JSON-RPC code -32000.",
+      "properties": {
+        "code": {
+          "const": "runner.already-started"
+        },
+        "details": false
+      }
+    },
+    {
+      "description": "The params aren't the ones the contract defines for the method. JSON-RPC code -32602.",
+      "properties": {
+        "code": {
+          "const": "runner.invalid-params"
+        },
+        "details": false
+      }
+    }
+  ],
+  "$defs": {
+    "anyError": {
+      "title": "Any error a runner sends",
+      "description": "One of the contract's own errors, or one of the runner's own codes, which the runner publishes and which fill the runnerErrors extension point.",
+      "oneOf": [
+        {
+          "$ref": "#"
+        },
+        {
+          "$dynamicRef": "#runnerErrors"
+        }
+      ]
+    },
+    "runnerErrors": {
+      "title": "The runner's own errors",
+      "description": "An extension point: a runner's published errors schema fills it. Without one, no code beyond the contract's validates.",
+      "$dynamicAnchor": "runnerErrors",
+      "allOf": [
+        false
+      ]
+    }
+  }
+}

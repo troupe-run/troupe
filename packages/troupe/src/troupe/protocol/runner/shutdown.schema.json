@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/runner/shutdown.schema.json",
+  "title": "shutdown",
+  "description": "Sent after the result event. The runner answers, then exits.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["jsonrpc", "id", "method", "params"],
+  "properties": {
+    "jsonrpc": {"$ref": "jsonrpc.schema.json#/$defs/jsonrpc"},
+    "id": {"$ref": "jsonrpc.schema.json#/$defs/id"},
+    "method": {"const": "shutdown"},
+    "params": {"$ref": "jsonrpc.schema.json#/$defs/emptyResult"}
+  },
+  "$defs": {
+    "result": {"$ref": "jsonrpc.schema.json#/$defs/emptyResult"}
+  }
+}

@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/runner/initialize.schema.json",
+  "title": "initialize",
+  "description": "The host's first message: the protocol versions and capabilities it supports. The runner answers with one of the offered versions and the offered capabilities it will use, or with an error naming the versions it supports.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "jsonrpc",
+    "id",
+    "method",
+    "params"
+  ],
+  "properties": {
+    "jsonrpc": {
+      "$ref": "jsonrpc.schema.json#/$defs/jsonrpc"
+    },
+    "id": {
+      "$ref": "jsonrpc.schema.json#/$defs/id"
+    },
+    "method": {
+      "const": "initialize"
+    },
+    "params": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocolVersions",
+        "host",
+        "capabilities"
+      ],
+      "properties": {
+        "protocolVersions": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "host": {
+          "$ref": "jsonrpc.schema.json#/$defs/named"
+        },
+        "capabilities": {
+          "description": "The capability names troupe supports. Version 0 defines none.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "result": {
+      "title": "initialize result",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocolVersion",
+        "runner",
+        "capabilities"
+      ],
+      "properties": {
+        "protocolVersion": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "runner": {
+          "$ref": "jsonrpc.schema.json#/$defs/named"
+        },
+        "capabilities": {
+          "description": "The capabilities the runner will use, each one troupe offered.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

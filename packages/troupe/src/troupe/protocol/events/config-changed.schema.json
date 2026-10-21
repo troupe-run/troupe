@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/events/config-changed.schema.json",
+  "title": "Config.Changed",
+  "description": "The payload of one config change (topic troupe.core.config.aggregate:Config.Changed): every value one command changed, and every config file it wrote or removed. One command records exactly one. Field names are as recorded.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "lineage",
+    "timestamp",
+    "changes",
+    "files"
+  ],
+  "properties": {
+    "lineage": {
+      "$ref": "../lineage.schema.json"
+    },
+    "timestamp": {
+      "$ref": "../event-record.schema.json#/$defs/libraryTimestamp"
+    },
+    "changes": {
+      "description": "Each value the command changed, at most once each. A change that would change nothing isn't recorded.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/entry"
+      }
+    },
+    "files": {
+      "description": "Each config file the change wrote or removed, so troupe can tell its own files from a person's.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/file"
+      }
+    }
+  },
+  "$defs": {
+    "entry": {
+      "title": "Change entry",
+      "description": "One value's change. A missing before means the value didn't exist; a missing after means it was removed. An entry for a group (an object) only ever removes it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path"
+      ],
+      "anyOf": [
+        {
+          "required": [
+            "before"
+          ]
+        },
+        {
+          "required": [
+            "after"
+          ]
+        }
+      ],
+      "properties": {
+        "path": {
+          "description": "The value's logical path, as keys from the top of config, such as [\"actors\", \"tester\", \"runner\"].",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "before": {
+          "description": "The SHA-256 of the old value's canonical JSON (sorted keys, no spaces, UTF-8), the same form event ids hash. For a group, the hash of the whole group.",
+          "$ref": "../lineage.schema.json#/$defs/hash"
+        },
+        "after": {
+          "description": "The new value. Never an object: an object is a group of values, each changed by its own entry.",
+          "$ref": "#/$defs/value"
+        }
+      }
+    },
+    "value": {
+      "title": "Value",
+      "description": "A config value: a string, number, boolean or list. A list's items may be any JSON value but null.",
+      "type": [
+        "string",
+        "number",
+        "boolean",
+        "array"
+      ],
+      "items": {
+        "$ref": "#/$defs/json"
+      }
+    },
+    "json": {
+      "title": "JSON value",
+      "description": "Any JSON value but null.",
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/json"
+          }
+        },
+        {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/json"
+          }
+        }
+      ]
+    },
+    "file": {
+      "title": "File written",
+      "description": "A config file, relative to .troupe/, and the hash of the bytes troupe wrote. A missing hash means the change removed it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path"
+      ],
+      "properties": {
+        "path": {
+          "description": "The file, relative to the theatre's .troupe/ directory, with / separators.",
+          "$ref": "../client/run.schema.json#/$defs/theatrePath"
+        },
+        "hash": {
+          "description": "The SHA-256 of the file's bytes as troupe wrote them.",
+          "$ref": "../lineage.schema.json#/$defs/hash"
+        }
+      }
+    }
+  }
+}

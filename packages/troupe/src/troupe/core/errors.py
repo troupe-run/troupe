@@ -78,6 +78,8 @@ CODES: dict[str, ExitCode] = {
     "client.unknown-method": ExitCode.USAGE,
     "perform.options-invalid": ExitCode.FAILURE,
     "perform.path-outside-theatre": ExitCode.USAGE,
+    # Config (config-model design). contributing/config.md lists them.
+    "schemas.plugin-missing": ExitCode.FAILURE,
 }
 
 

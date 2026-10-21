@@ -60,6 +60,8 @@ What exists, from the walking skeleton:
 | `troupe.core.config.commands` | `config set`, `config unset`, `config get` and `flush` behind the client protocol |
 | `troupe.core.theatre` | The theatre's own files: the patterns `.gitignore` and `.gitattributes` must hold (D12) |
 | `troupe.core.interim` | Only the runner table: name to command line and published options schema (D13), until #38 |
+| `troupe/protocol/` (package data) | A generated copy of `protocol/schemas/`, the schemas this troupe was built with (D17) |
+| `troupe.core.schemas` | The one place core finds a schema, by its `$id`: from the package's copy, or a runner's installed schemas (D17) |
 
 The import contract that keeps `troupe.cli` to `troupe.core.client` stays, so the config commands are reachable only
 through the protocol, like `perform`.
@@ -106,7 +108,8 @@ hash the payload); a `Config.Removed` topic (a missing `after` says it); one eve
 ### D3. Working out config: the merge
 
 Config is read from the stream's whole history (`EventStore.history`), never from `load`, so a fork is merged rather
-than refused. With one head, this is ordinary replay. With several:
+than refused. `history` refuses nothing, so the merge checks that every event's parents are here, and refuses one
+that isn't with `events.missing-parent`, as `load` would. With one head, this is ordinary replay. With several:
 
 1. **For each path, find its latest writes:** the entries for that path, or for a group containing it, that no later
    entry for the same path follows in the chain of parents. One latest write gives the value.
@@ -235,8 +238,11 @@ In this change, recovery would also work without staging, since a missing or old
 Staging is here so that #119 inherits an order where a crash between steps 3 and 4 is never mistaken for a hand edit.
 
 **Rendering.** YAML is written with ruamel.yaml, block style, keys in the schema's order, and two lines first: the
-`# yaml-language-server: $schema=…` comment and the `$schema:` key, both naming the same relative path to
-`.troupe/local/schemas/` (#7, and both forms, as agreed). The character file is the text exactly, UTF-8, with the line
+`# yaml-language-server: $schema=…` comment and the `$schema:` key, both naming the kind's schema at troupe.run by
+major version, `https://troupe.run/protocol/0/config/actor.schema.json` (#7, both forms as agreed, and the paths
+website#30 serves). An editor checks the file against it. The actor schema alone can't check `options`, whose shape
+depends on the runner, so troupe checks them (D6): with `troupe config set`, and with `troupe flush --rehearse`
+for a file. The character file is the text exactly, UTF-8, with the line
 endings it was given. The file's hash is the SHA-256 of the bytes written.
 
 ### D10. Commands, methods and the CLI
@@ -303,9 +309,28 @@ A person who deletes one of troupe's lines gets it back on the next write. The d
 ### D13. Runners: the interim table gains each runner's options schema
 
 Config checks options against the runner's published options schema when a change is recorded, without starting the
-runner. So each entry in `troupe.core.interim.RUNNERS` names the command line and where the runner's options schema
-is. For the scripted runner, that's its `schemas/` shipped as package data, found through the installed distribution.
-#38 replaces the table with plugins named and pinned in config.
+runner. So each entry in `troupe.core.interim.RUNNERS` names the command line and the package that holds the
+runner's schemas. The scripted runner's `schemas/` move into its package (`troupe_runner_scripted/schemas/`), so they
+are installed with it, and troupe finds them with `importlib.util.find_spec`, which locates a package without
+importing it (troupe never imports a plugin). #38 replaces the table with plugins named and pinned in config.
+
+### D17. troupe carries the schemas it was built with
+
+Core needs the protocol's schemas at runtime: the scripted runner's options schema refers to the runner contract by
+its `https://troupe.run/protocol/...` ids. They're published at troupe.run (website#30), but troupe never fetches its
+own: an installed troupe knows exactly which schemas its code was built with (owner, 2026-10-21).
+
+- **`scripts/package_schemas.py`** copies `protocol/schemas/` into `packages/troupe/src/troupe/protocol/`, and its
+  `--check` mode fails when the copy differs. A test runs the check, as for the generated models, so the source and
+  the copy can't drift. The copy is installed with the package, and is the same in a checkout, so there's one way
+  core finds a schema.
+- **`troupe.core.schemas`** builds a `referencing` registry from the copy, by `$id`, plus a runner's installed
+  schemas when asked for them, and is the only place core reads a schema.
+
+Rejected: finding `protocol/` from a checkout (an installed troupe has none); a build backend that pulls
+`../../protocol` into the wheel (it would change core's build, and an editable install would still need the
+checkout); fetching from troupe.run at runtime (the package already knows the exact schemas, so a fetch would only
+add a network dependency and a trust problem).
 
 ### D14. `perform` from config, and what a run records
 
@@ -354,6 +379,10 @@ the character went from config to the runner.
   sees them refused, and the message says to `git add --renormalize .troupe`.
 - [`--force` stores what it replaces in `.troupe/local/`, which isn't in git.] → It's a safety copy for this clone,
   and the message says where it is.
+- [The package's copy of `protocol/schemas/` doubles every schema change in a diff.] → It's generated and checked,
+  never edited, so review reads the source and the check vouches for the copy.
+- [Config files name `https://troupe.run/protocol/0/...` before website#30 serves it.] → Editors can't check the
+  files until it does; troupe's own checks don't depend on it.
 
 ## Migration Plan
 

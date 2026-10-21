@@ -275,7 +275,8 @@ class EventStore:
 
     def history(self, stream: UUID) -> list[RecordedEvent]:
         """Every event of the stream, both sides of any fork, in order: how an aggregate that
-        merges its own forks reads its stream. One missing a parent is refused."""
+        merges its own forks reads its stream. Nothing is refused, so such an aggregate checks
+        that every parent is here itself (config-model design D5)."""
         return list(self.recorder.history(stream))
 
     def recordings(self, event: str) -> list[dict[str, Any] | None]:

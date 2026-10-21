@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/runner/jsonrpc.schema.json",
+  "title": "Runner contract: shared definitions",
+  "description": "JSON-RPC 2.0 envelopes and values shared by every message of the runner contract. Each message is one line of UTF-8 JSON on the runner's standard input or standard output.",
+  "$defs": {
+    "jsonrpc": {
+      "title": "JSON-RPC version",
+      "const": "2.0"
+    },
+    "id": {
+      "title": "Request id",
+      "description": "Correlates a response with its request.",
+      "type": ["integer", "string"]
+    },
+    "runId": {
+      "title": "Run id",
+      "description": "Chosen by troupe for each run attempt: a UUID in canonical lowercase form.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "named": {
+      "title": "Name and version",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1}
+      }
+    },
+    "sha256Ref": {
+      "title": "Artifact reference",
+      "description": "sha256: followed by the lowercase hex SHA-256 of the artifact's bytes.",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "emptyResult": {
+      "title": "Empty result",
+      "type": "object",
+      "additionalProperties": false
+    },
+    "successResponse": {
+      "title": "Success response",
+      "description": "A response to a request. Its result is one of the methods' results; the host also checks it against the result schema of the request's own method.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jsonrpc", "id", "result"],
+      "properties": {
+        "jsonrpc": {"$ref": "#/$defs/jsonrpc"},
+        "id": {"$ref": "#/$defs/id"},
+        "result": {
+          "oneOf": [
+            {"$ref": "initialize.schema.json#/$defs/result"},
+            {"$ref": "run-start.schema.json#/$defs/result"},
+            {"$ref": "#/$defs/emptyResult"}
+          ]
+        }
+      }
+    }
+  }
+}

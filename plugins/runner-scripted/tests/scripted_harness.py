@@ -2,8 +2,8 @@
 schemas.
 
 Self-contained: no troupe imports. The contract's schemas are read from protocol/ at the repository
-root, and the runner's own from its schemas/ directory. Messages are validated with the runner's
-schemas filling the contract's extension points, as troupe would see them.
+root, and the runner's own from its package's schemas/ directory. Messages are validated with the
+runner's schemas filling the contract's extension points, as troupe would see them.
 """
 
 import json
@@ -22,7 +22,7 @@ from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT202012
 
 SCHEMAS = Path(__file__).resolve().parents[3] / "protocol" / "schemas"
-RUNNER_SCHEMAS = Path(__file__).resolve().parents[1] / "schemas"
+RUNNER_SCHEMAS = Path(__file__).resolve().parents[1] / "src" / "troupe_runner_scripted" / "schemas"
 BASE = "https://troupe.run/protocol/runner/"
 OWN = "https://troupe.run/plugins/runner-scripted/"
 RESULTS = {

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/client/status-request.schema.json",
+  "title": "status: request",
+  "description": "Show one run, or list the most recent runs.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "run": {
+      "description": "One run to show, by id or unique prefix. Absent: status lists runs.",
+      "$ref": "run.schema.json#/$defs/runRef"
+    },
+    "limit": {
+      "description": "How many runs to list, newest first. Absent means the default. Only for a list.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10000
+    }
+  },
+  "not": {
+    "required": [
+      "run",
+      "limit"
+    ]
+  }
+}
