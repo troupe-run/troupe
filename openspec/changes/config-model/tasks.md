@@ -85,16 +85,24 @@
     runner's schema and the contract schemas it refers to. A wheel built with `uv build --package troupe` holds all
     28 schemas, and installed with the runner's wheel into a fresh environment outside the checkout, it validated
     the scripted runner's options (and refused an unknown key) without importing the runner (2026-10-21).
-- [ ] 5.2 Add `troupe.core.config.aggregate`: the config stream's fixed id, `Config.Changed` with array paths, `before`
+- [x] 5.2 Add `troupe.core.config.aggregate`: the config stream's fixed id, `Config.Changed` with array paths, `before`
   as the canonical-JSON hash and `after` as the value, group removal as one entry, setting a group from data, and no
   event when nothing changes. Verify with tests for each scenario under "A command records one change", "A change
   entry holds…", "Objects are groups…", "A group is removed as one entry" and "A group can be set whole from a
   file", including a test that a `before` equals the hash of the earlier `after` for strings, numbers, booleans and
   arrays
-- [ ] 5.3 Check every change before it's recorded (D6): the merged actor against its schema, its options against its
+  - `troupe.core.config.changes` builds entries (`set_value`, `unset`, and `change` for one command's net change
+    across several values) and applies them; `aggregate.changed` builds the event. `test_config_changes.py` (17
+    tests, one a hypothesis property over every kind of value) records real events and validates every line the
+    store wrote against the event-record schema, the real-recording check task 2.2 deferred here.
+- [x] 5.3 Check every change before it's recorded (D6): the merged actor against its schema, its options against its
   runner's schema with `jsonschema`, and the actor name pattern, refusing with the path and the rule. Catalogue every
   new error code with its details schema. Verify with tests for a misspelt field, an unknown option, a missing
   `expect`, a path outside the theatre and a bad actor name, each recording nothing
+  - `troupe.core.config.kinds.check` refuses with `config.invalid` (catalogued), naming the path and the rule in
+    words taken from the schemas' descriptions; `test_config_kinds.py` (13 tests) covers each case above and more
+    (a runner set to a group, an unknown runner, an unknown kind, `$schema` set by hand). "Recording nothing" is a
+    property of the command that checks before recording, so it's verified with the commands, in 8.2.
 
 ## 6. Merging and conflicts (design D3, D4)
 
@@ -144,7 +152,8 @@
   `config.get` and `flush` (`force`, `rehearse`), and their hand-written message types in today's style. Verify the
   client-protocol schema tests cover them, including the random round trip
 - [ ] 8.2 Add the core commands behind the dispatcher, each flushing first and holding the projection lock while
-  writing. Verify a dispatcher test for each method, and that the import contract keeping `troupe.cli` to
+  writing. Verify a dispatcher test for each method, that a refused change (from 5.3's cases) records nothing and
+  writes no file, and that the import contract keeping `troupe.cli` to
   `troupe.core.client` still passes
 - [ ] 8.3 Add `troupe config set`, `troupe config unset`, `troupe config get [--json]` and `troupe flush [--force]`,
   with values typed by the schema at their path, `@<file>`, `--json` for values with no single type, and `--reason`.

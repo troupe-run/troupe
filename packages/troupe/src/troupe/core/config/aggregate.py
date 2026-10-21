@@ -16,6 +16,7 @@ only the home of the event's topic, which is this class's import path: it isn't 
 registering the old topic with the library.
 """
 
+from dataclasses import dataclass
 from typing import Any
 from uuid import NAMESPACE_URL, UUID, uuid5
 
@@ -28,6 +29,7 @@ STREAM: UUID = uuid5(NAMESPACE_URL, "https://troupe.run/streams/troupe.config")
 class Config(Aggregate):
     """A theatre's config, as a stream of changes."""
 
+    @dataclass(frozen=True)
     class Changed(Aggregate.Event):
         """One command's change to config."""
 
@@ -38,3 +40,16 @@ class Config(Aggregate):
 CHANGED = "troupe.core.config.aggregate:Config.Changed"
 TOPICS = (CHANGED,)
 """Every topic config records."""
+
+
+def changed(
+    version: int, changes: list[dict[str, Any]], files: list[dict[str, Any]]
+) -> Config.Changed:
+    """The ``Config.Changed`` event at ``version`` of the config stream."""
+    return Config.Changed(
+        originator_id=STREAM,
+        originator_version=version,
+        timestamp=Config.Changed.create_timestamp(),
+        changes=changes,
+        files=files,
+    )
