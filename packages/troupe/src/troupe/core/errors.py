@@ -80,6 +80,7 @@ CODES: dict[str, ExitCode] = {
     "perform.path-outside-theatre": ExitCode.USAGE,
     # Config (config-model design). contributing/config.md lists them.
     "schemas.plugin-missing": ExitCode.FAILURE,
+    "config.invalid": ExitCode.FAILURE,
 }
 
 
