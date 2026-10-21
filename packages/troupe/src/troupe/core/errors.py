@@ -82,6 +82,9 @@ CODES: dict[str, ExitCode] = {
     "schemas.plugin-missing": ExitCode.FAILURE,
     "config.invalid": ExitCode.FAILURE,
     "config.conflict": ExitCode.FAILURE,
+    "config.unknown-file": ExitCode.FAILURE,
+    "config.file-not-troupes": ExitCode.FAILURE,
+    "config.local-malformed": ExitCode.FAILURE,
 }
 
 

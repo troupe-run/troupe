@@ -21,6 +21,9 @@ CODES: dict[str, str] = {
     "run.cancelling": "Cancel was asked for, and the run is stopping within its grace period.",
     "run.interrupted": "A run has no recorded end, and the perform that ran it has stopped.",
     "run.unfinished-elsewhere": "A run started in another clone has no recorded end here.",
+    # Config (config-model design D8). contributing/config.md lists them.
+    "config.file-rewritten": "A config file troupe wrote was missing or older, so it was written "
+    "again from config.",
 }
 """Every notice code, with what it means."""
 

@@ -219,8 +219,15 @@ class Moves(RuleBasedStateMachine):
     def empty_commit(self) -> None:
         empty_commit(self.repo)
 
+    def drop_leftovers(self) -> None:
+        """A soft or mixed reset leaves changes, and can leave a merged file untracked, which git
+        won't switch or merge over. Dropping them moves no ref."""
+        self.repo.git("reset", "-q", "--hard")
+        self.repo.git("clean", "-q", "-f", "-d")
+
     @rule(pick=st.integers(min_value=0))
     def switch(self, pick: int) -> None:
+        self.drop_leftovers()
         self.repo.git("switch", "-q", "--discard-changes", self.branches[pick % len(self.branches)])
 
     @rule()
@@ -234,8 +241,7 @@ class Moves(RuleBasedStateMachine):
     @rule(pick=st.integers(min_value=0))
     def merge(self, pick: int) -> None:
         target = self.branches[pick % len(self.branches)]
-        # A soft or mixed reset leaves changes git won't merge over. Dropping them moves no ref.
-        self.repo.git("reset", "-q", "--hard")
+        self.drop_leftovers()
         self.repo.git("merge", "-q", "--no-ff", "--no-edit", "-X", "theirs", target)
 
     @rule(pick=st.integers(min_value=0), to=st.integers(min_value=0))
