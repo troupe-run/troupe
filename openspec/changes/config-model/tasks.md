@@ -213,10 +213,14 @@
 
 ## 9. Rehearsals (design D15)
 
-- [ ] 9.1 Add `WOULD_CHANGE = 3` to `troupe.core.exit_codes` with its docstring, and `--rehearse` for `config set`,
+- [x] 9.1 Add `WOULD_CHANGE = 3` to `troupe.core.exit_codes` with its docstring, and `--rehearse` for `config set`,
   `config unset` and `flush`, each returning its plan and recording and writing nothing. Verify with tests for each
   scenario under "Every command that changes anything can be rehearsed" and "A rehearsal's exit code says what it
   found", and that the generated exit-code table in `docs/prompt-book/cli.md` lists the new code
+  - `test_cli_config.py`: a rehearsed set and unset (exit 3, "would …", nothing recorded or written), `flush
+    --rehearse` with a file out of date (3, naming it), in line (0) and refused (the refusal's own code), and a
+    rehearsed change that changes nothing (0). The exit-code table is regenerated. `perform --rehearse` comes with
+    perform from config, in 10.4.
 
 ## 10. Perform from config, character and direction (design D14, D16)
 
