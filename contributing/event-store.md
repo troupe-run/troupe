@@ -111,7 +111,16 @@ with `events.stream-forked`, which names each head, its version and its file. tr
 A **settling event** ends a fork. Its parents are every head (naming fewer is `events.settle-incomplete`), and it
 carries the settled state, built by the library's snapshot mechanics. Loading a settled stream starts from the
 settling event, so no event from either branch before it is applied. History keeps both branches. What the settled
-state is belongs to the aggregate: config's three-way merge decides it for config.
+state is belongs to the aggregate.
+
+**An aggregate can merge its own forks.** Config does (config-model design D5): it never loads its stream, but reads
+its whole `history`, both sides of any fork, and works out the merged state itself, so a merge of two branches'
+config changes is read rather than refused, and reading it records nothing. Its next change settles the fork in the
+same batch: `Command.record(events, settles=heads)` records a settling event first, whose parents are those heads,
+and the events after it follow it. Settling events are content-addressed like any other, so two clones that settle
+a fork to the same state record one event. Runs don't merge their forks: a run is written by one `perform` in one
+clone, so a forked run is a fault, and loading it is refused. `history` still refuses a missing parent, as every
+read of a stream does.
 
 ## Visibility and abandoned edits
 

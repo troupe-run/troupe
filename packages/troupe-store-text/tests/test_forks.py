@@ -1,10 +1,11 @@
 """Forks and settling (spec: event-store, "A forked stream is detected" and "A settling event ends a
-fork"; design D6)."""
+fork"; design D6; config-model design D5)."""
 
 from pathlib import Path
 from uuid import UUID
 
 import pytest
+from eventsourcing.domain import DomainEventProtocol
 from eventsourcing.utils import get_topic
 
 from gitrepo import Repo, make_repo
@@ -117,3 +118,84 @@ def _settled(aggregate: Counter, version: int) -> Settled:
         topic=get_topic(type(aggregate)),
         state={"value": aggregate.value},
     )
+
+
+# An aggregate that merges its own forks reads its stream's history, and settles with its next
+# change in one batch (config-model design D5).
+
+
+def _set(stream: UUID, version: int, value: int) -> list[DomainEventProtocol[UUID]]:
+    """A Counter's set event at ``version``, built without loading the stream."""
+    loose = Counter(value=0)
+    loose._id = stream
+    loose._version = version - 1
+    loose.set(value)
+    return [e for e in loose.collect_events() if e.originator_version == version]
+
+
+def test_a_forked_streams_history_is_read_whole_and_reading_it_records_nothing(
+    tmp_path: Path,
+) -> None:
+    repo, stream = forked(tmp_path)
+    before = sorted((repo.path / ".troupe" / "events").iterdir())
+    history = git_service(repo).history(stream)
+    assert [record.version for record in history] == [1, 2, 2]
+    assert sorted((repo.path / ".troupe" / "events").iterdir()) == before
+
+
+def test_one_batch_settles_a_fork_and_records_a_change_after_it(tmp_path: Path) -> None:
+    repo, stream = forked(tmp_path)
+    service = git_service(repo)
+    heads = [head.id for head in service.recorder.heads(stream)]
+    settled = Counter(value=12)
+    settled._id = stream
+    recorded = service.command(via="cli").record(
+        [_settled(settled, 3), *_set(stream, 4, 13)], settles=heads
+    )
+    assert len(recorded) == 2
+    assert service.forks() == []
+    loaded = git_service(repo).load(stream)
+    assert isinstance(loaded, Counter)
+    assert (loaded.value, loaded.version) == (13, 4)
+    *_, settling, change = git_service(repo).history(stream)
+    assert sorted(settling.parents) == sorted(heads)
+    assert change.parents == (settling.id,)
+
+
+def test_a_batch_that_settles_and_changes_is_all_or_nothing(tmp_path: Path) -> None:
+    repo, stream = forked(tmp_path)
+    service = git_service(repo)
+    heads = [head.id for head in service.recorder.heads(stream)]
+    settled = Counter(value=12)
+    settled._id = stream
+    with pytest.raises(TroupeError) as caught:
+        service.command(via="cli").record(
+            [_settled(settled, 3), *_set(stream, 2, 13)],
+            settles=heads,  # version 2 is taken
+        )
+    assert caught.value.code == "events.version-conflict"
+    assert service.forks() == [stream]
+    assert [record.version for record in git_service(repo).history(stream)] == [1, 2, 2]
+
+
+def test_two_clones_that_settle_a_fork_the_same_way_record_one_settling_event(
+    tmp_path: Path,
+) -> None:
+    repo, stream = forked(tmp_path)
+    repo.commit_all("merged")
+    repo.git("branch", "elsewhere")
+    settled = Counter(value=12)
+    settled._id = stream
+    for branch in ("main", "elsewhere"):
+        repo.git("switch", "-q", branch)
+        service = git_service(repo)
+        heads = [head.id for head in service.recorder.heads(stream)]
+        service.command(via="cli").record([_settled(settled, 3)], settles=heads)
+        repo.commit_all(f"settled on {branch}")
+    repo.git("switch", "-q", "main")
+    repo.git("merge", "-q", "--no-edit", "elsewhere")
+    service = git_service(repo)
+    assert service.forks() == []
+    history = service.history(stream)
+    assert [record.version for record in history] == [1, 2, 2, 3]
+    assert len(service.recordings(history[-1].id)) == 2
