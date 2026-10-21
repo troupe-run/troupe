@@ -30,8 +30,10 @@ def _entry_line(entry: dict[str, Any]) -> str:
     return f"{'changed' if 'before' in entry else 'set'} {path}"
 
 
-def _file_line(file: dict[str, Any]) -> str:
+def _file_line(file: dict[str, Any], *, rehearse: bool = False) -> str:
     verb = {"write": "wrote", "remove": "removed", "finish": "finished", "discard": "discarded"}
+    if rehearse:
+        verb = {action: action for action in verb}
     line = f"{verb[file['action']]} {file['path']} ({file['reason']})"
     if "kept" in file:
         line += f"; what it held is kept as {file['kept']}"
@@ -52,6 +54,11 @@ def _configure_set(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--reason", help="why, recorded with the change")
     parser.add_argument(
         "--json", action="store_true", help="read every value as JSON, whatever its schema says"
+    )
+    parser.add_argument(
+        "--rehearse",
+        action="store_true",
+        help="change nothing: show what would be recorded and written",
     )
 
 
@@ -89,16 +96,21 @@ def _assignments(raw: list[str]) -> list[tuple[str, str]]:
     return found
 
 
-def _render_change(result: dict[str, Any], stdout: TextIO) -> None:
+def _render_change(result: dict[str, Any], stdout: TextIO, *, rehearse: bool) -> ExitCode:
     if not result["entries"]:
         print("Nothing changed: config already holds that.", file=stdout)
-        return
+        return ExitCode.OK
+    would = "would " if rehearse else ""
     for entry in result["entries"]:
-        print(_entry_line(entry), file=stdout)
+        print(would + _entry_line(entry), file=stdout)
     for file in result["files"]:
-        print(_file_line(file), file=stdout)
+        print(would + _file_line(file, rehearse=rehearse), file=stdout)
     if "change" in result:
         print(f"recorded change {result['change']}", file=stdout)
+    if rehearse:
+        print("Rehearsal: nothing was recorded or written.", file=stdout)
+        return ExitCode.WOULD_CHANGE
+    return ExitCode.OK
 
 
 def _run_set(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
@@ -114,12 +126,13 @@ def _run_set(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> E
     params: dict[str, Any] = {"operations": operations}
     if arguments.reason is not None:
         params["reason"] = arguments.reason
+    if arguments.rehearse:
+        params["rehearse"] = True
     result = _call(
         "config-set", params, _session(), lambda u: _show_notice(u, stderr), _ignore_cancel
     )
     _notices(result, stderr)
-    _render_change(result, stdout)
-    return ExitCode.OK
+    return _render_change(result, stdout, rehearse=arguments.rehearse)
 
 
 def _configure_unset(parser: argparse.ArgumentParser) -> None:
@@ -130,6 +143,11 @@ def _configure_unset(parser: argparse.ArgumentParser) -> None:
         help="a value or a group to remove, such as actors.tester",
     )
     parser.add_argument("--reason", help="why, recorded with the change")
+    parser.add_argument(
+        "--rehearse",
+        action="store_true",
+        help="change nothing: show what would be recorded and written",
+    )
 
 
 def _run_unset(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
@@ -138,12 +156,13 @@ def _run_unset(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) ->
     }
     if arguments.reason is not None:
         params["reason"] = arguments.reason
+    if arguments.rehearse:
+        params["rehearse"] = True
     result = _call(
         "config-set", params, _session(), lambda u: _show_notice(u, stderr), _ignore_cancel
     )
     _notices(result, stderr)
-    _render_change(result, stdout)
-    return ExitCode.OK
+    return _render_change(result, stdout, rehearse=arguments.rehearse)
 
 
 # config get
@@ -202,16 +221,26 @@ def _configure_flush(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="replace files troupe didn't write too, keeping a copy of each",
     )
+    parser.add_argument(
+        "--rehearse", action="store_true", help="change nothing: show what would be written"
+    )
 
 
 def _run_flush(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
     params: dict[str, Any] = {"force": True} if arguments.force else {}
+    if arguments.rehearse:
+        params["rehearse"] = True
     result = _call("flush", params, _session(), lambda u: _show_notice(u, stderr), _ignore_cancel)
     _notices(result, stderr)
     if not result["files"]:
         print("Nothing to do: the config files are what config says.", file=stdout)
+        return ExitCode.OK
+    would = "would " if arguments.rehearse else ""
     for file in result["files"]:
-        print(_file_line(file), file=stdout)
+        print(would + _file_line(file, rehearse=arguments.rehearse), file=stdout)
+    if arguments.rehearse:
+        print("Rehearsal: nothing was written.", file=stdout)
+        return ExitCode.WOULD_CHANGE
     return ExitCode.OK
 
 

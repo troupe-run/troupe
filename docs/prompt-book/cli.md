@@ -97,7 +97,7 @@ troupe logs <run> [--follow] [--json]
 Set config values, as one change.
 
 ```text
-troupe config set <path=value> [--reason <reason>] [--json]
+troupe config set <path=value> [--reason <reason>] [--json] [--rehearse]
 ```
 
 | Argument | Required | What it is |
@@ -105,19 +105,21 @@ troupe config set <path=value> [--reason <reason>] [--json]
 | `<path=value>` | Yes | A value to set, such as actors.tester.runner=scripted; path=@file reads it from a file |
 | `--reason <reason>` | No | Why, recorded with the change |
 | `--json` | No | Read every value as JSON, whatever its schema says |
+| `--rehearse` | No | Change nothing: show what would be recorded and written |
 
 ### `troupe config unset`
 
 Remove config values or groups, as one change.
 
 ```text
-troupe config unset <path> [--reason <reason>]
+troupe config unset <path> [--reason <reason>] [--rehearse]
 ```
 
 | Argument | Required | What it is |
 |---|---|---|
 | `<path>` | Yes | A value or a group to remove, such as actors.tester |
 | `--reason <reason>` | No | Why, recorded with the change |
+| `--rehearse` | No | Change nothing: show what would be recorded and written |
 
 ### `troupe config get`
 
@@ -137,12 +139,13 @@ troupe config get [<path>] [--json]
 Make the config files exactly what config says.
 
 ```text
-troupe flush [--force]
+troupe flush [--force] [--rehearse]
 ```
 
 | Argument | Required | What it is |
 |---|---|---|
 | `--force` | No | Replace files troupe didn't write too, keeping a copy of each |
+| `--rehearse` | No | Change nothing: show what would be written |
 
 ### Global flags
 
@@ -207,5 +210,6 @@ went wrong and how to fix it.
 | 0 | `OK` | The command completed. |
 | 1 | `FAILURE` | The command could not complete. The error says why and what to do. |
 | 2 | `USAGE` | The command line was not understood: an unknown command or flag, or a malformed value. |
+| 3 | `WOULD_CHANGE` | A rehearsal (`--rehearse`) found that the command would succeed and change something: record a change, write a file, or start a run. A rehearsal with nothing to do exits 0, and one that would be refused exits with the refusal's own code, so CI can tell the three apart. |
 | 130 | `CANCELLED` | You cancelled the command with Ctrl-C, and it stopped cleanly: `troupe perform` records the run as `cancelled`. 130 is the shell's code for an interrupt (128 + SIGINT), and troupe uses it on every platform. |
 <!-- end generated: exit-codes -->

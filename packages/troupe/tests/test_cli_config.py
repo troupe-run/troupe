@@ -14,7 +14,8 @@ from storetesting import git_service
 from troupe.cli import COMMANDS, main
 from troupe.cli.parser import parse
 from troupe.core.config import aggregate
-from troupe.core.errors import TroupeError
+from troupe.core.errors import CODES, TroupeError
+from troupe.core.exit_codes import ExitCode
 
 STEPS = '[{"exit": 0}]'
 
@@ -187,3 +188,58 @@ def test_a_config_commands_unknown_flag_is_refused_naming_it() -> None:
     with pytest.raises(TroupeError) as caught:
         parse(["config", "get", "--force"], COMMANDS)
     assert caught.value.code == "usage.unknown-flag"
+
+
+# Requirement: Every command that changes anything can be rehearsed
+
+
+def test_rehearsing_a_config_change_shows_it_and_records_and_writes_nothing(repo: Repo) -> None:
+    code, out, _ = _tester("--rehearse")
+    assert code == ExitCode.WOULD_CHANGE
+    assert "would set actors.tester.runner" in out
+    assert "would write .troupe/actors/tester.yaml" in out
+    assert "Rehearsal: nothing was recorded or written." in out
+    assert git_service(repo).history(aggregate.STREAM) == []
+    assert not (repo.path / ".troupe" / "actors").exists()
+
+
+def test_rehearsing_an_unset_records_nothing(repo: Repo) -> None:
+    _tester()
+    code, out, _ = cli("config", "unset", "actors.tester", "--rehearse")
+    assert code == ExitCode.WOULD_CHANGE
+    assert "would unset actors.tester" in out
+    assert len(git_service(repo).history(aggregate.STREAM)) == 1
+    assert (repo.path / ".troupe" / "actors" / "tester.yaml").exists()
+
+
+# Requirement: A rehearsal's exit code says what it found
+
+
+def test_flush_rehearsed_with_a_file_out_of_date_exits_would_change_naming_it(
+    repo: Repo,
+) -> None:
+    _tester()
+    (repo.path / ".troupe" / "actors" / "tester.yaml").unlink()
+    code, out, _ = cli("flush", "--rehearse")
+    assert code == ExitCode.WOULD_CHANGE
+    assert int(ExitCode.WOULD_CHANGE) == 3
+    assert "would write .troupe/actors/tester.yaml" in out
+    assert not (repo.path / ".troupe" / "actors" / "tester.yaml").exists()
+
+
+def test_flush_rehearsed_with_files_in_line_exits_0(repo: Repo) -> None:
+    _tester()
+    assert cli("flush", "--rehearse")[0] == ExitCode.OK
+
+
+def test_a_rehearsal_that_would_be_refused_exits_with_the_refusals_code(repo: Repo) -> None:
+    _tester()
+    (repo.path / ".troupe" / "actors" / "tester.yaml").write_text("# mine\n", encoding="utf-8")
+    code, _, err = cli("flush", "--rehearse")
+    assert code == CODES["config.file-not-troupes"]
+    assert ".troupe/actors/tester.yaml" in err
+
+
+def test_a_rehearsed_change_that_changes_nothing_exits_0(repo: Repo) -> None:
+    _tester()
+    assert cli("config", "set", "actors.tester.runner=scripted", "--rehearse")[0] == ExitCode.OK
