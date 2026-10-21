@@ -245,6 +245,29 @@
           }
         }
       }
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "config.file-rewritten"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "reason"
+          ],
+          "properties": {
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
     }
   ],
   "$defs": {

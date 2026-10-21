@@ -187,3 +187,69 @@ def check(config: Mapping[str, Any]) -> None:
             fix=first.fix,
             details={"path": list(first.path), "rule": first.rule},
         )
+
+
+# The registry of file kinds (config-model design D7): which files under .troupe/ are config, and
+# which aren't. Paths are relative to .troupe/, with / separators.
+
+RESERVED = ("events", "local", ".gitignore", ".gitattributes", "troupe.yaml")
+"""Never config: the event store's, troupe's own git files, and troupe.yaml, held for #6's root
+file."""
+
+CONFIG_DIRECTORIES = ("actors",)
+"""The directories that hold config files, one per kind."""
+
+OPERATING_SYSTEM_FILES = (".DS_Store", "Thumbs.db", "desktop.ini")
+"""Files an operating system leaves in any directory, ignored wherever they are."""
+
+STAGED_SUFFIX = ".troupe~"
+"""A file troupe is part-way through writing is staged beside its target as ``.<name>.troupe~``
+(design D9)."""
+
+
+@dataclass(frozen=True)
+class FileKind:
+    """A kind of config file: where it is, and what of an actor it holds."""
+
+    pattern: re.Pattern[str]
+    kind: str
+    holds: str
+    """``fields`` (the YAML file: everything but the character), or ``character`` (the text)."""
+    schema: str | None
+
+
+FILE_KINDS = (
+    FileKind(re.compile(r"\Aactors/(?P<name>[^/]+)\.yaml\Z"), ACTORS, "fields", ACTOR_SCHEMA),
+    FileKind(re.compile(r"\Aactors/(?P<name>[^/]+)\.md\Z"), ACTORS, "character", None),
+)
+"""Each kind of config file, matched by path. Shaped as a guest's registration will need (a
+pattern, a kind and a schema), though guests can't add to it yet."""
+
+
+def actor_files(name: str) -> tuple[str, str]:
+    """The paths, relative to .troupe/, of the actor ``name``'s YAML file and character file."""
+    return f"actors/{name}.yaml", f"actors/{name}.md"
+
+
+def staged_name(path: str) -> str:
+    """Where ``path`` (relative to .troupe/) is staged while troupe writes it."""
+    directory, _, name = path.rpartition("/")
+    return f"{directory}/.{name}{STAGED_SUFFIX}" if directory else f".{name}{STAGED_SUFFIX}"
+
+
+def staged_target(path: str) -> str | None:
+    """The file a staged ``path`` is for, or None when ``path`` isn't a staged file."""
+    directory, _, name = path.rpartition("/")
+    if not (name.startswith(".") and name.endswith(STAGED_SUFFIX)):
+        return None
+    target = name[1 : -len(STAGED_SUFFIX)]
+    return f"{directory}/{target}" if directory else target
+
+
+def file_kind(path: str) -> FileKind | None:
+    """The kind of config file at ``path``, or None when it's no kind of config file."""
+    for kind in FILE_KINDS:
+        match = kind.pattern.match(path)
+        if match and ACTOR_NAME.match(match["name"]):
+            return kind
+    return None

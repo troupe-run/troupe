@@ -144,25 +144,39 @@
 
 ## 7. Files: the registry, flush and the check before replacing (design D7, D8, D9)
 
-- [ ] 7.1 Add `troupe.core.config.kinds` (D7): the actor's `.yaml` and `.md`, the reserved names, staged writes and the
+- [x] 7.1 Add `troupe.core.config.kinds` (D7): the actor's `.yaml` and `.md`, the reserved names, staged writes and the
   named operating-system files. Verify with tests that a stray file in `actors/` is `config.unknown-file` and
   `.DS_Store` is ignored
-- [ ] 7.2 Render files (D9): YAML with ruamel.yaml, block style, keys in schema order, the language-server comment and
+- [x] 7.2 Render files (D9): YAML with ruamel.yaml, block style, keys in schema order, the language-server comment and
   the `$schema` key first, both naming `https://troupe.run/protocol/0/config/actor.schema.json`, and the character's
   text exactly. Verify a written actor file validates against the actor schema troupe carries
-- [ ] 7.3 Add the check before replacing (D8): what config would write now, any hash in a change's `files`, the local
+- [x] 7.3 Add the check before replacing (D8): what config would write now, any hash in a change's `files`, the local
   written record (`.troupe/local/config/written.jsonl`, a torn last line trimmed), or no file. Anything else is
   `config.file-not-troupes`. Verify with tests for a hand edit (refused, nothing recorded), a file restored from an
   earlier commit, a deleted file and a clean git merge of two branches' files
-- [ ] 7.4 Add staged writes and recovery (D9) under the projection lock: stage `.<file>.troupe~`, record, replace with
+- [x] 7.4 Add staged writes and recovery (D9) under the projection lock: stage `.<file>.troupe~`, record, replace with
   the platform seam's atomic replace; on the next flush, move a staged file an event names, and remove one no event
   names. Verify with tests that stop after recording and before recording (by injecting a failure), and a test that
   two config commands in two processes queue, with the wait announced
-- [ ] 7.5 Add `flush` in the core, run first by every command that uses config, and `--force`, which stores each
+- [x] 7.5 Add `flush` in the core, run first by every command that uses config, and `--force`, which stores each
   replaced file's bytes in the artifact store and names its hash. Verify with tests for each scenario under "Flush
   makes the files what config says" and "Force replaces a file and keeps a copy"
+  - Group 7 as built: the registry in `troupe.core.config.kinds`; `troupe.core.config.projection` (rendering, the
+    check before replacing, staged writes and their recovery, this clone's record of files flush wrote, the lock
+    with an announced wait, `flush` and `execute`). New codes: `config.unknown-file`, `config.file-not-troupes`,
+    `config.local-malformed`, and the notice `config.file-rewritten`.
+  - `test_config_files.py` (23 tests). Its YAML round-trip property (every file reads back the same under YAML 1.2
+    and YAML 1.1, as PyYAML and many editors read it) found two real bugs on its first runs, both fixed and pinned
+    as examples: a string holding NEL (U+0085, a line break to YAML 1.1) written raw, and a float such as `1e-05`
+    written without the dot a YAML 1.1 float needs. A one-off run of 6,000 examples then passed (2026-10-22). The
+    queueing test holds the lock in a child process and checks the flush waited and announced it.
+  - "Perform flushes first" (a scenario under "Flush makes the files what config says") is checked with perform,
+    in 10.3.
 - [ ] 7.6 Add a test on Windows CI that a config file committed and checked out again with `core.autocrlf=true` keeps
   troupe's line endings and isn't refused. Verify it runs (not skipped) on the Windows runners
+  - Written (`test_a_config_file_checked_out_with_autocrlf_keeps_troupes_line_endings`, with a control that removes
+    the attribute and sees the file turn CRLF and be refused). `core.autocrlf` converts on any OS, so it runs on all
+    three, and passes on macOS. Ticked once CI shows it passing on the Windows runners (11.3).
 
 ## 8. Commands, the client protocol and the CLI (design D10)
 
