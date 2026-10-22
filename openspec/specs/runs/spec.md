@@ -79,14 +79,24 @@ runner ended, the transcript's and standard error's references, and the limits i
 - **THEN** the run's end records outcome `failed`, error `run.error-result`, and the transcript's `sha256:` reference
 
 ### Requirement: What a run was asked to do is kept
-The run's start SHALL record the actor's name, the runner requested and the effect check. The instructions and the
-runner's options SHALL be stored as artifacts, and the run's start SHALL reference them by hash.
+The run's start SHALL record the actor's name, the runner requested, the effect check, and the config version it ran
+with: the sorted ids of the config stream's heads that the merged config was worked out from. The direction SHALL be
+stored as an artifact, and the run's start SHALL reference it by hash.
+
+#### Scenario: The config a run used
+- **WHEN** a run is performed, and the actor's options are changed afterwards
+- **THEN** the run's start names the config version from before the change
+- **AND** working out config at that version gives the options the run used
 
 #### Scenario: Options are referenced, not inlined
-- **WHEN** a run is performed with runner options holding an inline script
-- **THEN** the run's start holds a `sha256:` reference whose artifact is those options, byte for byte as canonical
-  JSON
-- **AND** no event in the run's stream holds the script itself
+- **WHEN** a run is performed for an actor whose options hold an inline script
+- **THEN** no event in the run's stream holds the script itself
+- **AND** the run's start references the options through its config version, not as an artifact of their own
+
+#### Scenario: The direction is referenced, not inlined
+- **WHEN** a run is performed with a direction
+- **THEN** the run's start holds a `sha256:` reference whose artifact is that direction, byte for byte
+- **AND** no event in the run's stream holds the direction itself
 
 ### Requirement: Ctrl-C cancels the run, and the cancel is recorded
 An interrupt during `perform` SHALL cancel the run through the run host, and `perform` SHALL record the run's end.
@@ -248,3 +258,16 @@ was recorded, and `transcript` when the runner never started.
 #### Scenario: A run event fails to record and the end is recorded
 - **WHEN** recording the run event with `seq` 2 fails and the run's end is recorded
 - **THEN** the details have `failedAt` 2 and no `endError`
+
+### Requirement: A run uses the actor as config defines it
+`perform` SHALL take the actor's runner, options, effect check and character from the merged config, as it is when
+the run starts. A request SHALL name only the actor, the direction and whether to rehearse.
+
+#### Scenario: The character reaches the runner
+- **WHEN** config gives `tester` a character, and a person performs `tester` with the scripted runner and a script
+  that checks the character it receives
+- **THEN** the run succeeds, because the runner received exactly that character
+
+#### Scenario: Config changed between two runs
+- **WHEN** a person performs `tester`, changes its runner's options, and performs it again
+- **THEN** the second run uses the new options

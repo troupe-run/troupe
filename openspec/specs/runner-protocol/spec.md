@@ -60,10 +60,11 @@ then exit. A second `run/start` SHALL be answered with an error.
 - **THEN** the runner answers with an error and the first run is unaffected
 
 ### Requirement: Run start carries everything the runner may use
-The `run/start` request SHALL carry the run id (a UUID in canonical lowercase form), the actor's instructions, the workspace directory, the
+The `run/start` request SHALL carry the run id (a UUID in canonical lowercase form), the run's direction (what the
+actor is asked to do), the actor's character (who it is) when it has one, the workspace directory, the
 runner-specific options as an object, and the limits the runner must respect, including the maximum size of one
-event. The runner SHALL use no other source of instructions or configuration from troupe. The contract's schema
-SHALL mark the options as an extension point that the runner's published options schema fills.
+event. The runner SHALL use no other source of direction, character or configuration from troupe. The contract's
+schema SHALL mark the options as an extension point that the runner's published options schema fills.
 
 #### Scenario: Run start is accepted
 - **WHEN** the runner receives a valid `run/start`
@@ -72,6 +73,14 @@ SHALL mark the options as an extension point that the runner's published options
 #### Scenario: Run id is not a UUID
 - **WHEN** a `run/start` carries a run id that is not a canonical lowercase UUID
 - **THEN** it does not validate against the contract's schema
+
+#### Scenario: An actor with no character
+- **WHEN** troupe starts a run for an actor that has no character
+- **THEN** the `run/start` has no `character` field, rather than a null or an empty string
+
+#### Scenario: Direction and character stay apart
+- **WHEN** troupe starts a run for an actor with a character, with a direction
+- **THEN** the `run/start` carries each in its own field, unchanged
 
 #### Scenario: Runner-specific options are opaque to the host
 - **WHEN** `run/start` carries options for the runner

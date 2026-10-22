@@ -172,11 +172,13 @@
     queueing test holds the lock in a child process and checks the flush waited and announced it.
   - "Perform flushes first" (a scenario under "Flush makes the files what config says") is checked with perform,
     in 10.3.
-- [ ] 7.6 Add a test on Windows CI that a config file committed and checked out again with `core.autocrlf=true` keeps
+- [x] 7.6 Add a test on Windows CI that a config file committed and checked out again with `core.autocrlf=true` keeps
   troupe's line endings and isn't refused. Verify it runs (not skipped) on the Windows runners
   - Written (`test_a_config_file_checked_out_with_autocrlf_keeps_troupes_line_endings`, with a control that removes
     the attribute and sees the file turn CRLF and be refused). `core.autocrlf` converts on any OS, so it runs on all
     three, and passes on macOS. Ticked once CI shows it passing on the Windows runners (11.3).
+  - Passes on the Windows runners: PR #142's run 39707887194 (c5f3507), where the only tests skipped on Windows are
+    the three Linux-and-macOS process tests and the opt-in conformance check.
 
 ## 8. Commands, the client protocol and the CLI (design D10)
 
@@ -357,8 +359,12 @@
     a fix that takes one side first (a spec scenario under "Only a file troupe wrote is replaced", tested by
     `test_a_file_git_left_conflicted_is_refused_with_how_to_take_a_side`, and documented in
     `hand-edit-config.md`). The real fix is placeholder #141.
-- [ ] 11.3 Run `uv run scripts/check.py` and verify it passes. Open the PR with `Closes #60`, and verify every CI job
+- [x] 11.3 Run `uv run scripts/check.py` and verify it passes. Open the PR with `Closes #60`, and verify every CI job
   passes on Linux, macOS and Windows, including 7.6's Windows test
+  - PR #142 (`Closes #60`). The first run failed on Windows only: two tests wrote a hand edit with `write_text`,
+    which writes `\r\n` there, so the bytes troupe kept weren't the bytes they expected (a test bug, fixed in
+    c5f3507). Run 39707887194 then passed every job: Linux, macOS and Windows on Python 3.12 to 3.15, the guard and
+    DCO. The full local check passes too (2321 passed, 7 skipped).
 
 ## Workflow follow-up
 
