@@ -250,7 +250,7 @@ def test_flush_rehearsed_reports_and_writes_nothing(repo: Repo) -> None:
 
 def test_flush_forced_past_a_hand_edit_names_where_the_edit_was_kept(repo: Repo) -> None:
     _set(repo, (TESTER_PATH, TESTER))
-    _actor_file(repo).write_text("# mine\n", encoding="utf-8")
+    _actor_file(repo).write_bytes(b"# mine\n")  # these bytes exactly, on Windows too
     result = _call(repo, "flush", {"force": True})
     [forced] = [f for f in result["files"] if "kept" in f]
     assert forced["kept"] == projection.file_hash(b"# mine\n")
