@@ -247,7 +247,7 @@ def test_force_replaces_a_hand_edit_and_names_the_hash_its_bytes_are_kept_under(
 ) -> None:
     theatre = _theatre(tmp_path)
     flush(theatre, CONFIG, {})
-    _actor_file(theatre).write_text("# mine\n", encoding="utf-8")
+    _actor_file(theatre).write_bytes(b"# mine\n")  # these bytes exactly, on Windows too
     flushed = flush(theatre, CONFIG, {}, force=True)
     assert _actor_file(theatre).read_bytes() == render(CONFIG)["actors/tester.yaml"]
     kept = flushed.kept["actors/tester.yaml"]
