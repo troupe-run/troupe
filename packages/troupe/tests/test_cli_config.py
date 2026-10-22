@@ -8,10 +8,12 @@ from pathlib import Path
 import pytest
 
 from client_schemas import check
+from configtesting import on
 from gitrepo import Repo
 from runtesting import ADA, theatre
 from storetesting import git_service
 from troupe.cli import COMMANDS, main
+from troupe.cli.config import SHOWN
 from troupe.cli.parser import parse
 from troupe.core.config import aggregate
 from troupe.core.errors import CODES, TroupeError
@@ -59,7 +61,7 @@ def test_config_set_records_one_change_writes_the_files_and_says_so(repo: Repo) 
     code, out, _ = _tester()
     assert code == 0
     assert "set actors.tester.runner" in out
-    assert "wrote .troupe/actors/tester.yaml" in out
+    assert "wrote .troupe/actors/tester.yaml (for this change)" in out
     assert "recorded change " in out
     assert len(git_service(repo).history(aggregate.STREAM)) == 1
     assert (repo.path / ".troupe" / "actors" / "tester.yaml").is_file()
@@ -106,6 +108,43 @@ def test_config_get_shows_a_string_value_as_it_is(repo: Repo) -> None:
     _tester()
     code, out, _ = cli("config", "get", "actors.tester.runner")
     assert (code, out) == (0, "scripted\n")
+
+
+def test_config_get_with_a_conflict_shows_what_each_side_set_it_to(repo: Repo) -> None:
+    character = ["actors", "tester", "character"]
+    assert _tester()[0] == 0
+    repo.commit_all("tester")
+    repo.git("branch", "feature")
+    on(repo, "feature", [(character, "x" * 100)])
+    on(repo, "main", [(character, "You test.")])
+    repo.git("merge", "-q", "--no-edit", "feature")
+    code, out, _ = cli("config", "get")
+    assert code == 0
+    assert "conflict at actors.tester.character: these changes set it differently" in out
+    assert 'set actors.tester.character to "You test."' in out
+    assert f'to "{"x" * (SHOWN - 1)}... (102 characters in all)' in out
+
+
+def test_a_file_git_left_conflicted_is_refused_with_how_to_take_a_side(repo: Repo) -> None:
+    assert _tester()[0] == 0
+    repo.commit_all("tester")
+    repo.git("branch", "feature")
+    for branch, character in (("feature", "One."), ("main", "Two.")):
+        repo.git("switch", "-q", branch)
+        assert cli("config", "set", f"actors.tester.character={character}")[0] == 0
+        repo.commit_all(character)
+    with pytest.raises(AssertionError, match="git merge"):
+        repo.git("merge", "-q", "--no-edit", "feature")
+    unmerged = repo.git("diff", "--name-only", "--diff-filter=U").split()
+    assert unmerged == [".troupe/actors/tester.md"]
+    code, _, err = cli("config", "set", "actors.tester.character=Both.")
+    assert code == CODES["config.file-not-troupes"]
+    assert "has git's conflict markers in it" in err
+    assert "git checkout --ours .troupe/actors/tester.md" in err
+    repo.git("checkout", "--ours", ".troupe/actors/tester.md")
+    assert cli("config", "set", "actors.tester.character=Both.")[0] == 0
+    assert (repo.path / ".troupe" / "actors" / "tester.md").read_text(encoding="utf-8") == "Both."
+    assert cli("flush", "--rehearse")[0] == 0
 
 
 def test_flush_with_nothing_to_do_says_so(repo: Repo) -> None:

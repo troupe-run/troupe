@@ -62,7 +62,7 @@ vouches for is a write a crash cut short, and the next flush finishes it; one no
 |---|---|
 | `config.invalid` | A change would make config break a rule: an unknown field, an option its runner doesn't define, a missing effect check, a bad name. Names the path and the rule |
 | `config.conflict` | Branches' config changes conflict, so config can't be used until they're resolved |
-| `config.file-not-troupes` | A config file isn't one troupe wrote, so it won't be replaced |
+| `config.file-not-troupes` | A config file isn't one troupe wrote, so it won't be replaced. A file with git's conflict markers gets a fix that takes one side first, since `git restore` doesn't work on an unmerged path (#141) |
 | `config.unknown-file` | A file in a config directory matches no kind of config file |
 | `config.local-malformed` | This clone's record of the files flush wrote has a malformed line before its last |
 | `schemas.plugin-missing` | A runner's package isn't installed, or ships no schemas |

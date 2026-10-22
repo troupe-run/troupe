@@ -144,7 +144,7 @@ async def config_set(request: m.ConfigSetRequest, session: Session, send: Send) 
     return m.ConfigSetResult(
         change=command.change,
         entries=entries,
-        files=_files(done.changes, kept, finished="the change"),
+        files=_files(done.changes, kept, finished="for this change"),
         notices=_notices(before, store.notices()),
     )
 
