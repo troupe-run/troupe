@@ -23,11 +23,22 @@ def _show_notice(update: dict[str, Any], stderr: TextIO) -> None:
         print(render_notice(update["notice"]), file=stderr, flush=True)
 
 
-def _entry_line(entry: dict[str, Any]) -> str:
+SHOWN = 72
+"""The most of a value a conflict shows, in characters of its JSON."""
+
+
+def _entry_line(entry: dict[str, Any], *, value: bool = False) -> str:
+    """What one entry did. With ``value``, what it set the value to, shortened past ``SHOWN``."""
     path = ".".join(entry["path"])
     if "after" not in entry:
         return f"unset {path}"
-    return f"{'changed' if 'before' in entry else 'set'} {path}"
+    line = f"{'changed' if 'before' in entry else 'set'} {path}"
+    if not value:
+        return line
+    shown = json.dumps(entry["after"], ensure_ascii=False)
+    if len(shown) > SHOWN:
+        shown = f"{shown[:SHOWN]}... ({len(shown)} characters in all)"
+    return f"{line} to {shown}"
 
 
 def _file_line(file: dict[str, Any], *, rehearse: bool = False) -> str:
@@ -186,7 +197,7 @@ def _conflict_lines(conflict: dict[str, Any]) -> list[str]:
     for change in conflict["changes"]:
         who = change["actor"].get("id", "someone unknown")
         lines.append(f"  change {change['change']} by {who} at {change['at']}:")
-        lines += [f"    {_entry_line(entry)}" for entry in change["entries"]]
+        lines += [f"    {_entry_line(entry, value=True)}" for entry in change["entries"]]
     return lines
 
 

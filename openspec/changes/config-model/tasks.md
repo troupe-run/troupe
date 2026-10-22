@@ -267,13 +267,96 @@
 
 ## 11. Integration
 
-- [ ] 11.1 In a fresh scratch theatre, follow `docs/opening-night/first-performance.md` as written: define the actor
+- [x] 11.1 In a fresh scratch theatre, follow `docs/opening-night/first-performance.md` as written: define the actor
   with `troupe config set`, `troupe perform` it with a direction, read it back with `troupe status` and `troupe logs`,
   and check that the run's start names the config version and that the files under `.troupe/actors/` are what config
   says (`troupe flush --rehearse` exits 0). Record the transcript in this task
-- [ ] 11.2 In a scratch git repository, make config changes on two branches (one to each of two actors, then one to the
+  - Run 2026-10-21 in a new git repository with `mkdir .troupe` (first-theatre.md), `hello.json` copied from the page:
+
+    ```text
+    $ troupe config set actors.tester.runner=scripted actors.tester.options=@hello.json 'actors.tester.expect=["out/hello.txt"]'
+    set actors.tester.expect
+    set actors.tester.options.script.steps
+    set actors.tester.runner
+    wrote .troupe/actors/tester.yaml (for this change)
+    recorded change 01M5FM91EXMTZKGE78412Y60GH
+    $ export TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE=true
+    $ troupe perform tester --rehearse --direction "say hello"
+    would perform tester
+      runner: scripted
+      stage: local, effects unenforced
+      effect check: out/hello.txt
+      character: none
+      direction: 9 characters, sha256:3cad3da3...
+      config: sha256:7be1224d...
+    Rehearsal: nothing was started or recorded.
+    [exit 3]
+    $ troupe perform tester --direction "say hello"
+    troupe: run 00b085f3-ab62-47cc-8d66-2dc1c20890ca starting; follow it from another terminal with `troupe logs 00b085f3 --follow`
+         0 2026-10-21T16:21:29.516Z init: scripted 0.1.0
+         1 2026-10-21T16:21:29.518Z result: ok: wrote out/hello.txt
+    run 00b085f3-ab62-47cc-8d66-2dc1c20890ca succeeded
+    $ cat out/hello.txt
+    hello
+    $ troupe status
+    00b085f3-ab62-47cc-8d66-2dc1c20890ca  succeeded  tester  2026-10-21T16:21:29.513Z  2 events
+    $ troupe logs 00b085f3
+         0 2026-10-21T16:21:29.516Z init: scripted 0.1.0
+         1 2026-10-21T16:21:29.518Z result: ok: wrote out/hello.txt
+    run 00b085f3-ab62-47cc-8d66-2dc1c20890ca: succeeded
+    $ troupe flush --rehearse
+    Nothing to do: the config files are what config says.
+    [exit 0]
+    ```
+
+    `Run.Started` recorded `config: ["sha256:7be1224d..."]`, the version the rehearsal showed, and `direction` as the
+    artifact's hash. The walk-through first printed `(the change)` after the written file, which read oddly; it now
+    says `(for this change)`, pinned in `test_cli_config.py`.
+- [x] 11.2 In a scratch git repository, make config changes on two branches (one to each of two actors, then one to the
   same value), merge them, and check `troupe config get` shows the merged config, then the conflict, and that a
   resolving `troupe config set` settles it. Record the transcript in this task
+  - Run 2026-10-21, with actors `alpha` and `beta` defined on main (`expect=[]`):
+
+    ```text
+    (branch one) $ troupe config set 'actors.alpha.expect=["a.txt"]' --reason "alpha writes a.txt"
+    (branch two) $ troupe config set 'actors.beta.expect=["b.txt"]' --reason "beta writes b.txt"
+    (main) $ git merge --no-edit one two          # clean, files included
+    $ troupe config get actors.alpha.expect        # ["a.txt"]
+    $ troupe config get actors.beta.expect         # ["b.txt"]
+    $ troupe flush --rehearse                      # Nothing to do [exit 0]
+    (branch three) $ troupe config set 'actors.alpha.expect=["c.txt"]'
+    (branch four)  $ troupe config set 'actors.alpha.expect=["d.txt"]'
+    (main) $ git merge --no-edit three four
+    ERROR: content conflict in .troupe/actors/alpha.yaml
+    $ troupe config get actors.alpha
+    { ...the config... }
+    conflict at actors.alpha.expect: these changes set it differently
+      change 01M5FMD9F8Y00D2XT6YEJHH9F6 by ada@example.com at 2026-10-21T16:23:47.952Z:
+        changed actors.alpha.expect to ["c.txt"]
+      change 01M5FMDK088GP1RVJEXAPY8PMG by ada@example.com at 2026-10-21T16:23:57.707Z:
+        changed actors.alpha.expect to ["d.txt"]
+    $ troupe config set 'actors.alpha.expect=["c.txt"]' --reason "alpha writes c.txt only"
+    troupe: .troupe/actors/alpha.yaml has git's conflict markers in it, from merging branches that changed it, ...
+      fix: Take one side's file (git checkout --ours .troupe/actors/alpha.yaml), then run troupe config get ...
+    $ git checkout --ours .troupe/actors/alpha.yaml
+    $ troupe config set 'actors.alpha.expect=["c.txt"]' --reason "alpha writes c.txt only"
+    changed actors.alpha.expect
+    wrote .troupe/actors/alpha.yaml (for this change)
+    recorded change 01M5GKY7663KR8293RN8V66W1N
+    $ troupe config get actors.alpha.expect        # ["c.txt"], no conflict
+    $ troupe flush --rehearse                      # Nothing to do [exit 0]
+    $ git add -A && git commit --no-edit           # the merge, clean
+    ```
+
+  - The walk-through found two gaps. **The conflict didn't show the values:** each side was only
+    `changed actors.alpha.expect`, so you couldn't see what to choose. It now shows what each side set, shortened
+    past 72 characters (`test_config_get_with_a_conflict_shows_what_each_side_set_it_to`). **git's text conflict
+    in the projection file blocked the resolution:** troupe read the conflict markers as a hand edit, and its fix
+    (`git restore`) doesn't work on an unmerged path. The merge tests had missed it because they record changes
+    without writing the files. The owner chose to document it for now: a file with conflict markers is refused with
+    a fix that takes one side first (a spec scenario under "Only a file troupe wrote is replaced", tested by
+    `test_a_file_git_left_conflicted_is_refused_with_how_to_take_a_side`, and documented in
+    `hand-edit-config.md`). The real fix is placeholder #141.
 - [ ] 11.3 Run `uv run scripts/check.py` and verify it passes. Open the PR with `Closes #60`, and verify every CI job
   passes on Linux, macOS and Windows, including 7.6's Windows test
 

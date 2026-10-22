@@ -66,6 +66,13 @@ and nothing SHALL be written.
 - **WHEN** a person restores `.troupe/actors/tester.yaml` from an earlier commit and runs `troupe flush`
 - **THEN** the file is written again from config, with a notice naming it
 
+#### Scenario: A file git left conflicted
+- **WHEN** git merges two branches that changed `.troupe/actors/tester.md`, leaves its conflict markers in the file,
+  and a person runs `troupe config set actors.tester.character=Both.`
+- **THEN** it is refused with `config.file-not-troupes`, saying the file has git's conflict markers in it, and that
+  the fix is to take one side with `git checkout --ours`, resolve, then `git add` the file and commit the merge
+- **AND** after `git checkout --ours .troupe/actors/tester.md`, the same command is accepted and writes the file
+
 #### Scenario: A clean merge of two branches' files
 - **WHEN** git merges two branches' changes to `.troupe/actors/tester.yaml` without a conflict, giving exactly what
   the merged config would write

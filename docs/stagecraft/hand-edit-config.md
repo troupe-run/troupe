@@ -63,3 +63,12 @@ config get` shows both sides, and one `troupe config set` that sets every value 
 never merges inside a value, such as two edits to one character: the whole value is one person's or the other's
 ([#135](https://github.com/troupe-run/troupe/issues/135),
 [#136](https://github.com/troupe-run/troupe/issues/136)).
+
+git merges the files under `.troupe/` as text, so when both branches changed the same actor it may stop with a
+conflict in `actors/<name>.yaml` or `actors/<name>.md`. troupe won't replace a file with git's conflict markers in
+it. Until it can ([#141](https://github.com/troupe-run/troupe/issues/141)):
+
+1. Take one side's file, which is a version troupe wrote: `git checkout --ours .troupe/actors/tester.yaml`.
+2. Run `troupe config get` to see whether config has a conflict too. If it does, one `troupe config set` that sets
+   every conflicting value resolves it, and writes the file. If it doesn't, `troupe flush` writes the file.
+3. `git add` the file and commit the merge.

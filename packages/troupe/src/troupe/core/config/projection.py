@@ -17,6 +17,7 @@ the new one; a staged file an event vouches for is a write a crash cut short, an
 
 import hashlib
 import io
+import re
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -273,9 +274,16 @@ def plan(
             actions.append(
                 Action(path, action, "forced past a file troupe didn't write", want, True)
             )
+        elif _MARKERS.search(have):
+            actions.append(Action(path, "refuse", CONFLICTED, want))
         else:
             actions.append(Action(path, "refuse", "troupe didn't write it", want))
     return Plan(tuple(actions), disk.unknown)
+
+
+CONFLICTED = "git left it conflicted"
+_MARKERS = re.compile(rb"^<<<<<<< .*^=======\r?$.*^>>>>>>> ", re.MULTILINE | re.DOTALL)
+"""git's conflict markers, as a merge leaves them in a file both branches changed."""
 
 
 def refuse(plan_: Plan) -> None:
@@ -290,6 +298,20 @@ def refuse(plan_: Plan) -> None:
             "config set; an actor is actors/<name>.yaml, with actors/<name>.md for its character.",
             path=f"{THEATRE_DIR}/{plan_.unknown[0]}",
             details={"paths": [f"{THEATRE_DIR}/{p}" for p in plan_.unknown]},
+        )
+    conflicted = [a for a in plan_.refused if a.reason == CONFLICTED]
+    if conflicted:
+        listed = ", ".join(f".troupe/{a.path}" for a in conflicted)
+        raise TroupeError(
+            "config.file-not-troupes",
+            problem=f"{listed} has git's conflict markers in it, from merging branches that "
+            "changed it, so it isn't what troupe wrote and troupe won't replace it. troupe "
+            "doesn't resolve this for you yet (#141).",
+            fix=f"Take one side's file (git checkout --ours {listed}), then run troupe config "
+            "get to see any config conflict and resolve it with one troupe config set. Then git "
+            "add the file and commit the merge.",
+            path=f"{THEATRE_DIR}/{conflicted[0].path}",
+            details={"paths": [f"{THEATRE_DIR}/{a.path}" for a in conflicted]},
         )
     if plan_.refused:
         listed = ", ".join(f".troupe/{a.path}" for a in plan_.refused)
