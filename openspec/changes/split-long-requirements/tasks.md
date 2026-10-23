@@ -6,17 +6,17 @@ Each test here checks behaviour the code already has. Write it, run it before an
 it passing. If one fails, stop: open a Bug issue on the roadmap board naming the failing requirement, and ask the
 owner whether to fix it in this change.
 
-- [ ] 1.1 In `packages/troupe/tests/test_run_host.py`, add a test under `# Requirement: The runner takes direction,
+- [x] 1.1 In `packages/troupe/tests/test_run_host.py`, add a test under `# Requirement: The runner takes direction,
   character and configuration only from its run start (spec: runner-protocol)`. It runs a scripted actor with a
   character, a direction and an option, each holding a unique marker, and asserts that neither the argv the host
   spawns nor the environment it passes holds any marker. If the harness can't observe argv and environment without a
   production change, stop and ask. Verify with `uv run pytest packages/troupe/tests/test_run_host.py -k <name>`.
-- [ ] 1.2 In `plugins/runner-scripted/tests/test_scripted_schemas.py`, add a test under `# Requirement: A script's
+- [x] 1.2 In `plugins/runner-scripted/tests/test_scripted_schemas.py`, add a test under `# Requirement: A script's
   steps cover what a runner can send or do`. It asserts that `options.schema.json`'s `step` alternatives include
   `event`, `transcript`, `stderr`, `wait`, `writeFile`, `hang`, `exit` and `rawStdout` as their `required` key. It
   checks inclusion, not equality (design D3). Verify it passes, then that it fails with one kind removed from a copy
   of the schema.
-- [ ] 1.3 In `plugins/runner-scripted/tests/test_scripted_runner.py`, add two tests under `# Requirement: Steps that
+- [x] 1.3 In `plugins/runner-scripted/tests/test_scripted_runner.py`, add two tests under `# Requirement: Steps that
   don't wait play without reading troupe's messages`. Both use `_played_with_everything_queued` with
   `onCancel: "ignore"` and a queued `run/cancel`:
   - a `wait` step followed by a `transcript` step: the cancel's answer comes before the transcript record;

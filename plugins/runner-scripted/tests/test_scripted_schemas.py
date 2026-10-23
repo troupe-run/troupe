@@ -100,3 +100,17 @@ def test_the_readmes_options_table_lists_exactly_the_options_schemas_properties(
     section = readme.split("## Options", 1)[1].split("\n## ", 1)[0]
     documented = set(re.findall(r"^\| `([^`]+)` \|", section, re.M))
     assert documented == set(OPTIONS["properties"])
+
+
+# Requirement: A script's steps cover what a runner can send or do
+
+LISTED_STEPS = {"event", "transcript", "stderr", "wait", "writeFile", "hang", "exit", "rawStdout"}
+"""The step kinds the requirement lists. It says "cover", so the schema may define more."""
+
+
+def _step_kinds(options_schema: dict[str, Any]) -> set[str]:
+    return {key for step in options_schema["$defs"]["step"]["oneOf"] for key in step["required"]}
+
+
+def test_the_options_schema_defines_a_step_for_each_kind_the_requirement_lists() -> None:
+    assert LISTED_STEPS - _step_kinds(OPTIONS) == set()
