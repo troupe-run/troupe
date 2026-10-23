@@ -42,7 +42,7 @@ owner whether to fix it in this change.
 - [x] 2.4 Check that every `# Requirement:` comment in the repository naming a `runner-protocol` or `scripted-runner`
   requirement matches a header in the main spec or in this change's deltas. Verify with a grep of the comments
   against the headers, showing no unmatched names.
-- [ ] 2.5 Run `uv run scripts/check.py` and show that every gate passes.
+- [x] 2.5 Run `uv run scripts/check.py` and show that every gate passes.
 
 ## 3. Integration
 
