@@ -87,3 +87,19 @@ class ProcessStateUnknownError(PlatformError):
         self.pid = pid
         self.code = code
         self.text = text
+
+
+class CloneDestinationExistsError(PlatformError):
+    """A clone was asked to write over a file that exists; nothing was changed."""
+
+    def __init__(self, destination: Path) -> None:
+        super().__init__(f"can't clone to {destination}: it already exists")
+        self.destination = destination
+
+
+class CloneFailedError(PlatformError):
+    def __init__(self, source: Path, destination: Path, reason: str) -> None:
+        super().__init__(f"can't clone {source} to {destination}: {reason}")
+        self.source = source
+        self.destination = destination
+        self.reason = reason

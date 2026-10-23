@@ -21,6 +21,7 @@ troupe calls it and sees one behaviour on Linux, macOS and Windows. An import co
 | Whether a process has ended | `platform/processes.py` | `kill(pid, 0)`: no such process (`ESRCH`) is ended; success or a refusal (`EPERM`) is running | `OpenProcess`, then whether the handle is signalled (`WaitForSingleObject`, zero timeout): no such process (`ERROR_INVALID_PARAMETER`) or signalled is ended; a refusal (`ERROR_ACCESS_DENIED`) or not signalled is running |
 | Watching a directory for changes | `platform/watching.py` | inotify on Linux, one watch on the directory; FSEvents on macOS, one stream with file events, no defer and latency 0 | `ReadDirectoryChangesW` on the directory, kept outstanding with overlapped I/O |
 | Catching Ctrl-C | `platform/interrupts.py` | `SIGINT`, through `signal.signal`, calls back instead of raising `KeyboardInterrupt` | `SIGINT` and `SIGBREAK` (Ctrl-Break: a process in its own console process group gets only that). The previous handlers come back when the block ends |
+| Cloning a file copy-on-write | `platform/clones.py` | `clonefile` on macOS (APFS); the `FICLONE` ioctl on Linux (Btrfs, XFS). Where the file system refuses, a plain copy | `CopyFile2`, which block-clones on ReFS and Dev Drive volumes |
 
 ## Locks
 
@@ -84,6 +85,24 @@ troupe calls it and sees one behaviour on Linux, macOS and Windows. An import co
 
 All three are reached through ctypes inside `troupe.platform`, with no compiled code and no dependency (decision on
 #54, 2026-10-13).
+
+## Clones
+
+`clone_file(src, dst)` makes `dst` a copy of `src` that shares its blocks where the file system can, and returns the
+mechanism it used, for callers to record. Run worktrees use it for the files that match HEAD (worktree-stage design
+D2, D3).
+
+- **Mechanisms:** `clonefile` (macOS, `CLONE_NOFOLLOW`), `ficlone` (Linux, on a destination created exclusively),
+  `copyfile2` (Windows), `copy` (the fallback) and `symlink` (a link, made again with `os.symlink` without reading its
+  target).
+- **The fallback:** when the clone fails with `ENOTSUP`, `EOPNOTSUPP`, `EXDEV`, `EINVAL`, `ENOTTY` or `ENOSYS` (the
+  file system can't clone, or the two paths are on different volumes), the file is copied instead. ext4 and tmpfs,
+  which CI's Linux runners use, always take it.
+- **Windows can't say whether it cloned:** `CopyFile2` block-clones on ReFS and Dev Drive volumes without reporting
+  it, so the mechanism is `copyfile2`, never a clone.
+- **Never overwrites:** an existing destination raises `CloneDestinationExistsError` and is left as it was. Any other
+  failure raises `CloneFailedError`, naming both paths, and leaves no destination behind.
+- **Kept:** the bytes and the permission bits (on Windows, only the read-only flag exists). Timestamps aren't.
 
 ## Defaults
 
