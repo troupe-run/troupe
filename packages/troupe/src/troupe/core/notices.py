@@ -25,6 +25,14 @@ CODES: dict[str, str] = {
     "config.file-rewritten": "A config file troupe wrote was missing or older, so it was written "
     "again from config.",
     "config.waiting": "Another troupe command is writing config files, and this one is waiting.",
+    # Run workspaces (worktree-stage design D9). contributing/runs.md lists them.
+    "workspace.waiting": "Making, filling, capturing or removing a run's worktree is taking a "
+    "while.",
+    "workspace.uncommitted-unseen": "The theatre has changes that differ from HEAD, which a "
+    "worktree run won't see.",
+    "workspace.shared-git-changed": "Refs, config or hooks every worktree shares changed during "
+    "a run, which discarding it won't undo.",
+    "workspace.not-removed": "A run's changes were accepted, and its worktree couldn't be removed.",
 }
 """Every notice code, with what it means."""
 

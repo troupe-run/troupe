@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/client/accept-request.schema.json",
+  "title": "accept: request",
+  "description": "Apply a worktree run's captured diff to the theatre's working tree, unstaged, all or nothing, then remove its worktree. A request never names a path, a diff or a workspace.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "run"
+  ],
+  "properties": {
+    "run": {
+      "description": "The run, by id or unique prefix.",
+      "$ref": "run.schema.json#/$defs/runRef"
+    },
+    "reason": {
+      "description": "Why, in the person's words, recorded in lineage. Absent: none was given.",
+      "type": "string",
+      "minLength": 1
+    },
+    "rehearse": {
+      "description": "Change nothing: check that the diff applies cleanly, and report the files it would change. Absent means false.",
+      "type": "boolean"
+    }
+  }
+}

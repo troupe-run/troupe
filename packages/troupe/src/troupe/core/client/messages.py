@@ -291,6 +291,7 @@ class NoticeData(Message):
 class Started(Tagged):
     TYPE: ClassVar[str | None] = "started"
     run_id: str = json_field("runId", pattern=p.RUN_ID_PATTERN)
+    worktree: str | None = json_field("worktree", default=None, pattern=THEATRE_PATH)
 
 
 @dataclass(frozen=True)
@@ -315,6 +316,18 @@ class TextSummary(Message):
 
 
 @dataclass(frozen=True)
+class RehearsedWorkspace(Message):
+    """Where a rehearsed perform would work: its own worktree made at ``base``, or the theatre."""
+
+    kind: Literal["worktree", "theatre"] = json_field("kind")
+    base: str | None = json_field("base", default=None, pattern=COMMIT)
+
+    def _check(self, where: str) -> None:
+        if (self.kind == "worktree") != (self.base is not None):
+            raise fail(where, "base is present exactly when kind is worktree")
+
+
+@dataclass(frozen=True, kw_only=True)
 class Rehearsal(Message):
     """What a perform would run, after every check it makes before starting the runner."""
 
@@ -325,6 +338,7 @@ class Rehearsal(Message):
     config: list[str] = json_field("config", min_items=1)
     character: TextSummary | None = json_field("character", default=None)
     direction: TextSummary | None = json_field("direction", default=None)
+    workspace: RehearsedWorkspace = json_field("workspace")
 
 
 @dataclass(frozen=True)
@@ -476,3 +490,56 @@ def parse_update(kind: object, data: object) -> Message:
     if not isinstance(message, Message):
         raise TypeError(f"{kind!r} isn't a union of tagged messages")
     return message
+
+
+# A worktree run's changes: diff, accept and discard (worktree-stage design D6).
+
+
+@dataclass(frozen=True)
+class DiffRequest(Message):
+    run: str = json_field("run", pattern=RUN_REF)
+
+
+@dataclass(frozen=True, kw_only=True)
+class DiffResult(Message):
+    """A worktree run's captured diff, as the artifact store holds it."""
+
+    run: str = json_field("run", pattern=p.RUN_ID_PATTERN)
+    base: str = json_field("base", pattern=COMMIT)
+    changes: ChangesData = json_field("changes")
+    patch: str | None = json_field("patch", default=None)
+    encoding: Literal["utf-8", "base64"] | None = json_field("encoding", default=None)
+
+    def _check(self, where: str) -> None:
+        if (self.patch is None) != (self.encoding is None):
+            raise fail(where, "encoding is present exactly when patch is")
+
+
+@dataclass(frozen=True)
+class AcceptRequest(Message):
+    run: str = json_field("run", pattern=RUN_REF)
+    reason: str | None = json_field("reason", default=None, min_length=1)
+    rehearse: bool | None = json_field("rehearse", default=None)
+
+
+@dataclass(frozen=True)
+class AcceptResult(Message):
+    run: str = json_field("run", pattern=p.RUN_ID_PATTERN)
+    files: list[str] = json_field("files", min_items=1)
+    rehearsed: bool = json_field("rehearsed")
+    notices: list[NoticeData] = json_field("notices")
+
+
+@dataclass(frozen=True)
+class DiscardRequest(Message):
+    run: str = json_field("run", pattern=RUN_REF)
+    reason: str | None = json_field("reason", default=None, min_length=1)
+    rehearse: bool | None = json_field("rehearse", default=None)
+
+
+@dataclass(frozen=True)
+class DiscardResult(Message):
+    run: str = json_field("run", pattern=p.RUN_ID_PATTERN)
+    worktree: str = json_field("worktree", pattern=THEATRE_PATH)
+    rehearsed: bool = json_field("rehearsed")
+    notices: list[NoticeData] = json_field("notices")

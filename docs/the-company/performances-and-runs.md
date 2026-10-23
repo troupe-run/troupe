@@ -91,6 +91,31 @@ weren't enforced and which setting allowed it.
 - a git worktree for each run on the local stage, so you can see exactly what a run changed and keep or discard it
   ([#51](https://github.com/troupe-run/troupe/issues/51)).
 
+## Workspaces
+
+A run works in its own **git worktree** by default: a second checkout of your theatre, made from your latest commit
+for that run alone, under `.troupe/local/worktrees/<run>`. Files that match the commit are cloned copy-on-write
+where your file system can (APFS on macOS, Btrfs or XFS on Linux, a Dev Drive on Windows), so even a large theatre
+costs little. Changes you haven't committed aren't in it: troupe tells you when there are some.
+
+When the run ends, troupe captures what it changed as a diff, keeps it, and leaves the worktree in place:
+
+- `troupe diff <run>` shows the diff;
+- `troupe accept <run>` applies it to your files, unstaged and all or nothing, then removes the worktree. If you've
+  changed the same lines since, nothing changes, and troupe names the files;
+- `troupe discard <run>` removes the worktree, and your files stay as they were.
+
+Accepting or discarding is recorded with who did it and why, and it's final. Changes the run made under `.troupe/`
+are never part of the diff, so a run can't write your history or config through an accept.
+
+**A worktree catches mistakes, not intent.** It contains nothing: the actor can still write outside it or reach the
+network, which is why [policy](#policy) still has to allow the local stage. And every worktree shares your
+theatre's git data. Branches, tags, stashes, config and hooks an actor makes there are your theatre's own at once,
+outside the diff, and discarding doesn't undo them. troupe checks them before and after each run, records what
+changed, and warns you, a changed hook first, since it runs the next time git uses it. A push can't be seen at all.
+
+An actor with `workspace: theatre` works in your files directly, as before.
+
 ## Policy
 
 Policy decides what troupe may do, whoever asks. No command can loosen it.

@@ -17,6 +17,10 @@
         },
         "runId": {
           "$ref": "run.schema.json#/$defs/runId"
+        },
+        "worktree": {
+          "description": "The run's worktree, relative to the theatre, where it works. Absent: the run works in the theatre.",
+          "$ref": "run.schema.json#/$defs/theatrePath"
         }
       }
     },

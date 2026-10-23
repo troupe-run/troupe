@@ -60,6 +60,7 @@ def render_run(run: Mapping[str, Any]) -> list[str]:
         f"  runner: {run['runner']['requested']}"
         + (f" ({reported['name']} {reported['version']})" if reported else ""),
         f"  stage: {run['stage']['name']}, effects {run['stage']['effects']}",
+        f"  workspace: {_workspace(run['workspace'])}",
         f"  state: {run['state']}",
         f"  outcome: {run.get('outcome', '-')}",
         f"  events: {run['events']}",
@@ -77,6 +78,41 @@ def render_run(run: Mapping[str, Any]) -> list[str]:
         lines.append(
             f"  recording stopped at event {failed['failedAt']}: {failed['error']['code']}"
         )
+    if "changes" in run:
+        lines.extend(_changes(run["changes"]))
+    return lines
+
+
+def _workspace(workspace: Mapping[str, Any]) -> str:
+    if workspace["kind"] == "theatre":
+        return "the theatre"
+    dirty = ", the theatre had uncommitted changes it didn't see" if workspace["dirty"] else ""
+    return f"its own worktree at {workspace['base'][:12]}{dirty}"
+
+
+def _changes(changes: Mapping[str, Any]) -> list[str]:
+    """A worktree run's changes, for its summary."""
+    state = changes["state"]
+    line = f"  changes: {state}"
+    if "added" in changes:
+        line += (
+            f" ({changes['added']} added, {changes['modified']} modified, "
+            f"{changes['deleted']} deleted"
+            + (f", {changes['leftOut']} under .troupe/ left out" if changes["leftOut"] else "")
+            + ")"
+        )
+    if "settledAt" in changes:
+        line += f" at {changes['settledAt']}"
+    lines = [line]
+    if "diff" in changes:
+        lines.append(f"  diff: {changes['diff']}")
+    if "worktree" in changes:
+        lines.append(f"  worktree: {changes['worktree']}")
+    if "error" in changes:
+        lines.append(f"  capture failed: {changes['error']['code']}: {changes['error']['problem']}")
+    for kind, entries in changes.get("shared", {}).items():
+        named = ", ".join(f"{entry['name']} {entry['change']}" for entry in entries)
+        lines.append(f"  changed in git while it ran ({kind}): {named}")
     return lines
 
 

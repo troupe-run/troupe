@@ -91,6 +91,7 @@ ACCEPTED = [
                 "effectCheck": {"kind": "none"},
                 "config": [HASH],
                 "direction": {"hash": HASH, "length": 9},
+                "workspace": {"kind": "worktree", "base": "c0ffee" + "0" * 34},
             }
         },
         "a rehearsal",

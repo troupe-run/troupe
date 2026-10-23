@@ -291,6 +291,107 @@
       "required": [
         "details"
       ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "workspace.waiting"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "operation",
+            "waitedSeconds"
+          ],
+          "properties": {
+            "operation": {
+              "type": "string",
+              "minLength": 1
+            },
+            "waitedSeconds": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "workspace.uncommitted-unseen"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "count",
+            "paths",
+            "base"
+          ],
+          "properties": {
+            "count": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "paths": {
+              "description": "The first of them, up to UNCOMMITTED_NOTICE_PATHS, relative to the repository's top level.",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "base": {
+              "$ref": "events/run-started.schema.json#/$defs/commit"
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "workspace.shared-git-changed"
+        },
+        "details": {
+          "$ref": "events/run-ended.schema.json#/$defs/shared"
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "workspace.not-removed"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "worktree"
+          ],
+          "properties": {
+            "worktree": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
     }
   ],
   "$defs": {

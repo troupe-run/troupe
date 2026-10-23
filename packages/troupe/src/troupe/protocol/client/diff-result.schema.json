@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/client/diff-result.schema.json",
+  "title": "diff: result",
+  "description": "A worktree run's captured diff: git's binary diff from the base commit, exactly as the artifact store holds it, read and verified against its reference.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "run",
+    "base",
+    "changes"
+  ],
+  "properties": {
+    "run": {
+      "$ref": "run.schema.json#/$defs/runId"
+    },
+    "base": {
+      "description": "The commit the diff applies to.",
+      "$ref": "../events/run-started.schema.json#/$defs/commit"
+    },
+    "changes": {
+      "$ref": "run.schema.json#/$defs/changes"
+    },
+    "patch": {
+      "description": "The diff itself. Absent: the run changed nothing.",
+      "type": "string"
+    },
+    "encoding": {
+      "description": "How patch is written: utf-8 when its bytes are UTF-8 text, otherwise base64 of its bytes. Present exactly when patch is.",
+      "enum": [
+        "utf-8",
+        "base64"
+      ]
+    }
+  },
+  "dependentRequired": {
+    "patch": [
+      "encoding"
+    ],
+    "encoding": [
+      "patch"
+    ]
+  }
+}

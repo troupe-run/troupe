@@ -67,27 +67,40 @@ def test_the_first_performance_runs_as_written_and_writes_its_file(
     assert lines == [
         "troupe config set actors.tester.runner=scripted actors.tester.options=@hello.json "
         "'actors.tester.expect=[\"out/hello.txt\"]'",
+        "git add -A",
+        'git commit -m "Add the tester actor"',
         "export TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE=true",
         "troupe perform tester",
+        "troupe diff <run>",
+        "troupe accept <run>",
         "troupe status",
         "troupe logs <run>",
     ]
     code, _, err = cli(*shlex.split(lines[0])[1:])
     assert code == 0, err
     assert (fresh.path / ".troupe" / "actors" / "tester.yaml").is_file()
-    name, _, value = lines[1].removeprefix("export ").partition("=")
+    fresh.git(*shlex.split(lines[1])[1:])
+    fresh.git(*shlex.split(lines[2])[1:])
+    name, _, value = lines[3].removeprefix("export ").partition("=")
     monkeypatch.setenv(name, value)
 
-    code, out, err = cli(*shlex.split(lines[2])[1:])
+    code, out, err = cli(*shlex.split(lines[4])[1:])
     assert code == 0, err
     run_id = out.split()[1]
     assert out == f"run {run_id} succeeded\n"
+    assert not (fresh.path / "out" / "hello.txt").exists()  # it's in the run's worktree
+
+    code, out, err = cli(*shlex.split(lines[5].replace("<run>", run_id[:8]))[1:])
+    assert code == 0, err
+    assert "+hello" in out
+    code, out, err = cli(*shlex.split(lines[6].replace("<run>", run_id[:8]))[1:])
+    assert code == 0, err
     assert (fresh.path / "out" / "hello.txt").read_text(encoding="utf-8") == "hello\n"
 
-    code, out, _ = cli(*shlex.split(lines[3])[1:])
+    code, out, _ = cli(*shlex.split(lines[7])[1:])
     assert code == 0
     assert run_id[:8] in out
-    code, out, _ = cli(*shlex.split(lines[4].replace("<run>", run_id[:8]))[1:])
+    code, out, _ = cli(*shlex.split(lines[8].replace("<run>", run_id[:8]))[1:])
     assert code == 0
     assert "wrote out/hello.txt" in out
 

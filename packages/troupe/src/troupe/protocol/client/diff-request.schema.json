@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/client/diff-request.schema.json",
+  "title": "diff: request",
+  "description": "Show the changes a worktree run captured. A request never names a path, a diff or a workspace.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "run"
+  ],
+  "properties": {
+    "run": {
+      "description": "The run, by id or unique prefix.",
+      "$ref": "run.schema.json#/$defs/runRef"
+    }
+  }
+}

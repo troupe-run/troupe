@@ -57,7 +57,8 @@
         "runner",
         "stage",
         "effectCheck",
-        "config"
+        "config",
+        "workspace"
       ],
       "properties": {
         "actor": {
@@ -87,6 +88,43 @@
         "direction": {
           "description": "The run's direction, by hash and length. Absent: none was given.",
           "$ref": "#/$defs/text"
+        },
+        "workspace": {
+          "description": "Where the run would work: its own worktree, made at base, or the theatre.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "enum": [
+                "worktree",
+                "theatre"
+              ]
+            },
+            "base": {
+              "description": "The commit the worktree would be made at. Present exactly when kind is worktree.",
+              "$ref": "../events/run-started.schema.json#/$defs/commit"
+            }
+          },
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "worktree"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "base"
+            ]
+          },
+          "else": {
+            "properties": {
+              "base": false
+            }
+          }
         }
       }
     }

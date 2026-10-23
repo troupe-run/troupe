@@ -1,5 +1,5 @@
-"""perform, status and logs on the command line (spec: cli; perform-status-logs design D14;
-config-model design D14).
+"""perform, status, logs, diff, accept and discard on the command line (spec: cli;
+perform-status-logs design D14; config-model design D14; worktree-stage design D6).
 
 Each command builds its request as data and calls the core through the client protocol's
 dispatcher, in process, then renders the updates and the result. Nothing here decides anything
@@ -9,6 +9,7 @@ check and the character are the actor's config.
 
 import argparse
 import asyncio
+import base64
 import json
 import os
 from collections.abc import Callable
@@ -93,9 +94,39 @@ def _render_rehearsal(rehearsal: dict[str, Any], stdout: TextIO) -> None:
         f"  character: {_text(rehearsal.get('character'))}",
         f"  direction: {_text(rehearsal.get('direction'))}",
         f"  config: {', '.join(rehearsal['config'])}",
+        f"  workspace: {_planned(rehearsal['workspace'])}",
         "Rehearsal: nothing was started or recorded.",
     ]
     print("\n".join(lines), file=stdout)
+
+
+def _planned(workspace: dict[str, Any]) -> str:
+    if workspace["kind"] == "theatre":
+        return "the theatre"
+    return f"its own worktree, made at {workspace['base']}"
+
+
+def _settle_hint(run: dict[str, Any]) -> str | None:
+    """What to do next with a worktree run's changes, or None for a run in the theatre."""
+    changes = run.get("changes")
+    if changes is None or "worktree" not in changes:
+        return None
+    short, where = run["runId"][:8], changes["worktree"]
+    if changes["state"] == "pending":
+        return (
+            f"troupe: run {short}'s changes are in its worktree, {where}, not yet in your files. "
+            f"See them with `troupe diff {short}`, then `troupe accept {short}` or "
+            f"`troupe discard {short}`."
+        )
+    if changes["state"] == "none":
+        return (
+            f"troupe: run {short} changed nothing. `troupe discard {short}` removes its worktree, "
+            f"{where}."
+        )
+    return (
+        f"troupe: run {short}'s changes weren't captured. Look at what it wrote in {where}, then "
+        f"`troupe discard {short}`."
+    )
 
 
 def _run_perform(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
@@ -115,6 +146,13 @@ def _run_perform(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) 
                 file=stderr,
                 flush=True,
             )
+            if "worktree" in update:
+                print(
+                    f"troupe: run {run_id[:8]} works in its own worktree, {update['worktree']}; "
+                    "your files change only when you accept it.",
+                    file=stderr,
+                    flush=True,
+                )
         elif update["kind"] == "event":
             print(render_event(update), file=stderr, flush=True)
         else:
@@ -137,6 +175,9 @@ def _run_perform(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) 
         _render_rehearsal(result["rehearsal"], stdout)
         return ExitCode.WOULD_CHANGE
     run = result["run"]
+    hint = _settle_hint(run)
+    if hint is not None:
+        print(hint, file=stderr)
     if run["outcome"] == "succeeded":
         print(f"run {run['runId']} succeeded", file=stdout)
         return ExitCode.OK
@@ -222,8 +263,113 @@ def _run_logs(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> 
     return ExitCode.CANCELLED if session.cancel.requested else ExitCode.OK
 
 
+# diff, accept and discard
+
+
+def _configure_diff(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("run", help="a run's id, or at least its first 8 characters")
+    parser.add_argument("--json", action="store_true", help="print the result as JSON")
+
+
+def _write_exactly(data: bytes, stdout: TextIO) -> None:
+    """``data`` on standard output byte for byte: no newline added, none translated."""
+    stdout.flush()
+    buffer = getattr(stdout, "buffer", None)
+    if buffer is not None:
+        buffer.write(data)
+        buffer.flush()
+    else:  # a text stream with no bytes underneath, as in tests
+        stdout.write(data.decode("utf-8", "surrogateescape"))
+
+
+def _run_diff(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
+    result = _call("diff", {"run": arguments.run}, _session(), lambda update: None, _ignore_cancel)
+    if arguments.json:
+        print(json.dumps(result, ensure_ascii=False), file=stdout)
+        return ExitCode.OK
+    if "patch" not in result:
+        print(f"troupe: run {result['run'][:8]} changed nothing.", file=stderr)
+        return ExitCode.OK
+    patch = result["patch"]
+    data = base64.b64decode(patch) if result["encoding"] == "base64" else patch.encode("utf-8")
+    _write_exactly(data, stdout)
+    return ExitCode.OK
+
+
+def _configure_settle(parser: argparse.ArgumentParser, rehearse: str) -> None:
+    parser.add_argument("run", help="a run's id, or at least its first 8 characters")
+    parser.add_argument("--reason", help="why, recorded in the lineage")
+    parser.add_argument("--rehearse", action="store_true", help=rehearse)
+
+
+def _configure_accept(parser: argparse.ArgumentParser) -> None:
+    _configure_settle(
+        parser, "check that the changes apply cleanly and name the files, changing nothing"
+    )
+
+
+def _configure_discard(parser: argparse.ArgumentParser) -> None:
+    _configure_settle(parser, "name the worktree that would be removed, removing nothing")
+
+
+def _settle_params(arguments: argparse.Namespace) -> dict[str, Any]:
+    params: dict[str, Any] = {"run": arguments.run}
+    if arguments.reason is not None:
+        params["reason"] = arguments.reason
+    if arguments.rehearse:
+        params["rehearse"] = True
+    return params
+
+
+def _on_notice(stderr: TextIO) -> Update:
+    def show(update: dict[str, Any]) -> None:
+        print(render_notice(update["notice"]), file=stderr, flush=True)
+
+    return show
+
+
+def _run_accept(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
+    params = _settle_params(arguments)
+    result = _call("accept", params, _session(), _on_notice(stderr), _ignore_cancel)
+    files = "\n".join(f"  {name}" for name in result["files"])
+    if result["rehearsed"]:
+        print(f"accepting run {result['run']} would change:\n{files}", file=stdout)
+        return ExitCode.WOULD_CHANGE
+    print(f"run {result['run']} accepted, unstaged:\n{files}", file=stdout)
+    return ExitCode.OK
+
+
+DISCARD_HELP = (
+    "Remove a worktree run's worktree, keeping nothing it wrote. It removes files, not git state: "
+    "branches, tags, stashes, config, hooks or pushes the run made in git stay."
+)
+
+
+def _run_discard(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
+    params = _settle_params(arguments)
+    result = _call("discard", params, _session(), _on_notice(stderr), _ignore_cancel)
+    if result["rehearsed"]:
+        print(f"discarding run {result['run']} would remove {result['worktree']}", file=stdout)
+        return ExitCode.WOULD_CHANGE
+    print(f"run {result['run']} discarded: removed {result['worktree']}", file=stdout)
+    print(
+        "troupe: discarding removes files, not git state: any branches, tags, stashes, config or "
+        "hooks the run made are still there (troupe status shows what it saw change).",
+        file=stderr,
+    )
+    return ExitCode.OK
+
+
 COMMANDS: tuple[Command, ...] = (
     Command("perform", "Run one actor and record the run.", _configure_perform, _run_perform),
     Command("status", "Show the most recent runs, or one run.", _configure_status, _run_status),
     Command("logs", "Show a run's events in order.", _configure_logs, _run_logs),
+    Command("diff", "Show the changes a worktree run captured.", _configure_diff, _run_diff),
+    Command(
+        "accept",
+        "Apply a worktree run's changes to your files, unstaged, all or nothing.",
+        _configure_accept,
+        _run_accept,
+    ),
+    Command("discard", DISCARD_HELP, _configure_discard, _run_discard),
 )

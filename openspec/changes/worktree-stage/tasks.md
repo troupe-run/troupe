@@ -103,12 +103,12 @@
 
 ## 5. Stage and perform (design D1, D2, D8)
 
-- [ ] 5.1 Change the `Stage` port's `workspace` to take the run id and the actor's workspace kind, and return a
-  `Workspace` (its kind, path, capture and settle). In the local stage, build the worktree from the VCS port under
-  `.troupe/local/worktrees/<run-id>/`, and keep `admit` as it is. Verify with `test_local_stage.py`:
-  - the admission and lineage are identical for `worktree` and `theatre`;
-  - `theatre` returns the theatre's root.
-- [ ] 5.2 In `perform`:
+- [x] 5.1 Put the worktree in `troupe.core.workspaces`, through the VCS port, under
+  `.troupe/local/worktrees/<run-id>/`, and keep the `Stage` port and the local stage's `admit` as they are (design D8,
+  amended). Verify with `test_run_workspaces.py`:
+  - the lineage of a worktree run's events is the same `unenforced` admission as a run in the theatre;
+  - a run in the theatre works in the theatre's root.
+- [x] 5.2 In `perform`:
   - check the VCS's worktree capability and HEAD (`vcs.worktrees-unsupported`, `workspace.no-head`, each with a fix
     naming `actors.<name>.workspace=theatre`) after the existing checks;
   - make the worktree after the lease. On failure, remove the partial worktree and the lease, and record nothing;
@@ -132,25 +132,25 @@
   - a branch, a hook and a config change are each reported;
   - a capture failure is recorded with the worktree kept;
   - `never-started` still records `changes`.
-- [ ] 5.3 Make the rehearsal report the workspace and base, and make no worktree. Verify with a test in
+- [x] 5.3 Make the rehearsal report the workspace and base, and make no worktree. Verify with a test in
   `test_perform.py`, and the CLI rehearsal scenario.
-- [ ] 5.4 Add the notices `workspace.uncommitted-unseen`, `workspace.not-removed` and
+- [x] 5.4 Add the notices `workspace.uncommitted-unseen`, `workspace.not-removed` and
   `workspace.shared-git-changed`, and the errors `workspace.no-head` and `workspace.not-at-head`, each with a details
   schema. List them in `contributing/runs.md`. Verify with `test_notices.py`, `test_errors.py` and the docs tests.
-- [ ] 5.5 Update existing tests and fixtures that expect a run's files in the theatre: set `workspace: theatre`
+- [x] 5.5 Update existing tests and fixtures that expect a run's files in the theatre: set `workspace: theatre`
   where in-place is what's being tested, and otherwise assert the worktree path. Verify that the full
   `uv run scripts/check.py` passes.
 
 ## 6. Diff, accept and discard in the core and the protocol (design D6)
 
-- [ ] 6.1 Add the client schemas `diff-request/result`, `accept-request/result` and `discard-request/result`, with
+- [x] 6.1 Add the client schemas `diff-request/result`, `accept-request/result` and `discard-request/result`, with
   run, `reason` and `rehearse`, and no path, diff or workspace. Add `workspace` and `changes` to `run.schema.json`,
   with the conditional rules: `changes` only for a worktree, and `pending` needs a diff. Regenerate the message types.
   Verify with `test_client_schemas.py`:
   - a request holding `diff` is refused with `client.invalid-request`;
   - a summary with `theatre` and `changes` doesn't validate;
   - a null is refused.
-- [ ] 6.2 Add `core/runs/changes.py` with the `diff` query and the `accept` and `discard` commands:
+- [x] 6.2 Add `core/runs/changes.py` with the `diff` query and the `accept` and `discard` commands:
   - resolve the run by id or prefix;
   - refuse with `run.not-ended`, `run.no-changes`, `run.changes-uncaptured` or `run.changes-settled` as the spec
     says;
@@ -170,11 +170,11 @@
   - the lineage of an accept (person, `cli`, the reason, no stage);
   - the diff query returns the artifact byte for byte;
   - a missing artifact in another clone.
-- [ ] 6.3 Route the three calls through `core/client/dispatch.py`. Verify with `test_client_dispatch.py`.
+- [x] 6.3 Route the three calls through `core/client/dispatch.py`. Verify with `test_client_dispatch.py`.
 
 ## 7. CLI and docs (cli delta)
 
-- [ ] 7.1 Add `troupe diff <run> [--json]`, `troupe accept <run> [--reason] [--rehearse]` and
+- [x] 7.1 Add `troupe diff <run> [--json]`, `troupe accept <run> [--reason] [--rehearse]` and
   `troupe discard <run> [--reason] [--rehearse]`. Give `discard` help that says it removes files, not git state.
   Show the workspace line on `perform` and the settle hint at a worktree run's end. Verify with `test_cli_runs.py`:
   - the diff is byte-exact on standard output, and `git apply --check` accepts it at the base;
@@ -183,7 +183,7 @@
   - a conflict's standard error names the files, the reference, the worktree and `troupe diff`;
   - the end-of-run hint;
   - the usage-error shapes for the new commands, through the existing property test.
-- [ ] 7.2 Document `diff`, `accept`, `discard` and `workspace` in these places:
+- [x] 7.2 Document `diff`, `accept`, `discard` and `workspace` in these places:
   - `docs/prompt-book/cli.md`;
   - `docs/the-company/performances-and-runs.md`, including that a worktree contains nothing, that discard doesn't
     undo branches, tags, stashes, config, hooks or pushes, and that worktrees live under `.troupe/local/worktrees/`
@@ -195,10 +195,14 @@
 
 ## 8. Integration
 
-- [ ] 8.1 Run one end-to-end check on all three OSes in CI: a scripted actor with no `workspace` changes a file, adds
-  one and creates a branch. Then `status` shows `pending` and the shared branch, `diff` shows the change, `accept`
-  applies it unstaged, and a second run is discarded and leaves the theatre untouched. Verify that CI's `check` job
-  passes on Linux, macOS and Windows.
+- [ ] 8.1 Run one end-to-end check on all three OSes in CI, through the CLI
+  (`test_cli_changes.py::test_a_worktree_run_is_seen_accepted_and_a_second_discarded_leaving_the_theatre_as_accepted`):
+  - a scripted actor with `workspace: worktree` changes a file and adds one;
+  - `status` shows `pending`, `diff` shows the change, and `accept` applies it unstaged;
+  - a second run is discarded and leaves the theatre as the accept left it.
+
+  A branch made during a run is covered by `test_run_workspaces.py`, because the scripted runner can't run git and
+  a person can't act mid-run through the CLI. Verify that CI's `check` job passes on Linux, macOS and Windows.
 
 ## Workflow follow-up
 

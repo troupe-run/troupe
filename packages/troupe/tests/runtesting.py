@@ -89,7 +89,9 @@ class Harness:
 
     def configure(self, request: dict[str, Any]) -> None:
         """Define the actor ``request`` names in config, as the old perform request described
-        it: its runner, options and effect check (config-model design D14)."""
+        it: its runner, options and effect check (config-model design D14). It works in the
+        theatre unless the request names a ``workspace``: these tests are about running and
+        recording, and test_run_workspaces.py covers worktrees."""
         check = request.get("effectCheck", {"kind": "none"})
         actor: dict[str, Any] = {
             "runner": request.get("runner", "scripted"),
@@ -98,6 +100,7 @@ class Harness:
         }
         if "character" in request:
             actor["character"] = request["character"]
+        actor["workspace"] = request.get("workspace", "theatre")
         store = git_service(self.repo, env={**ADA, **self.env})
         merged = read_config(store)
         entries = change(merged.config, [(["actors", request["actor"]], actor)])
