@@ -195,7 +195,7 @@
 
 ## 8. Integration
 
-- [ ] 8.1 Run one end-to-end check on all three OSes in CI, through the CLI
+- [x] 8.1 Run one end-to-end check on all three OSes in CI, through the CLI
   (`test_cli_changes.py::test_a_worktree_run_is_seen_accepted_and_a_second_discarded_leaving_the_theatre_as_accepted`):
   - a scripted actor with `workspace: worktree` changes a file and adds one;
   - `status` shows `pending`, `diff` shows the change, and `accept` applies it unstaged;
