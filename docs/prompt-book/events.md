@@ -41,6 +41,26 @@ The payload of config's settling event (topic troupe.core.config.aggregate:Confi
 | `topic` | `"troupe.core.config.aggregate:Config"` | Yes | The aggregate whose stream the event settles: config's. |
 | `state` | object | Yes | The settled state: the config the merge worked out from every head. |
 
+### Run.ChangesAccepted
+
+The payload of a run's acceptance (topic troupe.core.runs.aggregate:Run.ChangesAccepted): the person applied its captured diff to the theatre's working tree, unstaged. Recorded after the diff applied. Final: nothing else settles the run's changes after it.
+
+| Field | Holds | Always there | What it is |
+|---|---|---|---|
+| `lineage` | object (Lineage) | Yes | Where an event came from: who made it, through what, when, why, as part of which command and in reaction to what, with whose approval, and in what version-control state. Every event troupe records carries it. It is left out of the event's content hash, so two clones that make the same change agree on the event's id. |
+| `timestamp` | object (Library timestamp) | Yes | When the event-sourcing library created the event, as its transcoder writes a datetime. |
+| `diff` | string | Yes | The diff that was applied: the reference the run's end recorded. |
+| `files` | list of string | Yes | The files it changed, relative to the repository's top level. |
+
+### Run.ChangesDiscarded
+
+The payload of a run's discard (topic troupe.core.runs.aggregate:Run.ChangesDiscarded): the person removed its worktree, and nothing reached the theatre. The diff's artifact is kept. It doesn't undo what the run changed in the repository's shared state. Final: nothing else settles the run's changes after it.
+
+| Field | Holds | Always there | What it is |
+|---|---|---|---|
+| `lineage` | object (Lineage) | Yes | Where an event came from: who made it, through what, when, why, as part of which command and in reaction to what, with whose approval, and in what version-control state. Every event troupe records carries it. It is left out of the event's content hash, so two clones that make the same change agree on the event's id. |
+| `timestamp` | object (Library timestamp) | Yes | When the event-sourcing library created the event, as its transcoder writes a datetime. |
+
 ### Run.Ended
 
 The payload of a run's last event (topic troupe.core.runs.aggregate:Run.Ended): the outcome the run host derived, and whether recording failed part-way.
@@ -51,6 +71,7 @@ The payload of a run's last event (topic troupe.core.runs.aggregate:Run.Ended): 
 | `timestamp` | object (Library timestamp) | Yes | When the event-sourcing library created the event, as its transcoder writes a datetime. |
 | `outcome` | object | Yes | How the run ended, as the run host derived it from what the runner reported, never from its exit code alone: the outcome, whether the runner exited, was killed or never started, and the limits it ran under. |
 | `recording` | object | No | Where recording the run's events failed, and why. Absent: recording didn't fail. |
+| `changes` | object | No | What a worktree run changed, captured when it ended. Present exactly when the run's workspace was a worktree. |
 
 ### Run.Reported
 
@@ -80,6 +101,7 @@ The payload of a run's first event (topic troupe.core.runs.aggregate:Run.Started
 | `effect_check` | object | Yes | How troupe checks, after a run, that it did what it was for. There is no default: none must be said explicitly. |
 | `direction` | string | Yes | The artifact reference of the run's direction: what the actor was asked to do. |
 | `config` | list of string | Yes | The config version the run used: the ids of the config stream's heads, sorted. Working out config at that version gives the actor's runner, options, effect check and character. |
+| `workspace` | object (In the theatre) or object (In its own worktree) | No | Where the run worked. Absent: recorded before runs had workspaces, so in the theatre. |
 
 ### Lineage
 

@@ -272,6 +272,7 @@ def test_a_running_runs_summary_renders_no_outcome_end_transcript_or_stderr() ->
             "runner": {"requested": "scripted"},
             "stage": {"name": "local", "effects": "unenforced", "allowedBy": ALLOWANCE},
             "effectCheck": {"kind": "none"},
+            "workspace": {"kind": "theatre"},
             "state": "running",
             "events": 0,
             "startedAt": "2026-10-13T00:00:00.000Z",

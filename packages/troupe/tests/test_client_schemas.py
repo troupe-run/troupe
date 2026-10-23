@@ -23,6 +23,7 @@ SUMMARY: dict[str, Any] = {
         "allowedBy": {"setting": "allow_unenforced_local_stage", "source": "env"},
     },
     "effectCheck": {"kind": "none"},
+    "workspace": {"kind": "theatre"},
     "state": "ended",
     "outcome": "failed",
     "error": {

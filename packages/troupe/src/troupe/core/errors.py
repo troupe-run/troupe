@@ -79,6 +79,9 @@ CODES: dict[str, ExitCode] = {
     "run.recording-failed": ExitCode.FAILURE,
     "run.not-found": ExitCode.FAILURE,
     "run.ambiguous-id": ExitCode.FAILURE,
+    # A run's changes (worktree-stage design D6, D9). contributing/runs.md lists them.
+    "run.not-ended": ExitCode.FAILURE,
+    "run.changes-settled": ExitCode.FAILURE,
     # A request that isn't understood is a usage error from any surface (design D15).
     "client.invalid-request": ExitCode.USAGE,
     "client.unknown-method": ExitCode.USAGE,

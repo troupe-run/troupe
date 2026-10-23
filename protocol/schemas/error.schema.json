@@ -1747,6 +1747,71 @@
     {
       "properties": {
         "code": {
+          "const": "run.not-ended"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "run"
+          ],
+          "properties": {
+            "run": {
+              "type": "string",
+              "minLength": 1
+            },
+            "state": {
+              "description": "The run's state. Absent: it has no recorded start yet.",
+              "enum": [
+                "running",
+                "interrupted",
+                "unfinished-elsewhere"
+              ]
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "run.changes-settled"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "run",
+            "settled"
+          ],
+          "properties": {
+            "run": {
+              "type": "string",
+              "minLength": 1
+            },
+            "settled": {
+              "enum": [
+                "accepted",
+                "discarded"
+              ]
+            },
+            "at": {
+              "description": "When they were settled. Absent: not known where the refusal was made.",
+              "$ref": "lineage.schema.json#/$defs/timestamp"
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
           "const": "client.invalid-request"
         },
         "details": {

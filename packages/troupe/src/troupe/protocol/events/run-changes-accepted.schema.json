@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/events/run-changes-accepted.schema.json",
+  "title": "Run.ChangesAccepted",
+  "description": "The payload of a run's acceptance (topic troupe.core.runs.aggregate:Run.ChangesAccepted): the person applied its captured diff to the theatre's working tree, unstaged. Recorded after the diff applied. Final: nothing else settles the run's changes after it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "lineage",
+    "timestamp",
+    "diff",
+    "files"
+  ],
+  "properties": {
+    "lineage": {
+      "$ref": "../lineage.schema.json"
+    },
+    "timestamp": {
+      "$ref": "../event-record.schema.json#/$defs/libraryTimestamp"
+    },
+    "diff": {
+      "description": "The diff that was applied: the reference the run's end recorded.",
+      "$ref": "../lineage.schema.json#/$defs/hash"
+    },
+    "files": {
+      "description": "The files it changed, relative to the repository's top level.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

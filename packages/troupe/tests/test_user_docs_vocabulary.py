@@ -66,6 +66,16 @@ USES = (
     ),
     Use("opening-night/install.md", "a clone of its repository", "troupe's own git repository"),
     Use(
+        "prompt-book/events.md",
+        "relative to the repository's top level",
+        "a git repository's top level, which a theatre in a subdirectory isn't",
+    ),
+    Use(
+        "prompt-book/events.md",
+        "in the repository's shared state",
+        "the refs, config and hooks a git repository's worktrees share",
+    ),
+    Use(
         "the-company/lineage.md",
         "with a repository's own setting",
         "a git repository's config, as git means it",

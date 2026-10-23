@@ -4,7 +4,8 @@ design D12).
 Each fold takes one recorded event at a time (its topic, its state and its lineage), so a query can
 rebuild what it needs from the store, and a later follower can run the same fold and keep its
 position in the store's tracking log. A run's state isn't recorded; it is derived (design D11),
-so the summary takes it as an argument.
+so the summary takes it as an argument. So is the state of a worktree run's changes
+(worktree-stage design D7): pending, accepted, discarded, none or uncaptured.
 """
 
 from collections.abc import Iterable, Mapping
@@ -14,7 +15,13 @@ from uuid import UUID
 
 from troupe.core import strict_json
 from troupe.core.client import messages as m
-from troupe.core.runs.aggregate import ENDED, REPORTED, STARTED
+from troupe.core.runs.aggregate import (
+    CHANGES_ACCEPTED,
+    CHANGES_DISCARDED,
+    ENDED,
+    REPORTED,
+    STARTED,
+)
 
 
 class Recording(Protocol):
@@ -56,6 +63,8 @@ class RunView:
     events: int = 0
     ended: dict[str, Any] | None = None
     ended_at: str | None = None
+    settled: str | None = None
+    settled_at: str | None = None
     log: list[m.LoggedEvent] = field(default_factory=list)
 
     def apply(self, recording: Recording, *, keep_log: bool) -> None:
@@ -71,6 +80,44 @@ class RunView:
         elif recording.topic == ENDED:
             self.ended = state
             self.ended_at = _at(recording)
+        elif recording.topic in (CHANGES_ACCEPTED, CHANGES_DISCARDED):
+            self.settled = "accepted" if recording.topic == CHANGES_ACCEPTED else "discarded"
+            self.settled_at = _at(recording)
+
+    @property
+    def workspace(self) -> dict[str, Any]:
+        """The run's workspace as its start recorded it; a run recorded before runs had
+        workspaces worked in the theatre."""
+        recorded = (self.started or {}).get("workspace")
+        return recorded if isinstance(recorded, dict) else {"kind": "theatre"}
+
+    @property
+    def captured(self) -> dict[str, Any] | None:
+        """The changes the run's end recorded, if it has an end that recorded any."""
+        changes = (self.ended or {}).get("changes")
+        return changes if isinstance(changes, dict) else None
+
+    def changes(self) -> dict[str, Any] | None:
+        """A worktree run's changes and their state; None for a run in the theatre."""
+        workspace = self.workspace
+        if workspace.get("kind") != "worktree":
+            return None
+        captured = self.captured or {}
+        data: dict[str, Any] = {
+            key: captured[key]
+            for key in ("diff", "added", "modified", "deleted", "leftOut", "shared", "error")
+            if key in captured
+        }
+        if self.settled is not None:
+            data["state"] = self.settled
+            data["settledAt"] = self.settled_at
+            return data
+        data["worktree"] = workspace["path"]
+        if self.captured is None or "error" in captured:
+            data["state"] = "uncaptured"
+        else:
+            data["state"] = "pending" if "diff" in captured else "none"
+        return data
 
     @property
     def visible(self) -> bool:
@@ -94,6 +141,7 @@ class RunView:
             ),
             "stage": started["stage"],
             "effectCheck": started["effect_check"],
+            "workspace": self.workspace,
             "state": state,
             "outcome": outcome.get("outcome"),
             "error": outcome.get("error"),
@@ -103,6 +151,7 @@ class RunView:
             "transcript": outcome.get("transcript"),
             "stderr": outcome.get("stderr"),
             "recording": (self.ended or {}).get("recording"),
+            "changes": self.changes(),
         }
         return m.RunSummary.from_data(_present(summary))
 

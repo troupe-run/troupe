@@ -82,7 +82,7 @@
       "title": "Run summary",
       "type": "object",
       "additionalProperties": false,
-      "required": ["runId", "actor", "startedBy", "runner", "stage", "effectCheck", "state", "events", "startedAt"],
+      "required": ["runId", "actor", "startedBy", "runner", "stage", "effectCheck", "workspace", "state", "events", "startedAt"],
       "properties": {
         "runId": {"$ref": "#/$defs/runId"},
         "actor": {"$ref": "#/$defs/actorName"},
@@ -107,6 +107,10 @@
         },
         "stage": {"$ref": "../lineage.schema.json#/$defs/stage"},
         "effectCheck": {"$ref": "#/$defs/effectCheck"},
+        "workspace": {
+          "description": "Where the run worked: its own worktree, or the theatre.",
+          "$ref": "../events/run-started.schema.json#/$defs/workspace"
+        },
         "state": {"$ref": "#/$defs/state"},
         "outcome": {"description": "How the run ended. Present exactly when state is ended.", "$ref": "#/$defs/outcome"},
         "error": {"description": "Why the run didn't succeed. Absent: the outcome has no error, or the run hasn't ended.", "$ref": "../error.schema.json"},
@@ -124,11 +128,86 @@
             "failedAt": {"type": "integer", "minimum": 0},
             "error": {"$ref": "../error.schema.json"}
           }
+        },
+        "changes": {
+          "description": "What a worktree run changed, and what has been done with it. Present exactly when the workspace is a worktree.",
+          "$ref": "#/$defs/changes"
         }
       },
-      "if": {"properties": {"state": {"const": "ended"}}},
-      "then": {"required": ["outcome", "endedAt"]},
-      "else": {"properties": {"outcome": false, "endedAt": false}}
+      "allOf": [
+        {
+          "if": {"properties": {"state": {"const": "ended"}}},
+          "then": {"required": ["outcome", "endedAt"]},
+          "else": {"properties": {"outcome": false, "endedAt": false}}
+        },
+        {
+          "if": {"properties": {"workspace": {"$ref": "../events/run-started.schema.json#/$defs/worktreeWorkspace"}}},
+          "then": {"required": ["changes"]},
+          "else": {"properties": {"changes": false}}
+        }
+      ]
+    },
+    "changes": {
+      "title": "A run's changes",
+      "description": "A worktree run's changes. state: pending (captured, not yet accepted or discarded), accepted, discarded, none (the run changed nothing) or uncaptured (the run was interrupted, or capturing failed). The worktree is kept until the changes are accepted or discarded.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state"],
+      "properties": {
+        "state": {"enum": ["pending", "accepted", "discarded", "none", "uncaptured"]},
+        "diff": {
+          "description": "The diff's artifact reference. Present exactly when the run's end recorded one.",
+          "$ref": "#/$defs/hash"
+        },
+        "added": {
+          "description": "How many files the diff adds. Absent: nothing was captured.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "modified": {
+          "description": "How many files the diff modifies. Absent: nothing was captured.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "deleted": {
+          "description": "How many files the diff deletes. Absent: nothing was captured.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "leftOut": {
+          "description": "How many changed paths under .troupe/ were left out of the diff. Absent: nothing was captured.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "shared": {
+          "description": "What changed in the repository's shared state during the run, which discarding doesn't undo. Absent: nothing did, or nothing was captured.",
+          "$ref": "../events/run-ended.schema.json#/$defs/shared"
+        },
+        "error": {
+          "description": "Why the changes couldn't be captured. Absent: they were, or the run was interrupted.",
+          "$ref": "../error.schema.json"
+        },
+        "settledAt": {
+          "description": "When they were accepted or discarded. Present exactly when state is accepted or discarded.",
+          "$ref": "#/$defs/timestamp"
+        },
+        "worktree": {
+          "description": "The worktree, relative to the theatre, while it is kept. Absent once the changes are accepted or discarded.",
+          "$ref": "#/$defs/theatrePath"
+        }
+      },
+      "allOf": [
+        {"if": {"properties": {"state": {"const": "pending"}}}, "then": {"required": ["diff", "worktree"]}},
+        {
+          "if": {"properties": {"state": {"enum": ["none", "uncaptured"]}}},
+          "then": {"required": ["worktree"], "properties": {"diff": false}}
+        },
+        {
+          "if": {"properties": {"state": {"enum": ["accepted", "discarded"]}}},
+          "then": {"required": ["settledAt"], "properties": {"worktree": false}},
+          "else": {"properties": {"settledAt": false}}
+        }
+      ]
     },
     "loggedEvent": {
       "title": "Logged run event",

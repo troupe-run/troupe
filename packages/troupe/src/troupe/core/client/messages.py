@@ -129,6 +129,82 @@ class RecordingFailure(Message):
     error: p.ErrorData = json_field("error")
 
 
+COMMIT = re.compile(r"\A[0-9a-f]{40}([0-9a-f]{24})?\Z")
+PREFIX = re.compile(r"\A(?![/\\])(?!.*\\)(?!(.*/)?\.\.(/|\Z)).+/\Z")
+CloneMechanism = Literal["clonefile", "ficlone", "copyfile2", "copy", "symlink"]
+
+
+@dataclass(frozen=True)
+class TheatreWorkspace(Tagged):
+    """A run that worked in the theatre itself."""
+
+    TYPE: ClassVar[str | None] = "theatre"
+
+
+@dataclass(frozen=True)
+class WorktreeWorkspace(Tagged):
+    """A run that worked in its own worktree (worktree-stage design D7)."""
+
+    TYPE: ClassVar[str | None] = "worktree"
+    path: str = json_field("path", pattern=THEATRE_PATH)
+    base: str = json_field("base", pattern=COMMIT)
+    dirty: bool = json_field("dirty")
+    clones: list[CloneMechanism] = json_field("clones", unique=True)
+    prefix: str | None = json_field("prefix", default=None, pattern=PREFIX)
+
+
+Workspace = TheatreWorkspace | WorktreeWorkspace
+
+
+@dataclass(frozen=True)
+class SharedChangeData(Message):
+    name: str = json_field("name", min_length=1)
+    change: Literal["added", "changed", "removed"] = json_field("change")
+
+
+@dataclass(frozen=True)
+class SharedData(Message):
+    """What changed during a run in the state the repository's worktrees share."""
+
+    refs: list[SharedChangeData] | None = json_field("refs", default=None, min_items=1)
+    config: list[SharedChangeData] | None = json_field("config", default=None, min_items=1)
+    hooks: list[SharedChangeData] | None = json_field("hooks", default=None, min_items=1)
+
+    def _check(self, where: str) -> None:
+        if self.refs is None and self.config is None and self.hooks is None:
+            raise fail(where, "names at least one of refs, config and hooks")
+
+
+ChangesState = Literal["pending", "accepted", "discarded", "none", "uncaptured"]
+
+
+@dataclass(frozen=True, kw_only=True)
+class ChangesData(Message):
+    """A worktree run's changes, and what has been done with them."""
+
+    state: ChangesState = json_field("state")
+    diff: str | None = json_field("diff", default=None, pattern=p.REF_PATTERN)
+    added: int | None = json_field("added", default=None, minimum=0)
+    modified: int | None = json_field("modified", default=None, minimum=0)
+    deleted: int | None = json_field("deleted", default=None, minimum=0)
+    left_out: int | None = json_field("leftOut", default=None, minimum=0)
+    shared: SharedData | None = json_field("shared", default=None)
+    error: p.ErrorData | None = json_field("error", default=None)
+    settled_at: str | None = json_field("settledAt", default=None, pattern=TIME)
+    worktree: str | None = json_field("worktree", default=None, pattern=THEATRE_PATH)
+
+    def _check(self, where: str) -> None:
+        if self.state == "pending" and (self.diff is None or self.worktree is None):
+            raise fail(where, "pending changes have a diff and a worktree")
+        if self.state in ("none", "uncaptured") and (self.diff is not None or not self.worktree):
+            raise fail(where, f"{self.state} changes have a worktree and no diff")
+        settled = self.state in ("accepted", "discarded")
+        if settled != (self.settled_at is not None):
+            raise fail(where, "settledAt is present exactly when state is accepted or discarded")
+        if settled and self.worktree is not None:
+            raise fail(where, "settled changes have no worktree")
+
+
 @dataclass(frozen=True, kw_only=True)
 class RunSummary(Message):
     """A run as status, logs and perform report it. A field with nothing to say is left out; an
@@ -140,6 +216,7 @@ class RunSummary(Message):
     runner: RunnerData = json_field("runner")
     stage: StageData = json_field("stage")
     effect_check: EffectCheck = json_field("effectCheck")
+    workspace: Workspace = json_field("workspace")
     state: State = json_field("state")
     outcome: OutcomeName | None = json_field("outcome", default=None)
     error: p.ErrorData | None = json_field("error", default=None)
@@ -149,11 +226,14 @@ class RunSummary(Message):
     transcript: str | None = json_field("transcript", default=None, pattern=p.REF_PATTERN)
     stderr: str | None = json_field("stderr", default=None, pattern=p.REF_PATTERN)
     recording: RecordingFailure | None = json_field("recording", default=None)
+    changes: ChangesData | None = json_field("changes", default=None)
 
     def _check(self, where: str) -> None:
         ended = self.state == "ended"
         if ended != (self.outcome is not None) or ended != (self.ended_at is not None):
             raise fail(where, "outcome and endedAt are present exactly when state is ended")
+        if isinstance(self.workspace, WorktreeWorkspace) != (self.changes is not None):
+            raise fail(where, "changes are present exactly when the workspace is a worktree")
 
 
 HostEvent = (
