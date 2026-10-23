@@ -14,6 +14,24 @@ Language-neutral contracts between troupe and everything that talks to it: the C
 | [`schemas/client/`](schemas/client/) | The client protocol: the commands and queries every surface calls the core through (`perform`, `status`, `logs`). One schema per message (each method's request, its updates while it runs, and its result), and `run.schema.json` for what they share. Transport-free: the CLI calls them in process, and a run server will serve the same messages. A request never carries a host path, a command line or a policy value. [contributing/runs.md](../contributing/runs.md) explains runs |
 | [`schemas/runner/`](schemas/runner/) | The runner contract: JSON-RPC 2.0 over a runner's standard input and output, one message per line. One schema per message (`initialize`, `run/start`, `run/event`, `run/transcript`, `run/cancel`, `shutdown`), the error response and the contract's own error codes (`errors.schema.json`), and `message.schema.json`, which accepts any line either side may send. [contributing/runners.md](../contributing/runners.md) explains how to write a runner |
 
+## Versions
+
+The protocol is released on its own, at its own version, only when something here changes (issue
+[#140](https://github.com/troupe-run/troupe/issues/140)). Each release is tagged `protocol-v<version>`, and
+[`CHANGELOG.md`](CHANGELOG.md) lists what changed. Before 1.0 a breaking change bumps the minor version.
+[contributing/releasing.md](../contributing/releasing.md) explains how releases happen.
+
+troupe.run publishes each release's schemas under `https://troupe.run/protocol/<version>/`, alongside the latest
+release, each major version (`/protocol/0/`) and `next`
+([troupe-run/website#30](https://github.com/troupe-run/website/issues/30)). Files troupe writes name the
+major-version path, such as `https://troupe.run/protocol/0/config/actor.schema.json`.
+
+troupe never fetches a schema. The troupe package carries a copy of `schemas/`, and records which protocol release
+that copy is in `troupe/protocol/version.json`, which only a protocol release pull request changes. `troupe
+--version` prints it, and each event segment's header names the protocol version of the troupe that wrote it. A
+record that is missing or isn't a version is the error `schemas.protocol-version-invalid`. Between releases, a
+checkout of troupe records the last release, even if its schemas have changed since.
+
 ## Source of truth
 
 The JSON Schema here is the source of truth (decision
