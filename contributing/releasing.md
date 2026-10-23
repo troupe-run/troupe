@@ -34,18 +34,31 @@ changelogs.
 
 A commit counts towards a component when it changes files under that component's directory:
 
-- **Core and its bundled adapters** (`packages/*`) and **the protocol** (`protocol/`) form one linked group,
-  `troupe`. When any of them has a releasable commit, all of them release, at the same version. They run in-process
-  together, so mixed versions would be combinations nobody tests. The protocol is a component of its own (release
-  type `simple`), so a contract change releases the core and is listed in
-  `protocol/CHANGELOG.md`. The protocol's version is the release it shipped in. The
-  runner contract keeps its own version (version 0), set in its schemas.
+- **Core and its bundled adapters** (`packages/*`) form one linked group, `troupe`. When any of them has a releasable
+  commit, all of them release, at the same version. They run in-process together, so mixed versions would be
+  combinations nobody tests.
+- **The protocol** (`protocol/`) versions on its own (release type `simple`), because it evolves separately from the
+  packages and the docs (#140). It releases only when a releasable commit changes `protocol/`, and lists those
+  commits in `protocol/CHANGELOG.md`. The runner contract keeps its own version (version 0), set in its schemas.
 - **Each plugin** (`plugins/*`) versions on its own, because plugins are meant to move to their own repositories.
 - **Everything else** (`openspec/`, `scripts/`, `docs/`, the root `pyproject.toml`, CI) belongs to no component and
   releases nothing.
 
 Each component has its own `CHANGELOG.md` in its directory. Tags are `<component>-v<version>`, for example
 `troupe-v0.1.0`, `protocol-v0.1.0` and `troupe-runner-scripted-v0.1.0`.
+
+### The protocol version troupe ships
+
+The troupe package carries a copy of `protocol/schemas/` (`packages/troupe/src/troupe/protocol/`), and records which
+protocol release that copy is in `version.json` beside it. The protocol's release entry updates that file
+(`extra-files`), so the release pull request that bumps the protocol rewrites it in the same commit as the manifest.
+`scripts/check.py` fails if it differs from the protocol's version in `.release-please-manifest.json`. A segment's
+header and `troupe --version` both read it.
+
+A schema change touches the copy too, so it releases both the protocol and the `troupe` group. For the recorded
+version to be true of a released troupe, **a commit that changes a schema is `feat`, `fix` or breaking**, never
+`docs`, `refactor` or another type that releases nothing: otherwise troupe would ship changed schemas under the old
+protocol version. Between releases, a checkout records the last protocol release even if its schemas have moved on.
 
 ### Scopes don't choose components
 

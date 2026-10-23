@@ -2,21 +2,21 @@
 
 ## 1. The protocol releases on its own (design D1, D2, D3; spec: releases)
 
-- [ ] 1.1 In `scripts/tests/workspace/test_release_config.py`, replace the two tests that assert the old rules
+- [x] 1.1 In `scripts/tests/workspace/test_release_config.py`, replace the two tests that assert the old rules
   (`test_the_protocol_left_out_of_the_linked_group_is_named`, `test_a_protocol_entry_with_a_lock_update_is_named`)
   with known-bad tests for D3: protocol in the linked group; the protocol entry without the `version.json` extra-file,
   or with a different one; `version.json` missing, not an object, with an extra key, and with a version differing
   from the manifest's. Each asserts the exact message, naming the file(s) and the fix. Verify they **fail** against
   the current `release_config.py` and config (run `uv run pytest scripts/tests/workspace/test_release_config.py`)
-- [ ] 1.2 Add `packages/troupe/src/troupe/protocol/version.json` (`{"version": "0.0.0"}`, ending in a newline), remove
+- [x] 1.2 Add `packages/troupe/src/troupe/protocol/version.json` (`{"version": "0.0.0"}`, ending in a newline), remove
   `protocol` from the linked group's `components` and add D2's `extra-files` entry to the protocol in
   `release-please-config.json`. Change `_protocol_problems` and `_group_problems` in `scripts/release_config.py` to
   D3, and update its docstrings (`LINKED_GROUP`, `PROTOCOL`). Verify 1.1's tests and
   `test_every_workspace_member_is_configured_for_release` pass
-- [ ] 1.3 Add a test to `packages/troupe/tests/test_schemas.py` that `scripts/package_schemas.py`'s write leaves
+- [x] 1.3 Add a test to `packages/troupe/tests/test_schemas.py` that `scripts/package_schemas.py`'s write leaves
   `version.json` in the copy untouched (D2), and that `--check` doesn't report it. Verify it passes, and fails when
   `PATTERN` is widened to `*.json` locally
-- [ ] 1.4 Update `contributing/releasing.md` (the protocol as its own component, its tags, that a protocol release
+- [x] 1.4 Update `contributing/releasing.md` (the protocol as its own component, its tags, that a protocol release
   rewrites `version.json`, and that a schema change is `feat`/`fix`/breaking, never another type) and
   `docs/backstage/changelog.md` (the protocol under its own heading, not in the linked group). Verify the user-docs
   tests pass (`uv run pytest packages/troupe/tests/test_user_docs_changelog.py packages/troupe/tests/test_user_docs_links.py`)

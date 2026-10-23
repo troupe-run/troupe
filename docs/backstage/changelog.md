@@ -12,9 +12,9 @@ part it touched, grouped by kind: for example, features under **Features** and f
 
 ## troupe
 
-The core, its bundled adapters and the protocol release together, at one version: when any of them changes, all of
-them release. The core's changelog is the one to read for what changed in troupe as a whole. The others list the
-changes that touched them.
+The core and its bundled adapters release together, at one version: when any of them changes, all of them release.
+The core's changelog is the one to read for what changed in troupe as a whole. The others list the changes that
+touched them.
 
 - [troupe](https://github.com/troupe-run/troupe/blob/main/packages/troupe/CHANGELOG.md)
 - [troupe-artifacts-local](https://github.com/troupe-run/troupe/blob/main/packages/troupe-artifacts-local/CHANGELOG.md)
@@ -23,6 +23,12 @@ changes that touched them.
 - [troupe-store-text](https://github.com/troupe-run/troupe/blob/main/packages/troupe-store-text/CHANGELOG.md)
 - [troupe-vcs-files](https://github.com/troupe-run/troupe/blob/main/packages/troupe-vcs-files/CHANGELOG.md)
 - [troupe-vcs-git](https://github.com/troupe-run/troupe/blob/main/packages/troupe-vcs-git/CHANGELOG.md)
+
+## Protocol
+
+The protocol, the contracts troupe and its plugins speak, is released on its own, at its own version, only when it
+changes. `troupe --version` names the protocol version that troupe carries.
+
 - [protocol](https://github.com/troupe-run/troupe/blob/main/protocol/CHANGELOG.md)
 
 ## Plugins

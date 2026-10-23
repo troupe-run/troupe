@@ -2,7 +2,8 @@
 
 release-please only versions what its config lists, so a member left out would never release and
 nothing would say so. This compares the config, the manifest and uv.lock with the workspace
-members declared in the root pyproject.toml (release-automation design D10). It runs as a test,
+members declared in the root pyproject.toml (release-automation design D10), and the protocol
+version the troupe package records with the manifest's (protocol-own-release D3). It runs as a test,
 inside scripts/check.py; each problem names the member and the file to fix.
 
 Standard library only, like check.py.
@@ -17,9 +18,15 @@ CONFIG = "release-please-config.json"
 MANIFEST = ".release-please-manifest.json"
 LOCK = "uv.lock"
 LINKED_GROUP = "troupe"
-"""The linked-versions group: every packages/* member plus the protocol (design D3)."""
+"""The linked-versions group: every packages/* member (release-automation design D3)."""
 PROTOCOL = "protocol"
-"""The language-neutral protocol: a component in the linked group, not a workspace member."""
+"""The language-neutral protocol: released on its own, and not a workspace member
+(protocol-own-release design D1)."""
+PROTOCOL_RECORD = "packages/troupe/src/troupe/protocol/version.json"
+"""Where the troupe package records the protocol version its copy of the schemas is. Only a
+protocol release pull request changes it (protocol-own-release design D2)."""
+RECORD_UPDATE = {"type": "json", "path": f"/{PROTOCOL_RECORD}", "jsonpath": "$.version"}
+"""The protocol's extra-file update that writes its new version into PROTOCOL_RECORD."""
 
 
 def lock_jsonpath(name: str) -> str:
@@ -69,6 +76,7 @@ def problems(root: Path) -> list[str]:
         )
 
     found.extend(_protocol_problems(packages.get(PROTOCOL), manifest))
+    found.extend(_record_problems(root, manifest))
     found.extend(_group_problems(config, workspace))
     return found
 
@@ -115,14 +123,39 @@ def _protocol_problems(entry: dict[str, Any] | None, manifest: dict[str, str]) -
             f"{PROTOCOL}'s entry in {CONFIG} needs 'release-type': 'simple' and 'component': "
             f"'{PROTOCOL}'."
         )
-    if "extra-files" in entry:
+    if entry.get("extra-files") != [RECORD_UPDATE]:
         found.append(
-            f"{PROTOCOL}'s entry in {CONFIG} has 'extra-files', but it isn't a Python package and "
-            f"has nothing in {LOCK}: remove them."
+            f"{PROTOCOL}'s entry in {CONFIG} doesn't write the protocol version troupe records: "
+            f"make its 'extra-files' [{json.dumps(RECORD_UPDATE)}]."
         )
     if PROTOCOL not in manifest:
         found.append(f'{PROTOCOL} has no version in {MANIFEST}: add "{PROTOCOL}": "0.0.0".')
     return found
+
+
+def _record_problems(root: Path, manifest: dict[str, str]) -> list[str]:
+    released = manifest.get(PROTOCOL)
+    if released is None:
+        return []  # _protocol_problems names the missing manifest entry
+    should = f'{{"version": "{released}"}}, the protocol\'s version in {MANIFEST}'
+    path = root / PROTOCOL_RECORD
+    if not path.is_file():
+        return [f"{PROTOCOL_RECORD} is missing: add it, holding {should}."]
+    try:
+        record = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError:
+        record = None
+    only_a_version = isinstance(record, dict) and set(record) == {"version"}
+    version = record["version"] if only_a_version else None
+    if not isinstance(version, str):
+        return [f'{PROTOCOL_RECORD} must hold only {{"version": "<version>"}}: set it to {should}.']
+    if version != released:
+        return [
+            f"{PROTOCOL_RECORD} records protocol {version}, but {MANIFEST} has "
+            f"{released}: a protocol release pull request sets it. To correct it by hand, set it "
+            f"to {released}."
+        ]
+    return []
 
 
 def _group_problems(config: dict[str, Any], workspace: dict[str, str]) -> list[str]:
@@ -140,15 +173,17 @@ def _group_problems(config: dict[str, Any], workspace: dict[str, str]) -> list[s
         ]
     components = set(groups[0].get("components", []))
     expected = {name for path, name in workspace.items() if path.startswith("packages/")}
-    expected.add(PROTOCOL)
     found = [
         f"{component} isn't in the {LINKED_GROUP!r} linked group in {CONFIG}: add it to its "
         "'components'."
         for component in sorted(expected - components)
     ]
     found.extend(
-        f"{component} is in the {LINKED_GROUP!r} linked group in {CONFIG}, but only packages/* "
-        f"members and {PROTOCOL} belong there: remove it."
+        f"{PROTOCOL} is in the {LINKED_GROUP!r} linked group in {CONFIG}, but it's released on its "
+        "own: remove it from 'components'."
+        if component == PROTOCOL
+        else f"{component} is in the {LINKED_GROUP!r} linked group in {CONFIG}, but only "
+        "packages/* members belong there: remove it."
         for component in sorted(components - expected)
     )
     return found
