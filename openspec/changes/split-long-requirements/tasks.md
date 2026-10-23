@@ -46,7 +46,7 @@ owner whether to fix it in this change.
 
 ## 3. Integration
 
-- [ ] 3.1 Open the follow-up issue in `troupe-run/infrastructure` for the guard to run `openspec validate --specs
+- [x] 3.1 Open the follow-up issue in `troupe-run/infrastructure` for the guard to run `openspec validate --specs
   --strict` (design, Open Questions; owner, 2026-10-23), on the roadmap board, linked from #155. Verify with
   `gh issue view <n> -R troupe-run/infrastructure --json projectItems`.
 - [ ] 3.2 Push the branch, open the PR with `Closes #155`, and verify that CI passes on Linux, macOS and Windows.
