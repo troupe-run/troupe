@@ -154,6 +154,10 @@ SHALL be refused with `run.not-ended`.
 - **WHEN** a person asks for the diff of a run that is still `running`
 - **THEN** it is refused with `run.not-ended`
 
+#### Scenario: A run in the theatre
+- **WHEN** a person asks for the diff of, accepts or discards a run whose workspace was `theatre`
+- **THEN** it is refused with `run.not-a-worktree`, saying its changes are already among the person's files
+
 ### Requirement: Accepting applies the changes to the working tree, all or nothing
 `accept` SHALL apply a run's captured diff to the theatre's working tree as unstaged changes, without touching the
 index, HEAD or any branch. When any part of the diff doesn't apply cleanly, it SHALL be refused with
@@ -213,7 +217,7 @@ or whose changes are `none`, SHALL be refused, with `run.not-ended` or `run.no-c
 
 ### Requirement: Accepting and discarding can be rehearsed
 `accept` and `discard` SHALL take `rehearse`. A rehearsed accept SHALL check that the diff applies cleanly, and a
-rehearsed discard SHALL check that the worktree can be removed. Neither SHALL change a file or record an event.
+rehearsed discard SHALL make every check a discard makes and name the worktree it would remove. Neither SHALL change a file or record an event.
 
 #### Scenario: Rehearsing an accept that would conflict
 - **WHEN** a person rehearses accepting a run whose diff doesn't apply cleanly

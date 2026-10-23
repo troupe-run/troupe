@@ -328,6 +328,11 @@ The files adapter has no shared state, so its snapshot is empty. Alternatives co
 - **Windows can't report whether `CopyFile2` cloned.** → The mechanism is recorded as `copyfile2`, which is honest.
 - **The diff's artifact is per clone,** so another clone that merges the run's events can't accept it. → It's
   refused with the artifact store's missing-artifact error. That's out of scope until artifacts travel.
+- **A run killed before its runner's `init` leaves a worktree with no events.** A run's start is recorded when `init`
+  arrives, so `status` can't see that run, and `discard` can't name it. → The worktree is still under
+  `.troupe/local/worktrees/<id>`, and `git worktree remove` clears it. Recording a worktree run's start before the
+  runner starts would close this. It's a change to when `Run.Started` is recorded, so it's left for a follow-up
+  (found during apply, 2026-10-23).
 - **Submodules aren't populated in the worktree.** → `--ignore-submodules` leaves their changes out. This is
   documented.
 
