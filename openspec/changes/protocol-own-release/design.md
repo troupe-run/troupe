@@ -145,8 +145,8 @@ where it's published.
 - [A commit of a non-releasable type (`docs:`, `refactor:`, `test:`) that changes `protocol/schemas/` changes the
   copy without a protocol release, so a later troupe release would ship schemas that differ from the protocol
   version it records.] → `contributing/releasing.md` says that a change to a schema is `feat`, `fix` (or breaking),
-  never another type. A guard rule needs infrastructure's hooks, so it's raised as a follow-up issue in
-  troupe-run/infrastructure, not built here.
+  never another type. A guard rule needs infrastructure's hooks, so it's raised as a follow-up,
+  troupe-run/infrastructure#122, not built here.
 - [Between releases, a checkout records the last released protocol version while its schemas may be ahead of it.]
   → Accepted: only released wheels are claimed exact, as with troupe's own `0.0.1.dev0`. The proposal, the protocol
   README and `version.json`'s neighbouring docs say so.
