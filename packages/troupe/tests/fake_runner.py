@@ -112,6 +112,10 @@ def main(mode: str) -> None:
             if mode == "echo-env":
                 event(1, type="log", level="info", message=json.dumps(dict(os.environ)))
                 event(2, type="result", status="ok", message="done")
+            elif mode == "echo-argv-and-env":
+                seen = {"argv": sys.argv, "env": dict(os.environ)}
+                event(1, type="log", level="info", message=json.dumps(seen))
+                event(2, type="result", status="ok", message="done")
             elif mode == "ignore-shutdown":
                 event(1, type="result", status="ok", message="done")
             elif mode == "unsent-id":

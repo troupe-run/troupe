@@ -638,3 +638,27 @@ def test_run_start_carries_the_direction_and_the_character_each_in_its_own_field
 def test_an_actor_with_no_character_sends_none_rather_than_a_null(tmp_path: Path) -> None:
     ran = _run(tmp_path, {"steps": [{"event": INIT}, {"event": OK}]})
     assert "character" not in _run_start(ran)
+
+
+# Requirement: The runner takes direction, character and configuration only from its run start
+# (spec: runner-protocol)
+
+
+def test_neither_the_runners_argv_nor_its_environment_holds_the_direction_character_or_options(
+    tmp_path: Path,
+) -> None:
+    markers = {name: f"troupe-marker-{name}-{uuid.uuid4().hex}" for name in ("d", "c", "o")}
+    ran = _run(
+        tmp_path,
+        {"steps": [{"stderr": markers["o"]}]},
+        argv=_fake("echo-argv-and-env"),
+        direction=markers["d"],
+        character=markers["c"],
+    )
+    assert ran.outcome.error is None
+    params = _run_start(ran)
+    assert (params["direction"], params["character"]) == (markers["d"], markers["c"])
+    assert markers["o"] in json.dumps(params["options"])
+    seen = json.loads(next(e for e in ran.events if isinstance(e, p.LogEvent)).message)
+    held = [*seen["argv"], *seen["env"], *seen["env"].values()]
+    assert [m for m in markers.values() if any(m in value for value in held)] == []

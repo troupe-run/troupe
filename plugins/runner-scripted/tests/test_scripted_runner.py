@@ -3,6 +3,7 @@
 import hashlib
 import io
 import json
+import os
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -381,11 +382,16 @@ def test_a_refused_request_that_could_be_read_is_answered_with_its_own_id(
 
 
 def _played_with_everything_queued(
-    tmp_path: Path, script: dict[str, Any], *after_start: dict[str, Any]
+    tmp_path: Path,
+    script: dict[str, Any],
+    *after_start: dict[str, Any],
+    replay_delays: bool = False,
+    input_open: bool = False,
 ) -> tuple[int, list[dict[str, Any]]]:
     """Serve one run in this process with troupe's messages already waiting, including
     ``after_start``, before the runner plays anything: the ordering a loaded machine can produce
-    by chance, made certain."""
+    by chance, made certain. With ``input_open``, end of input never comes, so a wait or a
+    replay's delays run their full length and the script must end with an ``exit`` step."""
     from troupe_runner_scripted.runner import Runner
 
     workspace = tmp_path / "workspace"
@@ -409,17 +415,28 @@ def _played_with_everything_queued(
                 "runId": "0b9f4c1e-5f7c-4a39-9a43-3d2a3f1d0c11",
                 "direction": "test",
                 "workspace": str(workspace),
-                "options": {"script": script},
+                "options": {"script": script, **({"replayDelays": True} if replay_delays else {})},
                 "limits": {"eventMaxBytes": 65536},
             },
         },
         *({"jsonrpc": "2.0", "id": 3 + n, **m} for n, m in enumerate(after_start)),
     ]
-    stdin = io.BytesIO(b"".join(json.dumps(m).encode() + b"\n" for m in messages))
+    lines = [json.dumps(m).encode() + b"\n" for m in messages]
     stdout = io.BytesIO()
-    runner = Runner(stdin, stdout, io.BytesIO())
-    runner._read()  # every message is in the inbox before the first step
-    code = runner.serve()
+    if not input_open:
+        runner = Runner(io.BytesIO(b"".join(lines)), stdout, io.BytesIO())
+        runner._read()  # every message is in the inbox before the first step
+        code = runner.serve()
+    else:
+        read_end, write_end = os.pipe()
+        with os.fdopen(read_end, "rb") as stdin:
+            runner = Runner(stdin, stdout, io.BytesIO())
+            for line in lines:  # every message is in the inbox before the first step
+                runner._inbox.put(line)
+            try:
+                code = runner.serve()
+            finally:
+                os.close(write_end)  # end of input, so the reader thread ends
     return code, [json.loads(line) for line in stdout.getvalue().splitlines()]
 
 
@@ -454,6 +471,77 @@ def test_a_cancel_waiting_during_instant_steps_is_answered_at_the_hang_after_the
     played = [m.get("method") for m in sent if "method" in m]
     assert played == ["run/event", "run/transcript", "run/transcript"]
     assert [m for m in sent if m.get("id") == 3] == [{"jsonrpc": "2.0", "id": 3, "result": {}}]
+
+
+# Requirement: Steps that don't wait play without reading troupe's messages
+
+CANCEL_ANSWER = {"jsonrpc": "2.0", "id": 3, "result": {}}
+
+
+def _played(sent: list[dict[str, Any]]) -> list[object]:
+    """What the runner sent, in order: each notification's method and record, and each answer."""
+    return [
+        (m["method"], m["params"].get("record")) if "method" in m else m
+        for m in sent
+        if m.get("id") not in (1, 2)
+    ]
+
+
+def test_a_cancel_waiting_at_a_wait_is_answered_before_the_steps_after_the_wait_play(
+    tmp_path: Path,
+) -> None:
+    code, sent = _played_with_everything_queued(
+        tmp_path,
+        {
+            "onCancel": "ignore",
+            "steps": [
+                {"event": INIT},
+                {"wait": {"ms": 300}},
+                {"transcript": "after the wait"},
+                {"exit": 0},
+            ],
+        },
+        {"method": "run/cancel", "params": {"runId": "0b9f4c1e-5f7c-4a39-9a43-3d2a3f1d0c11"}},
+        input_open=True,
+    )
+    assert code == 0
+    assert _played(sent) == [
+        ("run/event", None),
+        CANCEL_ANSWER,
+        ("run/transcript", "after the wait"),
+    ]
+
+
+def test_a_cancel_waiting_during_a_replays_delay_is_answered_before_the_delayed_record(
+    tmp_path: Path,
+) -> None:
+    recording = tmp_path / "recording.jsonl"
+    lines = [
+        {"event": {"runId": "11111111-1111-4111-8111-111111111111", **INIT, "seq": 0}, "atMs": 0},
+        {"transcript": "delayed", "atMs": 300},
+    ]
+    recording.write_text("\n".join(json.dumps(line) for line in lines) + "\n", encoding="utf-8")
+    code, sent = _played_with_everything_queued(
+        tmp_path,
+        {
+            "onCancel": "ignore",
+            "steps": [
+                {"replay": str(recording)},
+                {"transcript": "after the replay"},
+                {"exit": 0},
+            ],
+        },
+        {"method": "run/cancel", "params": {"runId": "0b9f4c1e-5f7c-4a39-9a43-3d2a3f1d0c11"}},
+        replay_delays=True,
+        input_open=True,
+    )
+    assert code == 0
+    assert _played(sent) == [
+        ("run/event", None),
+        CANCEL_ANSWER,
+        ("run/transcript", "delayed"),
+        ("run/transcript", "after the replay"),
+    ]
 
 
 # Requirement: A script can check the character it received
