@@ -122,6 +122,22 @@ class SharedState:
         )
 
 
+@dataclass(frozen=True)
+class MergeSides:
+    """The versions a merge combined into one path (config-projection-conflicts design D2).
+
+    ``conflicted``: git left the path unmerged, and ``sides`` are ours and theirs from the index.
+    ``clean``: git merged it with no conflict, in the merge in progress or in HEAD's merge commit,
+    ``sides`` are the two parents' versions, and ``merged`` is what the merge gave. A side is
+    ``None`` where it has no file. The base isn't given: whether a file is safe to replace depends
+    only on the versions it came from.
+    """
+
+    kind: Literal["conflicted", "clean"]
+    sides: tuple[bytes | None, ...]
+    merged: bytes | None = None
+
+
 def worktrees_unsupported(adapter: str) -> TroupeError:
     """vcs.worktrees-unsupported, for an adapter that can't make worktrees."""
     return TroupeError(
@@ -172,6 +188,13 @@ class Vcs(Protocol):
 
         A committed file no longer travels with a branch switch; an uncommitted one does.
         """
+        ...
+
+    def merge_sides_under(self, directory: str) -> Mapping[str, MergeSides]:
+        """Each path under ``directory`` that a merge combined, by theatre-relative path: unmerged
+        in the index, or merged cleanly in the merge in progress or HEAD's merge commit, when git
+        reproduces that clean merge exactly. A path in no merge is left out; an adapter with no
+        merges gives none (config-projection-conflicts design D2, D3)."""
         ...
 
     def configured_identities(self) -> tuple[str, ...]:

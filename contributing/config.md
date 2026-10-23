@@ -56,6 +56,25 @@ A change stages each new file beside its target (`.<name>.troupe~`), records the
 moves them into place with an atomic replace, all under the lock in `.troupe/local/config/`. A staged file an event
 vouches for is a write a crash cut short, and the next flush finishes it; one no event vouches for is removed.
 
+### Files git merged
+
+git merges the files under `.troupe/actors/` as text, so a merge can leave one conflicted, or merge two versions of
+it cleanly into text troupe never wrote. The VCS port's `merge_sides_under` says which versions a merge combined
+into each path, and config uses that to decide whether nothing a person wrote can be in the file
+(config-projection-conflicts design D2 to D4). The git adapter (`troupe_vcs_git.merges`) reads:
+
+- **a conflicted path** from the index's stages, ours (2) and theirs (3), whatever left it unmerged: a merge, a
+  rebase, a cherry-pick, a revert or a stash pop;
+- **a clean merge** only in the merge in progress (`MERGE_HEAD`) or in HEAD when it's a merge of two parents, and
+  only for paths whose merged blob differs from both parents'. `git merge-tree --write-tree` on the two parents
+  must give that blob, with no conflict.
+
+It uses `merge-tree` rather than `merge-file` on the base and both sides because `merge-tree` redoes the merge with
+the strategy git used (ort) and the person's merge settings, handles several merge bases as the merge did, and needs
+git 2.38. Matching ort with `merge-file` needs `--diff-algorithm`, which arrived in git 2.44, and Apple's bundled
+git is older. A merge edited before it was committed, or made with options `merge-tree` didn't get, doesn't
+reproduce, so it's refused as a hand edit is. The files adapter reports no merges.
+
 ## Notices and errors
 
 | Code | When |

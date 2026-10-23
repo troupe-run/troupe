@@ -67,7 +67,7 @@ None.
 
 - `packages/troupe/src/troupe/core/vcs.py`: a `MergeSides` type and the `merge_sides` query on the `Vcs` protocol.
 - `packages/troupe-vcs-git`: the query, using `git ls-files --unmerged`, `MERGE_HEAD`, HEAD's parents,
-  `git merge-base` and `git merge-file`. `packages/troupe-vcs-files`: an empty answer.
+  and `git merge-tree --write-tree`. `packages/troupe-vcs-files`: an empty answer.
 - `packages/troupe/src/troupe/core/config/projection.py`: `plan` takes merge sides, and recognised files are
   replaced with a copy kept. `refuse` gets the new message.
 - `packages/troupe/src/troupe/core/config/commands.py`: `config set`, `flush` and the flush every command runs first

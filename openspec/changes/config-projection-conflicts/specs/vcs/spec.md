@@ -28,7 +28,7 @@ the index's stages, byte for byte. A side the index has no stage for SHALL be re
 
 ### Requirement: The git adapter reports a clean merge only when it reproduces it
 For a path that isn't unmerged, the git adapter SHALL report it as merged cleanly only during a merge in progress, or
-when HEAD is a merge of two parents, and only when merging the sides from their merge base with git reproduces, with
+when HEAD is a merge of two parents, and only when git, merging the two parents again, reproduces for that path, with
 no conflict, exactly the bytes the merge gave. Otherwise it SHALL leave the path out.
 
 #### Scenario: A clean merge in progress

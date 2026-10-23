@@ -253,6 +253,22 @@ def test_a_clean_git_merge_of_two_branches_files_is_left_as_it_is(tmp_path: Path
     assert flush(theatre, merged, {}).actions == ()
 
 
+def test_conflict_markers_typed_by_hand_outside_any_merge_are_refused_and_left_alone(
+    tmp_path: Path,
+) -> None:
+    repo = make_repo(tmp_path)
+    theatre = repo.path
+    flush(theatre, CONFIG, {})
+    repo.commit_all("tester")
+    marked = b"<<<<<<< mine\nrunner: a\n=======\nrunner: b\n>>>>>>> theirs\n"
+    _actor_file(theatre).write_bytes(marked)
+    with pytest.raises(TroupeError) as caught:
+        flush(theatre, CONFIG, {})
+    assert caught.value.code == "config.file-not-troupes"
+    assert "conflict markers" in caught.value.problem
+    assert _actor_file(theatre).read_bytes() == marked
+
+
 # Requirement: Force replaces a file and keeps a copy
 
 

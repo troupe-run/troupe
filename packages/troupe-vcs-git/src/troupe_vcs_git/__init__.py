@@ -4,8 +4,9 @@ Every git command runs through troupe.core.commands with GIT_ENVIRONMENT, so git
 config, credentials and SSH agent, but never a hook's GIT_DIR or GIT_INDEX_FILE, and nothing else of
 troupe's environment. Only local commands run (symbolic-ref, rev-parse, ls-files, ls-tree, config,
 and for a run's worktree: worktree, status, read-tree, checkout-index, update-index, diff-files,
-add, write-tree, diff, apply, for-each-ref), so git never starts a credential helper or ssh. The
-worktree operations live in troupe_vcs_git.worktrees.
+add, write-tree, diff, apply, for-each-ref; for merge sides: cat-file, merge-tree), so git never
+starts a credential helper or ssh. The worktree operations live in troupe_vcs_git.worktrees, and
+merge sides in troupe_vcs_git.merges.
 
 The branch and HEAD are cached behind the branch token: the stats of every file git changes when
 either moves. They are read through git again only when one of those files has changed, so
@@ -21,9 +22,10 @@ from pathlib import Path
 
 from troupe.core.commands import run_command
 from troupe.core.errors import TroupeError
-from troupe.core.vcs import Applicability, Captured, Clone, Filled, SharedState
+from troupe.core.vcs import Applicability, Captured, Clone, Filled, MergeSides, SharedState
 from troupe.platform.processes import Completed, EnvironmentPolicy, ProcessWaitCallback
 from troupe_vcs_git import defaults
+from troupe_vcs_git.merges import Merges
 from troupe_vcs_git.worktrees import Worktrees
 
 # Exit status 1 means "no answer" for these, not failure: an unborn or detached HEAD, a missing key.
@@ -97,6 +99,7 @@ class GitAdapter:
         self._common: Path | None = None
         self._state: _State | None = None
         self._worktrees = Worktrees(self)
+        self._merges = Merges(self)
 
     @property
     def name(self) -> str:
@@ -233,6 +236,9 @@ class GitAdapter:
             in_head = self.git("ls-tree", "-r", "-z", "--name-only", "HEAD", "--", directory)
             names.update(_nul_separated(in_head.stdout))
         return frozenset(names)
+
+    def merge_sides_under(self, directory: str) -> Mapping[str, MergeSides]:
+        return self._merges.under(directory)
 
     def configured_identities(self) -> tuple[str, ...]:
         completed = self.git(
