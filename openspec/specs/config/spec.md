@@ -188,8 +188,9 @@ batch, by a settling event whose parents are every head and whose state is the m
 
 ### Requirement: An actor is defined by its runner, options, effect check and character
 An actor SHALL have a `runner` (required), `options` (an object, default empty), `expect` (required: theatre-relative
-paths the run must create or change, where an empty list means no effect check) and an optional `character` (text).
-Its name SHALL match the client protocol's actor-name pattern.
+paths the run must create or change, where an empty list means no effect check), an optional `character` (text) and
+an optional `workspace`: `worktree` (the default when it's absent) or `theatre`. Its name SHALL match the client
+protocol's actor-name pattern.
 
 #### Scenario: An actor with no effect check written
 - **WHEN** a person sets only `actors.tester.runner`
@@ -202,6 +203,14 @@ Its name SHALL match the client protocol's actor-name pattern.
 #### Scenario: An actor name that doesn't fit
 - **WHEN** a person sets `actors.Tester.runner`
 - **THEN** it is refused, naming the name and the pattern
+
+#### Scenario: Running in place
+- **WHEN** a person runs `troupe config set actors.tester.workspace=theatre`
+- **THEN** `tester`'s runs work in the theatre
+
+#### Scenario: A workspace that doesn't exist
+- **WHEN** a person sets `actors.tester.workspace` to `sandbox`
+- **THEN** it is refused, naming the path, `sandbox`, and the accepted values `worktree` and `theatre`
 
 ### Requirement: Config commands
 `troupe config set <path>=<value>…` SHALL set values, with `<path>=@<file>` reading a value from a file;
