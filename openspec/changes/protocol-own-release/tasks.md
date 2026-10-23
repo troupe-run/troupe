@@ -44,20 +44,20 @@
 
 ## 3. Every surface reports it from there (design D5, D6, D7; specs: event-store, cli, config-files)
 
-- [ ] 3.1 Segment header (D5), tests first: in `packages/troupe-store-text/tests/test_codec.py` and
+- [x] 3.1 Segment header (D5), tests first: in `packages/troupe-store-text/tests/test_codec.py` and
   `test_segments.py`, a written header carries `"protocol"` equal to `protocol_version()`; a header without it, or
   with `"next"`, is refused as `events.malformed-record` naming file and line; in
   `packages/troupe/tests/test_event_schemas.py`, a header without `protocol` doesn't validate. Update every
   hand-written header fixture to carry `protocol`. Then change `event-record.schema.json` (with `$defs/protocolVersion`
   and its description), regenerate the copy, and change `Header`, `encode_header`, `_header` and `TextStore`'s
   header write. Verify `uv run pytest packages/troupe-store-text packages/troupe/tests/test_event_schemas.py` passes
-- [ ] 3.2 Update `contributing/event-store.md`'s header example and its description of the header's fields, and the
+- [x] 3.2 Update `contributing/event-store.md`'s header example and its description of the header's fields, and the
   README's `event-record.schema.json` row. Verify `test_event_store_doc.py` passes
-- [ ] 3.3 `--version` (D6), tests first in `packages/troupe/tests/test_cli.py`: outside a theatre it prints
+- [x] 3.3 `--version` (D6), tests first in `packages/troupe/tests/test_cli.py`: outside a theatre it prints
   `troupe <version> (protocol <recorded version>)` and exits 0; with a broken record (monkeypatched location) it
   renders `schemas.protocol-version-invalid` and exits with that code's exit code. Then change `cli/__init__.py`, and
   `docs/prompt-book/cli.md` wherever it shows or describes the output. Verify the CLI tests and `test_cli_docs.py` pass
-- [ ] 3.4 `$schema` URL (D7), tests first in `packages/troupe/tests/test_config_files.py`: with the packaged record
+- [x] 3.4 `$schema` URL (D7), tests first in `packages/troupe/tests/test_config_files.py`: with the packaged record
   the written actor file's bytes are unchanged (`/protocol/0/`); with a record of `1.3.0` (monkeypatched) both the
   comment and the key name `/protocol/1/`. Then replace `ACTOR_SCHEMA_URL` with `actor_schema_url()` in
   `core/config/kinds.py`, use it in `projection.py`, and check `cli/values.py` for the same constant. Verify the config

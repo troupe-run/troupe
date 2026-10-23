@@ -34,7 +34,9 @@ PATTERN = "*.schema.json"
 PROTOCOL_RECORD = PROTOCOL / "version.json"
 """Which protocol release the copy is: ``{"version": "<major>.<minor>.<patch>"}``."""
 
-_VERSION = re.compile(r"\A(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\Z")
+PROTOCOL_VERSION = re.compile(r"\A(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\Z")
+"""A protocol version: major.minor.patch, no leading zeros (event-record.schema.json's
+``protocolVersion``)."""
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -114,7 +116,7 @@ def protocol_version() -> str:
     else:
         only_a_version = isinstance(record, dict) and set(record) == {"version"}
         version = record.get("version") if isinstance(record, dict) and only_a_version else None
-        if isinstance(version, str) and _VERSION.match(version):
+        if isinstance(version, str) and PROTOCOL_VERSION.match(version):
             return version
         found = f"holds {strict_json.dumps(record)}"
     raise TroupeError(

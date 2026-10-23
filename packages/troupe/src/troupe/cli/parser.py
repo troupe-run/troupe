@@ -509,7 +509,10 @@ def _global_options() -> _Parser:
     # SUPPRESS: a flag missing from the subcommand's part of the line must not reset one given
     # before the subcommand.
     options.add_argument(
-        "--version", action="store_true", default=argparse.SUPPRESS, help="show the version"
+        "--version",
+        action="store_true",
+        default=argparse.SUPPRESS,
+        help="show the version, and the protocol version it carries",
     )
     options.add_argument(
         "-h", "--help", action="store_true", default=argparse.SUPPRESS, help="show this help"

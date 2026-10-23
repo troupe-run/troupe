@@ -158,12 +158,14 @@ troupe flush [--force] [--rehearse]
 
 | Flag | What it does |
 |---|---|
-| `--version` | Show the version |
+| `--version` | Show the version, and the protocol version it carries |
 | `-h`, `--help` | Show this help |
 <!-- end generated: cli -->
 
-`--version` needs no theatre, identity or daemon. Global flags work anywhere on the line, before or after the
-subcommand. Flags can't be abbreviated: `--vers` is an unknown flag, not `--version`.
+`--version` prints troupe's version and the version of the
+[protocol](https://github.com/troupe-run/troupe/tree/main/protocol) it carries, such as
+`troupe 0.4.0 (protocol 0.2.1)`. It needs no theatre, identity or daemon. Global flags work anywhere on the line,
+before or after the subcommand. Flags can't be abbreviated: `--vers` is an unknown flag, not `--version`.
 
 ## Values that start with `-`
 

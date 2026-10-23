@@ -8,6 +8,7 @@ from uuid import uuid4
 from event_schemas import is_valid
 from gitrepo import Repo, make_repo, past_the_racy_window
 from storetesting import event, segments
+from troupe.core import schemas
 from troupe_store_text.store import TextStore
 from troupe_vcs_git import GitAdapter
 
@@ -79,5 +80,9 @@ def test_a_session_on_a_detached_head_writes_a_header_with_no_branch(tmp_path: P
     store.insert([event(uuid4(), 1)])
     [segment] = segments(repo.path)
     header = json.loads(segment.read_bytes().splitlines()[0])
-    assert header["segment"] == {"session": segment.stem, "vcs": "git"}
+    assert header["segment"] == {
+        "session": segment.stem,
+        "vcs": "git",
+        "protocol": schemas.protocol_version(),
+    }
     assert is_valid(header, "event-record.schema.json")

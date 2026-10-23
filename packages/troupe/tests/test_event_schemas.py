@@ -195,9 +195,17 @@ def test_lineage_the_schema_refuses(value: dict[str, Any]) -> None:
 
 
 def test_a_header_line_and_an_event_line_are_both_records() -> None:
-    header = {"format": 1, "segment": {"session": ULID, "vcs": "git", "branch": "main"}}
+    header = {
+        "format": 1,
+        "segment": {"session": ULID, "vcs": "git", "branch": "main", "protocol": "0.2.0"},
+    }
     assert is_valid(header, "event-record.schema.json")
     assert is_valid(EVENT, "event-record.schema.json")
+
+
+def test_a_header_line_without_a_protocol_version_is_not_a_record() -> None:
+    header = {"format": 1, "segment": {"session": ULID, "vcs": "git", "branch": "main"}}
+    assert not is_valid(header, "event-record.schema.json")
 
 
 def test_an_event_troupe_recorded_must_carry_valid_lineage() -> None:
