@@ -2,8 +2,8 @@
 
 ## 1. Platform: copy-on-write clones (design D3)
 
-- [ ] 1.1 Write a test that passes on main first: the theatre's current file-copy helpers keep their behaviour. Then
-  add `troupe/platform/clones.py` with `clone_file(src, dst) -> CloneMechanism`. It uses `clonefile` through `ctypes`
+- [x] 1.1 Add `troupe/platform/clones.py` (new code; it replaces no existing copy path, so there's no old behaviour to
+  test against first) with `clone_file(src, dst) -> CloneMechanism`. It uses `clonefile` through `ctypes`
   on macOS, `FICLONE` after an exclusive create on Linux, and `_winapi.CopyFile2` with `COPY_FILE_FAIL_IF_EXISTS` on
   Windows. It falls back to an exclusive-create `copy` on the "unsupported" errnos, and recreates a symbolic link as
   a link. Verify with `packages/troupe/tests/test_platform_clones.py`, which covers:
@@ -16,7 +16,7 @@
   - `clonefile` reported on macOS CI (APFS), `copy` on Linux CI (ext4), and `copyfile2` on Windows CI.
 
   Each test's name states only what its body checks.
-- [ ] 1.2 Add the clone section to `contributing/platform.md`: the mechanisms per OS, the fallback errnos, and that
+- [x] 1.2 Add the clone section to `contributing/platform.md`: the mechanisms per OS, the fallback errnos, and that
   Windows can't report a block clone. Verify with `test_platform_docs.py`.
 
 ## 2. VCS port: the worktree capability and shared-state snapshots (design D4, D5, D10)
