@@ -101,6 +101,8 @@ class Worktree:
     prefix: str
     dirty: tuple[str, ...]
     clones: tuple[str, ...]
+    baseline: str
+    """The worktree's starting tree, as the VCS sees it, which the run's diff is taken from."""
 
     @property
     def cwd(self) -> Path:
@@ -145,7 +147,7 @@ def make_worktree(
         with contextlib.suppress(Exception):
             vcs.remove_worktree(path)
         raise
-    return Worktree(path, base, prefix, dirty, filled.mechanisms)
+    return Worktree(path, base, prefix, dirty, filled.mechanisms, filled.baseline)
 
 
 def _uncommitted(dirty: tuple[str, ...], base: str) -> Notice:

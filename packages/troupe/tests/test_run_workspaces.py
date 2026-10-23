@@ -44,9 +44,9 @@ class Recording(Harness):
 def committed(tmp_path: Path) -> Repo:
     """A theatre whose HEAD has src/a.txt (one) and src/b.txt (bee), and ignores build/."""
     repo = theatre(tmp_path)
-    repo.write("src/a.txt", "one\n")
-    repo.write("src/b.txt", "bee\n")
-    repo.write(".gitignore", "build/\n")
+    for name, text in (("src/a.txt", "one\n"), ("src/b.txt", "bee\n"), (".gitignore", "build/\n")):
+        (repo.path / name).parent.mkdir(parents=True, exist_ok=True)
+        (repo.path / name).write_bytes(text.encode("utf-8"))  # LF on every OS, as committed
     repo.commit_all("base")
     return repo
 

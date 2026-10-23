@@ -69,7 +69,7 @@ class FilesAdapter:
     def fill_worktree(self, path: Path, clone: Clone, skip: frozenset[str]) -> Filled:
         self._unsupported()
 
-    def capture(self, path: Path, base: str, leave_out: tuple[str, ...], out: Path) -> Captured:
+    def capture(self, path: Path, baseline: str, leave_out: tuple[str, ...], out: Path) -> Captured:
         self._unsupported()
 
     def check_apply(self, diff: Path) -> Applicability:

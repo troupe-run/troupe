@@ -63,7 +63,6 @@ CODES: dict[str, ExitCode] = {
     # Run worktrees (worktree-stage design D9). contributing/event-store.md lists the vcs one,
     # contributing/runs.md the others.
     "vcs.worktrees-unsupported": ExitCode.FAILURE,
-    "workspace.not-at-head": ExitCode.FAILURE,
     "workspace.no-head": ExitCode.FAILURE,
     "workspace.diff-too-large": ExitCode.FAILURE,
     "command.timeout": ExitCode.FAILURE,

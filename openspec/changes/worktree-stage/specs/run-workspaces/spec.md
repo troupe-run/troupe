@@ -11,7 +11,8 @@ the theatre unasked.
 ### Requirement: A worktree run works in its own worktree at HEAD
 A run whose actor's workspace is `worktree` SHALL work in a new git worktree of the theatre's repository, made for
 that run at `.troupe/local/worktrees/<run-id>/`, with HEAD detached at the theatre's HEAD commit. Before the runner
-starts, every file in the worktree SHALL match that commit, and the worktree SHALL hold no other file.
+starts, every file in the worktree SHALL be what checking out that commit writes, and the worktree SHALL hold no
+other file.
 
 #### Scenario: The actor sees HEAD
 - **WHEN** a theatre whose HEAD has `src/a.txt` with `one` performs an actor with workspace `worktree`, and the
@@ -75,8 +76,8 @@ name the actor's `workspace` setting and the value `theatre`.
 - **THEN** it is refused with `workspace.no-head`, and the fix says to commit or to set `workspace` to `theatre`
 
 ### Requirement: A run's changes are captured when it ends
-When a worktree run ends, whatever its outcome, troupe SHALL capture the worktree's changes against the base commit as
-a git binary diff. It SHALL store the diff as an artifact, and record it in the run's end by reference, with the base
+When a worktree run ends, whatever its outcome, troupe SHALL capture the worktree's changes against its starting
+state, as git sees it, as a git binary diff. It SHALL store the diff as an artifact, and record it in the run's end by reference, with the base
 commit and the number of files added, modified and deleted. Changes the actor committed in the worktree SHALL count
 as changes. A run with nothing changed SHALL record no diff and state `none`.
 
@@ -96,6 +97,11 @@ as changes. A run with nothing changed SHALL record no diff and state `none`.
 #### Scenario: The actor committed
 - **WHEN** a worktree run commits a change to `src/a.txt` in its worktree and leaves another change uncommitted
 - **THEN** the diff holds both, measured from the base commit
+
+#### Scenario: A file git would normalise
+- **WHEN** HEAD holds a file in a form git would normalise, such as CRLF under an `eol=crlf` attribute, so git lists
+  it as modified in every checkout, and a worktree run doesn't touch it
+- **THEN** the run starts, and its diff doesn't hold that file
 
 #### Scenario: Nothing changed
 - **WHEN** a worktree run changes no file

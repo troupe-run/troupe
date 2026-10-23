@@ -24,12 +24,21 @@ def adapter(repo: Repo, **options: object) -> GitAdapter:
 @pytest.fixture
 def repo(tmp_path: Path) -> Repo:
     repo = make_repo(tmp_path)
-    repo.write("src/a.txt", "one\n")
-    repo.write("src/b.txt", "bee\n")
-    repo.write(".troupe/events/x.jsonl", "{}\n")
-    repo.write(".gitignore", "build/\n")
+    put(repo, "src/a.txt", "one\n")
+    put(repo, "src/b.txt", "bee\n")
+    put(repo, ".troupe/events/x.jsonl", "{}\n")
+    put(repo, ".gitignore", "build/\n")
     repo.commit_all("base")
     return repo
+
+
+def put(repo: Repo, relative: str, text: str) -> Path:
+    """Write ``text`` as UTF-8 bytes exactly, so a commit holds LF on every OS (write_text would
+    write CRLF on Windows)."""
+    path = repo.path / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(text.encode("utf-8"))
+    return path
 
 
 def git_in(repo: Repo, cwd: Path, *args: str) -> str:
@@ -44,15 +53,15 @@ def git_in(repo: Repo, cwd: Path, *args: str) -> str:
 
 
 def worktree(repo: Repo, tmp_path: Path, name: str = "wt") -> tuple[GitAdapter, Path, str]:
-    """A filled worktree of ``repo`` at its HEAD."""
+    """A filled worktree of ``repo`` at its HEAD, with the baseline its diff is taken from."""
     git = adapter(repo)
     path = repo.path / ".troupe" / "local" / "worktrees" / name
     path.parent.mkdir(parents=True, exist_ok=True)
     base = git.head()
     assert base is not None
     git.add_worktree(path, base)
-    git.fill_worktree(path, clone_file, frozenset(git.differing_from_head()))
-    return git, path, base
+    filled = git.fill_worktree(path, clone_file, frozenset(git.differing_from_head()))
+    return git, path, filled.baseline
 
 
 def tree_files(root: Path) -> dict[str, bytes]:
@@ -101,8 +110,8 @@ def test_removing_a_directory_that_was_never_registered_removes_it(
 
 
 def test_a_dirty_theatres_worktree_holds_exactly_heads_files(repo: Repo, tmp_path: Path) -> None:
-    repo.write("src/a.txt", "edited, not committed\n")
-    repo.write("untracked.txt", "new\n")
+    put(repo, "src/a.txt", "edited, not committed\n")
+    put(repo, "untracked.txt", "new\n")
     (repo.path / "src" / "b.txt").unlink()
     _git, path, _ = worktree(repo, tmp_path)
     assert tree_files(path) == {
@@ -117,18 +126,18 @@ def test_a_dirty_theatres_worktree_holds_exactly_heads_files(repo: Repo, tmp_pat
 def test_the_paths_differing_from_head_are_staged_unstaged_and_untracked_ones(
     repo: Repo,
 ) -> None:
-    repo.write("src/a.txt", "edited\n")
-    repo.write("new.txt", "new\n")
+    put(repo, "src/a.txt", "edited\n")
+    put(repo, "new.txt", "new\n")
     repo.git("add", "new.txt")
-    repo.write("loose.txt", "loose\n")
-    repo.write("build/ignored.bin", "ignored\n")
+    put(repo, "loose.txt", "loose\n")
+    put(repo, "build/ignored.bin", "ignored\n")
     assert sorted(adapter(repo).differing_from_head()) == ["loose.txt", "new.txt", "src/a.txt"]
 
 
 def test_files_that_match_head_are_cloned_and_differing_ones_checked_out(
     repo: Repo, tmp_path: Path
 ) -> None:
-    repo.write("src/a.txt", "edited\n")
+    put(repo, "src/a.txt", "edited\n")
     git = adapter(repo)
     path = repo.path / ".troupe" / "local" / "worktrees" / "wt"
     git.add_worktree(path, git.head() or "")
@@ -184,24 +193,27 @@ def test_a_clone_that_fails_falls_back_to_a_checkout(repo: Repo, tmp_path: Path)
     assert tree_files(path)["src/a.txt"] == b"one\n"
 
 
-def test_a_worktree_that_keeps_changing_is_refused_as_not_at_head(
-    repo: Repo, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+def test_a_file_committed_in_a_form_git_would_normalise_neither_stops_the_fill_nor_is_in_the_diff(
+    tmp_path: Path,
 ) -> None:
+    # CRLF committed, then an attribute saying the file is text with CRLF endings: git lists it as
+    # modified in every checkout, the theatre's included (found in CI on Windows, 2026-10-23).
+    repo = make_repo(tmp_path)
+    put(repo, "crlf.txt", "a\r\nb\r\n")
+    repo.commit_all("crlf")
+    put(repo, ".gitattributes", "*.txt text eol=crlf\n")
+    repo.git("add", ".gitattributes")  # only it: add -A would renormalise crlf.txt
+    repo.git("commit", "-q", "-m", "attributes")
+    (repo.path / "crlf.txt").unlink()
+    repo.git("checkout", "--", "crlf.txt")  # a fresh checkout, as a clone or a teammate has
     git = adapter(repo)
+    assert git.differing_from_head() == ("crlf.txt",)
     path = repo.path / ".troupe" / "local" / "worktrees" / "wt"
     git.add_worktree(path, git.head() or "")
-    worktrees = git._worktrees
-    real = worktrees._check_out
-
-    def check_out_then_spoil(target: Path, names: object, *, force: bool) -> None:
-        real(target, names, force=force)  # type: ignore[arg-type]
-        (target / "src" / "a.txt").write_text("spoiled\n", encoding="utf-8")
-
-    monkeypatch.setattr(worktrees, "_check_out", check_out_then_spoil)
-    with pytest.raises(TroupeError) as caught:
-        git.fill_worktree(path, clone_file, frozenset({"src/a.txt"}))
-    assert caught.value.code == "workspace.not-at-head"
-    assert caught.value.details["paths"] == ["src/a.txt"]
+    filled = git.fill_worktree(path, clone_file, frozenset(git.differing_from_head()))
+    captured = git.capture(path, filled.baseline, (".troupe",), tmp_path / "run.diff")
+    assert captured.empty
+    assert (tmp_path / "run.diff").read_bytes() == b""
 
 
 # Requirement: The git adapter's diff is git's normalised binary diff
@@ -224,8 +236,9 @@ def test_a_capture_counts_added_modified_and_deleted_files_and_its_diff_rebuilds
     )
     expected = tree_files(path)
     other = make_repo(tmp_path, "other")
-    git_in(repo, other.path, "fetch", "-q", str(repo.path), base)
-    git_in(repo, other.path, "checkout", "-q", base)
+    head = repo.git("rev-parse", "HEAD").strip()
+    git_in(repo, other.path, "fetch", "-q", str(repo.path), head)
+    git_in(repo, other.path, "checkout", "-q", head)
     git_in(repo, other.path, "apply", str(out))
     assert tree_files(other.path) == expected
 
@@ -303,7 +316,7 @@ def test_a_diff_over_the_limit_fails_as_too_large_and_leaves_no_diff(
 
 
 def test_a_crlf_file_comes_back_crlf_with_the_worktrees_content(repo: Repo, tmp_path: Path) -> None:
-    repo.write(".gitattributes", "*.txt text eol=crlf\n")
+    put(repo, ".gitattributes", "*.txt text eol=crlf\n")
     repo.commit_all("attributes")
     (repo.path / "src" / "a.txt").unlink()
     repo.git("checkout", "--", "src/a.txt")  # checked out again, now with CRLF
@@ -328,7 +341,7 @@ def test_a_diff_with_one_conflicting_file_changes_neither_and_names_it(
     (path / "src" / "b.txt").write_text("bee two\n", encoding="utf-8")
     out = tmp_path / "run.diff"
     git.capture(path, base, (".troupe",), out)
-    repo.write("src/b.txt", "the person's own edit\n")
+    put(repo, "src/b.txt", "the person's own edit\n")
     applicability = git.check_apply(out)
     assert applicability.files == ("src/a.txt", "src/b.txt")
     assert applicability.failing == ("src/b.txt",)
@@ -339,13 +352,14 @@ def test_a_diff_with_one_conflicting_file_changes_neither_and_names_it(
 
 
 def test_applying_leaves_the_index_and_head_unchanged(repo: Repo, tmp_path: Path) -> None:
+    head = repo.git("rev-parse", "HEAD").strip()
     git, path, base = worktree(repo, tmp_path)
     (path / "src" / "a.txt").write_text("two\n", encoding="utf-8")
     (path / "new.txt").write_text("new\n", encoding="utf-8")
     out = tmp_path / "run.diff"
     git.capture(path, base, (".troupe",), out)
     assert git.apply(out) == ("new.txt", "src/a.txt")
-    assert repo.git("rev-parse", "HEAD").strip() == base
+    assert repo.git("rev-parse", "HEAD").strip() == head
     assert repo.git("diff", "--cached", "--name-only") == ""
     assert (repo.path / "src" / "a.txt").read_text(encoding="utf-8") == "two\n"
     assert (repo.path / "new.txt").read_text(encoding="utf-8") == "new\n"
@@ -358,7 +372,7 @@ def test_a_file_the_diff_adds_that_the_person_has_since_made_is_named_as_failing
     (path / "new.txt").write_text("from the run\n", encoding="utf-8")
     out = tmp_path / "run.diff"
     git.capture(path, base, (".troupe",), out)
-    repo.write("new.txt", "the person's\n")
+    put(repo, "new.txt", "the person's\n")
     assert git.check_apply(out).failing == ("new.txt",)
 
 
@@ -374,7 +388,7 @@ def test_an_empty_diff_applies_and_changes_nothing(repo: Repo, tmp_path: Path) -
 
 def test_a_theatre_in_a_subdirectory_reports_its_prefix(tmp_path: Path) -> None:
     repo = make_repo(tmp_path)
-    repo.write("apps/theatre/a.txt", "a\n")
+    put(repo, "apps/theatre/a.txt", "a\n")
     repo.commit_all()
     sub = GitAdapter(repo.path / "apps" / "theatre", source=repo.env)
     assert sub.theatre_prefix() == "apps/theatre/"

@@ -267,8 +267,8 @@ class GitAdapter:
     def fill_worktree(self, path: Path, clone: Clone, skip: frozenset[str]) -> Filled:
         return self._worktrees.fill_worktree(path, clone, skip)
 
-    def capture(self, path: Path, base: str, leave_out: tuple[str, ...], out: Path) -> Captured:
-        return self._worktrees.capture(path, base, leave_out, out)
+    def capture(self, path: Path, baseline: str, leave_out: tuple[str, ...], out: Path) -> Captured:
+        return self._worktrees.capture(path, baseline, leave_out, out)
 
     def check_apply(self, diff: Path) -> Applicability:
         return self._worktrees.check_apply(diff)
