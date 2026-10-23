@@ -369,12 +369,15 @@ def test_a_code_the_runner_has_not_published_does_not_validate_against_the_contr
     validate(_error_response(data), ERROR_RESPONSE)  # with the scripted runner's codes bound
 
 
-# Requirement: Run start carries everything the runner may use (options are an extension point)
+# Requirement: Run start options are an extension point
 
 
 def test_the_contract_alone_accepts_only_empty_options() -> None:
     assert is_valid(_request("run/start", {**START, "options": {}}), "run-start.schema.json", None)
     assert not is_valid(_request("run/start", START), "run-start.schema.json", runner=None)
+
+
+# Requirement: Run start carries everything the runner may use
 
 
 def test_with_a_runners_schema_bound_its_options_validate_and_an_unknown_key_does_not() -> None:
