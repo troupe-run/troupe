@@ -65,10 +65,27 @@ never merges inside a value, such as two edits to one character: the whole value
 [#136](https://github.com/troupe-run/troupe/issues/136)).
 
 git merges the files under `.troupe/` as text, so when both branches changed the same actor it may stop with a
-conflict in `actors/<name>.yaml` or `actors/<name>.md`. troupe won't replace a file with git's conflict markers in
-it. Until it can ([#141](https://github.com/troupe-run/troupe/issues/141)):
+conflict in `actors/<name>.yaml` or `actors/<name>.md`, or merge the two versions' lines into text troupe never
+wrote. Either way, troupe checks which versions git made the file from. When each of them is one troupe wrote, the
+file can't hold anything of yours, and troupe writes it again from the merged config
+([#141](https://github.com/troupe-run/troupe/issues/141)):
 
-1. Take one side's file, which is a version troupe wrote: `git checkout --ours .troupe/actors/tester.yaml`.
-2. Run `troupe config get` to see whether config has a conflict too. If it does, one `troupe config set` that sets
+1. Run `troupe config get` to see whether config has a conflict too. If it does, one `troupe config set` that sets
    every conflicting value resolves it, and writes the file. If it doesn't, `troupe flush` writes the file.
-3. `git add` the file and commit the merge.
+2. `git add` the file and commit the merge. troupe leaves git's index alone, so this step is yours for now
+   ([#156](https://github.com/troupe-run/troupe/issues/156)).
+
+troupe keeps a copy of what the file held before replacing it, in case you'd started resolving it by hand. Its
+message gives the copy's hash, and the copy is in `.troupe/local/artifacts/`, which is never committed.
+
+Only `troupe flush`, or a `troupe config set` that writes the file or resolves config's conflict, replaces it. Any other command that uses
+config, such as `troupe perform`, refuses until you've run one of them, so a file you're editing never changes under
+you.
+
+troupe still refuses the file, as it would a hand edit, when:
+
+- one side of the conflict isn't a version troupe wrote, because someone edited it by hand on that branch. Take the
+  side troupe wrote (`git checkout --ours` or `--theirs`, as the message says) and run `troupe flush`, or run `troupe
+  flush --force`, which keeps a copy;
+- the file was edited after git merged it, or the merge was edited before it was committed;
+- the merge isn't the one in progress or the latest commit, because commits have been made since.

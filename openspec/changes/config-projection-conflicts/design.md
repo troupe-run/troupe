@@ -163,10 +163,14 @@ the plan made again re-reads them too, so nothing is decided from a stale view o
 
 What each one passes as `resolve`:
 - **`flush_files`:** every path in `merges`, and its rehearsal does the same.
-- **`config_set`:** only the paths its own change writes, those where `render(before)` and `render(after)` differ.
-  So it works out its entries before its first plan, and passes the same set to that plan, the check before
-  staging, the finishing plan and its rehearsal. A recognised file the change doesn't touch is refused, and nothing
-  is recorded.
+- **`config_set`:** the paths its own change writes, those where `render(before)` and `render(after)` differ.
+  When config has conflicts, it passes every merged path instead. A change is recorded only if it resolves every
+  conflict (`refuse_unrecordable`), and until one does, `troupe flush` refuses. Without this, a merged file the
+  resolving change doesn't touch would deadlock: `config set` would refuse it, naming `flush`, and `flush` would
+  refuse the conflict. The merge property test found this during apply, and the owner chose this fix over leaving
+  the file for a `troupe flush` afterwards (2026-10-23). It works out its entries before its first plan, and passes
+  the same set to that plan, the check before staging, the finishing plan and its rehearsal. With no conflict, a
+  recognised file the change doesn't touch is refused, and nothing is recorded.
 - **`sync_files`:** none. So `perform` and every other command that uses config refuse a recognised file, and the refusal
   names `troupe flush`.
 
