@@ -65,9 +65,9 @@
 
 ## 4. Integration
 
-- [ ] 4.1 Run `uv run scripts/check.py` and see it pass. Then, in a scratch theatre, run `troupe --version`, record an
+- [x] 4.1 Run `uv run scripts/check.py` and see it pass. Then, in a scratch theatre, run `troupe --version`, record an
   event and read the new segment's first line, and confirm it carries the recorded protocol version
-- [ ] 4.2 Open a follow-up issue in troupe-run/infrastructure for a guard rule that refuses a non-releasable commit
+- [x] 4.2 Open a follow-up issue in troupe-run/infrastructure for a guard rule that refuses a non-releasable commit
   type changing `protocol/schemas/` (design, Risks), on the roadmap board (`--project "troupe roadmap"`), and link it
   from the PR. Verify with `gh issue view <n> -R troupe-run/infrastructure --json projectItems`
 
