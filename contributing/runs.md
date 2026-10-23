@@ -125,9 +125,10 @@ a worktree run's workspace through the VCS port alone, so it doesn't depend on t
    `workspace.no-head` (no commit yet).
 2. After the run's lease, list what differs from HEAD (`workspace.uncommitted-unseen` when anything outside
    `.troupe/` does), `git worktree add --detach --no-checkout` at `.troupe/local/worktrees/<run id>`, clone each file
-   that matches HEAD from the theatre (`troupe.platform.clones`), check out the rest, and verify against HEAD.
+   that matches HEAD from the theatre (`troupe.platform.clones`), check out the rest, check out again from git any file that differs from HEAD, and
+   write the result as the baseline tree the run's diff is taken from.
 3. Snapshot the repository's shared state (refs, config, hooks), run the actor in the worktree (at the theatre's
-   prefix when the theatre is a subdirectory), snapshot again, and capture the diff (`.troupe/` left out) into the
+   prefix when the theatre is a subdirectory), snapshot again, and capture the diff from the baseline (`.troupe/` left out) into the
    artifact store. Both go in the run's end; a failure to capture is recorded there, never raised.
 4. `accept` applies the diff with `git apply --check` then `git apply`, records `Run.ChangesAccepted`, and removes the
    worktree. `discard` removes it and records `Run.ChangesDiscarded`. Both hold `.troupe/local/runs/<id>/settle`.
@@ -175,7 +176,6 @@ export TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE=true
 | `run.not-a-worktree` | A run that worked in the theatre has no changes to show, accept or discard |
 | `run.changes-settled` | A run's changes were already accepted or discarded: settling them is final |
 | `workspace.no-head` | A worktree run needs a commit to start from, and the theatre has none yet |
-| `workspace.not-at-head` | A run's worktree kept differing from HEAD after it was checked out again, so the run didn't start |
 | `workspace.diff-too-large` | A run's changes make a diff larger than `GIT_DIFF_MAX_BYTES`, so they weren't captured |
 | `workspace.waiting` | (notice) Making, filling, capturing or removing a run's worktree has taken longer than `WORKSPACE_ANNOUNCE_AFTER_SECONDS` |
 | `workspace.not-removed` | (notice) A run's changes were accepted, but its worktree couldn't be removed; it names the path and `git worktree remove` |

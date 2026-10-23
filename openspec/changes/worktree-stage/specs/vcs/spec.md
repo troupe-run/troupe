@@ -41,9 +41,9 @@ already deleted by hand.
 - **THEN** removal succeeds and git no longer lists the worktree
 
 ### Requirement: The git adapter's diff is git's normalised binary diff
-The git adapter SHALL capture a worktree's changes as `git diff --binary` between the base commit and the worktree's
-files, everything git doesn't ignore included, in git's normalised form. Applying it SHALL convert line endings and
-filters as git does for the theatre's working tree.
+The git adapter SHALL capture a worktree's changes as `git diff --binary` between the worktree's starting state (a tree
+written from it once it is filled, its baseline) and its files, everything git doesn't ignore included, in git's
+normalised form. Applying it SHALL convert line endings and filters as git does for the theatre's working tree.
 
 #### Scenario: A CRLF file
 - **WHEN** a file checked out with CRLF line endings is changed in a worktree, captured and applied to the theatre

@@ -106,6 +106,9 @@ When the run ends, troupe captures what it changed as a diff, keeps it, and leav
   changed the same lines since, nothing changes, and troupe names the files;
 - `troupe discard <run>` removes the worktree, and your files stay as they were.
 
+Accepting leaves the changes uncommitted, like any edit of your own. The next run starts from your latest commit,
+so it won't see them: commit after accepting when the next run should build on this one.
+
 Accepting or discarding is recorded with who did it and why, and it's final. Changes the run made under `.troupe/`
 are never part of the diff, so a run can't write your history or config through an accept.
 

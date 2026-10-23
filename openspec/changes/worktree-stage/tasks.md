@@ -36,8 +36,8 @@
   `git branch --list` and `git worktree list` are unchanged after a make and remove, and that removing a worktree
   deleted by hand succeeds.
 - [x] 2.4 Give the git adapter `paths_differing_from_head`, `files_at_head` and `fill_worktree`: `read-tree HEAD`,
-  then clone the matching files through an injected `clone_file`, then `checkout-index -a`, then verify with
-  `update-index --refresh` and `diff-files`, checking out again once and then `workspace.not-at-head`. Verify with
+  then clone the matching files through an injected `clone_file`, then `checkout-index`, then check out again
+  each file `diff-files` lists, and write the baseline tree (design D2, amended). Verify with
   `test_git_worktrees.py`:
   - a dirty theatre's worktree matches HEAD exactly;
   - an untracked file in the theatre isn't in the worktree;
@@ -135,7 +135,7 @@
 - [x] 5.3 Make the rehearsal report the workspace and base, and make no worktree. Verify with a test in
   `test_perform.py`, and the CLI rehearsal scenario.
 - [x] 5.4 Add the notices `workspace.uncommitted-unseen`, `workspace.not-removed` and
-  `workspace.shared-git-changed`, and the errors `workspace.no-head` and `workspace.not-at-head`, each with a details
+  `workspace.shared-git-changed`, and the error `workspace.no-head`, each with a details
   schema. List them in `contributing/runs.md`. Verify with `test_notices.py`, `test_errors.py` and the docs tests.
 - [x] 5.5 Update existing tests and fixtures that expect a run's files in the theatre: set `workspace: theatre`
   where in-place is what's being tested, and otherwise assert the worktree path. Verify that the full

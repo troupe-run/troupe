@@ -4,14 +4,19 @@ D5, D6, D10).
 A run's worktree is a ``git worktree``, detached at the base commit and made with
 ``--no-checkout``, so git writes no file and runs no post-checkout hook. troupe fills it: each file
 that matches HEAD in the theatre is cloned from the theatre (its bytes are already what checkout
-would write), the rest are checked out from the index, and then git checks every file against HEAD.
-A file edited while it was cloned is checked out again.
+would write), the rest are checked out from the index, and then git compares every file with HEAD.
+Each one it lists is checked out again from git's objects: a clone that caught a file mid-edit is
+replaced by exactly what checkout writes. A file can still be listed after that, when the commit
+holds it in a form git would normalise (CRLF in the repository under an eol attribute, say); git
+lists it in every checkout, the theatre's too, so it isn't refused (found in CI on Windows).
 
-The diff is ``git diff --binary`` between the base commit and a tree written from the worktree's
-files (``add -A`` then ``write-tree``), so untracked files and any commits the actor made count,
-and ignored files don't. It is written to a file, never held in memory, with the person's diff
-settings that would change it (renames, prefixes, external drivers, textconv, colour, relative)
-overridden. Applying it is ``git apply``: checked first, then applied unstaged, all or nothing.
+The worktree's starting state is then written as a tree, the baseline (``add -A``, ``write-tree``),
+and the diff is ``git diff --binary`` between the baseline and a tree written the same way from the
+worktree's files when the run ends. Untracked files and any commits the actor made count, ignored
+files don't, and a normalisation git would make to a file the actor never touched cancels out.
+It is written to a file, never held in memory, with the person's diff settings that would change
+it (renames, prefixes, external drivers, textconv, colour, relative) overridden. Applying it is
+``git apply``: checked first, then applied unstaged, all or nothing.
 
 These operations speak in paths relative to the repository's top level, which isn't the theatre
 when the theatre is a subdirectory (``theatre_prefix``).
@@ -147,8 +152,10 @@ class Worktrees:
                 continue
             cloned += 1
         self._check_out(path, to_check_out, force=False)
-        self._verify(path)
-        return Filled(tuple(sorted(mechanisms)), cloned, len(to_check_out))
+        self._check_out(path, self._differing(path), force=True)
+        self._git(path, "add", "-A")
+        baseline = self._git(path, "write-tree").stdout.decode("ascii").strip()
+        return Filled(tuple(sorted(mechanisms)), cloned, len(to_check_out), baseline)
 
     def _check_out(self, path: Path, names: Iterable[str], *, force: bool) -> None:
         listed = b"".join(name.encode("utf-8") + b"\0" for name in names)
@@ -161,28 +168,11 @@ class Worktrees:
         self._git(path, "update-index", "-q", "--refresh", allow=(0, 1))
         return _nul_fields(self._git(path, "diff-files", "--name-only", "-z").stdout)
 
-    def _verify(self, path: Path) -> None:
-        differing = self._differing(path)
-        if not differing:
-            return
-        self._check_out(path, differing, force=True)  # a file edited while it was being cloned
-        differing = self._differing(path)
-        if differing:
-            raise TroupeError(
-                "workspace.not-at-head",
-                problem=f"The run's worktree still differs from HEAD after checking out "
-                f"{len(differing)} file(s) again, so the run can't start from HEAD.",
-                fix="Check what is changing those files (a running tool, a sync), then perform "
-                "again.",
-                path=str(path),
-                details={"worktree": str(path), "paths": differing[:20]},
-            )
-
-    def capture(self, path: Path, base: str, leave_out: tuple[str, ...], out: Path) -> Captured:
+    def capture(self, path: Path, baseline: str, leave_out: tuple[str, ...], out: Path) -> Captured:
         self._git(path, "add", "-A")
         tree = self._git(path, "write-tree").stdout.decode("ascii").strip()
         spec = _pathspec(leave_out)
-        self._git(path, "diff", *_DIFF_OPTIONS, f"--output={out}", base, tree, "--", *spec)
+        self._git(path, "diff", *_DIFF_OPTIONS, f"--output={out}", baseline, tree, "--", *spec)
         if out.stat().st_size > self.adapter.diff_max_bytes:
             out.unlink()
             raise TroupeError(
@@ -202,7 +192,7 @@ class Worktrees:
                 "-z",
                 "--no-renames",
                 "--ignore-submodules=all",
-                base,
+                baseline,
                 tree,
                 "--",
                 *spec,
@@ -222,7 +212,7 @@ class Worktrees:
                     "--name-only",
                     "-z",
                     "--no-renames",
-                    base,
+                    baseline,
                     tree,
                     "--",
                     *leave_out,

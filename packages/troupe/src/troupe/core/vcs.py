@@ -40,6 +40,8 @@ class Filled:
     """The clone mechanisms used, sorted, each once: empty when every file was checked out."""
     cloned: int
     checked_out: int
+    baseline: str
+    """The tree of the worktree as the run starts, as the VCS sees it: what its diff is from."""
 
 
 @dataclass(frozen=True)
@@ -196,13 +198,14 @@ class Vcs(Protocol):
 
     def fill_worktree(self, path: Path, clone: Clone, skip: frozenset[str]) -> Filled:
         """Write HEAD's files into the worktree at ``path``: clone each from the theatre with
-        ``clone``, except those in ``skip``, check out the rest, then check that every file matches
-        HEAD. Refused with workspace.not-at-head when one still doesn't."""
+        ``clone``, except those in ``skip``, check out the rest, then check out again from the VCS
+        each file that differs from HEAD. Returns the baseline its diff is taken from."""
         ...
 
-    def capture(self, path: Path, base: str, leave_out: tuple[str, ...], out: Path) -> Captured:
-        """Write the worktree's changes since ``base`` to ``out`` as a binary diff, leaving out the
-        paths under each of ``leave_out``. Everything the VCS doesn't ignore counts."""
+    def capture(self, path: Path, baseline: str, leave_out: tuple[str, ...], out: Path) -> Captured:
+        """Write the worktree's changes since ``baseline`` (from fill_worktree) to ``out`` as a
+        binary diff, leaving out the paths under each of ``leave_out``. Everything the VCS doesn't
+        ignore counts."""
         ...
 
     def check_apply(self, diff: Path) -> Applicability:

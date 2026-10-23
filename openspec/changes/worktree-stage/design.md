@@ -73,9 +73,13 @@ The owner chose HEAD over the working tree. Making the worktree:
 4. `git checkout-index -a` without `-f`. It writes every file that isn't there yet: the dirty ones, the absent ones,
    and any whose clone failed.
 5. Verify: `git update-index --refresh`, then `git diff-files --name-only -z`. Any path listed (a file the person
-   edited between steps 1 and 3) is checked out again with `git checkout-index -f -- <paths>`, and the verification is
-   repeated once. If anything still differs, the perform is refused with `workspace.not-at-head`, and the worktree is
-   removed.
+   edited between steps 1 and 3) is checked out again with `git checkout-index -f`, which writes exactly what a
+   checkout does. It isn't verified a second time. A file HEAD holds in a form git would normalise (CRLF committed
+   under an `eol` attribute) is listed in every checkout, the theatre's included, so a second check would refuse
+   such a theatre for good. CI on Windows found this (amended during apply, 2026-10-23: the plan was a second check
+   and `workspace.not-at-head`).
+6. Baseline: `git add -A`, then `git write-tree`. The run's diff is taken from this tree, not the base commit, so a
+   normalisation git would make to a file the actor never touched cancels out.
 
 Why clone the theatre's file rather than check it out: for a file that matches HEAD, the theatre's bytes are already
 exactly what checkout would write, with eol conversion and smudge filters applied. A clone shares their blocks. Step 5
@@ -139,7 +143,7 @@ Worktree commands get their own named defaults in `troupe_vcs_git/defaults.py`:
 
 Each command still announces after `GIT_ANNOUNCE_AFTER_SECONDS`, which meets "never wait silently".
 
-### D5. The diff: `git add -A` in the worktree, then `git diff --binary <base> <tree>`
+### D5. The diff: `git add -A` in the worktree, then `git diff --binary <baseline> <tree>`
 
 Capture runs in the worktree:
 1. `git add -A`. This stages everything git doesn't ignore, which includes any commits the actor made, because the
@@ -246,7 +250,6 @@ actor doesn't need them, and the diff leaves them out anyway, so warning about t
   - `vcs.worktrees-unsupported`
   - `clone.failed`
   - `workspace.no-head`
-  - `workspace.not-at-head`
   - `workspace.diff-too-large`
   - `run.not-ended`
   - `run.no-changes`

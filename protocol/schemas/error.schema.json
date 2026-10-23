@@ -1310,38 +1310,6 @@
     {
       "properties": {
         "code": {
-          "const": "workspace.not-at-head"
-        },
-        "details": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "worktree",
-            "paths"
-          ],
-          "properties": {
-            "worktree": {
-              "type": "string",
-              "minLength": 1
-            },
-            "paths": {
-              "type": "array",
-              "minItems": 1,
-              "items": {
-                "type": "string",
-                "minLength": 1
-              }
-            }
-          }
-        }
-      },
-      "required": [
-        "details"
-      ]
-    },
-    {
-      "properties": {
-        "code": {
           "const": "workspace.no-head"
         },
         "details": {
