@@ -40,3 +40,34 @@ def test_an_unknown_adapter_is_refused_naming_the_installed_ones(tmp_path: Path)
         load_vcs("svn", tmp_path)
     assert caught.value.code == "vcs.unknown-adapter"
     assert {"files", "git"} <= set(caught.value.details["installed"])
+
+
+# Requirement: The VCS port can make, diff, apply and remove worktrees
+
+WORKTREE_CALLS: dict[str, tuple[object, ...]] = {
+    "theatre_prefix": (),
+    "differing_from_head": (),
+    "add_worktree": (Path("wt"), "HEAD"),
+    "fill_worktree": (Path("wt"), lambda source, destination: "copy", frozenset()),
+    "capture": (Path("wt"), "HEAD", (".troupe",), Path("out.diff")),
+    "check_apply": (Path("out.diff"),),
+    "apply": (Path("out.diff"),),
+    "remove_worktree": (Path("wt"),),
+}
+
+
+@pytest.mark.parametrize("operation", sorted(WORKTREE_CALLS))
+def test_every_worktree_operation_is_refused_naming_the_adapter(
+    tmp_path: Path, operation: str
+) -> None:
+    vcs = load_vcs("files", tmp_path)
+    with pytest.raises(TroupeError) as caught:
+        getattr(vcs, operation)(*WORKTREE_CALLS[operation])
+    assert caught.value.code == "vcs.worktrees-unsupported"
+    assert caught.value.details == {"adapter": "files"}
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_its_shared_state_is_empty_and_never_changes(tmp_path: Path) -> None:
+    vcs = load_vcs("files", tmp_path)
+    assert vcs.shared_state().compare(vcs.shared_state()).empty

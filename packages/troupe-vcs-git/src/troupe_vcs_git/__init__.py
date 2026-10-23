@@ -2,8 +2,10 @@
 
 Every git command runs through troupe.core.commands with GIT_ENVIRONMENT, so git sees its own
 config, credentials and SSH agent, but never a hook's GIT_DIR or GIT_INDEX_FILE, and nothing else of
-troupe's environment. Only local commands run (symbolic-ref, rev-parse, ls-files, ls-tree, config),
-so git never starts a credential helper or ssh.
+troupe's environment. Only local commands run (symbolic-ref, rev-parse, ls-files, ls-tree, config,
+and for a run's worktree: worktree, status, read-tree, checkout-index, update-index, diff-files,
+add, write-tree, diff, apply, for-each-ref), so git never starts a credential helper or ssh. The
+worktree operations live in troupe_vcs_git.worktrees.
 
 The branch and HEAD are cached behind the branch token: the stats of every file git changes when
 either moves. They are read through git again only when one of those files has changed, so
@@ -19,8 +21,10 @@ from pathlib import Path
 
 from troupe.core.commands import run_command
 from troupe.core.errors import TroupeError
+from troupe.core.vcs import Applicability, Captured, Clone, Filled, SharedState
 from troupe.platform.processes import Completed, EnvironmentPolicy, ProcessWaitCallback
 from troupe_vcs_git import defaults
+from troupe_vcs_git.worktrees import Worktrees
 
 # Exit status 1 means "no answer" for these, not failure: an unborn or detached HEAD, a missing key.
 _NO_ANSWER = 1
@@ -69,6 +73,9 @@ class GitAdapter:
         racy_window: float = defaults.GIT_RACY_WINDOW_SECONDS,
         coarse_racy_window: float = defaults.GIT_COARSE_RACY_WINDOW_SECONDS,
         now: Callable[[], int] = time.time_ns,
+        worktree_timeout: float = defaults.GIT_WORKTREE_TIMEOUT_SECONDS,
+        worktree_max_output_bytes: int = defaults.GIT_WORKTREE_MAX_OUTPUT_BYTES,
+        diff_max_bytes: int = defaults.GIT_DIFF_MAX_BYTES,
     ) -> None:
         self.theatre = theatre
         self.policy = policy
@@ -81,11 +88,15 @@ class GitAdapter:
         self.coarse_racy_window = coarse_racy_window
         self.now = now
         """The wall clock, in nanoseconds, that file timestamps are compared with (design D4)."""
+        self.worktree_timeout = worktree_timeout
+        self.worktree_max_output_bytes = worktree_max_output_bytes
+        self.diff_max_bytes = diff_max_bytes
         self.commands_run = 0
         """How many git commands this adapter has run, so callers can check their cost."""
         self._watched: tuple[Path, ...] | None = None
         self._common: Path | None = None
         self._state: _State | None = None
+        self._worktrees = Worktrees(self)
 
     @property
     def name(self) -> str:
@@ -93,30 +104,55 @@ class GitAdapter:
 
     def git(self, *args: str, allow: Sequence[int] = (0,)) -> Completed:
         """Run ``git args`` in the theatre; any exit status outside ``allow`` is vcs.failed."""
+        return self.git_in(
+            self.theatre,
+            *args,
+            allow=allow,
+            timeout=self.timeout,
+            max_output_bytes=self.max_output_bytes,
+        )
+
+    def git_in(
+        self,
+        cwd: Path,
+        *args: str,
+        allow: Sequence[int] = (0,),
+        timeout: float,
+        max_output_bytes: int,
+        input: bytes | None = None,
+    ) -> Completed:
+        """Run ``git args`` in ``cwd`` within the limits given; any exit status outside ``allow``
+        is vcs.failed."""
         argv = ["git", *args]
         self.commands_run += 1
         completed = run_command(
             argv,
-            cwd=self.theatre,
+            cwd=cwd,
             policy=self.policy,
-            timeout=self.timeout,
-            max_output_bytes=self.max_output_bytes,
+            timeout=timeout,
+            max_output_bytes=max_output_bytes,
             announce_after=self.announce_after,
             source=self.source,
             on_wait=self.on_wait,
+            input=input,
         )
         if completed.returncode not in allow:
-            message = completed.stderr.decode("utf-8", "replace").strip() or "no message"
-            raise TroupeError(
-                "vcs.failed",
-                problem=f"{shlex.join(argv)} failed with exit status {completed.returncode}: "
-                f"{message}",
-                fix="Check that the theatre is a git repository and that git works there, then try "
-                "again.",
-                path=str(self.theatre.absolute()),
-                details={"command": shlex.join(argv), "exitStatus": completed.returncode},
-            )
+            raise self.failed(argv, completed, cwd)
         return completed
+
+    def failed(
+        self, argv: Sequence[str], completed: Completed, cwd: Path | None = None
+    ) -> TroupeError:
+        """vcs.failed for ``argv``, which ended as ``completed``."""
+        message = completed.stderr.decode("utf-8", "replace").strip() or "no message"
+        return TroupeError(
+            "vcs.failed",
+            problem=f"{shlex.join(argv)} failed with exit status {completed.returncode}: {message}",
+            fix="Check that the theatre is a git repository and that git works there, then try "
+            "again.",
+            path=str((cwd or self.theatre).absolute()),
+            details={"command": shlex.join(argv), "exitStatus": completed.returncode},
+        )
 
     def branch(self) -> str | None:
         return self._current().branch
@@ -216,6 +252,35 @@ class GitAdapter:
         winning = list(by_scope.values())[-1]
         values = [value for value in winning if value.strip()]
         return tuple(dict.fromkeys(values))
+
+    # The worktree operations (worktree-stage design D4), in troupe_vcs_git.worktrees.
+
+    def theatre_prefix(self) -> str:
+        return self._worktrees.theatre_prefix()
+
+    def differing_from_head(self) -> tuple[str, ...]:
+        return self._worktrees.differing_from_head()
+
+    def add_worktree(self, path: Path, at: str) -> None:
+        self._worktrees.add_worktree(path, at)
+
+    def fill_worktree(self, path: Path, clone: Clone, skip: frozenset[str]) -> Filled:
+        return self._worktrees.fill_worktree(path, clone, skip)
+
+    def capture(self, path: Path, base: str, leave_out: tuple[str, ...], out: Path) -> Captured:
+        return self._worktrees.capture(path, base, leave_out, out)
+
+    def check_apply(self, diff: Path) -> Applicability:
+        return self._worktrees.check_apply(diff)
+
+    def apply(self, diff: Path) -> tuple[str, ...]:
+        return self._worktrees.apply(diff)
+
+    def remove_worktree(self, path: Path) -> None:
+        self._worktrees.remove_worktree(path)
+
+    def shared_state(self) -> SharedState:
+        return self._worktrees.shared_state()
 
 
 def _nul_separated(data: bytes) -> list[str]:

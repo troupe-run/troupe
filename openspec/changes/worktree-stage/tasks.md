@@ -21,7 +21,7 @@
 
 ## 2. VCS port: the worktree capability and shared-state snapshots (design D4, D5, D10)
 
-- [ ] 2.1 Extend the `Vcs` protocol in `core/vcs.py` with:
+- [x] 2.1 Extend the `Vcs` protocol in `core/vcs.py` with:
   - `paths_differing_from_head`, `files_at_head`, `add_worktree`, `fill_worktree`, `capture`, `check_apply`, `apply`
     and `remove_worktree`;
   - `shared_state` and `SharedState.compare`;
@@ -29,13 +29,13 @@
 
   Add the `vcs.worktrees-unsupported` error with a details schema in `protocol/`. Verify that mypy --strict passes
   and that `test_errors.py` validates the new code's details.
-- [ ] 2.2 Make the files adapter refuse every worktree operation with `vcs.worktrees-unsupported`, naming the
+- [x] 2.2 Make the files adapter refuse every worktree operation with `vcs.worktrees-unsupported`, naming the
   adapter, and return an empty shared state. Verify with tests in `packages/troupe-vcs-files/tests/`.
-- [ ] 2.3 Give the git adapter `add_worktree` and `remove_worktree` (`git worktree add --detach --no-checkout`, then
+- [x] 2.3 Give the git adapter `add_worktree` and `remove_worktree` (`git worktree add --detach --no-checkout`, then
   `git worktree remove --force`, and `git worktree prune` when the directory is already gone). Verify that
   `git branch --list` and `git worktree list` are unchanged after a make and remove, and that removing a worktree
   deleted by hand succeeds.
-- [ ] 2.4 Give the git adapter `paths_differing_from_head`, `files_at_head` and `fill_worktree`: `read-tree HEAD`,
+- [x] 2.4 Give the git adapter `paths_differing_from_head`, `files_at_head` and `fill_worktree`: `read-tree HEAD`,
   then clone the matching files through an injected `clone_file`, then `checkout-index -a`, then verify with
   `update-index --refresh` and `diff-files`, checking out again once and then `workspace.not-at-head`. Verify with
   `test_git_worktrees.py`:
@@ -45,7 +45,7 @@
     source first;
   - a sparse or absent path is checked out;
   - the reported mechanisms match what was used.
-- [ ] 2.5 Give the git adapter `capture`: `add -A`, then `write-tree`, then
+- [x] 2.5 Give the git adapter `capture`: `add -A`, then `write-tree`, then
   `diff --binary --no-renames --no-ext-diff --no-textconv --ignore-submodules` with `:(exclude).troupe`, streamed to
   a writer, with the counts and the left-out count. Verify these:
   - added, modified and deleted counts are right;
@@ -55,20 +55,20 @@
   - a `.troupe/` change is counted and left out;
   - an empty capture has no diff;
   - a person's `diff.renames=copies` and an external diff driver don't change the diff.
-- [ ] 2.6 Give the git adapter `check_apply` and `apply`: `git apply --check`, then `git apply`, unstaged, naming the
+- [x] 2.6 Give the git adapter `check_apply` and `apply`: `git apply --check`, then `git apply`, unstaged, naming the
   files that fail. Verify these:
   - a two-file diff where one file conflicts changes neither file;
   - the index and HEAD are unchanged after an apply;
   - a CRLF round trip with `* text eol=crlf`, on Linux, macOS and Windows, written with `write_bytes`.
-- [ ] 2.7 Give the git adapter `shared_state`: refs from `for-each-ref` (including `refs/stash`), the hashes of the
+- [x] 2.7 Give the git adapter `shared_state`: refs from `for-each-ref` (including `refs/stash`), the hashes of the
   common `config` and `config.worktree`, and the hash and mode of each file in `--git-path hooks`, following
   `core.hooksPath`. Verify these:
   - a tag made between snapshots shows as added, and nothing else does;
   - a branch, a stash, a `git config` change and a new hook each show;
   - making and removing a worktree shows nothing.
-- [ ] 2.8 Add the worktree limits to `troupe_vcs_git/defaults.py`: `GIT_WORKTREE_TIMEOUT_SECONDS`,
+- [x] 2.8 Add the worktree limits to `troupe_vcs_git/defaults.py`: `GIT_WORKTREE_TIMEOUT_SECONDS`,
   `GIT_WORKTREE_MAX_OUTPUT_BYTES` and `GIT_DIFF_MAX_BYTES`. Use them in 2.3 to 2.7, and document them in
-  `contributing/runs.md`. Verify with a test that a worktree command past its announce time is announced, and that
+  `contributing/platform.md`, beside the git adapter's other limits. Verify with a test that a worktree command past its announce time is announced, and that
   one past its timeout fails naming the command and the timeout, using a small injected timeout. The docs test
   should list the new defaults.
 

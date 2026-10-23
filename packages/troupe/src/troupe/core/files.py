@@ -1,4 +1,4 @@
-"""File replacement and directory locks for the rest of troupe.
+"""File replacement, clones and directory locks for the rest of troupe.
 
 Thin wrappers over troupe.platform that supply the defaults from troupe.core.defaults (each can be
 overridden) and turn platform failures into TroupeErrors with a code, the problem and the fix.
@@ -11,8 +11,14 @@ from pathlib import Path
 
 from troupe.core import defaults
 from troupe.core.errors import BUG_REPORT_URL, TroupeError
-from troupe.platform import files, locks
-from troupe.platform.errors import FileInUseError, LockAlreadyHeldError, LockTimeoutError
+from troupe.platform import clones, files, locks
+from troupe.platform.errors import (
+    CloneDestinationExistsError,
+    CloneFailedError,
+    FileInUseError,
+    LockAlreadyHeldError,
+    LockTimeoutError,
+)
 from troupe.platform.files import WaitCallback
 
 
@@ -47,6 +53,28 @@ def replace_file(
             fix="Check that the file and its directory are writable, then try again.",
             path=str(Path(path).absolute()),
         ) from error
+
+
+def clone_file(source: Path, destination: Path) -> str:
+    """Clone ``source`` to ``destination``, copy-on-write where the file system can, and return the
+    mechanism used (troupe.platform.clones). A destination that exists is never overwritten."""
+    try:
+        return clones.clone_file(source, destination)
+    except CloneDestinationExistsError as error:
+        raise _clone_failed(source, destination, "the destination already exists") from error
+    except CloneFailedError as error:
+        raise _clone_failed(source, destination, error.reason) from error
+
+
+def _clone_failed(source: Path, destination: Path, reason: str) -> TroupeError:
+    return TroupeError(
+        "clone.failed",
+        problem=f"Couldn't clone {source} to {destination}: {reason}.",
+        fix="Check that the file can be read and its destination's directory written, then try "
+        "again.",
+        path=str(destination),
+        details={"source": str(source), "destination": str(destination), "reason": reason},
+    )
 
 
 def read_file(

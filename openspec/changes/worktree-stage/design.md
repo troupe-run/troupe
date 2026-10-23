@@ -111,14 +111,21 @@ Alternatives considered:
 ### D4. The VCS port gains a `Worktrees` capability, separate from reading
 
 There are new methods on the `Vcs` protocol, grouped and documented as the worktree capability:
-- `paths_differing_from_head() -> tuple[str, ...]`
-- `files_at_head() -> tuple[str, ...]`
+- `theatre_prefix() -> str`
+- `differing_from_head() -> tuple[str, ...]`
 - `add_worktree(path, at) -> None`
-- `fill_worktree(path, clone) -> FillReport` (D2, steps 2 to 5)
-- `capture(path, base, leave_out) -> Capture`
+- `fill_worktree(path, clone, skip) -> Filled` (D2, steps 2 to 5)
+- `capture(path, base, leave_out, out) -> Captured`
 - `check_apply(diff) -> Applicability`
 - `apply(diff) -> tuple[str, ...]`
 - `remove_worktree(path) -> None`
+- `shared_state() -> SharedState` (D10)
+
+A theatre can sit in a subdirectory of its repository (a monorepo), so these speak in repository-relative paths, and
+`theatre_prefix` says where the theatre is. The run then works in `<worktree>/<prefix>`, and `.troupe/` is left out
+as `<prefix>.troupe`. A diff passes through files rather than memory: `capture` writes it with `git diff --output`,
+and `check_apply` and `apply` read it from a path. `clone` is the core's `clone_file`, which turns a platform failure
+into `clone.failed`. A file whose clone fails is checked out instead.
 
 The files adapter raises `vcs.worktrees-unsupported` from each one. Stages call these through the port and never
 run git themselves, so the git knowledge stays in `troupe-vcs-git`.
@@ -226,8 +233,10 @@ A future Docker stage mounts the same worktree.
   `workspace.shared-git-changed`.
 - **Errors:**
   - `vcs.worktrees-unsupported`
+  - `clone.failed`
   - `workspace.no-head`
   - `workspace.not-at-head`
+  - `workspace.diff-too-large`
   - `run.not-ended`
   - `run.no-changes`
   - `run.changes-uncaptured`

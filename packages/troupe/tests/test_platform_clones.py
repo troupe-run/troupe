@@ -8,6 +8,8 @@ from pathlib import Path
 
 import pytest
 
+from troupe.core import files as core_files
+from troupe.core.errors import TroupeError
 from troupe.platform import clones
 from troupe.platform.errors import CloneDestinationExistsError, CloneFailedError
 
@@ -150,3 +152,22 @@ def test_a_missing_source_fails_naming_both_paths_and_leaves_no_destination(
     assert caught.value.source == tmp_path / "missing"
     assert caught.value.destination == tmp_path / "copy.bin"
     assert not os.path.lexists(tmp_path / "copy.bin")
+
+
+def test_the_cores_clone_turns_a_failure_into_clone_failed_naming_both_paths(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(TroupeError) as caught:
+        core_files.clone_file(tmp_path / "missing", tmp_path / "copy.bin")
+    assert caught.value.code == "clone.failed"
+    assert caught.value.details["source"] == str(tmp_path / "missing")
+    assert caught.value.details["destination"] == str(tmp_path / "copy.bin")
+
+
+def test_the_cores_clone_refuses_an_existing_destination_as_clone_failed(tmp_path: Path) -> None:
+    existing = tmp_path / "copy.bin"
+    existing.write_bytes(b"keep me")
+    with pytest.raises(TroupeError) as caught:
+        core_files.clone_file(_source(tmp_path), existing)
+    assert caught.value.code == "clone.failed"
+    assert existing.read_bytes() == b"keep me"

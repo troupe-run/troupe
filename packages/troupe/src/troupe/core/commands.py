@@ -37,9 +37,11 @@ def run_command(
     announce_after: float,
     source: Mapping[str, str] | None = None,
     on_wait: ProcessWaitCallback | None = None,
+    input: bytes | None = None,
 ) -> Completed:
     """Run ``argv`` to completion in ``cwd`` with the environment ``policy`` selects from
-    ``source`` (troupe's own environment when omitted)."""
+    ``source`` (troupe's own environment when omitted), writing ``input`` to its standard input
+    when given."""
     shown = shlex.join(argv)
     where = str(Path(cwd).absolute())
     try:
@@ -55,6 +57,7 @@ def run_command(
             timeout=timeout,
             max_output_bytes=max_output_bytes,
             announce_after=announce_after,
+            input=input,
             on_wait=on_wait,
             search_path=parent.get("PATH", ""),
         )
