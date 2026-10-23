@@ -119,3 +119,71 @@ def test_a_plugin_that_isnt_installed_is_refused_naming_it() -> None:
         schemas.plugin_schemas_directory("troupe_runner_nobody")
     assert caught.value.code == "schemas.plugin-missing"
     assert caught.value.details == {"package": "troupe_runner_nobody"}
+
+
+# Requirement: troupe records the protocol version it carries
+
+
+def test_the_recorded_protocol_version_is_the_manifests_protocol_version() -> None:
+    manifest = json.loads((ROOT / ".release-please-manifest.json").read_text(encoding="utf-8"))
+    assert schemas.protocol_version() == manifest["protocol"]
+
+
+def _record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, content: bytes | None) -> Path:
+    path = tmp_path / "version.json"
+    if content is not None:
+        path.write_bytes(content)
+    monkeypatch.setattr(schemas, "PROTOCOL_RECORD", path)
+    return path
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        b'{"version":"next"}\n',
+        b'{"version":"1.2"}\n',
+        b'{"version":"01.2.3"}\n',
+        b'{"version":"1.2.3-rc.1"}\n',
+        b'{"version":1}\n',
+        b'["0.2.0"]\n',
+        b'{"version":"0.2.0","extra":true}\n',
+        b'{"version":"0.2.0","version":"0.3.0"}\n',
+        b"not json\n",
+        None,
+    ],
+    ids=[
+        "next",
+        "two-parts",
+        "a-leading-zero",
+        "a-pre-release",
+        "a-number",
+        "not-an-object",
+        "an-extra-key",
+        "a-repeated-key",
+        "not-json",
+        "missing",
+    ],
+)
+def test_a_record_that_isnt_only_a_version_is_refused_naming_the_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, content: bytes | None
+) -> None:
+    path = _record(tmp_path, monkeypatch, content)
+    with pytest.raises(TroupeError) as caught:
+        schemas.protocol_version()
+    assert caught.value.code == "schemas.protocol-version-invalid"
+    assert caught.value.path == str(path)
+    assert "such as 0.2.0" in caught.value.problem
+
+
+def test_a_well_formed_record_is_read_as_its_version(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _record(tmp_path, monkeypatch, b'{"version":"10.0.3"}\n')
+    assert schemas.protocol_version() == "10.0.3"
+
+
+def test_the_protocols_major_version_is_the_first_part_of_the_recorded_version(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _record(tmp_path, monkeypatch, b'{"version":"1.3.0"}\n')
+    assert schemas.protocol_major() == 1

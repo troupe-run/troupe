@@ -1713,6 +1713,14 @@
     {
       "properties": {
         "code": {
+          "const": "schemas.protocol-version-invalid"
+        },
+        "details": false
+      }
+    },
+    {
+      "properties": {
+        "code": {
           "const": "config.invalid"
         },
         "details": {

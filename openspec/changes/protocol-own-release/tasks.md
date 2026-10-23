@@ -20,25 +20,25 @@
   rewrites `version.json`, and that a schema change is `feat`/`fix`/breaking, never another type) and
   `docs/backstage/changelog.md` (the protocol under its own heading, not in the linked group). Verify the user-docs
   tests pass (`uv run pytest packages/troupe/tests/test_user_docs_changelog.py packages/troupe/tests/test_user_docs_links.py`)
-- [ ] 1.5 Check release-please's view of the new config: run release-please's `release-pr --dry-run` against this
+- [x] 1.5 Check release-please's view of the new config: run release-please's `release-pr --dry-run` against this
   branch if a token allows it, or otherwise validate `release-please-config.json` against the `$schema` it names.
   Record which was run, and its result, in the commit message
 
 ## 2. Core reads the recorded version (design D4; spec: protocol)
 
-- [ ] 2.1 Add `schemas.protocol-version-invalid` to `protocol/schemas/error.schema.json` with its `details` schema,
+- [x] 2.1 Add `schemas.protocol-version-invalid` to `protocol/schemas/error.schema.json` with its `details` schema,
   regenerate the copy (`uv run scripts/package_schemas.py`), and add the code to core's catalogue in
   `core/errors.py`. Verify `test_protocol_strict.py` and the catalogue-agreement tests pass
-- [ ] 2.2 Write tests first in `packages/troupe/tests/test_schemas.py`: the packaged record reads as `0.0.0` (equal to
+- [x] 2.2 Write tests first in `packages/troupe/tests/test_schemas.py`: the packaged record reads as `0.0.0` (equal to
   the manifest's protocol version); a record of `"next"`, `"1.2"`, `"01.2.3"`, a non-object, an extra key, and a
   missing file are each refused with `schemas.protocol-version-invalid` naming the file; `protocol_major()` of
   `1.3.0` is `1`. Use a temporary directory for the bad records. Then add `protocol_version()` and `protocol_major()`
   to `core/schemas.py` and update its module docstring. Verify the tests pass and `uv run mypy --strict` is clean
-- [ ] 2.3 No test builds a wheel today. Add one (spec: protocol, "An installed troupe"): `uv build --package troupe
+- [x] 2.3 No test builds a wheel today. Add one (spec: protocol, "An installed troupe"): `uv build --package troupe
   --wheel` into a temporary directory, then assert the wheel holds `troupe/protocol/version.json` with the recorded
   version and every `*.schema.json` in the copy. If the build is too slow for the core suite (over ~10 s), put it in
   the scripts suite and say so in the commit. Verify it passes, and fails when `version.json` is excluded
-- [ ] 2.4 Add a "Versions" section to `protocol/README.md`: the protocol's own releases and `protocol-v*` tags, the
+- [x] 2.4 Add a "Versions" section to `protocol/README.md`: the protocol's own releases and `protocol-v*` tags, the
   site's `troupe.run/protocol/<version>/` and major-version paths (troupe-run/website#30), where troupe records the
   version it ships, and that a checkout between releases records the last release. Verify the docs link tests pass
 

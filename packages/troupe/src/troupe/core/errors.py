@@ -78,6 +78,8 @@ CODES: dict[str, ExitCode] = {
     "client.unknown-method": ExitCode.USAGE,
     # Config (config-model design). contributing/config.md lists them.
     "schemas.plugin-missing": ExitCode.FAILURE,
+    # The protocol version troupe records (protocol-own-release design D4). protocol/README.md.
+    "schemas.protocol-version-invalid": ExitCode.FAILURE,
     "config.invalid": ExitCode.FAILURE,
     "config.conflict": ExitCode.FAILURE,
     "config.unknown-file": ExitCode.FAILURE,

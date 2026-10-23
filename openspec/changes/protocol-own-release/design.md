@@ -99,12 +99,13 @@ rules (`test_the_protocol_left_out_of_the_linked_group_is_named`, `test_a_protoc
 
 ### D4: `troupe.core.schemas.protocol_version()` is the one reader
 
-Next to `PROTOCOL` (the copy's directory), `protocol_version()` reads `PROTOCOL / "version.json"`, cached. It accepts
+Next to `PROTOCOL` (the copy's directory), `protocol_version()` reads `PROTOCOL / "version.json"`, with strict JSON. It isn't cached: the
+file is a few bytes, read once per segment, per `--version` and per config file written. It accepts
 only `{"version": "<major>.<minor>.<patch>"}` with no leading zeros. Anything else, including a missing file, raises
 `TroupeError("schemas.protocol-version-invalid", …)`, naming the file, what it holds and the fix (reinstall troupe; in
-a checkout, restore the file from git). That new code goes in `protocol/schemas/error.schema.json`'s catalogue with a
-`details` schema (`path`, and `found` when the file could be read), and in core's catalogue, as the catalogue rule
-requires. `protocol_major()` returns the major as an `int`.
+a checkout, restore the file from git). That new code goes in `protocol/schemas/error.schema.json`'s catalogue with no
+`details` (the error's own `path` names the file, and the problem says what it holds), and in core's catalogue, as
+the catalogue rule requires. `protocol_major()` returns the major as an `int`.
 
 The version is a plain `str`; nothing compares versions yet, so no version type or dependency is added.
 
