@@ -282,3 +282,22 @@ def test_a_rehearsal_that_would_be_refused_exits_with_the_refusals_code(repo: Re
 def test_a_rehearsed_change_that_changes_nothing_exits_0(repo: Repo) -> None:
     _tester()
     assert cli("config", "set", "actors.tester.runner=scripted", "--rehearse")[0] == ExitCode.OK
+
+
+# Requirement: An actor is defined by its runner, options, effect check and character (workspace)
+
+
+def test_an_actors_workspace_can_be_set_to_theatre(repo: Repo) -> None:
+    _tester()
+    code, _, err = cli("config", "set", "actors.tester.workspace=theatre")
+    assert code == 0, err
+    assert _get("actors.tester.workspace") == "theatre"
+
+
+def test_a_workspace_that_doesnt_exist_is_refused_naming_the_path_and_both_values(
+    repo: Repo,
+) -> None:
+    _tester()
+    code, _, err = cli("config", "set", "actors.tester.workspace=sandbox")
+    assert code == 1
+    assert "actors.tester.workspace: it must be one of 'worktree', 'theatre', not 'sandbox'" in err

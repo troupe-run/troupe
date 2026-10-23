@@ -33,6 +33,15 @@
       "items": {
         "$ref": "../client/run.schema.json#/$defs/theatrePath"
       }
+    },
+    "workspace": {
+      "title": "Workspace",
+      "description": "Where a run works. worktree, the default when absent: the run's own git worktree at HEAD, under .troupe/local/worktrees/, whose changes reach the theatre only through troupe accept. theatre: the theatre itself, so what the run writes lands among your files at once.",
+      "type": "string",
+      "enum": [
+        "worktree",
+        "theatre"
+      ]
     }
   },
   "$defs": {

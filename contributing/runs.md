@@ -163,3 +163,6 @@ Every limit and default runs use has its default in `troupe.core.defaults`.
 | `LOGS_LEASE_CHECK_SECONDS` | 1 | How often `troupe logs --follow` checks that the run it follows is still running |
 | `STATUS_RUNS_LIMIT` | 20 | How many runs `troupe status` lists when it isn't given `--limit` |
 | `ALLOW_UNENFORCED_LOCAL_STAGE` | false | The policy setting `allow_unenforced_local_stage`, when nothing sets it |
+| `UNCOMMITTED_NOTICE_PATHS` | 20 | How many of the paths that differ from HEAD `workspace.uncommitted-unseen` names |
+| `WORKSPACE` | `worktree` | Where a run works when its actor doesn't set `workspace` |
+| `WORKTREES_DIR` | `worktrees` | The directory under `.troupe/local/` that holds each run's worktree, by run id |

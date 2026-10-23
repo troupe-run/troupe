@@ -74,13 +74,13 @@
 
 ## 3. Config: the actor's `workspace` (design D9)
 
-- [ ] 3.1 Add `workspace` (`"worktree" | "theatre"`, optional) to `protocol/schemas/config/actor.schema.json`, and
+- [x] 3.1 Add `workspace` (`"worktree" | "theatre"`, optional) to `protocol/schemas/config/actor.schema.json`, and
   regenerate the pydantic models. Add `WORKSPACE = "worktree"` to `core/defaults.py`. Verify these:
   - `troupe config set actors.tester.workspace=theatre` is accepted;
   - `sandbox` is refused, naming the path and both accepted values;
   - the types-and-schemas agreement property test passes;
   - `scripts/check.py` regeneration check is clean.
-- [ ] 3.2 Document `workspace` in `docs/prompt-book/config-schema.md`. Verify with the docs tests.
+- [x] 3.2 Document `workspace` in `docs/prompt-book/config-schema.md`. Verify with the docs tests.
 
 ## 4. Recording: run events and their schemas (design D7, D10)
 

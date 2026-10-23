@@ -84,6 +84,18 @@ option C). Off by default: the local stage then refuses every actor."""
 STAGE = "local"
 """The stage an actor runs on until config says otherwise."""
 
+# Run workspaces (spec: run-workspaces; worktree-stage design D9). contributing/runs.md lists them.
+
+WORKSPACE = "worktree"
+"""Where a run works when its actor's config doesn't say: its own git worktree at HEAD (owner,
+2026-10-23). An actor sets workspace: theatre to run in place."""
+
+WORKTREES_DIR = "worktrees"
+"""The directory, under the theatre's .troupe/local/, that holds each run's worktree by run id."""
+
+UNCOMMITTED_NOTICE_PATHS = 20
+"""How many of the paths that differ from HEAD workspace.uncommitted-unseen names."""
+
 # Where a theatre's runs are kept (perform-status-logs design D4). Interim: config names them.
 
 VCS = "git"
