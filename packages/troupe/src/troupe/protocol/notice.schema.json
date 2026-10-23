@@ -272,6 +272,46 @@
     {
       "properties": {
         "code": {
+          "const": "config.merge-rewritten"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "merge",
+            "action",
+            "kept"
+          ],
+          "properties": {
+            "merge": {
+              "description": "How git merged the file: it left it conflicted, or merged it cleanly.",
+              "enum": [
+                "conflicted",
+                "clean"
+              ]
+            },
+            "action": {
+              "description": "What troupe did to it, as the merged config says.",
+              "enum": [
+                "write",
+                "remove"
+              ]
+            },
+            "kept": {
+              "description": "The artifact the file's bytes were kept under before troupe replaced it.",
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
           "const": "config.waiting"
         },
         "details": {

@@ -86,4 +86,5 @@ reproduce, so it's refused as a hand edit is. The files adapter reports no merge
 | `config.local-malformed` | This clone's record of the files flush wrote has a malformed line before its last |
 | `schemas.plugin-missing` | A runner's package isn't installed, or ships no schemas |
 | `config.file-rewritten` | (notice) A config file troupe wrote was missing or older, and was written again |
+| `config.merge-rewritten` | (notice) A config file git merged from versions troupe wrote was written again from the merged config, its bytes kept first, and needs a `git add` |
 | `config.waiting` | (notice) Another troupe command is writing config files, and this one is waiting |

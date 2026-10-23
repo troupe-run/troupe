@@ -120,7 +120,7 @@ from a merge (D7). For each path where the disk and the rendered bytes differ, i
    wrote, and that `troupe flush` rewrites it from the merged config, keeping a copy.
 
    Only an explicit command rewrites it (owner, 2026-10-23). The alternative was that any command using config
-   rewrites it as it flushes first. That was turned down because a `perform` or `status` would then replace a file
+   rewrites it as it flushes first. That was turned down because a `perform` would then replace a file
    the person may be resolving in their editor. A copy would be kept, but the file would change under them without
    their asking.
 3. `force`: as now.
@@ -167,7 +167,7 @@ What each one passes as `resolve`:
   So it works out its entries before its first plan, and passes the same set to that plan, the check before
   staging, the finishing plan and its rehearsal. A recognised file the change doesn't touch is refused, and nothing
   is recorded.
-- **`sync_files`:** none. So `perform`, `status` and every other command refuse a recognised file, and the refusal
+- **`sync_files`:** none. So `perform` and every other command that uses config refuse a recognised file, and the refusal
   names `troupe flush`.
 
 ## Risks / Trade-offs

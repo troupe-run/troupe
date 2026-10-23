@@ -30,7 +30,7 @@ from troupe.core.client.dispatch import Send
 from troupe.core.client.session import Session
 from troupe.core.config.commands import sync_files
 from troupe.core.config.merge import Merged
-from troupe.core.config.projection import plan, refuse, render
+from troupe.core.config.projection import merges, plan, refuse, render
 from troupe.core.config.stream import read, refuse_conflicts
 from troupe.core.errors import TroupeError
 from troupe.core.events import Command, EventStore
@@ -255,7 +255,8 @@ async def perform(
         base = await asyncio.to_thread(worktree_base, vcs, what.actor)
     if request.rehearse:
         # Every check a flush makes, without writing: a rehearsal changes nothing.
-        refuse(plan(theatre / ".troupe", render(merged.config), merged.files))
+        found = merges(vcs)  # a file git merged is refused, naming troupe flush, as perform would
+        refuse(plan(theatre / ".troupe", render(merged.config), merged.files, merged=found))
         return m.PerformResult(
             rehearsal=m.Rehearsal(
                 actor=what.actor,

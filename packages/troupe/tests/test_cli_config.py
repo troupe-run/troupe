@@ -16,6 +16,7 @@ from troupe.cli import COMMANDS, main
 from troupe.cli.config import SHOWN
 from troupe.cli.parser import parse
 from troupe.core.config import aggregate
+from troupe.core.config.projection import file_hash
 from troupe.core.errors import CODES, TroupeError
 from troupe.core.exit_codes import ExitCode
 
@@ -125,7 +126,9 @@ def test_config_get_with_a_conflict_shows_what_each_side_set_it_to(repo: Repo) -
     assert f'to "{"x" * (SHOWN - 1)}... (102 characters in all)' in out
 
 
-def test_a_file_git_left_conflicted_is_refused_with_how_to_take_a_side(repo: Repo) -> None:
+def test_a_file_git_left_conflicted_is_written_by_the_config_set_that_resolves_it(
+    repo: Repo,
+) -> None:
     assert _tester()[0] == 0
     repo.commit_all("tester")
     repo.git("branch", "feature")
@@ -137,13 +140,11 @@ def test_a_file_git_left_conflicted_is_refused_with_how_to_take_a_side(repo: Rep
         repo.git("merge", "-q", "--no-edit", "feature")
     unmerged = repo.git("diff", "--name-only", "--diff-filter=U").split()
     assert unmerged == [".troupe/actors/tester.md"]
+    conflicted = (repo.path / ".troupe" / "actors" / "tester.md").read_bytes()
     code, _, err = cli("config", "set", "actors.tester.character=Both.")
-    assert code == CODES["config.file-not-troupes"]
-    assert "has git's conflict markers in it" in err
-    assert "git checkout --ours .troupe/actors/tester.md" in err
-    repo.git("checkout", "--ours", ".troupe/actors/tester.md")
-    assert cli("config", "set", "actors.tester.character=Both.")[0] == 0
-    assert (repo.path / ".troupe" / "actors" / "tester.md").read_text(encoding="utf-8") == "Both."
+    assert code == 0, err
+    assert (repo.path / ".troupe" / "actors" / "tester.md").read_bytes() == b"Both."
+    assert file_hash(conflicted) in err
     assert cli("flush", "--rehearse")[0] == 0
 
 
