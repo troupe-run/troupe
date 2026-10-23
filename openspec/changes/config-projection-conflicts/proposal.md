@@ -30,7 +30,8 @@ wrote.
   file says what the merge says, not what either side said.
 - **Only an explicit command rewrites a recognised file** (owner, 2026-10-23): `troupe flush`, or the `troupe config
   set` whose own change writes that file. Every other command that uses config refuses with
-  `config.file-not-troupes`. That includes `perform`, `status`, and a `config set` of an unrelated value. The refusal
+  `config.file-not-troupes`. That includes `perform`, and a `config set` of an unrelated value. (Commands that only read, such as
+  `status` and `config get`, don't flush, so they neither rewrite nor refuse it.) The refusal
   says the file is a merge of troupe's own versions, and that `troupe flush` rewrites it from the merged config and
   keeps a copy. So a file someone is part-way through resolving in their editor never changes under them.
 - **troupe keeps a copy of the file before replacing it** (owner, 2026-10-23). Its bytes go into the artifact store,

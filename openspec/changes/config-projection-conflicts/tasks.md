@@ -44,7 +44,7 @@
 
 ## 3. Recognising a merged file in the projection (design D4, D5)
 
-- [ ] 3.1 Give `projection.plan` and `flush` the `merges` and `resolve` inputs, apply D4's order, and add `keep` to
+- [x] 3.1 Give `projection.plan` and `flush` the `merges` and `resolve` inputs, apply D4's order, and add `keep` to
   `Action`. Make `execute` keep a copy for `forced or keep`, including on a `finish` over a recognised file (D5).
   Verify with unit tests in `test_config_files.py`, using `MergeSides` values and no git:
   - a recognised path that isn't in `resolve`: refused with the `MERGED` reason, and nothing written;
@@ -56,21 +56,22 @@
   - clean, the working file differs from `merged`: refused as a hand edit;
   - a working file already vouched: replaced with no copy, as now;
   - a finished staged write over a recognised file keeps the target's bytes first.
-- [ ] 3.2 Change `refuse`'s markers message to D4 step 4's (it names the side that isn't troupe's and the
+- [x] 3.2 Change `refuse`'s markers message to D4 step 4's (it names the side that isn't troupe's and the
   `--ours`/`--theirs` side to take, or `--force`), and drop the "(#141)" interim text. Add the `MERGED` refusal, which
   says the file is a merge of versions troupe wrote and that `troupe flush` rewrites it, keeping a copy. Verify with
-  refusal tests in `test_cli_config.py`, each named for what it checks.
+  refusal tests in `test_config_files.py` and `test_cli_config_merges.py`, each named for what it checks.
 
 ## 4. The commands and the notice (design D6, D7)
 
-- [ ] 4.1 Add `config.merge-rewritten` to `core/notices.py` and to `protocol/schemas/notice.schema.json`, with the
+- [x] 4.1 Add `config.merge-rewritten` to `core/notices.py` and to `protocol/schemas/notice.schema.json`, with the
   details `merge`, `action` and `kept`, and the package's bundled copy. List it in `contributing/config.md`. Verify
   with `test_notices.py`, the protocol schema tests and the docs tests.
-- [ ] 4.2 Pass `store.vcs.merge_sides_under(...)` for the config directories into every plan in `sync_files`,
+- [x] 4.2 Pass `store.vcs.merge_sides_under(...)` for the config directories into every plan in `sync_files`,
   `flush_files` and `config_set`, read again for the plan made under the lock. Pass `resolve` as D7 says: every
   merged path for `flush`, the paths its change writes for `config set` (working out its entries before its first
   plan), and none for `sync_files`. Emit the notice from `Flushed.notices()` and from `config set` for kept files.
-  Verify with CLI tests in `test_cli_config.py` that drive real git merges, one per config-files scenario:
+  Verify with CLI tests in `test_cli_config_merges.py` (and the converted test in `test_cli_config.py`) that
+  drive real git merges, one per config-files scenario:
   - config clean but the file conflicted, rewritten by `troupe flush` with both branches' changes, and the file still
     unmerged in git;
   - `troupe perform` refused, naming `troupe flush`, with the file unchanged and no run started;

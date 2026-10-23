@@ -63,9 +63,10 @@ change git's index.
 - **AND** the artifact store holds the bytes the person left, under the hash the notice names
 
 #### Scenario: Removed on one side, changed on the other
-- **WHEN** one branch removes `tester` and another changes its character, git leaves `.troupe/actors/tester.md`
-  unmerged, and a person resolves config with `troupe config set`
-- **THEN** the file is written or removed as the resolved config says, with its bytes kept first
+- **WHEN** one branch removes `tester`'s character and another changes it, git leaves `.troupe/actors/tester.md`
+  unmerged with the changed side in place, and a person resolves config with `troupe config set`
+- **THEN** the file is written or removed as the resolved config says
+- **AND** no copy is kept, since the file in place is a version troupe wrote
 
 #### Scenario: git merged the lines cleanly but config conflicts
 - **WHEN** two branches change different paragraphs of `tester`'s character, git merges and commits

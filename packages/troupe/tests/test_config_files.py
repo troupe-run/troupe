@@ -21,14 +21,18 @@ from troupe.core import schemas
 from troupe.core.config.kinds import file_kind, staged_name, staged_target
 from troupe.core.config.projection import (
     WRITTEN,
+    execute,
     file_hash,
     flush,
     locked,
     on_disk,
+    plan,
     render,
     render_actor,
+    stage,
 )
 from troupe.core.errors import TroupeError
+from troupe.core.vcs import MergeSides
 
 ACTOR_FILE = validator_for(PROTOCOL_BASE + "config/actor.schema.json", SCRIPTED)
 CONFIG: dict[str, Any] = {"actors": {"tester": TESTER}}
@@ -267,6 +271,258 @@ def test_conflict_markers_typed_by_hand_outside_any_merge_are_refused_and_left_a
     assert caught.value.code == "config.file-not-troupes"
     assert "conflict markers" in caught.value.problem
     assert _actor_file(theatre).read_bytes() == marked
+
+
+# Requirement: A file git merged from troupe's versions is rewritten from the merged config, and
+# Only an explicit command rewrites a file git merged (config-projection-conflicts design D4, D5).
+# These drive the plan with the merge sides a VCS would report; the git adapter's own tests show
+# it reports them.
+
+YAML_FILE = "actors/tester.yaml"
+MD_FILE = "actors/tester.md"
+OURS: dict[str, Any] = {"actors": {"tester": {**TESTER, "expect": ["out/ours.txt"]}}}
+THEIRS: dict[str, Any] = {"actors": {"tester": {**TESTER, "runner": "theirs"}}}
+MERGED_CONFIG: dict[str, Any] = {
+    "actors": {"tester": {**TESTER, "runner": "theirs", "expect": ["out/ours.txt"]}}
+}
+MARKERS = b"<<<<<<< HEAD\nexpect: ours\n=======\nrunner: theirs\n>>>>>>> feature\n"
+
+
+def _recorded(*configs: dict[str, Any]) -> dict[str, frozenset[str]]:
+    hashes: dict[str, set[str]] = {}
+    for config in configs:
+        for path, data in render(config).items():
+            hashes.setdefault(path, set()).add(file_hash(data))
+    return {path: frozenset(found) for path, found in hashes.items()}
+
+
+def _conflicted(theatre: Path, working: bytes) -> dict[str, MergeSides]:
+    (theatre / ".troupe" / "actors").mkdir(parents=True, exist_ok=True)
+    _actor_file(theatre).write_bytes(working)
+    (theatre / ".troupe" / MD_FILE).write_bytes(render(OURS)[MD_FILE])
+    return {
+        YAML_FILE: MergeSides("conflicted", (render(OURS)[YAML_FILE], render(THEIRS)[YAML_FILE]))
+    }
+
+
+def _kept(theatre: Path, kept: str) -> bytes:
+    return (
+        theatre / ".troupe" / "local" / "artifacts" / "sha256" / kept[7:9] / kept[7:]
+    ).read_bytes()
+
+
+@pytest.mark.parametrize(
+    "working",
+    [MARKERS, b"expect: ours\nrunner: theirs\n>>>>>>> feature\n"],
+    ids=["markers", "half-resolved-by-hand"],
+)
+def test_a_conflicted_file_from_troupes_versions_is_written_from_the_merged_config_and_kept(
+    tmp_path: Path, working: bytes
+) -> None:
+    theatre = _theatre(tmp_path)
+    merged = _conflicted(theatre, working)
+    troupe_dir = theatre / ".troupe"
+    planned = plan(
+        troupe_dir,
+        render(MERGED_CONFIG),
+        _recorded(OURS, THEIRS),
+        merged=merged,
+        resolve=frozenset(merged),
+    )
+    [action] = planned.changes
+    assert (action.path, action.action, action.keep, action.merge) == (
+        YAML_FILE,
+        "write",
+        True,
+        "conflicted",
+    )
+    kept = execute(troupe_dir, planned)
+    assert _actor_file(theatre).read_bytes() == render(MERGED_CONFIG)[YAML_FILE]
+    assert _actor_file(theatre).read_bytes() not in (
+        render(OURS)[YAML_FILE],
+        render(THEIRS)[YAML_FILE],
+    )
+    assert _kept(theatre, kept[YAML_FILE]) == working
+
+
+def test_a_conflicted_file_with_one_side_absent_and_edited_since_is_removed_and_kept(
+    tmp_path: Path,
+) -> None:
+    theatre = _theatre(tmp_path)
+    flush(theatre, CONFIG, {})
+    # git leaves the surviving side in the file; here the person has since started editing it.
+    (theatre / ".troupe" / MD_FILE).write_bytes(b"Changed on the side that kept it, and edited.")
+    changed = {"actors": {"tester": {**TESTER, "character": "Changed on the side that kept it."}}}
+    merged = {MD_FILE: MergeSides("conflicted", (None, render(changed)[MD_FILE]))}
+    no_character = {"actors": {"tester": {k: v for k, v in TESTER.items() if k != "character"}}}
+    troupe_dir = theatre / ".troupe"
+    planned = plan(
+        troupe_dir,
+        render(no_character),
+        _recorded(changed),
+        merged=merged,
+        resolve=frozenset(merged),
+    )
+    [action] = [a for a in planned.changes if a.path == MD_FILE]
+    assert (action.action, action.keep) == ("remove", True)
+    kept = execute(troupe_dir, planned)
+    assert not (troupe_dir / MD_FILE).exists()
+    assert _kept(theatre, kept[MD_FILE]) == b"Changed on the side that kept it, and edited."
+
+
+def test_a_conflicted_file_with_a_side_troupe_didnt_write_is_refused_naming_that_side(
+    tmp_path: Path,
+) -> None:
+    theatre = _theatre(tmp_path)
+    merged = _conflicted(theatre, MARKERS)
+    with pytest.raises(TroupeError) as caught:
+        flush(theatre, MERGED_CONFIG, _recorded(OURS), vcs=_Reports(merged), resolve=True)
+    assert caught.value.code == "config.file-not-troupes"
+    assert "theirs isn't a version troupe wrote" in caught.value.problem
+    assert f"git checkout --ours .troupe/{YAML_FILE}" in caught.value.fix
+    assert "troupe flush --force" in caught.value.fix
+    check_error(caught.value.to_data())
+    assert _actor_file(theatre).read_bytes() == MARKERS
+
+
+def test_a_clean_merge_still_as_git_made_it_is_written_from_the_merged_config_and_kept(
+    tmp_path: Path,
+) -> None:
+    theatre = _theatre(tmp_path)
+    git_merged = b"git's clean merge of the two sides\n"
+    _conflicted(theatre, git_merged)
+    merged = {
+        YAML_FILE: MergeSides(
+            "clean", (render(OURS)[YAML_FILE], render(THEIRS)[YAML_FILE]), git_merged
+        )
+    }
+    troupe_dir = theatre / ".troupe"
+    planned = plan(
+        troupe_dir,
+        render(MERGED_CONFIG),
+        _recorded(OURS, THEIRS),
+        merged=merged,
+        resolve=frozenset(merged),
+    )
+    [action] = planned.changes
+    assert (action.action, action.keep, action.merge) == ("write", True, "clean")
+
+
+def test_a_clean_merge_edited_after_git_made_it_is_refused_as_a_hand_edit(tmp_path: Path) -> None:
+    theatre = _theatre(tmp_path)
+    _conflicted(theatre, b"git's clean merge, then edited\n")
+    merged = {
+        YAML_FILE: MergeSides(
+            "clean", (render(OURS)[YAML_FILE], render(THEIRS)[YAML_FILE]), b"git's clean merge\n"
+        )
+    }
+    troupe_dir = theatre / ".troupe"
+    planned = plan(
+        troupe_dir,
+        render(MERGED_CONFIG),
+        _recorded(OURS, THEIRS),
+        merged=merged,
+        resolve=frozenset(merged),
+    )
+    [action] = planned.refused
+    assert action.reason == "troupe didn't write it"
+
+
+def test_a_merged_file_already_a_version_troupe_wrote_is_replaced_with_no_copy(
+    tmp_path: Path,
+) -> None:
+    theatre = _theatre(tmp_path)
+    merged = _conflicted(theatre, render(OURS)[YAML_FILE])  # as after git checkout --ours
+    troupe_dir = theatre / ".troupe"
+    planned = plan(
+        troupe_dir,
+        render(MERGED_CONFIG),
+        _recorded(OURS, THEIRS),
+        merged=merged,
+        resolve=frozenset(merged),
+    )
+    [action] = planned.changes
+    assert (action.reason, action.keep) == ("an older version troupe wrote", False)
+    assert execute(troupe_dir, planned) == {}
+
+
+def test_a_merged_file_this_command_may_not_resolve_is_refused_naming_flush_and_left_alone(
+    tmp_path: Path,
+) -> None:
+    theatre = _theatre(tmp_path)
+    merged = _conflicted(theatre, MARKERS)
+    with pytest.raises(TroupeError) as caught:
+        flush(theatre, MERGED_CONFIG, _recorded(OURS, THEIRS), vcs=_Reports(merged))
+    assert caught.value.code == "config.file-not-troupes"
+    assert "git merged it from versions troupe wrote" in caught.value.problem
+    assert "Run troupe flush" in caught.value.fix
+    check_error(caught.value.to_data())
+    assert _actor_file(theatre).read_bytes() == MARKERS
+    assert not (theatre / ".troupe" / "local" / "artifacts").exists()
+
+
+def test_a_staged_write_finished_over_a_merged_file_keeps_the_files_bytes_first(
+    tmp_path: Path,
+) -> None:
+    theatre = _theatre(tmp_path)
+    merged = _conflicted(theatre, MARKERS)
+    troupe_dir = theatre / ".troupe"
+    resolved = render(MERGED_CONFIG)[YAML_FILE]
+    stage(troupe_dir, YAML_FILE, resolved)  # what config set stages before recording its change
+    recorded = _recorded(OURS, THEIRS, MERGED_CONFIG)
+    planned = plan(
+        troupe_dir, render(MERGED_CONFIG), recorded, merged=merged, resolve=frozenset(merged)
+    )
+    [action] = planned.changes
+    assert (action.action, action.keep) == ("finish", True)
+    kept = execute(troupe_dir, planned)
+    assert _actor_file(theatre).read_bytes() == resolved
+    assert _kept(theatre, kept[YAML_FILE]) == MARKERS
+
+
+def test_flushing_a_merged_file_reports_config_merge_rewritten_with_its_kept_hash(
+    tmp_path: Path,
+) -> None:
+    theatre = _theatre(tmp_path)
+    merged = _conflicted(theatre, MARKERS)
+    flushed = flush(
+        theatre, MERGED_CONFIG, _recorded(OURS, THEIRS), vcs=_Reports(merged), resolve=True
+    )
+    [notice] = [n for n in flushed.notices() if n.path == f".troupe/{YAML_FILE}"]
+    assert notice.code == "config.merge-rewritten"
+    assert notice.details == {"merge": "conflicted", "action": "write", "kept": file_hash(MARKERS)}
+    assert f"git add .troupe/{YAML_FILE}" in notice.fix
+    check_notice(notice.to_data())
+
+
+def test_a_rehearsed_flush_of_a_merged_file_names_it_and_its_reason_and_writes_nothing(
+    tmp_path: Path,
+) -> None:
+    theatre = _theatre(tmp_path)
+    merged = _conflicted(theatre, MARKERS)
+    flushed = flush(
+        theatre,
+        MERGED_CONFIG,
+        _recorded(OURS, THEIRS),
+        vcs=_Reports(merged),
+        resolve=True,
+        rehearse=True,
+    )
+    [action] = [a for a in flushed.actions if a.path == YAML_FILE]
+    assert action.reason == "git left it conflicted, from versions troupe wrote"
+    assert _actor_file(theatre).read_bytes() == MARKERS
+    assert not (theatre / ".troupe" / "local" / "artifacts").exists()
+
+
+class _Reports:
+    """A VCS reporting ``merged`` (paths relative to .troupe/) as its merge sides."""
+
+    def __init__(self, merged: dict[str, MergeSides]) -> None:
+        self.merged = merged
+
+    def merge_sides_under(self, directory: str) -> dict[str, MergeSides]:
+        prefix = directory.removeprefix(".troupe/") + "/"
+        return {f".troupe/{p}": s for p, s in self.merged.items() if p.startswith(prefix)}
 
 
 # Requirement: Force replaces a file and keeps a copy

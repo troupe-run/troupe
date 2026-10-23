@@ -7,6 +7,10 @@ written in the order design D9 gives, holding the config files' lock throughout:
 it touches is troupe's, stage each new file beside its target, record the ``Config.Changed`` with
 each file's hash, then move the staged files into place. A crash between recording and moving is
 finished by the next flush, since the event vouches for the staged files.
+
+A file git merged from versions troupe wrote is rewritten only by troupe flush, or by a config set
+whose change writes it; the flush every other command runs first refuses it, naming troupe flush
+(config-projection-conflicts design D7).
 """
 
 from collections.abc import Mapping
@@ -26,6 +30,8 @@ from troupe.core.config.projection import (
     file_hash,
     flush,
     locked,
+    merge_notices,
+    merges,
     plan,
     refuse,
     render,
@@ -70,7 +76,7 @@ def _files(
                 path=f"{THEATRE_DIR}/{path}",
                 action=action,  # type: ignore[arg-type]  # the four actions a plan holds
                 reason=reason,
-                kept=kept.get(a.path),
+                kept=kept.get(staged_target(a.path) or a.path),
             )
         )
     return reported
@@ -84,8 +90,15 @@ def sync_files(session: Session, store: EventStore, merged: Merged, send: Send) 
     """Flush before a command uses config: refused when config has conflicts, or when a file
     troupe didn't write is in the way. Returns the notices of what was written again."""
     refuse_conflicts(merged)
-    flushed = flush(session.theatre, merged.config, merged.files, on_wait=_waiting(send))
+    flushed = flush(
+        session.theatre, merged.config, merged.files, on_wait=_waiting(send), vcs=store.vcs
+    )
     return [*flushed.notices(), *store.notices()]
+
+
+def _writes(before: Mapping[str, bytes], after: Mapping[str, bytes]) -> frozenset[str]:
+    """The files a change writes or removes: those its config renders differently."""
+    return frozenset(p for p in before.keys() | after.keys() if before.get(p) != after.get(p))
 
 
 async def config_set(request: m.ConfigSetRequest, session: Session, send: Send) -> Message:
@@ -97,31 +110,37 @@ async def config_set(request: m.ConfigSetRequest, session: Session, send: Send) 
         entries = change(merged.config, operations)
         if entries:
             refuse_unrecordable(store, merged, entries)
-        would = plan(troupe_dir, render(apply(merged.config, entries)), merged.files)
+        rendered_after = render(apply(merged.config, entries))
+        found = merges(store.vcs)
+        resolve = _writes(render(merged.config), rendered_after) & found.keys()
+        would = plan(troupe_dir, rendered_after, merged.files, merged=found, resolve=resolve)
         refuse(would)
         return m.ConfigSetResult(entries=entries, files=_files(would.changes, {}), notices=[])
     with locked(troupe_dir, _waiting(send)):
         merged = read(store)
+        entries = change(merged.config, operations)
+        after = apply(merged.config, entries) if entries else merged.config
+        rendered_before, rendered_after = render(merged.config), render(after)
+        # A file git merged may be rewritten only when this change writes it (design D7).
+        found = merges(store.vcs)
+        resolve = _writes(rendered_before, rendered_after) & found.keys()
         before: list[Notice] = []
         if not merged.conflicts:
             # Files right before the change, so the change's own files are written over troupe's.
-            first = plan(troupe_dir, render(merged.config), merged.files)
+            first = plan(troupe_dir, rendered_before, merged.files, merged=found, resolve=resolve)
             refuse(first)
-            execute(troupe_dir, first)
-            before = Flushed(first.changes).notices()
-        entries = change(merged.config, operations)
+            first_kept = execute(troupe_dir, first)
+            before = Flushed(first.changes, first_kept).notices()
         if not entries:
             return m.ConfigSetResult(entries=[], files=[], notices=_notices(before))
-        after = apply(merged.config, entries)
         refuse_unrecordable(store, merged, entries)
-        rendered_before, rendered_after = render(merged.config), render(after)
         files: list[dict[str, Any]] = []
         for path in sorted(rendered_before.keys() | rendered_after.keys()):
             new = rendered_after.get(path)
             if new == rendered_before.get(path):
                 continue
             files.append({"path": path} if new is None else {"path": path, "hash": file_hash(new)})
-        refuse(plan(troupe_dir, rendered_after, merged.files))
+        refuse(plan(troupe_dir, rendered_after, merged.files, merged=found, resolve=resolve))
         for written in files:
             if "hash" in written:
                 stage(troupe_dir, written["path"], rendered_after[written["path"]])
@@ -138,14 +157,14 @@ async def config_set(request: m.ConfigSetRequest, session: Session, send: Send) 
                 vouched[written["path"]] = vouched.get(written["path"], frozenset()) | {
                     written["hash"]
                 }
-        done = plan(troupe_dir, rendered_after, vouched)
+        done = plan(troupe_dir, rendered_after, vouched, merged=found, resolve=resolve)
         refuse(done)
         kept = execute(troupe_dir, done)
     return m.ConfigSetResult(
         change=command.change,
         entries=entries,
         files=_files(done.changes, kept, finished="for this change"),
-        notices=_notices(before, store.notices()),
+        notices=_notices(before, merge_notices(done.changes, kept), store.notices()),
     )
 
 
@@ -190,6 +209,8 @@ async def flush_files(request: m.FlushRequest, session: Session, send: Send) -> 
         force=bool(request.force),
         rehearse=bool(request.rehearse),
         on_wait=_waiting(send),
+        vcs=store.vcs,
+        resolve=True,
     )
     return m.FlushResult(
         files=_files(flushed.actions, flushed.kept),

@@ -9,6 +9,12 @@ replacing or removing a file, it checks that the file is one troupe wrote:
   this clone's own record of files flush wrote (``.troupe/local/config/written.jsonl``), or
 - no file at all: a file deleted by hand is written again.
 
+A file git merged from versions troupe wrote also counts, when the VCS reports it conflicted or
+cleanly merged and every side it came from is one of the above (config-projection-conflicts design
+D4). Only a command that asks to resolve it (``resolve``: troupe flush, or the config set whose
+change writes it) replaces it, keeping its bytes in the artifact store first; any other command
+refuses it, naming troupe flush, so a file being resolved by hand never changes under its editor.
+
 Anything else is a person's, and is refused (``config.file-not-troupes``) unless forced, when its
 bytes are kept in the artifact store first. A new file is written whole beside its target as
 ``.<name>.troupe~`` and moved into place with an atomic replace, so a reader sees the old file or
@@ -22,7 +28,7 @@ from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from ruamel.yaml import YAML
 from ruamel.yaml.nodes import ScalarNode
@@ -46,6 +52,7 @@ from troupe.core.errors import TroupeError
 from troupe.core.files import directory_lock, read_file, replace_file
 from troupe.core.notices import Notice
 from troupe.core.theatre import THEATRE_DIR, ensure_git_files
+from troupe.core.vcs import MergeSides
 from troupe.platform.files import WaitCallback, append_bytes
 
 FIELD_ORDER = ("$schema", "runner", "options", "expect")
@@ -217,6 +224,13 @@ class Action:
     reason: str
     data: bytes | None = None
     forced: bool = False
+    keep: bool = False
+    """Whether the file's bytes are kept before it's replaced: a file git merged from troupe's
+    versions (design D5)."""
+    merge: str | None = None
+    """``conflicted`` or ``clean``, for a file git merged."""
+    not_troupes: tuple[str, ...] = ()
+    """For a conflicted file refused: the sides (``ours``, ``theirs``) troupe didn't write."""
 
 
 @dataclass(frozen=True)
@@ -237,15 +251,48 @@ def _troupes(path: str, data: bytes, recorded: Mapping[str, frozenset[str]]) -> 
     return file_hash(data) in recorded.get(path, frozenset())
 
 
+SIDES = ("ours", "theirs")
+
+
+def _merged_from_troupes(
+    path: str, have: bytes, merge: MergeSides, vouched: Mapping[str, frozenset[str]]
+) -> bool:
+    """Whether git made ``have`` only from versions troupe wrote: every side is troupe's, and a
+    clean merge's file is still exactly what git merged (design D4 step 2)."""
+    if merge.kind == "clean" and have != merge.merged:
+        return False
+    return all(side is None or _troupes(path, side, vouched) for side in merge.sides)
+
+
+class MergeReader(Protocol):
+    """The one part of the VCS port config files need: what a merge combined (design D2)."""
+
+    def merge_sides_under(self, directory: str) -> Mapping[str, MergeSides]: ...
+
+
+def merges(vcs: MergeReader) -> dict[str, MergeSides]:
+    """Each config file a merge combined, by its path relative to .troupe/ (design D7)."""
+    found: dict[str, MergeSides] = {}
+    for directory in CONFIG_DIRECTORIES:
+        for path, sides in vcs.merge_sides_under(f"{THEATRE_DIR}/{directory}").items():
+            found[path.removeprefix(f"{THEATRE_DIR}/")] = sides
+    return found
+
+
 def plan(
     troupe_dir: Path,
     rendered: Mapping[str, bytes],
     recorded: Mapping[str, frozenset[str]],
     *,
     force: bool = False,
+    merged: Mapping[str, MergeSides] | None = None,
+    resolve: frozenset[str] = frozenset(),
 ) -> Plan:
     """What making the files exactly ``rendered`` takes, and what it would have to refuse.
-    ``recorded`` is every hash an event recorded for each path."""
+    ``recorded`` is every hash an event recorded for each path. ``merged`` is what the VCS says
+    a merge combined into each path, and ``resolve`` the paths this command may rewrite from a
+    merge (design D4, D7)."""
+    merged = merged or {}
     disk = on_disk(troupe_dir)
     known = {
         path: recorded.get(path, frozenset()) | written
@@ -256,10 +303,26 @@ def plan(
     for staged, data in sorted(disk.staged.items()):
         target = staged_target(staged) or staged
         if _troupes(target, data, vouched) and rendered.get(target) == data:
-            actions.append(Action(staged, "finish", "a write troupe recorded and didn't finish"))
+            reason = "a write troupe recorded and didn't finish"
+            have, merge = disk.files.get(target), merged.get(target)
+            if (
+                have is not None
+                and have != data
+                and merge is not None
+                and not _troupes(target, have, vouched)
+                and _merged_from_troupes(target, have, merge, vouched)
+            ):
+                # Moving the staged file into place replaces a file git merged: keep it (D5).
+                if target not in resolve:
+                    actions.append(Action(target, "refuse", MERGED, data, merge=merge.kind))
+                    continue
+                actions.append(Action(staged, "finish", reason, keep=True, merge=merge.kind))
+                continue
+            actions.append(Action(staged, "finish", reason))
         else:
             actions.append(Action(staged, "discard", "a write troupe staged but never recorded"))
     finishing = {staged_target(a.path) for a in actions if a.action == "finish"}
+    finishing |= {a.path for a in actions if a.action == "refuse"}  # a staged write refused
     for path in sorted(rendered.keys() | disk.files.keys()):
         want, have = rendered.get(path), disk.files.get(path)
         if want == have or path in finishing:
@@ -269,20 +332,40 @@ def plan(
             actions.append(Action(path, "write", reason, want))
             continue
         action = "write" if want is not None else "remove"
+        merge = merged.get(path)
         if _troupes(path, have, vouched):
             actions.append(Action(path, action, "an older version troupe wrote", want))
+        elif merge is not None and _merged_from_troupes(path, have, merge, vouched):
+            if path in resolve:
+                reason = MERGE_REASONS[merge.kind]
+                actions.append(Action(path, action, reason, want, keep=True, merge=merge.kind))
+            else:
+                actions.append(Action(path, "refuse", MERGED, want, merge=merge.kind))
         elif force:
             actions.append(
                 Action(path, action, "forced past a file troupe didn't write", want, True)
             )
-        elif _MARKERS.search(have):
-            actions.append(Action(path, "refuse", CONFLICTED, want))
+        elif (merge is not None and merge.kind == "conflicted") or _MARKERS.search(have):
+            not_troupes: tuple[str, ...] = ()
+            if merge is not None and merge.kind == "conflicted":
+                not_troupes = tuple(
+                    name
+                    for name, side in zip(SIDES, merge.sides, strict=True)
+                    if side is not None and not _troupes(path, side, vouched)
+                )
+            actions.append(Action(path, "refuse", CONFLICTED, want, not_troupes=not_troupes))
         else:
             actions.append(Action(path, "refuse", "troupe didn't write it", want))
     return Plan(tuple(actions), disk.unknown)
 
 
 CONFLICTED = "git left it conflicted"
+MERGED = "git merged it from versions troupe wrote"
+"""A file this command may not rewrite from a merge: troupe flush does (design D7)."""
+MERGE_REASONS = {
+    "conflicted": "git left it conflicted, from versions troupe wrote",
+    "clean": "git merged it from versions troupe wrote",
+}
 _MARKERS = re.compile(rb"^<<<<<<< .*^=======\r?$.*^>>>>>>> ", re.MULTILINE | re.DOTALL)
 """git's conflict markers, as a merge leaves them in a file both branches changed."""
 
@@ -302,17 +385,19 @@ def refuse(plan_: Plan) -> None:
         )
     conflicted = [a for a in plan_.refused if a.reason == CONFLICTED]
     if conflicted:
-        listed = ", ".join(f".troupe/{a.path}" for a in conflicted)
+        raise _conflicted(conflicted)
+    merged = [a for a in plan_.refused if a.reason == MERGED]
+    if merged:
+        listed = ", ".join(f".troupe/{a.path}" for a in merged)
         raise TroupeError(
             "config.file-not-troupes",
-            problem=f"{listed} has git's conflict markers in it, from merging branches that "
-            "changed it, so it isn't what troupe wrote and troupe won't replace it. troupe "
-            "doesn't resolve this for you yet (#141).",
-            fix=f"Take one side's file (git checkout --ours {listed}), then run troupe config "
-            "get to see any config conflict and resolve it with one troupe config set. Then git "
-            "add the file and commit the merge.",
-            path=f"{THEATRE_DIR}/{conflicted[0].path}",
-            details={"paths": [f"{THEATRE_DIR}/{a.path}" for a in conflicted]},
+            problem=f"{listed}: git merged it from versions troupe wrote, so troupe can write it "
+            "again from the merged config, but only when you ask, in case you're resolving it.",
+            fix="Run troupe flush to write it from the merged config (or, if config has a "
+            "conflict, the troupe config set that resolves it). troupe keeps a copy of what it "
+            "holds now. Then git add it and commit the merge.",
+            path=f"{THEATRE_DIR}/{merged[0].path}",
+            details={"paths": [f"{THEATRE_DIR}/{a.path}" for a in merged]},
         )
     if plan_.refused:
         listed = ", ".join(f".troupe/{a.path}" for a in plan_.refused)
@@ -325,6 +410,51 @@ def refuse(plan_: Plan) -> None:
             path=f"{THEATRE_DIR}/{plan_.refused[0].path}",
             details={"paths": [f"{THEATRE_DIR}/{a.path}" for a in plan_.refused]},
         )
+
+
+def _conflicted(refused: Sequence[Action]) -> TroupeError:
+    """config.file-not-troupes for files with git's conflict markers in them that troupe can't
+    tell were made only from its own versions."""
+    listed = ", ".join(f".troupe/{a.path}" for a in refused)
+    first = refused[0]
+    named = f".troupe/{first.path}"
+    if len(first.not_troupes) == 1:
+        side = first.not_troupes[0]
+        other = "theirs" if side == "ours" else "ours"
+        problem = (
+            f"{listed} has git's conflict markers in it, and {side} isn't a version troupe "
+            "wrote, so troupe won't replace it: that side may hold a hand edit."
+        )
+        fix = (
+            f"Take the side troupe wrote (git checkout --{other} {named}) and run troupe flush, "
+            "or run troupe flush --force to replace it, keeping a copy of what it holds."
+        )
+    elif first.not_troupes:
+        problem = (
+            f"{listed} has git's conflict markers in it, and neither side is a version troupe "
+            "wrote, so troupe won't replace it: they may hold hand edits."
+        )
+        fix = (
+            "Resolve the file by hand and make the change with troupe config set, or run troupe "
+            "flush --force to replace it, keeping a copy of what it holds."
+        )
+    else:
+        problem = (
+            f"{listed} has git's conflict markers in it, but git isn't merging it now, so troupe "
+            "can't tell which versions it came from and won't replace it."
+        )
+        fix = (
+            f"If a merge is part-way through, take one side (git checkout --ours {named}) and "
+            "run troupe flush. Otherwise remove the markers, or run troupe flush --force to "
+            "replace it, keeping a copy of what it holds."
+        )
+    return TroupeError(
+        "config.file-not-troupes",
+        problem=problem,
+        fix=fix,
+        path=f"{THEATRE_DIR}/{first.path}",
+        details={"paths": [f"{THEATRE_DIR}/{a.path}" for a in refused]},
+    )
 
 
 # Writing (design D9).
@@ -370,7 +500,7 @@ class Flushed:
     """Each file forced past, and the artifact its bytes were kept under."""
 
     def notices(self) -> list[Notice]:
-        return [
+        rewritten = [
             Notice(
                 "config.file-rewritten",
                 problem=f".troupe/{a.path}: {a.reason}, so troupe wrote it again from config.",
@@ -379,8 +509,32 @@ class Flushed:
                 details={"reason": a.reason},
             )
             for a in self.actions
-            if a.action in ("write", "remove") and a.reason != "new" and not a.forced
+            if a.action in ("write", "remove") and a.reason != "new" and not a.forced and not a.keep
         ]
+        return [*rewritten, *merge_notices(self.actions, self.kept)]
+
+
+def merge_notices(actions: Sequence[Action], kept: Mapping[str, str]) -> list[Notice]:
+    """config.merge-rewritten for each file git merged that troupe replaced (design D6)."""
+    notices = []
+    for a in actions:
+        if not a.keep or a.merge is None:
+            continue
+        path = staged_target(a.path) or a.path
+        action = "remove" if a.action == "remove" else "write"
+        done = "removed it" if action == "remove" else "wrote it again from the merged config"
+        notices.append(
+            Notice(
+                "config.merge-rewritten",
+                problem=f".troupe/{path}: {MERGE_REASONS[a.merge]}, so troupe {done}. What it "
+                f"held is kept in the artifact store as {kept[path]}.",
+                fix=f"git add .troupe/{path} and commit the merge. (troupe will do the git add "
+                "for you, if you turn it on, once #156 is built.)",
+                path=f"{THEATRE_DIR}/{path}",
+                details={"merge": a.merge, "action": action, "kept": kept[path]},
+            )
+        )
+    return notices
 
 
 def flush(
@@ -391,18 +545,28 @@ def flush(
     force: bool = False,
     rehearse: bool = False,
     on_wait: WaitCallback | None = None,
+    vcs: MergeReader | None = None,
+    resolve: bool = False,
 ) -> Flushed:
     """Make the config files exactly what ``config`` says. Refused, writing nothing, when it would
     replace a file troupe didn't write (unless ``force``), or meets an unknown file. With
-    ``rehearse``, works out what it would do and does none of it."""
+    ``rehearse``, works out what it would do and does none of it. With ``vcs``, a file git merged
+    from troupe's versions counts as troupe's, and with ``resolve`` it's replaced, keeping a copy;
+    without, it's refused, naming troupe flush (design D4, D7)."""
     troupe_dir = theatre / THEATRE_DIR
     rendered = render(config)
-    plan_ = plan(troupe_dir, rendered, recorded, force=force)
+
+    def again() -> Plan:
+        merged = merges(vcs) if vcs is not None else {}
+        allowed = frozenset(merged) if resolve else frozenset()
+        return plan(troupe_dir, rendered, recorded, force=force, merged=merged, resolve=allowed)
+
+    plan_ = again()
     refuse(plan_)
     if rehearse or not plan_.changes:
         return Flushed(plan_.changes)
     with locked(troupe_dir, on_wait):
-        plan_ = plan(troupe_dir, rendered, recorded, force=force)  # again, now nothing can move
+        plan_ = again()  # again, now nothing can move
         refuse(plan_)
         kept = execute(troupe_dir, plan_)
     return Flushed(plan_.changes, kept)
@@ -415,10 +579,11 @@ def execute(troupe_dir: Path, plan_: Plan) -> dict[str, str]:
     kept: dict[str, str] = {}
     written: list[dict[str, str]] = []
     for action in plan_.changes:
-        target = troupe_dir / action.path
-        if action.forced and target.exists():
+        path = staged_target(action.path) or action.path
+        target = troupe_dir / path
+        if (action.forced or action.keep) and target.exists():
             store = load_store(defaults.ARTIFACT_STORE, troupe_dir / "local" / "artifacts")
-            kept[action.path] = store.put(target.read_bytes())
+            kept[path] = store.put(target.read_bytes())
         if action.action == "finish":
             finish(troupe_dir, staged_target(action.path) or action.path)
         elif action.action == "discard":
