@@ -169,8 +169,11 @@ def _rule(error: jsonschema.ValidationError, against: str) -> str:
             names = [str(n) for n in wanted] if isinstance(wanted, list) else []
         actual = JSON_TYPES.get(type(error.instance), "a value")
         return f"it must be {' or '.join(_article(n) for n in names)}, not {actual} ({against})"
+    if error.validator == "enum" and isinstance(error.validator_value, list):
+        accepted = ", ".join(repr(value) for value in error.validator_value)
+        return f"it must be one of {accepted}, not {error.instance!r} ({against})"
     description = error.schema.get("description") if isinstance(error.schema, Mapping) else None
-    if error.validator in ("pattern", "oneOf", "anyOf", "enum", "const") and description:
+    if error.validator in ("pattern", "oneOf", "anyOf", "const") and description:
         return f"it doesn't fit {against}: {description}"
     return f"{error.message} ({against})"
 

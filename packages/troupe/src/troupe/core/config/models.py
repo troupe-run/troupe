@@ -6,7 +6,7 @@ Validate with ``parse``, which is strict (config-model design D11).
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Union
+from typing import Annotated, Any, Literal, Union
 
 from pydantic import ConfigDict, Field, RootModel
 
@@ -60,6 +60,10 @@ class Actor(StrictModel):
     expect: Annotated[list[ExpectItem], Field(title="Effect check")]
     """
     Files, relative to the theatre's root, that a run must create or change: each must exist after the run, and differ from before it. A file named twice is checked once. An empty list means no effect check, and has to be written.
+    """
+    workspace: Annotated[Literal["worktree", "theatre"] | None, Field(title="Workspace")] = None
+    """
+    Where a run works. worktree, the default when absent: the run's own git worktree at HEAD, under .troupe/local/worktrees/, whose changes reach the theatre only through troupe accept. theatre: the theatre itself, so what the run writes lands among your files at once.
     """
 
 

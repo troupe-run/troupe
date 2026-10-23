@@ -34,4 +34,5 @@ One actor's config file, .troupe/actors/<name>.yaml. The file's name is the acto
 | `runner` | string | Yes | The runner that runs this actor, by name. |
 | `options` | object (an extension point, filled by the runner's options schema) | No | The runner's own options, passed to it unchanged. Absent means {}. An extension point: the runner's published options schema fills it, and without one only {} validates. |
 | `expect` | list of string | Yes | Files, relative to the theatre's root, that a run must create or change: each must exist after the run, and differ from before it. A file named twice is checked once. An empty list means no effect check, and has to be written. |
+| `workspace` | one of `"worktree"`, `"theatre"` | No | Where a run works. worktree, the default when absent: the run's own git worktree at HEAD, under .troupe/local/worktrees/, whose changes reach the theatre only through troupe accept. theatre: the theatre itself, so what the run writes lands among your files at once. |
 <!-- end generated: config -->
