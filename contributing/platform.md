@@ -140,6 +140,15 @@ local commands, so git never starts a credential helper or `ssh`.
 | `GIT_MAX_OUTPUT_BYTES` | 16777216 |
 | `GIT_RACY_WINDOW_SECONDS` | 0.1 |
 | `GIT_COARSE_RACY_WINDOW_SECONDS` | 2 |
+| `GIT_WORKTREE_TIMEOUT_SECONDS` | 600 |
+| `GIT_WORKTREE_MAX_OUTPUT_BYTES` | 268435456 |
+| `GIT_DIFF_MAX_BYTES` | 1073741824 |
+
+A run's worktree (worktree-stage design D4) reads or writes every file of the repository, so its commands (`worktree`,
+`status`, `read-tree`, `checkout-index`, `update-index`, `diff-files`, `add`, `write-tree`, `diff` and `apply`) run
+under `GIT_WORKTREE_TIMEOUT_SECONDS` and `GIT_WORKTREE_MAX_OUTPUT_BYTES` instead, still announced after
+`GIT_ANNOUNCE_AFTER_SECONDS`. A run's diff is written to a file, never held in memory, and capturing fails with
+`workspace.diff-too-large` past `GIT_DIFF_MAX_BYTES`.
 
 The adapter caches the branch and HEAD, and asks git again only when one of the files git changes on a move has
 changed: `HEAD`, the index, `logs/HEAD`, `packed-refs`, the branch's own ref and the reftable table lists. An answer

@@ -63,3 +63,16 @@ from: about 4 ms on Linux, 16 ms on Windows, nanoseconds on APFS."""
 GIT_COARSE_RACY_WINDOW_SECONDS = 2.0
 """The racy window when every watched file's mtime is a whole second, as on a file system with
 coarse timestamps: FAT's are 2 s, HFS+'s 1 s."""
+
+# Run worktrees (worktree-stage design D4). A worktree's commands read or write every file of the
+# repository, so they get limits of their own; each is still announced after
+# GIT_ANNOUNCE_AFTER_SECONDS.
+
+GIT_WORKTREE_TIMEOUT_SECONDS = 600.0
+"""How long one git command that makes, fills, diffs or removes a run's worktree may run."""
+
+GIT_WORKTREE_MAX_OUTPUT_BYTES = 256 * 1024 * 1024
+"""The most output one worktree command may write, such as the file list of a large repository."""
+
+GIT_DIFF_MAX_BYTES = 1024 * 1024 * 1024
+"""The largest diff a run's changes may make before capturing them fails."""

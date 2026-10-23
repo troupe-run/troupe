@@ -16,6 +16,7 @@ Platform differences, handled here so callers see one behaviour:
 
 import contextlib
 import os
+import shutil
 import stat
 import sys
 import tempfile
@@ -205,3 +206,22 @@ def append_bytes(path: str | os.PathLike[str], data: bytes) -> int:
     if created:
         _fsync_directory(target.parent)
     return before
+
+
+def remove_tree(path: str | os.PathLike[str]) -> None:
+    """Remove the directory ``path`` and everything in it; nothing when it doesn't exist.
+
+    A symbolic link inside is removed, never followed. A read-only file is made writable first,
+    because Windows refuses to delete one (POSIX only needs the directory to be writable).
+    """
+
+    def writable_then_retry(
+        function: Callable[[str], object], name: str, error: BaseException
+    ) -> None:
+        if not isinstance(error, PermissionError):
+            raise error
+        os.chmod(name, stat.S_IWRITE | stat.S_IREAD)
+        function(name)
+
+    with contextlib.suppress(FileNotFoundError):
+        shutil.rmtree(path, onexc=writable_then_retry)
