@@ -5,7 +5,9 @@ resolves config's conflicts), no file is refused, every config file is what the 
 renders, and every file troupe replaced that wasn't a version it wrote is kept in the artifact
 store.
 
-Every example builds two repositories' worth of history with real git, so the budget is small.
+Every example builds two branches of history with real git, which takes several seconds an example
+on Windows, so the budget is small: CI's fixed seed still reaches git conflicts, clean merges and
+config conflicts with it.
 """
 
 import io
@@ -82,16 +84,18 @@ def _show(repo: Repo, ref: str, path: str) -> bytes | None:
     return shown.stdout if shown.returncode == 0 else None
 
 
-@settings(max_examples=15, suppress_health_check=[HealthCheck.function_scoped_fixture])
+@settings(max_examples=8, suppress_health_check=[HealthCheck.function_scoped_fixture])
 @given(feature=_changes(), main_changes=_changes())
 def test_one_command_after_any_merge_leaves_every_file_as_the_merged_config_renders_it(
     monkeypatch: pytest.MonkeyPatch, feature: dict[str, str], main_changes: dict[str, str]
 ) -> None:
-    with tempfile.TemporaryDirectory() as scratch:
+    # Each example's working directory is put back before its directory is removed: Windows can't
+    # remove a process's working directory (found in CI, WinError 32).
+    with tempfile.TemporaryDirectory() as scratch, monkeypatch.context() as patch:
         repo = theatre(Path(scratch))
         for name, value in {**repo.env, **ADA}.items():
-            monkeypatch.setenv(name, value)
-        monkeypatch.chdir(repo.path)
+            patch.setenv(name, value)
+        patch.chdir(repo.path)
         _set(BASE)
         repo.commit_all("base")
         repo.git("branch", "base")
