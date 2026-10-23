@@ -28,6 +28,15 @@ def test_a_missing_directory_has_nothing_committed_under_it(tmp_path: Path) -> N
     assert load_vcs("files", tmp_path).committed_under(".troupe/events") == frozenset()
 
 
+def test_it_reports_no_merge_sides_even_for_a_file_holding_conflict_markers(
+    tmp_path: Path,
+) -> None:
+    actors = tmp_path / ".troupe" / "actors"
+    actors.mkdir(parents=True)
+    (actors / "tester.yaml").write_bytes(b"<<<<<<< ours\na\n=======\nb\n>>>>>>> theirs\n")
+    assert load_vcs("files", tmp_path).merge_sides_under(".troupe/actors") == {}
+
+
 def test_its_branch_token_never_changes(tmp_path: Path) -> None:
     vcs = load_vcs("files", tmp_path)
     before = vcs.branch_token()

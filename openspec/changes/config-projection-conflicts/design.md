@@ -23,8 +23,8 @@ What exists:
 
 Observed with git 2.56 in a scratch repository: a content conflict leaves stages 1, 2 and 3 in `git ls-files -u`.
 A modify/delete conflict leaves stages 1 and 3 and puts the surviving side in the working tree. A clean merge leaves
-stage 0. After the merge is committed, `git merge-file` on the base and both parents reproduces HEAD's blob byte for
-byte.
+stage 0. After the merge is committed, `git merge-file` on the base and both parents, and `git merge-tree
+--write-tree` on the parents, each reproduce HEAD's blob byte for byte.
 
 ## Goals / Non-Goals
 
@@ -39,7 +39,7 @@ byte.
 
 **Non-Goals:**
 - Changing git's index, or committing (#156).
-- Recognising merges older than HEAD, octopus merges, or merges with more than one merge base.
+- Recognising merges older than HEAD, or octopus merges.
 - Any change to the event format or to how config merges.
 
 ## Decisions
@@ -86,17 +86,20 @@ is troupe's, nothing in the merge was written by a person.
    those two, and `merged` is HEAD's blob). The only candidates are paths under the directory whose merged blob
    differs from every parent's. A path equal to one side is already a version troupe recorded, and needs nothing
    new.
-3. **Reproduce the clean merge.** `git merge-base --all` of the two parents must give exactly one commit. For each
-   candidate, the three blobs (base, ours, theirs) are written to a temporary directory and run through
-   `git merge-file -p --diff-algorithm=histogram`. The path is reported only if this exits 0 with no conflict and
-   gives exactly `merged`. histogram is the default for git's ort strategy. A merge made with other options, or
-   edited before it was committed (an "evil merge"), won't reproduce, so it's left out and refused as today.
+3. **Reproduce the clean merge.** `git merge-tree --write-tree -z <ours> <theirs>` merges the two parents again,
+   with the same strategy (ort) and the person's merge settings, and writes the result as a tree without touching
+   the working tree, the index or any ref. A candidate is reported only if merge-tree doesn't list it as
+   conflicted, and its blob in the resulting tree is exactly `merged`. A merge edited before it was committed (an
+   "evil merge"), or made with options merge-tree didn't get (`-X`, another strategy), won't reproduce, so it's left
+   out and refused as today.
 
-   It uses temporary files rather than `git merge-file --object-id`, because `--object-id` needs git 2.43, and
-   Apple's bundled git is older.
+   This was first designed around `git merge-file` on the base and both sides, but that changed during apply.
+   Matching ort needs `merge-file --diff-algorithm`, which arrived in git 2.44, and Apple's bundled git is older.
+   It also needed a single merge base. merge-tree needs git 2.38, and handles several merge bases the way the
+   merge itself did. merge-tree only writes unreachable objects to the object store, which `git gc` removes.
 
 Every call runs through the adapter's bounded `git()` and its timeout, like every other git call. When nothing is
-unmerged and there's no merge, the query costs one `ls-files` and one `rev-parse`.
+unmerged and there's no merge, the query costs one `ls-files`, one `rev-parse --git-path` and one `rev-parse HEAD^@`.
 
 ### D4. What counts as troupe's in `plan`
 

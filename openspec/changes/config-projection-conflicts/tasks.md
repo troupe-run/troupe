@@ -2,7 +2,7 @@
 
 ## 1. Pin what must not change (before any code)
 
-- [ ] 1.1 On this branch before any code change, check that the behaviours the design's goals keep have tests that
+- [x] 1.1 On this branch before any code change, check that the behaviours the design's goals keep have tests that
   pass on main. These are: a hand edit refused (`test_cli_config.py`, `test_config_files.py`), an older version
   rewritten, a clean merge that matches config left alone
   (`test_a_clean_git_merge_of_two_branches_files_is_left_as_it_is`), `--force` keeping a copy, and a staged write
@@ -13,34 +13,34 @@
 
 ## 2. The VCS port's merge sides (design D2, D3)
 
-- [ ] 2.1 Add `MergeSides` and `merge_sides_under(directory)` to `core/vcs.py`, documented as D2 says (theatre-relative
+- [x] 2.1 Add `MergeSides` and `merge_sides_under(directory)` to `core/vcs.py`, documented as D2 says (theatre-relative
   paths, sides as bytes, no base). Make the plain-filesystem adapter return `{}`. Verify that mypy --strict passes,
   and with a test in `packages/troupe-vcs-files/tests/test_files_adapter.py` that it reports none.
-- [ ] 2.2 Git adapter, conflicted paths: `git ls-files -u -z` under the directory, with stages 2 and 3 read by one
+- [x] 2.2 Git adapter, conflicted paths: `git ls-files -u -z` under the directory, with stages 2 and 3 read by one
   `git cat-file --batch`, and a stage that isn't listed reported as `None`. Paths are theatre-relative when the
   theatre is a subdirectory of its repository. Verify with real repositories in
-  `packages/troupe-vcs-git/tests/test_git_adapter.py`:
+  `packages/troupe-vcs-git/tests/test_git_merge_sides.py`:
   - a content conflict gives both sides byte for byte;
   - a modify/delete gives ours `None`;
   - a cherry-pick conflict is reported;
   - a theatre in a subdirectory reports theatre-relative paths;
   - a path outside the directory is left out.
-- [ ] 2.3 Git adapter, clean merges: from `MERGE_HEAD` with the index's stage-0 blob, or from HEAD's two parents with
-  HEAD's blob. Only paths whose merged blob differs from every parent's count. There must be exactly one merge base,
-  and the merge is reproduced with `git merge-file -p --diff-algorithm=histogram` on temporary files. Verify with
-  real repositories in `test_git_adapter.py`:
+- [x] 2.3 Git adapter, clean merges: from `MERGE_HEAD` with the index's stage-0 blob, or from HEAD's two parents with
+  HEAD's blob. Only paths whose merged blob differs from every parent's count. The merge is reproduced with `git
+  merge-tree --write-tree` on the two parents (design D3). Verify with
+  real repositories in `test_git_merge_sides.py`:
   - a clean merge in progress (stopped by another file's conflict) is reported;
   - a committed clean merge is reported;
   - a merge commit whose file was edited before committing is left out;
   - an octopus merge reports none;
-  - a criss-cross merge with two bases reports none;
+  - a path merge-tree lists as conflicted is left out, even when the merge committed it with its markers;
   - a single-parent HEAD with no `MERGE_HEAD` reports none;
   - a path equal to one parent's version is left out.
 
   Each test's name states only what its body checks.
-- [ ] 2.4 Document the query in `contributing/config.md`, next to the table of what counts as troupe's file, and add
-  a line in `contributing/event-store.md` where it lists the port's reads. Say why it uses temporary files rather
-  than `--object-id`, and why histogram. Verify with the docs tests.
+- [x] 2.4 Document the query in `contributing/config.md`, next to the table of what counts as troupe's file, and add
+  a line in `contributing/event-store.md` where it lists the port's reads. Say why it uses `merge-tree`
+  rather than `merge-file`. Verify with the docs tests.
 
 ## 3. Recognising a merged file in the projection (design D4, D5)
 

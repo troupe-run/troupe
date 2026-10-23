@@ -197,12 +197,14 @@ imports them.
 | Port | Group | Bundled |
 |---|---|---|
 | Event store | `troupe.store` | `text` (`troupe-store-text`) |
-| Version control | `troupe.vcs` | `git` (`troupe-vcs-git`), `files` (`troupe-vcs-files`: no branches, everything committed) |
+| Version control | `troupe.vcs` | `git` (`troupe-vcs-git`), `files` (`troupe-vcs-files`: no branches, everything committed, no merges) |
 | Identity sources | `troupe.identity` | `env`, `vcs`, `os-login` (`troupe-identity-local`) |
 
 The text store is also an `eventsourcing` persistence module (`PERSISTENCE_MODULE=troupe_store_text`, with
 `TROUPE_THEATRE` and `TROUPE_VCS`), and passes the library's own recorder test suite unmodified. The git adapter
-runs git with its own environment policy ([contributing/platform.md](platform.md#the-git-adapter-troupe_vcs_gitdefaults)).
+runs git with its own environment policy ([contributing/platform.md](platform.md#the-git-adapter-troupe_vcs_gitdefaults)). Besides
+the branch, HEAD and what's committed, the VCS port reports a path's merge sides, which config reads to recognise a
+file git merged from troupe's own versions ([contributing/config.md](config.md#files-git-merged)).
 
 ## Notices and errors
 
