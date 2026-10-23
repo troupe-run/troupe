@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/events/run-changes-discarded.schema.json",
+  "title": "Run.ChangesDiscarded",
+  "description": "The payload of a run's discard (topic troupe.core.runs.aggregate:Run.ChangesDiscarded): the person removed its worktree, and nothing reached the theatre. The diff's artifact is kept. It doesn't undo what the run changed in the repository's shared state. Final: nothing else settles the run's changes after it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "lineage",
+    "timestamp"
+  ],
+  "properties": {
+    "lineage": {
+      "$ref": "../lineage.schema.json"
+    },
+    "timestamp": {
+      "$ref": "../event-record.schema.json#/$defs/libraryTimestamp"
+    }
+  }
+}

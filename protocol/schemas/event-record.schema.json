@@ -161,6 +161,8 @@
             "troupe.core.runs.aggregate:Run.Started",
             "troupe.core.runs.aggregate:Run.Reported",
             "troupe.core.runs.aggregate:Run.Ended",
+            "troupe.core.runs.aggregate:Run.ChangesAccepted",
+            "troupe.core.runs.aggregate:Run.ChangesDiscarded",
             "troupe.core.config.aggregate:Config.Changed",
             "troupe.core.config.aggregate:Config.Settled"
           ]
@@ -211,6 +213,38 @@
             "properties": {
               "state": {
                 "$ref": "events/run-ended.schema.json"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "topic": {
+                "const": "troupe.core.runs.aggregate:Run.ChangesAccepted"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "state": {
+                "$ref": "events/run-changes-accepted.schema.json"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "topic": {
+                "const": "troupe.core.runs.aggregate:Run.ChangesDiscarded"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "state": {
+                "$ref": "events/run-changes-discarded.schema.json"
               }
             }
           }
@@ -270,6 +304,8 @@
               "troupe.core.runs.aggregate:Run.Started",
               "troupe.core.runs.aggregate:Run.Reported",
               "troupe.core.runs.aggregate:Run.Ended",
+              "troupe.core.runs.aggregate:Run.ChangesAccepted",
+              "troupe.core.runs.aggregate:Run.ChangesDiscarded",
               "troupe.core.config.aggregate:Config.Changed",
               "troupe.core.config.aggregate:Config.Settled"
             ]

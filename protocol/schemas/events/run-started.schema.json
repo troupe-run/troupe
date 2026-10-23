@@ -58,6 +58,93 @@
       "items": {
         "$ref": "../lineage.schema.json#/$defs/hash"
       }
+    },
+    "workspace": {
+      "description": "Where the run worked. Absent: recorded before runs had workspaces, so in the theatre.",
+      "$ref": "#/$defs/workspace"
+    }
+  },
+  "$defs": {
+    "commit": {
+      "title": "Commit",
+      "description": "A git commit id: 40 hex digits (SHA-1) or 64 (SHA-256).",
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$"
+    },
+    "workspace": {
+      "title": "Workspace",
+      "description": "The run's workspace: its own worktree, or the theatre itself.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/theatreWorkspace"
+        },
+        {
+          "$ref": "#/$defs/worktreeWorkspace"
+        }
+      ]
+    },
+    "theatreWorkspace": {
+      "title": "In the theatre",
+      "description": "The run worked in the theatre itself.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "theatre"
+        }
+      }
+    },
+    "worktreeWorkspace": {
+      "title": "In its own worktree",
+      "description": "The run worked in its own git worktree, made at the theatre's HEAD.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "path",
+        "base",
+        "dirty",
+        "clones"
+      ],
+      "properties": {
+        "kind": {
+          "const": "worktree"
+        },
+        "path": {
+          "description": "The worktree, relative to the theatre: .troupe/local/worktrees/<run id>.",
+          "$ref": "../client/run.schema.json#/$defs/theatrePath"
+        },
+        "prefix": {
+          "description": "Where the theatre is in its repository, such as apps/web/, when it isn't the top level; the run works there in the worktree. Absent: the theatre is the repository's top level.",
+          "type": "string",
+          "pattern": "^(?![/\\\\])(?!.*\\\\)(?!(.*/)?\\.\\.(/|$)).+/$"
+        },
+        "base": {
+          "description": "The commit the worktree was made at: the theatre's HEAD.",
+          "$ref": "#/$defs/commit"
+        },
+        "dirty": {
+          "description": "Whether the theatre had changes that differ from HEAD, which the run didn't see.",
+          "type": "boolean"
+        },
+        "clones": {
+          "description": "The clone mechanisms used for the files that matched HEAD, sorted. Empty: every file was checked out.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "clonefile",
+              "ficlone",
+              "copyfile2",
+              "copy",
+              "symlink"
+            ]
+          }
+        }
+      }
     }
   }
 }

@@ -83,6 +83,55 @@ STAGES = st.just({"name": "docker", "effects": "enforced"}) | st.just(
         "allowedBy": {"setting": "allow_unenforced_local_stage", "source": "env"},
     }
 )
+COMMITS = st.text("0123456789abcdef", min_size=40, max_size=40)
+WORKSPACES = st.just({"kind": "theatre"}) | st.fixed_dictionaries(
+    {
+        "kind": st.just("worktree"),
+        "path": st.just(".troupe/local/worktrees/0f8fad5b-d9cb-469f-a165-70867728950e"),
+        "base": COMMITS,
+        "dirty": st.booleans(),
+        "clones": st.lists(
+            st.sampled_from(["clonefile", "ficlone", "copyfile2", "copy", "symlink"]),
+            unique=True,
+        ),
+    },
+    optional={"prefix": st.sampled_from(["apps/", "apps/web/"])},
+)
+SHARED_LISTS = st.lists(
+    st.fixed_dictionaries(
+        {"name": TEXT, "change": st.sampled_from(["added", "changed", "removed"])}
+    ),
+    min_size=1,
+    max_size=3,
+)
+SHARED = st.fixed_dictionaries(
+    {}, optional={"refs": SHARED_LISTS, "config": SHARED_LISTS, "hooks": SHARED_LISTS}
+).filter(bool)
+
+
+@st.composite
+def run_changes(draw: st.DrawFn) -> dict[str, Any]:
+    """A worktree run's changes, in each state, with what that state has."""
+    state = draw(st.sampled_from(["pending", "accepted", "discarded", "none", "uncaptured"]))
+    data: dict[str, Any] = {"state": state}
+    counts = {"added": 0, "modified": 0, "deleted": 0, "leftOut": draw(st.integers(0, 9))}
+    if state == "uncaptured":
+        if draw(st.booleans()):
+            data["error"] = draw(ERRORS)
+    elif state == "none":
+        data.update(counts)
+    else:
+        data.update(counts, added=draw(st.integers(1, 9)), diff=draw(HASHES))
+    if draw(st.booleans()):
+        data["shared"] = draw(SHARED)
+    if state in ("accepted", "discarded"):
+        data["settledAt"] = draw(TIMES)
+    else:
+        data["worktree"] = ".troupe/local/worktrees/0f8fad5b-d9cb-469f-a165-70867728950e"
+    return data
+
+
+RUN_CHANGES = run_changes()
 OUTCOMES = st.sampled_from(
     ["succeeded", "failed", "cancelled", "timed-out", "crashed", "could-not-start"]
 )
@@ -104,6 +153,7 @@ def summaries(draw: st.DrawFn) -> dict[str, Any]:
                 ),
                 "stage": STAGES,
                 "effectCheck": EFFECT_CHECKS,
+                "workspace": WORKSPACES,
                 "state": st.sampled_from(
                     ["running", "ended", "interrupted", "unfinished-elsewhere"]
                 ),
@@ -123,6 +173,8 @@ def summaries(draw: st.DrawFn) -> dict[str, Any]:
     if summary["state"] == "ended":
         summary["outcome"] = draw(OUTCOMES)
         summary["endedAt"] = draw(TIMES)
+    if summary["workspace"] != {"kind": "theatre"}:
+        summary["changes"] = draw(RUN_CHANGES)
     return summary
 
 
@@ -388,6 +440,7 @@ ENDED_SUMMARY: dict[str, Any] = {
     "runner": {"requested": "scripted", "reported": {"name": "scripted", "version": "0"}},
     "stage": {"name": "docker", "effects": "enforced"},
     "effectCheck": {"kind": "none"},
+    "workspace": {"kind": "theatre"},
     "state": "ended",
     "outcome": "failed",
     "error": {"code": "run.error-result", "problem": "p", "fix": "f", "details": {"message": "m"}},

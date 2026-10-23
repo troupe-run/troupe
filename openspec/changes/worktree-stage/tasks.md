@@ -84,20 +84,20 @@
 
 ## 4. Recording: run events and their schemas (design D7, D10)
 
-- [ ] 4.1 Extend `run-started.schema.json` with `workspace` (`worktree` with path, base, dirty and clones, or
+- [x] 4.1 Extend `run-started.schema.json` with `workspace` (`worktree` with path, base, dirty and clones, or
   `theatre`). Extend `run-ended.schema.json` with optional `changes` (a diff reference and counts, `leftOut`, an
   optional `shared` holding refs, config and hooks, or `error` alone). Add `run-changes-accepted.schema.json` and
   `run-changes-discarded.schema.json`. Verify with `test_event_schemas.py`: real payloads validate, and
   contradictions don't (a diff with an error, `changes` on a `theatre` run, a null).
-- [ ] 4.2 Add `workspace` to `Run.Started`, and `changes` to `Run.Ended`. Add `accept_changes(diff)` and
+- [x] 4.2 Add `workspace` to `Run.Started`, and `changes` to `Run.Ended`. Add `accept_changes(diff)` and
   `discard_changes()` to the run aggregate, which record `Run.ChangesAccepted` and `Run.ChangesDiscarded`. Both are
   allowed only after the end, and only once, with `run.changes-settled` otherwise. Register the new topics in
   `TOPICS`. Verify with aggregate tests:
   - an accept before the end is refused;
   - a second settle is refused, naming the first;
-  - an old run without `workspace` reads back as `theatre`, so earlier events still load. Add a fixture written by
-    the current code.
-- [ ] 4.3 Derive the changes state (`pending`, `accepted`, `discarded`, `none`, `uncaptured`) in
+  - an old run without `workspace` reads back as `theatre`, so earlier events still load (a start recorded with
+    no `workspace`, exactly as runs before this change were).
+- [x] 4.3 Derive the changes state (`pending`, `accepted`, `discarded`, `none`, `uncaptured`) in
   `runs/projections.py`, with `uncaptured` for a capture error and for an interrupted worktree run. Verify with
   projection tests covering each state.
 

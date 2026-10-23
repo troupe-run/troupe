@@ -29,9 +29,11 @@ A run is its own stream, keyed by its run id. Its events, in order:
 
 | Event | When | Actor and via |
 |---|---|---|
-| `Run.Started` | When the runner's `init` arrives (or, if it never sends one, at the end). It holds the actor's name, the runner asked for and the name and version `init` reported, the stage's admission, the effect check, the direction's reference, and the config version (the config stream's heads, sorted) | You, through `cli` |
+| `Run.Started` | When the runner's `init` arrives (or, if it never sends one, at the end). It holds the actor's name, the runner asked for and the name and version `init` reported, the stage's admission, the effect check, the direction's reference, the config version (the config stream's heads, sorted), and the workspace: the worktree's path, base commit, whether the theatre was dirty and the clone mechanisms, or `theatre` | You, through `cli` |
 | `Run.Reported` | Once per run event, in `seq` order. It holds the event's `seq` and the event as received | The agent (`source: troupe`), through `runner` |
-| `Run.Ended` | Once, when the run host returns. It holds the outcome, its error, the result, the exit code, the transcript's and standard error's references and the limits; and, if recording failed part-way, where and why | The agent, through `runner` |
+| `Run.Ended` | Once, when the run host returns. It holds the outcome, its error, the result, the exit code, the transcript's and standard error's references and the limits; if recording failed part-way, where and why; and for a worktree run, the changes captured: the diff's reference and counts, or why capturing failed, and what changed in the repository's shared state | The agent, through `runner` |
+| `Run.ChangesAccepted` | When a person accepts a worktree run's changes, after the diff applied. It holds the diff's reference and the files it changed | You, through `cli`, with no `stage` |
+| `Run.ChangesDiscarded` | When a person discards a worktree run's changes, after its worktree was removed | You, through `cli`, with no `stage` |
 
 All of a run's events share one change id. `seq` is the runner's numbering, kept in the payload; it isn't the
 stream's version, which counts `Run.Started` too. Recording a `seq` that isn't the next one is refused
@@ -148,6 +150,10 @@ export TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE=true
 | `run.recording-failed` | A run event, or the run's end, couldn't be recorded, so the run was stopped |
 | `run.not-found` | No run here has an id starting with what was given |
 | `run.ambiguous-id` | More than one run's id starts with what was given; it lists them |
+| `run.not-ended` | A run's changes can't be shown or accepted, or a running run discarded, before its end is recorded |
+| `run.changes-settled` | A run's changes were already accepted or discarded: settling them is final |
+| `workspace.not-at-head` | A run's worktree kept differing from HEAD after it was checked out again, so the run didn't start |
+| `workspace.diff-too-large` | A run's changes make a diff larger than `GIT_DIFF_MAX_BYTES`, so they weren't captured |
 | `run.cancelling` | (notice) Ctrl-C was pressed: the run is stopping within its grace period |
 | `run.interrupted` | (notice) A run has no recorded end, and the `troupe perform` that ran it has stopped |
 | `run.unfinished-elsewhere` | (notice) A run started in another clone has no recorded end here |
