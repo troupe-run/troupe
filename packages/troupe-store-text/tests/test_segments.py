@@ -8,6 +8,7 @@ import pytest
 from eventsourcing.persistence import IntegrityError, Tracking
 
 from storetesting import event, fresh_store, new_stream, segments, snapshot
+from troupe.core import schemas
 from troupe.core.errors import TroupeError
 from troupe_store_text.store import TextStore
 
@@ -32,7 +33,11 @@ def test_a_session_writes_its_header_with_its_first_batch_and_appends_after(
     header, first, second = lines(segment)
     assert header == {
         "format": 1,
-        "segment": {"session": segment.stem, "vcs": "files"},
+        "segment": {
+            "session": segment.stem,
+            "vcs": "files",
+            "protocol": schemas.protocol_version(),
+        },
     }
     assert (first["version"], second["version"]) == (1, 2)
     assert second["parents"] == [first["id"]]

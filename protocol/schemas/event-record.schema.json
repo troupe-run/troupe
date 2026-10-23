@@ -12,6 +12,12 @@
     }
   ],
   "$defs": {
+    "protocolVersion": {
+      "title": "Protocol version",
+      "description": "The protocol release whose schemas the writing troupe carries (its troupe/protocol/version.json), as major.minor.patch.",
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
     "format": {
       "title": "Format",
       "description": "The record format version. A reader refuses a format it doesn't know.",
@@ -19,7 +25,7 @@
     },
     "header": {
       "title": "Segment header",
-      "description": "The first line of a segment: the session that wrote it, and the branch it was written on. A segment holds one session's events on one branch.",
+      "description": "The first line of a segment: the session that wrote it, the branch it was written on, and the protocol version of the troupe that wrote it. A segment holds one session's events on one branch.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -35,7 +41,8 @@
           "additionalProperties": false,
           "required": [
             "session",
-            "vcs"
+            "vcs",
+            "protocol"
           ],
           "properties": {
             "session": {
@@ -49,6 +56,9 @@
               "description": "The branch the segment was written on. Absent: it was written with no branch (a detached HEAD, or an adapter without branches).",
               "type": "string",
               "minLength": 1
+            },
+            "protocol": {
+              "$ref": "#/$defs/protocolVersion"
             }
           }
         }

@@ -24,8 +24,14 @@ KINDS = (ACTORS,)
 """Every kind of config, by its key at the top of config."""
 
 ACTOR_SCHEMA = "https://troupe.run/protocol/config/actor.schema.json"
-ACTOR_SCHEMA_URL = "https://troupe.run/protocol/0/config/actor.schema.json"
-"""Where config files name the actor schema: troupe.run, by major version (website#30)."""
+"""The actor schema's ``$id``: how troupe finds it among the schemas it carries."""
+
+
+def actor_schema_url() -> str:
+    """Where config files name the actor schema: troupe.run, by the major version of the protocol
+    troupe carries (website#30; protocol-own-release design D7)."""
+    return f"https://troupe.run/protocol/{schemas.protocol_major()}/config/actor.schema.json"
+
 
 ACTOR_NAME = re.compile(r"\A[a-z][a-z0-9-]{0,63}\Z")
 CHARACTER = "character"

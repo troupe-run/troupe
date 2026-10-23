@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from troupe.core import strict_json
+from troupe.core import schemas, strict_json
 from troupe.core.errors import TroupeError
 
 FORMAT = 1
@@ -29,12 +29,13 @@ LEFT_OUT_OF_THE_HASH = ("timestamp", "lineage")
 
 @dataclass(frozen=True)
 class Header:
-    """A segment's first line: who wrote it, and on which branch (None, and left out of the line,
-    for a segment written with no branch)."""
+    """A segment's first line: who wrote it, on which branch (None, and left out of the line, for a
+    segment written with no branch), and the protocol version of the troupe that wrote it."""
 
     session: str
     vcs: str
     branch: str | None
+    protocol: str
 
 
 @dataclass(frozen=True)
@@ -108,7 +109,7 @@ def content_id(
 
 
 def encode_header(header: Header) -> bytes:
-    segment = {"session": header.session, "vcs": header.vcs}
+    segment = {"session": header.session, "vcs": header.vcs, "protocol": header.protocol}
     if header.branch is not None:
         segment["branch"] = header.branch
     line = {"format": FORMAT, "segment": segment}
@@ -169,11 +170,13 @@ def decode(raw: bytes, path: Path, line: int) -> Header | Record:
 
 def _header(segment: object, path: Path, line: int) -> Header:
     if not isinstance(segment, dict) or set(segment) not in (
-        {"session", "vcs"},
-        {"session", "vcs", "branch"},
+        {"session", "vcs", "protocol"},
+        {"session", "vcs", "protocol", "branch"},
     ):
         raise malformed(
-            path, line, "a header's segment must have session and vcs, and may have branch"
+            path,
+            line,
+            "a header's segment must have session, vcs and protocol, and may have branch",
         )
     session, vcs = segment["session"], segment["vcs"]
     if not (isinstance(session, str) and isinstance(vcs, str) and session and vcs):
@@ -185,7 +188,12 @@ def _header(segment: object, path: Path, line: int) -> Header:
             line,
             "a header's branch must be a non-empty string, or left out when there is none",
         )
-    return Header(session=session, vcs=vcs, branch=branch)
+    protocol = segment["protocol"]
+    if not (isinstance(protocol, str) and schemas.PROTOCOL_VERSION.match(protocol)):
+        raise malformed(
+            path, line, "a header's protocol must be a version such as 0.2.0 (major.minor.patch)"
+        )
+    return Header(session=session, vcs=vcs, branch=branch, protocol=protocol)
 
 
 _EVENT_KEYS = {"format", "id", "stream", "stream_type", "version", "topic", "parents", "batch"}

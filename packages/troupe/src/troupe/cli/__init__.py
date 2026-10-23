@@ -15,6 +15,7 @@ from troupe.cli.parser import Command, parse
 from troupe.cli.render import render_error
 from troupe.core.errors import BUG_REPORT_URL, TroupeError
 from troupe.core.exit_codes import ExitCode
+from troupe.core.schemas import protocol_version
 
 COMMANDS: tuple[Command, ...] = (*RUN_COMMANDS, *CONFIG_COMMANDS)
 """The subcommands troupe offers."""
@@ -30,7 +31,7 @@ def run(
     """Run one command line. Raises TroupeError for any failure the user should see."""
     parsed = parse(argv, commands)
     if parsed.show_version:
-        print(f"troupe {version('troupe')}", file=stdout)
+        print(f"troupe {version('troupe')} (protocol {protocol_version()})", file=stdout)
         return ExitCode.OK
     if parsed.command is None:
         print(parsed.help_text, end="", file=stdout)

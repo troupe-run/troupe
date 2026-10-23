@@ -30,7 +30,7 @@ from uuid import UUID
 
 from eventsourcing.persistence import IntegrityError, StoredEvent, Tracking
 
-from troupe.core import defaults
+from troupe.core import defaults, schemas
 from troupe.core.errors import TroupeError
 from troupe.core.files import directory_lock
 from troupe.core.notices import Notice
@@ -547,7 +547,12 @@ class TextStore:
         segment = self._writing
         if segment is None or segment.header is None or segment.header.branch != self._branch:
             session = new_ulid()
-            header = Header(session=session, vcs=self.vcs.name, branch=self._branch)
+            header = Header(
+                session=session,
+                vcs=self.vcs.name,
+                branch=self._branch,
+                protocol=schemas.protocol_version(),
+            )
             self._write_dotfiles()
             self.events_dir.mkdir(parents=True, exist_ok=True)
             path = self.events_dir / f"{session}.jsonl"

@@ -36,10 +36,14 @@ A segment's first line is its header; every later line is one event. Lines are s
 ([`event-record.schema.json`](../protocol/schemas/event-record.schema.json)).
 
 ```json
-{"format":1,"segment":{"branch":"main","session":"01K7…","vcs":"git"}}
+{"format":1,"segment":{"branch":"main","protocol":"0.2.0","session":"01K7…","vcs":"git"}}
 {"batch":{"id":"01K7…","index":0,"size":1},"format":1,"id":"sha256:9f2c…","parents":["sha256:41ab…"],"state":{"lineage":{…},"timestamp":"…","value":5},"stream":"6c1e…","stream_type":"uuid","topic":"troupe…:Counter.Set","version":3}
 ```
 
+- **The header says who wrote the segment.** `session` is the session's id (also the file's name), `vcs` the
+  version-control adapter, `branch` the branch it was written on (left out when there was none), and `protocol` the
+  protocol version of the troupe that wrote it (`troupe --version` prints it). A header without a `protocol` is a
+  malformed record.
 - **Content-hash ids.** An event's `id` is the SHA-256 of what it changed: its stream, version, topic, parents and
   state, leaving out the state's `timestamp` and `lineage`. Two clones that make the same change agree on its id,
   whoever made it and wherever. When a merge brings the same event twice, both lines stay (nothing is rewritten),

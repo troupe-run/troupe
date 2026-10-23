@@ -17,6 +17,7 @@ from ruamel.yaml import YAML
 from configtesting import TESTER
 from gitrepo import make_repo
 from protocol_schemas import PROTOCOL_BASE, SCRIPTED, check_error, check_notice, validator_for
+from troupe.core import schemas
 from troupe.core.config.kinds import file_kind, staged_name, staged_target
 from troupe.core.config.projection import (
     WRITTEN,
@@ -108,6 +109,19 @@ def test_an_actor_file_names_its_schema_in_its_first_line_and_its_first_key() ->
     text = render_actor(TESTER)["yaml"].decode("utf-8")
     first, second, *_ = text.splitlines()
     url = "https://troupe.run/protocol/0/config/actor.schema.json"
+    assert first == f"# yaml-language-server: $schema={url}"
+    assert second == f"$schema: {url}"
+
+
+def test_an_actor_file_names_its_schema_by_the_major_of_the_protocol_troupe_carries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    record = tmp_path / "version.json"
+    record.write_bytes(b'{"version":"1.3.0"}\n')
+    monkeypatch.setattr(schemas, "PROTOCOL_RECORD", record)
+    text = render_actor(TESTER)["yaml"].decode("utf-8")
+    first, second, *_ = text.splitlines()
+    url = "https://troupe.run/protocol/1/config/actor.schema.json"
     assert first == f"# yaml-language-server: $schema={url}"
     assert second == f"$schema: {url}"
 

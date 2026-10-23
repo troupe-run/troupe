@@ -20,6 +20,7 @@ from protocol_schemas import check_error
 from troupe.cli import COMMANDS, main
 from troupe.cli.parser import HELP_FIX, Command, _Declared, _declared, parse
 from troupe.cli.render import render_error
+from troupe.core import schemas
 from troupe.core.errors import TroupeError
 from troupe.core.exit_codes import ExitCode
 
@@ -130,6 +131,8 @@ def usage_error(*argv: str, commands: tuple[Command, ...] = TEST_COMMANDS) -> Tr
 
 # Requirement: Version reporting
 
+VERSION_LINE = f"troupe {version('troupe')} (protocol {schemas.protocol_version()})\n"
+
 
 def test_version_flag_prints_the_installed_version_from_a_directory_with_no_theatre(
     tmp_path: Path,
@@ -142,7 +145,28 @@ def test_version_flag_prints_the_installed_version_from_a_directory_with_no_thea
     assert not (tmp_path / ".troupe").exists()
     assert result.returncode == ExitCode.OK
     assert version("troupe") in result.stdout
+    assert result.stdout == VERSION_LINE
     assert result.stderr == ""
+
+
+def test_version_flag_names_the_protocol_version_troupe_carries_after_its_own() -> None:
+    code, out, _ = run_cli("--version")
+    assert (code, out) == (ExitCode.OK, VERSION_LINE)
+    assert out.endswith(f" (protocol {schemas.protocol_version()})\n")
+
+
+def test_version_flag_with_a_broken_protocol_record_reports_it_rather_than_guessing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    record = tmp_path / "version.json"
+    record.write_bytes(b'{"version":"next"}\n')
+    monkeypatch.setattr(schemas, "PROTOCOL_RECORD", record)
+    with pytest.raises(TroupeError) as caught:
+        schemas.protocol_version()
+    assert caught.value.code == "schemas.protocol-version-invalid"
+    code, out, err = run_cli("--version")
+    assert (code, out) == (caught.value.exit_code, "")
+    assert err == render_error(caught.value) + "\n"
 
 
 # Requirement: Global flags are accepted anywhere
@@ -150,7 +174,7 @@ def test_version_flag_prints_the_installed_version_from_a_directory_with_no_thea
 
 def test_version_flag_before_the_subcommand_prints_the_version() -> None:
     code, out, _ = run_cli("--version", "echo", "x")
-    assert (code, out) == (ExitCode.OK, f"troupe {version('troupe')}\n")
+    assert (code, out) == (ExitCode.OK, VERSION_LINE)
 
 
 def test_version_flag_after_the_subcommand_gives_the_same_result_as_before_it() -> None:

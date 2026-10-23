@@ -32,12 +32,12 @@ from ruamel.yaml.resolver import VersionedResolver
 from troupe.core import defaults, strict_json
 from troupe.core.artifacts import load_store
 from troupe.core.config.kinds import (
-    ACTOR_SCHEMA_URL,
     ACTORS,
     CHARACTER,
     CONFIG_DIRECTORIES,
     OPERATING_SYSTEM_FILES,
     actor_files,
+    actor_schema_url,
     file_kind,
     staged_name,
     staged_target,
@@ -111,12 +111,13 @@ def _sorted(value: object) -> object:
 
 def render_actor(actor: Mapping[str, Any]) -> dict[str, bytes]:
     """An actor's files, by their names (``<name>.yaml``, and ``<name>.md`` for a character)."""
-    fields: dict[str, Any] = {"$schema": ACTOR_SCHEMA_URL}
+    url = actor_schema_url()
+    fields: dict[str, Any] = {"$schema": url}
     for key in FIELD_ORDER[1:]:
         if key in actor:
             fields[key] = _sorted(actor[key])
     text = io.StringIO()
-    text.write(f"# yaml-language-server: $schema={ACTOR_SCHEMA_URL}\n")
+    text.write(f"# yaml-language-server: $schema={url}\n")
     _yaml().dump(fields, text)
     files = {"yaml": text.getvalue().encode("utf-8")}
     character = actor.get(CHARACTER)

@@ -136,28 +136,66 @@ def test_the_parent_order_doesnt_change_the_id() -> None:
 
 @pytest.mark.parametrize("branch", ["main", None], ids=["on a branch", "with no branch"])
 def test_a_header_line_reads_back_and_validates(branch: str | None) -> None:
-    header = Header(session="01K7ZX3N8V4Q2M6R9T5W1Y0B3C", vcs="git", branch=branch)
+    header = Header(
+        session="01K7ZX3N8V4Q2M6R9T5W1Y0B3C", vcs="git", branch=branch, protocol="0.2.0"
+    )
     line = encode_header(header)
     assert decode(line, PATH, 1) == header
     assert is_valid(json.loads(line), "event-record.schema.json")
 
 
 def test_a_header_written_with_no_branch_leaves_branch_out() -> None:
-    line = encode_header(Header(session="01K7ZX3N8V4Q2M6R9T5W1Y0B3C", vcs="git", branch=None))
-    assert json.loads(line)["segment"] == {"session": "01K7ZX3N8V4Q2M6R9T5W1Y0B3C", "vcs": "git"}
+    line = encode_header(
+        Header(session="01K7ZX3N8V4Q2M6R9T5W1Y0B3C", vcs="git", branch=None, protocol="0.2.0")
+    )
+    assert json.loads(line)["segment"] == {
+        "session": "01K7ZX3N8V4Q2M6R9T5W1Y0B3C",
+        "vcs": "git",
+        "protocol": "0.2.0",
+    }
 
 
 @pytest.mark.parametrize("branch", [None, ""], ids=["null", "empty"])
 def test_a_header_whose_branch_is_null_or_empty_is_refused_naming_file_and_line(
     branch: str | None,
 ) -> None:
-    line = {"format": 1, "segment": {"session": "01K7ZX3N8V4Q2M6R9T5W1Y0B3C", "vcs": "git"}}
-    line["segment"]["branch"] = branch  # type: ignore[index]
+    line = {"format": 1, "segment": {**SEGMENT, "branch": branch}}
     assert not is_valid(line, "event-record.schema.json")
     with pytest.raises(TroupeError) as caught:
         decode(json.dumps(line).encode(), PATH, 1)
     assert caught.value.code == "events.malformed-record"
     assert "branch" in caught.value.problem
+    assert caught.value.path == str(PATH.absolute())
+    assert caught.value.details["line"] == 1
+
+
+SEGMENT = {"session": "01K7ZX3N8V4Q2M6R9T5W1Y0B3C", "vcs": "git", "protocol": "0.2.0"}
+
+
+# Requirement: A segment header names the protocol that wrote it
+
+
+@pytest.mark.parametrize(
+    "segment",
+    [
+        {key: value for key, value in SEGMENT.items() if key != "protocol"},
+        {**SEGMENT, "protocol": "next"},
+        {**SEGMENT, "protocol": "0.2"},
+        {**SEGMENT, "protocol": ""},
+        {**SEGMENT, "protocol": None},
+        {**SEGMENT, "protocol": 2},
+    ],
+    ids=["missing", "next", "two-parts", "empty", "null", "a-number"],
+)
+def test_a_header_without_a_protocol_version_is_refused_naming_file_and_line(
+    segment: dict[str, object],
+) -> None:
+    line = {"format": 1, "segment": segment}
+    assert not is_valid(line, "event-record.schema.json")
+    with pytest.raises(TroupeError) as caught:
+        decode(json.dumps(line).encode(), PATH, 1)
+    assert caught.value.code == "events.malformed-record"
+    assert "protocol" in caught.value.problem
     assert caught.value.path == str(PATH.absolute())
     assert caught.value.details["line"] == 1
 

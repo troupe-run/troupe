@@ -19,7 +19,7 @@ import time
 from pathlib import Path
 from uuid import uuid4
 
-from troupe.core import strict_json
+from troupe.core import schemas, strict_json
 from troupe.core.ulid import new_ulid
 from troupe.core.vcs import load_vcs
 from troupe_store_text.codec import Header, encode_event, encode_header
@@ -29,11 +29,12 @@ from troupe_store_text.store import TextStore
 def write_segments(theatre: Path, count: int) -> None:
     events = theatre / ".troupe" / "events"
     events.mkdir(parents=True)
+    protocol = schemas.protocol_version()
     for n in range(count):
         session = new_ulid()
         state = strict_json.dumps({"n": n, "timestamp": "2026-10-12T00:00:00Z"}).encode()
         _, line = encode_event(uuid4(), 1, "bench:Recorded", (), state, (new_ulid(), 0, 1))
-        header = encode_header(Header(session=session, vcs="files", branch=None))
+        header = encode_header(Header(session=session, vcs="files", branch=None, protocol=protocol))
         (events / f"{session}.jsonl").write_bytes(header + line)
 
 
