@@ -109,7 +109,7 @@
 
 ## 6. Integration
 
-- [ ] 6.1 Run `uv run scripts/check.py` and show it passes. Then push, and verify that every CI job passes on Linux,
+- [x] 6.1 Run `uv run scripts/check.py` and show it passes. Then push, and verify that every CI job passes on Linux,
   macOS and Windows.
 
 ## Workflow follow-up
