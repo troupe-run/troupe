@@ -95,8 +95,9 @@ weren't enforced and which setting allowed it.
 
 A run works in its own **git worktree** by default: a second checkout of your theatre, made from your latest commit
 for that run alone, under `.troupe/local/worktrees/<run>`. Files that match the commit are cloned copy-on-write
-where your file system can (APFS on macOS, Btrfs or XFS on Linux, a Dev Drive on Windows), so even a large theatre
-costs little. Changes you haven't committed aren't in it: troupe tells you when there are some.
+where your file system can (APFS on macOS, Btrfs or XFS on Linux, a Dev Drive on Windows), so a run's copy takes
+almost no extra disk space. It still takes about as long to make as a checkout, because git reads every file to
+check it matches the commit. Changes you haven't committed aren't in it: troupe tells you when there are some.
 
 When the run ends, troupe captures what it changed as a diff, keeps it, and leaves the worktree in place:
 

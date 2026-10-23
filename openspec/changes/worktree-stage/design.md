@@ -320,8 +320,20 @@ The files adapter has no shared state, so its snapshot is empty. Alternatives co
   Automatic retention is a later setting, deliberately left out so nothing is dropped unasked.
 - **Tools that ignore `.gitignore` and don't skip dot-directories may scan the worktrees.** → This is documented,
   with the path to exclude.
-- **Copying is slow on large repos without copy-on-write.** → That costs no more than a plain `git worktree add`.
-  Each step is announced, under a named timeout.
+- **Making a worktree costs about a full checkout's time, even with copy-on-write.** Measured on APFS, 20,000 files
+  (1 GB), 2026-10-23:
+
+  | Step | Time |
+  |---|---|
+  | Plain `git worktree add` | 16.9 s |
+  | Clone and verify (D2) | 19.0 s |
+  | ↳ the clones | 6.8 s |
+  | ↳ git hashing every file | 9.1 s |
+
+  `read-tree` leaves the index with no stat data, so whichever git command first looks at the files hashes all of
+  them: the verify, the actor's own `git status`, or the capture's `git add -A`. Dropping the verify would only move
+  the cost. Copy-on-write saves disk space, not time. → Each step is announced, under a named timeout, and the docs
+  say it costs a checkout's time. Making it fast needs an index with trusted stat data, and parallel clones.
 - **Accepting into a theatre that has changed since the base can conflict.** → It's refused all or nothing, naming
   the files and pointing at `troupe diff <run> | git apply --3way` as a manual route. Other ways to accept come
   later.
