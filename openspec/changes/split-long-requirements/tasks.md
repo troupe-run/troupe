@@ -27,19 +27,19 @@ owner whether to fix it in this change.
 
 ## 2. Split the requirements and point the tests at them (design D1, D2, D5)
 
-- [ ] 2.1 Check the deltas against main's specs: each MODIFIED block keeps main's header and every scenario word for
+- [x] 2.1 Check the deltas against main's specs: each MODIFIED block keeps main's header and every scenario word for
   word, and the descriptions of the original plus the added requirements hold every sentence of main's description.
   Only D1's two "stand alone" edits differ. Verify by diffing main's requirement block against the delta's blocks
   (`git show main:openspec/specs/<spec>/spec.md`), and with `openspec validate split-long-requirements --strict`.
-- [ ] 2.2 In `packages/troupe/tests/test_runner_schemas.py`, replace the `:372` comment. Put
+- [x] 2.2 In `packages/troupe/tests/test_runner_schemas.py`, replace the `:372` comment. Put
   `test_the_contract_alone_accepts_only_empty_options` under `# Requirement: Run start options are an extension
   point`, and `test_with_a_runners_schema_bound_its_options_validate_and_an_unknown_key_does_not` under
   `# Requirement: Run start carries everything the runner may use`. Verify with
   `uv run pytest packages/troupe/tests/test_runner_schemas.py`.
-- [ ] 2.3 In `plugins/runner-scripted/tests/test_scripted_runner.py`, drop the bracket from the `:380` comment, so the
+- [x] 2.3 In `plugins/runner-scripted/tests/test_scripted_runner.py`, drop the bracket from the `:380` comment, so the
   two existing message-timing tests sit under `# Requirement: A script is a list of steps played in order`. Verify
   with `uv run pytest plugins/runner-scripted/tests/test_scripted_runner.py`.
-- [ ] 2.4 Check that every `# Requirement:` comment in the repository naming a `runner-protocol` or `scripted-runner`
+- [x] 2.4 Check that every `# Requirement:` comment in the repository naming a `runner-protocol` or `scripted-runner`
   requirement matches a header in the main spec or in this change's deltas. Verify with a grep of the comments
   against the headers, showing no unmatched names.
 - [ ] 2.5 Run `uv run scripts/check.py` and show that every gate passes.

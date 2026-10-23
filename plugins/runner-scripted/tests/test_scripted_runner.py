@@ -378,7 +378,7 @@ def test_a_refused_request_that_could_be_read_is_answered_with_its_own_id(
     validate(answer, "error-response.schema.json")
 
 
-# Requirement: A script is a list of steps played in order (when troupe's messages are read)
+# Requirement: A script is a list of steps played in order
 
 
 def _played_with_everything_queued(
