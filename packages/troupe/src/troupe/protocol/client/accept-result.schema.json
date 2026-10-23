@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/client/accept-result.schema.json",
+  "title": "accept: result",
+  "description": "What accepting changed, or would change.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "run",
+    "files",
+    "rehearsed",
+    "notices"
+  ],
+  "properties": {
+    "run": {
+      "$ref": "run.schema.json#/$defs/runId"
+    },
+    "files": {
+      "description": "The files the diff changed, or would change, relative to the repository's top level.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "rehearsed": {
+      "description": "Whether this was a rehearsal, which changed nothing.",
+      "type": "boolean"
+    },
+    "notices": {
+      "description": "What troupe told the person while it worked.",
+      "type": "array",
+      "items": {
+        "$ref": "../notice.schema.json"
+      }
+    }
+  }
+}

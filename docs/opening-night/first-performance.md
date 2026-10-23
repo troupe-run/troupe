@@ -41,6 +41,15 @@ troupe config set actors.tester.runner=scripted actors.tester.options=@hello.jso
 afterwards that `out/hello.txt` was created or changed, and the run fails if it wasn't. troupe records the change
 with who made it, and writes `.troupe/actors/tester.yaml`, so you can read the actor, and review it as a diff.
 
+## Commit
+
+A run works in its own copy of your theatre, made from your latest commit, so commit what the actor should see:
+
+```sh
+git add -A
+git commit -m "Add the tester actor"
+```
+
 ## Allow the local stage
 
 An actor runs on a [stage](../the-company/performances-and-runs.md#stages). The only stage so far runs it as a
@@ -63,7 +72,24 @@ troupe perform tester
 for, and `--rehearse` to see what would run without starting anything.
 
 While it runs, troupe shows its progress on standard error. When it succeeds, standard output gets one line,
-`run <id> succeeded`, and `out/hello.txt` says `hello`.
+`run <id> succeeded`.
+
+The run worked in its own git worktree, under `.troupe/local/worktrees/`, so your files haven't changed yet:
+`out/hello.txt` is in the worktree, not beside your files. That's a worktree's whole point: you see what an actor
+did before any of it is yours.
+
+## Keep it, or not
+
+```sh
+troupe diff <run>
+troupe accept <run>
+```
+
+`troupe diff <run>` shows what the run changed, as a diff. `troupe accept <run>` applies it to your files, unstaged,
+so `out/hello.txt` now says `hello` and `git diff` shows it like any change of your own. `troupe discard <run>`
+throws it away instead. A worktree catches an actor's mistakes, not its intent: it can still write outside the
+worktree, and [discarding doesn't undo](../the-company/performances-and-runs.md#workspaces) what it does to git
+itself.
 
 ## Read it back
 

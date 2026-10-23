@@ -1342,6 +1342,29 @@
     {
       "properties": {
         "code": {
+          "const": "workspace.no-head"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "actor"
+          ],
+          "properties": {
+            "actor": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
           "const": "workspace.diff-too-large"
         },
         "details": {
@@ -1767,6 +1790,131 @@
                 "interrupted",
                 "unfinished-elsewhere"
               ]
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "run.no-changes"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "run"
+          ],
+          "properties": {
+            "run": {
+              "type": "string",
+              "minLength": 1
+            },
+            "worktree": {
+              "description": "The run's worktree, relative to the theatre. Absent: it has been removed.",
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "run.changes-uncaptured"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "run"
+          ],
+          "properties": {
+            "run": {
+              "type": "string",
+              "minLength": 1
+            },
+            "worktree": {
+              "description": "The run's worktree, relative to the theatre. Absent: it has been removed.",
+              "type": "string",
+              "minLength": 1
+            },
+            "error": {
+              "description": "Why capturing failed. Absent: the run was interrupted, so nothing tried.",
+              "$ref": "#"
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "run.changes-conflict"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "run",
+            "diff",
+            "files"
+          ],
+          "properties": {
+            "run": {
+              "type": "string",
+              "minLength": 1
+            },
+            "diff": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            "files": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "worktree": {
+              "description": "The run's worktree, relative to the theatre. Absent: it has been removed.",
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "run.not-a-worktree"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "run"
+          ],
+          "properties": {
+            "run": {
+              "type": "string",
+              "minLength": 1
             }
           }
         }

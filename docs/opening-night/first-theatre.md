@@ -24,9 +24,10 @@ There's no setup command yet, and whether there'll be one isn't decided: it's an
 ## Put it under git
 
 Today troupe reads and records a theatre through git, so the theatre needs to be under git: run `git init`
-first if it isn't. A fresh git repository with no commits is fine. Every event troupe records notes the
-branch and commit it was made on, and commit `.troupe/` with the rest of your files: troupe sets up what git needs
-the first time it writes.
+first if it isn't. A fresh git repository with no commits is fine to start with, but an actor's run works from your
+latest commit, so you'll commit before your first performance. Every event troupe records notes the branch and
+commit it was made on, and commit `.troupe/` with the rest of your files: troupe sets up what git needs the first
+time it writes.
 
 troupe can also work without git, recording to plain files with no branches, but nothing can choose that yet:
 config will ([#60](https://github.com/troupe-run/troupe/issues/60)). Which of the two a non-technical user should

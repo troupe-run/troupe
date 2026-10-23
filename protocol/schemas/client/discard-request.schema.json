@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/client/discard-request.schema.json",
+  "title": "discard: request",
+  "description": "Remove a worktree run's worktree, changing nothing in the theatre's working tree. It doesn't undo what the run changed in the repository's shared state. A request never names a path, a diff or a workspace.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "run"
+  ],
+  "properties": {
+    "run": {
+      "description": "The run, by id or unique prefix.",
+      "$ref": "run.schema.json#/$defs/runRef"
+    },
+    "reason": {
+      "description": "Why, in the person's words, recorded in lineage. Absent: none was given.",
+      "type": "string",
+      "minLength": 1
+    },
+    "rehearse": {
+      "description": "Change nothing: report the worktree that would be removed. Absent means false.",
+      "type": "boolean"
+    }
+  }
+}

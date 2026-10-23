@@ -1,9 +1,12 @@
-"""perform: run one actor, and record the run (spec: runs, stages, policy; perform-status-logs
-design D4, D5, D8, D9, D11).
+"""perform: run one actor, and record the run (spec: runs, stages, policy, run-workspaces;
+perform-status-logs design D4, D5, D8, D9, D11; worktree-stage design D8).
 
 Everything that can refuse runs first, before a runner starts or anything is written: who is
-acting, the policy, the stage's admission and the runner's name. Then perform mints the run id,
-takes the run's lease, stores the instructions and options as artifacts, and runs the host. Each run
+acting, the policy, the stage's admission, the runner's name, and, for a worktree run, whether the
+theatre can have one. Then perform mints the run id, takes the run's lease, makes the run's
+worktree, stores the instructions and options as artifacts, and runs the host in the workspace.
+When the host returns, a worktree run's changes are captured into the artifact store, with what
+changed in the repository's shared state, and recorded in the run's end. Each run
 event is recorded as it arrives, through a worker thread so the event store's fsyncs and git calls
 stay off the event loop, and the run's end is recorded once the host returns.
 
@@ -44,6 +47,16 @@ from troupe.core.runs.aggregate import Run
 from troupe.core.runs.projections import fold_runs
 from troupe.core.stages import load_stage
 from troupe.core.stores import local_dir, open_artifact_store, open_event_store
+from troupe.core.vcs import SharedState, Vcs
+from troupe.core.workspaces import (
+    Kind,
+    Worktree,
+    capture,
+    make_worktree,
+    shared_changed,
+    snapshot,
+    worktree_base,
+)
 
 
 def lease_dir(theatre: Path, run_id: str) -> Path:
@@ -60,10 +73,11 @@ class Backends:
     limits: RunLimits | None = None
 
 
-def effect_check_for(check: m.EffectCheck, theatre: Path) -> EffectCheck:
+def effect_check_for(check: m.EffectCheck, workspace: Path) -> EffectCheck:
+    """The effect check, its theatre-relative paths read in the run's workspace."""
     if isinstance(check, m.NoEffectCheck):
         return NoEffectExpected()
-    return ExpectedFiles([theatre.joinpath(*PurePosixPath(path).parts) for path in check.paths])
+    return ExpectedFiles([workspace.joinpath(*PurePosixPath(path).parts) for path in check.paths])
 
 
 def _as_troupe_error(error: BaseException) -> TroupeError:
@@ -86,6 +100,7 @@ class _What:
     effect_check: m.EffectCheck
     character: str | None
     config: tuple[str, ...]
+    workspace: Kind
 
 
 def _from_config(merged: Merged, name: str) -> _What:
@@ -105,6 +120,7 @@ def _from_config(merged: Merged, name: str) -> _What:
     paths = list(dict.fromkeys(actor["expect"]))
     check: m.EffectCheck = m.FilesEffectCheck(paths=paths) if paths else m.NoEffectCheck()
     character = actor.get("character")
+    workspace = actor.get("workspace", defaults.WORKSPACE)
     return _What(
         actor=name,
         runner=str(actor["runner"]),
@@ -112,6 +128,7 @@ def _from_config(merged: Merged, name: str) -> _What:
         effect_check=check,
         character=character if isinstance(character, str) else None,
         config=merged.heads,
+        workspace="theatre" if workspace == "theatre" else "worktree",
     )
 
 
@@ -134,6 +151,7 @@ class _Recorder:
         agent: Command,
         admission: dict[str, Any],
         direction_ref: str,
+        workspace: dict[str, Any],
         send: Send,
         cancel: asyncio.Event,
     ) -> None:
@@ -145,6 +163,7 @@ class _Recorder:
         self.agent = agent
         self.admission = admission
         self.direction_ref = direction_ref
+        self.workspace = workspace
         self.send = send
         self.cancel = cancel
         self.run: Run | None = None
@@ -163,6 +182,7 @@ class _Recorder:
             effect_check=self.what.effect_check.to_data(),
             direction=self.direction_ref,
             config=list(self.what.config),
+            workspace=self.workspace,
         )
         self.person.record(run.collect_events())
         self.run = run
@@ -197,7 +217,7 @@ class _Recorder:
             )
         )
 
-    def _end(self, outcome: dict[str, Any]) -> None:
+    def _end(self, outcome: dict[str, Any], changes: dict[str, Any] | None) -> None:
         if self.stale and self.run is not None:
             loaded = self.store.load(UUID(self.run_id))
             if not isinstance(loaded, Run):
@@ -207,11 +227,11 @@ class _Recorder:
         recording = None
         if self.failure is not None:
             recording = {"failedAt": self.failure[0], "error": self.failure[1].to_data()}
-        run.end(outcome, recording)
+        run.end(outcome, recording, changes)
         self.agent.record(run.collect_events())
 
-    async def end(self, outcome: dict[str, Any]) -> None:
-        await asyncio.to_thread(self._end, outcome)
+    async def end(self, outcome: dict[str, Any], changes: dict[str, Any] | None) -> None:
+        await asyncio.to_thread(self._end, outcome, changes)
 
 
 async def perform(
@@ -229,6 +249,10 @@ async def perform(
     what = _from_config(merged, request.actor)
     argv = runner_command(what.runner)
     direction = request.direction or ""
+    vcs = store.vcs
+    base: tuple[str, str] | None = None
+    if what.workspace == "worktree":
+        base = await asyncio.to_thread(worktree_base, vcs, what.actor)
     if request.rehearse:
         # Every check a flush makes, without writing: a rehearsal changes nothing.
         refuse(plan(theatre / ".troupe", render(merged.config), merged.files))
@@ -241,6 +265,9 @@ async def perform(
                 config=list(what.config),
                 character=_summary(what.character),
                 direction=_summary(direction),
+                workspace=m.RehearsedWorkspace(
+                    kind=what.workspace, base=base[0] if base is not None else None
+                ),
             )
         )
     for notice in await asyncio.to_thread(sync_files, session, store, merged, send):
@@ -250,7 +277,24 @@ async def perform(
     lease = lease_dir(theatre, run_id)
     lease.mkdir(parents=True)
     with directory_lock(lease):
-        send(m.Started(run_id=run_id))
+        announce = lambda notice: send(_notice(notice))  # noqa: E731
+        worktree: Worktree | None = None
+        shared_before: SharedState | None = None
+        if base is not None:
+            worktree = await asyncio.to_thread(
+                make_worktree, vcs, theatre, run_id, base[0], base[1], announce
+            )
+            shared_before = await asyncio.to_thread(snapshot, vcs, announce)
+        workspace = worktree.cwd if worktree is not None else stage.workspace(theatre)
+        recorded_workspace = (
+            worktree.record(theatre) if worktree is not None else {"kind": "theatre"}
+        )
+        send(
+            m.Started(
+                run_id=run_id,
+                worktree=recorded_workspace["path"] if worktree is not None else None,
+            )
+        )
         artifacts = backends.artifact_store(session)
         direction_ref = artifacts.put(direction.encode("utf-8"))
         person = store.command(via="cli", actor=person_identity, stage=admission)
@@ -259,14 +303,22 @@ async def perform(
         )
         cancel = session.cancel.bind()
         recorder = _Recorder(
-            run_id, what, store, person, agent, admission.to_data(), direction_ref, send, cancel
+            run_id,
+            what,
+            store,
+            person,
+            agent,
+            admission.to_data(),
+            direction_ref,
+            recorded_workspace,
+            send,
+            cancel,
         )
-        workspace = stage.workspace(theatre)
         outcome = await run_actor(
             RunnerCommand(list(argv), cwd=workspace),
             RunRequest(run_id, direction, workspace, what.options, character=what.character),
             store=artifacts,
-            effect=effect_check_for(what.effect_check, theatre),
+            effect=effect_check_for(what.effect_check, workspace),
             limits=backends.limits,
             on_event=recorder.on_event,
             on_announce=lambda notice: send(_notice(notice)),
@@ -274,8 +326,13 @@ async def perform(
         )
         data = outcome.to_data()
         del data["runId"]
+        changes = None
+        if worktree is not None and shared_before is not None:
+            changes = await asyncio.to_thread(
+                _changes, vcs, worktree, artifacts, shared_before, announce
+            )
         try:
-            await recorder.end(data)
+            await recorder.end(data, changes)
         except Exception as error:
             raise _recording_failed(
                 run_id, recorder.failure, outcome.transcript, ended=_as_troupe_error(error)
@@ -285,6 +342,25 @@ async def perform(
         history = await asyncio.to_thread(store.history, UUID(run_id))
     [view] = fold_runs(history).values()
     return m.PerformResult(run=view.summary("ended"))
+
+
+def _changes(
+    vcs: Vcs,
+    worktree: Worktree,
+    artifacts: ArtifactStore,
+    before: SharedState,
+    announce: Callable[[Notice], None],
+) -> dict[str, Any]:
+    """A worktree run's changes, for its end: what changed in the repository's shared state,
+    announced, and the worktree's diff. A failure to read either is recorded, never raised: the
+    run's end must still be recorded, and the worktree is kept."""
+    try:
+        shared = before.compare(snapshot(vcs, announce))
+    except TroupeError as error:
+        return {"error": error.to_data()}
+    if not shared.empty:
+        announce(shared_changed(shared))
+    return capture(vcs, worktree, artifacts, shared, announce)
 
 
 def _recording_failed(

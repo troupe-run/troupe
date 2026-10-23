@@ -22,6 +22,9 @@ MESSAGES = {
         "config-set": ("request", "update", "result"),
         "config-get": ("request", "result"),
         "flush": ("request", "update", "result"),
+        "diff": ("request", "result"),
+        "accept": ("request", "result"),
+        "discard": ("request", "result"),
     }.items()
 }
 """Each method's messages, by part."""

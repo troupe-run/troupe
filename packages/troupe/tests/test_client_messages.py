@@ -221,7 +221,10 @@ CASES: list[tuple[object, str, st.SearchStrategy[Any]]] = [
     (
         m.PerformUpdate,
         "perform-update.schema.json",
-        st.fixed_dictionaries({"kind": st.just("started"), "runId": RUN_IDS})
+        st.fixed_dictionaries(
+            {"kind": st.just("started"), "runId": RUN_IDS},
+            optional={"worktree": st.just(".troupe/local/worktrees/0f8fad5b")},
+        )
         | logged_events()
         | NOTICE_UPDATES,
     ),
@@ -340,6 +343,58 @@ CASES += [
         st.fixed_dictionaries({}, optional={"force": st.booleans(), "rehearse": st.booleans()}),
     ),
     (m.ConfigUpdate, "flush-update.schema.json", NOTICE_UPDATES),
+    (m.DiffRequest, "diff-request.schema.json", st.fixed_dictionaries({"run": RUN_IDS})),
+    (
+        m.DiffResult,
+        "diff-result.schema.json",
+        st.fixed_dictionaries(
+            {"run": RUN_IDS, "base": COMMITS, "changes": RUN_CHANGES},
+        ).flatmap(
+            lambda result: (
+                st.just(result)
+                | st.fixed_dictionaries(
+                    {
+                        "patch": st.text(max_size=40),
+                        "encoding": st.sampled_from(["utf-8", "base64"]),
+                    }
+                ).map(lambda patch: {**result, **patch})
+            )
+        ),
+    ),
+    *(
+        (
+            request_type,
+            f"{name}-request.schema.json",
+            st.fixed_dictionaries(
+                {"run": RUN_IDS}, optional={"reason": TEXT, "rehearse": st.booleans()}
+            ),
+        )
+        for request_type, name in ((m.AcceptRequest, "accept"), (m.DiscardRequest, "discard"))
+    ),
+    (
+        m.AcceptResult,
+        "accept-result.schema.json",
+        st.fixed_dictionaries(
+            {
+                "run": RUN_IDS,
+                "files": st.lists(TEXT, min_size=1, max_size=3),
+                "rehearsed": st.booleans(),
+                "notices": st.lists(NOTICES, max_size=2),
+            }
+        ),
+    ),
+    (
+        m.DiscardResult,
+        "discard-result.schema.json",
+        st.fixed_dictionaries(
+            {
+                "run": RUN_IDS,
+                "worktree": st.just(".troupe/local/worktrees/0f8fad5b"),
+                "rehearsed": st.booleans(),
+                "notices": st.lists(NOTICES, max_size=2),
+            }
+        ),
+    ),
     (
         m.FlushResult,
         "flush-result.schema.json",

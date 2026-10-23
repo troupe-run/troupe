@@ -64,6 +64,7 @@ CODES: dict[str, ExitCode] = {
     # contributing/runs.md the others.
     "vcs.worktrees-unsupported": ExitCode.FAILURE,
     "workspace.not-at-head": ExitCode.FAILURE,
+    "workspace.no-head": ExitCode.FAILURE,
     "workspace.diff-too-large": ExitCode.FAILURE,
     "command.timeout": ExitCode.FAILURE,
     "command.not-found": ExitCode.FAILURE,
@@ -81,7 +82,11 @@ CODES: dict[str, ExitCode] = {
     "run.ambiguous-id": ExitCode.FAILURE,
     # A run's changes (worktree-stage design D6, D9). contributing/runs.md lists them.
     "run.not-ended": ExitCode.FAILURE,
+    "run.no-changes": ExitCode.FAILURE,
+    "run.changes-uncaptured": ExitCode.FAILURE,
+    "run.changes-conflict": ExitCode.FAILURE,
     "run.changes-settled": ExitCode.FAILURE,
+    "run.not-a-worktree": ExitCode.FAILURE,
     # A request that isn't understood is a usage error from any surface (design D15).
     "client.invalid-request": ExitCode.USAGE,
     "client.unknown-method": ExitCode.USAGE,

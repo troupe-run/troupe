@@ -93,6 +93,10 @@ WORKSPACE = "worktree"
 WORKTREES_DIR = "worktrees"
 """The directory, under the theatre's .troupe/local/, that holds each run's worktree by run id."""
 
+WORKSPACE_ANNOUNCE_AFTER_SECONDS = 2.0
+"""How long making, filling, capturing or removing a run's worktree runs before troupe says it is
+still at it (workspace.waiting)."""
+
 UNCOMMITTED_NOTICE_PATHS = 20
 """How many of the paths that differ from HEAD workspace.uncommitted-unseen names."""
 

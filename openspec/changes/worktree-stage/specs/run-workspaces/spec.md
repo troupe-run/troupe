@@ -27,8 +27,8 @@ starts, every file in the worktree SHALL match that commit, and the worktree SHA
 - **THEN** the theatre's own `out/hello.txt` doesn't exist and its `src/a.txt` is unchanged
 
 ### Requirement: Uncommitted changes are left out, with a warning
-A worktree run SHALL start from HEAD even when the theatre has uncommitted changes: staged, unstaged or untracked
-files that git doesn't ignore. It SHALL then send the notice `workspace.uncommitted-unseen`, saying the actor won't see
+A worktree run SHALL start from HEAD even when the theatre has uncommitted changes outside `.troupe/`: staged,
+unstaged or untracked files that git doesn't ignore. It SHALL then send the notice `workspace.uncommitted-unseen`, saying the actor won't see
 them and that accepting may conflict with them, and it SHALL still run. The run's start SHALL record that the theatre
 was dirty.
 
@@ -39,7 +39,8 @@ was dirty.
   was dirty
 
 #### Scenario: A clean theatre
-- **WHEN** the theatre has no uncommitted changes
+- **WHEN** the theatre has no uncommitted changes outside `.troupe/`, such as when only troupe's own uncommitted
+  events are there
 - **THEN** no `workspace.uncommitted-unseen` notice is sent, and the run's start records that the theatre was clean
 
 ### Requirement: Files that match HEAD are cloned copy-on-write

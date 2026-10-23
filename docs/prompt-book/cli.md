@@ -20,6 +20,12 @@ troupe never creates one for you; without one, a command fails with `theatre.not
   with Ctrl-C, 1 otherwise.
 - **`troupe status`** lists the most recent runs, newest first, or shows one run.
 - **`troupe logs`** shows a run's events in order; `--follow` waits for more until the run ends.
+- **`troupe diff`** shows what a run in its own worktree changed, as git's binary diff, byte for byte, so you can
+  pipe it to `git apply`.
+- **`troupe accept`** applies a worktree run's changes to your files, unstaged, all or nothing, then removes its
+  worktree. If they don't apply cleanly it changes nothing and names the files.
+- **`troupe discard`** removes a worktree run's worktree. It removes files, not git state: branches, tags, stashes,
+  config or hooks the run made stay.
 - **`troupe config set`**, **`config unset`** and **`config get`** change and show config. Each change is recorded
   with who made it and why (`--reason`), and troupe writes the files under `.troupe/` from config.
 - **`troupe flush`** makes the config files exactly what config says. Every command that uses config does it first.
@@ -29,7 +35,11 @@ runs](../the-company/performances-and-runs.md) describes runs, their states and 
 
 **`perform` names an actor, and config says the rest:** its runner (`scripted` is the only one so far), the
 runner's options, its effect check (`expect`: the files a run must create or change, relative to the theatre's
-root, where `[]` means no check) and its character. `--direction` says what this run is asked to do.
+root, where `[]` means no check), its character and its workspace. `--direction` says what this run is asked to do.
+
+**A run works in its own git worktree** by default, made from your latest commit: your files change only when you
+`troupe accept` it. An actor with `workspace: theatre` works in your files directly instead. See
+[Workspaces](../the-company/performances-and-runs.md#workspaces).
 
 **A config value on the command line is typed by its schema.** A string field takes the text as given, a number or
 boolean is parsed strictly (`true`, never `yes`), and a list or a group is JSON. `<path>=@<file>` reads a value
@@ -47,12 +57,14 @@ troupe config set actors.tester.runner=scripted actors.tester.options=@hello.jso
 troupe perform tester --direction "write the hello file"
 troupe logs 1a2b3c4d --follow        # from another terminal, while it runs
 troupe status 1a2b3c4d
+troupe diff 1a2b3c4d | less
+troupe accept 1a2b3c4d --reason "looks right"
 ```
 
 **Ctrl-C** during `perform` cancels the run, records it as `cancelled`, and exits 130. Pressing it again only says
 troupe is already cancelling: the run is stopped within its grace period either way.
 
-**`--json`** on `status` and `logs` prints the query's result exactly in its protocol shape
+**`--json`** on `status`, `logs` and `diff` prints the query's result exactly in its protocol shape
 ([`protocol/schemas/client/`](https://github.com/troupe-run/troupe/tree/main/protocol/schemas/client/)). With
 `--follow`, each update is printed on its own line first.
 
@@ -98,6 +110,47 @@ troupe logs <run> [--follow] [--json]
 | `<run>` | Yes | A run's id, or at least its first 8 characters |
 | `--follow` | No | Wait for new events until the run ends |
 | `--json` | No | Print updates and the result as JSON |
+
+### `troupe diff`
+
+Show the changes a worktree run captured.
+
+```text
+troupe diff <run> [--json]
+```
+
+| Argument | Required | What it is |
+|---|---|---|
+| `<run>` | Yes | A run's id, or at least its first 8 characters |
+| `--json` | No | Print the result as JSON |
+
+### `troupe accept`
+
+Apply a worktree run's changes to your files, unstaged, all or nothing.
+
+```text
+troupe accept <run> [--reason <reason>] [--rehearse]
+```
+
+| Argument | Required | What it is |
+|---|---|---|
+| `<run>` | Yes | A run's id, or at least its first 8 characters |
+| `--reason <reason>` | No | Why, recorded in the lineage |
+| `--rehearse` | No | Check that the changes apply cleanly and name the files, changing nothing |
+
+### `troupe discard`
+
+Remove a worktree run's worktree, keeping nothing it wrote. It removes files, not git state: branches, tags, stashes, config, hooks or pushes the run made in git stay.
+
+```text
+troupe discard <run> [--reason <reason>] [--rehearse]
+```
+
+| Argument | Required | What it is |
+|---|---|---|
+| `<run>` | Yes | A run's id, or at least its first 8 characters |
+| `--reason <reason>` | No | Why, recorded in the lineage |
+| `--rehearse` | No | Name the worktree that would be removed, removing nothing |
 
 ### `troupe config set`
 

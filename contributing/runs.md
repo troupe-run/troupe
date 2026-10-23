@@ -97,8 +97,8 @@ recorded: no event, no artifact.
 
 ### The local stage
 
-The local stage (`troupe-stage-local`, registered as `local`) runs the actor as a process on your machine, with the
-theatre's root as its workspace. It's the only stage so far, and the default.
+The local stage (`troupe-stage-local`, registered as `local`) runs the actor as a process on your machine, in the
+run's workspace (below). It's the only stage so far, and the default.
 
 **It enforces nothing.** A process on your machine can write any file and reach any host you can. So the local stage
 treats every actor's effects as unenforceable, including an actor that declares none: "no effects" is a claim it
@@ -115,6 +115,24 @@ When policy allows it, every event the run records says so in its lineage:
 A run's effect check (the actor's `expect`) isn't enforcement. It checks after the run that the actor produced what it was
 for, and a passing check doesn't make the run's effects count as enforced. A stage that can enforce effects, such
 as a Docker stage, comes later.
+
+### Workspaces
+
+An actor's `workspace` says where its runs work: `worktree` (the default) or `theatre`. `troupe.core.workspaces` makes
+a worktree run's workspace through the VCS port alone, so it doesn't depend on the stage (worktree-stage design D8):
+
+1. Refuse before anything is written: `vcs.worktrees-unsupported` (the plain filesystem adapter) or
+   `workspace.no-head` (no commit yet).
+2. After the run's lease, list what differs from HEAD (`workspace.uncommitted-unseen` when anything outside
+   `.troupe/` does), `git worktree add --detach --no-checkout` at `.troupe/local/worktrees/<run id>`, clone each file
+   that matches HEAD from the theatre (`troupe.platform.clones`), check out the rest, and verify against HEAD.
+3. Snapshot the repository's shared state (refs, config, hooks), run the actor in the worktree (at the theatre's
+   prefix when the theatre is a subdirectory), snapshot again, and capture the diff (`.troupe/` left out) into the
+   artifact store. Both go in the run's end; a failure to capture is recorded there, never raised.
+4. `accept` applies the diff with `git apply --check` then `git apply`, records `Run.ChangesAccepted`, and removes the
+   worktree. `discard` removes it and records `Run.ChangesDiscarded`. Both hold `.troupe/local/runs/<id>/settle`.
+
+A worktree is a workspace, not a boundary: it doesn't change the stage's admission or the `stage` lineage.
 
 ## Policy
 
@@ -151,9 +169,18 @@ export TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE=true
 | `run.not-found` | No run here has an id starting with what was given |
 | `run.ambiguous-id` | More than one run's id starts with what was given; it lists them |
 | `run.not-ended` | A run's changes can't be shown or accepted, or a running run discarded, before its end is recorded |
+| `run.no-changes` | A worktree run changed nothing, so there's nothing to accept; discard removes its worktree |
+| `run.changes-uncaptured` | A worktree run's changes weren't captured (it was interrupted, or capturing failed), so they can't be accepted; it names the worktree |
+| `run.changes-conflict` | A run's diff doesn't apply cleanly to the theatre's working tree, so nothing was changed; it names the files, the diff and the worktree |
+| `run.not-a-worktree` | A run that worked in the theatre has no changes to show, accept or discard |
 | `run.changes-settled` | A run's changes were already accepted or discarded: settling them is final |
+| `workspace.no-head` | A worktree run needs a commit to start from, and the theatre has none yet |
 | `workspace.not-at-head` | A run's worktree kept differing from HEAD after it was checked out again, so the run didn't start |
 | `workspace.diff-too-large` | A run's changes make a diff larger than `GIT_DIFF_MAX_BYTES`, so they weren't captured |
+| `workspace.waiting` | (notice) Making, filling, capturing or removing a run's worktree has taken longer than `WORKSPACE_ANNOUNCE_AFTER_SECONDS` |
+| `workspace.not-removed` | (notice) A run's changes were accepted, but its worktree couldn't be removed; it names the path and `git worktree remove` |
+| `workspace.uncommitted-unseen` | (notice) The theatre has changes that differ from HEAD; the worktree run starts from HEAD and won't see them |
+| `workspace.shared-git-changed` | (notice) Refs, config or hooks that every worktree shares changed during the run; it names hooks first, and discarding won't undo any of them |
 | `run.cancelling` | (notice) Ctrl-C was pressed: the run is stopping within its grace period |
 | `run.interrupted` | (notice) A run has no recorded end, and the `troupe perform` that ran it has stopped |
 | `run.unfinished-elsewhere` | (notice) A run started in another clone has no recorded end here |
@@ -169,6 +196,7 @@ Every limit and default runs use has its default in `troupe.core.defaults`.
 | `LOGS_LEASE_CHECK_SECONDS` | 1 | How often `troupe logs --follow` checks that the run it follows is still running |
 | `STATUS_RUNS_LIMIT` | 20 | How many runs `troupe status` lists when it isn't given `--limit` |
 | `ALLOW_UNENFORCED_LOCAL_STAGE` | false | The policy setting `allow_unenforced_local_stage`, when nothing sets it |
+| `WORKSPACE_ANNOUNCE_AFTER_SECONDS` | 2 | How long a worktree operation runs before `workspace.waiting` says so |
 | `UNCOMMITTED_NOTICE_PATHS` | 20 | How many of the paths that differ from HEAD `workspace.uncommitted-unseen` names |
 | `WORKSPACE` | `worktree` | Where a run works when its actor doesn't set `workspace` |
 | `WORKTREES_DIR` | `worktrees` | The directory under `.troupe/local/` that holds each run's worktree, by run id |

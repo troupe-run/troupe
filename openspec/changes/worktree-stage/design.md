@@ -223,9 +223,20 @@ failure becomes `changes.error`. It never changes the run's outcome, because the
 7. Run the host with `cwd` set to the worktree, and `ExpectedFiles` joined to the worktree.
 8. Capture, record the end, and return.
 
-The `Stage` port's `workspace(theatre)` becomes `workspace(theatre, run_id, actor_workspace)`. It returns the
-`Workspace`: its kind, its path, and a `capture()` and a `settle` handle. The local stage builds it from the VCS port.
-A future Docker stage mounts the same worktree.
+The worktree itself lives in `troupe.core.workspaces`, not in a stage. That module makes, fills, snapshots,
+captures and removes it through the VCS port alone, so it is stage-independent: the local stage runs the actor in
+it, and a Docker stage can mount the same worktree later. The `Stage` port is unchanged. `admit` decides what the
+stage enforces, and that is the same for both workspaces (a worktree contains nothing). `workspace(theatre)` is still
+where a run in the theatre works. (Amended during apply, 2026-10-23: the plan was to grow the `Stage` port with
+`workspace(theatre, run_id, kind)` returning a handle. That would have put stage-independent git work behind every
+stage's interface.)
+
+Each worktree operation is announced with the notice `workspace.waiting` once it has run for
+`WORKSPACE_ANNOUNCE_AFTER_SECONDS`, naming the operation. The adapter's own `on_wait` only names the program
+(`git`), and the port doesn't pass it through.
+
+Paths under `.troupe/` don't make the theatre dirty. troupe's own uncommitted events are almost always there, the
+actor doesn't need them, and the diff leaves them out anyway, so warning about them would be noise on every run.
 
 ### D9. Names, all in one place
 
