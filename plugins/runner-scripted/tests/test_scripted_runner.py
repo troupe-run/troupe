@@ -4,6 +4,7 @@ import hashlib
 import io
 import json
 import os
+import threading
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -380,6 +381,10 @@ def test_a_refused_request_that_could_be_read_is_answered_with_its_own_id(
 
 # Requirement: A script is a list of steps played in order
 
+INPUT_OPEN_LIMIT = 30.0
+"""How long a run with its input held open may take before the helper closes the input, so a
+script that never reaches its exit step fails the test rather than hanging it."""
+
 
 def _played_with_everything_queued(
     tmp_path: Path,
@@ -429,14 +434,30 @@ def _played_with_everything_queued(
         code = runner.serve()
     else:
         read_end, write_end = os.pipe()
+        lock = threading.Lock()
+        closed_late: list[bool] = []
+
+        def close_input(late: bool) -> None:
+            with lock:
+                if not closed_late:
+                    closed_late.append(late)
+                    os.close(write_end)  # end of input: the runner stops, the reader thread ends
+
+        timer = threading.Timer(INPUT_OPEN_LIMIT, close_input, args=(True,))
         with os.fdopen(read_end, "rb") as stdin:
             runner = Runner(stdin, stdout, io.BytesIO())
             for line in lines:  # every message is in the inbox before the first step
                 runner._inbox.put(line)
+            timer.start()
             try:
                 code = runner.serve()
             finally:
-                os.close(write_end)  # end of input, so the reader thread ends
+                timer.cancel()
+                close_input(False)
+        assert closed_late == [False], (
+            f"the script didn't reach its exit step within {INPUT_OPEN_LIMIT}s, so its input was "
+            f"closed; it sent {stdout.getvalue()!r}"
+        )
     return code, [json.loads(line) for line in stdout.getvalue().splitlines()]
 
 
