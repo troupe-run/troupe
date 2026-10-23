@@ -29,7 +29,8 @@ wrote.
 - **A recognised file is rewritten from the merged config,** which is worked out from both branches' events. So the
   file says what the merge says, not what either side said.
 - **Only an explicit command rewrites a recognised file** (owner, 2026-10-23): `troupe flush`, or the `troupe config
-  set` whose own change writes that file. Every other command that uses config refuses with
+  set` whose own change writes that file or resolves config's conflicts. The last is needed because `troupe flush`
+  can't run while config has a conflict (owner, 2026-10-23, after the merge property test found the deadlock). Every other command that uses config refuses with
   `config.file-not-troupes`. That includes `perform`, and a `config set` of an unrelated value. (Commands that only read, such as
   `status` and `config get`, don't flush, so they neither rewrite nor refuse it.) The refusal
   says the file is a merge of troupe's own versions, and that `troupe flush` rewrites it from the merged config and

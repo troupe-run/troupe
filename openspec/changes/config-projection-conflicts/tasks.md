@@ -76,6 +76,8 @@
     unmerged in git;
   - `troupe perform` refused, naming `troupe flush`, with the file unchanged and no run started;
   - `config set` of an unrelated value refused, naming `troupe flush`, with nothing recorded;
+  - the `config set` resolving a config conflict also rewriting a merged file its change doesn't write (found by
+    4.3's property test as a deadlock, and fixed as the owner chose);
   - a config conflict resolved by `config set`, with the conflicted bytes kept;
   - a half-done hand resolution kept under the named hash;
   - modify/delete;
@@ -87,7 +89,7 @@
 
   Turn today's conflicted-file test into the "A file git left conflicted" scenario: accepted, with no `git
   checkout --ours`. Each test asserts the rewritten file equals `render(merged config)` and differs from both sides.
-- [ ] 4.3 Add a property test in `test_config_merge_properties.py` (or a new `test_config_merge_files.py`), with a
+- [x] 4.3 Add a property test in `test_config_merge_properties.py` (or a new `test_config_merge_files.py`), with a
   small example budget since it drives real git. For generated changes to one actor on two branches, after
   `git merge` and one troupe command (`flush`, or `config set` when config conflicts), check that:
   - no file is refused;
@@ -98,7 +100,7 @@
 
 ## 5. Docs
 
-- [ ] 5.1 Replace the manual steps in `docs/stagecraft/hand-edit-config.md` (Branches) with what happens now: `troupe
+- [x] 5.1 Replace the manual steps in `docs/stagecraft/hand-edit-config.md` (Branches) with what happens now: `troupe
   flush` (or the `config set` that resolves a config conflict) rewrites the file from the merged config and keeps a
   copy, other commands refuse it and name `troupe flush`, and the person runs `git add` and commits (#156 will drop
   the `git add`). Say what's still refused (a side troupe didn't write, an edited or older merge) and its fix. Update

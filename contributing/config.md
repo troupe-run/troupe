@@ -50,6 +50,7 @@ file is troupe's:
 | What troupe would write now | nothing to do |
 | A hash a `Config.Changed` recorded for that path, or this clone's record of files flush wrote (`.troupe/local/config/written.jsonl`) | written again, with `config.file-rewritten` |
 | Nothing | written again, with `config.file-rewritten` |
+| A file git merged (conflicted, or cleanly in the merge in progress or HEAD's merge commit) from versions troupe recorded | written again from the merged config by `troupe flush`, or by the `config set` whose change writes it or resolves config's conflicts, its bytes kept first, with `config.merge-rewritten`; refused by any other command, naming `troupe flush` |
 | Anything else | refused with `config.file-not-troupes`, unless `--force`, which keeps its bytes in the artifact store |
 
 A change stages each new file beside its target (`.<name>.troupe~`), records the event with the files' hashes, then
@@ -81,7 +82,7 @@ reproduce, so it's refused as a hand edit is. The files adapter reports no merge
 |---|---|
 | `config.invalid` | A change would make config break a rule: an unknown field, an option its runner doesn't define, a missing effect check, a bad name. Names the path and the rule |
 | `config.conflict` | Branches' config changes conflict, so config can't be used until they're resolved |
-| `config.file-not-troupes` | A config file isn't one troupe wrote, so it won't be replaced. A file with git's conflict markers gets a fix that takes one side first, since `git restore` doesn't work on an unmerged path (#141) |
+| `config.file-not-troupes` | A config file isn't one troupe wrote, so it won't be replaced. A conflicted file with a side troupe didn't write names that side and the side to take; a file git merged from troupe's versions, met by a command other than `troupe flush` or the `config set` that writes it, names `troupe flush` |
 | `config.unknown-file` | A file in a config directory matches no kind of config file |
 | `config.local-malformed` | This clone's record of the files flush wrote has a malformed line before its last |
 | `schemas.plugin-missing` | A runner's package isn't installed, or ships no schemas |

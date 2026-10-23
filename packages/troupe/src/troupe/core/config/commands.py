@@ -9,8 +9,9 @@ each file's hash, then move the staged files into place. A crash between recordi
 finished by the next flush, since the event vouches for the staged files.
 
 A file git merged from versions troupe wrote is rewritten only by troupe flush, or by a config set
-whose change writes it; the flush every other command runs first refuses it, naming troupe flush
-(config-projection-conflicts design D7).
+whose change writes it or resolves config's conflicts (flush can't run until they're resolved); the
+flush every other command runs first refuses it, naming troupe flush (config-projection-conflicts
+design D7).
 """
 
 from collections.abc import Mapping
@@ -96,9 +97,19 @@ def sync_files(session: Session, store: EventStore, merged: Merged, send: Send) 
     return [*flushed.notices(), *store.notices()]
 
 
-def _writes(before: Mapping[str, bytes], after: Mapping[str, bytes]) -> frozenset[str]:
-    """The files a change writes or removes: those its config renders differently."""
-    return frozenset(p for p in before.keys() | after.keys() if before.get(p) != after.get(p))
+def _resolvable(
+    merged: Merged,
+    before: Mapping[str, bytes],
+    after: Mapping[str, bytes],
+    found: Mapping[str, Any],
+) -> frozenset[str]:
+    """The files git merged that a config set may rewrite (design D7): those its change writes or
+    removes, or every one when config has conflicts, since a change is only recorded when it
+    resolves them all, and until it does, troupe flush can't run."""
+    if merged.conflicts:
+        return frozenset(found)
+    writes = {p for p in before.keys() | after.keys() if before.get(p) != after.get(p)}
+    return frozenset(writes & found.keys())
 
 
 async def config_set(request: m.ConfigSetRequest, session: Session, send: Send) -> Message:
@@ -112,7 +123,7 @@ async def config_set(request: m.ConfigSetRequest, session: Session, send: Send) 
             refuse_unrecordable(store, merged, entries)
         rendered_after = render(apply(merged.config, entries))
         found = merges(store.vcs)
-        resolve = _writes(render(merged.config), rendered_after) & found.keys()
+        resolve = _resolvable(merged, render(merged.config), rendered_after, found)
         would = plan(troupe_dir, rendered_after, merged.files, merged=found, resolve=resolve)
         refuse(would)
         return m.ConfigSetResult(entries=entries, files=_files(would.changes, {}), notices=[])
@@ -121,9 +132,10 @@ async def config_set(request: m.ConfigSetRequest, session: Session, send: Send) 
         entries = change(merged.config, operations)
         after = apply(merged.config, entries) if entries else merged.config
         rendered_before, rendered_after = render(merged.config), render(after)
-        # A file git merged may be rewritten only when this change writes it (design D7).
+        # A file git merged may be rewritten only when this change writes it, or resolves config's
+        # conflicts (design D7).
         found = merges(store.vcs)
-        resolve = _writes(rendered_before, rendered_after) & found.keys()
+        resolve = _resolvable(merged, rendered_before, rendered_after, found)
         before: list[Notice] = []
         if not merged.conflicts:
             # Files right before the change, so the change's own files are written over troupe's.

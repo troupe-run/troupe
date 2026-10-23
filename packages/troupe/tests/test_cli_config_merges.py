@@ -265,6 +265,28 @@ def test_perform_refuses_a_conflicted_file_naming_flush_and_starts_no_run(repo: 
     assert cli("status") == (0, "No runs yet.\n", "")
 
 
+def test_the_config_set_resolving_a_conflict_rewrites_a_merged_file_its_change_doesnt_write(
+    repo: Repo,
+) -> None:
+    # Found by the merge property test: config conflicts in tester.md's character, and git also
+    # conflicts tester.yaml. The resolving config set writes only tester.md, and troupe flush can't
+    # run until config is resolved, so this config set must rewrite tester.yaml too.
+    _branches(
+        repo,
+        BASE,
+        [STEPS % 1, "actors.tester.character=One."],
+        ['actors.tester.expect=["out/other.txt"]', "actors.tester.character=Two."],
+    )
+    assert _merge(repo) != 0
+    assert sorted(_unmerged(repo)) == [MD, YAML]
+    conflicted = (repo.path / YAML).read_bytes()
+    code, _, err = cli("config", "set", "actors.tester.character=Both.")
+    assert code == 0, err
+    assert (repo.path / MD).read_bytes() == b"Both."
+    assert (repo.path / YAML).read_bytes() == render(_merged_config())["actors/tester.yaml"]
+    assert _kept(repo, file_hash(conflicted)) == conflicted
+
+
 def test_a_config_set_that_doesnt_write_the_file_is_refused_naming_flush_and_records_nothing(
     repo: Repo,
 ) -> None:

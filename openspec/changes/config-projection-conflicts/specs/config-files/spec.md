@@ -95,9 +95,8 @@ change git's index.
 
 ### Requirement: Only an explicit command rewrites a file git merged
 A file merged from troupe's versions SHALL be rewritten only by `troupe flush`, or by a `troupe config set` whose
-change writes that file. Every other command that uses config SHALL refuse it with `config.file-not-troupes`, saying
-the file is a merge of versions troupe wrote and that `troupe flush` rewrites it from the merged config, keeping a
-copy. So a file a person is resolving is never changed by a command they ran for something else.
+change writes that file or resolves config's conflicts. Any other command that uses config SHALL refuse it with
+`config.file-not-troupes`, saying that `troupe flush` rewrites it from the merged config, keeping a copy.
 
 #### Scenario: Another command refuses it and names flush
 - **WHEN** git left `.troupe/actors/tester.yaml` conflicted, config has no conflict, and a person runs `troupe
@@ -106,8 +105,16 @@ copy. So a file a person is resolving is never changed by a command they ran for
   `troupe flush` rewrites it from the merged config, keeping a copy
 - **AND** the file is unchanged, and the run doesn't start
 
+#### Scenario: The config set that resolves a conflict rewrites every merged file
+- **WHEN** two branches set `actors.tester.character` differently and also change `tester`'s options and effect
+  check, git leaves both `.troupe/actors/tester.md` and `.troupe/actors/tester.yaml` conflicted, and a person runs
+  `troupe config set actors.tester.character=Both.`
+- **THEN** the command is accepted, `.troupe/actors/tester.md` holds `Both.`, and `.troupe/actors/tester.yaml` is
+  what the merged config writes
+- **AND** each file's conflicted bytes are kept
+
 #### Scenario: A config set that doesn't write the file
-- **WHEN** git left `.troupe/actors/tester.md` conflicted, and a person runs `troupe config set
-  actors.reviewer.runner=scripted`
+- **WHEN** git left `.troupe/actors/tester.yaml` conflicted, config has no conflict, and a person runs `troupe config
+  set actors.reviewer.runner=scripted`
 - **THEN** it is refused with `config.file-not-troupes`, naming `troupe flush`
 - **AND** nothing is recorded or written
