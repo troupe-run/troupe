@@ -13,7 +13,7 @@ import pytest
 from conftest import REPO
 
 import release_config
-from release_config import CONFIG, LOCK, MANIFEST
+from release_config import CONFIG, LOCK, MANIFEST, PROTOCOL_RECORD
 
 
 @pytest.fixture
@@ -24,6 +24,8 @@ def copy(tmp_path: Path) -> Path:
     for path in release_config.members(REPO):
         (tmp_path / path).mkdir(parents=True)
         shutil.copy(REPO / path / "pyproject.toml", tmp_path / path / "pyproject.toml")
+    (tmp_path / PROTOCOL_RECORD).parent.mkdir(parents=True)
+    shutil.copy(REPO / PROTOCOL_RECORD, tmp_path / PROTOCOL_RECORD)
     return tmp_path
 
 
@@ -151,14 +153,15 @@ def test_a_plugin_in_the_linked_group_is_named(copy: Path) -> None:
     edit_json(copy, CONFIG, lambda c: group(c).append("troupe-runner-scripted"))
     assert release_config.problems(copy) == [
         f"troupe-runner-scripted is in the 'troupe' linked group in {CONFIG}, but only packages/* "
-        "members and protocol belong there: remove it."
+        "members belong there: remove it."
     ]
 
 
-def test_the_protocol_left_out_of_the_linked_group_is_named(copy: Path) -> None:
-    edit_json(copy, CONFIG, lambda c: group(c).remove("protocol"))
+def test_the_protocol_in_the_linked_group_is_named(copy: Path) -> None:
+    edit_json(copy, CONFIG, lambda c: group(c).append("protocol"))
     assert release_config.problems(copy) == [
-        f"protocol isn't in the 'troupe' linked group in {CONFIG}: add it to its 'components'."
+        f"protocol is in the 'troupe' linked group in {CONFIG}, but it's released on its own: "
+        "remove it from 'components'."
     ]
 
 
@@ -184,11 +187,67 @@ def test_a_protocol_entry_released_as_python_is_named(copy: Path) -> None:
     ]
 
 
-def test_a_protocol_entry_with_a_lock_update_is_named(copy: Path) -> None:
-    edit_json(copy, CONFIG, lambda c: c["packages"]["protocol"].update({"extra-files": []}))
+RECORD_UPDATE = {"type": "json", "path": f"/{PROTOCOL_RECORD}", "jsonpath": "$.version"}
+"""What keeps the recorded protocol version in step with a protocol release (design D2)."""
+
+
+@pytest.mark.parametrize(
+    "extra_files",
+    [
+        [],
+        [{**RECORD_UPDATE, "jsonpath": "$.protocol"}],
+        [RECORD_UPDATE, {"type": "toml", "path": "/uv.lock", "jsonpath": "$.version"}],
+    ],
+    ids=["none", "another-jsonpath", "an-extra-update"],
+)
+def test_a_protocol_entry_that_doesnt_update_the_record_exactly_is_named(
+    copy: Path, extra_files: list[dict[str, str]]
+) -> None:
+    edit_json(
+        copy, CONFIG, lambda c: c["packages"]["protocol"].update({"extra-files": extra_files})
+    )
     assert release_config.problems(copy) == [
-        f"protocol's entry in {CONFIG} has 'extra-files', but it isn't a Python package and has "
-        f"nothing in {LOCK}: remove them."
+        f"protocol's entry in {CONFIG} doesn't write the protocol version troupe records: make "
+        f"its 'extra-files' [{json.dumps(RECORD_UPDATE)}]."
+    ]
+
+
+def test_a_protocol_entry_with_no_extra_files_is_named(copy: Path) -> None:
+    edit_json(copy, CONFIG, lambda c: c["packages"]["protocol"].pop("extra-files"))
+    assert release_config.problems(copy) == [
+        f"protocol's entry in {CONFIG} doesn't write the protocol version troupe records: make "
+        f"its 'extra-files' [{json.dumps(RECORD_UPDATE)}]."
+    ]
+
+
+def test_a_missing_record_is_named_with_the_manifests_version(copy: Path) -> None:
+    (copy / PROTOCOL_RECORD).unlink()
+    assert release_config.problems(copy) == [
+        f'{PROTOCOL_RECORD} is missing: add it, holding {{"version": "0.0.0"}}, the protocol\'s '
+        f"version in {MANIFEST}."
+    ]
+
+
+@pytest.mark.parametrize(
+    "content",
+    [b"not json\n", b'["0.0.0"]\n', b'{"version": "0.0.0", "extra": 1}\n', b'{"version": 0}\n'],
+    ids=["not-json", "not-an-object", "an-extra-key", "not-a-string"],
+)
+def test_a_record_that_doesnt_hold_only_a_version_is_named(copy: Path, content: bytes) -> None:
+    (copy / PROTOCOL_RECORD).write_bytes(content)
+    assert release_config.problems(copy) == [
+        f'{PROTOCOL_RECORD} must hold only {{"version": "<version>"}}: set it to '
+        f'{{"version": "0.0.0"}}, the protocol\'s version in {MANIFEST}.'
+    ]
+
+
+def test_a_record_that_differs_from_the_manifest_names_both_files_and_versions(
+    copy: Path,
+) -> None:
+    (copy / PROTOCOL_RECORD).write_bytes(b'{"version": "0.2.0"}\n')
+    assert release_config.problems(copy) == [
+        f"{PROTOCOL_RECORD} records protocol 0.2.0, but {MANIFEST} has 0.0.0: a protocol "
+        "release pull request sets it. To correct it by hand, set it to 0.0.0."
     ]
 
 

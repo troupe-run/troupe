@@ -63,6 +63,25 @@ def test_a_schema_changed_without_its_copy_fails_the_check_naming_it_and_the_fix
     assert packager.main(["--check"], source=source, copy=copy) == 0
 
 
+def test_regenerating_and_checking_the_copy_leave_the_recorded_protocol_version_alone(
+    tmp_path: Path,
+) -> None:
+    # version.json sits beside the copy but is written only by a protocol release
+    # (protocol-own-release design D2), so the packager must neither delete nor report it.
+    source, copy = tmp_path / "source", tmp_path / "copy"
+    shutil.copytree(SCHEMAS, source)
+    shutil.copytree(schemas.PROTOCOL, copy)
+    record = copy / "version.json"
+    before = record.read_bytes()
+    (source / "error.schema.json").unlink()
+    assert packager.main([], source=source, copy=copy) == 0
+    assert record.read_bytes() == before
+    err = io.StringIO()
+    with redirect_stderr(err):
+        code = packager.main(["--check"], source=source, copy=copy)
+    assert code == 0, err.getvalue()
+
+
 def test_every_protocol_schema_is_found_by_its_id_from_the_packages_copy() -> None:
     registry = schemas.registry()
     for path in sorted(SCHEMAS.rglob("*.schema.json")):

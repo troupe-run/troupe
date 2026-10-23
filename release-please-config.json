@@ -15,8 +15,7 @@
         "troupe-stage-local",
         "troupe-store-text",
         "troupe-vcs-files",
-        "troupe-vcs-git",
-        "protocol"
+        "troupe-vcs-git"
       ]
     }
   ],
@@ -119,7 +118,14 @@
     },
     "protocol": {
       "release-type": "simple",
-      "component": "protocol"
+      "component": "protocol",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "/packages/troupe/src/troupe/protocol/version.json",
+          "jsonpath": "$.version"
+        }
+      ]
     }
   }
 }
