@@ -46,6 +46,7 @@ OVERRIDABLE_RULES = (
     "commit-on-main",
     "commit-branch-change",
     "commit-message",
+    "schema-commit-type",
     "commit-checks",
     "archive-incomplete",
     "edit-branch-change",
@@ -73,6 +74,10 @@ RELEASE_REPOSITORIES = frozenset({"troupe-run/troupe"})
 (tofu/release.tf). There, GitHub enforces who writes such a branch, so its name is proof; anywhere
 else, a fork included, anyone can use the name (open-release-exemption design D1;
 drop-forgery-resistance design D1)."""
+SCHEMA_PATHS = ("protocol/schemas/",)
+"""Where a change must release: troupe's protocol schemas, which release on their own and whose
+version troupe records (troupe-run/troupe#140). A repository without them is never refused for
+this (protocol-schema-commit-types design D1, #122)."""
 GUARD_DIR = "troupe-guard"
 CHECK_TIMEOUT_SECONDS = 600.0
 """How long the pre-commit check may run before the commit is refused. The default lives here
@@ -81,6 +86,11 @@ COMMIT_TYPES = (
     "feat", "fix", "docs", "build", "ci", "test", "refactor", "perf", "style", "chore", "revert",
 )  # fmt: skip
 COMMIT_PATTERN = re.compile(rf"^({'|'.join(COMMIT_TYPES)})(\([a-z0-9][a-z0-9-]*\))?!?: \S")
+RELEASING_TYPES = ("feat", "fix", "perf", "revert")
+"""The types release-please releases for, besides a breaking change of any type: the visible
+sections of DEFAULT_CHANGELOG_SECTIONS in its src/util/filter-commits.ts, which troupe doesn't
+override (protocol-schema-commit-types design D2)."""
+BREAKING_FOOTER = re.compile(r"^BREAKING[ -]CHANGE:", re.MULTILINE)
 AUTOSQUASH_PREFIXES = ("fixup! ", "squash! ", "amend! ")
 CLOSING = re.compile(
     r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):?\s+"
@@ -222,11 +232,7 @@ def commit_branch_change(root: Path, branch: str | None) -> Decision:
 def commit_message(message: str) -> Decision:
     lines = [line for line in message.splitlines() if not line.startswith("#")]
     first = next((line for line in lines if line.strip()), "")
-    target = first
-    while target.startswith(AUTOSQUASH_PREFIXES):
-        # git writes "fixup! <subject of the commit being fixed>": that subject must conform too.
-        target = target.split(" ", 1)[1]
-    if COMMIT_PATTERN.match(target):
+    if COMMIT_PATTERN.match(_conventional_subject(message)):
         return ALLOW
     example = "feat(cli): add --version"
     if first.startswith('Revert "'):
@@ -251,6 +257,47 @@ def pr_title(title: str) -> Decision:
         f"pull request title '{title}' isn't a Conventional Commit.",
         "Edit the title (gh pr edit <n> --title 'feat(cli): add --version', or on GitHub) to "
         f"start with a type, an optional (scope) and ': '. Types: {', '.join(COMMIT_TYPES)}.",
+    )
+
+
+def _conventional_subject(message: str) -> str:
+    """The first line a commit-message rule judges: comments dropped, and the subject a fixup,
+    squash or amend names in place of the fixup's own."""
+    lines = [line for line in message.splitlines() if not line.startswith("#")]
+    target = next((line for line in lines if line.strip()), "")
+    while target.startswith(AUTOSQUASH_PREFIXES):
+        # git writes "fixup! <subject of the commit being fixed>": that subject must conform too.
+        target = target.split(" ", 1)[1]
+    return target
+
+
+def schema_files(paths: Iterable[str]) -> list[str]:
+    """The paths under SCHEMA_PATHS, sorted."""
+    return sorted({path for path in paths if path.startswith(SCHEMA_PATHS)})
+
+
+def schema_commit_type(message: str, paths: Iterable[str]) -> Decision:
+    """Refuse a schema change under a type that releases nothing (#122; design D2, D6). A message
+    that isn't a Conventional Commit has no type to judge: that is commit-message's refusal."""
+    schemas = schema_files(paths)
+    match = COMMIT_PATTERN.match(_conventional_subject(message))
+    if not schemas or match is None:
+        return ALLOW
+    kind = match.group(1)
+    # The match ends with the subject's first character, so the header is what comes before it.
+    header = match.group(0)[:-1]
+    breaking = header.endswith("!: ") or BREAKING_FOOTER.search(message) is not None
+    if kind in RELEASING_TYPES or breaking:
+        return ALLOW
+    listed = ", ".join(schemas[:5]) + (f" and {len(schemas) - 5} more" if len(schemas) > 5 else "")
+    return Decision(
+        "schema-commit-type",
+        f"this commit changes protocol schemas ({listed}) under type '{kind}', which releases "
+        "nothing, so troupe would ship them under the old protocol version.",
+        f"Use a type that releases: {', '.join(RELEASING_TYPES)}, e.g. 'fix(protocol): <what "
+        "changed>'. A breaking change of any type is allowed too ('!' before the colon, or a "
+        "BREAKING CHANGE: footer). If the rest of the work shouldn't release, commit the schema "
+        "change on its own.",
     )
 
 
@@ -2676,6 +2723,32 @@ def nonconforming_commits(root: Path, commits: Iterable[str]) -> Decision:
     )
 
 
+def schema_commit_types(root: Path, commits: Iterable[str]) -> Decision:
+    """The schema-commit-type rule over many commits, each judged on its own changes, so a commit
+    amended, reworded or made with --no-verify is still caught (design D5)."""
+    bad: list[str] = []
+    for sha in commits:
+        message = git(root, "log", "-1", "--format=%B", sha)
+        # --root so a repository's first commit lists its files; --no-renames so a move lists both.
+        paths = git(
+            root, "diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", "--root", sha
+        ).splitlines()
+        if schema_commit_type(message, paths).refused:
+            first = next((line for line in message.splitlines() if line.strip()), "")
+            bad.append(f"{sha[:7]} '{first}' ({', '.join(schema_files(paths)[:5])})")
+    if not bad:
+        return ALLOW
+    listed = "; ".join(bad[:5]) + (f"; and {len(bad) - 5} more" if len(bad) > 5 else "")
+    return Decision(
+        "schema-commit-type",
+        f"{len(bad)} commit(s) change protocol schemas under a type that releases nothing: "
+        f"{listed}.",
+        f"Reword each to a type that releases ({', '.join(RELEASING_TYPES)}), or mark it "
+        "breaking: git commit --amend for the last commit, or git rebase with reword for earlier "
+        "ones. If the rest of a commit's work shouldn't release, split the schema change out.",
+    )
+
+
 def delivered_changes_by_others(
     root: Path, commits: Iterable[str], delivered: frozenset[str]
 ) -> Decision:
@@ -2714,7 +2787,7 @@ def run_ci(
     decides whether a release branch's name exempts it from the branch rule (open-release-exemption
     design D2; drop-forgery-resistance design D1, #47)."""
     commits = commits_in_range(root, base, head)
-    decisions = [nonconforming_commits(root, commits)]
+    decisions = [nonconforming_commits(root, commits), schema_commit_types(root, commits)]
     if title is not None:
         decisions.append(pr_title(title))
     if branch and branch != "main" and not reserved_release_branch(branch, repository):
@@ -2770,8 +2843,9 @@ def run_pre_push(root: Path, refs: Iterable[str]) -> int:
         local_ref, local_sha, _, remote_sha = parts
         if _is_null(local_sha):
             continue  # deleting a remote branch sends no commits
-        decision = nonconforming_commits(root, commits_in_range(root, remote_sha, local_sha))
-        refusal = first_refusal(root, [decision], f"push {local_ref}")
+        commits = commits_in_range(root, remote_sha, local_sha)
+        decisions = [nonconforming_commits(root, commits), schema_commit_types(root, commits)]
+        refusal = first_refusal(root, decisions, f"push {local_ref}")
         if refusal is not None:
             print(refusal.text(), file=sys.stderr)
             return 1
@@ -2913,10 +2987,34 @@ def run_check_scope(root: Path, paths: Iterable[str], stdout: TextIO | None = No
     return 0
 
 
+def committing_paths(root: Path) -> list[str]:
+    """The paths the commit being made changes. During `git commit -a` or `git commit <path>`, git
+    names the index it commits in GIT_INDEX_FILE, sometimes relative to the root; every other git
+    call here strips it (design D4)."""
+    env = _git_env()
+    index = os.environ.get("GIT_INDEX_FILE")
+    if index:
+        env["GIT_INDEX_FILE"] = str(root / index)
+    result = subprocess.run(
+        ["git", "diff", "--cached", "--name-only", "--no-renames"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=True,
+        env=env,
+    )
+    return result.stdout.splitlines()
+
+
 def run_commit_msg(root: Path, message_file: Path) -> int:
     message = message_file.read_text(encoding="utf-8")
     first = next((line for line in message.splitlines() if line.strip()), "")
-    refusal = first_refusal(root, [commit_message(message)], f"commit message: {first}")
+
+    def checks() -> Iterable[Decision]:
+        yield commit_message(message)
+        yield schema_commit_type(message, committing_paths(root))
+
+    refusal = first_refusal(root, checks(), f"commit message: {first}")
     if refusal is not None:
         print(refusal.text(), file=sys.stderr)
         return 1
