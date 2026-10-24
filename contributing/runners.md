@@ -6,9 +6,9 @@ and output. A runner can be written in any language. This page and the schemas i
 
 `troupe perform` runs an actor through a runner and records the run: see [contributing/runs.md](runs.md).
 
-troupe ships one runner so far, the [scripted runner](../plugins/runner-scripted/README.md), which tests use to
-produce every outcome on demand. A Claude Code runner and a local-model runner follow (decision
-[#16](https://github.com/troupe-run/troupe/issues/16)).
+troupe ships two runners: the [scripted runner](../plugins/runner-scripted/README.md), which tests use to produce
+every outcome on demand, and the [Claude Code runner](../plugins/runner-claude-code/README.md). A local-model runner
+follows (decision [#16](https://github.com/troupe-run/troupe/issues/16)).
 
 ## The contract
 
@@ -194,18 +194,26 @@ runner's schemas at run time yet; how it will is decided with config ([#60](http
 
 ### Mapping an engine: Claude Code
 
-How Claude Code's stream-json maps onto run events. The Claude Code runner implements this; the scripted runner's
-fixtures pin it.
+How Claude Code's stream-json maps onto run events. The
+[Claude Code runner](../plugins/runner-claude-code/README.md) implements this, and its fixtures pin it: real Claude Code
+output, each line paired with the events it maps to.
 
 | stream-json record | Run event |
 |---|---|
 | `system/init` | `init`, with the engine's name, version and model; the whole record stays in the transcript |
 | `assistant` message | A `turn` for its text, if it has any, then one `tool_call` per `tool_use` block. An API failure arrives this way too, as an `assistant` message with `error` set and the error's text as its content |
 | `rate_limit_event` | None while its status is `allowed` (the transcript keeps it); otherwise a `log` warning naming the status |
-| `user` message with `tool_result` blocks | one `tool_result` per block |
-| `system/api_retry` | `retry`: `authentication_failed` → `authentication`, HTTP 429 → `rate-limit`, connection errors → `network`, 5xx → `server` |
-| `result` | `result`, with `status` `error` whenever `is_error` is true, whatever `subtype` says. Its `usage` maps `input_tokens`, `output_tokens`, `cache_read_input_tokens` and `cache_creation_input_tokens` onto `inputTokens`, `outputTokens`, `cacheReadTokens` and `cacheWriteTokens` |
-| every line | one `run/transcript` record, verbatim |
+| `user` message with `tool_result` blocks | one `tool_result` per block. A block whose call was never reported is a `log` warning instead, since a `tool_result` needs its `tool_call` |
+| `system/api_retry` | `retry`: `authentication_failed` → `authentication`, HTTP 429 → `rate-limit`, 5xx → `server`, no HTTP status (a connection error, which Claude Code reports as `"error": "unknown"`) → `network`, anything else → `other` |
+| `result` | `result`, with `status` `error` whenever `is_error` is true, whatever `subtype` says. Its `usage` maps `input_tokens`, `output_tokens`, `cache_read_input_tokens` and `cache_creation_input_tokens` onto `inputTokens`, `outputTokens`, `cacheReadTokens` and `cacheWriteTokens`. Each tool in `permission_denials` is a `log` warning just before it |
+| a record type or `system` subtype not named here | a `log` at `debug` the first time it appears in the run, so a format change shows without failing the run |
+| a line that isn't a JSON object | a `log` warning |
+| every line | one `run/transcript` record, verbatim (`base64` if it isn't UTF-8), before any event it maps to |
+
+`init` comes first even when Claude Code writes something else first (2.1.302 writes `system/ui_invalidate` before
+its init): a `log` about an earlier record waits for `init`. Summaries (`turn` text, `inputSummary`,
+`outputSummary`, and log, retry and result messages) are cut on a character boundary to fit within
+`limits.eventMaxBytes`, ending with how many bytes were left out.
 
 ## How troupe runs a runner
 
