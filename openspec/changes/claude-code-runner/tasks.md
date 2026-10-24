@@ -32,7 +32,7 @@
   "runner-scripted/(fixtures|tools)"` finds nothing outside `openspec/changes/archive/`. These pass: `uv run pytest
   plugins/runner-claude-code/tests/test_fixtures.py plugins/runner-scripted/tests
   packages/troupe/tests/test_claude_fixtures.py`.
-- [ ] 2.2 Write a failing pairing test: every hand-written `result` event's `usage` has each counter its native
+- [x] 2.2 Write a failing pairing test: every hand-written `result` event's `usage` has each counter its native
   `result` record has. Run it to show `success-with-tools` and the error fixtures fail it. Then add the missing
   `cacheReadTokens` and `cacheWriteTokens` to those events, in a commit of its own that cites contributing/runners.md's
   table and 613ca5b. Verify: the new test passes, and `test_claude_fixtures.py` still derives every `expected.json`
