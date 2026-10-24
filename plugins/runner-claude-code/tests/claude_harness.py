@@ -12,6 +12,7 @@ import queue
 import subprocess
 import sys
 import threading
+import time
 import uuid
 from collections.abc import Mapping
 from functools import cache
@@ -87,6 +88,42 @@ def validate(instance: object, ref: str) -> None:
 
 def new_run_id() -> str:
     return str(uuid.uuid4())
+
+
+def wait_for_record(path: Path, key: str, timeout: float = TIMEOUT) -> dict[str, Any]:
+    """The stand-in claude's record at ``path`` once it holds ``key``. Fails after ``timeout``."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            record: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+        except OSError:  # not written yet, or (on Windows) being replaced at this moment
+            record = {}
+        if key in record:
+            return record
+        time.sleep(0.02)
+    raise AssertionError(f"the stand-in claude never recorded {key!r} in {path}")
+
+
+def alive(pid: int) -> bool:
+    """Whether ``pid`` names a running process, without a platform module of troupe's."""
+    if sys.platform == "win32":
+        import ctypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        handle = kernel32.OpenProcess(0x1000 | 0x00100000, False, pid)
+        if not handle:
+            return False
+        try:
+            return bool(kernel32.WaitForSingleObject(handle, 0) == 0x102)
+        finally:
+            kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
 
 
 def recording(name: str) -> list[dict[str, Any]]:
