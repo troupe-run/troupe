@@ -19,6 +19,8 @@ from pathlib import Path
 
 WINDOWS = sys.platform == "win32"
 
+_CREATE_SUSPENDED = 0x00000004
+
 _WINDOWS_STOPPED_EXIT_CODE = 1
 """The exit code a stopped Claude Code gets on Windows, where there is no signal to report."""
 
@@ -101,15 +103,27 @@ def start(argv: Sequence[str], cwd: Path, env: Mapping[str, str]) -> Claude:
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        # On Windows Claude Code starts suspended, so it is in its job before it can start a
+        # process of its own: a child started before the assignment would be outside the job.
+        creationflags=_CREATE_SUSPENDED if WINDOWS else 0,
     )
     job = None
     if WINDOWS:
         try:
             job = _new_job_for(process.pid)
         except OSError:
-            # Assignment can fail if Claude Code has already exited; stop() falls back to
-            # terminating the process, and troupe's own job still holds its children.
+            # stop() then falls back to terminating the process, and troupe's own job still
+            # holds whatever it starts.
             job = None
+        try:
+            _resume(process.pid)
+        except OSError:
+            # A process that can't be resumed would wait forever: end it, and say it didn't start.
+            process.kill()
+            process.wait()
+            if job is not None:
+                _close_job(job)
+            raise
     return Claude(process, job)
 
 
@@ -254,6 +268,54 @@ if sys.platform == "win32":
             raise
         return int(job)
 
+    _TH32CS_SNAPTHREAD = 0x00000004
+    _THREAD_SUSPEND_RESUME = 0x0002
+    _INVALID_HANDLE_VALUE = wintypes.HANDLE(-1).value
+
+    class _ThreadEntry(ctypes.Structure):
+        _fields_ = [  # the layout of THREADENTRY32
+            ("dwSize", wintypes.DWORD),
+            ("cntUsage", wintypes.DWORD),
+            ("th32ThreadID", wintypes.DWORD),
+            ("th32OwnerProcessID", wintypes.DWORD),
+            ("tpBasePri", wintypes.LONG),
+            ("tpDeltaPri", wintypes.LONG),
+            ("dwFlags", wintypes.DWORD),
+        ]
+
+    _kernel32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+    _kernel32.CreateToolhelp32Snapshot.argtypes = [wintypes.DWORD, wintypes.DWORD]
+    _kernel32.Thread32First.restype = wintypes.BOOL
+    _kernel32.Thread32First.argtypes = [wintypes.HANDLE, ctypes.POINTER(_ThreadEntry)]
+    _kernel32.Thread32Next.restype = wintypes.BOOL
+    _kernel32.Thread32Next.argtypes = [wintypes.HANDLE, ctypes.POINTER(_ThreadEntry)]
+    _kernel32.OpenThread.restype = wintypes.HANDLE
+    _kernel32.OpenThread.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    _kernel32.ResumeThread.restype = wintypes.DWORD
+    _kernel32.ResumeThread.argtypes = [wintypes.HANDLE]
+
+    def _resume(pid: int) -> None:
+        """Resume the threads of a process started suspended. Popen closes the thread handle
+        CreateProcess returned, so the threads are found through a Toolhelp snapshot."""
+        snapshot = _kernel32.CreateToolhelp32Snapshot(_TH32CS_SNAPTHREAD, 0)
+        if snapshot == _INVALID_HANDLE_VALUE:
+            raise ctypes.WinError(ctypes.get_last_error())
+        try:
+            entry = _ThreadEntry()
+            entry.dwSize = ctypes.sizeof(_ThreadEntry)
+            more = _kernel32.Thread32First(snapshot, ctypes.byref(entry))
+            while more:
+                if entry.th32OwnerProcessID == pid:
+                    thread = _kernel32.OpenThread(_THREAD_SUSPEND_RESUME, False, entry.th32ThreadID)
+                    _check(thread)
+                    try:
+                        _kernel32.ResumeThread(thread)
+                    finally:
+                        _kernel32.CloseHandle(thread)
+                more = _kernel32.Thread32Next(snapshot, ctypes.byref(entry))
+        finally:
+            _kernel32.CloseHandle(snapshot)
+
     def _terminate_job(job: int, grace: float) -> None:
         """Terminate every process in the job, and wait up to ``grace`` seconds until none is
         left: TerminateJobObject only starts the termination, and waiting for Claude Code's own
@@ -270,6 +332,9 @@ else:
 
     def _new_job_for(pid: int) -> int:
         raise NotImplementedError("POSIX children stay in the runner's process group")
+
+    def _resume(pid: int) -> None:
+        raise NotImplementedError("POSIX children aren't started suspended")
 
     def _terminate_job(job: int, grace: float) -> None:
         raise NotImplementedError("POSIX children are stopped with signals")
