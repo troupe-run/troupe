@@ -35,6 +35,7 @@ changes. `troupe --version` names the protocol version that troupe carries.
 
 Each plugin is released on its own, at its own version.
 
+- [troupe-runner-claude-code](https://github.com/troupe-run/troupe/blob/main/plugins/runner-claude-code/CHANGELOG.md)
 - [troupe-runner-scripted](https://github.com/troupe-run/troupe/blob/main/plugins/runner-scripted/CHANGELOG.md)
 
 Every release is also on [GitHub's releases page](https://github.com/troupe-run/troupe/releases).

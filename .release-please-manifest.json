@@ -6,6 +6,7 @@
   "packages/troupe-store-text": "0.0.0",
   "packages/troupe-vcs-files": "0.0.0",
   "packages/troupe-vcs-git": "0.0.0",
+  "plugins/runner-claude-code": "0.0.0",
   "plugins/runner-scripted": "0.0.0",
   "protocol": "0.0.0"
 }

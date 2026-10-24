@@ -2,16 +2,16 @@
 
 ## 1. Scaffold the plugin and wire it into the workspace (design D1)
 
-- [ ] 1.1 Create `plugins/runner-claude-code/`:
+- [x] 1.1 Create `plugins/runner-claude-code/`:
   - `pyproject.toml`: `troupe-runner-claude-code`, `0.0.1.dev0`, `requires-python` as the scripted runner's, no
     dependencies, and the script `troupe-runner-claude-code`;
   - `LICENSE` (Apache-2.0, copied);
   - a stub `README.md`;
   - `src/troupe_runner_claude_code/`, holding `__init__.py` (`NAME`, `__version__`), `__main__.py`, `py.typed` and
-    `defaults.py` with D11's four settings.
+    `defaults.py` with D11's four settings. `__main__.py` lands with `runner.py` (7.2), which it imports.
 
   Verify: `uv sync` succeeds and `uv run python -c "import troupe_runner_claude_code"` exits 0.
-- [ ] 1.2 Wire the member into the root `pyproject.toml`:
+- [x] 1.2 Wire the member into the root `pyproject.toml`:
   - `[tool.uv.sources]` and the dev group;
   - ruff `src`, mypy `files` and `mypy_path`, pytest `testpaths`;
   - import-linter `root_packages`, the source modules of `plugins import nothing from troupe`, and a new contract
