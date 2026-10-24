@@ -1,6 +1,6 @@
 [project]
 name = "troupe-vcs-git"
-version = "0.0.1.dev0"
+version = "0.1.0"
 description = "troupe's git adapter: branch, HEAD, what is committed and the configured identity, read through git."
 readme = "README.md"
 license = "Apache-2.0"
