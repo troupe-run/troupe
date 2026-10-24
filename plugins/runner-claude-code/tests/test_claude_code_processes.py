@@ -92,14 +92,26 @@ def test_stop_on_windows_ends_the_grandchild_a_cmd_shim_starts(tmp_path: Path) -
         f'@"{getattr(sys, "_base_executable", sys.executable)}" "{script}" %*\r\n', encoding="utf-8"
     )
     child = processes.start([str(shim)], tmp_path, dict(os.environ))
+    assert child._job is not None, "Claude Code wasn't given a job of its own"  # a precondition
     deadline = time.monotonic() + MARGIN
-    while not pid_file.exists() and time.monotonic() < deadline:
+    while not (pid_file.exists() and pid_file.read_text()) and time.monotonic() < deadline:
         time.sleep(0.02)
     assert pid_file.exists(), "the shim never started its grandchild"
     grandchild = int(pid_file.read_text())
+    assert _alive(grandchild), "the grandchild ended before the stop"  # a precondition
+    started = time.monotonic()
     child.stop(STOP_GRACE)
+    stopped = time.monotonic() - started
+    alive_after_stop = _alive(grandchild)
     child.release()
-    assert not _alive(grandchild)
+    later = time.monotonic() + MARGIN
+    while _alive(grandchild) and time.monotonic() < later:
+        time.sleep(0.05)
+    assert not alive_after_stop, (
+        f"the grandchild {grandchild} was alive after a stop of {stopped:.2f}s; "
+        f"{'it ended within' if not _alive(grandchild) else 'it was still alive after'} "
+        f"{MARGIN:g}s more"
+    )
 
 
 def test_find_claude_finds_the_program_on_an_absolute_path_entry(tmp_path: Path) -> None:
