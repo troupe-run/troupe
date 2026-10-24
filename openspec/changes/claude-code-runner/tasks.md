@@ -103,7 +103,7 @@
 
 ## 6. Claude Code's command line and the OS seam (design D3, D4, D6, D9)
 
-- [ ] 6.1 Add `command.py`: from `Options`, the character, the direction and a fresh private directory, build the
+- [x] 6.1 Add `command.py`: from `Options`, the character, the direction and a fresh private directory, build the
   argv, the stdin bytes, the character file and the settings file, as D3 and D4 describe. Verify with
   `test_command.py`:
   - the fixed flags;
