@@ -1,5 +1,5 @@
 """Real Claude Code output, replayed by the scripted runner through the run host (spec:
-scripted-runner, "Fixtures replay through the contract")."""
+claude-code-runner, "Fixtures replay through the contract")."""
 
 import asyncio
 import json
@@ -17,7 +17,7 @@ from troupe.core.runners.host import RunnerCommand, RunRequest, run_actor
 from troupe.core.runners.limits import RunLimits
 from troupe.core.runners.outcome import RunOutcome
 
-FIXTURES = Path(__file__).resolve().parents[3] / "plugins" / "runner-scripted" / "fixtures"
+FIXTURES = Path(__file__).resolve().parents[3] / "plugins" / "runner-claude-code" / "fixtures"
 NAMES = sorted(path.name for path in (FIXTURES / "claude-code").iterdir() if path.is_dir())
 
 
