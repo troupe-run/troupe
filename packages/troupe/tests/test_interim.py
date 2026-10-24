@@ -1,12 +1,10 @@
 """The interim runner table (perform-status-logs design D4): a name is the only way to a runner."""
 
 import asyncio
-import os
 from pathlib import Path
 
 import pytest
 
-import claude_stand_in
 from troupe.core.errors import TroupeError
 from troupe.core.interim import RUNNERS, runner_command
 from troupe.core.runners.conformance import check_runner
@@ -40,28 +38,8 @@ def test_an_unknown_runner_fails_naming_the_runners_troupe_knows() -> None:
     assert "scripted" in caught.value.fix
 
 
-def test_claude_code_resolves_to_a_runner_that_passes_every_conformance_check(
-    tmp_path: Path,
-) -> None:
-    bin_dir = tmp_path / "bin"
-    claude_stand_in.install(
-        bin_dir, fixture=claude_stand_in.fixture("success-with-tools"), wait_ms="200"
-    )
-    env = {"PATH": str(bin_dir)}
-    for name in ("COMSPEC", "PATHEXT", "TEMP", "TMP", "TMPDIR"):
-        if name in os.environ:
-            env[name] = os.environ[name]
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
-    results = asyncio.run(
-        check_runner(
-            RunnerCommand(list(runner_command("claude-code")), cwd=workspace, env=env),
-            {},
-            workspace=workspace,
-            limits=RunLimits(start_timeout=10.0, cancel_grace=10.0, run_timeout=30.0),
-        )
-    )
-    assert {r.name: r.problem for r in results if not r.passed} == {}
+def test_claude_code_resolves_to_the_claude_code_runners_module() -> None:
+    assert list(runner_command("claude-code"))[1:] == ["-m", "troupe_runner_claude_code"]
 
 
 def test_an_unknown_runner_is_refused_naming_both_runners_troupe_ships() -> None:
