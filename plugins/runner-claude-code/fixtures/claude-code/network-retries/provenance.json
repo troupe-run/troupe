@@ -1,0 +1,41 @@
+{
+  "fixture": "network-retries",
+  "claudeCodeVersion": "2.1.302",
+  "date": "2026-10-24",
+  "command": [
+    "claude",
+    "-p",
+    "say hi",
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--no-session-persistence",
+    "--bare",
+    "--model",
+    "claude-haiku-5-5"
+  ],
+  "environment": [
+    "ANTHROPIC_BASE_URL",
+    "CLAUDE_CODE_DISABLE_AUTO_MEMORY",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+    "CLAUDE_CODE_MAX_RETRIES",
+    "CLAUDE_CONFIG_DIR",
+    "DISABLE_AUTOUPDATER",
+    "HOME",
+    "PATH",
+    "ANTHROPIC_API_KEY (deliberately invalid)"
+  ],
+  "credential": "none: nothing listened at the API's address, and the key was invalid",
+  "exitCode": 1,
+  "terminatedWith": null,
+  "scrubbing": [
+    "the temporary workspace -> /workspace",
+    "the temporary home and config directories -> ~",
+    "the capturing user's home directory -> ~, and their login name -> user",
+    "the fake API's port -> 8080",
+    "every UUID (session ids, message ids) -> 00000000-0000-4000-8000-<n>, consistently",
+    "messaging_socket_path (a host path outside the workspace) -> '<host path>'",
+    "rate_limit_info: every utilization -> 0.5, every resetsAt -> 1790000000 (the account's usage isn't published)"
+  ],
+  "events": "written by hand from the native lines, following the mapping in contributing/runners.md and claude-code-runner design D5, and reviewed"
+}

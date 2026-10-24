@@ -40,7 +40,7 @@
 
 ## 3. Capture the three new retry fixtures offline (design D13)
 
-- [ ] 3.1 Extend `capture_claude.py`:
+- [x] 3.1 Extend `capture_claude.py`:
   - the fake API takes a status to answer with (401 as now, 429 with `retry-after: 0`, or 529);
   - a mode points `ANTHROPIC_BASE_URL` at a port nobody listens on;
   - three fixtures: `server-retries`, `rate-limit-retries` and `network-retries`, each with
@@ -48,7 +48,7 @@
 
   Verify: running the tool for each writes `recording.jsonl` and `provenance.json`, the provenance says no credential
   was used, and the secret scan passes.
-- [ ] 3.2 Hand-write each new fixture's events and `expected.json` from its native lines, using D5's retry-reason
+- [x] 3.2 Hand-write each new fixture's events and `expected.json` from its native lines, using D5's retry-reason
   rules. Record in each provenance that the events are hand-written and reviewed. Extend
   `test_there_are_fixtures_for_each_failure_shape` to name the three. Verify: `test_fixtures.py` passes, and
   `test_claude_fixtures.py` replays each through the scripted runner to the outcome its `expected.json` states.

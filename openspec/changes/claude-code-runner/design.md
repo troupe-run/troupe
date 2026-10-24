@@ -164,7 +164,8 @@ The mapping, beyond the contract's table:
 | Native | Events |
 |---|---|
 | `system/init` | `init`: runner `claude-code` and `__version__`; `tools`; engine `{name: "claude-code", version: claude_code_version, model}`, leaving out any engine field the record lacks |
-| any event-producing line before `system/init` | first a synthetic `init` with no `engine` and `tools: []` |
+| a line before `system/init` | a `log` it maps to is held and sent straight after `init`. Any other event first sends a synthetic `init` with no `engine` and `tools: []`. Claude Code 2.1.302 writes `system/ui_invalidate` before its init, so an unmapped record there must not force a synthetic `init` (found capturing `server-retries`) |
+| `system/init` after a synthetic `init` | a `log` info naming the engine's version and model, since only one `init` may be sent |
 | `assistant` | `turn` (the text blocks joined with `\n`, sent only if non-empty), then a `tool_call` per `tool_use`, with `inputSummary` the compact JSON of `input`. `thinking` and other blocks are transcript only. `parent_tool_use_id` (a subagent's messages) is mapped the same way: the contract has no nesting |
 | `user` | a `tool_result` per `tool_result` block. The text is the content string, or a list's `text` blocks joined with `\n`. Each non-text block counts as its compact JSON's bytes. `outputBytes` is the UTF-8 length. For an unknown `tool_use_id`, a `log` warning (the host would refuse the pair) |
 | `system/api_retry` | `retry`. The reason, taking the first rule that matches: `error == "authentication_failed"` → `authentication`; status 429 → `rate-limit`; status 500–599 → `server`; status null → `network`; else `other`. `message` is `"<error> (HTTP <status>)"` or `"<error> (no HTTP response)"`. `maxAttempts` is sent only when `max_retries` is a positive integer |

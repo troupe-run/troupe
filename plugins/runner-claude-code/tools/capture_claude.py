@@ -9,6 +9,9 @@ Anthropic):
     is-error-success-subtype  the key is refused, no retries: init, then an error under "success"
     auth-retries              the same with two retries: api_retry events, then the error result
     terminated-no-result      retries, then SIGTERM during the backoff: no result at all
+    server-retries            the fake API answers 529 (overloaded): two retries, then the error
+    rate-limit-retries        the fake API answers 429 (rate limited): two retries, then the error
+    network-retries           nothing listens at the API's address: two retries, then the error
 
 The one fixture that needs a real credential is captured by the owner, never in an agent session:
     success-with-tools        needs CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY: one short run
@@ -24,6 +27,7 @@ import os
 import re
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -43,17 +47,30 @@ OFFLINE_PROMPT = "say hi"
 UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 
 
-class _RefuseEveryKey(http.server.BaseHTTPRequestHandler):
-    """A stand-in for api.anthropic.com that refuses the key, so no request ever succeeds."""
+ERRORS = {
+    401: ("authentication_error", "invalid x-api-key"),
+    429: ("rate_limit_error", "Number of requests has exceeded your rate limit"),
+    529: ("overloaded_error", "Overloaded"),
+}
+"""What the fake API answers with, by status: the Anthropic API's error type and message."""
+
+
+class _RefuseEveryRequest(http.server.BaseHTTPRequestHandler):
+    """A stand-in for api.anthropic.com that answers every request with one error, so no request
+    ever succeeds and nothing reaches Anthropic."""
+
+    status = 401
 
     def _refuse(self) -> None:
         self.rfile.read(int(self.headers.get("content-length") or 0))
-        self.send_response(401)
+        kind, message = ERRORS[self.status]
+        self.send_response(self.status)
         self.send_header("content-type", "application/json")
+        if self.status == 429:
+            self.send_header("retry-after", "0")
         self.end_headers()
         self.wfile.write(
-            b'{"type":"error","error":{"type":"authentication_error",'
-            b'"message":"invalid x-api-key"}}'
+            json.dumps({"type": "error", "error": {"type": kind, "message": message}}).encode()
         )
 
     do_GET = do_POST = _refuse  # noqa: N815 - the names http.server dispatches to
@@ -62,10 +79,18 @@ class _RefuseEveryKey(http.server.BaseHTTPRequestHandler):
         pass
 
 
-def _fake_api() -> tuple[http.server.ThreadingHTTPServer, str]:
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _RefuseEveryKey)
+def _fake_api(status: int) -> tuple[http.server.ThreadingHTTPServer, str]:
+    handler = type("_Refuse", (_RefuseEveryRequest,), {"status": status})
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     return server, f"http://127.0.0.1:{server.server_address[1]}"
+
+
+def _unused_port() -> int:
+    """A local port nothing listens on: bound, then released, so a connection to it is refused."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        return int(probe.getsockname()[1])
 
 
 class Scrubber:
@@ -171,6 +196,9 @@ def capture(fixture: str, out: Path) -> None:
         "is-error-success-subtype",
         "auth-retries",
         "terminated-no-result",
+        "server-retries",
+        "rate-limit-retries",
+        "network-retries",
         "success-with-tools",
     }:
         sys.exit(f"capture: unknown fixture {fixture!r}")
@@ -194,6 +222,7 @@ def capture(fixture: str, out: Path) -> None:
     }
     flags = ["--output-format", "stream-json", "--verbose", "--no-session-persistence"]
     server = None
+    port: int | None = None
     if owner_run:
         for name in ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY"):
             if name in os.environ:
@@ -216,13 +245,21 @@ def capture(fixture: str, out: Path) -> None:
         ]
         env["CLAUDE_CODE_MAX_RETRIES"] = "2"
     else:
-        server, base_url = _fake_api()
-        env["ANTHROPIC_BASE_URL"] = base_url
+        if fixture == "network-retries":
+            port = _unused_port()
+        else:
+            status = {"server-retries": 529, "rate-limit-retries": 429}.get(fixture, 401)
+            server, _ = _fake_api(status)
+            port = server.server_address[1]
+        env["ANTHROPIC_BASE_URL"] = f"http://127.0.0.1:{port}"
         env["ANTHROPIC_API_KEY"] = "sk-troupe-capture-deliberately-invalid"
         env["CLAUDE_CODE_MAX_RETRIES"] = {
             "is-error-success-subtype": "0",
             "auth-retries": "2",
             "terminated-no-result": "10",
+            "server-retries": "2",
+            "rate-limit-retries": "2",
+            "network-retries": "2",
         }[fixture]
         prompt = OFFLINE_PROMPT
         flags += ["--bare", "--model", MODEL]
@@ -259,8 +296,8 @@ def capture(fixture: str, out: Path) -> None:
         user_home: "~",
         os.environ.get("USER", "nobody-at-all"): "user",
     }
-    if server is not None:
-        replacements[f"127.0.0.1:{server.server_address[1]}"] = "127.0.0.1:8080"
+    if port is not None:
+        replacements[f"127.0.0.1:{port}"] = "127.0.0.1:8080"
     scrub = Scrubber(replacements)
     out.mkdir(parents=True, exist_ok=True)
     with (out / "recording.jsonl").open("w", encoding="utf-8") as recording:
@@ -281,7 +318,11 @@ def capture(fixture: str, out: Path) -> None:
             if owner_run
             else ["ANTHROPIC_API_KEY (deliberately invalid)"]
         ),
-        "credential": "owner" if owner_run else "none: a local fake API refused an invalid key",
+        "credential": "owner"
+        if owner_run
+        else "none: nothing listened at the API's address, and the key was invalid"
+        if fixture == "network-retries"
+        else "none: a local fake API refused an invalid key",
         "exitCode": exit_code,
         "terminatedWith": "SIGTERM during the retry backoff" if terminated else None,
         "scrubbing": scrub.describe(),

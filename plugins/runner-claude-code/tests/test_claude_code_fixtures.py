@@ -43,6 +43,9 @@ def test_there_are_fixtures_for_each_failure_shape() -> None:
         "is-error-success-subtype",
         "auth-retries",
         "terminated-no-result",
+        "server-retries",
+        "rate-limit-retries",
+        "network-retries",
         "success-with-tools",
     } <= set(NAMES)
 
