@@ -42,7 +42,9 @@ def install(bin_dir: Path, settings: Mapping[str, str] | None = None) -> Path:
     if sys.platform == "win32":
         shim = bin_dir / "claude.cmd"
         lines = [f'@set "{name}={value}"' for name, value in settings.items()]
-        lines.append(f'@"{sys.executable}" "{here}" %*')
+        # The base interpreter, not the venv's python.exe, a launcher that runs the real one as a
+        # child in a job of its own: the recorded pid is then Claude Code's stand-in itself.
+        lines.append(f'@"{getattr(sys, "_base_executable", sys.executable)}" "{here}" %*')
         shim.write_text("\r\n".join(lines) + "\r\n", encoding="utf-8")
     else:
         shim = bin_dir / "claude"
