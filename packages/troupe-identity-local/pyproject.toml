@@ -1,6 +1,6 @@
 [project]
 name = "troupe-identity-local"
-version = "0.0.1.dev0"
+version = "0.1.0"
 description = "troupe's local identity sources: the TROUPE_ACTOR override, the VCS-configured identity and the OS login."
 readme = "README.md"
 license = "Apache-2.0"

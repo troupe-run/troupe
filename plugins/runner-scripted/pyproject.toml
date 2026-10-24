@@ -1,6 +1,6 @@
 [project]
 name = "troupe-runner-scripted"
-version = "0.0.1.dev0"
+version = "0.1.0"
 description = "A deterministic actor runner for troupe's tests: plays a script or replays a recording."
 readme = "README.md"
 license = "Apache-2.0"
