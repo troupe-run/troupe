@@ -102,3 +102,33 @@ def test_every_fixture_pairs_each_native_line_with_events_and_states_its_outcome
     assert any("event" in line for line in lines)
     expected = json.loads((FIXTURES / name / "expected.json").read_text(encoding="utf-8"))
     assert {"outcome", "errorCode", "exitCode", "withoutFailFast"} <= expected.keys()
+
+
+USAGE_COUNTERS = {
+    "input_tokens": "inputTokens",
+    "output_tokens": "outputTokens",
+    "cache_read_input_tokens": "cacheReadTokens",
+    "cache_creation_input_tokens": "cacheWriteTokens",
+}
+"""The contract's usage mapping (contributing/runners.md, "Mapping an engine: Claude Code")."""
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_each_result_events_usage_has_every_counter_its_native_result_record_has(
+    name: str,
+) -> None:
+    lines = [
+        json.loads(line)
+        for line in (FIXTURES / name / "recording.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    native = [json.loads(line["transcript"]) for line in lines if "transcript" in line]
+    native_results = [record for record in native if record.get("type") == "result"]
+    events = [line["event"] for line in lines if line.get("event", {}).get("type") == "result"]
+    assert len(native_results) == len(events)
+    for record, event in zip(native_results, events, strict=True):
+        expected = {
+            ours: record["usage"][theirs]
+            for theirs, ours in USAGE_COUNTERS.items()
+            if isinstance(record.get("usage", {}).get(theirs), int)
+        }
+        assert event.get("usage", {}) == expected
