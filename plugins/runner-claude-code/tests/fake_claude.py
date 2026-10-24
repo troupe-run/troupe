@@ -11,6 +11,10 @@ own environment on):
 - ``FAKE_CLAUDE_FIXTURE``: a fixture's ``recording.jsonl``, whose native lines it writes, or a
   ``.txt`` file whose lines it writes as they are.
 - ``FAKE_CLAUDE_STDERR``: text to write to standard error.
+- ``FAKE_CLAUDE_WAIT_MS``: how long to wait before writing its lines, so a cancel can arrive
+  mid-run.
+- ``FAKE_CLAUDE_WRITE``: ``path=content``, a file to write under its working directory, as an
+  agent's tool would.
 - ``FAKE_CLAUDE_HANG``: ``1`` to wait, after writing its lines, until it is stopped.
 - ``FAKE_CLAUDE_EXIT``: the exit code, 0 by default.
 
@@ -19,24 +23,35 @@ It exits 143 on SIGTERM without writing anything more, as the real CLI does.
 
 import json
 import os
+import shlex
 import signal
 import sys
 import time
+from collections.abc import Mapping
 from pathlib import Path
 
 
-def install(bin_dir: Path) -> Path:
+def install(bin_dir: Path, settings: Mapping[str, str] | None = None) -> Path:
     """Put a ``claude`` that runs this stand-in in ``bin_dir``, and return it: an executable
     script on POSIX, which execs Python so the pid is Claude Code's, and ``claude.cmd`` on
-    Windows."""
+    Windows. ``settings`` (``FAKE_CLAUDE_*`` variables) are set by the shim itself, for runs whose
+    environment troupe chooses, such as perform's."""
     bin_dir.mkdir(parents=True, exist_ok=True)
     here = Path(__file__).resolve()
+    settings = settings or {}
     if sys.platform == "win32":
         shim = bin_dir / "claude.cmd"
-        shim.write_text(f'@"{sys.executable}" "{here}" %*\r\n', encoding="utf-8")
+        lines = [f'@set "{name}={value}"' for name, value in settings.items()]
+        lines.append(f'@"{sys.executable}" "{here}" %*')
+        shim.write_text("\r\n".join(lines) + "\r\n", encoding="utf-8")
     else:
         shim = bin_dir / "claude"
-        shim.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{here}" "$@"\n', encoding="utf-8")
+        lines = [
+            "#!/bin/sh",
+            *(f"export {name}={shlex.quote(value)}" for name, value in settings.items()),
+        ]
+        lines.append(f'exec "{sys.executable}" "{here}" "$@"')
+        shim.write_text("\n".join(lines) + "\n", encoding="utf-8")
         shim.chmod(0o755)
     return shim
 
@@ -90,8 +105,14 @@ def main() -> None:
     if record_path:
         _write_record(record_path, record)
     if stderr := os.environ.get("FAKE_CLAUDE_STDERR"):
-        sys.stderr.write(stderr)
+        sys.stderr.buffer.write(stderr.encode("utf-8"))  # bytes, so Windows adds no \r
         sys.stderr.flush()
+    if write := os.environ.get("FAKE_CLAUDE_WRITE"):
+        relative, _, content = write.partition("=")
+        target = Path.cwd() / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+    time.sleep(int(os.environ.get("FAKE_CLAUDE_WAIT_MS", "0")) / 1000)
     if fixture := os.environ.get("FAKE_CLAUDE_FIXTURE"):
         out = sys.stdout.buffer
         for line in _lines(Path(fixture)):

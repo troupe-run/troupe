@@ -36,7 +36,7 @@ from troupe.core.errors import TroupeError
 from troupe.core.events import Command, EventStore
 from troupe.core.files import directory_lock
 from troupe.core.identity import Identity
-from troupe.core.interim import runner_command
+from troupe.core.interim import runner_command, runner_environment
 from troupe.core.notices import Notice
 from troupe.core.policy import read_policy
 from troupe.core.runners import protocol as p
@@ -316,7 +316,9 @@ async def perform(
             cancel,
         )
         outcome = await run_actor(
-            RunnerCommand(list(argv), cwd=workspace),
+            RunnerCommand(
+                list(argv), cwd=workspace, env=runner_environment(what.runner, session.env)
+            ),
             RunRequest(run_id, direction, workspace, what.options, character=what.character),
             store=artifacts,
             effect=effect_check_for(what.effect_check, workspace),

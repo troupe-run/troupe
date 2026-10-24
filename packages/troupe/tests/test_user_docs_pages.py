@@ -3,6 +3,7 @@ design D6)."""
 
 import io
 import json
+import os
 import re
 import shlex
 import tomllib
@@ -11,6 +12,7 @@ from typing import get_args
 
 import pytest
 
+import claude_stand_in
 from gitrepo import Repo
 from runtesting import ADA, theatre
 from troupe.cli import main
@@ -28,12 +30,16 @@ BLOCK = re.compile(
 )
 
 
-def blocks(page: str) -> list[tuple[str, str, str]]:
-    """Each fenced block in a page: its language, its meta (such as ``title="x"``) and its text."""
-    text = (DOCS / page).read_text(encoding="utf-8")
+def blocks_in(text: str) -> list[tuple[str, str, str]]:
+    """Each fenced block in ``text``: its language, its meta (such as ``title="x"``) and text."""
     return [
         (m.group("lang"), m.group("meta").strip(), m.group("body")) for m in BLOCK.finditer(text)
     ]
+
+
+def blocks(page: str) -> list[tuple[str, str, str]]:
+    """Each fenced block in a page."""
+    return blocks_in((DOCS / page).read_text(encoding="utf-8"))
 
 
 def cli(*argv: str) -> tuple[int, str, str]:
@@ -64,6 +70,7 @@ def test_the_first_performance_runs_as_written_and_writes_its_file(
     json.loads(script)  # the reader copies it as it is: it must be JSON
     (fresh.path / "hello.json").write_text(script, encoding="utf-8")
     lines = [line for lang, _, body in blocks(page) if lang == "sh" for line in body.splitlines()]
+    lines = lines[: lines.index(CLAUDE_CODE_DEFINE)]  # the scripted walkthrough, before Claude Code
     assert lines == [
         "troupe config set actors.tester.runner=scripted actors.tester.options=@hello.json "
         "'actors.tester.expect=[\"out/hello.txt\"]'",
@@ -105,6 +112,46 @@ def test_the_first_performance_runs_as_written_and_writes_its_file(
     assert "wrote out/hello.txt" in out
 
 
+CLAUDE_CODE_DEFINE = (
+    "troupe config set actors.writer.runner=claude-code actors.writer.options=@claude.json "
+    "'actors.writer.expect=[\"out/hello.txt\"]'"
+)
+
+
+def test_the_claude_code_section_runs_as_written_with_a_stand_in_claude(
+    fresh: Repo, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    page = "opening-night/first-performance.md"
+    text = section(page, "Run Claude Code instead")
+    (options,) = [body for lang, meta, body in blocks_in(text) if meta == 'title="claude.json"']
+    assert set(json.loads(options)) == {"permissionMode", "allowedTools", "maxBudgetUsd"}
+    (fresh.path / "claude.json").write_text(options, encoding="utf-8")
+    lines = [
+        line for lang, _, body in blocks_in(text) if lang == "sh" for line in body.splitlines()
+    ]
+    assert lines == [
+        CLAUDE_CODE_DEFINE,
+        "git add -A",
+        'git commit -m "Add the writer actor"',
+        'troupe perform writer --direction "Create out/hello.txt containing hello"',
+    ]
+    bin_dir = tmp_path / "bin"
+    claude_stand_in.install(
+        bin_dir,
+        fixture=claude_stand_in.fixture("success-with-tools"),
+        write="out/hello.txt=hello\n",
+    )
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv(env_name(ALLOW_UNENFORCED_LOCAL_STAGE), "true")
+    code, _, err = cli(*shlex.split(lines[0])[1:])
+    assert code == 0, err
+    fresh.git(*shlex.split(lines[1])[1:])
+    fresh.git(*shlex.split(lines[2])[1:])
+    code, out, err = cli(*shlex.split(lines[3])[1:])
+    assert code == 0, err
+    assert out == f"run {out.split()[1]} succeeded\n"
+
+
 def test_the_first_performance_is_refused_until_the_policy_is_set(fresh: Repo) -> None:
     page = "opening-night/first-performance.md"
     (script,) = [body for _, meta, body in blocks(page) if meta == 'title="hello.json"']
@@ -114,7 +161,7 @@ def test_the_first_performance_is_refused_until_the_policy_is_set(fresh: Repo) -
         for lang, _, body in blocks(page)
         if lang == "sh"
         for line in body.splitlines()
-        if line.startswith("troupe config set")
+        if line.startswith("troupe config set actors.tester")
     ]
     assert cli(*shlex.split(define)[1:])[0] == 0
     code, out, err = cli("perform", "tester")

@@ -52,6 +52,26 @@ def test_an_option_the_runner_doesnt_define_is_refused_naming_the_runners_schema
     assert "the scripted runner's options schema" in error.problem
 
 
+def test_a_claude_code_actor_with_valid_options_is_accepted() -> None:
+    options = {
+        "permissionMode": "acceptEdits",
+        "allowedTools": ["Bash(git status)"],
+        "maxBudgetUsd": 2,
+    }
+    check(_actor(runner="claude-code", options=options))
+
+
+def test_an_option_the_claude_code_runner_doesnt_define_is_refused_naming_its_schema() -> None:
+    error = _refused(_actor(runner="claude-code", options={"speed": 2}))
+    assert error.details["path"] == ["actors", "tester", "options", "speed"]
+    assert "the claude-code runner's options schema" in error.problem
+
+
+def test_a_claude_code_option_of_the_wrong_shape_is_refused_naming_its_path() -> None:
+    error = _refused(_actor(runner="claude-code", options={"permissionMode": "yolo"}))
+    assert error.details["path"] == ["actors", "tester", "options", "permissionMode"]
+
+
 def test_an_actor_without_an_effect_check_is_refused_saying_an_empty_list_means_none() -> None:
     error = _refused(_actor(expect=...))
     assert error.details["path"] == ["actors", "tester", "expect"]
