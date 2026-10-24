@@ -62,8 +62,9 @@ By default the actor loads no setting sources and no MCP servers: none of the pe
 hooks, permissions or default mode, and none of the workspace's `.claude/settings.json`. A run then doesn't depend on
 whose machine it's on, and the actor doesn't run the hooks of the repository it works in. `settingSources` names the
 sources to load instead. Logging in isn't a setting, so the person's existing login still works. `--bare` is never
-used, because it never reads OAuth or the keychain. Whether `CLAUDE.md` files load with no setting sources isn't
-documented; the live test reports it.
+used, because it never reads OAuth or the keychain. With no setting sources, the workspace's `CLAUDE.md` isn't
+loaded either: the live test showed it on Claude Code 2.1.302, and reports it on every run. Add `project` to
+`settingSources` for an actor that should read it.
 
 ## How a run ends
 

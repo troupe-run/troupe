@@ -128,8 +128,8 @@ troupe perform writer --direction "Create out/hello.txt containing hello"
   but not write. The run then reports each tool it was denied, rather than doing nothing silently.
 - **Every run has a budget:** `maxBudgetUsd`, or USD 5 when it isn't set. Claude Code stops when it's spent.
 - **Claude Code uses your existing login,** or `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` when one is set. It
-  doesn't load your Claude Code settings, hooks or MCP servers, or the theatre's: a run doesn't depend on whose
-  machine it's on. The option `settingSources` loads them again.
+  doesn't load your Claude Code settings, hooks or MCP servers, or the theatre's, or its `CLAUDE.md`: a run doesn't
+  depend on whose machine it's on. The option `settingSources` loads them again.
 
 The [Claude Code runner's README](https://github.com/troupe-run/troupe/blob/main/plugins/runner-claude-code/README.md)
 lists every option.
