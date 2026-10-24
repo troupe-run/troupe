@@ -204,7 +204,7 @@
 
 ## 10. The opt-in live test (spec: "A live test runs real Claude Code only when asked"; design D12)
 
-- [ ] 10.1 Add `packages/troupe/tests/test_claude_code_live.py`, skipped unless `TROUPE_LIVE_CLAUDE_CODE=1`, with a
+- [x] 10.1 Add `packages/troupe/tests/test_claude_code_live.py`, skipped unless `TROUPE_LIVE_CLAUDE_CODE=1`, with a
   reason naming the variable and the credentials it can use. It is D12's run: a pinned model, `maxBudgetUsd` 0.10, the
   capture tool's prompt, `allowedTools` `Write` and `Read`, and no `permissionMode`. It prints which credential it used
   and whether `CLAUDE.md` loaded. Verify: without the variable, `uv run pytest
@@ -218,7 +218,7 @@
 
 - [x] 11.1 Run `uv run scripts/check.py`. Verify: it passes, which includes ruff, mypy --strict, import-linter and the
   full test suite.
-- [ ] 11.2 Push the branch and open the PR (`Closes #55`). Verify: every CI job passes on Linux, macOS and Windows. Read
+- [x] 11.2 Push the branch and open the PR (`Closes #55`). Verify: every CI job passes on Linux, macOS and Windows. Read
   the jobs' logs to confirm that the cancel and process tests ran on Windows (not skipped), and that the live test was
   skipped.
 
