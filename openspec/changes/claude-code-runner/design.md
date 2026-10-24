@@ -350,7 +350,7 @@ harness, which validates every message against the bound schemas. Tests that nee
    - the tests cover the handshake, refusals, the command line, the stdin and the private files from D3, the
      exit-code mapping, and cancel and end of input, where the stand-in's pid must be gone before the runner exits,
      on all three operating systems.
-3. **Through the host, in core** (`packages/troupe/tests/test_claude_code_runner.py`):
+3. **Through the host, in core** (`packages/troupe/tests/test_claude_code_host.py`):
    - each fixture played by the stand-in through `run_actor`, with fail-fast on and off, must give the outcome in
      `expected.json`;
    - a cancel must end `cancelled`;

@@ -169,7 +169,7 @@
   `interim.Runner` its `environment` field (`()` for `scripted`), and add the `claude-code` entry with D8's names.
   `perform` copies each name that's set into `RunnerCommand.env`. Verify with `test_interim.py` and `test_perform.py`:
   - the scripted test still passes;
-  - `claude-code` resolves, and passes the conformance checks with the stand-in on `PATH`;
+  - `claude-code` resolves to the plugin's module (the conformance checks with the stand-in are 9.2's);
   - an unknown runner is refused, naming both runners;
   - each scenario of "Perform passes a runner only the variables it is known to need", using the stand-in's recorded
     environment.
@@ -185,7 +185,7 @@
 
 ## 9. Through the host, end to end (spec: claude-code-runner, actor-runners)
 
-- [ ] 9.1 Add `packages/troupe/tests/test_claude_code_runner.py`. For each fixture, the stand-in plays it through
+- [x] 9.1 Add `packages/troupe/tests/test_claude_code_host.py`. For each fixture, the stand-in plays it through
   `run_actor`, with fail-fast on and with it off (`RunLimits`). Each run must give the outcome and error code in
   `expected.json` and its `withoutFailFast`, and every message must validate against the contract with the runner's
   schemas bound. It also checks:
@@ -194,9 +194,9 @@
   - the transcript the host stores is the fixture's native lines byte for byte.
 
   Verify: the file passes locally.
-- [ ] 9.2 Add the Claude Code runner, with the stand-in on `PATH`, to `test_runner_conformance.py`. Verify: every
+- [x] 9.2 Add the Claude Code runner, with the stand-in on `PATH`, to `test_runner_conformance.py`. Verify: every
   check passes.
-- [ ] 9.3 Add `test_perform_claude_code.py`: `troupe perform` on a theatre with a `claude-code` actor, the
+- [x] 9.3 Add `test_perform_claude_code.py`: `troupe perform` on a theatre with a `claude-code` actor, the
   `success-with-tools` stand-in, and `AWS_SECRET_ACCESS_KEY` set. Verify:
   - the run ends `succeeded`;
   - its recorded start names runner `claude-code` and engine `claude-code` `2.1.296`;

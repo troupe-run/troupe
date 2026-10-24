@@ -13,6 +13,7 @@ from typing import Any
 
 import pytest
 
+import claude_stand_in
 from troupe.core.runners.conformance import CheckResult, check_runner
 from troupe.core.runners.host import RunnerCommand
 from troupe.core.runners.limits import RunLimits
@@ -33,11 +34,18 @@ runner answers, not on how long it takes (design D1)."""
 
 
 def _check(
-    argv: list[str], options: dict[str, Any], workspace: Path, limits: RunLimits = LIMITS
+    argv: list[str],
+    options: dict[str, Any],
+    workspace: Path,
+    limits: RunLimits = LIMITS,
+    env: dict[str, str] | None = None,
 ) -> dict[str, CheckResult]:
     results = asyncio.run(
         check_runner(
-            RunnerCommand(argv, cwd=workspace), options, workspace=workspace, limits=limits
+            RunnerCommand(argv, cwd=workspace, env=env or {}),
+            options,
+            workspace=workspace,
+            limits=limits,
         )
     )
     return {result.name: result for result in results}
@@ -109,3 +117,29 @@ def test_a_runner_that_refuses_a_character_fails_that_check(tmp_path: Path) -> N
     assert not check.passed
     assert check.problem is not None
     assert "refused run/start" in check.problem
+
+
+def test_the_claude_code_runner_passes_every_check_with_a_stand_in_claude(tmp_path: Path) -> None:
+    bin_dir = tmp_path / "bin"
+    claude_stand_in.install(
+        bin_dir, fixture=claude_stand_in.fixture("success-with-tools"), wait_ms="200"
+    )
+    env = {"PATH": str(bin_dir)}
+    env.update(
+        {
+            n: os.environ[n]
+            for n in ("COMSPEC", "PATHEXT", "TEMP", "TMP", "TMPDIR")
+            if n in os.environ
+        }
+    )
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    results = _check(
+        [sys.executable, "-m", "troupe_runner_claude_code"],
+        {},
+        workspace,
+        RunLimits(start_timeout=10.0, cancel_grace=10.0, run_timeout=30.0),
+        env,
+    )
+    assert {name: r.problem for name, r in results.items() if not r.passed} == {}
+    assert len(results) == 8
