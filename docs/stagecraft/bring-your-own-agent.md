@@ -11,10 +11,17 @@ swap the agent by swapping its runner, and your process stays the same.
 
 ## Runners today
 
-The only runner so far is the scripted runner, which plays a script instead of running an agent, so you can try
-troupe offline. The runners planned next are one for Claude Code
-([#55](https://github.com/troupe-run/troupe/issues/55)) and one for a model on your own computer
-([#56](https://github.com/troupe-run/troupe/issues/56)).
+troupe ships two runners:
+
+- **The scripted runner** plays a script instead of running an agent, so you can try troupe offline.
+- **The Claude Code runner** runs [Claude Code](https://code.claude.com) with your existing login. It leaves out your
+  Claude Code settings, hooks and MCP servers by default, so a run doesn't depend on whose machine it's on. Its
+  options choose the model, the budget and what the agent may do
+  ([Run Claude Code instead](../opening-night/first-performance.md#run-claude-code-instead)).
+
+The runners planned next are one for a model on your own computer
+([#56](https://github.com/troupe-run/troupe/issues/56)), and Claude Code on a local model
+([#160](https://github.com/troupe-run/troupe/issues/160)).
 
 You can write a runner for any agent today, and check it against the contract, but you can't run it with
 `troupe perform` yet: until config names runners ([#60](https://github.com/troupe-run/troupe/issues/60)),

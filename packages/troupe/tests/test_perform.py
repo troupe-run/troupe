@@ -3,6 +3,7 @@ design D5, D8, D9)."""
 
 import asyncio
 import hashlib
+import importlib
 import json
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,7 @@ from uuid import UUID
 
 import pytest
 
+import claude_stand_in
 from runtesting import ADA, ALLOW, INIT, OK, Harness, failing_at, request, script, theatre, turn
 from storetesting import git_service, snapshot
 from troupe.core import defaults, interim
@@ -453,3 +455,92 @@ def test_a_conflict_on_another_actor_refuses_the_perform(tmp_path: Path) -> None
         )
     assert caught.value.code == "config.conflict"
     assert "actors.tester.character" in caught.value.problem
+
+
+# claude-code-runner 8.1: perform passes a runner only the variables troupe's table names for it.
+
+
+def _runner_commands(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
+    """Every RunnerCommand perform hands the host, while the host still runs it."""
+    perform_module = importlib.import_module("troupe.core.runs.perform")
+    seen: list[Any] = []
+    real = perform_module.run_actor
+
+    async def capture(command: Any, *args: Any, **kwargs: Any) -> Any:  # noqa: ANN401
+        seen.append(command)
+        return await real(command, *args, **kwargs)
+
+    monkeypatch.setattr(perform_module, "run_actor", capture)
+    return seen
+
+
+def test_a_scripted_actors_runner_is_given_no_variables_even_with_path_and_a_secret_set(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    commands = _runner_commands(monkeypatch)
+    harness = Harness(theatre(tmp_path))
+    harness.env = {**harness.env, "PATH": "/usr/bin", "AWS_SECRET_ACCESS_KEY": FAKE_SECRET}
+    harness.perform(request(script(INIT, OK)))
+    [command] = commands
+    assert dict(command.env) == {}
+
+
+FAKE_TOKEN = "oauth-token"  # noqa: S105 - a stand-in value, checked for where it arrives
+FAKE_SECRET = "s3cret"  # noqa: S105 - a stand-in value, checked for where it never arrives
+
+
+def _claude_code_env(tmp_path: Path, record: Path, **variables: str) -> dict[str, str]:
+    """perform's environment for a claude-code actor: the stand-in claude first on PATH, which
+    replays the success fixture and records what it was given, plus ``variables``."""
+    bin_dir = tmp_path / "bin"
+    claude_stand_in.install(
+        bin_dir, fixture=claude_stand_in.fixture("success-with-tools"), record=str(record)
+    )
+    return {"PATH": str(bin_dir), **variables}
+
+
+def test_a_claude_code_actors_runner_gets_path_home_and_the_oauth_token_from_perform(
+    tmp_path: Path,
+) -> None:
+    record = tmp_path / "record.json"
+    harness = Harness(theatre(tmp_path / "theatre"))
+    home = str(tmp_path / "home")
+    harness.env = {
+        **harness.env,
+        **_claude_code_env(tmp_path, record, HOME=home, CLAUDE_CODE_OAUTH_TOKEN=FAKE_TOKEN),
+    }
+    result = harness.perform(request({}, runner="claude-code"))
+    assert result.run.outcome == "succeeded"
+    seen = claude_stand_in.wait_for_record(record, "env")["env"]
+    assert seen["PATH"] == str(tmp_path / "bin")
+    assert seen["HOME"] == home
+    assert seen["CLAUDE_CODE_OAUTH_TOKEN"] == FAKE_TOKEN
+
+
+def test_a_variable_the_table_doesnt_name_never_reaches_a_claude_code_runner(
+    tmp_path: Path,
+) -> None:
+    record = tmp_path / "record.json"
+    harness = Harness(theatre(tmp_path / "theatre"))
+    harness.env = {
+        **harness.env,
+        **_claude_code_env(tmp_path, record, AWS_SECRET_ACCESS_KEY=FAKE_SECRET),
+    }
+    harness.perform(request({}, runner="claude-code"))
+    seen = claude_stand_in.wait_for_record(record, "env")["env"]
+    assert "AWS_SECRET_ACCESS_KEY" not in seen
+    assert FAKE_SECRET not in seen.values()
+
+
+def test_a_named_variable_perform_doesnt_have_is_left_out_not_passed_empty(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    commands = _runner_commands(monkeypatch)
+    record = tmp_path / "record.json"
+    harness = Harness(theatre(tmp_path / "theatre"))
+    harness.env = {**harness.env, **_claude_code_env(tmp_path, record)}
+    harness.perform(request({}, runner="claude-code"))
+    [command] = commands
+    assert "ANTHROPIC_API_KEY" not in command.env
+    assert dict(command.env) == {"PATH": str(tmp_path / "bin")}
+    assert "ANTHROPIC_API_KEY" not in claude_stand_in.wait_for_record(record, "env")["env"]

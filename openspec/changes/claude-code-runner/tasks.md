@@ -113,7 +113,7 @@
   - the character and settings files, holding exactly the character's UTF-8 and the allow and deny rules;
   - a direction with quotes and newlines appears in stdin and in no argv element;
   - the private directory is outside the workspace and is 0700 on POSIX.
-- [ ] 6.2 Add `processes.py`, the only module using `signal` or `os.name`. It holds:
+- [x] 6.2 Add `processes.py`, the only module using `signal` or `os.name`. It holds:
   - `find_claude(path)`, which uses `shutil.which`;
   - `start(argv, cwd, env)`, which keeps the child in the runner's process group;
   - `stop(proc, grace) -> int`: SIGTERM then SIGKILL on POSIX, and terminate on Windows;
@@ -164,7 +164,7 @@
 
 ## 8. Perform runs the Claude Code runner (spec: runs; design D8)
 
-- [ ] 8.1 Before changing perform, write a test that passes on main and must keep passing: a `scripted` actor's
+- [x] 8.1 Before changing perform, write a test that passes on main and must keep passing: a `scripted` actor's
   runner gets only the platform minimum, even when `PATH` and a secret are set in perform's environment. Then give
   `interim.Runner` its `environment` field (`()` for `scripted`), and add the `claude-code` entry with D8's names.
   `perform` copies each name that's set into `RunnerCommand.env`. Verify with `test_interim.py` and `test_perform.py`:
@@ -173,10 +173,10 @@
   - an unknown runner is refused, naming both runners;
   - each scenario of "Perform passes a runner only the variables it is known to need", using the stand-in's recorded
     environment.
-- [ ] 8.2 `troupe config set actors.x.runner=claude-code` with a valid options file is accepted, and an option the
+- [x] 8.2 `troupe config set actors.x.runner=claude-code` with a valid options file is accepted, and an option the
   runner doesn't define is refused naming the runner's options schema. Verify with a test in `test_config_changes.py`
   or its neighbour, beside the scripted runner's cases.
-- [ ] 8.3 Update the user docs. In `docs/stagecraft/bring-your-own-agent.md`, "Runners today" names the Claude Code
+- [x] 8.3 Update the user docs. In `docs/stagecraft/bring-your-own-agent.md`, "Runners today" names the Claude Code
   runner, and says it uses the person's login and leaves out their settings by default. In
   `docs/opening-night/first-performance.md`, "Choose a runner" shows a `claude-code` actor with `permissionMode:
   acceptEdits` and `allowedTools`, and says why it needs them. Update the runner list in contributing/runners.md.

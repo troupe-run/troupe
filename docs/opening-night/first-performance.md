@@ -15,9 +15,10 @@ You need a [theatre](first-theatre.md) to work in.
 
 ## Choose a runner
 
-A runner is what runs an actor: it starts the agent and passes on what it does. Today there's one, the scripted
-runner, which plays a script instead of running an agent. It's how you try troupe out offline, and how troupe's own
-tests run. A runner for Claude Code comes next ([#55](https://github.com/troupe-run/troupe/issues/55)).
+A runner is what runs an actor: it starts the agent and passes on what it does. troupe ships two. The scripted
+runner plays a script instead of running an agent: it's how you try troupe out offline, and how troupe's own tests
+run. The Claude Code runner runs [Claude Code](#run-claude-code-instead). This page starts with the scripted runner,
+because it needs no account and costs nothing.
 
 Write a script that writes a file, in your theatre. It's the scripted runner's options:
 
@@ -106,3 +107,29 @@ Everything you've seen is recorded in `.troupe/events/`, with who started the ru
 allowed to run there, and which version of config it used. [Performances and
 runs](../the-company/performances-and-runs.md) says what a run records, and [Read the
 lineage](../stagecraft/read-the-lineage.md) how to answer questions from it.
+
+## Run Claude Code instead
+
+With [Claude Code](https://code.claude.com) installed and logged in, an actor can run it. Its runner is
+`claude-code`, and its options say what the agent may do:
+
+```json title="claude.json"
+{"permissionMode": "acceptEdits", "allowedTools": ["Read", "Write"], "maxBudgetUsd": 1}
+```
+
+```sh
+troupe config set actors.writer.runner=claude-code actors.writer.options=@claude.json 'actors.writer.expect=["out/hello.txt"]'
+git add -A
+git commit -m "Add the writer actor"
+troupe perform writer --direction "Create out/hello.txt containing hello"
+```
+
+- **What the agent may do is up to the options.** Without `permissionMode` and `allowedTools`, Claude Code may read
+  but not write. The run then reports each tool it was denied, rather than doing nothing silently.
+- **Every run has a budget:** `maxBudgetUsd`, or USD 5 when it isn't set. Claude Code stops when it's spent.
+- **Claude Code uses your existing login,** or `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` when one is set. It
+  doesn't load your Claude Code settings, hooks or MCP servers, or the theatre's: a run doesn't depend on whose
+  machine it's on. The option `settingSources` loads them again.
+
+The [Claude Code runner's README](https://github.com/troupe-run/troupe/blob/main/plugins/runner-claude-code/README.md)
+lists every option.
