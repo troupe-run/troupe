@@ -99,28 +99,6 @@ unchanged except for the run id. Delays between records SHALL be replayed only w
 - **WHEN** a recording is replayed
 - **THEN** the host receives the recorded events and transcript records in the recorded order
 
-### Requirement: Fixtures pair real engine output with protocol events
-The plugin SHALL include fixtures captured from real Claude Code runs: each pairs the native stream-json records,
-unchanged except for scrubbing, with the protocol events they map to. The fixtures SHALL include `is_error` under a
-"success" subtype, authentication retries, a run terminated without a `result`, and a successful run with tool calls.
-Each fixture SHALL record its provenance.
-
-#### Scenario: Fixtures replay through the contract
-- **WHEN** each fixture is replayed by the scripted runner
-- **THEN** every message validates against the contract and the host derives the outcome the fixture states
-
-#### Scenario: Provenance is recorded
-- **WHEN** a fixture is read
-- **THEN** it names the Claude Code version, the date, the command used and the scrubbing applied
-
-### Requirement: Fixtures hold no secrets
-No committed fixture SHALL contain a credential, a token, a host user name or a host path outside the run's
-workspace. A test SHALL check every fixture for the known patterns.
-
-#### Scenario: Secret pattern in a fixture
-- **WHEN** a fixture contains a string matching a credential pattern or the capturing host's home path
-- **THEN** the fixture check fails and names the fixture and line
-
 ### Requirement: The scripted runner exits on end of input
 The scripted runner SHALL stop playing and exit when its standard input closes, including while hanging.
 
