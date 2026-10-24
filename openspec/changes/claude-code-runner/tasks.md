@@ -216,7 +216,7 @@
 
 ## 11. Integration
 
-- [ ] 11.1 Run `uv run scripts/check.py`. Verify: it passes, which includes ruff, mypy --strict, import-linter and the
+- [x] 11.1 Run `uv run scripts/check.py`. Verify: it passes, which includes ruff, mypy --strict, import-linter and the
   full test suite.
 - [ ] 11.2 Push the branch and open the PR (`Closes #55`). Verify: every CI job passes on Linux, macOS and Windows. Read
   the jobs' logs to confirm that the cancel and process tests ran on Windows (not skipped), and that the live test was
