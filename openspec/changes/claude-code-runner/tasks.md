@@ -210,7 +210,7 @@
   and whether `CLAUDE.md` loaded. Verify: without the variable, `uv run pytest
   packages/troupe/tests/test_claude_code_live.py -rs` reports it skipped with that reason, and CI's logs show it
   skipped on all three operating systems.
-- [ ] 10.2 **Owner:** run the live test once with a credential (`CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY`) and
+- [x] 10.2 **Owner:** run the live test once with a credential (`CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY`) and
   once with only the existing login, on macOS. Paste the outcomes and what it printed into the PR. An agent session
   doesn't run this. Verify: both runs `succeeded`, and the README's `CLAUDE.md` sentence matches what was printed.
 
