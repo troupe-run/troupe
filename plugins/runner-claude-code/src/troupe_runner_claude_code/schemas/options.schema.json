@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/plugins/runner-claude-code/options.schema.json",
+  "title": "Claude Code runner options",
+  "description": "The run/start options the Claude Code runner takes, each optional. They fill the runner contract's runnerOptions extension point. Nothing here names a program to run.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "model": {
+      "description": "The model Claude Code uses, passed as --model. Absent: Claude Code's own default. It can't start with '-', so Claude Code can't read it as a flag.",
+      "type": "string",
+      "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])[^-]"
+    },
+    "maxBudgetUsd": {
+      "description": "The most a run may spend, in US dollars, passed as --max-budget-usd. Absent: the runner's default, USD 5.",
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "permissionMode": {
+      "description": "Claude Code's permission mode, passed as --permission-mode. Absent: Claude Code's own default, so the runner never grants more than config asks for. The modes are Claude Code 2.1.302's.",
+      "enum": ["acceptEdits", "auto", "bypassPermissions", "manual", "dontAsk", "plan"]
+    },
+    "allowedTools": {
+      "description": "Permission rules that allow a tool, such as Read or Bash(git status), written to a settings file as permissions.allow.",
+      "$ref": "#/$defs/rules"
+    },
+    "disallowedTools": {
+      "description": "Permission rules that deny a tool, written to a settings file as permissions.deny.",
+      "$ref": "#/$defs/rules"
+    },
+    "settingSources": {
+      "description": "The Claude Code setting sources to load. Absent: none, so the actor runs no settings, hooks or MCP servers of the person's or the workspace's.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"enum": ["user", "project", "local"]}
+    }
+  },
+  "$defs": {
+    "rules": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "description": "One permission rule, in Claude Code's syntax.",
+        "type": "string",
+        "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])[\\s\\S]"
+      }
+    }
+  }
+}

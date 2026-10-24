@@ -306,7 +306,7 @@ D8 delivers `PATH`.
 |---|---|
 | `claude-code.unknown-option` | `{where}` |
 | `claude-code.invalid-options` | `{where}` |
-| `claude-code.not-found` | `{path}`, the `PATH` searched |
+| `claude-code.not-found` | `{path}`, the `PATH` searched, left out when the runner was given none (the protocol's schemas allow no `null`) |
 | `claude-code.start-failed` | `{where}`, naming the temporary directory |
 
 `options.py` checks the same rules in code, because the plugin uses only the standard library and has no

@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/plugins/runner-claude-code/errors.schema.json",
+  "title": "Claude Code runner errors",
+  "description": "The Claude Code runner's own error codes, beyond the runner contract's. They fill the contract's runnerErrors extension point. Each refuses run/start, so no run starts.",
+  "$ref": "https://troupe.run/protocol/error.schema.json#/$defs/fields",
+  "unevaluatedProperties": false,
+  "oneOf": [
+    {
+      "description": "The run/start options hold a key the runner doesn't define.",
+      "required": ["details"],
+      "properties": {"code": {"const": "claude-code.unknown-option"}, "details": {"$ref": "#/$defs/where"}}
+    },
+    {
+      "description": "An option's value has the wrong shape. The fix names what is valid.",
+      "required": ["details"],
+      "properties": {"code": {"const": "claude-code.invalid-options"}, "details": {"$ref": "#/$defs/where"}}
+    },
+    {
+      "description": "No claude program is on the PATH the runner was given.",
+      "required": ["details"],
+      "properties": {
+        "code": {"const": "claude-code.not-found"},
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "description": "The PATH searched. Absent when the runner was given no PATH.",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "The runner couldn't prepare the run, such as making its private directory.",
+      "required": ["details"],
+      "properties": {"code": {"const": "claude-code.start-failed"}, "details": {"$ref": "#/$defs/where"}}
+    }
+  ],
+  "$defs": {
+    "where": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["where"],
+      "properties": {
+        "where": {
+          "description": "Where the problem is, such as options.permissionMode, or the directory that couldn't be made.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}
