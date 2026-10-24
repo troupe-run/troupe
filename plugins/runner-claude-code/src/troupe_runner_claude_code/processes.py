@@ -13,6 +13,7 @@ import os
 import signal
 import subprocess
 import sys
+import time
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
@@ -74,7 +75,7 @@ class Claude:
             return status
         if WINDOWS:
             if self._job is not None:
-                _terminate_job(self._job)
+                _terminate_job(self._job, grace)
             else:
                 self.process.terminate()
             return self.process.wait()
@@ -184,6 +185,43 @@ if sys.platform == "win32":
     _kernel32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
     _kernel32.TerminateJobObject.restype = wintypes.BOOL
     _kernel32.TerminateJobObject.argtypes = [wintypes.HANDLE, wintypes.UINT]
+
+    _JOB_OBJECT_BASIC_ACCOUNTING_INFORMATION_CLASS = 1
+
+    class _Accounting(ctypes.Structure):
+        _fields_ = [  # the layout of JOBOBJECT_BASIC_ACCOUNTING_INFORMATION
+            ("TotalUserTime", ctypes.c_int64),
+            ("TotalKernelTime", ctypes.c_int64),
+            ("ThisPeriodTotalUserTime", ctypes.c_int64),
+            ("ThisPeriodTotalKernelTime", ctypes.c_int64),
+            ("TotalPageFaultCount", wintypes.DWORD),
+            ("TotalProcesses", wintypes.DWORD),
+            ("ActiveProcesses", wintypes.DWORD),
+            ("TotalTerminatedProcesses", wintypes.DWORD),
+        ]
+
+    _kernel32.QueryInformationJobObject.restype = wintypes.BOOL
+    _kernel32.QueryInformationJobObject.argtypes = [
+        wintypes.HANDLE,
+        ctypes.c_int,
+        ctypes.c_void_p,
+        wintypes.DWORD,
+        ctypes.c_void_p,
+    ]
+
+    def _active_processes(job: int) -> int:
+        info = _Accounting()
+        _check(
+            _kernel32.QueryInformationJobObject(
+                job,
+                _JOB_OBJECT_BASIC_ACCOUNTING_INFORMATION_CLASS,
+                ctypes.byref(info),
+                ctypes.sizeof(info),
+                None,
+            )
+        )
+        return int(info.ActiveProcesses)
+
     _kernel32.CloseHandle.restype = wintypes.BOOL
     _kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
 
@@ -216,8 +254,14 @@ if sys.platform == "win32":
             raise
         return int(job)
 
-    def _terminate_job(job: int) -> None:
+    def _terminate_job(job: int, grace: float) -> None:
+        """Terminate every process in the job, and wait up to ``grace`` seconds until none is
+        left: TerminateJobObject only starts the termination, and waiting for Claude Code's own
+        process doesn't wait for a shim's child."""
         _kernel32.TerminateJobObject(job, _WINDOWS_STOPPED_EXIT_CODE)
+        deadline = time.monotonic() + grace
+        while _active_processes(job) and time.monotonic() < deadline:
+            time.sleep(0.01)
 
     def _close_job(job: int) -> None:
         _kernel32.CloseHandle(job)
@@ -227,7 +271,7 @@ else:
     def _new_job_for(pid: int) -> int:
         raise NotImplementedError("POSIX children stay in the runner's process group")
 
-    def _terminate_job(job: int) -> None:
+    def _terminate_job(job: int, grace: float) -> None:
         raise NotImplementedError("POSIX children are stopped with signals")
 
     def _close_job(job: int) -> None:
