@@ -3,10 +3,11 @@ name: guard
 
 # The git-level workflow rules, re-checked on GitHub (troupe-run/infrastructure:
 # docs/development-workflow.md): every commit is a Conventional Commit, the branch matches an
-# OpenSpec change, no archived change has an unticked task, and delivered files change only by
-# delivery. A pull request's title is checked as a commit message too, so `edited` re-runs it when
-# the title changes. Local hooks can be skipped; this can't: it's a required check
-# (tofu/required-checks.json).
+# OpenSpec change, no archived change has an unticked task, delivered files change only by
+# delivery, and the specs and active changes in scope pass OpenSpec's strict validation
+# (`openspec-strict`: what a pull request touches, everything on main). A pull request's title
+# is checked as a commit message too, so `edited` re-runs it when the title changes. Local hooks
+# can be skipped; this can't: it's a required check (tofu/required-checks.json).
 on:
   push:
     branches: ["**"]
@@ -25,6 +26,10 @@ jobs:
     name: guard (workflow rules)
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      # The OpenSpec CLI openspec-strict runs: one exact version, moved by pull request. Before a
+      # move is delivered, run it over every governed repository's main (docs/development-workflow.md).
+      OPENSPEC_VERSION: 1.14.3
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -33,5 +38,13 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.23.4
+      - name: Install the OpenSpec CLI
+        env:
+          OPENSPEC_TELEMETRY: "0"
+          DO_NOT_TRACK: "1"
+        run: npm install --global --no-fund --no-audit "@fission-ai/openspec@${OPENSPEC_VERSION}"
       - name: Check the workflow rules
         run: uv run --no-project python scripts/guard.py ci
