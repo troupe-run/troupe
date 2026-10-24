@@ -104,6 +104,18 @@
         }
       ]
     },
+    "plugins/runner-claude-code": {
+      "release-type": "python",
+      "package-name": "troupe-runner-claude-code",
+      "component": "troupe-runner-claude-code",
+      "extra-files": [
+        {
+          "type": "toml",
+          "path": "/uv.lock",
+          "jsonpath": "$.package[?(@.name.value=='troupe-runner-claude-code')].version"
+        }
+      ]
+    },
     "plugins/runner-scripted": {
       "release-type": "python",
       "package-name": "troupe-runner-scripted",

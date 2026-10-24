@@ -110,6 +110,23 @@ tests = [
     "scripts/tests/workspace/**",
 ]
 
+# Started as a subprocess by the core suite (the host, conformance and perform tests), and its fixtures replayed by the
+# scripted runner's and core's tests.
+[scopes.runner_claude_code]
+paths = [
+    "plugins/runner-claude-code/src/**",
+    "plugins/runner-claude-code/tests/**",
+    "plugins/runner-claude-code/fixtures/**",
+    "plugins/runner-claude-code/tools/**",
+    "plugins/runner-claude-code/LICENSE",
+]
+tests = [
+    "packages/troupe/tests/**",
+    "packages/troupe-artifacts-local/tests/**",
+    "packages/troupe-store-text/tests/**",
+    "plugins/runner-claude-code/tests/**",
+]
+
 # Started as a subprocess by the core suite, and its schemas read through core's protocol_schemas helper. Its README
 # is in `docs` too, so a change to it runs both.
 [scopes.runner_scripted]

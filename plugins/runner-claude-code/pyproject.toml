@@ -1,0 +1,21 @@
+[project]
+name = "troupe-runner-claude-code"
+version = "0.0.1.dev0"
+description = "An actor runner for troupe that runs Claude Code and maps its stream-json onto run events."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.12,<3.16"
+# Standard library only. A plugin imports nothing from troupe; it speaks the runner contract.
+dependencies = []
+
+[project.urls]
+Homepage = "https://troupe.run"
+Repository = "https://github.com/troupe-run/troupe"
+
+[project.scripts]
+troupe-runner-claude-code = "troupe_runner_claude_code.runner:main"
+
+[build-system]
+requires = ["uv_build>=0.13.0,<0.14"]
+build-backend = "uv_build"
