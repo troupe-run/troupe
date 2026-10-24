@@ -200,18 +200,15 @@ if sys.platform == "win32":
     _kernel32.TerminateJobObject.restype = wintypes.BOOL
     _kernel32.TerminateJobObject.argtypes = [wintypes.HANDLE, wintypes.UINT]
 
-    _JOB_OBJECT_BASIC_ACCOUNTING_INFORMATION_CLASS = 1
+    _JOB_OBJECT_BASIC_PROCESS_ID_LIST_CLASS = 3
+    _MAX_LISTED = 4096
+    _SYNCHRONIZE = 0x00100000
 
-    class _Accounting(ctypes.Structure):
-        _fields_ = [  # the layout of JOBOBJECT_BASIC_ACCOUNTING_INFORMATION
-            ("TotalUserTime", ctypes.c_int64),
-            ("TotalKernelTime", ctypes.c_int64),
-            ("ThisPeriodTotalUserTime", ctypes.c_int64),
-            ("ThisPeriodTotalKernelTime", ctypes.c_int64),
-            ("TotalPageFaultCount", wintypes.DWORD),
-            ("TotalProcesses", wintypes.DWORD),
-            ("ActiveProcesses", wintypes.DWORD),
-            ("TotalTerminatedProcesses", wintypes.DWORD),
+    class _ProcessIds(ctypes.Structure):
+        _fields_ = [  # the layout of JOBOBJECT_BASIC_PROCESS_ID_LIST, with room for _MAX_LISTED
+            ("NumberOfAssignedProcesses", wintypes.DWORD),
+            ("NumberOfProcessIdsInList", wintypes.DWORD),
+            ("ProcessIdList", ctypes.c_size_t * _MAX_LISTED),
         ]
 
     _kernel32.QueryInformationJobObject.restype = wintypes.BOOL
@@ -222,19 +219,21 @@ if sys.platform == "win32":
         wintypes.DWORD,
         ctypes.c_void_p,
     ]
+    _kernel32.WaitForSingleObject.restype = wintypes.DWORD
+    _kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
 
-    def _active_processes(job: int) -> int:
-        info = _Accounting()
+    def _job_pids(job: int) -> list[int]:
+        ids = _ProcessIds()
         _check(
             _kernel32.QueryInformationJobObject(
                 job,
-                _JOB_OBJECT_BASIC_ACCOUNTING_INFORMATION_CLASS,
-                ctypes.byref(info),
-                ctypes.sizeof(info),
+                _JOB_OBJECT_BASIC_PROCESS_ID_LIST_CLASS,
+                ctypes.byref(ids),
+                ctypes.sizeof(ids),
                 None,
             )
         )
-        return int(info.ActiveProcesses)
+        return [int(ids.ProcessIdList[i]) for i in range(ids.NumberOfProcessIdsInList)]
 
     _kernel32.CloseHandle.restype = wintypes.BOOL
     _kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
@@ -317,13 +316,33 @@ if sys.platform == "win32":
             _kernel32.CloseHandle(snapshot)
 
     def _terminate_job(job: int, grace: float) -> None:
-        """Terminate every process in the job, and wait up to ``grace`` seconds until none is
-        left: TerminateJobObject only starts the termination, and waiting for Claude Code's own
+        """Terminate every process in the job, and wait up to ``grace`` seconds until each has
+        ended: TerminateJobObject only starts the termination, and waiting for Claude Code's own
         process doesn't wait for a shim's child."""
-        _kernel32.TerminateJobObject(job, _WINDOWS_STOPPED_EXIT_CODE)
-        deadline = time.monotonic() + grace
-        while _active_processes(job) and time.monotonic() < deadline:
-            time.sleep(0.01)
+        # The job's counts drop as soon as its processes are marked for termination, before they
+        # have ended (seen on Windows CI), so wait on each process itself. Its handle is taken
+        # before the termination, while it is still listed, and the job is listed again after,
+        # for a process started in between.
+        handles = _open_all(_job_pids(job))
+        try:
+            _kernel32.TerminateJobObject(job, _WINDOWS_STOPPED_EXIT_CODE)
+            handles += _open_all(_job_pids(job))
+            deadline = time.monotonic() + grace
+            for process in handles:
+                left = max(0.0, deadline - time.monotonic())
+                _kernel32.WaitForSingleObject(process, int(left * 1000))
+        finally:
+            for process in handles:
+                _kernel32.CloseHandle(process)
+
+    def _open_all(pids: list[int]) -> list[int]:
+        """A handle to wait on for each of ``pids`` still running."""
+        handles = []
+        for pid in pids:
+            process = _kernel32.OpenProcess(_SYNCHRONIZE, False, pid)
+            if process:
+                handles.append(int(process))
+        return handles
 
     def _close_job(job: int) -> None:
         _kernel32.CloseHandle(job)
