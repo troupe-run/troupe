@@ -72,7 +72,7 @@
 
 ## 5. The mapper (design D5)
 
-- [ ] 5.1 Add `mapping.py` with `Mapper(runner_version, event_max_bytes)` and `feed(line: bytes) -> list[Out]`,
+- [x] 5.1 Add `mapping.py` with `Mapper(runner_version, event_max_bytes)` and `feed(line: bytes) -> list[Out]`,
   following D5's table, its strict JSON parsing and its summaries. Verify with `test_mapping.py`:
   - for every fixture, feeding its native lines yields exactly the recording's transcript records and events, in
     order;
@@ -81,7 +81,7 @@
     unknown type noted once, a non-JSON line, and a non-UTF-8 line sent as `base64`;
   - a summary cut to a 1 MiB tool output, on a UTF-8 boundary, with the bytes-left-out suffix and the true
     `outputBytes`.
-- [ ] 5.2 Add a hypothesis property test, fed by random bytes, random JSON objects and mutated fixture records. It
+- [x] 5.2 Add a hypothesis property test, fed by random bytes, random JSON objects and mutated fixture records. It
   asserts that `feed` never raises, and that every event, once numbered:
   - validates against `run-event.schema.json`;
   - fits `event_max_bytes`;
@@ -90,7 +90,7 @@
 
   Verify: the test passes at the `ci` hypothesis profile. A deliberately broken mapper (a scratch edit, reverted)
   makes it fail.
-- [ ] 5.3 Update contributing/runners.md's "Mapping an engine: Claude Code" table for what D5 adds:
+- [x] 5.3 Update contributing/runners.md's "Mapping an engine: Claude Code" table for what D5 adds:
   - `network` is a retry with no HTTP status;
   - permission denials;
   - records the mapping doesn't name;
