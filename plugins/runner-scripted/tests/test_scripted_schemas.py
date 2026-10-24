@@ -14,7 +14,8 @@ import pytest
 
 from scripted_harness import OWN, RUNNER_SCHEMAS, SCHEMAS, _registry
 
-FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "claude-code"
+# The Claude Code runner's recordings, which this runner replays (claude-code-runner design D13).
+FIXTURES = Path(__file__).resolve().parents[2] / "runner-claude-code" / "fixtures" / "claude-code"
 RECORDINGS = sorted(FIXTURES.glob("*/recording.jsonl"))
 OPTIONS = json.loads((RUNNER_SCHEMAS / "options.schema.json").read_text(encoding="utf-8"))
 CONTRACT_EVENTS = json.loads(
@@ -26,6 +27,7 @@ def _validator(ref: str) -> jsonschema.Draft202012Validator:
     return jsonschema.Draft202012Validator({"$ref": OWN + ref}, registry=_registry())
 
 
+@pytest.mark.runner_claude_code  # reads its fixtures (scripts/check-paths.toml)
 @pytest.mark.parametrize("path", RECORDINGS, ids=lambda path: path.parent.name)
 def test_every_line_of_each_shipped_recording_validates_as_a_recording_line(path: Path) -> None:
     validator = _validator("options.schema.json#/$defs/recordingLine")

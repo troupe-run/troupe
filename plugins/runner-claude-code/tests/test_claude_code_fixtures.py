@@ -1,4 +1,5 @@
-"""The Claude Code fixtures hold no secrets and record their provenance (spec: scripted-runner)."""
+"""The Claude Code fixtures hold no secrets and record their provenance (spec:
+claude-code-runner)."""
 
 import json
 import re

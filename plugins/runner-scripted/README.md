@@ -71,9 +71,10 @@ A recording is JSON Lines. Each line is `{"event": {...}}` or `{"transcript": "<
 
 ## Fixtures
 
-[`fixtures/claude-code/`](fixtures/claude-code/) holds recordings captured from real Claude Code runs: the native
+The Claude Code runner keeps recordings captured from real Claude Code runs, in
+[`plugins/runner-claude-code/fixtures/claude-code/`](../runner-claude-code/fixtures/claude-code/): the native
 stream-json lines as they came, paired with the run events they map to, and each fixture's provenance. The Claude
-Code runner's mapping is tested against them.
+Code runner's mapping is tested against them, and this runner replays them through troupe's host.
 
 ## Tests
 

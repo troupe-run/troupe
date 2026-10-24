@@ -24,7 +24,7 @@
 
 ## 2. Move the Claude Code fixtures and correct them to the contract (design D5, D13)
 
-- [ ] 2.1 `git mv` `plugins/runner-scripted/fixtures/claude-code/` and `tools/capture_claude.py` to
+- [x] 2.1 `git mv` `plugins/runner-scripted/fixtures/claude-code/` and `tools/capture_claude.py` to
   `plugins/runner-claude-code/`. Move the fixture checks from `test_scripted_fixtures.py` to
   `plugins/runner-claude-code/tests/test_fixtures.py`: the secret scan, the provenance, and the pairing. Then point
   the remaining readers at the new path: `packages/troupe/tests/test_claude_fixtures.py`, `test_scripted_schemas.py`,

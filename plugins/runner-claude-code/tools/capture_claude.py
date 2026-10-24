@@ -1,4 +1,4 @@
-"""Capture real Claude Code stream-json as a scripted-runner fixture (design D14). Not run in CI.
+"""Capture real Claude Code stream-json as a Claude Code runner fixture (design D14). Not run in CI.
 
 Usage:
     python capture_claude.py <fixture> <output directory>

@@ -133,8 +133,6 @@ tests = [
 paths = [
     "plugins/runner-scripted/src/**",
     "plugins/runner-scripted/tests/**",
-    "plugins/runner-scripted/fixtures/**",
-    "plugins/runner-scripted/tools/**",
     "plugins/runner-scripted/README.md",
     "plugins/runner-scripted/LICENSE",
 ]
