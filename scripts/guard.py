@@ -28,6 +28,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import signal
 import subprocess
 import sys
@@ -59,7 +60,11 @@ OVERRIDABLE_RULES = (
 )
 TAMPER_RULE = "guard-tamper"
 """Refuses an agent's attempt to grant itself an override. Never overridable."""
-RULES = (*OVERRIDABLE_RULES, TAMPER_RULE)
+OPENSPEC_RULE = "openspec-strict"
+"""Fails the GitHub check when a spec or active change in scope fails OpenSpec's strict validation.
+Checked only on GitHub, where no override is consumed, so it isn't overridable
+(guard-strict-openspec design D5, D7)."""
+RULES = (*OVERRIDABLE_RULES, TAMPER_RULE, OPENSPEC_RULE)
 
 HOOKS_PATH = ".githooks"
 SOURCE_REPOSITORY = "troupe-run/infrastructure"
@@ -78,6 +83,14 @@ SCHEMA_PATHS = ("protocol/schemas/",)
 """Where a change must release: troupe's protocol schemas, which release on their own and whose
 version troupe records (troupe-run/troupe#140). A repository without them is never refused for
 this (protocol-schema-commit-types design D1, #122)."""
+OPENSPEC_ALL_PATHS = frozenset({"scripts/guard.py", ".github/workflows/guard.yml"})
+"""Paths whose change puts every spec and active change in openspec-strict's scope: they decide how
+the validation runs and which OpenSpec version runs it (guard-strict-openspec design D3)."""
+OPENSPEC_TIMEOUT_SECONDS = 60.0
+"""How long OpenSpec's validation may run before openspec-strict fails, well inside the guard
+job's 5 minutes (guard-strict-openspec design D2)."""
+OPENSPEC_PIN = ".github/workflows/guard.yml"
+"""Where the OpenSpec version the check installs is pinned, as OPENSPEC_VERSION (design D6)."""
 GUARD_DIR = "troupe-guard"
 CHECK_TIMEOUT_SECONDS = 600.0
 """How long the pre-commit check may run before the commit is refused. The default lives here
@@ -2792,9 +2805,7 @@ def run_ci(
         decisions.append(pr_title(title))
     if branch and branch != "main" and not reserved_release_branch(branch, repository):
         decisions.append(commit_branch_change(root, branch))
-    changed: list[str] = []
-    for sha in commits:
-        changed += git(root, "diff-tree", "--no-commit-id", "--name-only", "-r", sha).splitlines()
+    changed = changed_paths(root, commits)
 
     def read_at_head(path: str) -> str | None:
         result = subprocess.run(
@@ -2829,6 +2840,267 @@ def _show(root: Path, revision: str, path: str) -> str | None:
         env=_git_env(),
     )
     return result.stdout if result.returncode == 0 else None
+
+
+def changed_paths(root: Path, commits: Iterable[str]) -> list[str]:
+    """Every path the commits change, in order, repeats included."""
+    changed: list[str] = []
+    for sha in commits:
+        changed += git(root, "diff-tree", "--no-commit-id", "--name-only", "-r", sha).splitlines()
+    return changed
+
+
+# --- strict OpenSpec validation on GitHub (guard-strict-openspec) -----------------------------
+
+
+@dataclass(frozen=True)
+class OpenSpecScope:
+    """What openspec-strict judges: everything, or the main specs and active changes named."""
+
+    everything: bool = False
+    specs: frozenset[str] = frozenset()
+    changes: frozenset[str] = frozenset()
+
+    @property
+    def empty(self) -> bool:
+        return not (self.everything or self.specs or self.changes)
+
+    def covers(self, kind: str, name: str) -> bool:
+        if self.everything:
+            return True
+        return name in (self.specs if kind == "spec" else self.changes)
+
+
+def openspec_scope(
+    paths: Iterable[str], branch: str | None, pull_request: bool, exists: Callable[[str], bool]
+) -> OpenSpecScope:
+    """A push to main is judged in full, and so is a range that changes the guard; anything else
+    on what it touches: the main specs it changes, and the active changes it changes that still
+    exist (design D3). ``exists`` says whether a repository path is a directory at the head."""
+    paths = list(paths)
+    if (branch == "main" and not pull_request) or any(p in OPENSPEC_ALL_PATHS for p in paths):
+        return OpenSpecScope(everything=True)
+    specs: set[str] = set()
+    changes: set[str] = set()
+    for path in paths:
+        parts = path.split("/")
+        if len(parts) < 4 or parts[0] != "openspec":
+            continue
+        if parts[1] == "specs":
+            specs.add(parts[2])
+        elif parts[1] == "changes" and parts[2] != "archive":
+            changes.add(parts[2])
+    return OpenSpecScope(
+        specs=frozenset(s for s in specs if exists(f"openspec/specs/{s}")),
+        changes=frozenset(c for c in changes if exists(f"openspec/changes/{c}")),
+    )
+
+
+@dataclass(frozen=True)
+class OpenSpecRun:
+    """What one run of OpenSpec's strict validation printed, and the version that printed it."""
+
+    status: int
+    stdout: str
+    stderr: str
+    version: str
+
+
+class OpenSpecUnavailableError(Exception):
+    """OpenSpec's validation couldn't be run at all: the CLI is missing, or it ran too long."""
+
+    def __init__(self, problem: str, fix: str) -> None:
+        super().__init__(problem)
+        self.problem = problem
+        self.fix = fix
+
+
+class UnreadableOpenSpecReportError(Exception):
+    """OpenSpec ran, but what it printed isn't a report the guard can read (design D2)."""
+
+
+@dataclass(frozen=True)
+class OpenSpecIssue:
+    level: str
+    path: str
+    message: str
+
+
+@dataclass(frozen=True)
+class OpenSpecItem:
+    kind: str
+    name: str
+    valid: bool
+    issues: tuple[OpenSpecIssue, ...]
+
+
+def _report_item(entry: object) -> OpenSpecItem:
+    if not isinstance(entry, dict):
+        raise UnreadableOpenSpecReportError("an item isn't an object")
+    name, kind, valid, issues = (entry.get(k) for k in ("id", "type", "valid", "issues"))
+    if not isinstance(name, str) or kind not in ("spec", "change") or not isinstance(valid, bool):
+        raise UnreadableOpenSpecReportError(
+            f"an item has no string id, a type of 'spec' or 'change', and a boolean valid: {entry}"
+        )
+    if not isinstance(issues, list):
+        raise UnreadableOpenSpecReportError(f"item {name} has no issues list")
+    read: list[OpenSpecIssue] = []
+    for issue in issues:
+        fields = (
+            [issue.get(k) for k in ("level", "path", "message")] if isinstance(issue, dict) else []
+        )
+        if len(fields) != 3 or not all(isinstance(f, str) for f in fields):
+            raise UnreadableOpenSpecReportError(
+                f"an issue of item {name} has no string level, path and message: {issue}"
+            )
+        read.append(OpenSpecIssue(*(str(f) for f in fields)))
+    return OpenSpecItem(str(kind), name, valid, tuple(read))
+
+
+def read_openspec_report(run: OpenSpecRun) -> list[OpenSpecItem]:
+    """The items of a run's JSON report. Its exit status is only cross-checked: a failure with
+    no failing item, or success with one, is unreadable, not a pass (design D2)."""
+    try:
+        report = json.loads(run.stdout)
+    except json.JSONDecodeError as error:
+        raise UnreadableOpenSpecReportError(f"its output isn't JSON ({error})") from None
+    entries = report.get("items") if isinstance(report, dict) else None
+    if not isinstance(entries, list):
+        raise UnreadableOpenSpecReportError("its output has no items list")
+    items = [_report_item(entry) for entry in entries]
+    failing = any(not item.valid for item in items)
+    if failing != (run.status != 0):
+        raise UnreadableOpenSpecReportError(
+            f"it exited {run.status} but reported "
+            f"{'a failing item' if failing else 'no failing item'}"
+        )
+    return items
+
+
+REQUIREMENT_INDEX = re.compile(r"^requirements\[(\d+)\]$")
+REQUIREMENT_HEADING = re.compile(r"^### Requirement:\s*(.+?)\s*$", re.MULTILINE)
+
+
+def requirement_name(root: Path, spec: str, index: int) -> str | None:
+    """The name of a main spec's requirement OpenSpec counts as ``index``: the index-th
+    '### Requirement:' heading, from 0 (design D4). None when there's no such file or heading."""
+    try:
+        text = (root / "openspec" / "specs" / spec / "spec.md").read_text(encoding="utf-8")
+    except OSError:
+        return None
+    names = REQUIREMENT_HEADING.findall(text)
+    return names[index] if index < len(names) else None
+
+
+def _issue_text(root: Path, item: OpenSpecItem, issue: OpenSpecIssue) -> str:
+    where = issue.path
+    match = REQUIREMENT_INDEX.match(issue.path)
+    if item.kind == "spec" and match:
+        name = requirement_name(root, item.name, int(match.group(1)))
+        if name is not None:
+            where = f'requirement "{name}" ({issue.path})'
+    elif item.kind == "change" and issue.path.endswith(".md"):
+        where = f"openspec/changes/{item.name}/specs/{issue.path}"
+    return f"{where}: [{issue.level.lower()}] {issue.message}"
+
+
+def openspec_refusal(root: Path, items: Iterable[OpenSpecItem], version: str) -> Decision:
+    """One refusal listing every failing item, each issue naming its requirement (design D5)."""
+    failing = [item for item in items if not item.valid]
+    if not failing:
+        return ALLOW
+    listed = "; ".join(
+        f"{item.kind} {item.name}: "
+        + ("; ".join(_issue_text(root, item, i) for i in item.issues) or "no issue given")
+        for item in failing
+    )
+    target = f"{failing[0].name} --type {failing[0].kind}" if len(failing) == 1 else "--all"
+    return Decision(
+        OPENSPEC_RULE,
+        f"{len(failing)} item(s) fail OpenSpec's strict validation: {listed}.",
+        f"Run `openspec validate {target} --strict` with OpenSpec {version} and fix what it "
+        "reports. For a long requirement, move examples into scenarios, or split it.",
+    )
+
+
+def run_openspec(root: Path) -> OpenSpecRun:
+    """OpenSpec's strict validation of every main spec and active change, with its telemetry
+    off. shutil.which finds npm's openspec.cmd on Windows too (design D1, D2)."""
+    executable = shutil.which("openspec")
+    if executable is None:
+        raise OpenSpecUnavailableError(
+            "the OpenSpec CLI wasn't found on PATH.",
+            f"Install it before the guard runs, at the version {OPENSPEC_PIN} pins "
+            "(OPENSPEC_VERSION).",
+        )
+    env = {**os.environ, "OPENSPEC_TELEMETRY": "0", "DO_NOT_TRACK": "1"}
+
+    def call(*args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [executable, *args],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            env=env,
+            timeout=OPENSPEC_TIMEOUT_SECONDS,
+        )
+
+    try:
+        version = call("--version")
+        result = call("validate", "--all", "--strict", "--json", "--no-interactive")
+    except subprocess.TimeoutExpired:
+        raise OpenSpecUnavailableError(
+            f"OpenSpec's validation ran for more than {OPENSPEC_TIMEOUT_SECONDS:g} seconds.",
+            "Re-run the check. If it times out again, run the validation locally to see why.",
+        ) from None
+    shown = version.stdout.strip() if version.returncode == 0 else ""
+    return OpenSpecRun(result.returncode, result.stdout, result.stderr, shown or "(unknown)")
+
+
+def openspec_strict(
+    root: Path,
+    scope: OpenSpecScope,
+    run: Callable[[Path], OpenSpecRun] = run_openspec,
+    notes: list[str] | None = None,
+) -> Decision:
+    """The openspec-strict rule. With no openspec/ root or nothing in scope, OpenSpec isn't run;
+    otherwise a run that can't be had or read fails, and never passes (design D2). ``notes``
+    gets one line saying what was judged, so a passing run's log shows it."""
+    said = notes if notes is not None else []
+    if not (root / "openspec").is_dir():
+        said.append("guard: openspec-strict: no openspec/ root, so OpenSpec wasn't run.")
+        return ALLOW
+    if scope.empty:
+        said.append(
+            "guard: openspec-strict: no spec or active change in scope, so OpenSpec wasn't run."
+        )
+        return ALLOW
+    try:
+        result = run(root)
+    except OpenSpecUnavailableError as error:
+        return Decision(OPENSPEC_RULE, error.problem, error.fix)
+    try:
+        items = read_openspec_report(result)
+    except UnreadableOpenSpecReportError as error:
+        stderr = result.stderr.strip()[-500:] or "(empty)"
+        return Decision(
+            OPENSPEC_RULE,
+            f"couldn't read OpenSpec {result.version}'s result: {error}. It exited "
+            f"{result.status}; its error output ends: {stderr}",
+            "Re-run the check. If it fails again, run the same validation locally with that "
+            "version; if OpenSpec's report has changed shape, the guard's reading of it needs "
+            "changing in troupe-run/infrastructure.",
+        )
+    judged = [item for item in items if scope.covers(item.kind, item.name)]
+    which = "every spec and active change" if scope.everything else "what the range touches"
+    said.append(
+        f"guard: openspec-strict: OpenSpec {result.version} validated {len(judged)} of "
+        f"{len(items)} item(s), {which}."
+    )
+    return openspec_refusal(root, judged, result.version)
 
 
 # --- entry points ----------------------------------------------------------------------------
@@ -2941,6 +3213,19 @@ def run_ci_entry(
             print(refusal.text(), file=sys.stderr)
             return 1
     refusals = run_ci(root, base, head, branch, title, repository)
+    # After the git-level rules, and outside run_ci, which needs no OpenSpec (design D1).
+    scope = openspec_scope(
+        changed_paths(root, commits_in_range(root, base, head)),
+        branch,
+        title is not None,
+        lambda path: (root / path).is_dir(),
+    )
+    notes: list[str] = []
+    strict = openspec_strict(root, scope, notes=notes)
+    for note in notes:
+        print(note)
+    if strict.refused:
+        refusals.append(strict)
     for refusal in refusals:
         print(refusal.text(), file=sys.stderr)
     if not refusals:
