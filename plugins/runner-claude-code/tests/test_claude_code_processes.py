@@ -86,7 +86,11 @@ def test_stop_on_windows_ends_the_grandchild_a_cmd_shim_starts(tmp_path: Path) -
         encoding="utf-8",
     )
     shim = tmp_path / "claude.cmd"
-    shim.write_text(f'@"{sys.executable}" "{script}" %*\r\n', encoding="utf-8")
+    # The base interpreter, not the venv's python.exe: that is a launcher whose own job holds the
+    # real interpreter, so the pid the child reports would be a process the launcher ends.
+    shim.write_text(
+        f'@"{getattr(sys, "_base_executable", sys.executable)}" "{script}" %*\r\n', encoding="utf-8"
+    )
     child = processes.start([str(shim)], tmp_path, dict(os.environ))
     deadline = time.monotonic() + MARGIN
     while not pid_file.exists() and time.monotonic() < deadline:
