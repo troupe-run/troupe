@@ -133,8 +133,14 @@ record's `tools`, and engine name `claude-code` with the record's `claude_code_v
 - **THEN** the event is `init` with engine version `2.1.296`, model `claude-haiku-5-5` and the record's 22 tools
 
 ### Requirement: The runner sends init before any other event
-`init` SHALL be the first event. Should Claude Code report anything that maps to an event before its init record, or
-end without one, the runner SHALL first send an `init` with no `engine` and no tools.
+`init` SHALL be the first event. A `log` about a record before the init record SHALL be held and sent after `init`.
+If any other event comes before the init record, or Claude Code ends without one, the runner SHALL first send an
+`init` with no `engine` and no tools.
+
+#### Scenario: A record before the init record
+- **WHEN** Claude Code writes a `system` record of subtype `ui_invalidate`, then its init record
+- **THEN** the first event is the `init` mapped from the init record, followed by the `debug` log noting
+  `ui_invalidate`
 
 #### Scenario: Claude Code exits before its init
 - **WHEN** Claude Code writes nothing to standard output and exits 1

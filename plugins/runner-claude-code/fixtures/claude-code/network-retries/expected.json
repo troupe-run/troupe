@@ -1,0 +1,10 @@
+{
+  "description": "Nothing listens at the API's address, with two retries: api_retry events with no HTTP status and error \"unknown\", then the error result under \"success\".",
+  "exitCode": 1,
+  "outcome": "failed",
+  "errorCode": "run.error-result",
+  "withoutFailFast": {
+    "outcome": "failed",
+    "errorCode": "run.error-result"
+  }
+}
