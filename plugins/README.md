@@ -24,6 +24,7 @@ house. #37 gives every port a JSON-RPC transport too, so an adapter acquired by 
 
 | Plugin | What it is |
 |---|---|
+| [`runner-claude-code/`](runner-claude-code/README.md) | An actor runner for Claude Code: runs `claude -p` in the workspace and maps its stream-json onto run events ([#55](https://github.com/troupe-run/troupe/issues/55)) |
 | [`runner-scripted/`](runner-scripted/README.md) | A deterministic actor runner for tests: plays a script or replays a recording, so every run outcome can be produced on demand (decision [#16](https://github.com/troupe-run/troupe/issues/16)) |
 
 How to write a runner is in [contributing/runners.md](../contributing/runners.md).

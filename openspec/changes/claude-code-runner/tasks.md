@@ -129,7 +129,7 @@
 
 ## 7. The runner process (design D2, D6, D7)
 
-- [ ] 7.1 Add `tests/fake_claude.py`, the stand-in `claude`, and a fixture that puts it first on a temporary `PATH`:
+- [x] 7.1 Add `tests/fake_claude.py`, the stand-in `claude`, and a fixture that puts it first on a temporary `PATH`:
   an executable shim on POSIX and `claude.cmd` on Windows. The stand-in:
   - records its argv, stdin bytes, cwd and environment as JSON to `FAKE_CLAUDE_RECORD`;
   - replays `FAKE_CLAUDE_FIXTURE`'s native lines;
@@ -139,7 +139,7 @@
 
   Verify: a test runs the stand-in directly with each fixture and checks it writes the fixture's native lines byte
   for byte.
-- [ ] 7.2 Add `runner.py`, the JSON-RPC loop, and `tests/claude_harness.py`, which follows `scripted_harness.py` and
+- [x] 7.2 Add `runner.py`, the JSON-RPC loop, and `tests/claude_harness.py`, which follows `scripted_harness.py` and
   validates every message against the contract with the runner's schemas bound. The loop:
   - handles the handshake;
   - checks before answering `run/start`, refusing `claude-code.not-found`, `claude-code.unknown-option`,
@@ -157,7 +157,7 @@
   - cancel mid-run and end of input mid-run, after each of which the stand-in's recorded pid is gone before the
     runner exits, and no event follows the cancel;
   - the private directory gone after each of those paths.
-- [ ] 7.3 Complete the plugin README: what the runner does, how it finds `claude`, the command line it builds, the
+- [x] 7.3 Complete the plugin README: what the runner does, how it finds `claude`, the command line it builds, the
   isolation and `settingSources`, cancelling, the exit codes, the limits (D11), the schemas, and the fixtures and how
   to capture them. Add the plugin to `plugins/README.md`'s table. Verify: the README test from 4.3 passes, and every
   path the README links to exists (checked by the same test).

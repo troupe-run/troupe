@@ -66,21 +66,21 @@ class Event:
 Out = Transcript | Event
 
 
-class _NotJson(Exception):  # noqa: N818 - a verdict on a line, not a Python failure
-    pass
+class NotJsonError(ValueError):
+    """A line or message that isn't strict JSON."""
 
 
 def _refuse_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
         if key in result:
-            raise _NotJson(f"duplicate key {key!r}")
+            raise NotJsonError(f"duplicate key {key!r}")
         result[key] = value
     return result
 
 
 def _refuse_constant(name: str) -> object:
-    raise _NotJson(f"{name} isn't JSON")
+    raise NotJsonError(f"{name} isn't JSON")
 
 
 def loads_strict(text: str) -> object:
@@ -90,7 +90,7 @@ def loads_strict(text: str) -> object:
             text, object_pairs_hook=_refuse_duplicates, parse_constant=_refuse_constant
         )
     except (json.JSONDecodeError, RecursionError) as error:
-        raise _NotJson(str(error)) from error
+        raise NotJsonError(str(error)) from error
 
 
 def _utf8_size(text: str) -> int:
@@ -171,7 +171,7 @@ class Mapper:
         try:
             text = line.decode("utf-8")
             record = loads_strict(text)
-        except (UnicodeDecodeError, _NotJson):
+        except (UnicodeDecodeError, NotJsonError):
             record = None
         if not isinstance(record, dict):
             events = [_log("warning", "Claude Code wrote a line that isn't a JSON object")]
@@ -189,9 +189,18 @@ class Mapper:
         if self._silenced or self._init_sent:
             return []
         how = "exit code unknown" if exit_status is None else f"exit code {exit_status}"
+        return self._end_before_init(
+            f"Claude Code ended ({how}) before it reported its init record"
+        )
+
+    def cannot_start(self, problem: str) -> list[Out]:
+        """The events for Claude Code failing to start: a synthetic init and a log saying why."""
+        return self._end_before_init(problem)
+
+    def _end_before_init(self, problem: str) -> list[Out]:
         self._init_sent = True
         held, self._held = self._held, []
-        ended = _log("error", f"Claude Code ended ({how}) before it reported its init record")
+        ended = _log("error", problem)
         return [Event(self._synthetic_init()), *(self._fit(event) for event in [*held, ended])]
 
     # Ordering init
@@ -491,4 +500,13 @@ def _tool_output(content: object) -> tuple[str, int]:
     return text, size + max(0, len(texts) - 1)
 
 
-__all__ = ["Event", "Mapper", "Out", "Transcript", "cut", "event_size", "loads_strict"]
+__all__ = [
+    "Event",
+    "Mapper",
+    "NotJsonError",
+    "Out",
+    "Transcript",
+    "cut",
+    "event_size",
+    "loads_strict",
+]
