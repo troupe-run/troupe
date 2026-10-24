@@ -55,18 +55,18 @@
 
 ## 4. Options and published schemas (design D10)
 
-- [ ] 4.1 Add `schemas/options.schema.json` and `schemas/errors.schema.json`, closed, with D10's rules and the four
+- [x] 4.1 Add `schemas/options.schema.json` and `schemas/errors.schema.json`, closed, with D10's rules and the four
   error codes, and `$id`s under `https://troupe.run/plugins/runner-claude-code/`. Verify: a schema test, copied from
   `test_scripted_schemas.py`'s pattern, loads both with the contract's schemas and checks each is draft 2020-12 and
   closed.
-- [ ] 4.2 Add `options.py`: `parse_options(value) -> Options`, raising `OptionsError(code, where, problem, fix)`
+- [x] 4.2 Add `options.py`: `parse_options(value) -> Options`, raising `OptionsError(code, where, problem, fix)`
   for an unknown option (`claude-code.unknown-option`) or a malformed value (`claude-code.invalid-options`). Verify
   with `test_options.py`:
   - one test per rule in D10, for both an accepted and a refused value. A refused value names `where`, and its fix
     names what's valid;
   - a hypothesis test that generates option objects, from both near-valid and arbitrary JSON, and asserts that
     `parse_options` and the published schema accept and refuse exactly the same ones.
-- [ ] 4.3 Document the options, their rules and the default budget in the plugin README. Verify: a README test (as
+- [x] 4.3 Document the options, their rules and the default budget in the plugin README. Verify: a README test (as
   `test_runners_doc.py` does for the contract) checks that every option in the schema has a row, and every row an
   option.
 

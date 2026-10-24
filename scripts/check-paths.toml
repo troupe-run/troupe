@@ -118,6 +118,7 @@ paths = [
     "plugins/runner-claude-code/tests/**",
     "plugins/runner-claude-code/fixtures/**",
     "plugins/runner-claude-code/tools/**",
+    "plugins/runner-claude-code/README.md",
     "plugins/runner-claude-code/LICENSE",
 ]
 tests = [
