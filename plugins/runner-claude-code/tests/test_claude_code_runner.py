@@ -357,3 +357,24 @@ def test_claude_terminated_by_someone_else_ends_the_run_with_no_result(
     assert [e["type"] for e in events] == ["init"]
     assert session.wait() == 143
     assert b"Claude Code exited with code 143 and sent no result" in session.stderr()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="a missing interpreter is how POSIX fails exec")
+def test_a_claude_that_cant_be_started_gives_a_synthetic_init_a_log_and_exit_1(
+    tmp_path: Path, workspace: Path, record: Path, sessions: list[Session]
+) -> None:
+    env = _env(tmp_path, record)
+    broken = tmp_path / "broken"
+    broken.mkdir()
+    claude = broken / "claude"
+    claude.write_text("#!/nonexistent/interpreter\n", encoding="utf-8")
+    claude.chmod(0o755)
+    env["PATH"] = str(broken)
+    session = _session(sessions, workspace, env)
+    assert session.start()["result"] == {"runId": session.run_id}
+    events = [m["params"] for m in session.rest() if m.get("method") == "run/event"]
+    assert [e["type"] for e in events] == ["init", "log"]
+    assert events[1]["level"] == "error"
+    assert "couldn't be started" in events[1]["message"]
+    assert session.wait() == 1
+    session.validate_all()
