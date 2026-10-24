@@ -419,7 +419,7 @@ rollback is reverting the change.
 
 ## Open Questions
 
-- Does `CLAUDE.md` load under `--setting-sources ""`? The live test reports it (D4). The answer changes the README,
-  not the design.
+- ~~Does `CLAUDE.md` load under `--setting-sources ""`?~~ No. The owner's live run with an existing login
+  (2026-10-24, Claude Code 2.1.302) reported `CLAUDE.md loaded with no setting sources: no`, and the README says so.
 - Should policy limit which permission modes, or how large a budget, an actor may set? That belongs with policy work.
   The runner already passes only what config sets.
