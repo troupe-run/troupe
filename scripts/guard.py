@@ -160,9 +160,25 @@ def _git_env() -> dict[str, str]:
     return {k: v for k, v in os.environ.items() if k not in REPOSITORY_LOCATION_VARIABLES}
 
 
-def git(root: Path, *args: str, check: bool = True) -> str:
+def _committing_env(root: Path) -> dict[str, str]:
+    """`_git_env()` with the index git is committing put back. During `git commit -a` or
+    `git commit <path>`, git names it in GIT_INDEX_FILE, sometimes relative to the root. Only
+    reads of the commit being made use this (minor-corrections design D1)."""
+    env = _git_env()
+    index = os.environ.get("GIT_INDEX_FILE")
+    if index:
+        env["GIT_INDEX_FILE"] = str(root / index)
+    return env
+
+
+def git(root: Path, *args: str, check: bool = True, env: dict[str, str] | None = None) -> str:
     result = subprocess.run(
-        ["git", *args], cwd=root, capture_output=True, text=True, check=False, env=_git_env()
+        ["git", *args],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=_git_env() if env is None else env,
     )
     if check and result.returncode != 0:
         raise RuntimeError(f"git {' '.join(args)} failed: {result.stderr.strip()}")
@@ -694,7 +710,7 @@ def read_working_tree(root: Path) -> Callable[[str], str | None]:
 
 
 class ReadStaged:
-    """Reads a file's staged contents (None when it isn't staged or doesn't exist)."""
+    """Reads a file's contents in the index git is committing (None when it isn't there)."""
 
     def __init__(self, root: Path) -> None:
         self.root = root
@@ -706,7 +722,7 @@ class ReadStaged:
             capture_output=True,
             text=True,
             check=False,
-            env=_git_env(),
+            env=_committing_env(self.root),
         )
         return result.stdout if result.returncode == 0 else None
 
@@ -737,16 +753,19 @@ def commit_checks(
     (stderr by default) as it runs, and it is stopped after ``timeout`` seconds.
     """
     out = sys.stderr if progress is None else progress
-    unstaged = git(root, "diff", "--name-only")
+    # Against the index git is committing, so `git commit -a` and `git commit <path>` are judged
+    # on what they commit (minor-corrections design D2).
+    unstaged = git(root, "diff", "--name-only", env=_committing_env(root))
     if unstaged:
         files = ", ".join(unstaged.splitlines()[:5])
         return Decision(
             "commit-checks",
             f"tracked files have unstaged changes ({files}), so the check wouldn't test what's "
             "being committed.",
-            "Stage them (git add) or set them aside (git stash --keep-index), then commit again.",
+            "Stage them (git add) or set them aside (git stash --keep-index), then commit again. "
+            "With `git commit <path>`, name them too, or commit without paths.",
         )
-    staged = git(root, "diff", "--cached", "--name-only", "--no-renames").splitlines()
+    staged = committing_paths(root)
     text = ReadStaged(root)(CHECK_PATHS)
     try:
         scope = check_scope(staged, None if text is None else check_paths(text))
@@ -3157,6 +3176,17 @@ def _event_payload() -> dict[str, object]:
     return {}
 
 
+def _has_commit(root: Path, sha: str) -> bool:
+    result = subprocess.run(
+        ["git", "cat-file", "-e", f"{sha}^{{commit}}"],
+        cwd=root,
+        capture_output=True,
+        check=False,
+        env=_git_env(),
+    )
+    return result.returncode == 0
+
+
 def github_ci_inputs(
     root: Path,
 ) -> tuple[str | None, str, str | None, str | None, str | None]:
@@ -3179,6 +3209,16 @@ def github_ci_inputs(
     branch = os.environ.get("GITHUB_REF_NAME")
     if not isinstance(before, str) or not before or _is_null(before):
         before = git(root, "merge-base", "origin/main", head, check=False) or None
+    elif not _has_commit(root, before):
+        # A force push replaced it, and the clone holds only what a ref reaches, so judge the
+        # branch from where it left main, as for a first push (minor-corrections design D3).
+        base = git(root, "merge-base", "origin/main", head, check=False) or None
+        if base is not None:
+            print(
+                f"guard: the push's previous tip {before[:7]} isn't in this clone (a force "
+                f"push?), so the range starts where the branch left main ({base[:7]})."
+            )
+        before = base
     return before, head, branch, None, os.environ.get("GITHUB_REPOSITORY") or None
 
 
@@ -3235,7 +3275,7 @@ def run_ci_entry(
 
 def run_pre_commit(root: Path) -> int:
     branch = current_branch(root)
-    staged = git(root, "diff", "--cached", "--name-only").splitlines()
+    staged = committing_paths(root)
 
     def checks() -> Iterable[Decision]:
         yield commit_on_main(branch)
@@ -3273,20 +3313,15 @@ def run_check_scope(root: Path, paths: Iterable[str], stdout: TextIO | None = No
 
 
 def committing_paths(root: Path) -> list[str]:
-    """The paths the commit being made changes. During `git commit -a` or `git commit <path>`, git
-    names the index it commits in GIT_INDEX_FILE, sometimes relative to the root; every other git
-    call here strips it (design D4)."""
-    env = _git_env()
-    index = os.environ.get("GIT_INDEX_FILE")
-    if index:
-        env["GIT_INDEX_FILE"] = str(root / index)
+    """The paths the commit being made changes, read from the index git is committing
+    (protocol-schema-commit-types design D4)."""
     result = subprocess.run(
         ["git", "diff", "--cached", "--name-only", "--no-renames"],
         cwd=root,
         capture_output=True,
         text=True,
         check=True,
-        env=env,
+        env=_committing_env(root),
     )
     return result.stdout.splitlines()
 
