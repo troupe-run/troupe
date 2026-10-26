@@ -29,7 +29,7 @@
 - [x] 3.1 Rebase onto `main` and re-run task 1.2's script, so a spec added on `main` meanwhile can't go without its
   line (design, Risks). Verify it still reports one match per spec in `openspec/specs/`. If a new spec appeared, ask
   the owner which labels it names unless #169's "its own label" rule clearly applies.
-- [ ] 3.2 Open the pull request with `Closes #170`, the drift job's expected 25 "Purpose has changed" findings and
+- [x] 3.2 Open the pull request with `Closes #170`, the drift job's expected 25 "Purpose has changed" findings and
   why (design D4), and links to troupe-run/infrastructure#151 and #153. Verify every CI job passes.
 
 ## Workflow follow-up
