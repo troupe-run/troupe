@@ -2,6 +2,8 @@
 
 ## Purpose
 
+Capability: `cap:actor-runners`
+
 Runs an actor through Claude Code. The runner speaks troupe's runner contract and maps Claude Code's stream-json onto
 run events, so `troupe perform` can use the engine troupe was designed around.
 

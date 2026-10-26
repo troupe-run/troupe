@@ -2,6 +2,8 @@
 
 ## Purpose
 
+Capability: `cap:identity`
+
 Works out who is acting, through an ordered, pluggable chain of identity sources, so that every event names a real
 actor and troupe fails rather than guesses when nobody can be identified.
 

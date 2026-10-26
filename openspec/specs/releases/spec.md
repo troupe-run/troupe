@@ -2,6 +2,8 @@
 
 ## Purpose
 
+Capability: `cap:development`
+
 How troupe's packages get their versions, changelogs and releases: all derived from the Conventional Commits on
 `main` through a release pull request, never edited by hand.
 

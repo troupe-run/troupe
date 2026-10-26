@@ -2,6 +2,8 @@
 
 ## Purpose
 
+Capability: `cap:runs`
+
 Records each run of an actor in the theatre's event store, with lineage, from its first runner event to its derived
 outcome, and reads runs back as projections so a person can see what is happening and what happened.
 

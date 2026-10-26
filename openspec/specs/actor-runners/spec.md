@@ -2,6 +2,8 @@
 
 ## Purpose
 
+Capability: `cap:actor-runners`
+
 How troupe runs an actor through an out-of-process runner: launching it, supervising the run within named limits,
 cancelling it, and deriving one trustworthy outcome per run.
 

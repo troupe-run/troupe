@@ -2,6 +2,8 @@
 
 ## Purpose
 
+Capability: `cap:config`
+
 Holds a theatre's config as events with lineage, works out the config every command uses from them, including
 across merged branches, and defines the actor, the first kind of config.
 

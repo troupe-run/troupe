@@ -2,6 +2,8 @@
 
 ## Purpose
 
+Capability: `cap:development`
+
 Finding flaky tests on demand, on every platform: repeating tests in overlapping rounds, under optional load and with
 fresh randomised inputs, and reporting each failure with the evidence an issue needs.
 

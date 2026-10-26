@@ -2,6 +2,8 @@
 
 ## Purpose
 
+Capability: `cap:actor-runners`, `cap:protocol`
+
 The language-neutral contract between troupe and an actor runner, so that a runner can be written in any language
 and troupe can run any actor (Claude Code, a local model, a scripted runner) the same way.
 

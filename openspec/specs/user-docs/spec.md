@@ -2,6 +2,8 @@
 
 ## Purpose
 
+Capability: `cap:user-docs`
+
 troupe's user documentation, which troupe.run's `/docs` is built from: where it lives, the page contract the site
 builds from, which reference is generated and how it's kept true, how pages describe built and unbuilt behaviour,
 and the vocabulary rules they follow.

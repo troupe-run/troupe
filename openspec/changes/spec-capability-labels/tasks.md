@@ -2,15 +2,15 @@
 
 ## 1. Name each spec's labels
 
-- [ ] 1.1 Add the `Capability:` line to each of the 25 specs in `openspec/specs/`, as the first line of its
+- [x] 1.1 Add the `Capability:` line to each of the 25 specs in `openspec/specs/`, as the first line of its
   `## Purpose`, followed by a blank line and the Purpose's prose unchanged, with the labels from the proposal's table
   in the order it gives (design D2). Verify `git diff --stat` lists exactly the 25 `spec.md` files, each with 2 lines
   added and none removed.
-- [ ] 1.2 Check every line by script against #169's mapping, written out in the script from the proposal's table:
+- [x] 1.2 Check every line by script against #169's mapping, written out in the script from the proposal's table:
   each spec's first non-blank Purpose line is exactly ``Capability: `cap:a`[, `cap:b`]`` with the expected labels,
   every spec in `openspec/specs/` has an entry, and the mapping names no spec that doesn't exist. Keep the script in
   the scratchpad, not the repository. Verify it reports 25 matches and nothing else.
-- [ ] 1.3 Verify `openspec validate --specs --strict` passes (25 passed, 0 failed), and that
+- [x] 1.3 Verify `openspec validate --specs --strict` passes (25 passed, 0 failed), and that
   `git diff --name-only main -- openspec/changes/archive/` prints nothing. Commit as
   `docs(openspec): name each spec's capability labels under its Purpose`, with `uv run scripts/check.py` passing first.
 
