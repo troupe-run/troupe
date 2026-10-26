@@ -36,6 +36,8 @@ import tempfile
 import threading
 import time
 import tomllib
+import urllib.error
+import urllib.request
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -64,7 +66,11 @@ OPENSPEC_RULE = "openspec-strict"
 """Fails the GitHub check when a spec or active change in scope fails OpenSpec's strict validation.
 Checked only on GitHub, where no override is consumed, so it isn't overridable
 (guard-strict-openspec design D5, D7)."""
-RULES = (*OVERRIDABLE_RULES, TAMPER_RULE, OPENSPEC_RULE)
+CAPABILITY_RULE = "capability-label"
+"""Fails the GitHub check when a troupe spec in scope names no capability label, a malformed
+Capability: line, or a label troupe-run/infrastructure doesn't declare on main. Checked only on
+GitHub, so it isn't overridable (guard-capability-label-at-proposal design D1, D4)."""
+RULES = (*OVERRIDABLE_RULES, TAMPER_RULE, OPENSPEC_RULE, CAPABILITY_RULE)
 
 HOOKS_PATH = ".githooks"
 SOURCE_REPOSITORY = "troupe-run/infrastructure"
@@ -91,6 +97,22 @@ OPENSPEC_TIMEOUT_SECONDS = 60.0
 job's 5 minutes (guard-strict-openspec design D2)."""
 OPENSPEC_PIN = ".github/workflows/guard.yml"
 """Where the OpenSpec version the check installs is pinned, as OPENSPEC_VERSION (design D6)."""
+CAPABILITY_REPOSITORIES = frozenset({"troupe-run/troupe"})
+"""Where capability-label applies: the repositories whose specs name capability labels, judged by
+the repository the run is in, so a fork's pull request is judged against troupe's labels
+(guard-capability-label-at-proposal design D1)."""
+CAPABILITY_LABELS_PATH = "tofu/labels/troupe.json"
+"""troupe's capability labels, declared in SOURCE_REPOSITORY and read from its main (design D3)."""
+CAPABILITY_LABELS_URL = (
+    f"https://api.github.com/repos/{SOURCE_REPOSITORY}/contents/{CAPABILITY_LABELS_PATH}?ref=main"
+)
+CAPABILITY_LABELS_TIMEOUT_SECONDS = 30.0
+"""How long reading the declared labels may take before capability-label fails (design D3)."""
+CAPABILITY_STANDARD_CHANGE = (
+    f"https://github.com/{SOURCE_REPOSITORY}/blob/main/docs/standard-changes.md#a-capability-label"
+)
+"""The standard change that adds a capability label, which an undeclared label's fix links (#152;
+design D5)."""
 GUARD_DIR = "troupe-guard"
 CHECK_TIMEOUT_SECONDS = 600.0
 """How long the pre-commit check may run before the commit is refused. The default lives here
@@ -3052,7 +3074,10 @@ def run_openspec(root: Path) -> OpenSpecRun:
             f"Install it before the guard runs, at the version {OPENSPEC_PIN} pins "
             "(OPENSPEC_VERSION).",
         )
-    env = {**os.environ, "OPENSPEC_TELEMETRY": "0", "DO_NOT_TRACK": "1"}
+    # Without the run's token, which only capability-label's read of the labels needs
+    # (guard-capability-label-at-proposal design D3).
+    env = {k: v for k, v in os.environ.items() if k != "GITHUB_TOKEN"}
+    env |= {"OPENSPEC_TELEMETRY": "0", "DO_NOT_TRACK": "1"}
 
     def call(*args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
@@ -3120,6 +3145,221 @@ def openspec_strict(
         f"{len(items)} item(s), {which}."
     )
     return openspec_refusal(root, judged, result.version)
+
+
+# --- a troupe spec's Capability: line (spec-capability-label-check, guard-capability-label-at-
+# proposal) ------------------------------------------------------------------------------------
+# The first non-blank line of a spec's Purpose names its capability labels (troupe#170 design D2).
+# Read here, in the delivered guard, and imported by scripts/oob.py, so the line's shape lives in
+# one place (guard-capability-label-at-proposal design D6).
+
+CAPABILITY_SHAPE = "Capability: `cap:<name>`, `cap:<name>`"
+CAPABILITY_LINE = re.compile(r"Capability: (`[^`\s]+`(?:, `[^`\s]+`)*)")
+
+
+def purpose_lines(spec_md: str) -> list[str]:
+    """The lines of a spec's `## Purpose` section; [] when there is none."""
+    lines: list[str] = []
+    inside = False
+    for line in spec_md.splitlines():
+        if line.startswith("## "):
+            if inside:
+                break
+            inside = line.strip() == "## Purpose"
+        elif inside:
+            lines.append(line)
+    return lines
+
+
+def capability_line(spec_md: str) -> str | None:
+    """The Purpose's first non-blank line when it's meant as the Capability: line, else None.
+    Any spelling of capability or capabilities, in any case, is meant as the line, so a misspelt
+    one is malformed rather than "no label" (spec-capability-label-check design D2)."""
+    first = next((line.strip() for line in purpose_lines(spec_md) if line.strip()), "")
+    return first if first.lower().startswith("capabilit") else None
+
+
+class MalformedCapabilityLineError(Exception):
+    """A Capability: line that isn't in the agreed shape: never read as naming no label, or as
+    naming the labels it seems to (spec-capability-label-check design D2)."""
+
+
+def capability_labels(spec_md: str) -> list[str]:
+    """The labels a spec names in its Capability: line; [] when it has none."""
+    line = capability_line(spec_md)
+    if line is None:
+        return []
+    match = CAPABILITY_LINE.fullmatch(line)
+    labels = [label.strip("`") for label in match.group(1).split(", ")] if match else []
+    if not labels or len(set(labels)) != len(labels):
+        raise MalformedCapabilityLineError(line)
+    return labels
+
+
+@dataclass(frozen=True)
+class CapabilitySpec:
+    """A spec capability-label judges: a main spec, or one an active change proposes."""
+
+    name: str
+    change: str | None
+    text: str
+
+    @property
+    def where(self) -> str:
+        spec = f"spec `{self.name}`"
+        return f"change `{self.change}`: {spec}" if self.change else spec
+
+
+def capability_specs(root: Path, scope: OpenSpecScope) -> list[CapabilitySpec]:
+    """The main specs in scope, and each delta in an active change in scope whose main spec doesn't
+    exist yet, whose Purpose becomes the new spec's. A delta for a spec that exists isn't judged:
+    OpenSpec ignores its Purpose (design D2; troupe#170 design D1, D3)."""
+    openspec = root / "openspec"
+    if scope.everything:
+        specs = sorted(p.name for p in (openspec / "specs").glob("*") if p.is_dir())
+        changes = sorted(
+            p.name for p in (openspec / "changes").glob("*") if p.is_dir() and p.name != "archive"
+        )
+    else:
+        specs, changes = sorted(scope.specs), sorted(scope.changes)
+    found: list[CapabilitySpec] = []
+    for name in specs:
+        path = openspec / "specs" / name / "spec.md"
+        if path.is_file():
+            found.append(CapabilitySpec(name, None, path.read_text(encoding="utf-8")))
+    for change in changes:
+        for path in sorted((openspec / "changes" / change / "specs").glob("*/spec.md")):
+            if not (openspec / "specs" / path.parent.name).exists():
+                found.append(
+                    CapabilitySpec(path.parent.name, change, path.read_text(encoding="utf-8"))
+                )
+    return sorted(found, key=lambda spec: (spec.name, spec.change or ""))
+
+
+class UnreadableLabelsError(Exception):
+    """The declared labels couldn't be had, or aren't a list of labels: never "no labels"
+    (design D3)."""
+
+
+def _send(request: urllib.request.Request, timeout: float) -> bytes:
+    with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310 (fixed https URL)
+        body: bytes = response.read()
+        return body
+
+
+def declared_labels(
+    send: Callable[[urllib.request.Request, float], bytes] = _send,
+) -> frozenset[str]:
+    """The label names CAPABILITY_LABELS_PATH declares on SOURCE_REPOSITORY's main, read through
+    GitHub's contents API, with the run's token when there is one (design D3)."""
+    request = urllib.request.Request(
+        CAPABILITY_LABELS_URL, headers={"Accept": "application/vnd.github.raw+json"}
+    )
+    token = os.environ.get("GITHUB_TOKEN")
+    if token:
+        request.add_header("Authorization", f"Bearer {token}")
+    try:
+        body = send(request, CAPABILITY_LABELS_TIMEOUT_SECONDS)
+    except urllib.error.HTTPError as error:
+        raise UnreadableLabelsError(f"GitHub answered {error.code} {error.reason}") from error
+    except OSError as error:  # a timeout or a failed connection, URLError included
+        raise UnreadableLabelsError(f"the request failed: {error}") from error
+    try:
+        labels = json.loads(body)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise UnreadableLabelsError(f"it isn't JSON: {error}") from error
+    if not isinstance(labels, list) or not all(
+        isinstance(label, dict) and isinstance(label.get("name"), str) for label in labels
+    ):
+        raise UnreadableLabelsError("it isn't a list of labels, each with a string name")
+    return frozenset(label["name"] for label in labels)
+
+
+def capability_label(
+    root: Path,
+    scope: OpenSpecScope,
+    repository: str | None,
+    read_labels: Callable[[], frozenset[str]] = declared_labels,
+    notes: list[str] | None = None,
+) -> Decision:
+    """The capability-label rule. Outside CAPABILITY_REPOSITORIES, or with no spec in scope, the
+    labels aren't read; otherwise a read that fails fails the rule, and never passes (design D1-D5).
+    ``notes`` gets one line saying what was judged."""
+    said = notes if notes is not None else []
+    if repository not in CAPABILITY_REPOSITORIES:
+        said.append(
+            f"guard: {CAPABILITY_RULE}: {repository or 'this repository'} names no capability "
+            "labels, so it wasn't checked."
+        )
+        return ALLOW
+    specs = capability_specs(root, scope) if (root / "openspec").is_dir() else []
+    if not specs:
+        said.append(f"guard: {CAPABILITY_RULE}: no spec in scope, so the labels weren't read.")
+        return ALLOW
+    try:
+        declared = read_labels()
+    except UnreadableLabelsError as error:
+        return Decision(
+            CAPABILITY_RULE,
+            f"couldn't read the declared labels, {CAPABILITY_LABELS_PATH} on "
+            f"{SOURCE_REPOSITORY}'s main: {error}.",
+            "Re-run the check. If it fails again, tell the owner, with the run's URL.",
+        )
+    which = "every spec" if scope.everything else "what the range touches"
+    said.append(
+        f"guard: {CAPABILITY_RULE}: judged {len(specs)} spec(s), {which}, against "
+        f"{len(declared)} declared label(s)."
+    )
+    findings: list[str] = []
+    undeclared = no_line = proposed_line = False
+    for spec in specs:
+        try:
+            named = capability_labels(spec.text)
+        except MalformedCapabilityLineError as error:
+            findings.append(f"{spec.where}: its Capability: line is malformed: {str(error)!r}")
+            no_line, proposed_line = True, proposed_line or spec.change is not None
+            continue
+        if not named:
+            findings.append(
+                f"{spec.where} names no capability label: its Purpose doesn't start with a "
+                "Capability: line"
+            )
+            no_line, proposed_line = True, proposed_line or spec.change is not None
+        for label in named:
+            if label not in declared:
+                findings.append(
+                    f"{spec.where} names `{label}`, which {SOURCE_REPOSITORY} doesn't declare "
+                    "on main"
+                )
+                undeclared = True
+    if not findings:
+        return ALLOW
+    fixes: list[str] = []
+    if undeclared:
+        fixes.append(
+            "For a label that isn't declared, add it as a standard change: open the label's "
+            f"sub-issue from {CAPABILITY_STANDARD_CHANGE} under the needing issue's Epic, so it "
+            "blocks that issue, and re-run this check once the label's pull request has merged. "
+            "Or name a declared label."
+        )
+    if no_line:
+        fixes.append(
+            f"Make the first line of the spec's Purpose {CAPABILITY_SHAPE}"
+            + (
+                "; for a proposed spec, at the top of the delta's `## Purpose`, which OpenSpec "
+                "carries into the new spec"
+                if proposed_line
+                else ""
+            )
+            + "."
+        )
+    return Decision(
+        CAPABILITY_RULE,
+        f"{len(findings)} problem(s) with the capability labels specs name: "
+        + "; ".join(findings)
+        + ".",
+        " ".join(fixes),
+    )
 
 
 # --- entry points ----------------------------------------------------------------------------
@@ -3229,6 +3469,7 @@ def run_ci_entry(
     branch: str | None,
     title: str | None = None,
     repository: str | None = None,
+    read_labels: Callable[[], frozenset[str]] = declared_labels,
 ) -> int:
     if head is None:
         try:
@@ -3266,6 +3507,16 @@ def run_ci_entry(
         print(note)
     if strict.refused:
         refusals.append(strict)
+    # The repository the run is in, not the branch's, so a fork is judged against troupe's labels
+    # (guard-capability-label-at-proposal design D1).
+    label_notes: list[str] = []
+    labels = capability_label(
+        root, scope, os.environ.get("GITHUB_REPOSITORY") or None, read_labels, notes=label_notes
+    )
+    for note in label_notes:
+        print(note)
+    if labels.refused:
+        refusals.append(labels)
     for refusal in refusals:
         print(refusal.text(), file=sys.stderr)
     if not refusals:
