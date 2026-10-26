@@ -65,6 +65,10 @@ context: |
     recommendation.
   - Surface design decisions in the proposal or design before code depends on them.
   - Keep specs, code and tests in agreement; change all three together.
+  - Every spec names the capability labels it belongs to, one or more, in the first line of its Purpose:
+    ``Capability: `cap:stages`, `cap:vcs` ``. A new spec's delta puts the line at the top of its `## Purpose`, which
+    OpenSpec carries into the main spec. A label that doesn't exist yet is added through
+    troupe-run/infrastructure#152 first.
   - When a change fixes a tracked issue, comment on the issue with the change and close it.
   - Commit in small steps with messages that say why.
 
