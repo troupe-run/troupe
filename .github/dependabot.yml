@@ -1,0 +1,41 @@
+# Generated in troupe-run/infrastructure from tofu/dependabot.json and
+# tofu/labels/dependabot.json, and delivered by its App. Change it there: an edit here is
+# drift, and the next apply reverts it.
+version: 2
+updates:
+- package-ecosystem: github-actions
+  directory: /
+  schedule:
+    interval: weekly
+    day: monday
+    time: "00:00"
+    timezone: UTC
+  cooldown:
+    default-days: 7
+  commit-message:
+    prefix: chore
+    include: scope
+  labels:
+  - dependencies
+  - github_actions
+  exclude-paths:
+  - .github/workflows/claude-review.yml
+  - .github/workflows/guard.yml
+- package-ecosystem: uv
+  directory: /
+  schedule:
+    interval: weekly
+    day: monday
+    time: "00:00"
+    timezone: UTC
+  cooldown:
+    default-days: 7
+    semver-patch-days: 3
+    semver-minor-days: 7
+    semver-major-days: 14
+  commit-message:
+    prefix: chore
+    include: scope
+  labels:
+  - dependencies
+  - "python:uv"
