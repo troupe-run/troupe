@@ -2,6 +2,8 @@
 
 ## Purpose
 
+Capability: `cap:protocol`
+
 The rules every schema troupe publishes follows, in `protocol/` and in each plugin: JSON Schema that is strict,
 so every value troupe reads or writes has a known shape that tools, editors and other languages can check.
 

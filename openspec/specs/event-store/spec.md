@@ -2,6 +2,8 @@
 
 ## Purpose
 
+Capability: `cap:event-store`
+
 Records troupe's events as append-only text that git can merge without conflicts, and reads them back in a stable
 local order that meets the `eventsourcing` library's recorder contract, across branches, merges and forks.
 

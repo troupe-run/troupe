@@ -2,6 +2,8 @@
 
 ## Purpose
 
+Capability: `cap:policy`
+
 Gives troupe one seam through which every policy setting is read, each with a named default and a known source, so
 policy can grow levels and combinators later without anything else reading policy its own way.
 

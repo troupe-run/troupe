@@ -2,6 +2,8 @@
 
 ## Purpose
 
+Capability: `cap:lineage`
+
 Makes every event troupe records explain itself: who made it, through what, when, why, as part of which change,
 with whose approval, and in what version-control state, so history can always be traced and trusted.
 

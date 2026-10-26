@@ -2,6 +2,8 @@
 
 ## Purpose
 
+Capability: `cap:development`, `cap:user-docs`
+
 How a change to troupe reaches troupe.run: which pushes notify the website to rebuild `/docs`, and what the job that
 sends the notice may do.
 

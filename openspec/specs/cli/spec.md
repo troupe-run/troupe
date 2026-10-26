@@ -2,6 +2,8 @@
 
 ## Purpose
 
+Capability: `cap:cli`
+
 The command-line surface of troupe: a thin client over the core's commands and queries, covering how it is
 invoked, how global flags are parsed, and how results and errors are rendered and reported through exit codes.
 

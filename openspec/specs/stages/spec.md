@@ -2,6 +2,8 @@
 
 ## Purpose
 
+Capability: `cap:stages`
+
 Defines where an actor runs and whether troupe can enforce what it may touch there: the stage port, and the local
 stage, which can't enforce any effect and so runs an actor only when policy allows it.
 

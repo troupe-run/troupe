@@ -2,6 +2,8 @@
 
 ## Purpose
 
+Capability: `cap:development`
+
 What troupe's `scripts/check.py` runs, the scoped form that narrows its tests, and troupe's declaration of which
 paths need which part of the check. The commit guard and CI read that declaration, and every test run keeps it true.
 

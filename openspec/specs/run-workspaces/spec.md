@@ -2,6 +2,8 @@
 
 ## Purpose
 
+Capability: `cap:stages`, `cap:vcs`
+
 Defines where a run works, and what happens to what it changed. A run gets its own git worktree, where its changes
 are captured as a diff, and the person can see, accept or discard them, without anything the actor wrote reaching
 the theatre unasked.

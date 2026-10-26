@@ -2,6 +2,8 @@
 
 ## Purpose
 
+Capability: `cap:actor-runners`
+
 A deterministic actor runner for tests: it plays a script or replays a recorded stream through the runner
 contract, so every run outcome can be produced on demand, offline and for free.
 

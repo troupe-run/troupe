@@ -2,6 +2,8 @@
 
 ## Purpose
 
+Capability: `cap:vcs`
+
 The version-control port troupe reads the working tree's state through, so the event store and lineage work the
 same whether a theatre uses git or no version control at all.
 

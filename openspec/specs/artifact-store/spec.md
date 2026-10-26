@@ -2,6 +2,8 @@
 
 ## Purpose
 
+Capability: `cap:storage`
+
 Content-addressed storage for run artifacts that are too large or too sensitive for git, such as raw transcripts,
 so that lineage can reference them by hash and any copy can be verified.
 

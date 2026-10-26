@@ -2,6 +2,8 @@
 
 ## Purpose
 
+Capability: `cap:development`
+
 Which Python versions troupe supports, how that support is declared and enforced, and how the declaration stays
 exactly in step with the versions CI tests.
 

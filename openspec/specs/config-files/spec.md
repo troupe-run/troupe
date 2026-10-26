@@ -2,6 +2,8 @@
 
 ## Purpose
 
+Capability: `cap:config`, `cap:projections`
+
 Projects a theatre's config to files under `.troupe/` that a person can read and review as diffs, never losing a
 file a person wrote, and keeps the theatre's own git files holding what troupe needs.
 

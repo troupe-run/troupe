@@ -2,6 +2,8 @@
 
 ## Purpose
 
+Capability: `cap:core-api`, `cap:protocol`
+
 Defines the commands and queries every surface uses to reach troupe's core: language-neutral messages that the CLI
 calls in process today and a run server will serve later, so no behaviour exists in only one surface.
 
