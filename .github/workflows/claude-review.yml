@@ -41,6 +41,19 @@ jobs:
           fetch-depth: 1
           # The run's token isn't left in .git/config, where Read could reach it.
           persist-credentials: false
+      # The org's contributing guide, which the prompt's check 5 names, where Read(./**) reaches it:
+      # the review has no tool that fetches a URL. After the checkout above, which would clean it
+      # away, and with the run's own read-only token, which can read this public repository
+      # (review-denials-and-guide design D4).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: troupe-run/.github
+          ref: main
+          path: .org-guide
+          sparse-checkout: CONTRIBUTING.md
+          sparse-checkout-cone-mode: false
+          fetch-depth: 1
+          persist-credentials: false
       # The review App's token, for this repository only: read the code, write on pull requests.
       # The App itself has nothing more, so no token minted for it can push (oob/README.md).
       - id: app-token
@@ -54,7 +67,8 @@ jobs:
           repositories: ${{ github.event.repository.name }}
           permission-contents: read
           permission-pull-requests: write
-      - uses: anthropics/claude-code-action@925afb53776cf1a2b738c6bdbed37b4d4000ef13 # v1.0.262
+      - id: review
+        uses: anthropics/claude-code-action@925afb53776cf1a2b738c6bdbed37b4d4000ef13 # v1.0.262
         with:
           github_token: ${{ steps.app-token.outputs.token }}
           # An org secret visible to troupe, infrastructure and website, set by hand (oob/README.md).
@@ -96,10 +110,72 @@ jobs:
             3. The issue the pull request closes (`Closes #n` in its body; read it with
                `gh issue view`): does the pull request do what its "Done when" asks?
             4. Each commit message is a Conventional Commit with a `Signed-off-by:` line.
-            5. The repository's `CLAUDE.md`, and the org's contributing guide
-               (https://github.com/troupe-run/.github/blob/main/CONTRIBUTING.md).
+            5. The repository's `CLAUDE.md`, and the org's contributing guide, checked out for you
+               at `.org-guide/CONTRIBUTING.md`: read it with Read. If the repository has
+               `org-profile/CONTRIBUTING.md`, that's the guide's source, and the checked-out copy is
+               the one on troupe-run/.github's main. If the pull request changes the source, check
+               the pull request against its own version.
 
             Post an inline comment, with `mcp__github_inline_comment__create_inline_comment` and
             `confirmed: true`, for each finding about specific lines. Then post one top-level
             comment with `gh pr comment` that summarises the findings, most serious first. If you
             find nothing, say so plainly in that comment. Don't approve or request changes.
+      # The one step of our own: it names each tool call Claude was refused, read from the action's
+      # execution file, so a denial can be traced. Nothing else of the session is shown: the action
+      # hides it, and show_full_output stays off, since it shows whatever the review saw
+      # (review-denials-and-guide design D1 to D3, #161). Its script is pinned by hash in
+      # scripts/tests/test_claude_review_workflow.py, and it can't fail the job.
+      - name: Name the tool calls Claude was refused
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        shell: python3 {0}
+        env:
+          EXECUTION_FILE: ${{ steps.review.outputs.execution_file }}
+        run: |
+          import json
+          import os
+          import sys
+
+          # The action's execution file: every message of the session, which stays hidden. Only the
+          # result messages' permission_denials are read, and only their tool and input are printed.
+          LIMIT = 300
+
+
+          def escape(text):
+              # As the runner's toolkit escapes a command's message, so no input can start a line.
+              return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+
+          def warn(message, title="Claude's denials are unknown"):
+              print(f"::warning title={title}::{escape(message)}")
+
+
+          path = os.environ.get("EXECUTION_FILE", "")
+          if not path or not os.path.isfile(path):
+              warn("The action left no execution file, so which tool calls were refused isn't known.")
+              sys.exit(0)
+          try:
+              with open(path, encoding="utf-8") as file:
+                  messages = json.load(file)
+          except (OSError, ValueError) as error:
+              warn(f"The execution file isn't readable JSON ({error}).")
+              sys.exit(1)
+          if isinstance(messages, list):
+              results = [m for m in messages if isinstance(m, dict) and m.get("type") == "result"]
+          if not isinstance(messages, list) or not results:
+              warn("The execution file isn't a list of messages with a result message.")
+              sys.exit(1)
+          lists = [m.get("permission_denials", []) for m in results]
+          denials = [d for each in lists if isinstance(each, list) for d in each]
+          if not all(isinstance(each, list) for each in lists) or not all(
+              isinstance(d, dict) and isinstance(d.get("tool_name"), str) for d in denials
+          ):
+              warn("The execution file's permission_denials aren't each a tool call.")
+              sys.exit(1)
+          for denial in denials:
+              text = f"{denial['tool_name']} {json.dumps(denial.get('tool_input'), sort_keys=True)}"
+              if len(text) > LIMIT:
+                  text = text[:LIMIT] + "..."
+              warn(text, title="Claude was refused a tool call")
+          if not denials:
+              print("No tool call was refused.")
