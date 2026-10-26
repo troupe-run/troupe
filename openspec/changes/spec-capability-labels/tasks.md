@@ -16,7 +16,7 @@
 
 ## 2. Write the convention down
 
-- [ ] 2.1 Add the note to the Working list in `openspec/config.yaml`'s context (design D3): a new spec's Purpose
+- [x] 2.1 Add the note to the Working list in `openspec/config.yaml`'s context (design D3): a new spec's Purpose
   starts with the `Capability:` line naming each label it belongs to; a new spec's delta puts the line at the top of
   its `## Purpose`, which OpenSpec carries over; and a label that doesn't exist yet is added through
   troupe-run/infrastructure#152. Verify `openspec instructions proposal --change spec-capability-labels --json`
