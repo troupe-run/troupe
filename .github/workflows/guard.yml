@@ -8,8 +8,9 @@ name: guard
 # (`openspec-strict`: what a pull request touches, everything on main), and, in troupe, the specs in
 # that scope name capability labels troupe-run/infrastructure declares on main (`capability-label`,
 # read from GitHub with the run's token). A pull request's title is checked as a commit message
-# too, so `edited` re-runs it when the title changes. Local hooks can be skipped; this can't: it's
-# a required check (tofu/required-checks.json).
+# too, and its description must close an issue (`pr-closes-issue`; release-please's is exempt), so
+# `edited` re-runs it when either changes. Local hooks can be skipped; this can't: it's a required
+# check (tofu/required-checks.json).
 on:
   push:
     branches: ["**"]
