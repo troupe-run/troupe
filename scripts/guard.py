@@ -311,6 +311,26 @@ def pr_title(title: str) -> Decision:
     )
 
 
+def pr_description(title: str, description: str) -> Decision:
+    """pr-closes-issue over a pull request's description on GitHub, read with the same CLOSING as
+    the local rule reads gh pr create's --body, so the two can't disagree (guard-closes-issue
+    design D1, D2). An empty description is "" here: None means no pull request."""
+    if CLOSING.search(description):
+        return ALLOW
+    lacks = (
+        "it has no description"
+        if not description.strip()
+        else "its description has no closing line"
+    )
+    return Decision(
+        "pr-closes-issue",
+        f"pull request '{title}' doesn't close an issue: {lacks}.",
+        "Edit the description (gh pr edit <n> --body-file <file>, or on GitHub) to add a line like "
+        "'Closes #22', or 'Closes owner/repo#22' for an issue in another repository. Editing it "
+        "re-runs this check.",
+    )
+
+
 def _conventional_subject(message: str) -> str:
     """The first line a commit-message rule judges: comments dropped, and the subject a fixup,
     squash or amend names in place of the fixup's own."""
@@ -2835,16 +2855,21 @@ def run_ci(
     branch: str | None,
     title: str | None = None,
     repository: str | None = None,
+    description: str | None = None,
 ) -> list[Decision]:
     """The git-level rules, re-checked on GitHub for a push or a pull request (design D11), and a
-    pull request's title when there is one. The repository is the one the branch lives in, which
-    decides whether a release branch's name exempts it from the branch rule (open-release-exemption
-    design D2; drop-forgery-resistance design D1, #47)."""
+    pull request's title and description when there is one. The repository is the one the branch
+    lives in, which decides whether a release branch's name exempts it from the branch rule and
+    from closing an issue (open-release-exemption design D2; drop-forgery-resistance design D1,
+    #47; guard-closes-issue design D4)."""
     commits = commits_in_range(root, base, head)
     decisions = [nonconforming_commits(root, commits), schema_commit_types(root, commits)]
     if title is not None:
         decisions.append(pr_title(title))
-    if branch and branch != "main" and not reserved_release_branch(branch, repository):
+    release = reserved_release_branch(branch, repository)
+    if description is not None and not release:
+        decisions.append(pr_description(title or "", description))
+    if branch and branch != "main" and not release:
         decisions.append(commit_branch_change(root, branch))
     changed = changed_paths(root, commits)
 
@@ -3392,6 +3417,27 @@ class UnreadableHeadRepositoryError(Exception):
     full_name: malformed input, not "no repository" (open-release-exemption design D2)."""
 
 
+class UnreadableDescriptionError(Exception):
+    """A pull_request event whose payload has no body, or one that's neither a string nor null:
+    malformed input, not "no description" (guard-closes-issue design D3)."""
+
+
+def _description(pull_request: dict[str, object]) -> str:
+    """A pull request's description: GitHub sends null for an empty one, which is "" here."""
+    if "body" not in pull_request:
+        raise UnreadableDescriptionError(
+            os.environ.get("GITHUB_EVENT_PATH", "no GITHUB_EVENT_PATH")
+        )
+    body = pull_request["body"]
+    if body is None:
+        return ""
+    if not isinstance(body, str):
+        raise UnreadableDescriptionError(
+            os.environ.get("GITHUB_EVENT_PATH", "no GITHUB_EVENT_PATH")
+        )
+    return body
+
+
 def _head_repository(pull_request: dict[str, object]) -> str | None:
     """The repository a pull request's branch lives in: a fork's name for a fork. None when the
     payload names none, as for a deleted fork, whose head.repo is null."""
@@ -3429,10 +3475,11 @@ def _has_commit(root: Path, sha: str) -> bool:
 
 def github_ci_inputs(
     root: Path,
-) -> tuple[str | None, str, str | None, str | None, str | None]:
-    """The range, branch, pull request title and the branch's repository for this GitHub Actions
-    run (design D11; release-please-prs design D3; open-release-exemption design D2). A push has
-    no title, and its repository is the run's; a pull request's is its head repository."""
+) -> tuple[str | None, str, str | None, str | None, str | None, str | None]:
+    """The range, branch, pull request title, the branch's repository and the pull request's
+    description for this GitHub Actions run (design D11; release-please-prs design D3;
+    open-release-exemption design D2; guard-closes-issue design D2). A push has no title or
+    description, and its repository is the run's; a pull request's is its head repository."""
     event = os.environ.get("GITHUB_EVENT_NAME", "")
     payload = _event_payload()
     head = git(root, "rev-parse", "HEAD")
@@ -3444,7 +3491,9 @@ def github_ci_inputs(
         base_branch = os.environ.get("GITHUB_BASE_REF", "main")
         base = git(root, "merge-base", f"origin/{base_branch}", head, check=False) or None
         repository = _head_repository(pull_request) if isinstance(pull_request, dict) else None
-        return base, head, os.environ.get("GITHUB_HEAD_REF"), title, repository
+        description = _description(pull_request) if isinstance(pull_request, dict) else None
+        branch = os.environ.get("GITHUB_HEAD_REF")
+        return base, head, branch, title, repository, description
     before = payload.get("before")
     branch = os.environ.get("GITHUB_REF_NAME")
     if not isinstance(before, str) or not before or _is_null(before):
@@ -3459,7 +3508,7 @@ def github_ci_inputs(
                 f"push?), so the range starts where the branch left main ({base[:7]})."
             )
         before = base
-    return before, head, branch, None, os.environ.get("GITHUB_REPOSITORY") or None
+    return before, head, branch, None, os.environ.get("GITHUB_REPOSITORY") or None, None
 
 
 def run_ci_entry(
@@ -3470,14 +3519,24 @@ def run_ci_entry(
     title: str | None = None,
     repository: str | None = None,
     read_labels: Callable[[], frozenset[str]] = declared_labels,
+    description: str | None = None,
 ) -> int:
     if head is None:
         try:
-            base, head, branch, title, repository = github_ci_inputs(root)
+            base, head, branch, title, repository, description = github_ci_inputs(root)
         except UnreadableTitleError as error:
             refusal = Decision(
                 "commit-message",
                 f"couldn't read the pull request's title from the event payload ({error}).",
+                "Re-run the check. If it fails again, the event payload is malformed: tell the "
+                "owner, with the run's URL.",
+            )
+            print(refusal.text(), file=sys.stderr)
+            return 1
+        except UnreadableDescriptionError as error:
+            refusal = Decision(
+                "pr-closes-issue",
+                f"couldn't read the pull request's description from the event payload ({error}).",
                 "Re-run the check. If it fails again, the event payload is malformed: tell the "
                 "owner, with the run's URL.",
             )
@@ -3493,7 +3552,7 @@ def run_ci_entry(
             )
             print(refusal.text(), file=sys.stderr)
             return 1
-    refusals = run_ci(root, base, head, branch, title, repository)
+    refusals = run_ci(root, base, head, branch, title, repository, description)
     # After the git-level rules, and outside run_ci, which needs no OpenSpec (design D1).
     scope = openspec_scope(
         changed_paths(root, commits_in_range(root, base, head)),
@@ -3745,6 +3804,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     ci.add_argument("--branch", help="branch the range belongs to (default: from GitHub)")
     ci.add_argument("--title", help="a pull request's title to check (default: from GitHub)")
     ci.add_argument(
+        "--description",
+        help="a pull request's description to check for a closing line (default: from GitHub)",
+    )
+    ci.add_argument(
         "--repository",
         help="owner/name of the repository the branch lives in (default: from GitHub)",
     )
@@ -3773,7 +3836,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.entry == "pre-push":
         return run_pre_push(root, sys.stdin.read().splitlines())
     if args.entry == "ci":
-        return run_ci_entry(root, args.base, args.head, args.branch, args.title, args.repository)
+        return run_ci_entry(
+            root,
+            args.base,
+            args.head,
+            args.branch,
+            args.title,
+            args.repository,
+            description=args.description,
+        )
     if args.entry == "check-scope":
         return run_check_scope(root, sys.stdin.read().splitlines())
     path = grant_override(root, args.rule, args.reason)
