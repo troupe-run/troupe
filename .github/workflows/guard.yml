@@ -30,6 +30,10 @@ jobs:
       # The OpenSpec CLI openspec-strict runs: one exact version, moved by pull request. Before a
       # move is delivered, run it over every governed repository's main (docs/development-workflow.md).
       OPENSPEC_VERSION: 1.14.3
+      # The Node the OpenSpec CLI runs on where the repository has no .nvmrc of its own. One exact
+      # version, moved by pull request. A repository's .nvmrc wins, so its single source holds, and
+      # no step names a Node version as an input (troupe-run/website#4 refuses one; #155).
+      NODE_VERSION: 22.23.4
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -38,9 +42,18 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: Choose the Node version
+        # Written only into this run's checkout, never committed; the guard reads no untracked file.
+        run: |
+          if [ -e .nvmrc ]; then
+            echo "Node from the repository's .nvmrc: $(cat .nvmrc)"
+          else
+            printf '%s\n' "$NODE_VERSION" > .nvmrc
+            echo "No .nvmrc here, so Node $NODE_VERSION, the guard's pin"
+          fi
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22.23.4
+          node-version-file: .nvmrc
       - name: Install the OpenSpec CLI
         env:
           OPENSPEC_TELEMETRY: "0"
