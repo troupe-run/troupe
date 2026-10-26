@@ -5,9 +5,11 @@ name: guard
 # docs/development-workflow.md): every commit is a Conventional Commit, the branch matches an
 # OpenSpec change, no archived change has an unticked task, delivered files change only by
 # delivery, and the specs and active changes in scope pass OpenSpec's strict validation
-# (`openspec-strict`: what a pull request touches, everything on main). A pull request's title
-# is checked as a commit message too, so `edited` re-runs it when the title changes. Local hooks
-# can be skipped; this can't: it's a required check (tofu/required-checks.json).
+# (`openspec-strict`: what a pull request touches, everything on main), and, in troupe, the specs in
+# that scope name capability labels troupe-run/infrastructure declares on main (`capability-label`,
+# read from GitHub with the run's token). A pull request's title is checked as a commit message
+# too, so `edited` re-runs it when the title changes. Local hooks can be skipped; this can't: it's
+# a required check (tofu/required-checks.json).
 on:
   push:
     branches: ["**"]
@@ -60,4 +62,7 @@ jobs:
           DO_NOT_TRACK: "1"
         run: npm install --global --no-fund --no-audit "@fission-ai/openspec@${OPENSPEC_VERSION}"
       - name: Check the workflow rules
+        env:
+          # capability-label reads troupe-run/infrastructure's declared labels, a public file, with it.
+          GITHUB_TOKEN: ${{ github.token }}
         run: uv run --no-project python scripts/guard.py ci
