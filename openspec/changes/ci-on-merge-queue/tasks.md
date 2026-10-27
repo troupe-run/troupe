@@ -36,7 +36,7 @@
 
 ## 4. On the pull request
 
-- [ ] 4.1 Open the pull request with `Closes #180`. Verify every required check (`check`, `guard (workflow rules)`,
+- [x] 4.1 Open the pull request with `Closes #180`. Verify every required check (`check`, `guard (workflow rules)`,
   `DCO`) passes on Linux, macOS and Windows, and that the run's `check` job log says every leg passed.
 
 ## Workflow follow-up
