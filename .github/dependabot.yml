@@ -20,6 +20,7 @@ updates:
   - github_actions
   exclude-paths:
   - .github/workflows/claude-review.yml
+  - .github/workflows/dependabot-dispatch.yml
   - .github/workflows/guard.yml
 - package-ecosystem: uv
   directory: /
