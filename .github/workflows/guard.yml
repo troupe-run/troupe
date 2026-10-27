@@ -11,11 +11,17 @@ name: guard
 # too, and its description must close an issue (`pr-closes-issue`; release-please's is exempt), so
 # `edited` re-runs it when either changes. Local hooks can be skipped; this can't: it's a required
 # check (tofu/required-checks.json).
+#
+# A merge queue's commit is judged as a push to main (merge-queue design D3): its range runs from
+# the group's base on main, and every pull request in it already passed the branch rule. The
+# queue's own gh-readonly-queue/... branch matches no change, so a push to it isn't judged here.
 on:
   push:
-    branches: ["**"]
+    branches: ["**", "!gh-readonly-queue/**"]
   pull_request:
     types: [opened, edited, synchronize, reopened]
+  merge_group:
+    types: [checks_requested]
 
 permissions:
   contents: read
