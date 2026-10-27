@@ -184,14 +184,14 @@ wheels = [
 
 [[package]]
 name = "eventsourcing"
-version = "9.5.5"
+version = "9.5.6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/23/ec/d562180c63b0948958700748f90f0b2eef2946570ec5b7736f84a5658b9b/eventsourcing-9.5.5.tar.gz", hash = "sha256:8f749b7ff1bd74bb72da98eac0663f0d0f879a40e7211aacbf60d4a4b87d7743", size = 109370, upload-time = "2026-08-19T14:28:43.508Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/46/ad/90d954ec921942d03593704d564de72e1da0be813ade785b7ab3fbd5d501/eventsourcing-9.5.6.tar.gz", hash = "sha256:f4956cdb4f8a3c718c3131263e745583520691d0a6e9e845bcdb5f1e792f0e22", size = 109269, upload-time = "2026-10-13T22:47:54.003Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/7e/d8/3d835f2723e26837f02af564452073dacfae4bc993a01a86c95be6dc6d2c/eventsourcing-9.5.5-py3-none-any.whl", hash = "sha256:35fee11fb6f56ca680b6212559db87c471c85d321b96900f8d11bbd7c41badc3", size = 121121, upload-time = "2026-08-19T14:28:42.107Z" },
+    { url = "https://files.pythonhosted.org/packages/5b/5b/ab79ccb60109b03d9658462655f08b4e4177a738326e499dd848edb4b867/eventsourcing-9.5.6-py3-none-any.whl", hash = "sha256:cb6ec44d6e38ede862458c1ef8dc3d2dc0fcc469a157b4386058da6757589416", size = 120984, upload-time = "2026-10-13T22:47:52.466Z" },
 ]
 
 [[package]]
@@ -1256,7 +1256,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "eventsourcing", specifier = ">=9.5.5,<9.6" },
+    { name = "eventsourcing", specifier = ">=9.5.6,<9.6" },
     { name = "jsonschema", specifier = ">=4.26,<5" },
     { name = "pydantic", specifier = ">=2.14,<3" },
     { name = "ruamel-yaml", specifier = ">=0.19.1,<0.20" },
@@ -1316,7 +1316,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "eventsourcing", specifier = ">=9.5.5,<9.6" },
+    { name = "eventsourcing", specifier = ">=9.5.6,<9.6" },
     { name = "troupe", editable = "packages/troupe" },
 ]
 
