@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-import yaml as yaml_1_1  # type: ignore[import-untyped]  # PyYAML reads YAML 1.1, as many editors do
+import yaml as yaml_1_1  # PyYAML reads YAML 1.1, as many editors do
 from hypothesis import example, given
 from hypothesis import strategies as st
 from ruamel.yaml import YAML
