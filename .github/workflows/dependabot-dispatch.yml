@@ -1,0 +1,51 @@
+# Source: troupe-run/infrastructure. Change it there; copies in other repositories are delivered.
+name: dependabot-dispatch
+
+# Starts infrastructure's dependabot-issues when Dependabot acts in this repository, so a pull request
+# it opens or rebases gets its issue and closing line soon after (spec: dependency-updates; #195;
+# dependabot-issues-on-events design D1, D2).
+#
+#   dispatch   env dependabot-dispatch (main only)   starts dependabot-issues.yml on infrastructure's
+#                                                    main, with no inputs, with the
+#                                                    troupe-run-dispatch App's token
+#
+# A workflow_run runs main's copy of this file, so the environment admits it and a Dependabot pull
+# request's own workflows can't reach the key. Nothing is checked out and nothing from the event is
+# read or passed on: every dependabot-issues run reads everything it needs itself. The token can
+# start infrastructure's workflows and write nothing there (spec: dependabot-dispatch-credentials).
+#
+# Delivered to troupe and website with the guard's files (tofu/guard_delivery.tf). infrastructure
+# holds it as the source, and its own dependabot-issues.yml runs on Dependabot's runs directly, so
+# the job is skipped there. scripts/tests/test_dependabot_dispatch_workflow.py pins the rest.
+on:
+  workflow_run:
+    workflows: ["Dependabot Updates"]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  dispatch:
+    name: start dependabot-issues
+    if: github.repository != 'troupe-run/infrastructure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Limited to main, and holds only the troupe-run-dispatch App's key (tofu/dependabot_dispatch.tf).
+    environment:
+      name: dependabot-dispatch
+      deployment: false
+    permissions: {}
+    steps:
+      - name: Mint the troupe-run-dispatch App's token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.DISPATCH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.DISPATCH_APP_PRIVATE_KEY }}
+          owner: troupe-run
+          repositories: infrastructure
+          permission-actions: write
+      - name: Start dependabot-issues on infrastructure
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: gh workflow run dependabot-issues.yml -R troupe-run/infrastructure --ref main
