@@ -9,29 +9,29 @@
 
 ## 2. The test, before the trigger (design D2)
 
-- [ ] 2.1 Write `scripts/tests/test_ci_workflow.py`, with a module docstring citing the spec (quality-check) and this
+- [x] 2.1 Write `scripts/tests/test_ci_workflow.py`, with a module docstring citing the spec (quality-check) and this
   design. Three tests, named for what they check, as D2's table has them: CI runs on merge groups; no trigger filters
   by path; only `changes` reads the event, and only on pull requests. Look the triggers up under `True` with a comment
   on PyYAML's YAML 1.1 reading of `on`. Each failure names `.github/workflows/ci.yml`, what was found and what would
   skip the check on the queue. Verify the first test fails on this branch before 2.2, and the other two pass (they
   hold on `main` today).
-- [ ] 2.2 Check each test can fail: in a scratch copy of `ci.yml` (in a temporary directory, through a helper that
+- [x] 2.2 Check each test can fail: in a scratch copy of `ci.yml` (in a temporary directory, through a helper that
   takes the path), add `paths: [src/**]` under `pull_request`, change `changes`' `if` to also allow `merge_group`, and
   add `if: github.event_name != 'merge_group'` to `check-legs`. Keep these as parametrized cases in the test file, so
   they stay checked. Verify each case fails with its message, and `uv run pytest scripts/tests/test_ci_workflow.py`
   shows only the merge-group test failing.
-- [ ] 2.3 Verify `printf 'scripts/tests/test_ci_workflow.py\n' | uv run --no-project scripts/guard.py check-scope`
+- [x] 2.3 Verify `printf 'scripts/tests/test_ci_workflow.py\n' | uv run --no-project scripts/guard.py check-scope`
   answers `scope=scripts`, and the reach check (`uv run scripts/check_paths_reach.py`) agrees with the declaration.
 
 ## 3. The trigger and the comment (design D1, D3)
 
-- [ ] 3.1 Add `merge_group:` to `on` in `.github/workflows/ci.yml`, after `pull_request`, with no `types`. Verify
+- [x] 3.1 Add `merge_group:` to `on` in `.github/workflows/ci.yml`, after `pull_request`, with no `types`. Verify
   `uv run pytest scripts/tests/test_ci_workflow.py` passes in full.
-- [ ] 3.2 Add D3's paragraph to the workflow's header comment, and add `merge_group` to the `check-legs` comment that
+- [x] 3.2 Add D3's paragraph to the workflow's header comment, and add `merge_group` to the `check-legs` comment that
   says when the legs get no answer ("a push to main, a merge group, or a failed `changes`"). Verify the comment names
   `scripts/tests/test_ci_workflow.py`, and `uv run scripts/python_versions.py` (or the test that runs it) still finds
   exactly one matrix line.
-- [ ] 3.3 Run `uv run scripts/check.py` and commit (`ci: run the full check on merge queue commits`), with the test
+- [x] 3.3 Run `uv run scripts/check.py` and commit (`ci: run the full check on merge queue commits`), with the test
   and the dependency from groups 1 and 2 in their own earlier commits if they were committed separately.
 
 ## 4. On the pull request

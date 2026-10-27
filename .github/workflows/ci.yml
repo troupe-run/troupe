@@ -16,8 +16,15 @@ name: CI
 #
 # A failed `changes` runs everything (D1). main runs everything after every merge (D5): its merged
 # tree may be one no pull request tested.
+#
+# A merge group runs everything too (ci-on-merge-queue D1): the merge queue lands only a commit its
+# required checks reported on, and that commit combines main with every pull request queued ahead,
+# which no pull request tested. `changes` runs on pull requests only, so a merge group gets no
+# answer and runs the full check, as main does. Nothing may filter or narrow it, or the queue waits
+# on a `check` that never reports: scripts/tests/test_ci_workflow.py fails if something does.
 on:
   pull_request:
+  merge_group:
   push:
     branches: [main]
 
@@ -80,7 +87,7 @@ jobs:
     # themselves: `check` below reports for them.
     name: check (${{ matrix.os }}, Python ${{ matrix.python }})
     # Skipped only when `changes` succeeded and found only skipped paths. With no answer (a push
-    # to main, or a failed `changes`) the legs run the full check.
+    # to main, a merge group, or a failed `changes`) the legs run the full check.
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.scope != 'none' }}
     runs-on: ${{ matrix.os }}
