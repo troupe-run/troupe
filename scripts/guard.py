@@ -85,6 +85,37 @@ RELEASE_REPOSITORIES = frozenset({"troupe-run/troupe"})
 (tofu/release.tf). There, GitHub enforces who writes such a branch, so its name is proof; anywhere
 else, a fork included, anyone can use the name (open-release-exemption design D1;
 drop-forgery-resistance design D1)."""
+DEPENDABOT_BRANCH_PREFIX = "dependabot/"
+DEPENDABOT_BRANCH = re.compile(r"dependabot/[^/]+/.+")
+"""The shape of Dependabot's branch names, dependabot/<ecosystem>/<name>, which the ruleset's
+refs/heads/dependabot/**/* was shown to reserve. A name of another shape, such as dependabot/x,
+isn't trusted even under the prefix: GitHub wasn't shown to reserve it (dependabot-exemption
+task 1.3)."""
+DEPENDABOT_REPOSITORIES = frozenset(
+    {"troupe-run/troupe", "troupe-run/website", "troupe-run/infrastructure"}
+)
+"""Where a ruleset lets only Dependabot create or update dependabot/ branches
+(tofu/dependabot.tf). There, as for release-please's, the name is proof of who wrote the branch;
+anywhere else, a fork included, it proves nothing (dependabot-exemption design D2, D3)."""
+DEPENDENCY_FILES = frozenset({"package.json", "package-lock.json", "pyproject.toml", "uv.lock"})
+"""The files, by name in any directory, that an exempt Dependabot branch may change, for the npm
+and uv ecosystems; a github-actions update may change a workflow's uses: lines (design D4). A new
+ecosystem's files are added here."""
+WORKFLOWS_DIR = ".github/workflows/"
+USES_LINE = re.compile(r"\s*(?:-\s+)?uses:\s")
+DEPENDABOT_SUBJECT = re.compile(
+    r"(?:[a-z]+(?:\([^)]*\))?!?:\s*)?(?:[Bb]ump|[Uu]pdate)\s+(?P<dependency>.+?)"
+    r"(?:\s+requirement)?\s+from\s+(?P<old>\S+)\s+to\s+(?P<new>\S+)(?:\s+in\s+(?P<directory>\S+))?"
+)
+"""Dependabot's subject for one dependency's update: a copy of TITLE in
+scripts/dependabot_issues.py, which the guard can't import (design D5). A test holds them equal."""
+DEPENDABOT_VERSION = re.compile(r"v?(\d+(?:\.\d+)*)")
+UPDATE_TYPE = re.compile(r"^\s*update-type:\s*(.*?)\s*$", re.MULTILINE)
+EXEMPT_UPDATE_TYPES = frozenset({"version-update:semver-minor", "version-update:semver-patch"})
+DEPENDABOT_DOCS = (
+    f"https://github.com/{SOURCE_REPOSITORY}/blob/main/docs/development-workflow.md"
+    "#dependabot-pull-requests"
+)
 SCHEMA_PATHS = ("protocol/schemas/",)
 """Where a change must release: troupe's protocol schemas, which release on their own and whose
 version troupe records (troupe-run/troupe#140). A repository without them is never refused for
@@ -2848,6 +2879,119 @@ def reserved_release_branch(branch: str | None, repository: str | None) -> bool:
     return repository in RELEASE_REPOSITORIES and (branch or "").startswith(RELEASE_BRANCH_PREFIX)
 
 
+def reserved_dependabot_branch(branch: str | None, repository: str | None) -> bool:
+    """A Dependabot branch in a repository where GitHub lets only Dependabot create or update it.
+    As for a release branch, the name is the proof, and no author is read (dependabot-exemption
+    design D3). With no repository named, nothing is reserved."""
+    return repository in DEPENDABOT_REPOSITORIES and bool(DEPENDABOT_BRANCH.fullmatch(branch or ""))
+
+
+def dependabot_update_kind(old: str | None, new: str | None) -> str:
+    """Dependabot's counting, as update_type in scripts/dependabot_issues.py counts: the first part
+    that differs is major, the second minor, any later one patch. Anything that isn't a run of
+    dotted digits is unknown (design D5)."""
+    if old is None or new is None:
+        return "unknown"
+    a, b = DEPENDABOT_VERSION.fullmatch(old), DEPENDABOT_VERSION.fullmatch(new)
+    if not a or not b:
+        return "unknown"
+    left = [int(part) for part in a.group(1).split(".")]
+    right = [int(part) for part in b.group(1).split(".")]
+    width = max(len(left), len(right))
+    left += [0] * (width - len(left))
+    right += [0] * (width - len(right))
+    for index, (x, y) in enumerate(zip(left, right, strict=True)):
+        if x != y:
+            return ("major", "minor")[index] if index < 2 else "patch"
+    return "unknown"
+
+
+def dependabot_subject_kind(subject: str) -> str:
+    """The kind of update a Dependabot subject names: patch, minor, major, or unknown when it
+    doesn't name one dependency moving between two versions."""
+    match = DEPENDABOT_SUBJECT.fullmatch(subject.strip())
+    if not match:
+        return "unknown"
+    return dependabot_update_kind(match.group("old"), match.group("new"))
+
+
+def _only_uses_lines(root: Path, sha: str, path: str) -> bool:
+    diff = git(root, "diff-tree", "-p", "-U0", "--no-commit-id", "--no-color", sha, "--", path)
+    changed = [
+        line[1:]
+        for line in diff.splitlines()
+        if line[:1] in ("+", "-") and not line.startswith(("+++", "---"))
+    ]
+    return bool(changed) and all(USES_LINE.match(line) for line in changed)
+
+
+def non_dependency_paths(root: Path, commits: Iterable[str]) -> list[str]:
+    """The paths the commits change that an exempt Dependabot branch may not: anything but a
+    modified dependency file, or a modified workflow whose every changed line is a uses: line
+    (design D4). An added, deleted or renamed file is never a version bump."""
+    bad: list[str] = []
+    for sha in commits:
+        listing = git(root, "diff-tree", "--no-commit-id", "-r", "-M", "--name-status", sha)
+        for line in listing.splitlines():
+            status, *paths = line.split("\t")
+            path = paths[-1]
+            if status == "M" and path.rsplit("/", 1)[-1] in DEPENDENCY_FILES:
+                continue
+            workflow = path.startswith(WORKFLOWS_DIR) and path.endswith((".yml", ".yaml"))
+            if status == "M" and workflow and _only_uses_lines(root, sha, path):
+                continue
+            if path not in bad:
+                bad.append(path)
+    return bad
+
+
+def dependabot_ineligibility(root: Path, commits: Sequence[str]) -> str | None:
+    """Why the commits aren't a minor or patch update of dependency files only, or None when they
+    are. Each commit's message is read, not the pull request's title, which anyone with write
+    access can edit; on a reserved branch only Dependabot writes the messages (design D3, D5)."""
+    reasons: list[str] = []
+    if not commits:
+        reasons.append("it carries no commits")
+    for sha in commits:
+        message = git(root, "log", "-1", "--format=%B", sha)
+        subject = message.splitlines()[0] if message else ""
+        kind = dependabot_subject_kind(subject)
+        if kind == "unknown":
+            reasons.append(
+                f"{sha[:7]}'s subject '{subject}' doesn't give one dependency's versions, so its "
+                "kind of update can't be read"
+            )
+        elif kind == "major":
+            reasons.append(f"{sha[:7]} ('{subject}') is a major update")
+        for stated in UPDATE_TYPE.findall(message):
+            if stated not in EXEMPT_UPDATE_TYPES:
+                reasons.append(f"{sha[:7]}'s message says update-type: {stated}")
+    others = non_dependency_paths(root, commits)
+    if others:
+        reasons.append(f"it changes files that aren't dependency files: {', '.join(others)}")
+    return "; ".join(reasons) or None
+
+
+def dependabot_branch_change(
+    root: Path, branch: str, repository: str | None, commits: Sequence[str]
+) -> Decision:
+    """The branch rule on GitHub. A branch matching no change is still refused, unless it's a
+    reserved Dependabot branch that is a minor or patch update of dependency files only. A reserved
+    one that isn't is told which condition failed (dependabot-exemption design D6)."""
+    decision = commit_branch_change(root, branch)
+    if not decision.refused or not reserved_dependabot_branch(branch, repository):
+        return decision
+    reason = dependabot_ineligibility(root, commits)
+    if reason is None:
+        return ALLOW
+    return Decision(
+        decision.rule,
+        f"{decision.problem} A Dependabot branch is exempt only when it is a minor or patch update "
+        f"of dependency files, and {reason}.",
+        f"Take the update through an OpenSpec change for its issue ({DEPENDABOT_DOCS}).",
+    )
+
+
 def run_ci(
     root: Path,
     base: str | None,
@@ -2860,8 +3004,9 @@ def run_ci(
     """The git-level rules, re-checked on GitHub for a push or a pull request (design D11), and a
     pull request's title and description when there is one. The repository is the one the branch
     lives in, which decides whether a release branch's name exempts it from the branch rule and
-    from closing an issue (open-release-exemption design D2; drop-forgery-resistance design D1,
-    #47; guard-closes-issue design D4)."""
+    from closing an issue, and whether a Dependabot branch's can exempt it from the branch rule
+    (open-release-exemption design D2; drop-forgery-resistance design D1, #47; guard-closes-issue
+    design D4; dependabot-exemption design D6)."""
     commits = commits_in_range(root, base, head)
     decisions = [nonconforming_commits(root, commits), schema_commit_types(root, commits)]
     if title is not None:
@@ -2870,7 +3015,7 @@ def run_ci(
     if description is not None and not release:
         decisions.append(pr_description(title or "", description))
     if branch and branch != "main" and not release:
-        decisions.append(commit_branch_change(root, branch))
+        decisions.append(dependabot_branch_change(root, branch, repository, commits))
     changed = changed_paths(root, commits)
 
     def read_at_head(path: str) -> str | None:
