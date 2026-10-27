@@ -44,6 +44,9 @@ dev = [
     # The eventsourcing recorder test suite imports AESCipher at module scope (design: prior art).
     "pycryptodome>=3.23",
     "pytest-xdist>=3.8",
+    # scripts/tests/test_ci_workflow.py reads CI's triggers and job conditions (ci-on-merge-queue design D2).
+    "pyyaml>=6.0.3",
+    "types-pyyaml>=6.0.12",
 ]
 
 [tool.ruff]

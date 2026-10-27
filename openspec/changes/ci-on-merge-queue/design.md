@@ -14,8 +14,10 @@ See proposal.md for why. What exists today:
 - The workflow's concurrency group is `ci-${{ github.ref }}`, with `cancel-in-progress: true`.
 - No test reads `ci.yml`'s triggers or job conditions. `scripts/python_versions.py` reads its `python: [...]` line
   with a regular expression.
-- `pyyaml` is in `uv.lock`, but only as a dependency of `datamodel-code-generator`. No troupe code or test imports
-  it, and `types-PyYAML` isn't installed.
+- `pyyaml` is in `uv.lock`, but only as a dependency of `datamodel-code-generator`. One test already imports it
+  undeclared: `packages/troupe/tests/test_config_files.py`, as a YAML 1.1 reader, with `# type: ignore[import-untyped]`
+  because `types-PyYAML` isn't installed. Declaring the stubs makes that ignore unused under mypy `--strict`, so it
+  goes (found while applying task 1.1).
 - troupe-run/infrastructure#169 (change `merge-queue`) will declare a queue in troupe's ruleset once `check` reports
   on merge groups. Its probe showed the guard and DCO already do.
 

@@ -2,7 +2,7 @@
 
 ## 1. Declare `pyyaml` (design D2)
 
-- [ ] 1.1 Add `pyyaml` and `types-PyYAML` to the root `dev` dependency group in `pyproject.toml`, with lower bounds
+- [x] 1.1 Add `pyyaml` and `types-PyYAML` to the root `dev` dependency group in `pyproject.toml`, with lower bounds
   matching the versions `uv lock` resolves, and run `uv lock`. Verify `uv sync --locked` succeeds and
   `uv run python -c "import yaml"` works, and that `uv.lock`'s diff adds only those two to the root's dev group (and
   the stubs' entry).
