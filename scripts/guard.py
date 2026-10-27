@@ -3567,6 +3567,26 @@ class UnreadableDescriptionError(Exception):
     malformed input, not "no description" (guard-closes-issue design D3)."""
 
 
+class UnreadableMergeGroupError(Exception):
+    """A merge_group event without a string base and head commit, and a base branch ref: malformed
+    input, never "no range" (merge-queue design D3)."""
+
+
+def _merge_group_inputs(payload: dict[str, object]) -> tuple[str, str, str]:
+    """A merge group's base on its branch, its head, and the name of the branch it lands on."""
+    group = payload.get("merge_group")
+    fields = group if isinstance(group, dict) else {}
+    base, head, ref = fields.get("base_sha"), fields.get("head_sha"), fields.get("base_ref")
+    if not (
+        isinstance(base, str)
+        and isinstance(head, str)
+        and isinstance(ref, str)
+        and ref.startswith("refs/heads/")
+    ):
+        raise UnreadableMergeGroupError(os.environ.get("GITHUB_EVENT_PATH", "no GITHUB_EVENT_PATH"))
+    return base, head, ref.removeprefix("refs/heads/")
+
+
 def _description(pull_request: dict[str, object]) -> str:
     """A pull request's description: GitHub sends null for an empty one, which is "" here."""
     if "body" not in pull_request:
@@ -3624,9 +3644,15 @@ def github_ci_inputs(
     """The range, branch, pull request title, the branch's repository and the pull request's
     description for this GitHub Actions run (design D11; release-please-prs design D3;
     open-release-exemption design D2; guard-closes-issue design D2). A push has no title or
-    description, and its repository is the run's; a pull request's is its head repository."""
+    description, and its repository is the run's; a pull request's is its head repository. A merge
+    group is judged as a push to the branch it lands on, never as the queue's own branch, which
+    matches no change: each pull request in it passed the branch rule (merge-queue design D3)."""
     event = os.environ.get("GITHUB_EVENT_NAME", "")
     payload = _event_payload()
+    if event == "merge_group":
+        group_base, group_head, group_branch = _merge_group_inputs(payload)
+        repository = os.environ.get("GITHUB_REPOSITORY") or None
+        return group_base, group_head, group_branch, None, repository, None
     head = git(root, "rev-parse", "HEAD")
     if event == "pull_request":
         pull_request = payload.get("pull_request")
@@ -3682,6 +3708,16 @@ def run_ci_entry(
             refusal = Decision(
                 "pr-closes-issue",
                 f"couldn't read the pull request's description from the event payload ({error}).",
+                "Re-run the check. If it fails again, the event payload is malformed: tell the "
+                "owner, with the run's URL.",
+            )
+            print(refusal.text(), file=sys.stderr)
+            return 1
+        except UnreadableMergeGroupError as error:
+            refusal = Decision(
+                "commit-branch-change",
+                f"couldn't read the merge group's base, head or branch from the event payload "
+                f"({error}).",
                 "Re-run the check. If it fails again, the event payload is malformed: tell the "
                 "owner, with the run's URL.",
             )
