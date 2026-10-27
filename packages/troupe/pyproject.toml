@@ -7,7 +7,7 @@ license = "Apache-2.0"
 license-files = ["LICENSE"]
 requires-python = ">=3.12,<3.16"
 dependencies = [
-    "eventsourcing>=9.5.5,<9.6",
+    "eventsourcing>=9.5.6,<9.6",
     # Checks an actor's options against its runner's published options schema, which core can't generate types for
     # (config-model design D6).
     "jsonschema>=4.26,<5",
