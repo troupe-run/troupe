@@ -3117,12 +3117,19 @@ def dependabot_subject_kind(subject: str) -> str:
 
 
 def _only_uses_lines(root: Path, sha: str, path: str) -> bool:
+    """Whether every line the commit adds or removes in ``path`` is a uses: line. Only lines inside
+    a hunk count, so a file's ---/+++ headers are skipped by where they are, not by how they begin,
+    and a changed line that begins with -- or ++ is judged like any other (#204)."""
     diff = git(root, "diff-tree", "-p", "-U0", "--no-commit-id", "--no-color", sha, "--", path)
-    changed = [
-        line[1:]
-        for line in diff.splitlines()
-        if line[:1] in ("+", "-") and not line.startswith(("+++", "---"))
-    ]
+    changed: list[str] = []
+    in_hunk = False
+    for line in diff.splitlines():
+        if line.startswith("diff --git "):
+            in_hunk = False
+        elif line.startswith("@@"):
+            in_hunk = True
+        elif in_hunk and line[:1] in ("+", "-"):
+            changed.append(line[1:])
     return bool(changed) and all(USES_LINE.match(line) for line in changed)
 
 
@@ -3154,7 +3161,13 @@ def dependabot_ineligibility(root: Path, commits: Sequence[str]) -> str | None:
     if not commits:
         reasons.append("it carries no commits")
     for sha in commits:
-        message = git(root, "log", "-1", "--format=%B", sha)
+        # NUL, not a newline: git() strips, and a root commit's parents are empty.
+        parents, _, message = git(root, "log", "-1", "--format=%P%x00%B", sha).partition("\0")
+        if len(parents.split()) > 1:
+            # diff-tree lists no paths for a merge, and Dependabot never makes one (#205).
+            reasons.append(
+                f"{sha[:7]} is a merge commit, and Dependabot doesn't make merge commits"
+            )
         subject = message.splitlines()[0] if message else ""
         kind = dependabot_subject_kind(subject)
         if kind == "unknown":
@@ -3628,7 +3641,8 @@ def declared_labels(
     )
     token = os.environ.get("GITHUB_TOKEN")
     if token:
-        request.add_header("Authorization", f"Bearer {token}")
+        # Unredirected: urllib doesn't carry it to a redirect's request, wherever it points (#206).
+        request.add_unredirected_header("Authorization", f"Bearer {token}")
     try:
         body = send(request, CAPABILITY_LABELS_TIMEOUT_SECONDS)
     except urllib.error.HTTPError as error:
