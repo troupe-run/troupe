@@ -2121,9 +2121,11 @@ GH_MUTATIONS_ALLOWED: frozenset[str] = frozenset()
 # one way; it's allowed for a nit the review opened, and nothing else (review-findings-by-severity
 # design D5). unresolveReviewThread isn't here: reopening a conversation is the owner's.
 GH_MUTATIONS_CONDITIONAL = frozenset({"resolveReviewThread"})
-# The gh command that does what a refused mutation does, named in its refusal's fix (design D2).
-# Only commands the guard allows; a mutation whose gh command is refused or owner-only has no entry.
-# Each name was checked against GitHub's GraphQL schema on 2026-10-13.
+# The allowed command that does what a refused mutation does, named in its refusal's fix (design
+# D2): its gh command or, for a write gh has no command for, its one gh api call
+# (guard-names-thread-reply-route design D1). Only commands the guard allows; a mutation whose gh
+# command is refused or owner-only has no entry. Each name was checked against GitHub's GraphQL
+# schema on 2026-10-13.
 GH_MUTATION_EQUIVALENTS: dict[str, tuple[str, ...]] = {
     "updateIssue": ("gh issue edit <n>", "gh issue close <n>", "gh issue reopen <n>"),
     "updateIssueIssueType": ("gh issue edit <n> --type <name>",),
@@ -2157,7 +2159,26 @@ GH_MUTATION_EQUIVALENTS: dict[str, tuple[str, ...]] = {
     "convertPullRequestToDraft": ("gh pr ready <n> --undo",),
     "updatePullRequest": ("gh pr edit <n>",),
     "createPullRequest": ("gh pr create --title <title> --body-file <file>",),
+    "addPullRequestReviewThreadReply": (
+        "gh api -X POST repos/<owner>/<repo>/pulls/<n>/comments -F in_reply_to=<comment id> "
+        "-f body=<text>",
+    ),
 }  # fmt: skip
+# Refused gh api writes that have an allowed way, as (endpoint, methods, the allowed command filled
+# in from the endpoint's groups), named in the refusal's fix (guard-names-thread-reply-route
+# design D2). Only commands the guard allows.
+GH_API_EQUIVALENTS = tuple(
+    (re.compile(pattern), frozenset(methods), template)
+    for pattern, methods, template in (
+        (
+            rf"repos/(?P<owner>{_SEG})/(?P<repo>{_SEG})/pulls/(?P<n>{_SEG})/comments/"
+            rf"(?P<comment_id>{_SEG})/replies",
+            {"POST"},
+            "gh api -X POST repos/{owner}/{repo}/pulls/{n}/comments -F in_reply_to={comment_id} "
+            "-f body=<text>",
+        ),
+    )
+)
 GH_MUTATIONS_OWNER_ONLY = {
     "mergePullRequest": "merge", "enablePullRequestAutoMerge": "merge",
     "enqueuePullRequest": "merge",
@@ -2539,6 +2560,16 @@ def review_resolve_decision(rest: Sequence[str], cwd: Path) -> Decision:
             "the conversation this resolveReviewThread names can't be read before it runs.",
             'Name it in the query (threadId: "PRRT_...") or with -f <variable>=<id>.',
         )
+    # The guard reads the command's text, not the shell's values, so $TID would reach GitHub as
+    # the text "$TID" and fail as if the read did (guard-names-thread-reply-route design D4).
+    if SHELL_EXPANSION.search(thread_id):
+        return Decision(
+            "gh-allow-list",
+            f"the conversation's id ({thread_id}) is filled in by the shell, so the guard can't "
+            "read it before it runs.",
+            'Write the conversation\'s id out in the command: threadId: "PRRT_..." in the query, '
+            "or a field on the command (-f <variable>=PRRT_...).",
+        )
     try:
         node = read_review_thread(thread_id)
     except ReviewLookupError as error:
@@ -2596,8 +2627,25 @@ def _not_listed_mutations(names: Sequence[str]) -> Decision:
         for name in unique
         if name in GH_MUTATION_EQUIVALENTS
     ]
-    fix = "Ask the owner, or add it to the list in troupe-run/infrastructure (scripts/guard.py)."
-    return Decision("gh-allow-list", problem, " ".join([*hints, fix]))
+    # A write with a way isn't also offered to the list: that would give it a second way
+    # (guard-names-thread-reply-route design D3).
+    without = [name for name in unique if name not in GH_MUTATION_EQUIVALENTS]
+    tail = "the list in troupe-run/infrastructure (scripts/guard.py)."
+    if not without:
+        return Decision("gh-allow-list", problem, " ".join(hints))
+    if not hints:
+        return Decision("gh-allow-list", problem, f"Ask the owner, or add it to {tail}")
+    ask = f"For {', '.join(without)}, ask the owner, or add it to {tail}"
+    return Decision("gh-allow-list", problem, " ".join([*hints, ask]))
+
+
+def _api_equivalent(endpoint: str, method: str) -> str | None:
+    """The allowed command that does what a refused gh api write does, filled in, or None."""
+    for pattern, methods, template in GH_API_EQUIVALENTS:
+        match = pattern.fullmatch(endpoint)
+        if match and method in methods:
+            return template.format(**match.groupdict())
+    return None
 
 
 def _classify_api(rest: Sequence[str], cwd: Path) -> tuple[str, str | None, str | None, list[str]]:
@@ -2679,7 +2727,15 @@ def gh_decision(words: Sequence[str], cwd: Path) -> Decision:
             return _owner_only(owner_group)
         if mutations:
             return _not_listed_mutations(mutations)
-        return _not_listed(f"gh api {_api_method(call_args)} {_api_endpoint(call_args) or '?'}")
+        what = f"gh api {_api_method(call_args)} {_api_endpoint(call_args) or '?'}"
+        equivalent = _api_equivalent(_api_endpoint(call_args), _api_method(call_args))
+        if equivalent is not None:
+            return Decision(
+                "gh-allow-list",
+                f"{what} isn't on the guard's gh allow-list.",
+                f"Run {equivalent}, which the guard allows.",
+            )
+        return _not_listed(what)
     sub = call_args[0] if call_args and not call_args[0].startswith("-") else None
     rest = call_args[1:] if sub is not None else call_args
     key = (group, sub or "")
