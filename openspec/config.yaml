@@ -71,6 +71,11 @@ context: |
     troupe-run/infrastructure#152 first.
   - When a change fixes a tracked issue, comment on the issue with the change and close it.
   - Commit in small steps with messages that say why.
+  - Before archiving, wait for Claude's review of the last push and act on each finding by its tier: fix or answer
+    every must-fix and nit, resolve only nits, and raise decisions and disputed must-fixes with the owner. The
+    review resolves its own must-fixes (troupe-run/infrastructure docs/development-workflow.md, "Claude's review");
+    after answering a must-fix without a push, re-run the last `claude review` run (`gh run rerun <id>`) so the
+    review judges the reply.
 
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.
