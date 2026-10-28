@@ -14,16 +14,16 @@
 
 ## 2. The review and merge steps in CLAUDE.md (#184, #185, design D2 and D3)
 
-- [ ] 2.1 In CLAUDE.md's "How work happens here", insert D3's step 5, renumber the archive step to 6 with D2's merge
+- [x] 2.1 In CLAUDE.md's "How work happens here", insert D3's step 5, renumber the archive step to 6 with D2's merge
   text, and renumber the after-merge step to 7. Verify `git diff CLAUDE.md` touches only that list, steps 1 to 4 are
   byte-identical, and the steps read 1 to 7 in order.
-- [ ] 2.2 Check the facts the text states against their sources: the ruleset's required checks are exactly `check`,
+- [x] 2.2 Check the facts the text states against their sources: the ruleset's required checks are exactly `check`,
   `DCO` and `guard (workflow rules)` and its `merge_queue` rule merges by `REBASE`
   (`gh api repos/troupe-run/troupe/rules/branches/main`); `.github/workflows/claude-review.yml`'s `name` is
   `claude review`; `gh pr merge --help` still says a queued branch needs no strategy and `--admin` bypasses the queue;
   infrastructure's `docs/development-workflow.md` has a `## Claude's review` heading, so the `#claudes-review` anchor
   resolves. Verify each by its command's output; if one has changed, stop and update design before the text.
-- [ ] 2.3 Verify nothing else cites CLAUDE.md's old step numbers: `git grep -n -i -E "step (5|6)" -- ':!openspec/changes/archive'`
+- [x] 2.3 Verify nothing else cites CLAUDE.md's old step numbers: `git grep -n -i -E "step (5|6)" -- ':!openspec/changes/archive'`
   finds no reference to CLAUDE.md's list (design D3). Commit as
   `docs: say pull requests land through the merge queue, after acting on Claude's review`, with
   `uv run scripts/check.py` passing first (the full check: CLAUDE.md is in no scope).

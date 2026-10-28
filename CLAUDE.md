@@ -14,8 +14,15 @@ Every change, however small, follows one path. The full guide is the org's
    the issue. Design decisions are surfaced in the proposal or design before code depends on them.
 3. **`/opsx:apply`** builds it. A task is ticked only when its verification has run and passed.
 4. **A pull request** closes the issue (`Closes #n`). All CI jobs pass on Linux, macOS and Windows.
-5. **`/opsx:archive`** runs on the branch before merging, so the PR lands code, tests and specs together.
-6. **After the merge**, comment on the issue with the PR and the archived change.
+5. **Claude's review is acted on**, after the review of the last push: fix or answer each finding, resolve only nits,
+   and raise decisions and disputed must-fixes with the owner. The review resolves its own must-fixes once they're
+   addressed; for a must-fix answered without a push, re-run the last `claude review` run (`gh run rerun <id>`). A
+   merge needs every conversation resolved ([development-workflow.md, "Claude's review"](https://github.com/troupe-run/infrastructure/blob/main/docs/development-workflow.md#claudes-review)).
+6. **`/opsx:archive`** runs on the branch before merging, so the PR lands code, tests and specs together. The pull
+   request then goes into the merge queue, which merges it by rebase once `check`, `guard (workflow rules)` and `DCO`
+   pass on the commit it tested: `gh pr merge <n>`, or "Merge when ready", queues it. `gh pr merge <n> --rebase
+   --admin` skips the queue, and is only for emergencies, such as clearing a stuck queue.
+7. **After the merge**, comment on the issue with the PR and the archived change.
 
 Commits are Conventional Commits (`feat(cli): ...`), signed, and `uv run scripts/check.py` passes before each one.
 
