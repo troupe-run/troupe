@@ -2,12 +2,12 @@
 
 ## 1. The review step in the config's context (#185, design D1)
 
-- [ ] 1.1 Add D1's item as the last entry of the Working list in `openspec/config.yaml`'s `context`, after "Commit in
+- [x] 1.1 Add D1's item as the last entry of the Working list in `openspec/config.yaml`'s `context`, after "Commit in
   small steps with messages that say why." Verify by a scratchpad script that the new item, whitespace collapsed,
   equals infrastructure's current item (fetched with `gh api repos/troupe-run/infrastructure/contents/openspec/config.yaml`)
   with only `docs/development-workflow.md` replaced by `troupe-run/infrastructure docs/development-workflow.md`, and
   that `git diff openspec/config.yaml` adds exactly those lines and removes none.
-- [ ] 1.2 Verify `openspec instructions tasks --change merge-queue-and-review-docs --json` shows the item in its
+- [x] 1.2 Verify `openspec instructions tasks --change merge-queue-and-review-docs --json` shows the item in its
   `context`, and `openspec validate --all --strict` passes. Commit as
   `docs(openspec): plan for acting on Claude's review before archiving`, with `uv run scripts/check.py` passing first
   (only the OpenSpec part runs: the path is in `skip`).
