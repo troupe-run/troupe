@@ -38,7 +38,7 @@ import time
 import tomllib
 import urllib.error
 import urllib.request
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -2042,7 +2042,7 @@ GH_READS = frozenset(
 GH_WORKFLOW_WRITES = frozenset(
     {
         ("pr", "create"), ("pr", "edit"), ("pr", "ready"), ("pr", "close"), ("pr", "reopen"),
-        ("pr", "comment"), ("pr", "checkout"), ("pr", "merge"),
+        ("pr", "comment"), ("pr", "checkout"),
         ("issue", "create"), ("issue", "comment"), ("issue", "edit"), ("issue", "close"),
         ("issue", "reopen"),
         ("project", "item-add"), ("project", "item-edit"), ("project", "item-archive"),
@@ -2051,14 +2051,18 @@ GH_WORKFLOW_WRITES = frozenset(
 )  # fmt: skip
 # What the hook grants, so it runs without a prompt or auto mode's check (guard-grants-gh
 # design D1). A grant skips auto mode's classifier entirely, so this is narrower than the
-# allow-list: merging, checking out, starting or stopping runs, and reads that write local files
-# anywhere keep Claude Code's own check, and so does gh api.
+# allow-list: checking out, starting or stopping runs, and reads that write local files anywhere
+# keep Claude Code's own check, and so does gh api. Merging isn't an agent's at all (GH_OWNER_ONLY).
 GH_NOT_GRANTED = frozenset(
-    {("pr", "merge"), ("pr", "checkout"), ("workflow", "run"), ("run", "rerun"), ("run", "cancel"),
+    {("pr", "checkout"), ("workflow", "run"), ("run", "rerun"), ("run", "cancel"),
      ("run", "download"), ("repo", "clone")}
 )  # fmt: skip
 GH_GRANTED = (GH_READS | GH_WORKFLOW_WRITES) - GH_NOT_GRANTED
 GH_OWNER_ONLY = {
+    # Any merge, not only --admin: on a pull request blocked by an open review conversation,
+    # gh pr merge turns on auto-merge, which lands it later with no look from the owner
+    # (review-findings-by-severity design D5a). A throwaway repository's stays exempt.
+    ("pr", "merge"): "merge",
     ("secret", "set"): "admin", ("secret", "delete"): "admin",
     ("variable", "set"): "admin", ("variable", "delete"): "admin",
     ("repo", "create"): "admin", ("repo", "edit"): "admin", ("repo", "rename"): "admin",
@@ -2112,6 +2116,11 @@ GH_API_OWNER_ONLY = tuple(
 # Every everyday write has one way to do it, its gh command, so no GraphQL mutation is allowed
 # (guard-issue-mutations design D1). Add one here only for a write gh can't do.
 GH_MUTATIONS_ALLOWED: frozenset[str] = frozenset()
+# Writes gh can't do, allowed only when the guard has read what they act on. Resolving a review
+# conversation has no gh command and no REST endpoint (checked against gh 2.103.3), so this is its
+# one way; it's allowed for a nit the review opened, and nothing else (review-findings-by-severity
+# design D5). unresolveReviewThread isn't here: reopening a conversation is the owner's.
+GH_MUTATIONS_CONDITIONAL = frozenset({"resolveReviewThread"})
 # The gh command that does what a refused mutation does, named in its refusal's fix (design D2).
 # Only commands the guard allows; a mutation whose gh command is refused or owner-only has no entry.
 # Each name was checked against GitHub's GraphQL schema on 2026-10-13.
@@ -2150,7 +2159,8 @@ GH_MUTATION_EQUIVALENTS: dict[str, tuple[str, ...]] = {
     "createPullRequest": ("gh pr create --title <title> --body-file <file>",),
 }  # fmt: skip
 GH_MUTATIONS_OWNER_ONLY = {
-    "mergePullRequest": "merge",
+    "mergePullRequest": "merge", "enablePullRequestAutoMerge": "merge",
+    "enqueuePullRequest": "merge",
     "approveDeployments": "deployment", "rejectDeployments": "deployment",
     "createRepositoryRuleset": "gates", "updateRepositoryRuleset": "gates",
     "deleteRepositoryRuleset": "gates",
@@ -2158,6 +2168,46 @@ GH_MUTATIONS_OWNER_ONLY = {
     "deleteBranchProtectionRule": "gates",
     "updateProjectV2Field": "admin",
 }  # fmt: skip
+
+# Claude's review labels each finding with a tier, named for who resolves it: the review
+# (must-fix), the author (nit) or the owner (decision). The label is the comment's first line, in
+# one fixed form; claude-review.yml's prompt shows it, and its resolving step carries a copy of
+# this parser, which scripts/tests/test_claude_review_workflow.py holds equal
+# (review-findings-by-severity design D1).
+REVIEW_TIERS = ("must-fix", "nit", "decision")
+# The separator is a middle dot, written as an escape: guard.py stays ASCII, so it reads the same
+# whatever a platform's default encoding is (cp1252 on Windows before Python 3.15).
+REVIEW_LABEL = re.compile(rf"\*\*({'|'.join(map(re.escape, REVIEW_TIERS))})\*\* \u00b7 \S.*")
+# How GitHub's GraphQL API names the review App as an author. A person could register the same
+# login, so only a Bot of that name is the review (design D5).
+REVIEW_BOT = {"__typename": "Bot", "login": "troupe-run-review"}
+
+
+def review_tier(body: str) -> str | None:
+    """The tier a review comment's first line names, or None if it isn't in the fixed form."""
+    match = REVIEW_LABEL.fullmatch(body.splitlines()[0] if body else "")
+    return match.group(1) if match else None
+
+
+def is_review_bot(author: object) -> bool:
+    return (
+        isinstance(author, dict)
+        and author.get("__typename") == REVIEW_BOT["__typename"]
+        and author.get("login") == REVIEW_BOT["login"]
+    )
+
+
+def conversation_tier(comments: Sequence[Mapping[str, object]]) -> str | None:
+    """A conversation's tier: the label on the review's latest labelled comment in it. Only the
+    review re-tiers, so a label in anyone else's comment counts for nothing (design D1)."""
+    for comment in reversed(comments):
+        body = comment.get("body")
+        if is_review_bot(comment.get("author")) and isinstance(body, str):
+            tier = review_tier(body)
+            if tier is not None:
+                return tier
+    return None
+
 
 # Throwaway repositories (design D2): any write by an agent, but only infra-probe-* may be deleted,
 # and archiving, unarchiving or deleting the others' records is the owner's.
@@ -2179,8 +2229,11 @@ GH_REPO_VALUE_FLAGS = GH_PR_CREATE_VALUE_FLAGS | GH_API_VALUE_FLAGS
 
 OWNER_ONLY_MESSAGES = {
     "merge": (
-        "only the owner merges past a pull request's rules.",
-        "Ask the owner to merge it, or fix what blocks it.",
+        "only the owner merges a pull request, queues it, turns on its auto-merge, or merges past "
+        "its rules.",
+        "Ask the owner to merge it once every review conversation is resolved, or fix what blocks "
+        "it. On a blocked pull request gh pr merge turns on auto-merge, which would land it later "
+        "without the owner looking again.",
     ),
     "deployment": (
         "only the owner approves or rejects a deployment.",
@@ -2378,6 +2431,150 @@ def graphql_mutations(query: str) -> list[str] | None:
     return mutations
 
 
+REVIEW_LOOKUP_TIMEOUT_SECONDS = 20.0
+"""How long the guard waits to read a review conversation before refusing to resolve it."""
+REVIEW_THREAD_QUERY = (
+    "query($id: ID!) { node(id: $id) { __typename ... on PullRequestReviewThread { "
+    "opened: comments(first: 1) { nodes { author { __typename login } } } "
+    "latest: comments(last: 100) { nodes { author { __typename login } body } } } } }"
+)
+"""Who opened a conversation, and its last 100 comments: the tier is the review's latest label,
+so the last 100 is the part that matters (design D5)."""
+_THREAD_ID = re.compile(r'\bthreadId\s*:\s*(?:("(?:\\.|[^"\\])*")|\$([A-Za-z_]\w*))')
+
+
+class ReviewLookupError(Exception):
+    """A review conversation couldn't be read, so resolving it is refused."""
+
+
+def read_review_thread(thread_id: str) -> Mapping[str, object] | None:
+    """The conversation's node from GitHub, through the session's own gh: None when the ID names
+    nothing, or something that isn't a review conversation."""
+    executable = shutil.which("gh")
+    if executable is None:
+        raise ReviewLookupError("gh wasn't found on PATH")
+    try:
+        result = subprocess.run(
+            [executable, "api", "graphql", "-f", f"query={REVIEW_THREAD_QUERY}",
+             "-f", f"id={thread_id}"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", check=False,
+            timeout=REVIEW_LOOKUP_TIMEOUT_SECONDS,
+        )  # fmt: skip
+    except subprocess.TimeoutExpired:
+        raise ReviewLookupError(
+            f"gh took more than {REVIEW_LOOKUP_TIMEOUT_SECONDS:g} second(s)"
+        ) from None
+    if result.returncode != 0:
+        raise ReviewLookupError(f"gh exited with {result.returncode}")
+    try:
+        answer = json.loads(result.stdout)
+    except ValueError:
+        raise ReviewLookupError("gh's answer isn't JSON") from None
+    data = answer.get("data") if isinstance(answer, dict) else None
+    if not isinstance(data, dict) or "node" not in data:
+        raise ReviewLookupError("GitHub's answer has no node")
+    node = data["node"]
+    if not isinstance(node, dict) or node.get("__typename") != "PullRequestReviewThread":
+        return None
+    return node
+
+
+def _comments(node: Mapping[str, object], key: str) -> list[Mapping[str, object]]:
+    connection = node.get(key)
+    nodes = connection.get("nodes") if isinstance(connection, dict) else None
+    return [n for n in nodes if isinstance(n, dict)] if isinstance(nodes, list) else []
+
+
+def _resolved_thread_id(rest: Sequence[str], cwd: Path) -> str | None:
+    """The one conversation a resolveReviewThread names: a string in the query, or a -f/-F field
+    given on the command. None if it names more or less than one, or one it can't read."""
+    if any(word.partition("=")[0] == "--input" for word in rest):
+        return None
+    queries = _graphql_queries(rest, cwd) or []
+    found = [m for query in queries for m in _THREAD_ID.finditer(query)]
+    if len(found) != 1:
+        return None
+    literal, variable = found[0].groups()
+    if literal is not None:
+        value = json.loads(literal)
+        return value if isinstance(value, str) else None
+    # gh sends the last of a repeated field, so a variable given twice can't be pinned to the one
+    # the guard would read: it names no single conversation.
+    given = [
+        (value, typed)
+        for field, typed in _api_fields(rest)
+        for key, equals, value in [field.partition("=")]
+        if key == variable and equals
+    ]
+    if len(given) != 1:
+        return None
+    value, typed = given[0]
+    return None if typed and value.startswith("@") else value
+
+
+def _owner_resolves(problem: str) -> Decision:
+    return Decision(
+        "gh-allow-list",
+        problem,
+        "Ask the owner: a decision, an unlabelled finding and a person's conversation are theirs "
+        "to resolve.",
+    )
+
+
+def review_resolve_decision(rest: Sequence[str], cwd: Path) -> Decision:
+    """resolveReviewThread: allowed for one conversation the review opened, whose tier is nit,
+    read from GitHub first; anything else is refused (spec: development-workflow; design D5)."""
+    queries = _graphql_queries(rest, cwd) or []
+    names = [name for query in queries for name in graphql_mutations(query) or []]
+    if names != ["resolveReviewThread"]:
+        return Decision(
+            "gh-allow-list",
+            "resolveReviewThread is allowed only on its own, for one conversation per command.",
+            "Resolve each conversation in a command of its own.",
+        )
+    thread_id = _resolved_thread_id(rest, cwd)
+    if thread_id is None:
+        return Decision(
+            "gh-allow-list",
+            "the conversation this resolveReviewThread names can't be read before it runs.",
+            'Name it in the query (threadId: "PRRT_...") or with -f <variable>=<id>.',
+        )
+    try:
+        node = read_review_thread(thread_id)
+    except ReviewLookupError as error:
+        return Decision(
+            "gh-allow-list",
+            f"conversation {thread_id} couldn't be read from GitHub ({error}), so resolving it "
+            "can't be checked.",
+            "Check gh's login and network, and run it again.",
+        )
+    if node is None:
+        return Decision(
+            "gh-allow-list",
+            f"{thread_id} isn't a review conversation.",
+            "Name a pull request's review conversation (its ID starts PRRT_).",
+        )
+    opened = _comments(node, "opened")
+    if not opened or not is_review_bot(opened[0].get("author")):
+        return _owner_resolves(f"the review didn't open conversation {thread_id}.")
+    tier = conversation_tier(_comments(node, "latest"))
+    if tier == "nit":
+        return ALLOW
+    if tier == "must-fix":
+        return Decision(
+            "gh-allow-list",
+            f"conversation {thread_id} is a must-fix: only the review resolves it.",
+            "Fix it, or reply with your reason; the review resolves it on its next run once it's "
+            "addressed. If you still disagree after that, raise it with the owner.",
+        )
+    if tier == "decision":
+        return _owner_resolves(f"conversation {thread_id} is a decision.")
+    return _owner_resolves(
+        f"conversation {thread_id} has no tier: the review's latest label isn't among its last "
+        "100 comments."
+    )
+
+
 def _owner_only(group: str) -> Decision:
     problem, fix = OWNER_ONLY_MESSAGES[group]
     return Decision("owner-only", problem, fix)
@@ -2423,6 +2620,8 @@ def _classify_api(rest: Sequence[str], cwd: Path) -> tuple[str, str | None, str 
         for name in names:
             if name in GH_MUTATIONS_OWNER_ONLY:
                 return "owner", GH_MUTATIONS_OWNER_ONLY[name], None, []
+        if any(name in GH_MUTATIONS_CONDITIONAL for name in names):
+            return "resolve", None, None, names
         unlisted = [name for name in names if name not in GH_MUTATIONS_ALLOWED]
         if not unlisted:
             return "allow", None, None, []
@@ -2458,6 +2657,8 @@ def gh_decision(words: Sequence[str], cwd: Path) -> Decision:
         return ALLOW
     if group == "api":
         verdict, owner_group, repository, mutations = _classify_api(call_args, cwd)
+        if verdict == "resolve":
+            return review_resolve_decision(call_args, cwd)
         repository = repository or _gh_repository(words, call_args)
         kind = throwaway_kind(repository)
         if verdict == "allow":
@@ -3888,7 +4089,8 @@ WORKFLOW_SUMMARY = (
     "This repository's workflow is enforced by guardrails ("
     f"https://github.com/{SOURCE_REPOSITORY}/blob/main/docs/development-workflow.md): "
     "issue -> OpenSpec change (/opsx:propose) on a branch named after the change -> "
-    "/opsx:apply -> PR that closes the issue -> archive on the branch -> merge -> comment on and "
+    "/opsx:apply -> PR that closes the issue -> act on Claude's review of the last push (fix or "
+    "answer each finding; resolve only nits) -> archive on the branch -> merge -> comment on and "
     "close the issue. Conventional Commits; scripts/check.py passes before every commit. "
     "When a guardrail refuses, follow its fix; don't work around it. Only the owner can grant "
     "an override."
