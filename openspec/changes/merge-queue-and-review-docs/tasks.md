@@ -30,10 +30,10 @@
 
 ## 3. The pull request
 
-- [ ] 3.1 Open the pull request with `Closes #184` and `Closes #185` on their own lines, and a link to
+- [x] 3.1 Open the pull request with `Closes #184` and `Closes #185` on their own lines, and a link to
   troupe-run/infrastructure#194 and #197. Verify every required check (`check`, `guard (workflow rules)`, `DCO`)
   passes, and `gh pr view --json closingIssuesReferences` lists both #184 and #185.
-- [ ] 3.2 Comment on troupe-run/infrastructure#194 with the pull request's link (#185's "Done when"). Verify the
+- [x] 3.2 Comment on troupe-run/infrastructure#194 with the pull request's link (#185's "Done when"). Verify the
   comment appears with `gh issue view 194 -R troupe-run/infrastructure --comments`.
 
 ## Workflow follow-up
