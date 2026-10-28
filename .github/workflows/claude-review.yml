@@ -1,8 +1,9 @@
 # Source: troupe-run/infrastructure. Change it there; copies in other repositories are delivered.
 name: claude review
 
-# Claude reviews each member's pull request when it's opened and on each update, drafts included,
-# and posts each finding as a conversation, labelled must-fix, nit or decision for who resolves it
+# Claude reviews each member's pull request when it's opened, on each update, drafts included, and
+# when a person with write access replies in one of its open must-fix conversations, so a reply is
+# judged when it's posted (review-judge-reply-on-post design D1, D2, D2a, #208). It posts each finding as a conversation, labelled must-fix, nit or decision for who resolves it
 # (spec: pr-review, #154, #194). It isn't a required check, and it can't approve, request changes
 # or push; what blocks a merge is an unresolved conversation, through the ruleset. A job after the
 # review resolves the review's own must-fixes that Claude found addressed, and posts the re-tiers it
@@ -21,19 +22,195 @@ name: claude review
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+  # A reply, not an edit; the gate says whose, and to what.
+  pull_request_review_comment:
+    types: [created]
 
 permissions:
   contents: read
 
-# A new push replaces a review still running for the pull request's earlier head.
-concurrency:
-  group: claude-review-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
-
 jobs:
+  # Whether the event needs a review: a pull request event always; a review comment only when
+  # it's a person's reply in an open must-fix the review opened, the one tier whose reply changes
+  # what the review does. A reply to a nit, which agents post before resolving each one with the
+  # owner's login, or to a decision, costs no Claude run. Outside the concurrency group, so a no
+  # cancels nothing (review-judge-reply-on-post design D2a).
+  gate:
+    name: does this need a review
+    # Bots' and forks' pull requests are skipped. A review comment goes on only when it's a reply,
+    # and not a bot's: each of the review's own comments starts a run (design D2). Whether its
+    # author has write access is the step's to ask: the comment's author_association can't say,
+    # since a member whose membership is private comments as a CONTRIBUTOR (Probe results).
+    if: >-
+      github.event.pull_request.user.type != 'Bot' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (github.event_name == 'pull_request' ||
+      (github.event.comment.in_reply_to_id != null &&
+      github.event.comment.user.type != 'Bot'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      review: ${{ steps.gate.outputs.review }}
+    steps:
+      # The review App's token, read-only: it only reads the conversations.
+      - id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          # Not a secret: it names the App, and minting a token also needs the key (design D3). The
+          # App ID is 5476894, recorded on #154.
+          client-id: Iv23liIWLSHXQlYupT89
+          private-key: ${{ secrets.REVIEW_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: read
+          permission-pull-requests: read
+      # A read that fails, or an answer that isn't one, fails the gate, and no review starts.
+      - id: gate
+        name: Decide whether this event needs a review
+        shell: python3 {0}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPOSITORY: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          EVENT: ${{ github.event_name }}
+          REPLY_TO: ${{ github.event.comment.in_reply_to_id }}
+          COMMENTER: ${{ github.event.comment.user.login }}
+        run: |
+          import json
+          import os
+          import re
+          import shutil
+          import subprocess
+          import sys
+
+          # Copies of the resolving step's LABEL and BOT, which this step can't import;
+          # scripts/tests/test_claude_review_workflow.py holds them equal (design D2a).
+          # The permissions that can push, as GitHub's permission API names them; maintain reads as
+          # write there.
+          WRITE = {"admin", "write"}
+          LABEL = re.compile(r"\*\*(must-fix|nit|decision)\*\* · \S.*")
+          BOT = {"__typename": "Bot", "login": "troupe-run-review"}
+          QUERY = """
+          query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
+            repository(owner: $owner, name: $name) {
+              pullRequest(number: $number) {
+                reviewThreads(first: 50, after: $cursor) {
+                  pageInfo { hasNextPage endCursor }
+                  nodes {
+                    id isResolved
+                    opened: comments(first: 1) {
+                      nodes { databaseId author { __typename login } }
+                    }
+                    comments(last: 100) {
+                      nodes { databaseId author { __typename login } body }
+                    }
+                  }
+                }
+              }
+            }
+          }
+          """
+
+
+          def fail(title, reason):
+              print(f"::error title={title}::{reason}, so whether this reply needs a review isn't "
+                    "known. Re-run this run once it can be read.")
+              sys.exit(1)
+
+
+          def say(review, why):
+              with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as file:
+                  file.write(f"review={'true' if review else 'false'}\n")
+              print(why)
+              sys.exit(0)
+
+
+          def is_bot(author):
+              return isinstance(author, dict) and all(author.get(k) == v for k, v in BOT.items())
+
+
+          def tier(comments):
+              for comment in reversed(comments):
+                  body = comment.get("body") or ""
+                  match = LABEL.fullmatch(body.splitlines()[0] if body else "")
+                  if is_bot(comment.get("author")) and match:
+                      return match.group(1)
+              return None
+
+
+          if os.environ.get("EVENT") == "pull_request":
+              say(True, "A pull request event: it's reviewed.")
+          reply_to = os.environ.get("REPLY_TO", "")
+          if not reply_to.isdigit():
+              fail("Reply unnamed", f"The comment replied to isn't named by an ID ({reply_to!r})")
+          commenter = os.environ.get("COMMENTER", "")
+          if not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})", commenter):
+              fail("Commenter unnamed", f"The reply's author isn't a login ({commenter!r})")
+          gh = shutil.which("gh")
+          if gh is None:
+              fail("Review conversations unread", "gh wasn't found")
+          done = subprocess.run(
+              [gh, "api", f"repos/{os.environ['REPOSITORY']}/collaborators/{commenter}/permission"],
+              capture_output=True, text=True, check=False)
+          try:
+              permission = json.loads(done.stdout)["permission"] if done.returncode == 0 else None
+          except (ValueError, KeyError, TypeError):
+              permission = None
+          if not isinstance(permission, str):
+              fail("Permission unknown", f"{commenter}'s permission on the repository can't be read")
+          if permission not in WRITE:
+              say(False, f"{commenter} can't push here ({permission}): no review.")
+          owner, _, name = os.environ["REPOSITORY"].partition("/")
+          threads = []
+          cursor = None
+          while True:
+              args = [gh, "api", "graphql", "-f", f"query={QUERY}", "-f", f"owner={owner}",
+                      "-f", f"name={name}", "-F", f"number={os.environ['NUMBER']}"]
+              if cursor:
+                  args += ["-f", f"cursor={cursor}"]
+              done = subprocess.run(args, capture_output=True, text=True, check=False)
+              if done.returncode != 0:
+                  fail("Review conversations unread", f"gh exited with {done.returncode}")
+              try:
+                  page = json.loads(done.stdout)["data"]["repository"]["pullRequest"]
+                  page = page["reviewThreads"]
+                  threads += page["nodes"]
+                  more = page["pageInfo"]["hasNextPage"]
+                  cursor = page["pageInfo"]["endCursor"]
+              except (ValueError, KeyError, TypeError):
+                  fail("Review conversations unread",
+                       "GitHub's answer isn't a page of review conversations")
+              if not more:
+                  break
+          wanted = int(reply_to)
+          for thread in threads:
+              comments = thread["opened"]["nodes"][:1] + thread["comments"]["nodes"]
+              if any(c.get("databaseId") == wanted for c in comments):
+                  break
+          else:
+              say(False, "The comment replied to is in no review conversation read: no review.")
+          if thread.get("isResolved"):
+              say(False, f"{thread['id']} is resolved: no review.")
+          if not any(is_bot(c.get("author")) for c in thread["opened"]["nodes"][:1]):
+              say(False, f"{thread['id']} wasn't opened by the review: no review.")
+          current = tier(thread["comments"]["nodes"])
+          if current != "must-fix":
+              say(False, f"{thread['id']} is {'a ' + current if current else 'unlabelled'}, not a "
+                         "must-fix, so the review has nothing to judge: no review.")
+          say(True, f"{thread['id']} is an open must-fix of the review's: it's reviewed.")
+
   review:
     name: claude review
-    if: github.event.pull_request.user.type != 'Bot' && github.event.pull_request.head.repo.full_name == github.repository
+    needs: gate
+    if: needs.gate.outputs.review == 'true'
+    # A new push or reply replaces a review still running for the pull request. The group is on
+    # the jobs, not the workflow, so a run whose review is skipped never joins it, and can't cancel
+    # the review whose comment started it (design D3).
+    concurrency:
+      group: claude-review-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # What Claude names to resolve or re-tier, for the resolve job (design D4a).
@@ -320,6 +497,10 @@ jobs:
     name: resolve review conversations
     needs: review
     if: needs.review.result == 'success'
+    # The review's group: a later run's review cancels this one, as it would the review (D3).
+    concurrency:
+      group: claude-review-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
