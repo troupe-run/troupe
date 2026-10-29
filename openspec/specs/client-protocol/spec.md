@@ -84,8 +84,9 @@ a failed call: its outcome and error are part of `perform`'s result.
 ### Requirement: A run summary carries what its state knows
 A run summary SHALL carry `outcome` and `endedAt` exactly when its `state` is `ended`. It SHALL leave out `error`
 when the outcome has none, `transcript` and `stderr` when the runner never started, `recording` when recording didn't
-fail, and `runner.reported` when the runner sent no init. It SHALL carry `workspace` always, and `changes` exactly
-when the workspace is a worktree. No field of a summary SHALL be `null`.
+fail, `runner.reported` when the runner sent no init, and a worktree workspace's `clones` until its worktree is
+made. It SHALL carry `workspace` always, and `changes` exactly when the workspace is a worktree. No field of a summary
+SHALL be `null`.
 
 #### Scenario: A running run
 - **WHEN** `status` reports a run whose `perform` is still alive
@@ -106,6 +107,11 @@ when the workspace is a worktree. No field of a summary SHALL be `null`.
 #### Scenario: Changes that contradict the workspace
 - **WHEN** a run summary has workspace `theatre` and `changes`, or changes `pending` and no diff reference
 - **THEN** it doesn't validate against the client protocol's run schema
+
+#### Scenario: A worktree not made yet
+- **WHEN** `status` reports a worktree run whose start is recorded and whose worktree isn't made yet
+- **THEN** its summary's workspace has its path, base and whether the theatre was dirty, and no `clones`
+- **AND** the summary validates against the client protocol's run schema
 
 ### Requirement: Perform's request names an actor and a direction
 A `perform` request SHALL hold the actor's name, an optional direction and an optional `rehearse`, and no runner,
