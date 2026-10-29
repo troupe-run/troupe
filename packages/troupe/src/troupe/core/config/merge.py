@@ -18,8 +18,11 @@ out. Of those left, lines that leave the point the same agree; otherwise their c
 conflict, whole.
 
 **Replay.** Config is every entry replayed in the history's order, leaving out the lines that
-dropped out, and both sides of every conflict. Entries that are left and concurrent never overlap,
-so their order can't change the result, and every clone works out the same config.
+dropped out, and both sides of every conflict. Where that leaves out every latest write of a point,
+the writes beneath them decide, so they're contested by the same rule, until one is left or a line
+stays in (#190); only the first contest's conflict is reported. Entries that are left and
+concurrent then never overlap, so their order can't change the result, and every clone works out
+the same config.
 
 **Conflicts from validation.** When the merged config breaks a rule (``kinds.problems``), the
 changes since the split that touched what broke it are in conflict too.
@@ -200,7 +203,30 @@ def _contest(
     point: Point, writes: Sequence[_Write], ancestors: dict[str, frozenset[str]]
 ) -> tuple[set[tuple[str, int]], list[_Write]] | None:
     """For a point with concurrent latest writes: the writes to leave out of replay, and the
-    latest writes left in conflict (empty when they agree)."""
+    latest writes left in conflict (empty when they agree).
+
+    When no latest write stays in (they conflict, or every line drops out), the writes beneath
+    decide, so they're contested again by the same rule, until one is left or a line stays in.
+    Only the first round's conflict is reported (#190)."""
+    found = _round(point, writes, ancestors)
+    if found is None:
+        return None
+    drop, conflicting, latest = found
+    while not {(w.event, w.index) for w in latest} - drop:
+        left = [w for w in writes if (w.event, w.index) not in drop]
+        beneath = _round(point, left, ancestors)
+        if beneath is None:
+            break  # one write is left, or none
+        drop |= beneath[0]
+        latest = beneath[2]
+    return drop, conflicting
+
+
+def _round(
+    point: Point, writes: Sequence[_Write], ancestors: dict[str, frozenset[str]]
+) -> tuple[set[tuple[str, int]], list[_Write], list[_Write]] | None:
+    """One round of a point's contest: the writes to leave out, the latest writes left in
+    conflict, and every latest write."""
     covering = [w for w in writes if _covers(w.path, point)]
     latest_by_event: dict[str, _Write] = {}
     for write in covering:
@@ -226,10 +252,10 @@ def _contest(
         else:
             left.append(write)
     if len({_effect(w, point) for w in left}) <= 1:
-        return drop, []
+        return drop, [], latest
     for write in latest:
         drop |= {(w.event, w.index) for w in lines[write.event]}
-    return drop, left
+    return drop, left, latest
 
 
 def _ends_where_it_began(line: Sequence[_Write]) -> bool:

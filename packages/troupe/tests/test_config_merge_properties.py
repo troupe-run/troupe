@@ -141,7 +141,7 @@ def _summary(merged: Merged) -> tuple[object, ...]:
     )
 
 
-@settings(max_examples=150)
+@settings(max_examples=500)
 @given(st.data())
 def test_every_order_the_events_can_arrive_in_works_out_the_same_config(
     data: st.DataObject,
@@ -197,3 +197,98 @@ def test_a_conflict_is_reported_exactly_where_two_branches_end_a_value_different
             assert path not in conflicted, path
             expected = json.loads(ended.pop()) if ended else was
             assert get(merged.config, path) == expected, path
+
+
+def _every_order(records: Sequence[Record]) -> list[list[Record]]:
+    """Every order of ``records`` that keeps each parent before its children."""
+    if not records:
+        return [[]]
+    placed = {r.id for r in records}
+    ready = [r for r in records if not placed & set(r.parents)]
+    return [
+        [record, *rest]
+        for record in ready
+        for rest in _every_order([r for r in records if r is not record])
+    ]
+
+
+def _step(records: list[Record], n: int, parent: str, path: tuple[str, ...], value: object) -> str:
+    """Record version ``n``, a change to ``path`` after ``parent``, worked out from its history."""
+    state = merge(_ancestry(records, parent)).config
+    record = _changed(n, [parent], change(state, [(path, value)]))
+    records.append(record)
+    return record.id
+
+
+def _issue_190() -> list[Record]:
+    """#190's history: a fork settled, then two changes after the settle that conflict."""
+    expect = ("actors", "reviewer", "expect")
+    records, _ = _base()
+    left = _step(records, 3, records[0].id, ("actors", "tester", "character"), "A")
+    left = _step(records, 6, left, expect, ["a.txt"])
+    right = _step(records, 8, records[0].id, expect, ["a.txt"])
+    right = _step(records, 10, right, expect, [])  # and back
+    settled = _settled(12, [left, right])
+    records.append(settled)
+    _step(records, 14, settled.id, expect, [])
+    _step(records, 15, settled.id, expect, ["b.txt"])
+    return records
+
+
+def test_issue_190s_history_shows_the_settled_value_and_one_conflict_in_every_order() -> None:
+    records = _issue_190()
+    later = [_id(("change", 14)), _id(("change", 15))]
+    orders = _every_order(records)
+    assert len(orders) == 12
+    for order in orders:
+        merged = merge(order)
+        assert get(merged.config, ("actors", "reviewer", "expect")) == ["a.txt"]
+        assert [(c.paths, sorted(x.id for x in c.changes)) for c in merged.conflicts] == [
+            ((("actors", "reviewer", "expect"),), sorted(later))
+        ]
+        assert merged.heads == tuple(sorted(later))
+
+
+CHARACTER = ("actors", "tester", "character")
+
+
+def _settled_fork(records: list[Record]) -> str:
+    """Two branches set ``tester``'s character, one to new text and one to other text and back,
+    and a settle joins them: the settle leaves the new text."""
+    base = _step(records, 2, records[0].id, CHARACTER, "Original.")
+    left = _step(records, 3, base, CHARACTER, "New.")
+    right = _step(records, 4, base, CHARACTER, "Other.")
+    right = _step(records, 5, right, CHARACTER, "Original.")
+    settled = _settled(6, [left, right])
+    records.append(settled)
+    assert get(merge(records).config, CHARACTER) == "New."
+    return settled.id
+
+
+def test_a_conflict_after_a_settle_shows_the_value_the_settle_left_in_every_order() -> None:
+    records, _ = _base()
+    settled = _settled_fork(records)
+    _step(records, 7, settled, CHARACTER, "X.")
+    _step(records, 8, settled, CHARACTER, "Y.")
+    orders = _every_order(records)
+    assert len(orders) == 6
+    for order in orders:
+        merged = merge(order)
+        assert get(merged.config, CHARACTER) == "New."
+        assert [c.paths for c in merged.conflicts] == [(CHARACTER,)]
+
+
+def test_lines_after_a_settle_that_change_a_value_back_leave_the_settled_value_in_every_order() -> (
+    None
+):
+    records, _ = _base()
+    settled = _settled_fork(records)
+    for n, text in ((7, "X."), (9, "Y.")):
+        changed = _step(records, n, settled, CHARACTER, text)
+        _step(records, n + 1, changed, CHARACTER, "New.")  # and back
+    orders = _every_order(records)
+    assert len(orders) == 18
+    for order in orders:
+        merged = merge(order)
+        assert get(merged.config, CHARACTER) == "New."
+        assert merged.conflicts == ()

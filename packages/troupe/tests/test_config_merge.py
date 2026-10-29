@@ -99,6 +99,39 @@ def test_the_order_events_arrive_in_doesnt_change_the_result(repo: Repo) -> None
     assert merge([*common, first, second]).config == merge([*common, second, first]).config
 
 
+def _settled_fork(repo: Repo) -> None:
+    """``feature`` sets the character to new text, ``main`` to other text and back; main merges
+    feature, a change to ``reviewer`` settles the fork, and ``feature`` starts again from there."""
+    on(repo, "feature", [(CHARACTER, "New.")])
+    on(repo, "main", [(CHARACTER, "Other.")])
+    on(repo, "main", [(CHARACTER, TESTER["character"])])  # and back
+    merged_feature(repo)
+    set_config(repo, [(["actors", "reviewer", "character"], "Settled.")])
+    assert _value(config_of(repo), CHARACTER) == "New."
+    repo.git("branch", "-f", "feature")
+
+
+def test_a_conflict_after_a_settle_shows_the_value_the_settle_left(repo: Repo) -> None:
+    _settled_fork(repo)
+    on(repo, "feature", [(CHARACTER, "X.")])
+    on(repo, "main", [(CHARACTER, "Y.")])
+    merged = merged_feature(repo)
+    assert [c.paths for c in merged.conflicts] == [(tuple(CHARACTER),)]
+    assert _value(merged, CHARACTER) == "New."
+
+
+def test_lines_after_a_settle_that_change_a_value_back_leave_the_value_the_settle_left(
+    repo: Repo,
+) -> None:
+    _settled_fork(repo)
+    for branch, text in (("feature", "X."), ("main", "Y.")):
+        on(repo, branch, [(CHARACTER, text)])
+        on(repo, branch, [(CHARACTER, "New.")])  # and back
+    merged = merged_feature(repo)
+    assert merged.conflicts == ()
+    assert _value(merged, CHARACTER) == "New."
+
+
 # Requirement: Differing net changes to a value are a conflict between whole changes
 
 
