@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://troupe.run/protocol/events/run-started.schema.json",
   "title": "Run.Started",
-  "description": "The payload of a run's first event (topic troupe.core.runs.aggregate:Run.Started): who and what the run is, recorded when the runner's init arrives, or at the end of a run that never sent one. Field names are as recorded.",
+  "description": "The payload of a run's first event (topic troupe.core.runs.aggregate:Run.Started): who and what the run is, recorded before its workspace is made and its runner starts, once every check that can refuse it has passed. Field names are as recorded.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -38,7 +38,7 @@
       "$ref": "../client/run.schema.json#/$defs/runnerName"
     },
     "runner_reported": {
-      "description": "The runner's name and version from its init. Absent: the runner never sent one.",
+      "description": "The runner's name and version from its init, as troupe recorded them before a run's start came before its runner. Absent: recorded since, when the run's first reported event, its init, names the runner; or the runner never sent one.",
       "$ref": "../runner/jsonrpc.schema.json#/$defs/named"
     },
     "stage": {
@@ -99,15 +99,14 @@
     },
     "worktreeWorkspace": {
       "title": "In its own worktree",
-      "description": "The run worked in its own git worktree, made at the theatre's HEAD.",
+      "description": "The run works in its own git worktree, made at the theatre's HEAD after the start is recorded, so this names the worktree before any part of it exists.",
       "type": "object",
       "additionalProperties": false,
       "required": [
         "kind",
         "path",
         "base",
-        "dirty",
-        "clones"
+        "dirty"
       ],
       "properties": {
         "kind": {
@@ -131,19 +130,24 @@
           "type": "boolean"
         },
         "clones": {
-          "description": "The clone mechanisms used for the files that matched HEAD, sorted. Empty: every file was checked out.",
-          "type": "array",
-          "uniqueItems": true,
-          "items": {
-            "enum": [
-              "clonefile",
-              "ficlone",
-              "copyfile2",
-              "copy",
-              "symlink"
-            ]
-          }
+          "description": "The clone mechanisms used for the files that matched HEAD, sorted, as troupe recorded them before a run's start came before its worktree. Absent: recorded since, in the run's Run.WorktreeMade.",
+          "$ref": "#/$defs/clones"
         }
+      }
+    },
+    "clones": {
+      "title": "Clone mechanisms",
+      "description": "The clone mechanisms used for a worktree's files that matched HEAD, sorted. Empty: every file was checked out.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "clonefile",
+          "ficlone",
+          "copyfile2",
+          "copy",
+          "symlink"
+        ]
       }
     }
   }

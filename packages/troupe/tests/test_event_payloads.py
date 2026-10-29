@@ -292,3 +292,43 @@ def test_recording_a_run_whose_payloads_match_their_topics_passes_the_guard(
     run = _run()
     run.report(0, {**INIT["event"], "runId": run.run_id, "seq": 0})
     assert len(store.command(via="cli").record(run.collect_events())) == 2
+
+
+WORKTREE = {"kind": "worktree", "path": ".troupe/local/worktrees/run", "base": "c" * 40}
+
+
+def test_a_start_an_older_troupe_recorded_with_its_runner_and_clones_passes_the_guard(
+    tmp_path: Path,
+) -> None:
+    store = git_service(theatre(tmp_path))
+    run = Run(
+        run_id="0f8fad5b-d9cb-469f-a165-70867728950e",
+        actor="tester",
+        runner_requested="scripted",
+        runner_reported={"name": "scripted", "version": "0.1.0"},
+        stage=STAGE,
+        effect_check={"kind": "none"},
+        direction=HASH,
+        config=[HASH],
+        workspace={**WORKTREE, "dirty": False, "clones": ["copy"]},
+    )
+    assert len(store.command(via="cli").record(run.collect_events())) == 1
+
+
+def test_a_worktree_made_with_a_field_its_topic_does_not_define_fails_naming_the_topic(
+    tmp_path: Path,
+) -> None:
+    store = git_service(theatre(tmp_path))
+    run = Run(
+        run_id="0f8fad5b-d9cb-469f-a165-70867728950e",
+        actor="tester",
+        runner_requested="scripted",
+        stage=STAGE,
+        effect_check={"kind": "none"},
+        direction=HASH,
+        config=[HASH],
+        workspace={**WORKTREE, "dirty": False},
+    )
+    run.made_worktree(["teleport"])
+    with pytest.raises(ProtocolGuardError, match=r"Run\.WorktreeMade.*'teleport'"):
+        store.command(via="cli").record(run.collect_events())

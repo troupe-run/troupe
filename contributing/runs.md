@@ -29,8 +29,9 @@ A run is its own stream, keyed by its run id. Its events, in order:
 
 | Event | When | Actor and via |
 |---|---|---|
-| `Run.Started` | When the runner's `init` arrives (or, if it never sends one, at the end). It holds the actor's name, the runner asked for and the name and version `init` reported, the stage's admission, the effect check, the direction's reference, the config version (the config stream's heads, sorted), and the workspace: the worktree's path, base commit, whether the theatre was dirty and the clone mechanisms, or `theatre` | You, through `cli` |
-| `Run.Reported` | Once per run event, in `seq` order. It holds the event's `seq` and the event as received | The agent (`source: troupe`), through `runner` |
+| `Run.Started` | Before the run's workspace is made and its runner starts, once every check that can refuse it has passed, and after its direction is stored. It holds the actor's name, the runner asked for, the stage's admission, the effect check, the direction's reference, the config version (the config stream's heads, sorted), and the workspace: the worktree's path, base commit and whether the theatre was dirty, or `theatre`. A start an older troupe recorded also holds the runner `init` reported and the clone mechanisms | You, through `cli` |
+| `Run.WorktreeMade` | For a worktree run, once its worktree is made and filled, before the runner starts. It holds the clone mechanisms | You, through `cli` |
+| `Run.Reported` | Once per run event, in `seq` order. It holds the event's `seq` and the event as received. The first is `init`, and a run's reported runner is read from it | The agent (`source: troupe`), through `runner` |
 | `Run.Ended` | Once, when the run host returns. It holds the outcome, its error, the result, the exit code, the transcript's and standard error's references and the limits; if recording failed part-way, where and why; and for a worktree run, the changes captured: the diff's reference and counts, or why capturing failed, and what changed in the repository's shared state | The agent, through `runner` |
 | `Run.ChangesAccepted` | When a person accepts a worktree run's changes, after the diff applied. It holds the diff's reference and the files it changed | You, through `cli`, with no `stage` |
 | `Run.ChangesDiscarded` | When a person discards a worktree run's changes, after its worktree was removed | You, through `cli`, with no `stage` |
@@ -123,10 +124,13 @@ a worktree run's workspace through the VCS port alone, so it doesn't depend on t
 
 1. Refuse before anything is written: `vcs.worktrees-unsupported` (the plain filesystem adapter) or
    `workspace.no-head` (no commit yet).
-2. After the run's lease, list what differs from HEAD (`workspace.uncommitted-unseen` when anything outside
-   `.troupe/` does), `git worktree add --detach --no-checkout` at `.troupe/local/worktrees/<run id>`, clone each file
+2. After the run's lease and its direction's artifact, list what differs from HEAD (`workspace.uncommitted-unseen`
+   when anything outside `.troupe/` does), and record `Run.Started`, naming the worktree before any of it exists, so a
+   perform killed from here on leaves a run that `status` shows and `discard` clears (account-for-every-worktree
+   design D2). Then `git worktree add --detach --no-checkout` at `.troupe/local/worktrees/<run id>`, clone each file
    that matches HEAD from the theatre (`troupe.platform.clones`), check out the rest, check out again from git any file that differs from HEAD, and
-   write the result as the baseline tree the run's diff is taken from.
+   write the result as the baseline tree the run's diff is taken from, and record `Run.WorktreeMade`. A failure from
+   here until the runner starts ends the run `could-not-start`, keeping a worktree that was made.
 3. Snapshot the repository's shared state (refs, config, hooks), run the actor in the worktree (at the theatre's
    prefix when the theatre is a subdirectory), snapshot again, and capture the diff from the baseline (`.troupe/` left out) into the
    artifact store. Both go in the run's end; a failure to capture is recorded there, never raised.

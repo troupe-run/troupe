@@ -5,13 +5,13 @@ otherwise; each test's name states what its body checks.
 
 ## 1. The run's events: a start without the reported runner, and Run.WorktreeMade
 
-- [ ] 1.1 In `troupe.core.runs.aggregate`, add `Run.WorktreeMade` (`clones`) and its `worktree_made` method, refused
+- [x] 1.1 In `troupe.core.runs.aggregate`, add `Run.WorktreeMade` (`clones`) and its `worktree_made` method, refused
       with `run.out-of-sequence` unless the start's workspace is a worktree and no WorktreeMade, run event or end is
       recorded yet (design D4); add its topic to `TOPICS`, and update the module docstring for the start's new timing
       and the new event. Keep `runner_reported` as an optional `__init__` parameter for old starts (D7). Verify with
       new tests in `test_run_aggregate.py`: WorktreeMade after the start is recorded; refused for a theatre run,
       twice, after a report and after the end; an old start holding `runner_reported` replays.
-- [ ] 1.2 Add `events/run-worktree-made.schema.json` and update `events/run-started.schema.json` (description of when
+- [x] 1.2 Add `events/run-worktree-made.schema.json` and update `events/run-started.schema.json` (description of when
       it's recorded; `runner_reported` and the worktree workspace's `clones` optional and described as written only by
       older versions), in `protocol/schemas/` and the package's copy, through `scripts/package_schemas.py` as the
       other schemas are. Regenerate the models (`scripts/generate_models.py`) and `docs/prompt-book/events.md`
