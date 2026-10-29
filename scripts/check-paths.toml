@@ -170,6 +170,7 @@ paths = [
     "scripts/flake_campaign.py",
     "scripts/flake_hunt.Dockerfile",
     "scripts/flake_hunt.py",
+    "scripts/install_check.py",
     "scripts/on.py",
     "scripts/python_versions.py",
     "scripts/release_config.py",
