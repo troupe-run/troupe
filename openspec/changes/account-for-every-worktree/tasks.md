@@ -64,15 +64,15 @@ otherwise; each test's name states what its body checks.
 
 ## 5. A killed perform leaves a run that names its worktree
 
-- [ ] 5.1 Let `perform_child.py` stop at a named point for tests that kill it: after the start is recorded and before
+- [x] 5.1 Let `perform_child.py` stop at a named point for tests that kill it: after the start is recorded and before
       the worktree is begun, inside `add_worktree` once git has made its entry, and after the worktree is made and
       before the runner sends `init` (for example by printing a marker on the `Started` update and then blocking in a
       wrapped VCS or a runner that waits before its init). Verify by running it by hand to each point.
-- [ ] 5.2 Add one test per point in `test_run_workspaces.py` (run-workspaces, "Every worktree troupe makes is named by
+- [x] 5.2 Add one test per point in `test_run_workspaces.py` (run-workspaces, "Every worktree troupe makes is named by
       an event"): kill the child, then `status` shows the run `interrupted` with changes `uncaptured` and the worktree's
       path, and `discard` succeeds, records the discard, and leaves no directory and no registration in
       `git worktree list --porcelain`. Verify on macOS locally and on all three OSes in CI.
-- [ ] 5.3 Check whether a kill inside `git worktree add` can leave `.git/worktrees/<id>/locked` behind with the
+- [x] 5.3 Check whether a kill inside `git worktree add` can leave `.git/worktrees/<id>/locked` behind with the
       directory gone or partial, so `git worktree prune` skips it (D6). If it can, make the git adapter's
       `remove_worktree` unlock the entry first, with a test in `packages/troupe-vcs-git/tests/test_git_worktrees.py`
       that removes a locked, partly made worktree and leaves no registration. Record what was found in design D6

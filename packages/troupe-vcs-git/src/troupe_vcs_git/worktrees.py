@@ -252,6 +252,9 @@ class Worktrees:
 
     def remove_worktree(self, path: Path) -> None:
         theatre = self.adapter.theatre
+        # A git worktree add killed part-way leaves its entry locked, and prune skips a locked
+        # entry. Unlocking fails harmlessly (128) when it isn't locked or isn't registered.
+        self._git(theatre, "worktree", "unlock", str(path), allow=(0, 128))
         if path.exists():
             self._git(
                 theatre, "worktree", "remove", "--force", "--force", str(path), allow=(0, 128)

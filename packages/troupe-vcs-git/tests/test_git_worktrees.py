@@ -106,6 +106,29 @@ def test_removing_a_directory_that_was_never_registered_removes_it(
     assert not path.exists()
 
 
+@pytest.mark.parametrize("directory", ["kept", "gone"])
+def test_removing_a_worktree_git_left_locked_while_adding_it_unregisters_it(
+    repo: Repo, tmp_path: Path, directory: str
+) -> None:
+    # A git worktree add killed part-way leaves its entry locked as "initializing", and git
+    # worktree prune skips a locked entry (account-for-every-worktree design D6).
+    worktrees = repo.git("worktree", "list")
+    git = adapter(repo)
+    path = repo.path / ".troupe" / "local" / "worktrees" / "killed"
+    path.parent.mkdir(parents=True)
+    base = git.head()
+    assert base is not None
+    git.add_worktree(path, base)
+    common = Path(repo.git("rev-parse", "--git-common-dir").strip())
+    common = common if common.is_absolute() else repo.path / common
+    (common / "worktrees" / "killed" / "locked").write_text("initializing\n", encoding="utf-8")
+    if directory == "gone":
+        shutil.rmtree(path)
+    git.remove_worktree(path)
+    assert not path.exists()
+    assert repo.git("worktree", "list") == worktrees
+
+
 # Requirement: A worktree run works in its own worktree at HEAD
 
 
