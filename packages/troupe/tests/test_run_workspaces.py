@@ -296,6 +296,41 @@ def test_a_worktree_failure_whose_end_cant_be_recorded_names_both_and_reads_inte
     assert run.state == "interrupted"
 
 
+# Requirement: Every worktree troupe makes is named by an event
+
+
+@pytest.mark.parametrize(
+    ("stop", "steps", "made"),
+    [
+        ("before-worktree", [INIT, OK], False),
+        ("worktree-added", [INIT, OK], True),
+        ("before-init", [{"hang": True}], True),
+    ],
+)
+def test_a_perform_killed_before_init_leaves_a_run_that_names_its_worktree_and_discards(
+    repo: Repo, stop: str, steps: list[dict[str, Any]], made: bool
+) -> None:
+    from test_run_changes import call_discard
+    from test_run_queries import Child
+
+    configured(harness(repo), *steps)
+    child = Child(repo, script(*steps), stop=stop, workspace="worktree")
+    worktree = f".troupe/local/worktrees/{child.run_id}"
+    assert (repo.path / worktree).is_dir() == made
+    child.kill()
+    reader = harness(repo)
+    result = reader.status(run=child.run_id)
+    [run] = result.runs
+    assert run.state == "interrupted"
+    assert [n.code for n in result.notices] == ["run.interrupted"]
+    changes = run.to_data()["changes"]
+    assert (changes["state"], changes["worktree"]) == ("uncaptured", worktree)
+    call_discard(reader, child.run_id)
+    assert not (repo.path / worktree).exists()
+    assert worktree not in repo.git("worktree", "list", "--porcelain")
+    assert topics(reader, child.run_id)[-1] == "Run.ChangesDiscarded"
+
+
 # Requirement: The local stage's workspace is the theatre (a worktree is still unenforced)
 
 

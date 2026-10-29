@@ -2,6 +2,7 @@
 D13)."""
 
 import json
+import os
 import subprocess
 import sys
 import threading
@@ -35,20 +36,31 @@ STAGE = {
 class Child:
     """perform running in another process."""
 
-    def __init__(self, repo: Repo, options: dict[str, Any], *, appends: Path | None = None) -> None:
+    def __init__(
+        self,
+        repo: Repo,
+        options: dict[str, Any],
+        *,
+        appends: Path | None = None,
+        stop: str | None = None,
+        **fields: Any,  # noqa: ANN401
+    ) -> None:
         """``appends``: a file outside the theatre where the child notes when each segment
-        append returned, and the run events it wrote (perform_child.py)."""
+        append returned, and the run events it wrote. ``stop``: where the child announces the
+        run instead of at its first event, and ``fields``: more of the request, such as its
+        workspace (perform_child.py)."""
         self.process = subprocess.Popen(
             [
                 sys.executable,
                 str(CHILD),
                 str(repo.path),
                 json.dumps(repo.env),
-                json.dumps(request(options)),
+                json.dumps(request(options, **fields)),
                 *([str(appends)] if appends is not None else []),
             ],
             stdout=subprocess.PIPE,
             text=True,
+            env={**os.environ, "TROUPE_TEST_STOP": stop} if stop is not None else None,
         )
         assert self.process.stdout is not None
         line = self.process.stdout.readline().split()

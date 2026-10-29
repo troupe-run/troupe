@@ -90,6 +90,11 @@ while it checks out (`.git/worktrees/<id>/locked`), and `git worktree prune` ski
 leave the entry locked with no directory, `remove_worktree` unlocks it first (`git worktree unlock`), so the
 registration goes too.
 
+Found during apply (2026-10-29): it can. With the directory still there, `git worktree remove --force --force`
+removes a locked entry. With the directory gone, `git worktree prune` leaves the locked entry registered, and
+`git worktree unlock` works on it (exiting 128 for an entry that isn't locked or isn't registered). So the git
+adapter's `remove_worktree` now unlocks first, allowing 128.
+
 **D7. Starts recorded before this change keep reading back.** `run-started.schema.json` keeps `runner_reported` and
 the worktree workspace's `clones` as optional fields, each described as recorded only by older versions. The
 aggregate's `__init__` keeps the `runner_reported` parameter, so the library can replay old starts. The projection
