@@ -41,7 +41,7 @@
 
 - [x] 3.1 Raise the order property's `max_examples` from 150 to 500. Time both properties against 1.1's numbers, and
   keep a lower count if the increase is more than a few seconds, saying why in the commit. Verify the property passes.
-- [ ] 3.2 Run both properties over at least 100 seeds (`--hypothesis-seed=1..100`), keeping the output in the
+- [x] 3.2 Run both properties over at least 100 seeds (`--hypothesis-seed=1..100`), keeping the output in the
   scratchpad. Ask the owner before starting it, since it runs for several minutes (memory: ask before load-heavy local
   runs). Verify every seed passes. Any failure is captured whole, becomes an explicit test like 1.2, and is fixed
   before this task is ticked.
@@ -56,11 +56,11 @@
   4.1's tests pass, every test from 1.1 and group 1 still passes, and mypy --strict and ruff pass. Add the rule to
   the module docstring's "A line's net change" paragraph and to `contributing/config.md`, "The merge", and verify
   with the docs tests.
-- [ ] 4.3 Run both properties over seeds 1 to 100 again, output kept in the scratchpad. Verify every seed passes.
+- [x] 4.3 Run both properties over seeds 1 to 100 again, output kept in the scratchpad. Verify every seed passes.
 
 ## 5. Integration
 
-- [ ] 5.1 Run `uv run scripts/check.py`. Verify it passes.
+- [x] 5.1 Run `uv run scripts/check.py`. Verify it passes.
 
 ## Workflow follow-up
 
