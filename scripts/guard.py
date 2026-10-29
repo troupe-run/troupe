@@ -2337,6 +2337,40 @@ def _positionals(rest: Sequence[str], value_flags: frozenset[str]) -> list[str]:
     return out
 
 
+def _named_by_shell(repository: str | None) -> bool:
+    """True when a repository's name holds `$` or a backtick and could still be a throwaway one.
+    GitHub allows neither in a name, so the shell builds it, and the guard can't tell what it names
+    (probe-repositories design D1). An owner written out that isn't troupe-run never could be."""
+    if repository is None or not any(char in repository for char in "$`"):
+        return False
+    parts = repository.strip("/").split("/")
+    owner = parts[-2] if len(parts) >= 2 else "$"
+    return owner.lower() == THROWAWAY_OWNER or any(char in owner for char in "$`")
+
+
+def _judged_live(decision: Decision, repository: str | None) -> Decision:
+    """A refusal of a command whose repository is named by the shell, saying why the throwaway
+    exemption didn't apply. The rule and its own fix stay, since it may be a live repository."""
+    if not decision.refused or not _named_by_shell(repository):
+        return decision
+    return Decision(
+        decision.rule,
+        f"{decision.problem} The repository is named by the shell ({repository}), so the guard "
+        "can't tell whether it's a throwaway repository and judges it as a live one.",
+        f"{decision.fix} For a throwaway repository (troupe-run/infra-probe-*, spike-*, "
+        "bakeoff-*), write its name out.",
+    )
+
+
+def _api_repository_as_written(rest: Sequence[str]) -> str | None:
+    """The owner/name of a gh api endpoint as the command writes it, case kept, for a message."""
+    positionals = _positionals(rest, GH_API_VALUE_FLAGS)
+    written = positionals[0] if positionals else ""
+    endpoint = re.sub(r"^https?://api\.github\.com/", "", written, flags=re.IGNORECASE)
+    found = re.match(rf"/?repos/({_SEG}/{_SEG})", endpoint, flags=re.IGNORECASE)
+    return found.group(1).split("?", 1)[0] if found else None
+
+
 def throwaway_kind(repository: str | None) -> str | None:
     """'deletable' for troupe-run/infra-probe-*, 'kept' for troupe-run/spike-* and bakeoff-*."""
     named = normalise_repository(repository) if repository else None
@@ -2737,19 +2771,23 @@ def gh_decision(words: Sequence[str], cwd: Path) -> Decision:
             repo_itself = re.fullmatch(_REPO, endpoint) is not None
             if not (kind == "kept" and repo_itself and _api_method(call_args) in _WRITES):
                 return ALLOW
+        written = _api_repository_as_written(call_args) or repository
         if verdict == "owner" and owner_group is not None:
-            return _owner_only(owner_group)
+            return _judged_live(_owner_only(owner_group), written)
         if mutations:
             return _not_listed_mutations(mutations)
         what = f"gh api {_api_method(call_args)} {_api_endpoint(call_args) or '?'}"
         equivalent = _api_equivalent(_api_endpoint(call_args), _api_method(call_args))
         if equivalent is not None:
-            return Decision(
-                "gh-allow-list",
-                f"{what} isn't on the guard's gh allow-list.",
-                f"Run {equivalent}, which the guard allows.",
+            return _judged_live(
+                Decision(
+                    "gh-allow-list",
+                    f"{what} isn't on the guard's gh allow-list.",
+                    f"Run {equivalent}, which the guard allows.",
+                ),
+                written,
             )
-        return _not_listed(what)
+        return _judged_live(_not_listed(what), written)
     sub = call_args[0] if call_args and not call_args[0].startswith("-") else None
     rest = call_args[1:] if sub is not None else call_args
     key = (group, sub or "")
@@ -2776,8 +2814,8 @@ def gh_decision(words: Sequence[str], cwd: Path) -> Decision:
         if not (kind == "kept" and keeps_record):
             return ALLOW
     if key in GH_OWNER_ONLY:
-        return _owner_only(GH_OWNER_ONLY[key])
-    return _not_listed(f"gh {group}{' ' + sub if sub else ''}")
+        return _judged_live(_owner_only(GH_OWNER_ONLY[key]), repository)
+    return _judged_live(_not_listed(f"gh {group}{' ' + sub if sub else ''}"), repository)
 
 
 # Help requests (spec: development-workflow, "Agents' gh commands are allow-listed";
