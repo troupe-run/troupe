@@ -201,7 +201,12 @@ class _Recorder:
 
     async def made(self, worktree: Worktree) -> None:
         """Record that the run's worktree is made, with its clone mechanisms."""
-        await asyncio.to_thread(self._made, worktree.clones)
+        try:
+            await asyncio.to_thread(self._made, worktree.clones)
+        except Exception:
+            # The aggregate may have counted what wasn't recorded; the end reloads it (_end).
+            self.stale = True
+            raise
 
     def _run(self) -> Run:
         if self.run is None:
