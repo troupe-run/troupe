@@ -32,9 +32,10 @@ None.
 
 ### Modified Capabilities
 
-- `protocol`: "A plugin's published schemas are installed with it" gains a scenario for a runner that isn't
-  installed: the refusal names the package, and its fix names the install page for an installed troupe and
-  `uv sync` for a checkout.
+- `protocol`: adds "A missing plugin's refusal fits any install", beside "A plugin's published schemas are installed
+  with it": the refusal names the package, and its fix names the install page for an installed troupe and `uv sync`
+  for a checkout. (It started as a change to the existing requirement, and was split out when the requirement's text
+  passed OpenSpec's strict 500-character limit.)
 
 ## Impact
 
