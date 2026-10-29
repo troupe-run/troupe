@@ -117,13 +117,34 @@ same.
   The conflict oracle property (`test_a_conflict_is_reported_exactly_where_two_branches_end_a_value_differently`)
   covers D2 for forks from one base.
 
+### D4. A line whose first writes disagree about where it began is a change
+
+Found by task 3.2's seed run (seed 31), and on main too: a line can hold concurrent writes, from a fork that a settle
+joined inside it. The line's net change then has no single first `before`, and taking the first in the store's order
+makes the result depend on it. In the found history, heads 10 (`A` → `B`) and 14 disagree. 14's line is 11 (`A` →
+`B`) and 12 (absent → `A`), concurrent, joined by a settle that conflicted, then 14, which resolved it to `A`. With 11
+first, the line changes the value and back, so it drops out and `B` wins. With 12 first, it's a conflict. Main gives
+`B` in 5 of the 14 orders and a conflict in the other 9.
+
+A line's **first writes** are its writes that no other write in the line comes before. The line drops out only when
+it's all at the point and **every** first write's `before` is the value it ends at. Otherwise it counts as a change.
+Owner, 2026-10-29, choosing this over the alternative: it's conservative. It can't quietly override a value someone
+chose when they resolved a conflict, and here it makes `B` against `A` a conflict that a person decides. For a line
+with one first write (every chain, so every branch off one base), the rule is the same as today's.
+
+Alternative: measure the net change from the value where the lines split, worked out from their shared history by
+the same rule. Here that's `A` to `A`, so the line drops out and `B` wins with no conflict. It reads "since the lines
+split" literally, but it needs a rule for "shared" when there are three or more lines, and it overrides the `A`
+resolution without asking. Not chosen.
+
 ## Risks / Trade-offs
 
 - **[One unexplained failure in the prototype run]** A scratch prototype of D1, patched over `_contest`, passed the
   saved example, the merge and config tests, and 134 of 135 seeded runs of both properties. The one failure, in the
   first 25-seed batch and taking 16 s, wasn't captured, and the same 25 seeds passed twice afterwards. It may have
   been the shrinker on a real failure, or something in the run. → Mitigation: the implementation runs both properties
-  over at least 100 seeds, output kept, and any failure becomes an explicit test before the change is done.
+  over at least 100 seeds, output kept, and any failure becomes an explicit test before the change is done. That run
+  found seed 31, a second order bug that main has too (D4), which is probably what the prototype hit.
 - **[A later round costs time]** Each extra round goes over the point's covering writes again. Config histories are
   small, and the rounds run only at points where nothing at the frontier stays in. → The merge and property tests are
   timed before and after.

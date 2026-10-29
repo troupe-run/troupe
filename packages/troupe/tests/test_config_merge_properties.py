@@ -292,3 +292,24 @@ def test_lines_after_a_settle_that_change_a_value_back_leave_the_settled_value_i
         merged = merge(order)
         assert get(merged.config, CHARACTER) == "New."
         assert merged.conflicts == ()
+
+
+def test_a_line_whose_first_changes_start_from_different_values_conflicts_in_every_order() -> None:
+    """Seed 31's history: 14's line is 11 (``A`` to ``B``) and 12 (none to ``A``), concurrent and
+    joined by a settle, then 14 back to ``A``. Against 10's ``B``, that's a conflict."""
+    records, _ = _base()
+    first = _step(records, 4, records[0].id, CHARACTER, "A")
+    _step(records, 10, first, CHARACTER, "B")
+    one = _step(records, 11, first, CHARACTER, "B")
+    other = _step(records, 12, records[0].id, CHARACTER, "A")
+    settled = _settled(13, [one, other])
+    records.append(settled)
+    _step(records, 14, settled.id, CHARACTER, "A")
+    orders = _every_order(records)
+    assert len(orders) == 14
+    summaries = {repr(_summary(merge(order))) for order in orders}
+    assert len(summaries) == 1
+    merged = merge(records)
+    assert [(c.paths, sorted(x.id for x in c.changes)) for c in merged.conflicts] == [
+        ((CHARACTER,), sorted([_id(("change", 10)), _id(("change", 14))]))
+    ]
