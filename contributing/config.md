@@ -28,8 +28,9 @@ Config is worked out from the stream's whole history, both sides of every fork, 
 - **Points and latest writes.** Each path an entry names is a point; the writes that cover it are the entries at it
   or at a group above it; its latest writes are those no later covering write follows.
 - **Each line's net change.** A latest write's line is the covering writes behind it that the other latest writes
-  don't descend from. A line whose writes are all at the point, and end where they began, drops out. Lines left
-  that leave the point differently conflict, as whole changes.
+  don't descend from. A line whose writes are all at the point, and end where they began, drops out. When a line
+  starts with concurrent writes (a fork joined inside it), it drops out only if every one of them starts from where
+  it ends. Lines left that leave the point differently conflict, as whole changes.
 - **Validation.** A merged config that breaks a rule is a conflict between the changes since the split that
   touched what broke it, for an actor with no conflict already.
 - **Replay.** Config is every entry replayed in the history's order, leaving out the lines that dropped out and both

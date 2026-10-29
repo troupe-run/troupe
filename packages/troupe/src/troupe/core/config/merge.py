@@ -14,8 +14,9 @@ contest. Several are concurrent, from lines of history that split.
 **A line's net change.** A latest write's line is the covering writes behind it that the other
 latest writes don't descend from. A line whose writes are all at the point itself, and whose net
 change (its first ``before`` to its last ``after``) ends where it began, changed nothing: it drops
-out. Of those left, lines that leave the point the same agree; otherwise their changes are in
-conflict, whole.
+out. A line can start with concurrent writes, from a fork joined inside it: it drops out only when
+every one of them starts from where it ends. Of those left, lines that leave the point the same
+agree; otherwise their changes are in conflict, whole.
 
 **Replay.** Config is every entry replayed in the history's order, leaving out the lines that
 dropped out, and both sides of every conflict. Where that leaves out every latest write of a point,
@@ -247,7 +248,7 @@ def _round(
     left: list[_Write] = []
     for write in latest:
         line = lines[write.event]
-        if all(w.path == point for w in line) and _ends_where_it_began(line):
+        if all(w.path == point for w in line) and _ends_where_it_began(line, ancestors):
             drop |= {(w.event, w.index) for w in line}
         else:
             left.append(write)
@@ -258,11 +259,14 @@ def _round(
     return drop, left, latest
 
 
-def _ends_where_it_began(line: Sequence[_Write]) -> bool:
-    began = line[0].entry.get("before")
+def _ends_where_it_began(line: Sequence[_Write], ancestors: dict[str, frozenset[str]]) -> bool:
+    """Whether every first write of ``line`` (none of the line's writes comes before it) starts
+    from the value its last write leaves. First writes that start from different values, from a
+    fork joined inside the line, are a change (#190)."""
     last = line[-1].entry
     ended = value_hash(last["after"]) if "after" in last else None
-    return began == ended
+    firsts = [w for w in line if not any(o.event in ancestors[w.event] for o in line)]
+    return all(w.entry.get("before") == ended for w in firsts)
 
 
 def _effect(write: _Write, point: Point) -> tuple[str, ...]:

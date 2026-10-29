@@ -5,7 +5,8 @@
 ### Requirement: A merge combines each line's net change
 When the config stream has more than one head, config SHALL be worked out from both lines of history: for each
 value, each line's net change since the lines split, from its first `before` to its last `after`. A line whose net
-change ends where it began SHALL count as not changing the value. Where no line's change is left at a value, because
+change ends where it began SHALL count as not changing the value, and a line whose first changes to the value start
+from different values SHALL count as changing it. Where no line's change is left at a value, because
 the lines conflict or every one counts as not changing it, the history before those lines SHALL work the value out by
 the same rule, never the order the events arrived in.
 
@@ -36,3 +37,9 @@ the same rule, never the order the events arrived in.
 - **WHEN** two branches set `tester`'s character, one changing it to new text and the other changing it to other text
   and back, a write settles them, and two branches from the settle each change it and change it back
 - **THEN** config holds the new text the settle left, with no conflict, whatever order the events arrived in
+
+#### Scenario: A line whose first changes start from different values is a change
+- **WHEN** one branch changes `tester`'s character from new text to other text, and another line of history holds two
+  concurrent changes to it, one from that new text and one from another value, which a settle joins, and the line
+  ends at the new text
+- **THEN** the two lines are in conflict, whatever order the events arrived in

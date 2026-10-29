@@ -46,9 +46,21 @@
   runs). Verify every seed passes. Any failure is captured whole, becomes an explicit test like 1.2, and is fixed
   before this task is ticked.
 
-## 4. Integration
+## 4. Lines whose first writes disagree (design D4, found by 3.2)
 
-- [ ] 4.1 Run `uv run scripts/check.py`. Verify it passes.
+- [x] 4.1 Add seed 31's history as a plain test next to #190's, built with `_step` and `_settled` (its ids match the
+  seed's), through every order (14): it checks that each order gives one conflict at `actors.tester.character`
+  naming versions 10 and 14, and the same config. Add the spec delta's third scenario through a real store and git
+  in `test_config_merge.py`. Verify both fail on the unchanged rule.
+- [x] 4.2 Make a line drop out only when every first write's `before` is the value it ends at (design D4). Verify
+  4.1's tests pass, every test from 1.1 and group 1 still passes, and mypy --strict and ruff pass. Add the rule to
+  the module docstring's "A line's net change" paragraph and to `contributing/config.md`, "The merge", and verify
+  with the docs tests.
+- [ ] 4.3 Run both properties over seeds 1 to 100 again, output kept in the scratchpad. Verify every seed passes.
+
+## 5. Integration
+
+- [ ] 5.1 Run `uv run scripts/check.py`. Verify it passes.
 
 ## Workflow follow-up
 
