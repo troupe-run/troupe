@@ -18,7 +18,9 @@ Flows aren't built, and almost nothing about them is decided yet. Today troupe r
 
 ## Not decided yet
 
-What a flow is in your config, what forking, joining, swarming and looping each mean, how a flow relates to a
-performance and its runs, and how its progress is recorded: all of these are open, in
-[#124](https://github.com/troupe-run/troupe/issues/124). [Build a flow](../stagecraft/build-a-flow.md) will show how to
-write one once they're decided.
+What a flow is in your config, how a flow relates to a performance and its runs, and how its progress is recorded:
+all of these are open, in [#124](https://github.com/troupe-run/troupe/issues/124), which brings the first flow, actors
+in sequence. Forking and joining ([#145](https://github.com/troupe-run/troupe/issues/145)), looping
+([#146](https://github.com/troupe-run/troupe/issues/146)) and swarming
+([#147](https://github.com/troupe-run/troupe/issues/147)) come later, and each decides then what it means.
+[Build a flow](../stagecraft/build-a-flow.md) will show how to write one once they're decided.

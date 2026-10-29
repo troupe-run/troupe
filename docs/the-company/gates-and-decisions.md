@@ -5,8 +5,10 @@ status: written
 prerelease: true
 ---
 
-A **gate** is a point where work waits for a decision from whoever owns it. Gates aren't built yet
-([#62](https://github.com/troupe-run/troupe/issues/62)). This is what's decided about them.
+A **gate** is a point where work waits for a decision from whoever owns it. Gates aren't built yet. The first ones
+are all manual, and go to whoever runs troupe ([#62](https://github.com/troupe-run/troupe/issues/62)). Addressing
+them to roles, so each reaches only the person who owns it, comes later
+([#148](https://github.com/troupe-run/troupe/issues/148)). This is what's decided about them.
 
 ## Decisions go to roles
 
@@ -33,6 +35,6 @@ back, whether through git or another transport, isn't decided yet: it's open in
 
 ## Still open
 
-How a gate is defined in your config, and who holds which role
-([#61](https://github.com/troupe-run/troupe/issues/61)), aren't decided yet. [Route decisions to the right
+How a gate is defined in your config ([#62](https://github.com/troupe-run/troupe/issues/62)), and who holds which
+role ([#61](https://github.com/troupe-run/troupe/issues/61)), aren't decided yet. [Route decisions to the right
 person](../stagecraft/route-decisions.md) will cover setting them up.

@@ -62,18 +62,18 @@
 
 ## 4. The docs (design D3, D7, D8)
 
-- [ ] 4.1 Write the docs test from D3 (tagged `docs`): every `uv tool install` line in `README.md` and under `docs/`
+- [x] 4.1 Write the docs test from D3 (tagged `docs`): every `uv tool install` line in `README.md` and under `docs/`
   matches `scripts/install_check.py`'s template, with its repository URL and a documented ref. The failure names the
   page, the line and the expected command. Verify: a scratch copy with `#subdirectory=packages/troupe` fails, naming
   the page and line, and the scratch copy is then removed.
-- [ ] 4.2 Check whether `uv tool upgrade troupe-run` fetches a newer `main`: install from a scratch commit, add a commit,
+- [x] 4.2 Check whether `uv tool upgrade troupe-run` fetches a newer `main`: install from a scratch commit, add a commit,
   upgrade, and compare `troupe --version` or the installed commit. Record the answer in design.md D7.
 - [ ] 4.3 Rewrite the README's opening paragraph and add an **Install** section, and rewrite
   `docs/opening-night/install.md`, as D7 says, using 4.2's answer for upgrading. Name the Python bound, and extend the
   existing Python-versions check if it reads the README's bound, so the install page is checked too. Verify: the
   docs check and the 4.1 test pass. Following the page by hand in a new shell, using the same temporary
   `UV_TOOL_DIR`/`UV_TOOL_BIN_DIR` as the install check, gives a `troupe` that prints its version.
-- [ ] 4.4 Re-read #62, #124, #126, #145, #146, #147 and #148, then make D8's edits to the six pages. Pages stay
+- [x] 4.4 Re-read #62, #124, #126, #145, #146, #147 and #148, then make D8's edits to the six pages. Pages stay
   `prerelease: true`. Verify: `uv run scripts/check.py --scope docs` passes, and `grep -rn '#62\|#124' docs` shows
   only the links D8 keeps or changes.
 

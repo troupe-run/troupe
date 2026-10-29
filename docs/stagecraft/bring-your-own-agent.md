@@ -58,7 +58,7 @@ TROUPE_CONFORMANCE_OPTIONS='{}' \
 uv run pytest packages/troupe/tests/test_runner_conformance.py -k environment
 ```
 
-Run it from a clone of troupe ([Install](../opening-night/install.md#trying-it-before-a-release)).
+Run it from a clone of troupe ([Install](../opening-night/install.md#running-it-from-a-clone)).
 
 ## What's decided for later
 
