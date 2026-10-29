@@ -90,7 +90,7 @@ otherwise; each test's name states what its body checks.
 
 ## 7. Integration
 
-- [ ] 7.1 Run `uv run scripts/check.py` in full and `openspec validate account-for-every-worktree --strict`, and show
+- [x] 7.1 Run `uv run scripts/check.py` in full and `openspec validate account-for-every-worktree --strict`, and show
       the results; push and confirm every CI job passes on Linux, macOS and Windows.
 
 ## Workflow follow-up
