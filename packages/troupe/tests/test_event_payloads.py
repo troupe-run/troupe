@@ -19,7 +19,7 @@ from runtesting import INIT, OK, Harness, failing_at, request, script, theatre, 
 from storetesting import git_service, segments
 from troupe.core.config import aggregate as config_aggregate
 from troupe.core.errors import TroupeError
-from troupe.core.runs.aggregate import ENDED, REPORTED, STARTED, TOPICS, Run
+from troupe.core.runs.aggregate import ENDED, REPORTED, STARTED, TOPICS, WORKTREE_MADE, Run
 
 # troupe.core.runs re-exports perform the function, so the module is reached by name.
 perform_module = importlib.import_module("troupe.core.runs.perform")
@@ -64,6 +64,27 @@ def test_every_line_a_succeeded_run_records_validates_by_topic(tmp_path: Path) -
         *[REPORTED] * 5,
         ENDED,
     ]
+    assert _problems(lines) == []
+
+
+def test_every_line_a_worktree_run_records_validates_by_topic_with_its_worktree_made(
+    tmp_path: Path,
+) -> None:
+    harness = Harness(theatre(tmp_path))
+    (harness.repo.path / "a.txt").write_text("one\n", encoding="utf-8")
+    harness.repo.commit_all("base")
+    asked = request(script(INIT, OK), workspace="worktree")
+    harness.configure(asked)
+    harness.repo.commit_all("config")
+    harness.perform(asked)
+    lines = _lines(harness)
+    topics = [line.get("topic") for line in lines if line.get("topic") in TOPICS]
+    assert topics == [STARTED, WORKTREE_MADE, REPORTED, REPORTED, ENDED]
+    started = next(line for line in lines if line.get("topic") == STARTED)["state"]
+    assert "clones" not in started["workspace"]
+    assert "runner_reported" not in started
+    made = next(line for line in lines if line.get("topic") == WORKTREE_MADE)["state"]
+    assert made["clones"] == sorted(made["clones"])
     assert _problems(lines) == []
 
 

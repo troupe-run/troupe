@@ -1,14 +1,19 @@
 """perform: run one actor, and record the run (spec: runs, stages, policy, run-workspaces;
-perform-status-logs design D4, D5, D8, D9, D11; worktree-stage design D8).
+perform-status-logs design D4, D5, D8, D9, D11; worktree-stage design D8; account-for-every-worktree
+design D1, D2, D5).
 
 Everything that can refuse runs first, before a runner starts or anything is written: who is
 acting, the policy, the stage's admission, the runner's name, and, for a worktree run, whether the
-theatre can have one. Then perform mints the run id, takes the run's lease, makes the run's
-worktree, stores the instructions and options as artifacts, and runs the host in the workspace.
-When the host returns, a worktree run's changes are captured into the artifact store, with what
-changed in the repository's shared state, and recorded in the run's end. Each run
-event is recorded as it arrives, through a worker thread so the event store's fsyncs and git calls
-stay off the event loop, and the run's end is recorded once the host returns.
+theatre can have one. Then perform mints the run id, takes the run's lease, stores the direction
+as an artifact, plans the run's worktree, and records the run's start, so from here on an event
+names the run, and its worktree, before any part of the worktree exists: however perform stops,
+status shows the run and discard can clear it. Then it makes the worktree and records that, and
+runs the host in the workspace. A failure between the start and the runner ends the run
+could-not-start, then fails perform with that error. When the host returns, a worktree run's
+changes are captured into the artifact store, with what changed in the repository's shared state,
+and recorded in the run's end. Each run event is recorded as it arrives, through a worker thread
+so the event store's fsyncs and git calls stay off the event loop, and the run's end is recorded
+once the host returns.
 
 A recording failure never raises into the run host: it cancels the run, no later event is recorded
 (a gap would break the seq rule), the end is still attempted with what failed, and then perform
@@ -41,7 +46,7 @@ from troupe.core.notices import Notice
 from troupe.core.policy import read_policy
 from troupe.core.runners import protocol as p
 from troupe.core.runners.effects import EffectCheck, ExpectedFiles, NoEffectExpected
-from troupe.core.runners.host import RunnerCommand, RunRequest, run_actor
+from troupe.core.runners.host import RunnerCommand, RunRequest, not_started, run_actor
 from troupe.core.runners.limits import RunLimits
 from troupe.core.runs.aggregate import Run
 from troupe.core.runs.projections import fold_runs
@@ -50,9 +55,11 @@ from troupe.core.stores import local_dir, open_artifact_store, open_event_store
 from troupe.core.vcs import SharedState, Vcs
 from troupe.core.workspaces import (
     Kind,
+    Planned,
     Worktree,
     capture,
     make_worktree,
+    plan_worktree,
     shared_changed,
     snapshot,
     worktree_base,
@@ -169,15 +176,11 @@ class _Recorder:
         self.run: Run | None = None
         self.failure: tuple[int, TroupeError] | None = None
 
-    def _start(self, init: p.RunEvent | None) -> Run:
-        reported = None
-        if isinstance(init, p.InitEvent):
-            reported = {"name": init.runner.name, "version": init.runner.version}
+    def _start(self) -> None:
         run = Run(
             run_id=self.run_id,
             actor=self.what.actor,
             runner_requested=self.what.runner,
-            runner_reported=reported,
             stage=self.admission,
             effect_check=self.what.effect_check.to_data(),
             direction=self.direction_ref,
@@ -186,10 +189,27 @@ class _Recorder:
         )
         self.person.record(run.collect_events())
         self.run = run
-        return run
+
+    async def start(self) -> None:
+        """Record the run's start, before its workspace is made and its runner starts."""
+        await asyncio.to_thread(self._start)
+
+    def _made(self, clones: tuple[str, ...]) -> None:
+        run = self._run()
+        run.made_worktree(list(clones))
+        self.person.record(run.collect_events())
+
+    async def made(self, worktree: Worktree) -> None:
+        """Record that the run's worktree is made, with its clone mechanisms."""
+        await asyncio.to_thread(self._made, worktree.clones)
+
+    def _run(self) -> Run:
+        if self.run is None:
+            raise RuntimeError(f"run {self.run_id}'s start isn't recorded")
+        return self.run
 
     def _record(self, event: p.RunEvent) -> str:
-        run = self.run if self.run is not None else self._start(event)
+        run = self._run()
         run.report(event.seq, event.to_data())
         [recorded] = self.agent.record(run.collect_events())
         return recorded.at
@@ -218,12 +238,12 @@ class _Recorder:
         )
 
     def _end(self, outcome: dict[str, Any], changes: dict[str, Any] | None) -> None:
-        if self.stale and self.run is not None:
+        if self.stale:
             loaded = self.store.load(UUID(self.run_id))
             if not isinstance(loaded, Run):
                 raise TypeError(f"run {self.run_id}'s stream doesn't hold a run")
             self.run = loaded
-        run = self.run if self.run is not None else self._start(None)
+        run = self._run()
         recording = None
         if self.failure is not None:
             recording = {"failedAt": self.failure[0], "error": self.failure[1].to_data()}
@@ -279,25 +299,14 @@ async def perform(
     lease.mkdir(parents=True)
     with directory_lock(lease):
         announce = lambda notice: send(_notice(notice))  # noqa: E731
-        worktree: Worktree | None = None
-        shared_before: SharedState | None = None
-        if base is not None:
-            worktree = await asyncio.to_thread(
-                make_worktree, vcs, theatre, run_id, base[0], base[1], announce
-            )
-            shared_before = await asyncio.to_thread(snapshot, vcs, announce)
-        workspace = worktree.cwd if worktree is not None else stage.workspace(theatre)
-        recorded_workspace = (
-            worktree.record(theatre) if worktree is not None else {"kind": "theatre"}
-        )
-        send(
-            m.Started(
-                run_id=run_id,
-                worktree=recorded_workspace["path"] if worktree is not None else None,
-            )
-        )
         artifacts = backends.artifact_store(session)
-        direction_ref = artifacts.put(direction.encode("utf-8"))
+        direction_ref = await asyncio.to_thread(artifacts.put, direction.encode("utf-8"))
+        planned: Planned | None = None
+        if base is not None:
+            planned = await asyncio.to_thread(
+                plan_worktree, vcs, theatre, run_id, base[0], base[1], announce
+            )
+        recorded_workspace = planned.record(theatre) if planned is not None else {"kind": "theatre"}
         person = store.command(via="cli", actor=person_identity, stage=admission)
         agent = person.acting_as(
             Identity(kind="agent", id=what.actor, source="troupe"), via="runner"
@@ -315,6 +324,24 @@ async def perform(
             send,
             cancel,
         )
+        await recorder.start()
+        send(
+            m.Started(
+                run_id=run_id,
+                worktree=recorded_workspace["path"] if planned is not None else None,
+            )
+        )
+        worktree: Worktree | None = None
+        shared_before: SharedState | None = None
+        try:
+            if planned is not None:
+                worktree = await asyncio.to_thread(make_worktree, vcs, planned, announce)
+                await recorder.made(worktree)
+                shared_before = await asyncio.to_thread(snapshot, vcs, announce)
+        except Exception as error:
+            await _could_not_start(recorder, run_id, error, backends.limits)
+            raise
+        workspace = worktree.cwd if worktree is not None else stage.workspace(theatre)
         outcome = await run_actor(
             RunnerCommand(
                 list(argv), cwd=workspace, env=runner_environment(what.runner, session.env)
@@ -345,6 +372,30 @@ async def perform(
         history = await asyncio.to_thread(store.history, UUID(run_id))
     [view] = fold_runs(history).values()
     return m.PerformResult(run=view.summary("ended"))
+
+
+async def _could_not_start(
+    recorder: _Recorder, run_id: str, error: Exception, limits: RunLimits | None
+) -> None:
+    """End a run that failed after its start and before its runner started: could-not-start,
+    with ``error``, and no changes, since the runner never ran (account-for-every-worktree design
+    D5). The caller raises ``error`` afterwards. When the end can't be recorded either, raises
+    run.recording-failed naming both, and the run shows as interrupted."""
+    stopped = _as_troupe_error(error)
+    data = not_started(run_id, limits, stopped).to_data()
+    del data["runId"]
+    try:
+        await recorder.end(data, None)
+    except Exception as ended:
+        failed = _as_troupe_error(ended)
+        raise TroupeError(
+            "run.recording-failed",
+            problem=f"Run {run_id} couldn't start: {stopped.problem} Its end couldn't be recorded "
+            f"either ({failed.problem}), so status shows it as interrupted.",
+            fix=f"{stopped.fix} Then discard the run to remove anything it left: troupe discard "
+            f"{run_id[:8]}",
+            details={"run": run_id, "error": stopped.to_data(), "endError": failed.to_data()},
+        ) from ended
 
 
 def _changes(

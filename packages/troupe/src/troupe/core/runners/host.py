@@ -417,8 +417,8 @@ async def run_actor(
     except (CommandNotFoundError, OSError) as error:
         name = command.argv[0] if command.argv else ""
         reason = "it wasn't found" if isinstance(error, CommandNotFoundError) else str(error)
-        return _not_started(
-            request,
+        return not_started(
+            request.run_id,
             limits,
             _start_error(
                 "runner.start-failed",
@@ -484,12 +484,15 @@ async def run_actor(
     )
 
 
-def _not_started(request: RunRequest, limits: RunLimits, error: TroupeError) -> RunOutcome:
+def not_started(run_id: str, limits: RunLimits | None, error: TroupeError) -> RunOutcome:
+    """The outcome of a run whose runner never started because of ``error``: could-not-start.
+    perform uses it, too, for a run that failed before its runner was started."""
+    limits = limits or RunLimits()
     outcome, error_out = derive_outcome(
         RunFacts(limits=limits, ending=Ending.NEVER_STARTED, start_error=error)
     )
     return RunOutcome(
-        request.run_id, outcome, error_out, None, None, Ending.NEVER_STARTED, None, None, limits
+        run_id, outcome, error_out, None, None, Ending.NEVER_STARTED, None, None, limits
     )
 
 

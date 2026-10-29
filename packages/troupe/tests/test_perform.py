@@ -1,5 +1,5 @@
 """perform runs one actor and records the run (spec: runs, stages, policy; perform-status-logs
-design D5, D8, D9)."""
+design D5, D8, D9; account-for-every-worktree design D1, D2)."""
 
 import asyncio
 import hashlib
@@ -15,15 +15,17 @@ import claude_stand_in
 from runtesting import ADA, ALLOW, INIT, OK, Harness, failing_at, request, script, theatre, turn
 from storetesting import git_service, snapshot
 from troupe.core import defaults, interim
+from troupe.core.artifacts import ArtifactStore, MemoryArtifactStore
 from troupe.core.client import messages as m
 from troupe.core.config import aggregate, projection
 from troupe.core.config.merge import merge
 from troupe.core.config.stream import read as read_config
 from troupe.core.errors import TroupeError
 from troupe.core.files import directory_lock
+from troupe.core.messages import Message
 from troupe.core.runners.limits import RunLimits
 from troupe.core.runs.aggregate import ENDED, REPORTED, STARTED, Run
-from troupe.core.runs.perform import lease_dir, perform
+from troupe.core.runs.perform import Backends, lease_dir, perform
 
 AGENT = {"kind": "agent", "id": "tester", "source": "troupe"}
 ADA_ACTOR = {"kind": "human", "id": "ada@example.com", "source": "env"}
@@ -63,6 +65,60 @@ def test_a_successful_run_records_its_start_each_event_in_seq_order_then_its_end
     assert run.events == 4
     assert run.runner.reported is not None
     assert (run.runner.reported.name, run.runner.reported.version) == ("scripted", "0.1.0")
+    assert "runner_reported" not in states(records)[0]  # it's read from the init, seq 0
+
+
+class Watching(Harness):
+    """A harness that notes the run's recorded topics when the runner's first event arrives."""
+
+    at_first_event: list[str] | None = None
+
+    def send(self, update: Message) -> None:
+        super().send(update)
+        data = update.to_data()
+        if data.get("kind") == "event" and data["seq"] == 0:
+            self.at_first_event = [r.topic for r in self.stores[0].history(UUID(data["runId"]))]
+
+
+def test_a_theatre_runs_start_is_recorded_before_its_runners_first_event(
+    tmp_path: Path,
+) -> None:
+    harness = Watching(theatre(tmp_path))
+    harness.perform(request(script(INIT, OK)))
+    assert harness.at_first_event == [STARTED, REPORTED]
+
+
+class FailingPut(MemoryArtifactStore):
+    def put(self, data: bytes) -> str:
+        raise TroupeError("artifact.write-failed", problem="p", fix="f")
+
+
+class DirectionUnstored(Harness):
+    def backends(self) -> Backends:
+        def store(_: Any) -> ArtifactStore:  # noqa: ANN401
+            return FailingPut()
+
+        return Backends(event_store=self.event_store, artifact_store=store, limits=self.limits)
+
+
+def test_a_direction_that_cant_be_stored_records_nothing_and_makes_no_worktree(
+    tmp_path: Path,
+) -> None:
+    harness = DirectionUnstored(theatre(tmp_path))
+    (harness.repo.path / "a.txt").write_text("one\n", encoding="utf-8")
+    harness.repo.commit_all("base")
+    asked = request(script(INIT, OK), workspace="worktree")
+    harness.configure(asked)
+    harness.repo.commit_all("config")
+    events = harness.repo.path / ".troupe" / "events"
+    before = snapshot(events)
+    with pytest.raises(TroupeError) as caught:
+        harness.perform(asked)
+    assert caught.value.code == "artifact.write-failed"
+    assert snapshot(events) == before
+    assert harness.status().runs == []
+    assert not (harness.repo.path / ".troupe" / "local" / "worktrees").exists()
+    assert harness.repo.git("worktree", "list").count("\n") == 1
 
 
 def test_the_start_is_the_persons_and_everything_else_the_agents_under_one_change(

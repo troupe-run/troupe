@@ -10,7 +10,7 @@ from uuid import UUID
 import pytest
 
 from gitrepo import Repo
-from runtesting import ADA, ALLOW, INIT, OK, Harness, request, script, theatre
+from runtesting import ADA, ALLOW, INIT, OK, Harness, failing_at, request, script, theatre
 from troupe.core.errors import TroupeError
 from troupe.core.events import EventStore
 from troupe.core.messages import Message
@@ -30,15 +30,16 @@ def worktree_request(*steps: dict[str, Any], **fields: Any) -> dict[str, Any]:  
 
 
 class Recording(Harness):
-    """A harness that runs ``on_started`` when perform says the run has started."""
+    """A harness that runs ``on_running`` when the runner's first event arrives: its worktree is
+    made and the shared state read, so what it does counts as done during the run."""
 
-    on_started: Any = None
+    on_running: Any = None
 
     def send(self, update: Message) -> None:
         super().send(update)
         data = update.to_data()
-        if data.get("kind") == "started" and self.on_started is not None:
-            self.on_started()
+        if data.get("kind") == "event" and data["seq"] == 0 and self.on_running is not None:
+            self.on_running()
 
 
 def committed(tmp_path: Path) -> Repo:
@@ -146,17 +147,22 @@ def test_a_clean_theatre_with_troupes_own_uncommitted_events_isnt_dirty(repo: Re
 # Requirement: Files that match HEAD are cloned copy-on-write
 
 
-def test_the_runs_start_records_its_workspace_with_base_path_and_clones(repo: Repo) -> None:
+def test_the_start_names_the_worktree_and_worktree_made_records_its_clones(repo: Repo) -> None:
     made = harness(repo)
     asked = configured(made, INIT, OK)
     head = repo.git("rev-parse", "HEAD").strip()
     run = made.perform(asked).run
-    workspace = history(made, run.run_id)[0]["workspace"]
-    assert workspace["kind"] == "worktree"
-    assert workspace["base"] == head
-    assert workspace["path"] == f".troupe/local/worktrees/{run.run_id}"
-    assert workspace["clones"]  # whatever this file system gave: clonefile, ficlone, copy...
-    assert set(workspace["clones"]) <= {"clonefile", "ficlone", "copyfile2", "copy", "symlink"}
+    start, worktree_made = history(made, run.run_id)[:2]
+    assert start["workspace"] == {
+        "kind": "worktree",
+        "path": f".troupe/local/worktrees/{run.run_id}",
+        "base": head,
+        "dirty": False,
+    }
+    clones = worktree_made["clones"]
+    assert clones  # whatever this file system gave: clonefile, ficlone, copy...
+    assert set(clones) <= {"clonefile", "ficlone", "copyfile2", "copy", "symlink"}
+    assert run.to_data()["workspace"] == {**start["workspace"], "clones": clones}
 
 
 # Requirement: A worktree needs git and a commit
@@ -230,7 +236,13 @@ def _vcs_failed(*_: object) -> Any:  # noqa: ANN401
     )
 
 
-def test_a_worktree_that_fails_to_fill_records_nothing_and_leaves_no_worktree(repo: Repo) -> None:
+def topics(made: Harness, run_id: str) -> list[str]:
+    return [event.topic.rsplit(":", 1)[1] for event in made.stores[-1].history(UUID(run_id))]
+
+
+def test_a_worktree_that_fails_to_fill_ends_the_run_could_not_start_and_leaves_no_worktree(
+    repo: Repo,
+) -> None:
     made = harness(repo, store_wrapper=_replacing("fill_worktree", _vcs_failed))
     asked = configured(made, INIT, OK)
     worktrees = repo.git("worktree", "list")
@@ -239,7 +251,49 @@ def test_a_worktree_that_fails_to_fill_records_nothing_and_leaves_no_worktree(re
     assert caught.value.code == "vcs.failed"
     assert repo.git("worktree", "list") == worktrees
     assert list((repo.path / ".troupe" / "local" / "worktrees").iterdir()) == []
-    assert not [u for u in made.updates if u.get("kind") == "started"]
+    [started] = [u for u in made.updates if u.get("kind") == "started"]
+    run_id = started["runId"]
+    assert topics(made, run_id) == ["Run.Started", "Run.Ended"]
+    outcome = history(made, run_id)[-1]["outcome"]
+    assert (outcome["outcome"], outcome["ending"]) == ("could-not-start", "never-started")
+    assert outcome["error"]["code"] == "vcs.failed"
+    assert "changes" not in history(made, run_id)[-1]
+
+
+def test_a_shared_state_that_cant_be_read_ends_the_run_and_keeps_its_worktree(
+    repo: Repo,
+) -> None:
+    made = harness(repo, store_wrapper=_replacing("shared_state", _vcs_failed))
+    asked = configured(made, INIT, OK)
+    with pytest.raises(TroupeError) as caught:
+        made.perform(asked)
+    assert caught.value.code == "vcs.failed"
+    [started] = [u for u in made.updates if u.get("kind") == "started"]
+    run_id = started["runId"]
+    assert topics(made, run_id) == ["Run.Started", "Run.WorktreeMade", "Run.Ended"]
+    assert history(made, run_id)[-1]["outcome"]["outcome"] == "could-not-start"
+    assert (repo.path / started["worktree"]).is_dir()
+    [run] = made.status(run=run_id).runs
+    changes = run.to_data()["changes"]
+    assert (changes["state"], changes["worktree"]) == ("uncaptured", started["worktree"])
+
+
+def test_a_worktree_failure_whose_end_cant_be_recorded_names_both_and_reads_interrupted(
+    repo: Repo,
+) -> None:
+    fill_fails = _replacing("fill_worktree", _vcs_failed)
+    end_fails = failing_at(-1, end_too=True)
+    made = harness(repo, store_wrapper=lambda store: end_fails(fill_fails(store)))
+    asked = configured(made, INIT, OK)
+    with pytest.raises(TroupeError) as caught:
+        made.perform(asked)
+    assert caught.value.code == "run.recording-failed"
+    details = caught.value.details
+    assert details["error"]["code"] == "vcs.failed"
+    assert details["endError"]["code"] == "artifact.write-failed"
+    assert "failedAt" not in details
+    [run] = harness(repo).status(run=details["run"]).runs
+    assert run.state == "interrupted"
 
 
 # Requirement: The local stage's workspace is the theatre (a worktree is still unenforced)
@@ -364,7 +418,7 @@ def test_an_ignored_file_the_run_wrote_is_still_in_its_worktree(repo: Repo) -> N
 def test_a_branch_made_during_the_run_is_recorded_and_announced(repo: Repo) -> None:
     made = harness(repo)
     asked = configured(made, INIT, OK)
-    made.on_started = lambda: repo.git("branch", "scratch")
+    made.on_running = lambda: repo.git("branch", "scratch")
     run = made.perform(asked).run
     shared = history(made, run.run_id)[-1]["changes"]["shared"]
     assert shared == {"refs": [{"name": "refs/heads/scratch", "change": "added"}]}
@@ -381,7 +435,7 @@ def test_a_hook_written_during_the_run_is_named_first(repo: Repo) -> None:
         repo.git("tag", "v0")
         (repo.path / ".git" / "hooks" / "pre-commit").write_text("#!/bin/sh\n", encoding="utf-8")
 
-    made.on_started = tag_and_hook
+    made.on_running = tag_and_hook
     made.perform(asked)
     [notice] = notices(made, "workspace.shared-git-changed")
     assert notice["problem"].index("hook pre-commit added") < notice["problem"].index("refs/tags")
@@ -391,7 +445,7 @@ def test_a_hook_written_during_the_run_is_named_first(repo: Repo) -> None:
 def test_a_config_change_during_the_run_is_recorded(repo: Repo) -> None:
     made = harness(repo)
     asked = configured(made, INIT, OK)
-    made.on_started = lambda: repo.git("config", "core.hooksPath", "elsewhere-hooks")
+    made.on_running = lambda: repo.git("config", "core.hooksPath", "elsewhere-hooks")
     run = made.perform(asked).run
     assert history(made, run.run_id)[-1]["changes"]["shared"]["config"] == [
         {"name": "config", "change": "changed"}
