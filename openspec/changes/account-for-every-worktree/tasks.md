@@ -31,34 +31,35 @@ otherwise; each test's name states what its body checks.
 
 ## 3. Perform records the start before anything can be left behind
 
-- [ ] 3.1 Split `make_worktree` in `troupe.core.workspaces` into finding what differs from HEAD (announcing
+- [x] 3.1 Split `make_worktree` in `troupe.core.workspaces` into finding what differs from HEAD (announcing
       `workspace.uncommitted-unseen`, writing nothing) and adding and filling the worktree (removing what it made on
       any failure, as now) (D2). Verify with the existing `test_run_workspaces.py` dirty, clean and fill tests passing
       unchanged in what they check.
-- [ ] 3.2 Reorder `perform` as design D2 lists it: direction artifact, then what's dirty, then `Run.Started` recorded
+- [x] 3.2 Reorder `perform` as design D2 lists it: direction artifact, then what's dirty, then `Run.Started` recorded
       by the person's command, then `m.Started`, then the worktree, `Run.WorktreeMade` and the shared-state snapshot,
       then the run host. Remove `_Recorder`'s lazy start and its `_start(None)` fallback in `_end`, and update the
       module docstring. Verify with tests: a run's stream is start, (for a worktree) WorktreeMade, then the run events
       and its end; a run whose runner can't start still holds its start and end; a failing direction store records
       nothing and makes no worktree (in `test_perform.py`); a theatre run records its start before its runner's first
-      event.
-- [ ] 3.3 Rename and update `test_run_workspaces.py`'s `test_the_runs_start_records_its_workspace_with_base_path_and_clones`
+      event; and a real worktree run's segment lines, `Run.WorktreeMade` included, validate by topic (in
+      `test_event_payloads.py`: 1.2 could only check hand-built events until perform recorded the event).
+- [x] 3.3 Rename and update `test_run_workspaces.py`'s `test_the_runs_start_records_its_workspace_with_base_path_and_clones`
       so its name and body say the start holds base, path and dirty, and WorktreeMade holds the clones; the test for
       the start's runner when init arrives (in `test_perform.py` or `test_run_aggregate.py`) now checks the summary's
       `runner.reported`. Verify by running both files.
 
 ## 4. A failure before the runner starts ends the run
 
-- [ ] 4.1 In `perform`, end the run when making the worktree, recording WorktreeMade or reading the shared state
+- [x] 4.1 In `perform`, end the run when making the worktree, recording WorktreeMade or reading the shared state
       fails after the start: outcome `could-not-start`, ending `never-started`, the error, the limits in effect, no
       changes; then raise the original error, or `run.recording-failed` with both errors when the end can't be
-      recorded (D5). Reuse the run host's never-started outcome (`runners.host._not_started` / `derive_outcome`)
+      recorded (D5). Reuse the run host's never-started outcome (`runners.host.not_started`, made public for it)
       rather than building the outcome by hand. Verify with tests: `test_a_worktree_that_fails_to_fill_records_nothing_and_leaves_no_worktree`
       becomes one that checks perform fails with git's error, no worktree is left, and the stream holds start and a
       `could-not-start` end with that error; a failing shared-state read leaves the worktree, records WorktreeMade and
       the end, and the run's changes are `uncaptured`; a failing end raises `run.recording-failed` and the run reads
       `interrupted`.
-- [ ] 4.2 Verify that discarding a run that ended `could-not-start` with its worktree made removes the worktree and
+- [x] 4.2 Verify that discarding a run that ended `could-not-start` with its worktree made removes the worktree and
       records the discard, with a test in `test_run_changes.py`.
 
 ## 5. A killed perform leaves a run that names its worktree

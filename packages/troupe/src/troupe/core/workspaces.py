@@ -1,12 +1,13 @@
 """A run's workspace: its own worktree, or the theatre (spec: run-workspaces, stages;
-worktree-stage design D1, D2, D7, D8, D10).
+worktree-stage design D1, D2, D7, D8, D10; account-for-every-worktree design D2).
 
 A worktree run works in a git worktree made for it at the theatre's HEAD, under
 ``.troupe/local/worktrees/<run id>``, through the VCS port, so any stage can use one: the local
-stage runs the actor in it, and a Docker stage can mount it later. This module makes the worktree,
-says when the theatre has changes the run won't see, snapshots the state every worktree of the
-repository shares, captures the run's changes into the artifact store when it ends, and removes
-the worktree when the person settles them.
+stage runs the actor in it, and a Docker stage can mount it later. Making one is in two steps, so
+the run's start can name the worktree between them: planning it writes nothing and says when the
+theatre has changes the run won't see, then making it adds and fills it. This module also snapshots
+the state every worktree of the repository shares, captures the run's changes into the artifact
+store when it ends, and removes the worktree when the person settles them.
 
 A worktree contains nothing: the process can still write outside it, and what it does to the
 repository's refs, config and hooks lands in the person's own repository. So a worktree never
@@ -93,13 +94,36 @@ def worktree_base(vcs: Vcs, actor: str) -> tuple[str, str]:
 
 
 @dataclass(frozen=True)
+class Planned:
+    """A run's worktree before it is made: where it goes, what it starts from, and what differs
+    from HEAD, which the run won't see."""
+
+    path: Path
+    base: str
+    prefix: str
+    differing: frozenset[str]
+    dirty: tuple[str, ...]
+
+    def record(self, theatre: Path) -> dict[str, Any]:
+        """The workspace as the run's start records it, before any part of it exists."""
+        data: dict[str, Any] = {
+            "kind": "worktree",
+            "path": relative(theatre, self.path),
+            "base": self.base,
+            "dirty": bool(self.dirty),
+        }
+        if self.prefix:
+            data["prefix"] = self.prefix
+        return data
+
+
+@dataclass(frozen=True)
 class Worktree:
     """A run's worktree, made and filled."""
 
     path: Path
     base: str
     prefix: str
-    dirty: tuple[str, ...]
     clones: tuple[str, ...]
     baseline: str
     """The worktree's starting tree, as the VCS sees it, which the run's diff is taken from."""
@@ -109,27 +133,15 @@ class Worktree:
         """Where the run works: the theatre's place in the worktree."""
         return self.path.joinpath(*self.prefix.rstrip("/").split("/")) if self.prefix else self.path
 
-    def record(self, theatre: Path) -> dict[str, Any]:
-        """The workspace as the run's start records it."""
-        data: dict[str, Any] = {
-            "kind": "worktree",
-            "path": relative(theatre, self.path),
-            "base": self.base,
-            "dirty": bool(self.dirty),
-            "clones": list(self.clones),
-        }
-        if self.prefix:
-            data["prefix"] = self.prefix
-        return data
 
-
-def make_worktree(
+def plan_worktree(
     vcs: Vcs, theatre: Path, run_id: str, base: str, prefix: str, announce: Announce
-) -> Worktree:
-    """Make the run's worktree at ``base`` and fill it, saying first what the run won't see. On
-    any failure, whatever part of it was made is removed again before the error is raised."""
-    after = defaults.WORKSPACE_ANNOUNCE_AFTER_SECONDS
-    with announced("looking for changes the run won't see", announce, after):
+) -> Planned:
+    """The run's worktree at ``base``, planned, saying first what the run won't see. Writes
+    nothing."""
+    with announced(
+        "looking for changes the run won't see", announce, defaults.WORKSPACE_ANNOUNCE_AFTER_SECONDS
+    ):
         differing = vcs.differing_from_head()
     # troupe's own state under .troupe/ is never the actor's to see, and is left out of the diff,
     # so only the person's other changes make the theatre dirty (worktree-stage design D2).
@@ -137,17 +149,25 @@ def make_worktree(
     dirty = tuple(p for p in differing if p != troupe and not p.startswith(f"{troupe}/"))
     if dirty:
         announce(_uncommitted(dirty, base))
-    path = worktree_path(theatre, run_id)
+    return Planned(worktree_path(theatre, run_id), base, prefix, frozenset(differing), dirty)
+
+
+def make_worktree(vcs: Vcs, planned: Planned, announce: Announce) -> Worktree:
+    """Make the planned worktree and fill it. On any failure, whatever part of it was made is
+    removed again before the error is raised."""
+    path = planned.path
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        with announced("making the run's worktree", announce, after):
-            vcs.add_worktree(path, base)
-            filled = vcs.fill_worktree(path, clone_file, frozenset(differing))
+        with announced(
+            "making the run's worktree", announce, defaults.WORKSPACE_ANNOUNCE_AFTER_SECONDS
+        ):
+            vcs.add_worktree(path, planned.base)
+            filled = vcs.fill_worktree(path, clone_file, planned.differing)
     except BaseException:
         with contextlib.suppress(Exception):
             vcs.remove_worktree(path)
         raise
-    return Worktree(path, base, prefix, dirty, filled.mechanisms, filled.baseline)
+    return Worktree(path, planned.base, planned.prefix, filled.mechanisms, filled.baseline)
 
 
 def _uncommitted(dirty: tuple[str, ...], base: str) -> Notice:

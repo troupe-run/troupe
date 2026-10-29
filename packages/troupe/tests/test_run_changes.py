@@ -1,5 +1,5 @@
 """diff, accept and discard: what a person does with a worktree run's changes (spec:
-run-workspaces; worktree-stage design D6)."""
+run-workspaces; worktree-stage design D6; account-for-every-worktree design D5, D6)."""
 
 import asyncio
 import base64
@@ -86,7 +86,7 @@ def test_a_diff_that_isnt_utf_8_is_returned_as_base64_of_its_bytes(repo: Repo) -
     made = Recording(repo)
     asked = configured(made, INIT, OK)
     # Latin-1 bytes written into the worktree while the run goes, as an actor's tool might.
-    made.on_started = lambda: (
+    made.on_running = lambda: (
         worktree_path(repo.path, made.updates[-1]["runId"]) / "menu.txt"
     ).write_bytes(b"caf\xe9\n")
     run = made.perform(asked).run
@@ -289,6 +289,22 @@ def test_discarding_an_interrupted_run_removes_its_worktree_and_records_the_disc
     call_discard(made, other_id)
     assert not worktree.exists()
     assert last_event(made, other_id)[0] == "Run.ChangesDiscarded"
+
+
+def test_discarding_a_run_that_couldnt_start_removes_the_worktree_it_left(repo: Repo) -> None:
+    from test_run_workspaces import _replacing, _vcs_failed
+
+    made = Harness(repo, store_wrapper=_replacing("shared_state", _vcs_failed))
+    asked = configured(made, INIT, OK)
+    with pytest.raises(TroupeError):
+        made.perform(asked)
+    [started] = [u for u in made.updates if u.get("kind") == "started"]
+    run_id = started["runId"]
+    assert worktree_path(repo.path, run_id).is_dir()
+    call_discard(made, run_id)
+    assert not worktree_path(repo.path, run_id).exists()
+    assert f"worktrees/{run_id}" not in repo.git("worktree", "list", "--porcelain")
+    assert last_event(made, run_id)[0] == "Run.ChangesDiscarded"
 
 
 # Requirement: Accepting and discarding are recorded, and final
