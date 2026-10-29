@@ -5,10 +5,28 @@
 troupe runs your development process with a team of agents, asking only when it needs you. Work branches and loops,
 decisions go to whoever owns them, and every decision records who made it.
 
-Pre-alpha: there's nothing to install yet. What exists so far is the repository's foundation: the workspace, the
-quality gates, and the first pieces of the command line and the platform seam. See [troupe.run](https://troupe.run)
-for the principles, and the [roadmap](https://github.com/orgs/troupe-run/projects/1) for the open decisions and
-what's next.
+Pre-alpha: there's no release yet, but you can install the latest `main` and run an actor with it. See
+[troupe.run](https://troupe.run) for the principles, and the [roadmap](https://github.com/orgs/troupe-run/projects/1)
+for the open decisions and what's next.
+
+## Install
+
+You need [uv](https://docs.astral.sh/uv/). troupe needs Python 3.12 to 3.15, on Linux, macOS or Windows, and uv
+downloads one for it if you don't have one. This installs the latest `main`:
+
+```sh
+uv tool install "git+https://github.com/troupe-run/troupe@main#subdirectory=packages/troupe-run"
+```
+
+It installs `troupe-run`, which is troupe with the adapters and runners it bundles, and puts `troupe` on your path.
+If your shell can't find `troupe` afterwards, run `uv tool update-shell` and open a new terminal. To install a
+particular commit, put the commit in place of `main`.
+
+- **Upgrade** to the latest `main` with `uv tool upgrade troupe-run`.
+- **Uninstall** with `uv tool uninstall troupe-run`.
+
+[Your first performance](https://troupe.run/docs/opening-night/first-performance/) runs an actor with it. Installing
+by release tag comes with the first release ([#189](https://github.com/troupe-run/troupe/issues/189)).
 
 ## Development
 

@@ -22,5 +22,6 @@ to the right person. Escalation isn't built yet, and most of how it works isn't 
 
 How your theatre defines its research steps, what a decision brief contains, when an agent escalates rather than
 decides, and how the brief and its answer are recorded: all of these are open, in
-[#126](https://github.com/troupe-run/troupe/issues/126). Reaching a role is part of gates and escalations, in
-[#62](https://github.com/troupe-run/troupe/issues/62).
+[#126](https://github.com/troupe-run/troupe/issues/126). The first escalations go to whoever runs troupe, as the
+first [gates](gates-and-decisions.md) do. Reaching the role that owns the decision comes with roles, in
+[#148](https://github.com/troupe-run/troupe/issues/148).

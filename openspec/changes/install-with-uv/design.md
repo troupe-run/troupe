@@ -142,8 +142,10 @@ if it's needed. The section also covers `uv tool update-shell` when the path isn
 troupe-run`. `docs/opening-night/install.md` says the same at more length. The decided points stay. The "isn't decided
 yet (#38)" paragraph is replaced with #139's decision. Reaching non-technical users is #143, and installing by tag is #189.
 
-Upgrading from `main` is documented only if `uv tool upgrade troupe-run` is shown, during apply, to fetch a newer
-`main`. Otherwise, the docs say to run the install command again with `--reinstall`.
+Upgrading was checked during apply (task 4.2, 2026-10-29, uv 0.11, in a scratch clone). With troupe installed from a
+branch, `uv tool upgrade troupe-run` fetched the branch's newer tip, and moved all nine packages to it. Running the install
+command again with another commit replaced the install, without `--reinstall`. So the docs give `uv tool upgrade
+troupe-run` for an install from `main`, and the install command with another commit for moving to that commit.
 
 ### D8. The issue links follow #139's split
 
