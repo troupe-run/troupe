@@ -71,7 +71,6 @@ def recorded_start(store: EventStore, run_id: str) -> None:
         run_id=run_id,
         actor="tester",
         runner_requested="scripted",
-        runner_reported={"name": "scripted", "version": "0.1.0"},
         stage=STAGE,
         effect_check={"kind": "none"},
         direction="sha256:" + "a" * 64,
@@ -222,6 +221,89 @@ def test_a_summary_says_who_started_the_run_and_on_what_stage(tmp_path: Path) ->
     assert data["stage"] == STAGE
     assert data["actor"] == "tester"
     assert data["runner"]["requested"] == "scripted"
+
+
+# Reading back what perform records before the runner starts (account-for-every-worktree design D3,
+# D4, D7).
+
+WORKTREE = {
+    "kind": "worktree",
+    "path": ".troupe/local/worktrees/6f1d2c3b-0000-4000-8000-000000000002",
+    "base": "c" * 40,
+    "dirty": False,
+}
+
+
+def started(
+    store: EventStore, workspace: dict[str, Any], runner_reported: dict[str, Any] | None = None
+) -> Run:
+    """A run's start as perform records it, or, with ``runner_reported``, as an older troupe
+    did."""
+    run = Run(
+        run_id="6f1d2c3b-0000-4000-8000-000000000002",
+        actor="tester",
+        runner_requested="scripted",
+        stage=STAGE,
+        effect_check={"kind": "none"},
+        direction="sha256:" + "a" * 64,
+        config=["sha256:" + "b" * 64],
+        workspace=workspace,
+        runner_reported=runner_reported,
+    )
+    store.command(via="cli").record(run.collect_events())
+    return run
+
+
+def init(run: Run) -> dict[str, Any]:
+    return {**INIT["event"], "runId": run.run_id, "seq": 0}
+
+
+def test_a_runs_reported_runner_is_read_from_its_init_event(tmp_path: Path) -> None:
+    harness = Harness(theatre(tmp_path))
+    store = git_service(harness.repo)
+    run = started(store, {"kind": "theatre"})
+    run.report(0, init(run))
+    store.command(via="runner").record(run.collect_events())
+    [summary] = harness.status(run=run.run_id).runs
+    assert summary.to_data()["runner"] == {
+        "requested": "scripted",
+        "reported": {"name": "scripted", "version": "0.1.0"},
+    }
+
+
+def test_a_run_ended_before_its_runner_sent_init_has_no_reported_runner(tmp_path: Path) -> None:
+    harness = Harness(theatre(tmp_path))
+    store = git_service(harness.repo)
+    run = started(store, {"kind": "theatre"})
+    run.report(0, {"runId": run.run_id, "seq": 0, "type": "log", "level": "info", "message": "m"})
+    store.command(via="runner").record(run.collect_events())
+    [summary] = harness.status(run=run.run_id).runs
+    assert summary.to_data()["runner"] == {"requested": "scripted"}
+
+
+def test_a_worktree_not_made_yet_has_no_clones_and_one_made_has_them(tmp_path: Path) -> None:
+    harness = Harness(theatre(tmp_path))
+    store = git_service(harness.repo)
+    run = started(store, WORKTREE)
+    [summary] = harness.status(run=run.run_id).runs
+    assert summary.to_data()["workspace"] == WORKTREE
+    run.made_worktree(["copy"])
+    store.command(via="cli").record(run.collect_events())
+    [summary] = harness.status(run=run.run_id).runs
+    assert summary.to_data()["workspace"] == {**WORKTREE, "clones": ["copy"]}
+
+
+def test_a_start_an_older_troupe_recorded_reads_back_its_runner_and_clones(
+    tmp_path: Path,
+) -> None:
+    harness = Harness(theatre(tmp_path))
+    store = git_service(harness.repo)
+    reported = {"name": "scripted", "version": "0.0.9"}
+    run = started(store, {**WORKTREE, "clones": ["symlink"]}, runner_reported=reported)
+    [summary] = harness.status(run=run.run_id).runs
+    data = summary.to_data()
+    assert data["runner"]["reported"] == reported
+    assert data["workspace"]["clones"] == ["symlink"]
 
 
 # 8.3: logs.

@@ -90,12 +90,15 @@ WORKSPACES = st.just({"kind": "theatre"}) | st.fixed_dictionaries(
         "path": st.just(".troupe/local/worktrees/0f8fad5b-d9cb-469f-a165-70867728950e"),
         "base": COMMITS,
         "dirty": st.booleans(),
+    },
+    optional={
+        "prefix": st.sampled_from(["apps/", "apps/web/"]),
+        # Absent until the worktree is made (account-for-every-worktree design D4).
         "clones": st.lists(
             st.sampled_from(["clonefile", "ficlone", "copyfile2", "copy", "symlink"]),
             unique=True,
         ),
     },
-    optional={"prefix": st.sampled_from(["apps/", "apps/web/"])},
 )
 SHARED_LISTS = st.lists(
     st.fixed_dictionaries(

@@ -143,14 +143,15 @@ class TheatreWorkspace(Tagged):
 
 @dataclass(frozen=True)
 class WorktreeWorkspace(Tagged):
-    """A run that worked in its own worktree (worktree-stage design D7)."""
+    """A run that works in its own worktree (worktree-stage design D7). ``clones`` is None until
+    the worktree is made (account-for-every-worktree design D4)."""
 
     TYPE: ClassVar[str | None] = "worktree"
     path: str = json_field("path", pattern=THEATRE_PATH)
     base: str = json_field("base", pattern=COMMIT)
     dirty: bool = json_field("dirty")
-    clones: list[CloneMechanism] = json_field("clones", unique=True)
     prefix: str | None = json_field("prefix", default=None, pattern=PREFIX)
+    clones: list[CloneMechanism] | None = json_field("clones", default=None, unique=True)
 
 
 Workspace = TheatreWorkspace | WorktreeWorkspace

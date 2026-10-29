@@ -20,12 +20,12 @@ otherwise; each test's name states what its body checks.
 
 ## 2. Reading runs back: the reported runner from init, the clones from WorktreeMade
 
-- [ ] 2.1 In `troupe.core.runs.projections`, take `runner.reported` from the `Run.Reported` with seq 0 when it's an
+- [x] 2.1 In `troupe.core.runs.projections`, take `runner.reported` from the `Run.Reported` with seq 0 when it's an
       `init`, whether or not the log is kept, preferring an old start's `runner_reported` (D3, D7); and add `clones`
       to a worktree workspace from `Run.WorktreeMade`, preferring an old start's own `clones`. Verify with
       `test_run_queries.py`: a run with an init reports its runner; one ended before init has no `runner.reported`;
       a worktree run started but not yet made has no `clones`; an old start's runner and clones read back.
-- [ ] 2.2 In `client/run.schema.json` (both copies), give the summary its own worktree workspace with `clones`
+- [x] 2.2 In `client/run.schema.json` (both copies), give the summary its own worktree workspace with `clones`
       optional, and regenerate the models. Verify with the client-protocol schema tests: a summary of a worktree not
       yet made validates, and the existing "changes that contradict the workspace" cases still don't.
 
