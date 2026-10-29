@@ -78,6 +78,12 @@ A run's state isn't recorded: it's worked out from the events each time you read
 troupe never records anything on behalf of an interrupted run: how it ended would be a guess. Its events and
 transcript show how far it got.
 
+A run is in `troupe status` from the moment `troupe perform` records its start, before its worktree is made and
+its runner starts. So however `perform` stops, a run's worktree always belongs to a run you can see, and
+`troupe discard <run>` removes it, even one that was only partly made. If something fails after the start and
+before the runner starts, such as git failing to make the worktree, the run ends `could-not-start` with that error,
+and `perform` fails with it.
+
 ## Stages
 
 A **stage** is where an actor runs. Before a run starts, the stage admits the actor or refuses it, and a refused

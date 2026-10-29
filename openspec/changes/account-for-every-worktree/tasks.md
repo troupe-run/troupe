@@ -80,11 +80,11 @@ otherwise; each test's name states what its body checks.
 
 ## 6. Docs
 
-- [ ] 6.1 In `docs/the-company/performances-and-runs.md`, say under "A run's state" that a run is in `status` from
+- [x] 6.1 In `docs/the-company/performances-and-runs.md`, say under "A run's state" that a run is in `status` from
       the moment `perform` records its start, before its runner starts, so an interrupted run's worktree is always
       named, and `troupe discard <run>` removes it; and that a run whose worktree couldn't be made ends
       `could-not-start`. Verify the docs build (`uv run scripts/check.py`'s docs step) and the text matches the specs.
-- [ ] 6.2 Update the archived worktree-stage risk's follow-up pointer only if the docs or specs cite it as open:
+- [x] 6.2 Update the archived worktree-stage risk's follow-up pointer only if the docs or specs cite it as open:
       grep `openspec/specs` and `docs` for "init arrives" and "before its runner's init", and fix any text that still
       says the start waits for `init`. Verify the grep finds none.
 
