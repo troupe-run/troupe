@@ -33,7 +33,10 @@ Config is worked out from the stream's whole history, both sides of every fork, 
 - **Validation.** A merged config that breaks a rule is a conflict between the changes since the split that
   touched what broke it, for an actor with no conflict already.
 - **Replay.** Config is every entry replayed in the history's order, leaving out the lines that dropped out and both
-  sides of every conflict. A settling event is read as a join, never for its state.
+  sides of every conflict. Where that leaves out every latest write of a point, the writes beneath them are contested
+  by the same rule, until one is left or a line stays in, so the order events arrived in never decides a value
+  ([#190](https://github.com/troupe-run/troupe/issues/190)). Only the first contest's conflict is reported. A
+  settling event is read as a join, never for its state.
 
 Any conflict blocks every use of config but `config get`, until one change that sets or unsets every conflicting
 value resolves it (`troupe.core.config.stream`). Reads record nothing.
