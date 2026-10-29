@@ -121,6 +121,25 @@ def test_a_plugin_that_isnt_installed_is_refused_naming_it() -> None:
     assert caught.value.details == {"package": "troupe_runner_nobody"}
 
 
+def test_a_missing_plugins_fix_names_the_install_page_and_uv_sync_in_a_checkout() -> None:
+    with pytest.raises(TroupeError) as caught:
+        schemas.plugin_schemas_directory("troupe_runner_nobody")
+    assert caught.value.fix == (
+        f"Reinstall troupe with the install command at {schemas.INSTALL_PAGE}, which brings every "
+        "runner troupe knows. If you run troupe from a checkout of troupe, run uv sync there "
+        "instead."
+    )
+
+
+def test_the_install_page_the_fix_links_to_is_in_the_docs() -> None:
+    site = "https://troupe.run/docs/"
+    address = schemas.INSTALL_PAGE
+    assert address.startswith(site), address
+    assert address.endswith("/"), address
+    page = ROOT / "docs" / f"{address.removeprefix(site).removesuffix('/')}.md"
+    assert page.is_file(), f"{address} links to {page.relative_to(ROOT)}, which doesn't exist"
+
+
 # Requirement: troupe records the protocol version it carries
 
 

@@ -38,6 +38,10 @@ PROTOCOL_VERSION = re.compile(r"\A(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9
 """A protocol version: major.minor.patch, no leading zeros (event-record.schema.json's
 ``protocolVersion``)."""
 
+INSTALL_PAGE = "https://troupe.run/docs/opening-night/install/"
+"""The page that gives the install command. A fix links here rather than repeating the command,
+which lives in one form (spec: installation)."""
+
 
 def _load(path: Path) -> dict[str, Any]:
     data: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
@@ -61,8 +65,9 @@ def plugin_schemas_directory(package: str) -> Path:
     raise TroupeError(
         "schemas.plugin-missing",
         problem=f"The plugin package {package!r} isn't installed, or ships no schemas/ directory.",
-        fix="Install the plugin (uv sync, in a checkout of troupe). A plugin publishes its schemas "
-        "in its package's schemas/ directory, installed with it.",
+        fix=f"Reinstall troupe with the install command at {INSTALL_PAGE}, which brings every "
+        "runner troupe knows. If you run troupe from a checkout of troupe, run uv sync there "
+        "instead.",
         details={"package": package},
     )
 
