@@ -35,11 +35,11 @@
 
 ## 2. The install check (design D3, D4)
 
-- [ ] 2.1 Write `scripts/install_check.py`: the command template and the repository URL as named constants, the
+- [x] 2.1 Write `scripts/install_check.py`: the command template and the repository URL as named constants, the
   `--ref` and `--python` options, the steps in D4, and named timeouts. Each failure names the step, the command and its
-  output. Add tests in `scripts/tests/` for what can be checked without installing: the command it builds for a given
-  ref and Python, that a ref that isn't a commit is refused by name, and that the tool directories are temporary and
-  removed afterwards.
+  output. Add tests in `scripts/tests/workspace/` (the script names the bundle's path) for what can be checked
+  without installing: the command it builds for a given ref and Python, that a ref that isn't a commit is refused by
+  name, and that the tool directories are temporary and removed afterwards.
 
   Verify: the tests pass. `uv run scripts/install_check.py` on this branch's `HEAD` installs, prints the version,
   and reports a succeeded scripted run. Afterwards, `uv tool list` and the developer's path are unchanged.
