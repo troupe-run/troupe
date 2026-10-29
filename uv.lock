@@ -12,6 +12,7 @@ members = [
     "troupe",
     "troupe-artifacts-local",
     "troupe-identity-local",
+    "troupe-run",
     "troupe-runner-claude-code",
     "troupe-runner-scripted",
     "troupe-stage-local",
@@ -1285,6 +1286,35 @@ dependencies = [
 requires-dist = [{ name = "troupe", editable = "packages/troupe" }]
 
 [[package]]
+name = "troupe-run"
+version = "0.0.1.dev0"
+source = { editable = "packages/troupe-run" }
+dependencies = [
+    { name = "troupe" },
+    { name = "troupe-artifacts-local" },
+    { name = "troupe-identity-local" },
+    { name = "troupe-runner-claude-code" },
+    { name = "troupe-runner-scripted" },
+    { name = "troupe-stage-local" },
+    { name = "troupe-store-text" },
+    { name = "troupe-vcs-files" },
+    { name = "troupe-vcs-git" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "troupe", editable = "packages/troupe" },
+    { name = "troupe-artifacts-local", editable = "packages/troupe-artifacts-local" },
+    { name = "troupe-identity-local", editable = "packages/troupe-identity-local" },
+    { name = "troupe-runner-claude-code", editable = "plugins/runner-claude-code" },
+    { name = "troupe-runner-scripted", editable = "plugins/runner-scripted" },
+    { name = "troupe-stage-local", editable = "packages/troupe-stage-local" },
+    { name = "troupe-store-text", editable = "packages/troupe-store-text" },
+    { name = "troupe-vcs-files", editable = "packages/troupe-vcs-files" },
+    { name = "troupe-vcs-git", editable = "packages/troupe-vcs-git" },
+]
+
+[[package]]
 name = "troupe-runner-claude-code"
 version = "0.0.1.dev0"
 source = { editable = "plugins/runner-claude-code" }
@@ -1361,6 +1391,7 @@ dev = [
     { name = "troupe" },
     { name = "troupe-artifacts-local" },
     { name = "troupe-identity-local" },
+    { name = "troupe-run" },
     { name = "troupe-runner-claude-code" },
     { name = "troupe-runner-scripted" },
     { name = "troupe-stage-local" },
@@ -1387,6 +1418,7 @@ dev = [
     { name = "troupe", editable = "packages/troupe" },
     { name = "troupe-artifacts-local", editable = "packages/troupe-artifacts-local" },
     { name = "troupe-identity-local", editable = "packages/troupe-identity-local" },
+    { name = "troupe-run", editable = "packages/troupe-run" },
     { name = "troupe-runner-claude-code", editable = "plugins/runner-claude-code" },
     { name = "troupe-runner-scripted", editable = "plugins/runner-scripted" },
     { name = "troupe-stage-local", editable = "packages/troupe-stage-local" },

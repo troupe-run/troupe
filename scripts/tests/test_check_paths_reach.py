@@ -278,6 +278,23 @@ def test_a_packages_console_script_reaches_it(tree: Tree) -> None:
     assert tree.reach(SUITE) == {"runner"}
 
 
+def test_a_console_script_reaches_the_package_whose_module_it_runs_not_one_that_redeclares_it(
+    tree: Tree,
+) -> None:
+    # troupe-run declares core's `troupe` command (install-with-uv design D2). Naming the command
+    # runs core's code, not the bundle's, so it mustn't reach the bundle and, through its
+    # dependencies, every package.
+    tree.package("runner", under="plugins", scripts='[project.scripts]\nrun-it = "runner:main"\n')
+    tree.package("alpha")
+    tree.package(
+        "bundle",
+        dependencies=("troupe", "runner", "alpha"),
+        scripts='[project.scripts]\nrun-it = "runner:main"\n',
+    )
+    tree.test(SUITE, "test_spawn", "COMMAND = ['run-it', '--once']\n")
+    assert tree.reach(SUITE) == {"runner"}
+
+
 def test_a_path_into_a_root_with_no_package_after_it_reaches_every_package_there(
     tree: Tree,
 ) -> None:

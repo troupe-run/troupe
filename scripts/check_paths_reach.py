@@ -18,7 +18,8 @@ already imported, nor subprocesses. So the reach is computed here, statically, w
    those, the group names written in the same module. A call with none of those is an error, so a
    new loader can't go unseen.
 4. Test-side code (anything outside a package's `src/`) also reaches a package it names: a string
-   equal to the package's module or console-script name (a subprocess's `-m` module or command),
+   equal to the package's module or console-script name (a subprocess's `-m` module or command;
+   a console script counts for the package whose module it runs, not one that redeclares it),
    or a path into a workspace root. A path that names a package right after the root reaches it,
    whether it's built in code (`ROOT / "plugins" / "runner-scripted"`) or written as one string
    (`"packages/troupe-vcs-git/tests"`, even as a configuration key: how a string is used can't be
@@ -86,7 +87,8 @@ class Package:
     groups: frozenset[str]
     """The entry-point groups it registers in: troupe.store."""
     commands: frozenset[str] = frozenset()
-    """Its console scripts, from [project.scripts]."""
+    """Its console scripts, from [project.scripts], that run one of its own modules. A script that
+    runs another package's module (troupe-run's `troupe`, which is core's) is that package's."""
 
     @property
     def scope(self) -> str | None:
@@ -162,7 +164,11 @@ def load_workspace(root: Path = ROOT) -> Workspace:
                 modules=frozenset(modules),
                 dependencies=frozenset(m[0] for m in requirements if m and m[0] in names),
                 groups=frozenset(_table(project, "entry-points")),
-                commands=frozenset(_table(project, "scripts")),
+                commands=frozenset(
+                    command
+                    for command, target in _table(project, "scripts").items()
+                    if str(target).split(":", 1)[0].split(".", 1)[0] in modules
+                ),
             )
         )
     return Workspace(

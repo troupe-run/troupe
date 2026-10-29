@@ -16,6 +16,7 @@ troupe = { workspace = true }
 troupe-artifacts-local = { workspace = true }
 troupe-runner-claude-code = { workspace = true }
 troupe-runner-scripted = { workspace = true }
+troupe-run = { workspace = true }
 troupe-stage-local = { workspace = true }
 troupe-identity-local = { workspace = true }
 troupe-store-text = { workspace = true }
@@ -28,6 +29,7 @@ dev = [
     "troupe-artifacts-local",
     "troupe-runner-claude-code",
     "troupe-runner-scripted",
+    "troupe-run",
     "troupe-stage-local",
     "troupe-identity-local",
     "troupe-store-text",
@@ -58,6 +60,7 @@ extend-exclude = ["openspec"]
 src = [
     "packages/troupe/src",
     "packages/troupe/tests",
+    "packages/troupe-run/src",
     "packages/troupe-artifacts-local/src",
     "packages/troupe-artifacts-local/tests",
     "packages/troupe-identity-local/src",
@@ -103,6 +106,7 @@ python_version = "3.12"
 files = [
     "packages/troupe/src",
     "packages/troupe/tests",
+    "packages/troupe-run/src",
     "packages/troupe-artifacts-local/src",
     "packages/troupe-artifacts-local/tests",
     "packages/troupe-identity-local/src",
@@ -125,6 +129,7 @@ explicit_package_bases = true
 mypy_path = [
     "packages/troupe/src",
     "packages/troupe/tests",
+    "packages/troupe-run/src",
     "packages/troupe-artifacts-local/src",
     "packages/troupe-identity-local/src",
     "packages/troupe-stage-local/src",
@@ -173,6 +178,7 @@ xfail_strict = true
 [tool.importlinter]
 root_packages = [
     "troupe",
+    "troupe_run",
     "troupe_artifacts_local",
     "troupe_identity_local",
     "troupe_stage_local",

@@ -10,6 +10,7 @@
       "groupName": "troupe",
       "components": [
         "troupe",
+        "troupe-run",
         "troupe-artifacts-local",
         "troupe-identity-local",
         "troupe-stage-local",
@@ -53,6 +54,18 @@
           "type": "toml",
           "path": "/uv.lock",
           "jsonpath": "$.package[?(@.name.value=='troupe-identity-local')].version"
+        }
+      ]
+    },
+    "packages/troupe-run": {
+      "release-type": "python",
+      "package-name": "troupe-run",
+      "component": "troupe-run",
+      "extra-files": [
+        {
+          "type": "toml",
+          "path": "/uv.lock",
+          "jsonpath": "$.package[?(@.name.value=='troupe-run')].version"
         }
       ]
     },

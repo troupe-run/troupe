@@ -1,0 +1,33 @@
+[project]
+name = "troupe-run"
+version = "0.0.1.dev0"
+description = "troupe, with the adapters and runners it bundles: what you install to run troupe."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.12,<3.16"
+# Every other workspace member, by name: the root's workspace sources install each one from the same commit
+# (install-with-uv design D1). scripts/bundle.py fails the check when one is missing.
+dependencies = [
+    "troupe",
+    "troupe-artifacts-local",
+    "troupe-identity-local",
+    "troupe-stage-local",
+    "troupe-store-text",
+    "troupe-vcs-files",
+    "troupe-vcs-git",
+    "troupe-runner-claude-code",
+    "troupe-runner-scripted",
+]
+
+[project.urls]
+Homepage = "https://troupe.run"
+Repository = "https://github.com/troupe-run/troupe"
+
+# uv tool links only this package's own commands, so it declares core's (install-with-uv design D2).
+[project.scripts]
+troupe = "troupe.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.13.5,<0.14"]
+build-backend = "uv_build"
