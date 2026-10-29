@@ -51,7 +51,7 @@
 
 ## 3. CI (design D5)
 
-- [ ] 3.1 Add the install-check step to `check-legs` in `.github/workflows/ci.yml`, after "Check", only when `check-args`
+- [x] 3.1 Add the install-check step to `check-legs` in `.github/workflows/ci.yml`, after "Check", only when `check-args`
   is empty. Pass `--ref ${{ github.sha }}` and `--python ${{ matrix.python }}`, with each OS's own shell, as the Check
   step does. Extend `scripts/tests/test_ci_workflow.py` so that removing the step, or running it on a scoped check,
   fails a test.
@@ -68,7 +68,7 @@
   the page and line, and the scratch copy is then removed.
 - [x] 4.2 Check whether `uv tool upgrade troupe-run` fetches a newer `main`: install from a scratch commit, add a commit,
   upgrade, and compare `troupe --version` or the installed commit. Record the answer in design.md D7.
-- [ ] 4.3 Rewrite the README's opening paragraph and add an **Install** section, and rewrite
+- [x] 4.3 Rewrite the README's opening paragraph and add an **Install** section, and rewrite
   `docs/opening-night/install.md`, as D7 says, using 4.2's answer for upgrading. Name the Python bound, and extend the
   existing Python-versions check if it reads the README's bound, so the install page is checked too. Verify: the
   docs check and the 4.1 test pass. Following the page by hand in a new shell, using the same temporary
@@ -79,7 +79,7 @@
 
 ## 5. Integration
 
-- [ ] 5.1 Run `uv run scripts/check.py` (the full check) and `uv run scripts/install_check.py` on the final commit.
+- [x] 5.1 Run `uv run scripts/check.py` (the full check) and `uv run scripts/install_check.py` on the final commit.
   Both pass, and every CI leg on the pull request is green, the install step included.
 
 ## Workflow follow-up

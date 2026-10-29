@@ -119,8 +119,10 @@ one adapter's tests) skips it. The bundle's contents can change only through a `
 `pyproject.toml` runs the full check.
 
 A separate job was considered. It would need its own path filter and its own entry in `check`'s aggregation, for no
-gain. `actions/checkout`'s shallow clone holds `github.sha`, and git can clone from a shallow repository. That's to be
-confirmed on CI's first run.
+gain. `actions/checkout`'s shallow clone holds `github.sha`, and git can clone from a shallow repository. CI's first run
+confirmed it (PR #192, run 40863498888, 2026-10-29). The step passed on all 12 legs, with no fallback needed. It took
+2 to 3 s on Linux, 7 to 8 s on macOS and 12 to 15 s on Windows, well inside the minute that would move it to one Python
+per platform.
 
 ### D6. The bundle's contents are checked against the workspace
 
