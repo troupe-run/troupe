@@ -13,12 +13,28 @@ import pytest
 from conftest import REPO
 
 import release_config
-from release_config import CONFIG, LOCK, MANIFEST, PROTOCOL_RECORD
+from release_config import CONFIG, LOCK, MANIFEST, PROTOCOL, PROTOCOL_RECORD
 
 
-@pytest.fixture
-def copy(tmp_path: Path) -> Path:
-    """The files the check reads, copied from the repository."""
+def next_minor(version: str) -> str:
+    """The version a pre-1.0 feature release moves to (spec: releases, "Pre-1.0 versioning")."""
+    major, minor, _ = version.split(".")
+    return f"{major}.{int(minor) + 1}.0"
+
+
+def release(root: Path) -> None:
+    """Leave root as a release pull request releasing every member and the protocol would: each
+    manifest version bumped, and the recorded protocol version set to the protocol's new one."""
+    edit_json(root, MANIFEST, lambda m: m.update({path: next_minor(v) for path, v in m.items()}))
+    (root / PROTOCOL_RECORD).write_text(
+        json.dumps({"version": released(root)}) + "\n", encoding="utf-8"
+    )
+
+
+@pytest.fixture(params=["as-is", "released"])
+def copy(tmp_path: Path, request: pytest.FixtureRequest) -> Path:
+    """The files the check reads, copied from the repository, and then, for "released", as a
+    release pull request leaves them, so no test can assume the versions on main (#188)."""
     for name in ("pyproject.toml", CONFIG, MANIFEST, LOCK):
         shutil.copy(REPO / name, tmp_path / name)
     for path in release_config.members(REPO):
@@ -26,6 +42,8 @@ def copy(tmp_path: Path) -> Path:
         shutil.copy(REPO / path / "pyproject.toml", tmp_path / path / "pyproject.toml")
     (tmp_path / PROTOCOL_RECORD).parent.mkdir(parents=True)
     shutil.copy(REPO / PROTOCOL_RECORD, tmp_path / PROTOCOL_RECORD)
+    if request.param == "released":
+        release(tmp_path)
     return tmp_path
 
 
@@ -34,6 +52,12 @@ def edit_json(root: Path, name: str, change: Callable[[dict[str, Any]], None]) -
     data: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
     change(data)
     path.write_text(json.dumps(data), encoding="utf-8")
+
+
+def released(root: Path) -> str:
+    """The protocol's version in root's manifest: the one the check's messages name."""
+    version: str = json.loads((root / MANIFEST).read_text(encoding="utf-8"))[PROTOCOL]
+    return version
 
 
 def group(config: dict[str, Any]) -> list[str]:
@@ -223,8 +247,8 @@ def test_a_protocol_entry_with_no_extra_files_is_named(copy: Path) -> None:
 def test_a_missing_record_is_named_with_the_manifests_version(copy: Path) -> None:
     (copy / PROTOCOL_RECORD).unlink()
     assert release_config.problems(copy) == [
-        f'{PROTOCOL_RECORD} is missing: add it, holding {{"version": "0.0.0"}}, the protocol\'s '
-        f"version in {MANIFEST}."
+        f'{PROTOCOL_RECORD} is missing: add it, holding {{"version": "{released(copy)}"}}, the '
+        f"protocol's version in {MANIFEST}."
     ]
 
 
@@ -237,17 +261,21 @@ def test_a_record_that_doesnt_hold_only_a_version_is_named(copy: Path, content: 
     (copy / PROTOCOL_RECORD).write_bytes(content)
     assert release_config.problems(copy) == [
         f'{PROTOCOL_RECORD} must hold only {{"version": "<version>"}}: set it to '
-        f'{{"version": "0.0.0"}}, the protocol\'s version in {MANIFEST}.'
+        f'{{"version": "{released(copy)}"}}, the protocol\'s version in {MANIFEST}.'
     ]
 
 
 def test_a_record_that_differs_from_the_manifest_names_both_files_and_versions(
     copy: Path,
 ) -> None:
-    (copy / PROTOCOL_RECORD).write_bytes(b'{"version": "0.2.0"}\n')
+    manifest = released(copy)
+    major = int(manifest.split(".")[0])
+    different = f"{major + 1}.0.0"
+    assert different != manifest
+    (copy / PROTOCOL_RECORD).write_text(json.dumps({"version": different}), encoding="utf-8")
     assert release_config.problems(copy) == [
-        f"{PROTOCOL_RECORD} records protocol 0.2.0, but {MANIFEST} has 0.0.0: a protocol "
-        "release pull request sets it. To correct it by hand, set it to 0.0.0."
+        f"{PROTOCOL_RECORD} records protocol {different}, but {MANIFEST} has {manifest}: a "
+        f"protocol release pull request sets it. To correct it by hand, set it to {manifest}."
     ]
 
 
