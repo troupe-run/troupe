@@ -19,6 +19,7 @@ touched them.
 - [troupe](https://github.com/troupe-run/troupe/blob/main/packages/troupe/CHANGELOG.md)
 - [troupe-artifacts-local](https://github.com/troupe-run/troupe/blob/main/packages/troupe-artifacts-local/CHANGELOG.md)
 - [troupe-identity-local](https://github.com/troupe-run/troupe/blob/main/packages/troupe-identity-local/CHANGELOG.md)
+- [troupe-run](https://github.com/troupe-run/troupe/blob/main/packages/troupe-run/CHANGELOG.md), the package you install
 - [troupe-stage-local](https://github.com/troupe-run/troupe/blob/main/packages/troupe-stage-local/CHANGELOG.md)
 - [troupe-store-text](https://github.com/troupe-run/troupe/blob/main/packages/troupe-store-text/CHANGELOG.md)
 - [troupe-vcs-files](https://github.com/troupe-run/troupe/blob/main/packages/troupe-vcs-files/CHANGELOG.md)

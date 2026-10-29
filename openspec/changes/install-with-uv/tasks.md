@@ -2,7 +2,7 @@
 
 ## 1. The bundle package (design D1, D2, D6)
 
-- [ ] 1.1 Write the bundle's contents tests first, in `scripts/tests/workspace/test_bundle.py`. Each test's name says
+- [x] 1.1 Write the bundle's contents tests first, in `scripts/tests/workspace/test_bundle.py`. Each test's name says
   exactly what it checks:
   - `troupe-run`'s dependencies are exactly `troupe` plus every other workspace member, read from the root
     `pyproject.toml`'s member globs. The failure names each missing or extra name and `packages/troupe-run/pyproject.toml`.
@@ -11,7 +11,7 @@
 
   Verify: run `uv run pytest scripts/tests/workspace/test_bundle.py` and see it fail, because `packages/troupe-run/`
   doesn't exist yet.
-- [ ] 1.2 Create `packages/troupe-run/`:
+- [x] 1.2 Create `packages/troupe-run/`:
   - `pyproject.toml`: `troupe-run`, `0.0.1.dev0`, the shared `requires-python`, the dependencies from D1 by bare
     name, `troupe = "troupe.cli:main"`, `uv_build` as core's;
   - `LICENSE` (copied);
@@ -21,12 +21,13 @@
   Verify: `uv sync` succeeds, and the 1.1 tests pass. Adding a scratch member under `packages/` without the
   dependency fails the first test, naming it. Listing `troupe-vcs-git` in core's dependencies fails the second test.
   Both scratch changes are then removed.
-- [ ] 1.3 Wire the member in:
+- [x] 1.3 Wire the member in:
   - the root `pyproject.toml`'s `[tool.uv.sources]`, plus the tool lists that name every package (ruff `src`, mypy
     `files` and `mypy_path`, import-linter `root_packages`);
   - `release-please-config.json` and its `troupe` linked group, with the `uv.lock` extra-file as the others have;
   - `.release-please-manifest.json` at `"0.0.0"`;
-  - a `troupe_run` scope in `scripts/check-paths.toml`, with the tests `uv run scripts/check_paths_reach.py` prints;
+  - a `run` scope in `scripts/check-paths.toml` (the reach tool's name for `troupe-run`), with the tests
+    `uv run scripts/check_paths_reach.py` prints;
   - `docs/backstage/changelog.md`, which lists its changelog under troupe.
 
   Verify: `uv run scripts/check.py` passes, including the release configuration's, Python bounds' and path scopes'

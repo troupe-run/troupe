@@ -22,7 +22,7 @@ paths = ["docs/**", "contributing/**", "plugins/runner-scripted/README.md"]
 # source, and scripts/tests/test_check_paths_reach.py fails a full run when a `tests` list disagrees with it: run
 # `uv run scripts/check_paths_reach.py` for the lists to declare.
 
-# Reached by core's artifacts loader.
+# Reached by core's artifacts loader, and through the bundle by its tests (scripts/tests/workspace).
 [scopes.artifacts_local]
 paths = [
     "packages/troupe-artifacts-local/src/**",
@@ -30,9 +30,10 @@ paths = [
     "packages/troupe-artifacts-local/README.md",
     "packages/troupe-artifacts-local/LICENSE",
 ]
-tests = ["packages/troupe/tests/**", "packages/troupe-artifacts-local/tests/**"]
+tests = ["packages/troupe/tests/**", "packages/troupe-artifacts-local/tests/**", "scripts/tests/workspace/**"]
 
-# Reached by core's identity loader, which the store-text and stage-local suites use.
+# Reached by core's identity loader, which the store-text and stage-local suites use, and through the bundle by its
+# tests (scripts/tests/workspace).
 [scopes.identity_local]
 paths = [
     "packages/troupe-identity-local/src/**",
@@ -45,9 +46,10 @@ tests = [
     "packages/troupe-identity-local/tests/**",
     "packages/troupe-stage-local/tests/**",
     "packages/troupe-store-text/tests/**",
+    "scripts/tests/workspace/**",
 ]
 
-# Reached by core's stages loader.
+# Reached by core's stages loader, and through the bundle by its tests (scripts/tests/workspace).
 [scopes.stage_local]
 paths = [
     "packages/troupe-stage-local/src/**",
@@ -55,7 +57,7 @@ paths = [
     "packages/troupe-stage-local/README.md",
     "packages/troupe-stage-local/LICENSE",
 ]
-tests = ["packages/troupe/tests/**", "packages/troupe-stage-local/tests/**"]
+tests = ["packages/troupe/tests/**", "packages/troupe-stage-local/tests/**", "scripts/tests/workspace/**"]
 
 # Reached by core's store loader, which the stage-local suite uses, and named by the flake campaign's selection
 # (scripts/tests/workspace).
@@ -110,8 +112,18 @@ tests = [
     "scripts/tests/workspace/**",
 ]
 
+# The bundle (install-with-uv design D1): it holds no code, and its pyproject.toml, which says what it bundles, runs the
+# full check. Reached by core's suite, and named by the bundle's tests (scripts/tests/workspace).
+[scopes.run]
+paths = [
+    "packages/troupe-run/src/**",
+    "packages/troupe-run/README.md",
+    "packages/troupe-run/LICENSE",
+]
+tests = ["packages/troupe/tests/**", "scripts/tests/workspace/**"]
+
 # Started as a subprocess by the core suite (the host, conformance and perform tests), and its fixtures replayed by the
-# scripted runner's and core's tests.
+# scripted runner's and core's tests. Reached through the bundle by its tests (scripts/tests/workspace).
 [scopes.runner_claude_code]
 paths = [
     "plugins/runner-claude-code/src/**",
@@ -126,6 +138,7 @@ tests = [
     "packages/troupe-artifacts-local/tests/**",
     "packages/troupe-store-text/tests/**",
     "plugins/runner-claude-code/tests/**",
+    "scripts/tests/workspace/**",
 ]
 
 # Started as a subprocess by the core suite, and its schemas read through core's protocol_schemas helper. Its README
@@ -150,6 +163,7 @@ tests = [
 [scopes.scripts]
 paths = [
     "scripts/benchmark_event_store.py",
+    "scripts/bundle.py",
     "scripts/check_paths_reach.py",
     "scripts/check_range.py",
     "scripts/check_result.py",
