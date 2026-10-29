@@ -44,10 +44,11 @@ None.
 
 ### Modified Capabilities
 
-- `config`: "A merge combines each line's net change" says that where no line's change is left at a value, the
-  history before those lines works it out by the same rule. It gains two scenarios: a conflict after a settle shows the
-  value the settle left, and lines after a settle that each change a value and change it back leave the value the
-  settle left, both in every order the events arrive in.
+- `config`: "A merge combines each line's net change" says that a line whose first changes start from different
+  values counts as changing the value, with a scenario for it. A new requirement says that where no line's change is
+  left at a value, the history before those lines works it out by the same rule. Its two scenarios are a conflict
+  after a settle showing the value the settle left, and lines after a settle that each change a value and change it
+  back leaving that value, both in every order the events arrive in.
 
 ## Impact
 

@@ -99,6 +99,22 @@ def test_the_order_events_arrive_in_doesnt_change_the_result(repo: Repo) -> None
     assert merge([*common, first, second]).config == merge([*common, second, first]).config
 
 
+def test_a_line_whose_first_changes_start_from_different_values_conflicts(repo: Repo) -> None:
+    on(repo, "feature", [(CHARACTER, "New.")])
+    repo.git("branch", "other", "feature")
+    on(repo, "feature", [(CHARACTER, "Other.")])
+    on(repo, "other", [(CHARACTER, "Third.")])
+    on(repo, "main", [(CHARACTER, UNSET)])
+    repo.git("merge", "-q", "--no-edit", "other")
+    assert config_of(repo).conflicts != ()  # "Third." from "New." against none from the base's text
+    set_config(repo, [(CHARACTER, "New.")])  # settles them, resolving to the new text
+    merged = merged_feature(repo)
+    assert [c.paths for c in merged.conflicts] == [(tuple(CHARACTER),)]
+
+
+# Requirement: The history before the lines works out a value no line's change is left at
+
+
 def _settled_fork(repo: Repo) -> None:
     """``feature`` sets the character to new text, ``main`` to other text and back; main merges
     feature, a change to ``reviewer`` settles the fork, and ``feature`` starts again from there."""
@@ -130,19 +146,6 @@ def test_lines_after_a_settle_that_change_a_value_back_leave_the_value_the_settl
     merged = merged_feature(repo)
     assert merged.conflicts == ()
     assert _value(merged, CHARACTER) == "New."
-
-
-def test_a_line_whose_first_changes_start_from_different_values_conflicts(repo: Repo) -> None:
-    on(repo, "feature", [(CHARACTER, "New.")])
-    repo.git("branch", "other", "feature")
-    on(repo, "feature", [(CHARACTER, "Other.")])
-    on(repo, "other", [(CHARACTER, "Third.")])
-    on(repo, "main", [(CHARACTER, UNSET)])
-    repo.git("merge", "-q", "--no-edit", "other")
-    assert config_of(repo).conflicts != ()  # "Third." from "New." against none from the base's text
-    set_config(repo, [(CHARACTER, "New.")])  # settles them, resolving to the new text
-    merged = merged_feature(repo)
-    assert [c.paths for c in merged.conflicts] == [(tuple(CHARACTER),)]
 
 
 # Requirement: Differing net changes to a value are a conflict between whole changes
