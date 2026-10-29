@@ -5,9 +5,8 @@
 ### Requirement: Every workspace member is configured for release
 Every workspace member SHALL appear in the release configuration and the version manifest, and each package under
 `packages/` SHALL be in the linked group. A missing member SHALL fail the repository's check, and the failure
-SHALL name the member and the file to add it to. When a member or the protocol is missing from the version manifest,
-the failure SHALL NOT suggest a version: it SHALL say to restore the version the component last released, its latest
-`<component>-v*` tag, and that `0.0.0` is right only when no such tag exists.
+SHALL name the member and the file to add it to. For an entry missing from the version manifest, member or protocol,
+the fix SHALL be the version of its latest `<component>-v*` tag, or `0.0.0` only if it has none, never a guess.
 
 #### Scenario: A new package without release config
 - **WHEN** a package is added under `packages/` but not to the release configuration
