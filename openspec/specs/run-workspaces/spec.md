@@ -49,19 +49,24 @@ was dirty.
 ### Requirement: Files that match HEAD are cloned copy-on-write
 When the worktree is made, each file that is the same in the theatre and in HEAD SHALL be cloned from the theatre
 through the platform seam, copy-on-write where the filesystem supports it. Each other file SHALL be checked out from
-git. The run's start SHALL record the clone mechanisms that were used.
+git. Once the worktree is made, and before the runner starts, the run SHALL record the clone mechanisms that were
+used, and its summary's workspace SHALL show them.
 
 #### Scenario: On APFS
 - **WHEN** a worktree is made on macOS on an APFS volume
-- **THEN** the files that match HEAD are cloned with `clonefile`, and the run's start records that mechanism
+- **THEN** the files that match HEAD are cloned with `clonefile`, and the run records that mechanism
 
 #### Scenario: On a filesystem without clones
 - **WHEN** a worktree is made on a filesystem that can't clone, such as ext4
-- **THEN** the files are copied, the worktree still matches HEAD, and the run's start records `copy`
+- **THEN** the files are copied, the worktree still matches HEAD, and the run records `copy`
 
 #### Scenario: A file edited while it is cloned
 - **WHEN** a file changes in the theatre after troupe found it matched HEAD and before it was cloned
 - **THEN** the worktree's copy is checked out again from HEAD before the runner starts
+
+#### Scenario: Before the worktree is made
+- **WHEN** a worktree run's start is recorded and its worktree isn't made yet
+- **THEN** its summary's workspace names the worktree's path and base, and has no clone mechanisms
 
 ### Requirement: A worktree needs git and a commit
 A worktree run SHALL be refused before anything runs or is recorded when the theatre's VCS can't make a worktree,
@@ -189,7 +194,9 @@ change no file. Once the diff has applied, the run's worktree SHALL be removed.
 
 ### Requirement: Discarding removes the worktree
 `discard` SHALL remove a run's worktree and change nothing in the theatre's working tree. The diff's artifact SHALL be
-kept. Discarding an interrupted run, or a run whose changes are `none`, SHALL remove its worktree too.
+kept. Discarding an interrupted run, a run whose changes are `none`, or a run that couldn't start, SHALL remove its
+worktree too. When the worktree is already gone, or was only partly made, discarding SHALL remove what is left of it,
+including its registration with git, and succeed.
 
 #### Scenario: Discarding a run
 - **WHEN** a person discards a run that changed `src/a.txt`
@@ -203,6 +210,14 @@ kept. Discarding an interrupted run, or a run whose changes are `none`, SHALL re
 #### Scenario: Discarding an interrupted run
 - **WHEN** a person discards a run that is `interrupted`
 - **THEN** its worktree is removed and its discard is recorded
+
+#### Scenario: Discarding a run that couldn't start
+- **WHEN** a worktree run's worktree was made, and the run ended `could-not-start` before its runner started
+- **THEN** its changes are `uncaptured`, with the worktree's path, and discarding it removes the worktree
+
+#### Scenario: Discarding a run whose worktree is gone
+- **WHEN** a person discards a run whose worktree directory doesn't exist
+- **THEN** the discard succeeds and is recorded, and git has no worktree registered at its path
 
 ### Requirement: Accepting and discarding are recorded, and final
 Accepting or discarding a run's changes SHALL be recorded on the run's stream with the person who did it as the
@@ -271,3 +286,22 @@ timeout SHALL fail, naming the operation and the timeout.
 #### Scenario: A slow checkout
 - **WHEN** making a worktree takes longer than its announce time
 - **THEN** the person is told what troupe is waiting for and for how long
+
+### Requirement: Every worktree troupe makes is named by an event
+A worktree run's start, naming the worktree's path, SHALL be recorded before any part of the worktree is made. So a
+run's worktree, whole or partly made, SHALL always belong to a run that `status` shows and `discard` can name, however
+`perform` stops.
+
+#### Scenario: Killed while the worktree is being made
+- **WHEN** a worktree run's `perform` is killed while git is making its worktree
+- **THEN** `status` shows the run as `interrupted`, with its changes `uncaptured` and the worktree's path
+- **AND** discarding the run removes whatever part of the worktree was made, and its registration with git
+
+#### Scenario: Killed before the runner sent init
+- **WHEN** a worktree run's `perform` is killed after its worktree is made and before its runner sends `init`
+- **THEN** `status` shows the run as `interrupted`, with its changes `uncaptured` and the worktree's path
+- **AND** discarding the run removes the worktree
+
+#### Scenario: Killed before the worktree was begun
+- **WHEN** a worktree run's `perform` is killed after its start is recorded and before git begins making its worktree
+- **THEN** `status` shows the run as `interrupted`, and discarding it succeeds and records the discard
