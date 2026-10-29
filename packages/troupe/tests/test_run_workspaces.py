@@ -260,6 +260,41 @@ def test_a_worktree_that_fails_to_fill_ends_the_run_could_not_start_and_leaves_n
     assert "changes" not in history(made, run_id)[-1]
 
 
+def failing_worktree_made(store: EventStore) -> EventStore:
+    """A store whose write of Run.WorktreeMade fails as a full disk would."""
+    original = store.record_with_lineage
+
+    def record(events: Any, lineage: Any, **kwargs: Any) -> Any:  # noqa: ANN401
+        if any(type(event).__qualname__ == "Run.WorktreeMade" for event in events):
+            raise TroupeError("artifact.write-failed", problem="No space.", fix="Free some.")
+        return original(events, lineage, **kwargs)
+
+    store.record_with_lineage = record  # type: ignore[method-assign]
+    return store
+
+
+def test_a_worktree_made_that_cant_be_recorded_ends_the_run_could_not_start_with_that_error(
+    repo: Repo,
+) -> None:
+    made = harness(repo, store_wrapper=failing_worktree_made)
+    asked = configured(made, INIT, OK)
+    with pytest.raises(TroupeError) as caught:
+        made.perform(asked)
+    assert caught.value.code == "artifact.write-failed"
+    [started] = [u for u in made.updates if u.get("kind") == "started"]
+    run_id = started["runId"]
+    assert topics(made, run_id) == ["Run.Started", "Run.Ended"]
+    # The end follows the start with no gap: the run was reloaded, not built on the version that
+    # counted the unrecorded event.
+    assert [e.version for e in made.stores[-1].history(UUID(run_id))] == [1, 2]
+    outcome = history(made, run_id)[-1]["outcome"]
+    assert (outcome["outcome"], outcome["error"]["code"]) == (
+        "could-not-start",
+        "artifact.write-failed",
+    )
+    assert (repo.path / started["worktree"]).is_dir()
+
+
 def test_a_shared_state_that_cant_be_read_ends_the_run_and_keeps_its_worktree(
     repo: Repo,
 ) -> None:
