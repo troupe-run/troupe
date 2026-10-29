@@ -159,6 +159,7 @@
         "topic": {
           "enum": [
             "troupe.core.runs.aggregate:Run.Started",
+            "troupe.core.runs.aggregate:Run.WorktreeMade",
             "troupe.core.runs.aggregate:Run.Reported",
             "troupe.core.runs.aggregate:Run.Ended",
             "troupe.core.runs.aggregate:Run.ChangesAccepted",
@@ -181,6 +182,22 @@
             "properties": {
               "state": {
                 "$ref": "events/run-started.schema.json"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "topic": {
+                "const": "troupe.core.runs.aggregate:Run.WorktreeMade"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "state": {
+                "$ref": "events/run-worktree-made.schema.json"
               }
             }
           }
@@ -302,6 +319,7 @@
           "topic": {
             "enum": [
               "troupe.core.runs.aggregate:Run.Started",
+              "troupe.core.runs.aggregate:Run.WorktreeMade",
               "troupe.core.runs.aggregate:Run.Reported",
               "troupe.core.runs.aggregate:Run.Ended",
               "troupe.core.runs.aggregate:Run.ChangesAccepted",

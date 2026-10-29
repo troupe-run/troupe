@@ -1,6 +1,7 @@
 """The run aggregate refuses a run event out of sequence (spec: runs; perform-status-logs design
-D8)."""
+D8; account-for-every-worktree design D4, D7)."""
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
@@ -13,7 +14,7 @@ from storetesting import files_service, snapshot
 from troupe.core.errors import TroupeError
 from troupe.core.events import EventStore
 from troupe.core.runners.limits import RunLimits
-from troupe.core.runs.aggregate import ENDED, REPORTED, STARTED, Run
+from troupe.core.runs.aggregate import ENDED, REPORTED, STARTED, WORKTREE_MADE, Run
 
 
 def outcome(name: str) -> dict[str, Any]:
@@ -35,16 +36,24 @@ STAGE = {
 }
 
 
-def new_run(run_id: str | None = None) -> Run:
+WORKTREE = {
+    "kind": "worktree",
+    "path": ".troupe/local/worktrees/run",
+    "base": "c" * 40,
+    "dirty": False,
+}
+
+
+def new_run(run_id: str | None = None, workspace: dict[str, Any] | None = None) -> Run:
     return Run(
         run_id=run_id or str(uuid4()),
         actor="tester",
         runner_requested="scripted",
-        runner_reported={"name": "scripted", "version": "0.1.0"},
         stage=STAGE,
         effect_check={"kind": "none"},
         direction="sha256:" + "a" * 64,
         config=["sha256:" + "b" * 64],
+        workspace=workspace or {"kind": "theatre"},
     )
 
 
@@ -138,3 +147,77 @@ def test_any_gap_free_sequence_is_accepted_and_reads_back_in_order(
     assert isinstance(loaded, Run)
     assert loaded.next_seq == count
     assert loaded.ended is end
+
+
+def test_a_worktree_made_after_the_start_is_recorded_before_the_first_report(
+    tmp_path: Path,
+) -> None:
+    store = files_service(tmp_path)
+    run = new_run(workspace=WORKTREE)
+    run.made_worktree(["clonefile"])
+    run.report(0, log(run, 0))
+    store.command(via="cli").record(run.collect_events())
+    history = store.history(UUID(run.run_id))
+    assert [r.topic for r in history] == [STARTED, WORKTREE_MADE, REPORTED]
+    loaded = store.load(UUID(run.run_id))
+    assert isinstance(loaded, Run)
+    assert loaded.worktree_made is True
+
+
+def made(run: Run) -> Run:
+    run.made_worktree(["copy"])
+    return run
+
+
+def reported(run: Run) -> Run:
+    run.report(0, log(run, 0))
+    return run
+
+
+def ended(run: Run) -> Run:
+    run.end(outcome("succeeded"), None)
+    return run
+
+
+@pytest.mark.parametrize(
+    ("workspace", "before", "problem"),
+    [
+        ({"kind": "theatre"}, lambda run: run, "a run in the theatre"),
+        (WORKTREE, made, "already recorded as made"),
+        (WORKTREE, reported, "after its runner reported"),
+        (WORKTREE, ended, "or it ended"),
+    ],
+    ids=["theatre", "twice", "after-a-report", "after-the-end"],
+)
+def test_a_worktree_made_out_of_place_is_refused_as_out_of_sequence(
+    workspace: dict[str, Any], before: Callable[[Run], Run], problem: str
+) -> None:
+    run = before(new_run(workspace=workspace))
+    run.collect_events()
+    with pytest.raises(TroupeError) as caught:
+        run.made_worktree(["copy"])
+    assert caught.value.code == "run.out-of-sequence"
+    assert problem in caught.value.problem
+    assert run.collect_events() == []
+
+
+def test_a_start_recorded_by_an_older_troupe_with_its_reported_runner_replays(
+    tmp_path: Path,
+) -> None:
+    store = files_service(tmp_path)
+    run = Run(
+        run_id=str(uuid4()),
+        actor="tester",
+        runner_requested="scripted",
+        runner_reported={"name": "scripted", "version": "0.1.0"},
+        stage=STAGE,
+        effect_check={"kind": "none"},
+        direction="sha256:" + "a" * 64,
+        config=["sha256:" + "b" * 64],
+        workspace={**WORKTREE, "clones": ["copy"]},
+    )
+    store.command(via="cli").record(run.collect_events())
+    loaded = store.load(UUID(run.run_id))
+    assert isinstance(loaded, Run)
+    assert loaded.runner_reported == {"name": "scripted", "version": "0.1.0"}
+    assert loaded.workspace == {**WORKTREE, "clones": ["copy"]}
