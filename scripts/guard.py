@@ -101,6 +101,11 @@ DEPENDENCY_FILES = frozenset({"package.json", "package-lock.json", "pyproject.to
 """The files, by name in any directory, that an exempt Dependabot branch may change, for the npm
 and uv ecosystems; a github-actions update may change a workflow's uses: lines (design D4). A new
 ecosystem's files are added here."""
+DEPENDABOT_MANIFESTS = frozenset({"package.json", "pyproject.toml"})
+"""The dependency files whose changed lines give a requirement update's versions. The rest of
+DEPENDENCY_FILES are lock files, which aren't read (guard-requirement-range design D3)."""
+VERSION_NUMBER = re.compile(r"\d+(?:\.\d+)*")
+PACKAGE_NAME_SEPARATORS = re.compile(r"[-_.]+")
 WORKFLOWS_DIR = ".github/workflows/"
 USES_LINE = re.compile(r"\s*(?:-\s+)?uses:\s")
 DEPENDABOT_SUBJECT = re.compile(
@@ -109,6 +114,15 @@ DEPENDABOT_SUBJECT = re.compile(
 )
 """Dependabot's subject for one dependency's update: a copy of TITLE in
 scripts/dependabot_issues.py, which the guard can't import (design D5). A test holds them equal."""
+DEPENDABOT_REQUIREMENT = re.compile(
+    r"(?:[a-z]+(?:\([^)]*\))?!?:\s*)?[Uu]pdate\s+(?P<dependency>.+?)\s+requirement"
+    r"(?:\s+from\s+(?P<old>\S+)\s+to\s+(?P<new>\S+))?(?:\s+in\s+(?P<directory>\S+))?"
+)
+"""Dependabot's subject for a requirement update, which moves a range: a copy of REQUIREMENT in
+scripts/dependabot_issues.py. A commit's subject stops at "requirement", so its versions are read
+from its manifest lines (guard-requirement-range design D2, D3)."""
+DEPENDABOT_SPECIFIER = re.compile(r"(?P<operator><=|>=|==|!=|~=|<|>|\^|~|=)?(?P<version>.+)")
+"""One bound of a range: a copy of SPECIFIER in scripts/dependabot_issues.py (design D4)."""
 DEPENDABOT_VERSION = re.compile(r"v?(\d+(?:\.\d+)*)")
 UPDATE_TYPE = re.compile(r"^\s*update-type:\s*(.*?)\s*$", re.MULTILINE)
 EXEMPT_UPDATE_TYPES = frozenset({"version-update:semver-minor", "version-update:semver-patch"})
@@ -3163,9 +3177,69 @@ def dependabot_update_kind(old: str | None, new: str | None) -> str:
     return "unknown"
 
 
+DEPENDABOT_KINDS = ("patch", "minor", "major")
+
+
+def _dependabot_raised(old: str, new: str) -> bool:
+    """Whether ``new`` is a later version than ``old``, both dotted digits, missing parts zero."""
+    a, b = DEPENDABOT_VERSION.fullmatch(old), DEPENDABOT_VERSION.fullmatch(new)
+    if not a or not b:
+        return False
+    left = [int(part) for part in a.group(1).split(".")]
+    right = [int(part) for part in b.group(1).split(".")]
+    width = max(len(left), len(right))
+    return right + [0] * (width - len(right)) > left + [0] * (width - len(left))
+
+
+def dependabot_pairs_kind(pairs: Iterable[tuple[str, str]]) -> str:
+    """A copy of pairs_kind in scripts/dependabot_issues.py: each version that changes is counted
+    by dependabot_update_kind and must go up, and the largest move is the kind. A version that goes
+    down, or none changing, is unknown (guard-requirement-range design D3, D4)."""
+    largest = -1
+    for old, new in pairs:
+        if old == new:
+            continue
+        kind = dependabot_update_kind(old, new)
+        if kind == "unknown" or not _dependabot_raised(old, new):
+            return "unknown"
+        largest = max(largest, DEPENDABOT_KINDS.index(kind))
+    return DEPENDABOT_KINDS[largest] if largest >= 0 else "unknown"
+
+
+def _dependabot_specifiers(text: str) -> dict[str, str] | None:
+    """A range's bounds by operator, or None when a bound isn't an operator and a version, or an
+    operator comes twice."""
+    found: dict[str, str] = {}
+    for part in re.split(r"[,\s]+", text.strip()):
+        match = DEPENDABOT_SPECIFIER.fullmatch(part)
+        if not match or not DEPENDABOT_VERSION.fullmatch(match.group("version")):
+            return None
+        operator = match.group("operator") or ""
+        if operator in found:
+            return None
+        found[operator] = match.group("version")
+    return found
+
+
+def dependabot_range_kind(old: str | None, new: str | None) -> str:
+    """A copy of range_kind in scripts/dependabot_issues.py: the bounds of two ranges, paired by
+    operator, counted by dependabot_pairs_kind. Ranges whose operators differ are unknown (design
+    D4)."""
+    if old is None or new is None:
+        return "unknown"
+    a, b = _dependabot_specifiers(old), _dependabot_specifiers(new)
+    if a is None or b is None or a.keys() != b.keys():
+        return "unknown"
+    return dependabot_pairs_kind((a[operator], b[operator]) for operator in a)
+
+
 def dependabot_subject_kind(subject: str) -> str:
     """The kind of update a Dependabot subject names: patch, minor, major, or unknown when it
-    doesn't name one dependency moving between two versions."""
+    doesn't name one dependency moving between two versions, or a requirement moving between two
+    ranges (guard-requirement-range design D3 step 6)."""
+    requirement = DEPENDABOT_REQUIREMENT.fullmatch(subject.strip())
+    if requirement:
+        return dependabot_range_kind(requirement.group("old"), requirement.group("new"))
     match = DEPENDABOT_SUBJECT.fullmatch(subject.strip())
     if not match:
         return "unknown"
@@ -3189,6 +3263,79 @@ def _only_uses_lines(root: Path, sha: str, path: str) -> bool:
     return bool(changed) and all(USES_LINE.match(line) for line in changed)
 
 
+def _package_name(text: str) -> str:
+    """PEP 503's normal form: lower case, each run of -, _ and . as one -."""
+    return PACKAGE_NAME_SEPARATORS.sub("-", text.lower())
+
+
+def _shown(line: str) -> str:
+    line = line.strip()
+    return line if len(line) <= 120 else line[:117] + "..."
+
+
+def dependabot_line_kind(dependency: str, removed: str, added: str) -> tuple[str, str | None]:
+    """The kind of one manifest line's move under a requirement update, and None; or unknown, and
+    why it can't be read. The lines must be the same but for version numbers, the removed one must
+    name the dependency, and the k-th number of one pairs with the k-th of the other (design D3
+    steps 3 to 5)."""
+    if VERSION_NUMBER.sub("0", removed) != VERSION_NUMBER.sub("0", added):
+        return "unknown", "changes more than version numbers"
+    name = re.escape(_package_name(dependency))
+    # A whole name: no name character, scope (@) or path (/) beside it, so neither @evil/zod nor
+    # zod/extra names zod (review on #221).
+    if not re.search(rf"(?<![a-z0-9@/-]){name}(?![a-z0-9/-])", _package_name(removed)):
+        return "unknown", f"doesn't name {dependency}"
+    pairs = list(zip(VERSION_NUMBER.findall(removed), VERSION_NUMBER.findall(added), strict=True))
+    if any(old != new and _dependabot_raised(new, old) for old, new in pairs):
+        return "unknown", "lowers a version"
+    kind = dependabot_pairs_kind(pairs)
+    return kind, None if kind != "unknown" else "doesn't move a version up"
+
+
+def _changed_hunks(diff: str) -> list[tuple[list[str], list[str]]]:
+    """Each hunk's removed and added lines, in order, from a -U0 diff of one file."""
+    hunks: list[tuple[list[str], list[str]]] = []
+    for line in diff.splitlines():
+        if line.startswith("diff --git "):
+            continue
+        if line.startswith("@@"):
+            hunks.append(([], []))
+        elif hunks and line[:1] == "-":
+            hunks[-1][0].append(line[1:])
+        elif hunks and line[:1] == "+":
+            hunks[-1][1].append(line[1:])
+    return hunks
+
+
+def requirement_commit_kind(root: Path, sha: str, dependency: str) -> tuple[str, str | None]:
+    """A requirement commit's kind, read from the manifest lines it changes, and None; or unknown,
+    and why it can't be read. Its other paths may be only lock files, which aren't read. Removed
+    and added lines pair in order within each hunk, and the largest line's kind is the commit's
+    (design D3 steps 1 to 5)."""
+    paths = git(
+        root, "diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", sha
+    ).splitlines()
+    kinds: list[str] = []
+    for path in paths:
+        name = path.rsplit("/", 1)[-1]
+        if name not in DEPENDENCY_FILES:
+            return "unknown", f"{path} isn't a manifest or lock file"
+        if name not in DEPENDABOT_MANIFESTS:
+            continue
+        diff = git(root, "diff-tree", "-p", "-U0", "--no-commit-id", "--no-color", sha, "--", path)
+        for removed, added in _changed_hunks(diff):
+            if len(removed) != len(added):
+                return "unknown", f"{path} doesn't pair line for line"
+            for old, new in zip(removed, added, strict=True):
+                kind, why = dependabot_line_kind(dependency, old, new)
+                if why is not None:
+                    return "unknown", f"{path} '{_shown(old)}' to '{_shown(new)}' {why}"
+                kinds.append(kind)
+    if not kinds:
+        return "unknown", "it changes no manifest line"
+    return max(kinds, key=DEPENDABOT_KINDS.index), None
+
+
 def non_dependency_paths(root: Path, commits: Iterable[str]) -> list[str]:
     """The paths the commits change that an exempt Dependabot branch may not: anything but a
     modified dependency file, or a modified workflow whose every changed line is a uses: line
@@ -3209,6 +3356,25 @@ def non_dependency_paths(root: Path, commits: Iterable[str]) -> list[str]:
     return bad
 
 
+def requirement_reasons(
+    root: Path, sha: str, subject: str, requirement: re.Match[str]
+) -> list[str]:
+    """Why a requirement commit isn't a minor or patch update, read from its manifest lines; and,
+    when its subject gives ranges too, whether the two readings disagree (design D3 step 6, D5)."""
+    kind, why = requirement_commit_kind(root, sha, requirement.group("dependency"))
+    if why is not None:
+        return [f"{sha[:7]}'s requirement versions can't be read as a minor or patch update: {why}"]
+    reasons = [f"{sha[:7]} ('{subject}') is a major update"] if kind == "major" else []
+    if requirement.group("old") is not None:
+        stated = dependabot_subject_kind(subject)
+        if stated != kind:
+            reasons.append(
+                f"{sha[:7]}'s subject and diff disagree: the subject's ranges are {stated}, "
+                f"its diff {kind}"
+            )
+    return reasons
+
+
 def dependabot_ineligibility(root: Path, commits: Sequence[str]) -> str | None:
     """Why the commits aren't a minor or patch update of dependency files only, or None when they
     are. Each commit's message is read, not the pull request's title, which anyone with write
@@ -3225,8 +3391,10 @@ def dependabot_ineligibility(root: Path, commits: Sequence[str]) -> str | None:
                 f"{sha[:7]} is a merge commit, and Dependabot doesn't make merge commits"
             )
         subject = message.splitlines()[0] if message else ""
-        kind = dependabot_subject_kind(subject)
-        if kind == "unknown":
+        requirement = DEPENDABOT_REQUIREMENT.fullmatch(subject.strip())
+        if requirement:
+            reasons += requirement_reasons(root, sha, subject, requirement)
+        elif (kind := dependabot_subject_kind(subject)) == "unknown":
             reasons.append(
                 f"{sha[:7]}'s subject '{subject}' doesn't give one dependency's versions, so its "
                 "kind of update can't be read"
