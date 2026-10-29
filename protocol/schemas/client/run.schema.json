@@ -94,7 +94,7 @@
           "properties": {
             "requested": {"$ref": "#/$defs/runnerName"},
             "reported": {
-              "description": "The runner's name and version from its init event. Absent: it sent none.",
+              "description": "The runner's name and version from its init event, the run's first reported event. Absent: it sent none.",
               "type": "object",
               "additionalProperties": false,
               "required": ["name", "version"],
@@ -108,7 +108,7 @@
         "stage": {"$ref": "../lineage.schema.json#/$defs/stage"},
         "effectCheck": {"$ref": "#/$defs/effectCheck"},
         "workspace": {
-          "description": "Where the run worked: its own worktree, or the theatre.",
+          "description": "Where the run works: its own worktree, or the theatre. A worktree's clones are absent until it is made.",
           "$ref": "../events/run-started.schema.json#/$defs/workspace"
         },
         "state": {"$ref": "#/$defs/state"},

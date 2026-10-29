@@ -6,6 +6,10 @@ rebuild what it needs from the store, and a later follower can run the same fold
 position in the store's tracking log. A run's state isn't recorded; it is derived (design D11),
 so the summary takes it as an argument. So is the state of a worktree run's changes
 (worktree-stage design D7): pending, accepted, discarded, none or uncaptured.
+
+A run's reported runner is read from its init, its first reported event, and a worktree's clone
+mechanisms from Run.WorktreeMade. A start an older troupe recorded holds both itself, and they're
+read from there (account-for-every-worktree design D3, D4, D7).
 """
 
 from collections.abc import Iterable, Mapping
@@ -21,6 +25,7 @@ from troupe.core.runs.aggregate import (
     ENDED,
     REPORTED,
     STARTED,
+    WORKTREE_MADE,
 )
 
 
@@ -61,6 +66,8 @@ class RunView:
     started_by: dict[str, Any] | None = None
     started_at: str | None = None
     events: int = 0
+    reported: dict[str, Any] | None = None
+    clones: list[str] | None = None
     ended: dict[str, Any] | None = None
     ended_at: str | None = None
     settled: str | None = None
@@ -73,8 +80,14 @@ class RunView:
             self.started = state
             self.started_by = (recording.lineage or {}).get("actor")
             self.started_at = _at(recording)
+        elif recording.topic == WORKTREE_MADE:
+            self.clones = state["clones"]
         elif recording.topic == REPORTED:
             self.events += 1
+            event = state["event"]
+            if state["seq"] == 0 and event.get("type") == "init":
+                runner = event["runner"]
+                self.reported = {"name": runner["name"], "version": runner["version"]}
             if keep_log:
                 self.log.append(logged(self.run_id, state, _at(recording)))
         elif recording.topic == ENDED:
@@ -86,10 +99,14 @@ class RunView:
 
     @property
     def workspace(self) -> dict[str, Any]:
-        """The run's workspace as its start recorded it; a run recorded before runs had
-        workspaces worked in the theatre."""
+        """The run's workspace as its start recorded it, with a worktree's clone mechanisms once
+        it is made; a run recorded before runs had workspaces worked in the theatre."""
         recorded = (self.started or {}).get("workspace")
-        return recorded if isinstance(recorded, dict) else {"kind": "theatre"}
+        if not isinstance(recorded, dict):
+            return {"kind": "theatre"}
+        if self.clones is not None and "clones" not in recorded:
+            return {**recorded, "clones": self.clones}
+        return recorded
 
     @property
     def captured(self) -> dict[str, Any] | None:
@@ -136,7 +153,7 @@ class RunView:
             "runner": _present(
                 {
                     "requested": started["runner_requested"],
-                    "reported": started.get("runner_reported"),
+                    "reported": started.get("runner_reported") or self.reported,
                 }
             ),
             "stage": started["stage"],
