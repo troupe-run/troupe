@@ -88,8 +88,9 @@ def test_a_new_package_without_release_config_is_named(copy: Path) -> None:
         in found
     )
     assert (
-        f"packages/troupe-new (troupe-new) has no version in {MANIFEST}: "
-        'add "packages/troupe-new": "0.0.0".'
+        f'packages/troupe-new (troupe-new) has no version in {MANIFEST}: add "packages/troupe-new" '
+        "at the version it last released, its latest troupe-new-v<version> tag (`git ls-remote "
+        "--tags --sort=-v:refname origin 'troupe-new-v*'`), or at \"0.0.0\" if it has none."
     ) in found
     assert (
         f"troupe-new isn't in the 'troupe' linked group in {CONFIG}: add it to its 'components'."
@@ -97,11 +98,13 @@ def test_a_new_package_without_release_config_is_named(copy: Path) -> None:
     )
 
 
-def test_a_member_missing_from_the_manifest_is_named_with_the_manifest_file(copy: Path) -> None:
+def test_a_member_missing_from_the_manifest_is_named_with_the_file_and_its_tags(copy: Path) -> None:
     edit_json(copy, MANIFEST, lambda m: m.pop("plugins/runner-scripted"))
     assert release_config.problems(copy) == [
         f"plugins/runner-scripted (troupe-runner-scripted) has no version in {MANIFEST}: add "
-        '"plugins/runner-scripted": "0.0.0".'
+        '"plugins/runner-scripted" at the version it last released, its latest '
+        "troupe-runner-scripted-v<version> tag (`git ls-remote --tags --sort=-v:refname origin "
+        "'troupe-runner-scripted-v*'`), or at \"0.0.0\" if it has none."
     ]
 
 
@@ -279,10 +282,14 @@ def test_a_record_that_differs_from_the_manifest_names_both_files_and_versions(
     ]
 
 
-def test_the_protocol_missing_from_the_manifest_is_named(copy: Path) -> None:
+def test_the_protocol_missing_from_the_manifest_is_named_with_the_file_and_its_tags(
+    copy: Path,
+) -> None:
     edit_json(copy, MANIFEST, lambda m: m.pop("protocol"))
     assert release_config.problems(copy) == [
-        f'protocol has no version in {MANIFEST}: add "protocol": "0.0.0".'
+        f'protocol has no version in {MANIFEST}: add "protocol" at the version it last released, '
+        "its latest protocol-v<version> tag (`git ls-remote --tags --sort=-v:refname origin "
+        "'protocol-v*'`), or at \"0.0.0\" if it has none."
     ]
 
 

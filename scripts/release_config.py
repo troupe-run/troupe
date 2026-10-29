@@ -63,7 +63,7 @@ def problems(root: Path) -> list[str]:
         else:
             found.extend(_member_entry_problems(path, name, entry, lock))
         if path not in manifest:
-            found.append(f'{path} ({name}) has no version in {MANIFEST}: add "{path}": "0.0.0".')
+            found.append(_missing_version(path, name))
 
     known = set(workspace) | {PROTOCOL}
     for path in sorted(set(packages) - known):
@@ -79,6 +79,19 @@ def problems(root: Path) -> list[str]:
     found.extend(_record_problems(root, manifest))
     found.extend(_group_problems(config, workspace))
     return found
+
+
+def _missing_version(path: str, component: str) -> str:
+    """The fix for a path missing from the manifest: the version its component last released,
+    which only its tags record, so the message names them instead of guessing a version. The check
+    doesn't read tags, since a clone may not have fetched them (missing-manifest-version design
+    D1); it names the command that asks origin (D2)."""
+    named = path if path == component else f"{path} ({component})"
+    return (
+        f'{named} has no version in {MANIFEST}: add "{path}" at the version it last released, its '
+        f"latest {component}-v<version> tag (`git ls-remote --tags --sort=-v:refname origin "
+        f"'{component}-v*'`), or at \"0.0.0\" if it has none."
+    )
 
 
 def _member_entry_problems(
@@ -129,7 +142,7 @@ def _protocol_problems(entry: dict[str, Any] | None, manifest: dict[str, str]) -
             f"make its 'extra-files' [{json.dumps(RECORD_UPDATE)}]."
         )
     if PROTOCOL not in manifest:
-        found.append(f'{PROTOCOL} has no version in {MANIFEST}: add "{PROTOCOL}": "0.0.0".')
+        found.append(_missing_version(PROTOCOL, PROTOCOL))
     return found
 
 
