@@ -43,9 +43,11 @@
 
   Verify: the tests pass. `uv run scripts/install_check.py` on this branch's `HEAD` installs, prints the version,
   and reports a succeeded scripted run. Afterwards, `uv tool list` and the developer's path are unchanged.
-- [ ] 2.2 Show that the check catches a broken install: in a scratch commit, remove `troupe-runner-scripted` from the
-  bundle's dependencies, run the install check against that commit, and see it fail at the perform step, naming it.
-  Then drop the scratch commit. Record the output in the PR description.
+- [x] 2.2 Show that the check catches a broken install: in a scratch commit, remove `troupe-runner-scripted` from the
+  bundle's dependencies, run the install check against that commit, and see it fail, naming the step. Then drop the
+  scratch commit. Record the output in the PR description. (Done in a throwaway clone. It fails at "define the
+  actor", one step before perform: `troupe config set` checks the options against the runner's published schema,
+  and names the missing `troupe_runner_scripted`.)
 
 ## 3. CI (design D5)
 

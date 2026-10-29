@@ -1,7 +1,8 @@
 """CI's workflow runs the full check on every merge group, so troupe's merge queue always gets a
 `check` to land on (spec: quality-check; ci-on-merge-queue design D1, D2). These tests read the
-workflow's structure, and each fails naming what would skip or narrow the check on the queue. The
-broken copies at the end show each one can fail."""
+workflow's structure, and each fails naming what would skip or narrow the check on the queue. Every
+leg also runs the documented install after a full check (spec: installation; install-with-uv design
+D5). The broken copies at the end show each one can fail."""
 
 from collections.abc import Callable
 from pathlib import Path
@@ -72,6 +73,41 @@ def event_condition_problems(workflow: dict[Any, Any]) -> list[str]:
     return found
 
 
+INSTALL_CHECK = "scripts/install_check.py"
+INSTALL_CONDITION = "${{ needs.changes.outputs['check-args'] == '' }}"
+INSTALL_ARGUMENTS = ("--ref ${{ github.sha }}", "--python ${{ matrix.python }}")
+
+
+def install_step_problems(workflow: dict[Any, Any]) -> list[str]:
+    # spec: installation, "The documented install is checked on every platform" (design D5).
+    steps = workflow["jobs"]["check-legs"]["steps"]
+    found = [step for step in steps if INSTALL_CHECK in str(step.get("run", ""))]
+    if not found:
+        return [
+            f"{CI}'s `check-legs` doesn't run {INSTALL_CHECK}: keep its install-check step, so the "
+            "documented install is checked on every platform and Python."
+        ]
+    problems: list[str] = []
+    for step in found:
+        condition = str(step.get("if", ""))
+        if condition != INSTALL_CONDITION:
+            problems.append(
+                f"{CI}'s install-check step runs on `if: {condition}`: keep `if: "
+                f"{INSTALL_CONDITION}`, so it runs after every full check and no scoped one."
+            )
+        missing = [argument for argument in INSTALL_ARGUMENTS if argument not in step["run"]]
+        if missing:
+            problems.append(
+                f"{CI}'s install-check step doesn't pass {', '.join(missing)}: it must install the "
+                "commit under test, on the leg's Python."
+            )
+    return problems
+
+
+def test_every_check_leg_installs_the_commit_under_test_after_a_full_check() -> None:
+    assert install_step_problems(load(REPO / CI)) == []
+
+
 def test_ci_runs_on_merge_groups() -> None:
     assert merge_group_problems(load(REPO / CI)) == []
 
@@ -117,6 +153,28 @@ LEGS_CONDITION = "    if: ${{ !cancelled() && needs.changes.outputs.scope != 'no
             event_condition_problems,
             "`check-legs` job reads the event",
             id="legs skip merge groups",
+        ),
+        pytest.param(
+            f"        run: uv run {INSTALL_CHECK} --ref ${{{{ github.sha }}}} --python "
+            "${{ matrix.python }}\n",
+            "        run: echo skipped\n",
+            install_step_problems,
+            f"`check-legs` doesn't run {INSTALL_CHECK}",
+            id="install check removed",
+        ),
+        pytest.param(
+            f"        if: {INSTALL_CONDITION}\n",
+            "        if: ${{ always() }}\n",
+            install_step_problems,
+            "install-check step runs on `if: ${{ always() }}`",
+            id="install check on scoped runs",
+        ),
+        pytest.param(
+            " --ref ${{ github.sha }}",
+            "",
+            install_step_problems,
+            "doesn't pass --ref ${{ github.sha }}",
+            id="install check of HEAD rather than the commit under test",
         ),
     ],
 )
