@@ -19,5 +19,5 @@ vcs = "troupe_identity_local:VcsSource"
 "os-login" = "troupe_identity_local:OsLoginSource"
 
 [build-system]
-requires = ["uv_build>=0.13.0,<0.14"]
+requires = ["uv_build>=0.13.5,<0.14"]
 build-backend = "uv_build"
