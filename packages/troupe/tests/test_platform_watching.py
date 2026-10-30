@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pytest
 
+from storetesting import SETTLE
 from troupe.platform import watching
 from troupe.platform.errors import WatchDirectoryMissingError, WatchUnavailableError
 from troupe.platform.watching import DirectoryWatch, watch
@@ -69,12 +70,6 @@ def drain(watched: DirectoryWatch, quiet: float = 0.2) -> None:
     reported as more than one wake."""
     while watched.wait(quiet):
         pass
-
-
-SETTLE = 1.5
-"""Seconds of quiet that end a new watch's spurious wakes. FSEvents reports a directory made just
-before it is watched: measured locally in 26 of 30 fresh directories, up to 0.49 s after the watch
-started, and CI runners are slower (a 0.3 s settle failed there once)."""
 
 
 def settled(directory: Path) -> DirectoryWatch:

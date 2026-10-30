@@ -2,17 +2,17 @@
 
 ## 1. Reproduce
 
-- [ ] 1.1 Ask the owner before the load run. Then run the flake hunt on the two quiet tests with CPUs kept busy, e.g. `uv run scripts/flake_hunt.py --load <cpus> --rounds <n> -k "reads_no_segment" packages/troupe/tests/test_run_queries.py packages/troupe-store-text/tests/test_processes.py`, and keep each failure's full assertion. Temporarily record, in the run-queries test's failure message, when each look came relative to the follower sending seq 1 (a local, uncommitted change). Verify: at least one failure is captured, and its looks fit cause 1, 2 or 3 of the proposal. If none fails in a reasonable budget, or a captured look fits none of them, stop and report to the owner with the hunt's output before going on
+- [x] 1.1 Ask the owner before the load run, then run the flake hunt on the quiet tests with CPUs kept busy, with timing instrumentation in the run-queries test's failure message (local, uncommitted). Outcome: **not reproduced**. `--load 8 --rounds 40 -k reads_no_segment` (both tests, 1 worker) passed 40 of 40 rounds; `--workers 4 --load 8 --rounds 40` on the whole of both files, for file-system churn, passed 160 of 160 (load average up to 20 on 10 cores). The owner chose to go ahead on the code reading in the proposal, without a captured failure; the instrumentation was reverted
 
 ## 2. Fix
 
-- [ ] 2.1 In `packages/troupe/tests/test_run_queries.py`, add the bounded waits (design D1–D3): wait until `harness.updates` holds the event with seq 1, then until no look for `SETTLE` (1.5 s, docstring pointing at `test_platform_watching.py`'s), each giving up after 30 s with a message naming the condition; then clear `looks`, wait 2 s and assert `looks == []` as now. Verify: `uv run pytest packages/troupe/tests/test_run_queries.py -k reads_no_segment` passes
-- [ ] 2.2 In `packages/troupe-store-text/tests/test_processes.py`, replace the fixed 2 s settle in `test_a_listened_store_reads_no_segment_while_nothing_is_recorded` with the same settle-until-quiet wait (design D2, D3). Verify: `uv run pytest packages/troupe-store-text/tests/test_processes.py -k reads_no_segment` passes
-- [ ] 2.3 Check each test still fails for the defect it's named for: temporarily make the follower (or the store's subscription) look at segments every 0.5 s while nothing is recorded, and confirm both tests fail with the settle wait's message; then revert. Verify: both failures seen, and `git diff` shows only the test changes afterwards
+- [x] 2.1 In `packages/troupe/tests/test_run_queries.py`, add the bounded waits (design D1–D3): wait until `harness.updates` holds the event with seq 1, then until no look for `SETTLE` (1.5 s, moved to `storetesting.py` from `test_platform_watching.py`, which now imports it), each giving up after 30 s with a message naming the condition; then clear `looks`, wait 2 s and assert `looks == []` as now. Verify: `uv run pytest packages/troupe/tests/test_run_queries.py -k reads_no_segment` passes
+- [x] 2.2 In `packages/troupe-store-text/tests/test_processes.py`, replace the fixed 2 s settle in `test_a_listened_store_reads_no_segment_while_nothing_is_recorded` with the same settle-until-quiet wait (design D2, D3). Verify: `uv run pytest packages/troupe-store-text/tests/test_processes.py -k reads_no_segment` passes
+- [x] 2.3 Check each test still fails for the defect it's named for: temporarily set `check_seconds` to 0.5 s in both tests, so the store looks at segments every 0.5 s while nothing is recorded, and confirm both tests fail with the settle wait's message; then revert. Verify: both failures seen, and `git diff` shows only the test changes afterwards
 
 ## 3. Verify under load
 
-- [ ] 3.1 With the owner's go-ahead, re-run the hunt from 1.1 with the same load and at least as many rounds. Verify: no failure, and record the rounds, load and timings in the PR description
+- [x] 3.1 ~~Re-run the hunt from 1.1 after the fix.~~ Dropped with the owner's agreement: the hunt never failed before the fix, so passing after it shows nothing. CI on Linux, macOS and Windows is the check, with the done-when the issue names
 - [ ] 3.2 Run `uv run scripts/check.py`, and verify all gates pass
 
 ## Workflow follow-up

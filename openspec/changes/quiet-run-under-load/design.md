@@ -40,8 +40,9 @@ has read the run since its last write.
 
 Both tests then wait until no look has happened for a settle period, by polling the `looks` list the tests already
 keep: the clock restarts at each look. Only then do they clear `looks` and count over 2 s. The settle period is
-1.5 s, the value `test_platform_watching.py`'s `SETTLE` already uses for spurious wakes. Each test package has its
-own copy with a docstring pointing at that one, since the test packages don't import each other's test modules.
+1.5 s, the value `test_platform_watching.py`'s `SETTLE` already used for spurious wakes. Both test packages already
+import `packages/troupe/tests/storetesting.py`, so `SETTLE` moves there with the two waits (`wait_until`, `settle`), and
+the watch tests import it: one named place for the value.
 
 - *Alternative: drain the watch directly*, as `settled()` does in the watch tests. The follower's watch lives inside
   the store and the follower's thread, so the test can't reach it without reaching into internals.
@@ -59,8 +60,8 @@ message that says so.
 - [Settling until quiet could hide a store that reads segments regularly but more slowly than every 1.5 s] → The
   2 s window that follows still catches anything at least once every 2 s, as now. Polling at the `QUIET` intervals
   (60 s) was never in the window's reach, before or after.
-- [The reading in "Why" could be wrong, and the failure come from something else] → Tasks 1.x reproduce the
-  failure under load and capture the assertion before changing anything. If the captured looks don't fit causes
-  1–3 (for example, regular looks after the follower has gone quiet), the change stops and raises it with the
-  owner (proposal, "Impact").
+- [The reading in "Why" could be wrong, and the failure come from something else] → Task 1.1 tried to reproduce the
+  failure under load first. It didn't reproduce in 200 loaded runs, and the owner chose to go ahead on the code
+  reading. The fix doesn't depend on which of causes 1–3 it was, and task 2.3 shows the tests still catch a store
+  that keeps reading.
 - [Reproducing it loads the machine] → Ask the owner before the load run, per the standing preference.
