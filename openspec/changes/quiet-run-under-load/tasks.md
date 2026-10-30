@@ -13,7 +13,7 @@
 ## 3. Verify under load
 
 - [x] 3.1 ~~Re-run the hunt from 1.1 after the fix.~~ Dropped with the owner's agreement: the hunt never failed before the fix, so passing after it shows nothing. CI on Linux, macOS and Windows is the check, with the done-when the issue names
-- [ ] 3.2 Run `uv run scripts/check.py`, and verify all gates pass
+- [x] 3.2 Run `uv run scripts/check.py`, and verify all gates pass (at 63c9fac: 2920 passed, 14 skipped, all gates in 114 s)
 
 ## Workflow follow-up
 
