@@ -71,6 +71,8 @@ CODES: dict[str, ExitCode] = {
     "environment.policy-invalid": ExitCode.FAILURE,
     # perform, status and logs (perform-status-logs design D15). contributing/runs.md lists them.
     "policy.invalid-value": ExitCode.FAILURE,
+    # Settings (mark-config-resolved design D1). contributing/config.md lists it.
+    "settings.invalid-value": ExitCode.FAILURE,
     "stage.unknown": ExitCode.FAILURE,
     "stage.effects-unenforced": ExitCode.FAILURE,
     "theatre.not-found": ExitCode.FAILURE,

@@ -303,3 +303,85 @@ def test_a_config_set_that_doesnt_write_the_file_is_refused_naming_flush_and_rec
     assert "Run troupe flush" in err
     assert _events(repo) == events
     assert not (repo.path / ".troupe/actors/reviewer.yaml").exists()
+
+
+# With mark_merges_resolved unset, git's index is left alone (mark-config-resolved task 1.1).
+
+
+def _index(repo: Repo) -> str:
+    return repo.git("ls-files", "-s")
+
+
+def test_the_config_set_resolving_config_leaves_both_conflicted_files_unmerged_when_unset(
+    repo: Repo,
+) -> None:
+    _branches(
+        repo,
+        BASE,
+        [STEPS % 1, "actors.tester.character=One."],
+        ['actors.tester.expect=["out/other.txt"]', "actors.tester.character=Two."],
+    )
+    assert _merge(repo) != 0
+    index = _index(repo)
+    code, _, err = cli("config", "set", "actors.tester.character=Both.")
+    assert code == 0, err
+    assert sorted(_unmerged(repo)) == [MD, YAML]
+    assert _index(repo) == index
+
+
+def test_the_config_set_rewriting_a_committed_clean_merge_leaves_the_index_unchanged_when_unset(
+    repo: Repo,
+) -> None:
+    _branches(
+        repo,
+        [*BASE, f"actors.tester.character={CHARACTER}"],
+        [f"actors.tester.character={CHARACTER.replace('First', 'Edited first')}"],
+        [f"actors.tester.character={CHARACTER.replace('Third', 'Edited third')}"],
+    )
+    assert _merge(repo) == 0
+    index = _index(repo)
+    code, _, err = cli("config", "set", "actors.tester.character=Both.")
+    assert code == 0, err
+    assert _index(repo) == index
+
+
+def _hand_edited_side(repo: Repo) -> None:
+    """tester.yaml conflicted, with feature's side edited by hand and committed."""
+    ok("config", "set", *BASE)
+    repo.commit_all("base")
+    repo.git("switch", "-q", "-c", "feature")
+    yaml = repo.path / YAML
+    yaml.write_bytes(yaml.read_bytes().replace(b"exit: 0", b"exit: 7"))
+    repo.commit_all("feature, by hand")
+    repo.git("switch", "-q", "main")
+    ok("config", "set", 'actors.tester.expect=["out/other.txt"]')
+    repo.commit_all("main")
+    assert _merge(repo) != 0
+    assert _unmerged(repo) == [YAML]
+
+
+def test_flush_force_past_a_hand_edited_side_leaves_the_file_unmerged_when_unset(
+    repo: Repo,
+) -> None:
+    _hand_edited_side(repo)
+    index = _index(repo)
+    code, _, err = cli("flush", "--force")
+    assert code == 0, err
+    assert (repo.path / YAML).read_bytes() == render(_merged_config())["actors/tester.yaml"]
+    assert _unmerged(repo) == [YAML]
+    assert _index(repo) == index
+
+
+def test_flush_with_no_merge_leaves_the_index_byte_identical(repo: Repo) -> None:
+    ok("config", "set", *BASE)
+    repo.commit_all("base")
+    yaml = repo.path / YAML
+    older = yaml.read_bytes()
+    ok("config", "set", STEPS % 1)
+    repo.commit_all("newer")
+    yaml.write_bytes(older)  # an older version troupe wrote, so flush rewrites it
+    index = _index(repo)
+    code, out, err = cli("flush")
+    assert code == 0, err
+    assert YAML in out
+    assert _index(repo) == index

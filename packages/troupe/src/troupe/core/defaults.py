@@ -79,6 +79,17 @@ ALLOW_UNENFORCED_LOCAL_STAGE = False
 """Whether a stage that can't enforce an actor's declared effects may run it anyway (decision #3,
 option C). Off by default: the local stage then refuses every actor."""
 
+ALLOW_MARK_MERGES_RESOLVED = True
+"""Whether troupe may mark a config file it rewrote from a conflicted merge resolved in git's index,
+when the setting mark_merges_resolved asks it to (mark-config-resolved design D2). On by default:
+policy can only forbid it."""
+
+# Settings (spec: settings; mark-config-resolved design D1). contributing/config.md lists them.
+
+MARK_MERGES_RESOLVED = False
+"""Whether a config file troupe rewrites from a conflicted merge of its own versions is also marked
+resolved in git's index, as git add would, so the person only commits the merge (#156)."""
+
 # Stages (spec: stages; perform-status-logs design D5). Interim: config chooses an actor's stage.
 
 STAGE = "local"

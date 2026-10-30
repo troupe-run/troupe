@@ -147,6 +147,7 @@ and never from a command's request, so no client can loosen them.
 | Setting | Default | What it allows |
 |---|---|---|
 | `allow_unenforced_local_stage` | `false` | Running an actor on a stage that can't enforce its declared effects, such as the local stage |
+| `allow_mark_merges_resolved` | `true` | Marking a rewritten conflicted config file resolved in git's index, when the setting `mark_merges_resolved` is on ([config.md](config.md#settings)) |
 
 **Setting it, for now.** Until config brings policy files (#8), the only way to set a policy is an environment
 variable: `TROUPE_POLICY_` and the setting's name in capitals. This is interim, and config replaces it.
@@ -200,6 +201,7 @@ Every limit and default runs use has its default in `troupe.core.defaults`.
 | `LOGS_LEASE_CHECK_SECONDS` | 1 | How often `troupe logs --follow` checks that the run it follows is still running |
 | `STATUS_RUNS_LIMIT` | 20 | How many runs `troupe status` lists when it isn't given `--limit` |
 | `ALLOW_UNENFORCED_LOCAL_STAGE` | false | The policy setting `allow_unenforced_local_stage`, when nothing sets it |
+| `ALLOW_MARK_MERGES_RESOLVED` | true | The policy setting `allow_mark_merges_resolved`, when nothing sets it |
 | `WORKSPACE_ANNOUNCE_AFTER_SECONDS` | 2 | How long a worktree operation runs before `workspace.waiting` says so |
 | `UNCOMMITTED_NOTICE_PATHS` | 20 | How many of the paths that differ from HEAD `workspace.uncommitted-unseen` names |
 | `WORKSPACE` | `worktree` | Where a run works when its actor doesn't set `workspace` |

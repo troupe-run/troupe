@@ -80,6 +80,28 @@ git 2.38. Matching ort with `merge-file` needs `--diff-algorithm`, which arrived
 git is older. A merge edited before it was committed, or made with options `merge-tree` didn't get, doesn't
 reproduce, so it's refused as a hand edit is. The files adapter reports no merges.
 
+## Settings
+
+A setting is a person's preference, which policy bounds. troupe reads every setting that isn't policy through one
+seam, `troupe.core.settings` (spec: settings), shaped like policy's (`troupe.core.policy`, see
+[runs.md](runs.md#policy)): each setting has its default in `troupe.core.defaults`, and each value read says where it
+came from (`env` or `default`). Nothing else reads a setting, and no request carries one.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `mark_merges_resolved` | `false` | Marks a config file troupe rewrote from a conflicted merge of its own versions resolved in git's index |
+
+**Setting one, for now.** Until policy files and house config bring levels (#71, #2), the only source above the
+default is the environment: `TROUPE_SETTING_` and the setting's name in capitals. The value must be exactly `true` or
+`false`. Anything else fails the command with `settings.invalid-value` and never falls back to the default; unset or
+empty means the default.
+
+Its default, in `troupe.core.defaults`:
+
+| Setting | Default | What it is |
+|---|---|---|
+| `MARK_MERGES_RESOLVED` | false | The setting `mark_merges_resolved`, when nothing sets it |
+
 ## Notices and errors
 
 | Code | When |
@@ -88,6 +110,7 @@ reproduce, so it's refused as a hand edit is. The files adapter reports no merge
 | `config.conflict` | Branches' config changes conflict, so config can't be used until they're resolved |
 | `config.file-not-troupes` | A config file isn't one troupe wrote, so it won't be replaced. A conflicted file with a side troupe didn't write names that side and the side to take; a file git merged from troupe's versions, met by a command other than `troupe flush` or the `config set` that writes it, names `troupe flush` |
 | `config.unknown-file` | A file in a config directory matches no kind of config file |
+| `settings.invalid-value` | A setting variable is set to something other than `true` or `false` |
 | `config.local-malformed` | This clone's record of the files flush wrote has a malformed line before its last |
 | `schemas.plugin-missing` | A runner's package isn't installed, or ships no schemas |
 | `config.file-rewritten` | (notice) A config file troupe wrote was missing or older, and was written again |
