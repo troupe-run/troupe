@@ -14,7 +14,7 @@
 
 ## 2. Ready the pull request
 
-- [ ] 2.1 Rebase onto `main` and open the pull request with `Closes #199`, linking troupe-run/infrastructure#224 and
+- [x] 2.1 Rebase onto `main` and open the pull request with `Closes #199`, linking troupe-run/infrastructure#224 and
   saying the note widens #199 to edited Purposes and removed specs (design D2). Verify every CI job passes.
 
 ## Workflow follow-up
