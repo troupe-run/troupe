@@ -78,6 +78,15 @@ def test_each_method_has_exactly_its_message_schemas() -> None:
     assert files == expected | {"run.schema.json", "config.schema.json"}
 
 
+MARKED: dict[str, Any] = {
+    "path": ".troupe/actors/tester.yaml",
+    "action": "write",
+    "reason": "git left it conflicted, from versions troupe wrote",
+    "kept": HASH,
+    "resolve": True,
+}
+"""A file flush rewrote from a conflicted merge and marked resolved (mark-config-resolved D6)."""
+
 ACCEPTED = [
     ("perform-request.schema.json", PERFORM, "everything"),
     ("perform-request.schema.json", {"actor": "t"}, "only what's required"),
@@ -166,6 +175,7 @@ ACCEPTED = [
         },
         "a run whose recording failed",
     ),
+    ("flush-result.schema.json", {"files": [MARKED], "notices": []}, "a file marked resolved"),
 ]
 
 
@@ -197,6 +207,11 @@ REFUSED = [
         "perform-result.schema.json",
         {"run": changed(SUMMARY, effectCheck={"kind": "none", "paths": ["a"]})},
         "none with paths",
+    ),
+    (
+        "flush-result.schema.json",
+        {"files": [changed(MARKED, resolve="yes")], "notices": []},
+        "resolve that isn't a boolean",
     ),
     ("perform-request.schema.json", changed(PERFORM, actor="Tester"), "an actor in capitals"),
     ("perform-request.schema.json", changed(PERFORM, actor="1tester"), "an actor from a digit"),

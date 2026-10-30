@@ -136,7 +136,8 @@ def test_flush_writes_a_conflicted_file_from_the_merged_config_keeps_it_and_leav
     assert f"git add {YAML} and commit the merge" in err
     assert file_hash(conflicted) in err
     assert _kept(repo, file_hash(conflicted)) == conflicted
-    assert _unmerged(repo) == [YAML]  # troupe leaves git's index alone (#156)
+    assert _unmerged(repo) == [YAML]  # with mark_merges_resolved unset, the index is left alone
+    assert "TROUPE_SETTING_MARK_MERGES_RESOLVED=true" in err
 
 
 def test_a_resolution_started_by_hand_is_kept_under_the_hash_the_notice_names(
@@ -384,4 +385,151 @@ def test_flush_with_no_merge_leaves_the_index_byte_identical(repo: Repo) -> None
     code, out, err = cli("flush")
     assert code == 0, err
     assert YAML in out
+    assert _index(repo) == index
+
+
+# Requirement: A rewritten unmerged file is marked resolved when the setting is on, and Policy can
+# forbid marking a file resolved (mark-config-resolved design D3, D6, D7)
+
+SETTING = "TROUPE_SETTING_MARK_MERGES_RESOLVED"
+POLICY = "TROUPE_POLICY_ALLOW_MARK_MERGES_RESOLVED"
+
+
+@pytest.fixture
+def marking(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(SETTING, "true")
+
+
+def _staged(repo: Repo, path: str) -> bytes:
+    return subprocess.run(
+        ["git", "show", f":0:{path}"],  # noqa: S607
+        cwd=repo.path,
+        env=repo.env,
+        capture_output=True,
+        check=True,
+    ).stdout
+
+
+@pytest.mark.usefixtures("marking")
+def test_flush_marks_a_conflicted_file_resolved_and_the_merge_commits_with_no_git_add(
+    repo: Repo,
+) -> None:
+    _yaml_conflicted(repo)
+    code, out, err = cli("flush")
+    assert code == 0, err
+    written = (repo.path / YAML).read_bytes()
+    assert written == render(_merged_config())["actors/tester.yaml"]
+    assert _unmerged(repo) == []
+    assert _staged(repo, YAML) == written
+    assert "marked it resolved in git" in out
+    assert "Commit the merge: troupe marked" in err
+    repo.git("commit", "-q", "--no-edit")
+    assert repo.git("show", f"HEAD:{YAML}").encode() == written
+
+
+@pytest.mark.usefixtures("marking")
+def test_the_config_set_resolving_config_removes_a_modify_delete_file_and_drops_its_entry(
+    repo: Repo,
+) -> None:
+    ok("config", "set", *BASE, "actors.tester.character=Old.")
+    repo.commit_all("base")
+    repo.git("switch", "-q", "-c", "feature")
+    ok("config", "set", "actors.tester.character=New.")
+    repo.commit_all("feature")
+    repo.git("switch", "-q", "main")
+    ok("config", "unset", "actors.tester.character")
+    repo.commit_all("main")
+    assert _merge(repo) != 0
+    assert _unmerged(repo) == [MD]
+    code, out, err = cli("config", "unset", "actors.tester.character")
+    assert code == 0, err
+    assert not (repo.path / MD).exists()
+    assert repo.git("ls-files", "-s", "--", MD) == ""
+    assert "marked it resolved in git" in out
+
+
+@pytest.mark.usefixtures("marking")
+def test_only_the_rewritten_config_file_is_staged(repo: Repo) -> None:
+    ok("config", "set", *BASE, "actors.tester.character=Old.")
+    repo.write("src.txt", "a\n")
+    repo.commit_all("base")
+    repo.git("switch", "-q", "-c", "feature")
+    ok("config", "set", STEPS % 1, "actors.tester.character=New.")
+    repo.write("src.txt", "b\n")
+    repo.commit_all("feature")
+    repo.git("switch", "-q", "main")
+    ok("config", "set", 'actors.tester.expect=["out/other.txt"]')
+    repo.write("src.txt", "c\n")
+    repo.commit_all("main")
+    assert _merge(repo) != 0
+    assert sorted(_unmerged(repo)) == [YAML, "src.txt"]
+    others = [line for line in _index(repo).splitlines() if YAML not in line]
+    code, _, err = cli("flush")
+    assert code == 0, err
+    assert _unmerged(repo) == ["src.txt"]
+    assert [line for line in _index(repo).splitlines() if YAML not in line] == others
+
+
+@pytest.mark.usefixtures("marking")
+def test_an_unmerged_file_already_holding_what_config_writes_is_left_unmerged(
+    repo: Repo,
+) -> None:
+    _yaml_conflicted(repo)
+    (repo.path / YAML).write_bytes(render(_merged_config())["actors/tester.yaml"])
+    index = _index(repo)
+    code, out, err = cli("flush")
+    assert code == 0, err
+    assert out == "Nothing to do: the config files are what config says.\n"
+    assert _unmerged(repo) == [YAML]
+    assert _index(repo) == index
+
+
+@pytest.mark.usefixtures("marking")
+def test_a_rehearsed_flush_says_it_would_mark_the_file_and_leaves_the_index(repo: Repo) -> None:
+    _yaml_conflicted(repo)
+    index = _index(repo)
+    code, out, err = cli("flush", "--rehearse")
+    assert code == ExitCode.WOULD_CHANGE, err
+    assert f"would write {YAML}" in out
+    assert "and mark it resolved in git" in out
+    assert _index(repo) == index
+
+
+@pytest.mark.usefixtures("marking")
+def test_policy_forbidding_it_rewrites_the_file_leaves_it_unmerged_and_names_the_policy(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(POLICY, "false")
+    _yaml_conflicted(repo)
+    conflicted = (repo.path / YAML).read_bytes()
+    code, _, err = cli("flush")
+    assert code == 0, err
+    assert (repo.path / YAML).read_bytes() == render(_merged_config())["actors/tester.yaml"]
+    assert _kept(repo, file_hash(conflicted)) == conflicted
+    assert _unmerged(repo) == [YAML]
+    assert f"git add {YAML}" in err
+    assert f"{POLICY}=false" in err
+
+
+@pytest.mark.usefixtures("marking")
+def test_flush_force_past_a_hand_edited_side_leaves_the_file_unmerged_with_the_setting_on(
+    repo: Repo,
+) -> None:
+    _hand_edited_side(repo)
+    code, _, err = cli("flush", "--force")
+    assert code == 0, err
+    assert _unmerged(repo) == [YAML]
+
+
+def test_a_malformed_setting_fails_flush_and_writes_and_stages_nothing(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _yaml_conflicted(repo)
+    monkeypatch.setenv(SETTING, "yes")
+    conflicted = (repo.path / YAML).read_bytes()
+    index = _index(repo)
+    code, _, err = cli("flush")
+    assert code == CODES["settings.invalid-value"]
+    assert SETTING in err
+    assert (repo.path / YAML).read_bytes() == conflicted
     assert _index(repo) == index

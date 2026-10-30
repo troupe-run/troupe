@@ -27,10 +27,12 @@ from troupe.core.config.merge import Merged
 from troupe.core.config.projection import (
     Action,
     Flushed,
+    Resolved,
     execute,
     file_hash,
     flush,
     locked,
+    mark_resolved,
     merge_notices,
     merges,
     plan,
@@ -42,6 +44,7 @@ from troupe.core.config.stream import read, record, refuse_conflicts, refuse_unr
 from troupe.core.events import EventStore
 from troupe.core.messages import Message
 from troupe.core.notices import Notice
+from troupe.core.settings import marking
 from troupe.core.stores import open_event_store
 from troupe.core.theatre import THEATRE_DIR
 from troupe.platform.files import WaitCallback
@@ -63,21 +66,28 @@ def _waiting(send: Send) -> WaitCallback:
 
 
 def _files(
-    actions: tuple[Action, ...], kept: Mapping[str, str], *, finished: str | None = None
+    actions: tuple[Action, ...],
+    kept: Mapping[str, str],
+    resolved: Resolved,
+    *,
+    finished: str | None = None,
 ) -> list[m.FileAction]:
     """Each file a command changed. With ``finished``, a staged write moved into place is
-    reported as the write of its target, for that reason: what the person's change wrote."""
+    reported as the write of its target, for that reason: what the person's change wrote. A file
+    git left unmerged from troupe's versions says whether it was (or would be) marked resolved."""
     reported: list[m.FileAction] = []
     for a in actions:
         path, action, reason = a.path, a.action, a.reason
+        target = staged_target(a.path) or a.path
         if finished is not None and action == "finish":
-            path, action, reason = staged_target(a.path) or a.path, "write", finished
+            path, action, reason = target, "write", finished
         reported.append(
             m.FileAction(
                 path=f"{THEATRE_DIR}/{path}",
                 action=action,  # type: ignore[arg-type]  # the four actions a plan holds
                 reason=reason,
-                kept=kept.get(staged_target(a.path) or a.path),
+                kept=kept.get(target),
+                resolve=resolved.paths[target] is None if target in resolved.paths else None,
             )
         )
     return reported
@@ -90,9 +100,15 @@ def _notices(*groups: list[Notice]) -> list[m.NoticeData]:
 def sync_files(session: Session, store: EventStore, merged: Merged, send: Send) -> list[Notice]:
     """Flush before a command uses config: refused when config has conflicts, or when a file
     troupe didn't write is in the way. Returns the notices of what was written again."""
+    marks = marking(session.env)
     refuse_conflicts(merged)
     flushed = flush(
-        session.theatre, merged.config, merged.files, on_wait=_waiting(send), vcs=store.vcs
+        session.theatre,
+        merged.config,
+        merged.files,
+        on_wait=_waiting(send),
+        vcs=store.vcs,
+        marking=marks,
     )
     return [*flushed.notices(), *store.notices()]
 
@@ -116,6 +132,7 @@ async def config_set(request: m.ConfigSetRequest, session: Session, send: Send) 
     store = open_event_store(session)
     troupe_dir = session.theatre / THEATRE_DIR
     operations = [(op.path, UNSET if op.unset else op.value) for op in request.operations]
+    marks = marking(session.env)
     if request.rehearse:
         merged = read(store)
         entries = change(merged.config, operations)
@@ -126,7 +143,10 @@ async def config_set(request: m.ConfigSetRequest, session: Session, send: Send) 
         resolve = _resolvable(merged, render(merged.config), rendered_after, found)
         would = plan(troupe_dir, rendered_after, merged.files, merged=found, resolve=resolve)
         refuse(would)
-        return m.ConfigSetResult(entries=entries, files=_files(would.changes, {}), notices=[])
+        resolved = mark_resolved(store.vcs, would, found, marks, rehearse=True)
+        return m.ConfigSetResult(
+            entries=entries, files=_files(would.changes, {}, resolved), notices=[]
+        )
     with locked(troupe_dir, _waiting(send)):
         merged = read(store)
         entries = change(merged.config, operations)
@@ -142,7 +162,8 @@ async def config_set(request: m.ConfigSetRequest, session: Session, send: Send) 
             first = plan(troupe_dir, rendered_before, merged.files, merged=found, resolve=resolve)
             refuse(first)
             first_kept = execute(troupe_dir, first)
-            before = Flushed(first.changes, first_kept).notices()
+            first_resolved = mark_resolved(store.vcs, first, found, marks)
+            before = Flushed(first.changes, first_kept, first_resolved).notices()
         if not entries:
             return m.ConfigSetResult(entries=[], files=[], notices=_notices(before))
         refuse_unrecordable(store, merged, entries)
@@ -172,11 +193,12 @@ async def config_set(request: m.ConfigSetRequest, session: Session, send: Send) 
         done = plan(troupe_dir, rendered_after, vouched, merged=found, resolve=resolve)
         refuse(done)
         kept = execute(troupe_dir, done)
+        resolved = mark_resolved(store.vcs, done, found, marks)
     return m.ConfigSetResult(
         change=command.change,
         entries=entries,
-        files=_files(done.changes, kept, finished="for this change"),
-        notices=_notices(before, merge_notices(done.changes, kept), store.notices()),
+        files=_files(done.changes, kept, resolved, finished="for this change"),
+        notices=_notices(before, merge_notices(done.changes, kept, resolved), store.notices()),
     )
 
 
@@ -212,6 +234,7 @@ async def config_get(request: m.ConfigGetRequest, session: Session, send: Send) 
 
 async def flush_files(request: m.FlushRequest, session: Session, send: Send) -> Message:
     store = open_event_store(session)
+    marks = marking(session.env)
     merged = read(store)
     refuse_conflicts(merged)
     flushed = flush(
@@ -223,9 +246,10 @@ async def flush_files(request: m.FlushRequest, session: Session, send: Send) -> 
         on_wait=_waiting(send),
         vcs=store.vcs,
         resolve=True,
+        marking=marks,
     )
     return m.FlushResult(
-        files=_files(flushed.actions, flushed.kept),
+        files=_files(flushed.actions, flushed.kept, flushed.resolved),
         notices=_notices(flushed.notices() if not request.rehearse else [], store.notices()),
     )
 

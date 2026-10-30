@@ -85,6 +85,10 @@
         "kept": {
           "description": "For a file forced past: the artifact its bytes were kept under. Absent: it wasn't forced past.",
           "$ref": "run.schema.json#/$defs/hash"
+        },
+        "resolve": {
+          "description": "For a file git's index held unmerged from versions troupe wrote: whether troupe marked it resolved in git (or, rehearsed, would). Absent: git doesn't hold it unmerged from troupe's versions.",
+          "type": "boolean"
         }
       }
     },

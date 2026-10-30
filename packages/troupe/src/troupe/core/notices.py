@@ -25,7 +25,8 @@ CODES: dict[str, str] = {
     "config.file-rewritten": "A config file troupe wrote was missing or older, so it was written "
     "again from config.",
     "config.merge-rewritten": "A config file git merged from versions troupe wrote was written "
-    "again from the merged config, its bytes kept first, and needs a git add.",
+    "again from the merged config, its bytes kept first; unless troupe marked it resolved, it "
+    "needs a git add.",
     "config.waiting": "Another troupe command is writing config files, and this one is waiting.",
     # Run workspaces (worktree-stage design D9). contributing/runs.md lists them.
     "workspace.waiting": "Making, filling, capturing or removing a run's worktree is taking a "

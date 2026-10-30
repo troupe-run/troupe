@@ -428,6 +428,7 @@ class FileAction(Message):
     action: Literal["write", "remove", "finish", "discard"] = json_field("action")
     reason: str = json_field("reason", min_length=1)
     kept: str | None = json_field("kept", default=None, pattern=HASH)
+    resolve: bool | None = json_field("resolve", default=None)
 
 
 @dataclass(frozen=True)

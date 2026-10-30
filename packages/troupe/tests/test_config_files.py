@@ -5,9 +5,11 @@ import subprocess
 import sys
 import textwrap
 import time
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+import jsonschema
 import pytest
 import yaml as yaml_1_1  # PyYAML reads YAML 1.1, as many editors do
 from hypothesis import example, given
@@ -21,10 +23,13 @@ from troupe.core import schemas
 from troupe.core.config.kinds import file_kind, staged_name, staged_target
 from troupe.core.config.projection import (
     WRITTEN,
+    Action,
+    Resolved,
     execute,
     file_hash,
     flush,
     locked,
+    merge_notices,
     on_disk,
     plan,
     render,
@@ -32,7 +37,8 @@ from troupe.core.config.projection import (
     stage,
 )
 from troupe.core.errors import TroupeError
-from troupe.core.vcs import MergeSides
+from troupe.core.settings import Marking
+from troupe.core.vcs import Marked, MergeSides, Resolve
 
 ACTOR_FILE = validator_for(PROTOCOL_BASE + "config/actor.schema.json", SCRIPTED)
 CONFIG: dict[str, Any] = {"actors": {"tester": TESTER}}
@@ -490,7 +496,13 @@ def test_flushing_a_merged_file_reports_config_merge_rewritten_with_its_kept_has
     )
     [notice] = [n for n in flushed.notices() if n.path == f".troupe/{YAML_FILE}"]
     assert notice.code == "config.merge-rewritten"
-    assert notice.details == {"merge": "conflicted", "action": "write", "kept": file_hash(MARKERS)}
+    assert notice.details == {
+        "merge": "conflicted",
+        "action": "write",
+        "kept": file_hash(MARKERS),
+        "resolved": False,
+        "unresolved": "setting",
+    }
     assert f"git add .troupe/{YAML_FILE}" in notice.fix
     check_notice(notice.to_data())
 
@@ -515,14 +527,196 @@ def test_a_rehearsed_flush_of_a_merged_file_names_it_and_its_reason_and_writes_n
 
 
 class _Reports:
-    """A VCS reporting ``merged`` (paths relative to .troupe/) as its merge sides."""
+    """A VCS reporting ``merged`` (paths relative to .troupe/) as its merge sides, recording each
+    call to mark paths resolved and marking every one."""
 
     def __init__(self, merged: dict[str, MergeSides]) -> None:
         self.merged = merged
+        self.marked: list[dict[str, Resolve]] = []
 
     def merge_sides_under(self, directory: str) -> dict[str, MergeSides]:
         prefix = directory.removeprefix(".troupe/") + "/"
         return {f".troupe/{p}": s for p, s in self.merged.items() if p.startswith(prefix)}
+
+    def mark_resolved(self, paths: Mapping[str, Resolve]) -> Marked:
+        self.marked.append(dict(paths))
+        return Marked(dict.fromkeys(paths))
+
+
+# Marking a rewritten unmerged file resolved (spec: config-files, "A rewritten unmerged file is
+# marked resolved when the setting is on"; mark-config-resolved design D3, D6). These drive flush
+# with a fake VCS; the git adapter's own tests show it marks what it's given.
+
+ON = Marking(True)
+
+
+def test_a_conflicted_file_rewritten_from_troupes_versions_is_marked_with_the_bytes_written(
+    tmp_path: Path,
+) -> None:
+    theatre = _theatre(tmp_path)
+    vcs = _Reports(_conflicted(theatre, MARKERS))
+    flushed = flush(
+        theatre, MERGED_CONFIG, _recorded(OURS, THEIRS), vcs=vcs, resolve=True, marking=ON
+    )
+    want = render(MERGED_CONFIG)[YAML_FILE]
+    assert vcs.marked == [{f".troupe/{YAML_FILE}": Resolve(vcs.merged[YAML_FILE], want)}]
+    assert flushed.resolved == Resolved({YAML_FILE: None})
+    [notice] = [n for n in flushed.notices() if n.code == "config.merge-rewritten"]
+    assert notice.details["resolved"] is True
+    assert "unresolved" not in notice.details
+    assert notice.fix.startswith("Commit the merge: troupe marked")
+    check_notice(notice.to_data())
+
+
+def test_an_unmerged_file_already_troupes_and_both_sides_troupes_is_marked_when_rewritten(
+    tmp_path: Path,
+) -> None:
+    theatre = _theatre(tmp_path)
+    vcs = _Reports(_conflicted(theatre, render(OURS)[YAML_FILE]))  # as after git checkout --ours
+    flushed = flush(theatre, MERGED_CONFIG, _recorded(OURS, THEIRS), vcs=vcs, marking=ON)
+    assert list(vcs.marked[0]) == [f".troupe/{YAML_FILE}"]
+    [notice] = [n for n in flushed.notices() if n.path == f".troupe/{YAML_FILE}"]
+    assert notice.code == "config.file-rewritten"
+    assert notice.details["resolved"] is True
+    check_notice(notice.to_data())
+
+
+def test_a_finished_staged_write_over_a_recognised_file_is_marked_with_the_staged_bytes(
+    tmp_path: Path,
+) -> None:
+    theatre = _theatre(tmp_path)
+    vcs = _Reports(_conflicted(theatre, MARKERS))
+    want = render(MERGED_CONFIG)[YAML_FILE]
+    (theatre / ".troupe" / staged_name(YAML_FILE)).write_bytes(want)  # recorded, not moved
+    recorded = _recorded(OURS, THEIRS, MERGED_CONFIG)
+    flushed = flush(theatre, MERGED_CONFIG, recorded, vcs=vcs, resolve=True, marking=ON)
+    [action] = [a for a in flushed.actions if a.action == "finish"]
+    assert action.keep
+    assert vcs.marked == [{f".troupe/{YAML_FILE}": Resolve(vcs.merged[YAML_FILE], want)}]
+
+
+def test_a_clean_merge_is_never_marked(tmp_path: Path) -> None:
+    theatre = _theatre(tmp_path)
+    git_merged = b"git's clean merge of the two sides\n"
+    _conflicted(theatre, git_merged)
+    vcs = _Reports(
+        {
+            YAML_FILE: MergeSides(
+                "clean", (render(OURS)[YAML_FILE], render(THEIRS)[YAML_FILE]), git_merged
+            )
+        }
+    )
+    flushed = flush(
+        theatre, MERGED_CONFIG, _recorded(OURS, THEIRS), vcs=vcs, resolve=True, marking=ON
+    )
+    assert vcs.marked == []
+    [notice] = [n for n in flushed.notices() if n.code == "config.merge-rewritten"]
+    assert notice.details["resolved"] is False
+    assert "unresolved" not in notice.details
+    check_notice(notice.to_data())
+
+
+def test_a_file_forced_past_a_side_troupe_didnt_write_is_never_marked(tmp_path: Path) -> None:
+    theatre = _theatre(tmp_path)
+    vcs = _Reports(_conflicted(theatre, MARKERS))
+    flushed = flush(
+        theatre, MERGED_CONFIG, _recorded(OURS), vcs=vcs, resolve=True, force=True, marking=ON
+    )
+    assert any(a.forced for a in flushed.actions)
+    assert vcs.marked == []
+
+
+def test_an_unmerged_file_already_troupes_with_a_side_troupe_didnt_write_is_never_marked(
+    tmp_path: Path,
+) -> None:
+    theatre = _theatre(tmp_path)
+    vcs = _Reports(_conflicted(theatre, render(OURS)[YAML_FILE]))
+    flushed = flush(theatre, MERGED_CONFIG, _recorded(OURS), vcs=vcs, marking=ON)
+    assert [a.path for a in flushed.actions] == [YAML_FILE]  # rewritten, as an older version
+    assert vcs.marked == []
+
+
+def test_an_unmerged_file_already_what_config_writes_is_left_unmarked(tmp_path: Path) -> None:
+    theatre = _theatre(tmp_path)
+    vcs = _Reports(_conflicted(theatre, render(MERGED_CONFIG)[YAML_FILE]))
+    recorded = _recorded(OURS, THEIRS, MERGED_CONFIG)
+    flushed = flush(theatre, MERGED_CONFIG, recorded, vcs=vcs, resolve=True, marking=ON)
+    assert flushed.actions == ()
+    assert vcs.marked == []
+
+
+@pytest.mark.parametrize(
+    ("marking", "variable"),
+    [
+        (Marking(False, "setting"), "TROUPE_SETTING_MARK_MERGES_RESOLVED=true"),
+        (Marking(False, "policy"), "TROUPE_POLICY_ALLOW_MARK_MERGES_RESOLVED=false"),
+    ],
+    ids=["setting", "policy"],
+)
+def test_with_marking_off_nothing_is_marked_and_the_notice_says_why(
+    tmp_path: Path, marking: Marking, variable: str
+) -> None:
+    theatre = _theatre(tmp_path)
+    vcs = _Reports(_conflicted(theatre, MARKERS))
+    flushed = flush(
+        theatre, MERGED_CONFIG, _recorded(OURS, THEIRS), vcs=vcs, resolve=True, marking=marking
+    )
+    assert vcs.marked == []
+    assert _actor_file(theatre).read_bytes() == render(MERGED_CONFIG)[YAML_FILE]
+    [notice] = [n for n in flushed.notices() if n.code == "config.merge-rewritten"]
+    assert notice.details["resolved"] is False
+    assert notice.details["unresolved"] == marking.off_because
+    assert f"git add .troupe/{YAML_FILE}" in notice.fix
+    assert variable in notice.fix
+    assert "#156" not in notice.fix
+    check_notice(notice.to_data())
+
+
+def test_a_rehearsal_marks_nothing_and_says_it_would_mark(tmp_path: Path) -> None:
+    theatre = _theatre(tmp_path)
+    vcs = _Reports(_conflicted(theatre, MARKERS))
+    flushed = flush(
+        theatre,
+        MERGED_CONFIG,
+        _recorded(OURS, THEIRS),
+        vcs=vcs,
+        resolve=True,
+        rehearse=True,
+        marking=ON,
+    )
+    assert vcs.marked == []
+    assert flushed.resolved == Resolved({YAML_FILE: None})
+    assert _actor_file(theatre).read_bytes() == MARKERS
+
+
+@pytest.mark.parametrize(
+    ("why", "says"),
+    [
+        ("index-changed", "git's index changed after troupe read it"),
+        ("failed", "troupe couldn't mark it resolved (git broke)"),
+        ("no-index", "git add .troupe/actors/tester.yaml and commit the merge."),
+    ],
+)
+def test_each_reason_a_file_wasnt_marked_has_its_own_fix(why: str, says: str) -> None:
+    action = Action(
+        YAML_FILE, "write", "git left it conflicted", b"x", keep=True, merge="conflicted"
+    )
+    resolved = Resolved({YAML_FILE: why}, "git broke" if why == "failed" else None)  # type: ignore[dict-item]
+    [notice] = merge_notices([action], {YAML_FILE: file_hash(b"x")}, resolved)
+    assert says in notice.fix
+    assert notice.details["unresolved"] == why
+    check_notice(notice.to_data())
+
+
+def test_a_notice_with_an_unknown_reason_for_not_marking_is_invalid() -> None:
+    action = Action(
+        YAML_FILE, "write", "git left it conflicted", b"x", keep=True, merge="conflicted"
+    )
+    [notice] = merge_notices([action], {YAML_FILE: file_hash(b"x")}, Resolved({YAML_FILE: None}))
+    data = notice.to_data()
+    data["details"] = {**data["details"], "resolved": False, "unresolved": "forgot"}
+    with pytest.raises(jsonschema.ValidationError):
+        check_notice(data)
 
 
 # Requirement: Force replaces a file and keeps a copy
