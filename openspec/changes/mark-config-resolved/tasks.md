@@ -97,7 +97,7 @@
 - [x] 5.1 Raise a troupe-run/infrastructure issue, on the roadmap board, to record the new `settings` spec's Purpose in
   `oob/troupe-spec-purposes.json`. Check `cap:settings`'s description against that Purpose. Verify with `gh issue view
   <n> -R troupe-run/infrastructure --json projectItems`.
-- [ ] 5.2 Run `uv run scripts/check.py` and show it passes. Then push, and verify that every CI job passes on Linux,
+- [x] 5.2 Run `uv run scripts/check.py` and show it passes. Then push, and verify that every CI job passes on Linux,
   macOS and Windows.
 
 ## Workflow follow-up
