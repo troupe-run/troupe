@@ -15,7 +15,7 @@ import pytest
 
 from gitrepo import Repo, clone
 from runtesting import INIT, OK, Harness, failing_at, request, script, theatre, turn
-from storetesting import git_service
+from storetesting import git_service, settle, wait_until
 from troupe.core import defaults
 from troupe.core.errors import TroupeError
 from troupe.core.events import EventStore
@@ -444,7 +444,12 @@ def test_following_a_quiet_run_reads_no_segment_while_it_waits(
     try:
         harness = Harness(repo, store_options=QUIET, store_wrapper=counting)
         thread, _ = follow_in_background(harness, child.run_id)
-        time.sleep(2.0)  # following has read the run; a fresh watch may wake spuriously for 1.5 s
+        # The child has recorded all it will (HANG's turn is seq 1), and following has read it.
+        wait_until(
+            lambda: any(u["kind"] == "event" and u["seq"] == 1 for u in harness.updates),
+            "following sending the turn HANG records before it hangs (seq 1)",
+        )
+        settle(looks)
         looks.clear()
         time.sleep(2.0)
         assert looks == []

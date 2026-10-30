@@ -17,7 +17,7 @@ from eventsourcing.persistence import Notification
 
 from gitrepo import make_repo
 from protocol_schemas import check_notice
-from storetesting import event
+from storetesting import event, settle
 from troupe.core.files import directory_lock
 from troupe.core.vcs import load_vcs
 from troupe.platform import watching
@@ -461,7 +461,7 @@ def test_a_listened_store_reads_no_segment_while_nothing_is_recorded(
 
     monkeypatch.setattr(store, "_sizes", counted)
     with listened(store):
-        time.sleep(2.0)  # listening reads once, and a fresh watch may wake spuriously for 1.5 s
+        settle(looks)  # listening reads once, and a fresh watch may wake spuriously
         looks.clear()
         time.sleep(2)
         assert looks == []
