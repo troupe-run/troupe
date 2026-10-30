@@ -97,6 +97,40 @@ def test_a_cherry_pick_that_stops_on_the_file_reports_it_conflicted(repo: Repo) 
     assert _sides(repo) == {YAML: MergeSides("conflicted", (b"runner: c\n", b"runner: b\n"))}
 
 
+def test_two_reads_of_the_same_unmerged_path_record_the_same_index_entries(repo: Repo) -> None:
+    _branches(repo, {YAML: b"a\n"}, feature={YAML: b"b\n"}, main={YAML: b"c\n"})
+    assert _git_may_fail(repo, "merge", "-q", "--no-edit", "feature") != 0
+    first, second = _sides(repo)[YAML], _sides(repo)[YAML]
+    assert first.index is not None
+    assert first.index == second.index
+
+
+def test_a_path_resolved_with_git_add_between_reads_is_left_out_of_the_second(repo: Repo) -> None:
+    _branches(repo, {YAML: b"a\n"}, feature={YAML: b"b\n"}, main={YAML: b"c\n"})
+    assert _git_may_fail(repo, "merge", "-q", "--no-edit", "feature") != 0
+    assert YAML in _sides(repo)
+    repo.git("add", YAML)
+    assert YAML not in _sides(repo)
+
+
+def test_a_different_conflict_on_the_same_path_records_different_index_entries(
+    repo: Repo,
+) -> None:
+    _branches(
+        repo,
+        {YAML: b"a\n"},
+        feature={YAML: b"b\n"},
+        other={YAML: b"d\n"},
+        main={YAML: b"c\n"},
+    )
+    assert _git_may_fail(repo, "merge", "-q", "--no-edit", "feature") != 0
+    first = _sides(repo)[YAML]
+    repo.git("merge", "--abort")
+    assert _git_may_fail(repo, "merge", "-q", "--no-edit", "other") != 0
+    second = _sides(repo)[YAML]
+    assert first.index != second.index
+
+
 def test_a_theatre_in_a_subdirectory_gets_theatre_relative_paths(repo: Repo) -> None:
     nested = f"sub/{YAML}"
     _branches(repo, {nested: b"a\n"}, feature={nested: b"b\n"}, main={nested: b"c\n"})

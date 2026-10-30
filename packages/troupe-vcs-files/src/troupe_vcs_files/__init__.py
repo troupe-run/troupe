@@ -6,7 +6,8 @@ commands, so it declares no environment policy (design D11).
 
 It can't make a worktree, so each worktree operation is refused with vcs.worktrees-unsupported, and
 with nothing shared between worktrees, its shared state is empty (worktree-stage design D4, D10).
-With no merges, it reports no merge sides (config-projection-conflicts design D2).
+With no merges, it reports no merge sides (config-projection-conflicts design D2), and with no
+index it marks nothing resolved (mark-config-resolved design D4).
 """
 
 from collections.abc import Hashable, Mapping
@@ -18,7 +19,9 @@ from troupe.core.vcs import (
     Captured,
     Clone,
     Filled,
+    Marked,
     MergeSides,
+    Resolve,
     SharedState,
     worktrees_unsupported,
 )
@@ -56,6 +59,9 @@ class FilesAdapter:
     def merge_sides_under(self, directory: str) -> Mapping[str, MergeSides]:
         del directory
         return {}
+
+    def mark_resolved(self, paths: Mapping[str, Resolve]) -> Marked:
+        return Marked(dict.fromkeys(paths, "no-index"))
 
     def configured_identities(self) -> tuple[str, ...]:
         return ()

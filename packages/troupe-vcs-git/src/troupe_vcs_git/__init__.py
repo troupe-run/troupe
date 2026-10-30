@@ -4,7 +4,8 @@ Every git command runs through troupe.core.commands with GIT_ENVIRONMENT, so git
 config, credentials and SSH agent, but never a hook's GIT_DIR or GIT_INDEX_FILE, and nothing else of
 troupe's environment. Only local commands run (symbolic-ref, rev-parse, ls-files, ls-tree, config,
 and for a run's worktree: worktree, status, read-tree, checkout-index, update-index, diff-files,
-add, write-tree, diff, apply, for-each-ref; for merge sides: cat-file, merge-tree), so git never
+add, write-tree, diff, apply, for-each-ref; for merge sides: cat-file, merge-tree; for marking a
+merged path resolved: hash-object, update-index), so git never
 starts a credential helper or ssh. The worktree operations live in troupe_vcs_git.worktrees, and
 merge sides in troupe_vcs_git.merges.
 
@@ -22,7 +23,16 @@ from pathlib import Path
 
 from troupe.core.commands import run_command
 from troupe.core.errors import TroupeError
-from troupe.core.vcs import Applicability, Captured, Clone, Filled, MergeSides, SharedState
+from troupe.core.vcs import (
+    Applicability,
+    Captured,
+    Clone,
+    Filled,
+    Marked,
+    MergeSides,
+    Resolve,
+    SharedState,
+)
 from troupe.platform.processes import Completed, EnvironmentPolicy, ProcessWaitCallback
 from troupe_vcs_git import defaults
 from troupe_vcs_git.merges import Merges
@@ -239,6 +249,9 @@ class GitAdapter:
 
     def merge_sides_under(self, directory: str) -> Mapping[str, MergeSides]:
         return self._merges.under(directory)
+
+    def mark_resolved(self, paths: Mapping[str, Resolve]) -> Marked:
+        return self._merges.mark(paths)
 
     def configured_identities(self) -> tuple[str, ...]:
         completed = self.git(

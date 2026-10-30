@@ -15,13 +15,21 @@ are left out too.
 
 Paths are theatre-relative: ls-files and ls-tree print them relative to the directory git runs in,
 which is the theatre, while merge-tree names conflicted paths from the repository's top.
+
+Marking a path resolved (mark-config-resolved design D5) reads its unmerged entries again and goes
+on only when they are exactly those its sides were read from. The bytes to stage are written with
+``hash-object -w --path``, which applies the path's attributes as ``git add`` would, and never from
+the working file. One ``update-index -z --index-info`` then gives each path a stage-0 entry, or a
+mode-0 entry that drops every stage of a removed one. ``--index-info`` reads its paths from the
+repository's top whatever directory git runs in, so they are given with the theatre's prefix.
 """
 
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from troupe.core.vcs import MergeSides
+from troupe.core.errors import TroupeError
+from troupe.core.vcs import Marked, MergeSides, Resolve, Unmarked
 from troupe.platform.processes import Completed
 
 if TYPE_CHECKING:
@@ -45,6 +53,21 @@ def _index(data: bytes) -> list[tuple[str, str, str]]:
         _mode, blob, stage = info.split(" ")
         entries.append((path, stage, blob))
     return entries
+
+
+def _unmerged(data: bytes) -> dict[str, dict[str, tuple[str, str]]]:
+    """Each path's unmerged entries, as ``ls-files -u`` prints them, as {stage: (mode, object)}."""
+    entries: dict[str, dict[str, tuple[str, str]]] = {}
+    for record in _records(data):
+        info, _, path = record.partition("\t")
+        mode, blob, stage = info.split(" ")
+        entries.setdefault(path, {})[stage] = (mode, blob)
+    return entries
+
+
+def _record(stages: Mapping[str, tuple[str, str]]) -> str:
+    """The adapter's own record of a path's unmerged entries: what ``MergeSides.index`` holds."""
+    return ";".join(f"{mode} {blob} {stage}" for stage, (mode, blob) in sorted(stages.items()))
 
 
 def _tree(data: bytes) -> dict[str, str]:
@@ -71,20 +94,83 @@ class Merges:
         return found
 
     def _conflicted(self, directory: str) -> dict[str, MergeSides]:
-        unmerged = _index(self.adapter.git("ls-files", "-u", "-z", "--", directory).stdout)
-        stages: dict[str, dict[str, str]] = {}
-        for path, stage, blob in unmerged:
-            stages.setdefault(path, {})[stage] = blob
+        stages = _unmerged(self.adapter.git("ls-files", "-u", "-z", "--", directory).stdout)
         blobs = self._read(
-            blob for by_stage in stages.values() for s, blob in by_stage.items() if s != "1"
+            blob for by_stage in stages.values() for s, (_, blob) in by_stage.items() if s != "1"
         )
         return {
             path: MergeSides(
                 "conflicted",
-                tuple(blobs.get(by_stage.get(stage, "")) for stage in (_OURS, _THEIRS)),
+                tuple(
+                    blobs.get(by_stage[stage][1]) if stage in by_stage else None
+                    for stage in (_OURS, _THEIRS)
+                ),
+                index=_record(by_stage),
             )
             for path, by_stage in sorted(stages.items())
         }
+
+    def mark(self, paths: Mapping[str, Resolve]) -> Marked:
+        """Mark each path resolved, when its unmerged entries are still those it was read from."""
+        if not paths:
+            return Marked({})
+        try:
+            listed = self.adapter.git(
+                "ls-files", "-u", "-z", "--", *(f":(literal){path}" for path in sorted(paths))
+            )
+        except TroupeError as error:
+            if error.code != "vcs.failed":
+                raise
+            return Marked(dict.fromkeys(paths, "failed"), error.problem)
+        current = _unmerged(listed.stdout)
+        result: dict[str, Unmarked | None] = {}
+        due: dict[str, tuple[Mapping[str, tuple[str, str]], bytes | None]] = {}
+        for path, resolve in sorted(paths.items()):
+            stages = current.get(path)
+            if stages is None or resolve.sides.index != _record(stages):
+                result[path] = "index-changed"
+            else:
+                due[path] = (stages, resolve.data)
+        if not due:
+            return Marked(result)
+        prefix = self.adapter.theatre_prefix()
+        try:
+            entries = []
+            for path, (entry, data) in due.items():
+                mode, blob = entry.get(_OURS) or entry[_THEIRS]
+                if data is None:
+                    # Mode 0 drops every stage; the zero object is as long as the repository's.
+                    entries.append(f"0 {'0' * len(blob)} 0\t{prefix}{path}")
+                else:
+                    entries.append(f"{mode} {self._write(path, data)} 0\t{prefix}{path}")
+            self.adapter.git_in(
+                self.adapter.theatre,
+                "update-index",
+                "-z",
+                "--index-info",
+                input="".join(f"{entry}\0" for entry in entries).encode("utf-8"),
+                timeout=self.adapter.timeout,
+                max_output_bytes=self.adapter.max_output_bytes,
+            )
+        except TroupeError as error:
+            if error.code != "vcs.failed":
+                raise
+            return Marked({**result, **dict.fromkeys(due, "failed")}, error.problem)
+        return Marked({**result, **dict.fromkeys(due)})
+
+    def _write(self, path: str, data: bytes) -> str:
+        """Store ``data`` as the object ``git add`` would store for ``path``, and name it."""
+        written = self.adapter.git_in(
+            self.adapter.theatre,
+            "hash-object",
+            "-w",
+            f"--path={path}",
+            "--stdin",
+            input=data,
+            timeout=self.adapter.timeout,
+            max_output_bytes=self.adapter.max_output_bytes,
+        )
+        return written.stdout.decode("ascii").strip()
 
     def _merge(self, directory: str) -> tuple[tuple[str, str], Mapping[str, str]] | None:
         """The merge to look at: its two parents, and the blob it gave each path under
