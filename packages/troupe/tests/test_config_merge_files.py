@@ -3,7 +3,9 @@ conflicts design D4, task 4.3): for any changes to one actor on two branches, af
 and the one troupe command that settles it (``troupe flush``, or the ``troupe config set`` that
 resolves config's conflicts), no file is refused, every config file is what the merged config
 renders, and every file troupe replaced that wasn't a version it wrote is kept in the artifact
-store.
+store. With the setting mark_merges_resolved on (drawn per example), every config file git left
+unmerged that troupe rewrote is marked resolved with exactly what it wrote, and no other path's
+index entry changes (mark-config-resolved task 4.4).
 
 Every example builds two branches of history with real git, which takes several seconds an example
 on Windows, so the budget is small: CI's fixed seed still reaches git conflicts, clean merges and
@@ -73,6 +75,16 @@ def _set(values: dict[str, str]) -> None:
     assert code == 0, err
 
 
+def _index(repo: Repo) -> dict[str, list[str]]:
+    """Each path's index entries (mode, object and stage), as ``ls-files -s`` lists them."""
+    entries: dict[str, list[str]] = {}
+    for record in repo.git("ls-files", "-s", "-z").split("\0"):
+        if record:
+            info, _, path = record.partition("\t")
+            entries.setdefault(path, []).append(info)
+    return entries
+
+
 def _show(repo: Repo, ref: str, path: str) -> bytes | None:
     shown = subprocess.run(
         ["git", "show", f"{ref}:{path}"],  # noqa: S607 - git from the test's PATH
@@ -85,9 +97,12 @@ def _show(repo: Repo, ref: str, path: str) -> bytes | None:
 
 
 @settings(max_examples=8, suppress_health_check=[HealthCheck.function_scoped_fixture])
-@given(feature=_changes(), main_changes=_changes())
+@given(feature=_changes(), main_changes=_changes(), marking=st.booleans())
 def test_one_command_after_any_merge_leaves_every_file_as_the_merged_config_renders_it(
-    monkeypatch: pytest.MonkeyPatch, feature: dict[str, str], main_changes: dict[str, str]
+    monkeypatch: pytest.MonkeyPatch,
+    feature: dict[str, str],
+    main_changes: dict[str, str],
+    marking: bool,
 ) -> None:
     # Each example's working directory is put back before its directory is removed: Windows can't
     # remove a process's working directory (found in CI, WinError 32).
@@ -95,6 +110,8 @@ def test_one_command_after_any_merge_leaves_every_file_as_the_merged_config_rend
         repo = theatre(Path(scratch))
         for name, value in {**repo.env, **ADA}.items():
             patch.setenv(name, value)
+        if marking:
+            patch.setenv("TROUPE_SETTING_MARK_MERGES_RESOLVED", "true")
         patch.chdir(repo.path)
         _set(BASE)
         repo.commit_all("base")
@@ -116,6 +133,7 @@ def test_one_command_after_any_merge_leaves_every_file_as_the_merged_config_rend
         event(f"git left {len(unmerged)} file(s) unmerged")
         actors = repo.path / ".troupe" / "actors"
         before = {p.name: p.read_bytes() for p in actors.iterdir() if p.is_file()}
+        index = _index(repo)
         troupes = {
             file_hash(data)
             for name in before
@@ -149,3 +167,22 @@ def test_one_command_after_any_merge_leaves_every_file_as_the_merged_config_rend
                 event("a file troupe didn't write was replaced and kept")
                 kept = file_hash(data)
                 assert (store / kept[7:9] / kept[7:]).read_bytes() == data, name
+
+        after = _index(repo)
+        rewritten = {
+            f".troupe/{path}"
+            for path in rendered.keys() | {f"actors/{name}" for name in before}
+            if on_disk.get(path) != before.get(path.removeprefix("actors/"))
+        }
+        for path in sorted(index.keys() | after.keys()):
+            if marking and path in rewritten and path in unmerged:
+                event("an unmerged file troupe rewrote was marked resolved")
+                data = on_disk.get(path.removeprefix(".troupe/"))
+                if data is None:
+                    assert path not in after, path
+                else:
+                    [entry] = after[path]
+                    assert entry.endswith(" 0"), path
+                    assert _show(repo, "", path) == data, path
+            else:
+                assert after.get(path) == index.get(path), path

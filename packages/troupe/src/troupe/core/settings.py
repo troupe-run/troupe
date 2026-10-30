@@ -79,6 +79,10 @@ class Marking:
     off_because: Literal["setting", "policy"] | None = None
 
 
+OFF = Marking(False, "setting")
+"""Marking as the setting's default leaves it."""
+
+
 def marking(env: Mapping[str, str]) -> Marking:
     """The marking in effect for a command run with ``env``. The setting is always read, so a
     malformed one fails any command that uses config (design D7); policy is read only when the

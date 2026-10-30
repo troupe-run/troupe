@@ -56,7 +56,7 @@
 
 ## 4. Marking from the projection and commands (design D3, D6)
 
-- [ ] 4.1 In `projection.py`, pick the paths to mark (D3) from the final plan, give `flush()` a `marking`, call
+- [x] 4.1 In `projection.py`, pick the paths to mark (D3) from the final plan, give `flush()` a `marking`, call
   `vcs.mark_resolved` under the lock after `execute` when `marking.on` and there's something to mark, and carry
   `resolved` on `Flushed`. Verify with unit tests in `test_config_files.py` using a fake `Vcs` that records its calls:
   - D3 picks a step-2 conflicted rewrite, a step-1 unmerged rewrite with both sides vouched, and a `finish` over a
@@ -65,11 +65,11 @@
     already matching config;
   - with `marking` off, the fake is never called;
   - a rehearsal never calls it, and reports `resolve` true or false per path.
-- [ ] 4.2 Update `merge_notices` and `Flushed.notices()` with the `resolved` and `unresolved` details and D6's fix for
+- [x] 4.2 Update `merge_notices` and `Flushed.notices()` with the `resolved` and `unresolved` details and D6's fix for
   each case, and add the optional `resolved` to `config.file-rewritten`. Update `notice.schema.json` (both notices)
   and the `FileAction` schema (`resolve`). Remove the `#156` sentence. Verify with schema tests that a notice of each
   case validates and an unknown `unresolved` value doesn't, and with unit tests of each fix's text.
-- [ ] 4.3 Wire `read_settings` and `Marking` into `flush_files`, `config_set` (both `execute`s) and `sync_files` (D7).
+- [x] 4.3 Wire `read_settings` and `Marking` into `flush_files`, `config_set` (both `execute`s) and `sync_files` (D7).
   Verify with CLI tests in `test_cli_config_merges.py` that drive real git merges, one per `config-files` scenario:
   - marked resolved by `troupe flush`, after which `git commit --no-edit` succeeds with no `git add`;
   - removed and marked by the `config set` that resolves config;
@@ -82,11 +82,11 @@
   - a malformed `TROUPE_SETTING_MARK_MERGES_RESOLVED` fails `troupe flush` with `settings.invalid-value`, and nothing
     is written and the index is unchanged;
   - with the setting unset, the notice says to `git add` and names the setting.
-- [ ] 4.4 Extend the property test in `test_config_merge_files.py` (small example budget, as now) with the setting
+- [x] 4.4 Extend the property test in `test_config_merge_files.py` (small example budget, as now) with the setting
   on. After the merge and one troupe command, check that every config path troupe rewrote is no longer unmerged, its
   index blob equals what config writes, and no other path's index entry changed. Verify that it passes under the CI
   hypothesis profile.
-- [ ] 4.5 Update `docs/stagecraft/hand-edit-config.md` (Branches): with the setting on, troupe marks the file
+- [x] 4.5 Update `docs/stagecraft/hand-edit-config.md` (Branches): with the setting on, troupe marks the file
   resolved and the person only commits. Name the setting, its default, and the policy that can forbid it, and say
   what's never marked (a clean merge, a forced file, a side troupe didn't write). Update the table and notice list in
   `contributing/config.md`. Verify with the docs tests, and by running the documented commands in a scratch

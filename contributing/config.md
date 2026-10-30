@@ -54,7 +54,7 @@ file is troupe's:
 | What troupe would write now | nothing to do |
 | A hash a `Config.Changed` recorded for that path, or this clone's record of files flush wrote (`.troupe/local/config/written.jsonl`) | written again, with `config.file-rewritten` |
 | Nothing | written again, with `config.file-rewritten` |
-| A file git merged (conflicted, or cleanly in the merge in progress or HEAD's merge commit) from versions troupe recorded | written again from the merged config by `troupe flush`, or by the `config set` whose change writes it or resolves config's conflicts, its bytes kept first, with `config.merge-rewritten`; refused by any other command, naming `troupe flush` |
+| A file git merged (conflicted, or cleanly in the merge in progress or HEAD's merge commit) from versions troupe recorded | written again from the merged config by `troupe flush`, or by the `config set` whose change writes it or resolves config's conflicts, its bytes kept first, with `config.merge-rewritten`; refused by any other command, naming `troupe flush`. With `mark_merges_resolved` on, a conflicted one is also marked resolved in git's index |
 | Anything else | refused with `config.file-not-troupes`, unless `--force`, which keeps its bytes in the artifact store |
 
 A change stages each new file beside its target (`.<name>.troupe~`), records the event with the files' hashes, then
@@ -79,6 +79,23 @@ the strategy git used (ort) and the person's merge settings, handles several mer
 git 2.38. Matching ort with `merge-file` needs `--diff-algorithm`, which arrived in git 2.44, and Apple's bundled
 git is older. A merge edited before it was committed, or made with options `merge-tree` didn't get, doesn't
 reproduce, so it's refused as a hand edit is. The files adapter reports no merges.
+
+### Marking a merged file resolved
+
+With the setting `mark_merges_resolved` on, and policy's `allow_mark_merges_resolved` not forbidding it, a command
+that writes or removes a config file git's index holds unmerged, and whose every side is a version troupe wrote,
+marks it resolved through the VCS port's `mark_resolved` (mark-config-resolved design D3 to D6). That's a
+recognised conflicted file, or one already a version troupe wrote (after `git checkout --ours`) that troupe rewrites.
+It's never a clean merge's file, a file forced past with `--force`, or an unmerged file troupe didn't need to write.
+
+The git adapter reads the path's unmerged entries again and goes on only when they're exactly those its sides were
+read from (`MergeSides.index`, opaque to core). It stores troupe's bytes with `hash-object -w --path`, never the
+working file, and gives the path one stage-0 entry, or drops every stage of a removed file, in one
+`update-index -z --index-info`. `--index-info` reads paths from the repository's top, whatever directory git runs
+in, so they carry the theatre's prefix. A path whose index moved is left alone (`index-changed`), and a git failure
+(`failed`) leaves the file written and kept. `config.merge-rewritten` says which happened (`resolved`,
+`unresolved`), and a rehearsal reports `resolve` on each file without touching the index. The files adapter marks
+nothing (`no-index`).
 
 ## Settings
 
@@ -114,5 +131,5 @@ Its default, in `troupe.core.defaults`:
 | `config.local-malformed` | This clone's record of the files flush wrote has a malformed line before its last |
 | `schemas.plugin-missing` | A runner's package isn't installed, or ships no schemas |
 | `config.file-rewritten` | (notice) A config file troupe wrote was missing or older, and was written again |
-| `config.merge-rewritten` | (notice) A config file git merged from versions troupe wrote was written again from the merged config, its bytes kept first, and needs a `git add` |
+| `config.merge-rewritten` | (notice) A config file git merged from versions troupe wrote was written again from the merged config, its bytes kept first. Says whether troupe marked it resolved in git, and if not, why not and to `git add` it |
 | `config.waiting` | (notice) Another troupe command is writing config files, and this one is waiting |

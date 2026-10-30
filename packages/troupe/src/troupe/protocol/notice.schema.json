@@ -261,6 +261,10 @@
             "reason": {
               "type": "string",
               "minLength": 1
+            },
+            "resolved": {
+              "description": "Present when git's index held the file unmerged from versions troupe wrote, and troupe marked it resolved.",
+              "const": true
             }
           }
         }
@@ -280,7 +284,8 @@
           "required": [
             "merge",
             "action",
-            "kept"
+            "kept",
+            "resolved"
           ],
           "properties": {
             "merge": {
@@ -301,6 +306,20 @@
               "description": "The artifact the file's bytes were kept under before troupe replaced it.",
               "type": "string",
               "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            "resolved": {
+              "description": "Whether troupe marked the file resolved in git's index, so the merge can be committed with no git add.",
+              "type": "boolean"
+            },
+            "unresolved": {
+              "description": "Why troupe didn't mark a conflicted file resolved: the setting mark_merges_resolved is off, policy forbids it, git's index changed after troupe read it, git failed, or the VCS has no index. Absent when it was marked, and for a clean merge.",
+              "enum": [
+                "setting",
+                "policy",
+                "index-changed",
+                "failed",
+                "no-index"
+              ]
             }
           }
         }

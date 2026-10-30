@@ -72,8 +72,18 @@ file can't hold anything of yours, and troupe writes it again from the merged co
 
 1. Run `troupe config get` to see whether config has a conflict too. If it does, one `troupe config set` that sets
    every conflicting value resolves it, and writes the file. If it doesn't, `troupe flush` writes the file.
-2. `git add` the file and commit the merge. troupe leaves git's index alone, so this step is yours for now
-   ([#156](https://github.com/troupe-run/troupe/issues/156)).
+2. `git add` the file and commit the merge. Or turn on the setting `mark_merges_resolved`, and troupe marks the file
+   resolved in git for you, as `git add` would, so you only commit the merge
+   ([#156](https://github.com/troupe-run/troupe/issues/156)):
+
+   ```sh
+   export TROUPE_SETTING_MARK_MERGES_RESOLVED=true
+   ```
+
+   It's off by default. With it on, troupe stages exactly the file it wrote, and nothing else: not a clean merge's
+   file, not one it didn't need to write, not a file you forced past with `--force`, and never one with a side
+   troupe didn't write. Policy can forbid it (`TROUPE_POLICY_ALLOW_MARK_MERGES_RESOLVED=false`), and then troupe
+   leaves git's index alone and says so. Its message always says whether it marked the file, and if not, why not.
 
 troupe keeps a copy of what the file held before replacing it, in case you'd started resolving it by hand. Its
 message gives the copy's hash, and the copy is in `.troupe/local/artifacts/`, which is never committed.

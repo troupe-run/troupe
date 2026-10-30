@@ -48,6 +48,8 @@ def _file_line(file: dict[str, Any], *, rehearse: bool = False) -> str:
     line = f"{verb[file['action']]} {file['path']} ({file['reason']})"
     if "kept" in file:
         line += f"; what it held is kept as {file['kept']}"
+    if file.get("resolve") is True:
+        line += "; and mark it resolved in git" if rehearse else "; marked it resolved in git"
     return line
 
 
