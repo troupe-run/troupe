@@ -39,7 +39,9 @@ has read the run since its last write.
 ### D2: Settle until no look for `SETTLE` seconds, then count
 
 Both tests then wait until no look has happened for a settle period, by polling the `looks` list the tests already
-keep: the clock restarts at each look. Only then do they clear `looks` and count over 2 s. The settle period is
+keep: the clock restarts at each look. Only then do they clear `looks` and count over 2 s. The text-store test first
+waits for listening's first read (its subscription thread makes it after `listen()` returns), its counterpart to D1:
+without that, a starved thread could make the read after settling, inside the counted window. The settle period is
 1.5 s, the value `test_platform_watching.py`'s `SETTLE` already used for spurious wakes. Both test packages already
 import `packages/troupe/tests/storetesting.py`, so `SETTLE` moves there with the two waits (`wait_until`, `settle`), and
 the watch tests import it: one named place for the value.
