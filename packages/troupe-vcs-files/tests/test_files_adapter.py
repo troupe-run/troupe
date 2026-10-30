@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from troupe.core.errors import TroupeError
-from troupe.core.vcs import is_committed, load_vcs
+from troupe.core.vcs import Marked, MergeSides, Resolve, is_committed, load_vcs
 
 
 def test_it_reports_no_branch_no_head_and_no_identity(tmp_path: Path) -> None:
@@ -35,6 +35,16 @@ def test_it_reports_no_merge_sides_even_for_a_file_holding_conflict_markers(
     actors.mkdir(parents=True)
     (actors / "tester.yaml").write_bytes(b"<<<<<<< ours\na\n=======\nb\n>>>>>>> theirs\n")
     assert load_vcs("files", tmp_path).merge_sides_under(".troupe/actors") == {}
+
+
+def test_it_marks_nothing_resolved_and_says_it_has_no_index(tmp_path: Path) -> None:
+    path = tmp_path / ".troupe/actors/tester.yaml"
+    path.parent.mkdir(parents=True)
+    path.write_bytes(b"<<<<<<< ours\n")
+    resolve = Resolve(MergeSides("conflicted", (b"a\n", b"b\n")), b"c\n")
+    marked = load_vcs("files", tmp_path).mark_resolved({".troupe/actors/tester.yaml": resolve})
+    assert marked == Marked({".troupe/actors/tester.yaml": "no-index"})
+    assert path.read_bytes() == b"<<<<<<< ours\n"
 
 
 def test_its_branch_token_never_changes(tmp_path: Path) -> None:

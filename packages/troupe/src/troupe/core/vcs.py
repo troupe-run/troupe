@@ -136,6 +136,34 @@ class MergeSides:
     kind: Literal["conflicted", "clean"]
     sides: tuple[bytes | None, ...]
     merged: bytes | None = None
+    index: str | None = field(default=None, compare=False)
+    """Conflicted only: the adapter's own record of the unmerged entries it read, given back to
+    ``mark_resolved`` so it can tell whether the index has moved since. Opaque to core, and never
+    compared with troupe's hashes (mark-config-resolved design D4). None from an adapter with no
+    index."""
+
+
+@dataclass(frozen=True)
+class Resolve:
+    """What to mark one path resolved with: the merge sides read for it, and the bytes troupe wrote,
+    or None when it removed the file (mark-config-resolved design D4)."""
+
+    sides: MergeSides
+    data: bytes | None
+
+
+Unmarked = Literal["no-index", "index-changed", "failed"]
+"""Why a path wasn't marked resolved: the adapter has no index, the index no longer holds the
+sides that were read, or git failed."""
+
+
+@dataclass(frozen=True)
+class Marked:
+    """What marking paths resolved did: for each path given, None when it was marked, else why
+    not, and git's message when it failed."""
+
+    paths: Mapping[str, Unmarked | None]
+    message: str | None = None
 
 
 def worktrees_unsupported(adapter: str) -> TroupeError:
@@ -195,6 +223,14 @@ class Vcs(Protocol):
         in the index, or merged cleanly in the merge in progress or HEAD's merge commit, when git
         reproduces that clean merge exactly. A path in no merge is left out; an adapter with no
         merges gives none (config-projection-conflicts design D2, D3)."""
+        ...
+
+    def mark_resolved(self, paths: Mapping[str, Resolve]) -> Marked:
+        """Mark each theatre-relative path resolved, as ``git add`` would: one entry with the given
+        bytes, or none when they're None, in place of its unmerged entries. Only a path the index
+        still holds unmerged exactly as its sides were read is marked; the working file is never
+        read, and no other path changes (mark-config-resolved design D4, D5). An adapter with no
+        index marks none."""
         ...
 
     def configured_identities(self) -> tuple[str, ...]:

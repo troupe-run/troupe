@@ -144,9 +144,10 @@ In one call, for all paths:
    fallback: a conflicted path has at least one of the two.
 3. One `git update-index --index-info` from the theatre, with each line naming the path **repository-relative**
    (`theatre_prefix() + path`), because `--index-info` reads paths from the top whatever directory it runs in (see
-   Context). Removals go in the same input as `0 <null object> 0\t<path>`, which drops every stage. The null object's
-   length is the repository's object format (`git rev-parse --show-object-format`), so this works in a SHA-256
-   repository too. `--force-remove` would work just as well, but one input keeps it to one index write.
+   Context). Removals go in the same input as `0 <null object> 0\t<path>`, which drops every stage. The null object is as
+   long as the path's own unmerged objects, so this works in a SHA-256 repository too, with no extra call. (This
+   was first designed as `git rev-parse --show-object-format`, and changed during apply.) `--force-remove` would work just as well, but one input keeps it to one index write. The input is `-z`, so a path
+   needs no quoting.
 4. A failure of steps 2 or 3 (`vcs.failed`, such as another git holding `index.lock`, or a timeout) gives `failed`
    for every path not yet marked, and the failure's message is kept for the notice. There's one `update-index` call,
    so it's all or nothing for the paths that got that far.

@@ -30,13 +30,13 @@
 
 ## 3. The VCS port's `mark_resolved` (design D4, D5)
 
-- [ ] 3.1 Add `MergeSides.index`, `Resolve`, `Unmarked` and `Vcs.mark_resolved` to `core/vcs.py`, documented as D4
+- [x] 3.1 Add `MergeSides.index`, `Resolve`, `Unmarked` and `Vcs.mark_resolved` to `core/vcs.py`, documented as D4
   says. Make the plain filesystem adapter return `no-index` for every path. Verify with mypy --strict, and with a test
   in `packages/troupe-vcs-files/tests/test_files_adapter.py` that it marks nothing and reports `no-index`.
-- [ ] 3.2 Make the git adapter's conflicted reading (`merges.py`, `_conflicted`) fill `index` with its sorted
+- [x] 3.2 Make the git adapter's conflicted reading (`merges.py`, `_conflicted`) fill `index` with its sorted
   `<mode> <object> <stage>` records. Verify in `test_git_merge_sides.py` that two reads of the same unmerged path
   give equal `index`, and that `git add` on the path between reads changes it.
-- [ ] 3.3 Implement the git adapter's `mark_resolved` as D5 says: re-read with `ls-files -u`, `hash-object -w --path`
+- [x] 3.3 Implement the git adapter's `mark_resolved` as D5 says: re-read with `ls-files -u`, `hash-object -w --path`
   from the given bytes, the mode from stage 2 or else 3, and one `update-index --index-info` with repository-relative
   paths and the object format's null object for removals. Map a `vcs.failed` to `failed` with its message. Verify
   with real repositories in `packages/troupe-vcs-git/tests/test_git_mark_resolved.py`, one test per `vcs` scenario:
