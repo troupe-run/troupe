@@ -1,6 +1,7 @@
 """What single user docs pages say about troupe, checked against troupe (spec: user-docs; user-docs
 design D6)."""
 
+import dataclasses
 import io
 import json
 import os
@@ -16,9 +17,9 @@ import claude_stand_in
 from gitrepo import Repo
 from runtesting import ADA, theatre
 from troupe.cli import main
-from troupe.core import defaults
+from troupe.core import defaults, settings
 from troupe.core.client.messages import State
-from troupe.core.policy import ALLOW_UNENFORCED_LOCAL_STAGE, env_name
+from troupe.core.policy import ALLOW_UNENFORCED_LOCAL_STAGE, Policy, env_name
 from troupe.core.runs.aggregate import TOPICS
 from userdocs import DOCS, pages, read
 
@@ -200,10 +201,24 @@ def test_the_runs_page_lists_exactly_the_events_a_run_records() -> None:
 def test_the_runs_page_gives_each_policy_settings_default_and_variable_as_the_code_does() -> None:
     policy = section(RUNS, "Policy")
     rows = dict(re.findall(r"^\| `([a-z_]+)` \| `([a-z]+)` \|", policy, re.MULTILINE))
-    assert rows == {
-        ALLOW_UNENFORCED_LOCAL_STAGE: str(defaults.ALLOW_UNENFORCED_LOCAL_STAGE).lower()
-    }
+    assert rows == _defaults(Policy)
     assert env_name(ALLOW_UNENFORCED_LOCAL_STAGE) in policy
+
+
+def _defaults(seam: type) -> dict[str, str]:
+    """Each setting a seam's dataclass reads, and its default as the docs write it."""
+    return {
+        field.name: str(getattr(defaults, field.name.upper())).lower()
+        for field in dataclasses.fields(seam)
+    }
+
+
+def test_the_runs_page_gives_each_settings_default_and_variable_as_the_code_does() -> None:
+    page = section(RUNS, "Settings")
+    rows = dict(re.findall(r"^\| `([a-z_]+)` \| `([a-z]+)` \|", page, re.MULTILINE))
+    assert rows == _defaults(settings.Settings)
+    assert settings.env_name(settings.MARK_MERGES_RESOLVED) in page
+    assert "`settings.invalid-value`" in page
 
 
 # Lineage.

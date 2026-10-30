@@ -136,6 +136,7 @@ Policy decides what troupe may do, whoever asks. No command can loosen it.
 | Setting | Default | What it allows |
 |---|---|---|
 | `allow_unenforced_local_stage` | `false` | Running an actor on a stage that can't enforce its declared effects, such as the local stage |
+| `allow_mark_merges_resolved` | `true` | Marking a config file troupe rewrote from a conflicted merge resolved in git, when the setting `mark_merges_resolved` asks for it |
 
 Until policy has files of its own ([#8](https://github.com/troupe-run/troupe/issues/8)), you set it with an
 environment variable, `TROUPE_POLICY_` and the setting's name in capitals:
@@ -146,6 +147,26 @@ export TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE=true
 
 The value must be exactly `true` or `false`. Anything else, such as `yes` or `1`, fails the command with
 `policy.invalid-value`, and never falls back to the default. Unset or empty means the default.
+
+## Settings
+
+Settings are your preferences. Policy bounds them: when policy forbids what a setting asks for, troupe acts as if
+the setting were off, and says so.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `mark_merges_resolved` | `false` | When troupe rewrites a config file git left conflicted, it also marks the file resolved in git, as `git add` would, so you only commit the merge ([merges](../stagecraft/hand-edit-config.md#branches)) |
+
+Until settings have files of their own ([#71](https://github.com/troupe-run/troupe/issues/71),
+[#2](https://github.com/troupe-run/troupe/issues/2)), you set one with an environment variable, `TROUPE_SETTING_` and
+the setting's name in capitals:
+
+```sh
+export TROUPE_SETTING_MARK_MERGES_RESOLVED=true
+```
+
+As with policy, the value must be exactly `true` or `false`. Anything else fails the command with
+`settings.invalid-value`. Unset or empty means the default.
 
 ## When the house runs runs
 

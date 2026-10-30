@@ -41,3 +41,21 @@ def test_any_other_value_is_refused_naming_the_variable_the_value_and_the_accept
     assert error.details == {"variable": VARIABLE, "value": raw, "accepted": ["false", "true"]}
     assert "true" in error.fix
     assert "false" in error.fix
+
+
+MARK = "TROUPE_POLICY_ALLOW_MARK_MERGES_RESOLVED"
+
+
+@pytest.mark.parametrize("env", [{}, {MARK: ""}], ids=["unset", "empty"])
+def test_allow_mark_merges_resolved_defaults_to_true_from_the_default_source(
+    env: dict[str, str],
+) -> None:
+    assert read_policy(env).allow_mark_merges_resolved == PolicyFlag(
+        "allow_mark_merges_resolved", True, "default"
+    )
+
+
+def test_allow_mark_merges_resolved_false_is_read_from_the_env_source() -> None:
+    assert read_policy({MARK: "false"}).allow_mark_merges_resolved == PolicyFlag(
+        "allow_mark_merges_resolved", False, "env"
+    )

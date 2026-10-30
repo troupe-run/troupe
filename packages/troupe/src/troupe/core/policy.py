@@ -19,6 +19,7 @@ from troupe.core.errors import TroupeError
 
 ENV_PREFIX = "TROUPE_POLICY_"
 ALLOW_UNENFORCED_LOCAL_STAGE = "allow_unenforced_local_stage"
+ALLOW_MARK_MERGES_RESOLVED = "allow_mark_merges_resolved"
 
 PolicySource = Literal["default", "env"]
 BOOLEANS = {"true": True, "false": False}
@@ -38,6 +39,7 @@ class Policy:
     """Every policy setting troupe has, read once for a command."""
 
     allow_unenforced_local_stage: PolicyFlag
+    allow_mark_merges_resolved: PolicyFlag
 
 
 def env_name(setting: str) -> str:
@@ -51,8 +53,16 @@ def read_policy(env: Mapping[str, str]) -> Policy:
     return Policy(
         allow_unenforced_local_stage=_flag(
             ALLOW_UNENFORCED_LOCAL_STAGE, defaults.ALLOW_UNENFORCED_LOCAL_STAGE, env
-        )
+        ),
+        allow_mark_merges_resolved=read_mark_merges_resolved(env),
     )
+
+
+def read_mark_merges_resolved(env: Mapping[str, str]) -> PolicyFlag:
+    """Only ``allow_mark_merges_resolved``: what a config command reads when the setting
+    ``mark_merges_resolved`` is on, so a malformed policy it doesn't need never fails it
+    (mark-config-resolved design D2)."""
+    return _flag(ALLOW_MARK_MERGES_RESOLVED, defaults.ALLOW_MARK_MERGES_RESOLVED, env)
 
 
 def _flag(setting: str, default: bool, env: Mapping[str, str]) -> PolicyFlag:

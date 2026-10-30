@@ -2,7 +2,7 @@
 
 ## 1. Pin what must not change (before any code)
 
-- [ ] 1.1 On this branch, before any code change, check that the behaviours the design keeps with the setting unset
+- [x] 1.1 On this branch, before any code change, check that the behaviours the design keeps with the setting unset
   have tests that pass on main. They are: `troupe flush` rewriting a conflicted file and leaving it unmerged in git
   (`test_cli_config_merges.py`), the index untouched after a `config set` that resolves a conflicted file, a clean
   merge's index entry unchanged, and `--force` past a hand-edited side. Add any that's missing, plus one test that
@@ -11,20 +11,20 @@
 
 ## 2. The settings seam and the policy flag (design D1, D2, D7)
 
-- [ ] 2.1 Add `core/settings.py` (`TROUPE_SETTING_`, `SettingFlag`, `Settings`, `read_settings`, and
+- [x] 2.1 Add `core/settings.py` (`TROUPE_SETTING_`, `SettingFlag`, `Settings`, `read_settings`, and
   `settings.invalid-value`) and `defaults.MARK_MERGES_RESOLVED = False`, under a "Settings" heading. Register the
   error code wherever error codes are listed. Verify with `packages/troupe/tests/test_settings.py`, one test per
   `settings` scenario: the default with source `default`, `true` from env with source `env`, empty counting as
   unset, and `yes` failing and naming the variable, the value, `true` and `false`. Add a test that walks every
   request schema and finds no field that sets a setting.
-- [ ] 2.2 Add `allow_mark_merges_resolved` to `Policy` and `read_policy`, with `defaults.ALLOW_MARK_MERGES_RESOLVED =
+- [x] 2.2 Add `allow_mark_merges_resolved` to `Policy` and `read_policy`, with `defaults.ALLOW_MARK_MERGES_RESOLVED =
   True`, and a function that works out `Marking` from `Settings` and the env, reading policy only when the setting is
   on (D2). Verify in `test_policy.py` and `test_settings.py` that:
   - setting off gives `off_because="setting"`, and a malformed policy value is then not read;
   - setting on and policy unset gives `on`;
   - setting on and policy `false` gives `off_because="policy"`;
   - setting on and policy `nope` fails with `policy.invalid-value`.
-- [ ] 2.3 Document the seam and the setting: a settings table beside the policy table in
+- [x] 2.3 Document the seam and the setting: a settings table beside the policy table in
   `docs/the-company/performances-and-runs.md`, the new policy row in both that table and `contributing/runs.md`, and
   the settings seam in `contributing/` next to where policy's seam is described. Verify with the docs tests.
 

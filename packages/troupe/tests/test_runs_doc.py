@@ -1,5 +1,6 @@
 """contributing/runs.md describes runs, stages and policy as the code defines them."""
 
+import dataclasses
 import re
 from collections.abc import Iterable
 from pathlib import Path
@@ -11,7 +12,7 @@ from troupe.core import defaults
 from troupe.core.client.messages import State
 from troupe.core.errors import CODES
 from troupe.core.notices import CODES as NOTICE_CODES
-from troupe.core.policy import ALLOW_UNENFORCED_LOCAL_STAGE, env_name
+from troupe.core.policy import ALLOW_UNENFORCED_LOCAL_STAGE, Policy, env_name
 from troupe.core.runs.aggregate import TOPICS
 
 pytestmark = pytest.mark.docs  # reads docs/ (scripts/check-paths.toml)
@@ -30,11 +31,16 @@ def _section(heading: str) -> str:
     return match.group(1)
 
 
+POLICY = {
+    field.name: str(getattr(defaults, field.name.upper())).lower()
+    for field in dataclasses.fields(Policy)
+}
+"""Every policy setting the seam reads, and its default as the docs write it."""
+
+
 def test_the_policy_table_gives_each_settings_default_as_the_code_does() -> None:
     rows = dict(re.findall(r"^\| `([a-z_]+)` \| `([a-z]+)` \|", _section("Policy"), re.M))
-    assert rows == {
-        ALLOW_UNENFORCED_LOCAL_STAGE: str(defaults.ALLOW_UNENFORCED_LOCAL_STAGE).lower()
-    }
+    assert rows == POLICY
 
 
 def test_the_policy_section_names_the_variable_the_code_reads() -> None:
