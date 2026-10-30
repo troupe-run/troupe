@@ -64,4 +64,3 @@ message that says so.
   failure under load first. It didn't reproduce in 200 loaded runs, and the owner chose to go ahead on the code
   reading. The fix doesn't depend on which of causes 1–3 it was, and task 2.3 shows the tests still catch a store
   that keeps reading.
-- [Reproducing it loads the machine] → Ask the owner before the load run, per the standing preference.
