@@ -38,8 +38,9 @@ fixes it too.
   which condition never came, so a follower that never goes quiet still fails rather than hangs.
 - **The assertion is unchanged:** no segment read in 2 s once the store is quiet. A follower that reads while nothing
   is recorded still fails.
-- **First, reproduce it under load** and capture the assertion, as the issue asks, so the fix is checked against the
-  real failure rather than only the reading above.
+- **Not reproduced.** The issue asked for a reproduction under load first. Two flake hunts, 200 loaded runs of each
+  quiet test, found no failure (tasks.md, 1.1). The owner chose to go ahead on the reading above: the fix doesn't
+  depend on which of the three causes it was, since the tests no longer assume anything has finished by a fixed time.
 
 ## Capabilities
 
@@ -54,8 +55,8 @@ says what the tests check, and the follower's behaviour doesn't change. The chan
 
 ## Impact
 
-- `packages/troupe/tests/test_run_queries.py`: the one test, and possibly a small helper beside `follow_in_background`.
+- `packages/troupe/tests/test_run_queries.py`: the one test.
 - `packages/troupe-store-text/tests/test_processes.py`: the sibling test.
-- No production code changes. If reproducing it shows a look while the store really is quiet (a follower that reads
-  without a write or a wake), that is a bug in the follower, and the change stops and raises it with the owner
-  rather than loosening the test.
+- `packages/troupe/tests/storetesting.py`: the two bounded waits and `SETTLE`, which moves here from
+  `packages/troupe/tests/test_platform_watching.py` (design D2).
+- No production code changes.
