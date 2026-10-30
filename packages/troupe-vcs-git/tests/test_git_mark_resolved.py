@@ -163,6 +163,38 @@ def test_another_git_holding_the_index_lock_is_a_failure_that_changes_nothing(re
     assert _index(repo) == index
 
 
+def _base_only(repo: Repo) -> None:
+    """tester.yaml unmerged with only stage 1, as git leaves a path both sides deleted: the
+    stages are set straight in the index, since only rename conflicts make one."""
+    _write(repo, YAML, b"runner: a\n")
+    repo.commit_all("base")
+    blob = repo.git("rev-parse", f"HEAD:{YAML}").strip()
+    zero = "0" * len(blob)
+    entries = f"0 {zero} 0\t{YAML}\x00100644 {blob} 1\t{YAML}\x00"
+    subprocess.run(
+        ["git", "update-index", "-z", "--index-info"],  # noqa: S607
+        cwd=repo.path,
+        env=repo.env,
+        input=entries.encode(),
+        check=True,
+    )
+    assert repo.git("ls-files", "-u", "--", YAML).split()[2] == "1"
+    (repo.path / YAML).unlink()
+
+
+def test_a_path_holding_only_its_base_stage_is_removed(repo: Repo) -> None:
+    _base_only(repo)
+    assert _mark(repo, None) == Marked({YAML: None})
+    assert repo.git("ls-files", "-s", "--", YAML) == ""
+
+
+def test_a_path_holding_only_its_base_stage_is_written_with_the_bases_mode(repo: Repo) -> None:
+    _base_only(repo)
+    assert _mark(repo, MERGED) == Marked({YAML: None})
+    assert repo.git("ls-files", "-s", "--", YAML).startswith("100644 ")
+    assert _staged(repo, YAML) == MERGED
+
+
 # Requirement: The git adapter leaves a path whose stages have changed
 
 
