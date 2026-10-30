@@ -69,6 +69,10 @@ context: |
     ``Capability: `cap:stages`, `cap:vcs` ``. A new spec's delta puts the line at the top of its `## Purpose`, which
     OpenSpec carries into the main spec. A label that doesn't exist yet is added through
     troupe-run/infrastructure#152 first.
+  - Every spec's Purpose, without its `Capability:` line, is recorded in troupe-run/infrastructure's
+    `oob/troupe-spec-purposes.json`, and the descriptions of the labels it names are checked against it. A change
+    that adds or removes a spec, or edits a Purpose, updates the record in an infrastructure pull request merged
+    alongside it; otherwise infrastructure's drift job fails. Its `oob/README.md` says how.
   - When a change fixes a tracked issue, comment on the issue with the change and close it.
   - Commit in small steps with messages that say why.
   - Before archiving, wait for Claude's review of the last push and act on each finding by its tier: fix or answer
