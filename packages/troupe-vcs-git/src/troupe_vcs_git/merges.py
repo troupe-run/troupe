@@ -35,7 +35,7 @@ from troupe.platform.processes import Completed
 if TYPE_CHECKING:
     from troupe_vcs_git import GitAdapter
 
-_MERGED, _OURS, _THEIRS = "0", "2", "3"
+_MERGED, _BASE, _OURS, _THEIRS = "0", "1", "2", "3"
 _CONFLICTS = 1
 """merge-tree's exit status when the merge has conflicts: an answer, not a failure."""
 
@@ -137,7 +137,9 @@ class Merges:
         try:
             entries = []
             for path, (entry, data) in due.items():
-                mode, blob = entry.get(_OURS) or entry[_THEIRS]
+                # The mode of ours, else theirs, else the base's: a path both sides deleted
+                # (rename conflicts leave one) holds only stage 1.
+                mode, blob = entry.get(_OURS) or entry.get(_THEIRS) or entry[_BASE]
                 if data is None:
                     # Mode 0 drops every stage; the zero object is as long as the repository's.
                     entries.append(f"0 {'0' * len(blob)} 0\t{prefix}{path}")
