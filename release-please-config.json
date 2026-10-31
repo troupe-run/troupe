@@ -66,6 +66,14 @@
           "type": "toml",
           "path": "/uv.lock",
           "jsonpath": "$.package[?(@.name.value=='troupe-run')].version"
+        },
+        {
+          "type": "generic",
+          "path": "/README.md"
+        },
+        {
+          "type": "generic",
+          "path": "/docs/opening-night/install.md"
         }
       ]
     },

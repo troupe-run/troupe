@@ -37,6 +37,11 @@ TAGGED_PAGES = ("README.md", "docs/opening-night/install.md")
 generic updater rewrites the version between their markers (install-from-tag design D3)."""
 
 
+def page_update(page: str) -> dict[str, str]:
+    """The bundle's extra-file update that moves the version between a page's markers."""
+    return {"type": "generic", "path": f"/{page}"}
+
+
 def bundle_path(root: Path) -> str:
     """The bundle's path in the release config: the entry released under its name."""
     config: dict[str, Any] = json.loads((root / CONFIG).read_text(encoding="utf-8"))
@@ -137,6 +142,14 @@ def _member_entry_problems(
             f"{path} ({name}) doesn't update its version in {LOCK}: add {json.dumps(expected)} to "
             f"its 'extra-files' in {CONFIG}."
         )
+    if name == BUNDLE:
+        for page in TAGGED_PAGES:
+            update = page_update(page)
+            if update not in entry.get("extra-files", []):
+                found.append(
+                    f"{path} ({name}) doesn't move the tag {page}'s install command names: add "
+                    f"{json.dumps(update)} to its 'extra-files' in {CONFIG}."
+                )
     in_lock = [package for package in lock.get("package", []) if package.get("name") == name]
     if len(in_lock) != 1:
         found.append(

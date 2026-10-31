@@ -39,15 +39,22 @@
 
 ## 3. Each release moves the documented tag (design D3)
 
-- [ ] 3.1 Add `{"type": "generic", "path": "/README.md"}` and `{"type": "generic", "path":
+- [x] 3.1 Add `{"type": "generic", "path": "/README.md"}` and `{"type": "generic", "path":
   "/docs/opening-night/install.md"}` to the `packages/troupe-run` entry's `extra-files` in `release-please-config.json`.
-- [ ] 3.2 In `scripts/release_config.py`, fail when the bundle's entry doesn't list both pages, naming the file and the
+- [x] 3.2 In `scripts/release_config.py`, fail when the bundle's entry doesn't list both pages, naming the file and the
   missing path. Verify with a test in `test_release_config.py` that removes one, written to fail before 3.1, and that
   `test_every_workspace_member_is_configured_for_release` still passes.
-- [ ] 3.3 Run release-please's generic updater, from npm at the version `release.yml`'s action pins, on scratch copies
+- [x] 3.3 Run release-please's generic updater, from npm at the version `release.yml`'s action pins, on scratch copies
   of both pages with `@main` replaced by `@troupe-run-v0.1.0` and a new version of 0.2.0. Verify that the diff changes
   only the tag to `troupe-run-v0.2.0`, and that the same run on the real pages (`@main`) changes nothing. Record the
   command and diffs here.
+  - 2026-10-31: `release-please-action` v5.0.0 (the SHA `release.yml` pins) locks `release-please` 17.6.0. Installed
+    it from npm into a scratch directory, and ran its `Generic` updater (`new Generic({version:
+    Version.parse("0.2.0")}).updateContent(page)`, what a `{"type": "generic"}` extra file runs) on copies of both
+    pages. With `@troupe-run-v0.1.0`, the only change in each was the command's line, to `@troupe-run-v0.2.0`
+    (README.md:19, install.md:18). With the real pages (`@main`, and the `<commit>` command outside the markers),
+    nothing changed. `release-please-config.json` validates against 17.6.0's `schemas/config.json`
+    (`check-jsonschema`: ok).
 
 ## 4. The release install check workflow (design D5, D6)
 

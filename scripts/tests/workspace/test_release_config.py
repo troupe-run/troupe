@@ -293,5 +293,22 @@ def test_the_protocol_missing_from_the_manifest_is_named_with_the_file_and_its_t
     ]
 
 
+@pytest.mark.parametrize("page", release_config.TAGGED_PAGES)
+def test_a_bundle_that_doesnt_move_an_install_pages_tag_is_named_with_the_update(
+    copy: Path, page: str
+) -> None:
+    path = release_config.bundle_path(copy)
+    update = release_config.page_update(page)
+
+    def remove(config: dict[str, Any]) -> None:
+        config["packages"][path]["extra-files"].remove(update)
+
+    edit_json(copy, CONFIG, remove)
+    assert release_config.problems(copy) == [
+        f"{path} (troupe-run) doesn't move the tag {page}'s install command names: add "
+        f"{json.dumps(update)} to its 'extra-files' in {CONFIG}."
+    ]
+
+
 def test_every_workspace_member_is_configured_for_release() -> None:
     assert release_config.problems(REPO) == []
