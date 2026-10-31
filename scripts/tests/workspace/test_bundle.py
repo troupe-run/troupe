@@ -104,7 +104,7 @@ def test_the_bundle_names_its_dependencies_without_versions() -> None:
     # The root's workspace sources pin each one to the installed commit (design D1); a version
     # here would be a second, unchecked statement of what's installed.
     project = tomllib.loads((REPO / BUNDLE_PYPROJECT).read_text(encoding="utf-8"))["project"]
-    assert all(bundle.requirement_name(r) == r for r in project["dependencies"])
+    assert all(release_config.requirement_name(r) == r for r in project["dependencies"])
 
 
 def test_troupe_run_installs_troupe_with_every_workspace_member() -> None:

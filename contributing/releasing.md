@@ -34,13 +34,18 @@ changelogs.
 
 A commit counts towards a component when it changes files under that component's directory:
 
-- **Core and its bundled adapters** (`packages/*`) form one linked group, `troupe`. When any of them has a releasable
-  commit, all of them release, at the same version. They run in-process together, so mixed versions would be
-  combinations nobody tests.
+- **Everything the bundle ships forms one linked group, `troupe`**: core and its adapters (`packages/*`), the bundle
+  `troupe-run`, and the runner plugins it depends on. The bundle is the latest release of everything in it (#214),
+  so when any of them has a releasable commit, all of them release, at the same version, and each release makes a
+  `troupe-run-v<version>` tag. A `fix:` that changes only `plugins/runner-scripted/` releases the whole group. Core
+  and the adapters also run in-process together, so mixed versions would be combinations nobody tests. A release
+  pull request gathers every pending commit, so releases close together roll up into one.
 - **The protocol** (`protocol/`) versions on its own (release type `simple`), because it evolves separately from the
   packages and the docs (#140). It releases only when a releasable commit changes `protocol/`, and lists those
   commits in `protocol/CHANGELOG.md`. The runner contract keeps its own version (version 0), set in its schemas.
-- **Each plugin** (`plugins/*`) versions on its own, because plugins are meant to move to their own repositories.
+- **The runners leave the group when they move to their own repositories** (#38, #67). That change takes them out
+  of `troupe-run`'s dependencies and out of the group together, and from then on they version on their own. Until
+  then the bundle is the only way to install a runner, so a version of its own would give users nothing.
 - **Everything else** (`openspec/`, `scripts/`, `docs/`, the root `pyproject.toml`, CI) belongs to no component and
   releases nothing.
 
@@ -68,8 +73,9 @@ a commit changes decide which components it counts towards. A commit that change
 ## Adding a package
 
 A new workspace member needs an entry in `release-please-config.json` and in `.release-please-manifest.json` (at
-`"0.0.0"`). A `packages/*` member also goes in the `troupe` linked group. `scripts/check.py` fails until it's
-configured, and its message names the member and the file to add it to (`scripts/release_config.py`).
+`"0.0.0"`). A `packages/*` member, and any package `troupe-run` depends on (it ships them all), also goes in the
+`troupe` linked group. `scripts/check.py` fails until it's configured, and its message names the member and the file
+to add it to (`scripts/release_config.py`). It also fails when the group lists a package the bundle doesn't ship.
 
 ## Forcing a version
 

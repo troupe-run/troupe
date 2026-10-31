@@ -8,31 +8,17 @@ test, inside scripts/check.py; each problem names the package and the file to fi
 Standard library only, like check.py.
 """
 
-import re
 import tomllib
 from pathlib import Path
 from typing import Any
 
-from release_config import members
+from release_config import members, normalise, requirement_name
 
 BUNDLE = "troupe-run"
 BUNDLE_PYPROJECT = "packages/troupe-run/pyproject.toml"
 CORE = "troupe"
 CORE_PYPROJECT = "packages/troupe/pyproject.toml"
 COMMAND = "troupe"
-
-
-def normalise(name: str) -> str:
-    """A distribution name as packaging compares it (PEP 503)."""
-    return re.sub(r"[-_.]+", "-", name).lower()
-
-
-def requirement_name(requirement: str) -> str:
-    """The distribution a requirement names, without its extras, markers or version."""
-    match = re.match(r"\s*([A-Za-z0-9][A-Za-z0-9._-]*)", requirement)
-    if match is None:
-        raise ValueError(f"not a requirement: {requirement!r}")
-    return normalise(match.group(1))
 
 
 def _project(root: Path, path: str) -> dict[str, Any] | None:
