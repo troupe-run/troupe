@@ -520,6 +520,37 @@ def test_waiting_for_a_killed_child_whose_over_long_line_was_refused_ends() -> N
     assert rest == b"x" * size + b"\n", f"{len(rest)} bytes of the {size + 1} the child wrote"
 
 
+@pytest.mark.parametrize("read", ["at once", "once its output has paused"])
+def test_waiting_for_a_child_that_exits_by_itself_after_an_over_long_line_ends(read: str) -> None:
+    size, limit = 2 * 1024 * 1024, 1024 * 1024
+    code = f"import sys; sys.stdout.buffer.write(b'x' * {size} + b'\\n')"
+
+    async def main() -> tuple[int, bytes]:
+        child = await processes.start(_python(code), cwd=Path.cwd(), env={}, line_limit=limit)
+        try:
+            if read != "at once":
+                # The whole line arrives first, so asyncio pauses the pipe before its end (#187).
+                await _until_stdout_pauses(child)
+            with pytest.raises(LineTooLongError):
+                await processes.read_line(child.stdout, limit)
+            try:
+                exit_code = await asyncio.wait_for(child.wait(), timeout=WAIT_LIMIT)
+            except TimeoutError:
+                pytest.fail(
+                    f"waiting for the child that exited took over {WAIT_LIMIT:g}s: its output "
+                    "was left paused at the refused line, so its end was never read"
+                )
+            rest = await asyncio.wait_for(child.stdout.read(), timeout=WAIT_LIMIT)
+            return exit_code, rest
+        finally:
+            child.kill_tree()
+            child.release()
+
+    exit_code, rest = asyncio.run(main())
+    assert exit_code == 0
+    assert rest == b"x" * size + b"\n", f"{len(rest)} bytes of the {size + 1} the child wrote"
+
+
 def test_reading_at_end_of_output_returns_the_unterminated_last_line_then_nothing() -> None:
     async def main() -> list[bytes]:
         child = await processes.start(
