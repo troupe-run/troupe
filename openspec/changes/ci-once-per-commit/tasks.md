@@ -2,39 +2,57 @@
 
 ## 1. Check what the change relies on
 
-- [ ] 1.1 Confirm D3's reading of the check-runs API on a real troupe commit: for a recent pull request head, compare
+- [x] 1.1 Confirm D3's reading of the check-runs API on a real troupe commit: for a recent pull request head, compare
   `gh api "repos/troupe-run/troupe/commits/<sha>/check-runs?check_name=check&app_id=15368&filter=all"` with the
   default `filter=latest`, and record here whether every run carries `started_at` and `conclusion`, including a
   skipped one (find a run with the legs skipped, such as an archive push). If `started_at` can be null on a completed
   run, say so in design D3 before task 3.1.
-- [ ] 1.2 Confirm the guard allows the pull request steps in this repository: run the guard's Claude Code hook on a
+  Done 2026-10-31. troupe's last six merged heads each have one `check` (one suite), the same under both filters.
+  efa5105 on `main` has two, from its merge-group and push suites (111252847691, 111256534054), and `filter=latest`
+  returns **both**, newest first: it dedupes within a suite only, as D3 assumed. A skipped `check` (infrastructure's
+  draft head d936713, run 124088533146) is `completed`/`skipped` with `started_at` set, and its `completed_at` a
+  second *before* its `started_at`, so ordering by `completed_at` would be wrong and D3's `started_at` is the key.
+  Every run seen carries `started_at`; the no-start-time rule stays as a safe default.
+- [x] 1.2 Confirm the guard allows the pull request steps in this repository: run the guard's Claude Code hook on a
   `gh pr create --draft --body-file <file with Closes #204>` and a `gh pr ready 1` tool call, as
   `scripts/tests/test_guard_*.py` do, and record the decisions here. If either is refused, stop and raise it with the
   owner (it's infrastructure's rule, delivered).
+  Done 2026-10-31 by piping a PreToolUse Bash payload into `uv run --no-project python scripts/guard.py
+  claude-pre-tool-use` (troupe holds no guard tests; they're infrastructure's). `gh pr create --draft … --body-file
+  <Closes #204>`: exit 0, no decision, so Claude Code's own check applies. `gh pr ready 1`: allowed and granted
+  ("on the guard's allow-list"). The same create with a body that closes nothing is denied by `pr-closes-issue`, so
+  the hook is deciding. No rule change needed.
 
 ## 2. A push to `main` asks the merge queue (design D1)
 
-- [ ] 2.1 Add `scripts/queue_passed.py`, adapted from troupe-run/infrastructure's (its header names the source): given
+- [x] 2.1 Add `scripts/queue_passed.py`, adapted from troupe-run/infrastructure's (its header names the source): given
   `--repository` and `--sha`, read CI's `merge_group` runs on that commit with `gh run list`, print `scope=none` and
   `check-args=` when one completed with success, and `scope=full` and `check-args=` otherwise. Poll a waiting run
   every 10 s for up to 2 minutes. Answer `full` with a `::warning::` naming why on a failed read, unparseable output
   or an unknown status, and always exit 0. Standard library only, with an injected `gh` callable. Add it to
   `scopes.scripts` in `scripts/check-paths.toml`.
-- [ ] 2.2 Add `scripts/tests/test_queue_passed.py`, each test named for what it checks: a successful queue run skips;
+- [x] 2.2 Add `scripts/tests/test_queue_passed.py`, each test named for what it checks: a successful queue run skips;
   no queue run, or a failed or cancelled one, runs everything; a run that completes during the wait is waited for;
   one still running at the limit runs everything; a failed read, unparseable output and an unknown status run
   everything with a warning and exit 0; only `--event merge_group` runs of `ci.yml` on the given sha are asked for;
   stdout holds only `name=value` lines. Verify `uv run scripts/check.py --scope scripts` passes.
-- [ ] 2.3 Run it against GitHub: `python3 scripts/queue_passed.py --repository troupe-run/troupe --sha <sha>` for
+- [x] 2.3 Run it against GitHub: `python3 scripts/queue_passed.py --repository troupe-run/troupe --sha <sha>` for
   efa5105's full sha (merged through the queue) answers `scope=none`, and for 2588054's (a guard delivery) answers
   `scope=full`. Record both outputs here.
+  Done 2026-10-31. efa5105: `scope=none`, `check-args=` ("the merge queue passed efa5105…, so its legs aren't run
+  again"). 2588054: `scope=full`, `check-args=` ("no merge-queue run of CI tested 2588054…"). A repository that
+  doesn't exist: `scope=full` with a `::warning::` naming the 404. Each exited 0.
 
 ## 3. D1 judges only the latest `check`, and accepts `ready_for_review` (design D2, D3)
 
-- [ ] 3.1 Before changing `scripts/check_range.py`, list in `scripts/tests/test_check_range.py` the behaviours that
+- [x] 3.1 Before changing `scripts/check_range.py`, list in `scripts/tests/test_check_range.py` the behaviours that
   must stay the same (a passing previous head narrows a `synchronize`; anything else, `opened` and `reopened` take
   the whole diff; malformed shas and unknown actions are refused, naming them) and confirm they pass on the current
   code.
+  Done 2026-10-31: the file already holds each one (narrowing, the whole diff for every other conclusion and for
+  `opened`/`reopened`, malformed shas, unknown actions, the exit codes and argument count). All 26 pass on
+  `check_range.py` as of 281ed5a, before 3.2 changes it. 3.2 keeps every case, moving each conclusion into the
+  check-runs JSON it now reads.
 - [ ] 3.2 Change `check_range.py`'s fifth argument from a conclusion to the path of the check-runs JSON (empty when
   nothing was looked up). It picks the run that started last, counting one with no start time as the latest, and
   narrows only when that run's conclusion is `success`. JSON that isn't the check-runs shape is refused, naming the
