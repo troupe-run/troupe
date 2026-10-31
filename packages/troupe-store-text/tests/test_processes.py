@@ -17,7 +17,7 @@ from eventsourcing.persistence import Notification
 
 from gitrepo import make_repo
 from protocol_schemas import check_notice
-from storetesting import event, settle, wait_until
+from storetesting import BOUND, STALL_SECONDS, event, settle, wait_until, watched_delays
 from troupe.core.files import directory_lock
 from troupe.core.vcs import load_vcs
 from troupe.platform import watching
@@ -213,15 +213,6 @@ for version, _ in enumerate(sys.stdin, start=1):
 """Records one event per line read, in one session (so the first creates a segment and later ones
 append to it), printing the wall-clock time each segment append returned (design D7)."""
 
-BOUND = 0.25  # seconds: a quarter of the 1 s subscription poll this replaces
-
-STALL_SECONDS = 5.0
-"""How much a loaded machine may add to a timed delivery beyond its interval: to a delivery that
-happens once, which a median can't cover, and to the median of polled or watched deliveries, where
-a slow stretch can cover most of the samples (#91, #100). One scheduling stall has taken 1.06 s in
-CI (#81) and 3.40 s locally; #91's slow stretch had a median of 0.52 s. Well inside the 10 s wait,
-which is what fails a store that never delivers."""
-
 
 class Writer:
     def __init__(self, theatre: Path) -> None:
@@ -304,19 +295,22 @@ def store_for(theatre: Path, **options: object) -> TextStore:
     return TextStore(theatre, load_vcs("files", theatre), **options)  # type: ignore[arg-type]
 
 
-def delays(store: TextStore, heard: threading.Event, writer: Writer, count: int = 5) -> list[float]:
-    """How long each of ``count`` events the writer records takes to reach the listener, from when
-    its append returned. Each must arrive, and be the one event the store's order gained."""
-    measured: list[float] = []
-    for _ in range(count):
+def delays(store: TextStore, heard: threading.Event, writer: Writer) -> list[float]:
+    """How long each event the writer records takes to reach the listener, from when its append
+    returned: five, then more while none is under BOUND (``watched_delays``). Each must arrive, and
+    be the one event the store's order gained."""
+
+    def measure() -> float:
         before = store.max_notification_id() or 0
         heard.clear()
         writer.record()
         assert heard.wait(10)
         woke = time.time()
-        measured.append(woke - writer.appended_at())
+        delay = woke - writer.appended_at()
         assert store.max_notification_id() == before + 1
-    return measured
+        return delay
+
+    return watched_delays(measure)
 
 
 class Recording:
@@ -429,9 +423,10 @@ def test_another_processs_events_each_reach_a_listener_the_fastest_under_the_bou
     with listened(store) as heard:
         woken = delays(store, heard, writer)
     # Poll and check are 60 s, so every delivery inside the 10 s waits was the watch's. The fastest
-    # shows it delivers promptly; the median allows a loaded machine's slow stretch (#100, #89).
+    # shows it delivers promptly, measured past a slow stretch (#159); the median of the first five
+    # allows a loaded machine's slow stretch (#100, #89).
     assert min(woken) < BOUND, woken
-    assert statistics.median(woken) < BOUND + STALL_SECONDS, woken
+    assert statistics.median(woken[:5]) < BOUND + STALL_SECONDS, woken
 
 
 def test_the_first_event_reaches_a_listener_that_subscribed_before_events_existed(

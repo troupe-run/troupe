@@ -92,6 +92,42 @@ WITHIN = 30.0
 bounded, since nothing else stops a test that waits (quiet-run-under-load design D3)."""
 
 
+BOUND = 0.25
+"""Seconds within which a watched delivery must arrive: a quarter of the 1 s subscription poll the
+watch replaces."""
+
+STALL_SECONDS = 5.0
+"""How much a loaded machine may add to a timed delivery beyond its interval: to a delivery that
+happens once, which a median can't cover, and to the median of polled or watched deliveries, where
+a slow stretch can cover most of the samples (#91, #100). One scheduling stall has taken 1.06 s in
+CI (#81) and 3.40 s locally; #91's slow stretch had a median of 0.52 s, and #100's Windows runs
+gave watched medians of 0.40 s and 0.52 s. Well inside the 10 s wait, which is what fails a store
+that never delivers."""
+
+SLOW_STRETCH_SECONDS = 60.0
+"""How long a slow stretch the watched-delivery tests ride out before the fastest delivery must be
+under BOUND (listener-bound-on-windows design D1). A slow stretch can cover every one of five
+deliveries: on Windows CI all five took 0.78 s to 2.17 s once, and 0.38 s to 0.82 s another time
+(#159), about 7 s of deliveries at most, while another worker's 56 s test loaded the runner. A watch
+that is slow by design is slow every time, so it still fails once this has passed."""
+
+
+def watched_delays(
+    measure: Callable[[], float],
+    *,
+    clock: Callable[[], float] = time.monotonic,
+    slow_stretch: float = SLOW_STRETCH_SECONDS,
+) -> list[float]:
+    """Each delay ``measure`` returns: five, then one at a time while none is under BOUND, until
+    ``slow_stretch`` seconds have passed since the first started (listener-bound-on-windows design
+    D1). A quiet machine measures five; a loaded one measures until its slow stretch passes."""
+    started = clock()
+    delays = [measure() for _ in range(5)]
+    while min(delays) >= BOUND and clock() - started < slow_stretch:
+        delays.append(measure())
+    return delays
+
+
 def wait_until(condition: Callable[[], bool], what: str) -> None:
     """Return once ``condition`` holds; fail naming ``what`` if it doesn't within WITHIN seconds."""
     deadline = time.monotonic() + WITHIN
