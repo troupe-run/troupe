@@ -93,8 +93,10 @@
 - [x] 5.1 Run `uv run scripts/check.py` and confirm it passes in full. Run `openspec validate install-from-tag --strict`.
   - 2026-10-31: the commit guard ran the full `scripts/check.py` on 6d9ce17, the last code change: all gates passed,
     3090 passed and 14 skipped. `openspec validate install-from-tag --strict`: valid.
-- [ ] 5.2 On the draft PR's CI, once it's ready, confirm every leg's existing install check (from the commit) still
+- [x] 5.2 On the draft PR's CI, once it's ready, confirm every leg's existing install check (from the commit) still
   passes on all three platforms.
+  - 2026-10-31: CI run 41196979522 on 21348aa, the ready PR: `check` passed, and each of the 12 legs (Linux, macOS,
+    Windows × Python 3.12–3.15) printed `install check: installed and performed (run … succeeded)`.
 
 ## Workflow follow-up
 
