@@ -90,7 +90,9 @@
 
 ## 5. Integration
 
-- [ ] 5.1 Run `uv run scripts/check.py` and confirm it passes in full. Run `openspec validate install-from-tag --strict`.
+- [x] 5.1 Run `uv run scripts/check.py` and confirm it passes in full. Run `openspec validate install-from-tag --strict`.
+  - 2026-10-31: the commit guard ran the full `scripts/check.py` on 6d9ce17, the last code change: all gates passed,
+    3090 passed and 14 skipped. `openspec validate install-from-tag --strict`: valid.
 - [ ] 5.2 On the draft PR's CI, once it's ready, confirm every leg's existing install check (from the commit) still
   passes on all three platforms.
 
