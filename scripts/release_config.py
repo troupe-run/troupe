@@ -27,6 +27,28 @@ PROTOCOL_RECORD = "packages/troupe/src/troupe/protocol/version.json"
 protocol release pull request changes it (protocol-own-release design D2)."""
 RECORD_UPDATE = {"type": "json", "path": f"/{PROTOCOL_RECORD}", "jsonpath": "$.version"}
 """The protocol's extra-file update that writes its new version into PROTOCOL_RECORD."""
+BUNDLE = "troupe-run"
+"""The bundle the documented install command installs (install-with-uv design D1). Its release tag,
+troupe-run-v<version>, is the one the docs name (install-from-tag design D1). Named, not given as
+its path: a path into packages/ here would make every suite that imports this reach every package
+(check_paths_reach.py, rule 4)."""
+TAGGED_PAGES = ("README.md", "docs/opening-night/install.md")
+"""The pages whose install command each release moves to the bundle's new tag: release-please's
+generic updater rewrites the version between their markers (install-from-tag design D3)."""
+
+
+def bundle_path(root: Path) -> str:
+    """The bundle's path in the release config: the entry released under its name."""
+    config: dict[str, Any] = json.loads((root / CONFIG).read_text(encoding="utf-8"))
+    entries: dict[str, dict[str, Any]] = config["packages"]
+    [path] = [path for path, entry in entries.items() if entry.get("package-name") == BUNDLE]
+    return path
+
+
+def bundle_version(root: Path) -> str:
+    """The bundle's released version in the manifest: 0.0.0 until its first release."""
+    manifest: dict[str, str] = json.loads((root / MANIFEST).read_text(encoding="utf-8"))
+    return manifest[bundle_path(root)]
 
 
 def lock_jsonpath(name: str) -> str:

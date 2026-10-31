@@ -13,9 +13,11 @@ troupe hasn't had a release yet, but you can install the latest `main`, or any c
 troupe needs Python 3.12 to 3.15, on Linux, macOS or Windows. All three are supported from the start, and tested on
 every change. You don't need to install Python yourself: uv downloads a version troupe supports if you don't have one.
 
+<!-- x-release-please-start-version -->
 ```sh
 uv tool install "git+https://github.com/troupe-run/troupe@main#subdirectory=packages/troupe-run"
 ```
+<!-- x-release-please-end -->
 
 This installs the latest `main`. To install a particular commit instead, give the commit in place of `main`:
 
@@ -41,9 +43,10 @@ If your shell can't find `troupe`, run `uv tool update-shell` and open a new ter
 ## What's decided
 
 - **Releases are installed with uv, from GitHub.** troupe isn't on PyPI, and may never be
-  ([#139](https://github.com/troupe-run/troupe/issues/139)). Installing a release by its tag comes with the first
-  release ([#189](https://github.com/troupe-run/troupe/issues/189)). How troupe reaches people who won't use uv is
-  open, in [#143](https://github.com/troupe-run/troupe/issues/143).
+  ([#139](https://github.com/troupe-run/troupe/issues/139)). From the first release, you install a release by the
+  tag of `troupe-run`, the package the command installs: `troupe-run-v<version>`, in place of `main`
+  ([#208](https://github.com/troupe-run/troupe/issues/208)). How troupe reaches people who won't use uv is open, in
+  [#143](https://github.com/troupe-run/troupe/issues/143).
 - **Each release is on GitHub**, at [troupe's releases page](https://github.com/troupe-run/troupe/releases), with
   its [changelog](../backstage/changelog.md).
 - **The command line and the house are installed and upgraded together, as one unit,** so they never disagree
