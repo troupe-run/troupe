@@ -1,6 +1,6 @@
 [project]
 name = "troupe-stage-local"
-version = "0.0.1.dev0"
+version = "0.1.0"
 description = "troupe's local stage: runs an actor on the host, in the theatre, with its effects unenforced."
 readme = "README.md"
 license = "Apache-2.0"
