@@ -58,16 +58,16 @@
 
 ## 4. The release install check workflow (design D5, D6)
 
-- [ ] 4.1 Write `scripts/release_check_report.py`, standard library only: from `gh run view --json jobs` output, the
+- [x] 4.1 Write `scripts/release_check_report.py`, standard library only: from `gh run view --json jobs` output, the
   failed legs (platform, Python, job URL). From those, the tag, the run URL and the release URL, the issue's title and
   body. Verify with tests in `scripts/tests/workspace/` against a payload copied from a real `gh run view --json jobs`
   of a CI run with a failed leg: one failed leg, several, and none (no issue).
-- [ ] 4.2 Write `.github/workflows/release-install-check.yml`, following `ci.yml`'s conventions (actions pinned by SHA,
+- [x] 4.2 Write `.github/workflows/release-install-check.yml`, following `ci.yml`'s conventions (actions pinned by SHA,
   `timeout-minutes`, least permissions): `release: published` and `workflow_dispatch` with `ref`; the `install` matrix
   job filtered to `troupe-run-v` tags; the `report` job on failure for a tag only, with `contents: read`,
   `actions: read` and `issues: write`. Verify with `actionlint`, if the guard or check runs it, and by reading it
   against D5.
-- [ ] 4.3 Extend `scripts/python_versions.py` to check the new workflow's `python` matrix like `ci.yml`'s, and add a
+- [x] 4.3 Extend `scripts/python_versions.py` to check the new workflow's `python` matrix like `ci.yml`'s, and add a
   test that the workflow's tag filter is `install_check.TAG_PREFIX`. Verify with tests that a matrix missing 3.15
   names the workflow and 3.15, and that a filter of `troupe-v` is named.
 - [ ] 4.4 Check, in a `troupe-run/infra-probe-*` repository (troupe-run/infrastructure#217), whether a workflow's

@@ -1,0 +1,78 @@
+name: release install check
+
+# Installs each published troupe-run release the way the docs say, from GitHub by its tag, on every
+# OS and Python troupe supports, and performs with it (spec: installation; install-from-tag design
+# D5). release-please publishes one release per component, and this checks only the bundle's,
+# troupe-run-v<version>, the tag the docs name (design D1). It can be run again for a tag, or tried
+# against main, with `gh workflow run release-install-check.yml -f ref=<ref>`.
+#
+# A failure for a published tag opens a Bug (design D6): tags are never moved or deleted, and a run
+# the release App started notifies nobody. A dispatch for anything other than a release tag just
+# fails. No secrets: this runs code from the tag, so the release App's key stays in release.yml.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: The tag, branch or commit to install, as the docs would name it
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    name: install (${{ matrix.os }}, Python ${{ matrix.python }})
+    if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'troupe-run-v') }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.12", "3.13", "3.14", "3.15"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The check reads the version core declares at the ref, so it checks out the same one.
+          ref: ${{ github.event.release.tag_name || inputs.ref }}
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          python-version: ${{ matrix.python }}
+          enable-cache: true
+      - name: Install check (the documented install, from GitHub)
+        shell: bash
+        env:
+          REF: ${{ github.event.release.tag_name || inputs.ref }}
+          PYTHON: ${{ matrix.python }}
+        run: uv run scripts/install_check.py --hosted --ref "$REF" --python "$PYTHON"
+
+  report:
+    name: report
+    needs: install
+    # Only a release tag's failure is a published release that doesn't install (design D6).
+    if: ${{ failure() && startsWith(github.event.release.tag_name || inputs.ref, 'troupe-run-v') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Open a Bug naming each failed leg
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.ref }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RELEASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.event.release.tag_name || inputs.ref }}
+        run: |
+          gh run view "$GITHUB_RUN_ID" -R "$GITHUB_REPOSITORY" --json jobs > "$RUNNER_TEMP/jobs.json"
+          python3 scripts/release_check_report.py "$RUNNER_TEMP/jobs.json" "$TAG" "$RUN_URL" "$RELEASE_URL" > "$RUNNER_TEMP/issue.json"
+          if [ -s "$RUNNER_TEMP/issue.json" ]; then
+            gh api "repos/$GITHUB_REPOSITORY/issues" --method POST --input "$RUNNER_TEMP/issue.json" --jq .html_url
+          else
+            echo "No install leg failed, so no issue is opened."
+          fi

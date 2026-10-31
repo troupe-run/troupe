@@ -20,6 +20,10 @@ import release_config
 
 PYPROJECT = "pyproject.toml"
 CI = ".github/workflows/ci.yml"
+RELEASE_CHECK = ".github/workflows/release-install-check.yml"
+"""Installs each release on every supported Python too (install-from-tag design D5)."""
+MATRICES = {CI: "the check job's", RELEASE_CHECK: "the install job's"}
+"""Each workflow whose Python matrix must be the supported versions, and the job it's in."""
 PIN = ".python-version"
 
 _MINOR = r"3\.(0|[1-9][0-9]*)"
@@ -73,7 +77,8 @@ def problems(root: Path) -> list[str]:
                 f'{path}/{PYPROJECT} has {has}, not the root\'s "{declared}": set it to '
                 f'"{declared}".'
             )
-    found.extend(_ci_problems(root, declared, versions))
+    for workflow, job in MATRICES.items():
+        found.extend(_ci_problems(root, workflow, job, declared, versions))
     found.extend(_pin_problems(root, lowest))
     found.extend(_tool_problems(_toml(root / PYPROJECT), lowest))
     return found
@@ -88,11 +93,13 @@ def _requires_python(pyproject: dict[str, Any]) -> str | None:
     return value if isinstance(value, str) else None
 
 
-def _ci_problems(root: Path, declared: str, versions: list[str]) -> list[str]:
-    lines = _MATRIX.findall((root / CI).read_text(encoding="utf-8"))
+def _ci_problems(
+    root: Path, workflow: str, job: str, declared: str, versions: list[str]
+) -> list[str]:
+    lines = _MATRIX.findall((root / workflow).read_text(encoding="utf-8"))
     if len(lines) != 1:
         return [
-            f"{CI} has {len(lines)} 'python: [...]' lines: keep exactly one, in the check job's "
+            f"{workflow} has {len(lines)} 'python: [...]' lines: keep exactly one, in {job} "
             'matrix, listing the supported versions as quoted strings, like python: ["3.12", '
             '"3.13"].'
         ]
@@ -102,7 +109,7 @@ def _ci_problems(root: Path, declared: str, versions: list[str]) -> list[str]:
         match = _ENTRY.fullmatch(entry)
         if match is None:
             found.append(
-                f"{CI} lists {entry} in its Python matrix: each entry must be a quoted minor "
+                f"{workflow} lists {entry} in its Python matrix: each entry must be a quoted minor "
                 'version, like "3.13" (unquoted, YAML reads 3.10 as the number 3.1).'
             )
         else:
@@ -110,13 +117,13 @@ def _ci_problems(root: Path, declared: str, versions: list[str]) -> list[str]:
     if found:
         return found
     found.extend(
-        f'{CI} doesn\'t test {version}, which requires-python "{declared}" in {PYPROJECT} '
+        f'{workflow} doesn\'t test {version}, which requires-python "{declared}" in {PYPROJECT} '
         "supports: add it to the matrix, or narrow the bound."
         for version in versions
         if version not in tested
     )
     found.extend(
-        f'{CI} tests {version}, which requires-python "{declared}" in {PYPROJECT} doesn\'t '
+        f'{workflow} tests {version}, which requires-python "{declared}" in {PYPROJECT} doesn\'t '
         "allow: widen the bound, or remove it from the matrix."
         for version in tested
         if version not in versions
