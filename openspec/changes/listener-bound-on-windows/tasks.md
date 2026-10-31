@@ -22,7 +22,7 @@
 ## 4. Verify
 
 - [x] 4.1 Run `uv run scripts/check.py`. Verify: every gate passes; record the counts here. Outcome: on d84d13a, the commit's check passed every gate: 3053 passed, 14 skipped, tests in 215.5 s
-- [ ] 4.2 Ask the owner to re-run 1.2's hunt on Windows under load with the fix, without the instrumentation (#159's done-when). Verify: the hunt reports no failures in any round; record its report here
+- [x] 4.2 Ask the owner to re-run 1.2's hunt on Windows under load with the fix, without the instrumentation (#159's done-when). Verify: the hunt reports no failures in any round; record its report here. Outcome: the owner's Windows hunt on 2984b33 (`--workers 6 --load 8 --rounds 40`, all three tests, `-k fastest_under_the_bound`) ran 240 rounds, 3 tests each, 0 failed
 
 ## Workflow follow-up
 
