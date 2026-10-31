@@ -155,11 +155,30 @@ release's notes. That would need `contents: write` on a job running code from th
 failure is tracked. A run started by the release App notifies nobody, so a red run alone would go unseen.
 
 **Issue type.** The report job sets the type when it creates the issue (`gh api` `POST /repos/{owner}/{repo}/issues`
-with `type: Bug`). Whether `GITHUB_TOKEN` may set an org's issue type is checked in apply (task 4.4). If it can't, the
-issue gets the `bug` label and the body says to set its type. That's recorded here before it's relied on.
+with `type: Bug`). `GITHUB_TOKEN` with `issues: write` can set the org's issue type: checked on 2026-10-31 in a
+private probe, `troupe-run/infra-probe-issue-type` (deleted afterwards), whose `workflow_dispatch` run made that same
+call and opened an issue by `app/github-actions` whose type the API read back as Bug (task 4.4). The same run's
+`gh run view --json jobs` listed its own running job, so the report job can read the legs before it finishes.
 
 **The board.** `GITHUB_TOKEN` can't write the org's project, and the org adds issues to the board by hand (the
 add-issues-to-the-roadmap habit), so the body says to. The sweep for issues missing from the board picks it up too.
+
+### D7. The prose stays true in 0.1.0's own copy of the docs (owner, 2026-10-31)
+
+troupe.run builds a copy of `/docs` for each release from its tag, and a tag never changes. At the 0.1.0 tag the
+command still says `@main`, because #208 can only switch it once the tag exists, and the release pull request can't do
+it: release-please rewrites version strings, `@main` has none, and only the release App may commit to that branch. So
+0.1.0's copy of the install page will give the `@main` command whatever this change does.
+
+The owner accepted that, and asked that the prose not make it worse. The README and the install page no longer say
+"there's no release yet" or "from the first release". They say each release is tagged `troupe-run-v<version>`, on the
+releases page, and that its tag goes in place of `main` to install it. That reads true before the release, at the 0.1.0
+tag, and after #208. From the next release on, the command itself names the tag (D3).
+
+Other options considered: having troupe.run build 0.1.0's copy from the commit #208 lands (a website change, and the
+copy would no longer match its tag), and merging a docs pull request that names `@troupe-run-v0.1.0` just before the
+release pull request (the docs check would have to accept a tag that doesn't exist yet, and `main` would name it for a
+while).
 
 ## Risks / Trade-offs
 

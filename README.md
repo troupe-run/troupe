@@ -5,7 +5,7 @@
 troupe runs your development process with a team of agents, asking only when it needs you. Work branches and loops,
 decisions go to whoever owns them, and every decision records who made it.
 
-Pre-alpha: there's no release yet, but you can install the latest `main` and run an actor with it. See
+Pre-alpha: you can install it with uv and run an actor with it. See
 [troupe.run](https://troupe.run) for the principles, and the [roadmap](https://github.com/orgs/troupe-run/projects/1)
 for the open decisions and what's next.
 
@@ -27,9 +27,9 @@ particular commit, put the commit in place of `main`.
 - **Upgrade** to the latest `main` with `uv tool upgrade troupe-run`.
 - **Uninstall** with `uv tool uninstall troupe-run`.
 
-[Your first performance](https://troupe.run/docs/opening-night/first-performance/) runs an actor with it. From the
-first release, you'll install a release by its tag, `troupe-run-v<version>`, in place of `main`
-([#208](https://github.com/troupe-run/troupe/issues/208)).
+[Your first performance](https://troupe.run/docs/opening-night/first-performance/) runs an actor with it. Each
+release is tagged `troupe-run-v<version>`, on the [releases page](https://github.com/troupe-run/troupe/releases): to
+install a release, put its tag in place of `main`.
 
 ## Development
 

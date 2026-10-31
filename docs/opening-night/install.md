@@ -5,8 +5,8 @@ status: written
 prerelease: true
 ---
 
-troupe hasn't had a release yet, but you can install the latest `main`, or any commit, with
-[uv](https://docs.astral.sh/uv/), and run an actor with it.
+You can install troupe with [uv](https://docs.astral.sh/uv/), from a release, the latest `main` or any commit, and
+run an actor with it.
 
 ## Install with uv
 
@@ -19,7 +19,9 @@ uv tool install "git+https://github.com/troupe-run/troupe@main#subdirectory=pack
 ```
 <!-- x-release-please-end -->
 
-This installs the latest `main`. To install a particular commit instead, give the commit in place of `main`:
+This installs the latest `main`. To install a release instead, give its tag in place of `main`: each release is
+tagged `troupe-run-v<version>`, on [troupe's releases page](https://github.com/troupe-run/troupe/releases). To
+install a particular commit, give the commit:
 
 ```sh
 uv tool install "git+https://github.com/troupe-run/troupe@<commit>#subdirectory=packages/troupe-run"
@@ -34,8 +36,8 @@ troupe --version
 
 If your shell can't find `troupe`, run `uv tool update-shell` and open a new terminal.
 
-- **Upgrade** an install of `main` to the latest `main` with `uv tool upgrade troupe-run`. To move to another commit,
-  run the install command again with that commit.
+- **Upgrade** an install of `main` to the latest `main` with `uv tool upgrade troupe-run`. To move to another release
+  or commit, run the install command again with its tag or the commit.
 - **Uninstall** with `uv tool uninstall troupe-run`.
 
 [Your first theatre](first-theatre.md) sets up a theatre to run it in.
@@ -43,9 +45,8 @@ If your shell can't find `troupe`, run `uv tool update-shell` and open a new ter
 ## What's decided
 
 - **Releases are installed with uv, from GitHub.** troupe isn't on PyPI, and may never be
-  ([#139](https://github.com/troupe-run/troupe/issues/139)). From the first release, you install a release by the
-  tag of `troupe-run`, the package the command installs: `troupe-run-v<version>`, in place of `main`
-  ([#208](https://github.com/troupe-run/troupe/issues/208)). How troupe reaches people who won't use uv is open, in
+  ([#139](https://github.com/troupe-run/troupe/issues/139)). A release is installed by the tag of `troupe-run`, the
+  package the command installs: `troupe-run-v<version>`. How troupe reaches people who won't use uv is open, in
   [#143](https://github.com/troupe-run/troupe/issues/143).
 - **Each release is on GitHub**, at [troupe's releases page](https://github.com/troupe-run/troupe/releases), with
   its [changelog](../backstage/changelog.md).

@@ -37,6 +37,12 @@
   Check `packages/troupe-run/README.md` says the same where it names the refs. Verify that the docs tests pass on the
   real pages (`uv run pytest scripts/tests/workspace/test_install_docs.py`) and that both pages read correctly.
 
+- [x] 2.4 Reword the README's and the install page's prose so it's true at the 0.1.0 tag as well as before and after
+  it (design D7): drop "there's no release yet" and "from the first release", and say each release is tagged
+  `troupe-run-v<version>`, on the releases page, with its tag going in place of `main`. Verify the docs tests pass, and
+  that neither page says there's no release (`grep -n "no release\|first release" README.md
+  docs/opening-night/install.md` finds nothing).
+
 ## 3. Each release moves the documented tag (design D3)
 
 - [x] 3.1 Add `{"type": "generic", "path": "/README.md"}` and `{"type": "generic", "path":
@@ -70,9 +76,13 @@
 - [x] 4.3 Extend `scripts/python_versions.py` to check the new workflow's `python` matrix like `ci.yml`'s, and add a
   test that the workflow's tag filter is `install_check.TAG_PREFIX`. Verify with tests that a matrix missing 3.15
   names the workflow and 3.15, and that a filter of `troupe-v` is named.
-- [ ] 4.4 Check, in a `troupe-run/infra-probe-*` repository (troupe-run/infrastructure#217), whether a workflow's
+- [x] 4.4 Check, in a `troupe-run/infra-probe-*` repository (troupe-run/infrastructure#217), whether a workflow's
   `GITHUB_TOKEN` with `issues: write` can create an issue with type Bug. Record the result in design D6. If it can't,
   make the report job use the `bug` label, with the body asking for the type, and update its test.
+  - 2026-10-31: it can. The owner allowed a private probe, `troupe-run/infra-probe-issue-type`, since auto mode
+    refused a public one. A `workflow_dispatch` job with `issues: write` ran
+    `gh api repos/$GITHUB_REPOSITORY/issues --method POST --input issue.json` with `"type": "Bug"`, and issue #1 was
+    opened by `app/github-actions` with type Bug, read back through the API. The probe was then deleted.
 - [x] 4.5 Add "Checking each release's install" to `contributing/releasing.md`: what runs on a published
   `troupe-run-v*` release, that release-please moves the documented tag, what the Bug means, and how to re-run with
   `gh workflow run release-install-check.yml -f ref=<tag>`. Verify that its links resolve, and that it matches the
