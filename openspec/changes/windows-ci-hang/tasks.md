@@ -43,14 +43,15 @@
   line has arrived left `wait()` still waiting 5 s after `kill_tree()`, and reading at once let it return. The run
   host's `_finish_process` takes the same path with an unbounded `wait()`. Design D3's outcome, D5 and D6, and a new
   platform requirement, were recorded before the fix was written
-- [ ] 2.3 Comment on #187 with the run, the test, its stack and the cause (design D6). Verify: the comment is posted
+- [x] 2.3 Comment on #187 with the run, the test, its stack and the cause (design D6). Verify: the comment is posted (issuecomment-6542694478)
 
 ## 3. No Windows child gets out of its job (design D4)
 
-- [ ] 3.1 Add the `_before_job_assignment` hook (a no-op by default) and the escape test for `start` in
+- [x] 3.1 Add the `_before_job_assignment` hook (a no-op by default) and the escape test for `start` in
   `packages/troupe/tests/test_platform_processes.py`, as D4 describes (`ESCAPE_WINDOW`, `WAIT_LIMIT`). Add the
   matching test for `run_to_completion`'s timeout path. Verify: both pass on macOS. Their Windows failure on the
-  unfixed seam is shown in 3.3, since there's no Windows machine locally
+  unfixed seam is shown in 3.3, since there's no Windows machine locally. Outcome: 44 passed, 2 skipped on macOS (both new tests pass:
+  POSIX doesn't call the hook, and the group holds the grandchild)
 - [ ] 3.2 Start Windows children suspended in `start` and `run_to_completion`, and have `_new_job_for` assign and
   resume them (`NtResumeProcess`). On failure, close the job and raise an `OSError` naming the step and the pid; the
   callers kill the child and wait for it. Update the module docstring, `contributing/platform.md`'s process table, and

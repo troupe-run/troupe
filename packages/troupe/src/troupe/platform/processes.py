@@ -439,6 +439,15 @@ class ChildProcess:
             self._job = None
 
 
+def _no_hook(pid: int) -> None:
+    pass
+
+
+_before_job_assignment: Callable[[int], None] = _no_hook
+"""Called on Windows with the child's pid between starting it and putting it in its job. A no-op:
+tests replace it to hold that moment open and show nothing the child starts escapes the job."""
+
+
 def resolve_command(command: str, search_path: str | None) -> str:
     """The absolute path of ``command``, found on ``search_path`` when it has no directory part."""
     found = shutil.which(command, path=search_path)
@@ -479,6 +488,7 @@ async def start(
             creationflags=0x00000200,  # CREATE_NEW_PROCESS_GROUP
         )
         try:
+            _before_job_assignment(process.pid)
             job = _new_job_for(process.pid)
         except OSError:
             process.kill()
@@ -591,6 +601,7 @@ def run_to_completion(
     job: int | None = None
     try:
         if _WINDOWS:
+            _before_job_assignment(process.pid)
             job = _new_job_for(process.pid)
     except OSError:
         process.kill()

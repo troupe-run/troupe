@@ -134,6 +134,75 @@ def test_killing_a_child_also_kills_the_grandchild_it_started() -> None:
     assert _gone_within(grandchild_pid, 10)
 
 
+ESCAPE_WINDOW = 5.0
+"""How long the hook holds the moment between starting a child and putting it in its job open,
+waiting for the child to start a grandchild. A child that runs in that moment does so well within
+it; a suspended one never does, and the hook gives up."""
+WAIT_LIMIT = 30.0
+"""How long waiting for a killed child may take before the test fails instead of hanging (#187)."""
+
+
+def _early_grandparent(marker: Path) -> str:
+    """A child whose first act is to start a grandchild that holds its output open, writing the
+    grandchild's pid to ``marker`` and to standard output."""
+    return (
+        "import pathlib, subprocess, sys, time\n"
+        'grandchild = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])\n'
+        f"pathlib.Path({str(marker)!r}).write_text(str(grandchild.pid))\n"
+        "print(grandchild.pid, flush=True)\n"
+        "time.sleep(60)\n"
+    )
+
+
+def _hold_the_job_assignment_open(marker: Path) -> Callable[[int], None]:
+    """A hook that waits, before the job is assigned, for the child to report a grandchild."""
+
+    def hold(pid: int) -> None:
+        deadline = time.monotonic() + ESCAPE_WINDOW
+        while not marker.exists() and time.monotonic() < deadline:
+            time.sleep(0.05)
+
+    return hold
+
+
+def _end_if_running(pid: int) -> None:
+    """Best-effort cleanup of a grandchild that escaped, so a failure doesn't leave it running."""
+    if processes.is_running(pid):
+        with contextlib.suppress(OSError):
+            os.kill(pid, 9)  # SIGKILL on POSIX; TerminateProcess with code 9 on Windows
+
+
+def test_a_grandchild_started_before_the_child_could_be_put_in_its_job_is_killed_with_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    marker = tmp_path / "grandchild.pid"
+    monkeypatch.setattr(processes, "_before_job_assignment", _hold_the_job_assignment_open(marker))
+
+    async def main() -> int:
+        child = await processes.start(
+            _python(_early_grandparent(marker)), cwd=Path.cwd(), env={}, line_limit=LIMIT
+        )
+        grandchild = int(await asyncio.wait_for(child.stdout.readline(), timeout=WAIT_LIMIT))
+        child.kill_tree()
+        try:
+            await asyncio.wait_for(child.wait(), timeout=WAIT_LIMIT)
+        except TimeoutError:
+            _end_if_running(grandchild)
+            pytest.fail(
+                f"waiting for the killed child took over {WAIT_LIMIT:g}s: grandchild {grandchild} "
+                f"is {'still running' if processes.is_running(grandchild) else 'gone'}, holding "
+                "the child's output open"
+            )
+        finally:
+            child.release()
+        return grandchild
+
+    grandchild = asyncio.run(main())
+    gone = _gone_within(grandchild, 10)
+    _end_if_running(grandchild)
+    assert gone, f"grandchild {grandchild} outlived the kill: it escaped the child's job"
+
+
 def test_closing_stdin_lets_a_child_read_end_of_file() -> None:
     async def main() -> bytes:
         child = await processes.start(
@@ -455,6 +524,22 @@ def test_a_command_past_its_timeout_is_killed_with_its_children_and_keeps_its_ou
     assert error.command == sys.executable
     grandchild = int(error.stdout)
     assert _gone_within(grandchild, 10)
+
+
+def test_a_command_whose_grandchild_starts_before_the_job_is_killed_with_it_at_its_timeout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    marker = tmp_path / "grandchild.pid"
+    monkeypatch.setattr(processes, "_before_job_assignment", _hold_the_job_assignment_open(marker))
+
+    with pytest.raises(ProcessTimeoutError) as caught:
+        _run(_early_grandparent(marker), timeout=3.0)
+
+    assert caught.value.timeout == 3.0
+    grandchild = int(marker.read_text())
+    gone = _gone_within(grandchild, 10)
+    _end_if_running(grandchild)
+    assert gone, f"grandchild {grandchild} outlived the timeout's kill: it escaped the job"
 
 
 def test_a_command_writing_past_the_output_limit_is_killed_and_the_limit_named() -> None:
