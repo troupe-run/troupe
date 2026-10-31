@@ -62,7 +62,8 @@ jobs:
       issues: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Open a Bug naming each failed leg
+      # A re-run for a tag whose Bug is still open adds to that Bug rather than opening another.
+      - name: Open a Bug naming each failed leg, or add to the tag's open one
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.release.tag_name || inputs.ref }}
@@ -71,8 +72,15 @@ jobs:
         run: |
           gh run view "$GITHUB_RUN_ID" -R "$GITHUB_REPOSITORY" --json jobs > "$RUNNER_TEMP/jobs.json"
           python3 scripts/release_check_report.py "$RUNNER_TEMP/jobs.json" "$TAG" "$RUN_URL" "$RELEASE_URL" > "$RUNNER_TEMP/issue.json"
-          if [ -s "$RUNNER_TEMP/issue.json" ]; then
-            gh api "repos/$GITHUB_REPOSITORY/issues" --method POST --input "$RUNNER_TEMP/issue.json" --jq .html_url
-          else
+          if [ ! -s "$RUNNER_TEMP/issue.json" ]; then
             echo "No install leg failed, so no issue is opened."
+            exit 0
+          fi
+          export TITLE="Install check failed for $TAG"
+          open=$(gh issue list -R "$GITHUB_REPOSITORY" --state open --search "\"$TITLE\" in:title" --limit 100 --json number,title --jq '[.[] | select(.title == env.TITLE) | .number][0] // empty')
+          if [ -n "$open" ]; then
+            python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["body"])' "$RUNNER_TEMP/issue.json" > "$RUNNER_TEMP/comment.md"
+            gh issue comment "$open" -R "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/comment.md"
+          else
+            gh api "repos/$GITHUB_REPOSITORY/issues" --method POST --input "$RUNNER_TEMP/issue.json" --jq .html_url
           fi

@@ -71,3 +71,13 @@ def test_only_the_report_job_may_write_and_only_issues() -> None:
 
 def test_no_job_reads_a_secret() -> None:
     assert "secrets." not in WORKFLOW.read_text(encoding="utf-8")
+
+
+def test_a_failure_while_the_tags_bug_is_open_comments_on_it_instead_of_opening_another() -> None:
+    [step] = workflow()["jobs"]["report"]["steps"][1:]
+    script = step["run"]
+    assert 'export TITLE="Install check failed for $TAG"' in script
+    assert "--state open" in script
+    assert "select(.title == env.TITLE)" in script
+    comment, create = script.index("gh issue comment"), script.index("--method POST")
+    assert script.index('if [ -n "$open" ]') < comment < create

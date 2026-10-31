@@ -130,6 +130,9 @@ which is the default. `--hosted` can't be pointed at the wrong place.
   (platform and Python) with a link to its job, and links the run and the release. It says the tag and release stay
   as they are, the fix is a patch release, and the issue goes on the roadmap board by hand. Its permissions are
   `contents: read`, `actions: read` (the run's jobs) and `issues: write`, and nothing else.
+- A re-run for a tag whose Bug is still open comments on that Bug, with the same table and the new run, rather than
+  opening a second one (review of #212). The Bug is found by its exact title among open issues; a closed one doesn't
+  count, so a failure after the Bug was closed opens a new one.
 - A dispatch against `main` or a commit that fails just fails the run. It isn't a published release, so it opens no
   issue.
 

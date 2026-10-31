@@ -99,7 +99,7 @@ working for every release:
 and Python, the run and the release. The workflow can't add it to the roadmap board, so add it by hand. The tag and
 its release stay as they are, and the docs already name it. Fix it forward in a patch release, whose release pull
 request moves the documented tag on. If a leg failed because of GitHub rather than troupe, re-run the check, and close
-the Bug with that run:
+the Bug with that run. A re-run that fails while the Bug is open comments on it rather than opening another:
 
 ```sh
 gh workflow run release-install-check.yml -f ref=troupe-run-v<version>
