@@ -19,3 +19,20 @@ or run to completion.
 - **WHEN** a command run to completion starts a grandchild as the first thing it does and is still running when its
   timeout passes
 - **THEN** the command and the grandchild are both killed, and the failure names the command and the timeout
+
+## ADDED Requirements
+
+### Requirement: Waiting for a child ends once it has exited, whatever output was left unread
+Once a child has exited, waiting for it SHALL end on Linux, macOS and Windows, even when a caller stopped reading its
+output part-way, such as at a line longer than the maximum. The output the child wrote SHALL still be readable after
+the wait, and none of it SHALL be dropped.
+
+#### Scenario: A killed child whose over-long line was refused
+- **WHEN** a child writes a line longer than the maximum and keeps running, reading that line reports the error
+  naming the maximum, and the child is then killed
+- **THEN** waiting for it ends, with the kill's exit status
+
+#### Scenario: A child that exits by itself after an over-long line
+- **WHEN** a child writes a line longer than the maximum and exits, and reading reports the error before the line
+  has all arrived or after
+- **THEN** waiting for it ends either way

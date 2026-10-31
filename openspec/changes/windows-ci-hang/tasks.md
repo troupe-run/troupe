@@ -19,21 +19,31 @@
   `pyproject.toml`. Add a test that `round_command` has no `faulthandler_timeout` override without `--stall`, and has
   `--stall 60`'s value with it. Verify: `uv run pytest scripts/tests/test_flake_hunt.py` passes, including the
   existing stuck-test test. Outcome: 29 passed, 2 skipped (Windows-only); ruff and mypy clean
-- [ ] 1.4 Run `uv run scripts/check.py`, and verify every gate passes, recording the counts. Commit 1.1–1.3 in small
+- [x] 1.4 Run `uv run scripts/check.py`, and verify every gate passes, recording the counts. Commit 1.1–1.3 in small
   commits, push, open the PR as a draft with `Closes #187`, then mark it ready (`gh pr ready`) so its legs run (D3, the
   owner's choice). Verify: every leg of that run passes, and the Windows legs' logs show 1.1's tests passed there,
-  so the dump reaches the log on Windows
+  so the dump reaches the log on Windows. Outcome: check passed locally (3052 passed, 14 skipped). The guard's
+  pre-commit check refused separate commits while other tracked files had unstaged changes, so 1.1–1.3 went in as one
+  commit (bff6b3b). PR #211, run 41194587297: 11 legs passed, Windows 3.13–3.15 included, so 1.1's tests passed on
+  Windows. Windows 3.12 hung and was stopped at its timeout, but its log holds the dump (2.1), which is the proof
+  that the dump reaches the log on Windows
 
 ## 2. Catch the hang (design D3)
 
-- [ ] 2.1 Rerun the Windows 3.12 job on the 1.4 head with `gh run rerun <run-id> --job <job-id>`, one at a time, until
-  a dump names the stuck test or D3's stopping rule is reached. Record each attempt here (attempt, outcome, and for a
-  hang the test and the first frames of its stack). Verify: the record lists every attempt. On a hang, the log holds
-  `Timeout (` followed by a frame in a test file
-- [ ] 2.2 If a test was named, comment on #187 with the run, the test and its stack, and record here whether the stack
-  shows a wait on a child (`Process.wait`/`_wait` under `base_subprocess`). If the stack points to a cause other than
-  the job gap, update design.md with `/opsx:update` before writing any code for it. If nothing hung within the rule,
-  stop and ask the owner (D3). Verify: the comment is posted, or the owner's answer is recorded here
+- [x] 2.1 Catch the hang and name its test. Outcome: the hunt wasn't needed. The stage 1 run's own Windows 3.12 leg
+  (run 41194587297, job 124518135781) stalled at 96%. At 11:01:35 the dump printed `Timeout (0:05:00)!`, and the test
+  thread's stack named `test_platform_processes.py`, line 396, in
+  `test_a_line_over_the_maximum_is_an_error_naming_the_maximum`, then line 386 in `_first_line` (`asyncio.run`), over
+  the proactor's `_poll`. The job was stopped at 11:14:04 with 3040 passed, 22 skipped of 3064, followed by the same
+  `BaseSubprocessTransport` / closed-pipe warning. The hunt workflow (D3) was written but never pushed. It is kept
+  for 5.2
+- [x] 2.2 Find the cause and update the design before any code depends on it. Outcome: not the job gap. A refused
+  over-long line can leave the child's stdout stream paused, so `wait()` never sees end-of-file. Reproduced
+  deterministically on macOS. With a child that keeps running after writing 2 MiB and a line feed, reading after the
+  line has arrived left `wait()` still waiting 5 s after `kill_tree()`, and reading at once let it return. The run
+  host's `_finish_process` takes the same path with an unbounded `wait()`. Design D3's outcome, D5 and D6, and a new
+  platform requirement, were recorded before the fix was written
+- [ ] 2.3 Comment on #187 with the run, the test, its stack and the cause (design D6). Verify: the comment is posted
 
 ## 3. No Windows child gets out of its job (design D4)
 
@@ -41,30 +51,38 @@
   `packages/troupe/tests/test_platform_processes.py`, as D4 describes (`ESCAPE_WINDOW`, `WAIT_LIMIT`). Add the
   matching test for `run_to_completion`'s timeout path. Verify: both pass on macOS. Their Windows failure on the
   unfixed seam is shown in 3.3, since there's no Windows machine locally
-- [ ] 3.2 Start Windows children suspended in `start` and `run_to_completion`, then assign and resume with
-  `_assign_and_resume` (`NtResumeProcess`). On failure, terminate the child, wait for it, close the job and raise an
-  `OSError` naming the step and the pid. Update the module docstring, `contributing/platform.md`'s process table, and
+- [ ] 3.2 Start Windows children suspended in `start` and `run_to_completion`, and have `_new_job_for` assign and
+  resume them (`NtResumeProcess`). On failure, close the job and raise an `OSError` naming the step and the pid; the
+  callers kill the child and wait for it. Update the module docstring, `contributing/platform.md`'s process table, and
   remove its "Windows job assignment" limitation. Verify: `uv run pytest packages/troupe/tests/test_platform_processes.py`
-  passes, and `uv run mypy` is clean
-- [ ] 3.3 Show the escape test fails on Windows without the fix. Push 3.1's tests first, alone, and check that the
-  Windows legs fail them at `WAIT_LIMIT` (`start`) and on the surviving grandchild (`run_to_completion`). Then push
-  3.2 and check every leg passes. Verify: both runs' ids and the failing assertions are recorded here
+  passes, `uv run mypy` is clean, and `uv run mypy --platform win32` on the module is clean
+- [ ] 3.3 Show the escape test fails on Windows without the fix. Push 3.1's tests (with the hook) first, without
+  3.2, and check that the Windows legs fail them at `WAIT_LIMIT` (`start`) and on the surviving grandchild
+  (`run_to_completion`). Then push 3.2 and check every leg passes. Verify: both runs' ids and the failing assertions
+  are recorded here
 
-## 4. The hung test bounds itself (design D5)
+## 4. Waiting ends once the child has exited (design D5, D6)
 
-- [ ] 4.1 In the test 2.1 named, wrap the wait that hung in `asyncio.wait_for` with a named module-level limit and a
-  failure message naming the limit and what it waited for. Verify: the test passes. Then make it block (for example,
-  skip the kill it relies on) and check it fails at the limit with that message instead of hanging (then revert).
-  If 2.1 named no test, record "not applicable" with the owner's decision from 2.2
-- [ ] 4.2 If 2.2 found a different cause, fix it as the updated design says, with a test that fails before the fix.
-  Verify: as the updated design states. Otherwise record "not applicable: the stack showed the job gap"
+- [ ] 4.1 Add the seam test from D6: a child writes 2 MiB and a line feed against a 1 MiB limit, flushes and sleeps.
+  The test waits (bounded) for the stdout pipe to pause, reads (`LineTooLongError`), kills the tree, and asserts that
+  `wait()` returns within `WAIT_LIMIT` with the kill's status, and that the rest of stdout can still be read whole
+  afterwards. Verify: it fails at `WAIT_LIMIT` on the unfixed seam (run before 4.2)
+- [ ] 4.2 In `ChildProcess.wait()`, once the child's exit code is known, resume reading any of its paused output
+  pipes (D6). Update the docstring. Verify: 4.1's test passes, the whole of `test_platform_processes.py` and the run
+  host's tests pass, and mypy is clean
+- [ ] 4.3 In `_first_line`, the helper of the test that hung, bound `await child.wait()` with `WAIT_LIMIT` and a
+  failure message naming the limit and what it waited for (D5). Verify: the line tests pass. With 4.2's fix removed
+  and the stream forced to pause (a sleep before the read), the over-long test fails at the limit with that message
+  instead of hanging (then restore)
 
 ## 5. Verify
 
 - [ ] 5.1 Run `uv run scripts/check.py`, and verify every gate passes, recording the counts
-- [ ] 5.2 Run the Windows 3.12 job on the final head as many times as D3's rule, with `gh run rerun --job`. Verify: no
-  attempt hangs, and none of the logs holds `Timeout (`. Record the attempts here. This is the issue's "a flake hunt
-  on Windows passes with no hung rounds", done on the leg that hung
+- [ ] 5.2 Push the fixed head together with the hunt workflow (D3, set aside since 2.1), and run one batch (40 copies
+  of the Windows 3.12 check). Verify: no copy hangs, and no log holds `Timeout (`. Record the counts here. This is the issue's
+  "a flake hunt on Windows passes with no hung rounds", done on the leg that hung
+- [ ] 5.3 Delete `.github/workflows/hang-hunt-187.yml` in a push of its own. Verify: `git ls-files .github/workflows`
+  doesn't list it, `git diff main --stat -- .github` is empty, and that push starts no hunt run
 
 ## Workflow follow-up
 

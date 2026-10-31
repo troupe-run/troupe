@@ -35,12 +35,14 @@ See proposal.md, "Why", for the three occurrences and the job-assignment gap. Th
 - A test stuck in the check names itself in the log, on every platform, well before the job's timeout.
 - The test that hung on Windows is named from evidence, and its cause is fixed so it can't block.
 - No Windows child can start a process outside its job, through either way of starting a child.
+- Waiting for a child that has exited ends, whatever output a caller left unread (D6, the cause D3 found).
 - The test that hung bounds its own wait, so a regression fails it, naming the limit, instead of hanging CI.
 
 **Non-Goals:**
 - A per-test timeout or a new test dependency. A test that can block bounds itself (memory/no-per-test-timeout), and
   the dump is diagnostic only.
-- Changing the CI job's 20-minute timeout or the matrix.
+- Changing the CI job's 20-minute timeout or the matrix. The temporary hunt workflow (D3) is a separate file that
+  never reaches `main`.
 - POSIX's documented limitation, a grandchild that starts its own session and so leaves the group. It is a different
   mechanism, and nothing here suggests it plays a part.
 - Raising the timeout on any other test, or an audit of every `await child.wait()` in the suite. If the dump names a
@@ -91,44 +93,57 @@ in three stages (tasks):
 The deterministic test for the gap (D4) can be written and run locally at any point, because it fails on any OS
 where the window is widened. It just isn't pushed until stage 3.
 
-### D3: Reruns: the Windows 3.12 job alone, with a stopping rule set in advance
+### D3: Catch it with parallel copies of the Windows 3.12 check, with a stopping rule set in advance
 
 The owner chose to mark the PR ready after the dump push, ahead of a clean review, so that its legs run (2026-10-31).
-Each rerun is `gh run rerun <run-id> --job <windows-3.12-job-id>`, one at a time, waiting for each to finish. Each
-outcome (passed, or stuck with the dump's test) is recorded in tasks.md.
+Then, once the rate below was measured, the owner chose parallel copies over one-at-a-time reruns (2026-10-31).
 
 - **The rate.** From 2026-10-27 to 2026-10-31, the latest attempt of each CI run had 73 Windows 3.12 legs pass, 19
   fail and 12 cancelled, mostly by newer pushes. The three known hangs were all on attempts that a rerun later
   replaced, so they aren't in those counts. That's about 3 hangs in roughly 100 leg runs, about 3%, and with so few
   hangs the true rate could plausibly be anywhere from about 1% to 8%.
-- **Stopping rule.** Up to 30 reruns. At 3%, 30 reruns catch the hang with a probability of about 60% (1 − 0.97³⁰),
-  at a cost of about 4–5 hours of one Windows runner, one job at a time. Catching it 90% of the time at 3% would take
-  about 75 reruns, roughly 11 hours. 30 is a budget, not a guarantee. When it runs out, the owner decides what comes
-  next.
-- **If a dump names a test.** Stop rerunning. Record the test, its stack and the run in tasks.md and in a comment on
-  #187, then go on to stage 3.
+- **How.** A temporary workflow, `.github/workflows/hang-hunt-187.yml`, runs on pushes to this branch only. It runs
+  40 copies of the Windows 3.12 leg's check (`uv run scripts/check.py`, the same steps, Python and 20-minute timeout
+  as `ci.yml`), with `fail-fast: false`. It doesn't touch `ci.yml`, so nothing about the required checks or the
+  merge queue changes. The org's concurrent-job limit queues the copies in batches, so a batch takes about two
+  legs' time. A batch is repeated with `gh run rerun <run-id>`. The same workflow runs one batch on the fixed head
+  (task 5.2), and is then deleted in a push of its own, so it never reaches `main`.
+- **Stopping rule.** Up to two batches, 80 copies. At 3%, one batch catches the hang with a probability of about 70%
+  (1 − 0.97⁴⁰), and two batches about 91%. The parallel copies also load the runner pool the way a busy day does,
+  rather than one job at a time.
+- **If a dump names a test.** Stop. Record the test, its stack and the run in tasks.md and in a comment on #187, then
+  go on to stage 3.
 - **If the dump names a different cause** than a wait on a pipe that a process outside the job is holding: the
-  design is updated with `/opsx:update` before any code for it is written. That cause is fixed in this change, and D4
-  still lands, since the owner chose to fix the gap either way.
-- **If nothing hangs within the rule.** Stop and ask the owner before stage 3, with the count. The issue's
+  design is updated before any code for it is written. That cause is fixed in this change, and D4 still lands, since
+  the owner chose to fix the gap either way.
+- **If nothing hangs within the rule.** Stop and ask the owner before stage 3, with the counts. The issue's
   "identified" can't be claimed, so it's the owner's call whether to land the fix with #187 left open for a later
-  dump, or to keep rerunning.
+  dump, or to keep hunting.
 
-Only the 3.12 leg has hung. Rerunning the whole matrix would multiply the cost by twelve for legs that have never
-shown it.
+Only the 3.12 leg has hung, so only it is copied.
+- *Alternative: one-at-a-time reruns (`gh run rerun --job`).* The plan this replaced: about 60% for 30 reruns at
+  3%, over 4–5 hours.
+
+**Outcome (2026-10-31).** No hunt was needed. The first CI run with the dump (run 41194587297, the stage 1 push)
+hung on Windows 3.12 itself. At 11:01:35 the dump named `test_a_line_over_the_maximum_is_an_error_naming_the_maximum`
+(`packages/troupe/tests/test_platform_processes.py`), stuck under `asyncio.run` in its helper `_first_line`, with the
+event loop idle in the proactor's `_poll`. The same `BaseSubprocessTransport` warning followed when the job was
+stopped. That is a different cause from the job gap (D6). The hunt workflow was never pushed. It runs once, on the
+fixed head, as task 5.2's check.
 
 ### D4: Windows starts the child suspended, assigns it to the job, then resumes it
 
-In `troupe.platform.processes`, both Windows paths add `CREATE_SUSPENDED` (`0x4`) to their creation flags. After the
-process exists, they run one helper, `_assign_and_resume(job, pid)`. It opens the process with
-`PROCESS_SET_QUOTA | PROCESS_TERMINATE | PROCESS_SUSPEND_RESUME`, assigns it to the kill-on-close job, and resumes it
-with `ntdll.NtResumeProcess`, the flake hunt's code and order. `_new_job_for(pid)` becomes "make the job", and the
-assignment moves into the helper.
+In `troupe.platform.processes`, both Windows paths add `CREATE_SUSPENDED` (`0x4`) to their creation flags
+(`_WINDOWS_CREATION_FLAGS`). `_new_job_for(pid)` then makes the kill-on-close job, opens the process with
+`PROCESS_SET_QUOTA | PROCESS_TERMINATE | PROCESS_SUSPEND_RESUME`, assigns it to the job, and resumes it with
+`ntdll.NtResumeProcess`, the flake hunt's code and order. Both callers keep calling `_new_job_for` as before, so no
+caller changes beyond the flags.
 
-- **Failure.** If opening, assigning or resuming fails, the process is terminated (`TerminateProcess` through the
-  `Popen`/asyncio handle; a suspended process can be terminated) and waited for. The job is closed, and an `OSError`
-  naming the step and the pid is raised, as today's `_new_job_for` failure path does. A non-zero NTSTATUS from the
-  resume becomes an `OSError` with the status in hex.
+- **Failure.** If any step fails, `_new_job_for` closes the job (which kills the child if it was assigned) and raises
+  an `OSError` naming the step and the pid. A non-zero NTSTATUS from the resume becomes an `OSError` with the status
+  in hex. The callers' existing failure paths then kill the child (`TerminateProcess` through the `Popen`/asyncio
+  handle; a suspended process can be terminated) and wait for it. Before this change, a failure after the job was
+  made leaked the job's handle.
 - **asyncio is unaffected by the suspension.** `create_subprocess_exec` returns once `CreateProcess` has returned and
   the pipes are connected to the proactor. Neither step needs the child to run.
 - **Proved first, deterministically.** A new test in `packages/troupe/tests/test_platform_processes.py` widens the
@@ -160,10 +175,50 @@ assignment moves into the helper.
 
 ### D5: The hung test bounds its own wait
 
-Whatever test D3 names gets a named limit on the wait that hung. That is `asyncio.wait_for` around the await, with a
+The test D3 named, `test_a_line_over_the_maximum_is_an_error_naming_the_maximum`, gets a named limit on the wait that
+hung: its helper `_first_line` bounds `await child.wait()` with `WAIT_LIMIT`. That is `asyncio.wait_for` around the await, with a
 module-level constant and a failure message naming the limit and what it waited for, in the style of
 `INPUT_OPEN_LIMIT` (`plugins/runner-scripted/tests/test_scripted_runner.py`). A regression then fails that test,
-naming the limit, instead of hanging the leg. The test's body and the limit are recorded in tasks.md once known.
+naming the limit, instead of hanging the leg. The helper is shared with the 5 MiB test, which gets the same bound.
+
+### D6: Waiting for a child that has exited reads its paused output to the end
+
+**The cause D3 found.** `asyncio.StreamReader` pauses reading its pipe once its buffer holds more than twice its
+limit, and resumes only when a reader drains it below the limit. `read_line` raises `LineTooLongError` when
+`readuntil` overruns the limit. If the whole over-long line had arrived first, the stream is left paused, and nothing
+will ever read it again. The child then exits, but its pipe's end-of-file is never read, the pipe never disconnects,
+and asyncio's `Process.wait()` (which waits for every pipe, see Context) never returns. In `_first_line`, the child
+writes 2 MiB and a line feed against a 1 MiB limit (a pause at 2 MiB), and whether the reader overran before or after
+the whole line arrived is a race. Reproduced deterministically on macOS: a child that writes the over-long line, then
+keeps running, read only once the line has arrived, leaves `wait()` waiting after `kill_tree()`. Read straight away,
+the stream never pauses and `wait()` returns.
+
+**It isn't only a test's problem.** The run host (`core/runners/host.py`) turns `LineTooLongError` into a protocol
+violation, then `_finish_process` kills the runner, waits out the grace, kills it again, and then calls `await
+child.wait()` with no bound. On this path that call never returns. That breaks "never wait silently or
+indefinitely".
+
+**The fix, in the seam.** `ChildProcess.wait()` waits for asyncio's `wait()` in steps of `_POLL_SECONDS`. Once the
+child's exit code is known (`returncode` is set when the process exits, whatever its pipes are doing), it resumes
+reading any of the child's output pipes that is paused (`get_pipe_transport(1/2)`, `is_reading()`,
+`resume_reading()`, all public transport API). The rest of the output then reaches the stream and its end-of-file
+is read, the pipes disconnect, and the wait ends. The stream keeps its paused flag, so it doesn't pause again, and it
+keeps everything the child wrote, so nothing is dropped from a stream a caller may still read.
+
+- Only after exit. While the child runs, the pause is what stops an unread child filling memory. After exit, all
+  that's left is what's already in the pipe. A grandchild still holding the pipe could keep writing, and that is
+  read into the stream, a known cost. A grandchild that escaped the job is what D4 rules out.
+- *Alternative: return on the exit code alone, without waiting for the pipes.* A caller that waits and then
+  releases would then close pipes that still hold output, and lose it. The current guarantee, that output has
+  ended when `wait()` returns, stays.
+- *Alternative: have `read_line` discard the over-long line so the stream resumes.* That reaches into the
+  `StreamReader`'s private buffer, and leaves a stream positioned mid-line for any later read.
+- **Proof.** A new seam test does what the hang needed: a child writes 2 MiB and a line feed, flushes, then sleeps.
+  The test waits (bounded) until the stdout pipe has paused, then reads (`LineTooLongError`), kills the tree, and
+  asserts `wait()` returns within `WAIT_LIMIT`. Without the fix it fails at the limit, deterministically, on every OS.
+  With it, it passes.
+- **Spec.** platform gains "Waiting for a child ends once it has exited, whatever output was left unread", with the
+  over-long line as its scenario.
 
 ## Risks / Trade-offs
 
@@ -176,8 +231,9 @@ naming the limit, instead of hanging the leg. The test's body and the limit are 
 - [`NtResumeProcess` is undocumented] → It's what the flake hunt uses on the same runners. A failure is raised with
   its NTSTATUS rather than ignored, and the child is killed, never left suspended.
 - [Marking the PR ready before the review is clean departs from the usual order] → The owner chose it for this change.
+- [A temporary workflow that lingers would run on every push to this branch] → It's deleted after 5.2's batch, in a
+  push of its own, and 5.3 checks it isn't in the tree.
   Claude's review is still acted on before archiving, and the owner still merges.
-- [Up to 4–5 hours of one Windows runner for D3's reruns, and as much again for 5.2] → One job at a time, never the
-  matrix. The rate measured in D3 (about 3%) is lower than the "about 1 in 10" the owner chose reruns on. A temporary
-  workflow with many identical Windows 3.12 jobs in parallel would get the same number of attempts in one leg's wall
-  time, at the cost of editing the CI workflow. That is raised with the owner before stage 2 starts.
+- [40 to 80 Windows jobs for D3, and 40 more for 5.2, on the org's shared runner pool] → Copies queue behind the
+  org's concurrent-job limit rather than failing, and the workflow runs only on this branch. It is deleted before
+  the PR can merge, and a test in task 5.3 checks that it's gone.
