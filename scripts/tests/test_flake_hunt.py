@@ -224,6 +224,22 @@ def test_a_round_gets_the_hunts_environment_plus_only_its_hypothesis_directory(
     assert env["HYPOTHESIS_STORAGE_DIRECTORY"] == str(tmp_path / "out" / "hypothesis" / "w0r0")
 
 
+def test_a_round_leaves_the_stall_limit_to_the_configuration_unless_the_hunt_is_given_one(
+    tmp_path: Path,
+) -> None:
+    # The limit is set once, in pyproject.toml (spec: quality-check; windows-ci-hang design D1).
+    base = ["--root", str(tmp_path), "--out", str(tmp_path / "out")]
+    report = tmp_path / "report.xml"
+
+    unset = flake_hunt.round_command(flake_hunt.parse_options(base), tmp_path, report)
+    given = flake_hunt.round_command(
+        flake_hunt.parse_options([*base, "--stall", "60"]), tmp_path, report
+    )
+
+    assert not any(part.startswith("faulthandler_timeout=") for part in unset)
+    assert given[given.index("faulthandler_timeout=60") - 1] == "-o"
+
+
 # Requirement: The hunt reports each failing test with its evidence
 
 

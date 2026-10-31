@@ -1,11 +1,14 @@
 """The tests gate's command behaves in parallel the way run_gates relies on: no tests selected exits
-5, a failing test exits 1 and is named, and the slowest tests' durations print either way (spec:
-quality-check; parallel-tests design D1-D3; shorten-slow-tests design D4).
+5, a failing test exits 1 and is named, the slowest tests' durations print either way, and a test
+past the stall limit has its stack written from inside its worker (spec: quality-check;
+parallel-tests design D1-D3; shorten-slow-tests design D4; windows-ci-hang design D1).
 
 Each run is a real pytest with check.py's own PARALLEL and DURATIONS options, in a directory
 pytester writes, with the worker count pinned to 2 through xdist's own variable."""
 
 import sys
+import tomllib
+from pathlib import Path
 
 import pytest
 
@@ -105,3 +108,59 @@ def test_the_full_and_the_scoped_tests_gates_ask_for_the_slowest_durations() -> 
     for scopes in [(), ("docs",)]:
         tests = dict(check.gates(scopes))["tests"]
         assert tests[1 : 1 + len(check.PARALLEL) + 1] == [*check.PARALLEL, "--durations=25"]
+
+
+STALL_LIMIT = 1
+"""The stall limit these tests give pytest, in seconds: short, so a test can pass it quickly."""
+
+
+def _stall_suite(pytester: pytest.Pytester, sleep: float) -> None:
+    pytester.makeini(f"[pytest]\nfaulthandler_timeout = {STALL_LIMIT}\n")
+    pytester.makepyfile(
+        test_stall=f"import time\n\n\ndef test_stuck_here():\n    time.sleep({sleep})\n\n\n"
+        "def test_quick():\n    pass\n"
+    )
+
+
+def test_a_test_past_the_stall_limit_in_a_parallel_run_has_its_stack_in_the_output(
+    pytester: pytest.Pytester, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PYTEST_XDIST_AUTO_NUM_WORKERS", "2")
+    _stall_suite(pytester, sleep=STALL_LIMIT + 1.5)
+    result = pytester.run(*gate_command())
+
+    output = "\n".join([*result.outlines, *result.errlines])
+    assert result.ret == pytest.ExitCode.OK, output
+    assert f"Timeout (0:00:0{STALL_LIMIT})!" in output, output
+    assert any(
+        "test_stall.py" in line and "in test_stuck_here" in line for line in output.splitlines()
+    ), output
+    result.assert_outcomes(passed=2)
+
+
+def test_a_parallel_run_with_no_test_past_the_stall_limit_dumps_no_stack(
+    pytester: pytest.Pytester, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PYTEST_XDIST_AUTO_NUM_WORKERS", "2")
+    _stall_suite(pytester, sleep=0)
+    result = pytester.run(*gate_command())
+
+    output = "\n".join([*result.outlines, *result.errlines])
+    assert result.ret == pytest.ExitCode.OK, output
+    assert "Timeout (" not in output, output
+
+
+SLOWEST_TEST_MARGIN = 120
+"""The stall limit must be above this many seconds: the slowest test takes 87 s on Windows CI."""
+STALL_LIMIT_CEILING = 600
+"""...and at most this many: the CI job's 20 minutes, less a Windows suite of up to 10 minutes."""
+
+
+def test_the_repositorys_stall_limit_is_set_above_the_slowest_test_and_below_the_jobs_room() -> (
+    None
+):
+    pyproject = Path(check.ROOT, "pyproject.toml").read_text(encoding="utf-8")
+    options = tomllib.loads(pyproject)["tool"]["pytest"]["ini_options"]
+
+    assert "faulthandler_timeout" in options, "pyproject.toml sets no stall limit"
+    assert SLOWEST_TEST_MARGIN < options["faulthandler_timeout"] <= STALL_LIMIT_CEILING
