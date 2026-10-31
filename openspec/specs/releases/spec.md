@@ -35,25 +35,25 @@ bump at most its minor version. The first release of every package SHALL be 0.1.
 - **WHEN** the first release pull request is merged
 - **THEN** every package it releases is at version 0.1.0
 
-### Requirement: Core and its bundled adapters share one version
-Every package under `packages/` SHALL belong to one linked group: when any of them releases, all of them release at
-the same version. The protocol under `protocol/` SHALL NOT belong to it.
+### Requirement: The bundle and everything it ships share one version
+Every package under `packages/`, and every workspace member the bundle `troupe-run` depends on, SHALL belong to one
+linked group: when any of them releases, all of them release at the same version, so the bundle's release is the
+latest of everything it ships. The protocol under `protocol/` SHALL NOT belong to it.
 
 #### Scenario: Only one adapter changed
 - **WHEN** the only releasable commit since the last release changes `packages/troupe-store-text/`
-- **THEN** the release pull request gives every package under `packages/` the same new version
+- **THEN** the release pull request gives every package in the linked group the same new version
+
+#### Scenario: Only a runner changed
+- **WHEN** the only releasable commit since the last release is a `fix:` that changes `plugins/runner-scripted/`
+- **THEN** the release pull request gives every package in the linked group, `troupe-run` included, the same new
+  version
+- **AND** merging it creates a `troupe-run-v<version>` tag at that version
 
 #### Scenario: A protocol change
 - **WHEN** a `feat!` commit changes only `protocol/README.md`
 - **THEN** the release pull request bumps the protocol's version and lists the commit in `protocol/CHANGELOG.md`
-- **AND** it changes no version under `packages/`
-
-### Requirement: Each plugin has its own version
-Each package under `plugins/` SHALL have its own version and release, unaffected by changes to other packages.
-
-#### Scenario: Only core changed
-- **WHEN** the only releasable commits since the last release change `packages/`
-- **THEN** the release pull request doesn't change any plugin's version
+- **AND** it changes no version in the linked group
 
 ### Requirement: Every package has its own changelog
 Each package SHALL have a `CHANGELOG.md` in its own directory, listing the released commits that touched it, under
@@ -65,13 +65,23 @@ the version that released them.
 
 ### Requirement: Every workspace member is configured for release
 Every workspace member SHALL appear in the release configuration and the version manifest, and each package under
-`packages/` SHALL be in the linked group. A missing member SHALL fail the repository's check, and the failure
-SHALL name the member and the file to add it to. For an entry missing from the version manifest, member or protocol,
-the fix SHALL be the version of its latest `<component>-v*` tag, or `0.0.0` only if it has none, never a guess.
+`packages/` or shipped by the bundle SHALL be in the linked group. A missing member SHALL fail the repository's check,
+naming the member and the file to add it to. For an entry missing from the version manifest, member or protocol, the
+fix SHALL be the version of its latest `<component>-v*` tag, or `0.0.0` only if it has none, never a guess.
 
 #### Scenario: A new package without release config
 - **WHEN** a package is added under `packages/` but not to the release configuration
 - **THEN** `scripts/check.py` fails, naming the package and the configuration file
+
+#### Scenario: A bundled runner left out of the linked group
+- **WHEN** `troupe-run` depends on `troupe-runner-scripted` and it isn't in the linked group's components
+- **THEN** `scripts/check.py` fails, naming `troupe-runner-scripted`, that `troupe-run` ships it, the configuration
+  file and the fix
+
+#### Scenario: A component the bundle doesn't ship in the linked group
+- **WHEN** the linked group's components list a package that is neither under `packages/` nor a dependency of
+  `troupe-run`
+- **THEN** `scripts/check.py` fails, naming the package, the configuration file and the fix
 
 #### Scenario: The protocol put back in the linked group
 - **WHEN** `protocol` is listed in the linked group's components
