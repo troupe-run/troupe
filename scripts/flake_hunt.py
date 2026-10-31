@@ -43,10 +43,6 @@ JOIN_SECONDS = 0.5
 STOP_ANNOUNCE_SECONDS = 2.0
 STOP_TIMEOUT_SECONDS = 30.0
 """How long a stop waits for the workers before giving up on them, announcing the wait first."""
-STALL_SECONDS = 300.0
-"""A single test running this long is taken to be stuck: pytest's faulthandler then writes every
-thread's stack to the round's output, unbuffered, so a hung round's log names the test. Without
-it a killed round's buffered output is lost (#100: a hung Windows round left an empty log)."""
 TAIL_CHARACTERS = 4000
 """How much of a crashed round's output the summary shows."""
 LOAD_PROGRAM = "while True: pass"
@@ -77,7 +73,11 @@ class Options:
     rounds: int
     load: int
     round_timeout: float
-    stall_seconds: float
+    stall_seconds: float | None
+    """A single test running this long is taken to be stuck: pytest's faulthandler then writes every
+    thread's stack to the round's output, unbuffered, so a hung round's log names the test. Without
+    it a killed round's buffered output is lost (#100: a hung Windows round left an empty log).
+    None leaves the limit to the pytest configuration's faulthandler_timeout (#187)."""
     out: Path
     root: Path
     keyword: str | None
@@ -174,10 +174,10 @@ def parse_options(argv: Sequence[str]) -> Options:
     parser.add_argument(
         "--stall",
         type=_seconds("--stall"),
-        default=STALL_SECONDS,
+        default=None,
         metavar="SECONDS",
         help="a single test running longer has every thread's stack written to the round's "
-        f"output (default: {STALL_SECONDS:g})",
+        "output (default: the pytest configuration's faulthandler_timeout)",
     )
     parser.add_argument(
         "--out", type=Path, help="where results go (default: a new directory under the temp dir)"
@@ -520,9 +520,9 @@ def round_command(options: Options, basetemp: Path, report: Path) -> list[str]:
         f"--junitxml={report}",
         "-o",
         "junit_family=xunit1",
-        "-o",
-        f"faulthandler_timeout={options.stall_seconds:g}",
     ]
+    if options.stall_seconds is not None:
+        command += ["-o", f"faulthandler_timeout={options.stall_seconds:g}"]
     if options.keyword is not None:
         command += ["-k", options.keyword]
     return command + list(options.paths)

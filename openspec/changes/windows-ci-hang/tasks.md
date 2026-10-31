@@ -2,21 +2,23 @@
 
 ## 1. A stuck test names itself (pushed alone: design D1, D2)
 
-- [ ] 1.1 In `scripts/tests/test_check_parallel.py`, add a test that a stalled test's stack reaches a parallel run's
+- [x] 1.1 In `scripts/tests/test_check_parallel.py`, add a test that a stalled test's stack reaches a parallel run's
   output. Use a pytester root with `faulthandler_timeout = 1`, a test that sleeps 3 s and a quick test, run with
   `gate_command()`. Assert that the output holds `Timeout (` and a frame naming the sleeping test's function, and that
   the run passes. Add a second test asserting that a quick-only run holds no `Timeout (`. Verify: `uv run pytest
   scripts/tests/test_check_parallel.py -k stall` passes. Then set the sleep below the limit and check the first test
-  fails (then revert)
-- [ ] 1.2 In `pyproject.toml`'s `[tool.pytest.ini_options]`, set `faulthandler_timeout = 300` with a comment naming
+  fails (then revert). Outcome on macOS: 2 passed (2.7 s and 2.4 s). With the sleep at 0.2 s the first test failed
+  on `'Timeout (0:00:01)!' in ...`; reverted. The sleep is the limit plus 1.5 s, not 3 s
+- [x] 1.2 In `pyproject.toml`'s `[tool.pytest.ini_options]`, set `faulthandler_timeout = 300` with a comment naming
   #187 and the reasoning in D1. Add a test that reads `pyproject.toml` and asserts the limit is set, above 120 s and at
   most 600 s (named constants for the slowest-test margin and the job's timeout less the suite). Verify: the test
-  passes. Then remove the setting and check the test fails (then restore)
-- [ ] 1.3 In `scripts/flake_hunt.py`, make `--stall` default to none and pass `-o faulthandler_timeout` only when it's
+  passes. Then remove the setting and check the test fails (then restore). Outcome: the file's 10 tests passed. With
+  the setting removed, the test failed with "pyproject.toml sets no stall limit"; restored
+- [x] 1.3 In `scripts/flake_hunt.py`, make `--stall` default to none and pass `-o faulthandler_timeout` only when it's
   given. Remove `STALL_SECONDS`, and update `contributing/flake-hunt.md`'s options table to say the default comes from
   `pyproject.toml`. Add a test that `round_command` has no `faulthandler_timeout` override without `--stall`, and has
   `--stall 60`'s value with it. Verify: `uv run pytest scripts/tests/test_flake_hunt.py` passes, including the
-  existing stuck-test test
+  existing stuck-test test. Outcome: 29 passed, 2 skipped (Windows-only); ruff and mypy clean
 - [ ] 1.4 Run `uv run scripts/check.py`, and verify every gate passes, recording the counts. Commit 1.1–1.3 in small
   commits, push, open the PR as a draft with `Closes #187`, then mark it ready (`gh pr ready`) so its legs run (D3, the
   owner's choice). Verify: every leg of that run passes, and the Windows legs' logs show 1.1's tests passed there,

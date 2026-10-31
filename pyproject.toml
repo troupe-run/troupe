@@ -175,6 +175,12 @@ addopts = [
     "hypothesis_profiles",
 ]
 xfail_strict = true
+# A single test running this long has every thread's stack written to the output, so a stuck test
+# names itself instead of only timing out the CI job (#187; windows-ci-hang design D1). The dump
+# changes no outcome. 300 s is well above the slowest test (87 s on Windows) and leaves room before
+# the job's 20-minute timeout after a 7.5 to 10 minute Windows suite. The flake hunt's rounds read
+# it too unless given --stall.
+faulthandler_timeout = 300
 
 [tool.importlinter]
 root_packages = [
