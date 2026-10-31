@@ -95,10 +95,16 @@
 - [x] 6.1 Run `uv run scripts/check.py` (full) and `openspec validate ci-once-per-commit --strict`; both pass.
   Done 2026-10-31: the guard's full check on 77e1226 passed (3048 passed, 14 skipped), and
   `openspec validate ci-once-per-commit --strict` and `openspec validate --all --strict` (28) pass.
-- [ ] 6.2 Open the pull request as a draft (`gh pr create --draft`, `Closes #204`). Verify its CI run: `changes`
+- [x] 6.2 Open the pull request as a draft (`gh pr create --draft`, `Closes #204`). Verify its CI run: `changes`
   answers draft, no leg runs, `check` is skipped, and the run succeeds. Record the run link here.
-- [ ] 6.3 Act on Claude's review of the last push by tier. Once nothing is left to fix, `gh pr ready <n>`. Verify every
+  Done 2026-10-31: #205 opened as a draft on e3f3c9a. CI run 41172715889 concluded success: `what does it need?`
+  printed the draft notice and answered `scope=none`, `draft=true`; the legs and `check` were skipped, and the
+  `check` run on e3f3c9a reads `skipped`.
+- [x] 6.3 Act on Claude's review of the last push by tier. Once nothing is left to fix, `gh pr ready <n>`. Verify every
   leg runs the full check and no review run starts. Record the run link here.
+  Done 2026-10-31: review run 41172715882 on e3f3c9a found nothing ("no findings, so no inline comments").
+  `gh pr ready 205` started CI run 41172845258: `changes` diffed the whole pull request
+  (`2588054…e3f3c9a`), answered `scope=full`, and all 12 legs started the full check. No review run started.
 - [ ] 6.4 Straight after 6.3, before the ready run's `check` reports, push an `openspec/`-only commit (this task's
   tick). Verify `changes` reports diffing the whole pull request and every leg runs the full check, not a skip
   (design D3, Migration Plan step 3). Record the run link here.
