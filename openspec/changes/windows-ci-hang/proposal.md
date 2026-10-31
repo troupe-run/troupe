@@ -28,6 +28,12 @@ seam shows a defect that can hang exactly that way:
 The platform spec already requires that killing a child kills every grandchild, so this gap breaks the spec on
 Windows. `scripts/flake_hunt.py` closed the same gap for its own rounds by starting them suspended.
 
+**What the dump found (2026-10-31).** The first CI run with the stack dump hung on Windows 3.12, and the dump named
+`test_a_line_over_the_maximum_is_an_error_naming_the_maximum`. The cause isn't the job gap. When `read_line` refuses
+an over-long line after the whole line has arrived, asyncio has already paused reading the child's stdout, so the
+pipe's end-of-file is never read and `wait()` never returns, even once the child is killed. The run host takes the
+same path when a runner sends an over-long message, and then waits with no limit. Design D6 has the details.
+
 ## What Changes
 
 - **A stuck test names itself.** The tests gate dumps every thread's stack, including the test's own frame, once a
@@ -36,12 +42,15 @@ Windows. `scripts/flake_hunt.py` closed the same gap for its own rounds by start
   timeout. The limit is set in one place, the pytest configuration, which the flake hunt also reads unless `--stall`
   is given.
 - **The hang is identified before anything is fixed.** The stack dump is pushed on its own, and the Windows 3.12 leg
-  is rerun until a dump names the stuck test, up to a limit set in advance (design D3). Only then does the fix go
+  is run in parallel copies until a dump names the stuck test, up to a limit set in advance (design D3). Only then does the fix go
   out, so a hang that stops can be told apart from one that wasn't caught.
 - **Nothing a Windows child starts can get out of its job.** `start` and `run_to_completion` start the child
   suspended, assign it to the job, and only then let it run, as the flake hunt does. If assigning or resuming fails,
   the child is killed and the error is raised. The gap is first shown with a test that widens it on purpose, so the
   test fails on the current code and passes with the fix. `contributing/platform.md` drops the limitation.
+- **Waiting for a child that has exited always ends.** Once the child's exit code is known, `ChildProcess.wait()`
+  resumes reading any of its output that a caller left paused, so end-of-file arrives and the wait ends. Nothing
+  the child wrote is dropped (design D6). A seam test reproduces the hang deterministically before the fix.
 - **The hung test bounds itself.** Whichever test the dump names gets its own named limit on the wait that hung
   (memory/no-per-test-timeout: there is no per-test timeout), so a regression fails it, naming the limit, instead of
   hanging. If the dump points to a cause other than the job gap, that cause is fixed too. The design is updated
@@ -57,6 +66,7 @@ None.
 
 - `platform`: "Killing a child kills its whole process tree" gains a scenario for a grandchild the child starts
   straight away, before troupe could act, on every platform and through both ways of starting a child.
+  A new requirement: waiting for a child ends once it has exited, whatever output a caller left unread.
 - `quality-check`: a new requirement that a test running past the stall limit has its stack written to the check's
   output, naming the test, in parallel and in CI on every platform, without changing the result.
 
@@ -72,4 +82,5 @@ None.
 - `contributing/platform.md`: the Windows job-assignment limitation is removed, and the process table describes the
   suspended start.
 - Process: the PR is marked ready before Claude's review of the dump push is clean, so that its legs run (owner's
-  choice, 2026-10-31). Then the Windows 3.12 job is rerun with `gh run rerun --job`.
+  choice, 2026-10-31). Then a temporary workflow, `.github/workflows/hang-hunt-187.yml`, runs 40 copies of the
+  Windows 3.12 check at once on this branch only (the owner's choice, 2026-10-31). It is deleted before merging.
