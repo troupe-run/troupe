@@ -351,10 +351,13 @@ def test_claude_terminated_by_someone_else_ends_the_run_with_no_result(
 
     session = _session(sessions, workspace, _hanging_after_init(tmp_path, record))
     session.start()
+    while (message := session.message()).get("method") != "run/event":
+        pass
+    assert message["params"]["type"] == "init"
+    assert message["params"]["engine"]["version"] == "9.9.9"  # Claude Code's, not a synthetic init
     seen = wait_for_record(record, "argv")
     os.kill(seen["pid"], signal.SIGTERM)
-    events = [m["params"] for m in session.rest() if m.get("method") == "run/event"]
-    assert [e["type"] for e in events] == ["init"]
+    assert [m for m in session.rest() if m.get("method") == "run/event"] == []
     assert session.wait() == 143
     assert b"Claude Code exited with code 143 and sent no result" in session.stderr()
 
