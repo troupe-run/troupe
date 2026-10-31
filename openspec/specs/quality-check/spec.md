@@ -257,10 +257,10 @@ suite that does. The failure SHALL name the scope, each suite added or missing, 
 - **THEN** the full run fails, naming the scope and the suite to remove
 
 ### Requirement: A pull request's CI runs only what its changed paths need
-CI SHALL work out a pull request's changed paths, since the last push whose `check` passed, or from its base when no
-earlier push passed, and ask the declaration in `scripts/check-paths.toml` what they need, through the same decision
-the commit guard makes. Every leg of the test matrix SHALL then skip the check, run the scoped check, or run the full
-check, as that answer says.
+CI SHALL work out the changed paths of a pull request that's ready for review, since the last push whose `check`
+passed, or from its base when no earlier push passed, and ask the declaration in `scripts/check-paths.toml` what they
+need, through the same decision the commit guard makes. Every leg of the test matrix SHALL then skip the check, run the
+scoped check, or run the full check, as that answer says.
 
 #### Scenario: A pull request that changes only OpenSpec artifacts
 - **WHEN** a pull request's changes are all under `openspec/`, such as a change's archive and its task ticks
@@ -281,9 +281,9 @@ check, as that answer says.
 - **THEN** every leg runs the full check
 
 ### Requirement: A push is checked against the last push that passed
-When a push adds to an open pull request and the previous head's `check`, reported by GitHub Actions, passed, CI SHALL
-work out the changed paths by comparing the previous head's tree with the new head's. Otherwise it SHALL use every
-path the pull request changes from its base.
+When a push adds to an open pull request and the latest `check` on the previous head, reported by GitHub Actions,
+passed, CI SHALL work out the changed paths by comparing the previous head's tree with the new head's. Otherwise it
+SHALL use every path the pull request changes from its base.
 
 #### Scenario: An archive push after a green code push
 - **WHEN** a pull request's code changes passed `check`, and the next push only moves files under `openspec/`
@@ -313,6 +313,16 @@ path the pull request changes from its base.
   from GitHub Actions
 - **THEN** CI uses every path the pull request changes
 
+#### Scenario: The previous head was only checked as a draft
+- **WHEN** a draft is marked ready, and a push that changes only files under `openspec/` arrives before the ready
+  run's `check` on the previous head has reported
+- **THEN** CI uses every path the pull request changes, and runs the check those paths need
+
+#### Scenario: The previous head passed once it was ready
+- **WHEN** a draft was marked ready and the ready run's `check` passed on its head, and the next push changes only
+  files under `openspec/`
+- **THEN** no leg runs `scripts/check.py`, and every required check passes
+
 ### Requirement: CI runs the full check when the changed paths are unknown
 When CI can't work out a pull request's changed paths, or can't get an answer from the declaration, every leg SHALL
 run the full check. A skip SHALL happen only when the changed paths are known and every one is skipped.
@@ -329,12 +339,49 @@ run the full check. A skip SHALL happen only when the changed paths are known an
 - **WHEN** a pull request makes `scripts/check-paths.toml` malformed
 - **THEN** every leg runs the full check, which fails, naming the file and what is wrong with it
 
-### Requirement: Every push to main runs the full check
-A push to `main` SHALL run the full check on every leg, whatever it changed.
+### Requirement: A push to main skips a commit the merge queue passed
+On a push to `main`, CI SHALL skip every leg when its own merge-queue run on that exact commit succeeded, and `check`
+SHALL pass. Any other push to `main` SHALL run the full check on every leg. Finding out SHALL never fail CI's run:
+when it can't be found out, every leg runs the full check.
 
-#### Scenario: A merge that changes only OpenSpec artifacts
-- **WHEN** a pull request whose changes are all under `openspec/` merges into `main`
+#### Scenario: A merge through the queue
+- **WHEN** the merge queue passes a merge group and its commit lands on `main`
+- **THEN** CI's run on `main` runs no leg, `check` passes, and the run succeeds
+
+#### Scenario: A commit that didn't come through the queue
+- **WHEN** a commit reaches `main` with no merge-queue run of CI on it, such as a guard delivery
 - **THEN** every leg runs the full check on `main`
+
+#### Scenario: A merge-queue run on the commit that didn't pass
+- **WHEN** CI's only merge-queue runs on the commit pushed to `main` failed or were cancelled
+- **THEN** every leg runs the full check on `main`
+
+#### Scenario: The merge-queue run is still finishing
+- **WHEN** CI's merge-queue run on the commit hasn't completed when the push's run asks
+- **THEN** CI waits for it for a bounded time, skips the legs if it succeeds in that time, and otherwise runs the full
+  check
+
+#### Scenario: The merge-queue runs can't be read
+- **WHEN** reading CI's merge-queue runs fails, or answers in a shape CI doesn't recognise
+- **THEN** CI warns, naming why, and every leg runs the full check
+- **AND** the read itself doesn't fail the run
+
+### Requirement: A draft pull request runs no legs until it's marked ready
+On a draft pull request, CI SHALL run no leg, and `check` SHALL be skipped rather than pass. Marking the pull request
+ready for review SHALL run what every path the pull request changes from its base needs.
+
+#### Scenario: A push to a draft
+- **WHEN** a draft pull request is opened, or a push adds to one, whatever it changes
+- **THEN** no leg installs the project or runs `scripts/check.py`
+- **AND** `check` is skipped, saying it runs when the pull request is marked ready
+
+#### Scenario: A draft marked ready
+- **WHEN** a draft whose changes include core code is marked ready for review
+- **THEN** every leg runs the full check, judged on every path the pull request changes from its base
+
+#### Scenario: A draft marked ready whose changes are all OpenSpec artifacts
+- **WHEN** a draft whose changes are all under `openspec/` is marked ready for review
+- **THEN** no leg runs `scripts/check.py`, and `check` passes
 
 ### Requirement: Every merge group runs the full check
 CI SHALL run on every merge group the merge queue creates for `main`, and SHALL run the full check there on every
@@ -356,9 +403,10 @@ merge group, since the queue lands only a commit whose required checks reported 
 - **THEN** the full check fails, naming the workflow and what would skip the check on the queue
 
 ### Requirement: One required check reports for every leg
-CI SHALL report one check named `check` on every pull request, every merge group and every push to `main`. It SHALL
-pass when every leg passed, or when every leg was skipped because the changed paths needed no check. It SHALL fail
-when any leg failed or was cancelled, and when the legs were skipped for any other reason.
+CI SHALL report one check named `check` on every pull request that's ready for review, every merge group and every
+push to `main`. It SHALL pass when every leg passed, or when every leg was skipped because the changed paths needed no
+check or the merge queue had passed the commit. It SHALL fail when any leg failed or was cancelled, and when the legs
+were skipped for any other reason.
 
 #### Scenario: Every leg passes
 - **WHEN** every leg runs and passes
@@ -379,6 +427,10 @@ when any leg failed or was cancelled, and when the legs were skipped for any oth
 #### Scenario: A merge group's legs pass
 - **WHEN** every leg runs the full check on a merge group's commit and passes
 - **THEN** `check` passes on that commit
+
+#### Scenario: A push to main the merge queue passed
+- **WHEN** every leg is skipped on a push to `main` because the merge queue passed that commit
+- **THEN** `check` passes
 
 ### Requirement: No gate reads OpenSpec artifacts
 No gate in `scripts/check.py` SHALL read a file under `openspec/`, so that skipping the check for a change to those
