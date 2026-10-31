@@ -2,15 +2,15 @@
 
 ## 1. The install check installs from GitHub by a tag (design D1, D4)
 
-- [ ] 1.1 In `scripts/install_check.py`, add `TAG_PREFIX = "troupe-run-v"` beside `TEMPLATE`, and a function giving the
+- [x] 1.1 In `scripts/install_check.py`, add `TAG_PREFIX = "troupe-run-v"` beside `TEMPLATE`, and a function giving the
   version a ref names when it's `TAG_PREFIX` + version (`None` otherwise). Verify with unit tests in
   `scripts/tests/workspace/test_install_check.py`: `troupe-run-v0.1.0` gives 0.1.0; `troupe-v0.1.0`, `main`, a SHA
   and `troupe-run-v` alone give `None`.
-- [ ] 1.2 Add `--hosted`: install from `REPOSITORY` with the ref exactly as given, still resolving the ref in the
+- [x] 1.2 Add `--hosted`: install from `REPOSITORY` with the ref exactly as given, still resolving the ref in the
   checkout to read core's version. Verify with tests that the arguments uv gets for `--hosted --ref troupe-run-v0.1.0`
   are the URL `command(REPOSITORY, "troupe-run-v0.1.0")` holds, and that without `--hosted` they're unchanged
   (`file://` URL and the resolved SHA).
-- [ ] 1.3 For a `troupe-run-v<version>` ref, fail unless `<version>` equals core's version at the commit and the
+- [x] 1.3 For a `troupe-run-v<version>` ref, fail unless `<version>` equals core's version at the commit and the
   installed `troupe --version` prints it, naming the tag and the version found. Verify with tests for both failures,
   each asserting the whole message, written to fail on main first.
 - [ ] 1.4 Update the script's docstring and usage for `--hosted` and tags. Push the branch, then run

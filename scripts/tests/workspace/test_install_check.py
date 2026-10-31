@@ -95,3 +95,73 @@ def test_a_step_that_outlives_its_timeout_is_stopped_and_named(tmp_path: Path) -
     argv = [sys.executable, "-c", "import time; time.sleep(30)"]
     with pytest.raises(InstallCheckError, match=r"^install: `.*` didn't finish within 0.5s\.$"):
         install_check.run("install", argv, tmp_path, os.environ, 0.5)
+
+
+@pytest.mark.parametrize(
+    ("ref", "version"),
+    [
+        ("troupe-run-v0.1.0", "0.1.0"),
+        ("troupe-run-v1.2.3-rc.1", "1.2.3-rc.1"),
+        ("troupe-v0.1.0", None),
+        ("main", None),
+        ("0123456789abcdef0123456789abcdef01234567", None),
+        ("troupe-run-v", None),
+        ("troupe-run-vnext", None),
+    ],
+)
+def test_only_the_bundles_release_tag_names_a_version(ref: str, version: str | None) -> None:
+    assert install_check.tagged_version(ref) == version
+
+
+def test_hosted_installs_from_github_with_the_ref_exactly_as_given() -> None:
+    repository, ref = install_check.source(REPO, "troupe-run-v0.1.0", "abc", hosted=True)
+    assert f"uv {' '.join(install_check.install_arguments(repository, ref, None))}" == (
+        install_check.command(install_check.REPOSITORY, "troupe-run-v0.1.0").replace('"', "")
+    )
+
+
+def test_without_hosted_the_checkout_is_installed_from_by_its_resolved_commit() -> None:
+    assert install_check.source(REPO, "HEAD", "abc", hosted=False) == (
+        install_check.repository_url(REPO),
+        "abc",
+    )
+
+
+def test_a_tag_whose_version_core_doesnt_declare_is_refused_naming_both() -> None:
+    with pytest.raises(InstallCheckError) as caught:
+        install_check.expected_version("troupe-run-v0.2.0", "0.1.0", "abc")
+    assert str(caught.value) == (
+        "--ref troupe-run-v0.2.0: the tag names version 0.2.0, but core declares 0.1.0 at abc. "
+        "The bundle and core are released at one version, so the tag or the linked group is wrong."
+    )
+
+
+def test_a_tag_whose_version_core_declares_expects_that_version() -> None:
+    assert install_check.expected_version("troupe-run-v0.1.0", "0.1.0", "abc") == "0.1.0"
+    assert install_check.expected_version("main", "0.0.0", "abc") == "0.0.0"
+
+
+def test_an_install_that_prints_another_version_than_its_tag_is_refused_naming_the_tag() -> None:
+    with pytest.raises(InstallCheckError) as caught:
+        install_check.confirm_printed(
+            "troupe 0.0.0 (protocol 0.1.0)\n", "0.1.0", "troupe-run-v0.1.0", "abc"
+        )
+    assert str(caught.value) == (
+        "troupe --version: printed 'troupe 0.0.0 (protocol 0.1.0)', not troupe 0.1.0, "
+        "the version troupe-run-v0.1.0 names."
+    )
+
+
+def test_an_install_from_a_commit_that_prints_another_version_names_the_commit() -> None:
+    with pytest.raises(InstallCheckError) as caught:
+        install_check.confirm_printed("troupe 0.0.1 (protocol 0.1.0)\n", "0.0.0", "HEAD", "abc")
+    assert str(caught.value) == (
+        "troupe --version: printed 'troupe 0.0.1 (protocol 0.1.0)', not troupe 0.0.0, "
+        "the version core declares at abc."
+    )
+
+
+def test_an_install_that_prints_the_expected_version_passes() -> None:
+    install_check.confirm_printed(
+        "troupe 0.1.0 (protocol 0.1.0)\n", "0.1.0", "troupe-run-v0.1.0", "abc"
+    )
