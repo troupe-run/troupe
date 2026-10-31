@@ -92,7 +92,9 @@
 
 ## 6. Whole-change checks
 
-- [ ] 6.1 Run `uv run scripts/check.py` (full) and `openspec validate ci-once-per-commit --strict`; both pass.
+- [x] 6.1 Run `uv run scripts/check.py` (full) and `openspec validate ci-once-per-commit --strict`; both pass.
+  Done 2026-10-31: the guard's full check on 77e1226 passed (3048 passed, 14 skipped), and
+  `openspec validate ci-once-per-commit --strict` and `openspec validate --all --strict` (28) pass.
 - [ ] 6.2 Open the pull request as a draft (`gh pr create --draft`, `Closes #204`). Verify its CI run: `changes`
   answers draft, no leg runs, `check` is skipped, and the run succeeds. Record the run link here.
 - [ ] 6.3 Act on Claude's review of the last push by tier. Once nothing is left to fix, `gh pr ready <n>`. Verify every
