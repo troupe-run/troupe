@@ -88,7 +88,7 @@ workflow. It SHALL also run on demand for a given ref.
 
 ### Requirement: A failed check on a published tag opens a Bug
 When the release install check fails for a tag, the workflow SHALL open one Bug issue in troupe-run/troupe naming the
-tag, each failed platform and Python, and the run. It SHALL NOT move, delete or edit the tag or its release. Its token
+tag, each failed platform and Python, and the run, or comment on that tag's Bug if one is open. It SHALL NOT move, delete or edit the tag or its release. Its token
 SHALL be able to read the repository and its runs and write issues, and nothing else.
 
 #### Scenario: Windows fails for a published tag
@@ -99,3 +99,7 @@ SHALL be able to read the repository and its runs and write issues, and nothing 
 #### Scenario: Every leg passes
 - **WHEN** the check passes on every platform and Python
 - **THEN** no issue is opened
+
+#### Scenario: A re-run fails while the tag's Bug is open
+- **WHEN** the check for `troupe-run-v0.1.0` is run again on demand and fails, and its Bug is still open
+- **THEN** no second issue is opened, and the open Bug gets a comment naming the failed legs and the new run
