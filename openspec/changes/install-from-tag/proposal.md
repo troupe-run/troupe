@@ -16,8 +16,8 @@ builds the parts that mean #208 only has to edit one line.
 - **The docs accept the tag form, with the bundle's current version.** The docs test that keeps every copy of the
   install command in one form also allows `@troupe-run-v<version>`, but only where `<version>` is `troupe-run`'s
   version in `.release-please-manifest.json`. That version is 0.0.0 until the release, so no copy can name a tag
-  that doesn't exist yet. The README and the install page keep `@main` until #208. Their pointers to #189 change to
-  name the tag form and point to #208.
+  that doesn't exist yet. The README and the install page keep `@main` until #208. Their prose names the tag form
+  in words that stay true in 0.1.0's own copy of the docs (design D7).
 - **The documented tag follows each release** (owner, 2026-10-31). release-please markers go around the install
   command in the README and the install page, and the bundle's release entry updates both files. Each release pull
   request then moves the documented tag in the same commit as the versions. While the command says `@main`, the
