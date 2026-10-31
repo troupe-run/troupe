@@ -1,29 +1,41 @@
 name: CI
 
-# Each push to a pull request runs what its changed paths need (#101; spec: quality-check;
-# ci-check-scope design):
+# Each push to a pull request that's ready for review runs what its changed paths need (#101;
+# spec: quality-check; ci-check-scope design):
 #
-#   changes  what the changed paths need. When the pull request's previous head passed `check`,
-#            only what this push changed decides, so an archive push after green code is judged on
-#            its own; otherwise every path the pull request changes does (D1). guard.py check-scope
-#            reads scripts/check-paths.toml, the same declaration the commit guard reads, and
-#            answers none, full or the scopes
+#   changes  what the changed paths need. When the latest `check` on the pull request's previous
+#            head passed, only what this push changed decides, so an archive push after green code
+#            is judged on its own; otherwise every path the pull request changes does (D1).
+#            guard.py check-scope reads scripts/check-paths.toml, the same declaration the commit
+#            guard reads, and answers none, full or the scopes
 #   check    the legs, on every OS and Python version troupe supports: skipped when only skipped
 #            paths changed, scoped when only scoped ones did, and otherwise the full check
 #   check    (the result job) the required check for the legs. It passes when every leg passed, or
 #            when they were all skipped because `changes` answered none. A skipped matrix job
 #            reports under its unexpanded name, so the legs themselves can't be required (D3).
 #
-# A failed `changes` runs everything (D1). main runs everything after every merge (D5): its merged
-# tree may be one no pull request tested.
+# A failed `changes` runs everything (D1).
 #
-# A merge group runs everything too (ci-on-merge-queue D1): the merge queue lands only a commit its
+# The matrix runs once for each version of the code that matters (#204; ci-once-per-commit design):
+#
+# - A draft runs no legs, and its `check` is skipped rather than passed. An agent marks it ready once
+#   Claude's review of its last push is clean, and `ready_for_review` then runs what every path the
+#   pull request changes needs. A draft's `check` never runs, so D1 can't read it as passed and
+#   narrow the first push after ready to that push alone (design D3).
+# - A push to main skips the legs when CI's merge-queue run on that exact commit succeeded
+#   (scripts/queue_passed.py), and `check` passes. Any other commit, such as a guard delivery, runs
+#   everything, and so does a lookup that fails (design D1).
+#
+# A merge group runs everything (ci-on-merge-queue D1): the merge queue lands only a commit its
 # required checks reported on, and that commit combines main with every pull request queued ahead,
-# which no pull request tested. `changes` runs on pull requests only, so a merge group gets no
-# answer and runs the full check, as main does. Nothing may filter or narrow it, or the queue waits
-# on a `check` that never reports: scripts/tests/test_ci_workflow.py fails if something does.
+# which no pull request tested. `changes` doesn't run on a merge group, so it gets no answer and
+# runs the full check. Nothing may filter or narrow it, or the queue waits on a `check` that never
+# reports: scripts/tests/test_ci_workflow.py fails if something does.
 on:
   pull_request:
+    # GitHub's default types, written out because naming one replaces them, and ready_for_review:
+    # marking a draft ready runs what a draft skipped (ci-once-per-commit design D2).
+    types: [opened, synchronize, reopened, ready_for_review]
   merge_group:
   push:
     branches: [main]
@@ -38,25 +50,52 @@ concurrency:
 jobs:
   changes:
     name: what does it need?
-    if: github.event_name == 'pull_request'
+    # A pull request and a push to main; a merge group runs everything (ci-once-per-commit design
+    # D2). Exactly one of the three answering steps runs: a draft, a push, or a ready pull request.
+    if: github.event_name != 'merge_group'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: read
       # To read the previous head's `check` (D1).
       checks: read
+      # queue_passed.py reads CI's merge-queue runs (ci-once-per-commit design D1).
+      actions: read
     outputs:
-      scope: ${{ steps.paths.outputs.scope }}
-      check-args: ${{ steps.paths.outputs['check-args'] }}
+      scope: ${{ steps.draft.outputs.scope || steps.main.outputs.scope || steps.paths.outputs.scope }}
+      check-args: ${{ steps.draft.outputs['check-args'] || steps.main.outputs['check-args'] || steps.paths.outputs['check-args'] }}
+      # `true` only on a draft, which skips `check` (ci-once-per-commit design D3).
+      draft: ${{ steps.draft.outputs.draft }}
     steps:
+      - name: A draft runs nothing until it's ready
+        id: draft
+        if: github.event_name == 'pull_request' && github.event.pull_request.draft
+        run: |
+          echo "::notice::A draft: the legs and check run when it's marked ready for review."
+          printf 'scope=none\ncheck-args=\ndraft=true\n' >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event_name == 'push'
+      # It always exits 0: a failed read answers "everything", with a warning (design D1).
+      - name: Did the merge queue pass this commit?
+        id: main
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+        run: |
+          python3 scripts/queue_passed.py --repository "$GITHUB_REPOSITORY" --sha "$SHA" >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event_name == 'pull_request' && !github.event.pull_request.draft
         with:
           # The whole history, so the diff from the merge base can be worked out.
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        if: github.event_name == 'pull_request' && !github.event.pull_request.draft
       - name: What this push changed
         id: paths
+        if: github.event_name == 'pull_request' && !github.event.pull_request.draft
         env:
           ACTION: ${{ github.event.action }}
           # The previous head, on `synchronize` only.
@@ -66,16 +105,20 @@ jobs:
           REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          # The previous head's `check`, from GitHub Actions (app 15368) only, when the commit can
-          # be had: checkout doesn't fetch a head a force push left behind, so fetch it by sha.
-          CONCLUSION=""
+          # The previous head's `check` runs, from GitHub Actions (app 15368) only, when the
+          # commit can be had: checkout doesn't fetch a head a force push left behind, so fetch it
+          # by sha. Every run, one per workflow run: check_range.py judges only the one that
+          # started last, so a draft's skipped `check` can't stand in for the ready run's (D3).
+          CHECK_RUNS=""
           if [ -n "$BEFORE" ] && { git cat-file -e "$BEFORE^{commit}" 2>/dev/null ||
             git fetch --quiet --no-tags origin "$BEFORE"; }; then
-            CONCLUSION=$(gh api "repos/$REPO/commits/$BEFORE/check-runs?check_name=check&app_id=15368" \
-              --jq '.check_runs[0].conclusion // ""')
+            CHECK_RUNS="$RUNNER_TEMP/check-runs.json"
+            gh api "repos/$REPO/commits/$BEFORE/check-runs?check_name=check&app_id=15368&filter=all&per_page=100" \
+              > "$CHECK_RUNS"
+            jq -r '.check_runs[] | "a check on the previous head: \(.conclusion // .status), started \(.started_at)"' \
+              "$CHECK_RUNS"
           fi
-          echo "the previous head's check: ${CONCLUSION:-none}"
-          REVISIONS=$(python3 scripts/check_range.py "$ACTION" "$BEFORE" "$BASE" "$HEAD" "$CONCLUSION")
+          REVISIONS=$(python3 scripts/check_range.py "$ACTION" "$BEFORE" "$BASE" "$HEAD" "$CHECK_RUNS")
           echo "diffing $REVISIONS"
           # Unquoted: one revision range, or two shas.
           git diff --name-only --no-renames $REVISIONS > "$RUNNER_TEMP/paths"
@@ -86,8 +129,9 @@ jobs:
     # troupe supports Linux, macOS and Windows from the first commit (decision #17). Not required
     # themselves: `check` below reports for them.
     name: check (${{ matrix.os }}, Python ${{ matrix.python }})
-    # Skipped only when `changes` succeeded and found only skipped paths. With no answer (a push
-    # to main, a merge group, or a failed `changes`) the legs run the full check.
+    # Skipped only when `changes` succeeded and answered none: only skipped paths changed, a draft,
+    # or a push to main the merge queue passed. With no answer (a merge group, or a failed
+    # `changes`) the legs run the full check.
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.scope != 'none' }}
     runs-on: ${{ matrix.os }}
@@ -131,9 +175,11 @@ jobs:
 
   check:
     name: check
-    # The required check for the legs (D3). always(): it must report whatever they did.
+    # The required check for the legs (D3). always(): it must report whatever they did, except on a
+    # draft, where it's skipped so it can never read as passed (ci-once-per-commit design D3). A
+    # failed `changes` gives no draft answer, so `check` judges legs that ran in full.
     needs: [changes, check-legs]
-    if: ${{ always() }}
+    if: ${{ always() && needs.changes.outputs.draft != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

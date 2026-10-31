@@ -5,7 +5,8 @@ Usage: python3 scripts/check_result.py LEGS CHANGES SCOPE
 LEGS is the matrix job's result, CHANGES the `changes` job's result, and SCOPE its `scope` answer
 (empty when it gave none). GitHub reports a skipped matrix job under its unexpanded name, so the
 legs can't be required themselves: this passes when every leg passed, or when they were all skipped
-because `changes` found only skipped paths, and fails on anything else.
+because `changes` answered that nothing needs checking (only skipped paths changed, or on a push to
+main, the merge queue passed the commit: ci-once-per-commit design D1), and fails on anything else.
 
 Standard library only: it runs with the runner's python3, before anything is installed.
 """
@@ -24,7 +25,10 @@ def judge(legs: str, changes: str, scope: str) -> tuple[bool, str]:
         return True, "every leg passed."
     if legs == "skipped":
         if changes == "success" and scope == "none":
-            return True, "the legs were skipped: no changed path needs the check."
+            return True, (
+                "the legs were skipped: `changes` answered that nothing needs checking (only "
+                "skipped paths changed, or the merge queue passed this commit; its log says which)."
+            )
         return False, (
             f"the legs were skipped without a reason to skip them (changes: `{changes}`, scope: "
             f"`{scope}`). Only a `changes` job that succeeded and answered `none` may skip them."

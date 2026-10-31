@@ -18,7 +18,7 @@ def test_legs_that_all_passed_pass_whatever_changes_answered(changes: str, scope
 def test_legs_skipped_because_changes_answered_none_pass() -> None:
     passed, reason = check_result.judge("skipped", "success", "none")
     assert passed
-    assert "no changed path needs the check" in reason
+    assert "`changes` answered that nothing needs checking" in reason
 
 
 @pytest.mark.parametrize(
