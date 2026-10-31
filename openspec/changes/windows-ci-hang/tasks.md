@@ -62,7 +62,11 @@
 - [ ] 3.3 Show the escape test fails on Windows without the fix. Push 3.1's tests (with the hook) first, without
   3.2, and check that the Windows legs fail them at `WAIT_LIMIT` (`start`) and on the surviving grandchild
   (`run_to_completion`). Then push 3.2 and check every leg passes. Verify: both runs' ids and the failing assertions
-  are recorded here
+  are recorded here. Without the fix (run 41196516803, head cf7cd1b): every Windows leg failed exactly the two
+  escape tests (2 failed, 3042 passed, 22 skipped), and every Linux and macOS leg passed. `start`: on 3.12, "waiting
+  for the killed child took over 30s: grandchild 3164 is still running"; on 3.13–3.15 the wait ended but "grandchild
+  … outlived the kill: it escaped the child's job". `run_to_completion`: "grandchild … outlived the timeout's kill: it
+  escaped the job" on all four
 
 ## 4. Waiting ends once the child has exited (design D5, D6)
 
