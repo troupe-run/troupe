@@ -13,22 +13,25 @@
 - [x] 1.3 For a `troupe-run-v<version>` ref, fail unless `<version>` equals core's version at the commit and the
   installed `troupe --version` prints it, naming the tag and the version found. Verify with tests for both failures,
   each asserting the whole message, written to fail on main first.
-- [ ] 1.4 Update the script's docstring and usage for `--hosted` and tags. Push the branch, then run
+- [x] 1.4 Update the script's docstring and usage for `--hosted` and tags. Push the branch, then run
   `uv run scripts/install_check.py --hosted --ref <pushed head SHA>` on macOS, and record the result here. It's the first
   install from the hosted URL.
+  - 2026-10-31, macOS (arm64), uv 0.13.6: `--hosted --ref b3d5dcf1494acc36db2dbb9b04b53ba5942eca5f` installed from
+    `git+https://github.com/troupe-run/troupe@b3d5dcf…#subdirectory=packages/troupe-run` and printed
+    `install check: installed and performed (run 0e3ac63d-… succeeded)`, in 8.7 s. No tag exists yet to try.
 
 ## 2. The docs accept the bundle's tag at its released version (design D2, D3)
 
-- [ ] 2.1 In `scripts/tests/workspace/test_install_docs.py`, take the allowed refs from the root: `main`, `<commit>`, and
+- [x] 2.1 In `scripts/tests/workspace/test_install_docs.py`, take the allowed refs from the root: `main`, `<commit>`, and
   `TAG_PREFIX` + `troupe-run`'s version in `.release-please-manifest.json`, with 0.0.0 refused as "no release yet".
   Verify with copy-the-real-pages tests: core's tag (`@troupe-v0.1.0`) is named with page, line and expected command;
   `@troupe-run-v0.1.0` with the manifest at 0.0.0 is named with version 0.0.0; the same line with a copied manifest
   set to 0.1.0 passes.
-- [ ] 2.2 Add the markers check: in `README.md` and `docs/opening-night/install.md`, a command naming `main` or a
+- [x] 2.2 Add the markers check: in `README.md` and `docs/opening-night/install.md`, a command naming `main` or a
   `troupe-run-v` tag must sit between `<!-- x-release-please-start-version -->` and `<!-- x-release-please-end -->`,
   and anywhere else a tagged command must too. Verify with tests: a command moved after the end marker is named with
   page and line; the `<commit>` command outside the markers passes.
-- [ ] 2.3 Put the markers around the `@main` code block in `README.md` and `docs/opening-night/install.md`, outside the
+- [x] 2.3 Put the markers around the `@main` code block in `README.md` and `docs/opening-night/install.md`, outside the
   fences, leaving the `<commit>` block outside. Change "Installing by release tag comes with the first release (#189)"
   in both to say releases are installed by the bundle's tag, `troupe-run-v<version>`, from the first release (#208).
   Check `packages/troupe-run/README.md` says the same where it names the refs. Verify that the docs tests pass on the
