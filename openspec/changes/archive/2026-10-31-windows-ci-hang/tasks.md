@@ -104,8 +104,11 @@
   39 passed. Copy 7 failed one timing test unrelated to the hang,
   `test_another_processs_events_each_reach_a_listener_the_fastest_under_the_bound` (fastest 0.33 s against 0.25 s),
   which is #159, already open
-- [ ] 5.3 Delete `.github/workflows/hang-hunt-187.yml` in a push of its own. Verify: `git ls-files .github/workflows`
-  doesn't list it, `git diff main --stat -- .github` is empty, and that push starts no hunt run
+- [x] 5.3 Delete `.github/workflows/hang-hunt-187.yml` in a push of its own. Verify: `git ls-files .github/workflows`
+  doesn't list it, `git diff main --stat -- .github` is empty, and that push starts no hunt run. Outcome: deleted in
+  b189f2d, its own commit, pushed together with 6e517c1 (4.4). `git ls-files .github/workflows` lists only the five
+  workflows on main, and `git diff origin/main --stat -- .github` is empty. The push's runs were CI, guard and
+  claude review, with no hunt run. CI on b189f2d: every leg and `check` passed
 
 ## Workflow follow-up
 
