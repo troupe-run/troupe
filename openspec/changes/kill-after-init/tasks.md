@@ -12,7 +12,7 @@
 
 ## 3. Verify
 
-- [ ] 3.1 Run `uv run scripts/check.py`, and verify all gates pass (record the counts here)
+- [x] 3.1 Run `uv run scripts/check.py`, and verify all gates pass (record the counts here). On 068e284: all gates passed, 2991 passed, 14 skipped (the commit's guard ran the `runner_claude_code` scope: 2557 passed, 12 skipped)
 
 ## Workflow follow-up
 
