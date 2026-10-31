@@ -52,11 +52,13 @@
   matching test for `run_to_completion`'s timeout path. Verify: both pass on macOS. Their Windows failure on the
   unfixed seam is shown in 3.3, since there's no Windows machine locally. Outcome: 44 passed, 2 skipped on macOS (both new tests pass:
   POSIX doesn't call the hook, and the group holds the grandchild)
-- [ ] 3.2 Start Windows children suspended in `start` and `run_to_completion`, and have `_new_job_for` assign and
+- [x] 3.2 Start Windows children suspended in `start` and `run_to_completion`, and have `_new_job_for` assign and
   resume them (`NtResumeProcess`). On failure, close the job and raise an `OSError` naming the step and the pid; the
   callers kill the child and wait for it. Update the module docstring, `contributing/platform.md`'s process table, and
   remove its "Windows job assignment" limitation. Verify: `uv run pytest packages/troupe/tests/test_platform_processes.py`
-  passes, `uv run mypy` is clean, and `uv run mypy --platform win32` on the module is clean
+  passes, `uv run mypy` is clean, and `uv run mypy --platform win32` on the module is clean. Outcome: 45 passed,
+  2 skipped (with 4.1–4.3 in place); both mypy runs clean. The claude-code runner's own `processes.py` already starts
+  its child suspended, so only the core seam had the gap
 - [ ] 3.3 Show the escape test fails on Windows without the fix. Push 3.1's tests (with the hook) first, without
   3.2, and check that the Windows legs fail them at `WAIT_LIMIT` (`start`) and on the surviving grandchild
   (`run_to_completion`). Then push 3.2 and check every leg passes. Verify: both runs' ids and the failing assertions
@@ -64,17 +66,22 @@
 
 ## 4. Waiting ends once the child has exited (design D5, D6)
 
-- [ ] 4.1 Add the seam test from D6: a child writes 2 MiB and a line feed against a 1 MiB limit, flushes and sleeps.
+- [x] 4.1 Add the seam test from D6: a child writes 2 MiB and a line feed against a 1 MiB limit, flushes and sleeps.
   The test waits (bounded) for the stdout pipe to pause, reads (`LineTooLongError`), kills the tree, and asserts that
   `wait()` returns within `WAIT_LIMIT` with the kill's status, and that the rest of stdout can still be read whole
-  afterwards. Verify: it fails at `WAIT_LIMIT` on the unfixed seam (run before 4.2)
-- [ ] 4.2 In `ChildProcess.wait()`, once the child's exit code is known, resume reading any of its paused output
+  afterwards. Verify: it fails at `WAIT_LIMIT` on the unfixed seam (run before 4.2). Outcome: on macOS, before 4.2,
+  "Failed: waiting for the killed child took over 30s: its output was left paused at the refused line" (30.2 s)
+- [x] 4.2 In `ChildProcess.wait()`, once the child's exit code is known, resume reading any of its paused output
   pipes (D6). Update the docstring. Verify: 4.1's test passes, the whole of `test_platform_processes.py` and the run
-  host's tests pass, and mypy is clean
-- [ ] 4.3 In `_first_line`, the helper of the test that hung, bound `await child.wait()` with `WAIT_LIMIT` and a
+  host's tests pass, and mypy is clean. Outcome: 4.1's test passes in 0.07 s. `test_platform_processes.py`: 45
+  passed, 2 skipped. Core's host, runner and run tests: 2093 passed, 11 skipped. `plugins/`: 274 passed, 1 skipped.
+  mypy clean
+- [x] 4.3 In `_first_line`, the helper of the test that hung, bound `await child.wait()` with `WAIT_LIMIT` and a
   failure message naming the limit and what it waited for (D5). Verify: the line tests pass. With 4.2's fix removed
   and the stream forced to pause (a sleep before the read), the over-long test fails at the limit with that message
-  instead of hanging (then restore)
+  instead of hanging (then restore). Outcome: the line tests pass (4 passed). Mutated (fix removed, the child keeps
+  running, and a 1 s sleep before the read): "Failed: waiting for the killed child took over 30s" after 31.2 s.
+  Restored, 4 passed
 
 ## 5. Verify
 
