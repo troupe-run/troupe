@@ -77,6 +77,37 @@ To release a specific version instead of the computed one, add a commit whose bo
 footer, for example `chore: release 0.4.0` with `Release-As: 0.4.0`. To pin one component in the config instead, set
 `release-as` on its entry, and remove it after that release.
 
+## Checking each release's install
+
+People install a release with the command in the README and the [install page](../docs/opening-night/install.md),
+which names the bundle's tag, `troupe-run-v<version>` (install-from-tag design D1). Two things keep that command
+working for every release:
+
+- **Each release pull request moves the tag.** The bundle's entry in `release-please-config.json` runs release-please's
+  generic updater on both pages, which rewrites the version between their `x-release-please-start-version` and
+  `x-release-please-end` markers. So the release pull request that releases `troupe-run` at 0.2.0 changes
+  `@troupe-run-v0.1.0` to `@troupe-run-v0.2.0` in the same commit as the versions. While the command says `@main`
+  (until #208 switches it after 0.1.0), there's nothing for it to change. The docs check fails if a command names a
+  tag at any version but the bundle's in `.release-please-manifest.json`, or sits outside the markers.
+- **Each published release is installed on every platform.** When release-please publishes the `troupe-run-v*`
+  release, the [`release install check`](../.github/workflows/release-install-check.yml) workflow runs the
+  documented command from GitHub against the tag, on Linux, macOS and Windows and every supported Python, and runs
+  a scripted performance with the installed `troupe` (`uv run scripts/install_check.py --hosted --ref <tag>`). The
+  other components' releases start it too, but it does nothing for them.
+
+**If it fails,** it opens a Bug titled `Install check failed for troupe-run-v<version>`, naming each failed platform
+and Python, the run and the release. The workflow can't add it to the roadmap board, so add it by hand. The tag and
+its release stay as they are, and the docs already name it. Fix it forward in a patch release, whose release pull
+request moves the documented tag on. If a leg failed because of GitHub rather than troupe, re-run the check, and close
+the Bug with that run:
+
+```sh
+gh workflow run release-install-check.yml -f ref=troupe-run-v<version>
+```
+
+The same command with `-f ref=main`, or a commit, tries the check against unreleased work. That opens no issue
+when it fails.
+
 ## When something goes wrong
 
 - **A wrong version or changelog in an open release pull request:** don't edit the pull request. release-please

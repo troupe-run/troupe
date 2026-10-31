@@ -73,7 +73,7 @@
 - [ ] 4.4 Check, in a `troupe-run/infra-probe-*` repository (troupe-run/infrastructure#217), whether a workflow's
   `GITHUB_TOKEN` with `issues: write` can create an issue with type Bug. Record the result in design D6. If it can't,
   make the report job use the `bug` label, with the body asking for the type, and update its test.
-- [ ] 4.5 Add "Checking each release's install" to `contributing/releasing.md`: what runs on a published
+- [x] 4.5 Add "Checking each release's install" to `contributing/releasing.md`: what runs on a published
   `troupe-run-v*` release, that release-please moves the documented tag, what the Bug means, and how to re-run with
   `gh workflow run release-install-check.yml -f ref=<tag>`. Verify that its links resolve, and that it matches the
   workflow as written.
