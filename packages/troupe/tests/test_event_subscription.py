@@ -17,16 +17,10 @@ from pathlib import Path
 
 import pytest
 
+from storetesting import BOUND, STALL_SECONDS, watched_delays
 from troupe.core import defaults
 from troupe.core.events import load_store
 from troupe.core.vcs import load_vcs
-
-BOUND = 0.25  # seconds
-STALL_SECONDS = 5.0
-"""How much a loaded machine may add to the median of five watched deliveries (#100: a Windows CI
-run's medians reached 0.40 s and 0.52 s). The fastest of the five still has to beat BOUND: a watch
-that is slow by design is slow every time, and load doesn't slow every sample (the fastest in
-those runs took 0.08 s and 0.12 s)."""
 
 WRITER = """
 import sys, time
@@ -82,11 +76,13 @@ def test_another_writers_events_reach_a_port_subscriber_the_fastest_under_the_bo
     record(writer)  # the store exists before subscribing
     store = load_store("text", tmp_path, load_vcs("files", tmp_path))
     heard = threading.Event()
-    delays: list[float] = []
     store.listen(heard)
     try:
         time.sleep(0.5)  # a fresh subscription may wake once on its own
-        for count in range(2, 7):
+        recorded_count = 1
+
+        def measure() -> float:
+            nonlocal recorded_count
             heard.clear()
             assert writer.stdin is not None
             writer.stdin.write("record\n")
@@ -95,9 +91,12 @@ def test_another_writers_events_reach_a_port_subscriber_the_fastest_under_the_bo
             woke = time.time()
             assert writer.stdout is not None
             recorded = float(writer.stdout.readline().split()[1])
-            delays.append(woke - recorded)
-            assert store.max_notification_id() == count
+            recorded_count += 1
+            assert store.max_notification_id() == recorded_count
+            return woke - recorded
+
+        delays = watched_delays(measure)
     finally:
         store.unlisten(heard)
     assert min(delays) < BOUND, delays
-    assert statistics.median(delays) < BOUND + STALL_SECONDS, delays
+    assert statistics.median(delays[:5]) < BOUND + STALL_SECONDS, delays
