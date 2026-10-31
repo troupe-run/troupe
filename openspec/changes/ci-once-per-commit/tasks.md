@@ -83,7 +83,7 @@
 
 ## 5. The docs (design D5)
 
-- [ ] 5.1 Update `CLAUDE.md`'s "How work happens here", steps 4 and 5: open a draft (`gh pr create --draft`); Claude
+- [x] 5.1 Update `CLAUDE.md`'s "How work happens here", steps 4 and 5: open a draft (`gh pr create --draft`); Claude
   reviews it while CI's legs wait; once the review of the last push leaves no must-fix or decision open,
   `gh pr ready <n>` runs the legs and starts no review; the review judges a reply when it's posted, and a failed
   review run is re-run with `gh run rerun <id>`. Compare it with infrastructure's `docs/development-workflow.md`
