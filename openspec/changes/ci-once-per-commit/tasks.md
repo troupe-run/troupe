@@ -105,9 +105,17 @@
   Done 2026-10-31: review run 41172715882 on e3f3c9a found nothing ("no findings, so no inline comments").
   `gh pr ready 205` started CI run 41172845258: `changes` diffed the whole pull request
   (`2588054…e3f3c9a`), answered `scope=full`, and all 12 legs started the full check. No review run started.
-- [ ] 6.4 Straight after 6.3, before the ready run's `check` reports, push an `openspec/`-only commit (this task's
+- [x] 6.4 Straight after 6.3, before the ready run's `check` reports, push an `openspec/`-only commit (this task's
   tick). Verify `changes` reports diffing the whole pull request and every leg runs the full check, not a skip
   (design D3, Migration Plan step 3). Record the run link here.
+  Done 2026-10-31: e692d43 (ticks only) was pushed while the ready run's legs were running, before its `check` job
+  had started. CI run 41172944756's `changes` saw two `check` runs on e3f3c9a: the ready run's `failure`, started
+  05:32:20 (the push cancelled that run, and its `check` reported the cancelled legs under `always()`), and the
+  draft's `skipped`, started 05:28:23. It diffed the whole pull request (`2588054…e692d43`), answered `scope=full`,
+  and ran all 12 legs. So the first push after ready wasn't narrowed. The draft's `skipped` (6.2) is the guard that
+  matters: neither run read as `success`. The `failure` case is now in design D3. One leg, ubuntu 3.15, failed on
+  #206, a race in a Claude Code runner test that this change doesn't touch. Its re-run (attempt 2) passed, and
+  `check` passed.
 
 ## Workflow follow-up
 
