@@ -14,7 +14,7 @@ from hypothesis import strategies as st
 
 import python_versions
 import release_config
-from python_versions import CI, PIN, PYPROJECT, BoundError
+from python_versions import CI, PIN, PYPROJECT, RELEASE_CHECK, BoundError
 
 NEXT = minor_after(HIGHEST)
 """The first version the bound doesn't allow."""
@@ -32,7 +32,7 @@ FORM = re.compile(r" *>= *3\.(0|[1-9][0-9]*) *, *< *3\.(0|[1-9][0-9]*) *")
 @pytest.fixture
 def copy(tmp_path: Path) -> Path:
     """The files the check reads, copied from the repository."""
-    for name in (PYPROJECT, CI, PIN):
+    for name in (PYPROJECT, CI, RELEASE_CHECK, PIN):
         (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(REPO / name, tmp_path / name)
     for path in release_config.members(REPO):
@@ -53,8 +53,8 @@ def set_bound(root: Path, name: str, bound: str) -> None:
     replace(root, name, f'requires-python = "{BOUND}"', f'requires-python = "{bound}"')
 
 
-def set_matrix(root: Path, entries: str) -> None:
-    replace(root, CI, matrix(SUPPORTED), f"python: [{entries}]")
+def set_matrix(root: Path, entries: str, workflow: str = CI) -> None:
+    replace(root, workflow, matrix(SUPPORTED), f"python: [{entries}]")
 
 
 def test_the_copy_of_the_real_files_has_no_problems(copy: Path) -> None:
@@ -108,6 +108,23 @@ def test_a_version_missing_from_the_ci_matrix_is_named(copy: Path) -> None:
     assert python_versions.problems(copy) == [
         f'{CI} doesn\'t test {HIGHEST}, which requires-python "{BOUND}" in {PYPROJECT} supports: '
         "add it to the matrix, or narrow the bound."
+    ]
+
+
+def test_a_version_missing_from_the_release_install_checks_matrix_is_named(copy: Path) -> None:
+    set_matrix(copy, ", ".join(f'"{version}"' for version in SUPPORTED[:-1]), RELEASE_CHECK)
+    assert python_versions.problems(copy) == [
+        f'{RELEASE_CHECK} doesn\'t test {HIGHEST}, which requires-python "{BOUND}" in '
+        f"{PYPROJECT} supports: add it to the matrix, or narrow the bound."
+    ]
+
+
+def test_a_release_install_check_with_no_python_matrix_names_its_install_job(copy: Path) -> None:
+    replace(copy, RELEASE_CHECK, matrix(SUPPORTED), "pythons: []")
+    assert python_versions.problems(copy) == [
+        f"{RELEASE_CHECK} has 0 'python: [...]' lines: keep exactly one, in the install job's "
+        'matrix, listing the supported versions as quoted strings, like python: ["3.12", '
+        '"3.13"].'
     ]
 
 
@@ -177,11 +194,12 @@ def test_a_mypy_version_that_isnt_the_lowest_supported_version_is_named(copy: Pa
 
 
 def test_widening_the_bound_and_the_matrix_together_has_no_problems(copy: Path) -> None:
-    """The way the next versions are added: the bound and the matrix move, and nothing else."""
+    """The way the next versions are added: the bound and the matrices move, and nothing else."""
     widened = [*SUPPORTED, NEXT, minor_after(HIGHEST, 2)]
     for path in ["", *(f"{member}/" for member in release_config.members(copy))]:
         set_bound(copy, f"{path}{PYPROJECT}", f">={LOWEST},<{minor_after(HIGHEST, 3)}")
-    set_matrix(copy, ", ".join(f'"{version}"' for version in widened))
+    for workflow in (CI, RELEASE_CHECK):
+        set_matrix(copy, ", ".join(f'"{version}"' for version in widened), workflow)
     assert python_versions.problems(copy) == []
     assert python_versions.supported(copy) == widened
 
