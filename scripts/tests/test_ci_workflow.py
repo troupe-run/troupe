@@ -1,8 +1,11 @@
 """CI's workflow runs the full check on every merge group, so troupe's merge queue always gets a
-`check` to land on (spec: quality-check; ci-on-merge-queue design D1, D2). These tests read the
-workflow's structure, and each fails naming what would skip or narrow the check on the queue. Every
-leg also runs the documented install after a full check (spec: installation; install-with-uv design
-D5). The broken copies at the end show each one can fail."""
+`check` to land on (spec: quality-check; ci-on-merge-queue design D1, D2). It runs no legs on a
+draft and skips its `check`, runs them once the draft is marked ready, and asks the merge queue
+before running them again on main (ci-once-per-commit design D1 to D4). These tests read the
+workflow's structure, and each fails naming what would skip or narrow the check on the queue, or
+let a draft's `check` narrow a later push. Every leg also runs the documented install after a full
+check (spec: installation; install-with-uv design D5). The broken copies at the end show each one
+can fail."""
 
 from collections.abc import Callable
 from pathlib import Path
@@ -14,8 +17,9 @@ from conftest import REPO
 
 CI = ".github/workflows/ci.yml"
 CHANGES = "changes"
-"""The job that works out a pull request's changed paths, and so the only one that may narrow."""
-PULL_REQUEST_ONLY = "github.event_name == 'pull_request'"
+"""The job that answers what a pull request or a push to main needs, and so the only one that may
+narrow."""
+NOT_A_MERGE_GROUP = "github.event_name != 'merge_group'"
 
 Check = Callable[[dict[Any, Any]], list[str]]
 """One of the checks below: the workflow's problems, each naming what to keep."""
@@ -59,11 +63,11 @@ def event_condition_problems(workflow: dict[Any, Any]) -> list[str]:
     for name, job in workflow["jobs"].items():
         condition = str(job.get("if", ""))
         if name == CHANGES:
-            if condition != PULL_REQUEST_ONLY:
+            if condition != NOT_A_MERGE_GROUP:
                 found.append(
                     f"{CI}'s `{CHANGES}` job runs on `if: {condition}`: keep `if: "
-                    f"{PULL_REQUEST_ONLY}`, so a merge group and a push to main get no answer and "
-                    "run the full check."
+                    f"{NOT_A_MERGE_GROUP}`, so a merge group gets no answer and runs the full "
+                    "check, and a draft and a push to main still get one."
                 )
         elif "github.event_name" in condition:
             found.append(
@@ -71,6 +75,123 @@ def event_condition_problems(workflow: dict[Any, Any]) -> list[str]:
                 "or a merge group could skip a leg or `check`."
             )
     return found
+
+
+PULL_REQUEST_TYPES = ["opened", "synchronize", "reopened", "ready_for_review"]
+
+
+def pull_request_type_problems(workflow: dict[Any, Any]) -> list[str]:
+    on = triggers(workflow).get("pull_request") or {}
+    types = on.get("types") if isinstance(on, dict) else None
+    if types == PULL_REQUEST_TYPES:
+        return []
+    return [
+        f"{CI}'s `pull_request` types are {types}: keep {PULL_REQUEST_TYPES}. Naming a type "
+        "replaces GitHub's defaults, and `ready_for_review` runs what a draft skipped."
+    ]
+
+
+def changes_step(workflow: dict[Any, Any], step_id: str) -> dict[Any, Any] | None:
+    steps = workflow["jobs"][CHANGES]["steps"]
+    return next((step for step in steps if step.get("id") == step_id), None)
+
+
+DRAFT_CONDITION = "github.event_name == 'pull_request' && github.event.pull_request.draft"
+DRAFT_ANSWERS = ("scope=none", "draft=true")
+
+
+def draft_step_problems(workflow: dict[Any, Any]) -> list[str]:
+    step = changes_step(workflow, "draft")
+    if step is None:
+        return [
+            f"{CI}'s `{CHANGES}` job has no step with `id: draft`: a draft would run every leg "
+            "before its review is clean."
+        ]
+    problems: list[str] = []
+    if step.get("if") != DRAFT_CONDITION:
+        problems.append(
+            f"{CI}'s draft step runs on `if: {step.get('if')}`: keep `if: {DRAFT_CONDITION}`."
+        )
+    missing = [answer for answer in DRAFT_ANSWERS if answer not in str(step.get("run", ""))]
+    if missing:
+        problems.append(
+            f"{CI}'s draft step doesn't answer {', '.join(missing)}: a draft must skip the legs, "
+            "and `check` (ci-once-per-commit design D3)."
+        )
+    return problems
+
+
+QUEUE_PASSED = "scripts/queue_passed.py"
+
+
+def push_step_problems(workflow: dict[Any, Any]) -> list[str]:
+    step = changes_step(workflow, "main")
+    if step is None or QUEUE_PASSED not in str(step.get("run", "")):
+        return [
+            f"{CI}'s `{CHANGES}` job has no `id: main` step running {QUEUE_PASSED}: a push to main "
+            "would get no answer and rerun the commit the merge queue passed."
+        ]
+    problems: list[str] = []
+    if step.get("if") != "github.event_name == 'push'":
+        problems.append(
+            f"{CI}'s push step runs on `if: {step.get('if')}`: keep `if: github.event_name == "
+            "'push'`."
+        )
+    if (step.get("env") or {}).get("SHA") != "${{ github.sha }}" or '--sha "$SHA"' not in str(
+        step["run"]
+    ):
+        problems.append(
+            f"{CI}'s push step doesn't pass `--sha` the pushed commit (`github.sha`): it must ask "
+            "about the commit that landed."
+        )
+    return problems
+
+
+CHECK_CONDITION = "${{ always() && needs.changes.outputs.draft != 'true' }}"
+
+
+def check_condition_problems(workflow: dict[Any, Any]) -> list[str]:
+    condition = workflow["jobs"]["check"].get("if")
+    outputs = workflow["jobs"][CHANGES].get("outputs") or {}
+    problems: list[str] = []
+    if condition != CHECK_CONDITION:
+        problems.append(
+            f"{CI}'s `check` runs on `if: {condition}`: keep `if: {CHECK_CONDITION}`, so a draft's "
+            "`check` is skipped and can never read as passed (ci-once-per-commit design D3)."
+        )
+    if outputs.get("draft") != "${{ steps.draft.outputs.draft }}":
+        problems.append(
+            f"{CI}'s `{CHANGES}` doesn't output `draft` from its draft step: `check` reads it."
+        )
+    return problems
+
+
+LOOKUP = "check-runs?check_name=check&app_id=15368&filter=all"
+
+
+def lookup_problems(workflow: dict[Any, Any]) -> list[str]:
+    step = changes_step(workflow, "paths")
+    if step is not None and LOOKUP in str(step.get("run", "")):
+        return []
+    return [
+        f"{CI}'s paths step doesn't look up `{LOOKUP}`: with the default filter the API lists "
+        "one `check` per workflow run in no promised order, so check_range.py must see them all "
+        "and judge the latest (ci-once-per-commit design D3)."
+    ]
+
+
+@pytest.mark.parametrize(
+    "check",
+    [
+        pull_request_type_problems,
+        draft_step_problems,
+        push_step_problems,
+        check_condition_problems,
+        lookup_problems,
+    ],
+)
+def test_drafts_wait_for_ready_and_main_asks_the_merge_queue(check: Check) -> None:
+    assert check(load(REPO / CI)) == []
 
 
 INSTALL_CHECK = "scripts/install_check.py"
@@ -141,11 +262,67 @@ LEGS_CONDITION = "    if: ${{ !cancelled() && needs.changes.outputs.scope != 'no
             id="path filter on pull_request",
         ),
         pytest.param(
-            f"    if: {PULL_REQUEST_ONLY}\n",
-            "    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'\n",
+            f"    if: {NOT_A_MERGE_GROUP}\n",
+            "    if: ${{ always() }}\n",
             event_condition_problems,
             "`changes` job runs on",
             id="changes widened to merge groups",
+        ),
+        pytest.param(
+            f"    if: {NOT_A_MERGE_GROUP}\n",
+            "    if: github.event_name == 'pull_request'\n",
+            event_condition_problems,
+            "`changes` job runs on",
+            id="changes confined to pull requests again",
+        ),
+        pytest.param(
+            "    types: [opened, synchronize, reopened, ready_for_review]\n",
+            "    types: [opened, synchronize, reopened]\n",
+            pull_request_type_problems,
+            "keep ['opened', 'synchronize', 'reopened', 'ready_for_review']",
+            id="ready_for_review dropped",
+        ),
+        pytest.param(
+            "        id: draft\n",
+            "        id: drafts\n",
+            draft_step_problems,
+            "no step with `id: draft`",
+            id="draft step removed",
+        ),
+        pytest.param(
+            "scope=none\\ncheck-args=\\ndraft=true",
+            "scope=none\\ncheck-args=",
+            draft_step_problems,
+            "doesn't answer draft=true",
+            id="draft step without its draft answer",
+        ),
+        pytest.param(
+            f"python3 {QUEUE_PASSED}",
+            "true",
+            push_step_problems,
+            f"running {QUEUE_PASSED}",
+            id="push step without the merge-queue lookup",
+        ),
+        pytest.param(
+            "          SHA: ${{ github.sha }}\n",
+            "          SHA: ${{ github.event.before }}\n",
+            push_step_problems,
+            "the pushed commit",
+            id="push step asks about the wrong commit",
+        ),
+        pytest.param(
+            f"    if: {CHECK_CONDITION}\n",
+            "    if: ${{ always() }}\n",
+            check_condition_problems,
+            "a draft's `check` is skipped",
+            id="check runs on drafts",
+        ),
+        pytest.param(
+            "&filter=all",
+            "",
+            lookup_problems,
+            "judge the latest",
+            id="lookup back to the default filter",
         ),
         pytest.param(
             LEGS_CONDITION,

@@ -53,7 +53,7 @@
   `opened`/`reopened`, malformed shas, unknown actions, the exit codes and argument count). All 26 pass on
   `check_range.py` as of 281ed5a, before 3.2 changes it. 3.2 keeps every case, moving each conclusion into the
   check-runs JSON it now reads.
-- [ ] 3.2 Change `check_range.py`'s fifth argument from a conclusion to the path of the check-runs JSON (empty when
+- [x] 3.2 Change `check_range.py`'s fifth argument from a conclusion to the path of the check-runs JSON (empty when
   nothing was looked up). It picks the run that started last, counting one with no start time as the latest, and
   narrows only when that run's conclusion is `success`. JSON that isn't the check-runs shape is refused, naming the
   file and what's wrong. Add `ready_for_review` to the actions, handled as `opened`. Rewrite the tests from 3.1 on the
@@ -61,12 +61,12 @@
   doesn't narrow; a run with no start time decides; a draft's `skipped` run followed by a ready run in progress
   doesn't narrow; `ready_for_review` takes the whole diff; malformed JSON is refused. Verify
   `uv run scripts/check.py --scope scripts` passes.
-- [ ] 3.3 Change `scripts/check_result.py`'s message for skipped legs so it's true for a push to `main` as well as for
+- [x] 3.3 Change `scripts/check_result.py`'s message for skipped legs so it's true for a push to `main` as well as for
   skipped paths (design D2), and update `scripts/tests/test_check_result.py`. Verify it passes.
 
 ## 4. The workflow (design D1 to D4)
 
-- [ ] 4.1 In `.github/workflows/ci.yml`: write out `pull_request`'s types with `ready_for_review`. Run `changes` on
+- [x] 4.1 In `.github/workflows/ci.yml`: write out `pull_request`'s types with `ready_for_review`. Run `changes` on
   `github.event_name != 'merge_group'`, with `actions: read`. Give it three exclusive answering steps: a draft
   (`scope=none`, `check-args=`, `draft=true`, and a notice that the legs run once it's marked ready), a push
   (checkout, then `queue_passed.py` with `github.sha`), and a ready pull request (the existing paths step, its lookup
@@ -74,7 +74,8 @@
   answered, and add the `draft` output. Give `check` the condition `always() && needs.changes.outputs.draft !=
   'true'`. Rewrite the header comment: a draft runs nothing until ready, a push to `main` skips a commit the queue
   passed, and why a draft's `check` is skipped (D3). Verify `actionlint`, if installed, or a YAML parse of the file.
-- [ ] 4.2 Update `scripts/tests/test_ci_workflow.py` (design D4): the `changes` condition becomes
+  Done 2026-10-31: `actionlint` isn't installed; the file parses with PyYAML, and 4.2's tests read its structure.
+- [x] 4.2 Update `scripts/tests/test_ci_workflow.py` (design D4): the `changes` condition becomes
   `github.event_name != 'merge_group'`, and pins are added for the `pull_request` types, the draft step's answers,
   the push step's script and sha, `check`'s draft condition and the lookup's `filter=all`. Add a broken copy for
   each, and keep the existing ones, updated to the new condition. Update the module docstring. Verify the file passes
