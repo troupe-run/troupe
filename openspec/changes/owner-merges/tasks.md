@@ -16,12 +16,12 @@
   workflow.)
 - [x] 1.4 If website#79 has a pull request, compare its step with D1 and note any difference for the pull request's
   description (design, Risks). Verify by `gh pr list -R troupe-run/website --search "79 in:body"`'s output.
-- [ ] 1.5 Commit as `docs: say the owner merges a pull request, and the agent asks`, with `uv run scripts/check.py`
+- [x] 1.5 Commit as `docs: say the owner merges a pull request, and the agent asks`, with `uv run scripts/check.py`
   passing first (the full check: CLAUDE.md is in no `scripts/check-paths.toml` group).
 
 ## 2. The pull request
 
-- [ ] 2.1 Open a draft pull request with `Closes #207` on its own line and a link to troupe-run/website#79. Verify
+- [x] 2.1 Open a draft pull request with `Closes #207` on its own line and a link to troupe-run/website#79. Verify
   `gh pr view --json closingIssuesReferences` lists #207.
 
 ## Workflow follow-up
