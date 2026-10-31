@@ -115,7 +115,9 @@ Two guards make that lookup answer "not passed", each on its own:
   the check runs' JSON to `check_range.py`. That picks the run that started last. A run with no start time counts as
   the latest. Only that one's `conclusion == "success"` lets the push be
   narrowed. So in step 3 above, H's latest `check` is the ready run's, still in progress, or the draft's `skipped` if
-  the ready run's hasn't started. Either way, the whole diff decides. Once the ready run's `check` has passed, it's
+  the ready run's hasn't started. The push to H2 also cancels the ready run (the concurrency group), and its `check`,
+  under `always()`, may already have reported `failure` for the cancelled legs, as it had on this change's own pull
+  request (tasks 6.4). In every case, the whole diff decides. Once the ready run's `check` has passed, it's
   the latest, and a later push is narrowed as before.
 
 The choice of run moves from `jq` into `check_range.py`, so it has tests: the latest decides; an older success
