@@ -1,9 +1,9 @@
 # Source: troupe-run/infrastructure. Change it there; copies in other repositories are delivered.
 name: claude review
 
-# Claude reviews each member's pull request when it's opened, on each update, drafts included, and
-# when a person with write access replies in one of its open must-fix conversations, so a reply is
-# judged when it's posted (review-judge-reply-on-post design D1, D2, D2a, #208). It posts each finding as a conversation, labelled must-fix, nit or decision for who resolves it
+# Claude reviews each member's pull request when it's opened and on each push, drafts included (not
+# when a draft is marked ready: below), and when a person with write access replies in one of its
+# open must-fix conversations, so a reply is judged when it's posted (review-judge-reply-on-post design D1, D2, D2a, #208). It posts each finding as a conversation, labelled must-fix, nit or decision for who resolves it
 # (spec: pr-review, #154, #194). It isn't a required check, and it can't approve, request changes
 # or push; what blocks a merge is an unresolved conversation, through the ruleset. A job after the
 # review resolves the review's own must-fixes that Claude found addressed, and posts the re-tiers it
@@ -21,7 +21,10 @@ name: claude review
 # pins the rest.
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    # Not ready_for_review: a draft's head was reviewed when it was pushed, and an agent marks it
+    # ready once that review is clean, so reviewing it again would only cost a run and could start
+    # another round (ci-once-per-commit design D5). A push after ready is reviewed as any push is.
+    types: [opened, synchronize, reopened]
   # A reply, not an edit; the gate says whose, and to what.
   pull_request_review_comment:
     types: [created]
