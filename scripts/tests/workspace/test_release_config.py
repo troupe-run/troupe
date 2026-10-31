@@ -176,11 +176,81 @@ def test_a_package_left_out_of_the_linked_group_is_named(copy: Path) -> None:
     ]
 
 
-def test_a_plugin_in_the_linked_group_is_named(copy: Path) -> None:
-    edit_json(copy, CONFIG, lambda c: group(c).append("troupe-runner-scripted"))
+RUNNERS = ("troupe-runner-claude-code", "troupe-runner-scripted")
+"""The runner plugins the bundle ships, so they're in the linked group (#214)."""
+
+
+def leave_out(name: str) -> Callable[[dict[str, Any]], None]:
+    """Take name out of the linked group, whether or not it's there."""
+
+    def change(config: dict[str, Any]) -> None:
+        config["plugins"][0]["components"] = [c for c in group(config) if c != name]
+
+    return change
+
+
+def put_in(name: str) -> Callable[[dict[str, Any]], None]:
+    """Put name in the linked group, whether or not it's there."""
+
+    def change(config: dict[str, Any]) -> None:
+        if name not in group(config):
+            group(config).append(name)
+
+    return change
+
+
+def bundle_member(root: Path) -> str:
+    """The bundle's directory among root's workspace members."""
+    [path] = [path for path, name in release_config.members(root).items() if name == "troupe-run"]
+    return path
+
+
+def unbundle(root: Path, name: str) -> None:
+    """Drop name from the bundle's dependencies, as moving it to its own repository would."""
+    pyproject = root / bundle_member(root) / "pyproject.toml"
+    text = pyproject.read_text(encoding="utf-8")
+    assert text.count(f'    "{name}",\n') == 1
+    pyproject.write_text(text.replace(f'    "{name}",\n', ""), encoding="utf-8")
+
+
+@pytest.mark.parametrize("runner", RUNNERS)
+def test_a_bundled_runner_left_out_of_the_linked_group_is_named(copy: Path, runner: str) -> None:
+    edit_json(copy, CONFIG, leave_out(runner))
     assert release_config.problems(copy) == [
-        f"troupe-runner-scripted is in the 'troupe' linked group in {CONFIG}, but only packages/* "
-        "members belong there: remove it."
+        f"{runner} isn't in the 'troupe' linked group in {CONFIG}, but troupe-run ships it: add it "
+        "to its 'components'."
+    ]
+
+
+def test_a_plugin_the_bundle_doesnt_ship_in_the_linked_group_is_named(copy: Path) -> None:
+    unbundle(copy, "troupe-runner-scripted")
+    edit_json(copy, CONFIG, put_in("troupe-runner-scripted"))
+    assert release_config.problems(copy) == [
+        f"troupe-runner-scripted is in the 'troupe' linked group in {CONFIG}, but troupe-run "
+        "doesn't ship it: remove it."
+    ]
+
+
+def test_a_component_that_isnt_a_member_in_the_linked_group_is_named(copy: Path) -> None:
+    edit_json(copy, CONFIG, put_in("troupe-gone"))
+    assert release_config.problems(copy) == [
+        f"troupe-gone is in the 'troupe' linked group in {CONFIG}, but it isn't a workspace "
+        "member: remove it."
+    ]
+
+
+def test_without_the_bundle_the_group_is_checked_against_packages_alone(copy: Path) -> None:
+    """bundle.py names the missing bundle; this check doesn't add a message per runner."""
+    path = bundle_member(copy)
+    (copy / path / "pyproject.toml").unlink()
+    edit_json(copy, CONFIG, leave_out("troupe-store-text"))
+    assert release_config.problems(copy) == [
+        f"{CONFIG} has an entry for {path}, which isn't a workspace member: remove it.",
+        f"{MANIFEST} has a version for {path}, which isn't a workspace member: remove it.",
+        f"troupe-store-text isn't in the 'troupe' linked group in {CONFIG}: add it to its "
+        "'components'.",
+        f"troupe-run is in the 'troupe' linked group in {CONFIG}, but it isn't a workspace member: "
+        "remove it.",
     ]
 
 

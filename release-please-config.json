@@ -13,6 +13,8 @@
         "troupe-run",
         "troupe-artifacts-local",
         "troupe-identity-local",
+        "troupe-runner-claude-code",
+        "troupe-runner-scripted",
         "troupe-stage-local",
         "troupe-store-text",
         "troupe-vcs-files",

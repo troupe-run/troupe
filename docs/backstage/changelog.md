@@ -12,9 +12,9 @@ part it touched, grouped by kind: for example, features under **Features** and f
 
 ## troupe
 
-The core and its bundled adapters release together, at one version: when any of them changes, all of them release.
-The core's changelog is the one to read for what changed in troupe as a whole. The others list the changes that
-touched them.
+Everything `troupe-run` installs releases together, at one version: the core, its bundled adapters and the runners.
+When any of them changes, all of them release. The core's changelog is the one to read for what changed in troupe as
+a whole. The others list the changes that touched them.
 
 - [troupe](https://github.com/troupe-run/troupe/blob/main/packages/troupe/CHANGELOG.md)
 - [troupe-artifacts-local](https://github.com/troupe-run/troupe/blob/main/packages/troupe-artifacts-local/CHANGELOG.md)
@@ -34,7 +34,7 @@ changes. `troupe --version` names the protocol version that troupe carries.
 
 ## Plugins
 
-Each plugin is released on its own, at its own version.
+The runners are released with troupe, at the same version.
 
 - [troupe-runner-claude-code](https://github.com/troupe-run/troupe/blob/main/plugins/runner-claude-code/CHANGELOG.md)
 - [troupe-runner-scripted](https://github.com/troupe-run/troupe/blob/main/plugins/runner-scripted/CHANGELOG.md)

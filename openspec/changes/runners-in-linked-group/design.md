@@ -49,8 +49,8 @@ workspace members by normalised name (PEP 503), ignoring extras, markers and ver
 workspace member is ignored here (`bundle.py` reports it).
 
 If the bundle isn't a workspace member, or has no `pyproject.toml`, the expected group is the `packages/*` members
-alone and the check adds nothing: `bundle.py` already fails with its own message, and two messages about one cause
-would be noise.
+alone, and no member is refused for not being shipped: `bundle.py` already fails with its own message, and a "doesn't
+ship it" for every runner would be noise, and untrue of the bundle itself.
 
 ### D3. Move `normalise` and `requirement_name` into `release_config`
 
@@ -65,9 +65,14 @@ check that the move changed nothing.
   add it to its 'components'.`
 - A `packages/*` member outside the group keeps today's message (`... isn't in the 'troupe' linked group in
   release-please-config.json: add it to its 'components'.`), so the existing test stays as it is.
-- A component that's neither: `<name> is in the 'troupe' linked group in release-please-config.json, but troupe-run
-  doesn't ship it: remove it.` This replaces "only packages/* members belong there". The protocol keeps its own
-  message.
+- A workspace member that's neither under `packages/` nor shipped: `<name> is in the 'troupe' linked group in
+  release-please-config.json, but troupe-run doesn't ship it: remove it.` This is the case of a runner that has left
+  the bundle but not yet the repository, and replaces "only packages/* members belong there".
+- A component that isn't a workspace member at all: `<name> is in the 'troupe' linked group in
+  release-please-config.json, but it isn't a workspace member: remove it.`, in the words the config and manifest
+  messages already use. Split from the one above while building it, so that a missing bundle doesn't make the check
+  say troupe-run doesn't ship itself (D2).
+- The protocol keeps its own message.
 
 ### D5. Showing a runner-only fix releases the bundle
 

@@ -10,6 +10,7 @@ Standard library only, like check.py.
 """
 
 import json
+import re
 import tomllib
 from pathlib import Path
 from typing import Any
@@ -18,7 +19,9 @@ CONFIG = "release-please-config.json"
 MANIFEST = ".release-please-manifest.json"
 LOCK = "uv.lock"
 LINKED_GROUP = "troupe"
-"""The linked-versions group: every packages/* member (release-automation design D3)."""
+"""The linked-versions group: every packages/* member and everything the bundle ships, so the bundle
+is the latest release of everything in it (release-automation design D3; runners-in-linked-group
+design D1)."""
 PROTOCOL = "protocol"
 """The language-neutral protocol: released on its own, and not a workspace member
 (protocol-own-release design D1)."""
@@ -61,6 +64,19 @@ def lock_jsonpath(name: str) -> str:
     return f"$.package[?(@.name.value=='{name}')].version"
 
 
+def normalise(name: str) -> str:
+    """A distribution name as packaging compares it (PEP 503)."""
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def requirement_name(requirement: str) -> str:
+    """The distribution a requirement names, without its extras, markers or version."""
+    match = re.match(r"\s*([A-Za-z0-9][A-Za-z0-9._-]*)", requirement)
+    if match is None:
+        raise ValueError(f"not a requirement: {requirement!r}")
+    return normalise(match.group(1))
+
+
 def members(root: Path) -> dict[str, str]:
     """Each workspace member's path, relative to root with '/' separators, and its project name."""
     pyproject = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
@@ -72,6 +88,19 @@ def members(root: Path) -> dict[str, str]:
                 project = tomllib.loads(manifest.read_text(encoding="utf-8"))["project"]
                 found[member.relative_to(root).as_posix()] = project["name"]
     return found
+
+
+def bundled(root: Path) -> set[str] | None:
+    """The workspace members the bundle depends on, by project name, or None when the bundle isn't
+    a member, which bundle.py reports (runners-in-linked-group design D2)."""
+    workspace = members(root)
+    paths = [path for path, name in workspace.items() if name == BUNDLE]
+    if not paths:
+        return None
+    project = tomllib.loads((root / paths[0] / "pyproject.toml").read_text(encoding="utf-8"))
+    names = {normalise(name): name for name in workspace.values()}
+    wanted = {requirement_name(r) for r in project["project"].get("dependencies", [])}
+    return {names[name] for name in wanted if name in names}
 
 
 def problems(root: Path) -> list[str]:
@@ -104,7 +133,7 @@ def problems(root: Path) -> list[str]:
 
     found.extend(_protocol_problems(packages.get(PROTOCOL), manifest))
     found.extend(_record_problems(root, manifest))
-    found.extend(_group_problems(config, workspace))
+    found.extend(_group_problems(config, workspace, bundled(root)))
     return found
 
 
@@ -206,7 +235,11 @@ def _record_problems(root: Path, manifest: dict[str, str]) -> list[str]:
     return []
 
 
-def _group_problems(config: dict[str, Any], workspace: dict[str, str]) -> list[str]:
+def _group_problems(
+    config: dict[str, Any], workspace: dict[str, str], shipped: set[str] | None
+) -> list[str]:
+    """Without a bundle (shipped is None) only packages/* members are expected, and no member is
+    refused for not being shipped: bundle.py names the missing bundle (design D2)."""
     groups = [
         plugin
         for plugin in config.get("plugins", [])
@@ -220,18 +253,28 @@ def _group_problems(config: dict[str, Any], workspace: dict[str, str]) -> list[s
             "exactly one."
         ]
     components = set(groups[0].get("components", []))
-    expected = {name for path, name in workspace.items() if path.startswith("packages/")}
+    packages = {name for path, name in workspace.items() if path.startswith("packages/")}
+    expected = packages | (shipped or set())
     found = [
-        f"{component} isn't in the {LINKED_GROUP!r} linked group in {CONFIG}: add it to its "
-        "'components'."
+        f"{component} isn't in the {LINKED_GROUP!r} linked group in {CONFIG}"
+        + ("" if component in packages else f", but {BUNDLE} ships it")
+        + ": add it to its 'components'."
         for component in sorted(expected - components)
     ]
-    found.extend(
-        f"{PROTOCOL} is in the {LINKED_GROUP!r} linked group in {CONFIG}, but it's released on its "
-        "own: remove it from 'components'."
-        if component == PROTOCOL
-        else f"{component} is in the {LINKED_GROUP!r} linked group in {CONFIG}, but only "
-        "packages/* members belong there: remove it."
-        for component in sorted(components - expected)
-    )
+    for component in sorted(components - expected):
+        if component == PROTOCOL:
+            found.append(
+                f"{PROTOCOL} is in the {LINKED_GROUP!r} linked group in {CONFIG}, but it's "
+                "released on its own: remove it from 'components'."
+            )
+        elif component not in workspace.values():
+            found.append(
+                f"{component} is in the {LINKED_GROUP!r} linked group in {CONFIG}, but it isn't a "
+                "workspace member: remove it."
+            )
+        elif shipped is not None:
+            found.append(
+                f"{component} is in the {LINKED_GROUP!r} linked group in {CONFIG}, but {BUNDLE} "
+                "doesn't ship it: remove it."
+            )
     return found
