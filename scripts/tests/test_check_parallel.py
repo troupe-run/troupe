@@ -114,6 +114,11 @@ STALL_LIMIT = 1
 """The stall limit these tests give pytest, in seconds: short, so a test can pass it quickly."""
 
 
+SLEEP_LINE = 5
+"""The line of the stuck test's sleep in the file _stall_suite writes. A dump that names it was
+taken while the test was still sleeping, not after the test had finished."""
+
+
 def _stall_suite(pytester: pytest.Pytester, sleep: float) -> None:
     pytester.makeini(f"[pytest]\nfaulthandler_timeout = {STALL_LIMIT}\n")
     pytester.makepyfile(
@@ -133,7 +138,8 @@ def test_a_test_past_the_stall_limit_in_a_parallel_run_has_its_stack_in_the_outp
     assert result.ret == pytest.ExitCode.OK, output
     assert f"Timeout (0:00:0{STALL_LIMIT})!" in output, output
     assert any(
-        "test_stall.py" in line and "in test_stuck_here" in line for line in output.splitlines()
+        "test_stall.py" in line and f"line {SLEEP_LINE} in test_stuck_here" in line
+        for line in output.splitlines()
     ), output
     result.assert_outcomes(passed=2)
 
