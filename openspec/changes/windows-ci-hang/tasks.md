@@ -59,14 +59,14 @@
   passes, `uv run mypy` is clean, and `uv run mypy --platform win32` on the module is clean. Outcome: 45 passed,
   2 skipped (with 4.1–4.3 in place); both mypy runs clean. The claude-code runner's own `processes.py` already starts
   its child suspended, so only the core seam had the gap
-- [ ] 3.3 Show the escape test fails on Windows without the fix. Push 3.1's tests (with the hook) first, without
+- [x] 3.3 Show the escape test fails on Windows without the fix. Push 3.1's tests (with the hook) first, without
   3.2, and check that the Windows legs fail them at `WAIT_LIMIT` (`start`) and on the surviving grandchild
   (`run_to_completion`). Then push 3.2 and check every leg passes. Verify: both runs' ids and the failing assertions
   are recorded here. Without the fix (run 41196516803, head cf7cd1b): every Windows leg failed exactly the two
   escape tests (2 failed, 3042 passed, 22 skipped), and every Linux and macOS leg passed. `start`: on 3.12, "waiting
   for the killed child took over 30s: grandchild 3164 is still running"; on 3.13–3.15 the wait ended but "grandchild
   … outlived the kill: it escaped the child's job". `run_to_completion`: "grandchild … outlived the timeout's kill: it
-  escaped the job" on all four
+  escaped the job" on all four. With the fix (run 41197563086, head 707a6b6): all 12 legs and `check` passed
 
 ## 4. Waiting ends once the child has exited (design D5, D6)
 
@@ -87,12 +87,23 @@
   running, and a 1 s sleep before the read): "Failed: waiting for the killed child took over 30s" after 31.2 s.
   Restored, 4 passed
 
+- [x] 4.4 Cover the scenario "A child that exits by itself after an over-long line" (review of 707a6b6): a child writes
+  2 MiB and a line feed against a 1 MiB limit and exits, read at once or once its output has paused, then `wait()`
+  without a kill. Verify: both cases pass, returning exit code 0 with the whole line still readable. With 4.2's fix
+  removed, they fail at `WAIT_LIMIT`. Outcome: 2 passed in 0.2 s. With the fix removed, over 3 runs the paused case
+  failed every time, and the read-at-once case failed 2 of 3 (the race CI hit). Restored
+
 ## 5. Verify
 
-- [ ] 5.1 Run `uv run scripts/check.py`, and verify every gate passes, recording the counts
-- [ ] 5.2 Push the fixed head together with the hunt workflow (D3, set aside since 2.1), and run one batch (40 copies
+- [x] 5.1 Run `uv run scripts/check.py`, and verify every gate passes, recording the counts. Outcome on 707a6b6: all gates
+  passed, 3055 passed, 14 skipped, and no `Timeout (` in the output
+- [x] 5.2 Push the fixed head together with the hunt workflow (D3, set aside since 2.1), and run one batch (40 copies
   of the Windows 3.12 check). Verify: no copy hangs, and no log holds `Timeout (`. Record the counts here. This is the issue's
-  "a flake hunt on Windows passes with no hung rounds", done on the leg that hung
+  "a flake hunt on Windows passes with no hung rounds", done on the leg that hung. Outcome (run 41197557680, head 707a6b6):
+  every one of the 40 copies ran the suite to its summary, none hung, and none of the 40 logs holds `Timeout (`.
+  39 passed. Copy 7 failed one timing test unrelated to the hang,
+  `test_another_processs_events_each_reach_a_listener_the_fastest_under_the_bound` (fastest 0.33 s against 0.25 s),
+  which is #159, already open
 - [ ] 5.3 Delete `.github/workflows/hang-hunt-187.yml` in a push of its own. Verify: `git ls-files .github/workflows`
   doesn't list it, `git diff main --stat -- .github` is empty, and that push starts no hunt run
 
