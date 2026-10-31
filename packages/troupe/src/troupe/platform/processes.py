@@ -7,9 +7,11 @@ Platform differences, handled here so callers see one behaviour:
 - POSIX: the child starts a new session (and so a new process group); killing the tree sends
   SIGKILL to the group. A grandchild that starts its own session escapes the group: a documented
   limitation (contributing/platform.md).
-- Windows: the child starts in a new process group and is assigned at once to a new job object
-  created with kill-on-close. Killing the tree terminates the job with KILLED_EXIT_CODE, and the
-  tree also dies if troupe does, because the job's last handle closes with it. Windows needs
+- Windows: the child starts suspended in a new process group, is assigned to a new job object
+  created with kill-on-close, and only then resumed, so nothing it starts can escape the job
+  (#187: a venv's python.exe starts the real interpreter at once). Killing the tree terminates
+  the job with KILLED_EXIT_CODE, and the tree also dies if troupe does, because the job's last
+  handle closes with it. Windows needs
   ``SYSTEMROOT`` to start Python and use sockets, so it is always passed.
 - Both: the command is resolved to an absolute path before starting, using the caller's search
   path, so the child doesn't need ``PATH`` itself.
@@ -217,11 +219,13 @@ if sys.platform == "win32":
     from ctypes import wintypes
 
     _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    _ntdll = ctypes.WinDLL("ntdll")
 
     _JOB_OBJECT_EXTENDED_LIMIT_INFORMATION_CLASS = 9
     _JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000
     _PROCESS_TERMINATE = 0x0001
     _PROCESS_SET_QUOTA = 0x0100
+    _PROCESS_SUSPEND_RESUME = 0x0800
     _PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
     _SYNCHRONIZE = 0x00100000
 
@@ -280,30 +284,56 @@ if sys.platform == "win32":
     _kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
     _kernel32.CloseHandle.restype = wintypes.BOOL
     _kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    _ntdll.NtResumeProcess.restype = ctypes.c_long  # NTSTATUS
+    _ntdll.NtResumeProcess.argtypes = [wintypes.HANDLE]
 
-    def _check(ok: object) -> None:
+    def _check(ok: object, step: str, pid: int) -> None:
         if not ok:
-            raise ctypes.WinError(ctypes.get_last_error())
+            code = ctypes.get_last_error()
+            raise OSError(
+                errno.EINVAL, f"couldn't {step} process {pid}: {_windows_error_text(code)}"
+            )
 
     def _new_job_for(pid: int) -> int:
+        """Put a suspended child in a new kill-on-close job, then let it run (#187).
+
+        The child must have been started suspended: nothing it starts can then run before it is
+        in the job, so nothing escapes it. On failure the job is closed, which kills the child if
+        it was assigned, and OSError names the step and the pid.
+        """
         job = _kernel32.CreateJobObjectW(None, None)
-        _check(job)
-        limits = _ExtendedLimits()
-        limits.BasicLimitInformation.LimitFlags = _JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
-        _check(
-            _kernel32.SetInformationJobObject(
-                job,
-                _JOB_OBJECT_EXTENDED_LIMIT_INFORMATION_CLASS,
-                ctypes.byref(limits),
-                ctypes.sizeof(limits),
-            )
-        )
-        process = _kernel32.OpenProcess(_PROCESS_SET_QUOTA | _PROCESS_TERMINATE, False, pid)
-        _check(process)
+        _check(job, "make a job for", pid)
         try:
-            _check(_kernel32.AssignProcessToJobObject(job, process))
-        finally:
-            _kernel32.CloseHandle(process)
+            limits = _ExtendedLimits()
+            limits.BasicLimitInformation.LimitFlags = _JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+            _check(
+                _kernel32.SetInformationJobObject(
+                    job,
+                    _JOB_OBJECT_EXTENDED_LIMIT_INFORMATION_CLASS,
+                    ctypes.byref(limits),
+                    ctypes.sizeof(limits),
+                ),
+                "make the job kill on close for",
+                pid,
+            )
+            process = _kernel32.OpenProcess(
+                _PROCESS_SET_QUOTA | _PROCESS_TERMINATE | _PROCESS_SUSPEND_RESUME, False, pid
+            )
+            _check(process, "open", pid)
+            try:
+                _check(_kernel32.AssignProcessToJobObject(job, process), "put in its job", pid)
+                status = _ntdll.NtResumeProcess(process)
+                if status != 0:
+                    raise OSError(
+                        errno.EINVAL,
+                        f"couldn't resume process {pid} after putting it in its job "
+                        f"(NTSTATUS {status & 0xFFFFFFFF:#010x})",
+                    )
+            finally:
+                _kernel32.CloseHandle(process)
+        except OSError:
+            _kernel32.CloseHandle(job)
+            raise
         return int(job)
 
     _KILL_STATUS = KILLED_EXIT_CODE
@@ -396,8 +426,32 @@ class ChildProcess:
         return self._process.returncode
 
     async def wait(self) -> int:
-        """Wait for the child to exit and return its exit code."""
-        return await self._process.wait()
+        """Wait for the child to exit and its output to end, and return its exit code.
+
+        asyncio's own wait also waits for every pipe to close, and a stream holding more than
+        twice its limit unread stops reading its pipe, as a refused over-long line leaves it.
+        Once the child has exited, its paused output is read on to the end into its stream, so
+        the wait ends and nothing it wrote is dropped (#187; windows-ci-hang design D6).
+        """
+        waiting = asyncio.ensure_future(self._process.wait())
+        try:
+            while not waiting.done():
+                if self._process.returncode is not None:
+                    self._read_output_to_its_end()
+                await asyncio.wait({waiting}, timeout=_POLL_SECONDS)
+            return waiting.result()
+        finally:
+            waiting.cancel()
+
+    def _read_output_to_its_end(self) -> None:
+        transport = getattr(self._process, "_transport", None)
+        if not isinstance(transport, asyncio.SubprocessTransport):
+            return
+        for fd in (1, 2):
+            pipe = transport.get_pipe_transport(fd)
+            if isinstance(pipe, asyncio.ReadTransport) and not pipe.is_reading():
+                # The stream stays marked paused, so it doesn't pause the pipe again.
+                pipe.resume_reading()
 
     def close_stdin(self) -> None:
         """Close the child's standard input, so it reads end of file."""
@@ -437,6 +491,12 @@ class ChildProcess:
         if self._job is not None:
             _close_job(self._job)
             self._job = None
+
+
+_CREATE_NEW_PROCESS_GROUP = 0x00000200
+_CREATE_SUSPENDED = 0x00000004
+_WINDOWS_CREATION_FLAGS = _CREATE_NEW_PROCESS_GROUP | _CREATE_SUSPENDED
+"""A Windows child starts suspended in a new process group; it runs once it is in its job."""
 
 
 def _no_hook(pid: int) -> None:
@@ -485,7 +545,7 @@ async def start(
             stdout=stdio,
             stderr=stdio,
             limit=line_limit,
-            creationflags=0x00000200,  # CREATE_NEW_PROCESS_GROUP
+            creationflags=_WINDOWS_CREATION_FLAGS,
         )
         try:
             _before_job_assignment(process.pid)
@@ -526,7 +586,6 @@ async def read_line(stream: asyncio.StreamReader, limit: int) -> bytes:
 ProcessWaitCallback = Callable[[str, float], None]
 """Called once when a command has run for ``announce_after`` seconds, with the command and time."""
 
-_CREATE_NEW_PROCESS_GROUP = 0x00000200
 _READ_CHUNK = 64 * 1024
 _POLL_SECONDS = 0.02
 
@@ -596,7 +655,7 @@ def run_to_completion(
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         start_new_session=not _WINDOWS,
-        creationflags=_CREATE_NEW_PROCESS_GROUP if _WINDOWS else 0,
+        creationflags=_WINDOWS_CREATION_FLAGS if _WINDOWS else 0,
     )
     job: int | None = None
     try:
