@@ -8,6 +8,7 @@ import json
 import shutil
 from pathlib import Path
 
+import bundle_state
 import pytest
 from conftest import REPO
 
@@ -53,8 +54,8 @@ def changelog(component: str, *sections: str) -> str:
 @pytest.fixture
 def copy(tmp_path: Path) -> Path:
     """The files the step reads and writes, copied from the repository, with every member at
-    0.1.0 and a first-release changelog each, as merging the first release pull request leaves
-    them."""
+    0.1.0 and a first-release changelog each, and the bundle unpinned, as merging the first
+    release pull request leaves them, whatever state the repository is in (#229)."""
     for name in ("pyproject.toml", CONFIG, MANIFEST):
         shutil.copy(REPO / name, tmp_path / name)
     for path, name in release_config.members(REPO).items():
@@ -66,6 +67,7 @@ def copy(tmp_path: Path) -> Path:
     for path in manifest:
         manifest[path] = "0.0.0" if path == bundle else "0.1.0"
     (tmp_path / MANIFEST).write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    bundle_state.unpinned(tmp_path)
     return tmp_path
 
 
@@ -121,21 +123,27 @@ def test_nothing_moves_when_every_pin_is_current(copy: Path, tmp_path: Path) -> 
 def test_the_first_pin_pins_every_member_and_changes_nothing_else(copy: Path) -> None:
     pyproject = bundle_pyproject(copy)
     before = pyproject.read_bytes().decode()
-    pin_bundle.apply(copy, pin_bundle.moves(copy))
+    moved = pin_bundle.moves(copy)
+    others = {name for name in release_config.members(copy).values() if name != "troupe-run"}
+    assert {move.name for move in moved} == others
+    pin_bundle.apply(copy, moved)
     expected = before
     for path, name in release_config.members(copy).items():
         if name != "troupe-run":
             expected = expected.replace(
                 f'"{name}"', f'"{release_config.pin(name, "0.1.0", path)}"', 1
             )
+    assert expected != before
     assert pyproject.read_bytes().decode() == expected
 
 
 def test_crlf_line_endings_are_kept(copy: Path) -> None:
     pyproject = bundle_pyproject(copy)
     pyproject.write_bytes(pyproject.read_bytes().replace(b"\n", b"\r\n"))
+    before = pyproject.read_bytes()
     pin_bundle.apply(copy, pin_bundle.moves(copy))
     written = pyproject.read_bytes()
+    assert written != before
     assert written.count(b"\r\n") == written.count(b"\n")
 
 

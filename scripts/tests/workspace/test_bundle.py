@@ -7,21 +7,29 @@ import shutil
 import tomllib
 from pathlib import Path
 
+import bundle_state
 import pytest
 from conftest import REPO
 
 import bundle
 import release_config
 from bundle import BUNDLE_PYPROJECT, CORE_PYPROJECT
+from release_config import CONFIG, MANIFEST
 
 
-@pytest.fixture
-def copy(tmp_path: Path) -> Path:
-    """The root pyproject.toml and every member's, copied from the repository."""
-    shutil.copy(REPO / "pyproject.toml", tmp_path / "pyproject.toml")
+@pytest.fixture(params=["unpinned", "pinned"])
+def copy(tmp_path: Path, request: pytest.FixtureRequest) -> Path:
+    """The root pyproject.toml and every member's, with the release config and manifest, copied
+    from the repository, and then the bundle as it is before its first pin, or after it, so no
+    test can assume which the repository is in (#229)."""
+    for name in ("pyproject.toml", CONFIG, MANIFEST):
+        shutil.copy(REPO / name, tmp_path / name)
     for path in release_config.members(REPO):
         (tmp_path / path).mkdir(parents=True)
         shutil.copy(REPO / path / "pyproject.toml", tmp_path / path / "pyproject.toml")
+    bundle_state.unpinned(tmp_path)
+    if request.param == "pinned":
+        bundle_state.pinned(tmp_path)
     return tmp_path
 
 
@@ -32,7 +40,9 @@ def replace(root: Path, name: str, old: str, new: str) -> None:
     path.write_text(text.replace(old, new, 1), encoding="utf-8")
 
 
-def test_the_copy_of_the_real_files_has_no_problems(copy: Path) -> None:
+def test_the_copy_has_no_problems(copy: Path) -> None:
+    """The real files, with the bundle unpinned or pinned: both states are ones the check
+    accepts."""
     assert bundle.problems(copy) == []
 
 
@@ -50,7 +60,7 @@ def test_a_new_package_the_bundle_leaves_out_is_named_with_the_bundles_pyproject
 
 
 def test_a_runner_plugin_the_bundle_leaves_out_is_named(copy: Path) -> None:
-    replace(copy, BUNDLE_PYPROJECT, '    "troupe-runner-scripted",\n', "")
+    bundle_state.set_dependency(copy, "troupe-runner-scripted", None)
     assert bundle.problems(copy) == [
         "troupe-runner-scripted (plugins/runner-scripted) isn't a dependency of troupe-run: add "
         f'"troupe-runner-scripted" to the dependencies in {BUNDLE_PYPROJECT}, so an install '
@@ -59,7 +69,9 @@ def test_a_runner_plugin_the_bundle_leaves_out_is_named(copy: Path) -> None:
 
 
 def test_a_bundle_dependency_that_isnt_a_workspace_member_is_named(copy: Path) -> None:
-    replace(copy, BUNDLE_PYPROJECT, '    "troupe",\n', '    "troupe",\n    "troupe-vcs-svn",\n')
+    replace(
+        copy, BUNDLE_PYPROJECT, "dependencies = [\n", 'dependencies = [\n    "troupe-vcs-svn",\n'
+    )
     assert bundle.problems(copy) == [
         "troupe-run depends on troupe-vcs-svn, which isn't a workspace member: remove it from "
         f"the dependencies in {BUNDLE_PYPROJECT}."
@@ -113,7 +125,7 @@ def test_the_bundle_names_each_dependency_bare_or_pinned_at_a_tag() -> None:
 
 def test_a_pinned_dependency_counts_as_a_dependency(copy: Path) -> None:
     pinned = release_config.pin("troupe-vcs-git", "0.1.1", "packages/troupe-vcs-git")
-    replace(copy, BUNDLE_PYPROJECT, '"troupe-vcs-git"', f'"{pinned}"')
+    bundle_state.set_dependency(copy, "troupe-vcs-git", pinned)
     assert bundle.problems(copy) == []
 
 
