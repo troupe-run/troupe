@@ -150,6 +150,20 @@ def pin(name: str, version: str, path: str) -> str:
     return f"{name} @ git+{REPOSITORY}@{name}-v{version}#subdirectory={path}"
 
 
+def read_pin(requirement: str) -> tuple[str, str] | None:
+    """The member and version a requirement pins at a release tag of this repository, whatever its
+    subdirectory, or None when it isn't such a pin. For reading a tag's bundle, whose members this
+    checkout may not have; pinned_version checks a pin against the workspace."""
+    matched = _PIN.fullmatch(requirement.strip())
+    if matched is None or matched["url"] != REPOSITORY:
+        return None
+    name = matched["name"]
+    version = matched["ref"].removeprefix(f"{name}-v")
+    if version == matched["ref"] or _VERSION.fullmatch(version) is None:
+        return None
+    return name, version
+
+
 def pinned_version(requirement: str, name: str, path: str) -> str | None:
     """The version a requirement pins the member at path at, or None when it names it bare.
     Raises ValueError when it's neither: another repository, subdirectory or ref, a marker, extras

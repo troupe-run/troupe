@@ -28,14 +28,14 @@ INSTALL_PAGES = release_config.TAGGED_PAGES
 PYTHON_PAGE = "README.md"
 """The install page checked here for the Python versions: core's tests check the user docs' one."""
 OTHER_PAGES = ("packages/troupe-run/README.md",)
-COMMAND = 'uv tool install "'
-"""What marks a line as a copy of the install command: the command with its quoted URL."""
+COMMAND = "uv tool install "
+"""What marks a line as a copy of the install command, with or without --no-sources."""
 START = "<!-- x-release-please-start-version -->"
 END = "<!-- x-release-please-end -->"
 """release-please's markers: its generic updater rewrites the versions between them."""
 NO_RELEASE = "0.0.0"
 """The manifest's version for a package that hasn't been released."""
-_BEFORE, _AFTER = install_check.command(install_check.REPOSITORY, "{ref}").split("{ref}")
+_BEFORE, _AFTER = install_check.command(release_config.REPOSITORY, "{ref}").split("{ref}")
 
 
 def pages(root: Path) -> list[str]:
@@ -51,11 +51,13 @@ def expected(root: Path) -> list[str]:
     version = release_config.bundle_version(root)
     if version != NO_RELEASE:
         refs.append(install_check.TAG_PREFIX + version)
-    return [install_check.command(install_check.REPOSITORY, ref) for ref in refs]
+    return [install_check.command(release_config.REPOSITORY, ref) for ref in refs]
 
 
 def ref_of(command: str) -> str | None:
-    """The ref a copy of the command names, when it's otherwise the documented form."""
+    """The ref a copy of the command names, when it's otherwise the documented form for some ref,
+    with or without --no-sources (release-each-package design D3)."""
+    command = command.replace(COMMAND + install_check.PINNED, COMMAND, 1)
     if command.startswith(_BEFORE) and command.endswith(_AFTER):
         return command[len(_BEFORE) : len(command) - len(_AFTER)]
     return None
@@ -106,6 +108,13 @@ def problems(root: Path) -> list[str]:
             ref = ref_of(line.strip())
             if ref is not None and ref.startswith(install_check.TAG_PREFIX):
                 problem = _tag_problem(root, page, number, ref)
+                pinned = install_check.command(release_config.REPOSITORY, ref)
+                if problem is None and line.strip() != pinned:
+                    problem = (
+                        f"{page}:{number} names {ref} without --no-sources, so uv would install "
+                        "every component from the tag's commit rather than its pins: give "
+                        f"{pinned!r}."
+                    )
                 if problem is not None:
                     found.append(problem)
                     continue
@@ -162,7 +171,7 @@ def test_a_command_that_names_another_subdirectory_is_named_with_its_page_and_li
 ) -> None:
     page = "README.md"
     text = (copy / page).read_text(encoding="utf-8")
-    good = install_check.command(install_check.REPOSITORY, "main")
+    good = install_check.command(release_config.REPOSITORY, "main")
     bad = good.replace("packages/troupe-run", "packages/troupe")
     assert good in text, f"{page} no longer gives {good!r}: update the case"
     (copy / page).write_text(text.replace(good, bad, 1), encoding="utf-8")
@@ -195,7 +204,7 @@ def test_a_readme_without_the_python_versions_is_named(copy: Path) -> None:
     ]
 
 
-MAIN = install_check.command(install_check.REPOSITORY, "main")
+MAIN = install_check.command(release_config.REPOSITORY, "main")
 
 
 def released(root: Path, version: str) -> None:
@@ -210,7 +219,7 @@ def tagged(root: Path, page: str, version: str) -> str:
     """Switch the page's main command to the bundle's tag at version, as #208 does."""
     text = (root / page).read_text(encoding="utf-8")
     assert MAIN in text, f"{page} no longer gives {MAIN!r}: update the case"
-    command = install_check.command(install_check.REPOSITORY, f"troupe-run-v{version}")
+    command = install_check.command(release_config.REPOSITORY, f"troupe-run-v{version}")
     (root / page).write_text(text.replace(MAIN, command), encoding="utf-8")
     return command
 
@@ -250,6 +259,22 @@ def test_the_bundles_tag_at_its_released_version_passes_on_both_install_pages(
     assert problems(copy) == []
 
 
+def test_the_bundles_tag_without_no_sources_is_named_with_the_command_expected(
+    copy: Path,
+) -> None:
+    page = "docs/opening-night/install.md"
+    released(copy, "0.1.0")
+    command = tagged(copy, page, "0.1.0")
+    plain = command.replace("--no-sources ", "")
+    text = (copy / page).read_text(encoding="utf-8")
+    (copy / page).write_text(text.replace(command, plain), encoding="utf-8")
+    assert problems(copy) == [
+        f"{page}:{line_of(copy, page, plain)} names troupe-run-v0.1.0 without --no-sources, so uv "
+        "would install every component from the tag's commit rather than its pins: give "
+        f"{command!r}."
+    ]
+
+
 def test_the_bundles_tag_at_another_version_is_named_with_the_tag_expected(copy: Path) -> None:
     page = "docs/opening-night/install.md"
     released(copy, "0.2.0")
@@ -263,7 +288,7 @@ def test_the_bundles_tag_at_another_version_is_named_with_the_tag_expected(copy:
 def test_the_bundles_tag_on_a_page_no_release_moves_is_named(copy: Path) -> None:
     page = "docs/the-company/the-house.md"
     released(copy, "0.1.0")
-    command = install_check.command(install_check.REPOSITORY, "troupe-run-v0.1.0")
+    command = install_check.command(release_config.REPOSITORY, "troupe-run-v0.1.0")
     with (copy / page).open("a", encoding="utf-8") as file:
         file.write(f"\n{START}\n{command}\n{END}\n")
     assert problems(copy) == [
@@ -279,7 +304,7 @@ def test_a_command_after_the_end_marker_is_named_with_its_page_and_line(
 ) -> None:
     page = "docs/opening-night/install.md"
     released(copy, "0.1.0")
-    command = install_check.command(install_check.REPOSITORY, ref)
+    command = install_check.command(release_config.REPOSITORY, ref)
     text = (copy / page).read_text(encoding="utf-8")
     assert f"{END}\n" in text, f"{page} no longer has {END}: update the case"
     text = text.replace(MAIN, "uv --version").replace(f"{END}\n", f"{END}\n\n{command}\n", 1)
@@ -294,7 +319,7 @@ def test_a_command_after_the_end_marker_is_named_with_its_page_and_line(
 def test_the_commit_command_outside_the_markers_passes(copy: Path) -> None:
     page = "docs/opening-night/install.md"
     lines = (copy / page).read_text(encoding="utf-8").splitlines()
-    commit = install_check.command(install_check.REPOSITORY, "<commit>")
+    commit = install_check.command(release_config.REPOSITORY, "<commit>")
     assert line_of(copy, page, commit) not in marked(lines)
     assert problems(copy) == []
 
