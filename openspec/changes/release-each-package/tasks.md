@@ -140,7 +140,7 @@
 
 ## 6. Docs
 
-- [ ] 6.1 `contributing/releasing.md`:
+- [x] 6.1 `contributing/releasing.md`:
   - "What bumps what": each package on its own, the protocol as before, and no linked group (#218).
   - A new "The bundle follows its components" section: the pinning pull request, its type rule and branch, that the
     owner merges it, and the first release's `exclude-paths` bootstrap.
@@ -149,9 +149,17 @@
 
   Verify by reading each section against the config, the script and the workflow, and that
   `uv run pytest scripts/tests/workspace` passes.
-- [ ] 6.2 `docs/backstage/changelog.md`: the runners no longer "release with troupe, at the same version". Each
+  - "What bumps what" now says each package versions on its own, the bundle follows, and the runner bullet is
+    gone. The schema note names `troupe`, not "the group". "The bundle follows its components" is new. It covers the
+    pins, the four steps (job, branch, type rule, owner merge), failure and the `exclude-paths` bootstrap. "Adding
+    a package" says to add the bundle dependency bare in a `build(bundle):` commit. "Checking each release's
+    install" gives the `--no-sources` form and the pinned core version. I read each against
+    `release-please-config.json`, `pin_bundle.py` and `release.yml`. `scripts/tests/workspace`: 215 passed.
+- [x] 6.2 `docs/backstage/changelog.md`: the runners no longer "release with troupe, at the same version". Each
   package has its own version, and `troupe-run`'s changelog lists the releases it ships. Verify with the user-docs
   tests in 7.1's check.
+  - The "troupe" and "Plugins" sections say each part releases on its own, and `troupe-run` follows with each
+    release. Core's docs tests (`-k "doc or changelog or backstage"`): 145 passed. The full check runs in 7.1.
 
 ## 7. Integration
 

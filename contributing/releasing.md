@@ -42,18 +42,15 @@ breaking change of a hidden type, such as `refactor!:`, is still listed, under b
 
 A commit counts towards a component when it changes files under that component's directory:
 
-- **Everything the bundle ships forms one linked group, `troupe`**: core and its adapters (`packages/*`), the bundle
-  `troupe-run`, and the runner plugins it depends on. The bundle is the latest release of everything in it (#214),
-  so when any of them has a releasable commit, all of them release, at the same version, and each release makes a
-  `troupe-run-v<version>` tag. A `fix:` that changes only `plugins/runner-scripted/` releases the whole group. Core
-  and the adapters also run in-process together, so mixed versions would be combinations nobody tests. A release
-  pull request gathers every pending commit, so releases close together roll up into one.
+- **Every package versions on its own** (#218): core (`packages/troupe`), each adapter, each runner plugin and the
+  bundle `troupe-run`. A `fix:` that changes only `packages/troupe-vcs-git/` releases `troupe-vcs-git` alone. There's
+  no linked group, and `scripts/check.py` refuses one. A release pull request still gathers every component with
+  releasable commits, so releases close together roll up into one.
+- **The bundle follows** each release of anything it ships, through the pinning pull request (below), so a fix to
+  one adapter still reaches everyone who installs a `troupe-run` tag.
 - **The protocol** (`protocol/`) versions on its own (release type `simple`), because it evolves separately from the
   packages and the docs (#140). It releases only when a releasable commit changes `protocol/`, and lists those
   commits in `protocol/CHANGELOG.md`. The runner contract keeps its own version (version 0), set in its schemas.
-- **The runners leave the group when they move to their own repositories** (#38, #67). That change takes them out
-  of `troupe-run`'s dependencies and out of the group together, and from then on they version on their own. Until
-  then the bundle is the only way to install a runner, so a version of its own would give users nothing.
 - **Everything else** (`openspec/`, `scripts/`, `docs/`, the root `pyproject.toml`, CI) belongs to no component and
   releases nothing.
 
@@ -68,7 +65,7 @@ protocol release that copy is in `version.json` beside it. The protocol's releas
 `scripts/check.py` fails if it differs from the protocol's version in `.release-please-manifest.json`. A segment's
 header and `troupe --version` both read it.
 
-A schema change touches the copy too, so it releases both the protocol and the `troupe` group. For the recorded
+A schema change touches the copy too, so it releases both the protocol and `troupe`. For the recorded
 version to be true of a released troupe, **a commit that changes a schema is `feat`, `fix` or breaking**, never
 `docs`, `refactor` or another type that releases nothing: otherwise troupe would ship changed schemas under the old
 protocol version. Between releases, a checkout records the last protocol release even if its schemas have moved on.
@@ -93,12 +90,43 @@ request, check that each changelog entry is under a component its commit changed
 [#89's comment](https://github.com/troupe-run/troupe/pull/89#issuecomment-6552218406). `scripts/check.py` fails if
 either setting changes.
 
+## The bundle follows its components
+
+`troupe-run` names each component it ships, either bare or pinned at a release tag
+(`troupe-vcs-git @ git+https://github.com/troupe-run/troupe@troupe-vcs-git-v0.1.1#subdirectory=packages/troupe-vcs-git`).
+Locally the root's workspace sources win, so `uv sync` and every test use the checkout's packages, whatever the pins
+say, and moving a pin doesn't change `uv.lock`.
+
+1. **A release pull request releases components.** Merging it tags them, as above.
+2. **The `release` workflow opens the pinning pull request.** Its `pin-bundle` job runs
+   [`scripts/pin_bundle.py`](../scripts/pin_bundle.py) on `main`. That moves every pin that's behind its component's
+   version in the manifest, a bare one included, and commits as the release App on `release-please--pin-bundle`. Like
+   release-please's own branch, the guard exempts it by name. If one is already open, a later release updates it.
+3. **Its commit type is the largest change it ships.** The script reads each component's changelog sections above
+   the old pin. A `⚠ BREAKING CHANGES` section makes the commit breaking (its `BREAKING CHANGE:` footer names each
+   one), a `Features` section makes it `feat`, and otherwise it's `fix`.
+4. **The owner merges it** through the queue like any pull request. The next release pull request then releases
+   `troupe-run` at that size, and its tag is what the install command names.
+
+Nothing moves after a release of only the protocol or the bundle, and the job opens nothing. If the job fails (for
+example, a changelog without the released version's section), it says which file. Fix the cause, and the next
+release's run moves every pin that's still behind.
+
+**The bundle's first release.** Every package had releasable history and no tag before 0.1.0, so `troupe-run`'s
+entry has `"exclude-paths": ["packages/troupe-run"]`. That keeps its commits out of the first release pull request,
+which releases the components and the protocol at 0.1.0. The first pinning pull request removes the key, so its
+merge releases `troupe-run` at 0.1.0, pinning them. `scripts/check.py` refuses the key once the bundle has released.
+
 ## Adding a package
 
 A new workspace member needs an entry in `release-please-config.json` and in `.release-please-manifest.json` (at
-`"0.0.0"`). A `packages/*` member, and any package `troupe-run` depends on (it ships them all), also goes in the
-`troupe` linked group. `scripts/check.py` fails until it's configured, and its message names the member and the file
-to add it to (`scripts/release_config.py`). It also fails when the group lists a package the bundle doesn't ship.
+`"0.0.0"`). `scripts/check.py` fails until it's configured, and its message names the member and the file to add it
+to (`scripts/release_config.py`).
+
+If `troupe-run` ships it, add it to the bundle's dependencies bare, in a commit that doesn't release the bundle
+(`build(bundle): ship troupe-<name>`). After the package's first release, the pinning pull request pins it and
+releases the bundle. A bundle released while a component is still bare would send `--no-sources` looking for that
+component on a package index, and the install check refuses such a tag.
 
 ## Forcing a version
 
@@ -109,8 +137,11 @@ footer, for example `chore: release 0.4.0` with `Release-As: 0.4.0`. To pin one 
 ## Checking each release's install
 
 People install a release with the command in the README and the [install page](../docs/opening-night/install.md),
-which names the bundle's tag, `troupe-run-v<version>` (install-from-tag design D1). Two things keep that command
-working for every release:
+which names the bundle's tag, `troupe-run-v<version>` (install-from-tag design D1). For a tag the command carries
+`--no-sources`: `uv tool install --no-sources "git+https://github.com/troupe-run/troupe@troupe-run-v<version>#subdirectory=packages/troupe-run"`.
+Without it, uv applies the tag's own workspace sources and installs every component from the bundle's commit,
+ignoring the pins. Installing `main` or a commit keeps the plain form, which installs everything from that commit.
+The docs check refuses a tag without the flag. Two things keep the command working for every release:
 
 - **Each release pull request moves the tag.** The bundle's entry in `release-please-config.json` runs release-please's
   generic updater on both pages, which rewrites the version between their `x-release-please-start-version` and
@@ -121,9 +152,10 @@ working for every release:
 - **Each published release is installed on every platform.** When release-please publishes the `troupe-run-v*`
   release, the [`release install check`](../.github/workflows/release-install-check.yml) workflow runs the
   documented command from GitHub against the tag, on Linux, macOS and Windows and every supported Python, and runs
-  a scripted performance with the installed `troupe` (`uv run scripts/install_check.py --hosted --ref <tag>`). A
-  pre-release starts it like any other published release. The other components' releases start it too, but it
-  does nothing for them.
+  a scripted performance with the installed `troupe` (`uv run scripts/install_check.py --hosted --ref <tag>`).
+  `troupe --version` must print the version the tag pins core at, since the bundle and core version on their own.
+  The check refuses a tag whose bundle leaves a component unpinned before installing anything. A pre-release starts
+  it like any other published release. The other components' releases start it too, but it does nothing for them.
 
 **If it fails,** it opens a Bug titled `Install check failed for troupe-run-v<version>`, naming each failed platform
 and Python, the run and the release. The workflow can't add it to the roadmap board, so add it by hand. The tag and

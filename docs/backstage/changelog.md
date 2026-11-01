@@ -15,9 +15,10 @@ Until 1.0, every release is marked **Pre-release** on GitHub: troupe makes no pr
 
 ## troupe
 
-Everything `troupe-run` installs releases together, at one version: the core, its bundled adapters and the runners.
-When any of them changes, all of them release. The core's changelog is the one to read for what changed in troupe as
-a whole. The others list the changes that touched them.
+Each part releases on its own, at its own version, when it changes: the core, each bundled adapter and each runner.
+`troupe-run`, the package you install, follows: after any of them releases, a new `troupe-run` pins that release, and
+its version moves by the largest change it now ships. Its changelog lists those, and each part's changelog says what
+changed in it.
 
 - [troupe](https://github.com/troupe-run/troupe/blob/main/packages/troupe/CHANGELOG.md)
 - [troupe-artifacts-local](https://github.com/troupe-run/troupe/blob/main/packages/troupe-artifacts-local/CHANGELOG.md)
@@ -37,7 +38,7 @@ changes. `troupe --version` names the protocol version that troupe carries.
 
 ## Plugins
 
-The runners are released with troupe, at the same version.
+The runners are released on their own, like the other parts, and `troupe-run` ships each release.
 
 - [troupe-runner-claude-code](https://github.com/troupe-run/troupe/blob/main/plugins/runner-claude-code/CHANGELOG.md)
 - [troupe-runner-scripted](https://github.com/troupe-run/troupe/blob/main/plugins/runner-scripted/CHANGELOG.md)
