@@ -134,6 +134,7 @@ def problems(root: Path) -> list[str]:
     found.extend(_protocol_problems(packages.get(PROTOCOL), manifest))
     found.extend(_record_problems(root, manifest))
     found.extend(_group_problems(config, workspace, bundled(root)))
+    found.extend(_prerelease_problems(config, packages))
     return found
 
 
@@ -233,6 +234,28 @@ def _record_problems(root: Path, manifest: dict[str, str]) -> list[str]:
             f"to {released}."
         ]
     return []
+
+
+def _prerelease_problems(config: dict[str, Any], packages: dict[str, dict[str, Any]]) -> list[str]:
+    """Releases before 1.0 are pre-releases: set once at the top level, which every entry inherits,
+    and which release-please applies only to 0.x versions (prerelease-before-1-0 design D1, D3)."""
+    found: list[str] = []
+    if "prerelease" not in config:
+        found.append(
+            f"{CONFIG} doesn't set 'prerelease': set it to true at the top level, so releases "
+            "before 1.0 are pre-releases."
+        )
+    elif config["prerelease"] is not True:
+        found.append(
+            f"{CONFIG}'s 'prerelease' is {json.dumps(config['prerelease'])}: set it to true."
+        )
+    for path in sorted(packages):
+        if "prerelease" in packages[path]:
+            found.append(
+                f"{path}'s entry in {CONFIG} sets 'prerelease': remove it, so it takes the "
+                "top-level setting."
+            )
+    return found
 
 
 def _group_problems(

@@ -284,6 +284,32 @@ def test_a_protocol_entry_released_as_python_is_named(copy: Path) -> None:
     ]
 
 
+def test_a_config_without_prerelease_is_named(copy: Path) -> None:
+    edit_json(copy, CONFIG, lambda c: c.pop("prerelease", None))
+    assert release_config.problems(copy) == [
+        f"{CONFIG} doesn't set 'prerelease': set it to true at the top level, so releases before "
+        "1.0 are pre-releases."
+    ]
+
+
+@pytest.mark.parametrize("value", [False, "true", 1], ids=["false", "string", "one"])
+def test_a_prerelease_that_isnt_true_is_named_with_its_value(copy: Path, value: object) -> None:
+    edit_json(copy, CONFIG, lambda c: c.update({"prerelease": value}))
+    assert release_config.problems(copy) == [
+        f"{CONFIG}'s 'prerelease' is {json.dumps(value)}: set it to true."
+    ]
+
+
+@pytest.mark.parametrize("path", ["packages/troupe", PROTOCOL])
+@pytest.mark.parametrize("value", [True, False], ids=["true", "false"])
+def test_an_entry_that_sets_prerelease_itself_is_named(copy: Path, path: str, value: bool) -> None:
+    edit_json(copy, CONFIG, lambda c: c["packages"][path].update({"prerelease": value}))
+    assert release_config.problems(copy) == [
+        f"{path}'s entry in {CONFIG} sets 'prerelease': remove it, so it takes the top-level "
+        "setting."
+    ]
+
+
 RECORD_UPDATE = {"type": "json", "path": f"/{PROTOCOL_RECORD}", "jsonpath": "$.version"}
 """What keeps the recorded protocol version in step with a protocol release (design D2)."""
 

@@ -13,7 +13,12 @@ changelog by hand. This page describes releasing as built by the `release-automa
    which opens a release pull request titled `chore: release main`, or updates the one that's open. The PR bumps
    versions in each `pyproject.toml` and in `uv.lock`, and adds each version's changelog entries.
 3. **Merging the release pull request is the release.** release-please then tags the merge and creates a GitHub
-   release for each component it released, with that version's changelog section as the notes.
+   release for each component it released, with that version's changelog section as the notes. **Until 1.0, each
+   release is a pre-release,** because 1.0 holds the stability promise (#217), so GitHub shows no Latest release
+   until then. The top-level `prerelease` setting does it, and release-please applies it only to a version whose
+   major is 0, so it stops by itself when a component reaches 1.0, with nothing to turn off. It's read only when
+   the releases are created, so the release pull request doesn't show it. `scripts/check.py` fails if it's
+   removed, or set on one component's entry.
 
 The release pull request is an ordinary pull request. CI, DCO and `guard` run on it and must pass. It's opened by
 the `troupe-run-release` App, not `GITHUB_TOKEN`, because a pull request opened with `GITHUB_TOKEN` starts no
@@ -98,8 +103,9 @@ working for every release:
 - **Each published release is installed on every platform.** When release-please publishes the `troupe-run-v*`
   release, the [`release install check`](../.github/workflows/release-install-check.yml) workflow runs the
   documented command from GitHub against the tag, on Linux, macOS and Windows and every supported Python, and runs
-  a scripted performance with the installed `troupe` (`uv run scripts/install_check.py --hosted --ref <tag>`). The
-  other components' releases start it too, but it does nothing for them.
+  a scripted performance with the installed `troupe` (`uv run scripts/install_check.py --hosted --ref <tag>`). A
+  pre-release starts it like any other published release. The other components' releases start it too, but it
+  does nothing for them.
 
 **If it fails,** it opens a Bug titled `Install check failed for troupe-run-v<version>`, naming each failed platform
 and Python, the run and the release. The workflow can't add it to the roadmap board, so add it by hand. The tag and
