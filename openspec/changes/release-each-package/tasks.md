@@ -27,7 +27,7 @@
 
 ## 2. Every package on its own (D1, D7, D8)
 
-- [ ] 2.1 In `scripts/tests/workspace/test_release_config.py`, write the new tests first, and record that they fail
+- [x] 2.1 In `scripts/tests/workspace/test_release_config.py`, write the new tests first, and record that they fail
   against the unchanged check:
   - a `linked-versions` plugin, under any group name, is refused with the spec's message;
   - pins with another repository, another subdirectory, or a malformed tag are refused, each naming the dependency,
@@ -40,20 +40,36 @@
   Replace the linked-group tests (`test_a_package_left_out_of_the_linked_group_is_named`, the bundled-runner,
   not-shipped, not-a-member, without-the-bundle, protocol-in-the-group and missing-group tests): their rule no longer
   holds.
-- [ ] 2.2 In `scripts/release_config.py`, replace `_group_problems` and `LINKED_GROUP` with the D8 checks, using
+  - Against the unchanged check (2026-11-01): 34 of the new cases failed, the linked group and every malformed
+    pin, early pin and exclusion case. A pin at or behind the released version already passed, as it should.
+    `test_a_new_package_without_release_config_is_named` now asserts the whole list, which is the two config and
+    manifest messages and nothing else.
+- [x] 2.2 In `scripts/release_config.py`, replace `_group_problems` and `LINKED_GROUP` with the D8 checks, using
   stdlib parsing of the PEP 508 direct reference (name, URL, `@ref`, `#subdirectory=`). Keep `members`/`bundled`
   free of any `packages/troupe-run` literal (`check_paths_reach.py`, rule 4). Update the module docstrings. Verify
   that 2.1's tests pass, along with `uv run pytest scripts/tests/workspace/test_release_config.py
   scripts/tests/workspace/test_bundle.py scripts/tests/test_check_paths_reach.py`.
-- [ ] 2.3 In `release-please-config.json`, remove the `plugins` entry and add D7's `exclude-paths` (in the form 1.3
+  - `test_release_config.py`, `test_bundle.py` and `test_check_paths_reach.py`: 145 passed. ruff, ruff format and
+    mypy are clean. `bundled()` and `_group_problems` are gone. `REPOSITORY`, `pin()`, `pinned_version()` and
+    `bundle_member()` are new, and pin_bundle.py and install_check.py will share them.
+- [x] 2.3 In `release-please-config.json`, remove the `plugins` entry and add D7's `exclude-paths` (in the form 1.3
   found) to `packages/troupe-run`, or apply the fallback 1.3 chose. Verify that the file validates against release-please
   v17.6.0's `config.json` schema (`uvx check-jsonschema --schemafile <url> release-please-config.json`), and that
   `test_every_workspace_member_is_configured_for_release` passes on the real files.
-- [ ] 2.4 Update the comment in `packages/troupe-run/pyproject.toml` that says the workspace sources install each
+  - 1.3's probe run showed the repository-relative form works, so the entry is
+    `"exclude-paths": ["packages/troupe-run"]`. `uvx check-jsonschema` against v17.6.0's schema: "ok -- validation
+    done". `test_every_workspace_member_is_configured_for_release` passes.
+- [x] 2.4 Update the comment in `packages/troupe-run/pyproject.toml` that says the workspace sources install each
   dependency from the same commit, to say that a commit install does, and a tag install uses the pins. Commit it as
   `docs(bundle):` so it releases nothing. Verify with `git log -1 --format=%s` and that `uv run pytest
   scripts/tests/workspace/test_bundle.py` passes. If `bundle.py`'s parsing needs a pinned form, add a test that a
   pinned dependency counts as present.
+  - The comment now covers both kinds of install. It's committed with the rest of group 2 as `build(release)`, which
+    releases nothing either: the guard refuses a commit that leaves tracked edits out, so it can't go alone.
+    `exclude-paths` keeps it out of #89 anyway. `bundle.py` already read pins by name. Two test changes:
+    `test_the_bundle_names_each_dependency_bare_or_pinned_at_a_tag` replaces "without versions", which the first
+    pin would have broken, and `test_a_pinned_dependency_counts_as_a_dependency` is new. `test_bundle.py`: 11
+    passed.
 
 ## 3. The pinning step (D4, D5)
 

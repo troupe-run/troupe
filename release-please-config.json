@@ -21,24 +21,6 @@
   "initial-version": "0.1.0",
   "include-component-in-tag": true,
   "signoff": "troupe-run-release[bot] <341990208+troupe-run-release[bot]@users.noreply.github.com>",
-  "plugins": [
-    {
-      "type": "linked-versions",
-      "groupName": "troupe",
-      "components": [
-        "troupe",
-        "troupe-run",
-        "troupe-artifacts-local",
-        "troupe-identity-local",
-        "troupe-runner-claude-code",
-        "troupe-runner-scripted",
-        "troupe-stage-local",
-        "troupe-store-text",
-        "troupe-vcs-files",
-        "troupe-vcs-git"
-      ]
-    }
-  ],
   "packages": {
     "packages/troupe": {
       "release-type": "python",
@@ -80,6 +62,7 @@
       "release-type": "python",
       "package-name": "troupe-run",
       "component": "troupe-run",
+      "exclude-paths": ["packages/troupe-run"],
       "extra-files": [
         {
           "type": "toml",

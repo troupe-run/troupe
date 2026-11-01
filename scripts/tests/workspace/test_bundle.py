@@ -100,11 +100,21 @@ def test_a_missing_bundle_is_named(copy: Path) -> None:
     ]
 
 
-def test_the_bundle_names_its_dependencies_without_versions() -> None:
-    # The root's workspace sources pin each one to the installed commit (design D1); a version
-    # here would be a second, unchecked statement of what's installed.
+def test_the_bundle_names_each_dependency_bare_or_pinned_at_a_tag() -> None:
+    # A commit install takes each one from that commit (design D1), and a tag install from its pin
+    # (release-each-package design D2, D3); a version range would be a third, unchecked statement
+    # of what's installed. release_config.py names a malformed pin.
     project = tomllib.loads((REPO / BUNDLE_PYPROJECT).read_text(encoding="utf-8"))["project"]
-    assert all(release_config.requirement_name(r) == r for r in project["dependencies"])
+    paths = {name: path for path, name in release_config.members(REPO).items()}
+    for requirement in project["dependencies"]:
+        name = release_config.requirement_name(requirement)
+        release_config.pinned_version(requirement, name, paths[name])
+
+
+def test_a_pinned_dependency_counts_as_a_dependency(copy: Path) -> None:
+    pinned = release_config.pin("troupe-vcs-git", "0.1.1", "packages/troupe-vcs-git")
+    replace(copy, BUNDLE_PYPROJECT, '"troupe-vcs-git"', f'"{pinned}"')
+    assert bundle.problems(copy) == []
 
 
 def test_troupe_run_installs_troupe_with_every_workspace_member() -> None:
