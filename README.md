@@ -12,24 +12,25 @@ for the open decisions and what's next.
 ## Install
 
 You need [uv](https://docs.astral.sh/uv/). troupe needs Python 3.12 to 3.15, on Linux, macOS or Windows, and uv
-downloads one for it if you don't have one. This installs the latest `main`:
+downloads one for it if you don't have one. This installs the latest release:
 
 <!-- x-release-please-start-version -->
 ```sh
-uv tool install "git+https://github.com/troupe-run/troupe@main#subdirectory=packages/troupe-run"
+uv tool install --no-sources "git+https://github.com/troupe-run/troupe@troupe-run-v0.1.0#subdirectory=packages/troupe-run"
 ```
 <!-- x-release-please-end -->
 
 It installs `troupe-run`, which is troupe with the adapters and runners it bundles, and puts `troupe` on your path.
-If your shell can't find `troupe` afterwards, run `uv tool update-shell` and open a new terminal. To install a
-particular commit, put the commit in place of `main`.
+If your shell can't find `troupe` afterwards, run `uv tool update-shell` and open a new terminal. Each release is
+tagged `troupe-run-v<version>`, on the [releases page](https://github.com/troupe-run/troupe/releases): to install
+another, put its tag in the command. To install the latest `main` or a particular commit, put it in place of the tag
+and leave out `--no-sources`.
 
-- **Upgrade** to the latest `main` with `uv tool upgrade troupe-run`.
+- **Upgrade** to a newer release by running the install command again with its tag. `uv tool upgrade troupe-run`
+  only moves an install of `main`.
 - **Uninstall** with `uv tool uninstall troupe-run`.
 
-[Your first performance](https://troupe.run/docs/opening-night/first-performance/) runs an actor with it. Each
-release is tagged `troupe-run-v<version>`, on the [releases page](https://github.com/troupe-run/troupe/releases): to
-install a release, put its tag in place of `main`.
+[Your first performance](https://troupe.run/docs/opening-night/first-performance/) runs an actor with it.
 
 ## Development
 

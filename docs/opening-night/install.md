@@ -15,20 +15,23 @@ every change. You don't need to install Python yourself: uv downloads a version 
 
 <!-- x-release-please-start-version -->
 ```sh
-uv tool install "git+https://github.com/troupe-run/troupe@main#subdirectory=packages/troupe-run"
+uv tool install --no-sources "git+https://github.com/troupe-run/troupe@troupe-run-v0.1.0#subdirectory=packages/troupe-run"
 ```
 <!-- x-release-please-end -->
 
-This installs the latest `main`. To install a release instead, give its tag in place of `main`: each release is
-tagged `troupe-run-v<version>`, on [troupe's releases page](https://github.com/troupe-run/troupe/releases). To
-install a particular commit, give the commit:
+This installs the latest release. Each release is tagged `troupe-run-v<version>`, on
+[troupe's releases page](https://github.com/troupe-run/troupe/releases): to install another one, give its tag
+instead. `--no-sources` installs each part of troupe at the version the release names.
+
+To install the latest `main` or a particular commit, give it in place of the tag, and leave out `--no-sources` so
+every part comes from that commit:
 
 ```sh
 uv tool install "git+https://github.com/troupe-run/troupe@<commit>#subdirectory=packages/troupe-run"
 ```
 
-It installs `troupe-run`: troupe, with the adapters and runners it comes with, all from that one commit. It puts
-`troupe` on your path. Check it worked:
+Either way, it installs `troupe-run`: troupe, with the adapters and runners it comes with. It puts `troupe` on your
+path. Check it worked:
 
 ```sh
 troupe --version
@@ -36,8 +39,9 @@ troupe --version
 
 If your shell can't find `troupe`, run `uv tool update-shell` and open a new terminal.
 
-- **Upgrade** an install of `main` to the latest `main` with `uv tool upgrade troupe-run`. To move to another release
-  or commit, run the install command again with its tag or the commit.
+- **Upgrade** to a newer release by running the install command again with its tag. It replaces what you have.
+  `uv tool upgrade troupe-run` leaves a release where it is, since the tag names it exactly. It does move an install
+  of `main` to the latest `main`.
 - **Uninstall** with `uv tool uninstall troupe-run`.
 
 [Your first theatre](first-theatre.md) sets up a theatre to run it in.
