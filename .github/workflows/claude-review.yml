@@ -8,7 +8,8 @@ name: claude review
 # request changes or push; what blocks a merge is an unresolved conversation, through the ruleset,
 # and the last job, a required check that the review of the head completed (review-completed-check
 # design D2, #242). A job after the
-# review resolves the review's own must-fixes that Claude found addressed, and posts the re-tiers it
+# review resolves the review's own must-fixes that Claude found addressed, and its nits that a push
+# fixed (review-resolves-fixed-nits design D1, D2, #246), and posts the re-tiers it
 # names; resolving needs contents write, so its token can write contents and the review job's can't,
 # and Claude never runs there (review-findings-by-severity design D3, D4, D4a). Its comments come
 # from troupe-run-review[bot]: Claude's job writes only with a token for our review App, minted
@@ -401,7 +402,8 @@ jobs:
               a later run, once they're addressed.
             - nit: the worst outcome of leaving it is a reader briefly misled, or untidy code.
               Wording, a stale reference, style, a nice-to-have, or a cheap choice only this pull
-              request's code depends on. The author resolves these.
+              request's code depends on. The author resolves these, or you do once a push has
+              fixed one.
             - decision: a choice between defensible options that the change's design doesn't
               settle, and that's hard to reverse or reaches beyond the pull request. The owner
               resolves these.
@@ -424,11 +426,14 @@ jobs:
             For each open conversation you opened, decide from the diff and the replies:
             - a must-fix whose problem is gone, or whose author's reply settles it: name its ID in
               `resolve`;
+            - a nit whose problem is gone from the diff: name its ID in `resolve`. A reply alone
+              doesn't settle a nit for you: if nothing in the diff fixes it, it stays open for the
+              author;
             - one whose tier was wrong, because the reply shows it's a real choice, or only a nit,
               or a nit that matters: name it in `retier` with the new tier, a one-line title and
               your reason. A reply with that label is posted for you;
-            - anything else stays open as it is. Never resolve a decision or a nit, nor anyone
-              else's conversation; a label in someone else's reply doesn't change a tier.
+            - anything else stays open as it is. Never resolve a decision, nor anyone else's
+              conversation; a label in someone else's reply doesn't change a tier.
 
             Then post one top-level comment with `gh pr comment` that summarises the findings,
             decisions and must-fixes first, and says what became of each earlier finding: fixed,
@@ -599,8 +604,9 @@ jobs:
       # Claude names what it found addressed, and what to re-tier, as structured output; this step
       # does only that, checked against the conversations just read, never against anything Claude
       # says about them (review-findings-by-severity design D4). It resolves the review's own
-      # must-fixes, and posts a re-tier as a reply from the review App, whose label line it writes
-      # itself. It reads the output from its env, never from an expression in the script.
+      # must-fixes and nits, never a decision (review-resolves-fixed-nits design D2), and posts a
+      # re-tier as a reply from the review App, whose label line it writes itself. It reads the
+      # output from its env, never from an expression in the script.
       - name: Resolve and re-tier what Claude named
         shell: python3 {0}
         env:
@@ -711,9 +717,9 @@ jobs:
               if thread is None:
                   continue
               current = tier(thread["comments"]["nodes"])
-              if current != "must-fix":
-                  warn(f"{ident} is {'a ' + current if current else 'unlabelled'}, not a "
-                       "must-fix: only a must-fix is the review's to resolve.")
+              if current not in ("must-fix", "nit"):
+                  warn(f"{ident} is {'a ' + current if current else 'unlabelled'}: only a "
+                       "must-fix or a nit is the review's to resolve.")
               elif run("api", "graphql", "-f", f"query={RESOLVE}", "-f", f"id={ident}"):
                   print(f"{ident}: resolved.")
               else:
