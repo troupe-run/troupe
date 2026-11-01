@@ -31,14 +31,36 @@ def test_ci_still_uses_fixed_seeds_and_no_database() -> None:
     assert ci.database is None
 
 
-def run_slow(tmp_path: Path, config: Path) -> subprocess.CompletedProcess[str]:
-    """A 300 ms example, run with pytest's configuration from ``config``."""
+RECORD_DIRS = """\
+import os
+import pytest
+
+def pytest_collectstart(collector):
+    if isinstance(collector, pytest.Dir):
+        with open(os.environ["RECORDED_DIRS"], "a", encoding="utf-8") as recorded:
+            recorded.write(str(collector.path) + "\\n")
+"""
+"""A plugin for the child run that writes down every directory it collects."""
+
+
+def run_slow(
+    tmp_path: Path, config: Path, *plugins: str, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
+    """A 300 ms example, run with pytest's configuration from ``config``.
+
+    The child collects only ``tmp_path`` (``--confcutdir``). Without it, when the repository and the
+    temp directory are on different drives, no directory above the test is above the repository, so
+    pytest collects every one from the drive's root down, and on Windows stats each entry beside
+    them, other tests' temp directories included. One removed in between failed the run (#226).
+    """
     test = tmp_path / "test_slow.py"
     test.write_text(SLOW, encoding="utf-8")
     return subprocess.run(
         [
             *[sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"],
             *["--rootdir", str(config.parent), "-c", str(config), "-o", "testpaths="],
+            *["--confcutdir", str(tmp_path)],
+            *[arg for plugin in plugins for arg in ("-p", plugin)],
             *["--hypothesis-profile=default", str(test)],
         ],
         capture_output=True,
@@ -46,13 +68,33 @@ def run_slow(tmp_path: Path, config: Path) -> subprocess.CompletedProcess[str]:
         timeout=300,
         check=False,
         cwd=ROOT,
-        env={**os.environ, "HYPOTHESIS_STORAGE_DIRECTORY": str(tmp_path / "db")},
+        env={**os.environ, "HYPOTHESIS_STORAGE_DIRECTORY": str(tmp_path / "db"), **(env or {})},
     )
 
 
 def test_a_slow_example_passes_under_the_profile_the_flake_hunt_asks_for(tmp_path: Path) -> None:
     completed = run_slow(tmp_path, ROOT / "pyproject.toml")
     assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
+def test_the_slow_examples_run_collects_no_directory_outside_its_own(tmp_path: Path) -> None:
+    # Directories above or beside tmp_path belong to other tests, which create and remove theirs
+    # while this runs (#226).
+    plugin = tmp_path / "plugin"
+    plugin.mkdir()
+    (plugin / "record_dirs.py").write_text(RECORD_DIRS, encoding="utf-8")
+    recorded = tmp_path / "dirs.txt"
+    path = os.pathsep.join(filter(None, [str(plugin), os.environ.get("PYTHONPATH")]))
+    completed = run_slow(
+        tmp_path,
+        ROOT / "pyproject.toml",
+        "record_dirs",
+        env={"PYTHONPATH": path, "RECORDED_DIRS": str(recorded)},
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    collected = [Path(line) for line in recorded.read_text(encoding="utf-8").splitlines()]
+    assert collected, "the child run collected no directory, so this checks nothing"
+    assert [d for d in collected if not d.is_relative_to(tmp_path)] == []
 
 
 def test_without_the_plugin_the_same_example_fails_on_hypothesiss_deadline(tmp_path: Path) -> None:
