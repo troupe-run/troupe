@@ -53,18 +53,25 @@
     changes still list and release; the new section names both settings, the page-boundary case, its limit, #223
     and the manual check on #89; "When something goes wrong" says what to do about a stray entry.
     `uv run pytest scripts/tests/workspace`: 210 passed; the user-docs tests (`test_user_docs_*`): 86 passed.
-- [ ] 3.2 After the branch is pushed, ask the owner to dry-run release-please against it, since it needs their
+- [x] 3.2 After the branch is pushed, ask the owner to dry-run release-please against it, since it needs their
   token: `! npx release-please@17.6.0 release-pr --dry-run --token "$(gh auth token)" --repo-url
   troupe-run/troupe --target-branch changelog-commit-paths --config-file release-please-config.json
   --manifest-file .release-please-manifest.json`. Verify from its output that troupe's changelog lists `74cbf20`,
   that no changelog has a Documentation section, that `69d6c27` is only in troupe's, runner-scripted's and the
   protocol's, and that `dd6189b` is only in troupe's; record the result here. If the owner prefers not to, record
   that, and the follow-up's check of #89 is the proof.
+  - 2026-11-01, the owner ran it against `e1365cd` (exit 0). It read the config from the branch ("commit search
+    depth: 1000"), fetched history in pages of 100, and considered all 577 commits. Its release pull request
+    body: 11 components, all at 0.1.0; no Documentation section; `74cbf20` in troupe's changelog; `69d6c27` only
+    in protocol's, troupe's and runner-scripted's; `dd6189b` only in troupe's; `7e03119` in none. Each of the 196
+    entries' commits was checked with `git show` against its component's directory: 0 stray.
 
 ## 4. Integration
 
-- [ ] 4.1 Run `uv run scripts/check.py` and `openspec validate changelog-commit-paths --strict`, and record both
+- [x] 4.1 Run `uv run scripts/check.py` and `openspec validate changelog-commit-paths --strict`, and record both
   results here.
+  - 2026-11-01, macOS, at `e1365cd`'s commit: `check: all gates passed` (3157 passed, 14 skipped, 128 s); "Change
+    'changelog-commit-paths' is valid".
 
 ## Workflow follow-up
 
