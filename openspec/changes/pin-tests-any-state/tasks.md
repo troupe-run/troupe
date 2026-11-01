@@ -14,8 +14,8 @@
 
 ## 3. Check against the pinning pull request
 
-- [ ] 3.1 Run the fixed files on #228's files (design, "Risks"): add a throwaway worktree of #228's head (`git fetch origin pull/228/head`) under the scratchpad, merge this branch into it as CI's `pull_request` run does, and run `uv run pytest scripts/tests/workspace/test_bundle.py scripts/tests/workspace/test_pin_bundle.py scripts/tests/workspace/test_release_config.py` there. Verify every case passes (it was 11 failed, 155 passed on `afde24d`); record the head SHA it ran on in the PR description. Remove the throwaway worktree afterwards
-- [ ] 3.2 Run `uv run scripts/check.py` on the branch, and verify all gates pass
+- [x] 3.1 Run the fixed files on #228's files (design, "Risks"): add a throwaway worktree of #228's head (`git fetch origin pull/228/head`) under the scratchpad, merge this branch into it as CI's `pull_request` run does, and run `uv run pytest scripts/tests/workspace/test_bundle.py scripts/tests/workspace/test_pin_bundle.py scripts/tests/workspace/test_release_config.py` there. Verify every case passes (it was 11 failed, 155 passed on `afde24d`); record the head SHA it ran on in the PR description. Remove the throwaway worktree afterwards
+- [x] 3.2 Run `uv run scripts/check.py` on the branch, and verify all gates pass
 
 ## Workflow follow-up
 
