@@ -2,8 +2,10 @@ name: release
 
 # Opens or updates the release pull request from the Conventional Commits on main, and tags and
 # releases what a merged release pull request released (contributing/releasing.md; release-automation
-# design D5). Every write uses the release App's token: a pull request opened with GITHUB_TOKEN
-# starts no workflows, so the required checks would never run on it (design D6).
+# design D5). After a release, opens or updates the pull request that pins the bundle at each
+# component's latest release (release-each-package design D4 to D6). Every write uses the release
+# App's token: a pull request opened with GITHUB_TOKEN starts no workflows, so the required checks
+# would never run on it (release-automation design D6).
 on:
   push:
     branches: [main]
@@ -23,6 +25,8 @@ jobs:
     timeout-minutes: 10
     # Its deployment branches are limited to main, so no other branch's workflow can read the key.
     environment: release
+    outputs:
+      releases_created: ${{ steps.release-please.outputs.releases_created }}
     steps:
       - name: Mint the release App's token
         id: app-token
@@ -35,11 +39,75 @@ jobs:
           permission-pull-requests: write
           permission-issues: write
       - name: Open or update the release pull request, or release a merged one
+        id: release-please
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
           token: ${{ steps.app-token.outputs.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  pin-bundle:
+    name: pin the bundle
+    # Every component release is followed by a bundle that pins it (#218): this moves the bundle's
+    # pins to the latest releases in one pull request the owner merges, and its commit releases
+    # troupe-run (release-each-package design D4 to D6). Nothing to move, nothing opened.
+    needs: release-please
+    if: ${{ needs.release-please.outputs.releases_created == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: release
+    steps:
+      - name: Mint the release App's token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          # Only what the pinning pull request needs: its branch, and the pull request.
+          permission-contents: write
+          permission-pull-requests: write
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # main as release-please left it, manifest and changelogs included. The token stays out
+          # of .git/config while the script runs; only the push below uses it.
+          ref: main
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: Move the pins
+        id: pin
+        run: |
+          uv run scripts/pin_bundle.py --message "$RUNNER_TEMP/pin-message.txt"
+          if [ -f "$RUNNER_TEMP/pin-message.txt" ]; then echo "moved=true" >> "$GITHUB_OUTPUT"; fi
+      - name: Open or update the pinning pull request
+        if: ${{ steps.pin.outputs.moved == 'true' }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          # A copy of pin_bundle.py's BRANCH, and the release App's bot, as the config's signoff.
+          BRANCH: release-please--pin-bundle
+          BOT_NAME: troupe-run-release[bot]
+          BOT_EMAIL: 341990208+troupe-run-release[bot]@users.noreply.github.com
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          git config user.name "$BOT_NAME"
+          git config user.email "$BOT_EMAIL"
+          git switch -C "$BRANCH"
+          git commit -a -F "$RUNNER_TEMP/pin-message.txt"
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/$BRANCH"
+          title=$(head -n 1 "$RUNNER_TEMP/pin-message.txt")
+          {
+            echo "The release workflow pins the bundle at each component's latest release ([run]($RUN_URL))."
+            echo "Merging it releases troupe-run in the next release pull request (contributing/releasing.md)."
+            echo
+            echo '```text'
+            cat "$RUNNER_TEMP/pin-message.txt"
+            echo '```'
+          } > "$RUNNER_TEMP/pin-body.md"
+          open=$(gh pr list -R "$GITHUB_REPOSITORY" --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$open" ]; then
+            gh pr edit "$open" -R "$GITHUB_REPOSITORY" --title "$title" --body-file "$RUNNER_TEMP/pin-body.md"
+          else
+            gh pr create -R "$GITHUB_REPOSITORY" --base main --head "$BRANCH" --title "$title" --body-file "$RUNNER_TEMP/pin-body.md"
+          fi
 
   notify-website:
     name: notify troupe.run

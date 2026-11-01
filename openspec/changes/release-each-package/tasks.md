@@ -73,7 +73,7 @@
 
 ## 3. The pinning step (D4, D5)
 
-- [ ] 3.1 Write `scripts/tests/workspace/test_pin_bundle.py` first, on copies of the real files with byte-exact
+- [x] 3.1 Write `scripts/tests/workspace/test_pin_bundle.py` first, on copies of the real files with byte-exact
   writes (`write_bytes`), and record that it fails before the script exists:
   - no move when every pin matches the manifest, so no message file;
   - a bare dependency and one behind each move to `<name>-v<manifest version>`, and every other byte of the file is
@@ -84,14 +84,24 @@
     scenarios, using real release-please headings (copied from #89's changelogs);
   - the subject stays within 72 characters, and the `BREAKING CHANGE:` footer names each component and version;
   - a pin above the manifest, or a changelog missing a needed version, stops with a message naming the file.
-- [ ] 3.2 Write `scripts/pin_bundle.py` (stdlib only), sharing the reference parser with `release_config.py`. Its CLI
+  - Before the script existed, collection failed (`No module named 'pin_bundle'`). There are 20 cases. Each
+    pyproject and config write is compared byte for byte, and CRLF endings are kept. The fixture's 0.1.0 changelog
+    is #89's `troupe-vcs-git` one, shortened, and later sections use release-please's compare-link heading. The
+    first pin is `feat!`, because every component's 0.1.0 has breaking changes from history. The last case shows
+    the result passes `release_config.problems`, before and after the bundle's release.
+- [x] 3.2 Write `scripts/pin_bundle.py` (stdlib only), sharing the reference parser with `release_config.py`. Its CLI
   is `uv run scripts/pin_bundle.py --message <path>`. Verify with 3.1's tests, `ruff`, `ruff format` and
   `mypy --strict`. Run it on this checkout, record that it moves nothing (every component is at 0.0.0), and that
   `git status` is clean afterwards.
+  - `test_pin_bundle.py`: 20 passed. ruff, ruff format and `mypy --strict` are clean. Two fixes on the way: changelog
+    paths in the footer now follow the components' order (a string sort put `-` before `/`), and a test's regex
+    had the message's parts in the wrong order. On this checkout, `uv run scripts/pin_bundle.py --message <tmp>`
+    exited 0, wrote no message file, and `git status` showed only the two new files. `scripts/pin_bundle.py` is
+    listed in `check-paths.toml`'s scripts scope, and `test_check_scope.py` and `test_check_paths_reach.py` pass.
 
 ## 4. The release workflow (D6)
 
-- [ ] 4.1 In `.github/workflows/release.yml`, expose `releases_created` from `release-please`. Add the `pin-bundle`
+- [x] 4.1 In `.github/workflows/release.yml`, expose `releases_created` from `release-please`. Add the `pin-bundle`
   job (needs `release-please`, runs only when it's `true`, `release` environment, App token with `contents` and
   `pull-requests` write only, pinned action SHAs). It runs the script, commits as the App's bot with a sign-off on
   `release-please--pin-bundle` from `main`, force-pushes, and opens the pull request, or edits the open one.
@@ -99,6 +109,12 @@
   `scripts/tests/workspace/test_release_workflow.py`) that pin the job's condition, its token's permissions, its
   environment and the branch name under `release-please--`. Verify they pass, and that `uvx zizmor` or the
   repository's workflow lint (whichever the check runs) is clean.
+  - `scripts/tests/test_release_workflow.py` has 7 tests, which pass. They cover: the output, the condition, the
+    environment, the token's two permissions, the branch matching `pin_bundle.BRANCH` and exempt by
+    `guard.reserved_release_branch`, the bot matching the config's `signoff` (for DCO), and the checkout not
+    persisting the token. The check runs no workflow linter, so I ran `uvx zizmor@1.16.3 --offline`. Its one finding,
+    `artipacked`, is fixed: `persist-credentials: false`, and only the push uses the token. Now: "No findings".
+    troupe's rulesets have no required-signatures rule, so a `git commit` signed off as the bot is enough.
 - [ ] 4.2 Run the same job in the probe (1.4) and record that its pull request matches 3.1's expectations.
 
 ## 5. Installs from a tag (D3, D10)
