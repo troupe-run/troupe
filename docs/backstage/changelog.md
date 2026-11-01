@@ -10,6 +10,8 @@ Each part of troupe that's released has its own changelog, written by
 them by hand, and a release's notes on GitHub are its changelog section. A change shows up in the changelog of the
 part it touched, grouped by kind: for example, features under **Features** and fixes under **Bug Fixes**.
 
+Until 1.0, every release is marked **Pre-release** on GitHub: troupe makes no promise of stability before 1.0.
+
 ## troupe
 
 Everything `troupe-run` installs releases together, at one version: the core, its bundled adapters and the runners.
