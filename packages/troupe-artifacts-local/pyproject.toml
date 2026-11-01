@@ -1,6 +1,6 @@
 [project]
 name = "troupe-artifacts-local"
-version = "0.0.1.dev0"
+version = "0.1.0"
 description = "troupe's local artifact store: content-addressed files in a directory."
 readme = "README.md"
 license = "Apache-2.0"
