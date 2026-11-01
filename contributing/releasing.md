@@ -146,9 +146,10 @@ The docs check refuses a tag without the flag. Two things keep the command worki
 - **Each release pull request moves the tag.** The bundle's entry in `release-please-config.json` runs release-please's
   generic updater on both pages, which rewrites the version between their `x-release-please-start-version` and
   `x-release-please-end` markers. So the release pull request that releases `troupe-run` at 0.2.0 changes
-  `@troupe-run-v0.1.0` to `@troupe-run-v0.2.0` in the same commit as the versions. While the command says `@main`
-  (until #208 switches it after 0.1.0), there's nothing for it to change. The docs check fails if a command names a
-  tag at any version but the bundle's in `.release-please-manifest.json`, or sits outside the markers.
+  `@troupe-run-v0.1.0` to `@troupe-run-v0.2.0` in the same commit as the versions. Both pages name the tag from
+  0.1.0 on (#208). The docs check fails if a command names a tag at any version but the bundle's in
+  `.release-please-manifest.json`, or sits outside the markers. It also fails if either page gives `@main` once the
+  manifest has a release, since a release would then have nothing to move.
 - **Each published release is installed on every platform.** When release-please publishes the `troupe-run-v*`
   release, the [`release install check`](../.github/workflows/release-install-check.yml) workflow runs the
   documented command from GitHub against the tag, on Linux, macOS and Windows and every supported Python, and runs

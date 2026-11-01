@@ -4,8 +4,9 @@ page's are checked by core's test_the_install_page_gives_the_python_versions_tro
 
 A command may name the bundle's release tag only at the version the release manifest gives it, and
 only between release-please's markers in the pages each release updates, so every release moves it
-(install-from-tag design D2, D3). The README's and the install page's `main` command sits between
-the markers too, so switching it to the tag is a one-line edit (#208).
+(install-from-tag design D2, D3). Once the manifest gives the bundle a release, those two pages give
+its tag, and `main` there is refused, with the tag command as the fix: going back to `main` would
+leave each release nothing to move (install-from-the-tag design D1).
 
 Each property is broken in a copy of the real pages to show the check catches it and names the
 page and line. The last tests run it on the real pages."""
@@ -99,6 +100,14 @@ def _tag_problem(root: Path, page: str, number: int, ref: str) -> str | None:
 def problems(root: Path) -> list[str]:
     found: list[str] = []
     allowed = expected(root)
+    version = release_config.bundle_version(root)
+    tag = install_check.command(release_config.REPOSITORY, install_check.TAG_PREFIX + version)
+
+    def suggested(page: str) -> str:
+        """The command to give on a page: the bundle's tag on the pages a release moves, once
+        there's a release, else main's."""
+        return tag if page in INSTALL_PAGES and version != NO_RELEASE else allowed[0]
+
     for page in pages(root):
         lines = (root / page).read_text(encoding="utf-8").splitlines()
         between = marked(lines)
@@ -121,8 +130,15 @@ def problems(root: Path) -> list[str]:
             elif line.strip() not in allowed:
                 found.append(
                     f"{page}:{number} gives the install command as {line.strip()!r}: give it as "
-                    f"{allowed[0]!r}, with `main`, `<commit>` or the bundle's release tag as the "
-                    "ref (scripts/install_check.py's TEMPLATE)."
+                    f"{suggested(page)!r}, with `main`, `<commit>` or the bundle's release tag as "
+                    "the ref (scripts/install_check.py's TEMPLATE)."
+                )
+                continue
+            elif ref == "main" and page in INSTALL_PAGES and version != NO_RELEASE:
+                found.append(
+                    f"{page}:{number} gives the install command with main, but "
+                    f"{release_config.MANIFEST} gives {release_config.bundle_path(root)} "
+                    f"{version}: give {tag!r}."
                 )
                 continue
             moved = ref == "main" or (ref or "").startswith(install_check.TAG_PREFIX)
@@ -136,7 +152,7 @@ def problems(root: Path) -> list[str]:
     needs = f"Python {versions[0]} to {versions[-1]}"
     for page in INSTALL_PAGES:
         if COMMAND not in (root / page).read_text(encoding="utf-8"):
-            found.append(f"{page} doesn't give the install command: give {allowed[0]!r}.")
+            found.append(f"{page} doesn't give the install command: give {suggested(page)!r}.")
     if needs not in (root / PYTHON_PAGE).read_text(encoding="utf-8"):
         found.append(
             f"{PYTHON_PAGE} doesn't say troupe needs {needs}, the versions the root "
@@ -162,6 +178,36 @@ def line_of(root: Path, page: str, text: str) -> int:
     return next(number for number, line in enumerate(lines, start=1) if text in line)
 
 
+def released(root: Path, version: str) -> None:
+    """Set the bundle's version in the copy's release manifest, and the install pages' command to
+    match, as a release pull request does: its tag, or `main` before any release. A case then
+    changes the one page it's about."""
+    path = root / release_config.MANIFEST
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    manifest[release_config.bundle_path(root)] = version
+    path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    ref = "main" if version == NO_RELEASE else install_check.TAG_PREFIX + version
+    for page in INSTALL_PAGES:
+        given(root, page, ref)
+
+
+def given(root: Path, page: str, ref: str) -> str:
+    """Make the copy's page give the install command with ref, in its documented form, in place of
+    the command a release moves (or the page's only command, on a page no release moves)."""
+    text = (root / page).read_text(encoding="utf-8")
+    lines = text.splitlines(keepends=True)
+    between = marked(text.splitlines())
+    [index] = [
+        index
+        for index, line in enumerate(lines)
+        if COMMAND in line and (page not in INSTALL_PAGES or index + 1 in between)
+    ]
+    command = install_check.command(release_config.REPOSITORY, ref)
+    lines[index] = command + "\n"
+    (root / page).write_text("".join(lines), encoding="utf-8")
+    return command
+
+
 def test_the_copy_of_the_real_pages_has_no_problems(copy: Path) -> None:
     assert problems(copy) == []
 
@@ -170,10 +216,10 @@ def test_a_command_that_names_another_subdirectory_is_named_with_its_page_and_li
     copy: Path,
 ) -> None:
     page = "README.md"
-    text = (copy / page).read_text(encoding="utf-8")
-    good = install_check.command(release_config.REPOSITORY, "main")
+    released(copy, "0.1.0")
+    good = given(copy, page, "troupe-run-v0.1.0")
     bad = good.replace("packages/troupe-run", "packages/troupe")
-    assert good in text, f"{page} no longer gives {good!r}: update the case"
+    text = (copy / page).read_text(encoding="utf-8")
     (copy / page).write_text(text.replace(good, bad, 1), encoding="utf-8")
     assert problems(copy) == [
         f"{page}:{line_of(copy, page, bad)} gives the install command as {bad!r}: give it as "
@@ -204,35 +250,51 @@ def test_a_readme_without_the_python_versions_is_named(copy: Path) -> None:
     ]
 
 
-MAIN = install_check.command(release_config.REPOSITORY, "main")
+def test_main_on_the_readme_after_a_release_is_named_with_the_tag_command(copy: Path) -> None:
+    page = "README.md"
+    released(copy, "0.1.0")
+    command = given(copy, page, "main")
+    tag = install_check.command(release_config.REPOSITORY, "troupe-run-v0.1.0")
+    assert problems(copy) == [
+        f"{page}:{line_of(copy, page, command)} gives the install command with main, but "
+        f".release-please-manifest.json gives packages/troupe-run 0.1.0: give {tag!r}."
+    ]
 
 
-def released(root: Path, version: str) -> None:
-    """Set the bundle's version in the copy's release manifest, as a release pull request does."""
-    path = root / release_config.MANIFEST
-    manifest = json.loads(path.read_text(encoding="utf-8"))
-    manifest[release_config.bundle_path(root)] = version
-    path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+def test_main_on_the_install_page_before_any_release_passes(copy: Path) -> None:
+    released(copy, "0.0.0")
+    given(copy, "docs/opening-night/install.md", "main")
+    assert problems(copy) == []
 
 
-def tagged(root: Path, page: str, version: str) -> str:
-    """Switch the page's main command to the bundle's tag at version, as #208 does."""
-    text = (root / page).read_text(encoding="utf-8")
-    assert MAIN in text, f"{page} no longer gives {MAIN!r}: update the case"
-    command = install_check.command(release_config.REPOSITORY, f"troupe-run-v{version}")
-    (root / page).write_text(text.replace(MAIN, command), encoding="utf-8")
-    return command
+def test_main_on_a_page_no_release_moves_passes_after_a_release(copy: Path) -> None:
+    page = "packages/troupe-run/README.md"
+    released(copy, "0.1.0")
+    given(copy, page, "main")
+    assert problems(copy) == []
+
+
+def test_an_install_page_without_the_command_after_a_release_is_given_the_tag_command(
+    copy: Path,
+) -> None:
+    page = "docs/opening-night/install.md"
+    released(copy, "0.1.0")
+    tag = given(copy, page, "troupe-run-v0.1.0")
+    text = (copy / page).read_text(encoding="utf-8")
+    commit = install_check.command(release_config.REPOSITORY, "<commit>")
+    text = text.replace(tag, "uv --version").replace(commit, "uv --version")
+    (copy / page).write_text(text, encoding="utf-8")
+    assert problems(copy) == [f"{page} doesn't give the install command: give {tag!r}."]
 
 
 def test_a_command_that_names_cores_tag_is_named_with_its_page_and_line(copy: Path) -> None:
     page = "README.md"
     released(copy, "0.1.0")
-    text = (copy / page).read_text(encoding="utf-8")
-    bad = MAIN.replace("@main", "@troupe-v0.1.0")
-    (copy / page).write_text(text.replace(MAIN, bad), encoding="utf-8")
+    bad = given(copy, page, "troupe-v0.1.0")
+    tag = install_check.command(release_config.REPOSITORY, "troupe-run-v0.1.0")
     assert problems(copy) == [
         f"{page}:{line_of(copy, page, bad)} gives the install command as {bad!r}: give it as "
-        f"{MAIN!r}, with `main`, `<commit>` or the bundle's release tag as the ref "
+        f"{tag!r}, with `main`, `<commit>` or the bundle's release tag as the ref "
         "(scripts/install_check.py's TEMPLATE)."
     ]
 
@@ -242,7 +304,7 @@ def test_the_bundles_tag_before_any_release_is_named_with_the_manifests_version(
 ) -> None:
     page = "README.md"
     released(copy, "0.0.0")
-    command = tagged(copy, page, "0.1.0")
+    command = given(copy, page, "troupe-run-v0.1.0")
     assert problems(copy) == [
         f"{page}:{line_of(copy, page, command)} names troupe-run-v0.1.0, but "
         ".release-please-manifest.json gives packages/troupe-run 0.0.0: there's no release to "
@@ -254,8 +316,6 @@ def test_the_bundles_tag_at_its_released_version_passes_on_both_install_pages(
     copy: Path,
 ) -> None:
     released(copy, "0.1.0")
-    for page in INSTALL_PAGES:
-        tagged(copy, page, "0.1.0")
     assert problems(copy) == []
 
 
@@ -264,7 +324,7 @@ def test_the_bundles_tag_without_no_sources_is_named_with_the_command_expected(
 ) -> None:
     page = "docs/opening-night/install.md"
     released(copy, "0.1.0")
-    command = tagged(copy, page, "0.1.0")
+    command = given(copy, page, "troupe-run-v0.1.0")
     plain = command.replace("--no-sources ", "")
     text = (copy / page).read_text(encoding="utf-8")
     (copy / page).write_text(text.replace(command, plain), encoding="utf-8")
@@ -278,7 +338,7 @@ def test_the_bundles_tag_without_no_sources_is_named_with_the_command_expected(
 def test_the_bundles_tag_at_another_version_is_named_with_the_tag_expected(copy: Path) -> None:
     page = "docs/opening-night/install.md"
     released(copy, "0.2.0")
-    command = tagged(copy, page, "0.1.0")
+    command = given(copy, page, "troupe-run-v0.1.0")
     assert problems(copy) == [
         f"{page}:{line_of(copy, page, command)} names troupe-run-v0.1.0, but "
         ".release-please-manifest.json gives packages/troupe-run 0.2.0: name troupe-run-v0.2.0."
@@ -298,16 +358,17 @@ def test_the_bundles_tag_on_a_page_no_release_moves_is_named(copy: Path) -> None
     ]
 
 
-@pytest.mark.parametrize("ref", ["main", "troupe-run-v0.1.0"])
+@pytest.mark.parametrize(("ref", "version"), [("main", "0.0.0"), ("troupe-run-v0.1.0", "0.1.0")])
 def test_a_command_after_the_end_marker_is_named_with_its_page_and_line(
-    copy: Path, ref: str
+    copy: Path, ref: str, version: str
 ) -> None:
     page = "docs/opening-night/install.md"
-    released(copy, "0.1.0")
-    command = install_check.command(release_config.REPOSITORY, ref)
+    released(copy, version)
+    inside = given(copy, page, ref)
     text = (copy / page).read_text(encoding="utf-8")
     assert f"{END}\n" in text, f"{page} no longer has {END}: update the case"
-    text = text.replace(MAIN, "uv --version").replace(f"{END}\n", f"{END}\n\n{command}\n", 1)
+    command = inside
+    text = text.replace(inside, "uv --version").replace(f"{END}\n", f"{END}\n\n{command}\n", 1)
     (copy / page).write_text(text, encoding="utf-8")
     assert problems(copy) == [
         f"{page}:{line_of(copy, page, command)} gives the install command outside "
