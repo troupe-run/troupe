@@ -1,6 +1,6 @@
 [project]
 name = "troupe-store-text"
-version = "0.0.1.dev0"
+version = "0.1.0"
 description = "troupe's text event store: append-only JSON Lines segments that git can merge, as an eventsourcing persistence module."
 readme = "README.md"
 license = "Apache-2.0"
