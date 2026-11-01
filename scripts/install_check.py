@@ -9,9 +9,12 @@ Runs the install command the README and the user docs give, with this checkout a
 and REF (default HEAD) as the ref, into a tool directory of its own (install-with-uv design D4).
 With --hosted it installs from GitHub instead, with REF exactly as given, as someone following
 the docs would: the release install check runs it against each published troupe-run-v<version>
-tag (install-from-tag design D4, D5). REF is still resolved in this checkout, to read the version
-core declares there, so check out the same ref first. A release tag's version must be that
-version, and the one the installed troupe prints.
+tag (install-from-tag design D4, D5). REF is still resolved in this checkout, to read core's and the
+bundle's pyproject.toml there, so check out the same ref first. A bundle tag installs with
+--no-sources, so each component comes from the bundle's pins: the tag's version must be the
+bundle's, every component must be pinned, and the installed troupe must print the version core is
+pinned at (release-each-package design D3, D10). Any other ref installs everything from that
+commit, and troupe must print core's version there.
 Then it runs the installed `troupe --version`, and a scripted performance in a new theatre outside
 the checkout, as "Your first performance" does. Nothing is installed into your own uv tool directory
 or onto your path, and everything is removed afterwards. CI runs it against the commit under test
@@ -35,13 +38,17 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
+from release_config import REPOSITORY, read_pin, requirement_name
+
 ROOT = Path(__file__).resolve().parent.parent
-REPOSITORY = "https://github.com/troupe-run/troupe"
-"""Where the documented command installs from."""
 SUBDIRECTORY = "packages/troupe-run"
 """The bundle (design D1), which installs troupe with everything it bundles."""
-TEMPLATE = 'uv tool install "git+{repository}@{ref}#subdirectory=' + SUBDIRECTORY + '"'
-"""The install command, the one form the README, the user docs and this check use (design D3)."""
+TEMPLATE = 'uv tool install {flags}"git+{repository}@{ref}#subdirectory=' + SUBDIRECTORY + '"'
+"""The install command the README, the user docs and this check use (design D3). For a bundle tag
+its flags are --no-sources, so each component comes from the tag's pins rather than the tag's
+own workspace (release-each-package design D3); for any other ref, none."""
+PINNED = "--no-sources "
+CORE = "troupe"
 DOCUMENTED_REFS = ("main", "<commit>")
 """The refs the docs may name besides a release tag: the latest main, or a placeholder for a commit
 of your choosing."""
@@ -81,7 +88,8 @@ class InstallCheckError(Exception):
 
 def command(repository: str, ref: str) -> str:
     """The documented install command, for a repository URL and a ref."""
-    return TEMPLATE.format(repository=repository, ref=ref)
+    flags = PINNED if tagged_version(ref) is not None else ""
+    return TEMPLATE.format(flags=flags, repository=repository, ref=ref)
 
 
 def tagged_version(ref: str) -> str | None:
@@ -90,16 +98,36 @@ def tagged_version(ref: str) -> str | None:
     return matched.group(1) if matched else None
 
 
-def expected_version(ref: str, declared: str, sha: str) -> str:
-    """The version the install must print: core's at the commit. A release tag must name it too."""
+def expected_version(ref: str, declared: str, bundle: str, sha: str) -> str:
+    """The version the install must print. For a bundle tag, the version troupe-run pins core at,
+    once the tag is shown to be the bundle's release with every component pinned; for any other
+    ref, core's at the commit (release-each-package design D10)."""
     tagged = tagged_version(ref)
-    if tagged is not None and tagged != declared:
+    if tagged is None:
+        return declared
+    project = tomllib.loads(bundle)["project"]
+    if project.get("version") != tagged:
         raise InstallCheckError(
-            f"--ref {ref}: the tag names version {tagged}, but core declares {declared} at {sha}. "
-            "The bundle and core are released at one version, so the tag or the linked group is "
-            "wrong."
+            f"--ref {ref}: the tag names version {tagged}, but troupe-run declares "
+            f"{project.get('version')} at {sha}, so the tag isn't the bundle's release."
         )
-    return declared
+    pins: dict[str, str] = {}
+    bare: list[str] = []
+    for requirement in project.get("dependencies", []):
+        found = read_pin(requirement)
+        if found is None:
+            bare.append(requirement_name(requirement))
+        else:
+            pins[found[0]] = found[1]
+    if bare:
+        raise InstallCheckError(
+            f"--ref {ref}: troupe-run doesn't pin {', '.join(sorted(bare))} at {sha}, so "
+            "--no-sources would look for them on a package index. A pinning pull request pins "
+            "them, and the bundle's next release ships them."
+        )
+    if CORE not in pins:
+        raise InstallCheckError(f"--ref {ref}: troupe-run doesn't pin {CORE} at {sha}.")
+    return pins[CORE]
 
 
 def confirm_printed(shown: str, version: str, ref: str, sha: str) -> None:
@@ -107,16 +135,20 @@ def confirm_printed(shown: str, version: str, ref: str, sha: str) -> None:
     if f"troupe {version} " in shown:
         return
     tagged = tagged_version(ref) is not None
-    named = f"the version {ref} names" if tagged else f"the version core declares at {sha}"
+    named = f"the version {ref} pins troupe at" if tagged else f"the version core declares at {sha}"
     raise InstallCheckError(
         f"troupe --version: printed {shown.strip()!r}, not troupe {version}, {named}."
     )
 
 
-def install_arguments(repository: str, ref: str, python: str | None) -> list[str]:
-    """The arguments `uv` runs for the documented command, with `--python` when one is given."""
+def install_arguments(
+    repository: str, ref: str, python: str | None, pinned: bool = False
+) -> list[str]:
+    """The arguments `uv` runs for the documented command, with `--python` when one is given. A
+    bundle tag is pinned: it installs with --no-sources, even from the checkout by commit."""
     url = f"git+{repository}@{ref}#subdirectory={SUBDIRECTORY}"
-    return ["tool", "install", url, *(["--python", python] if python else [])]
+    flags = [PINNED.strip()] if pinned else []
+    return ["tool", "install", *flags, url, *(["--python", python] if python else [])]
 
 
 def repository_url(root: Path) -> str:
@@ -202,6 +234,17 @@ def core_version(root: Path, sha: str) -> str:
     return version
 
 
+def bundle_pyproject(root: Path, sha: str) -> str:
+    """The bundle's pyproject.toml at a commit."""
+    return run(
+        "read the bundle's pins",
+        [_program("git"), "show", f"{sha}:{SUBDIRECTORY}/pyproject.toml"],
+        root,
+        os.environ,
+        COMMAND_TIMEOUT,
+    )
+
+
 def _program(name: str, path: str | None = None) -> str:
     found = shutil.which(name, path=path)
     if found is None:
@@ -219,14 +262,19 @@ def source(root: Path, ref: str, sha: str, hosted: bool) -> tuple[str, str]:
 def check(root: Path, ref: str, python: str | None, hosted: bool = False) -> str:
     """Install `ref` the documented way and perform with it. Returns the run's line."""
     sha = resolve(root, ref)
-    version = expected_version(ref, core_version(root, sha), sha)
+    version = expected_version(ref, core_version(root, sha), bundle_pyproject(root, sha), sha)
     repository, install_ref = source(root, ref, sha, hosted)
     with scratch() as place:
         tools = Tools(directory=place / "tools", bin=place / "bin")
         env = tools.environment(os.environ)
         run(
             "install",
-            [_program("uv"), *install_arguments(repository, install_ref, python)],
+            [
+                _program("uv"),
+                *install_arguments(
+                    repository, install_ref, python, pinned=tagged_version(ref) is not None
+                ),
+            ],
             place,
             env,
             INSTALL_TIMEOUT,

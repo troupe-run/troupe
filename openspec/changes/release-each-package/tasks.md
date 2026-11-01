@@ -119,16 +119,24 @@
 
 ## 5. Installs from a tag (D3, D10)
 
-- [ ] 5.1 In `scripts/tests/workspace/test_install_check.py` and `test_install_docs.py`, write the new tests first
+- [x] 5.1 In `scripts/tests/workspace/test_install_check.py` and `test_install_docs.py`, write the new tests first
   and record that they fail:
   - the tag form has `--no-sources` and the `main`/commit form doesn't;
   - a page copy naming a tag without `--no-sources` fails with the expected command;
   - for a tag, the expected version is `troupe`'s pin, and a tag whose bundle version differs is refused;
   - a tag with a bare member dependency is refused before installing, naming it.
-- [ ] 5.2 Change `scripts/install_check.py`: the command per ref kind, `expected_version` reading the bundle's
+  - Against the unchanged check: 10 failed. That's 9 in `test_install_check.py` (the tag's form, from GitHub
+    and from the checkout; the pinned version; a bundle version that differs; an unpinned component; no core
+    pin; the printed-version message) and the new docs case.
+- [x] 5.2 Change `scripts/install_check.py`: the command per ref kind, `expected_version` reading the bundle's
   `pyproject.toml` at the commit for a tag, and the bare-dependency refusal. Change its docstrings, which say the
   bundle and core share one version. Verify that 5.1's tests pass, and that `uv run scripts/install_check.py --ref
   HEAD` still installs and performs from the checkout.
+  - `scripts/tests/workspace`: 215 passed. ruff and `mypy` (43 files) are clean. `uv run
+    scripts/install_check.py --ref HEAD`: "installed and performed (run 46d8bb27-… succeeded)". The docs check
+    (in `test_install_docs.py`) now recognises the command with or without `--no-sources`. It refuses a tag
+    without the flag and a `main` or commit copy with it. `REPOSITORY` now lives in `release_config.py`, with
+    `read_pin()` beside it for reading a tag's bundle. README and install page text is unchanged (`@main`).
 
 ## 6. Docs
 

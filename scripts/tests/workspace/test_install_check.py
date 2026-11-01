@@ -12,14 +12,36 @@ import pytest
 from conftest import REPO
 
 import install_check
+import release_config
 from install_check import InstallCheckError, Tools
 
 
 def test_the_documented_command_installs_the_bundle_from_the_named_ref() -> None:
-    assert install_check.command(install_check.REPOSITORY, "main") == (
+    assert install_check.command(release_config.REPOSITORY, "main") == (
         'uv tool install "git+https://github.com/troupe-run/troupe@main'
         '#subdirectory=packages/troupe-run"'
     )
+
+
+def test_a_bundle_tags_command_installs_each_component_from_its_pin() -> None:
+    """--no-sources, so uv reads the bundle's pins rather than the tag's workspace (design D3)."""
+    assert install_check.command(release_config.REPOSITORY, "troupe-run-v0.1.0") == (
+        'uv tool install --no-sources "git+https://github.com/troupe-run/troupe@troupe-run-v0.1.0'
+        '#subdirectory=packages/troupe-run"'
+    )
+    assert "--no-sources" not in install_check.command(release_config.REPOSITORY, "<commit>")
+    assert "--no-sources" not in install_check.command(release_config.REPOSITORY, "troupe-v0.1.0")
+
+
+def test_a_bundle_tag_installed_from_the_checkout_still_uses_its_pins() -> None:
+    """From the checkout the ref is the resolved commit, but the form is still the tag's."""
+    url = "git+file:///checkout@abc#subdirectory=packages/troupe-run"
+    assert install_check.install_arguments("file:///checkout", "abc", None, pinned=True) == [
+        "tool",
+        "install",
+        "--no-sources",
+        url,
+    ]
 
 
 def test_the_install_arguments_are_the_documented_command_with_python_only_when_given() -> None:
@@ -115,8 +137,9 @@ def test_only_the_bundles_release_tag_names_a_version(ref: str, version: str | N
 
 def test_hosted_installs_from_github_with_the_ref_exactly_as_given() -> None:
     repository, ref = install_check.source(REPO, "troupe-run-v0.1.0", "abc", hosted=True)
-    assert f"uv {' '.join(install_check.install_arguments(repository, ref, None))}" == (
-        install_check.command(install_check.REPOSITORY, "troupe-run-v0.1.0").replace('"', "")
+    arguments = install_check.install_arguments(repository, ref, None, pinned=True)
+    assert f"uv {' '.join(arguments)}" == (
+        install_check.command(release_config.REPOSITORY, "troupe-run-v0.1.0").replace('"', "")
     )
 
 
@@ -127,18 +150,53 @@ def test_without_hosted_the_checkout_is_installed_from_by_its_resolved_commit() 
     )
 
 
-def test_a_tag_whose_version_core_doesnt_declare_is_refused_naming_both() -> None:
+def bundle(version: str, *dependencies: str) -> str:
+    """A bundle pyproject.toml as a tag would hold it."""
+    listed = "".join(f'    "{d}",\n' for d in dependencies)
+    return f'[project]\nname = "troupe-run"\nversion = "{version}"\ndependencies = [\n{listed}]\n'
+
+
+def pinned(name: str, version: str) -> str:
+    path = "packages/" + name if not name.startswith("troupe-runner") else "plugins/" + name[7:]
+    return release_config.pin(name, version, path)
+
+
+def test_a_bundle_tag_expects_the_version_core_is_pinned_at() -> None:
+    """The bundle and core version on their own: the spec's 0.2.0 bundle shipping core 0.1.3."""
+    text = bundle("0.2.0", pinned("troupe", "0.1.3"), pinned("troupe-vcs-git", "0.1.1"))
+    assert install_check.expected_version("troupe-run-v0.2.0", "0.1.4", text, "abc") == "0.1.3"
+
+
+def test_any_other_ref_expects_the_version_core_declares() -> None:
+    text = bundle("0.2.0", pinned("troupe", "0.1.3"))
+    assert install_check.expected_version("main", "0.1.4", text, "abc") == "0.1.4"
+
+
+def test_a_tag_whose_bundle_declares_another_version_is_refused_naming_both() -> None:
+    text = bundle("0.1.0", pinned("troupe", "0.1.0"))
     with pytest.raises(InstallCheckError) as caught:
-        install_check.expected_version("troupe-run-v0.2.0", "0.1.0", "abc")
+        install_check.expected_version("troupe-run-v0.2.0", "0.1.0", text, "abc")
     assert str(caught.value) == (
-        "--ref troupe-run-v0.2.0: the tag names version 0.2.0, but core declares 0.1.0 at abc. "
-        "The bundle and core are released at one version, so the tag or the linked group is wrong."
+        "--ref troupe-run-v0.2.0: the tag names version 0.2.0, but troupe-run declares 0.1.0 at "
+        "abc, so the tag isn't the bundle's release."
     )
 
 
-def test_a_tag_whose_version_core_declares_expects_that_version() -> None:
-    assert install_check.expected_version("troupe-run-v0.1.0", "0.1.0", "abc") == "0.1.0"
-    assert install_check.expected_version("main", "0.0.0", "abc") == "0.0.0"
+def test_a_tag_with_a_component_that_isnt_pinned_is_refused_before_installing() -> None:
+    text = bundle("0.2.0", pinned("troupe", "0.1.0"), "troupe-stage-local", "troupe-vcs-git")
+    with pytest.raises(InstallCheckError) as caught:
+        install_check.expected_version("troupe-run-v0.2.0", "0.1.0", text, "abc")
+    assert str(caught.value) == (
+        "--ref troupe-run-v0.2.0: troupe-run doesn't pin troupe-stage-local, troupe-vcs-git at "
+        "abc, so --no-sources would look for them on a package index. A pinning pull request pins "
+        "them, and the bundle's next release ships them."
+    )
+
+
+def test_a_tag_that_doesnt_pin_core_is_refused() -> None:
+    text = bundle("0.2.0", pinned("troupe-vcs-git", "0.1.0"))
+    with pytest.raises(InstallCheckError, match="doesn't pin troupe at abc"):
+        install_check.expected_version("troupe-run-v0.2.0", "0.1.0", text, "abc")
 
 
 def test_an_install_that_prints_another_version_than_its_tag_is_refused_naming_the_tag() -> None:
@@ -148,7 +206,7 @@ def test_an_install_that_prints_another_version_than_its_tag_is_refused_naming_t
         )
     assert str(caught.value) == (
         "troupe --version: printed 'troupe 0.0.0 (protocol 0.1.0)', not troupe 0.1.0, "
-        "the version troupe-run-v0.1.0 names."
+        "the version troupe-run-v0.1.0 pins troupe at."
     )
 
 
