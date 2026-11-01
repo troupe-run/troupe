@@ -9,6 +9,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import bundle_state
 import pytest
 from conftest import REPO
 
@@ -40,10 +41,18 @@ def release(root: Path) -> None:
     )
 
 
+@pytest.fixture(params=["unpinned", "pinned"])
+def bundle(request: pytest.FixtureRequest) -> str:
+    """The bundle's state in the copy: before its first pin, or after it (#229)."""
+    state: str = request.param
+    return state
+
+
 @pytest.fixture(params=["as-is", "released"])
-def copy(tmp_path: Path, request: pytest.FixtureRequest) -> Path:
-    """The files the check reads, copied from the repository, and then, for "released", as a
-    release pull request leaves them, so no test can assume the versions on main (#188)."""
+def copy(tmp_path: Path, request: pytest.FixtureRequest, bundle: str) -> Path:
+    """The files the check reads, copied from the repository, with the bundle as it is before its
+    first pin or after it, and then, for "released", as a release pull request leaves them, so no
+    test can assume the versions on main (#188) or the bundle's pins (#229)."""
     for name in ("pyproject.toml", CONFIG, MANIFEST, LOCK):
         shutil.copy(REPO / name, tmp_path / name)
     for path in release_config.members(REPO):
@@ -51,6 +60,9 @@ def copy(tmp_path: Path, request: pytest.FixtureRequest) -> Path:
         shutil.copy(REPO / path / "pyproject.toml", tmp_path / path / "pyproject.toml")
     (tmp_path / PROTOCOL_RECORD).parent.mkdir(parents=True)
     shutil.copy(REPO / PROTOCOL_RECORD, tmp_path / PROTOCOL_RECORD)
+    bundle_state.unpinned(tmp_path)
+    if bundle == "pinned":
+        bundle_state.pinned(tmp_path)
     if request.param == "released":
         release(tmp_path)
     return tmp_path
@@ -69,7 +81,9 @@ def released(root: Path) -> str:
     return version
 
 
-def test_the_copy_of_the_real_files_has_no_problems(copy: Path) -> None:
+def test_the_copy_has_no_problems(copy: Path) -> None:
+    """The real files, with the bundle unpinned or pinned, as-is or released: every state is one
+    the check accepts."""
     assert release_config.problems(copy) == []
 
 
@@ -95,6 +109,8 @@ def test_a_new_package_without_release_config_is_named(copy: Path) -> None:
 
 
 def test_a_member_missing_from_the_manifest_is_named_with_the_file_and_its_tags(copy: Path) -> None:
+    # A member missing from the manifest is a new one, and a new one is bare until it releases.
+    bundle_state.set_dependency(copy, "troupe-runner-scripted", "troupe-runner-scripted")
     edit_json(copy, MANIFEST, lambda m: m.pop("plugins/runner-scripted"))
     assert release_config.problems(copy) == [
         f"plugins/runner-scripted (troupe-runner-scripted) has no version in {MANIFEST}: add "

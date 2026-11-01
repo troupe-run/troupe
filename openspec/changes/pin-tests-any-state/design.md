@@ -42,7 +42,7 @@ The pinning step's own functions are the real definition of "pinned": `pin_bundl
 
 ### D1. One shared helper module builds each state
 
-A module beside the tests, `scripts/tests/workspace/bundle_state.py`, with two functions on a copy's root:
+A module beside `conftest.py`, `scripts/tests/bundle_state.py` (where mypy's `mypy_path` and pytest's `sys.path` already find test helpers), with two functions on a copy's root:
 
 - `unpinned(root)`: the state before the first pin. Every dependency of the bundle on a workspace member is rewritten
   to its bare name, the bundle's entry in the config gets its bootstrap line back
