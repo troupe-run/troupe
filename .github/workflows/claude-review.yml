@@ -4,8 +4,10 @@ name: claude review
 # Claude reviews each member's pull request when it's opened and on each push, drafts included (not
 # when a draft is marked ready: below), and when a person with write access replies in one of its
 # open must-fix conversations, so a reply is judged when it's posted (review-judge-reply-on-post design D1, D2, D2a, #208). It posts each finding as a conversation, labelled must-fix, nit or decision for who resolves it
-# (spec: pr-review, #154, #194). It isn't a required check, and it can't approve, request changes
-# or push; what blocks a merge is an unresolved conversation, through the ruleset. A job after the
+# (spec: pr-review, #154, #194). The review job isn't a required check, and it can't approve,
+# request changes or push; what blocks a merge is an unresolved conversation, through the ruleset,
+# and the last job, a required check that the review of the head completed (review-completed-check
+# design D2, #242). A job after the
 # review resolves the review's own must-fixes that Claude found addressed, and posts the re-tiers it
 # names; resolving needs contents write, so its token can write contents and the review job's can't,
 # and Claude never runs there (review-findings-by-severity design D3, D4, D4a). Its comments come
@@ -28,6 +30,9 @@ on:
   # A reply, not an edit; the gate says whose, and to what.
   pull_request_review_comment:
     types: [created]
+  # Only so `claude review completed`, a required check, reports on each commit a merge queue tests:
+  # every job is skipped there, which counts as passed (review-completed-check design D5).
+  merge_group:
 
 permissions:
   contents: read
@@ -713,3 +718,73 @@ jobs:
                   print(f"{ident}: resolved.")
               else:
                   warn(f"{ident} couldn't be resolved.")
+
+  # Whether the review of the pull request's head completed. A required check (tofu/required-checks.
+  # json), so a review cancelled or failed with no run after it holds the merge until that run is
+  # re-run (review-completed-check design D2, D3, #242). always(), so it reports after a cancelled
+  # review too, and outside the concurrency group, so a newer review never cancels it. Pull request
+  # events only: GitHub counts only the newest pull request event's run for a pull request, and
+  # ignores a comment's run, though its checks land on the head (design D4, Probe results). A merge
+  # group skips it, which counts as passed (D5).
+  completed:
+    name: claude review completed
+    needs: [gate, review, resolve]
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Did the review of this head complete?
+        shell: python3 {0}
+        env:
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          GATE: ${{ needs.gate.result }}
+          WANTS_REVIEW: ${{ needs.gate.outputs.review }}
+          REVIEW: ${{ needs.review.result }}
+          RESOLVE: ${{ needs.resolve.result }}
+        run: |
+          import os
+          import re
+          import sys
+
+
+          def escape(text):
+              # As the runner's toolkit escapes a command's message, so no input can start a line.
+              return str(text).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+
+          run = os.environ.get("RUN_ID", "")
+          rerun = (f"gh run rerun {run}" if re.fullmatch(r"[0-9]+", run)
+                   else "gh run rerun <this run's ID>")
+
+
+          def fail(title, reason):
+              print(f"::error title={escape(title)}::{escape(reason)} The head isn't reviewed until "
+                    f"a review of it completes: re-run this run with `{rerun}`, or \"Re-run all "
+                    "jobs\" on GitHub.")
+              sys.exit(1)
+
+
+          # The gate's own test: a bot's pull request, Dependabot's and release-please's among them,
+          # and a fork's aren't reviewed by design, so the review is skipped and nothing is held.
+          if os.environ.get("AUTHOR_TYPE") == "Bot":
+              print("A bot's pull request isn't reviewed: nothing to wait for.")
+              sys.exit(0)
+          if os.environ.get("HEAD_REPOSITORY") != os.environ.get("REPOSITORY"):
+              print("A fork's pull request isn't reviewed: nothing to wait for.")
+              sys.exit(0)
+          gate = os.environ.get("GATE", "")
+          wants = os.environ.get("WANTS_REVIEW", "")
+          if gate != "success" or wants != "true":
+              fail("Review not started", f"The gate ended {gate or 'with no result'} and answered "
+                   f"{wants!r}, where a pull request event's gate says review=true.")
+          jobs = {"claude review": os.environ.get("REVIEW", ""),
+                  "resolve review conversations": os.environ.get("RESOLVE", "")}
+          unfinished = [f"{name} ({result or 'no result'})"
+                        for name, result in jobs.items() if result != "success"]
+          if unfinished:
+              fail("Review not completed", f"Not completed: {', '.join(unfinished)}.")
+          print("The review of this head completed, and its resolving job too.")
