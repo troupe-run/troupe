@@ -172,6 +172,7 @@ paths = [
     "scripts/flake_hunt.py",
     "scripts/install_check.py",
     "scripts/on.py",
+    "scripts/pin_bundle.py",
     "scripts/python_versions.py",
     "scripts/queue_passed.py",
     "scripts/release_config.py",
