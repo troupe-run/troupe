@@ -1287,7 +1287,7 @@ requires-dist = [{ name = "troupe", editable = "packages/troupe" }]
 
 [[package]]
 name = "troupe-run"
-version = "0.0.1.dev0"
+version = "0.1.0"
 source = { editable = "packages/troupe-run" }
 dependencies = [
     { name = "troupe" },
