@@ -3,7 +3,9 @@
 release-please only versions what its config lists, so a member left out would never release and
 nothing would say so. This compares the config, the manifest and uv.lock with the workspace
 members declared in the root pyproject.toml (release-automation design D10), and the protocol
-version the troupe package records with the manifest's (protocol-own-release D3). It runs as a test,
+version the troupe package records with the manifest's (protocol-own-release D3). Every package
+versions on its own, so no components are linked, and the bundle names each one bare or pinned at
+a release it has made (release-each-package design D1, D2, D8). It runs as a test,
 inside scripts/check.py; each problem names the member and the file to fix.
 
 Standard library only, like check.py.
@@ -18,10 +20,8 @@ from typing import Any
 CONFIG = "release-please-config.json"
 MANIFEST = ".release-please-manifest.json"
 LOCK = "uv.lock"
-LINKED_GROUP = "troupe"
-"""The linked-versions group: every packages/* member and everything the bundle ships, so the bundle
-is the latest release of everything in it (release-automation design D3; runners-in-linked-group
-design D1)."""
+REPOSITORY = "https://github.com/troupe-run/troupe"
+"""Where the bundle's pins, and the documented install command, fetch troupe from."""
 PROTOCOL = "protocol"
 """The language-neutral protocol: released on its own, and not a workspace member
 (protocol-own-release design D1)."""
@@ -129,17 +129,49 @@ def members(root: Path) -> dict[str, str]:
     return found
 
 
-def bundled(root: Path) -> set[str] | None:
-    """The workspace members the bundle depends on, by project name, or None when the bundle isn't
-    a member, which bundle.py reports (runners-in-linked-group design D2)."""
-    workspace = members(root)
-    paths = [path for path, name in workspace.items() if name == BUNDLE]
-    if not paths:
+_PIN = re.compile(
+    r"(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)\s*@\s*git\+(?P<url>[^@\s]+)@(?P<ref>[^#\s]+)"
+    r"#subdirectory=(?P<subdirectory>\S+)"
+)
+_VERSION = re.compile(r"(\d+)\.(\d+)\.(\d+)")
+
+
+def version_key(version: str) -> tuple[int, int, int]:
+    """A release version, for comparing. Only the plain x.y.z that release-please makes."""
+    matched = _VERSION.fullmatch(version)
+    if matched is None:
+        raise ValueError(f"not a release version: {version!r}")
+    major, minor, patch = (int(part) for part in matched.groups())
+    return major, minor, patch
+
+
+def pin(name: str, version: str, path: str) -> str:
+    """The bundle's dependency on the member at path, pinned at its release version (design D2)."""
+    return f"{name} @ git+{REPOSITORY}@{name}-v{version}#subdirectory={path}"
+
+
+def pinned_version(requirement: str, name: str, path: str) -> str | None:
+    """The version a requirement pins the member at path at, or None when it names it bare.
+    Raises ValueError when it's neither: another repository, subdirectory or ref, a marker, extras
+    or a version range."""
+    if requirement.strip() == name:
         return None
-    project = tomllib.loads((root / paths[0] / "pyproject.toml").read_text(encoding="utf-8"))
-    names = {normalise(name): name for name in workspace.values()}
-    wanted = {requirement_name(r) for r in project["project"].get("dependencies", [])}
-    return {names[name] for name in wanted if name in names}
+    matched = _PIN.fullmatch(requirement.strip())
+    if matched is None or matched["url"] != REPOSITORY or matched["subdirectory"] != path:
+        raise ValueError(requirement)
+    if normalise(matched["name"]) != normalise(name):
+        raise ValueError(requirement)
+    version = matched["ref"].removeprefix(f"{name}-v")
+    if version == matched["ref"] or _VERSION.fullmatch(version) is None:
+        raise ValueError(requirement)
+    return version
+
+
+def bundle_member(root: Path) -> str | None:
+    """The bundle's directory among the workspace members, found by name, or None when it isn't
+    one, which bundle.py reports. Not a literal path: see BUNDLE."""
+    paths = [path for path, name in members(root).items() if name == BUNDLE]
+    return paths[0] if paths else None
 
 
 def problems(root: Path) -> list[str]:
@@ -172,7 +204,11 @@ def problems(root: Path) -> list[str]:
 
     found.extend(_protocol_problems(packages.get(PROTOCOL), manifest))
     found.extend(_record_problems(root, manifest))
-    found.extend(_group_problems(config, workspace, bundled(root)))
+    found.extend(_linked_problems(config))
+    bundle = bundle_member(root)
+    if bundle is not None:
+        found.extend(_pin_problems(root, bundle, workspace, manifest))
+        found.extend(_bootstrap_problems(bundle, packages.get(bundle), manifest))
     found.extend(_prerelease_problems(config, packages))
     found.extend(_history_problems(config, packages))
     return found
@@ -324,46 +360,72 @@ def _history_problems(config: dict[str, Any], packages: dict[str, dict[str, Any]
     return found
 
 
-def _group_problems(
-    config: dict[str, Any], workspace: dict[str, str], shipped: set[str] | None
-) -> list[str]:
-    """Without a bundle (shipped is None) only packages/* members are expected, and no member is
-    refused for not being shipped: bundle.py names the missing bundle (design D2)."""
-    groups = [
-        plugin
+def _linked_problems(config: dict[str, Any]) -> list[str]:
+    """Any linked-versions plugin: every package versions on its own (design D1)."""
+    return [
+        f"{CONFIG} links the components in {plugin.get('groupName')!r} ('linked-versions'): "
+        "remove the plugin, since every package versions on its own (#218)."
         for plugin in config.get("plugins", [])
-        if isinstance(plugin, dict)
-        and plugin.get("type") == "linked-versions"
-        and plugin.get("groupName") == LINKED_GROUP
+        if isinstance(plugin, dict) and plugin.get("type") == "linked-versions"
     ]
-    if len(groups) != 1:
-        return [
-            f"{CONFIG} has {len(groups)} 'linked-versions' plugins named {LINKED_GROUP!r}: keep "
-            "exactly one."
-        ]
-    components = set(groups[0].get("components", []))
-    packages = {name for path, name in workspace.items() if path.startswith("packages/")}
-    expected = packages | (shipped or set())
-    found = [
-        f"{component} isn't in the {LINKED_GROUP!r} linked group in {CONFIG}"
-        + ("" if component in packages else f", but {BUNDLE} ships it")
-        + ": add it to its 'components'."
-        for component in sorted(expected - components)
-    ]
-    for component in sorted(components - expected):
-        if component == PROTOCOL:
+
+
+def _pin_problems(
+    root: Path, bundle: str, workspace: dict[str, str], manifest: dict[str, str]
+) -> list[str]:
+    """Each of the bundle's dependencies on a member is bare, or pinned at a version the member
+    has released (design D2, D8). Whether a pin is behind is the pinning step's business."""
+    pyproject = f"{bundle}/pyproject.toml"
+    project = tomllib.loads((root / pyproject).read_text(encoding="utf-8"))["project"]
+    paths = {normalise(name): path for path, name in workspace.items()}
+    found: list[str] = []
+    for requirement in project.get("dependencies", []):
+        path = paths.get(requirement_name(requirement))
+        if path is None:
+            continue
+        name = workspace[path]
+        released = manifest.get(path, "0.0.0")
+        try:
+            version = pinned_version(requirement, name, path)
+        except ValueError:
             found.append(
-                f"{PROTOCOL} is in the {LINKED_GROUP!r} linked group in {CONFIG}, but it's "
-                "released on its own: remove it from 'components'."
+                f"{name}'s dependency in {pyproject} is {requirement!r}: pin it as "
+                f'"{pin(name, released, path)}", or name it bare.'
             )
-        elif component not in workspace.values():
+            continue
+        if version is None:
+            continue
+        if released == "0.0.0":
             found.append(
-                f"{component} is in the {LINKED_GROUP!r} linked group in {CONFIG}, but it isn't a "
-                "workspace member: remove it."
+                f"{pyproject} pins {name} at {version}, but {MANIFEST} gives {path} 0.0.0: it "
+                f'hasn\'t released, so name it bare ("{name}") until the pinning pull request '
+                "pins it."
             )
-        elif shipped is not None:
+        elif version_key(version) > version_key(released):
             found.append(
-                f"{component} is in the {LINKED_GROUP!r} linked group in {CONFIG}, but {BUNDLE} "
-                "doesn't ship it: remove it."
+                f"{pyproject} pins {name} at {version}, but {MANIFEST} gives {path} {released}: "
+                f"pin a version it has released, at most {released}."
             )
     return found
+
+
+def _bootstrap_problems(
+    bundle: str, entry: dict[str, Any] | None, manifest: dict[str, str]
+) -> list[str]:
+    """The bundle's commits are kept out of release pull requests only until its first pin, and
+    only by excluding its own directory (design D7)."""
+    if entry is None or "exclude-paths" not in entry:
+        return []
+    released = manifest.get(bundle, "0.0.0")
+    if released != "0.0.0":
+        return [
+            f"{bundle}'s 'exclude-paths' in {CONFIG} is still set, but {MANIFEST} gives it "
+            f"{released}: remove it, or {BUNDLE}'s commits never release."
+        ]
+    if entry["exclude-paths"] != [bundle]:
+        return [
+            f"{bundle}'s 'exclude-paths' in {CONFIG} is {json.dumps(entry['exclude-paths'])}: "
+            f'make it ["{bundle}"], which keeps {BUNDLE} out of release pull requests until it\'s '
+            "first pinned, or remove it."
+        ]
+    return []

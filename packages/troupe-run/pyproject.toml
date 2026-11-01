@@ -6,8 +6,10 @@ readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 requires-python = ">=3.12,<3.16"
-# Every other workspace member, by name: the root's workspace sources install each one from the same commit
-# (install-with-uv design D1). scripts/bundle.py fails the check when one is missing.
+# Every other workspace member, by name: bare until its first release, then pinned at its latest release tag by the
+# release workflow's pinning pull request (release-each-package design D2, D4). Installing a commit installs each one
+# from that commit, since the root's workspace sources win (install-with-uv design D1); installing a troupe-run tag
+# with --no-sources installs each from its pin (design D3). scripts/bundle.py fails the check when one is missing.
 dependencies = [
     "troupe",
     "troupe-artifacts-local",

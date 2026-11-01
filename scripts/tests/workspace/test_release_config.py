@@ -22,10 +22,19 @@ def next_minor(version: str) -> str:
     return f"{major}.{int(minor) + 1}.0"
 
 
+def unexclude(config: dict[str, Any]) -> None:
+    """Remove every entry's 'exclude-paths', as the first pinning pull request does."""
+    for entry in config["packages"].values():
+        entry.pop("exclude-paths", None)
+
+
 def release(root: Path) -> None:
     """Leave root as a release pull request releasing every member and the protocol would: each
-    manifest version bumped, and the recorded protocol version set to the protocol's new one."""
+    manifest version bumped, and the recorded protocol version set to the protocol's new one. The
+    bundle only releases after the first pinning pull request removed its bootstrap exclusion
+    (release-each-package design D7), so that's gone too."""
     edit_json(root, MANIFEST, lambda m: m.update({path: next_minor(v) for path, v in m.items()}))
+    edit_json(root, CONFIG, unexclude)
     (root / PROTOCOL_RECORD).write_text(
         json.dumps({"version": released(root)}) + "\n", encoding="utf-8"
     )
@@ -60,11 +69,6 @@ def released(root: Path) -> str:
     return version
 
 
-def group(config: dict[str, Any]) -> list[str]:
-    components: list[str] = config["plugins"][0]["components"]
-    return components
-
-
 def test_the_copy_of_the_real_files_has_no_problems(copy: Path) -> None:
     assert release_config.problems(copy) == []
 
@@ -82,20 +86,12 @@ def test_a_new_package_without_release_config_is_named(copy: Path) -> None:
     (copy / "packages/troupe-new/pyproject.toml").write_text(
         '[project]\nname = "troupe-new"\nversion = "0.0.1.dev0"\n', encoding="utf-8"
     )
-    found = release_config.problems(copy)
-    assert (
-        f"packages/troupe-new (troupe-new) has no entry in {CONFIG}: add one under 'packages'."
-        in found
-    )
-    assert (
+    assert release_config.problems(copy) == [
+        f"packages/troupe-new (troupe-new) has no entry in {CONFIG}: add one under 'packages'.",
         f'packages/troupe-new (troupe-new) has no version in {MANIFEST}: add "packages/troupe-new" '
         "at the version it last released, its latest troupe-new-v<version> tag (`git ls-remote "
-        "--tags --sort=-v:refname origin 'troupe-new-v*'`), or at \"0.0.0\" if it has none."
-    ) in found
-    assert (
-        f"troupe-new isn't in the 'troupe' linked group in {CONFIG}: add it to its 'components'."
-        in found
-    )
+        "--tags --sort=-v:refname origin 'troupe-new-v*'`), or at \"0.0.0\" if it has none.",
+    ]
 
 
 def test_a_member_missing_from_the_manifest_is_named_with_the_file_and_its_tags(copy: Path) -> None:
@@ -168,104 +164,154 @@ def test_a_member_missing_from_the_lock_is_named_with_the_fix(copy: Path) -> Non
     ]
 
 
-def test_a_package_left_out_of_the_linked_group_is_named(copy: Path) -> None:
-    edit_json(copy, CONFIG, lambda c: group(c).remove("troupe-store-text"))
-    assert release_config.problems(copy) == [
-        f"troupe-store-text isn't in the 'troupe' linked group in {CONFIG}: add it to its "
-        "'components'."
-    ]
-
-
-RUNNERS = ("troupe-runner-claude-code", "troupe-runner-scripted")
-"""The runner plugins the bundle ships, so they're in the linked group (#214)."""
-
-
-def leave_out(name: str) -> Callable[[dict[str, Any]], None]:
-    """Take name out of the linked group, whether or not it's there."""
-
-    def change(config: dict[str, Any]) -> None:
-        config["plugins"][0]["components"] = [c for c in group(config) if c != name]
-
-    return change
-
-
-def put_in(name: str) -> Callable[[dict[str, Any]], None]:
-    """Put name in the linked group, whether or not it's there."""
-
-    def change(config: dict[str, Any]) -> None:
-        if name not in group(config):
-            group(config).append(name)
-
-    return change
-
-
 def bundle_member(root: Path) -> str:
     """The bundle's directory among root's workspace members."""
     [path] = [path for path, name in release_config.members(root).items() if name == "troupe-run"]
     return path
 
 
-def unbundle(root: Path, name: str) -> None:
-    """Drop name from the bundle's dependencies, as moving it to its own repository would."""
-    pyproject = root / bundle_member(root) / "pyproject.toml"
+def version_of(root: Path, path: str) -> str:
+    version: str = json.loads((root / MANIFEST).read_text(encoding="utf-8"))[path]
+    return version
+
+
+def path_of(root: Path, name: str) -> str:
+    [path] = [path for path, member in release_config.members(root).items() if member == name]
+    return path
+
+
+def pin(root: Path, name: str, requirement: str) -> str:
+    """Name `requirement` in place of the bundle's dependency on name. Returns the file's path."""
+    relative = f"{bundle_member(root)}/pyproject.toml"
+    pyproject = root / relative
     text = pyproject.read_text(encoding="utf-8")
-    assert text.count(f'    "{name}",\n') == 1
-    pyproject.write_text(text.replace(f'    "{name}",\n', ""), encoding="utf-8")
+    [line] = [line for line in text.splitlines() if line.strip().startswith(f'"{name}')]
+    pyproject.write_text(text.replace(line, f'    "{requirement}",'), encoding="utf-8")
+    return relative
 
 
-@pytest.mark.parametrize("runner", RUNNERS)
-def test_a_bundled_runner_left_out_of_the_linked_group_is_named(copy: Path, runner: str) -> None:
-    edit_json(copy, CONFIG, leave_out(runner))
+def pinned(root: Path, name: str, version: str) -> str:
+    """The pin the check expects for name at version (design D2)."""
+    return (
+        f"{name} @ git+{release_config.REPOSITORY}@{name}-v{version}"
+        f"#subdirectory={path_of(root, name)}"
+    )
+
+
+def set_version(root: Path, path: str, version: str) -> None:
+    edit_json(root, MANIFEST, lambda m: m.update({path: version}))
+
+
+@pytest.mark.parametrize("group_name", ["troupe", "adapters"])
+def test_a_linked_group_is_named(copy: Path, group_name: str) -> None:
+    plugin = {"type": "linked-versions", "groupName": group_name, "components": ["troupe"]}
+    edit_json(copy, CONFIG, lambda c: c.update({"plugins": [plugin]}))
     assert release_config.problems(copy) == [
-        f"{runner} isn't in the 'troupe' linked group in {CONFIG}, but troupe-run ships it: add it "
-        "to its 'components'."
+        f"{CONFIG} links the components in {group_name!r} ('linked-versions'): remove the "
+        "plugin, since every package versions on its own (#218)."
     ]
 
 
-def test_a_plugin_the_bundle_doesnt_ship_in_the_linked_group_is_named(copy: Path) -> None:
-    unbundle(copy, "troupe-runner-scripted")
-    edit_json(copy, CONFIG, put_in("troupe-runner-scripted"))
+def test_a_pin_at_the_released_version_passes(copy: Path) -> None:
+    path = path_of(copy, "troupe-vcs-git")
+    set_version(copy, path, "0.1.1")
+    pin(copy, "troupe-vcs-git", pinned(copy, "troupe-vcs-git", "0.1.1"))
+    assert release_config.problems(copy) == []
+
+
+def test_a_pin_behind_the_released_version_passes(copy: Path) -> None:
+    """Moving it is the pinning pull request's job, after the release (design D8)."""
+    path = path_of(copy, "troupe-vcs-git")
+    set_version(copy, path, "0.2.0")
+    pin(copy, "troupe-vcs-git", pinned(copy, "troupe-vcs-git", "0.1.1"))
+    assert release_config.problems(copy) == []
+
+
+MALFORMED = {
+    "another-repository": "troupe-vcs-git @ git+https://github.com/someone/troupe"
+    "@troupe-vcs-git-v0.1.1#subdirectory=packages/troupe-vcs-git",
+    "another-subdirectory": "troupe-vcs-git @ git+https://github.com/troupe-run/troupe"
+    "@troupe-vcs-git-v0.1.1#subdirectory=packages/troupe-vcs-files",
+    "another-components-tag": "troupe-vcs-git @ git+https://github.com/troupe-run/troupe"
+    "@troupe-vcs-files-v0.1.1#subdirectory=packages/troupe-vcs-git",
+    "a-branch": "troupe-vcs-git @ git+https://github.com/troupe-run/troupe"
+    "@main#subdirectory=packages/troupe-vcs-git",
+    "no-subdirectory": "troupe-vcs-git @ git+https://github.com/troupe-run/troupe@troupe-vcs-git-v0.1.1",
+    "a-marker": "troupe-vcs-git @ git+https://github.com/troupe-run/troupe"
+    "@troupe-vcs-git-v0.1.1#subdirectory=packages/troupe-vcs-git ; os_name == 'nt'",
+    "a-version-range": "troupe-vcs-git>=0.1",
+}
+
+
+@pytest.mark.parametrize("requirement", MALFORMED.values(), ids=MALFORMED.keys())
+def test_a_malformed_pin_is_named_with_the_expected_form(copy: Path, requirement: str) -> None:
+    path = path_of(copy, "troupe-vcs-git")
+    set_version(copy, path, "0.1.1")
+    pyproject = pin(copy, "troupe-vcs-git", requirement)
     assert release_config.problems(copy) == [
-        f"troupe-runner-scripted is in the 'troupe' linked group in {CONFIG}, but troupe-run "
-        "doesn't ship it: remove it."
+        f"troupe-vcs-git's dependency in {pyproject} is {requirement!r}: pin it as "
+        f'"{pinned(copy, "troupe-vcs-git", "0.1.1")}", or name it bare.'
     ]
 
 
-def test_a_component_that_isnt_a_member_in_the_linked_group_is_named(copy: Path) -> None:
-    edit_json(copy, CONFIG, put_in("troupe-gone"))
+def test_a_pin_ahead_of_the_release_names_both_versions(copy: Path) -> None:
+    path = path_of(copy, "troupe-vcs-git")
+    set_version(copy, path, "0.1.0")
+    pyproject = pin(copy, "troupe-vcs-git", pinned(copy, "troupe-vcs-git", "0.2.0"))
     assert release_config.problems(copy) == [
-        f"troupe-gone is in the 'troupe' linked group in {CONFIG}, but it isn't a workspace "
-        "member: remove it."
+        f"{pyproject} pins troupe-vcs-git at 0.2.0, but {MANIFEST} gives {path} 0.1.0: pin a "
+        "version it has released, at most 0.1.0."
     ]
 
 
-def test_without_the_bundle_the_group_is_checked_against_packages_alone(copy: Path) -> None:
-    """bundle.py names the missing bundle; this check doesn't add a message per runner."""
+def test_a_pin_before_the_first_release_is_named(copy: Path) -> None:
+    path = path_of(copy, "troupe-vcs-git")
+    set_version(copy, path, "0.0.0")
+    pyproject = pin(copy, "troupe-vcs-git", pinned(copy, "troupe-vcs-git", "0.0.0"))
+    assert release_config.problems(copy) == [
+        f"{pyproject} pins troupe-vcs-git at 0.0.0, but {MANIFEST} gives {path} 0.0.0: it hasn't "
+        'released, so name it bare ("troupe-vcs-git") until the pinning pull request pins it.'
+    ]
+
+
+def exclude(root: Path, paths: list[str]) -> None:
+    edit_json(
+        root, CONFIG, lambda c: c["packages"][bundle_member(root)].update({"exclude-paths": paths})
+    )
+
+
+def test_the_bootstrap_exclusion_passes_before_the_bundles_first_release(copy: Path) -> None:
+    set_version(copy, bundle_member(copy), "0.0.0")
+    exclude(copy, [bundle_member(copy)])
+    assert release_config.problems(copy) == []
+
+
+def test_no_bootstrap_exclusion_passes_before_the_bundles_first_release(copy: Path) -> None:
+    """The first pinning pull request removes it before the bundle releases (design D7)."""
+    set_version(copy, bundle_member(copy), "0.0.0")
+    edit_json(copy, CONFIG, lambda c: c["packages"][bundle_member(copy)].pop("exclude-paths", None))
+    assert release_config.problems(copy) == []
+
+
+@pytest.mark.parametrize("paths", [["packages"], ["packages/troupe-run/src"], []])
+def test_a_bootstrap_exclusion_of_anything_else_is_named(copy: Path, paths: list[str]) -> None:
     path = bundle_member(copy)
-    (copy / path / "pyproject.toml").unlink()
-    edit_json(copy, CONFIG, leave_out("troupe-store-text"))
+    set_version(copy, path, "0.0.0")
+    exclude(copy, paths)
     assert release_config.problems(copy) == [
-        f"{CONFIG} has an entry for {path}, which isn't a workspace member: remove it.",
-        f"{MANIFEST} has a version for {path}, which isn't a workspace member: remove it.",
-        f"troupe-store-text isn't in the 'troupe' linked group in {CONFIG}: add it to its "
-        "'components'.",
-        f"troupe-run is in the 'troupe' linked group in {CONFIG}, but it isn't a workspace member: "
-        "remove it.",
+        f"{path}'s 'exclude-paths' in {CONFIG} is {json.dumps(paths)}: make it "
+        f'["{path}"], which keeps troupe-run out of release pull requests until it\'s first '
+        "pinned, or remove it."
     ]
 
 
-def test_the_protocol_in_the_linked_group_is_named(copy: Path) -> None:
-    edit_json(copy, CONFIG, lambda c: group(c).append("protocol"))
+def test_the_bootstrap_exclusion_left_after_the_bundle_released_is_named(copy: Path) -> None:
+    path = bundle_member(copy)
+    set_version(copy, path, "0.1.0")
+    exclude(copy, [path])
     assert release_config.problems(copy) == [
-        f"protocol is in the 'troupe' linked group in {CONFIG}, but it's released on its own: "
-        "remove it from 'components'."
-    ]
-
-
-def test_a_missing_linked_group_is_named(copy: Path) -> None:
-    edit_json(copy, CONFIG, lambda c: c.update({"plugins": []}))
-    assert release_config.problems(copy) == [
-        f"{CONFIG} has 0 'linked-versions' plugins named 'troupe': keep exactly one."
+        f"{path}'s 'exclude-paths' in {CONFIG} is still set, but {MANIFEST} gives it 0.1.0: "
+        "remove it, or troupe-run's commits never release."
     ]
 
 
