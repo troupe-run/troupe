@@ -62,7 +62,6 @@
       "release-type": "python",
       "package-name": "troupe-run",
       "component": "troupe-run",
-      "exclude-paths": ["packages/troupe-run"],
       "extra-files": [
         {
           "type": "toml",
