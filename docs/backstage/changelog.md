@@ -8,7 +8,8 @@ prerelease: false
 Each part of troupe that's released has its own changelog, written by
 [release-please](https://github.com/googleapis/release-please) from the commits on troupe's `main`. Nobody edits
 them by hand, and a release's notes on GitHub are its changelog section. A change shows up in the changelog of the
-part it touched, grouped by kind: for example, features under **Features** and fixes under **Bug Fixes**.
+part it touched, grouped by kind: breaking changes first, then **Features**, **Bug Fixes**, **Performance
+Improvements** and **Reverts**. Changes to troupe's own docs, tests and tooling aren't listed.
 
 Until 1.0, every release is marked **Pre-release** on GitHub: troupe makes no promise of stability before 1.0.
 

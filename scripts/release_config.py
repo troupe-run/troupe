@@ -35,6 +35,45 @@ BUNDLE = "troupe-run"
 troupe-run-v<version>, is the one the docs name (install-from-tag design D1). Named, not given as
 its path: a path into packages/ here would make every suite that imports this reach every package
 (check_paths_reach.py, rule 4)."""
+COMMIT_BATCH_SIZE = 100
+"""Commits release-please reads per page of history, GraphQL's largest. A rebase-merged pull request
+split across two pages gives its last commit every file the pull request changed, so the larger the
+page, the rarer that is (changelog-commit-paths design D1; #223 decided this over fixing it)."""
+COMMIT_SEARCH_DEPTH = 1000
+"""How far back release-please reads, to the last release: past every commit on main before 0.1.0,
+with room between later releases (changelog-commit-paths design D2)."""
+CHANGELOG_SECTIONS: list[dict[str, Any]] = [
+    {"type": "feat", "section": "Features"},
+    {"type": "fix", "section": "Bug Fixes"},
+    {"type": "perf", "section": "Performance Improvements"},
+    {"type": "revert", "section": "Reverts"},
+    {"type": "docs", "section": "Documentation", "hidden": True},
+    {"type": "deps", "section": "Dependencies", "hidden": True},
+    {"type": "style", "section": "Styles", "hidden": True},
+    {"type": "chore", "section": "Miscellaneous Chores", "hidden": True},
+    {"type": "refactor", "section": "Code Refactoring", "hidden": True},
+    {"type": "test", "section": "Tests", "hidden": True},
+    {"type": "build", "section": "Build System", "hidden": True},
+    {"type": "ci", "section": "Continuous Integration", "hidden": True},
+]
+"""What changelogs show, as contributing/releasing.md says: a shown type is listed and releases; a
+hidden one does neither, unless it's a breaking change (changelog-commit-paths design D3)."""
+HISTORY_SETTINGS: dict[str, tuple[object, str]] = {
+    "commit-batch-size": (
+        COMMIT_BATCH_SIZE,
+        "so a pull request's commits rarely fall on two pages of history (#223)",
+    ),
+    "commit-search-depth": (
+        COMMIT_SEARCH_DEPTH,
+        "so every commit since the last release reaches the changelogs",
+    ),
+    "changelog-sections": (
+        CHANGELOG_SECTIONS,
+        "so only feat, fix, perf, revert and breaking changes are listed, and only they release",
+    ),
+}
+"""Each top-level setting that decides which commits reach which changelogs, and why, for the
+check's messages (changelog-commit-paths design D4)."""
 TAGGED_PAGES = ("README.md", "docs/opening-night/install.md")
 """The pages whose install command each release moves to the bundle's new tag: release-please's
 generic updater rewrites the version between their markers (install-from-tag design D3)."""
@@ -135,6 +174,7 @@ def problems(root: Path) -> list[str]:
     found.extend(_record_problems(root, manifest))
     found.extend(_group_problems(config, workspace, bundled(root)))
     found.extend(_prerelease_problems(config, packages))
+    found.extend(_history_problems(config, packages))
     return found
 
 
@@ -253,6 +293,32 @@ def _prerelease_problems(config: dict[str, Any], packages: dict[str, dict[str, A
         if "prerelease" in packages[path]:
             found.append(
                 f"{path}'s entry in {CONFIG} sets 'prerelease': remove it, so it takes the "
+                "top-level setting."
+            )
+    return found
+
+
+def _history_problems(config: dict[str, Any], packages: dict[str, dict[str, Any]]) -> list[str]:
+    """The settings that decide which commits reach which changelogs, each set once at the top level
+    to exactly its value (changelog-commit-paths design D4). Compared as JSON, so "100" or 100.0 is
+    another value, not the same one. Package entries can't hold the page size or depth (release-
+    please's schema refuses them), but they can set their own sections."""
+    found: list[str] = []
+    for key, (want, why) in HISTORY_SETTINGS.items():
+        if key not in config:
+            found.append(
+                f"{CONFIG} doesn't set '{key}': set it to {json.dumps(want)} at the top level, "
+                f"{why}."
+            )
+        elif json.dumps(config[key], sort_keys=True) != json.dumps(want, sort_keys=True):
+            found.append(
+                f"{CONFIG}'s '{key}' is {json.dumps(config[key])}: set it to {json.dumps(want)}, "
+                f"{why}."
+            )
+    for path in sorted(packages):
+        if "changelog-sections" in packages[path]:
+            found.append(
+                f"{path}'s entry in {CONFIG} sets 'changelog-sections': remove it, so it takes the "
                 "top-level setting."
             )
     return found

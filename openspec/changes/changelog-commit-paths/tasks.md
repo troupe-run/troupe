@@ -2,14 +2,17 @@
 
 ## 0. Before any change
 
-- [ ] 0.1 Save the release pull request's current diff (`gh pr diff 89 -R troupe-run/troupe`) to the scratchpad for
+- [x] 0.1 Save the release pull request's current diff (`gh pr diff 89 -R troupe-run/troupe`) to the scratchpad for
   the follow-up's comparison, and record #89's head commit here. Verify the file is non-empty and that troupe's
   changelog in it doesn't list `74cbf20` and does have a Documentation section (the two symptoms this change
   removes).
+  - 2026-11-01: #89's head `cd20f75` (built from `e18bb96`), 688 lines. `74cbf20` appears 0 times; troupe's
+    changelog has a Documentation section. The manual check in #89's comment reports one stray, `7e03119` in
+    troupe's. The scratchpad is this session's; if it's gone, compare against #89's commit `cd20f75`.
 
 ## 1. The check holds the three settings (design D4)
 
-- [ ] 1.1 In `scripts/tests/workspace/test_release_config.py`, write the tests first and run them against the
+- [x] 1.1 In `scripts/tests/workspace/test_release_config.py`, write the tests first and run them against the
   unchanged check, recording that they fail: for each of `commit-batch-size` and `commit-search-depth`, a copy
   without it gives D4's "doesn't set" message, and a copy with another value (parametrised: a smaller number, the
   string form, and for the depth 500) gives D4's "is {value}" message; a copy without `changelog-sections` gives
@@ -17,25 +20,39 @@
   the "is {value}" message; a copy where `packages/troupe`'s entry, and separately the protocol's, sets
   `changelog-sections` gives the "sets 'changelog-sections'" message. Each asserts the whole message, as the
   existing tests do.
-- [ ] 1.2 In `scripts/release_config.py`, add `COMMIT_BATCH_SIZE`, `COMMIT_SEARCH_DEPTH` and `CHANGELOG_SECTIONS`
+  - The values are written out in the test (`SECTIONS`, `HISTORY`), not imported from the check, so a change to
+    the check's copy fails a test. A float (`100.0`) is also another value. Against the unchanged check, all 28
+    cases (each × `as-is`/`released`) failed, each getting `[]`.
+- [x] 1.2 In `scripts/release_config.py`, add `COMMIT_BATCH_SIZE`, `COMMIT_SEARCH_DEPTH` and `CHANGELOG_SECTIONS`
   with docstrings citing design D1 to D3 and #223, and `_history_problems` called from `problems()`, with D4's
   messages. Verify the tests from 1.1 pass once 2.1 is in, and that ruff, ruff format and `mypy --strict` are clean
   on both files.
+  - Each message also says why the value matters (`HISTORY_SETTINGS`), and the comparison is as JSON, so
+    `"100"` and `100.0` aren't taken as 100. After 2.1: `test_release_config.py`, 113 passed; ruff, ruff format
+    and `mypy --strict` clean on both files.
 
 ## 2. The settings (design D1 to D3)
 
-- [ ] 2.1 Add `"commit-batch-size": 100`, `"commit-search-depth": 1000` and D3's `changelog-sections` at the top of
+- [x] 2.1 Add `"commit-batch-size": 100`, `"commit-search-depth": 1000` and D3's `changelog-sections` at the top of
   `release-please-config.json`, after `prerelease`. Record that, before this task, `problems()` on the real files
   gave exactly D4's three "doesn't set" messages. Verify the copy-of-the-real-files tests (`as-is` and `released`)
   pass, and that the file validates against release-please v17.6.0's schema
   (`uvx check-jsonschema --schemafile <v17.6.0 schemas/config.json> release-please-config.json`).
+  - 2026-11-01: before it, `problems()` on the real files gave exactly D4's three "doesn't set" messages
+    (`commit-batch-size`, `commit-search-depth`, `changelog-sections`). After it, `test_release_config.py`, 113
+    passed (both `as-is` and `released`), and `uvx check-jsonschema` against v17.6.0's `schemas/config.json`
+    (from the npm package): "ok -- validation done".
 
 ## 3. Docs, and the release pull request as release-please would build it
 
-- [ ] 3.1 In `contributing/releasing.md`, make design D5's edits ("What bumps what", and a new "How commits reach
+- [x] 3.1 In `contributing/releasing.md`, make design D5's edits ("What bumps what", and a new "How commits reach
   changelogs" section pointing at #223); in `docs/backstage/changelog.md`, name the sections a reader sees. Verify
   by reading each against the config and design's Context, and that `uv run pytest scripts/tests/workspace` (which
   includes the docs-reference tests) passes.
+  - Read against the config and Context: "What bumps what" says the sections do it and that hidden breaking
+    changes still list and release; the new section names both settings, the page-boundary case, its limit, #223
+    and the manual check on #89; "When something goes wrong" says what to do about a stray entry.
+    `uv run pytest scripts/tests/workspace`: 210 passed; the user-docs tests (`test_user_docs_*`): 86 passed.
 - [ ] 3.2 After the branch is pushed, ask the owner to dry-run release-please against it, since it needs their
   token: `! npx release-please@17.6.0 release-pr --dry-run --token "$(gh auth token)" --repo-url
   troupe-run/troupe --target-branch changelog-commit-paths --config-file release-please-config.json

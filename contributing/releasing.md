@@ -35,7 +35,10 @@ sign-off. `guard` exempts that branch from needing an OpenSpec change of the sam
 
 Before 1.0 a breaking change bumps the minor version (`bump-minor-pre-major`). The first release of every component is
 0.1.0. `docs`, `test`, `ci`, `chore` and the other types release nothing on their own and don't appear in
-changelogs.
+changelogs. The config's `changelog-sections` does that: it shows `feat`, `fix`, `perf` and `revert` and hides the
+other types, and release-please releases a component only when its changelog section would list something. A
+breaking change of a hidden type, such as `refactor!:`, is still listed, under breaking changes, and releases.
+`scripts/check.py` fails if the sections change, or if a component's entry sets its own.
 
 A commit counts towards a component when it changes files under that component's directory:
 
@@ -74,6 +77,21 @@ protocol version. Between releases, a checkout records the last protocol release
 
 A commit's scope (`feat(cli): ...`) is free-form, and release-please ignores it when assigning commits. Only the paths
 a commit changes decide which components it counts towards. A commit that changes two packages counts towards both.
+
+### How commits reach changelogs
+
+release-please reads `main` back to the last release, at most 1000 commits (`commit-search-depth`), in pages of 100
+(`commit-batch-size`, the most GitHub allows). For most commits it asks GitHub which files that commit changed. For
+a pull request's last commit, though, it takes the whole pull request's files when no other commit of that pull
+request is on the same page: that's how it recognises a squash merge. Our pull requests land by rebase, so when a
+pull request's commits fall on two pages, its last commit is listed under every component the pull request changed,
+and which commits that hits changes as `main` grows.
+
+Pages of 100 make that rare, and impossible while fewer than 100 commits land between two releases, because they all
+fit on one page. #223 records why that was chosen over fixing it, and when to revisit. Before merging a release pull
+request, check that each changelog entry is under a component its commit changed: the check is in
+[#89's comment](https://github.com/troupe-run/troupe/pull/89#issuecomment-6552218406). `scripts/check.py` fails if
+either setting changes.
 
 ## Adding a package
 
@@ -124,7 +142,8 @@ when it fails.
 
 - **A wrong version or changelog in an open release pull request:** don't edit the pull request. release-please
   rewrites it on the next push. Fix the cause (a commit message on `main` can't change, so add a commit, or use
-  `Release-As`).
+  `Release-As`). An entry under a component its commit didn't change comes from the page boundary ("How commits
+  reach changelogs"): land any commit on `main`, which rebuilds the pull request, and comment on #223.
 - **A wrong release:** fix it forward with a `fix` commit, or `Release-As` for the next version. Tags are never moved
   or deleted.
 - **Stopping releases:** disable the `release` workflow. Releases already made stay, because tags and changelogs

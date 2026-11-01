@@ -310,6 +310,100 @@ def test_an_entry_that_sets_prerelease_itself_is_named(copy: Path, path: str, va
     ]
 
 
+SECTIONS: list[dict[str, Any]] = [
+    {"type": "feat", "section": "Features"},
+    {"type": "fix", "section": "Bug Fixes"},
+    {"type": "perf", "section": "Performance Improvements"},
+    {"type": "revert", "section": "Reverts"},
+    {"type": "docs", "section": "Documentation", "hidden": True},
+    {"type": "deps", "section": "Dependencies", "hidden": True},
+    {"type": "style", "section": "Styles", "hidden": True},
+    {"type": "chore", "section": "Miscellaneous Chores", "hidden": True},
+    {"type": "refactor", "section": "Code Refactoring", "hidden": True},
+    {"type": "test", "section": "Tests", "hidden": True},
+    {"type": "build", "section": "Build System", "hidden": True},
+    {"type": "ci", "section": "Continuous Integration", "hidden": True},
+]
+"""The changelog sections, written out here rather than read from the check, so a change to the
+check's copy fails a test (changelog-commit-paths design D3)."""
+
+HISTORY = {
+    "commit-batch-size": (
+        100,
+        "so a pull request's commits rarely fall on two pages of history (#223)",
+    ),
+    "commit-search-depth": (
+        1000,
+        "so every commit since the last release reaches the changelogs",
+    ),
+    "changelog-sections": (
+        SECTIONS,
+        "so only feat, fix, perf, revert and breaking changes are listed, and only they release",
+    ),
+}
+"""Each history setting, the value it must have and why (changelog-commit-paths design D4)."""
+
+
+@pytest.mark.parametrize("key", HISTORY)
+def test_a_config_without_a_history_setting_is_named_with_its_value(copy: Path, key: str) -> None:
+    edit_json(copy, CONFIG, lambda c: c.pop(key, None))
+    value, why = HISTORY[key]
+    assert release_config.problems(copy) == [
+        f"{CONFIG} doesn't set '{key}': set it to {json.dumps(value)} at the top level, {why}."
+    ]
+
+
+def _shown(sections: list[dict[str, Any]], kind: str) -> list[dict[str, Any]]:
+    """sections with kind's section no longer hidden."""
+    return [
+        {k: v for k, v in s.items() if k != "hidden"} if s["type"] == kind else s for s in sections
+    ]
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("commit-batch-size", 10),
+        ("commit-batch-size", "100"),
+        ("commit-batch-size", 100.0),
+        ("commit-search-depth", 500),
+        ("commit-search-depth", "1000"),
+        ("changelog-sections", _shown(SECTIONS, "docs")),
+        ("changelog-sections", SECTIONS[1:]),
+        ("changelog-sections", [SECTIONS[1], SECTIONS[0], *SECTIONS[2:]]),
+        ("changelog-sections", []),
+    ],
+    ids=[
+        "batch-10",
+        "batch-string",
+        "batch-float",
+        "depth-500",
+        "depth-string",
+        "docs-shown",
+        "feat-missing",
+        "reordered",
+        "empty",
+    ],
+)
+def test_a_history_setting_with_another_value_is_named_with_both_values(
+    copy: Path, key: str, value: object
+) -> None:
+    edit_json(copy, CONFIG, lambda c: c.update({key: value}))
+    want, why = HISTORY[key]
+    assert release_config.problems(copy) == [
+        f"{CONFIG}'s '{key}' is {json.dumps(value)}: set it to {json.dumps(want)}, {why}."
+    ]
+
+
+@pytest.mark.parametrize("path", ["packages/troupe", PROTOCOL])
+def test_an_entry_that_sets_its_own_changelog_sections_is_named(copy: Path, path: str) -> None:
+    edit_json(copy, CONFIG, lambda c: c["packages"][path].update({"changelog-sections": SECTIONS}))
+    assert release_config.problems(copy) == [
+        f"{path}'s entry in {CONFIG} sets 'changelog-sections': remove it, so it takes the "
+        "top-level setting."
+    ]
+
+
 RECORD_UPDATE = {"type": "json", "path": f"/{PROTOCOL_RECORD}", "jsonpath": "$.version"}
 """What keeps the recorded protocol version in step with a protocol release (design D2)."""
 
