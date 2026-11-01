@@ -84,8 +84,11 @@ def unpinned(root: Path) -> None:
 
 def pinned(root: Path) -> None:
     """As the pinning step leaves it, by running the step: every member the manifest gives a
-    release pinned at it, unreleased ones bare, and the bootstrap exclusion gone."""
-    pin_bundle.apply(root, pin_bundle.moves(root))
+    release pinned at it, unreleased ones bare, and the bootstrap exclusion gone. A copy with
+    nothing to pin fails rather than quietly staying unpinned."""
+    moved = pin_bundle.moves(root)
+    assert moved, f"nothing in {root / MANIFEST} has released, so the bundle can't be pinned"
+    pin_bundle.apply(root, moved)
 
 
 def _exclude(config: Path, bundle: str) -> None:
