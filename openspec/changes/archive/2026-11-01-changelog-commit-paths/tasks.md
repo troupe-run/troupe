@@ -73,6 +73,24 @@
   - 2026-11-01, macOS, at `e1365cd`'s commit: `check: all gates passed` (3157 passed, 14 skipped, 128 s); "Change
     'changelog-commit-paths' is valid".
 
+## 5. A race the merge queue found (#226, after archiving)
+
+- [x] 5.1 The merge queue dropped #225 twice: `test_a_slow_example_passes_under_the_profile_the_flake_hunt_asks_for`
+  failed on Windows legs (1 of 4, then 2 of 4), each with `FileNotFoundError` on a
+  `Temp\troupe-claude-code-*` directory, the Claude Code runner tests' private directory. The owner asked for it to
+  be fixed here, since these changes started showing it. Cause, read in pytest 9.1.1's `Session.collect`: a path
+  argument's parents are collected down from the root, stopping at the first one above `confcutdir` (the
+  repository). On CI the repository is on `D:` and the temp directory on `C:`, so none is, and the child collected
+  `C:\` down to the test; on Windows each entry that doesn't match is compared with `samefile_nofollow`, which
+  stats it, so a sibling removed between listing and stat fails collection. The fix passes `--confcutdir
+  <tmp_path>` in `run_slow`, and `test_the_slow_examples_run_collects_no_directory_outside_its_own` records every
+  `Dir` the child collects (a `-p` plugin) and requires them all inside `tmp_path`. Verify the new test fails
+  without the flag and passes with it, and that the file is ruff, ruff format and `mypy --strict` clean.
+  - 2026-11-01, macOS: without the flag the new test failed, the child having collected the temp directory and
+    its parents (the walk happens on every platform; only Windows stats the siblings). With it, the file's 5
+    tests passed, in 5.6 s rather than 44.8 s. ruff, ruff format and `mypy --strict` clean. The only other child
+    pytest command in the repository, `scripts/tests/test_on.py`, records arguments and runs nothing.
+
 ## Workflow follow-up
 
 - Draft pull request closing #222 and mentioning #223 (which it doesn't close); act on Claude's review; mark ready;
