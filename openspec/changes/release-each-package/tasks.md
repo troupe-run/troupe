@@ -2,28 +2,70 @@
 
 ## 1. Probe before relying on anything (design D9)
 
-- [ ] 1.1 Ask the owner before creating the private probe repository `troupe-run/infra-probe-release-each-package`
+- [x] 1.1 Ask the owner before creating the private probe repository `troupe-run/infra-probe-release-each-package`
   (auto mode refuses a public one). Set it up with a three-member uv workspace shaped like troupe: core, an adapter
   depending on core, and a bundle depending on both, with the bundle's first commit also touching `uv.lock`. Add
   release-please with this change's config shape (no linked group, `initial-version` 0.1.0, `bump-minor-pre-major`,
   the bundle's `exclude-paths`) and a `release.yml` copy that uses `GITHUB_TOKEN`. Verify that the repository's
   first push opens a release pull request, and record its URL here.
-- [ ] 1.2 uv (D2, D3): with the bundle's dependencies pinned as direct references at the probe's tags, verify
+  - The owner agreed (2026-11-01). Created private https://github.com/troupe-run/infra-probe-release-each-package.
+    The first push's workflow made `release-please--branches--main`, but couldn't open the pull request: the org
+    doesn't let Actions open pull requests (and doesn't allow write as the default token permission). The guard
+    refused my running the release-please CLI with the owner's login (`owner-only`). So each release pull request
+    was opened by the owner running the CLI with `!`. The first was
+    https://github.com/troupe-run/infra-probe-release-each-package/pull/1.
+- [x] 1.2 uv (D2, D3): with the bundle's dependencies pinned as direct references at the probe's tags, verify
   `uv sync --locked` installs every member from the workspace. Then verify the tagged
   `uv tool install --no-sources "git+https://github.com/…@<bundle-tag>#subdirectory=…"` installs each member from its
   pinned tag on Linux, macOS and Windows, with a matrix job that prints each installed member's version and file
   contents. Record the run here.
-- [ ] 1.3 Bootstrap (D7): verify the first release pull request releases core and the adapter at 0.1.0 and leaves
+  - Locally, after the first pin: `uv sync --locked` installed pcore, padapter and pbundle editable from the
+    workspace, and `uv lock --locked` passed. It first failed because the probe's release left `uv.lock`'s versions
+    stale, which isn't the pins' doing. The probe lacked troupe's `uv.lock` extra-files, and `main` itself failed
+    `--locked` too, so I added them (e8fc16f).
+  - Install run 41263422547, `pbundle-v0.1.1`, on ubuntu, macos and windows. Every `--no-sources` leg printed
+    "pcore 0.1.0 pcore initial | padapter 0.1.1 padapter fixed", which is the pinned trees. `padapter`'s bare
+    dependency on `pcore` was satisfied by the bundle's pin. Every plain leg printed "pcore 0.2.0 pcore broke its
+    API | padapter 0.1.1 padapter fixed", which is the tag's own commit.
+- [x] 1.3 Bootstrap (D7): verify the first release pull request releases core and the adapter at 0.1.0 and leaves
   the bundle out, and record whether `exclude-paths` is repository- or package-relative. If the bundle is included,
   try the fallback (a lightweight `<bundle>-v0.0.0` tag, no GitHub release) and record the result. If neither works,
   stop and ask the owner before going on.
-- [ ] 1.4 The two steps (D4–D6, after group 3's script exists, copied in): merge the first release pull request in
+  - Probe run 41260547310 (2026-11-01), with `"exclude-paths": ["packages/pbundle"]`, repository-relative. It
+    reported "commits: 0 … No commits for path: packages/pbundle, skipping", and gave pcore and padapter one commit
+    each. That's even though the bundle's only commit (`feat: add pbundle…`) also changed the root `pyproject.toml`
+    and `uv.lock`. So `exclude-paths` judges only the component's own files, and repository-relative is the form.
+    The fallback isn't needed. The same log shows release-please looking for `pbundle-v0.0.0` at the manifest
+    version. The release pull request itself couldn't open, because the org doesn't let Actions open pull requests
+    (1.1).
+- [x] 1.4 The two steps (D4–D6, after group 3's script exists, copied in): merge the first release pull request in
   the probe. Verify the pinning pull request opens typed `feat`, pins both members at `-v0.1.0` and removes
   `exclude-paths`, and that release-please leaves its branch alone. Merge it, and verify the next release pull
   request gives the bundle 0.1.0. Then a `fix:` to the adapter: the adapter releases alone, and the pinning commit
   is `fix`, bringing the bundle to 0.1.1. Then a `feat!:` to core: the pinning commit is breaking, bringing the
   bundle to 0.2.0. And a second release while a pinning pull request is open updates it. Record each pull request
   here, then delete the probe repository and record that it's gone.
+  - 2026-11-01. The probe used the real `pin_bundle.py` and `release_config.py`, with only `BUNDLE` and
+    `REPOSITORY` changed for the probe. Release pull requests were opened by the owner's CLI runs (1.1). The
+    pinning pull requests were opened by me with `gh` from the branch the job pushed, which the org's Actions
+    policy doesn't let the job open itself.
+    - #1 released pcore and padapter at 0.1.0, without pbundle. Merging it ran `pin-bundle`, which pushed
+      `feat(bundle): ship pcore 0.1.0, padapter 0.1.0`. That commit pinned both at `-v0.1.0` and removed only the
+      `exclude-paths` line. Its type is `feat` because the probe's history has no breaking change.
+    - The pinning pull request was #2, merged by rebase. #3 then released pbundle at 0.1.0 with its history and the
+      pin, and the job that followed moved nothing.
+    - A `fix:` to padapter, plus a `refactor:` to pcore, gave #4: padapter 0.1.1 alone, with pcore skipped as "No
+      user facing commits". The job pushed `fix(bundle): ship padapter 0.1.1` (#5).
+    - #6 released pbundle 0.1.1 together with pcore 0.2.0, from a `feat!:`. The job pushed
+      `feat(bundle)!: ship pcore 0.2.0`, with `BREAKING CHANGE: pcore 0.2.0 has breaking changes: see
+      packages/pcore/CHANGELOG.md.` That's #7, which I left open.
+    - #8 (padapter 0.1.2), merged while #7 was open, made the job force-push the same branch to
+      `feat(bundle)!: ship pcore 0.2.0, padapter 0.1.2`, and #7 stayed the only open one.
+    - release-please never touched `release-please--pin-bundle`, or treated its pull request as one of its own.
+    - Not exercised: the real job's `gh pr edit` of an open pull request's title and body, because the probe's
+      token couldn't open or edit pull requests. `test_release_workflow.py` pins that step's shape, and its first
+      real run is troupe's first pinning pull request.
+    - The probe repository is deleted: `gh repo view` reports "Could not resolve to a Repository".
 
 ## 2. Every package on its own (D1, D7, D8)
 
@@ -115,7 +157,10 @@
     persisting the token. The check runs no workflow linter, so I ran `uvx zizmor@1.16.3 --offline`. Its one finding,
     `artipacked`, is fixed: `persist-credentials: false`, and only the push uses the token. Now: "No findings".
     troupe's rulesets have no required-signatures rule, so a `git commit` signed off as the bot is enough.
-- [ ] 4.2 Run the same job in the probe (1.4) and record that its pull request matches 3.1's expectations.
+- [x] 4.2 Run the same job in the probe (1.4) and record that its pull request matches 3.1's expectations.
+  - See 1.4: the probe ran this job's steps with the probe's token in place of the App's. The four commits it
+    pushed (`feat`, `fix`, breaking, and breaking with two pins) matched 3.1's expectations, byte-surgical edits
+    included.
 
 ## 5. Installs from a tag (D3, D10)
 
@@ -163,8 +208,10 @@
 
 ## 7. Integration
 
-- [ ] 7.1 Run `uv run scripts/check.py` and `openspec validate release-each-package --strict`, and record both
+- [x] 7.1 Run `uv run scripts/check.py` and `openspec validate release-each-package --strict`, and record both
   results here.
+  - 2026-11-01, macOS: `check: all gates passed` (3169 passed, 14 skipped, 140 s). "Change 'release-each-package'
+    is valid".
 
 ## Workflow follow-up
 
