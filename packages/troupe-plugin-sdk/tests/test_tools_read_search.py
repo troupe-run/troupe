@@ -2,7 +2,10 @@
 result", "Results are capped by named limits", "The repository's metadata is out of reach";
 runner-sdk design D9, D10)."""
 
+import os
 from pathlib import Path
+
+import pytest
 
 from sdk_tools import call, workspace
 from troupe_plugin_sdk.defaults import ToolLimits
@@ -173,3 +176,29 @@ def test_searching_from_a_path_that_doesnt_exist_is_an_error(tmp_path: Path) -> 
     step = call(Tools(workspace(tmp_path, TREE)), "Glob", {"pattern": "*", "path": "nope"})
     assert step.is_error
     assert step.output == "nope doesn't exist."
+
+
+def test_reading_a_file_over_the_file_limit_is_an_error_naming_its_size(tmp_path: Path) -> None:
+    tools = Tools(workspace(tmp_path, {"big.txt": b"x" * 20}), limits=ToolLimits(file_max_bytes=10))
+    step = call(tools, "Read", {"file_path": "big.txt"})
+    assert step.is_error
+    assert step.output == "big.txt is 20 bytes, over the 10-byte limit for Read."
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="named pipes are POSIX's; Windows has none")
+def test_a_named_pipe_is_refused_by_read_and_skipped_by_grep_without_blocking(
+    tmp_path: Path,
+) -> None:
+    root = workspace(tmp_path, {"a.txt": b"hit\n"})
+    os.mkfifo(root / "pipe")
+    tools = Tools(root)
+
+    read = call(tools, "Read", {"file_path": "pipe"})
+    grep = call(tools, "Grep", {"pattern": "hit"})
+
+    assert read.is_error
+    assert read.output == "pipe isn't a regular file, so it can't be read or changed."
+    assert grep.output.split("\n") == [
+        "a.txt:1:hit",
+        "[1 entries that aren't regular files were skipped.]",
+    ]

@@ -86,12 +86,19 @@ run. The two events are numbered from the same counter as the runner's other eve
 ## Limits
 
 Each limit has its default in `troupe_plugin_sdk.defaults`. A runner may lower any of them with `ToolLimits`, never
-raise them. A result that's cut says so, and says how to get the rest.
+raise them. A result that's cut says so, and says how to get the rest. Only regular files are read: a
+directory, a pipe or a device is an error result for `Read` and `Edit`, and skipped by `Grep`.
+
+The limits bound what a call returns, not how long it takes. `Grep` runs the model's regular expression with
+Python's `re`, which can't be interrupted, so an expression that backtracks badly can stall the call. The size
+limits bound the text each search sees, and troupe's run timeout bounds the run: a runner that stalls is stopped,
+never waited on silently.
 
 | Limit | Default | What it caps |
 |---|---|---|
 | `read_max_bytes` | 256 KiB | The file text `Read` returns in one call |
 | `read_max_lines` | 2000 | The lines `Read` returns in one call |
+| `file_max_bytes` | 16 MiB | The largest file `Read` and `Edit` load; a larger one is an error result |
 | `glob_max_paths` | 1000 | The paths `Glob` returns |
 | `grep_max_matches` | 500 | The lines `Grep` returns |
 | `grep_file_max_bytes` | 1 MiB | The largest file `Grep` searches |
