@@ -11,7 +11,7 @@
 
 ## 3. Verify
 
-- [ ] 3.1 Run `openspec validate one-audition-row --strict` and `uv run scripts/check.py`. Verify: validation passes and every gate passes; record the counts here
+- [x] 3.1 Run `openspec validate one-audition-row --strict` and `uv run scripts/check.py`. Verify: validation passes and every gate passes; record the counts here Outcome: validation passed; on 625827e the commit's check passed every gate: 3426 passed, 14 skipped, tests in 292.3 s
 - [ ] 3.2 Push and let CI run on Linux, macOS and Windows once the PR is marked ready. Verify: every leg of the run on the last code commit passes; record the run here
 
 ## Workflow follow-up
