@@ -34,12 +34,12 @@
   `git grep -c "claude review completed" -- CLAUDE.md openspec/config.yaml` find each file;
   `git grep -n "judg" -- openspec/config.yaml` finds the reply sentence; and `CLAUDE.md` step 6 names
   `claude review completed`, matching `gh api repos/troupe-run/troupe/rules/branches/main`'s required checks.
-- [ ] 2.4 Commit as `docs: say the rest of what infrastructure says about the review`, with `uv run scripts/check.py`
+- [x] 2.4 Commit as `docs: say the rest of what infrastructure says about the review`, with `uv run scripts/check.py`
   passing first (the guard runs the full check).
 
 ## 3. The pull request
 
-- [ ] 3.1 Before opening it, re-read infrastructure's `CLAUDE.md` steps 5 and 6 and `openspec/config.yaml` context on
+- [x] 3.1 Before opening it, re-read infrastructure's `CLAUDE.md` steps 5 and 6 and `openspec/config.yaml` context on
   `main`. Verify they still match design, Context; if not, stop and update D1 to D3.
 - [ ] 3.2 Open a draft pull request with `Closes #238` and `Closes #256`, each on its own line, linking
   troupe-run/website#89 and #101. Verify `gh pr view --json closingIssuesReferences` lists both.
