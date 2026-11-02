@@ -80,11 +80,11 @@
 
 ## 7. Integration checks
 
-- [ ] 7.1 Run `uv run scripts/check.py` and verify it passes (ruff, mypy --strict, import contracts, tests).
+- [x] 7.1 Run `uv run scripts/check.py` and verify it passes (ruff, mypy --strict, import contracts, tests).
 - [ ] 7.2 Check the Claude Code path by hand, with Claude Code installed and logged in. In an empty git repository,
   run `troupe init --audition`, then each printed step. Verify that the perform ends `succeeded` (the issue's
   "done when"), and record the commands and output in the PR.
-- [ ] 7.3 Run `openspec validate init-and-audition --strict` and verify it passes.
+- [x] 7.3 Run `openspec validate init-and-audition --strict` and verify it passes.
 
 ## Workflow follow-up
 
