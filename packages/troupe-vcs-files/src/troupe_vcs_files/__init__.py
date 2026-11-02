@@ -7,7 +7,8 @@ commands, so it declares no environment policy (design D11).
 It can't make a worktree, so each worktree operation is refused with vcs.worktrees-unsupported, and
 with nothing shared between worktrees, its shared state is empty (worktree-stage design D4, D10).
 With no merges, it reports no merge sides (config-projection-conflicts design D2), and with no
-index it marks nothing resolved (mark-config-resolved design D4).
+index it marks nothing resolved (mark-config-resolved design D4). Every directory counts as being in
+a repository, so troupe init can make a theatre anywhere (init-and-audition design D7).
 """
 
 from collections.abc import Hashable, Mapping
@@ -38,6 +39,9 @@ class FilesAdapter:
     @property
     def name(self) -> str:
         return NAME
+
+    def check_repository(self) -> None:
+        return None
 
     def branch(self) -> str | None:
         return None

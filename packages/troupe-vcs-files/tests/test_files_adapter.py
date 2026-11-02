@@ -90,3 +90,7 @@ def test_every_worktree_operation_is_refused_naming_the_adapter(
 def test_its_shared_state_is_empty_and_never_changes(tmp_path: Path) -> None:
     vcs = load_vcs("files", tmp_path)
     assert vcs.shared_state().compare(vcs.shared_state()).empty
+
+
+def test_every_directory_counts_as_being_in_a_repository(tmp_path: Path) -> None:
+    load_vcs("files", tmp_path / "anywhere").check_repository()

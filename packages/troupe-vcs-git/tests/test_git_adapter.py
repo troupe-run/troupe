@@ -297,3 +297,52 @@ def test_the_branch_token_works_in_a_linked_worktree(repo: Repo, tmp_path: Path)
         check=True,
     )
     assert git.branch_token() != before
+
+
+# Whether a directory is in a repository (spec: vcs, "The git adapter's repository is a work tree").
+
+
+def _outside(tmp_path: Path) -> tuple[Path, dict[str, str]]:
+    """A directory no repository holds, with git told not to look above ``tmp_path`` for one, so a
+    repository that happens to hold the test's temporary directory can't answer instead."""
+    directory = tmp_path / "plain"
+    directory.mkdir()
+    env = {**isolated_environment(tmp_path / "home"), "GIT_CEILING_DIRECTORIES": str(tmp_path)}
+    return directory, env
+
+
+def test_a_directory_outside_any_repository_is_not_a_repository_and_the_fix_names_git_init(
+    tmp_path: Path,
+) -> None:
+    directory, env = _outside(tmp_path)
+    with pytest.raises(TroupeError) as caught:
+        GitAdapter(directory, source=env).check_repository()
+    error = caught.value
+    assert error.code == "vcs.not-a-repository"
+    assert error.path == str(directory.absolute())
+    assert error.details == {"directory": str(directory.absolute()), "adapter": "git"}
+    assert "git init" in error.fix
+
+
+def test_a_subdirectory_of_a_work_tree_with_no_commits_is_in_a_repository(repo: Repo) -> None:
+    app = repo.path / "app"
+    app.mkdir()
+    GitAdapter(app, source=repo.env).check_repository()
+
+
+def test_a_repositorys_git_directory_is_not_a_repository(repo: Repo) -> None:
+    with pytest.raises(TroupeError) as caught:
+        GitAdapter(repo.path / ".git", source=repo.env).check_repository()
+    assert caught.value.code == "vcs.not-a-repository"
+
+
+def test_a_bare_repository_is_not_a_repository(tmp_path: Path) -> None:
+    directory, env = _outside(tmp_path)
+    subprocess.run(
+        ["git", "init", "-q", "--bare", str(directory)],  # noqa: S607 - git from PATH
+        env=env,
+        check=True,
+    )
+    with pytest.raises(TroupeError) as caught:
+        GitAdapter(directory, source=env).check_repository()
+    assert caught.value.code == "vcs.not-a-repository"

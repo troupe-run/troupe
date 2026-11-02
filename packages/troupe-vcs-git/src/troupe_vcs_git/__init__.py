@@ -12,6 +12,9 @@ merge sides in troupe_vcs_git.merges.
 The branch and HEAD are cached behind the branch token: the stats of every file git changes when
 either moves. They are read through git again only when one of those files has changed, so
 recording event after event runs no command while nothing moves (cache-vcs-state design D1, D3).
+
+A directory is in a repository only when git reports it inside a work tree, so neither a git
+directory nor a bare repository can hold a theatre (init-and-audition design D7).
 """
 
 import os
@@ -32,6 +35,7 @@ from troupe.core.vcs import (
     MergeSides,
     Resolve,
     SharedState,
+    not_a_repository,
 )
 from troupe.platform.processes import Completed, EnvironmentPolicy, ProcessWaitCallback
 from troupe_vcs_git import defaults
@@ -40,6 +44,14 @@ from troupe_vcs_git.worktrees import Worktrees
 
 # Exit status 1 means "no answer" for these, not failure: an unborn or detached HEAD, a missing key.
 _NO_ANSWER = 1
+_NOT_A_REPOSITORY = 128
+"""git's exit status when no repository holds the directory, among other fatal errors."""
+_NOT_A_REPOSITORY_MESSAGE = b"not a git repository"
+"""What git's message says when that is the reason, as opposed to, say, a dubious owner."""
+_INIT_FIX = (
+    "Make it a git repository first with git init (or run troupe init inside one), then run "
+    "troupe init again. troupe never makes a repository for you."
+)
 
 # The files git changes when the branch or HEAD moves (cache-vcs-state design D3), as --git-path
 # names them. Per worktree: HEAD, the index, HEAD's reflog and, under reftable, the table list that
@@ -114,6 +126,16 @@ class GitAdapter:
     @property
     def name(self) -> str:
         return "git"
+
+    def check_repository(self) -> None:
+        completed = self.git("rev-parse", "--is-inside-work-tree", allow=(0, _NOT_A_REPOSITORY))
+        if completed.returncode == _NOT_A_REPOSITORY:
+            if _NOT_A_REPOSITORY_MESSAGE not in completed.stderr:
+                # Another fatal error, such as a repository git refuses to read: say what git said.
+                raise self.failed(["git", "rev-parse", "--is-inside-work-tree"], completed)
+        elif completed.stdout.strip() == b"true":
+            return
+        raise not_a_repository("git", self.theatre.absolute(), _INIT_FIX)
 
     def git(self, *args: str, allow: Sequence[int] = (0,)) -> Completed:
         """Run ``git args`` in the theatre; any exit status outside ``allow`` is vcs.failed."""

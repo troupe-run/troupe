@@ -237,6 +237,7 @@ path ([`notice.schema.json`](../protocol/schemas/notice.schema.json)).
 | `identity.unknown-source` | The chain names a source that isn't installed |
 | `vcs.unknown-adapter` | No VCS adapter of that name is installed |
 | `vcs.failed` | A git command failed |
+| `vcs.not-a-repository` | `troupe init` was run in a directory that isn't in a repository of the theatre's version control |
 | `vcs.worktrees-unsupported` | The version-control adapter can't make a run's worktree (the plain filesystem adapter) |
 
 ## File count
