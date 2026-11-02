@@ -29,15 +29,15 @@
 
 ## 3. The ignore, delivered from infrastructure (troupe-run/infrastructure#259)
 
-- [ ] 3.1 infrastructure#259 merged and applied: its policy declares `troupe` and `troupe-*` as ignores for troupe's
+- [x] 3.1 infrastructure#259 merged and applied: its policy declares `troupe` and `troupe-*` as ignores for troupe's
   `uv` entry. Verify: `git fetch && git show origin/main:.github/dependabot.yml` has an `ignore` list in the `uv`
   entry naming both, each with no `versions` or `update-types`.
-- [ ] 3.2 Rebase this branch onto `main` with the delivered file, and remove the real-repository test's `xfail`.
+- [x] 3.2 Rebase this branch onto `main` with the delivered file, and remove the real-repository test's `xfail`.
   Verify: that test now passes, and `uv run scripts/check.py` passes.
 
 ## 4. Integration
 
-- [ ] 4.1 Differential check: with the delivered file, remove `troupe-*` from a copy and confirm the check names every
+- [x] 4.1 Differential check: with the delivered file, remove `troupe-*` from a copy and confirm the check names every
   `troupe-*` member and not `troupe`. Then remove `troupe` and confirm it names only `troupe` (covered by 1.1's
   tests; re-run them on the rebased branch). Verify: `uv run pytest scripts/tests/workspace/test_dependabot_members.py`.
 - [ ] 4.2 Ask the owner to run Dependabot's "Check for updates" for `uv` in troupe (Insights → Dependency graph →
