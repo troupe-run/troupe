@@ -49,14 +49,14 @@
 
 ## 3. Paths and effects
 
-- [ ] 3.1 Write `paths`: the syntax rules, the `.git` rule and resolving inside the workspace (D6). Test each refused
+- [x] 3.1 Write `paths`: the syntax rules, the `.git` rule and resolving inside the workspace (D6). Test each refused
   form (absolute, `..`, `\`, `:`, control characters, reserved names, a trailing dot or space, empty), `.` and `//`
   being dropped, and a property test that no generated path that's accepted resolves outside the workspace. Verify
   they pass (runner-tools: "Paths are workspace-relative").
 - [ ] 3.2 Test links: a symlink, or a junction on Windows, leading out of the workspace is refused for every tool. A
   link inside the workspace is checked by the path it leads to. Verify they pass on all three platforms in CI, not
   skipped (runner-tools: links, "checked on the path that would change").
-- [ ] 3.3 Write `effects`: `Effects` and the pattern matcher (D7). Test `*`, `**` and `?` against the spec's examples,
+- [x] 3.3 Write `effects`: `Effects` and the pattern matcher (D7). Test `*`, `**` and `?` against the spec's examples,
   each malformed pattern being refused with its list named, and a property test comparing the matcher with a regex
   translation of the same pattern. Verify they pass (runner-tools: "Effects are declared as path patterns").
 
