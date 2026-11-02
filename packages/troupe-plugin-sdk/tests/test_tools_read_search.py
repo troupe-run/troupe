@@ -3,6 +3,7 @@ result", "Results are capped by named limits", "The repository's metadata is out
 runner-sdk design D9, D10)."""
 
 import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -185,10 +186,12 @@ def test_reading_a_file_over_the_file_limit_is_an_error_naming_its_size(tmp_path
     assert step.output == "big.txt is 20 bytes, over the 10-byte limit for Read."
 
 
-@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="named pipes are POSIX's; Windows has none")
 def test_a_named_pipe_is_refused_by_read_and_skipped_by_grep_without_blocking(
     tmp_path: Path,
 ) -> None:
+    # A platform check mypy understands, unlike skipif: Windows has no os.mkfifo.
+    if sys.platform == "win32":
+        pytest.skip("named pipes are POSIX's; Windows has none")
     root = workspace(tmp_path, {"a.txt": b"hit\n"})
     os.mkfifo(root / "pipe")
     tools = Tools(root)
