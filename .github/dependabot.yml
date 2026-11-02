@@ -40,3 +40,6 @@ updates:
   labels:
   - dependencies
   - "python:uv"
+  ignore:
+  - dependency-name: troupe
+  - dependency-name: troupe-*
