@@ -127,8 +127,9 @@ runner without an audition fails the check rather than falling through.
 - **The name `lead`** is short, theatrical, and reads naturally in `troupe perform lead`. One name for every runner,
   so the docs and printed steps don't depend on the runner.
 - **Claude Code** gets `maxBudgetUsd: 1` (small, and the figure the first-run page already uses), `permissionMode:
-  acceptEdits`, `allowedTools: [Read, Write, Edit, Glob, Grep]` (enough to read the repository and write a file, and
-  no `Bash`), and `expect: []`. With no effect check, the direction you type can succeed whatever it touches. The
+  acceptEdits`, `allowedTools: [Read, Write, Edit, Glob, Grep]` (enough to read the repository and write a file;
+  `Bash` isn't allowed, though Claude Code still runs commands it classes as read-only, such as `git ls-files`, as
+  the hand check in task 7.2 showed), and `expect: []`. With no effect check, the direction you type can succeed whatever it touches. The
   run's worktree, and `troupe diff` and `accept`, are what you review. Its character is two or three plain sentences
   about working carefully in the repository and saying what changed. The "edit this file" hint goes in the printed
   output, not in the prompt, because the character is sent to the model verbatim.
