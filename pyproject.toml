@@ -38,7 +38,7 @@ dev = [
     "troupe-vcs-files",
     "troupe-vcs-git",
     "ruff>=0.17.2",
-    "mypy>=2.4",
+    "mypy>=2.4.1",
     "pytest>=9.1",
     "hypothesis>=6.170.5",
     "import-linter>=2.15",
