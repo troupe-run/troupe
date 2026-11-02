@@ -4,6 +4,7 @@ declared, an actor is read-only", "Writing needs the write effect", "Deleting an
 effects of their own", "A refusal names the effect it needs", "Effects are checked on the path that
 would change", "A link can't lead out of the workspace"; #240's "done when")."""
 
+import os
 from pathlib import Path
 
 import pytest
@@ -232,3 +233,17 @@ def test_a_write_into_git_is_refused_whatever_is_declared(tmp_path: Path) -> Non
     assert step.is_error
     assert ".git" in step.output
     assert (root / ".git" / "config").read_bytes() == b"[core]\n"
+
+
+def test_searching_never_descends_into_a_directory_that_reads_as_a_junction(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # os.walk(followlinks=False) descends into a Windows junction, since it isn't a symbolic link.
+    # This makes a plain directory read as a junction, so the check runs on every platform; the
+    # link tests above cover a real junction on Windows.
+    root = workspace(tmp_path, {**FILES, "notes/a.txt": b"secret"})
+    real = os.path.isjunction
+    monkeypatch.setattr(os.path, "isjunction", lambda p: Path(p).name == "notes" or real(p))
+    tools = Tools(root)
+    assert "notes/" not in call(tools, "Glob", {"pattern": "**"}).output
+    assert "secret" not in call(tools, "Grep", {"pattern": "secret"}).output
