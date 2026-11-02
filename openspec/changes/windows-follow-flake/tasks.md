@@ -34,7 +34,7 @@
 ## 4. Verify
 
 - [x] 4.1 Run `uv run scripts/check.py`. Verify: every gate passes; record the counts here Outcome: on 6f389ad, the commit's check passed every gate: 3362 passed, 14 skipped, tests in 165.2 s
-- [ ] 4.2 Push and let CI run on Linux, macOS and Windows (#227's done-when). Verify: every leg of the run on the last code commit passes; record the run here. If the owner wants more confidence than one CI run, ask before any load run (a Windows flake hunt needs the owner's machine, as for #159)
+- [x] 4.2 Push and let CI run on Linux, macOS and Windows (#227's done-when). Verify: every leg of the run on the last code commit passes; record the run here. If the owner wants more confidence than one CI run, ask before any load run (a Windows flake hunt needs the owner's machine, as for #159) Outcome: CI run 41429710381 on #259's head 1da67c0 (the last code commit is 6f389ad) passed all 12 legs, Linux, macOS and Windows on Python 3.12 to 3.15, and `check`
 
 ## Workflow follow-up
 
