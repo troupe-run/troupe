@@ -165,6 +165,14 @@ house's page SHALL NOT call the house's name unconfirmed ("TBC", "isn't final").
 - **WHEN** the glossary has no row for audition
 - **THEN** the docs check fails, naming audition
 
+#### Scenario: A duplicate term
+- **WHEN** the glossary has two rows for audition, at different places in the table
+- **THEN** the docs check fails once, naming audition and that it has 2 rows, and says to keep one
+
+#### Scenario: A duplicate that differs only in case or spacing
+- **WHEN** the glossary has a row for "the house" and another for "The  House"
+- **THEN** the docs check fails, naming the term as the first row writes it, and that it has 2 rows
+
 ### Requirement: The user docs say theatre for a theatre
 Every line in `docs/` that says "project", "repo" or "repository" (or their plurals) SHALL be recorded, with the
 reason it isn't a theatre: for example, explaining what a theatre is, troupe itself, or a git repository as git
