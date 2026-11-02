@@ -117,9 +117,13 @@ in.
 ### D4: Turn following's lease check up to 60 s in this test
 
 A timeout of following's lease check doesn't re-read today. But a regression where it did (a follower driven by its
-1 s timer) would show each event within about 1 s and pass the handshake. With
+timer) would show each event within one interval, which passes the handshake. With
 `monkeypatch.setattr(defaults, "LOGS_LEASE_CHECK_SECONDS", 60)` in this test, only the subscription can wake
-following inside the test. The run ends by recording its end, which wakes following, so the long check never holds
+following inside the test, so such a follower fails on order, naming the event, whatever its interval.
+
+Without the patch, the bound would catch only a timer slower than `FOLLOW_BOUND`. The handshake writes each event just
+after a re-read, so a timer-driven follower's delay is always about one full interval. That covers today's 1 s, but
+not an interval under 0.5 s (found in 3.3). The run ends by recording its end, which wakes following, so the long check never holds
 the test up. The follower runs in the test's process and reads the setting through `defaults` on each wait, so the
 patch reaches it.
 
@@ -149,14 +153,14 @@ Temporary edits, each reverted, made in following's loop in `queries.py`:
 2. **A held event.** After a wake, send all but the newest event unless the run has ended. The new test fails, naming
    seq 1.
 3. **A timer-driven follower.** Stop listening to the subscription, and re-read on the lease check's timeout instead.
-   Seq 0 still comes from the first read, and the new test fails, naming seq 1. With D4's patch taken out it passes,
-   since a 1 s timer lands within 0.5 s of some writes. That shows why D4 is needed.
+   Seq 0 still comes from the first read, and the new test fails, naming seq 1. With D4's patch taken out it fails on
+   the bound instead, every delay about 1 s, since the handshake writes each event just after a re-read (D4).
 4. **A steady delay.** Sleep 2 s before every re-read. The new test fails on the fastest delay once the 60 s budget
    has passed, listing every delay. This is the case the owner's review asked to catch.
 
 ### D7: Rename the test
 
-`test_following_shows_each_event_before_another_process_records_the_next_the_fastest_under_the_bound`, in the shape
+`test_following_shows_another_processs_events_each_before_the_next_the_fastest_under_the_bound`, in the shape
 of the store tests' names. Its body checks both claims.
 
 ## Risks / Trade-offs

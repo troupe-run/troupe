@@ -12,6 +12,13 @@ hangs before its init.
 An optional fourth argument names a file outside the theatre. For each segment append, the moment
 it returns, a line is added to it: the wall-clock time, then the seq of each run event the append
 wrote (watch-event-segments design D7: delays are timed from the write, not from the event's at).
+
+With TROUPE_TEST_SHOWN set to a file outside the theatre, it waits after each run event is recorded
+until that file lists the event's seq, one per line, so it records the next only once the test's
+follower has shown this one (windows-follow-flake design D1, D5). A line ``stop`` ends the waiting:
+it plays the rest of its script at once. If WITHIN passes first, it prints ``UNSHOWN <seq>`` and
+waits no more. Its run's time limits are raised to cover the waits, so a slow follower fails in the
+test, never as a timed-out run.
 """
 
 import json
@@ -20,17 +27,20 @@ import re
 import sys
 import time
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 import troupe_store_text.store as text_store
 from gitrepo import Repo
-from runtesting import Harness
+from runtesting import LIMITS, Harness
+from storetesting import SLOW_STRETCH_SECONDS, WITHIN
 from troupe.core.events import EventStore
 from troupe.core.messages import Message
 from troupe.core.vcs import SharedState
 
 STOP = os.environ.get("TROUPE_TEST_STOP")
+SHOWN = os.environ.get("TROUPE_TEST_SHOWN")
 BLOCK_SECONDS = 600  # far longer than any test waits: the test kills it first
 
 
@@ -62,6 +72,39 @@ class Stopping:
         return state
 
 
+class Handshake:
+    """Waits for the test to say its follower has shown each event (TROUPE_TEST_SHOWN)."""
+
+    def __init__(self, shown: Path) -> None:
+        self._shown = shown
+        self._waiting = True
+
+    def _lines(self) -> list[str]:
+        """The file's complete lines: one being written is left until its line feed is."""
+        try:
+            text = self._shown.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            return []
+        return text[: text.rfind("\n") + 1].split()
+
+    def wait(self, seq: int) -> None:
+        deadline = time.monotonic() + WITHIN
+        while self._waiting:
+            lines = self._lines()
+            if "stop" in lines:
+                self._waiting = False
+            elif str(seq) in lines:
+                return
+            elif time.monotonic() >= deadline:
+                print(f"UNSHOWN {seq}", flush=True)
+                self._waiting = False
+            else:
+                time.sleep(0.01)
+
+
+HANDSHAKE = Handshake(Path(SHOWN)) if SHOWN is not None else None
+
+
 class Announcing(Harness):
     def event_store(self, session: Any) -> EventStore:  # noqa: ANN401
         store = super().event_store(session)
@@ -73,6 +116,8 @@ class Announcing(Harness):
         data: dict[str, Any] = update.to_data()
         if STOP is None and data["kind"] == "event" and data["seq"] == 0:
             print(f"STARTED {data['runId']}", flush=True)
+        if HANDSHAKE is not None and data["kind"] == "event":
+            HANDSHAKE.wait(data["seq"])
 
 
 SEQ = re.compile(rb'"seq":(\d+)')
@@ -107,7 +152,16 @@ def main() -> None:
     path, env, request = sys.argv[1], json.loads(sys.argv[2]), json.loads(sys.argv[3])
     if len(sys.argv) > 4:
         time_appends(Path(sys.argv[4]))
-    result = Announcing(Repo(Path(path), env)).perform(request)
+    limits = LIMITS
+    if HANDSHAKE is not None:
+        # Seq 0's wait, the slow-stretch budget and the last measurement (design D5).
+        waits = SLOW_STRETCH_SECONDS + 2 * WITHIN
+        limits = replace(
+            LIMITS,
+            run_timeout=LIMITS.run_timeout + waits,
+            silence_announce=LIMITS.silence_announce + waits,
+        )
+    result = Announcing(Repo(Path(path), env), limits=limits).perform(request)
     print(f"ENDED {result.run.outcome}", flush=True)
 
 
