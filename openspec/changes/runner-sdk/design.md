@@ -143,7 +143,10 @@ change its shape if config needs it, since the SDK is pre-1.0.
 ### D9. Searching doesn't follow links out, or into `.git`
 
 `Glob` and `Grep` walk with `os.walk(followlinks=False)` from their checked start directory, skip the top-level
-`.git`, and include a linked file only if it resolves inside the workspace. Results are sorted by path. `Grep` uses
+`.git`, never descend into a directory link, and include a linked file only if it resolves inside the workspace.
+`followlinks=False` alone isn't enough: on Windows a directory junction isn't a symbolic link, so `os.walk` descends
+into it. Each directory is also checked with `os.path.isjunction`, and `Grep` checks that each file resolves inside
+the workspace before reading it (found by Windows CI on #268). Results are sorted by path. `Grep` uses
 Python's `re`. An invalid expression is an error result naming it. It skips files that aren't UTF-8 or are over the
 size limit, and says how many it skipped. Its lines are `path:line:text`. `Read` returns `line<TAB>text`, like
 Claude Code's.

@@ -253,6 +253,11 @@ def _write_atomically(target: Path, data: bytes) -> None:
         raise
 
 
+def _is_link(path: Path) -> bool:
+    """Whether ``path`` is a symbolic link or a Windows junction."""
+    return path.is_symlink() or os.path.isjunction(path)
+
+
 class Tools:
     """The seven tools, for one workspace and one actor's declared effects."""
 
@@ -472,7 +477,11 @@ class Tools:
 
     def _files(self, start: WorkspacePath) -> Iterator[str]:
         """Every file under ``start``, workspace-relative, sorted, without following links out of
-        the workspace or into ``.git``."""
+        the workspace or into ``.git``.
+
+        It never descends into a directory link: ``os.walk(followlinks=False)`` skips symbolic
+        links but descends into a Windows junction, which isn't one, so each directory is checked
+        with ``os.path.isjunction`` as well (runner-sdk design D9)."""
         root = self.workspace.root
         found: list[str] = []
         for directory, dirnames, filenames in os.walk(start.absolute, followlinks=False):
@@ -481,7 +490,7 @@ class Tools:
             if not relative.parts:
                 dirnames[:] = [d for d in dirnames if d.casefold() != GIT]
                 filenames = [f for f in filenames if f.casefold() != GIT]
-            dirnames.sort()
+            dirnames[:] = sorted(d for d in dirnames if not _is_link(here / d))
             for name in filenames:
                 file = here / name
                 if file.is_symlink() and not self.workspace.contains(file):
@@ -543,6 +552,8 @@ class Tools:
         root = self.workspace.root
         for file in files:
             absolute = root.joinpath(*file.split("/"))
+            if not self.workspace.contains(absolute):
+                continue  # never read outside the workspace, whatever the walk found
             try:
                 status = absolute.stat()
                 if not stat.S_ISREG(status.st_mode):
