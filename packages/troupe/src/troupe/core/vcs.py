@@ -178,12 +178,31 @@ def worktrees_unsupported(adapter: str) -> TroupeError:
     )
 
 
+def not_a_repository(adapter: str, directory: Path, fix: str) -> TroupeError:
+    """vcs.not-a-repository: ``directory`` isn't in one of ``adapter``'s repositories, and ``fix``
+    says how to make one."""
+    return TroupeError(
+        "vcs.not-a-repository",
+        problem=f"{directory} isn't in a {adapter} repository, so troupe can't make a theatre "
+        "here: a theatre's history and config live in its repository.",
+        fix=fix,
+        path=str(directory),
+        details={"directory": str(directory), "adapter": adapter},
+    )
+
+
 class Vcs(Protocol):
     """What troupe needs to know about version control. Callers depend only on this."""
 
     @property
     def name(self) -> str:
         """The adapter's name, as lineage records it: ``git`` or ``files``."""
+        ...
+
+    def check_repository(self) -> None:
+        """Raise vcs.not-a-repository (``not_a_repository``) when the adapter's directory isn't in
+        one of its repositories, with a fix only the adapter can give: how to make one
+        (init-and-audition design D7)."""
         ...
 
     def branch(self) -> str | None:

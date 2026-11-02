@@ -14,7 +14,7 @@ flush every other command runs first refuses it, naming troupe flush (config-pro
 design D7).
 """
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +42,7 @@ from troupe.core.config.projection import (
 )
 from troupe.core.config.stream import read, record, refuse_conflicts, refuse_unrecordable
 from troupe.core.events import EventStore
+from troupe.core.events.lineage import Actor
 from troupe.core.messages import Message
 from troupe.core.notices import Notice
 from troupe.core.settings import marking
@@ -147,6 +148,25 @@ async def config_set(request: m.ConfigSetRequest, session: Session, send: Send) 
         return m.ConfigSetResult(
             entries=entries, files=_files(would.changes, {}, resolved), notices=[]
         )
+    return record_change(session, store, operations, reason=request.reason, send=send)
+
+
+def record_change(
+    session: Session,
+    store: EventStore,
+    operations: Sequence[tuple[Sequence[str], object]],
+    *,
+    reason: str | None,
+    send: Send,
+    actor: Actor | None = None,
+) -> m.ConfigSetResult:
+    """Record one change of ``operations`` and write its files, in design D9's order, holding the
+    config files' lock throughout. ``actor`` is who made it when the caller resolved that already
+    (troupe init does, before it makes anything; init-and-audition design D2), else the store's
+    identity chain is asked. config-set and init both record through here, so an audition's change
+    is exactly what config-set would record (init-and-audition design D3)."""
+    troupe_dir = session.theatre / THEATRE_DIR
+    marks = marking(session.env)
     with locked(troupe_dir, _waiting(send)):
         merged = read(store)
         entries = change(merged.config, operations)
@@ -177,7 +197,7 @@ async def config_set(request: m.ConfigSetRequest, session: Session, send: Send) 
         for written in files:
             if "hash" in written:
                 stage(troupe_dir, written["path"], rendered_after[written["path"]])
-        command = store.command(via="cli", reason=request.reason)
+        command = store.command(via="cli", reason=reason, actor=actor)
         try:
             record(command, merged, entries, files)
         except BaseException:

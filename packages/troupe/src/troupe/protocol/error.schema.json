@@ -1287,6 +1287,36 @@
     {
       "properties": {
         "code": {
+          "const": "vcs.not-a-repository"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "directory",
+            "adapter"
+          ],
+          "properties": {
+            "directory": {
+              "description": "The directory that isn't in a repository.",
+              "type": "string",
+              "minLength": 1
+            },
+            "adapter": {
+              "description": "The version-control adapter that was asked.",
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
           "const": "vcs.worktrees-unsupported"
         },
         "details": {

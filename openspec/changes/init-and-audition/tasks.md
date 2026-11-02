@@ -2,18 +2,18 @@
 
 ## 1. The VCS port says whether a directory is in a repository
 
-- [ ] 1.1 Add `vcs.not-a-repository` to `troupe.core.errors` (exit 1) and its details schema (`directory`,
+- [x] 1.1 Add `vcs.not-a-repository` to `troupe.core.errors` (exit 1) and its details schema (`directory`,
   `adapter`) to `protocol/schemas/error.schema.json`. Verify with the error-schema test, which checks every
   registered code has a details schema.
-- [ ] 1.2 Add `check_repository()` to the `Vcs` protocol, and implement it in `troupe-vcs-files` (always passes) and
+- [x] 1.2 Add `check_repository()` to the `Vcs` protocol, and implement it in `troupe-vcs-files` (always passes) and
   in any test fakes of the port. Verify with mypy --strict and the files adapter's test for the new scenario.
-- [ ] 1.3 Implement it in `troupe-vcs-git` with `git rev-parse --is-inside-work-tree`, with a fix that names
+- [x] 1.3 Implement it in `troupe-vcs-git` with `git rev-parse --is-inside-work-tree`, with a fix that names
   `git init` (design D7). Verify with tests for each vcs spec scenario: outside any repository, a subdirectory of a
   work tree with no commits, a `.git` directory, and a bare repository.
 
 ## 2. Config's recording path, shared
 
-- [ ] 2.1 Move `config_set`'s recording body (lock, plan, stage, record, move) into one function that takes the
+- [x] 2.1 Move `config_set`'s recording body (lock, plan, stage, record, move) into one function that takes the
   operations, an optional identity and the reason, and have `config-set` call it (design D3). Verify that the
   existing config and config-files suites pass unchanged.
 

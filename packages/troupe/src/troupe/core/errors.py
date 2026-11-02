@@ -60,6 +60,8 @@ CODES: dict[str, ExitCode] = {
     "identity.unknown-source": ExitCode.FAILURE,
     "vcs.unknown-adapter": ExitCode.FAILURE,
     "vcs.failed": ExitCode.FAILURE,
+    # A theatre is made only in a repository (init-and-audition design D7).
+    "vcs.not-a-repository": ExitCode.FAILURE,
     # Run worktrees (worktree-stage design D9). contributing/event-store.md lists the vcs one,
     # contributing/runs.md the others.
     "vcs.worktrees-unsupported": ExitCode.FAILURE,
