@@ -2,25 +2,26 @@
 
 ## 1. The check that every workspace member is ignored
 
-- [ ] 1.1 Write `scripts/tests/workspace/test_dependabot_members.py` first, copying the real root and member
+- [x] 1.1 Write `scripts/tests/workspace/test_dependabot_members.py` first, copying the real root and member
   `pyproject.toml` files and `.github/dependabot.yml` into `tmp_path` (the `test_bundle.py` pattern). Give each spec
   scenario its own test: a member named outside the ignores, an ignore limited by `versions`, one limited by
   `update-types`, case/`_`/`.` differences that still match, `*` matching any run (including none) while `?` and
   `[` stay literal, and a missing file, unparseable YAML, no `uv` entry, or a `uv` entry for another directory. Plus
   one test on the real repository. Verify: the real-repository test fails on today's `main` (no ignores yet),
   naming `troupe` and every other member, and the copies' tests fail because the module doesn't exist.
-- [ ] 1.2 Add `scripts/dependabot_members.py` with `problems(root: Path) -> list[str]` (design D3 to D5): members from
+- [x] 1.2 Add `scripts/dependabot_members.py` with `problems(root: Path) -> list[str]` (design D3 to D5): members from
   `release_config.members`, names normalised with `release_config.normalise`, `*`-only patterns built with
   `re.escape`, only ignores with neither `versions` nor `update-types` counting. Each message names the member,
   `.github/dependabot.yml`, and the fix in troupe-run/infrastructure's `tofu/dependabot.json`. Verify:
   `uv run pytest scripts/tests/workspace/test_dependabot_members.py` passes for every copy-based test, and the
-  real-repository test still fails, listing exactly the members, until group 3.
-- [ ] 1.3 Verify the module carries no `packages/<name>` literal, and that `uv run scripts/check_paths_reach.py`
+  real-repository test still fails, listing exactly the members, until group 3. It's marked strict `xfail`
+  (citing infrastructure#259) so commits pass meanwhile; strict means it fails once the ignores arrive.
+- [x] 1.3 Verify the module carries no `packages/<name>` literal, and that `uv run scripts/check_paths_reach.py`
   reports no change to any scope's `tests` list (`scripts/tests/test_check_paths_reach.py` passes).
 
 ## 2. Docs
 
-- [ ] 2.1 In `contributing/releasing.md`, "Adding a package": a new member must be matched by Dependabot's `uv`
+- [x] 2.1 In `contributing/releasing.md`, "Adding a package": a new member must be matched by Dependabot's `uv`
   ignores (`troupe` and `troupe-*`). If its name doesn't match, add it in troupe-run/infrastructure's
   `tofu/dependabot.json`, and `scripts/check.py` fails until it's delivered. Say why: a member moves only through its
   own release, and a same-named package on PyPI breaks Dependabot's run (#254). Verify: the `docs`-tagged tests pass
@@ -31,8 +32,8 @@
 - [ ] 3.1 infrastructure#259 merged and applied: its policy declares `troupe` and `troupe-*` as ignores for troupe's
   `uv` entry. Verify: `git fetch && git show origin/main:.github/dependabot.yml` has an `ignore` list in the `uv`
   entry naming both, each with no `versions` or `update-types`.
-- [ ] 3.2 Rebase this branch onto `main` with the delivered file. Verify: the real-repository test from 1.1 now
-  passes, and `uv run scripts/check.py` passes.
+- [ ] 3.2 Rebase this branch onto `main` with the delivered file, and remove the real-repository test's `xfail`.
+  Verify: that test now passes, and `uv run scripts/check.py` passes.
 
 ## 4. Integration
 

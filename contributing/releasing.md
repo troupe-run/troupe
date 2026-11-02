@@ -123,6 +123,14 @@ A new workspace member needs an entry in `release-please-config.json` and in `.r
 `"0.0.0"`). `scripts/check.py` fails until it's configured, and its message names the member and the file to add it
 to (`scripts/release_config.py`).
 
+Dependabot must ignore it too. A member's version moves only through its own release, but Dependabot reads every
+member as a dependency and looks it up on PyPI. When a package there has the same name (`troupe` does, and it's
+someone else's), Dependabot asks uv to lock the member at that version, which can't resolve, and its `uv` run fails
+(#254). troupe's `uv` entry in `.github/dependabot.yml` ignores `troupe` and `troupe-*`, so a member named
+`troupe-<name>` is covered already. For any other name, add it to troupe's `uv` ignores in troupe-run/infrastructure's
+`tofu/dependabot.json`, which delivers the file. `scripts/check.py` fails until the delivered file covers every member
+(`scripts/dependabot_members.py`).
+
 If `troupe-run` ships it, add it to the bundle's dependencies bare, in a commit that doesn't release the bundle
 (`build(bundle): ship troupe-<name>`). After the package's first release, the pinning pull request pins it and
 releases the bundle. A bundle released while a component is still bare would send `--no-sources` looking for that
