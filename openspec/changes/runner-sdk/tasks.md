@@ -53,7 +53,7 @@
   form (absolute, `..`, `\`, `:`, control characters, reserved names, a trailing dot or space, empty), `.` and `//`
   being dropped, and a property test that no generated path that's accepted resolves outside the workspace. Verify
   they pass (runner-tools: "Paths are workspace-relative").
-- [ ] 3.2 Test links: a symlink, or a junction on Windows, leading out of the workspace is refused for every tool. A
+- [x] 3.2 Test links: a symlink, or a junction on Windows, leading out of the workspace is refused for every tool. A
   link inside the workspace is checked by the path it leads to. Verify they pass on all three platforms in CI, not
   skipped (runner-tools: links, "checked on the path that would change").
 - [x] 3.3 Write `effects`: `Effects` and the pattern matcher (D7). Test `*`, `**` and `?` against the spec's examples,
@@ -62,28 +62,28 @@
 
 ## 4. The tools
 
-- [ ] 4.1 Write `defaults` and `ToolLimits` (D10), and the tool definitions with closed input schemas (D5). Test that
+- [x] 4.1 Write `defaults` and `ToolLimits` (D10), and the tool definitions with closed input schemas (D5). Test that
   there are exactly the seven tools, that each schema is closed and validates the spec's example inputs, and that a
   limit above its default or at zero is refused. Verify they pass (runner-tools: "The tools are file tools",
   "Each tool's input").
-- [ ] 4.2 Write `events`: `EventNumbering` and fitting summaries to `SUMMARY_MAX_BYTES` and `eventMaxBytes` at a UTF-8
+- [x] 4.2 Write `events`: `EventNumbering` and fitting summaries to `SUMMARY_MAX_BYTES` and `eventMaxBytes` at a UTF-8
   boundary (D11). Test that seq continues the runner's numbering and that a 200 KB output's event fits 65536 bytes with
   the full `outputBytes`, with a property test over multi-byte text. Verify they pass and each event validates against
   `run-event.schema.json` (runner-tools: "Run events fit the run's limits").
-- [ ] 4.3 Write `Tools.run`'s handling of the call itself: arguments as a mapping or JSON text, unknown tools, input that
+- [x] 4.3 Write `Tools.run`'s handling of the call itself: arguments as a mapping or JSON text, unknown tools, input that
   breaks the schema, and an empty call id being a `ValueError`. Test each malformed case gives an error result naming
   the problem and the field, and a `tool_call` and `tool_result` pair. Verify they pass (runner-tools: "A malformed call
   is an error result").
-- [ ] 4.4 Write `Read`, `Glob` and `Grep` (D9). Test the spec's scenarios: offset and limit, numbered lines, a binary
+- [x] 4.4 Write `Read`, `Glob` and `Grep` (D9). Test the spec's scenarios: offset and limit, numbered lines, a binary
   file, a missing file, sorted globs, `path:line:text` matches, an invalid expression, skipped non-UTF-8 and oversized
   files, `.git` left out, and each cut result saying how to get the rest. Verify they pass (runner-tools: "Reading and
   searching", "Results are capped").
-- [ ] 4.5 Write `Write` and `Edit` (D8). Test a new file in a new directory, exact bytes with `\n` and `\r\n` on every
+- [x] 4.5 Write `Write` and `Edit` (D8). Test a new file in a new directory, exact bytes with `\n` and `\r\n` on every
   platform, an executable's mode kept, no match, two matches without `replace_all`, `replace_all`, and identical
   strings. Verify they pass (runner-tools: "Writing and editing").
-- [ ] 4.6 Write `Delete` and `Move` (D8). Test deleting a file, a directory, a missing file, moving into a new directory,
+- [x] 4.6 Write `Delete` and `Move` (D8). Test deleting a file, a directory, a missing file, moving into a new directory,
   and onto an existing file. Verify they pass (runner-tools: "Deleting and moving").
-- [ ] 4.7 Check every call against the effects before it runs. Test, against a fake model that issues calls: read-only with
+- [x] 4.7 Check every call against the effects before it runs. Test, against a fake model that issues calls: read-only with
   nothing declared; writing, editing, deleting and moving each allowed where declared and refused where not; `write`
   allowing neither delete nor move; a move whose destination isn't declared; each refusal naming the tool, the path and
   the effect, with the workspace unchanged and the next call still running. Verify they pass (runner-tools: effects
