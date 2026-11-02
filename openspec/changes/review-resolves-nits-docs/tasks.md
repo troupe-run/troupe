@@ -21,14 +21,14 @@
 
 ## 2. The rest of the review's wording (#256)
 
-- [ ] 2.1 Rewrite `CLAUDE.md` step 5 to D1's text and add D2's clause to step 6, wrapped at 120 columns. Verify
+- [x] 2.1 Rewrite `CLAUDE.md` step 5 to D1's text and add D2's clause to step 6, wrapped at 120 columns. Verify
   `git diff CLAUDE.md` touches only steps 5 and 6, both still read as before apart from D1 and D2 (three-OS CI,
   "Marking ready starts no review", the link, asking the owner to merge, `owner-only`), the list still reads 1 to 7,
   and `awk 'length > 120' CLAUDE.md` prints only the two long-link lines.
-- [ ] 2.2 Rewrite the last "Working" bullet of `openspec/config.yaml`'s context to D3's text. Verify `git diff
+- [x] 2.2 Rewrite the last "Working" bullet of `openspec/config.yaml`'s context to D3's text. Verify `git diff
   openspec/config.yaml` touches only that bullet, the file parses and `openspec context --json` resolves the root (as
   in 1.3), and no line is over 120 columns.
-- [ ] 2.3 Verify every point is said and the stale one is gone:
+- [x] 2.3 Verify every point is said and the stale one is gone:
   `git grep -n -E "re-run the last .claude review. run" -- CLAUDE.md openspec/config.yaml` finds nothing;
   `git grep -c -E "gets no \"fixed\"" -- CLAUDE.md openspec/config.yaml` and
   `git grep -c "claude review completed" -- CLAUDE.md openspec/config.yaml` find each file;

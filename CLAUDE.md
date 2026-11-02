@@ -16,16 +16,19 @@ Every change, however small, follows one path. The full guide is the org's
 4. **A draft pull request** closes the issue (`Closes #n`): `gh pr create --draft`. Claude reviews it; CI's legs
    wait until it's marked ready.
 5. **Claude's review is acted on**, after the review of the last push: fix or answer each finding, resolve only nits,
-   and raise decisions and disputed must-fixes with the owner. The review resolves its own must-fixes once they're
+   and raise decisions and disputed must-fixes with the owner. A must-fix fixed by a push gets no "fixed" reply;
+   reply only when it needs a discussion, and then before pushing. The review resolves its own must-fixes once they're
    addressed, judging a reply to one when it's posted, and its nits once a push has fixed them, so a nit fixed by a
    push needs no reply or resolve; if that run fails, re-run it (`gh run rerun <id>`). Once the review of the last
-   push leaves no must-fix or decision open, **mark it ready** (`gh pr ready <n>`): CI runs on Linux, macOS and
-   Windows, and every job must pass. Marking ready starts no review. A merge needs every
+   push has completed (the required `claude review completed` check passed; if it failed, re-run the run it names) and
+   leaves no must-fix or decision open, **mark it ready** (`gh pr ready <n>`): CI runs on Linux, macOS and Windows,
+   and every job must pass. Marking ready starts no review. A merge needs every
    conversation resolved ([development-workflow.md, "Claude's review"](https://github.com/troupe-run/infrastructure/blob/main/docs/development-workflow.md#claudes-review)).
 6. **`/opsx:archive`** runs on the branch before merging, so the PR lands code, tests and specs together. **The
    owner merges** by rebase, through the merge queue, which lands the pull request once `check`,
-   `guard (workflow rules)` and `DCO` pass on the commit it tested. Once every check passes and every conversation
-   is resolved, ask the owner to merge it. The guard refuses `gh pr merge` from an agent (`owner-only`), with or
+   `guard (workflow rules)` and `DCO` pass on the commit it tested; `claude review completed`, also required, has to
+   have passed on the pull request's head before it's queued. Once every check passes and every conversation is
+   resolved, ask the owner to merge it. The guard refuses `gh pr merge` from an agent (`owner-only`), with or
    without `--admin`.
 7. **After the merge**, comment on the issue with the PR and the archived change.
 
