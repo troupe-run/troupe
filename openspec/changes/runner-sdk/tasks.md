@@ -3,7 +3,8 @@
 ## 1. The package, its release and its checks
 
 - [x] 1.1 Create `packages/troupe-plugin-sdk/` (`pyproject.toml` with no dependencies, `src/troupe_plugin_sdk/__init__.py`,
-  `py.typed`, `tests/`, README stub, `CHANGELOG.md`, `LICENSE`), and add it to the root `pyproject.toml`'s workspace
+  `py.typed`, `tests/`, README stub, `LICENSE`; no `CHANGELOG.md`, which release-please writes at the first release),
+  and add it to the root `pyproject.toml`'s workspace
   sources, dev group, ruff `src`, mypy `files` and `mypy_path`, and pytest `testpaths`. Verify `uv sync --locked`
   succeeds after `uv lock` and `uv run python -c "import troupe_plugin_sdk"` works.
 - [x] 1.2 Add the release component to `release-please-config.json` (with its `uv.lock` extra-file) and `0.0.0` to
@@ -94,7 +95,7 @@
 
 ## 5. Integration
 
-- [ ] 5.1 Run `uv run scripts/check.py` and show it passing, then confirm the matrix (Linux, macOS, Windows, every
+- [x] 5.1 Run `uv run scripts/check.py` and show it passing, then confirm the matrix (Linux, macOS, Windows, every
   supported Python) passes on the pull request once it's ready.
 - [ ] 5.2 Open the troupe-run/infrastructure pull request adding `plugin-sdk`'s and `runner-tools`' Purposes to
   `oob/troupe-spec-purposes.json` (its `oob/README.md` says how), on the roadmap board, and link it from this change's
