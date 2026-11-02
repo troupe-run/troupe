@@ -97,9 +97,12 @@
 
 - [x] 5.1 Run `uv run scripts/check.py` and show it passing, then confirm the matrix (Linux, macOS, Windows, every
   supported Python) passes on the pull request once it's ready.
-- [ ] 5.2 Open the troupe-run/infrastructure pull request adding `plugin-sdk`'s and `runner-tools`' Purposes to
+- [x] 5.2 Open the troupe-run/infrastructure pull request adding `plugin-sdk`'s and `runner-tools`' Purposes to
   `oob/troupe-spec-purposes.json` (its `oob/README.md` says how), on the roadmap board, and link it from this change's
-  pull request. Verify its drift check passes against this branch.
+  pull request. Verify the Purposes it records match this branch's specs. (troupe-run/infrastructure#263, for #262,
+  opened from the owner's session. Both Purposes match, compared whitespace-collapsed without their `Capability:`
+  lines. It merges after this pull request, because `oob.py` also reports a record with no spec (its design D3).
+  The drift job can only pass once both have merged, which #263's tasks 2.1–2.2 check.)
 
 ## Workflow follow-up
 
