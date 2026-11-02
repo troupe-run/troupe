@@ -10,9 +10,12 @@ Rules for everything in this directory:
 
 - **A plugin is a separate process** that troupe starts and talks to with JSON-RPC over stdio. The messages are
   defined in [`protocol/`](../protocol/). A containerised plugin is the same thing, run inside `docker run`.
-- **A plugin imports only the protocol, never `troupe`.** It sees troupe exactly as a third party would, so
-  first-party plugins prove the contract is complete. An import-linter contract (`plugins import nothing from
-  troupe`) enforces it, and `scripts/check.py` fails when it breaks.
+- **A plugin imports only the plugin SDK, never `troupe`.** It sees troupe exactly as a third party would, so
+  first-party plugins prove the contract is complete. The [plugin SDK](../packages/troupe-plugin-sdk/README.md)
+  (`troupe-plugin-sdk`) holds the runner contract's types, which core uses too, and the code a runner uses to carry
+  out a model's tool calls. Import-linter contracts (`plugins import nothing from troupe`, and `plugins are
+  independent of each other`) enforce it, `scripts/plugin_imports.py` fails when a plugin is missing from them, and
+  `scripts/check.py` fails when any breaks.
 - **Each plugin is self-contained:** its own `pyproject.toml` (or its language's equivalent), tests and, where it
   needs one, a container image. That lets it move to its own repository later with its history
   (`git filter-repo`).

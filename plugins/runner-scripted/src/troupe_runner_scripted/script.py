@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any, Literal
 
+from troupe_plugin_sdk import runner as p
+
 OnCancel = Literal["honour", "honour-with-result", "ignore"]
 ON_CANCEL: tuple[OnCancel, ...] = ("honour", "honour-with-result", "ignore")
 
@@ -109,6 +111,21 @@ def workspace_relative(path: str, where: str) -> PurePosixPath:
     return PurePosixPath(*parts)
 
 
+_PLACEHOLDER_RUN_ID = "00000000-0000-4000-8000-000000000000"
+
+
+def _event_shape(value: dict[str, Any], where: str) -> None:
+    """Check an event step against the plugin SDK's type for its event (runner-sdk design D4). The
+    runner fills in runId and seq when it plays the step, so they're filled in here only to check
+    the rest; a step that gives them keeps its own, which is how a script breaks the contract's
+    sequence on purpose."""
+    seq = 0 if value["type"] == "init" else 1
+    try:
+        p.parse_event({"runId": _PLACEHOLDER_RUN_ID, "seq": seq, **value})
+    except p.ProtocolError as error:
+        raise _invalid(str(error), where) from error
+
+
 CHECK_CHARACTER = 'a checkCharacter step is {"hash": "sha256:..."} or {"absent": true}'
 
 
@@ -120,6 +137,7 @@ def _step(data: Any, where: str) -> Step:  # noqa: ANN401
     if kind == "event":
         if not isinstance(value, dict) or not isinstance(value.get("type"), str):
             raise _invalid("an event step is an object with a type", here)
+        _event_shape(value, here)
     elif kind == "transcript":
         if isinstance(value, dict):
             _require_keys(value, here, {"record"}, {"encoding"})

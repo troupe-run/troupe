@@ -6,6 +6,9 @@ and output. A runner can be written in any language. This page and the schemas i
 
 `troupe perform` runs an actor through a runner and records the run: see [contributing/runs.md](runs.md).
 
+In Python, the [plugin SDK](../packages/troupe-plugin-sdk/README.md) (`troupe_plugin_sdk.runner`) has the contract's
+types, checked against those schemas, and core uses the same ones. A runner in another language reads the schemas.
+
 troupe ships two runners: the [scripted runner](../plugins/runner-scripted/README.md), which tests use to produce
 every outcome on demand, and the [Claude Code runner](../plugins/runner-claude-code/README.md). A local-model runner
 follows (decision [#16](https://github.com/troupe-run/troupe/issues/16)).

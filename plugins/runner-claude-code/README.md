@@ -1,8 +1,8 @@
 # troupe-runner-claude-code
 
 An actor runner for troupe that runs [Claude Code](https://code.claude.com). It speaks the
-[runner contract](../../contributing/runners.md) over standard input and output, uses only the standard library, and
-imports nothing from troupe.
+[runner contract](../../contributing/runners.md) over standard input and output, depends only on the
+[plugin SDK](../../packages/troupe-plugin-sdk/README.md), and imports nothing else from troupe.
 
 ```console
 python -m troupe_runner_claude_code

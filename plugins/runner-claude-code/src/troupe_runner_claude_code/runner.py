@@ -20,6 +20,7 @@ import threading
 from pathlib import Path
 from typing import Any, BinaryIO, NoReturn
 
+from troupe_plugin_sdk import runner as p
 from troupe_runner_claude_code import NAME, __version__
 from troupe_runner_claude_code.command import (
     PrivateDirectoryError,
@@ -38,12 +39,15 @@ from troupe_runner_claude_code.mapping import (
 from troupe_runner_claude_code.options import OptionsError, parse_options
 from troupe_runner_claude_code.processes import Claude, exit_code, find_claude, start
 
-PROTOCOL_VERSIONS = (0,)
-INVALID_REQUEST = -32600
-METHOD_NOT_FOUND = -32601
-INVALID_PARAMS = -32602
-PARSE_ERROR = -32700
-REFUSED = -32000
+PROTOCOL_VERSIONS = p.PROTOCOL_VERSIONS
+INVALID_REQUEST = p.JSONRPC_INVALID_REQUEST
+METHOD_NOT_FOUND = p.JSONRPC_METHOD_NOT_FOUND
+INVALID_PARAMS = p.JSONRPC_INVALID_PARAMS
+PARSE_ERROR = p.JSONRPC_PARSE_ERROR
+REFUSED = p.JSONRPC_REFUSED
+"""The contract's protocol versions and JSON-RPC error codes are the plugin SDK's (spec:
+plugin-sdk; runner-sdk design D4). The event mapping still builds dicts; moving it onto the SDK's
+types is a later change."""
 
 _TROUPE = "troupe"
 _TROUPE_EOF = "troupe-eof"

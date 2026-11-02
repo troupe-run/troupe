@@ -1,7 +1,8 @@
 # troupe-runner-scripted
 
 A deterministic actor runner for troupe's tests. It speaks the [runner contract](../../contributing/runners.md) over
-standard input and output, imports nothing from troupe, and plays a script, or replays a recording, so that tests
+standard input and output, builds on the [plugin SDK](../../packages/troupe-plugin-sdk/README.md) and imports nothing
+else from troupe, and plays a script, or replays a recording, so that tests
 can produce every run outcome on demand: offline, instantly and for free (decision
 [#16](https://github.com/troupe-run/troupe/issues/16)).
 
