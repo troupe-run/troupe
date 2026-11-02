@@ -12,9 +12,14 @@ Pre-alpha. The conventions below apply to every subcommand.
 
 ## Commands
 
-Every command runs in a **theatre**: the nearest directory, from where you are upwards, that holds `.troupe/`.
-troupe never creates one for you; without one, a command fails with `theatre.not-found`.
+Every command but `init` runs in a **theatre**: the nearest directory, from where you are upwards, that holds
+`.troupe/`. `troupe init` makes one; without one, every other command fails with `theatre.not-found`.
 
+- **`troupe init`** makes a theatre in the directory you're in, which must be in a git repository and have no
+  theatre in it or above it. It writes `.troupe/.gitignore` and `.troupe/.gitattributes`, and records nothing.
+  `--audition` also defines a working example actor, `lead`, and prints what to run next: commit, allow the local
+  stage, and `troupe perform lead` with an example direction. The actor runs Claude Code, with a USD 1 budget and a
+  character in `.troupe/actors/lead.md` to edit; `--runner scripted` makes one that runs offline with no account.
 - **`troupe perform`** runs one actor, as config defines it, and records the run. Progress goes to standard error;
   on success, standard output gets `run <id> succeeded`. It exits by the run's outcome: 0 succeeded, 130 cancelled
   with Ctrl-C, 1 otherwise.
@@ -33,7 +38,7 @@ troupe never creates one for you; without one, a command fails with `theatre.not
 A run is named by its full id or by its first 8 or more characters. [Performances and
 runs](../the-company/performances-and-runs.md) describes runs, their states and what is recorded.
 
-**`perform` names an actor, and config says the rest:** its runner (`scripted` is the only one so far), the
+**`perform` names an actor, and config says the rest:** its runner (`claude-code` or `scripted`), the
 runner's options, its effect check (`expect`: the files a run must create or change, relative to the theatre's
 root, where `[]` means no check), its character and its workspace. `--direction` says what this run is asked to do.
 
@@ -69,6 +74,20 @@ troupe is already cancelling: the run is stopped within its grace period either 
 `--follow`, each update is printed on its own line first.
 
 <!-- generated: cli (from troupe.cli.COMMANDS and the global options; regenerate with `uv run scripts/docs_reference.py`) -->
+### `troupe init`
+
+Make a theatre here, and with --audition, a working example actor.
+
+```text
+troupe init [--audition] [--runner <runner>] [--rehearse]
+```
+
+| Argument | Required | What it is |
+|---|---|---|
+| `--audition` | No | Also define a working example actor, lead (Claude Code unless --runner says) |
+| `--runner <runner>` | No | The example actor's runner, such as scripted (only with --audition) |
+| `--rehearse` | No | Run every check and make nothing: show what would be made |
+
 ### `troupe perform`
 
 Run one actor and record the run.

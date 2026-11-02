@@ -1645,6 +1645,35 @@
     {
       "properties": {
         "code": {
+          "const": "theatre.exists"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "theatre",
+            "directory"
+          ],
+          "properties": {
+            "theatre": {
+              "description": "The existing theatre's root, or where troupe init was run when a .troupe that isn't a directory is in the way.",
+              "type": "string",
+              "minLength": 1
+            },
+            "directory": {
+              "description": "Whether the .troupe found is a directory: false when a file of that name is in the way.",
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
           "const": "runner.unknown"
         },
         "details": {

@@ -1,0 +1,151 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/client/init-result.schema.json",
+  "title": "init: result",
+  "description": "The theatre made (or that would be), the files written, and for an audition, the change recorded and what to do next.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "rehearsed",
+    "files",
+    "entries",
+    "steps",
+    "notices"
+  ],
+  "properties": {
+    "rehearsed": {
+      "description": "Whether this was a rehearsal, which made, wrote and recorded nothing.",
+      "type": "boolean"
+    },
+    "files": {
+      "description": "Each file written (or that would be), theatre-relative, in the order written.",
+      "type": "array",
+      "items": {
+        "$ref": "config.schema.json#/$defs/file"
+      }
+    },
+    "actor": {
+      "description": "The example actor. Absent: there was no audition.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "runner"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+        },
+        "runner": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+        }
+      }
+    },
+    "change": {
+      "description": "The recorded change's id. Absent: nothing was recorded, because there was no audition, or it was a rehearsal.",
+      "type": "string",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "entries": {
+      "description": "The audition's change entries (recorded, or that would be): empty without an audition.",
+      "type": "array",
+      "items": {
+        "$ref": "../events/config-changed.schema.json#/$defs/entry"
+      }
+    },
+    "steps": {
+      "description": "What to do next, in order, as data each surface phrases for its own users: empty without an audition.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/step"
+      }
+    },
+    "notices": {
+      "type": "array",
+      "items": {
+        "$ref": "../notice.schema.json"
+      }
+    }
+  },
+  "$defs": {
+    "step": {
+      "oneOf": [
+        {
+          "description": "Commit these theatre-relative paths, since a run works from the latest commit.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "paths"
+          ],
+          "properties": {
+            "kind": {
+              "const": "commit"
+            },
+            "paths": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        {
+          "description": "Allow the local stage, which the session's policy doesn't: set this policy variable to this value.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "variable",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "const": "allow-local-stage"
+            },
+            "variable": {
+              "type": "string",
+              "minLength": 1
+            },
+            "value": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        {
+          "description": "Perform the example actor with this direction.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "actor",
+            "runner",
+            "direction"
+          ],
+          "properties": {
+            "kind": {
+              "const": "perform"
+            },
+            "actor": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{0,63}$"
+            },
+            "runner": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{0,63}$"
+            },
+            "direction": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      ]
+    }
+  }
+}

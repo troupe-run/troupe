@@ -10,24 +10,23 @@ page sets one up in an existing project directory, step by step.
 
 ## Make the theatre
 
-troupe never makes a theatre for you. A command finds its theatre by looking for a `.troupe/` directory, from where
-you are upwards, and fails with `theatre.not-found` when there isn't one. So today, you make one by hand:
+A command finds its theatre by looking for a `.troupe/` directory, from where you are upwards, and fails with
+`theatre.not-found` when there isn't one. `troupe init` makes one, in the directory you're in:
 
 ```sh
 cd my-app
-mkdir .troupe
+troupe init
 ```
 
-There's no setup command yet, and whether there'll be one isn't decided: it's an open question on
-[#60](https://github.com/troupe-run/troupe/issues/60), which brings config.
+It refuses outside a git repository, naming `git init` (see below), and where there's a theatre already, here or
+above. `troupe init --audition` also defines a working example actor, and prints what to run next.
 
 ## Put it under git
 
 Today troupe reads and records a theatre through git, so the theatre needs to be under git: run `git init`
-first if it isn't. A fresh git repository with no commits is fine to start with, but an actor's run works from your
+first if it isn't, or `troupe init` refuses. A fresh git repository with no commits is fine to start with, but an actor's run works from your
 latest commit, so you'll commit before your first performance. Every event troupe records notes the branch and
-commit it was made on, and commit `.troupe/` with the rest of your files: troupe sets up what git needs the first
-time it writes.
+commit it was made on, and commit `.troupe/` with the rest of your files: `troupe init` sets up what git needs.
 
 troupe can also work without git, recording to plain files with no branches, but nothing can choose that yet:
 config will ([#60](https://github.com/troupe-run/troupe/issues/60)). Which of the two a non-technical user should
@@ -35,7 +34,8 @@ get is an open question, in [#121](https://github.com/troupe-run/troupe/issues/1
 
 ## What troupe writes
 
-troupe writes into `.troupe/` the first time it records something. Reading never changes your history.
+`troupe init` writes `.gitignore` and `.gitattributes`, and troupe writes the rest the first time it records
+something. Reading never changes your history.
 
 ```text
 .troupe/

@@ -73,8 +73,9 @@ The order:
 6. **Record:** with an audition, record the change through config's shared recording path (D3), passing the identity
    resolved in step 4.
 
-When step 5 or 6 fails before the event is recorded, `init` removes the `.troupe/` it made. It made it in this
-command, so it holds nothing of anyone else's. Once the event is recorded, `init` leaves the theatre, and the next
+When step 5 or 6 fails while nothing is recorded in `.troupe/events/`, `init` removes the `.troupe/` it made,
+with whatever the failed record left in it (a lock, a staged file). It made it in this command, so it holds nothing
+of anyone else's. Once the event is recorded, `init` leaves the theatre, and the next
 command's flush finishes any file not yet moved into place, as config-set's recovery already does. A rehearsal runs
 steps 1 to 4 and reports what steps 5 and 6 would do, opening no store.
 
@@ -155,7 +156,8 @@ The error is a core code with a details schema (`directory`, `adapter`), and its
 
 An audition's `init-result` carries `steps`, in order:
 
-1. `{"kind": "commit", "paths": [".troupe"]}`, when the adapter has commits (git).
+1. `{"kind": "commit", "paths": [".troupe"]}`, always: a run works from the latest commit, and the example actor's
+   runs work in a worktree, which only an adapter with commits can make.
 2. `{"kind": "allow-local-stage", "variable": "TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE", "value": "true"}`, only
    when the session's policy doesn't already allow it. Policy is read through its seam, so a malformed value fails
    `init` as it would fail `perform`.
@@ -168,6 +170,9 @@ The CLI renders them as commands to copy:
 - `export ...=true` on Linux and macOS, `$env:... = "true"` on Windows.
 - `troupe perform lead --direction "..."`, with a note for `claude-code` that Claude Code must be installed and
   logged in, and a pointer to `.troupe/actors/lead.md` to edit the character.
+
+Each step's notes are printed as `#` comments, which sh and PowerShell both ignore, so the whole block can be copied
+and run as it is.
 
 Plain `init` has no steps. The CLI prints the theatre and its files, and says `troupe init --audition` adds an
 example actor.
@@ -188,8 +193,9 @@ exists is refused. Refusals print to standard error and exit with their codes (D
   second theatre. Commands in `app/` then find the inner one. → This is out of scope, as the issue covers here and
   above. It's noted in the docs' theatres page, and worth a follow-up issue if it bites.
 - **Removing `.troupe/` after a failed record** could, in principle, remove something written into it by another
-  process during the command. → `init` refused if `.troupe` existed at step 1, so only a concurrent `init` could race
-  it. The removal deletes only paths `init` itself wrote, and leaves a directory that has anything else in it.
+  process during the command. → `init` refused if `.troupe` existed at step 1, and `mkdir` refuses one made since,
+  so only a command run against a theatre that didn't exist when `init` began could write there. The removal happens
+  only while nothing is recorded in `events/`, so it never deletes history.
 - **The example's wording and budget are product choices.** → They live in one module (D6) and can change in a later
   release without any spec change beyond the scenario values.
 - **The printed policy step** has to be repeated in every shell until #235. → It's printed only when needed, and it

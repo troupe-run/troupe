@@ -30,7 +30,7 @@ def test_the_nearest_theatre_wins_over_one_further_up(tmp_path: Path) -> None:
     assert find_theatre(inner / ".troupe") == inner
 
 
-def test_with_no_theatre_above_it_fails_naming_the_start_and_creates_nothing(
+def test_with_no_theatre_above_it_fails_naming_the_start_and_troupe_init_and_creates_nothing(
     tmp_path: Path,
 ) -> None:
     start = tmp_path / "nowhere"
@@ -39,7 +39,7 @@ def test_with_no_theatre_above_it_fails_naming_the_start_and_creates_nothing(
         find_theatre(start)
     assert caught.value.code == "theatre.not-found"
     assert caught.value.path == str(start)
-    assert "mkdir .troupe" in caught.value.fix
+    assert "troupe init" in caught.value.fix
     assert not (start / ".troupe").exists()
     assert sorted(tmp_path.iterdir()) == [start]
 

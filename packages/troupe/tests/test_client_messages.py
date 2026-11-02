@@ -301,6 +301,16 @@ CONFLICTS = st.fixed_dictionaries(
 OPERATIONS = st.fixed_dictionaries({"path": CONFIG_PATHS, "value": JSON}) | st.fixed_dictionaries(
     {"path": CONFIG_PATHS, "unset": st.just(True)}
 )
+NAMES = st.from_regex(r"\A[a-z][a-z0-9-]{0,10}\Z")
+INIT_STEPS = (
+    st.fixed_dictionaries(
+        {"kind": st.just("commit"), "paths": st.lists(TEXT, min_size=1, max_size=2)}
+    )
+    | st.fixed_dictionaries({"kind": st.just("allow-local-stage"), "variable": TEXT, "value": TEXT})
+    | st.fixed_dictionaries(
+        {"kind": st.just("perform"), "actor": NAMES, "runner": NAMES, "direction": TEXT}
+    )
+)
 CASES += [
     (
         m.ConfigSetRequest,
@@ -396,6 +406,34 @@ CASES += [
                 "rehearsed": st.booleans(),
                 "notices": st.lists(NOTICES, max_size=2),
             }
+        ),
+    ),
+    (
+        m.InitRequest,
+        "init-request.schema.json",
+        st.fixed_dictionaries(
+            {},
+            optional={
+                "audition": st.fixed_dictionaries({}, optional={"runner": NAMES}),
+                "rehearse": st.booleans(),
+            },
+        ),
+    ),
+    (
+        m.InitResult,
+        "init-result.schema.json",
+        st.fixed_dictionaries(
+            {
+                "rehearsed": st.booleans(),
+                "files": st.lists(FILES, max_size=2),
+                "entries": st.lists(ENTRIES, max_size=3),
+                "steps": st.lists(INIT_STEPS, max_size=3),
+                "notices": st.lists(NOTICES, max_size=2),
+            },
+            optional={
+                "actor": st.fixed_dictionaries({"name": NAMES, "runner": NAMES}),
+                "change": ULIDS,
+            },
         ),
     ),
     (

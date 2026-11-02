@@ -3,7 +3,8 @@
 The theatre is the nearest directory, from where a command starts upwards, that contains a
 ``.troupe`` directory. Nothing is created when there's none: a theatre exists because someone made
 it, never because troupe guessed from a git work tree. This is how a surface on the person's
-machine finds the theatre for its session; a run server addresses theatres by id instead.
+machine finds the theatre for its session; a run server addresses theatres by id instead. troupe
+init makes one, refusing where one is already here or above (init-and-audition design D2).
 """
 
 from pathlib import Path
@@ -14,20 +15,57 @@ from troupe.core.files import replace_file
 THEATRE_DIR = ".troupe"
 
 
-def find_theatre(start: Path) -> Path:
-    """The theatre's root: ``start`` or its nearest ancestor holding a ``.troupe`` directory."""
+def existing_theatre(start: Path) -> Path | None:
+    """The theatre's root: ``start`` or its nearest ancestor holding a ``.troupe`` directory, or
+    None when there's none."""
     start = start.absolute()
     for directory in (start, *start.parents):
         if (directory / THEATRE_DIR).is_dir():
             return directory
+    return None
+
+
+def find_theatre(start: Path) -> Path:
+    """The theatre's root: ``start`` or its nearest ancestor holding a ``.troupe`` directory."""
+    found = existing_theatre(start)
+    if found is not None:
+        return found
     raise TroupeError(
         "theatre.not-found",
         problem=f"There's no troupe theatre here: no {THEATRE_DIR} directory in this directory "
         "or any directory above it.",
-        fix=f"Run troupe inside a project that has a {THEATRE_DIR} directory, or create one at "
-        f"your project's root (mkdir {THEATRE_DIR}).",
-        path=str(start),
+        fix="Run troupe inside a project that has a theatre, or make one at your project's root "
+        "with troupe init (troupe init --audition adds a working example actor).",
+        path=str(start.absolute()),
     )
+
+
+def refuse_existing(start: Path) -> None:
+    """Refuse to make a theatre at ``start`` when one is there or above it, or when a ``.troupe``
+    that isn't a directory is in the way (spec: cli; init-and-audition design D2)."""
+    start = start.absolute()
+    in_the_way = start / THEATRE_DIR
+    if in_the_way.exists() and not in_the_way.is_dir():
+        raise TroupeError(
+            "theatre.exists",
+            problem=f"{in_the_way} is in the way: troupe keeps a theatre in a directory of that "
+            "name, and this isn't a directory.",
+            fix=f"Move or rename {in_the_way}, then run troupe init again.",
+            path=str(in_the_way),
+            details={"theatre": str(start), "directory": False},
+        )
+    found = existing_theatre(start)
+    if found is not None:
+        here = "here" if found == start else f"above this directory, at {found}"
+        raise TroupeError(
+            "theatre.exists",
+            problem=f"There's already a troupe theatre {here}, so troupe init would make a second "
+            "one.",
+            fix="Use the theatre that's there: define an actor in it with troupe config set. To "
+            "start again, remove its .troupe directory yourself.",
+            path=str(found),
+            details={"theatre": str(found), "directory": True},
+        )
 
 
 # The theatre's own git files (spec: config-files; config-model design D12). Whenever troupe writes

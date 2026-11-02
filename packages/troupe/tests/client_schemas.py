@@ -25,6 +25,7 @@ MESSAGES = {
         "diff": ("request", "result"),
         "accept": ("request", "result"),
         "discard": ("request", "result"),
+        "init": ("request", "result"),
     }.items()
 }
 """Each method's messages, by part."""
