@@ -158,10 +158,5 @@ def test_a_malformed_ignore_is_named_rather_than_skipped(copy: Path, ignore: obj
     assert problem.startswith(f"{CONFIG}: the uv entry's ignore {ignore!r}")
 
 
-@pytest.mark.xfail(
-    reason="the ignores aren't delivered until troupe-run/infrastructure#259; remove this marker "
-    "when they are (dependabot-uv-resolve task 3.2)",
-    strict=True,
-)
 def test_dependabot_ignores_every_workspace_member() -> None:
     assert dependabot_members.problems(REPO) == []
