@@ -17,9 +17,10 @@ Every change, however small, follows one path. The full guide is the org's
    wait until it's marked ready.
 5. **Claude's review is acted on**, after the review of the last push: fix or answer each finding, resolve only nits,
    and raise decisions and disputed must-fixes with the owner. The review resolves its own must-fixes once they're
-   addressed, judging a reply to one when it's posted; if that run fails, re-run it (`gh run rerun <id>`). Once the
-   review of the last push leaves no must-fix or decision open, **mark it ready** (`gh pr ready <n>`): CI runs on
-   Linux, macOS and Windows, and every job must pass. Marking ready starts no review. A merge needs every
+   addressed, judging a reply to one when it's posted, and its nits once a push has fixed them, so a nit fixed by a
+   push needs no reply or resolve; if that run fails, re-run it (`gh run rerun <id>`). Once the review of the last
+   push leaves no must-fix or decision open, **mark it ready** (`gh pr ready <n>`): CI runs on Linux, macOS and
+   Windows, and every job must pass. Marking ready starts no review. A merge needs every
    conversation resolved ([development-workflow.md, "Claude's review"](https://github.com/troupe-run/infrastructure/blob/main/docs/development-workflow.md#claudes-review)).
 6. **`/opsx:archive`** runs on the branch before merging, so the PR lands code, tests and specs together. **The
    owner merges** by rebase, through the merge queue, which lands the pull request once `check`,
