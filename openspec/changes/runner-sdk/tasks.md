@@ -36,14 +36,14 @@
   `test_bundle.py` cases pass: core on the SDK passes, core on an adapter still fails, a pinned `troupe` with a
   released SDK bare fails naming both and the file, and with an unreleased SDK bare passes (installation delta, D12;
   owner, 2026-11-02, with #262 for the release-time check).
-- [ ] 2.5 Move the scripted runner onto the SDK: depend on it, drop its protocol versions and JSON-RPC codes, answer
+- [x] 2.5 Move the scripted runner onto the SDK: depend on it, drop its protocol versions and JSON-RPC codes, answer
   the handshake and refusals with the SDK's types, and parse event steps with the SDK's event types. Verify the
   scripted runner's suite, core's conformance suite and the seq-gap and raw-line steps' tests pass (scripted-runner
   delta, D4).
-- [ ] 2.6 Move the Claude Code runner's protocol versions and JSON-RPC codes onto the SDK and depend on it. Verify its
+- [x] 2.6 Move the Claude Code runner's protocol versions and JSON-RPC codes onto the SDK and depend on it. Verify its
   suite passes and `grep -n "\-32\|PROTOCOL_VERSIONS =" plugins/*/src` finds no copy (plugin-sdk spec: "one
   definition").
-- [ ] 2.7 Update `plugins/README.md` (plugins import the SDK, never troupe), `contributing/runners.md` (where the
+- [x] 2.7 Update `plugins/README.md` (plugins import the SDK, never troupe), `contributing/runners.md` (where the
   contract's types are) and the two runners' `pyproject.toml` comments. Verify the docs tests pass
   (`uv run scripts/check.py --scope docs`).
 

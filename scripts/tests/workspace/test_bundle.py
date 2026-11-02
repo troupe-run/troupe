@@ -107,11 +107,14 @@ def test_a_pinned_core_with_the_released_sdk_bare_names_both_and_the_bundle(copy
         copy, "troupe", release_config.pin("troupe", "0.1.0", "packages/troupe")
     )
     bundle_state.set_dependency(copy, "troupe-plugin-sdk", "troupe-plugin-sdk")
-    assert bundle.problems(copy) == [
+    # In the pinned state the runner plugins, which depend on the SDK too, are pinned and named.
+    found = bundle.problems(copy)
+    assert (
         "troupe-run pins troupe, which depends on troupe-plugin-sdk, but names troupe-plugin-sdk "
         f"bare in {BUNDLE_PYPROJECT}: pin it at its latest release too, so an install of the "
         "bundle's tag never looks it up on a package index."
-    ]
+    ) in found
+    assert all("but names troupe-plugin-sdk bare" in problem for problem in found)
 
 
 def test_a_pinned_core_with_the_unreleased_sdk_bare_has_no_problems(copy: Path) -> None:

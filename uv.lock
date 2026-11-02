@@ -1328,11 +1328,23 @@ requires-dist = [
 name = "troupe-runner-claude-code"
 version = "0.1.0"
 source = { editable = "plugins/runner-claude-code" }
+dependencies = [
+    { name = "troupe-plugin-sdk" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "troupe-plugin-sdk", editable = "packages/troupe-plugin-sdk" }]
 
 [[package]]
 name = "troupe-runner-scripted"
 version = "0.1.0"
 source = { editable = "plugins/runner-scripted" }
+dependencies = [
+    { name = "troupe-plugin-sdk" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "troupe-plugin-sdk", editable = "packages/troupe-plugin-sdk" }]
 
 [[package]]
 name = "troupe-stage-local"

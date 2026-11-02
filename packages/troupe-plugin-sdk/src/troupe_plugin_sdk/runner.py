@@ -26,6 +26,9 @@ from troupe_plugin_sdk.messages import fail, json_field
 PROTOCOL_VERSION = 0
 """The protocol version this troupe speaks. Version 0 is the draft contract: it changes in place,
 with no compatibility promise, until troupe commits to version 1 (strict-schemas design D9)."""
+PROTOCOL_VERSIONS: tuple[int, ...] = (PROTOCOL_VERSION,)
+"""The protocol versions a runner built on this SDK speaks, for its answer to initialize (spec:
+plugin-sdk, "The runner contract's types have one definition")."""
 
 RUN_ID_PATTERN = re.compile(r"\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\Z")
 """Run ids are UUIDs in canonical lowercase form (design D11)."""

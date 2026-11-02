@@ -67,6 +67,8 @@ tests = [
     "packages/troupe-store-text/tests/**",
     "packages/troupe-vcs-files/tests/**",
     "packages/troupe-vcs-git/tests/**",
+    "plugins/runner-claude-code/tests/**",
+    "plugins/runner-scripted/tests/**",
     "scripts/tests/**",
     "scripts/tests/workspace/**",
 ]

@@ -159,6 +159,12 @@ def test_a_script_is_read_from_the_file_the_options_name(session: Session, tmp_p
         ({"steps": [], "colour": "red"}, "unknown field(s) 'colour'"),
         ({"steps": [], "onCancel": "maybe"}, "onCancel"),
         ({"steps": [{"exit": -1}]}, "at least 0"),
+        # Event steps are checked against the plugin SDK's event types (runner-sdk design D4).
+        ({"steps": [{"event": {"type": "result", "status": "ok"}}]}, "missing required field"),
+        ({"steps": [{"event": {**OK, "colour": "red"}}]}, "unknown field(s) 'colour'"),
+        ({"steps": [{"event": {**OK, "status": "maybe"}}]}, "ResultEvent.status"),
+        ({"steps": [{"event": {"type": "dance"}}]}, "unknown event type 'dance'"),
+        ({"steps": [{"event": {"type": "oversized"}}]}, "unknown event type 'oversized'"),
     ],
 )
 def test_an_invalid_script_is_refused_naming_the_step_and_nothing_plays(
@@ -190,6 +196,12 @@ def test_an_unknown_option_is_refused_naming_the_key(
 def test_a_step_can_override_seq_to_break_the_contract_on_purpose(session: Session) -> None:
     session.play({"steps": [{"event": INIT}, {"event": {**OK, "seq": 5}}]})
     assert [e["seq"] for e in _events(session.notifications(2))] == [0, 5]
+
+
+def test_a_step_can_send_another_runs_id_on_purpose(session: Session) -> None:
+    other = "11111111-1111-4111-8111-111111111111"
+    session.play({"steps": [{"event": {**INIT, "runId": other}}]})
+    assert [e["runId"] for e in _events(session.notifications(1))] == [other]
 
 
 # Requirement: Every outcome can be produced on demand

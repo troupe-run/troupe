@@ -14,8 +14,9 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import Any, BinaryIO, NoReturn
+from typing import Any, BinaryIO, Literal, NoReturn
 
+from troupe_plugin_sdk import runner as p
 from troupe_runner_scripted import NAME, __version__
 from troupe_runner_scripted.script import (
     Options,
@@ -27,12 +28,14 @@ from troupe_runner_scripted.script import (
     workspace_relative,
 )
 
-PROTOCOL_VERSIONS = (0,)
-INVALID_REQUEST = -32600
-METHOD_NOT_FOUND = -32601
-INVALID_PARAMS = -32602
-PARSE_ERROR = -32700
-REFUSED = -32000
+PROTOCOL_VERSIONS = p.PROTOCOL_VERSIONS
+INVALID_REQUEST = p.JSONRPC_INVALID_REQUEST
+METHOD_NOT_FOUND = p.JSONRPC_METHOD_NOT_FOUND
+INVALID_PARAMS = p.JSONRPC_INVALID_PARAMS
+PARSE_ERROR = p.JSONRPC_PARSE_ERROR
+REFUSED = p.JSONRPC_REFUSED
+"""The contract's protocol versions and JSON-RPC error codes are the plugin SDK's (spec:
+plugin-sdk; runner-sdk design D4)."""
 
 EOF = object()
 """Put on the queue when standard input reaches end of file."""
@@ -70,8 +73,8 @@ class Runner:
             self._stdout.write(data)
             self._stdout.flush()
 
-    def _result(self, id_: object, result: dict[str, Any]) -> None:
-        self._send({"jsonrpc": "2.0", "id": id_, "result": result})
+    def _result(self, id_: object, result: p.Message) -> None:
+        self._send({"jsonrpc": "2.0", "id": id_, "result": result.to_data()})
 
     def _error(
         self,
@@ -82,16 +85,9 @@ class Runner:
         fix: str,
         details: dict[str, Any] | None = None,
     ) -> None:
-        data: dict[str, Any] = {"code": code, "problem": problem, "fix": fix}
-        if details:
-            data["details"] = details
-        self._send(
-            {
-                "jsonrpc": "2.0",
-                "id": id_,
-                "error": {"code": rpc_code, "message": problem, "data": data},
-            }
-        )
+        data = p.ErrorData(code=code, problem=problem, fix=fix, details=details or None)
+        error = p.RpcError(code=rpc_code, message=problem, data=data)
+        self._send({"jsonrpc": "2.0", "id": id_, "error": error.to_data()})
 
     # Input
 
@@ -146,7 +142,7 @@ class Runner:
         elif method == "run/cancel":
             self._cancel(id_)
         elif method == "shutdown":
-            self._result(id_, {})
+            self._result(id_, p.Empty())
             raise _Exit(0)
         else:
             self._error(
@@ -174,11 +170,11 @@ class Runner:
         chosen = max(v for v in offered if v in PROTOCOL_VERSIONS)
         self._result(
             id_,
-            {
-                "protocolVersion": chosen,
-                "runner": {"name": NAME, "version": __version__},
-                "capabilities": [],
-            },
+            p.InitializeResult(
+                protocol_version=chosen,
+                runner=p.Named(name=NAME, version=__version__),
+                capabilities=[],
+            ),
         )
 
     def _start(self, id_: object, params: Any) -> None:  # noqa: ANN401
@@ -217,17 +213,17 @@ class Runner:
         self._workspace = workspace
         character = params.get("character")
         self._character = character if isinstance(character, str) else None
-        self._result(id_, {"runId": self._run_id})
+        self._result(id_, p.RunStartResult(run_id=self._run_id))
 
     def _cancel(self, id_: object) -> None:
-        self._result(id_, {})
+        self._result(id_, p.Empty())
         if self._options is None:
             raise _Exit(0)
         mode = self._options.script.on_cancel
         if mode == "honour":
             raise _Exit(0)
         if mode == "honour-with-result":
-            self._event({"type": "result", "status": "error", "message": "cancelled"})
+            self._result_event("cancelled")
             raise _Exit(0)
         self._cancel_ignored = True
 
@@ -240,11 +236,20 @@ class Runner:
         self._next_seq = int(sent["seq"]) + 1 if isinstance(sent["seq"], int) else self._next_seq
         self._send({"jsonrpc": "2.0", "method": "run/event", "params": sent})
 
-    def _transcript(self, record: str, encoding: str | None = None) -> None:
-        params: dict[str, Any] = {"runId": self._run_id, "record": record}
-        if encoding is not None:
-            params["encoding"] = encoding
-        self._send({"jsonrpc": "2.0", "method": "run/transcript", "params": params})
+    def _transcript(self, record: str, encoding: Literal["utf-8", "base64"] | None = None) -> None:
+        params = p.TranscriptRecord(run_id=self._started_run(), record=record, encoding=encoding)
+        self._send(p.notification("run/transcript", params))
+
+    def _started_run(self) -> str:
+        if self._run_id is None:
+            raise RuntimeError("a step played before run/start")
+        return self._run_id
+
+    def _result_event(self, message: str) -> None:
+        """End the run with an error result, built with the SDK's type."""
+        seq, self._next_seq = self._next_seq, self._next_seq + 1
+        event = p.ResultEvent(run_id=self._started_run(), seq=seq, status="error", message=message)
+        self._send(p.notification("run/event", event))
 
     def _pause(self, seconds: float) -> None:
         """Wait ``seconds``, still answering troupe: cancel, shutdown or EOF can end it early."""
@@ -296,13 +301,8 @@ class Runner:
         )
         wanted = value.get("hash", "none")
         if got != wanted:
-            self._event(
-                {
-                    "type": "result",
-                    "status": "error",
-                    "message": f"the character run/start carried is {got}; the script expected "
-                    f"{wanted}",
-                }
+            self._result_event(
+                f"the character run/start carried is {got}; the script expected {wanted}"
             )
             raise _Exit(0)
 
