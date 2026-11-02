@@ -176,9 +176,10 @@ every code raised in any worker process, and SHALL run once per run, never in ea
 
 ### Requirement: Each package outside core has a scope
 troupe SHALL declare one scope per workspace package other than core: `artifacts_local`, `identity_local`,
-`stage_local`, `store_text`, `vcs_files` and `vcs_git` for `packages/troupe-<name>/`, and `runner_scripted` for
-`plugins/runner-scripted/`. Each SHALL cover its package's files except `pyproject.toml`. Core, `packages/troupe/**`,
-and every package's `pyproject.toml` SHALL be in no scope, so a change to them runs the full check.
+`stage_local`, `store_text`, `vcs_files`, `vcs_git`, `plugin_sdk` and `run` for `packages/troupe-<name>/`, and
+`runner_claude_code` and `runner_scripted` for `plugins/runner-<name>/`. Each SHALL cover its package's files except
+`pyproject.toml`. Core (`packages/troupe/**`) and every `pyproject.toml` SHALL be in no scope, so a change to them
+runs the full check.
 
 #### Scenario: A commit that changes one leaf package
 - **WHEN** a commit stages only files under `packages/troupe-stage-local/`, possibly with files under `openspec/`
@@ -202,6 +203,11 @@ and every package's `pyproject.toml` SHALL be in no scope, so a change to them r
 #### Scenario: A package added later
 - **WHEN** a commit adds a new directory under `packages/` or `plugins/` that no scope names
 - **THEN** the commit guard runs the full check
+
+#### Scenario: A commit that changes the plugin SDK
+- **WHEN** a commit stages only files under `packages/troupe-plugin-sdk/src/`
+- **THEN** the commit guard runs `scripts/check.py --scope plugin_sdk`, and the tests that run are the SDK's suite
+  and every suite that reaches it, core's and both runners' among them
 
 ### Requirement: The scripts have a scope that leaves out the check and the guard
 troupe SHALL declare a scope `scripts` covering `scripts/tests/**` and each other file under `scripts/` by its exact
