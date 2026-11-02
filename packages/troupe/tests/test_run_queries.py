@@ -2,7 +2,10 @@
 D13)."""
 
 import json
+import math
 import os
+import queue
+import statistics
 import subprocess
 import sys
 import threading
@@ -15,7 +18,16 @@ import pytest
 
 from gitrepo import Repo, clone
 from runtesting import INIT, OK, Harness, failing_at, request, script, theatre, turn
-from storetesting import git_service, settle, wait_until
+from storetesting import (
+    FOLLOW_BOUND,
+    SLOW_STRETCH_SECONDS,
+    STALL_SECONDS,
+    WITHIN,
+    git_service,
+    settle,
+    wait_until,
+    watched_delays,
+)
 from troupe.core import defaults
 from troupe.core.errors import TroupeError
 from troupe.core.events import EventStore
@@ -42,11 +54,14 @@ class Child:
         options: dict[str, Any],
         *,
         appends: Path | None = None,
+        shown: Path | None = None,
         stop: str | None = None,
         **fields: Any,  # noqa: ANN401
     ) -> None:
         """``appends``: a file outside the theatre where the child notes when each segment
-        append returned, and the run events it wrote. ``stop``: where the child announces the
+        append returned, and the run events it wrote. ``shown``: a file outside the theatre
+        where the test lists each seq its follower has shown, and the child waits for each before
+        recording the next (windows-follow-flake design D5). ``stop``: where the child announces the
         run instead of at its first event, and ``fields``: more of the request, such as its
         workspace (perform_child.py)."""
         self.process = subprocess.Popen(
@@ -60,7 +75,11 @@ class Child:
             ],
             stdout=subprocess.PIPE,
             text=True,
-            env={**os.environ, "TROUPE_TEST_STOP": stop} if stop is not None else None,
+            env={
+                **os.environ,
+                **({"TROUPE_TEST_STOP": stop} if stop is not None else {}),
+                **({"TROUPE_TEST_SHOWN": str(shown)} if shown is not None else {}),
+            },
         )
         assert self.process.stdout is not None
         line = self.process.stdout.readline().split()
@@ -396,32 +415,94 @@ def follow_in_background(harness: Harness, run_id: str) -> tuple[threading.Threa
     return thread, result
 
 
-def test_following_wakes_on_another_processs_write_timed_from_when_the_append_returned(
-    tmp_path: Path,
+def test_following_shows_another_processs_events_each_before_the_next_the_fastest_under_the_bound(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """The child records each event only once following has shown the one before (windows-follow-
+    flake design D1). With the store's poll and check (QUIET) and following's lease check all at
+    60 s, only the store's subscription can wake following inside the test (D4), and the next
+    event isn't written yet: so each event shown was shown on its own write's wake, however
+    loaded the machine. Speed is sampled like the store's watched deliveries (D2): five, then
+    more while none is under FOLLOW_BOUND, until a slow stretch's budget runs out."""
+    monkeypatch.setattr(defaults, "LOGS_LEASE_CHECK_SECONDS", 60)
     repo = theatre(tmp_path / "theatre")
-    appends = tmp_path / "appends.txt"
-    gaps = [{"wait": {"ms": 700}}, turn("a"), {"wait": {"ms": 700}}, turn("b")]
-    child = Child(repo, script(INIT, *gaps, {"wait": {"ms": 700}}, OK), appends=appends)
-    received: dict[int, float] = {}
+    appends, shown = tmp_path / "appends.txt", tmp_path / "shown.txt"
+    # Each measurement after the fifth took at least FOLLOW_BOUND, or sampling would have stopped.
+    turns = 5 + math.ceil(SLOW_STRETCH_SECONDS / FOLLOW_BOUND) + 1
+    steps = [INIT, *(turn(str(n)) for n in range(turns)), OK]
+    child = Child(repo, script(*steps), appends=appends, shown=shown)
+    arrivals: queue.Queue[tuple[int, float]] = queue.Queue()
+    followed: list[int] = []
 
     class Timing(Harness):
         def send(self, update: Any) -> None:  # noqa: ANN401
             data = update.to_data()
             if data["kind"] == "event":
-                received[data["seq"]] = time.time()
+                followed.append(data["seq"])
+                arrivals.put((data["seq"], time.time()))
 
-    Timing(repo, store_options=QUIET).logs(run=child.run_id, follow=True)
-    assert "ENDED succeeded" in child.finish()
+    def show(line: str) -> None:
+        with shown.open("a", encoding="utf-8") as out:
+            out.write(f"{line}\n")
+
+    received: dict[int, float] = {}
+
+    def receive(seq: int) -> None:
+        """Wait for following to show ``seq``, the next event, and tell the child it has."""
+        try:
+            got, at = arrivals.get(timeout=WITHIN)
+        except queue.Empty:
+            pytest.fail(f"following didn't show seq {seq} within {WITHIN} s; shown: {followed}")
+        assert got == seq, followed
+        received[seq] = at
+        show(str(seq))
+
+    def appended_at(seq: int) -> float:
+        """When the child's append of ``seq`` returned. The child notes it just after the append,
+        so following may have shown the event first."""
+        noted: dict[int, float] = {}
+
+        def find() -> bool:
+            text = appends.read_text(encoding="utf-8") if appends.exists() else ""
+            for line in text[: text.rfind("\n") + 1].splitlines():
+                at, *seqs = line.split()
+                noted.update((int(each), float(at)) for each in seqs)
+            return seq in noted
+
+        wait_until(find, f"the child noting when its append of seq {seq} returned")
+        return noted[seq]
+
     appended: dict[int, float] = {}
-    for line in appends.read_text(encoding="utf-8").splitlines():
-        at, *seqs = line.split()
-        for seq in seqs:
-            appended[int(seq)] = float(at)
-    # seq 0 was recorded before following began; every later one arrived while following.
-    delays = sorted(received[seq] - appended[seq] for seq in appended if seq > 0)
-    assert len(delays) == 3
-    assert delays[1] < 0.5, delays
+
+    def measure() -> float:
+        seq = len(received)
+        receive(seq)
+        appended[seq] = appended_at(seq)
+        return received[seq] - appended[seq]
+
+    harness = Timing(repo, store_options=QUIET)
+    try:
+        thread, result = follow_in_background(harness, child.run_id)
+        receive(0)  # recorded before following began; seq 1 is written only after it's shown
+        delays = watched_delays(measure, bound=FOLLOW_BOUND)
+    except BaseException:
+        harness.cancel.request()
+        child.kill()
+        raise
+    finally:
+        show("stop")
+    out = child.finish()
+    thread.join(timeout=WITHIN)
+    assert not thread.is_alive(), "following didn't stop once the run ended"
+    assert "ENDED succeeded" in out, out
+    assert "UNSHOWN" not in out, out
+    assert followed == list(range(turns + 2)), followed
+    assert result[0].run.state == "ended"
+    # Each event reached following before the child recorded the next: the handshake's order.
+    for seq in appended:
+        assert received[seq - 1] < appended[seq], (seq, received, appended)
+    assert min(delays) < FOLLOW_BOUND, delays
+    assert statistics.median(delays[:5]) < FOLLOW_BOUND + STALL_SECONDS, delays
 
 
 def test_following_a_quiet_run_reads_no_segment_while_it_waits(

@@ -1,6 +1,7 @@
 """The sampling the watched-delivery tests share (listener-bound-on-windows design D1, D3): five
-deliveries, then one at a time while none is under BOUND, until the slow-stretch budget runs out.
-Driven by scripted delays and a clock that advances by each one, so no machine is measured."""
+deliveries, then one at a time while none is under the bound (BOUND unless another is passed),
+until the slow-stretch budget runs out. Driven by scripted delays and a clock that advances by each
+one, so no machine is measured."""
 
 from collections.abc import Callable
 
@@ -58,3 +59,10 @@ def test_a_fast_delivery_within_the_first_five_still_measures_five() -> None:
 def test_five_are_measured_even_when_they_outlast_the_budget() -> None:
     script = Scripted(lambda index: SLOW)
     assert watched_delays(script.measure, clock=script.clock, slow_stretch=2) == [SLOW] * 5
+
+
+def test_a_bound_passed_in_decides_which_delivery_is_fast() -> None:
+    # 0.5 s is slow against BOUND (0.25 s), but fast against a bound of 1 s.
+    script = Scripted(lambda index: 0.5)
+    delays = watched_delays(script.measure, clock=script.clock, slow_stretch=60, bound=1.0)
+    assert delays == [0.5] * 5

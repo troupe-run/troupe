@@ -96,6 +96,13 @@ BOUND = 0.25
 """Seconds within which a watched delivery must arrive: a quarter of the 1 s subscription poll the
 watch replaces."""
 
+FOLLOW_BOUND = 0.5
+"""Seconds within which following a run's logs must show an event another process records: BOUND
+for the store's delivery, plus following's own hops (waking its event loop, and re-reading the run
+in a worker thread). 0.5 s is what the runs spec has promised since watch-event-segments. In a quiet
+moment it holds on a loaded Windows runner: in two of #227's three failures the first event took
+0.17 s and 0.18 s. Like BOUND, only the fastest delivery must meet it (watched_delays)."""
+
 STALL_SECONDS = 5.0
 """How much a loaded machine may add to a timed delivery beyond its interval: to a delivery that
 happens once, which a median can't cover, and to the median of polled or watched deliveries, where
@@ -117,13 +124,15 @@ def watched_delays(
     *,
     clock: Callable[[], float] = time.monotonic,
     slow_stretch: float = SLOW_STRETCH_SECONDS,
+    bound: float = BOUND,
 ) -> list[float]:
-    """Each delay ``measure`` returns: five, then one at a time while none is under BOUND, until
-    ``slow_stretch`` seconds have passed since the first started (listener-bound-on-windows design
-    D1). A quiet machine measures five; a loaded one measures until its slow stretch passes."""
+    """Each delay ``measure`` returns: five, then one at a time while none is under ``bound``,
+    until ``slow_stretch`` seconds have passed since the first started (listener-bound-on-windows
+    design D1). A quiet machine measures five; a loaded one measures until its slow stretch
+    passes."""
     started = clock()
     delays = [measure() for _ in range(5)]
-    while min(delays) >= BOUND and clock() - started < slow_stretch:
+    while min(delays) >= bound and clock() - started < slow_stretch:
         delays.append(measure())
     return delays
 
