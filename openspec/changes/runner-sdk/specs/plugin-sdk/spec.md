@@ -1,0 +1,81 @@
+# Spec Delta
+
+## Purpose
+
+Capability: `cap:plugins`, `cap:protocol`
+
+The plugin SDK: one small, framework-free package with the public API that plugins build against, starting with the
+runner contract's types and running a model's tool calls. Core takes the contract's types from it too, so they have
+one definition, and plugins depend on it instead of on core.
+
+## ADDED Requirements
+
+### Requirement: The SDK imports nothing of troupe's
+The `troupe-plugin-sdk` package SHALL NOT import `troupe` or any other workspace package. A check SHALL fail the
+build when it does, naming the import.
+
+#### Scenario: The SDK imports core
+- **WHEN** a module under `packages/troupe-plugin-sdk/` imports `troupe.core`
+- **THEN** the import contract check fails, naming the importing module and `troupe.core`
+
+### Requirement: The SDK depends only on the standard library
+The SDK's package SHALL declare no dependencies, so a plugin that uses it inherits nothing else. Its API SHALL be
+plain functions and immutable values, and SHALL NOT require a plugin to run in a particular way.
+
+#### Scenario: The SDK's declared dependencies
+- **WHEN** the repository's check reads `packages/troupe-plugin-sdk/pyproject.toml`
+- **THEN** its dependencies are empty, or the check fails naming the dependency and the file
+
+### Requirement: The runner contract's types have one definition
+The runner contract's message types, its protocol version and its JSON-RPC error codes SHALL be defined in the SDK
+alone. Core and every runner plugin SHALL use the SDK's, and SHALL NOT define their own copy.
+
+#### Scenario: Core and the scripted runner read the same event type
+- **WHEN** core's runner host parses a `tool_call` event that the scripted runner sent
+- **THEN** both use the SDK's type for it, and neither package defines a `tool_call` type of its own
+
+#### Scenario: A runner plugin's protocol version
+- **WHEN** the scripted runner or the Claude Code runner answers `initialize`
+- **THEN** the protocol versions it supports are the SDK's
+
+### Requirement: The SDK's types are checked against the contract's schemas
+Every runner message type in the SDK SHALL be checked by tests against its schema in `protocol/schemas/runner/`:
+what a type writes SHALL validate, and what the schema refuses SHALL fail to parse, naming where.
+
+#### Scenario: A type that drifts from its schema
+- **WHEN** a field is added to `run-event.schema.json`'s `tool_result` and not to the SDK's type
+- **THEN** the SDK's tests fail, naming the type and the field
+
+#### Scenario: An unknown field
+- **WHEN** the SDK parses a `tool_call` event that has a field the schema doesn't define
+- **THEN** it raises a protocol error naming the event and the field
+
+### Requirement: Plugins depend on the SDK, never on core
+No package under `plugins/` SHALL import `troupe` or another workspace package except the SDK. The import check
+SHALL cover every package under `plugins/`, and SHALL fail when one is missing from it.
+
+#### Scenario: A plugin imports core
+- **WHEN** code under `plugins/runner-scripted/` imports `troupe.core.runners`
+- **THEN** the import contract check fails
+
+#### Scenario: A plugin imports the SDK
+- **WHEN** code under `plugins/runner-scripted/` imports `troupe_plugin_sdk`
+- **THEN** the import contract check passes
+
+#### Scenario: A new plugin left out of the check
+- **WHEN** a package is added under `plugins/` and not named in the import contract
+- **THEN** the repository's check fails, naming the plugin and the contract to add it to
+
+### Requirement: The SDK releases at its own version
+The SDK SHALL be its own release component, `troupe-plugin-sdk`, with its own changelog and
+`troupe-plugin-sdk-v<version>` tag. Core and the plugins SHALL depend on it bare; `troupe-run` SHALL pin it, as it
+pins every package, so a tag install resolves it from its tag.
+
+#### Scenario: Only the SDK changed
+- **WHEN** the only releasable commit since the last release is a `fix:` that changes `packages/troupe-plugin-sdk/`
+- **THEN** the release pull request releases `troupe-plugin-sdk` alone, at its next patch version
+
+#### Scenario: Installed from a bundle tag
+- **WHEN** a `troupe-run` tag that pins `troupe-plugin-sdk-v0.1.0` is installed with `--no-sources`
+- **THEN** the SDK is installed from the `troupe-plugin-sdk-v0.1.0` tree, for core and for every plugin, and never
+  looked up on a package index
