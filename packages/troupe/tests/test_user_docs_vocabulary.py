@@ -17,7 +17,7 @@ pytestmark = pytest.mark.docs  # reads docs/ (scripts/check-paths.toml)
 
 GLOSSARY = "prompt-book/glossary.md"
 HOUSE_PAGE = "the-company/the-house.md"
-REQUIRED_TERMS = ("stage", "rehearsal", "system", "cue")
+REQUIRED_TERMS = ("stage", "rehearsal", "audition", "system", "cue")
 
 WORDS = re.compile(r"\b(projects?|repos?|repository|repositories)\b", re.IGNORECASE)
 UNCONFIRMED = re.compile(r"\bTBC\b|isn['\u2019]t final", re.IGNORECASE)
@@ -164,6 +164,7 @@ GLOSSARY_TABLE = """\
 | system | troupe acting by itself, recorded as an actor of kind `system` |
 | stage | Where an actor runs |
 | rehearsal | A dry run of a performance |
+| audition | What troupe init --audition writes: a working example actor |
 | cue | An open request to a role. The name is provisional |
 """
 
@@ -250,6 +251,13 @@ def test_a_term_in_code_font_is_named(tmp_path: Path) -> None:
 def test_a_missing_term_is_named() -> None:
     table = GLOSSARY_TABLE.replace("| rehearsal | A dry run of a performance |\n", "")
     assert glossary_problems(table) == ["the glossary has no row for rehearsal"]
+
+
+def test_a_glossary_with_no_audition_row_is_named() -> None:
+    table = GLOSSARY_TABLE.replace(
+        "| audition | What troupe init --audition writes: a working example actor |\n", ""
+    )
+    assert glossary_problems(table) == ["the glossary has no row for audition"]
 
 
 def test_a_cue_that_isnt_marked_provisional_is_named() -> None:
