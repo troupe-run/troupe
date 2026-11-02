@@ -79,7 +79,8 @@ context: |
     every must-fix and nit, resolve only nits, and raise decisions and disputed must-fixes with the owner. The
     review resolves its own must-fixes (troupe-run/infrastructure docs/development-workflow.md, "Claude's review");
     after answering a must-fix without a push, re-run the last `claude review` run (`gh run rerun <id>`) so the
-    review judges the reply.
+    review judges the reply. It also resolves its own nits once a push has fixed them, so a nit fixed by a push
+    needn't be resolved by hand.
 
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.
