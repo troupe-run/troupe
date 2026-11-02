@@ -88,7 +88,7 @@
   allowing neither delete nor move; a move whose destination isn't declared; each refusal naming the tool, the path and
   the effect, with the workspace unchanged and the next call still running. Verify they pass (runner-tools: effects
   requirements; #240's "done when").
-- [ ] 4.8 Write the SDK's README: what it's for, the contract's types, the tools and their inputs, effects, limits and an
+- [x] 4.8 Write the SDK's README: what it's for, the contract's types, the tools and their inputs, effects, limits and an
   example of a runner's tool loop. Add a docs test that the README's tools table matches the definitions. Verify it
   passes.
 
