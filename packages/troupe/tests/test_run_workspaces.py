@@ -13,9 +13,9 @@ from gitrepo import Repo
 from runtesting import ADA, ALLOW, INIT, OK, Harness, failing_at, request, script, theatre
 from troupe.core.errors import TroupeError
 from troupe.core.events import EventStore
-from troupe.core.messages import Message
 from troupe.core.vcs import Vcs, load_vcs
 from troupe.core.workspaces import worktree_path
+from troupe_plugin_sdk.messages import Message
 
 perform_module = importlib.import_module("troupe.core.runs.perform")
 FAIL = {"event": {"type": "result", "status": "error", "message": "it went wrong"}}

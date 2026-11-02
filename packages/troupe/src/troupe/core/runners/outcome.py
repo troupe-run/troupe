@@ -13,7 +13,7 @@ from typing import Any
 from troupe.core.errors import TroupeError
 from troupe.core.runners.effects import EffectVerdict
 from troupe.core.runners.limits import RunLimits
-from troupe.core.runners.protocol import ResultEvent
+from troupe_plugin_sdk.runner import ResultEvent
 
 
 class Outcome(StrEnum):

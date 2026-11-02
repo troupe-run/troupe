@@ -3,8 +3,8 @@ design D2).
 
 The JSON Schemas in protocol/ are the source of truth (decision #7). Until a generator is chosen,
 each message type mirrors its schema by hand, declaring every field with ``json_field``, and tests
-check the types against the schemas. The runner contract and the client protocol both build on
-this.
+check the types against the schemas. The runner contract and troupe's client protocol both build on
+this, which is why it lives in the plugin SDK (runner-sdk design D2).
 
 ``from_data`` is strict, like the schemas: an unknown field, a missing required field, a wrong type
 or a value out of range raises ProtocolError, naming where. ``to_data`` produces the JSON shape,

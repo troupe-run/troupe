@@ -16,6 +16,9 @@ dependencies = [
     # Writes config files. Pinned to a minor version: an upgrade that renders differently changes files' hashes
     # (config-model design D8).
     "ruamel.yaml>=0.19.1,<0.20",
+    # The runner contract's types and the strict message base, defined once for core and the plugins (spec:
+    # plugin-sdk). Bare, like an adapter's dependency on troupe: the bundle pins it (runner-sdk design D12).
+    "troupe-plugin-sdk",
 ]
 
 [project.urls]

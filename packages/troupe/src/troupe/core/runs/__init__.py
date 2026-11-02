@@ -7,10 +7,10 @@ from typing import Any
 from troupe.core.client import messages as m
 from troupe.core.client.dispatch import Method, Send
 from troupe.core.client.session import Session
-from troupe.core.messages import Message
 from troupe.core.runs.changes import accept, diff, discard
 from troupe.core.runs.perform import perform
 from troupe.core.runs.queries import logs, status
+from troupe_plugin_sdk.messages import Message
 
 
 async def _perform(request: Any, session: Session, send: Send) -> Message:  # noqa: ANN401

@@ -18,7 +18,7 @@ from troupe.core.runners.outcome import (
     StopReason,
     derive_outcome,
 )
-from troupe.core.runners.protocol import ResultEvent
+from troupe_plugin_sdk.runner import ResultEvent
 
 RUN = "0f8fad5b-d9cb-469f-a165-70867728950e"
 LIMITS = RunLimits()

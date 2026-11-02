@@ -44,7 +44,6 @@ from troupe.core.identity import Identity
 from troupe.core.interim import runner_command, runner_environment
 from troupe.core.notices import Notice
 from troupe.core.policy import read_policy
-from troupe.core.runners import protocol as p
 from troupe.core.runners.effects import EffectCheck, ExpectedFiles, NoEffectExpected
 from troupe.core.runners.host import RunnerCommand, RunRequest, not_started, run_actor
 from troupe.core.runners.limits import RunLimits
@@ -64,6 +63,7 @@ from troupe.core.workspaces import (
     snapshot,
     worktree_base,
 )
+from troupe_plugin_sdk import runner as p
 
 
 def lease_dir(theatre: Path, run_id: str) -> Path:

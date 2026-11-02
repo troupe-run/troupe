@@ -36,8 +36,8 @@ from gitrepo import Repo
 from runtesting import LIMITS, Harness
 from storetesting import SLOW_STRETCH_SECONDS, WITHIN
 from troupe.core.events import EventStore
-from troupe.core.messages import Message
 from troupe.core.vcs import SharedState
+from troupe_plugin_sdk.messages import Message
 
 STOP = os.environ.get("TROUPE_TEST_STOP")
 SHOWN = os.environ.get("TROUPE_TEST_SHOWN")

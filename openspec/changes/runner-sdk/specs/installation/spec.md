@@ -17,15 +17,16 @@ on any other workspace member SHALL fail the repository's check, naming it.
 
 ## ADDED Requirements
 
-### Requirement: A pinned component's workspace dependencies are pinned too
-When the bundle pins a component that depends on another workspace member, the bundle SHALL pin that member too, so
-an install of the bundle's tag never looks a workspace member up on a package index. The check SHALL fail otherwise,
-naming both and the file.
+### Requirement: A pinned component's released workspace dependencies are pinned too
+When the bundle pins a component that depends on another workspace member that has released, the bundle SHALL pin
+that member too, so an install of the bundle's tag never looks it up on a package index. The check SHALL fail
+otherwise, naming both and the file.
 
-#### Scenario: Core pinned, the SDK bare
-- **WHEN** `troupe-run` pins `troupe` at a tag and names `troupe-plugin-sdk` bare, and core depends on the SDK
+#### Scenario: Core pinned, the released SDK bare
+- **WHEN** `troupe-run` pins `troupe`, core depends on the SDK, the manifest gives the SDK 0.1.0, and `troupe-run`
+  names `troupe-plugin-sdk` bare
 - **THEN** `scripts/check.py` fails, naming `troupe-plugin-sdk`, `troupe` and `packages/troupe-run/pyproject.toml`
 
-#### Scenario: Before any pin
-- **WHEN** `troupe-run` names both `troupe` and `troupe-plugin-sdk` bare
+#### Scenario: The SDK not yet released
+- **WHEN** `troupe-run` pins `troupe` and names `troupe-plugin-sdk` bare, and the manifest gives the SDK 0.0.0
 - **THEN** the check passes

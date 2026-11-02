@@ -170,8 +170,15 @@ UTF-8 size.
 - Core, both runners and `troupe-run` depend on it bare, with a workspace source. The pinning pull request moves
   the bundle's pin after the SDK's first release, as it does for every member.
 - `scripts/bundle.py` lets core depend on the SDK and nothing else in the workspace. It also checks that when the
-  bundle pins a component, every workspace member that component depends on is pinned too (installation delta).
-  Otherwise a tag install would look the SDK up on a package index, where someone else could register the name.
+  bundle pins a component, every workspace member that component depends on and that has released (its manifest
+  version is above 0.0.0) is pinned too (installation delta). Otherwise a tag install would look the SDK up on a
+  package index, where someone else could register the name. An unreleased member is left out of the check, because
+  the bundle can't pin it yet: main is in that state from this change until the SDK's first release is pinned
+  (owner, 2026-11-02).
+- **Until that pin, the bundle must not release.** A bundle released while it names the SDK bare would send a tag
+  install to a package index. So this change's commits that touch `packages/troupe-run/` use a type that doesn't
+  release (`build`). #262 covers refusing a release pull request that releases `troupe-run` while it
+  names any member bare.
 
 ### D13. Import contracts and their coverage
 
@@ -180,10 +187,12 @@ UTF-8 size.
   every adapter and every plugin).
 - The SDK joins the sources of "only troupe.platform imports OS-specific modules". It uses `os` and `pathlib`
   only.
-- The plugins contract is unchanged: the SDK isn't in its forbidden list.
-- A new test in `scripts/tests/workspace/` reads `plugins/*/pyproject.toml`, finds each plugin's import package under
-  `src/`, and fails when one is missing from the plugins contract's sources or from `root_packages`. It also fails
-  when the SDK's `pyproject.toml` declares a dependency.
+- The plugins contract doesn't forbid the SDK. It now also forbids `troupe_run`, the one workspace package it had
+  missed. A new independence contract, **plugins are independent of each other**, keeps one plugin from importing
+  another, so "no workspace package except the SDK" holds for plugins too.
+- `scripts/plugin_imports.py`, run as a test in `scripts/tests/workspace/`, finds each plugin's import package under
+  `src/`, and fails when one is missing from `root_packages` or from either contract, when the plugins contract
+  forbids the SDK or leaves out another workspace package, and when the SDK's `pyproject.toml` declares a dependency.
 
 ### D14. Check scope
 

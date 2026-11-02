@@ -2,39 +2,40 @@
 
 ## 1. The package, its release and its checks
 
-- [ ] 1.1 Create `packages/troupe-plugin-sdk/` (`pyproject.toml` with no dependencies, `src/troupe_plugin_sdk/__init__.py`,
+- [x] 1.1 Create `packages/troupe-plugin-sdk/` (`pyproject.toml` with no dependencies, `src/troupe_plugin_sdk/__init__.py`,
   `py.typed`, `tests/`, README stub, `CHANGELOG.md`, `LICENSE`), and add it to the root `pyproject.toml`'s workspace
   sources, dev group, ruff `src`, mypy `files` and `mypy_path`, and pytest `testpaths`. Verify `uv sync --locked`
   succeeds after `uv lock` and `uv run python -c "import troupe_plugin_sdk"` works.
-- [ ] 1.2 Add the release component to `release-please-config.json` (with its `uv.lock` extra-file) and `0.0.0` to
+- [x] 1.2 Add the release component to `release-please-config.json` (with its `uv.lock` extra-file) and `0.0.0` to
   `.release-please-manifest.json`, and add `troupe-plugin-sdk` bare to `packages/troupe-run/pyproject.toml`. Verify
   `scripts/tests/workspace/test_release_config.py` and `test_bundle.py` pass (D12).
-- [ ] 1.3 Add the `plugin_sdk` scope to `scripts/check-paths.toml`, with the `tests` list `uv run
+- [x] 1.3 Add the `plugin_sdk` scope to `scripts/check-paths.toml`, with the `tests` list `uv run
   scripts/check_paths_reach.py` reports. Verify `scripts/tests/test_check_paths_reach.py` passes, and that `scripts/guard.py
   check-scope` on a path under the SDK's `src/` names `plugin_sdk` (quality-check delta, D14).
-- [ ] 1.4 Add `troupe_plugin_sdk` to import-linter's `root_packages`, the contract "the plugin SDK imports nothing of
+- [x] 1.4 Add `troupe_plugin_sdk` to import-linter's `root_packages`, the contract "the plugin SDK imports nothing of
   troupe's", and the SDK to the OS-specific modules contract's sources. Verify `uv run lint-imports` passes, and fails
   on a temporary `import troupe.core` in the SDK (plugin-sdk spec, D13).
-- [ ] 1.5 Write the workspace test that every package under `plugins/` is in the plugins contract's sources and in
+- [x] 1.5 Write the workspace test that every package under `plugins/` is in the plugins contract's sources and in
   `root_packages`, and that the SDK declares no dependencies. Verify it passes, and fails naming the plugin when one
   is removed from the contract and naming the dependency when one is added (plugin-sdk spec, D13).
 
 ## 2. The runner contract's types move into the SDK
 
-- [ ] 2.1 Move `troupe/core/messages.py` to `troupe_plugin_sdk/messages.py` unchanged, update every importer in core
+- [x] 2.1 Move `troupe/core/messages.py` to `troupe_plugin_sdk/messages.py` unchanged, update every importer in core
   (client messages and dispatch, config commands, runs), and move ruff's `extend-immutable-calls` entry. Verify
   `uv run scripts/check.py` passes: ruff, mypy, the import contracts and the full suite.
-- [ ] 2.2 Move `troupe/core/runners/protocol.py` to `troupe_plugin_sdk/runner.py`, and update core's importers (host,
+- [x] 2.2 Move `troupe/core/runners/protocol.py` to `troupe_plugin_sdk/runner.py`, and update core's importers (host,
   conformance, outcome, perform, client messages, tests). Verify the full check passes and `grep -r
   "core.runners.protocol\|core.messages" packages plugins scripts` finds nothing.
-- [ ] 2.3 Move `test_runner_protocol_types.py` into the SDK's tests, reading the schemas from `protocol/schemas/runner/`,
+- [x] 2.3 Move `test_runner_protocol_types.py` into the SDK's tests, reading the schemas from `protocol/schemas/runner/`,
   and add tests that a field added to the `tool_result` schema and not the type fails, naming both, and that an
   unknown field fails to parse. Verify they pass, and that the drift test fails on a temporary schema edit (plugin-sdk
   spec: "checked against the contract's schemas").
-- [ ] 2.4 Allow core's dependency on the SDK in `scripts/bundle.py`, and add the check that a pinned component's
-  workspace dependencies are pinned too. Add `troupe-plugin-sdk` to core's dependencies. Verify the new
-  `test_bundle.py` cases pass: core on the SDK passes, core on an adapter still fails, and a pinned `troupe` with a bare
-  SDK fails naming both and the file (installation delta, D12).
+- [x] 2.4 Allow core's dependency on the SDK in `scripts/bundle.py`, and add the check that a pinned component's
+  released workspace dependencies are pinned too. Add `troupe-plugin-sdk` to core's dependencies. Verify the new
+  `test_bundle.py` cases pass: core on the SDK passes, core on an adapter still fails, a pinned `troupe` with a
+  released SDK bare fails naming both and the file, and with an unreleased SDK bare passes (installation delta, D12;
+  owner, 2026-11-02, with #262 for the release-time check).
 - [ ] 2.5 Move the scripted runner onto the SDK: depend on it, drop its protocol versions and JSON-RPC codes, answer
   the handshake and refusals with the SDK's types, and parse event steps with the SDK's event types. Verify the
   scripted runner's suite, core's conformance suite and the seq-gap and raw-line steps' tests pass (scripted-runner

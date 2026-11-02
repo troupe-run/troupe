@@ -43,12 +43,12 @@ from troupe.core.config.projection import (
 from troupe.core.config.stream import read, record, refuse_conflicts, refuse_unrecordable
 from troupe.core.events import EventStore
 from troupe.core.events.lineage import Actor
-from troupe.core.messages import Message
 from troupe.core.notices import Notice
 from troupe.core.settings import marking
 from troupe.core.stores import open_event_store
 from troupe.core.theatre import THEATRE_DIR
 from troupe.platform.files import WaitCallback
+from troupe_plugin_sdk.messages import Message
 
 
 def _waiting(send: Send) -> WaitCallback:

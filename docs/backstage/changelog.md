@@ -43,4 +43,9 @@ The runners are released on their own, like the other parts, and `troupe-run` sh
 - [troupe-runner-claude-code](https://github.com/troupe-run/troupe/blob/main/plugins/runner-claude-code/CHANGELOG.md)
 - [troupe-runner-scripted](https://github.com/troupe-run/troupe/blob/main/plugins/runner-scripted/CHANGELOG.md)
 
+The plugin SDK, the library the runners and the core share for the runner contract, is released on its own too. Its
+changelog starts with its first release.
+
+- [troupe-plugin-sdk](https://github.com/troupe-run/troupe/blob/main/packages/troupe-plugin-sdk/CHANGELOG.md)
+
 Every release is also on [GitHub's releases page](https://github.com/troupe-run/troupe/releases).
