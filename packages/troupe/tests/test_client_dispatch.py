@@ -83,6 +83,7 @@ def test_the_core_offers_exactly_its_methods_with_their_request_types() -> None:
         "diff": m.DiffRequest,
         "accept": m.AcceptRequest,
         "discard": m.DiscardRequest,
+        "init": m.InitRequest,
     }
 
 

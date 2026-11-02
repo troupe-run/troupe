@@ -12,9 +12,9 @@ holding any of it.
 ## Finding the theatre
 
 Every troupe command runs in a theatre: the nearest directory, from where you are upwards, that holds `.troupe/`.
-So you can run troupe from anywhere inside your theatre, as you would git. troupe never makes a theatre for you:
-without one, a command fails with `theatre.not-found` and changes nothing. [Your first
-theatre](../opening-night/first-theatre.md) sets one up.
+So you can run troupe from anywhere inside your theatre, as you would git. `troupe init` makes one, and refuses where
+there's one already, here or above. Without one, every other command fails with `theatre.not-found` and changes
+nothing. [Your first theatre](../opening-night/first-theatre.md) sets one up.
 
 ## What lives in `.troupe/`
 
@@ -34,8 +34,8 @@ theatre](../opening-night/first-theatre.md) sets one up.
 - **`.gitignore` and `.gitattributes` keep your lines.** troupe adds the lines it needs to the end, with a comment
   saying why, and never changes or removes one that's there. If you delete one of troupe's lines, troupe adds it back
   the next time it writes, because it needs it.
-- **Nothing is made until it's needed.** troupe writes these the first time it records something. Reading never
-  changes your history.
+- **Nothing is made until it's needed.** `troupe init` writes `.gitignore` and `.gitattributes`, and troupe writes
+  the rest the first time it records something. Reading never changes your history.
 
 Today a theatre has to be under git. troupe can also record to plain files with no branches, but nothing can choose
 that yet ([Your first theatre](../opening-night/first-theatre.md#put-it-under-git)).

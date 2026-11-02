@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/client/init-request.schema.json",
+  "title": "init: request",
+  "description": "Make a theatre where the session says, and with an audition, a working example actor in it. It names no path: the session holds where the theatre is made.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "audition": {
+      "description": "Define the example actor too. Absent: make the theatre only.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "runner": {
+          "description": "The example actor's runner. Absent: claude-code. A runner troupe doesn't know is refused with runner.unknown.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+        }
+      }
+    },
+    "rehearse": {
+      "description": "Make, write and record nothing: report what would be. Absent means false.",
+      "type": "boolean"
+    }
+  }
+}

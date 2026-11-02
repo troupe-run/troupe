@@ -64,6 +64,16 @@ USES = (
         "A fresh git repository",
         "a git repository, as git means it",
     ),
+    Use(
+        "opening-night/first-theatre.md",
+        "It refuses outside a git repository",
+        "a git repository, as git means it: where troupe init may make a theatre",
+    ),
+    Use(
+        "prompt-book/cli.md",
+        "must be in a git repository",
+        "a git repository, as git means it: where troupe init may make a theatre",
+    ),
     Use("opening-night/install.md", "a clone of its repository", "troupe's own git repository"),
     Use(
         "prompt-book/events.md",

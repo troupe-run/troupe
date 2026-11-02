@@ -11,13 +11,14 @@ from typing import TextIO
 
 from troupe.cli.commands import COMMANDS as RUN_COMMANDS
 from troupe.cli.config import COMMANDS as CONFIG_COMMANDS
+from troupe.cli.init import COMMANDS as INIT_COMMANDS
 from troupe.cli.parser import Command, parse
 from troupe.cli.render import render_error
 from troupe.core.errors import BUG_REPORT_URL, TroupeError
 from troupe.core.exit_codes import ExitCode
 from troupe.core.schemas import protocol_version
 
-COMMANDS: tuple[Command, ...] = (*RUN_COMMANDS, *CONFIG_COMMANDS)
+COMMANDS: tuple[Command, ...] = (*INIT_COMMANDS, *RUN_COMMANDS, *CONFIG_COMMANDS)
 """The subcommands troupe offers."""
 
 

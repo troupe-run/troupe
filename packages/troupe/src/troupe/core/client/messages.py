@@ -483,6 +483,69 @@ class FlushResult(Message):
     notices: list[NoticeData] = json_field("notices")
 
 
+# Making a theatre: init (init-and-audition design D1, D8).
+
+ACTOR_NAME = re.compile(r"\A[a-z][a-z0-9-]{0,63}\Z")
+
+
+@dataclass(frozen=True)
+class InitAudition(Message):
+    runner: str | None = json_field("runner", default=None, pattern=ACTOR_NAME)
+
+
+@dataclass(frozen=True)
+class InitRequest(Message):
+    audition: InitAudition | None = json_field("audition", default=None)
+    rehearse: bool | None = json_field("rehearse", default=None)
+
+
+@dataclass(frozen=True)
+class InitActor(Message):
+    name: str = json_field("name", pattern=ACTOR_NAME)
+    runner: str = json_field("runner", pattern=ACTOR_NAME)
+
+
+@dataclass(frozen=True)
+class CommitStep(Tagged):
+    """Commit these theatre-relative paths, since a run works from the latest commit."""
+
+    TYPE: ClassVar[str | None] = "commit"
+    paths: list[str] = json_field("paths", min_items=1)
+
+
+@dataclass(frozen=True)
+class AllowLocalStageStep(Tagged):
+    """Set this policy variable to this value, so the local stage may run the actor."""
+
+    TYPE: ClassVar[str | None] = "allow-local-stage"
+    variable: str = json_field("variable", min_length=1)
+    value: str = json_field("value", min_length=1)
+
+
+@dataclass(frozen=True)
+class PerformStep(Tagged):
+    """Perform the example actor with this direction."""
+
+    TYPE: ClassVar[str | None] = "perform"
+    actor: str = json_field("actor", pattern=ACTOR_NAME)
+    runner: str = json_field("runner", pattern=ACTOR_NAME)
+    direction: str = json_field("direction", min_length=1)
+
+
+InitStep = CommitStep | AllowLocalStageStep | PerformStep
+
+
+@dataclass(frozen=True)
+class InitResult(Message):
+    rehearsed: bool = json_field("rehearsed")
+    files: list[FileAction] = json_field("files")
+    entries: list[dict[str, object]] = json_field("entries")
+    steps: list[InitStep] = json_field("steps")
+    notices: list[NoticeData] = json_field("notices")
+    actor: InitActor | None = json_field("actor", default=None)
+    change: str | None = json_field("change", default=None, pattern=ULID)
+
+
 ConfigUpdate = NoticeUpdate
 
 

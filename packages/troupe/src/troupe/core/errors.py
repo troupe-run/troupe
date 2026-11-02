@@ -78,6 +78,7 @@ CODES: dict[str, ExitCode] = {
     "stage.unknown": ExitCode.FAILURE,
     "stage.effects-unenforced": ExitCode.FAILURE,
     "theatre.not-found": ExitCode.FAILURE,
+    "theatre.exists": ExitCode.FAILURE,
     "runner.unknown": ExitCode.FAILURE,
     "run.out-of-sequence": ExitCode.FAILURE,
     "run.recording-failed": ExitCode.FAILURE,
