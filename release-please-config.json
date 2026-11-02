@@ -58,6 +58,18 @@
         }
       ]
     },
+    "packages/troupe-plugin-sdk": {
+      "release-type": "python",
+      "package-name": "troupe-plugin-sdk",
+      "component": "troupe-plugin-sdk",
+      "extra-files": [
+        {
+          "type": "toml",
+          "path": "/uv.lock",
+          "jsonpath": "$.package[?(@.name.value=='troupe-plugin-sdk')].version"
+        }
+      ]
+    },
     "packages/troupe-run": {
       "release-type": "python",
       "package-name": "troupe-run",

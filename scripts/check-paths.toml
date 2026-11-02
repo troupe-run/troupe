@@ -49,6 +49,28 @@ tests = [
     "scripts/tests/workspace/**",
 ]
 
+# The plugin SDK: the runner contract's types, which core and the runner plugins import, and the tools runners run
+# (runner-sdk design D14).
+[scopes.plugin_sdk]
+paths = [
+    "packages/troupe-plugin-sdk/src/**",
+    "packages/troupe-plugin-sdk/tests/**",
+    "packages/troupe-plugin-sdk/README.md",
+    "packages/troupe-plugin-sdk/LICENSE",
+]
+tests = [
+    "packages/troupe/tests/**",
+    "packages/troupe-artifacts-local/tests/**",
+    "packages/troupe-identity-local/tests/**",
+    "packages/troupe-plugin-sdk/tests/**",
+    "packages/troupe-stage-local/tests/**",
+    "packages/troupe-store-text/tests/**",
+    "packages/troupe-vcs-files/tests/**",
+    "packages/troupe-vcs-git/tests/**",
+    "scripts/tests/**",
+    "scripts/tests/workspace/**",
+]
+
 # Reached by core's stages loader, and through the bundle by its tests (scripts/tests/workspace).
 [scopes.stage_local]
 paths = [
@@ -136,6 +158,7 @@ paths = [
 tests = [
     "packages/troupe/tests/**",
     "packages/troupe-artifacts-local/tests/**",
+    "packages/troupe-plugin-sdk/tests/**",
     "packages/troupe-store-text/tests/**",
     "plugins/runner-claude-code/tests/**",
     "scripts/tests/workspace/**",
@@ -153,6 +176,7 @@ paths = [
 tests = [
     "packages/troupe/tests/**",
     "packages/troupe-artifacts-local/tests/**",
+    "packages/troupe-plugin-sdk/tests/**",
     "packages/troupe-store-text/tests/**",
     "plugins/runner-scripted/tests/**",
     "scripts/tests/workspace/**",
@@ -173,6 +197,7 @@ paths = [
     "scripts/install_check.py",
     "scripts/on.py",
     "scripts/pin_bundle.py",
+    "scripts/plugin_imports.py",
     "scripts/python_versions.py",
     "scripts/queue_passed.py",
     "scripts/release_config.py",

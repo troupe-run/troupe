@@ -27,11 +27,11 @@ from troupe.core.config.commands import record_change
 from troupe.core.config.kinds import check
 from troupe.core.config.projection import render
 from troupe.core.events.lineage import Actor
-from troupe.core.messages import Message
 from troupe.core.policy import ALLOW_UNENFORCED_LOCAL_STAGE, env_name, read_policy
 from troupe.core.stores import open_event_store
 from troupe.core.theatre import GIT_FILES, THEATRE_DIR, ensure_git_files, refuse_existing
 from troupe.core.vcs import load_vcs
+from troupe_plugin_sdk.messages import Message
 
 MADE = "made by troupe init"
 """The reason each file init writes is reported with."""

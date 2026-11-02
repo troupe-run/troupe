@@ -3,6 +3,7 @@
 Each property is broken in a copy of the real files, one at a time, to show the check catches it
 and names the package and the file. The last test runs the check on the real files."""
 
+import json
 import shutil
 import tomllib
 from pathlib import Path
@@ -82,9 +83,54 @@ def test_a_core_dependency_on_an_adapter_is_named_with_core_and_the_bundle(copy:
     replace(copy, CORE_PYPROJECT, "dependencies = [\n", 'dependencies = [\n    "troupe_vcs_git",\n')
     assert bundle.problems(copy) == [
         f"troupe depends on troupe-vcs-git in {CORE_PYPROJECT}, but core declares no dependency "
-        f"on a workspace member: remove it there. troupe-run ({BUNDLE_PYPROJECT}) is what brings "
-        "it into an install."
+        f"on a workspace member but troupe-plugin-sdk: remove it there. troupe-run "
+        f"({BUNDLE_PYPROJECT}) is what brings it into an install."
     ]
+
+
+def test_core_depending_on_the_plugin_sdk_bare_has_no_problems(copy: Path) -> None:
+    core = tomllib.loads((copy / CORE_PYPROJECT).read_text(encoding="utf-8"))["project"]
+    assert "troupe-plugin-sdk" in core["dependencies"]
+    assert bundle.problems(copy) == []
+
+
+def _release(root: Path, path: str, version: str) -> None:
+    manifest = root / MANIFEST
+    versions = json.loads(manifest.read_bytes())
+    versions[path] = version
+    manifest.write_bytes((json.dumps(versions, indent=2) + "\n").encode("utf-8"))
+
+
+def test_a_pinned_core_with_the_released_sdk_bare_names_both_and_the_bundle(copy: Path) -> None:
+    _release(copy, "packages/troupe-plugin-sdk", "0.1.0")
+    bundle_state.set_dependency(
+        copy, "troupe", release_config.pin("troupe", "0.1.0", "packages/troupe")
+    )
+    bundle_state.set_dependency(copy, "troupe-plugin-sdk", "troupe-plugin-sdk")
+    assert bundle.problems(copy) == [
+        "troupe-run pins troupe, which depends on troupe-plugin-sdk, but names troupe-plugin-sdk "
+        f"bare in {BUNDLE_PYPROJECT}: pin it at its latest release too, so an install of the "
+        "bundle's tag never looks it up on a package index."
+    ]
+
+
+def test_a_pinned_core_with_the_unreleased_sdk_bare_has_no_problems(copy: Path) -> None:
+    _release(copy, "packages/troupe-plugin-sdk", "0.0.0")
+    bundle_state.set_dependency(
+        copy, "troupe", release_config.pin("troupe", "0.1.0", "packages/troupe")
+    )
+    bundle_state.set_dependency(copy, "troupe-plugin-sdk", "troupe-plugin-sdk")
+    assert bundle.problems(copy) == []
+
+
+def test_a_pinned_core_with_the_released_sdk_pinned_has_no_problems(copy: Path) -> None:
+    _release(copy, "packages/troupe-plugin-sdk", "0.1.0")
+    sdk = release_config.pin("troupe-plugin-sdk", "0.1.0", "packages/troupe-plugin-sdk")
+    bundle_state.set_dependency(
+        copy, "troupe", release_config.pin("troupe", "0.1.0", "packages/troupe")
+    )
+    bundle_state.set_dependency(copy, "troupe-plugin-sdk", sdk)
+    assert bundle.problems(copy) == []
 
 
 def test_a_bundle_command_that_runs_something_else_names_both_targets(copy: Path) -> None:
@@ -124,9 +170,27 @@ def test_the_bundle_names_each_dependency_bare_or_pinned_at_a_tag() -> None:
 
 
 def test_a_pinned_dependency_counts_as_a_dependency(copy: Path) -> None:
+    # troupe-vcs-git depends on troupe, which has released, so troupe is pinned too.
     pinned = release_config.pin("troupe-vcs-git", "0.1.1", "packages/troupe-vcs-git")
     bundle_state.set_dependency(copy, "troupe-vcs-git", pinned)
+    bundle_state.set_dependency(
+        copy, "troupe", release_config.pin("troupe", "0.1.0", "packages/troupe")
+    )
     assert bundle.problems(copy) == []
+
+
+def test_a_pinned_adapter_with_released_core_bare_is_named(copy: Path) -> None:
+    # In the pinned state every adapter is pinned, so each is named; vcs-git is among them.
+    pinned = release_config.pin("troupe-vcs-git", "0.1.1", "packages/troupe-vcs-git")
+    bundle_state.set_dependency(copy, "troupe-vcs-git", pinned)
+    bundle_state.set_dependency(copy, "troupe", "troupe")
+    found = bundle.problems(copy)
+    assert (
+        "troupe-run pins troupe-vcs-git, which depends on troupe, but names troupe bare in "
+        f"{BUNDLE_PYPROJECT}: pin it at its latest release too, so an install of the bundle's "
+        "tag never looks it up on a package index."
+    ) in found
+    assert all("but names troupe bare" in problem for problem in found)
 
 
 def test_troupe_run_installs_troupe_with_every_workspace_member() -> None:

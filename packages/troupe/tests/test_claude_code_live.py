@@ -18,10 +18,10 @@ import pytest
 
 from troupe.core.artifacts import MemoryArtifactStore
 from troupe.core.interim import runner_command, runner_environment
-from troupe.core.runners import protocol as p
 from troupe.core.runners.effects import ExpectedFiles
 from troupe.core.runners.host import RunnerCommand, RunRequest, run_actor
 from troupe.core.runners.limits import RunLimits
+from troupe_plugin_sdk import runner as p
 
 OPT_IN = "TROUPE_LIVE_CLAUDE_CODE"
 MODEL = "claude-haiku-5-5"

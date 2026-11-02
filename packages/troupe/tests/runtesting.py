@@ -17,10 +17,10 @@ from troupe.core.config.stream import read as read_config
 from troupe.core.config.stream import record as record_config
 from troupe.core.errors import TroupeError
 from troupe.core.events import EventStore
-from troupe.core.messages import Message
 from troupe.core.runners.limits import RunLimits
 from troupe.core.runs.perform import Backends, perform
 from troupe.core.runs.queries import logs, status
+from troupe_plugin_sdk.messages import Message
 
 ALLOW = {"TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE": "true"}
 ADA = {"TROUPE_ACTOR": "human:ada@example.com"}

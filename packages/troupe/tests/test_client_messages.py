@@ -18,7 +18,7 @@ from hypothesis import strategies as st
 from client_schemas import check
 from troupe.core.client import messages as m
 from troupe.core.events.lineage import timestamp
-from troupe.core.messages import Message, ProtocolError
+from troupe_plugin_sdk.messages import Message, ProtocolError
 
 RUN_IDS = st.uuids().map(str)
 NAMES = st.from_regex(r"\A[a-z][a-z0-9-]{0,10}\Z")

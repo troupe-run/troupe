@@ -16,12 +16,12 @@ from protocol_schemas import check_error, check_notice
 from runner_schemas import is_valid, validate
 from troupe.core.artifacts import ArtifactStore, MemoryArtifactStore, load_store
 from troupe.core.notices import Notice
-from troupe.core.runners import protocol as p
 from troupe.core.runners.effects import EffectCheck, ExpectedFiles, NoEffectExpected
 from troupe.core.runners.host import RunnerCommand, RunRequest, run_actor
 from troupe.core.runners.limits import RunLimits
 from troupe.core.runners.outcome import Ending, Outcome, RunOutcome
 from troupe.platform import processes
+from troupe_plugin_sdk import runner as p
 
 FAKE = Path(__file__).with_name("fake_runner.py")
 INIT = {"type": "init", "runner": {"name": "scripted", "version": "0.0.1"}, "tools": ["Write"]}

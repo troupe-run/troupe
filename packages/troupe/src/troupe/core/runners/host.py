@@ -23,7 +23,6 @@ from troupe.core import defaults
 from troupe.core.artifacts import ArtifactStore, ArtifactWriter
 from troupe.core.errors import TroupeError
 from troupe.core.notices import Notice
-from troupe.core.runners import protocol as p
 from troupe.core.runners.effects import EffectCheck, EffectVerdict
 from troupe.core.runners.limits import RunLimits
 from troupe.core.runners.outcome import (
@@ -35,6 +34,7 @@ from troupe.core.runners.outcome import (
 )
 from troupe.platform import processes
 from troupe.platform.errors import CommandNotFoundError, LineTooLongError
+from troupe_plugin_sdk import runner as p
 
 EventCallback = Callable[[p.RunEvent], Awaitable[None]]
 """Receives each run event (or the oversized event standing in for one), in seq order."""

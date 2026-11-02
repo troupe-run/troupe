@@ -22,10 +22,10 @@ from troupe.core.config.merge import merge
 from troupe.core.config.stream import read as read_config
 from troupe.core.errors import TroupeError
 from troupe.core.files import directory_lock
-from troupe.core.messages import Message
 from troupe.core.runners.limits import RunLimits
 from troupe.core.runs.aggregate import ENDED, REPORTED, STARTED, Run
 from troupe.core.runs.perform import Backends, lease_dir, perform
+from troupe_plugin_sdk.messages import Message
 
 AGENT = {"kind": "agent", "id": "tester", "source": "troupe"}
 ADA_ACTOR = {"kind": "human", "id": "ada@example.com", "source": "env"}

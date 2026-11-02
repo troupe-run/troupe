@@ -1,4 +1,8 @@
-"""The runner contract's messages as Python types (spec: runner-protocol; design D2, D3, D11).
+"""The runner contract's messages as Python types (spec: runner-protocol, plugin-sdk;
+runner-contract design D2, D3, D11).
+
+Core and every runner plugin use these, so the contract has one definition in Python (runner-sdk
+design D2).
 
 The JSON Schemas in protocol/schemas/runner/ are the source of truth (decision #7). These types
 mirror them by hand until a generator is chosen, and the tests check every type against the
@@ -15,9 +19,9 @@ from dataclasses import dataclass
 from typing import Any, ClassVar, Literal
 
 # Message and ProtocolError are re-exported: callers know them as part of the runner contract.
-from troupe.core.messages import Message as Message
-from troupe.core.messages import ProtocolError as ProtocolError
-from troupe.core.messages import fail, json_field
+from troupe_plugin_sdk.messages import Message as Message
+from troupe_plugin_sdk.messages import ProtocolError as ProtocolError
+from troupe_plugin_sdk.messages import fail, json_field
 
 PROTOCOL_VERSION = 0
 """The protocol version this troupe speaks. Version 0 is the draft contract: it changes in place,

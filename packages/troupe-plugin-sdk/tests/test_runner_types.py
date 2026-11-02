@@ -1,4 +1,5 @@
-"""The Python protocol types agree with the schemas (spec: runner-protocol; design D11)."""
+"""The SDK's runner contract types agree with the schemas in protocol/schemas/runner/ (spec:
+runner-protocol, plugin-sdk; runner-contract design D11; runner-sdk design D3)."""
 
 import json
 from typing import Any
@@ -8,7 +9,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from runner_schemas import is_valid, validate
-from troupe.core.runners import protocol as p
+from troupe_plugin_sdk import runner as p
 
 RUN_IDS = st.uuids().map(str)
 RUN = "0f8fad5b-d9cb-469f-a165-70867728950e"
@@ -274,6 +275,20 @@ INIT = {
 REFUSED: list[tuple[str, type[p.Message], dict[str, Any], str]] = [
     ("unknown field", p.InitEvent, {**INIT, "colour": "red"}, "unknown field"),
     (
+        "unknown field on tool_call",
+        p.ToolCallEvent,
+        {
+            "runId": RUN,
+            "seq": 1,
+            "type": "tool_call",
+            "callId": "c1",
+            "tool": "Read",
+            "inputSummary": "{}",
+            "input": {},
+        },
+        "ToolCallEvent: unknown field\\(s\\) 'input'",
+    ),
+    (
         "native on init",
         p.InitEvent,
         {**INIT, "native": {"type": "system", "subtype": "init"}},
@@ -340,6 +355,7 @@ def test_from_data_refuses_what_the_schema_refuses(
     ref = {
         p.InitEvent: "run-event.schema.json#/$defs/init",
         p.RetryEvent: "run-event.schema.json#/$defs/retry",
+        p.ToolCallEvent: "run-event.schema.json#/$defs/tool_call",
         p.ToolResultEvent: "run-event.schema.json#/$defs/tool_result",
         p.ResultEvent: "run-event.schema.json#/$defs/result",
         p.TurnEvent: "run-event.schema.json#/$defs/turn",

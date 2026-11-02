@@ -16,12 +16,12 @@ from pathlib import Path
 
 from troupe.core import defaults
 from troupe.core.artifacts import MemoryArtifactStore
-from troupe.core.runners import protocol as p
 from troupe.core.runners.effects import NoEffectExpected
 from troupe.core.runners.host import RunnerCommand, RunRequest, run_actor
 from troupe.core.runners.limits import RunLimits
 from troupe.core.runners.outcome import Outcome
 from troupe.platform import processes
+from troupe_plugin_sdk import runner as p
 
 UNKNOWN_OPTION = "troupeConformanceUnknownOption"
 """An option key no runner defines: a runner refuses a key outside its options schema, never

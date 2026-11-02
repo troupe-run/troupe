@@ -12,7 +12,7 @@ from troupe.core.client import messages as m
 from troupe.core.client.dispatch import Method, Send, call, handlers
 from troupe.core.client.session import CancelSignal, Session
 from troupe.core.errors import TroupeError
-from troupe.core.messages import Message
+from troupe_plugin_sdk.messages import Message
 
 RUN_ID = "0f8fad5b-d9cb-469f-a165-70867728950e"
 

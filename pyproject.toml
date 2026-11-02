@@ -14,6 +14,7 @@ members = ["packages/*", "plugins/*"]
 [tool.uv.sources]
 troupe = { workspace = true }
 troupe-artifacts-local = { workspace = true }
+troupe-plugin-sdk = { workspace = true }
 troupe-runner-claude-code = { workspace = true }
 troupe-runner-scripted = { workspace = true }
 troupe-run = { workspace = true }
@@ -27,6 +28,7 @@ troupe-vcs-git = { workspace = true }
 dev = [
     "troupe",
     "troupe-artifacts-local",
+    "troupe-plugin-sdk",
     "troupe-runner-claude-code",
     "troupe-runner-scripted",
     "troupe-run",
@@ -65,6 +67,8 @@ src = [
     "packages/troupe-artifacts-local/tests",
     "packages/troupe-identity-local/src",
     "packages/troupe-identity-local/tests",
+    "packages/troupe-plugin-sdk/src",
+    "packages/troupe-plugin-sdk/tests",
     "packages/troupe-stage-local/src",
     "packages/troupe-stage-local/tests",
     "packages/troupe-store-text/src",
@@ -85,7 +89,7 @@ select = ["E", "W", "F", "I", "UP", "B", "SIM", "RUF", "PT", "N", "ANN", "S"]
 
 [tool.ruff.lint.flake8-bugbear]
 # Field factories for dataclasses that carry JSON metadata: they return dataclasses.field(...).
-extend-immutable-calls = ["troupe.core.messages.json_field"]
+extend-immutable-calls = ["troupe_plugin_sdk.messages.json_field"]
 
 [tool.ruff.lint.per-file-ignores]
 # Tests assert, and drive the CLI and helper processes through subprocess with trusted arguments.
@@ -111,6 +115,8 @@ files = [
     "packages/troupe-artifacts-local/tests",
     "packages/troupe-identity-local/src",
     "packages/troupe-identity-local/tests",
+    "packages/troupe-plugin-sdk/src",
+    "packages/troupe-plugin-sdk/tests",
     "packages/troupe-stage-local/src",
     "packages/troupe-stage-local/tests",
     "packages/troupe-store-text/src",
@@ -132,6 +138,7 @@ mypy_path = [
     "packages/troupe-run/src",
     "packages/troupe-artifacts-local/src",
     "packages/troupe-identity-local/src",
+    "packages/troupe-plugin-sdk/src",
     "packages/troupe-stage-local/src",
     "packages/troupe-store-text/src",
     "packages/troupe-vcs-files/src",
@@ -149,6 +156,7 @@ testpaths = [
     "packages/troupe/tests",
     "packages/troupe-artifacts-local/tests",
     "packages/troupe-identity-local/tests",
+    "packages/troupe-plugin-sdk/tests",
     "packages/troupe-stage-local/tests",
     "packages/troupe-store-text/tests",
     "packages/troupe-vcs-files/tests",
@@ -188,6 +196,7 @@ root_packages = [
     "troupe_run",
     "troupe_artifacts_local",
     "troupe_identity_local",
+    "troupe_plugin_sdk",
     "troupe_stage_local",
     "troupe_store_text",
     "troupe_vcs_files",
@@ -209,6 +218,7 @@ source_modules = [
     "troupe",
     "troupe_artifacts_local",
     "troupe_identity_local",
+    "troupe_plugin_sdk",
     "troupe_stage_local",
     "troupe_store_text",
     "troupe_vcs_files",
@@ -225,12 +235,27 @@ source_modules = ["troupe"]
 forbidden_modules = ["troupe_artifacts_local"]
 
 [[tool.importlinter.contracts]]
-# Plugins see troupe exactly as a third party would: they speak the protocol and import nothing of troupe's
-# (plugins/README.md; bootstrap design D7.3).
+# Plugins see troupe exactly as a third party would: they speak the protocol, build on the plugin SDK, and import
+# nothing else of troupe's (plugins/README.md; bootstrap design D7.3; spec: plugin-sdk). scripts/plugin_imports.py
+# fails the check when a plugin is missing from this contract or the next.
 name = "plugins import nothing from troupe"
 type = "forbidden"
 source_modules = ["troupe_runner_claude_code", "troupe_runner_scripted"]
-forbidden_modules = ["troupe", "troupe_artifacts_local", "troupe_identity_local", "troupe_stage_local", "troupe_store_text", "troupe_vcs_files", "troupe_vcs_git"]
+forbidden_modules = ["troupe", "troupe_run", "troupe_artifacts_local", "troupe_identity_local", "troupe_stage_local", "troupe_store_text", "troupe_vcs_files", "troupe_vcs_git"]
+
+[[tool.importlinter.contracts]]
+# Each plugin is self-contained, so it can move to its own repository (plugins/README.md; spec: plugin-sdk).
+name = "plugins are independent of each other"
+type = "independence"
+modules = ["troupe_runner_claude_code", "troupe_runner_scripted"]
+
+[[tool.importlinter.contracts]]
+# Core and the plugins depend on the plugin SDK, never the other way round, so it imports nothing of troupe's: not
+# core, an adapter or a plugin (spec: plugin-sdk; runner-sdk design D13).
+name = "the plugin SDK imports nothing of troupe's"
+type = "forbidden"
+source_modules = ["troupe_plugin_sdk"]
+forbidden_modules = ["troupe", "troupe_artifacts_local", "troupe_identity_local", "troupe_stage_local", "troupe_store_text", "troupe_vcs_files", "troupe_vcs_git", "troupe_runner_claude_code", "troupe_runner_scripted"]
 
 [[tool.importlinter.contracts]]
 # The Claude Code runner can't use troupe.platform, so it keeps its own OS-specific behaviour (signals, Windows

@@ -1,0 +1,19 @@
+[project]
+name = "troupe-plugin-sdk"
+version = "0.0.0"
+description = "The public API troupe's plugins build against: the runner contract's types and running a model's tool calls."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.12,<3.16"
+# Standard library only, so a plugin that uses it inherits nothing else (spec: plugin-sdk). It imports nothing
+# from troupe: core and the plugins depend on it, not the other way round.
+dependencies = []
+
+[project.urls]
+Homepage = "https://troupe.run"
+Repository = "https://github.com/troupe-run/troupe"
+
+[build-system]
+requires = ["uv_build>=0.13.5,<0.14"]
+build-backend = "uv_build"

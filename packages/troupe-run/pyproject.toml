@@ -14,6 +14,7 @@ dependencies = [
     "troupe @ git+https://github.com/troupe-run/troupe@troupe-v0.1.0#subdirectory=packages/troupe",
     "troupe-artifacts-local @ git+https://github.com/troupe-run/troupe@troupe-artifacts-local-v0.1.0#subdirectory=packages/troupe-artifacts-local",
     "troupe-identity-local @ git+https://github.com/troupe-run/troupe@troupe-identity-local-v0.1.0#subdirectory=packages/troupe-identity-local",
+    "troupe-plugin-sdk",
     "troupe-stage-local @ git+https://github.com/troupe-run/troupe@troupe-stage-local-v0.1.0#subdirectory=packages/troupe-stage-local",
     "troupe-store-text @ git+https://github.com/troupe-run/troupe@troupe-store-text-v0.1.0#subdirectory=packages/troupe-store-text",
     "troupe-vcs-files @ git+https://github.com/troupe-run/troupe@troupe-vcs-files-v0.1.0#subdirectory=packages/troupe-vcs-files",

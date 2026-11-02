@@ -11,10 +11,10 @@ import re
 from dataclasses import dataclass
 from typing import ClassVar, Literal
 
-from troupe.core.messages import Message, ProtocolError, decode, fail, json_field
 from troupe.core.notices import CODES as NOTICE_CODES
 from troupe.core.notices import Notice
-from troupe.core.runners import protocol as p
+from troupe_plugin_sdk import runner as p
+from troupe_plugin_sdk.messages import Message, ProtocolError, decode, fail, json_field
 
 ACTOR_NAME = re.compile(r"\A[a-z][a-z0-9-]{0,63}\Z")
 RUNNER_NAME = ACTOR_NAME

@@ -12,6 +12,7 @@ members = [
     "troupe",
     "troupe-artifacts-local",
     "troupe-identity-local",
+    "troupe-plugin-sdk",
     "troupe-run",
     "troupe-runner-claude-code",
     "troupe-runner-scripted",
@@ -1253,6 +1254,7 @@ dependencies = [
     { name = "jsonschema" },
     { name = "pydantic" },
     { name = "ruamel-yaml" },
+    { name = "troupe-plugin-sdk" },
 ]
 
 [package.metadata]
@@ -1261,6 +1263,7 @@ requires-dist = [
     { name = "jsonschema", specifier = ">=4.26,<5" },
     { name = "pydantic", specifier = ">=2.14,<3" },
     { name = "ruamel-yaml", specifier = ">=0.19.1,<0.20" },
+    { name = "troupe-plugin-sdk", editable = "packages/troupe-plugin-sdk" },
 ]
 
 [[package]]
@@ -1286,6 +1289,11 @@ dependencies = [
 requires-dist = [{ name = "troupe", editable = "packages/troupe" }]
 
 [[package]]
+name = "troupe-plugin-sdk"
+version = "0.0.0"
+source = { editable = "packages/troupe-plugin-sdk" }
+
+[[package]]
 name = "troupe-run"
 version = "0.1.0"
 source = { editable = "packages/troupe-run" }
@@ -1293,6 +1301,7 @@ dependencies = [
     { name = "troupe" },
     { name = "troupe-artifacts-local" },
     { name = "troupe-identity-local" },
+    { name = "troupe-plugin-sdk" },
     { name = "troupe-runner-claude-code" },
     { name = "troupe-runner-scripted" },
     { name = "troupe-stage-local" },
@@ -1306,6 +1315,7 @@ requires-dist = [
     { name = "troupe", editable = "packages/troupe" },
     { name = "troupe-artifacts-local", editable = "packages/troupe-artifacts-local" },
     { name = "troupe-identity-local", editable = "packages/troupe-identity-local" },
+    { name = "troupe-plugin-sdk", editable = "packages/troupe-plugin-sdk" },
     { name = "troupe-runner-claude-code", editable = "plugins/runner-claude-code" },
     { name = "troupe-runner-scripted", editable = "plugins/runner-scripted" },
     { name = "troupe-stage-local", editable = "packages/troupe-stage-local" },
@@ -1391,6 +1401,7 @@ dev = [
     { name = "troupe" },
     { name = "troupe-artifacts-local" },
     { name = "troupe-identity-local" },
+    { name = "troupe-plugin-sdk" },
     { name = "troupe-run" },
     { name = "troupe-runner-claude-code" },
     { name = "troupe-runner-scripted" },
@@ -1418,6 +1429,7 @@ dev = [
     { name = "troupe", editable = "packages/troupe" },
     { name = "troupe-artifacts-local", editable = "packages/troupe-artifacts-local" },
     { name = "troupe-identity-local", editable = "packages/troupe-identity-local" },
+    { name = "troupe-plugin-sdk", editable = "packages/troupe-plugin-sdk" },
     { name = "troupe-run", editable = "packages/troupe-run" },
     { name = "troupe-runner-claude-code", editable = "plugins/runner-claude-code" },
     { name = "troupe-runner-scripted", editable = "plugins/runner-scripted" },

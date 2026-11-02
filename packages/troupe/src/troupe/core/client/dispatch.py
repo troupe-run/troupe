@@ -14,7 +14,7 @@ from typing import Any
 
 from troupe.core.client.session import Session
 from troupe.core.errors import TroupeError
-from troupe.core.messages import Message, ProtocolError
+from troupe_plugin_sdk.messages import Message, ProtocolError
 
 UpdateCallback = Callable[[dict[str, Any]], None]
 """Receives each update, as data, in the order it happens."""
