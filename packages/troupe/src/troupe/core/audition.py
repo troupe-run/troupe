@@ -35,8 +35,9 @@ CLAUDE_CODE_MAX_BUDGET_USD = 1
 already used."""
 
 CLAUDE_CODE_TOOLS = ("Read", "Write", "Edit", "Glob", "Grep")
-"""What the Claude Code example may use: enough to read the repository and write a file, and no
-Bash."""
+"""What the Claude Code example may use: enough to read the repository and write a file. Bash isn't
+allowed, though Claude Code still runs commands it classes as read-only (init-and-audition task
+7.2)."""
 
 CHARACTER = (
     "You are a careful developer working in this repository. Read what's there before you change "
