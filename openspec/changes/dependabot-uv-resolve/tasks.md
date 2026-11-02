@@ -40,7 +40,7 @@
 - [x] 4.1 Differential check: with the delivered file, remove `troupe-*` from a copy and confirm the check names every
   `troupe-*` member and not `troupe`. Then remove `troupe` and confirm it names only `troupe` (covered by 1.1's
   tests; re-run them on the rebased branch). Verify: `uv run pytest scripts/tests/workspace/test_dependabot_members.py`.
-- [ ] 4.2 Ask the owner to run Dependabot's "Check for updates" for `uv` in troupe (Insights → Dependency graph →
+- [x] 4.2 Ask the owner to run Dependabot's "Check for updates" for `uv` in troupe (Insights → Dependency graph →
   Dependabot), since the ignore takes effect once it's on `main`. Read the run's log
   (`gh run view <id> --log | grep -a "troupe"`). Verify: no "Updating troupe" or other member, no
   `dependency_file_not_resolvable`, and the run concludes `success`. If it's not run before archive, record that in
