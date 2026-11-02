@@ -152,6 +152,15 @@ def glossary_problems(text: str) -> list[str]:
         for term in terms
         if "`" in term
     ]
+    # One row per term, compared as a reader sees it: case and extra spaces don't make a new term.
+    rows_of: dict[str, list[str]] = {}
+    for term in terms:
+        rows_of.setdefault(" ".join(term.split()).casefold(), []).append(term)
+    problems += [
+        f"the glossary has {len(written)} rows for {written[0]}: keep one"
+        for written in rows_of.values()
+        if len(written) > 1
+    ]
     problems += [
         f"the glossary has no row for {term}" for term in REQUIRED_TERMS if term not in terms
     ]
@@ -268,6 +277,31 @@ def test_a_glossary_with_no_audition_row_is_named() -> None:
         "| audition | What troupe init --audition writes: a working example actor |\n", ""
     )
     assert glossary_problems(table) == ["the glossary has no row for audition"]
+
+
+AUDITION_AGAIN = "| audition | A working example actor that troupe init --audition defines |\n"
+
+
+def test_a_term_with_two_rows_is_named_once_with_its_count() -> None:
+    # #264: two pull requests each added an audition row, at different places in the table.
+    assert glossary_problems(GLOSSARY_TABLE + AUDITION_AGAIN) == [
+        "the glossary has 2 rows for audition: keep one"
+    ]
+
+
+def test_a_term_with_three_rows_is_named_once_with_its_count() -> None:
+    assert glossary_problems(GLOSSARY_TABLE + AUDITION_AGAIN + AUDITION_AGAIN) == [
+        "the glossary has 3 rows for audition: keep one"
+    ]
+
+
+def test_terms_that_differ_only_in_case_or_spacing_are_duplicates() -> None:
+    table = (
+        GLOSSARY_TABLE
+        + "| the house | The long-lived local process |\n"
+        + "| The  House | The process that runs troupe |\n"
+    )
+    assert glossary_problems(table) == ["the glossary has 2 rows for the house: keep one"]
 
 
 def test_a_cue_that_isnt_marked_provisional_is_named() -> None:
