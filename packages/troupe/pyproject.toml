@@ -12,7 +12,7 @@ dependencies = [
     # (config-model design D6).
     "jsonschema>=4.26,<5",
     # Config's types, generated from protocol/schemas/config/ (config-model design D11).
-    "pydantic>=2.14,<3",
+    "pydantic>=2.14.2,<3",
     # Writes config files. Pinned to a minor version: an upgrade that renders differently changes files' hashes
     # (config-model design D8).
     "ruamel.yaml>=0.19.1,<0.20",
