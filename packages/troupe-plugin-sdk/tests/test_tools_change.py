@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from sdk_tools import call, workspace
+from troupe_plugin_sdk.defaults import ToolLimits
 from troupe_plugin_sdk.effects import Effects
 from troupe_plugin_sdk.tools import Tools
 
@@ -190,3 +191,14 @@ def test_moving_a_missing_file_is_an_error(tmp_path: Path) -> None:
     tools, _ = _tools(tmp_path)
     step = call(tools, "Move", {"source": "a.txt", "destination": "b.txt"})
     assert (step.is_error, step.output) == (True, "a.txt doesn't exist.")
+
+
+def test_editing_a_file_over_the_file_limit_is_an_error_and_the_file_is_unchanged(
+    tmp_path: Path,
+) -> None:
+    root = workspace(tmp_path, {"big.txt": b"a" * 20})
+    tools = Tools(root, EVERYTHING, limits=ToolLimits(file_max_bytes=10))
+    step = call(tools, "Edit", {"file_path": "big.txt", "old_string": "a", "new_string": "b"})
+    assert step.is_error
+    assert step.output == "big.txt is 20 bytes, over the 10-byte limit for Edit."
+    assert (root / "big.txt").read_bytes() == b"a" * 20

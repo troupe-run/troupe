@@ -213,6 +213,19 @@ it was cut, and how to get the rest.
 - **WHEN** a model reads a file larger than the read limit
 - **THEN** the result holds the lines that fit, and says where it stopped and that `offset` reads on
 
+### Requirement: Only regular files of a bounded size are loaded
+`Read` and `Edit` SHALL refuse, with an error result, a path that isn't a regular file, and a file larger than the
+named file limit, before reading any of it. `Grep` SHALL skip both kinds and say how many it skipped. No call SHALL
+hold a whole file larger than its limit in memory, or wait on a pipe or device.
+
+#### Scenario: Reading a file over the limit
+- **WHEN** a model calls `Read` on a file larger than the file limit
+- **THEN** the result is an error giving the file's size and the limit, and the file isn't read
+
+#### Scenario: A named pipe in the workspace
+- **WHEN** a model calls `Read` on a named pipe, or `Grep` over a directory holding one
+- **THEN** `Read` is an error saying it isn't a regular file, `Grep` skips it and counts it, and neither blocks
+
 ### Requirement: Each call and result is a pair of run events
 Each call SHALL be recorded as a `tool_call` event (its call id, the tool's name, and a summary of its input), then a
 `tool_result` event with the same call id, whether it was an error, a summary of its output and the full output's

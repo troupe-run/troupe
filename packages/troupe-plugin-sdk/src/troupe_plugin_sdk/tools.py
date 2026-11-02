@@ -357,11 +357,26 @@ class Tools:
             f"actor doesn't declare. {has}"
         )
 
-    def _file(self, path: WorkspacePath) -> None:
-        if not path.absolute.exists():
-            raise _CallError(f"{path.relative} doesn't exist.")
-        if path.absolute.is_dir():
+    def _file(self, path: WorkspacePath, load: str | None = None) -> None:
+        """Refuse a path that isn't an existing regular file. With ``load``, the tool that reads
+        it whole, refuse one over the file limit too, before anything reads it."""
+        try:
+            status = path.absolute.stat()
+        except FileNotFoundError:
+            raise _CallError(f"{path.relative} doesn't exist.") from None
+        except OSError as error:
+            raise self._failed(load or "The call", path, error) from error
+        if stat.S_ISDIR(status.st_mode):
             raise _CallError(f"{path.relative} is a directory, not a file.")
+        if not stat.S_ISREG(status.st_mode):
+            raise _CallError(
+                f"{path.relative} isn't a regular file, so it can't be read or changed."
+            )
+        cap = self.limits.file_max_bytes
+        if load is not None and status.st_size > cap:
+            raise _CallError(
+                f"{path.relative} is {status.st_size} bytes, over the {cap}-byte limit for {load}."
+            )
 
     def _failed(self, tool: str, path: WorkspacePath, error: OSError) -> _CallError:
         # strerror, never str(error): the full message names the host path.
@@ -372,7 +387,7 @@ class Tools:
 
     def _read(self, data: dict[str, Any]) -> str:
         path = self.workspace.path(data["file_path"])
-        self._file(path)
+        self._file(path, load="Read")
         offset: int = data.get("offset", 1)
         wanted: int = min(data.get("limit", self.limits.read_max_lines), self.limits.read_max_lines)
         try:
@@ -426,7 +441,7 @@ class Tools:
     def _edit(self, data: dict[str, Any]) -> str:
         path = self.workspace.path(data["file_path"])
         self._allowed("Edit", "write", path)
-        self._file(path)
+        self._file(path, load="Edit")
         old: str = data["old_string"]
         new: str = data["new_string"]
         if not old:
@@ -524,12 +539,16 @@ class Tools:
         cap = self.limits.grep_max_matches
         matches: list[str] = []
         more = 0
-        too_large = not_text = 0
+        too_large = not_text = special = 0
         root = self.workspace.root
         for file in files:
             absolute = root.joinpath(*file.split("/"))
             try:
-                if absolute.stat().st_size > self.limits.grep_file_max_bytes:
+                status = absolute.stat()
+                if not stat.S_ISREG(status.st_mode):
+                    special += 1
+                    continue
+                if status.st_size > self.limits.grep_file_max_bytes:
                     too_large += 1
                     continue
                 text = absolute.read_bytes().decode("utf-8")
@@ -553,6 +572,8 @@ class Tools:
             out.append(f"[{too_large} files over {limit} bytes were skipped.]")
         if not_text:
             out.append(f"[{not_text} files that aren't UTF-8 text were skipped.]")
+        if special:
+            out.append(f"[{special} entries that aren't regular files were skipped.]")
         return "\n".join(out)
 
     def _delete(self, data: dict[str, Any]) -> str:

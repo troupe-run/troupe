@@ -150,8 +150,11 @@ Claude Code's.
 
 ### D10. Limits: defaults in one place, lowered only
 
-`defaults` holds `READ_MAX_BYTES` (256 KiB), `READ_MAX_LINES` (2000), `GLOB_MAX_PATHS` (1000), `GREP_MAX_MATCHES`
-(500), `GREP_FILE_MAX_BYTES` (1 MiB) and `SUMMARY_MAX_BYTES` (4096, the Claude Code runner's). `ToolLimits` defaults to
+`defaults` holds `READ_MAX_BYTES` (256 KiB), `READ_MAX_LINES` (2000), `FILE_MAX_BYTES` (16 MiB, the largest file
+`Read` and `Edit` load whole), `GLOB_MAX_PATHS` (1000), `GREP_MAX_MATCHES` (500), `GREP_FILE_MAX_BYTES` (1 MiB) and
+`SUMMARY_MAX_BYTES` (4096, the Claude Code runner's). Only regular files are loaded: a pipe or device is refused by
+`Read` and `Edit` and skipped by `Grep`, so no call waits on one (added after review: `FILE_MAX_BYTES` and the
+regular-file check). `ToolLimits` defaults to
 them and refuses a value that's zero, negative, or above the default, naming it. A cut result ends with a line saying
 what was left out and how to get it (`offset` for `Read`, a narrower `path` or `glob` for the others).
 

@@ -14,6 +14,10 @@ READ_MAX_LINES = 2000
 """The lines ``Read`` returns in one call when the model gives no ``limit``, and the most it may ask
 for."""
 
+FILE_MAX_BYTES = 16 * 1024 * 1024
+"""The largest file ``Read`` and ``Edit`` load. Both read a whole file, so a larger one is an error
+result rather than a runner holding it all in memory."""
+
 GLOB_MAX_PATHS = 1000
 """The paths ``Glob`` returns in one call."""
 
@@ -35,6 +39,7 @@ class ToolLimits:
 
     read_max_bytes: int = READ_MAX_BYTES
     read_max_lines: int = READ_MAX_LINES
+    file_max_bytes: int = FILE_MAX_BYTES
     glob_max_paths: int = GLOB_MAX_PATHS
     grep_max_matches: int = GREP_MAX_MATCHES
     grep_file_max_bytes: int = GREP_FILE_MAX_BYTES
