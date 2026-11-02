@@ -17,6 +17,7 @@ prerelease: false
 | performance | One run of your process |
 | audition | A working example actor that troupe init --audition defines, so a first run is one command, a commit and a perform |
 | rehearsal | A dry run: any command that changes something, run with --rehearse, checks everything, shows what it would do, and changes nothing |
+| audition | What troupe init --audition writes: a working example actor, Claude Code by default, ready to perform or edit. Not a rehearsal, which is a dry run (--rehearse) |
 | stage | Where an actor runs: on the host, in a container, or elsewhere |
 | notes | What a run teaches, fed into the next one |
 | gate | A point where work waits for a decision from whoever owns it |
