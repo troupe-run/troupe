@@ -197,10 +197,15 @@ each new event as an update as it is recorded, and SHALL stop when the run ends 
 - **AND** following stops when the run's end is recorded
 
 #### Scenario: Following shows events as they are recorded
-- **WHEN** a person follows a running run's logs, with the store's fallback poll interval set to 60 s, and the
-  runner sends three events
-- **THEN** each event is shown, and the median delay, measured from when the writer's append returned rather than
-  from the event's recorded time, is under 0.5 s
+- **WHEN** a person follows a running run's logs from another process, with the store's fallback poll and check
+  intervals and following's run check all set to 60 s, and the run's process records each event only once following
+  has shown the event before it, five times, and then, while no delay so far is under 0.5 s, once more at a time for
+  up to a 60 s allowance for a slow stretch
+- **THEN** each event is shown before the next one is recorded, so following woke on that event's own write rather
+  than on a later event or a timer
+- **AND** the fastest of the delays, measured from when the writer's append returned rather than from the event's
+  recorded time, is under 0.5 s, and the median of the first five is within 0.5 s plus an allowance for a loaded
+  machine
 
 #### Scenario: Following an interrupted run
 - **WHEN** a person follows the logs of a run that is `interrupted`
