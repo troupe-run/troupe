@@ -61,7 +61,7 @@
   the Claude Code note and the pointer to `.troupe/actors/lead.md` for `claude-code`. The rehearsal shows "would"
   and exits 3. Verify with CLI tests for both policy cases, the scripted and Claude Code renderings, and the
   rehearsal's exit code. Check that the global flags' placement test covers `init`.
-- [ ] 5.3 Add an end-to-end test on all three platforms. In a fresh git repository, run `troupe init --audition
+- [x] 5.3 Add an end-to-end test on all three platforms. In a fresh git repository, run `troupe init --audition
   --runner scripted`, then run each printed step as printed (the commit, the policy variable, the perform). Verify
   that the perform ends `succeeded` with its effect check passed. This is the issue's offline "done when".
 - [x] 5.4 Add a test that `troupe init --rehearse` and `troupe init --audition --rehearse` leave the directory

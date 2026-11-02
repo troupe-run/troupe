@@ -108,15 +108,14 @@ constrained to argparse choices. The core checks it, so `runner.unknown` names t
   a second flag is worth.
 - `--audition <runner>` with the value required. Rejected because Claude Code must be the default (#232).
 
-The issue left this choice to the design, so **this is for the owner to confirm at review.**
+The issue left this choice to the design. **The owner confirmed it on PR #260 (2026-11-02).**
 
 ### D5. The two refusals exit 1, not the usage code
 
 `theatre.exists` and `vcs.not-a-repository` exit with 1 (`FAILURE`), like `theatre.not-found`. The exit-code table
 defines 2 as "the command line was not understood", and here it was understood. The issue's wording says these
 refuse "with a usage error naming the fix", which reads as describing the message rather than the exit code.
-**This is for the owner to confirm at review.** If 2 is wanted, the change is one line each in
-`troupe.core.errors`, plus the scenarios' codes.
+**The owner confirmed exit 1 on PR #260 (2026-11-02).**
 
 ### D6. The example actor is defined in one module, `troupe.core.audition`
 
