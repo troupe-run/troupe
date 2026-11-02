@@ -41,7 +41,7 @@
 
 - [x] 3.1 Before opening it, re-read infrastructure's `CLAUDE.md` steps 5 and 6 and `openspec/config.yaml` context on
   `main`. Verify they still match design, Context; if not, stop and update D1 to D3.
-- [ ] 3.2 Open a draft pull request with `Closes #238` and `Closes #256`, each on its own line, linking
+- [x] 3.2 Open a draft pull request with `Closes #238` and `Closes #256`, each on its own line, linking
   troupe-run/website#89 and #101. Verify `gh pr view --json closingIssuesReferences` lists both.
 
 ## Workflow follow-up
