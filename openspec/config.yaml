@@ -75,12 +75,13 @@ context: |
     alongside it; otherwise infrastructure's drift job fails. Its `oob/README.md` says how.
   - When a change fixes a tracked issue, comment on the issue with the change and close it.
   - Commit in small steps with messages that say why.
-  - Before archiving, wait for Claude's review of the last push and act on each finding by its tier: fix or answer
-    every must-fix and nit, resolve only nits, and raise decisions and disputed must-fixes with the owner. The
-    review resolves its own must-fixes (troupe-run/infrastructure docs/development-workflow.md, "Claude's review");
-    after answering a must-fix without a push, re-run the last `claude review` run (`gh run rerun <id>`) so the
-    review judges the reply. It also resolves its own nits once a push has fixed them, so a nit fixed by a push
-    needn't be resolved by hand.
+  - Before archiving, wait for Claude's review of the last push to complete (the required `claude review completed`
+    check passed; if it failed, re-run the run it names), and act on each finding by its tier: fix or answer every
+    must-fix and nit, resolve only nits, and raise decisions and disputed must-fixes with the owner. A must-fix fixed
+    by a push gets no "fixed" reply; reply only when it needs a discussion, and then before pushing. The review
+    resolves its own must-fixes (troupe-run/infrastructure docs/development-workflow.md, "Claude's review"), and
+    judges a reply to one when it's posted; if that run fails, re-run it (`gh run rerun <id>`). It also resolves its
+    own nits once a push has fixed them, so a nit fixed by a push needn't be resolved by hand.
 
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.
