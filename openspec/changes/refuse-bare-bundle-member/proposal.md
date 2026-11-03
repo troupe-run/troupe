@@ -58,4 +58,6 @@ None.
 - `scripts/tests/bundle_state.py`, `scripts/tests/workspace/test_release_config.py`,
   `scripts/tests/workspace/test_pin_bundle.py`: the fixtures and tests for the rule, including a new member.
 - `contributing/releasing.md`: the bundle's first release and adding a package.
+- `scripts/tests/workspace/test_bundle.py`: one test assumed the SDK unreleased, so it would fail the SDK's first
+  pinning pull request. It now sets the SDK's state itself (owner, 2026-11-03).
 - No Purpose changes, so troupe-run/infrastructure's `oob/troupe-spec-purposes.json` is untouched.
