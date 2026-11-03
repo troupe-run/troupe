@@ -105,7 +105,7 @@
 - [x] 7.3 Update `plugins/runner-claude-code/README.md` (options, the translation, delete and move, what shell rules
   can still do), `plugins/README.md` and `contributing/runners.md` (the declaration, `init.effects`, the translation
   seam). Verify every option and error code the README names is in the published schemas (the README test).
-- [ ] 7.4 Run `openspec validate declared-effects --strict` and `uv run scripts/check.py`. Verify both pass.
+- [x] 7.4 Run `openspec validate declared-effects --strict` and `uv run scripts/check.py`. Verify both pass.
 
 ## Workflow follow-up
 
