@@ -48,7 +48,7 @@ def _credential(env: dict[str, str]) -> str:
     return "the existing login"
 
 
-def test_a_live_run_writes_and_reads_back_a_file_with_only_write_and_read_allowed(
+def test_a_live_run_writes_and_reads_back_a_file_its_effects_declare_with_only_read_allowed(
     tmp_path: Path,
 ) -> None:
     workspace = tmp_path / "workspace"
@@ -69,7 +69,8 @@ def test_a_live_run_writes_and_reads_back_a_file_with_only_write_and_read_allowe
                 str(uuid.uuid4()),
                 DIRECTION,
                 workspace,
-                {"model": MODEL, "maxBudgetUsd": BUDGET_USD, "allowedTools": ["Write", "Read"]},
+                {"model": MODEL, "maxBudgetUsd": BUDGET_USD, "allowedTools": ["Read"]},
+                effects=p.EffectsDeclaration(write=["out/**"], delete=[], move=[]),
             ),
             store=MemoryArtifactStore(),
             effect=ExpectedFiles([workspace / "out" / "hello.txt"]),
@@ -78,7 +79,10 @@ def test_a_live_run_writes_and_reads_back_a_file_with_only_write_and_read_allowe
         )
     )
     results = [e for e in events if isinstance(e, p.ResultEvent)]
+    inits = [e for e in events if isinstance(e, p.InitEvent)]
     print(f"\ncredential: {_credential(env)}")
+    if inits and inits[0].engine is not None:
+        print(f"Claude Code: {inits[0].engine.version}")
     print(f"outcome: {outcome.outcome} {outcome.error.code if outcome.error else ''}")
     if results:
         loaded = results[0].message.rstrip(". \n").endswith(MARKER)
@@ -86,6 +90,7 @@ def test_a_live_run_writes_and_reads_back_a_file_with_only_write_and_read_allowe
     assert outcome.outcome == "succeeded", outcome.error
     assert (workspace / "out" / "hello.txt").read_text(encoding="utf-8").strip() == "hi"
     assert any(isinstance(e, p.ToolCallEvent) and e.tool == "Write" for e in events)
+    assert inits[0].effects == "translated"
     [result] = results
     assert result.cost_usd is not None
     assert result.cost_usd <= BUDGET_USD

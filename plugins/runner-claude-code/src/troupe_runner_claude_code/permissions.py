@@ -21,9 +21,9 @@ audit checks the run's changes afterwards.
 """
 
 from dataclasses import dataclass, field
-from pathlib import PurePath
+from pathlib import Path, PurePath
 
-from troupe_plugin_sdk.declaration import Declaration, Mode
+from troupe_plugin_sdk.declaration import Declaration, Mode, posix_absolute
 from troupe_runner_claude_code.options import MCP_SERVER, Options
 
 SHELL_TOOLS = ("Bash", "PowerShell")
@@ -87,6 +87,17 @@ def _untranslatable(text: str, where: str, characters: str) -> None:
             )
 
 
+def _forms(path: PurePath) -> list[str]:
+    """``path`` in the SDK's normalised absolute form, and its resolved form too when that differs:
+    resolving only a path on this machine, never a pure one a test builds."""
+    forms = [posix_absolute(path).rstrip("/")]
+    if isinstance(path, Path):
+        resolved = posix_absolute(path.resolve()).rstrip("/")
+        if resolved not in forms:
+            forms.append(resolved)
+    return forms
+
+
 def _rooted(path: str) -> str:
     """An absolute path in the SDK's normalised form, as a Claude Code rule's absolute path."""
     return "/" + path
@@ -107,20 +118,25 @@ class ClaudeCodePermissions:
             if pattern.startswith("!"):
                 _untranslatable(pattern, "effects.write", "!")
             _untranslatable(pattern, "effects.write", PATTERN_UNTRANSLATABLE)
-        workspace = declaration.workspace_absolute()
-        _untranslatable(workspace, "workspace", UNTRANSLATABLE)
-        allow = [f"Edit({_rooted(pattern)})" for pattern in declaration.absolute("write")]
+        # Each path as given and, when a link leads elsewhere (macOS's /var is /private/var), as it
+        # resolves, so a rule matches whichever form Claude Code compares.
+        roots = _forms(declaration.workspace)
+        for root in roots:
+            _untranslatable(root, "workspace", UNTRANSLATABLE)
+        write = declaration.effects.declared("write")
+        allow = [f"Edit({_rooted(root)}/{pattern})" for root in roots for pattern in write]
         add_dirs: list[str] = []
         env: dict[str, str] = {}
-        scratch = declaration.scratch_absolute()
-        if scratch is not None and declaration.scratch is not None:
-            _untranslatable(scratch, "scratch", UNTRANSLATABLE)
-            allow.append(f"Edit({_rooted(scratch)}/**)")
+        if declaration.scratch is not None:
+            for scratch in _forms(declaration.scratch):
+                _untranslatable(scratch, "scratch", UNTRANSLATABLE)
+                allow.append(f"Edit({_rooted(scratch)}/**)")
             native = str(PurePath(declaration.scratch))
             add_dirs.append(native)
             env = dict.fromkeys(TEMPORARY_VARIABLES, native)
-        root = workspace.rstrip("/")
-        deny = [f"Edit({_rooted(root)}/.git/**)", f"Edit({_rooted(root)}/.troupe/**)"]
+        deny = [
+            f"Edit({_rooted(root)}/{entry}/**)" for root in roots for entry in (".git", ".troupe")
+        ]
         offered = tuple(
             MCP_TOOLS[effect]
             for effect in ("delete", "move")

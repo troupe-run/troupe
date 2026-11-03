@@ -13,9 +13,19 @@ Anthropic):
     rate-limit-retries        the fake API answers 429 (rate limited): two retries, then the error
     network-retries           nothing listens at the API's address: two retries, then the error
 
-The one fixture that needs a real credential is captured by the owner, never in an agent session:
-    success-with-tools        needs CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY: one short run
-                              that writes a file and reads it back, pinned model, budget-capped
+The fixtures that need a real credential are captured by the owner, never in an agent session. Each
+needs CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY, and is one short run on a pinned model,
+budget-capped:
+    success-with-tools        writes a file and reads it back
+    edit-denied-by-effects    the runner's translated rules (write declared for out/** only) deny
+                              an edit to src/a.txt: a permission denial, then the result
+    delete-through-troupe     delete declared for drafts/**: Claude Code calls troupe's own
+                              mcp__troupe__Delete on drafts/old.md, served by the runner's MCP
+                              server
+
+The last two are launched exactly as the runner launches Claude Code: the actor's effects are
+translated by the runner's own ClaudeCodePermissions and the command line built by its build(),
+so the recording is of the rules a run really gets (declared-effects design D8).
 
 The tool writes recording.jsonl (each native line as {"transcript": ..., "atMs": ...}, scrubbed)
 and provenance.json. The paired run events and expected.json are written by hand afterwards.
@@ -190,8 +200,69 @@ def rescrub(directory: Path) -> None:
     provenance_path.write_text(json.dumps(provenance, indent=2) + "\n", encoding="utf-8")
 
 
+THROUGH_RUNNER: dict[str, tuple[dict[str, list[str]], dict[str, bytes], str]] = {
+    "edit-denied-by-effects": (
+        {"write": ["out/**"]},
+        {},
+        "Use the Write tool to create src/a.txt containing exactly: hi\n"
+        "If you can't, don't try another way: reply with one word: denied.",
+    ),
+    "delete-through-troupe": (
+        {"delete": ["drafts/**"]},
+        {"drafts/old.md": b"an old draft\n"},
+        "Use the mcp__troupe__Delete tool to delete drafts/old.md, then reply with one word: done.",
+    ),
+}
+"""Each fixture captured through the runner: the actor's effects, the workspace's files, and the
+direction."""
+
+
+def _through_runner(
+    fixture: str, workspace: Path, private: Path, run_scratch: Path
+) -> tuple[list[str], bytes, dict[str, str]]:
+    """The command line, standard input and environment the runner would give Claude Code."""
+    # Imported here: the offline fixtures need nothing but Claude Code and the standard library.
+    from troupe_plugin_sdk.declaration import Declaration
+    from troupe_plugin_sdk.effects import Effects
+    from troupe_runner_claude_code.command import build
+    from troupe_runner_claude_code.effects_server import write_config
+    from troupe_runner_claude_code.options import parse_options
+    from troupe_runner_claude_code.permissions import ClaudeCodePermissions
+
+    declared, files, direction = THROUGH_RUNNER[fixture]
+    for relative, data in files.items():
+        path = workspace / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+    options = parse_options({"model": MODEL, "maxBudgetUsd": float(BUDGET_USD)})
+    effects = Effects(
+        write=tuple(declared.get("write", [])),
+        delete=tuple(declared.get("delete", [])),
+        move=tuple(declared.get("move", [])),
+    )
+    declaration = Declaration(effects, workspace, run_scratch)
+    rules = ClaudeCodePermissions(options).translate(declaration)
+    server = None
+    if rules.mcp_tools:
+        config = private / "effects.json"
+        write_config(
+            config,
+            run_id="00000000-0000-4000-8000-000000000000",
+            declaration=declaration,
+            tools=rules.mcp_tools,
+            event_max_bytes=65536,
+        )
+        server = [sys.executable, "-m", "troupe_runner_claude_code.effects_server", str(config)]
+    claude = shutil.which("claude")
+    if claude is None:
+        sys.exit("capture: claude isn't on PATH. Fix: install Claude Code.")
+    launch = build(Path(claude), options, direction, None, private, {}, rules, server)
+    return launch.argv, launch.stdin, launch.env
+
+
 def capture(fixture: str, out: Path) -> None:
-    owner_run = fixture == "success-with-tools"
+    through_runner = fixture in THROUGH_RUNNER
+    owner_run = fixture == "success-with-tools" or through_runner
     if fixture not in {
         "is-error-success-subtype",
         "auth-retries",
@@ -200,6 +271,7 @@ def capture(fixture: str, out: Path) -> None:
         "rate-limit-retries",
         "network-retries",
         "success-with-tools",
+        *THROUGH_RUNNER,
     }:
         sys.exit(f"capture: unknown fixture {fixture!r}")
     claude = shutil.which("claude")
@@ -210,8 +282,9 @@ def capture(fixture: str, out: Path) -> None:
     ).stdout.split()[0]
     scratch = Path(tempfile.mkdtemp(prefix="troupe-capture-"))
     workspace, home = scratch / "workspace", scratch / "home"
-    workspace.mkdir()
-    home.mkdir()
+    private, run_scratch = scratch / "private", scratch / "run-scratch"
+    for directory in (workspace, home, private, run_scratch):
+        directory.mkdir()
     env = {
         "PATH": os.environ["PATH"],
         "HOME": str(home),
@@ -264,6 +337,10 @@ def capture(fixture: str, out: Path) -> None:
         prompt = OFFLINE_PROMPT
         flags += ["--bare", "--model", MODEL]
     argv = [claude, "-p", prompt, *flags]
+    stdin: bytes | None = None
+    if through_runner:
+        argv, stdin, launched = _through_runner(fixture, workspace, private, run_scratch)
+        env = {**env, **{k: v for k, v in launched.items() if k not in ("HOME", "PATH")}}
 
     started = time.monotonic()
     lines: list[tuple[int, str]] = []
@@ -271,12 +348,16 @@ def capture(fixture: str, out: Path) -> None:
         argv,
         cwd=workspace,
         env=env,
+        stdin=subprocess.PIPE if stdin is not None else subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
         text=True,
     )
     if process.stdout is None:
         sys.exit("capture: claude's output wasn't piped")
+    if stdin is not None and process.stdin is not None:
+        process.stdin.write(stdin.decode("utf-8"))  # the direction, as the runner sends it
+        process.stdin.close()
     terminated = False
     for raw in process.stdout:
         lines.append((round((time.monotonic() - started) * 1000), raw.rstrip("\n")))
@@ -289,6 +370,10 @@ def capture(fixture: str, out: Path) -> None:
 
     user_home = str(Path.home())
     replacements = {
+        str(private): "/private",
+        str(private.resolve()): "/private",
+        str(run_scratch): "/scratch",
+        str(run_scratch.resolve()): "/scratch",
         str(workspace): "/workspace",
         str(workspace.resolve()): "/workspace",
         str(home): "~",

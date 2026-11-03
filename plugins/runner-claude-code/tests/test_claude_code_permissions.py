@@ -3,12 +3,13 @@ effects become edit rules", "The scratch directory is Claude Code's to use", "De
 effects are troupe's own tools", "What the translation can't cover is said, not hidden" and "A
 pattern Claude Code would read differently is refused"; declared-effects design D8)."""
 
+import sys
 from collections.abc import Mapping
-from pathlib import PurePath, PurePosixPath, PureWindowsPath
+from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
 
 import pytest
 
-from troupe_plugin_sdk.declaration import Declaration
+from troupe_plugin_sdk.declaration import Declaration, posix_absolute
 from troupe_plugin_sdk.effects import Effects
 from troupe_runner_claude_code.options import parse_options
 from troupe_runner_claude_code.permissions import (
@@ -141,3 +142,16 @@ def test_a_workspace_path_claude_code_would_read_differently_is_refused(workspac
 def test_delete_and_move_patterns_are_troupes_tools_own_so_any_pattern_is_kept() -> None:
     rules = _rules(Effects(delete=("app/[id]/*",), move=("a(1)/**",)))
     assert rules.mcp_tools == ("Delete", "Move")
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="a symbolic link needs a privilege on Windows")
+def test_a_workspace_reached_through_a_link_gets_rules_for_both_forms(tmp_path: Path) -> None:
+    real = tmp_path / "real"
+    real.mkdir()
+    linked = tmp_path / "linked"
+    linked.symlink_to(real, target_is_directory=True)
+    rules = _rules(Effects(write=("out/**",)), linked, None)
+    given, resolved = posix_absolute(linked), posix_absolute(real.resolve())
+    assert rules.allow == (f"Edit(/{given}/out/**)", f"Edit(/{resolved}/out/**)")
+    assert f"Edit(/{resolved}/.troupe/**)" in rules.deny
+    assert f"Edit(/{given}/.git/**)" in rules.deny
