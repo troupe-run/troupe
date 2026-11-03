@@ -19,7 +19,8 @@ Every command but `init` runs in a **theatre**: the nearest directory, from wher
   theatre in it or above it. It writes `.troupe/.gitignore` and `.troupe/.gitattributes`, and records nothing.
   `--audition` also defines a working example actor, `lead`, and prints what to run next: commit, allow the local
   stage, and `troupe perform lead` with an example direction. The actor runs Claude Code, with a USD 1 budget and a
-  character in `.troupe/actors/lead.md` to edit; `--runner scripted` makes one that runs offline with no account.
+  character in `.troupe/actors/lead.md`, which you change with `troupe config set actors.lead.character=@<file>`;
+  `--runner scripted` makes one that runs offline with no account.
 - **`troupe perform`** runs one actor, as config defines it, and records the run. Progress goes to standard error;
   on success, standard output gets `run <id> succeeded`. It exits by the run's outcome: 0 succeeded, 130 cancelled
   with Ctrl-C, 1 otherwise.

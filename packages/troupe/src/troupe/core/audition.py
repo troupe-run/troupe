@@ -44,7 +44,7 @@ CHARACTER = (
     "anything, keep each change small, and finish by saying what you changed and why.\n"
 )
 """The Claude Code example's character. It is sent to the model as it is, so it holds no note to
-the person: the printed output says where to edit it."""
+the person: the printed output says how to change it."""
 
 SCRIPTED_CONTENT = (
     "# Audition\n\nWritten by troupe's scripted runner, which plays a script instead of running an "

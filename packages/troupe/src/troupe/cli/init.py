@@ -132,7 +132,13 @@ def render_init(result: dict[str, Any], directory: Path, stdout: TextIO) -> None
     )
     character = f"{THEATRE_DIR}/actors/{actor['name']}.md"
     if any(file["path"] == character for file in result["files"]):
-        print(f"Its character, the prompt it runs with, is {character}: edit it.", file=stdout)
+        # Not "edit it": troupe can't read hand edits back yet (#119), so an edited file makes the
+        # next command refuse with config.file-not-troupes (first-run-walkthrough design D8).
+        print(
+            f"Its character, the prompt it runs with, is {character}. To change it, write yours "
+            f"in a file and run: troupe config set actors.{actor['name']}.character=@<file>",
+            file=stdout,
+        )
     if rehearsed:
         print("Rehearsal: nothing was made, written or recorded.", file=stdout)
         return
