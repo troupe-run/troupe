@@ -1,9 +1,9 @@
 ## ADDED Requirements
 
 ### Requirement: The first run leads with Claude Code and your own direction
-The first-run walkthrough SHALL start from `troupe init --audition` in the reader's own repository, have them edit the
-`lead` actor's character in `.troupe/actors/lead.md`, and run `troupe perform lead` with a `--direction` they type.
-Each command it gives SHALL run as written in the docs check, with a stand-in `claude`.
+The first-run walkthrough SHALL start from `troupe init --audition` in the reader's own repository, have them set the
+`lead` actor's character from a file of their own with `troupe config set`, and run `troupe perform lead` with a
+`--direction` they type. Each command it gives SHALL run as written in the docs check, with a stand-in `claude`.
 
 #### Scenario: The Claude Code walkthrough runs as written
 - **WHEN** the docs check runs each command the walkthrough gives, in order, in a git repository with a commit, with a
