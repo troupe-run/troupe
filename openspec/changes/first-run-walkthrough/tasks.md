@@ -46,8 +46,8 @@
 
 ## 4. Integration
 
-- [ ] 4.1 Run `uv run scripts/check.py` and verify it passes.
-- [ ] 4.2 Follow the new pages by hand from a fresh install of this branch with a real, logged-in Claude Code, in a
+- [x] 4.1 Run `uv run scripts/check.py` and verify it passes.
+- [x] 4.2 Follow the new pages by hand from a fresh install of this branch with a real, logged-in Claude Code, in a
       repository with uncommitted changes: `init --audition`, a character of your own set through config, your own
       direction, and the notice shown. Then the offline path. Record the result in the PR description.
 
