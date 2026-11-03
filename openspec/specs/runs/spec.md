@@ -310,8 +310,8 @@ was recorded, and `transcript` when the runner never started.
 - **THEN** the details have `failedAt` 2 and no `endError`
 
 ### Requirement: A run uses the actor as config defines it
-`perform` SHALL take the actor's runner, options, effect check and character from the merged config, as it is when
-the run starts. A request SHALL name only the actor, the direction and whether to rehearse.
+`perform` SHALL take the actor's runner, options, effects, effect check and character from the merged config, as it
+is when the run starts. A request SHALL name only the actor, the direction and whether to rehearse.
 
 #### Scenario: The character reaches the runner
 - **WHEN** config gives `tester` a character, and a person performs `tester` with the scripted runner and a script
@@ -321,6 +321,10 @@ the run starts. A request SHALL name only the actor, the direction and whether t
 #### Scenario: Config changed between two runs
 - **WHEN** a person performs `tester`, changes its runner's options, and performs it again
 - **THEN** the second run uses the new options
+
+#### Scenario: The effects reach the runner
+- **WHEN** config gives `tester` `effects.write: ["out/**"]` and a person performs it
+- **THEN** the runner's `run/start` carries `write: ["out/**"]` and empty `delete` and `move`
 
 ### Requirement: The effect check reads the run's workspace
 The effect check's paths SHALL be read in the run's workspace: under the worktree for a worktree run, and under the
@@ -395,3 +399,17 @@ start came first.
 - **THEN** perform fails with `run.recording-failed`, naming the run, the error that stopped the worktree, and the
   error recording its end
 - **AND** `status` shows the run as `interrupted`, and it can be discarded
+
+### Requirement: Perform's effects check shows the declaration
+A rehearsed `perform` SHALL show the effects the run would start with, and, when a run's effect check fails because
+of the audit, `perform` SHALL show each change outside the declaration with the effect it needed, on every surface,
+as structured data.
+
+#### Scenario: A rehearsal shows the effects
+- **WHEN** a person rehearses performing `tester`, which declares `write` for `out/**`
+- **THEN** the rehearsal shows `effects: write out/**`, and a read-only actor's shows that it's read-only
+
+#### Scenario: A failed audit on the command line
+- **WHEN** a run fails its audit for `src/a.py`
+- **THEN** `troupe perform` reports the outcome `failed`, naming `src/a.py`, `write`, and the `troupe config set` that
+  would declare it
