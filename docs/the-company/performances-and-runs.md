@@ -14,8 +14,8 @@ dry-run counterpart of a performance, and isn't built yet either.
 
 ## A run
 
-`troupe perform <actor>` runs one actor, as config defines it: its runner, the runner's options, its effect check
-and its character. `--direction` says what this run is asked to do.
+`troupe perform <actor>` runs one actor, as config defines it: its runner, the runner's options, its effect check,
+its [effects](#effects) and its character. `--direction` says what this run is asked to do.
 
 1. **Everything that can refuse goes first:** who you are, the policy, whether the stage admits the actor, the
    actor's config (an actor config doesn't have, or config with a [conflict](../stagecraft/hand-edit-config.md#branches),
@@ -58,8 +58,45 @@ troupe works out the outcome from everything it saw, never from the runner's exi
 only when the runner reports an `ok` result, the effect check passes and the runner exits cleanly. Otherwise it has
 failed, was cancelled, timed out, crashed or couldn't start, and the error says which and why.
 
-**The effect check** is what the run was for: `--expect` names each file the run must create or change, and troupe
-checks them afterwards. `--no-effect-check` says there's nothing to check. One of the two is required.
+**The effect check** is what the run was for, and what it was allowed to do. The actor's `expect` names each file the
+run must create or change, and troupe checks them afterwards; `expect: []` says no file has to change. Then troupe
+audits every change the run made against the actor's [effects](#effects), whatever its `expect`.
+
+## Effects
+
+An actor's **effects** say what its runs may change. Each is a list of patterns, relative to the theatre:
+
+| Effect | Allows | Example |
+|---|---|---|
+| `write` | Creating and changing files | `actors.tester.effects.write='["out/**"]'` |
+| `delete` | Removing files | `actors.tester.effects.delete='["drafts/*"]'` |
+| `move` | Moving or renaming files, where both the old path and the new one match | `actors.tester.effects.move='["docs/**"]'` |
+
+- **Patterns** use `*` within one part of a path, `**` as a whole part for any number of parts, and `?` for one
+  character. They're never absolute, never use `..`, and never reach `.git/` or `.troupe/`, which no effect allows.
+- **With nothing declared, an actor is read-only.** It can read and search anything in its workspace, and change
+  nothing.
+- **Deleting and moving are declared on their own,** apart from writing, because they're more destructive, and a
+  reviewer should see that they were asked for.
+- **Every file in `expect` must be inside `write` or `move`,** or troupe refuses the actor, naming the
+  `troupe config set` that declares it.
+- **Each runner applies the effects as it can,** and its first event says how. troupe's own runners check each tool
+  call before carrying it out, and refuse one that needs an effect the actor doesn't declare, telling the model
+  which. The Claude Code runner translates them into Claude Code's permission rules, and offers troupe's own tools
+  for deleting and moving.
+- **After each run, troupe audits what changed** in its workspace, as git sees it: added or changed files need
+  `write`, removed ones `delete`, and a moved file `move` for both ends. Files git ignores, `.git` and `.troupe/`
+  are left out. A change outside the declaration fails the run, naming each file and the effect it needed. A run in
+  the theatre counts every change made there while it ran, by anyone.
+- **Every run gets scratch space:** an empty directory outside the theatre, for temporary files, removed when the
+  run ends. Nothing written there needs an effect or reaches the theatre. `RUN_SCRATCH_ROOT` says where it's made
+  (by default, your system's temporary directory).
+
+**Effects aren't enforcement.** On the local stage, a run's runner is a process on your machine. troupe's tools and
+Claude Code's rules limit what the agent does through them, and the audit checks the workspace afterwards, but a
+change a run makes *outside* its workspace, such as to a file in your home directory, is neither prevented nor
+detected. Only a stage that enforces effects contains a run, and lineage records the local stage's effects as
+`unenforced` whatever the actor declares.
 
 **Ctrl-C** cancels the run: troupe asks the runner to stop, gives it a grace period, then stops it and everything it
 started. The run is recorded as `cancelled`, and `perform` exits 130.
@@ -94,7 +131,8 @@ process there can write any file and reach any host you can, so troupe can't enf
 local stage therefore refuses every actor unless policy allows it, and every event the run records says its effects
 weren't enforced and which setting allowed it.
 
-`--expect` isn't enforcement: it checks afterwards that the actor did what it was for. Two things are planned:
+Neither the effect check nor an actor's [effects](#effects) is enforcement: they limit what an agent does through
+troupe's tools and check the workspace afterwards. Two things are planned:
 - a stage that can enforce what an actor may touch, in a container
   ([#65](https://github.com/troupe-run/troupe/issues/65));
 - a git worktree for each run on the local stage, so you can see exactly what a run changed and keep or discard it

@@ -29,7 +29,7 @@ follows (decision [#16](https://github.com/troupe-run/troupe/issues/16)).
 | Method | Direction | Kind | Params | Result |
 |---|---|---|---|---|
 | `initialize` | troupe → runner | request | `protocolVersions`, `host {name, version}`, `capabilities` | `protocolVersion`, `runner {name, version}`, `capabilities` |
-| `run/start` | troupe → runner | request | `runId`, `direction`, `character` (optional), `workspace`, `options`, `limits {eventMaxBytes}` | `runId` |
+| `run/start` | troupe → runner | request | `runId`, `direction`, `character` (optional), `workspace`, `effects {write, delete, move}`, `scratch`, `options`, `limits {eventMaxBytes}` | `runId` |
 | `run/event` | runner → troupe | notification | one run event | — |
 | `run/transcript` | runner → troupe | notification | `runId`, `record`, `encoding` (optional) | — |
 | `run/cancel` | troupe → runner | request | `runId` | `{}` |
@@ -58,7 +58,41 @@ engine's task and system prompt. `options` holds runner-specific settings, which
 troupe passes through without looking inside them. The runner publishes their schema (see
 [Publishing a runner's schemas](#publishing-a-runners-schemas)), and refuses an option it doesn't define, with an
 error naming it, rather than ignoring it. `limits.eventMaxBytes` is the largest serialised event troupe
-keeps inline: summarise below it.
+keeps inline: summarise below it. `effects` and `scratch` are covered in [Applying the effects](#applying-the-effects).
+
+### Applying the effects
+
+`run/start`'s `effects` is the actor's declaration, always with all three lists: `write`, `delete` and `move`, each a
+list of workspace-relative patterns. Empty lists mean the actor is read-only. `scratch` is the absolute path of an
+empty directory outside the workspace that troupe made for this run, and removes when it ends: the runner and its
+engine may use it for anything, with no effect.
+
+A runner applies the declaration its own way, and says how in its `init` event's `effects`:
+
+- **`checked`:** it checks each change its engine asks for before carrying it out. A runner whose engine returns tool
+  calls (a local model, an OpenAI-style API) gives them to the plugin SDK's `Tools`, which does exactly this.
+- **`translated`:** it translates the declaration into its engine's own rules, as the Claude Code runner does into
+  Claude Code's permission rules.
+
+A runner that can do neither doesn't conform: every actor is at least read-only. The SDK gives every runner the same
+view of the declaration, whichever way it goes (`troupe_plugin_sdk.declaration`):
+
+```python
+from troupe_plugin_sdk.declaration import Declaration, EffectsTranslation
+
+declaration = Declaration.from_run_start(params)  # the effects, the workspace and scratch
+declaration.absolute("write")  # each pattern rooted at the workspace: /c/work/out/** on Windows too
+declaration.scratch_absolute()
+
+
+class MyEngineRules:  # an EffectsTranslation
+    mode = "translated"
+
+    def translate(self, declaration: Declaration) -> list[str]: ...
+```
+
+Neither way is enforcement. troupe audits every run's changes in its workspace afterwards, whatever the runner did,
+and lineage records the local stage's effects as `unenforced`.
 
 ### Run events
 
@@ -67,7 +101,7 @@ repeats.
 
 | Type | Fields | Rules |
 |---|---|---|
-| `init` | `runner {name, version}`, `tools`, `engine {name, version, model}` (optional) | Always the first event, `seq` 0. |
+| `init` | `runner {name, version}`, `effects` (`checked` or `translated`), `tools`, `engine {name, version, model}` (optional) | Always the first event, `seq` 0. `effects` says how the runner applies the actor's effects (see [Applying the effects](#applying-the-effects)); troupe accepts an `init` without it only when it reads a run recorded before it existed. |
 | `turn` | `role` (`assistant` or `user`), `text` | One message turn, summarised. |
 | `tool_call` | `callId`, `tool`, `inputSummary` | |
 | `tool_result` | `callId`, `isError`, `outputSummary`, `outputBytes` | `callId` matches an earlier `tool_call`. The full output belongs in the transcript. |
