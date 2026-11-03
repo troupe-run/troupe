@@ -50,7 +50,8 @@ jobs:
     name: pin the bundle
     # Every component release is followed by a bundle that pins it (#218): this moves the bundle's
     # pins to the latest releases in one pull request the owner merges, and its commit releases
-    # troupe-run (release-each-package design D4 to D6). Nothing to move, nothing opened.
+    # troupe-run once no component is left bare (release-each-package design D4 to D6;
+    # refuse-bare-bundle-member D3). Nothing to move, nothing opened.
     needs: release-please
     if: ${{ needs.release-please.outputs.releases_created == 'true' }}
     runs-on: ubuntu-latest
@@ -96,7 +97,7 @@ jobs:
           title=$(head -n 1 "$RUNNER_TEMP/pin-message.txt")
           {
             echo "The release workflow pins the bundle at each component's latest release ([run]($RUN_URL))."
-            echo "Merging it releases troupe-run in the next release pull request (contributing/releasing.md)."
+            echo "Merging it releases troupe-run in the next release pull request, unless the message below says a component is still bare (contributing/releasing.md)."
             echo
             echo '```text'
             cat "$RUNNER_TEMP/pin-message.txt"

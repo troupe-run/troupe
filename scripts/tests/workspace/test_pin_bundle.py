@@ -103,7 +103,8 @@ def release(root: Path, name: str, version: str, *headings: str) -> None:
 
 
 def pin_all(root: Path) -> None:
-    """Run the step once and keep its result: every member pinned, the exclusion gone."""
+    """Run the step once and keep its result: every member that has released pinned, and the
+    exclusion gone if that leaves nothing bare."""
     pin_bundle.apply(root, pin_bundle.moves(root))
 
 
@@ -147,7 +148,8 @@ def test_crlf_line_endings_are_kept(copy: Path) -> None:
     assert written.count(b"\r\n") == written.count(b"\n")
 
 
-def test_the_first_pin_removes_only_the_bootstrap_exclusion(copy: Path) -> None:
+def test_the_first_pin_with_every_member_released_removes_only_the_exclusion(copy: Path) -> None:
+    """The copy gives every member a release, so the first pin leaves nothing bare."""
     config = copy / CONFIG
     before = config.read_bytes().decode()
     line = f'      "exclude-paths": ["{bundle_path(copy)}"],\n'
@@ -304,4 +306,68 @@ def test_the_result_passes_the_release_configuration_check(copy: Path) -> None:
     assert release_config.problems(copy) == []
     manifest[bundle_path(copy)] = "0.1.0"
     (copy / MANIFEST).write_text(json.dumps(manifest), encoding="utf-8")
+    assert release_config.problems(copy) == []
+
+
+STILL_BARE = (
+    "troupe-example is still bare, so troupe-run doesn't release until a pinning pull request "
+    "pins it, after its first release (refuse-bare-bundle-member design D3)."
+)
+
+
+def checkable(root: Path) -> None:
+    """Give the copy what release_config.problems also reads: uv.lock and the protocol record."""
+    shutil.copy(REPO / "uv.lock", root / "uv.lock")
+    record = release_config.PROTOCOL_RECORD
+    (root / record).parent.mkdir(parents=True, exist_ok=True)
+    manifest = json.loads((root / MANIFEST).read_text(encoding="utf-8"))
+    (root / record).write_text(json.dumps({"version": manifest["protocol"]}), encoding="utf-8")
+
+
+def with_a_new_member(root: Path) -> None:
+    """After the bundle's first pin and release, troupe-example added bare with the exclusion,
+    as the check requires (spec: releases)."""
+    checkable(root)
+    pin_all(root)
+    manifest = json.loads((root / MANIFEST).read_text(encoding="utf-8"))
+    manifest[bundle_path(root)] = "0.1.0"
+    (root / MANIFEST).write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    bundle_state.add_member(root, "troupe-example")
+    bundle_state.exclude(root)
+    assert release_config.problems(root) == []
+
+
+def test_a_pin_that_leaves_a_member_bare_keeps_the_exclusion_and_says_so(
+    copy: Path, tmp_path: Path
+) -> None:
+    with_a_new_member(copy)
+    config = copy / CONFIG
+    before = config.read_bytes()
+    release(copy, "troupe", "0.2.0", "Features")
+    code, text = run(copy, tmp_path)
+    assert code == 0
+    assert config.read_bytes() == before
+    assert text is not None
+    assert STILL_BARE in text
+    assert release_config.problems(copy) == []
+
+
+def test_pinning_the_last_bare_member_removes_the_exclusion_and_says_nothing_of_it(
+    copy: Path, tmp_path: Path
+) -> None:
+    with_a_new_member(copy)
+    config = copy / CONFIG
+    line = f'      "exclude-paths": ["{bundle_path(copy)}"],\n'
+    before = config.read_bytes().decode()
+    assert before.count(line) == 1
+    path = path_of(copy, "troupe-example")
+    (copy / path / "CHANGELOG.md").write_bytes(changelog("troupe-example").encode())
+    manifest = json.loads((copy / MANIFEST).read_text(encoding="utf-8"))
+    manifest[path] = "0.1.0"
+    (copy / MANIFEST).write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    code, text = run(copy, tmp_path)
+    assert code == 0
+    assert config.read_bytes().decode() == before.replace(line, "")
+    assert text is not None
+    assert "still bare" not in text
     assert release_config.problems(copy) == []

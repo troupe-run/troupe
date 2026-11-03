@@ -5,7 +5,8 @@ nothing would say so. This compares the config, the manifest and uv.lock with th
 members declared in the root pyproject.toml (release-automation design D10), and the protocol
 version the troupe package records with the manifest's (protocol-own-release D3). Every package
 versions on its own, so no components are linked, and the bundle names each one bare or pinned at
-a release it has made (release-each-package design D1, D2, D8). It runs as a test,
+a release it has made (release-each-package design D1, D2, D8). While it names any bare, its
+commits are kept out of release pull requests (refuse-bare-bundle-member D2). It runs as a test,
 inside scripts/check.py; each problem names the member and the file to fix.
 
 Standard library only, like check.py.
@@ -222,7 +223,7 @@ def problems(root: Path) -> list[str]:
     bundle = bundle_member(root)
     if bundle is not None:
         found.extend(_pin_problems(root, bundle, workspace, manifest))
-        found.extend(_bootstrap_problems(bundle, packages.get(bundle), manifest))
+        found.extend(_exclusion_problems(bundle, packages.get(bundle), bare(root, bundle)))
     found.extend(_prerelease_problems(config, packages))
     found.extend(_history_problems(config, packages))
     return found
@@ -423,23 +424,59 @@ def _pin_problems(
     return found
 
 
-def _bootstrap_problems(
-    bundle: str, entry: dict[str, Any] | None, manifest: dict[str, str]
-) -> list[str]:
-    """The bundle's commits are kept out of release pull requests only until its first pin, and
-    only by excluding its own directory (design D7)."""
-    if entry is None or "exclude-paths" not in entry:
+def bare(root: Path, bundle: str) -> list[str]:
+    """The workspace members the bundle at bundle names bare, sorted. A malformed pin isn't bare:
+    _pin_problems reports it."""
+    workspace = members(root)
+    paths = {normalise(name): path for path, name in workspace.items()}
+    project = tomllib.loads((root / bundle / "pyproject.toml").read_text(encoding="utf-8"))
+    found: list[str] = []
+    for requirement in project["project"].get("dependencies", []):
+        path = paths.get(requirement_name(requirement))
+        if path is None or path == bundle:
+            continue
+        try:
+            if pinned_version(requirement, workspace[path], path) is None:
+                found.append(workspace[path])
+        except ValueError:
+            continue
+    return sorted(found)
+
+
+def listed(names: list[str]) -> str:
+    """Names for a message: `a`, `a and b`, `a, b and c`."""
+    return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
+
+
+def _exclusion_problems(bundle: str, entry: dict[str, Any] | None, bare: list[str]) -> list[str]:
+    """The bundle's commits are kept out of release pull requests exactly while it names a member
+    bare, and only by excluding its own directory, so no release pull request releases a bundle
+    whose tag install would look a member up on a package index (refuse-bare-bundle-member design
+    D2, which widens release-each-package design D7). Whether anything has released doesn't
+    matter."""
+    if entry is None:
         return []
-    released = manifest.get(bundle, "0.0.0")
-    if released != "0.0.0":
+    excluded = "exclude-paths" in entry
+    if not bare:
+        if not excluded:
+            return []
         return [
-            f"{bundle}'s 'exclude-paths' in {CONFIG} is still set, but {MANIFEST} gives it "
-            f"{released}: remove it, or {BUNDLE}'s commits never release."
+            f"{bundle}'s 'exclude-paths' in {CONFIG} is still set, but {BUNDLE} names no "
+            f"workspace member bare: remove it, or {BUNDLE}'s commits never release."
+        ]
+    if not excluded:
+        them = "them" if len(bare) > 1 else "it"
+        each = "each" if len(bare) > 1 else bare[0]
+        return [
+            f"{bundle}/pyproject.toml names {listed(bare)} bare, but {bundle}'s entry in {CONFIG} "
+            f'doesn\'t exclude its commits: add "exclude-paths": ["{bundle}"] to it, so no release '
+            f"pull request releases {BUNDLE} until {each} has released and the pinning pull "
+            f"request pins {them}. A tag install would otherwise look {them} up on a package index."
         ]
     if entry["exclude-paths"] != [bundle]:
         return [
             f"{bundle}'s 'exclude-paths' in {CONFIG} is {json.dumps(entry['exclude-paths'])}: "
-            f'make it ["{bundle}"], which keeps {BUNDLE} out of release pull requests until it\'s '
-            "first pinned, or remove it."
+            f'make it ["{bundle}"], which keeps {BUNDLE} out of release pull requests while it '
+            f"names {listed(bare)} bare."
         ]
     return []
