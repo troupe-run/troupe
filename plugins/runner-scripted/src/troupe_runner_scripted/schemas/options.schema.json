@@ -267,6 +267,57 @@
               ]
             }
           }
+        },
+        {
+          "description": "Carry out one tool call with the plugin SDK's tools, as a model's call would be: checked against run/start's effects, in its workspace and scratch directory, and reported as a tool_call and a tool_result. With isError, a result that isn't (or is) an error ends the run with an error result naming the step.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "tool"
+          ],
+          "properties": {
+            "tool": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "input"
+              ],
+              "properties": {
+                "name": {
+                  "description": "The tool, as the SDK names it: Read, Write, Edit, Glob, Grep, Delete or Move. Any other name is the SDK's error result, as for a model.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "input": {
+                  "description": "The call's input, as a model sends it: an object of the tool's fields (each a string, a whole number or a boolean, as every tool's fields are), or the JSON text of one, which may be malformed on purpose.",
+                  "type": [
+                    "object",
+                    "string"
+                  ],
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {
+                    "type": [
+                      "string",
+                      "integer",
+                      "boolean"
+                    ]
+                  }
+                },
+                "callId": {
+                  "description": "The call's id. Absent: tool- and the step's number.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "isError": {
+                  "description": "Whether the result must be an error. Absent: either is fine.",
+                  "type": "boolean"
+                }
+              }
+            }
+          }
         }
       ]
     },

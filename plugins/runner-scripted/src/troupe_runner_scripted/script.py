@@ -176,6 +176,23 @@ def _step(data: Any, where: str) -> Step:  # noqa: ANN401
             raise _invalid(
                 'a checkCharacter step is {"hash": "sha256:..."} or {"absent": true}', here
             )
+    elif kind == "tool":
+        _require_keys(value, here, {"name", "input"}, {"callId", "isError"})
+        if not _str(value["name"], f"{here}.name"):
+            raise _invalid("must not be empty", f"{here}.name")
+        given = value["input"]
+        if not isinstance(given, dict | str):
+            raise _invalid("must be an object, or the JSON text of one", f"{here}.input")
+        if isinstance(given, dict):
+            for field, inner in given.items():
+                if not isinstance(inner, str | int):  # a bool is an int
+                    raise _invalid(
+                        "must be a string, a whole number or a boolean", f"{here}.input.{field}"
+                    )
+        if "callId" in value and not _str(value["callId"], f"{here}.callId"):
+            raise _invalid("must not be empty", f"{here}.callId")
+        if "isError" in value and not isinstance(value["isError"], bool):
+            raise _invalid("must be true or false", f"{here}.isError")
     else:
         raise _invalid(f"unknown step {kind!r}", where)
     return Step(kind, value)

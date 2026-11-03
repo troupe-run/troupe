@@ -116,7 +116,17 @@ def test_the_readmes_options_table_lists_exactly_the_options_schemas_properties(
 
 # Requirement: A script's steps cover what a runner can send or do
 
-LISTED_STEPS = {"event", "transcript", "stderr", "wait", "writeFile", "hang", "exit", "rawStdout"}
+LISTED_STEPS = {
+    "event",
+    "transcript",
+    "stderr",
+    "wait",
+    "writeFile",
+    "tool",
+    "hang",
+    "exit",
+    "rawStdout",
+}
 """The step kinds the requirement lists. It says "cover", so the schema may define more."""
 
 

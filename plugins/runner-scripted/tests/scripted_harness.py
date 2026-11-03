@@ -184,9 +184,14 @@ class Session:
         return self.request("run/start", params)
 
     def play(
-        self, script: dict[str, Any], *, valid: bool = True, character: str | None = None
+        self,
+        script: dict[str, Any],
+        *,
+        valid: bool = True,
+        character: str | None = None,
+        effects: dict[str, list[str]] | None = None,
     ) -> dict[str, Any]:
-        return self.start({"script": script}, valid=valid, character=character)
+        return self.start({"script": script}, valid=valid, character=character, effects=effects)
 
     def notifications(self, count: int) -> list[dict[str, Any]]:
         return [self.message() for _ in range(count)]

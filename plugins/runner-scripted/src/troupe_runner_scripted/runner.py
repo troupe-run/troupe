@@ -17,6 +17,9 @@ from pathlib import Path
 from typing import Any, BinaryIO, Literal, NoReturn
 
 from troupe_plugin_sdk import runner as p
+from troupe_plugin_sdk.declaration import Declaration
+from troupe_plugin_sdk.events import EventNumbering
+from troupe_plugin_sdk.tools import Tools
 from troupe_runner_scripted import NAME, __version__
 from troupe_runner_scripted.script import (
     Options,
@@ -59,6 +62,9 @@ class Runner:
         self._options: Options | None = None
         self._character: str | None = None
         self._workspace: Path | None = None
+        self._params: dict[str, Any] = {}
+        self._tools: Tools | None = None
+        self._tool_steps = 0
         self._next_seq = 0
         self._cancel_ignored = False
 
@@ -213,6 +219,7 @@ class Runner:
         self._workspace = workspace
         character = params.get("character")
         self._character = character if isinstance(character, str) else None
+        self._params = params
         self._result(id_, p.RunStartResult(run_id=self._run_id))
 
     def _cancel(self, id_: object) -> None:
@@ -295,6 +302,38 @@ class Runner:
             self._replay(value)
         elif kind == "checkCharacter":
             self._check_character(value)
+        elif kind == "tool":
+            self._tool(value)
+
+    def _tool(self, value: dict[str, Any]) -> None:
+        """Carry out one call with the SDK's tools for run/start's declaration, send its two
+        events, and end the run with an error result when it was to be (or not be) an error
+        (declared-effects design D9)."""
+        self._tool_steps += 1
+        tools = self._tools_for_run()
+        limits = self._params.get("limits", {})
+        numbering = EventNumbering(
+            self._started_run(), int(limits.get("eventMaxBytes", 65536)), self._next_seq
+        )
+        call_id = value.get("callId", f"tool-{self._tool_steps}")
+        step = tools.run(call_id, value["name"], value["input"], numbering)
+        for event in step.events:
+            self._event(event.to_data())
+        wanted = value.get("isError")
+        if wanted is not None and wanted != step.is_error:
+            said = "an error" if step.is_error else "not an error"
+            self._result_event(
+                f"tool step {self._tool_steps} ({value['name']}, call {call_id}): its result was "
+                f"{said}, which the script didn't expect: {step.output}"
+            )
+            raise _Exit(0)
+
+    def _tools_for_run(self) -> Tools:
+        if self._tools is None:
+            self._tools = Tools.for_declaration(
+                Declaration.from_run_start(p.RunStartParams.from_data(self._params))
+            )
+        return self._tools
 
     def _check_character(self, value: dict[str, Any]) -> None:
         """End the run with an error result unless run/start's character is the one expected."""
