@@ -173,11 +173,19 @@ def test_the_bundle_names_each_dependency_bare_or_pinned_at_a_tag() -> None:
 
 
 def test_a_pinned_dependency_counts_as_a_dependency(copy: Path) -> None:
-    # troupe-vcs-git depends on troupe, which has released, so troupe is pinned too.
+    # troupe-vcs-git depends on troupe, which has released, so troupe is pinned too, and troupe on
+    # the SDK, released and pinned here so the test holds whether or not the repository's SDK has
+    # released (refuse-bare-bundle-member task 4.1).
     pinned = release_config.pin("troupe-vcs-git", "0.1.1", "packages/troupe-vcs-git")
     bundle_state.set_dependency(copy, "troupe-vcs-git", pinned)
     bundle_state.set_dependency(
         copy, "troupe", release_config.pin("troupe", "0.1.0", "packages/troupe")
+    )
+    _release(copy, "packages/troupe-plugin-sdk", "0.1.0")
+    bundle_state.set_dependency(
+        copy,
+        "troupe-plugin-sdk",
+        release_config.pin("troupe-plugin-sdk", "0.1.0", "packages/troupe-plugin-sdk"),
     )
     assert bundle.problems(copy) == []
 

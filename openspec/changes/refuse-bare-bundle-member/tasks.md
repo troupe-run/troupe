@@ -56,11 +56,20 @@
   `grep -n "build(bundle)\|exclude-paths" contributing/releasing.md` shows only the new wording, and that the docs
   tests (`scripts/tests/workspace/test_install_docs.py`, and any docs check in `scripts/check.py`) pass.
 
-## 4. Integration
+## 4. A bundle test that assumed the SDK unreleased
 
-- [ ] 4.1 Run `uv run scripts/check.py` and show it passing, then confirm the matrix (Linux, macOS and Windows, every
+- [x] 4.1 `test_bundle.py::test_a_pinned_dependency_counts_as_a_dependency` pins `troupe` and leaves the SDK as the
+  repository has it, so once the SDK releases, its unpinned case fails runner-sdk's rule (a pinned component's
+  released workspace dependencies are pinned too), and with it the SDK's first pinning pull request. Found by running
+  the suites with the real files in that state. Make the test set the SDK's state itself, as its sibling tests do:
+  released at 0.1.0 and pinned. Verify it passes with the files as they are, and with them temporarily set as after
+  the SDK's first pin (manifest 0.1.0, pinned, no exclusion), where it failed before the fix; then restore them.
+
+## 5. Integration
+
+- [ ] 5.1 Run `uv run scripts/check.py` and show it passing, then confirm the matrix (Linux, macOS and Windows, every
   supported Python) passes on the pull request once it's ready.
-- [x] 4.2 Check that no Purpose changed (`git diff main -- openspec/specs` is empty before archive, and the delta has no
+- [x] 5.2 Check that no Purpose changed (`git diff main -- openspec/specs` is empty before archive, and the delta has no
   `## Purpose`), so troupe-run/infrastructure's `oob/troupe-spec-purposes.json` needs no pull request.
 
 ## Workflow follow-up
