@@ -14,7 +14,7 @@ permission is still taught as an `export` for every shell, and `init --audition`
 ## What Changes
 
 - **`first-performance.md` leads with Claude Code, in your own repository.** It starts from `troupe init --audition`:
-  you edit the character it wrote (`.troupe/actors/lead.md`), commit, allow the local stage, and run
+  you write your own character in a file and set it with `troupe config set actors.lead.character=@<file>`, commit, allow the local stage, and run
   `troupe perform lead --direction "..."` with a direction you type. Reviewing (`diff`, `accept`, `discard`) and
   reading back (`status`, `logs`) follow, as today.
 - **The page shows `workspace.uncommitted-unseen`**, and why a run starts from your latest commit: in your own
@@ -30,6 +30,9 @@ permission is still taught as an `export` for every shell, and `init --audition`
   every theatre you run. Policy is still read from the environment only (#235).
 - **`troupe init --audition`'s note for the allow step says the same,** in place of "Set this in each shell you
   perform from", naming the profile files for the platform it runs on.
+- **`init --audition` says how to change the character with `troupe config set`,** in place of "edit it". Editing
+  `.troupe/actors/lead.md` by hand makes the next command refuse with `config.file-not-troupes`, since troupe can't
+  read hand edits back until #119 (found while applying this change; owner, 2026-11-03).
 - **`first-theatre.md` leads with `troupe init`,** says what `--audition` adds (the `lead` actor's two files), and
   drops its "Config, when it comes" section, since config has come.
 - **`install.md` presents the install command better** (docs only, #232 question 5): what you need first (uv, with
@@ -54,13 +57,14 @@ None.
 - `user-docs`: adds that the first-run walkthrough leads with Claude Code from `troupe init --audition`, keeps an
   offline path with the scripted runner, and runs as written in the docs check, and that it says to give the
   local-stage permission once, in the shell profile.
-- `cli`: `troupe init --audition`'s allow step says to add the line to your shell profile once, so it applies to every
+- `cli`: `troupe init --audition` says to change the character with `troupe config set ...=@<file>`, not by editing
+  the file (the requirement "Init with an audition defines a working example actor"), and its allow step says to add the line to your shell profile once, so it applies to every
   theatre you run (the requirement "Init prints the next steps for its audition").
 
 ## Impact
 
 - `docs/opening-night/first-performance.md`, `first-theatre.md`, `install.md`.
-- `packages/troupe/src/troupe/cli/init.py` (the allow step's note), and its tests in
+- `packages/troupe/src/troupe/cli/init.py` (the character line and the allow step's note), and its tests in
   `packages/troupe/tests/test_cli_init.py`.
 - `packages/troupe/tests/test_user_docs_pages.py`: the first-performance tests are rewritten for the new walkthrough.
 - No change to policy, config, the protocol, or any event. No new spec, so troupe-run/infrastructure's

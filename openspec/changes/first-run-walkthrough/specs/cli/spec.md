@@ -1,5 +1,26 @@
 ## MODIFIED Requirements
 
+### Requirement: Init with an audition defines a working example actor
+`troupe init --audition` SHALL make the theatre as `troupe init` does, and SHALL define the example actor `lead` in
+the same command. On success it SHALL print the actor, its runner, the files written, and the next steps. When the
+actor has a character, it SHALL say how to change it with `troupe config set`, and SHALL NOT say to edit the file.
+
+#### Scenario: An audition with the default runner
+- **WHEN** a person runs `troupe init --audition` in a fresh git repository
+- **THEN** `.troupe/actors/lead.yaml` names the runner `claude-code`, and `.troupe/actors/lead.md` holds its
+  character
+- **AND** standard output names `lead`, `claude-code` and both files
+
+#### Scenario: Config shows the actor
+- **WHEN** a person runs `troupe init --audition` and then `troupe config get actors.lead.runner`
+- **THEN** it prints `claude-code`
+
+#### Scenario: The character is changed through config
+- **WHEN** a person runs `troupe init --audition`, then the `troupe config set actors.lead.character=@<file>` it names
+  with a file of their own, then `troupe perform lead --rehearse`
+- **THEN** `troupe config get actors.lead.character` prints the file's text, and the rehearsal isn't refused with
+  `config.file-not-troupes`
+
 ### Requirement: Init prints the next steps for its audition
 After an audition, `troupe init` SHALL print, in order: committing `.troupe/`, allowing the local stage when policy
 doesn't already allow it, and `troupe perform lead` with an example `--direction`. For Claude Code it SHALL say that

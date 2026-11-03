@@ -39,13 +39,16 @@ See proposal.md for why. What's there now:
 
 ### D1. The walkthrough is the audition's printed steps, with the character and direction made yours
 
-The page follows `troupe init --audition` in order: run it, edit `.troupe/actors/lead.md`, commit (the two commands
+The page follows `troupe init --audition` in order: run it, set your own character (D8), commit (the two commands
 `init` printed), allow the local stage, then `troupe perform lead --direction "..."` with an example direction the
 page invites the reader to replace. Reviewing (`diff`, `accept`, `discard`) and reading back (`status`, `logs`) follow,
 as today.
 
 Following the printed steps means one path, not two that agree by hand. A docs test runs `init --audition` and checks
 the page's commit and allow lines are the lines it printed, so a change to either fails the check.
+
+The character is written in a file of your own and set with `troupe config set actors.lead.character=@<file>`
+(D8), not by editing `.troupe/actors/lead.md`.
 
 The page's example direction differs from `init`'s on purpose: the point is that it's yours. The test runs the page's.
 
@@ -111,6 +114,26 @@ checks pass unchanged.
 ### D7. The pages stay `prerelease: true`
 
 They describe `troupe init`, which ships in 0.2.0. The docs check's prerelease rules already apply.
+
+### D8. You change the character with `config set`, until hand edits are read back
+
+troupe writes `.troupe/actors/lead.md` from config and doesn't read edits to it back until #119 (0.3.0). An edited file
+makes the next command that uses config refuse with `config.file-not-troupes`. `init --audition` said "edit it", which
+led straight to that refusal (found while applying this change, owner's choice 2026-11-03).
+
+So the page has you write your character in a file (`character.md`) and run
+`troupe config set actors.lead.character=@character.md`: the file's text becomes the character, recorded with who set
+it, and troupe writes `lead.md` from it. `init` prints that command in place of "edit it", with `<file>` for the file.
+The line stays phrasing in the CLI, beside the files it lists: the core's result already says the actor has a
+character.
+
+`character.md` isn't committed by the page's `git add .troupe`, so it's one of the changes the uncommitted-changes
+notice names (D2). The page says it can be deleted once it's set, since config holds the text.
+
+When #119 lands, the page and `init` can go back to editing the file.
+
+*Alternatives:* a separate Bug and change for `init`'s line first (rejected by the owner: two PRs for one first-run
+text), or waiting for #119 (rejected: 0.3.0, and much larger).
 
 ## Risks / Trade-offs
 

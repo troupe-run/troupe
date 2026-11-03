@@ -4,11 +4,17 @@
 
 - [x] 1.1 Add tests to `packages/troupe/tests/test_cli_init.py` for the cli spec's two new scenarios: on Linux and
       macOS the allow step's note names `~/.zshrc` and `~/.bashrc`, says to add it once and that it then applies to
-      every theatre, and doesn't say "each shell"; on Windows (`sys.platform` patched) the line is the `$env:` form and
+      every theatre, and doesn't say "each shell"; on Windows (the shell choice patched to PowerShell) the line is the `$env:` form and
       the note names `$PROFILE`. Verify they fail against today's note.
 - [x] 1.2 Change `_step_notes` in `packages/troupe/src/troupe/cli/init.py` to name the profile for the platform, chosen
       beside `_allow_line` so the line and note share one platform check (design D5). Verify the 1.1 tests and the rest
       of `test_cli_init.py` pass, and `mypy --strict` passes with `--platform win32` too.
+- [ ] 1.3 Add a test for the cli scenario "The character is changed through config": `init --audition` names
+      `troupe config set actors.lead.character=@<file>` and not "edit it", and running that command with a file, then
+      `perform lead --rehearse`, isn't refused and `config get` shows the file's text. Verify it fails today.
+- [ ] 1.4 Change the character line in `render_init` to print the `config set` command (design D8). Verify the 1.3 test
+      and the rest of `test_cli_init.py` pass, and update `docs/prompt-book/cli.md` if its init entry says to edit the
+      file.
 
 ## 2. The first-run walkthrough leads with Claude Code
 
@@ -42,8 +48,8 @@
 
 - [ ] 4.1 Run `uv run scripts/check.py` and verify it passes.
 - [ ] 4.2 Follow the new pages by hand from a fresh install of this branch with a real, logged-in Claude Code, in a
-      repository with uncommitted changes: `init --audition`, an edited character, an own direction, and the notice
-      shown. Then the offline path. Record the result in the PR description.
+      repository with uncommitted changes: `init --audition`, a character of your own set through config, your own
+      direction, and the notice shown. Then the offline path. Record the result in the PR description.
 
 ## Workflow follow-up
 
