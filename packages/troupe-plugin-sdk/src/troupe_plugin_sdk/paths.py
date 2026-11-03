@@ -48,9 +48,10 @@ class PathRefusedError(ValueError):
         self.problem = problem
 
 
-def parts_of(text: str) -> tuple[str, ...]:
+def parts_of(text: str, scratch: Path | None = None) -> tuple[str, ...]:
     """The parts of a workspace-relative path, after the syntax rules (step 1). An empty tuple is
-    the workspace itself. Raises PathRefusedError naming what's wrong."""
+    the workspace itself. Raises PathRefusedError naming what's wrong, and, for an absolute path,
+    where the run's ``scratch`` directory is, or that it has none."""
     shown = repr(text)
     if not text:
         raise PathRefusedError(text, "The path is empty. Give a path relative to the workspace.")
@@ -67,10 +68,15 @@ def parts_of(text: str) -> tuple[str, ...]:
             "drive letter.",
         )
     if text.startswith("/"):
+        elsewhere = (
+            "and this run has no scratch directory"
+            if scratch is None
+            else f"or inside the scratch directory {scratch}"
+        )
         raise PathRefusedError(
             text,
             f"The path {shown} is absolute. Paths are relative to the workspace, such as "
-            "src/main.py.",
+            f"src/main.py, {elsewhere}.",
         )
     parts = tuple(part for part in text.split("/") if part not in ("", "."))
     _check_parts(text, parts)
@@ -153,9 +159,11 @@ class Workspace:
     def path(self, text: str, *, directory: bool = False) -> WorkspacePath:
         """``text`` as a checked path. With ``directory``, the workspace itself (``.``) is allowed,
         for a tool that searches from it. Raises PathRefusedError naming what's wrong."""
-        if text and _is_absolute(text) and not _CONTROL.search(text):
+        # Only a path inside the scratch directory takes the scratch route. Every other path, a
+        # drive path on Windows included, gets the same syntax rules on every platform.
+        if self._in_scratch(text):
             return self._scratch_path(text, directory=directory)
-        parts = parts_of(text)
+        parts = parts_of(text, self.scratch_shown)
         if not parts and not directory:
             raise PathRefusedError(
                 text, f"The path {text!r} names the workspace itself, not a file."
@@ -180,32 +188,28 @@ class Workspace:
         shown = "" if not relative.parts else relative.as_posix()
         return WorkspacePath(given=text, relative=shown, absolute=resolved, root=self.root)
 
+    def _in_scratch(self, text: str) -> bool:
+        """Whether ``text`` names a path in the scratch directory, as given or as it resolves."""
+        if self.scratch is None or self.scratch_shown is None or not text:
+            return False
+        if _CONTROL.search(text) or not _is_absolute(text):
+            return False
+        given = Path(text)
+        return given.is_relative_to(self.scratch_shown) or given.is_relative_to(self.scratch)
+
     def _scratch_path(self, text: str, *, directory: bool) -> WorkspacePath:
         shown = repr(text)
         if self.scratch is None or self.scratch_shown is None:
-            raise PathRefusedError(
-                text,
-                f"The path {shown} is absolute. Paths are relative to the workspace, such as "
-                "src/main.py, and this run has no scratch directory.",
-            )
-        outside = PathRefusedError(
-            text,
-            f"The path {shown} is absolute. Paths are relative to the workspace, such as "
-            f"src/main.py, or inside the scratch directory {self.scratch_shown}.",
-        )
+            raise RuntimeError("_scratch_path is only for a path _in_scratch accepted")
         given = Path(text)
-        if not given.is_absolute():
-            raise outside
         if ".." in given.parts:
             raise PathRefusedError(
                 text, f"The path {shown} uses '..'. Paths stay inside the scratch directory."
             )
         if given.is_relative_to(self.scratch_shown):
             inner = given.relative_to(self.scratch_shown)
-        elif given.is_relative_to(self.scratch):
-            inner = given.relative_to(self.scratch)
         else:
-            raise outside
+            inner = given.relative_to(self.scratch)
         _check_parts(text, tuple(inner.parts))
         resolved = self.scratch.joinpath(*inner.parts).resolve()
         if not resolved.is_relative_to(self.scratch):

@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from sdk_tools import call, workspace
+from troupe_plugin_sdk import paths
 from troupe_plugin_sdk.effects import READ_ONLY, Effects
 from troupe_plugin_sdk.tools import Tools
 
@@ -168,3 +169,17 @@ def test_the_write_tools_description_names_the_scratch_directory(tmp_path: Path)
     assert "Temporary files" in write.description
     [plain] = [d for d in Tools.definitions() if d.name == "Write"]
     assert "scratch" not in plain.description
+
+
+@pytest.mark.parametrize("path", ["C:/Windows/win.ini", "C:\\Windows\\win.ini"])
+def test_a_drive_path_outside_scratch_gets_the_same_answer_whatever_the_platform_calls_absolute(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, path: str
+) -> None:
+    # On Windows a drive path is absolute. Only a path inside the scratch directory may take the
+    # scratch route, so every other one gets the platform-independent answer, as on POSIX.
+    monkeypatch.setattr(paths, "_is_absolute", lambda text: True)
+    root = workspace(tmp_path)
+    tools = Tools(root, READ_ONLY, scratch=_scratch(tmp_path))
+    step = call(tools, "Read", {"file_path": path})
+    assert step.is_error
+    assert ("colon" in step.output) or ("backslash" in step.output)
