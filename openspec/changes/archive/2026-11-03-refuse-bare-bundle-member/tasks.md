@@ -67,7 +67,7 @@
 
 ## 5. Integration
 
-- [ ] 5.1 Run `uv run scripts/check.py` and show it passing, then confirm the matrix (Linux, macOS and Windows, every
+- [x] 5.1 Run `uv run scripts/check.py` and show it passing, then confirm the matrix (Linux, macOS and Windows, every
   supported Python) passes on the pull request once it's ready.
 - [x] 5.2 Check that no Purpose changed (`git diff main -- openspec/specs` is empty before archive, and the delta has no
   `## Purpose`), so troupe-run/infrastructure's `oob/troupe-spec-purposes.json` needs no pull request.
