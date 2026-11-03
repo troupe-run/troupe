@@ -7,6 +7,7 @@ import json
 import os
 import re
 import shlex
+import subprocess
 import tomllib
 from pathlib import Path
 from typing import get_args
@@ -14,8 +15,9 @@ from typing import get_args
 import pytest
 
 import claude_stand_in
-from gitrepo import Repo
-from runtesting import ADA, theatre
+from gitrepo import Repo, make_repo
+from runtesting import ADA
+from troupe.cli import init as init_cli
 from troupe.cli import main
 from troupe.core import defaults, settings
 from troupe.core.client.messages import State
@@ -49,126 +51,251 @@ def cli(*argv: str) -> tuple[int, str, str]:
     return code, stdout.getvalue(), stderr.getvalue()
 
 
-# Your first performance.
+# Your first performance (first-run-walkthrough design D1-D5).
+
+PAGE = "opening-night/first-performance.md"
+OFFLINE = "Try it offline, with no account"
+OWN = "Define your own actor"
+NOTICE = "Changes the run won't see"
+ALLOW = "Allow the local stage, once"
+DIRECTION = "Write NOTES.md: what this code is for, in a few lines"
+EXAMPLE_COMMIT = "3f9c2a1b7d4e"
+"""The commit the page's copy of the uncommitted-changes notice names, read as the run's own."""
+
+WALKTHROUGH = [
+    "troupe init --audition",
+    "troupe config set actors.lead.character=@character.md",
+    "git add .troupe",
+    "git commit -m 'Add a troupe theatre'",
+    "export TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE=true",
+    f'troupe perform lead --direction "{DIRECTION}"',
+    "troupe diff <run>",
+    "troupe accept <run>",
+    "troupe status",
+    "troupe logs <run>",
+]
+OFFLINE_WALKTHROUGH = [
+    "mkdir troupe-offline",
+    "cd troupe-offline",
+    "git init",
+    "troupe init --audition --runner scripted",
+    "git add .troupe",
+    "git commit -m 'Add a troupe theatre'",
+    "troupe perform lead",
+]
+OWN_ACTOR = [
+    "troupe config set actors.reviewer.runner=claude-code actors.reviewer.options=@claude.json "
+    "actors.reviewer.character=@reviewer.md 'actors.reviewer.expect=[]'",
+    "git add .troupe",
+    "git commit -m 'Add the reviewer actor'",
+    'troupe perform reviewer --direction "Review the last commit, and write what you found in '
+    'REVIEW.md"',
+]
+
+
+def sh_lines(text: str) -> list[str]:
+    """Every line of every sh block in ``text``, in order: the commands a reader runs."""
+    return [line for lang, _, body in blocks_in(text) if lang == "sh" for line in body.splitlines()]
+
+
+def walkthrough() -> str:
+    """The page up to its offline section: the Claude Code walkthrough."""
+    text = (DOCS / PAGE).read_text(encoding="utf-8")
+    return text.split(f"\n## {OFFLINE}\n", 1)[0]
+
+
+def titled(text: str, title: str) -> str:
+    """The body of the one block in ``text`` titled ``title``."""
+    (body,) = [body for _, meta, body in blocks_in(text) if meta == f'title="{title}"']
+    return body
+
+
+def git(*args: str) -> None:
+    """git in the working directory, as a reader runs it."""
+    subprocess.run(["git", *args], check=True, capture_output=True)  # noqa: S607 - git from PATH
 
 
 @pytest.fixture
-def fresh(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Repo:
-    """A new git theatre as the working directory, with the policy unset, as a reader has it."""
-    made = theatre(tmp_path)
+def project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Repo:
+    """The reader's own git repository, with a commit and no theatre, as the working directory,
+    with the policy unset."""
+    made = make_repo(tmp_path)
     for name, value in {**made.env, **ADA}.items():
         monkeypatch.setenv(name, value)
-    monkeypatch.delenv("TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE", raising=False)
+    monkeypatch.delenv(env_name(ALLOW_UNENFORCED_LOCAL_STAGE), raising=False)
     monkeypatch.chdir(made.path)
+    (made.path / "README.md").write_text("# my-app\n", encoding="utf-8")
+    made.commit_all("Start my-app")
     return made
 
 
-def test_the_first_performance_runs_as_written_and_writes_its_file(
-    fresh: Repo, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    page = "opening-night/first-performance.md"
-    (script,) = [body for lang, meta, body in blocks(page) if meta == 'title="hello.json"']
-    json.loads(script)  # the reader copies it as it is: it must be JSON
-    (fresh.path / "hello.json").write_text(script, encoding="utf-8")
-    lines = [line for lang, _, body in blocks(page) if lang == "sh" for line in body.splitlines()]
-    lines = lines[: lines.index(CLAUDE_CODE_DEFINE)]  # the scripted walkthrough, before Claude Code
-    assert lines == [
-        "troupe config set actors.tester.runner=scripted actors.tester.options=@hello.json "
-        "'actors.tester.expect=[\"out/hello.txt\"]'",
-        "git add -A",
-        'git commit -m "Add the tester actor"',
-        "export TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE=true",
-        "troupe perform tester",
-        "troupe diff <run>",
-        "troupe accept <run>",
-        "troupe status",
-        "troupe logs <run>",
-    ]
-    code, _, err = cli(*shlex.split(lines[0])[1:])
-    assert code == 0, err
-    assert (fresh.path / ".troupe" / "actors" / "tester.yaml").is_file()
-    fresh.git(*shlex.split(lines[1])[1:])
-    fresh.git(*shlex.split(lines[2])[1:])
-    name, _, value = lines[3].removeprefix("export ").partition("=")
-    monkeypatch.setenv(name, value)
+def stand_in_claude(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, write: str) -> None:
+    """A stand-in claude first on PATH, writing ``write`` (``path=content``) when it runs."""
+    bin_dir = tmp_path / "bin"
+    claude_stand_in.install(
+        bin_dir, fixture=claude_stand_in.fixture("success-with-tools"), write=write
+    )
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
 
-    code, out, err = cli(*shlex.split(lines[4])[1:])
+
+def run_line(line: str, monkeypatch: pytest.MonkeyPatch) -> tuple[int, str, str]:
+    """Run one of the page's sh lines as a reader would: troupe in process, git as git, and an
+    export as the variable it sets."""
+    if line.startswith("export "):
+        name, _, value = line.removeprefix("export ").partition("=")
+        monkeypatch.setenv(name, value)
+        return 0, "", ""
+    program, *args = shlex.split(line)
+    if program == "git":
+        git(*args)
+        return 0, "", ""
+    assert program == "troupe", line
+    return cli(*args)
+
+
+def perform_walkthrough(monkeypatch: pytest.MonkeyPatch, lines: list[str]) -> tuple[int, str, str]:
+    """The walkthrough's lines up to and including its perform, the page's character written
+    first; perform's result."""
+    (Path.cwd() / "character.md").write_text(titled(walkthrough(), "character.md"), "utf-8")
+    perform = next(n for n, line in enumerate(lines) if line.startswith("troupe perform"))
+    for line in lines[:perform]:
+        code, _, err = run_line(line, monkeypatch)
+        assert code == 0, (line, err)
+    return run_line(lines[perform], monkeypatch)
+
+
+def test_the_claude_code_walkthrough_runs_as_written_with_a_stand_in_claude(
+    project: Repo, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    lines = sh_lines(walkthrough())
+    assert lines == WALKTHROUGH
+    stand_in_claude(tmp_path, monkeypatch, write="NOTES.md=my-app is an app.\n")
+    code, out, err = perform_walkthrough(monkeypatch, lines)
     assert code == 0, err
     run_id = out.split()[1]
     assert out == f"run {run_id} succeeded\n"
-    assert not (fresh.path / "out" / "hello.txt").exists()  # it's in the run's worktree
+    code, out, _ = cli("config", "get", "actors.lead.character")
+    assert out.removesuffix("\n") == titled(walkthrough(), "character.md")
+    assert not (project.path / "NOTES.md").exists()  # it's in the run's worktree
 
-    code, out, err = cli(*shlex.split(lines[5].replace("<run>", run_id[:8]))[1:])
+    code, out, err = run_line(lines[6].replace("<run>", run_id[:8]), monkeypatch)
     assert code == 0, err
-    assert "+hello" in out
-    code, out, err = cli(*shlex.split(lines[6].replace("<run>", run_id[:8]))[1:])
+    assert "+my-app is an app." in out
+    code, _, err = run_line(lines[7].replace("<run>", run_id[:8]), monkeypatch)
     assert code == 0, err
-    assert (fresh.path / "out" / "hello.txt").read_text(encoding="utf-8") == "hello\n"
-
-    code, out, _ = cli(*shlex.split(lines[7])[1:])
+    assert (project.path / "NOTES.md").read_text(encoding="utf-8") == "my-app is an app.\n"
+    code, out, _ = run_line(lines[8], monkeypatch)
     assert code == 0
     assert run_id[:8] in out
-    code, out, _ = cli(*shlex.split(lines[8].replace("<run>", run_id[:8]))[1:])
+    code, out, _ = run_line(lines[9].replace("<run>", run_id[:8]), monkeypatch)
     assert code == 0
-    assert "wrote out/hello.txt" in out
+    assert out.endswith(f"run {run_id}: succeeded\n"), out
 
 
-CLAUDE_CODE_DEFINE = (
-    "troupe config set actors.writer.runner=claude-code actors.writer.options=@claude.json "
-    "'actors.writer.expect=[\"out/hello.txt\"]'"
-)
-
-
-def test_the_claude_code_section_runs_as_written_with_a_stand_in_claude(
-    fresh: Repo, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+def test_the_walkthroughs_commit_and_allow_lines_are_the_ones_init_prints(
+    project: Repo, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    page = "opening-night/first-performance.md"
-    text = section(page, "Run Claude Code instead")
-    (options,) = [body for lang, meta, body in blocks_in(text) if meta == 'title="claude.json"']
-    assert set(json.loads(options)) == {"permissionMode", "allowedTools", "maxBudgetUsd"}
-    (fresh.path / "claude.json").write_text(options, encoding="utf-8")
-    lines = [
-        line for lang, _, body in blocks_in(text) if lang == "sh" for line in body.splitlines()
-    ]
-    assert lines == [
-        CLAUDE_CODE_DEFINE,
-        "git add -A",
-        'git commit -m "Add the writer actor"',
-        'troupe perform writer --direction "Create out/hello.txt containing hello"',
-    ]
-    bin_dir = tmp_path / "bin"
-    claude_stand_in.install(
-        bin_dir,
-        fixture=claude_stand_in.fixture("success-with-tools"),
-        write="out/hello.txt=hello\n",
-    )
-    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
-    monkeypatch.setenv(env_name(ALLOW_UNENFORCED_LOCAL_STAGE), "true")
-    code, _, err = cli(*shlex.split(lines[0])[1:])
+    monkeypatch.setattr(init_cli, "SHELL", init_cli.POSIX)  # the page's sh lines
+    code, out, err = cli("init", "--audition")
     assert code == 0, err
-    fresh.git(*shlex.split(lines[1])[1:])
-    fresh.git(*shlex.split(lines[2])[1:])
-    code, out, err = cli(*shlex.split(lines[3])[1:])
+    printed = [
+        re.sub(r"^(\d+\.)? +", "", line)
+        for line in out.split("\nNext:\n", 1)[1].splitlines()
+        if not line.lstrip().startswith("#")
+    ]
+    lines = sh_lines(walkthrough())
+    assert lines[2:5] == printed[:3]
+    assert printed[3].startswith("troupe perform lead --direction ")
+    # The page's own direction differs from init's example on purpose: it's the reader's.
+    assert lines[5] != printed[3]
+
+
+def test_the_uncommitted_changes_notice_the_page_shows_is_the_one_perform_writes(
+    project: Repo, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    (shown,) = [body for lang, _, body in blocks_in(section(PAGE, NOTICE)) if lang == "text"]
+    assert EXAMPLE_COMMIT in shown
+    pattern = re.escape(shown.strip()).replace(EXAMPLE_COMMIT, "[0-9a-f]{12}")
+    stand_in_claude(tmp_path, monkeypatch, write="NOTES.md=notes\n")
+    # character.md isn't committed by the page's git add .troupe: it's the one path the run
+    # won't see, as the page says.
+    code, _, err = perform_walkthrough(monkeypatch, sh_lines(walkthrough()))
+    assert code == 0, err
+    assert re.search(pattern, err), err
+
+
+def test_the_allow_section_names_the_shell_profiles_and_both_lines(
+    project: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    text = section(PAGE, ALLOW)
+    for named in ("~/.zshrc", "~/.bashrc", "$PROFILE", "every theatre"):
+        assert named in text
+    variable = env_name(ALLOW_UNENFORCED_LOCAL_STAGE)
+    assert sh_lines(text) == [init_cli.POSIX.allow_line(variable, "true")]
+    powershell = [body.strip() for lang, _, body in blocks_in(text) if lang == "powershell"]
+    assert powershell == [init_cli.POWERSHELL.allow_line(variable, "true")]
+
+
+def test_the_walkthroughs_perform_is_refused_until_the_policy_is_set(
+    project: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    lines = [line for line in sh_lines(walkthrough()) if not line.startswith("export ")]
+    code, out, err = perform_walkthrough(monkeypatch, lines)
+    assert code == 1
+    assert out == ""
+    assert f"{env_name(ALLOW_UNENFORCED_LOCAL_STAGE)}=true" in err
+
+
+def test_the_offline_walkthrough_runs_as_written_with_no_claude(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    made = make_repo(tmp_path)  # for its HOME and git identity: the reader starts elsewhere
+    for name, value in {**made.env, **ADA}.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv(env_name(ALLOW_UNENFORCED_LOCAL_STAGE), "true")
+    no_claude = [
+        entry
+        for entry in os.environ["PATH"].split(os.pathsep)
+        if not any((Path(entry) / name).exists() for name in ("claude", "claude.exe", "claude.cmd"))
+    ]
+    monkeypatch.setenv("PATH", os.pathsep.join(no_claude))
+    start = tmp_path / "work"
+    start.mkdir()
+    monkeypatch.chdir(start)
+    lines = sh_lines(section(PAGE, OFFLINE))
+    assert lines == OFFLINE_WALKTHROUGH
+    (Path.cwd() / lines[0].split()[1]).mkdir()
+    monkeypatch.chdir(Path.cwd() / lines[1].split()[1])
+    for line in lines[2:-1]:
+        code, _, err = run_line(line, monkeypatch)
+        assert code == 0, (line, err)
+    code, out, err = run_line(lines[-1], monkeypatch)
     assert code == 0, err
     assert out == f"run {out.split()[1]} succeeded\n"
 
 
-def test_the_first_performance_is_refused_until_the_policy_is_set(fresh: Repo) -> None:
-    page = "opening-night/first-performance.md"
-    (script,) = [body for _, meta, body in blocks(page) if meta == 'title="hello.json"']
-    (fresh.path / "hello.json").write_text(script, encoding="utf-8")
-    [define] = [
-        line
-        for lang, _, body in blocks(page)
-        if lang == "sh"
-        for line in body.splitlines()
-        if line.startswith("troupe config set actors.tester")
-    ]
-    assert cli(*shlex.split(define)[1:])[0] == 0
-    code, out, err = cli("perform", "tester")
-    assert code == 1
-    assert out == ""
-    assert "TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE=true" in err
+def test_defining_your_own_actor_runs_as_written_with_a_stand_in_claude(
+    project: Repo, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    text = section(PAGE, OWN)
+    options = titled(text, "claude.json")
+    assert set(json.loads(options)) == {"permissionMode", "allowedTools", "maxBudgetUsd"}
+    (project.path / "claude.json").write_text(options, encoding="utf-8")
+    (project.path / "reviewer.md").write_text(titled(text, "reviewer.md"), encoding="utf-8")
+    lines = sh_lines(text)
+    assert lines == OWN_ACTOR
+    code, _, err = cli("init")
+    assert code == 0, err
+    stand_in_claude(tmp_path, monkeypatch, write="REVIEW.md=fine\n")
+    monkeypatch.setenv(env_name(ALLOW_UNENFORCED_LOCAL_STAGE), "true")
+    for line in lines[:-1]:
+        code, _, err = run_line(line, monkeypatch)
+        assert code == 0, (line, err)
+    code, out, _ = cli("config", "get", "actors.reviewer.character")
+    assert out.removesuffix("\n") == titled(text, "reviewer.md")
+    code, out, err = run_line(lines[-1], monkeypatch)
+    assert code == 0, err
+    assert out == f"run {out.split()[1]} succeeded\n"
 
 
 # Performances and runs.

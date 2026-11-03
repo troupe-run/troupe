@@ -18,19 +18,19 @@
 
 ## 2. The first-run walkthrough leads with Claude Code
 
-- [ ] 2.1 Write the new tests in `packages/troupe/tests/test_user_docs_pages.py` before the page: the Claude Code
+- [x] 2.1 Write the new tests in `packages/troupe/tests/test_user_docs_pages.py` before the page: the Claude Code
       walkthrough runs as written with the stand-in `claude` in a repository with a commit (`init --audition`, commit,
       allow, `perform lead --direction`, then `diff`, `accept`, `status`, `logs`); the page's commit and allow lines are
       the ones `init --audition` prints (design D1); the uncommitted-changes notice block matches what `perform` writes
       after a change, with the count and commit as wildcards (D2); the allow section names `~/.zshrc`, `~/.bashrc`, the
       PowerShell profile and both line forms, and `perform` is refused without the variable (D5). Verify each fails
       against today's page.
-- [ ] 2.2 Rewrite `docs/opening-night/first-performance.md`: the walkthrough from `troupe init --audition` (D1), the
+- [x] 2.2 Rewrite `docs/opening-night/first-performance.md`: the walkthrough from `troupe init --audition` (D1), the
       notice and why a run starts from the latest commit (D2), the permission in the shell profile (D5), reviewing and
       reading back. Verify the 2.1 tests pass.
-- [ ] 2.3 Add the offline section (D3): a new repository, `troupe init --audition --runner scripted`, the same steps. Add
+- [x] 2.3 Add the offline section (D3): a new repository, `troupe init --audition --runner scripted`, the same steps. Add
       a test that runs it as written with no `claude` on `PATH` and gets `run <id> succeeded`. Verify it passes.
-- [ ] 2.4 Add the "define your own actor" section (D4): a second Claude Code actor from `claude.json` with
+- [x] 2.4 Add the "define your own actor" section (D4): a second Claude Code actor from `claude.json` with
       `troupe config set` and a character in `.troupe/actors/<name>.md`, with the options notes moved from
       "Run Claude Code instead", which goes. Rework the existing stand-in test to run it as written. Verify it passes,
       and no test still reads `hello.json` or the `tester` walkthrough.

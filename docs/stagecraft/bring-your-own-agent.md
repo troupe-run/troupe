@@ -17,7 +17,7 @@ troupe ships two runners:
 - **The Claude Code runner** runs [Claude Code](https://code.claude.com) with your existing login. It leaves out your
   Claude Code settings, hooks and MCP servers by default, so a run doesn't depend on whose machine it's on. Its
   options choose the model, the budget and what the agent may do
-  ([Run Claude Code instead](../opening-night/first-performance.md#run-claude-code-instead)).
+  ([Define your own actor](../opening-night/first-performance.md#define-your-own-actor)).
 
 The runners planned next are one for a model on your own computer
 ([#56](https://github.com/troupe-run/troupe/issues/56)), and Claude Code on a local model

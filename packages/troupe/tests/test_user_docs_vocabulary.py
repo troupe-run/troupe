@@ -70,6 +70,16 @@ USES = (
         "a git repository, as git means it: where troupe init may make a theatre",
     ),
     Use(
+        "opening-night/first-performance.md",
+        "in a git repository you already have",
+        "a git repository, as git means it: where troupe init may make a theatre",
+    ),
+    Use(
+        "opening-night/first-performance.md",
+        "Try it in a new git repository",
+        "a git repository, as git means it: where troupe init may make a theatre",
+    ),
+    Use(
         "prompt-book/cli.md",
         "must be in a git repository",
         "a git repository, as git means it: where troupe init may make a theatre",
