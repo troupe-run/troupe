@@ -2,11 +2,11 @@
 
 ## 1. init's allow step says to set it once, in the shell profile
 
-- [ ] 1.1 Add tests to `packages/troupe/tests/test_cli_init.py` for the cli spec's two new scenarios: on Linux and
+- [x] 1.1 Add tests to `packages/troupe/tests/test_cli_init.py` for the cli spec's two new scenarios: on Linux and
       macOS the allow step's note names `~/.zshrc` and `~/.bashrc`, says to add it once and that it then applies to
       every theatre, and doesn't say "each shell"; on Windows (`sys.platform` patched) the line is the `$env:` form and
       the note names `$PROFILE`. Verify they fail against today's note.
-- [ ] 1.2 Change `_step_notes` in `packages/troupe/src/troupe/cli/init.py` to name the profile for the platform, chosen
+- [x] 1.2 Change `_step_notes` in `packages/troupe/src/troupe/cli/init.py` to name the profile for the platform, chosen
       beside `_allow_line` so the line and note share one platform check (design D5). Verify the 1.1 tests and the rest
       of `test_cli_init.py` pass, and `mypy --strict` passes with `--platform win32` too.
 

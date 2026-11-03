@@ -9,6 +9,7 @@ import argparse
 import os
 import shlex
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TextIO
 
@@ -56,10 +57,24 @@ def _show_notice(update: dict[str, Any], stderr: TextIO) -> None:
         print(render_notice(update["notice"]), file=stderr, flush=True)
 
 
-def _allow_line(variable: str, value: str) -> str:
-    if sys.platform == "win32":
-        return f'$env:{variable} = "{value}"'
-    return f"export {variable}={value}"
+@dataclass(frozen=True)
+class Shell:
+    """How the allow step is phrased for one family of shells: the line that sets a variable, and
+    where to keep it so every new shell has it (#235: once, in the shell profile)."""
+
+    line: str
+    """The line, with ``{variable}`` and ``{value}`` to fill in."""
+    profile: str
+    """The profile the note names."""
+
+    def allow_line(self, variable: str, value: str) -> str:
+        return self.line.format(variable=variable, value=value)
+
+
+POSIX = Shell("export {variable}={value}", "~/.zshrc or ~/.bashrc")
+POWERSHELL = Shell('$env:{variable} = "{value}"', "your PowerShell profile ($PROFILE)")
+SHELL = POWERSHELL if sys.platform == "win32" else POSIX
+"""The shell the printed steps are phrased for: one choice, so the line and its note agree."""
 
 
 def _step_lines(step: dict[str, Any]) -> list[str]:
@@ -71,7 +86,7 @@ def _step_lines(step: dict[str, Any]) -> list[str]:
             shlex.join(["git", "commit", "-m", COMMIT_MESSAGE]),
         ]
     if kind == "allow-local-stage":
-        return [_allow_line(step["variable"], step["value"])]
+        return [SHELL.allow_line(step["variable"], step["value"])]
     return [shlex.join(["troupe", "perform", step["actor"], "--direction", step["direction"]])]
 
 
@@ -82,8 +97,8 @@ def _step_notes(step: dict[str, Any]) -> list[str]:
         return ["A run works from your latest commit, so commit the theatre first."]
     if kind == "allow-local-stage":
         return [
-            "troupe runs an actor on your machine only when policy allows it. Set this in each "
-            "shell you perform from."
+            "troupe runs an actor on your machine only when policy allows it. Run this line now, "
+            f"and add it once to {SHELL.profile}: it then applies to every theatre you run."
         ]
     notes = []
     if step["runner"] == "claude-code":
