@@ -12,9 +12,11 @@ import base64
 import binascii
 import contextlib
 import json
+import shutil
+import tempfile
 import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from importlib.metadata import version
 from pathlib import Path
 from typing import Any
@@ -73,6 +75,11 @@ class RunRequest:
     options: Mapping[str, object] = field(default_factory=dict)
     character: str | None = None
     """Who the actor is, sent apart from the direction; None when it has no character."""
+    effects: p.EffectsDeclaration = p.READ_ONLY_DECLARATION
+    """The actor's declared effects, sent with all three lists; read-only when it declares none."""
+    scratch: Path | None = None
+    """The run's scratch directory. None: run_actor makes one, and removes it when the run ends
+    (spec: effects, "Every run gets scratch space outside its declaration")."""
 
 
 class _Violation(Exception):  # noqa: N818 - it carries the protocol error, not a Python failure
@@ -395,14 +402,78 @@ async def run_actor(
     on_announce: AnnounceCallback | None = None,
     on_message: MessageCallback | None = None,
     cancel: asyncio.Event | None = None,
+    scratch_root: Path | None = None,
 ) -> RunOutcome:
     """Run one actor through a runner and return the run's one outcome.
+
+    Unless the request names one, the run gets a scratch directory, made under ``scratch_root``
+    (default: the platform's temporary directory) and removed when the run ends.
 
     Set ``cancel`` to cancel the run. The effect check has no default: a run with nothing to check
     passes NoEffectExpected.
     """
     if not p.RUN_ID_PATTERN.match(request.run_id):
         raise ValueError(f"run id {request.run_id!r} isn't a canonical lowercase UUID")
+    if request.scratch is not None:
+        return await _run_actor(
+            command, request, store, effect, limits, on_event, on_announce, on_message, cancel
+        )
+    scratch = await asyncio.to_thread(make_scratch, scratch_root)
+    try:
+        return await _run_actor(
+            command,
+            replace(request, scratch=scratch),
+            store,
+            effect,
+            limits,
+            on_event,
+            on_announce,
+            on_message,
+            cancel,
+        )
+    finally:
+        notice = await asyncio.to_thread(remove_scratch, scratch)
+        if notice is not None and on_announce is not None:
+            on_announce(notice)
+
+
+def make_scratch(root: Path | None = None) -> Path:
+    """A new, empty scratch directory for one run, under ``root`` or the platform's temporary
+    directory (spec: effects; declared-effects design D6). 0700 on POSIX."""
+    base = root if root is not None else defaults.run_scratch_root()
+    return Path(tempfile.mkdtemp(prefix=defaults.RUN_SCRATCH_PREFIX, dir=base))
+
+
+def remove_scratch(scratch: Path) -> Notice | None:
+    """Remove a run's scratch directory and all it holds. A failure is a notice naming it, never a
+    failed run: nothing in it was ever the theatre's."""
+    try:
+        shutil.rmtree(scratch)
+    except FileNotFoundError:
+        return None
+    except OSError as error:
+        return Notice(
+            "run.scratch-not-removed",
+            problem=f"The run's scratch directory {scratch} couldn't be removed: "
+            f"{error.strerror or type(error).__name__}.",
+            fix=f"Remove {scratch} yourself once nothing is using it; nothing in it is needed.",
+            path=str(scratch),
+            details={"scratch": str(scratch)},
+        )
+    return None
+
+
+async def _run_actor(
+    command: RunnerCommand,
+    request: RunRequest,
+    store: ArtifactStore,
+    effect: EffectCheck,
+    limits: RunLimits | None,
+    on_event: EventCallback | None,
+    on_announce: AnnounceCallback | None,
+    on_message: MessageCallback | None,
+    cancel: asyncio.Event | None,
+) -> RunOutcome:
     limits = limits or RunLimits()
     run = _Run(command, request, store, effect, limits, on_event, on_announce, on_message, cancel)
     effect.before()
@@ -553,6 +624,8 @@ async def _start(run: _Run) -> TroupeError | None:
             workspace=str(run.request.workspace),
             options=dict(run.request.options),
             limits=p.StartLimits(run.limits.event_max_bytes),
+            effects=run.request.effects,
+            scratch=str(run.request.scratch),
             character=run.request.character,
         ),
     )

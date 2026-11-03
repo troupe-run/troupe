@@ -62,6 +62,7 @@ def configure(
     expect: list[str] | None = None,
     name: str = "actor.json",
     workspace: str = "theatre",
+    effects: dict[str, list[str]] | None = None,
 ) -> None:
     """Define the actor tester in config through the CLI, as a person would, working in the
     theatre unless ``workspace`` says otherwise."""
@@ -69,6 +70,7 @@ def configure(
         "runner": "scripted",
         "options": options,
         "expect": expect or [],
+        "effects": effects if effects is not None else {"write": list(expect or [])},
         "workspace": workspace,
     }
     (repo.path / name).write_text(json.dumps(actor), encoding="utf-8")

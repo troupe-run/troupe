@@ -43,6 +43,7 @@ def _tester(*more: str) -> tuple[int, str, str]:
         "config",
         "set",
         "actors.tester.runner=scripted",
+        'actors.tester.effects.write=["out/**"]',
         'actors.tester.expect=["out/hello.txt"]',
         f"actors.tester.options.script.steps={STEPS}",
         *more,

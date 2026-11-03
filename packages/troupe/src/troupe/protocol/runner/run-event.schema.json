@@ -16,7 +16,7 @@
       "title": "Run event",
       "description": "Every event carries the run id, a seq that starts at 0 and increases by one, and a type.",
       "oneOf": [
-        {"$ref": "#/$defs/init"},
+        {"allOf": [{"$ref": "#/$defs/init"}, {"required": ["effects"]}]},
         {"$ref": "#/$defs/turn"},
         {"$ref": "#/$defs/tool_call"},
         {"$ref": "#/$defs/tool_result"},
@@ -27,8 +27,17 @@
     },
     "hostEvent": {
       "title": "Run event as troupe passes it on",
-      "description": "A run event, or the oversized event troupe writes in place of one larger than the maximum event size.",
-      "oneOf": [{"$ref": "#/$defs/event"}, {"$ref": "#/$defs/oversized"}]
+      "description": "A run event, or the oversized event troupe writes in place of one larger than the maximum event size. As troupe records it, an init may lack effects: one recorded before runners said how they apply effects.",
+      "oneOf": [
+        {"$ref": "#/$defs/init"},
+        {"$ref": "#/$defs/turn"},
+        {"$ref": "#/$defs/tool_call"},
+        {"$ref": "#/$defs/tool_result"},
+        {"$ref": "#/$defs/retry"},
+        {"$ref": "#/$defs/log"},
+        {"$ref": "#/$defs/result"},
+        {"$ref": "#/$defs/oversized"}
+      ]
     },
     "seq": {"type": "integer", "minimum": 0},
     "init": {
@@ -42,6 +51,10 @@
         "seq": {"const": 0},
         "type": {"const": "init"},
         "runner": {"$ref": "jsonrpc.schema.json#/$defs/named"},
+        "effects": {
+          "description": "How the runner applies the actor's declared effects. checked: it checks each change its engine asks for against them before carrying it out. translated: it translates them into its engine's own rules. A runner always sends it (see event); it's absent only from an init troupe recorded before runners said how they apply effects.",
+          "enum": ["checked", "translated"]
+        },
         "engine": {
           "description": "The engine the runner drives, where there is one.",
           "type": "object",

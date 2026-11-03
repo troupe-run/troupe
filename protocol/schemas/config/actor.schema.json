@@ -28,11 +28,16 @@
     },
     "expect": {
       "title": "Effect check",
-      "description": "Files, relative to the theatre's root, that a run must create or change: each must exist after the run, and differ from before it. A file named twice is checked once. An empty list means no effect check, and has to be written.",
+      "description": "Files, relative to the theatre's root, that a run must create or change: each must exist after the run, and differ from before it, and each must match a write or move pattern in effects. A file named twice is checked once. An empty list means no file has to change; the run's changes are still audited against its effects. It has to be written.",
       "type": "array",
       "items": {
         "$ref": "../client/run.schema.json#/$defs/theatrePath"
       }
+    },
+    "effects": {
+      "title": "Effects",
+      "description": "What this actor's runs may change: write, delete and move, each a list of patterns relative to the theatre's root. Absent declares nothing, so the actor is read-only. Every path in expect must match a write or move pattern. After each run, troupe audits every change in the workspace against it. Not enforcement: only a stage that enforces effects contains a run.",
+      "$ref": "../effects.schema.json#/$defs/effects"
     },
     "workspace": {
       "title": "Workspace",

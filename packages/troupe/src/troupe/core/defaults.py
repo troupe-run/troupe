@@ -4,6 +4,9 @@ Every timeout, size or other limit troupe uses has its default here. Callers can
 the ``settings`` capability will later let configuration override them too, bounded by policy.
 """
 
+from pathlib import Path
+
+from troupe.platform.files import temporary_directory
 from troupe.platform.processes import EnvironmentPolicy
 
 LOCK_TIMEOUT_SECONDS = 30.0
@@ -38,6 +41,21 @@ RUNNER_MAX_MESSAGE_BYTES = 64 * 1024 * 1024
 
 RUN_EVENT_MAX_BYTES = 64 * 1024
 """The largest run event kept inline; a larger one is stored as an artifact and referenced."""
+
+RUN_SCRATCH_ROOT: str | None = None
+"""Where each run's scratch directory is made (spec: effects, "Every run gets scratch space outside
+its declaration"; declared-effects design D6). None: the platform's temporary directory. It must
+be outside the theatre."""
+
+RUN_SCRATCH_PREFIX = "troupe-scratch-"
+"""How a run's scratch directory's name starts, so a person can tell what made it."""
+
+
+def run_scratch_root() -> Path:
+    """The directory scratch directories are made in: RUN_SCRATCH_ROOT, or the platform's
+    temporary directory."""
+    return Path(RUN_SCRATCH_ROOT) if RUN_SCRATCH_ROOT is not None else temporary_directory()
+
 
 RUN_TRANSCRIPT_MAX_BYTES = 1024 * 1024 * 1024
 """The largest transcript a run may produce before it is cancelled."""

@@ -18,6 +18,8 @@ import re
 from dataclasses import dataclass
 from typing import Any, ClassVar, Literal
 
+from troupe_plugin_sdk.effects import PatternError, pattern_regex
+
 # Message and ProtocolError are re-exported: callers know them as part of the runner contract.
 from troupe_plugin_sdk.messages import Message as Message
 from troupe_plugin_sdk.messages import ProtocolError as ProtocolError
@@ -84,12 +86,39 @@ class StartLimits(Message):
 
 
 @dataclass(frozen=True)
+class EffectsDeclaration(Message):
+    """The actor's declared effects as run start carries them: all three lists, always present."""
+
+    write: list[str] = json_field("write")
+    delete: list[str] = json_field("delete")
+    move: list[str] = json_field("move")
+
+    def _check(self, where: str) -> None:
+        for effect, patterns in (
+            ("write", self.write),
+            ("delete", self.delete),
+            ("move", self.move),
+        ):
+            for pattern in patterns:
+                try:
+                    pattern_regex(pattern, effect)
+                except PatternError as error:
+                    raise fail(where, str(error)) from error
+
+
+READ_ONLY_DECLARATION = EffectsDeclaration(write=[], delete=[], move=[])
+"""What run start carries for an actor that declares nothing."""
+
+
+@dataclass(frozen=True)
 class RunStartParams(Message):
     run_id: str = json_field("runId", pattern=RUN_ID_PATTERN)
     direction: str = json_field("direction")
     workspace: str = json_field("workspace", min_length=1)
     options: dict[str, object] = json_field("options")
     limits: StartLimits = json_field("limits")
+    effects: EffectsDeclaration = json_field("effects")
+    scratch: str = json_field("scratch", min_length=1)
     character: str | None = json_field("character", default=None)
 
 
@@ -142,6 +171,9 @@ class InitEvent(RunEvent):
     runner: Named = json_field("runner")
     tools: list[str] = json_field("tools")
     engine: Engine | None = json_field("engine", default=None)
+    effects: Literal["checked", "translated"] | None = json_field("effects", default=None)
+    """How the runner applies the declared effects. A runner always sends it (``parse_event``
+    refuses an init without it); None only in an init recorded before runners said."""
 
     def _check(self, where: str) -> None:
         if self.seq != 0:
@@ -241,7 +273,10 @@ def parse_event(data: object) -> RunEvent:
     kind = data.get("type")
     if not isinstance(kind, str) or kind not in EVENT_TYPES:
         raise fail("run event", f"unknown event type {kind!r}")
-    return EVENT_TYPES[kind].from_data(data)
+    event = EVENT_TYPES[kind].from_data(data)
+    if isinstance(event, InitEvent) and event.effects is None:
+        raise fail("InitEvent", "missing required field 'effects'")
+    return event
 
 
 @dataclass(frozen=True)

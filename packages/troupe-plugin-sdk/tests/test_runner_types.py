@@ -75,6 +75,14 @@ CASES: list[tuple[type[p.Message], str, st.SearchStrategy[Any]]] = [
                     optional={"replayDelays": st.booleans()},
                 ),
                 "limits": st.fixed_dictionaries({"eventMaxBytes": st.integers(1, 10**9)}),
+                "effects": st.fixed_dictionaries(
+                    {
+                        "write": st.lists(st.sampled_from(["out/**", "a.txt", "**"]), max_size=2),
+                        "delete": st.lists(st.sampled_from(["drafts/*", "x?"]), max_size=2),
+                        "move": st.lists(st.sampled_from(["docs/**/*.md"]), max_size=1),
+                    }
+                ),
+                "scratch": NAME,
             }
         ),
     ),
@@ -95,7 +103,11 @@ CASES: list[tuple[type[p.Message], str, st.SearchStrategy[Any]]] = [
         _event(
             "init",
             st.just(0),
-            required={"runner": NAMED, "tools": st.lists(NAME, max_size=3)},
+            required={
+                "runner": NAMED,
+                "effects": st.sampled_from(["checked", "translated"]),
+                "tools": st.lists(NAME, max_size=3),
+            },
             optional={
                 "engine": _with_optional({"name": NAME}, {"version": NAME, "model": NAME}),
             },
@@ -269,6 +281,7 @@ INIT = {
     "seq": 0,
     "type": "init",
     "runner": {"name": "s", "version": "1"},
+    "effects": "checked",
     "tools": [],
 }
 
@@ -422,7 +435,15 @@ def test_messages_the_host_builds_validate_as_host_messages() -> None:
         p.request(
             2,
             "run/start",
-            p.RunStartParams(RUN, "go", "/w", {"script": {"steps": []}}, p.StartLimits(65536)),
+            p.RunStartParams(
+                RUN,
+                "go",
+                "/w",
+                {"script": {"steps": []}},
+                p.StartLimits(65536),
+                p.READ_ONLY_DECLARATION,
+                "/s",
+            ),
         ),
         p.request(3, "run/cancel", p.RunCancelParams(RUN)),
         p.request(4, "shutdown", p.Empty()),
@@ -453,3 +474,21 @@ def test_parse_line_refuses_ambiguous_json(line: bytes) -> None:
 def test_parse_line_reads_a_message_ending_in_a_carriage_return_and_line_feed() -> None:
     note = p.parse_line(b'{"jsonrpc":"2.0","method":"run/event","params":{}}\r\n')
     assert note.method == "run/event"
+
+
+# Requirement: Init says how the runner applies the effects (declared-effects): a runner must send
+# it, and an init troupe recorded before it existed still reads.
+
+
+def test_a_runner_sent_init_without_effects_is_refused_naming_it() -> None:
+    legacy = {key: value for key, value in INIT.items() if key != "effects"}
+    with pytest.raises(p.ProtocolError, match="InitEvent: missing required field 'effects'"):
+        p.parse_event(legacy)
+    assert not is_valid(legacy, "run-event.schema.json#/$defs/event")
+
+
+def test_an_init_recorded_before_effects_existed_still_reads_as_a_host_event() -> None:
+    legacy = {key: value for key, value in INIT.items() if key != "effects"}
+    event = p.InitEvent.from_data(legacy)
+    assert event.effects is None
+    validate(legacy, "run-event.schema.json#/$defs/hostEvent")

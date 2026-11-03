@@ -28,6 +28,8 @@
         "runId",
         "direction",
         "workspace",
+        "effects",
+        "scratch",
         "options",
         "limits"
       ],
@@ -45,6 +47,15 @@
         },
         "workspace": {
           "description": "The absolute path of the directory the actor works in.",
+          "type": "string",
+          "minLength": 1
+        },
+        "effects": {
+          "description": "The actor's declared effects, all three lists always present: empty lists mean read-only. The runner applies them its own way, and says how in its init event.",
+          "$ref": "../effects.schema.json#/$defs/declaration"
+        },
+        "scratch": {
+          "description": "The absolute path of an empty directory, outside the workspace, that the runner and its engine may use for anything during the run without any effect. troupe removes it when the run ends.",
           "type": "string",
           "minLength": 1
         },

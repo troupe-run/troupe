@@ -17,7 +17,13 @@ from pathlib import Path
 from troupe.core import defaults
 from troupe.core.artifacts import MemoryArtifactStore
 from troupe.core.runners.effects import NoEffectExpected
-from troupe.core.runners.host import RunnerCommand, RunRequest, run_actor
+from troupe.core.runners.host import (
+    RunnerCommand,
+    RunRequest,
+    make_scratch,
+    remove_scratch,
+    run_actor,
+)
 from troupe.core.runners.limits import RunLimits
 from troupe.core.runners.outcome import Outcome
 from troupe.platform import processes
@@ -46,6 +52,7 @@ class _Driver:
         self.child = child
         self.limits = limits
         self.next_id = 1
+        self.scratches: list[Path] = []
 
     async def send(self, method: str, params: p.Message) -> int:
         id_ = self.next_id
@@ -89,12 +96,16 @@ class _Driver:
     async def start(
         self, options: Mapping[str, object], workspace: Path, character: str | None = None
     ) -> p.Incoming:
+        scratch = make_scratch()
+        self.scratches.append(scratch)
         params = p.RunStartParams(
             run_id=str(uuid.uuid4()),
             direction="conformance check",
             workspace=str(workspace),
             options=dict(options),
             limits=p.StartLimits(self.limits.event_max_bytes),
+            effects=p.READ_ONLY_DECLARATION,
+            scratch=str(scratch),
             character=character,
         )
         return await self.answer(await self.send("run/start", params))
@@ -110,13 +121,16 @@ async def _with_runner(
         line_limit=limits.max_message_bytes,
         search_path=command.search_path,
     )
+    driver = _Driver(child, limits)
     try:
-        await body(_Driver(child, limits))
+        await body(driver)
     finally:
         child.kill_tree()
         with contextlib.suppress(Exception):
             await asyncio.wait_for(child.wait(), limits.cancel_grace)
         child.release()
+        for scratch in driver.scratches:
+            remove_scratch(scratch)
 
 
 def _started(answer: p.Incoming, step: str) -> None:

@@ -10,7 +10,12 @@ from troupe.core.config.kinds import check, problems
 from troupe.core.errors import TroupeError
 
 SCRIPT = {"script": {"steps": [{"exit": 0}]}}
-TESTER: dict[str, Any] = {"runner": "scripted", "options": SCRIPT, "expect": ["out/hello.txt"]}
+TESTER: dict[str, Any] = {
+    "runner": "scripted",
+    "options": SCRIPT,
+    "expect": ["out/hello.txt"],
+    "effects": {"write": ["out/**"]},
+}
 
 
 def _actor(**changes: object) -> dict[str, Any]:
@@ -75,8 +80,8 @@ def test_a_claude_code_option_of_the_wrong_shape_is_refused_naming_its_path() ->
 def test_an_actor_without_an_effect_check_is_refused_saying_an_empty_list_means_none() -> None:
     error = _refused(_actor(expect=...))
     assert error.details["path"] == ["actors", "tester", "expect"]
-    assert "[] means no effect check" in error.problem
-    assert "[] means no effect check" in error.fix
+    assert "[] means no file has to change" in error.problem
+    assert "[] means no file has to change" in error.fix
 
 
 def test_an_effect_check_path_outside_the_theatre_is_refused_naming_it() -> None:

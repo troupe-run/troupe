@@ -21,6 +21,12 @@ Effect = Literal["write", "delete", "move"]
 EFFECTS: tuple[Effect, ...] = ("write", "delete", "move")
 
 
+RESERVED = (".git", ".troupe")
+"""Top-level entries no effect can allow changing: git's metadata and troupe's own state."""
+
+_CONTROL = re.compile(r"[\x00-\x1f\x7f]")
+
+
 class PatternError(ValueError):
     """A malformed pattern: where it is, the pattern, and what's wrong."""
 
@@ -42,7 +48,14 @@ def pattern_regex(pattern: str, where: str = "pattern") -> re.Pattern[str]:
         raise PatternError(f"{shown} is absolute; patterns are relative to the workspace")
     if "\\" in pattern or ":" in pattern:
         raise PatternError(f"{shown} has a '\\' or ':'; use '/' between the parts of a path")
+    if _CONTROL.search(pattern):
+        raise PatternError(f"{shown} has a control character in it")
     parts = pattern.split("/")
+    if parts[0] in RESERVED:
+        raise PatternError(
+            f"{shown} starts with {parts[0]!r}, which is troupe's or git's own; no effect can "
+            "allow changing it"
+        )
     for part in parts:
         if part in ("", "."):
             raise PatternError(f"{shown} has an empty part; write each part once, with one '/'")

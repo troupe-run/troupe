@@ -33,8 +33,8 @@ workspace, and every change it makes there SHALL be outside its declaration.
 - **THEN** the run's audit fails, naming `out/a.txt` and the `write` effect
 
 ### Requirement: A pattern that can't be meant is refused
-A pattern SHALL be refused, recording nothing, when it's empty, absolute, contains `..`, `\`, `:`, an empty part or
-`**` inside a part, or starts with `.git` or `.troupe` as its first part. The error SHALL name the actor, the list,
+A pattern SHALL be refused, recording nothing, when it's empty, absolute, contains `..`, `\`, `:`, a control
+character, an empty part or `**` inside a part, or starts with `.git` or `.troupe` as its first part. The error SHALL name the actor, the list,
 the pattern and the rule. The actor schema's pattern and the runner SDK's SHALL accept exactly the same patterns.
 
 #### Scenario: An absolute pattern

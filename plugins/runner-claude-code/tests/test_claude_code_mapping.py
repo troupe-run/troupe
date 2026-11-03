@@ -84,6 +84,7 @@ def test_system_init_maps_to_init_with_the_engines_version_model_and_tools() -> 
     assert init == {
         "type": "init",
         "runner": {"name": "claude-code", "version": "1.0"},
+        "effects": "translated",
         "engine": {"name": "claude-code", "version": "9.9.9", "model": "m"},
         "tools": ["Read"],
     }
@@ -104,6 +105,7 @@ def test_another_event_before_init_sends_a_synthetic_init_first() -> None:
     assert events[0] == {
         "type": "init",
         "runner": {"name": "claude-code", "version": "1.0"},
+        "effects": "translated",
         "tools": [],
     }
     assert events[1] == {"type": "turn", "role": "assistant", "text": "hi"}

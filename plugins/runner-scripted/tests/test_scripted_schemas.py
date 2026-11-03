@@ -40,15 +40,25 @@ def test_every_line_of_each_shipped_recording_validates_as_a_recording_line(path
     "type_", [ref["$ref"].rsplit("/", 1)[1] for ref in OPTIONS["$defs"]["event"]["oneOf"]]
 )
 def test_each_event_step_has_the_contracts_fields_with_run_id_and_seq_optional(type_: str) -> None:
+    """runId and seq are optional in every step, and init's effects too, which the runner fills
+    in as ``checked`` (declared-effects design D9)."""
     step: dict[str, Any] = OPTIONS["$defs"][type_]
     contract: dict[str, Any] = CONTRACT_EVENTS[type_]
+    filled = {"runId", "seq", "effects"} if type_ == "init" else {"runId", "seq"}
     assert step["properties"].keys() == contract["properties"].keys()
-    assert set(step["required"]) == set(contract["required"]) - {"runId", "seq"}
+    assert set(step["required"]) == set(contract["required"]) - filled
+
+
+def _ref(choice: dict[str, Any]) -> str:
+    """The def a oneOf choice names: its $ref, or its allOf's first $ref (init, whose effects a
+    runner must send)."""
+    ref = choice["$ref"] if "$ref" in choice else choice["allOf"][0]["$ref"]
+    return str(ref).rsplit("/", 1)[1]
 
 
 def test_the_event_steps_cover_every_event_type_a_runner_sends() -> None:
-    steps = {ref["$ref"].rsplit("/", 1)[1] for ref in OPTIONS["$defs"]["event"]["oneOf"]}
-    contract = {ref["$ref"].rsplit("/", 1)[1] for ref in CONTRACT_EVENTS["event"]["oneOf"]}
+    steps = {_ref(choice) for choice in OPTIONS["$defs"]["event"]["oneOf"]}
+    contract = {_ref(choice) for choice in CONTRACT_EVENTS["event"]["oneOf"]}
     assert steps == contract
 
 

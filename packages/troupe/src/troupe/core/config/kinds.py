@@ -8,6 +8,7 @@ and when branches' changes are merged, so a change that would make config invali
 naming the path and the rule, and records nothing.
 """
 
+import json
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -18,6 +19,7 @@ import jsonschema
 from troupe.core import interim, schemas
 from troupe.core.config.changes import dotted
 from troupe.core.errors import TroupeError
+from troupe_plugin_sdk.effects import Effects, PatternError, pattern_regex
 
 ACTORS = "actors"
 KINDS = (ACTORS,)
@@ -91,7 +93,10 @@ def actor_problems(name: str, actor: object) -> list[Problem]:
     if character is not None and not isinstance(character, str):
         found.append(Problem((*base, CHARACTER), "the character is text", "Set it to text."))
     fields = {k: v for k, v in actor.items() if k not in (CHARACTER, "options", *WRITTEN_BY_TROUPE)}
-    found += _schema_problems(base, fields, schemas.validator(ACTOR_SCHEMA))
+    schema_problems = _schema_problems(base, fields, schemas.validator(ACTOR_SCHEMA))
+    found += schema_problems
+    if not schema_problems:
+        found += _expect_problems(base, actor)
     runner = actor.get("runner")
     if isinstance(runner, str) and runner in interim.RUNNERS:
         options = actor.get("options", {})
@@ -134,7 +139,7 @@ def _schema_problems(
             continue
         if error.validator == "required" and isinstance(error.instance, Mapping):
             for missing in sorted(set(error.validator_value) - set(error.instance)):
-                hint = " ([] means no effect check)" if missing == "expect" else ""
+                hint = " ([] means no file has to change)" if missing == "expect" else ""
                 found.append(
                     Problem(
                         (*path, missing),
@@ -143,8 +148,63 @@ def _schema_problems(
                     )
                 )
             continue
+        pattern = _effect_pattern_problem(path, error)
+        if pattern is not None:
+            found.append(pattern)
+            continue
         found.append(
             Problem(path, _rule(error, against), f"Set {dotted(path)} to a value {against} allows.")
+        )
+    return found
+
+
+EFFECTS = "effects"
+
+
+def _effect_pattern_problem(
+    path: tuple[str, ...], error: jsonschema.ValidationError
+) -> Problem | None:
+    """A malformed effect pattern, in the SDK's own words (spec: effects, "A pattern that can't
+    be meant is refused"): the list it's in, the pattern and the rule."""
+    if error.validator not in ("pattern", "minLength") or not isinstance(error.instance, str):
+        return None
+    if len(path) < 5 or path[2] != EFFECTS:
+        return None
+    where = dotted(path[:4])
+    try:
+        pattern_regex(error.instance, where)
+    except PatternError as refused:
+        rule = str(refused)
+    else:  # the schema refused what the SDK accepts: a bug, but say what's known
+        rule = f"{where}: {error.instance!r} isn't a pattern the actor schema accepts"
+    if error.instance.startswith("/"):
+        rule += ". Runs get a scratch directory for temporary files without declaring it"
+    return Problem(path[:4], rule, f"Set {where} without {error.instance!r}.")
+
+
+def _expect_problems(base: tuple[str, ...], actor: Mapping[str, Any]) -> list[Problem]:
+    """Each ``expect`` path no ``write`` or ``move`` pattern covers (spec: effects, "Every
+    expected file is covered by the declaration"; declared-effects design D2)."""
+    expect = actor.get("expect")
+    if not isinstance(expect, list) or not expect:
+        return []
+    declared = actor.get(EFFECTS) or {}
+    write = list(declared.get("write") or [])
+    move = list(declared.get("move") or [])
+    effects = Effects(write=tuple(write), move=tuple(move))
+    found: list[Problem] = []
+    for index, path in enumerate(expect):
+        if effects.allows("write", path) or effects.allows("move", path):
+            continue
+        target = (*base, EFFECTS, "write")
+        fix = json.dumps([*write, path])
+        found.append(
+            Problem(
+                (*base, "expect", str(index)),
+                f"{path!r} is expected, but no write or move effect covers it, so the run "
+                "couldn't make it",
+                f"Declare it: troupe config set {dotted(target)}='{fix}'",
+            )
         )
     return found
 
@@ -186,7 +246,17 @@ def _article(json_type: str) -> str:
 
 def check(config: Mapping[str, Any]) -> None:
     """Refuse ``config`` with ``config.invalid`` when it breaks any rule, naming the first."""
-    found = problems(config)
+    _refuse(problems(config))
+
+
+def check_actor(name: str, actor: object) -> None:
+    """Refuse the actor ``name`` with ``config.invalid`` when it breaks any rule, naming the
+    first: what perform checks, so an actor recorded before a rule was tightened can't run
+    (spec: effects, "Every expected file is covered by the declaration")."""
+    _refuse(actor_problems(name, actor))
+
+
+def _refuse(found: list[Problem]) -> None:
     if found:
         first = found[0]
         more = f" ({len(found) - 1} more)" if len(found) > 1 else ""

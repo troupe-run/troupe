@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/effects.schema.json",
+  "title": "Effects",
+  "description": "What an actor may change: three lists of path patterns, relative to the theatre's root (the run's workspace). With nothing declared, an actor is read-only. Declaring effects isn't enforcement: only a stage that enforces effects contains a run.",
+  "$defs": {
+    "pattern": {
+      "title": "Effect pattern",
+      "description": "A path pattern relative to the theatre's root, with / between its parts: * matches within one part, ** as a whole part matches any number of parts, ? matches one character, and anything else matches itself. Never absolute, never with .., \\, :, a control character, an empty part or ** inside a part, and never starting with .git or .troupe, which no effect can allow changing.",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?![\\s\\S]*[\\x00-\\x1f\\x7f])(?!\\.git(?:/|$))(?!\\.troupe(?:/|$))(?!\\.\\.?(?:/|$))(?:\\*\\*(?=/|$)|(?:(?!\\*\\*)[^/\\\\:\\x00-\\x1f\\x7f])+)(?:/(?!\\.\\.?(?:/|$))(?:\\*\\*(?=/|$)|(?:(?!\\*\\*)[^/\\\\:\\x00-\\x1f\\x7f])+))*$"
+    },
+    "patterns": {
+      "title": "Effect patterns",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/pattern"
+      }
+    },
+    "effects": {
+      "title": "Declared effects",
+      "description": "The effects an actor declares in config. Each list is optional, and absent declares nothing.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "write": {
+          "title": "Write",
+          "description": "Where a run may create or change files (Write and Edit).",
+          "$ref": "#/$defs/patterns"
+        },
+        "delete": {
+          "title": "Delete",
+          "description": "Where a run may remove files. Declared apart from write, because it's more destructive.",
+          "$ref": "#/$defs/patterns"
+        },
+        "move": {
+          "title": "Move",
+          "description": "Where a run may move or rename files: both the source and the destination must match.",
+          "$ref": "#/$defs/patterns"
+        }
+      }
+    },
+    "declaration": {
+      "title": "Declared effects, explicit",
+      "description": "The effects troupe sends a runner: all three lists, each present, so a read-only actor is three empty lists and a runner never has to guess.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "write",
+        "delete",
+        "move"
+      ],
+      "properties": {
+        "write": {
+          "$ref": "#/$defs/patterns"
+        },
+        "delete": {
+          "$ref": "#/$defs/patterns"
+        },
+        "move": {
+          "$ref": "#/$defs/patterns"
+        }
+      }
+    }
+  }
+}

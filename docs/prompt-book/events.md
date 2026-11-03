@@ -82,7 +82,7 @@ The payload of one run event (topic troupe.core.runs.aggregate:Run.Reported): th
 | `lineage` | object (Lineage) | Yes | Where an event came from: who made it, through what, when, why, as part of which command and in reaction to what, with whose approval, and in what version-control state. Every event troupe records carries it. It is left out of the event's content hash, so two clones that make the same change agree on the event's id. |
 | `timestamp` | object (Library timestamp) | Yes | When the event-sourcing library created the event, as its transcoder writes a datetime. |
 | `seq` | integer | Yes | The runner's number for the event, counting from 0. Each run event is recorded in seq order, and one that isn't the next is refused. |
-| `event` | object (init) or object (turn) or object (tool_call) or object (tool_result) or object (retry) or object (log) or object (result) or object (oversized) | Yes | A run event, or the oversized event troupe writes in place of one larger than the maximum event size. |
+| `event` | object (init) or object (turn) or object (tool_call) or object (tool_result) or object (retry) or object (log) or object (result) or object (oversized) | Yes | A run event, or the oversized event troupe writes in place of one larger than the maximum event size. As troupe records it, an init may lack effects: one recorded before runners said how they apply effects. |
 
 ### Run.Started
 

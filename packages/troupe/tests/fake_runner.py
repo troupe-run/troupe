@@ -28,7 +28,7 @@ def event(seq: int, **fields: Any) -> None:  # noqa: ANN401 - event fields
 
 
 def init() -> None:
-    event(0, type="init", runner={"name": "fake", "version": "1"}, tools=[])
+    event(0, type="init", runner={"name": "fake", "version": "1"}, effects="checked", tools=[])
 
 
 def requests() -> Any:  # noqa: ANN401 - a generator of decoded requests
@@ -108,6 +108,11 @@ def main(mode: str) -> None:
                 )
                 continue
             send({"jsonrpc": "2.0", "id": message["id"], "result": {"runId": RUN_ID}})
+            if mode == "init-without-effects":
+                # breaks the contract: a runner says how it applies the effects (declared-effects)
+                event(0, type="init", runner={"name": "fake", "version": "1"}, tools=[])
+                event(1, type="result", status="ok", message="done")
+                continue
             init()
             if mode == "echo-env":
                 event(1, type="log", level="info", message=json.dumps(dict(os.environ)))
@@ -116,6 +121,22 @@ def main(mode: str) -> None:
                 seen = {"argv": sys.argv, "env": dict(os.environ)}
                 event(1, type="log", level="info", message=json.dumps(seen))
                 event(2, type="result", status="ok", message="done")
+            elif mode == "inspect-scratch":
+                scratch = message["params"]["scratch"]
+                found: dict[str, object] = {
+                    "scratch": scratch,
+                    "exists": os.path.isdir(scratch),
+                    "empty": os.path.isdir(scratch) and not os.listdir(scratch),
+                }
+                with open(os.path.join(scratch, "left.txt"), "w", encoding="utf-8") as left:
+                    left.write("a temporary file the run leaves behind")
+                event(1, type="log", level="info", message=json.dumps(found))
+                event(
+                    2,
+                    type="result",
+                    status=message["params"].get("direction") or "ok",
+                    message="done",
+                )
             elif mode == "ignore-shutdown":
                 event(1, type="result", status="ok", message="done")
             elif mode == "unsent-id":

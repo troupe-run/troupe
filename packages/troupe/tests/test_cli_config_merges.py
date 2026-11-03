@@ -105,7 +105,12 @@ def _unmerged(repo: Repo) -> list[str]:
     return repo.git("diff", "--name-only", "--diff-filter=U").split()
 
 
-BASE = ["actors.tester.runner=scripted", "actors.tester.expect=[]", STEPS % 0]
+BASE = [
+    "actors.tester.runner=scripted",
+    "actors.tester.expect=[]",
+    'actors.tester.effects.write=["out/**"]',
+    STEPS % 0,
+]
 """A tester whose YAML ends in its options' last line followed by ``expect: []``: one branch
 changing each puts the changes on adjacent lines, which git can't merge, while config can."""
 

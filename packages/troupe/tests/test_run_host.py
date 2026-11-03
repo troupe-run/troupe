@@ -3,6 +3,7 @@
 import asyncio
 import base64
 import json
+import shutil
 import sys
 import time
 import uuid
@@ -14,6 +15,7 @@ import pytest
 
 from protocol_schemas import check_error, check_notice
 from runner_schemas import is_valid, validate
+from troupe.core import defaults
 from troupe.core.artifacts import ArtifactStore, MemoryArtifactStore, load_store
 from troupe.core.notices import Notice
 from troupe.core.runners.effects import EffectCheck, ExpectedFiles, NoEffectExpected
@@ -67,6 +69,8 @@ def _run(
     valid_options: bool = True,
     character: str | None = None,
     direction: str = "test",
+    effects: p.EffectsDeclaration = p.READ_ONLY_DECLARATION,
+    scratch_root: Path | None = None,
 ) -> Ran:
     """Run the scripted runner (or ``argv``) and check every message troupe sent against the
     contract, with the scripted runner's schemas bound. ``valid_options=False`` marks options the
@@ -81,6 +85,7 @@ def _run(
         tmp_path,
         options if options is not None else {"script": script or {"steps": []}},
         character=character,
+        effects=effects,
     )
     ran: dict[str, Any] = {"events": [], "notices": [], "sent": [], "received": [], "times": []}
 
@@ -105,6 +110,7 @@ def _run(
             on_announce=ran["notices"].append,
             on_message=on_message,
             cancel=cancel,
+            scratch_root=scratch_root,
         )
 
     outcome = asyncio.run(main())
@@ -662,3 +668,63 @@ def test_neither_the_runners_argv_nor_its_environment_holds_the_direction_charac
     seen = json.loads(next(e for e in ran.events if isinstance(e, p.LogEvent)).message)
     held = [*seen["argv"], *seen["env"], *seen["env"].values()]
     assert [m for m in markers.values() if any(m in value for value in held)] == []
+
+
+# Requirement: Every run gets scratch space outside its declaration (spec: effects;
+# declared-effects design D6)
+
+
+def _scratch_seen(ran: Ran) -> dict[str, Any]:
+    log = next(e for e in ran.events if isinstance(e, p.LogEvent))
+    seen: dict[str, Any] = json.loads(log.message)
+    return seen
+
+
+@pytest.mark.parametrize("status", ["ok", "error"])
+def test_a_run_gets_an_empty_scratch_directory_outside_its_workspace_removed_when_it_ends(
+    tmp_path: Path, status: str
+) -> None:
+    workspace, root = tmp_path / "workspace", tmp_path / "scratch-root"
+    workspace.mkdir()
+    root.mkdir()
+    ran = _run(workspace, argv=_fake("inspect-scratch"), direction=status, scratch_root=root)
+    seen = _scratch_seen(ran)
+    scratch = Path(seen["scratch"])
+    assert (seen["exists"], seen["empty"]) == (True, True)
+    assert scratch.parent == root.resolve()
+    assert scratch.name.startswith(defaults.RUN_SCRATCH_PREFIX)
+    assert not scratch.resolve().is_relative_to(workspace.resolve())
+    assert _run_start(ran)["scratch"] == seen["scratch"]
+    assert ran.outcome.outcome is (Outcome.SUCCEEDED if status == "ok" else Outcome.FAILED)
+    assert not scratch.exists()  # gone, with the file the run left in it
+    assert ran.notices == []
+
+
+def test_a_scratch_directory_that_cant_be_removed_is_a_notice_not_a_failed_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def refuse(path: object, *args: object, **kwargs: object) -> None:
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(shutil, "rmtree", refuse)
+    workspace, root = tmp_path / "workspace", tmp_path / "scratch-root"
+    workspace.mkdir()
+    root.mkdir()
+    ran = _run(workspace, argv=_fake("inspect-scratch"), direction="ok", scratch_root=root)
+    assert ran.outcome.outcome is Outcome.SUCCEEDED
+    [notice] = ran.notices
+    scratch = _scratch_seen(ran)["scratch"]
+    assert notice.code == "run.scratch-not-removed"
+    assert notice.details == {"scratch": scratch}
+    assert scratch in notice.fix
+
+
+def test_the_actors_effects_reach_the_runner_with_all_three_lists(tmp_path: Path) -> None:
+    effects = p.EffectsDeclaration(write=["out/**"], delete=[], move=["drafts/**"])
+    ran = _run(tmp_path, {"steps": [{"event": INIT}, {"event": OK}]}, effects=effects)
+    assert _run_start(ran)["effects"] == {"write": ["out/**"], "delete": [], "move": ["drafts/**"]}
+
+
+def test_a_read_only_actors_run_start_carries_three_empty_lists(tmp_path: Path) -> None:
+    ran = _run(tmp_path, {"steps": [{"event": INIT}, {"event": OK}]})
+    assert _run_start(ran)["effects"] == {"write": [], "delete": [], "move": []}

@@ -565,6 +565,30 @@
     {
       "properties": {
         "code": {
+          "const": "run.scratch-in-theatre"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "scratchRoot"
+          ],
+          "properties": {
+            "scratchRoot": {
+              "description": "Where runs' scratch directories would be made, as an absolute path on this machine.",
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
           "const": "run.timeout"
         },
         "details": {

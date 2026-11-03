@@ -11,8 +11,9 @@ Claude Code names them, and troupe's own ``Delete`` and ``Move``. There's no she
 
 ::
 
-    tools = Tools(workspace, effects, limits=ToolLimits())
-    tools.definitions()   # each tool's name, description and input schema, for the model
+    tools = Tools(workspace, effects, limits=ToolLimits(), scratch=scratch)
+    # or: tools = Tools.for_declaration(Declaration.from_run_start(params))
+    tools.offered()       # each tool's name, description and input schema, for the model
     step = tools.run(call_id, name, arguments, numbering)
     step.events           # (ToolCallEvent, ToolResultEvent): send them
     step.output           # give this to the model
@@ -28,13 +29,16 @@ import tempfile
 from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from troupe_plugin_sdk.defaults import ToolLimits
 from troupe_plugin_sdk.effects import READ_ONLY, Effect, Effects, PatternError, pattern_regex
 from troupe_plugin_sdk.events import EventNumbering, fit, utf8_size
-from troupe_plugin_sdk.paths import GIT, PathRefusedError, Workspace, WorkspacePath
+from troupe_plugin_sdk.paths import GIT, PathRefusedError, Workspace, WorkspacePath, is_troupe
 from troupe_plugin_sdk.runner import ToolCallEvent, ToolResultEvent
+
+if TYPE_CHECKING:
+    from troupe_plugin_sdk.declaration import Declaration, Mode
 
 # Each tool's input: its fields, their types, and whether they're required. The input schemas the
 # model sees and the checks a call goes through are both made from this, so they can't disagree.
@@ -259,12 +263,21 @@ def _is_link(path: Path) -> bool:
 
 
 class Tools:
-    """The seven tools, for one workspace and one actor's declared effects."""
+    """The seven tools, for one workspace and one actor's declared effects, and optionally the
+    run's scratch directory. It's the SDK's ``checked`` way of applying a declaration: each call
+    is checked against it before it's carried out."""
+
+    mode: "Mode" = "checked"
 
     def __init__(
-        self, workspace: Path, effects: Effects = READ_ONLY, limits: ToolLimits | None = None
+        self,
+        workspace: Path,
+        effects: Effects = READ_ONLY,
+        limits: ToolLimits | None = None,
+        scratch: Path | None = None,
     ) -> None:
-        self.workspace = Workspace(workspace)
+        self.workspace = Workspace(workspace, scratch)
+        self.scratch = None if scratch is None else Path(scratch)
         self.effects = effects
         self.limits = limits if limits is not None else ToolLimits()
         self._run: dict[str, Callable[[dict[str, Any]], str]] = {
@@ -277,13 +290,39 @@ class Tools:
             "Move": self._move,
         }
 
+    @classmethod
+    def for_declaration(
+        cls, declaration: "Declaration", limits: ToolLimits | None = None
+    ) -> "Tools":
+        """The tools for a run's declaration: its workspace, effects and scratch directory."""
+        scratch = None if declaration.scratch is None else Path(declaration.scratch)
+        return cls(Path(declaration.workspace), declaration.effects, limits, scratch)
+
+    def translate(self, declaration: "Declaration") -> "Tools":
+        """The ``EffectsTranslation`` form: the tools that check each call against
+        ``declaration``."""
+        return Tools.for_declaration(declaration, self.limits)
+
     @staticmethod
-    def definitions() -> tuple[ToolDefinition, ...]:
-        """Each tool's name, description and closed input schema, to offer the model."""
+    def definitions(scratch: Path | str | None = None) -> tuple[ToolDefinition, ...]:
+        """Each tool's name, description and closed input schema, to offer the model. With
+        ``scratch``, each description names the scratch directory as the place for temporary
+        files."""
+        note = (
+            ""
+            if scratch is None
+            else f" Temporary files go in the scratch directory, {scratch}, by absolute path: "
+            "they need no effect, and are removed when the run ends."
+        )
         return tuple(
-            ToolDefinition(name, description, _schema(fields))
+            ToolDefinition(name, description + note, _schema(fields))
             for name, (description, fields) in _TOOLS.items()
         )
+
+    def offered(self) -> tuple[ToolDefinition, ...]:
+        """The definitions to offer this run's model, naming its scratch directory if it has
+        one."""
+        return Tools.definitions(self.scratch)
 
     @staticmethod
     def names() -> list[str]:
@@ -349,6 +388,13 @@ class Tools:
     # Checks shared by the tools
 
     def _allowed(self, tool: str, effect: Effect, path: WorkspacePath) -> None:
+        if path.scratch:
+            return
+        if is_troupe(path.relative):
+            raise _CallError(
+                f"{tool} on {path.relative} would change .troupe/, troupe's own state, which no "
+                "effect allows. Reading it is fine."
+            )
         if self.effects.allows(effect, path.relative):
             return
         declared = self.effects.declared(effect)
@@ -475,19 +521,25 @@ class Tools:
             raise self._failed("Edit", path, error) from error
         return f"Replaced {count} occurrence{'s' if count > 1 else ''} in {path.relative}."
 
-    def _files(self, start: WorkspacePath) -> Iterator[str]:
-        """Every file under ``start``, workspace-relative, sorted, without following links out of
-        the workspace or into ``.git``.
+    def _files(self, start: WorkspacePath) -> Iterator[tuple[str, str, Path]]:
+        """Every file under ``start``, sorted: how it's shown to the model, its path relative to
+        ``start`` (for matching), and where it is. It never follows links out of the workspace or
+        the scratch directory, or into ``.git``.
 
         It never descends into a directory link: ``os.walk(followlinks=False)`` skips symbolic
         links but descends into a Windows junction, which isn't one, so each directory is checked
         with ``os.path.isjunction`` as well (runner-sdk design D9)."""
-        root = self.workspace.root
-        found: list[str] = []
+        root = start.root if start.root is not None else self.workspace.root
+        shown_root = (
+            self.workspace.scratch_shown
+            if start.scratch and self.workspace.scratch_shown is not None
+            else None
+        )
+        found: list[tuple[str, str, Path]] = []
         for directory, dirnames, filenames in os.walk(start.absolute, followlinks=False):
             here = Path(directory)
             relative = PurePosixPath(*here.relative_to(root).parts)
-            if not relative.parts:
+            if not relative.parts and not start.scratch:
                 dirnames[:] = [d for d in dirnames if d.casefold() != GIT]
                 filenames = [f for f in filenames if f.casefold() != GIT]
             dirnames[:] = sorted(d for d in dirnames if not _is_link(here / d))
@@ -495,7 +547,14 @@ class Tools:
                 file = here / name
                 if file.is_symlink() and not self.workspace.contains(file):
                     continue
-                found.append((relative / name).as_posix())
+                inner = relative / name
+                shown = (
+                    inner.as_posix()
+                    if shown_root is None
+                    else str(shown_root.joinpath(*inner.parts))
+                )
+                under = PurePosixPath(*file.relative_to(start.absolute).parts).as_posix()
+                found.append((shown, under, file))
         yield from sorted(found)
 
     def _start(self, data: dict[str, Any]) -> WorkspacePath:
@@ -510,16 +569,12 @@ class Tools:
         except PatternError as error:
             raise _CallError(f"The {error}.") from error
 
-    def _under(self, start: WorkspacePath, file: str) -> str:
-        """``file`` relative to ``start``, for matching a pattern given relative to it."""
-        return file[len(start.relative) + 1 :] if start.relative else file
-
     def _glob(self, data: dict[str, Any]) -> str:
         matcher = self._matcher(data["pattern"], "pattern")
         start = self._start(data)
         if not start.absolute.is_dir():
             raise _CallError(f"{start.relative} is a file; Glob's path is a directory.")
-        matched = [f for f in self._files(start) if matcher.match(self._under(start, f))]
+        matched = [shown for shown, under, _ in self._files(start) if matcher.match(under)]
         if not matched:
             return "No files match."
         cap = self.limits.glob_max_paths
@@ -541,17 +596,17 @@ class Tools:
         start = self._start(data)
         if start.absolute.is_dir():
             files = [
-                f for f in self._files(start) if only is None or only.match(self._under(start, f))
+                (shown, absolute)
+                for shown, under, absolute in self._files(start)
+                if only is None or only.match(under)
             ]
         else:
-            files = [start.relative]
+            files = [(start.relative, start.absolute)]
         cap = self.limits.grep_max_matches
         matches: list[str] = []
         more = 0
         too_large = not_text = special = 0
-        root = self.workspace.root
-        for file in files:
-            absolute = root.joinpath(*file.split("/"))
+        for file, absolute in files:
             if not self.workspace.contains(absolute):
                 continue  # never read outside the workspace, whatever the walk found
             try:
@@ -603,8 +658,13 @@ class Tools:
     def _move(self, data: dict[str, Any]) -> str:
         source = self.workspace.path(data["source"])
         destination = self.workspace.path(data["destination"])
-        self._allowed("Move", "move", source)
-        self._allowed("Move", "move", destination)
+        if source.scratch and not destination.scratch:
+            self._allowed("Move", "write", destination)  # into the workspace: a new file
+        elif destination.scratch and not source.scratch:
+            self._allowed("Move", "delete", source)  # out of the workspace: the file is gone
+        else:
+            self._allowed("Move", "move", source)
+            self._allowed("Move", "move", destination)
         self._file(source)
         if os.path.lexists(destination.absolute):
             raise _CallError(f"{destination.relative} already exists. Move doesn't replace a file.")
