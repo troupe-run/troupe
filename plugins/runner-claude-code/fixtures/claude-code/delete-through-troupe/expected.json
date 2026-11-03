@@ -1,0 +1,10 @@
+{
+  "description": "A real run through the runner's translated rules, with delete declared for drafts/**: Claude Code finds troupe's mcp__troupe__Delete through ToolSearch, calls it on drafts/old.md, which the runner's MCP server deletes after checking the declaration, and replies 'done'. init, two calls with their results, then an ok result.",
+  "exitCode": 0,
+  "outcome": "succeeded",
+  "errorCode": null,
+  "withoutFailFast": {
+    "outcome": "succeeded",
+    "errorCode": null
+  }
+}
