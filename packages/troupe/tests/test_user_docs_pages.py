@@ -138,7 +138,9 @@ def project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Repo:
 
 
 def stand_in_claude(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, write: str) -> None:
-    """A stand-in claude first on PATH, writing ``write`` (``path=content``) when it runs."""
+    """A stand-in claude first on PATH, writing ``write`` (``path=content``) when it runs. The
+    content has no newline: the Windows shim, a .cmd file, can't carry one, and the stand-in
+    writes text, which is CRLF there."""
     bin_dir = tmp_path / "bin"
     claude_stand_in.install(
         bin_dir, fixture=claude_stand_in.fixture("success-with-tools"), write=write
@@ -178,7 +180,7 @@ def test_the_claude_code_walkthrough_runs_as_written_with_a_stand_in_claude(
 ) -> None:
     lines = sh_lines(walkthrough())
     assert lines == WALKTHROUGH
-    stand_in_claude(tmp_path, monkeypatch, write="NOTES.md=my-app is an app.\n")
+    stand_in_claude(tmp_path, monkeypatch, write="NOTES.md=my-app is an app.")
     code, out, err = perform_walkthrough(monkeypatch, lines)
     assert code == 0, err
     run_id = out.split()[1]
@@ -192,7 +194,7 @@ def test_the_claude_code_walkthrough_runs_as_written_with_a_stand_in_claude(
     assert "+my-app is an app." in out
     code, _, err = run_line(lines[7].replace("<run>", run_id[:8]), monkeypatch)
     assert code == 0, err
-    assert (project.path / "NOTES.md").read_text(encoding="utf-8") == "my-app is an app.\n"
+    assert (project.path / "NOTES.md").read_bytes() == b"my-app is an app."
     code, out, _ = run_line(lines[8], monkeypatch)
     assert code == 0
     assert run_id[:8] in out
@@ -229,7 +231,7 @@ def test_the_uncommitted_changes_notice_the_page_shows_is_the_one_perform_writes
         .replace(re.escape(EXAMPLE_COUNT), r"\d+ path\(s\)")
         .replace(EXAMPLE_COMMIT, "[0-9a-f]{12}")
     )
-    stand_in_claude(tmp_path, monkeypatch, write="NOTES.md=notes\n")
+    stand_in_claude(tmp_path, monkeypatch, write="NOTES.md=notes")
     # character.md isn't committed by the page's git add .troupe, as the page says. A change of
     # the reader's own makes 2 paths, so the page's count is read as the run's own, not matched.
     (project.path / "README.md").write_text("# my-app, changed\n", encoding="utf-8")
@@ -302,7 +304,7 @@ def test_defining_your_own_actor_runs_as_written_with_a_stand_in_claude(
     assert lines == OWN_ACTOR
     code, _, err = cli("init")
     assert code == 0, err
-    stand_in_claude(tmp_path, monkeypatch, write="REVIEW.md=fine\n")
+    stand_in_claude(tmp_path, monkeypatch, write="REVIEW.md=fine")
     monkeypatch.setenv(env_name(ALLOW_UNENFORCED_LOCAL_STAGE), "true")
     for line in lines[:-1]:
         code, _, err = run_line(line, monkeypatch)
