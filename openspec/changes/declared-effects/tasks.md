@@ -89,9 +89,11 @@
   server over stdio (initialize, tools/list, a declared delete, a refused move), and that a write-only actor's command
   line has no `--mcp-config`.
 - [x] 6.4 Send the `log` warnings for allowed shell rules and loaded setting sources. Verify tests for both scenarios.
-- [ ] 6.5 Capture fixtures from a current Claude Code for a run whose edit is denied by the translated rules and one
+- [x] 6.5 Capture fixtures from a current Claude Code for a run whose edit is denied by the translated rules and one
   that calls `mcp__troupe__Delete`, and run the opt-in live test once with `write` declared. Verify the fixtures pass
-  their mapping tests, and record the live test's Claude Code version and result in the pull request.
+  their mapping tests, and record the live test's Claude Code version and result in the pull request. (owner, 2026-11-03, Claude Code 2.1.316:
+  `edit-denied-by-effects` and `delete-through-troupe` captured through the runner's own rules and committed, both
+  passing their mapping and host tests; the live test passed with the existing login, outcome `succeeded`)
 
 ## 7. Auditions, docs and specs
 
