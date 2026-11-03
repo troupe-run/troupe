@@ -109,11 +109,12 @@ def test_a_link_out_of_scratch_is_refused(tmp_path: Path) -> None:
 
 
 def test_an_absolute_path_outside_scratch_names_the_scratch_directory(tmp_path: Path) -> None:
+    # A POSIX-style absolute path, refused alike on every platform. (A native Windows path is
+    # refused for its backslash first, as it would be on POSIX: the same answer everywhere.)
     root = workspace(tmp_path)
     scratch = _scratch(tmp_path)
     tools = Tools(root, READ_ONLY, scratch=scratch)
-    elsewhere = str(tmp_path / "elsewhere.txt")
-    step = call(tools, "Read", {"file_path": elsewhere})
+    step = call(tools, "Read", {"file_path": "/elsewhere/notes.txt"})
     assert step.is_error
     assert "relative to the workspace" in step.output
     assert str(scratch) in step.output
@@ -122,10 +123,10 @@ def test_an_absolute_path_outside_scratch_names_the_scratch_directory(tmp_path: 
 def test_with_no_scratch_an_absolute_path_says_the_run_has_none(tmp_path: Path) -> None:
     root = workspace(tmp_path)
     tools = Tools(root, READ_ONLY)
-    step = call(tools, "Write", {"file_path": str(tmp_path / "a.txt"), "content": "x"})
+    step = call(tools, "Write", {"file_path": "/elsewhere/a.txt", "content": "x"})
     assert step.is_error
     assert "no scratch directory" in step.output
-    assert not (tmp_path / "a.txt").exists()
+    assert sorted(p.name for p in root.iterdir()) == []
 
 
 def test_scratch_inside_the_workspace_is_refused(tmp_path: Path) -> None:
