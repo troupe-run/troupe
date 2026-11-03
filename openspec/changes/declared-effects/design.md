@@ -178,7 +178,9 @@ The translation (`troupe_runner_claude_code.permissions`):
   `-p` today, but only from Claude Code 2.1.302, so it's refused rather than trusted.
 - **Write:** `Edit(//<abs pattern>)` allow rules from `Declaration.absolute("write")`, plus
   `Edit(//<scratch>/**)`. Deny `Edit(//<ws>/.git/**)` and `Edit(//<ws>/.troupe/**)`. Absolute rules avoid both
-  gitignore's anchoring quirks for allow rules and the settings-file-relative `/x` form.
+  gitignore's anchoring quirks for allow rules and the settings-file-relative `/x` form. When a path reaches its
+  directory through a link (macOS's `/var` is `/private/var`), each rule is written for the resolved form too, so
+  it matches whichever form Claude Code compares.
 - **Scratch:** `--add-dir <scratch>`, and `TMPDIR`, `TMP` and `TEMP` pointed at it in Claude Code's environment. The
   runner's private directory (settings, character, MCP config) stays its own `mkdtemp`, never under scratch, so
   Claude Code can't edit its own settings.
