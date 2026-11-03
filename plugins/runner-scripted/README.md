@@ -50,11 +50,12 @@ before anything plays.
 
 | Step | What it does |
 |---|---|
-| `event` | Sends a run event. `runId` and `seq` are filled in, unless the step sets them (to break the contract on purpose). |
+| `event` | Sends a run event. `runId` and `seq` are filled in, unless the step sets them (to break the contract on purpose), and so is an `init`'s `effects`, as `checked`. |
 | `transcript` | Sends a transcript record: a string, or `{"record": "...", "encoding": "base64"}`. |
 | `stderr` | Writes text to standard error. |
 | `wait` | `{"ms": n}`: waits, still answering troupe, so a cancel or end of input ends it early. |
-| `writeFile` | `{"path": "...", "content": "..."}`: writes a file under the workspace. Absolute paths, drives, UNC paths and `..` are refused. |
+| `writeFile` | `{"path": "...", "content": "..."}`: writes a file under the workspace, raw: no effect checks it, so a test can show what troupe's audit catches. Absolute paths, drives, UNC paths and `..` are refused. |
+| `tool` | `{"name": "Write", "input": {...}, "callId": "c1", "isError": true}`: carries out one tool call with the [plugin SDK's tools](../../packages/troupe-plugin-sdk/README.md), as a model's call would be: checked against `run/start`'s effects, in its workspace and scratch directory, and sent as a `tool_call` and a `tool_result`. `input` is an object of the tool's fields, or the JSON text of one (malformed on purpose, if need be). `callId` is `tool-<n>` when absent. With `isError`, a result that isn't what the step expects ends the run with an error `result` naming the step. |
 | `hang` | `true`: blocks until a cancel it honours, `shutdown` or end of input. |
 | `exit` | Exits at once with this code, without a `result`. |
 | `rawStdout` | Writes this line to standard output as it is, to break the contract on purpose. |

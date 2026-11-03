@@ -12,8 +12,9 @@ Rules for everything in this directory:
   defined in [`protocol/`](../protocol/). A containerised plugin is the same thing, run inside `docker run`.
 - **A plugin imports only the plugin SDK, never `troupe`.** It sees troupe exactly as a third party would, so
   first-party plugins prove the contract is complete. The [plugin SDK](../packages/troupe-plugin-sdk/README.md)
-  (`troupe-plugin-sdk`) holds the runner contract's types, which core uses too, and the code a runner uses to carry
-  out a model's tool calls. Import-linter contracts (`plugins import nothing from troupe`, and `plugins are
+  (`troupe-plugin-sdk`) holds the runner contract's types, which core uses too, the code a runner uses to carry
+  out a model's tool calls, and the actor's declared effects as `run/start` carries them, with the seam a runner
+  plugs its own way of applying them into. Import-linter contracts (`plugins import nothing from troupe`, and `plugins are
   independent of each other`) enforce it, `scripts/plugin_imports.py` fails when a plugin is missing from them, and
   `scripts/check.py` fails when any breaks.
 - **Each plugin is self-contained:** its own `pyproject.toml` (or its language's equivalent), tests and, where it

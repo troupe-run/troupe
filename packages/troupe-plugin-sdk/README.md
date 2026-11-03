@@ -39,6 +39,12 @@ There's no shell, because nothing on the local stage would contain it.
 Every path is relative to the workspace, with `/` between its parts, and the same rules apply on every platform. A
 path that's absolute, uses `..`, a `\`, a `:` or a reserved Windows name, leads into `.git`, or leads out of the
 workspace through a link is refused. The effects are checked on the path a call would actually change, after links.
+No tool changes anything under the workspace's `.troupe`, troupe's own state, though reading it is fine.
+
+The run's **scratch directory** is the one exception to relative paths: an absolute path inside it is accepted, and
+needs no effect. Moving a file from scratch into the workspace needs `write` for its destination, and moving one out
+needs `delete` for its source. With a scratch directory, each tool's description names it, so the model knows
+where temporary files go.
 
 ## Effects
 
@@ -54,7 +60,8 @@ In a pattern, `*` matches within one part of a path, `?` matches one character, 
 any number of parts: `src/**` matches `src/a.py` and `src/pkg/b.py`, but not `src` itself. `Glob` uses the same
 patterns. A malformed pattern raises a `PatternError` naming the effect and the pattern.
 
-With nothing declared (`Effects()`), an actor is read-only. Deleting and moving are declared apart from writing,
+A pattern can't start with `.git` or `.troupe`, or hold a control character. With nothing declared (`Effects()`), an
+actor is read-only. Deleting and moving are declared apart from writing,
 because they're more destructive. A call the effects don't allow is an error result naming the tool, the path and
 the effect it needs, and nothing changes. The check isn't enforcement: the runner is still a process on the host, so
 troupe records the local stage's effects as unenforced.
@@ -62,16 +69,14 @@ troupe records the local stage's effects as unenforced.
 ## A runner's tool loop
 
 ```python
-from pathlib import Path
-
-from troupe_plugin_sdk.effects import Effects
+from troupe_plugin_sdk.declaration import Declaration
 from troupe_plugin_sdk.events import EventNumbering
 from troupe_plugin_sdk.tools import Tools
 
-tools = Tools(Path(workspace), Effects(write=("out/**",)))
+tools = Tools.for_declaration(Declaration.from_run_start(params))  # effects, workspace, scratch
 numbering = EventNumbering(run_id, event_max_bytes, next_seq=1)  # after init, seq 0
 
-offered = tools.definitions()  # each tool's name, description and input schema
+offered = tools.offered()  # each tool's name, description and input schema, naming scratch
 # ... ask the model, offering `offered`; for each tool call in its reply:
 step = tools.run(call_id, name, arguments, numbering)
 for event in step.events:  # tool_call, then tool_result

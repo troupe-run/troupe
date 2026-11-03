@@ -97,11 +97,12 @@
 
 - [x] 7.1 Update the auditions (D10). Verify the config delta's audition scenarios, and that the scripted audition
   performed offline succeeds with its audit passed.
-- [ ] 7.2 Document effects for people: what each list allows, the read-only default, `expect` inside `write`, the
+- [x] 7.2 Document effects for people: what each list allows, the read-only default, `expect` inside `write`, the
   audit, scratch, that none of it is enforcement, and that changes outside the workspace are neither prevented nor
-  detected on the local stage, in the user docs page on actors and the regenerated schema page.
-  Verify `uv run scripts/docs_reference.py --check` passes and the docs build's link check passes.
-- [ ] 7.3 Update `plugins/runner-claude-code/README.md` (options, the translation, delete and move, what shell rules
+  detected on the local stage, in the user docs (the-company/performances-and-runs.md, "Effects") and the
+  regenerated schema page. Verify `uv run scripts/docs_reference.py --check` and the docs tests pass; the docs build's
+  link check runs in troupe-run/website.
+- [x] 7.3 Update `plugins/runner-claude-code/README.md` (options, the translation, delete and move, what shell rules
   can still do), `plugins/README.md` and `contributing/runners.md` (the declaration, `init.effects`, the translation
   seam). Verify every option and error code the README names is in the published schemas (the README test).
 - [ ] 7.4 Run `openspec validate declared-effects --strict` and `uv run scripts/check.py`. Verify both pass.

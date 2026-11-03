@@ -17,20 +17,48 @@ shape. No option names a program to run.
 |---|---|
 | `model` | The model Claude Code uses, passed as `--model`. Absent: Claude Code's own default. It can't start with `-` |
 | `maxBudgetUsd` | The most a run may spend, in US dollars, above 0, passed as `--max-budget-usd`. Absent: USD 5 |
-| `permissionMode` | `acceptEdits`, `auto`, `bypassPermissions`, `manual`, `dontAsk` or `plan`, passed as `--permission-mode`. Absent: Claude Code's own default, which in print mode denies edits and any tool not allowed |
-| `allowedTools` | Permission rules that allow a tool, such as `Read` or `Bash(git status)` |
+| `permissionMode` | `dontAsk` or `plan`, passed as `--permission-mode`. Absent: `dontAsk`. The modes that approve edits without a rule (`acceptEdits`, `auto`, `bypassPermissions`, `manual`) are refused: what Claude Code may change comes from the actor's effects |
+| `allowedTools` | Permission rules that allow a tool, such as `Read` or `Bash(git status)`. A rule for an editing tool (`Edit`, `Write`, `NotebookEdit`, `MultiEdit`) or for `mcp__troupe` is refused |
 | `disallowedTools` | Permission rules that deny a tool |
 | `settingSources` | The Claude Code setting sources to load: any of `user`, `project` and `local`. Absent: none |
 
-A run always has a budget, so a runaway loop stops. The runner never grants more than config asks for: without
-`permissionMode` and `allowedTools`, Claude Code can read but not write, and the runner reports each denied tool as
-a `log` warning before the result. An actor that writes files needs, for example:
+A run always has a budget, so a runaway loop stops. The runner never grants more than config asks for: what Claude
+Code may change comes from the actor's [effects](#effects), and with none declared it can read but not write. The
+runner reports each denied tool as a `log` warning before the result. An actor that edits its source and runs its
+tests needs, for example:
 
 ```yaml
 options:
-  permissionMode: acceptEdits
   allowedTools: ["Bash(uv run pytest *)"]
+effects:
+  write: ["src/**", "tests/**"]
 ```
+
+## Effects
+
+The runner applies the actor's declared effects by translating them into Claude Code's own permission rules, and its
+`init` event says so (`effects: translated`). It writes them into the settings file it already passes:
+
+- **Claude Code runs in `dontAsk`** (or `plan`, when the options ask), which denies every tool call no rule allows.
+- **Each `write` pattern becomes an allow rule,** `Edit(//<workspace>/<pattern>)`, which covers every built-in tool
+  that edits a file. The rules are absolute, with a Windows drive written `//c/...`, as Claude Code reads them.
+- **The workspace's `.git` and `.troupe`** are denied, whatever the effects allow.
+- **The run's scratch directory** is allowed for editing, added as a working directory, and is Claude Code's
+  `TMPDIR`, `TMP` and `TEMP`.
+- **`delete` and `move` are troupe's own tools.** Claude Code has none for either, only its shell, and a shell rule
+  matches a command's text, not the paths it touches. So when an actor declares either, the runner starts Claude Code
+  with an MCP server of its own (`python -m troupe_runner_claude_code.effects_server`), whose `Delete` and `Move` are
+  carried out by the plugin SDK, checked against the declaration on each call, and allowed as
+  `mcp__troupe__Delete` and `mcp__troupe__Move`. With neither declared, there's no MCP server.
+- **A `write` pattern holding `[`, `]`, `(`, `)`, a backslash or a leading `!`,** or a workspace or scratch path
+  holding one of those or `*` or `?`, is refused with `claude-code.untranslatable-pattern`: Claude Code's rule syntax
+  reads them differently, so no rule would mean what's declared.
+
+What the rules can't cover is said, not hidden. **An allowed shell rule** (`Bash(...)`, `PowerShell(...)`) can change
+any file, and **a loaded setting source**'s rules merge with the runner's, so the run sends a `log` warning naming
+each. troupe's audit checks the run's changes after it ends, whatever made them. The settings file also turns off
+Claude Code's automatic allowing of sandboxed shell commands. None of this is enforcement: the runner, and Claude
+Code, are processes on your machine.
 
 ## What it runs
 
@@ -41,24 +69,28 @@ program. It runs Claude Code in the workspace:
 ```console
 claude -p --output-format stream-json --verbose --no-session-persistence \
        --setting-sources "" --strict-mcp-config --max-budget-usd 5 \
-       [--model M] [--permission-mode P] \
-       [--append-system-prompt-file <private>/character.md] [--settings <private>/settings.json]
+       [--model M] --permission-mode dontAsk|plan --add-dir <scratch> \
+       [--append-system-prompt-file <private>/character.md] --settings <private>/settings.json \
+       [--mcp-config <private>/mcp.json]
 ```
 
 - **The direction goes on standard input,** never on the command line, so it can't show in a process listing,
   meet Windows' command-line limit, or be re-read by `cmd.exe` when `claude` is an npm `claude.cmd`.
 - **The character is appended to Claude Code's system prompt** from a file, so its own tool instructions stay.
-- **`allowedTools` and `disallowedTools` go in a settings file** as `permissions.allow` and `permissions.deny`.
+- **`allowedTools` and `disallowedTools` go in a settings file** as `permissions.allow` and `permissions.deny`,
+  with the rules translated from the actor's [effects](#effects).
 - **The private files** live in a directory of the runner's own, outside the workspace (0700 on POSIX), removed when
   the runner exits. If the temporary directory is inside the workspace, the run is refused.
-- **Claude Code's environment is the runner's,** plus `DISABLE_AUTOUPDATER=1` and
+- **Claude Code's environment is the runner's,** with its temporary directory pointed at the run's scratch
+  directory, plus `DISABLE_AUTOUPDATER=1` and
   `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`. troupe gives the runner only the variables it names for it: the path,
   the home and temporary directories, the locale, proxies, `CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_OAUTH_TOKEN` and
   `ANTHROPIC_API_KEY`.
 
 ### The person's settings are left out
 
-By default the actor loads no setting sources and no MCP servers: none of the person's `~/.claude/settings.json`
+By default the actor loads no setting sources and no MCP servers but troupe's own, when it declares `delete` or
+`move`: none of the person's `~/.claude/settings.json`
 hooks, permissions or default mode, and none of the workspace's `.claude/settings.json`. A run then doesn't depend on
 whose machine it's on, and the actor doesn't run the hooks of the repository it works in. `settingSources` names the
 sources to load instead. Logging in isn't a setting, so the person's existing login still works. `--bare` is never
@@ -102,7 +134,8 @@ with it ([Publishing a runner's schemas](../../contributing/runners.md#publishin
 - [`options.schema.json`](src/troupe_runner_claude_code/schemas/options.schema.json): the options above.
 - [`errors.schema.json`](src/troupe_runner_claude_code/schemas/errors.schema.json): its own error codes, each refusing
   `run/start`: `claude-code.unknown-option` and `claude-code.invalid-options` (with `details.where`),
-  `claude-code.not-found` (with `details.path`, the `PATH` searched) and `claude-code.start-failed`.
+  `claude-code.not-found` (with `details.path`, the `PATH` searched), `claude-code.start-failed`, and, with
+  `details.where`, `claude-code.widens-effects` and `claude-code.untranslatable-pattern`.
 
 ## Fixtures
 
