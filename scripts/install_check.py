@@ -306,6 +306,7 @@ def _perform(theatre: Path, troupe: str, env: dict[str, str]) -> str:
                 "actors.tester.runner=scripted",
                 "actors.tester.options=@hello.json",
                 'actors.tester.expect=["out/hello.txt"]',
+                'actors.tester.effects.write=["out/**"]',
             ],
         ),
         ("commit", [git, *local, "add", "-A"]),
