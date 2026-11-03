@@ -5,6 +5,7 @@ and names the member and the file. The last test runs the check on the real file
 
 import json
 import shutil
+import tomllib
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -13,6 +14,7 @@ import bundle_state
 import pytest
 from conftest import REPO
 
+import bundle as bundle_check
 import release_config
 from release_config import CONFIG, LOCK, MANIFEST, PROTOCOL, PROTOCOL_RECORD
 
@@ -23,19 +25,19 @@ def next_minor(version: str) -> str:
     return f"{major}.{int(minor) + 1}.0"
 
 
-def unexclude(config: dict[str, Any]) -> None:
-    """Remove every entry's 'exclude-paths', as the first pinning pull request does."""
-    for entry in config["packages"].values():
-        entry.pop("exclude-paths", None)
-
-
 def release(root: Path) -> None:
     """Leave root as a release pull request releasing every member and the protocol would: each
     manifest version bumped, and the recorded protocol version set to the protocol's new one. The
-    bundle only releases after the first pinning pull request removed its bootstrap exclusion
-    (release-each-package design D7), so that's gone too."""
-    edit_json(root, MANIFEST, lambda m: m.update({path: next_minor(v) for path, v in m.items()}))
-    edit_json(root, CONFIG, unexclude)
+    bundle releases only while its commits aren't excluded, which is while it names nothing bare
+    (refuse-bare-bundle-member design D2), and a release pull request leaves the exclusion as it
+    was."""
+    config = json.loads((root / CONFIG).read_text(encoding="utf-8"))
+    held = {path for path, entry in config["packages"].items() if "exclude-paths" in entry}
+    edit_json(
+        root,
+        MANIFEST,
+        lambda m: m.update({path: next_minor(v) for path, v in m.items() if path not in held}),
+    )
     (root / PROTOCOL_RECORD).write_text(
         json.dumps({"version": released(root)}) + "\n", encoding="utf-8"
     )
@@ -111,6 +113,7 @@ def test_a_new_package_without_release_config_is_named(copy: Path) -> None:
 def test_a_member_missing_from_the_manifest_is_named_with_the_file_and_its_tags(copy: Path) -> None:
     # A member missing from the manifest is a new one, and a new one is bare until it releases.
     bundle_state.set_dependency(copy, "troupe-runner-scripted", "troupe-runner-scripted")
+    bundle_state.exclude(copy)
     edit_json(copy, MANIFEST, lambda m: m.pop("plugins/runner-scripted"))
     assert release_config.problems(copy) == [
         f"plugins/runner-scripted (troupe-runner-scripted) has no version in {MANIFEST}: add "
@@ -296,39 +299,129 @@ def exclude(root: Path, paths: list[str]) -> None:
     )
 
 
-def test_the_bootstrap_exclusion_passes_before_the_bundles_first_release(copy: Path) -> None:
-    set_version(copy, bundle_member(copy), "0.0.0")
-    exclude(copy, [bundle_member(copy)])
-    assert release_config.problems(copy) == []
+def unexcluded(root: Path) -> None:
+    edit_json(root, CONFIG, lambda c: c["packages"][bundle_member(root)].pop("exclude-paths", None))
 
 
-def test_no_bootstrap_exclusion_passes_before_the_bundles_first_release(copy: Path) -> None:
-    """The first pinning pull request removes it before the bundle releases (design D7)."""
-    set_version(copy, bundle_member(copy), "0.0.0")
-    edit_json(copy, CONFIG, lambda c: c["packages"][bundle_member(copy)].pop("exclude-paths", None))
-    assert release_config.problems(copy) == []
+def bare(root: Path) -> list[str]:
+    """The workspace members the bundle in root names bare, sorted: what the rule reads."""
+    workspace = {release_config.normalise(n): n for n in release_config.members(root).values()}
+    text = (root / bundle_member(root) / "pyproject.toml").read_text(encoding="utf-8")
+    requirements = tomllib.loads(text)["project"]["dependencies"]
+    return sorted(
+        workspace[release_config.requirement_name(r)]
+        for r in requirements
+        if r.strip() in workspace.values()
+    )
+
+
+def missing(root: Path, names: list[str]) -> str:
+    """The message for a bundle that names `names` bare without the exclusion."""
+    path = bundle_member(root)
+    them = "them" if len(names) > 1 else "it"
+    each = "each" if len(names) > 1 else names[0]
+    return (
+        f"{path}/pyproject.toml names {release_config.listed(names)} bare, but {path}'s entry in "
+        f'{CONFIG} doesn\'t exclude its commits: add "exclude-paths": ["{path}"] to it, so no '
+        f"release pull request releases troupe-run until {each} has released and the pinning pull "
+        f"request pins {them}. A tag install would otherwise look {them} up on a package index."
+    )
+
+
+@pytest.fixture
+def everything_pinned(tmp_path: Path) -> Path:
+    """The real files with every member released at 0.1.0 or later, the bundle pinning each and
+    released at 0.1.0, and no exclusion, whatever state the repository is in (#229)."""
+    for name in ("pyproject.toml", CONFIG, MANIFEST, LOCK):
+        shutil.copy(REPO / name, tmp_path / name)
+    for path in release_config.members(REPO):
+        (tmp_path / path).mkdir(parents=True)
+        shutil.copy(REPO / path / "pyproject.toml", tmp_path / path / "pyproject.toml")
+    (tmp_path / PROTOCOL_RECORD).parent.mkdir(parents=True)
+    shutil.copy(REPO / PROTOCOL_RECORD, tmp_path / PROTOCOL_RECORD)
+    bundle_state.unpinned(tmp_path)
+    edit_json(
+        tmp_path,
+        MANIFEST,
+        lambda m: m.update({p: "0.1.0" for p, v in m.items() if v == "0.0.0" and p != PROTOCOL}),
+    )
+    bundle_state.pinned(tmp_path)
+    assert bare(tmp_path) == []
+    return tmp_path
+
+
+def test_a_new_member_with_the_exclusion_has_no_problems(everything_pinned: Path) -> None:
+    """bundle_state.add_member builds a state both checks accept (refuse-bare-bundle-member D5)."""
+    bundle_state.add_member(everything_pinned, "troupe-example")
+    bundle_state.exclude(everything_pinned)
+    assert release_config.problems(everything_pinned) == []
+    assert bundle_check.problems(everything_pinned) == []
+
+
+def test_a_new_member_bare_after_the_bundles_first_release_without_the_exclusion_is_named(
+    everything_pinned: Path,
+) -> None:
+    """#262: the bundle at 0.1.0, a member added after it, and nothing keeping the bundle out of
+    release pull requests."""
+    manifest = json.loads((everything_pinned / MANIFEST).read_text(encoding="utf-8"))
+    assert manifest[bundle_member(everything_pinned)] == "0.1.0"
+    bundle_state.add_member(everything_pinned, "troupe-example")
+    assert release_config.problems(everything_pinned) == [
+        missing(everything_pinned, ["troupe-example"])
+    ]
+
+
+def test_every_bare_member_is_named_in_one_problem(everything_pinned: Path) -> None:
+    bundle_state.add_member(everything_pinned, "troupe-example")
+    bundle_state.add_member(everything_pinned, "troupe-other")
+    assert release_config.problems(everything_pinned) == [
+        missing(everything_pinned, ["troupe-example", "troupe-other"])
+    ]
+
+
+def test_bare_members_without_the_exclusion_are_named_in_every_state(copy: Path) -> None:
+    """Unpinned or pinned, as-is or released: with a member bare, the exclusion is needed."""
+    names = bare(copy)
+    if not names:
+        bundle_state.set_dependency(copy, "troupe-vcs-git", "troupe-vcs-git")
+        names = ["troupe-vcs-git"]
+    unexcluded(copy)
+    assert release_config.problems(copy) == [missing(copy, names)]
+
+
+@pytest.mark.parametrize("version", ["0.0.0", "0.1.0"])
+def test_an_exclusion_with_nothing_bare_is_named_whether_or_not_the_bundle_released(
+    everything_pinned: Path, version: str
+) -> None:
+    path = bundle_member(everything_pinned)
+    set_version(everything_pinned, path, version)
+    exclude(everything_pinned, [path])
+    assert release_config.problems(everything_pinned) == [
+        f"{path}'s 'exclude-paths' in {CONFIG} is still set, but troupe-run names no workspace "
+        "member bare: remove it, or troupe-run's commits never release."
+    ]
 
 
 @pytest.mark.parametrize("paths", [["packages"], ["packages/troupe-run/src"], []])
-def test_a_bootstrap_exclusion_of_anything_else_is_named(copy: Path, paths: list[str]) -> None:
-    path = bundle_member(copy)
-    set_version(copy, path, "0.0.0")
-    exclude(copy, paths)
-    assert release_config.problems(copy) == [
+def test_an_exclusion_of_anything_else_while_a_member_is_bare_is_named(
+    everything_pinned: Path, paths: list[str]
+) -> None:
+    path = bundle_member(everything_pinned)
+    bundle_state.add_member(everything_pinned, "troupe-example")
+    exclude(everything_pinned, paths)
+    assert release_config.problems(everything_pinned) == [
         f"{path}'s 'exclude-paths' in {CONFIG} is {json.dumps(paths)}: make it "
-        f'["{path}"], which keeps troupe-run out of release pull requests until it\'s first '
-        "pinned, or remove it."
+        f'["{path}"], which keeps troupe-run out of release pull requests while it names '
+        "troupe-example bare."
     ]
 
 
-def test_the_bootstrap_exclusion_left_after_the_bundle_released_is_named(copy: Path) -> None:
-    path = bundle_member(copy)
-    set_version(copy, path, "0.1.0")
-    exclude(copy, [path])
-    assert release_config.problems(copy) == [
-        f"{path}'s 'exclude-paths' in {CONFIG} is still set, but {MANIFEST} gives it 0.1.0: "
-        "remove it, or troupe-run's commits never release."
-    ]
+def test_a_malformed_pin_isnt_counted_as_bare(everything_pinned: Path) -> None:
+    """Only the pin check's message appears: the member isn't bare, it's wrong."""
+    requirement = MALFORMED["a-version-range"]
+    pyproject = pin(everything_pinned, "troupe-vcs-git", requirement)
+    [problem] = release_config.problems(everything_pinned)
+    assert problem.startswith(f"troupe-vcs-git's dependency in {pyproject} is {requirement!r}")
 
 
 def test_a_missing_protocol_entry_is_named(copy: Path) -> None:

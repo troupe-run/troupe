@@ -8,9 +8,10 @@ Usage: uv run scripts/pin_bundle.py --message PATH [--root DIR]
 After release-please publishes releases, the release workflow runs this on main. For each workspace
 member troupe-run depends on whose release in .release-please-manifest.json is above its pin (a
 bare dependency counts as unpinned), it rewrites that one dependency to the member's release tag
-(design D2). The first time, it also removes troupe-run's bootstrap 'exclude-paths' from
-release-please-config.json (design D7), so the commit releases the bundle. Only those strings
-change: every other byte of both files stays as it was.
+(design D2). When that leaves no member bare, it also removes troupe-run's 'exclude-paths' from
+release-please-config.json (design D7; refuse-bare-bundle-member D3), so the commit releases the
+bundle. While a member that hasn't released stays bare, the exclusion stays, and the message says
+so. Only those strings change: every other byte of both files stays as it was.
 
 When something moves, it writes the commit message to PATH: breaking when a changelog section it now
 pins has breaking changes, `feat` when one has features, otherwise `fix`, so the bundle's release is
@@ -36,7 +37,9 @@ from release_config import (
     BUNDLE,
     CONFIG,
     MANIFEST,
+    bare,
     bundle_member,
+    listed,
     members,
     normalise,
     pin,
@@ -134,6 +137,17 @@ def message(root: Path, moved: Sequence[Move]) -> str:
         logs = " and ".join(f"{_path(moved, name)}/CHANGELOG.md" for name in names)
         verb = "has" if len(breaking) == 1 else "have"
         lines += ["", f"BREAKING CHANGE: {which} {verb} breaking changes: see {logs}."]
+    still = left_bare(root, moved)
+    if still:
+        them = "them" if len(still) > 1 else "it"
+        verb = "are" if len(still) > 1 else "is"
+        their = "their" if len(still) > 1 else "its"
+        lines += [
+            "",
+            f"{listed(still)} {verb} still bare, so {BUNDLE} doesn't release until a pinning pull "
+            f"request pins {them}, after {their} first release (refuse-bare-bundle-member design "
+            "D3).",
+        ]
     signoff = json.loads((root / CONFIG).read_text(encoding="utf-8"))["signoff"]
     lines += ["", f"Signed-off-by: {signoff}"]
     return "\n".join(lines) + "\n"
@@ -153,10 +167,17 @@ def apply(root: Path, moved: Sequence[Move]) -> None:
                 f"{bundle}/pyproject.toml names {quoted} {text.count(quoted)} times: name it once."
             )
         text = text.replace(quoted, f'"{pin(move.name, move.new, move.path)}"')
-    config_text = _unexcluded(root, bundle)
+    config_text = None if left_bare(root, moved) else _unexcluded(root, bundle)
     pyproject.write_bytes(text.encode("utf-8"))
     if config_text is not None:
         (root / CONFIG).write_bytes(config_text.encode("utf-8"))
+
+
+def left_bare(root: Path, moved: Sequence[Move]) -> list[str]:
+    """The members the bundle still names bare once moved is applied: each bare one the moves
+    don't pin, which is one that hasn't released (refuse-bare-bundle-member design D3)."""
+    pinning = {move.name for move in moved}
+    return [name for name in bare(root, _bundle(root)) if name not in pinning]
 
 
 def _unexcluded(root: Path, bundle: str) -> str | None:

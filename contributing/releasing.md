@@ -106,16 +106,23 @@ say, and moving a pin doesn't change `uv.lock`.
    the old pin. A `⚠ BREAKING CHANGES` section makes the commit breaking (its `BREAKING CHANGE:` footer names each
    one), a `Features` section makes it `feat`, and otherwise it's `fix`.
 4. **The owner merges it** through the queue like any pull request. The next release pull request then releases
-   `troupe-run` at that size, and its tag is what the install command names.
+   `troupe-run` at that size, and its tag is what the install command names, unless a component is still bare
+   (below).
 
 Nothing moves after a release of only the protocol or the bundle, and the job opens nothing. If the job fails (for
 example, a changelog without the released version's section), it says which file. Fix the cause, and the next
 release's run moves every pin that's still behind.
 
-**The bundle's first release.** Every package had releasable history and no tag before 0.1.0, so `troupe-run`'s
-entry has `"exclude-paths": ["packages/troupe-run"]`. That keeps its commits out of the first release pull request,
-which releases the components and the protocol at 0.1.0. The first pinning pull request removes the key, so its
-merge releases `troupe-run` at 0.1.0, pinning them. `scripts/check.py` refuses the key once the bundle has released.
+**The bundle doesn't release while it names a component bare.** A bundle released then would send `--no-sources`
+looking for that component on a package index, where it isn't, or where someone else has registered the name (#262).
+So while `troupe-run` names any workspace member bare, its entry has `"exclude-paths": ["packages/troupe-run"]`,
+which keeps its commits out of release pull requests. `scripts/check.py` enforces it both ways: it fails on a bare
+member without the key, naming the member, and on the key with nothing bare (`scripts/release_config.py`). The
+pinning pull request removes the key when it pins the last bare component, and says in its message when it leaves
+one bare. Once the key goes, release-please reads the bundle's commits since its last release again, pinning commits
+included, so the bundle releases at the size of the largest change it ships. The bundle's first release worked this
+way: every component was bare until the first pinning pull request pinned them all, and its merge released
+`troupe-run` at 0.1.0.
 
 ## Adding a package
 
@@ -131,10 +138,10 @@ someone else's), Dependabot asks uv to lock the member at that version, which ca
 `tofu/dependabot.json`, which delivers the file. `scripts/check.py` fails until the delivered file covers every member
 (`scripts/dependabot_members.py`).
 
-If `troupe-run` ships it, add it to the bundle's dependencies bare, in a commit that doesn't release the bundle
-(`build(bundle): ship troupe-<name>`). After the package's first release, the pinning pull request pins it and
-releases the bundle. A bundle released while a component is still bare would send `--no-sources` looking for that
-component on a package index, and the install check refuses such a tag.
+If `troupe-run` ships it, add it to the bundle's dependencies bare, and in the same commit add
+`"exclude-paths": ["packages/troupe-run"]` to `troupe-run`'s entry, unless it's already there. `scripts/check.py`
+fails without it, naming the member. After the package's first release, the pinning pull request pins it, removes the
+key and releases the bundle (above).
 
 ## Forcing a version
 

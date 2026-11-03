@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pin_bundle
 import release_config
-from release_config import BUNDLE, CONFIG, MANIFEST
+from release_config import BUNDLE, CONFIG, LOCK, MANIFEST
 
 _DEPENDENCY = re.compile(r'^(?P<indent>\s*)"(?P<requirement>[^"]+)"(?P<rest>,?\s*)$')
 
@@ -60,8 +60,9 @@ def set_dependency(root: Path, name: str, requirement: str | None) -> None:
 
 def unpinned(root: Path) -> None:
     """As before the first pin: every dependency on a workspace member bare, the bundle's
-    bootstrap 'exclude-paths' in the config, and the bundle unreleased in the manifest. The three
-    go together: the check fails an exclusion kept after the bundle released."""
+    'exclude-paths' in the config, and the bundle unreleased in the manifest. The exclusion goes
+    with something being bare: the check fails a bare member without it, and an exclusion with
+    nothing bare (refuse-bare-bundle-member design D2)."""
     pyproject = bundle_pyproject(root)
     bundle = pyproject.parent.relative_to(root).as_posix()
     names = {release_config.normalise(name): name for name in release_config.members(root).values()}
@@ -70,10 +71,8 @@ def unpinned(root: Path) -> None:
         name = names.get(release_config.requirement_name(requirement))
         if name is not None:
             set_dependency(root, name, name)
-    config = root / CONFIG
-    entry = json.loads(config.read_bytes())["packages"][bundle] if config.exists() else {}
-    if config.exists() and "exclude-paths" not in entry:
-        _exclude(config, bundle)
+    if (root / CONFIG).exists():
+        exclude(root)
     manifest = root / MANIFEST
     if manifest.exists():
         versions = json.loads(manifest.read_bytes())
@@ -84,16 +83,21 @@ def unpinned(root: Path) -> None:
 
 def pinned(root: Path) -> None:
     """As the pinning step leaves it, by running the step: every member the manifest gives a
-    release pinned at it, unreleased ones bare, and the bootstrap exclusion gone. A copy with
-    nothing to pin fails rather than quietly staying unpinned."""
+    release pinned at it, unreleased ones bare, and the exclusion gone only when nothing is left
+    bare. A copy with nothing to pin fails rather than quietly staying unpinned."""
     moved = pin_bundle.moves(root)
     assert moved, f"nothing in {root / MANIFEST} has released, so the bundle can't be pinned"
     pin_bundle.apply(root, moved)
 
 
-def _exclude(config: Path, bundle: str) -> None:
-    """Put the bootstrap line back on its own after the entry's "component" line: the one form
-    the pinning step can remove."""
+def exclude(root: Path) -> None:
+    """Keep the bundle's commits out of release pull requests, unless they already are: its
+    'exclude-paths' line on its own after the entry's "component" line, the one form the pinning
+    step can remove."""
+    config = root / CONFIG
+    bundle = bundle_pyproject(root).parent.relative_to(root).as_posix()
+    if "exclude-paths" in json.loads(config.read_bytes())["packages"][bundle]:
+        return
     text = config.read_bytes().decode("utf-8")
     lines = text.splitlines(keepends=True)
     component = [i for i, line in enumerate(lines) if line.strip() == f'"component": "{BUNDLE}",']
@@ -103,3 +107,51 @@ def _exclude(config: Path, bundle: str) -> None:
     ending = line[len(line.rstrip("\r\n")) :]
     lines.insert(component[0] + 1, f'{indent}"exclude-paths": ["{bundle}"],{ending}')
     config.write_bytes("".join(lines).encode("utf-8"))
+
+
+def add_member(root: Path, name: str) -> str:
+    """Add a new workspace member, packages/<name>, as a commit adding one would: its
+    pyproject.toml, its release config entry, the manifest at 0.0.0 (no tag yet), its uv.lock
+    package, and a bare dependency in the bundle (spec: releases). The bundle's exclusion is left
+    as it was: each test decides. Returns the member's path. Text is inserted, not re-serialised,
+    so every other byte stays as it was."""
+    path = f"packages/{name}"
+    (root / path).mkdir(parents=True)
+    (root / path / "pyproject.toml").write_bytes(
+        f'[project]\nname = "{name}"\nversion = "0.0.0"\n'.encode()
+    )
+    entry = {
+        "release-type": "python",
+        "package-name": name,
+        "component": name,
+        "extra-files": [
+            {"type": "toml", "path": f"/{LOCK}", "jsonpath": release_config.lock_jsonpath(name)}
+        ],
+    }
+    _insert_after(root / CONFIG, '"packages": {', f"{json.dumps(path)}: {json.dumps(entry)},")
+    manifest = root / MANIFEST
+    versions = json.loads(manifest.read_bytes())
+    versions[path] = "0.0.0"
+    manifest.write_bytes((json.dumps(versions, indent=2) + "\n").encode("utf-8"))
+    lock = root / LOCK
+    if lock.exists():
+        text = lock.read_bytes().decode("utf-8")
+        text += (
+            f'\n[[package]]\nname = "{name}"\nversion = "0.0.0"\n'
+            f'source = {{ editable = "{path}" }}\n'
+        )
+        lock.write_bytes(text.encode("utf-8"))
+    _insert_after(bundle_pyproject(root), "dependencies = [", f'"{name}",')
+    return path
+
+
+def _insert_after(file: Path, marker: str, line: str) -> None:
+    """Insert line after the one line that ends with marker, indented one level deeper."""
+    text = file.read_bytes().decode("utf-8")
+    lines = text.splitlines(keepends=True)
+    [index] = [i for i, held in enumerate(lines) if held.rstrip("\r\n").endswith(marker)]
+    held = lines[index]
+    indent = held[: len(held) - len(held.lstrip())] + "    "
+    ending = held[len(held.rstrip("\r\n")) :]
+    lines.insert(index + 1, f"{indent}{line}{ending}")
+    file.write_bytes("".join(lines).encode("utf-8"))
