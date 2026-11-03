@@ -338,7 +338,7 @@ jobs:
                   file.write(text)
           print(f"{len(threads)} review conversation(s) read.")
       - id: review
-        uses: anthropics/claude-code-action@925afb53776cf1a2b738c6bdbed37b4d4000ef13 # v1.0.262
+        uses: anthropics/claude-code-action@8041f1d17e0e7d2f2cfe35002962e9f26237c0bb # v1.0.263
         with:
           github_token: ${{ steps.app-token.outputs.token }}
           # An org secret visible to troupe, infrastructure and website, set by hand (oob/README.md).
