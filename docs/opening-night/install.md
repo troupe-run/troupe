@@ -5,13 +5,16 @@ status: written
 prerelease: true
 ---
 
-You can install troupe with [uv](https://docs.astral.sh/uv/), from a release, the latest `main` or any commit, and
-run an actor with it.
+You install troupe with [uv](https://docs.astral.sh/uv/), from a release, the latest `main` or any commit. It takes
+one command.
 
-## Install with uv
+## Install the latest release
 
-troupe needs Python 3.12 to 3.15, on Linux, macOS or Windows. All three are supported from the start, and tested on
-every change. You don't need to install Python yourself: uv downloads a version troupe supports if you don't have one.
+You need uv: [install it](https://docs.astral.sh/uv/getting-started/installation/) first if you don't have it. You
+don't need Python: troupe needs Python 3.12 to 3.15, and uv downloads a version troupe supports if you don't have
+one. troupe runs on Linux, macOS and Windows, all supported from the start and tested on every change.
+
+Then install troupe:
 
 <!-- x-release-please-start-version -->
 ```sh
@@ -19,9 +22,22 @@ uv tool install --no-sources "git+https://github.com/troupe-run/troupe@troupe-ru
 ```
 <!-- x-release-please-end -->
 
-This installs the latest release. Each release is tagged `troupe-run-v<version>`, on
-[troupe's releases page](https://github.com/troupe-run/troupe/releases): to install another one, give its tag
-instead. `--no-sources` installs each part of troupe at the version the release names.
+And check it worked:
+
+```sh
+troupe --version
+```
+
+If your shell can't find `troupe`, run `uv tool update-shell` and open a new terminal.
+
+The command installs `troupe-run`, troupe with the adapters and runners it comes with, from its release tag on
+GitHub, and puts `troupe` on your path. [Your first theatre](first-theatre.md) sets up a theatre to run it in.
+
+## Install another version
+
+Each release is tagged `troupe-run-v<version>`, on [troupe's releases
+page](https://github.com/troupe-run/troupe/releases): to install another one, give its tag in the command above.
+`--no-sources` installs each part of troupe at the version the release names.
 
 To install the latest `main` or a particular commit, give it in place of the tag, and leave out `--no-sources` so
 every part comes from that commit:
@@ -30,21 +46,12 @@ every part comes from that commit:
 uv tool install "git+https://github.com/troupe-run/troupe@<commit>#subdirectory=packages/troupe-run"
 ```
 
-Either way, it installs `troupe-run`: troupe, with the adapters and runners it comes with. It puts `troupe` on your
-path. Check it worked:
-
-```sh
-troupe --version
-```
-
-If your shell can't find `troupe`, run `uv tool update-shell` and open a new terminal.
+## Upgrade and uninstall
 
 - **Upgrade** to a newer release by running the install command again with its tag. It replaces what you have.
   `uv tool upgrade troupe-run` leaves a release where it is, since the tag names it exactly. It does move an install
   of `main` to the latest `main`.
 - **Uninstall** with `uv tool uninstall troupe-run`.
-
-[Your first theatre](first-theatre.md) sets up a theatre to run it in.
 
 ## What's decided
 
