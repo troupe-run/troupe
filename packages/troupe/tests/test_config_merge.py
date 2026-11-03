@@ -275,3 +275,20 @@ def test_the_first_write_after_a_merge_settles_the_fork_and_changes_in_one_batch
     assert len(batches) == 1
     assert all(RECORD.is_valid(line) for line in lines)
     assert len(config_of(repo).heads) == 1
+
+
+# Requirement: Every expected file is covered by the declaration (spec: effects): a merge that
+# leaves an expected file undeclared is a conflict.
+
+
+def test_an_expected_file_one_branch_adds_and_another_branch_undeclares_is_a_conflict(
+    repo: Repo,
+) -> None:
+    on(repo, "feature", [(["actors", "tester", "expect"], ["out/hello.txt", "out/more.txt"])])
+    on(repo, "main", [(["actors", "tester", "effects", "write"], ["out/hello.txt"])])
+    merged = merged_feature(repo)
+    [conflict] = merged.conflicts
+    assert conflict.paths == (tuple(TESTER_PATH),)
+    assert conflict.rule is not None
+    assert "'out/more.txt' is expected" in conflict.rule
+    assert len(conflict.changes) == 2
