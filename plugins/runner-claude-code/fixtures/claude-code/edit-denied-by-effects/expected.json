@@ -1,0 +1,10 @@
+{
+  "description": "A real run through the runner's translated rules, with write declared for out/** only: Claude Code tries Write on src/a.txt, dontAsk denies it, and it replies 'denied'. init, the call and its error result, unmapped permission_denied and thinking_tokens records noted once each, a permission-denial warning, then an ok result.",
+  "exitCode": 0,
+  "outcome": "succeeded",
+  "errorCode": null,
+  "withoutFailFast": {
+    "outcome": "succeeded",
+    "errorCode": null
+  }
+}
