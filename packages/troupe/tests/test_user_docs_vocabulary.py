@@ -66,7 +66,7 @@ USES = (
     ),
     Use(
         "opening-night/first-theatre.md",
-        "It refuses outside a git repository",
+        "it refuses outside a git repository",
         "a git repository, as git means it: where troupe init may make a theatre",
     ),
     Use(

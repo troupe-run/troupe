@@ -37,10 +37,10 @@
 
 ## 3. The theatre and install pages
 
-- [ ] 3.1 Rewrite `docs/opening-night/first-theatre.md` to lead with `troupe init`: what it refuses, what it writes,
+- [x] 3.1 Rewrite `docs/opening-night/first-theatre.md` to lead with `troupe init`: what it refuses, what it writes,
       what `--audition` adds (`actors/lead.yaml` and `actors/lead.md`), and drop "Config, when it comes". Verify the docs
       check's link, front matter and vocabulary tests pass.
-- [ ] 3.2 Rearrange `docs/opening-night/install.md` (D6): uv and where to get it, the latest release's command between
+- [x] 3.2 Rearrange `docs/opening-night/install.md` (D6): uv and where to get it, the latest release's command between
       the unchanged markers, `troupe --version` and the `update-shell` hint first; other releases, `main`, a commit and
       `--no-sources` below. Verify `scripts/tests/workspace/test_install_docs.py` and the Python-versions test pass.
 
