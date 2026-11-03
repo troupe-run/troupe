@@ -87,7 +87,8 @@ OFFLINE_WALKTHROUGH = [
 ]
 OWN_ACTOR = [
     "troupe config set actors.reviewer.runner=claude-code actors.reviewer.options=@claude.json "
-    "actors.reviewer.character=@reviewer.md 'actors.reviewer.expect=[]'",
+    "actors.reviewer.character=@reviewer.md 'actors.reviewer.expect=[]' "
+    "'actors.reviewer.effects.write=[\"REVIEW.md\"]'",
     "git add .troupe",
     "git commit -m 'Add the reviewer actor'",
     'troupe perform reviewer --direction "Review the last commit, and write what you found in '
@@ -296,7 +297,7 @@ def test_defining_your_own_actor_runs_as_written_with_a_stand_in_claude(
 ) -> None:
     text = section(PAGE, OWN)
     options = titled(text, "claude.json")
-    assert set(json.loads(options)) == {"permissionMode", "allowedTools", "maxBudgetUsd"}
+    assert set(json.loads(options)) == {"allowedTools", "maxBudgetUsd"}  # edits come from effects
     (project.path / "claude.json").write_text(options, encoding="utf-8")
     # Bytes, so the text is the page's on every platform: write_text writes CRLF on Windows.
     (project.path / "reviewer.md").write_bytes(titled(text, "reviewer.md").encode())
