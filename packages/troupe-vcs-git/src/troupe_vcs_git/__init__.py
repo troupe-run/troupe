@@ -40,6 +40,7 @@ from troupe.core.vcs import (
 from troupe.platform.processes import Completed, EnvironmentPolicy, ProcessWaitCallback
 from troupe_vcs_git import defaults
 from troupe_vcs_git.merges import Merges
+from troupe_vcs_git.states import States
 from troupe_vcs_git.worktrees import Worktrees
 
 # Exit status 1 means "no answer" for these, not failure: an unborn or detached HEAD, a missing key.
@@ -121,6 +122,7 @@ class GitAdapter:
         self._common: Path | None = None
         self._state: _State | None = None
         self._worktrees = Worktrees(self)
+        self._states = States(self)
         self._merges = Merges(self)
 
     @property
@@ -322,6 +324,9 @@ class GitAdapter:
 
     def shared_state(self) -> SharedState:
         return self._worktrees.shared_state()
+
+    def file_states(self, directory: Path, at: str | None = None) -> Mapping[str, str]:
+        return self._states.file_states(directory, at)
 
 
 def _nul_separated(data: bytes) -> list[str]:

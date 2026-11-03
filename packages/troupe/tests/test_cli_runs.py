@@ -149,6 +149,7 @@ def test_rehearsing_a_perform_shows_what_would_run_and_starts_and_records_nothin
     assert "runner: scripted" in out
     assert "stage: local, effects unenforced" in out
     assert "effect check: out/hello.txt" in out
+    assert "effects: write out/hello.txt" in out
     assert "direction: 2 characters" in out
     assert "Rehearsal: nothing was started or recorded." in out
     assert not (repo.path / ".troupe" / "local" / "runs").exists()
@@ -498,3 +499,25 @@ def test_each_ctrl_c_during_perform_announces_cancelling_and_counts_the_presses(
     assert code == 130
     assert err.count("Cancelling the run") == 2
     assert "troupe is already cancelling it." in err
+
+
+# Requirement: Perform's effects check shows the declaration (spec: runs; declared-effects)
+
+
+def test_rehearsing_a_read_only_actor_says_it_is_read_only(repo: Repo) -> None:
+    configure(repo, script(INIT, OK), effects={})
+    code, out, _ = cli("perform", "tester", "--rehearse")
+    assert code == ExitCode.WOULD_CHANGE
+    assert "effects: none declared, so the actor is read-only" in out
+
+
+def test_a_failed_audit_names_the_path_the_effect_and_the_config_set_that_declares_it(
+    repo: Repo,
+) -> None:
+    write = {"writeFile": {"path": "src/a.py", "content": "x"}}
+    configure(repo, script(INIT, write, OK), effects={"write": ["out/**"]})
+    code, out, err = cli("perform", "tester")
+    assert code == ExitCode.FAILURE
+    shown = out + err
+    assert "src/a.py added (needs write)" in shown
+    assert 'troupe config set actors.tester.effects.write=\'["out/**", "src/a.py"]\'' in shown

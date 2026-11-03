@@ -304,6 +304,15 @@ class Vcs(Protocol):
         """A snapshot of what every worktree of the repository shares (design D10)."""
         ...
 
+    def file_states(self, directory: Path, at: str | None = None) -> Mapping[str, str]:
+        """Every file the VCS would record under ``directory`` (the theatre, or the theatre's
+        directory in a run's worktree): tracked, and untracked but not ignored, by its path
+        relative to ``directory`` with ``/``, to an id that changes when its content does. With
+        ``at``, a tree or commit, the files it holds instead of the working tree's. Leaves out
+        ``.git`` and everything under ``.troupe/`` (spec: effects, "The audit sees changes as git
+        sees them"; declared-effects design D4). Ids are comparable only within one adapter."""
+        ...
+
 
 def is_committed(vcs: Vcs, path: str) -> bool:
     """Whether the theatre-relative ``path`` is committed."""

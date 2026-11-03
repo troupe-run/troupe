@@ -22,8 +22,13 @@ is when the run starts. A request SHALL name only the actor, the direction and w
 ## ADDED Requirements
 
 ### Requirement: Perform's effects check shows the declaration
-`perform` SHALL show the effects the run starts with, and, when the effect check fails because of the audit, show
-each change outside the declaration with the effect it needed, on every surface, as structured data.
+A rehearsed `perform` SHALL show the effects the run would start with, and, when a run's effect check fails because
+of the audit, `perform` SHALL show each change outside the declaration with the effect it needed, on every surface,
+as structured data.
+
+#### Scenario: A rehearsal shows the effects
+- **WHEN** a person rehearses performing `tester`, which declares `write` for `out/**`
+- **THEN** the rehearsal shows `effects: write out/**`, and a read-only actor's shows that it's read-only
 
 #### Scenario: A failed audit on the command line
 - **WHEN** a run fails its audit for `src/a.py`

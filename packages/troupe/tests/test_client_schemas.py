@@ -98,6 +98,7 @@ ACCEPTED = [
                 "runner": "scripted",
                 "stage": SUMMARY["stage"],
                 "effectCheck": {"kind": "none"},
+                "effects": {"write": ["out/**"], "delete": [], "move": []},
                 "config": [HASH],
                 "direction": {"hash": HASH, "length": 9},
                 "workspace": {"kind": "worktree", "base": "c0ffee" + "0" * 34},

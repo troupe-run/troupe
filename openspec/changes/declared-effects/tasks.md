@@ -55,14 +55,14 @@
   --porcelain=v2 -z`, `hash-object`, `ls-tree -r`) and the files adapter (walk and hash). Verify adapter tests: clean,
   modified, untracked, ignored (left out), `.git` and `.troupe/` left out, a committed change counted against a base
   commit, and a path with spaces and non-ASCII characters, on every OS.
-- [ ] 4.2 Add the `DeclaredEffects` check and the `Combined` check (D3), with `effects.outside-declared` and
+- [x] 4.2 Add the `DeclaredEffects` check and the `Combined` check (D3), with `effects.outside-declared` and
   `effects.check-failed` errors whose `details.changes` follow D3. Verify unit tests for each effects-spec scenario
   under "Each kind of change needs its own effect", including deterministic move pairing with two identical files.
-- [ ] 4.3 Wire the audit into `perform` for worktree and theatre runs, replacing `effect_check_for`'s no-check
+- [x] 4.3 Wire the audit into `perform` for worktree and theatre runs, replacing `effect_check_for`'s no-check
   branch. Verify end-to-end tests with the scripted runner's raw `write` step: a write outside the declaration fails
   the run naming the path; `expect: []` still audits; an ignored build output passes; a pre-existing uncommitted
   change left alone passes; a concurrent edit in a theatre run fails with the message saying so.
-- [ ] 4.4 Show the declaration and a failed audit on `troupe perform`'s output, from the structured error. Verify a CLI
+- [x] 4.4 Show the declaration and a failed audit on `troupe perform`'s output, from the structured error. Verify a CLI
   test for "A failed audit on the command line".
 
 ## 5. The scripted runner

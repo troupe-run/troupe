@@ -25,6 +25,17 @@ def test_the_local_stage_refuses_naming_the_setting_and_how_to_set_it(
     assert error.details["variable"] == VARIABLE
 
 
+def test_the_refusal_says_changes_outside_the_workspace_are_neither_prevented_nor_detected() -> (
+    None
+):
+    with pytest.raises(TroupeError) as caught:
+        LocalStage().admit(read_policy({}))
+    error = caught.value
+    assert "outside its workspace are neither prevented nor detected" in error.problem
+    assert "only a stage that enforces effects contains them" in error.problem
+    assert "nothing stops or notices a change it makes outside its workspace" in error.fix
+
+
 def test_an_allowed_admission_records_unenforced_effects_and_the_setting_and_source() -> None:
     admission = LocalStage().admit(read_policy({VARIABLE: "true"}))
     assert admission == StageLineage(

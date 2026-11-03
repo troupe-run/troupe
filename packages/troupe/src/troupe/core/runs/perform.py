@@ -22,7 +22,7 @@ fails with run.recording-failed.
 
 import asyncio
 import hashlib
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -45,7 +45,7 @@ from troupe.core.identity import Identity
 from troupe.core.interim import runner_command, runner_environment
 from troupe.core.notices import Notice
 from troupe.core.policy import read_policy
-from troupe.core.runners.effects import EffectCheck, ExpectedFiles, NoEffectExpected
+from troupe.core.runners.effects import Combined, DeclaredEffects, EffectCheck, ExpectedFiles
 from troupe.core.runners.host import RunnerCommand, RunRequest, not_started, run_actor
 from troupe.core.runners.limits import RunLimits
 from troupe.core.runs.aggregate import Run
@@ -65,6 +65,7 @@ from troupe.core.workspaces import (
     worktree_base,
 )
 from troupe_plugin_sdk import runner as p
+from troupe_plugin_sdk.effects import Effects
 
 
 def lease_dir(theatre: Path, run_id: str) -> Path:
@@ -81,11 +82,32 @@ class Backends:
     limits: RunLimits | None = None
 
 
-def effect_check_for(check: m.EffectCheck, workspace: Path) -> EffectCheck:
-    """The effect check, its theatre-relative paths read in the run's workspace."""
+def effect_check_for(
+    what: "_What", workspace: Path, vcs: Vcs, baseline: str | None = None
+) -> EffectCheck:
+    """The run's effect check, read in its workspace: the files it's expected to change, if any,
+    and always the audit of every change against its declared effects (spec: effects;
+    declared-effects design D3, D4). A worktree run's changes are measured from its baseline, a
+    run in the theatre's from the theatre as it was when the run started."""
+    declared = what.effects
+    effects = Effects(
+        write=tuple(declared.write), delete=tuple(declared.delete), move=tuple(declared.move)
+    )
+
+    def now() -> Mapping[str, str]:
+        return vcs.file_states(workspace)
+
+    def start() -> Mapping[str, str]:
+        return vcs.file_states(workspace, at=baseline) if baseline is not None else now()
+
+    audit = DeclaredEffects(what.actor, effects, start, now, in_theatre=baseline is None)
+    check = what.effect_check
     if isinstance(check, m.NoEffectCheck):
-        return NoEffectExpected()
-    return ExpectedFiles([workspace.joinpath(*PurePosixPath(path).parts) for path in check.paths])
+        return audit
+    expected = ExpectedFiles(
+        [workspace.joinpath(*PurePosixPath(path).parts) for path in check.paths]
+    )
+    return Combined(expected, audit)
 
 
 def refuse_scratch_in_theatre(root: Path, theatre: Path) -> Path:
@@ -317,6 +339,7 @@ async def perform(
                 runner=what.runner,
                 stage=m.StageData.from_data(admission.to_data()),
                 effect_check=what.effect_check,
+                effects=what.effects,
                 config=list(what.config),
                 character=_summary(what.character),
                 direction=_summary(direction),
@@ -389,7 +412,9 @@ async def perform(
                 effects=what.effects,
             ),
             store=artifacts,
-            effect=effect_check_for(what.effect_check, workspace),
+            effect=effect_check_for(
+                what, workspace, vcs, worktree.baseline if worktree is not None else None
+            ),
             limits=backends.limits,
             on_event=recorder.on_event,
             on_announce=lambda notice: send(_notice(notice)),
