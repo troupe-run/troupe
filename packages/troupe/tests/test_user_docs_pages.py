@@ -15,7 +15,7 @@ from typing import get_args
 import pytest
 
 import claude_stand_in
-from gitrepo import Repo, make_repo
+from gitrepo import AUTHOR, Repo, make_repo
 from runtesting import ADA
 from troupe.cli import init as init_cli
 from troupe.cli import main
@@ -113,8 +113,14 @@ def titled(text: str, title: str) -> str:
 
 
 def git(*args: str) -> None:
-    """git in the working directory, as a reader runs it."""
-    subprocess.run(["git", *args], check=True, capture_output=True)  # noqa: S607 - git from PATH
+    """git in the working directory, as a reader runs it, with the test author as their identity:
+    the isolated HOME has none, and only macOS's git makes one up from the host's name."""
+    subprocess.run(
+        ["git", *args],  # noqa: S607 - git from PATH
+        env={**os.environ, **AUTHOR},
+        check=True,
+        capture_output=True,
+    )
 
 
 @pytest.fixture
@@ -158,7 +164,8 @@ def run_line(line: str, monkeypatch: pytest.MonkeyPatch) -> tuple[int, str, str]
 def perform_walkthrough(monkeypatch: pytest.MonkeyPatch, lines: list[str]) -> tuple[int, str, str]:
     """The walkthrough's lines up to and including its perform, the page's character written
     first; perform's result."""
-    (Path.cwd() / "character.md").write_text(titled(walkthrough(), "character.md"), "utf-8")
+    # Bytes, so the text is the page's on every platform: write_text writes CRLF on Windows.
+    (Path.cwd() / "character.md").write_bytes(titled(walkthrough(), "character.md").encode())
     perform = next(n for n, line in enumerate(lines) if line.startswith("troupe perform"))
     for line in lines[:perform]:
         code, _, err = run_line(line, monkeypatch)
@@ -289,7 +296,8 @@ def test_defining_your_own_actor_runs_as_written_with_a_stand_in_claude(
     options = titled(text, "claude.json")
     assert set(json.loads(options)) == {"permissionMode", "allowedTools", "maxBudgetUsd"}
     (project.path / "claude.json").write_text(options, encoding="utf-8")
-    (project.path / "reviewer.md").write_text(titled(text, "reviewer.md"), encoding="utf-8")
+    # Bytes, so the text is the page's on every platform: write_text writes CRLF on Windows.
+    (project.path / "reviewer.md").write_bytes(titled(text, "reviewer.md").encode())
     lines = sh_lines(text)
     assert lines == OWN_ACTOR
     code, _, err = cli("init")

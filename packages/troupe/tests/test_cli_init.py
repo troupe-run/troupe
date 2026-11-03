@@ -95,7 +95,7 @@ def test_an_audition_says_to_change_the_character_with_config_set_not_by_editing
     assert f"To change it, write yours in a file and run: {CHARACTER_SET}" in out
     assert "edit it" not in out
     mine = repo.path / "character.md"
-    mine.write_text("You are terse.\n", encoding="utf-8")
+    mine.write_bytes(b"You are terse.\n")  # write_text writes CRLF on Windows
     command = CHARACTER_SET.replace("<file>", mine.name)
     code, _, err = cli(*shlex.split(command)[1:])
     assert code == ExitCode.OK, err
