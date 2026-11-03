@@ -9,10 +9,10 @@
 - [x] 1.2 Change `_step_notes` in `packages/troupe/src/troupe/cli/init.py` to name the profile for the platform, chosen
       beside `_allow_line` so the line and note share one platform check (design D5). Verify the 1.1 tests and the rest
       of `test_cli_init.py` pass, and `mypy --strict` passes with `--platform win32` too.
-- [ ] 1.3 Add a test for the cli scenario "The character is changed through config": `init --audition` names
+- [x] 1.3 Add a test for the cli scenario "The character is changed through config": `init --audition` names
       `troupe config set actors.lead.character=@<file>` and not "edit it", and running that command with a file, then
       `perform lead --rehearse`, isn't refused and `config get` shows the file's text. Verify it fails today.
-- [ ] 1.4 Change the character line in `render_init` to print the `config set` command (design D8). Verify the 1.3 test
+- [x] 1.4 Change the character line in `render_init` to print the `config set` command (design D8). Verify the 1.3 test
       and the rest of `test_cli_init.py` pass, and update `docs/prompt-book/cli.md` if its init entry says to edit the
       file.
 

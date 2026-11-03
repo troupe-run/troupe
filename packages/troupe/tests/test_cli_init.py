@@ -79,10 +79,36 @@ def test_an_audition_names_the_actor_its_runner_and_both_files(repo: Repo) -> No
     assert "Defined the actor lead, with the claude-code runner." in out
     assert "wrote .troupe/actors/lead.yaml" in out
     assert "wrote .troupe/actors/lead.md" in out
-    assert "Its character, the prompt it runs with, is .troupe/actors/lead.md: edit it." in out
+    assert "Its character, the prompt it runs with, is .troupe/actors/lead.md." in out
     code, out, _ = cli("config", "get", "actors.lead.runner")
     assert code == ExitCode.OK
     assert out.strip() == "claude-code"
+
+
+CHARACTER_SET = "troupe config set actors.lead.character=@<file>"
+
+
+def test_an_audition_says_to_change_the_character_with_config_set_not_by_editing(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, out, _ = cli("init", "--audition")
+    assert f"To change it, write yours in a file and run: {CHARACTER_SET}" in out
+    assert "edit it" not in out
+    mine = repo.path / "character.md"
+    mine.write_text("You are terse.\n", encoding="utf-8")
+    command = CHARACTER_SET.replace("<file>", mine.name)
+    code, _, err = cli(*shlex.split(command)[1:])
+    assert code == ExitCode.OK, err
+    code, out, _ = cli("config", "get", "actors.lead.character")
+    assert out.removesuffix("\n") == "You are terse.\n"  # config get ends its output with a newline
+    lead = repo.path / ".troupe" / "actors" / "lead.md"
+    assert lead.read_text(encoding="utf-8") == "You are terse.\n"
+    repo.git("add", ".troupe")
+    repo.git("commit", "-m", "Add a troupe theatre")
+    monkeypatch.setenv(ALLOW_VARIABLE, "true")
+    code, _, err = cli("perform", "lead", "--rehearse")
+    assert code == ExitCode.WOULD_CHANGE, err
+    assert "isn't what troupe wrote" not in err
 
 
 # Requirement: Init prints the next steps for its audition
