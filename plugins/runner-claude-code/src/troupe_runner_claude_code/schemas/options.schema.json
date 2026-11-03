@@ -17,12 +17,16 @@
       "exclusiveMinimum": 0
     },
     "permissionMode": {
-      "description": "Claude Code's permission mode, passed as --permission-mode. Absent: Claude Code's own default, so the runner never grants more than config asks for. The modes are Claude Code 2.1.302's.",
-      "enum": ["acceptEdits", "auto", "bypassPermissions", "manual", "dontAsk", "plan"]
+      "description": "Claude Code's permission mode, passed as --permission-mode: dontAsk or plan, which both deny whatever no rule allows. Absent: dontAsk. What Claude Code may change comes from the actor's effects, so the modes that approve edits without a rule (acceptEdits, auto, bypassPermissions, manual) are refused.",
+      "enum": ["dontAsk", "plan"]
     },
     "allowedTools": {
-      "description": "Permission rules that allow a tool, such as Read or Bash(git status), written to a settings file as permissions.allow.",
-      "$ref": "#/$defs/rules"
+      "description": "Permission rules that allow a tool, such as Read or Bash(git status), written to a settings file as permissions.allow. A rule for an editing tool (Edit, Write, NotebookEdit, MultiEdit) or for troupe's own tools (mcp__troupe) is refused: what Claude Code may change comes from the actor's effects.",
+      "$ref": "#/$defs/rules",
+      "items": {
+        "type": "string",
+        "pattern": "^(?!\\s*(?:(?:Edit|Write|NotebookEdit|MultiEdit)\\s*(?:\\(|$)|mcp__troupe))"
+      }
     },
     "disallowedTools": {
       "description": "Permission rules that deny a tool, written to a settings file as permissions.deny.",

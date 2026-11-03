@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any, BinaryIO, NoReturn
 
 from troupe_plugin_sdk import runner as p
+from troupe_plugin_sdk.declaration import Declaration
 from troupe_runner_claude_code import NAME, __version__
 from troupe_runner_claude_code.command import (
     PrivateDirectoryError,
@@ -28,6 +29,7 @@ from troupe_runner_claude_code.command import (
     make_private_directory,
 )
 from troupe_runner_claude_code.defaults import CLAUDE_EXIT_WAIT_SECONDS, CLAUDE_STOP_GRACE_SECONDS
+from troupe_runner_claude_code.effects_server import write_config
 from troupe_runner_claude_code.mapping import (
     Event,
     Mapper,
@@ -37,6 +39,7 @@ from troupe_runner_claude_code.mapping import (
     loads_strict,
 )
 from troupe_runner_claude_code.options import OptionsError, parse_options
+from troupe_runner_claude_code.permissions import ClaudeCodePermissions, EffectsRefusedError
 from troupe_runner_claude_code.processes import Claude, exit_code, find_claude, start
 
 PROTOCOL_VERSIONS = p.PROTOCOL_VERSIONS
@@ -286,7 +289,9 @@ class Runner:
             return
         try:
             options = parse_options(params.get("options", {}))
-        except OptionsError as error:
+            declaration = Declaration.from_run_start(p.RunStartParams.from_data(params))
+            rules = ClaudeCodePermissions(options).translate(declaration)
+        except (OptionsError, EffectsRefusedError) as error:
             self._error(
                 id_,
                 INVALID_PARAMS,
@@ -295,6 +300,9 @@ class Runner:
                 error.fix,
                 {"where": error.where},
             )
+            return
+        except p.ProtocolError as error:
+            self._invalid_params(id_, str(error))
             return
         path = os.environ.get("PATH")
         claude = find_claude(path)
@@ -336,8 +344,22 @@ class Runner:
         self._private = private
         self._run_id = run_id
         self._mapper = Mapper(__version__, limit)
+        self._mapper.hold_warnings(rules.warnings)
         self._result(id_, {"runId": run_id})
-        launch = build(claude, options, direction, character, private, dict(os.environ))
+        server: list[str] | None = None
+        if rules.mcp_tools:
+            config = private / "effects.json"
+            write_config(
+                config,
+                run_id=run_id,
+                declaration=declaration,
+                tools=rules.mcp_tools,
+                event_max_bytes=limit,
+            )
+            server = [sys.executable, "-m", "troupe_runner_claude_code.effects_server", str(config)]
+        launch = build(
+            claude, options, direction, character, private, dict(os.environ), rules, server
+        )
         self._diagnose(f"running {claude}")
         try:
             self._claude = start(launch.argv, workspace, launch.env)

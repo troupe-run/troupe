@@ -29,7 +29,7 @@ def test_the_options_schema_is_closed() -> None:
     assert _schema("options.schema.json")["additionalProperties"] is False
 
 
-def test_the_errors_schema_closes_each_error_and_lists_the_four_codes() -> None:
+def test_the_errors_schema_closes_each_error_and_lists_the_six_codes() -> None:
     schema = _schema("errors.schema.json")
     assert schema["unevaluatedProperties"] is False
     codes = {branch["properties"]["code"]["const"] for branch in schema["oneOf"]}
@@ -38,6 +38,8 @@ def test_the_errors_schema_closes_each_error_and_lists_the_four_codes() -> None:
         "claude-code.invalid-options",
         "claude-code.not-found",
         "claude-code.start-failed",
+        "claude-code.widens-effects",
+        "claude-code.untranslatable-pattern",
     }
 
 
@@ -45,7 +47,7 @@ def test_the_options_schema_accepts_an_empty_object_and_every_option_together() 
     options = {
         "model": "claude-haiku-5-5",
         "maxBudgetUsd": 0.1,
-        "permissionMode": "acceptEdits",
+        "permissionMode": "plan",
         "allowedTools": ["Bash(git status)", "Read"],
         "disallowedTools": ["WebFetch"],
         "settingSources": ["project", "local"],

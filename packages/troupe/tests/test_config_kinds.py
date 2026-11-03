@@ -59,11 +59,18 @@ def test_an_option_the_runner_doesnt_define_is_refused_naming_the_runners_schema
 
 def test_a_claude_code_actor_with_valid_options_is_accepted() -> None:
     options = {
-        "permissionMode": "acceptEdits",
+        "permissionMode": "plan",
         "allowedTools": ["Bash(git status)"],
         "maxBudgetUsd": 2,
     }
     check(_actor(runner="claude-code", options=options))
+
+
+def test_a_claude_code_actor_that_accepts_edits_is_refused_when_its_set() -> None:
+    # What Claude Code may change comes from the actor's effects (declared-effects design D8).
+    error = _refused(_actor(runner="claude-code", options={"permissionMode": "acceptEdits"}))
+    assert error.details["path"] == ["actors", "tester", "options", "permissionMode"]
+    assert "the claude-code runner's options schema" in error.problem
 
 
 def test_an_option_the_claude_code_runner_doesnt_define_is_refused_naming_its_schema() -> None:

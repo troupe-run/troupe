@@ -8,12 +8,13 @@ runs through ``cmd.exe``), shows in a process listing, or meets Windows' command
 
 import json
 import tempfile
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
 from troupe_runner_claude_code.defaults import DEFAULT_MAX_BUDGET_USD
-from troupe_runner_claude_code.options import Options
+from troupe_runner_claude_code.options import MCP_SERVER, Options
+from troupe_runner_claude_code.permissions import Rules
 
 ENGINE_ENVIRONMENT = {
     "DISABLE_AUTOUPDATER": "1",
@@ -75,8 +76,12 @@ def build(
     character: str | None,
     private: Path,
     env: Mapping[str, str],
+    rules: Rules,
+    mcp_server: Sequence[str] | None = None,
 ) -> Launch:
-    """The launch for one run, writing its private files into ``private``."""
+    """The launch for one run, writing its private files into ``private``: the rules translated
+    from the actor's effects, and, when ``rules`` offers troupe's tools, the MCP config that
+    starts ``mcp_server`` (its command line) for them."""
     argv = [
         str(claude),
         "-p",
@@ -94,25 +99,31 @@ def build(
     ]
     if options.model is not None:
         argv += ["--model", options.model]
-    if options.permission_mode is not None:
-        argv += ["--permission-mode", options.permission_mode]
+    argv += ["--permission-mode", rules.mode]
+    for directory in rules.add_dirs:
+        argv += ["--add-dir", directory]
     if character is not None:
         path = private / "character.md"
         path.write_bytes(character.encode("utf-8"))
         argv += ["--append-system-prompt-file", str(path)]
-    permissions: dict[str, list[str]] = {}
-    if options.allowed_tools:
-        permissions["allow"] = list(options.allowed_tools)
-    if options.disallowed_tools:
-        permissions["deny"] = list(options.disallowed_tools)
-    if permissions:
-        path = private / "settings.json"
-        path.write_bytes(json.dumps({"permissions": permissions}, ensure_ascii=False).encode())
-        argv += ["--settings", str(path)]
+    settings = {
+        "permissions": {"allow": list(rules.allow), "deny": list(rules.deny)},
+        # A sandbox turned on by a loaded setting source must not allow shell commands by itself.
+        "sandbox": {"autoAllowBashIfSandboxed": False},
+    }
+    path = private / "settings.json"
+    path.write_bytes(json.dumps(settings, ensure_ascii=False).encode())
+    argv += ["--settings", str(path)]
+    if rules.mcp_tools and mcp_server is not None:
+        command, *args = mcp_server
+        config = {"mcpServers": {MCP_SERVER: {"type": "stdio", "command": command, "args": args}}}
+        mcp = private / "mcp.json"
+        mcp.write_bytes(json.dumps(config, ensure_ascii=False).encode())
+        argv += ["--mcp-config", str(mcp)]
     return Launch(
         argv=argv,
         stdin=direction.encode("utf-8"),
-        env={**env, **ENGINE_ENVIRONMENT},
+        env={**env, **rules.env, **ENGINE_ENVIRONMENT},
     )
 
 

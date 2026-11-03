@@ -116,8 +116,9 @@ runner's. It SHALL turn off Claude Code's automatic allowing of sandboxed shell 
 
 ### Requirement: A pattern Claude Code would read differently is refused
 `run/start` SHALL be refused with `claude-code.untranslatable-pattern`, naming the pattern or path and the character,
-when a declared pattern, the workspace's path or the scratch directory's path holds a character Claude Code's rule
-syntax gives a meaning the declaration's patterns don't: `[`, `]`, a leading `!`, or a backslash in a pattern.
+when a `write` pattern holds `[`, `]`, `(`, `)`, a backslash or a leading `!`, or the workspace's or scratch
+directory's path holds one of those or `*` or `?`: characters Claude Code's rule syntax reads differently, or as
+the rule's end. `delete` and `move` patterns SHALL be kept whatever they hold, since troupe's own tools read them.
 
 #### Scenario: A bracket in a pattern
 - **WHEN** `effects.write` holds `app/[id]/page.tsx`

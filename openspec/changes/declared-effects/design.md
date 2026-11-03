@@ -195,8 +195,13 @@ The translation (`troupe_runner_claude_code.permissions`):
   `sandbox.autoAllowBashIfSandboxed: false`, so turning on the sandbox from a loaded setting source can't
   auto-allow shell commands. A loaded `settingSources` gets a warning: its allow rules merge with the runner's.
 - **Patterns Claude Code would read differently:** gitignore gives `[`, `]`, a leading `!` and a backslash meanings
-  the SDK's patterns don't have. A pattern, workspace or scratch path holding one is refused with
-  `claude-code.untranslatable-pattern`, naming it, rather than escaped on trust.
+  the SDK's patterns don't have, and a parenthesis would end the rule. A `write` pattern holding one, or a
+  workspace or scratch path holding one (or a `*` or `?`, which would act as a wildcard there), is refused with
+  `claude-code.untranslatable-pattern`, naming it, rather than escaped on trust. `delete` and `move` patterns
+  aren't translated, since troupe's own tools read them, so they're kept as they are.
+- **Where the widening check lives:** in the options parser, with the same rule in the published options schema
+  (`permissionMode` is `dontAsk` or `plan`; `allowedTools` refuses editing tools and `mcp__troupe`), so `troupe
+  config set` refuses a widening option when it's set, not at the next run.
 
 - *Rejected: `Bash(rm <pattern>)` rules for delete.* Command-text matching misses `rm -f`, `find -delete`,
   `xargs rm`, and so on; it would claim a translation it can't keep.

@@ -11,6 +11,7 @@ from claude_harness import own_validator
 from troupe_runner_claude_code.options import (
     PERMISSION_MODES,
     SETTING_SOURCES,
+    WIDENING_MODES,
     Options,
     OptionsError,
     parse_options,
@@ -34,7 +35,7 @@ def test_every_option_together_is_parsed() -> None:
         {
             "model": "claude-haiku-5-5",
             "maxBudgetUsd": 1,
-            "permissionMode": "acceptEdits",
+            "permissionMode": "plan",
             "allowedTools": ["Bash(git status)", "Read"],
             "disallowedTools": ["WebFetch"],
             "settingSources": ["project"],
@@ -43,7 +44,7 @@ def test_every_option_together_is_parsed() -> None:
     assert parsed == Options(
         model="claude-haiku-5-5",
         max_budget_usd=1.0,
-        permission_mode="acceptEdits",
+        permission_mode="plan",
         allowed_tools=("Bash(git status)", "Read"),
         disallowed_tools=("WebFetch",),
         setting_sources=("project",),
@@ -73,7 +74,7 @@ def test_options_that_arent_an_object_are_refused() -> None:
         ({"maxBudgetUsd": 0}, "options.maxBudgetUsd", "above 0"),
         ({"maxBudgetUsd": True}, "options.maxBudgetUsd", "above 0"),
         ({"maxBudgetUsd": "5"}, "options.maxBudgetUsd", "above 0"),
-        ({"permissionMode": "yolo"}, "options.permissionMode", "acceptEdits"),
+        ({"permissionMode": "yolo"}, "options.permissionMode", "dontAsk"),
         ({"allowedTools": "Read"}, "options.allowedTools", "JSON array"),
         ({"allowedTools": ["Read", "Read"]}, "options.allowedTools[1]", "once"),
         ({"allowedTools": [""]}, "options.allowedTools[0]", "Bash(git status)"),
@@ -166,3 +167,37 @@ def test_the_code_and_the_published_schema_accept_exactly_the_same_options(
     options: object,
 ) -> None:
     assert _accepted(options) == SCHEMA.is_valid(options)
+
+
+# Requirement: Options can't widen the effects (spec: claude-code-runner; declared-effects D8)
+
+
+@pytest.mark.parametrize("mode", WIDENING_MODES)
+def test_a_mode_that_approves_without_a_rule_is_refused_by_the_code_and_the_schema(
+    mode: str,
+) -> None:
+    with pytest.raises(OptionsError) as caught:
+        parse_options({"permissionMode": mode})
+    assert caught.value.code == "claude-code.widens-effects"
+    assert caught.value.where == "options.permissionMode"
+    assert "effects.write" in caught.value.fix
+    assert "Unset options.permissionMode" in caught.value.fix
+    assert not SCHEMA.is_valid({"permissionMode": mode})
+
+
+@pytest.mark.parametrize(
+    "rule", ["Edit", "Edit(src/**)", "Write", "NotebookEdit(x)", "MultiEdit", "mcp__troupe__Delete"]
+)
+def test_an_allow_rule_for_an_editing_tool_is_refused_naming_it(rule: str) -> None:
+    with pytest.raises(OptionsError) as caught:
+        parse_options({"allowedTools": ["Read", rule]})
+    assert caught.value.code == "claude-code.widens-effects"
+    assert caught.value.where == "options.allowedTools[1]"
+    assert rule in caught.value.problem
+    assert not SCHEMA.is_valid({"allowedTools": ["Read", rule]})
+
+
+@pytest.mark.parametrize("rule", ["Edit(docs/**)", "Write", "mcp__troupe__Move"])
+def test_a_deny_rule_for_an_editing_tool_is_accepted(rule: str) -> None:
+    assert parse_options({"disallowedTools": [rule]}).disallowed_tools == (rule,)
+    assert SCHEMA.is_valid({"disallowedTools": [rule]})

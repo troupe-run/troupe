@@ -77,25 +77,25 @@
 
 ## 6. The Claude Code runner
 
-- [ ] 6.1 Add `troupe_runner_claude_code.permissions`, an `EffectsTranslation` (D8): `dontAsk` or `plan`, `Edit(//…)`
+- [x] 6.1 Add `troupe_runner_claude_code.permissions`, an `EffectsTranslation` (D8): `dontAsk` or `plan`, `Edit(//…)`
   allow rules from `write` and scratch, denies for `.git` and `.troupe`, `--add-dir` and `TMPDIR`/`TMP`/`TEMP` for
   scratch, `sandbox.autoAllowBashIfSandboxed: false`, `init.effects: translated`. Verify unit tests for each
   claude-code-runner delta scenario on settings and command lines, including the Windows `//c/…` form.
-- [ ] 6.2 Refuse widening options with `claude-code.widens-effects`, and untranslatable patterns with
+- [x] 6.2 Refuse widening options with `claude-code.widens-effects`, and untranslatable patterns with
   `claude-code.untranslatable-pattern`; publish both in the runner's error codes schema. Verify the scenarios for
   `acceptEdits`, `Edit(src/**)` in `allowedTools`, a denied edit rule passing, and `app/[id]/page.tsx`.
-- [ ] 6.3 Add the stdio MCP server for `Delete` and `Move` (standard library only), its config in the private
+- [x] 6.3 Add the stdio MCP server for `Delete` and `Move` (standard library only), its config in the private
   directory, `--mcp-config` only when `delete` or `move` is declared, and its allow rules. Verify tests that drive the
   server over stdio (initialize, tools/list, a declared delete, a refused move), and that a write-only actor's command
   line has no `--mcp-config`.
-- [ ] 6.4 Send the `log` warnings for allowed shell rules and loaded setting sources. Verify tests for both scenarios.
+- [x] 6.4 Send the `log` warnings for allowed shell rules and loaded setting sources. Verify tests for both scenarios.
 - [ ] 6.5 Capture fixtures from a current Claude Code for a run whose edit is denied by the translated rules and one
   that calls `mcp__troupe__Delete`, and run the opt-in live test once with `write` declared. Verify the fixtures pass
   their mapping tests, and record the live test's Claude Code version and result in the pull request.
 
 ## 7. Auditions, docs and specs
 
-- [ ] 7.1 Update the auditions (D10). Verify the config delta's audition scenarios, and that the scripted audition
+- [x] 7.1 Update the auditions (D10). Verify the config delta's audition scenarios, and that the scripted audition
   performed offline succeeds with its audit passed.
 - [ ] 7.2 Document effects for people: what each list allows, the read-only default, `expect` inside `write`, the
   audit, scratch, that none of it is enforcement, and that changes outside the workspace are neither prevented nor
