@@ -35,6 +35,7 @@ from troupe.core.notices import Notice
 from troupe.core.runs.aggregate import Run
 from troupe.platform.errors import WatchUnavailableError
 from troupe.platform.watching import DirectoryWatch
+from troupe_plugin_sdk import runner as p
 
 CHILD = Path(__file__).with_name("perform_child.py")
 HANG = script(INIT, turn("one"), {"hang": True})
@@ -573,3 +574,24 @@ def test_killing_perform_while_its_run_is_followed_stops_following_within_the_le
     assert time.monotonic() - killed < defaults.LOGS_LEASE_CHECK_SECONDS + 3
     assert result[0].run.state == "interrupted"
     assert [n.code for n in result[0].notices] == ["run.interrupted"]
+
+
+# Requirement: Init says how the runner applies the effects (declared-effects): a run recorded
+# before runners said still reads.
+
+
+def test_a_run_whose_init_was_recorded_without_effects_still_shows_in_status_and_logs(
+    tmp_path: Path,
+) -> None:
+    harness = Harness(theatre(tmp_path))
+    store = git_service(harness.repo)
+    run = started(store, {"kind": "theatre"})
+    legacy = {key: value for key, value in init(run).items() if key != "effects"}
+    assert "effects" not in legacy
+    run.report(0, legacy)
+    store.command(via="runner").record(run.collect_events())
+    [summary] = harness.status(run=run.run_id).runs
+    assert summary.to_data()["runner"]["reported"] == {"name": "scripted", "version": "0.1.0"}
+    [logged] = [e for e in harness.logs(run=run.run_id).events if e.seq == 0]
+    assert isinstance(logged.event, p.InitEvent)
+    assert logged.event.effects is None

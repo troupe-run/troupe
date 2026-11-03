@@ -139,3 +139,67 @@ def test_every_problem_is_listed_and_the_refusal_says_how_many_more() -> None:
         ("actors", "tester", "runnr"),
     ]
     assert "(1 more)" in _refused(config).problem
+
+
+# Requirement: An actor declares its effects as three lists of patterns (spec: effects)
+
+
+def test_an_actor_declaring_each_effect_is_valid() -> None:
+    check(_actor(effects={"write": ["out/**"], "delete": ["drafts/*"], "move": ["docs/**"]}))
+
+
+def test_an_effect_the_schema_doesnt_define_is_refused_naming_it() -> None:
+    error = _refused(_actor(effects={"write": ["out/**"], "network": ["example.com"]}))
+    assert error.details["path"] == ["actors", "tester", "effects", "network"]
+
+
+# Requirement: A pattern that can't be meant is refused (spec: effects)
+
+
+def test_an_absolute_pattern_is_refused_naming_the_list_the_pattern_and_scratch() -> None:
+    error = _refused(_actor(expect=[], effects={"write": ["/tmp/**"]}))  # noqa: S108
+    assert error.details["path"] == ["actors", "tester", "effects", "write"]
+    assert "actors.tester.effects.write: '/tmp/**' is absolute" in error.problem
+    assert "relative to the workspace" in error.problem
+    assert "scratch directory" in error.problem
+
+
+def test_a_pattern_into_troupes_own_directory_is_refused_saying_no_effect_allows_it() -> None:
+    error = _refused(_actor(expect=[], effects={"write": [".troupe/**"]}))
+    assert "'.troupe'" in error.problem
+    assert "no effect can allow changing it" in error.problem
+
+
+# Requirement: Every expected file is covered by the declaration (spec: effects)
+
+
+def test_expecting_a_file_the_actor_cant_write_is_refused_naming_it_and_the_fix() -> None:
+    error = _refused(_actor(effects=...))
+    assert error.details["path"] == ["actors", "tester", "expect", "0"]
+    assert "'out/hello.txt' is expected" in error.problem
+    assert (
+        error.fix
+        == "Declare it: troupe config set actors.tester.effects.write='[\"out/hello.txt\"]'"
+    )
+
+
+def test_the_fix_adds_the_expected_file_to_what_write_already_declares() -> None:
+    error = _refused(_actor(effects={"write": ["src/**"]}))
+    assert error.fix.endswith('actors.tester.effects.write=\'["src/**", "out/hello.txt"]\'')
+
+
+def test_expecting_a_file_inside_a_declared_pattern_is_valid() -> None:
+    check(_actor(expect=["out/hello.txt"], effects={"write": ["out/**"]}))
+
+
+def test_expecting_a_file_a_move_creates_is_valid() -> None:
+    check(_actor(expect=["docs/a.md"], effects={"move": ["docs/**"]}))
+
+
+def test_expecting_a_file_only_delete_covers_is_refused() -> None:
+    error = _refused(_actor(expect=["docs/a.md"], effects={"delete": ["docs/**"]}))
+    assert "'docs/a.md' is expected" in error.problem
+
+
+def test_expecting_nothing_needs_no_effect() -> None:
+    check(_actor(expect=[], effects=...))

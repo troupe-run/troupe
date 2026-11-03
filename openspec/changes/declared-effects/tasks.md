@@ -32,7 +32,7 @@
 
 ## 3. Core: config rules, scratch, run start
 
-- [ ] 3.1 In `config/kinds.py`, validate `effects` and check each `expect` path against `write` or `move` (D2),
+- [x] 3.1 In `config/kinds.py`, validate `effects` and check each `expect` path against `write` or `move` (D2),
   with the exact `troupe config set` fix. Verify tests for each effects-spec scenario under "Every expected file is
   covered", including one command setting both, and that a merged config breaking the rule is a conflict.
 - [x] 3.2 Add the `RUN_SCRATCH_ROOT` setting in `defaults.py` (default from the platform seam), refuse one inside the
