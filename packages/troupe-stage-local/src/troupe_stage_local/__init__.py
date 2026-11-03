@@ -35,10 +35,13 @@ class LocalStage:
             raise TroupeError(
                 "stage.effects-unenforced",
                 problem="The local stage can't enforce what an actor may touch: it runs as you, "
-                "with your files and network. So it runs no actor unless policy allows it, and "
+                "with your files and network. Changes a run makes outside its workspace are "
+                "neither prevented nor detected there; only a stage that enforces effects "
+                "contains them. So it runs no actor unless policy allows it, and "
                 f"{allowed.setting} is off ({allowed.source}).",
                 fix=f"To run actors on the local stage anyway, set {variable}=true. Each run is "
-                "then recorded as having its effects unenforced.",
+                "then recorded as having its effects unenforced, and nothing stops or notices a "
+                "change it makes outside its workspace.",
                 details={
                     "stage": NAME,
                     "setting": allowed.setting,

@@ -565,6 +565,95 @@
     {
       "properties": {
         "code": {
+          "const": "effects.outside-declared"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "actor",
+            "changes"
+          ],
+          "properties": {
+            "actor": {
+              "$ref": "client/run.schema.json#/$defs/actorName"
+            },
+            "changes": {
+              "description": "Each change the actor's declared effects don't allow, in path order.",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "path",
+                  "change",
+                  "needs"
+                ],
+                "properties": {
+                  "path": {
+                    "$ref": "client/run.schema.json#/$defs/theatrePath"
+                  },
+                  "change": {
+                    "enum": [
+                      "added",
+                      "modified",
+                      "removed",
+                      "moved"
+                    ]
+                  },
+                  "to": {
+                    "description": "For a move, where the file went.",
+                    "$ref": "client/run.schema.json#/$defs/theatrePath"
+                  },
+                  "needs": {
+                    "description": "The effect that would allow it.",
+                    "enum": [
+                      "write",
+                      "delete",
+                      "move"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "effects.check-failed"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "errors"
+          ],
+          "properties": {
+            "errors": {
+              "description": "Each way the effect check failed, as its own error.",
+              "type": "array",
+              "minItems": 2,
+              "items": {
+                "$ref": "#"
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
           "const": "run.scratch-in-theatre"
         },
         "details": {

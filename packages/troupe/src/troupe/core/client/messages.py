@@ -336,6 +336,7 @@ class Rehearsal(Message):
     runner: str = json_field("runner", pattern=RUNNER_NAME)
     stage: StageData = json_field("stage")
     effect_check: EffectCheck = json_field("effectCheck")
+    effects: p.EffectsDeclaration = json_field("effects")
     config: list[str] = json_field("config", min_items=1)
     character: TextSummary | None = json_field("character", default=None)
     direction: TextSummary | None = json_field("direction", default=None)

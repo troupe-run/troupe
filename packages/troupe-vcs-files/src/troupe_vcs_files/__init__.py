@@ -11,8 +11,10 @@ index it marks nothing resolved (mark-config-resolved design D4). Every director
 a repository, so troupe init can make a theatre anywhere (init-and-audition design D7).
 """
 
+import hashlib
+import os
 from collections.abc import Hashable, Mapping
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import NoReturn
 
 from troupe.core.vcs import (
@@ -99,3 +101,26 @@ class FilesAdapter:
 
     def shared_state(self) -> SharedState:
         return SharedState()
+
+    def file_states(self, directory: Path, at: str | None = None) -> Mapping[str, str]:
+        """Every file under ``directory``, by a SHA-256 of its bytes (a link's, of its target's
+        text): with no ignore rules, it records everything but ``.git`` and ``.troupe/``. With no
+        history, ``at`` names nothing it could read (declared-effects design D4)."""
+        if at is not None:
+            self._unsupported()
+        found: dict[str, str] = {}
+        for here, dirnames, filenames in os.walk(directory, followlinks=False):
+            relative = PurePosixPath(*Path(here).relative_to(directory).parts)
+            if not relative.parts:
+                dirnames[:] = [d for d in dirnames if d not in (".git", ".troupe")]
+                filenames = [f for f in filenames if f not in (".git", ".troupe")]
+            for name in filenames:
+                path = Path(here) / name
+                if path.is_symlink():
+                    data = os.readlink(path).encode("utf-8", "surrogateescape")
+                elif path.is_file():
+                    data = path.read_bytes()
+                else:
+                    continue
+                found[(relative / name).as_posix()] = hashlib.sha256(data).hexdigest()
+        return found

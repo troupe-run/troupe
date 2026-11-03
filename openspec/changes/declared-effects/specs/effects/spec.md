@@ -72,9 +72,10 @@ error SHALL name the path and the `troupe config set` that declares it.
 - **THEN** it is refused with `config.invalid`, naming the path and the fix, and nothing is recorded
 
 ### Requirement: Every run's changes are audited against its declaration
-When a run ends, whatever its outcome, troupe SHALL audit each file added, changed or removed in its workspace since
-the run started. Every change the declaration doesn't allow SHALL fail the audit. The audit SHALL run for every actor,
-whatever its `expect`.
+When a run's result is `ok`, troupe SHALL audit each file added, changed or removed in its workspace since the run
+started, as part of its effect check. Every change the declaration doesn't allow SHALL fail the audit. The audit SHALL
+run for every actor, whatever its `expect`. A run whose result isn't `ok` has already failed; its changes are kept, and
+`troupe diff` shows them.
 
 #### Scenario: Expecting nothing still audits
 - **WHEN** an actor has `expect: []`, declares no effects, and its run writes `out/a.txt`

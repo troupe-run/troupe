@@ -57,6 +57,7 @@
         "runner",
         "stage",
         "effectCheck",
+        "effects",
         "config",
         "workspace"
       ],
@@ -69,6 +70,10 @@
         },
         "stage": {
           "$ref": "../lineage.schema.json#/$defs/stage"
+        },
+        "effects": {
+          "description": "What the run would be allowed to change: the actor's declared effects, all three lists present.",
+          "$ref": "../effects.schema.json#/$defs/declaration"
         },
         "effectCheck": {
           "$ref": "run.schema.json#/$defs/effectCheck"

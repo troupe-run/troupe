@@ -94,3 +94,39 @@ def test_its_shared_state_is_empty_and_never_changes(tmp_path: Path) -> None:
 
 def test_every_directory_counts_as_being_in_a_repository(tmp_path: Path) -> None:
     load_vcs("files", tmp_path / "anywhere").check_repository()
+
+
+# The audit's file states (spec: effects, "The audit sees changes as git sees them";
+# declared-effects design D4)
+
+
+def _write(root: Path, relative: str, data: bytes) -> None:
+    path = root.joinpath(*relative.split("/"))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+
+
+def test_file_states_list_every_file_but_git_and_troupes_own(tmp_path: Path) -> None:
+    _write(tmp_path, "src/a.txt", b"one\n")
+    _write(tmp_path, "build/out.bin", b"\x00")  # no ignore rules: it counts
+    _write(tmp_path, ".git/config", b"x")
+    _write(tmp_path, ".troupe/events/a.jsonl", b"{}\n")
+    _write(tmp_path, "notes/a file é.txt", b"n\n")
+    states = load_vcs("files", tmp_path).file_states(tmp_path)
+    assert sorted(states) == ["build/out.bin", "notes/a file é.txt", "src/a.txt"]
+
+
+def test_file_states_change_with_content_and_match_for_the_same_bytes(tmp_path: Path) -> None:
+    vcs = load_vcs("files", tmp_path)
+    _write(tmp_path, "a.txt", b"one\n")
+    _write(tmp_path, "b.txt", b"one\n")
+    before = vcs.file_states(tmp_path)
+    assert before["a.txt"] == before["b.txt"]
+    _write(tmp_path, "a.txt", b"two\n")
+    assert vcs.file_states(tmp_path)["a.txt"] != before["a.txt"]
+
+
+def test_file_states_at_a_commit_are_refused_with_no_history(tmp_path: Path) -> None:
+    with pytest.raises(TroupeError) as caught:
+        load_vcs("files", tmp_path).file_states(tmp_path, at="abc")
+    assert caught.value.code == "vcs.worktrees-unsupported"

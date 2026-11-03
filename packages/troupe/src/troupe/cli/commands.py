@@ -91,6 +91,7 @@ def _render_rehearsal(rehearsal: dict[str, Any], stdout: TextIO) -> None:
         f"  runner: {rehearsal['runner']}",
         f"  stage: {stage['name']}, effects {stage['effects']}",
         f"  effect check: {expect}",
+        f"  effects: {_effects(rehearsal['effects'])}",
         f"  character: {_text(rehearsal.get('character'))}",
         f"  direction: {_text(rehearsal.get('direction'))}",
         f"  config: {', '.join(rehearsal['config'])}",
@@ -98,6 +99,16 @@ def _render_rehearsal(rehearsal: dict[str, Any], stdout: TextIO) -> None:
         "Rehearsal: nothing was started or recorded.",
     ]
     print("\n".join(lines), file=stdout)
+
+
+def _effects(effects: dict[str, list[str]]) -> str:
+    """What a run may change, as a person reads it: each declared effect and its patterns."""
+    declared = [
+        f"{effect} {', '.join(effects[effect])}"
+        for effect in ("write", "delete", "move")
+        if effects[effect]
+    ]
+    return "; ".join(declared) if declared else "none declared, so the actor is read-only"
 
 
 def _planned(workspace: dict[str, Any]) -> str:

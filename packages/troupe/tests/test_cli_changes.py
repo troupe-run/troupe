@@ -31,7 +31,7 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Repo:
 
 def performed(repo: Repo) -> tuple[str, str]:
     """Perform a worktree actor that changes src/a.txt; its run id and perform's standard error."""
-    configure(repo, script(INIT, WRITE, OK), workspace="worktree")
+    configure(repo, script(INIT, WRITE, OK), workspace="worktree", effects={"write": ["**"]})
     repo.commit_all("config")
     code, out, err = cli("perform", "tester")
     assert code == 0, err
@@ -135,7 +135,7 @@ def test_status_shows_the_workspace_and_pending_changes(repo: Repo) -> None:
 
 
 def test_rehearsing_a_worktree_perform_shows_the_base_and_makes_no_worktree(repo: Repo) -> None:
-    configure(repo, script(INIT, OK), workspace="worktree")
+    configure(repo, script(INIT, OK), workspace="worktree", effects={"write": ["**"]})
     repo.commit_all("config")
     head = repo.git("rev-parse", "HEAD").strip()
     code, out, _ = cli("perform", "tester", "--rehearse")
@@ -168,6 +168,7 @@ def test_a_worktree_run_is_seen_accepted_and_a_second_discarded_leaving_the_thea
         repo,
         script(INIT, WRITE, {"writeFile": {"path": "new.txt", "content": "new\n"}}, OK),
         workspace="worktree",
+        effects={"write": ["**"]},
     )
     repo.commit_all("config")
     code, out, _ = cli("perform", "tester")
@@ -186,6 +187,7 @@ def test_a_worktree_run_is_seen_accepted_and_a_second_discarded_leaving_the_thea
         repo,
         script(INIT, {"writeFile": {"path": "src/a.txt", "content": "three\n"}}, OK),
         workspace="worktree",
+        effects={"write": ["**"]},
         name="second.json",
     )
     code, out, _ = cli("perform", "tester")

@@ -255,7 +255,7 @@ for every outcome but `succeeded` and `cancelled`. The first row that matches wi
 | `failed` | The run was stopped because authentication failed | `run.authentication` |
 | `failed` | The transcript passed `RUN_TRANSCRIPT_MAX_BYTES` | `run.transcript-too-large` |
 | `failed` | The `result` had status `error` | `run.error-result` |
-| `failed` | The `result` was `ok`, but the effect check failed | `run.effect-missing` |
+| `failed` | The `result` was `ok`, but the effect check failed: an expected file wasn't made or changed, the run changed a file its actor's effects don't declare, or both | `run.effect-missing`, `effects.outside-declared`, `effects.check-failed` |
 | `failed` | The `result` was `ok` and the effect check passed, but the runner exited non-zero or had to be killed: the run's state is uncertain | `run.unclean-exit` |
 | `succeeded` | The `result` was `ok`, the effect check passed, and the runner exited with code 0 | — |
 | `timed-out` | No `result` by `RUN_TIMEOUT_SECONDS` | `run.timeout` |
