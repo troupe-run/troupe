@@ -31,6 +31,7 @@ CHARACTER = "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.\n"
 BASE = {
     "actors.tester.runner": "scripted",
     "actors.tester.expect": "[]",
+    "actors.tester.effects.write": '["out/**"]',
     "actors.tester.options.script.steps": '[{"exit": 0}]',
     "actors.tester.options.script.onCancel": "honour",
     "actors.tester.character": CHARACTER,

@@ -13,7 +13,12 @@ import pytest
 
 from scripted_harness import Session, validate
 
-INIT = {"type": "init", "runner": {"name": "scripted", "version": "0.0.1"}, "tools": ["Write"]}
+INIT = {
+    "type": "init",
+    "runner": {"name": "scripted", "version": "0.0.1"},
+    "effects": "checked",
+    "tools": ["Write"],
+}
 OK = {"type": "result", "status": "ok", "message": "done"}
 
 
@@ -70,6 +75,8 @@ def test_a_second_run_start_is_refused_and_the_first_run_carries_on(session: Ses
             "workspace": str(session.workspace),
             "options": {"script": {"steps": []}},
             "limits": {"eventMaxBytes": 1},
+            "effects": {"write": [], "delete": [], "move": []},
+            "scratch": str(session.scratch()),
         },
     )
     assert second["error"]["data"]["code"] == "runner.already-started"
@@ -434,6 +441,8 @@ def _played_with_everything_queued(
                 "workspace": str(workspace),
                 "options": {"script": script, **({"replayDelays": True} if replay_delays else {})},
                 "limits": {"eventMaxBytes": 65536},
+                "effects": {"write": [], "delete": [], "move": []},
+                "scratch": str(workspace.parent),
             },
         },
         *({"jsonrpc": "2.0", "id": 3 + n, **m} for n, m in enumerate(after_start)),

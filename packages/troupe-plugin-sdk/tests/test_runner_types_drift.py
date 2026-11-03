@@ -20,8 +20,9 @@ import pytest
 from troupe_plugin_sdk import runner as p
 from troupe_plugin_sdk.messages import Message
 
-SCHEMAS = Path(__file__).resolve().parents[3] / "protocol" / "schemas" / "runner"
-BASE = "https://troupe.run/protocol/runner/"
+PROTOCOL = Path(__file__).resolve().parents[3] / "protocol" / "schemas"
+ROOT = "https://troupe.run/protocol/"
+BASE = ROOT + "runner/"
 
 TYPES: list[tuple[type[Message], str]] = [
     (p.InitializeParams, "initialize.schema.json#/properties/params"),
@@ -39,7 +40,7 @@ TYPES: list[tuple[type[Message], str]] = [
 
 def _load(uri: str) -> Any:  # noqa: ANN401 - JSON
     url, fragment = urldefrag(uri)
-    node: Any = json.loads((SCHEMAS / url.removeprefix(BASE)).read_text(encoding="utf-8"))
+    node: Any = json.loads((PROTOCOL / url.removeprefix(ROOT)).read_text(encoding="utf-8"))
     for part in [part for part in fragment.split("/") if part]:
         node = node[part.replace("~1", "/").replace("~0", "~")]
     return node

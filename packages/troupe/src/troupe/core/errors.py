@@ -35,6 +35,7 @@ CODES: dict[str, ExitCode] = {
     "runner.crashed": ExitCode.FAILURE,
     "run.error-result": ExitCode.FAILURE,
     "run.effect-missing": ExitCode.FAILURE,
+    "run.scratch-in-theatre": ExitCode.FAILURE,
     "run.timeout": ExitCode.FAILURE,
     "run.authentication": ExitCode.FAILURE,
     "run.transcript-too-large": ExitCode.FAILURE,

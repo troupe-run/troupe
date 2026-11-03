@@ -43,6 +43,8 @@ START: dict[str, Any] = {
     "runId": RUN_ID,
     "direction": "write hello.txt",
     "workspace": "/workspace",
+    "effects": {"write": [], "delete": [], "move": []},
+    "scratch": "/scratch",
     "options": {"script": {"steps": [{"wait": {"ms": 1}}]}},
     "limits": {"eventMaxBytes": 65536},
 }
@@ -116,6 +118,7 @@ EXAMPLES: list[tuple[str, object, object]] = [
                 "seq": 0,
                 "type": "init",
                 "runner": {"name": "s", "version": "1"},
+                "effects": "checked",
                 "tools": [],
             },
         ),
@@ -126,6 +129,7 @@ EXAMPLES: list[tuple[str, object, object]] = [
                 "seq": 1,
                 "type": "init",
                 "runner": {"name": "s", "version": "1"},
+                "effects": "checked",
                 "tools": [],
             },
         ),
@@ -154,6 +158,7 @@ def test_each_message_schema_accepts_a_valid_example_and_refuses_an_invalid_one(
 EVENTS: dict[str, dict[str, Any]] = {
     "init": {
         "runner": {"name": "s", "version": "1"},
+        "effects": "translated",
         "tools": ["Write"],
         "engine": {"name": "claude-code", "version": "2.1.281", "model": "m"},
     },
@@ -258,11 +263,20 @@ def _minimal_events() -> st.SearchStrategy[dict[str, Any]]:
     """Events with only their required fields, filled with generic, engine-free values."""
     choices = [
         st.fixed_dictionaries(
-            {field: _strategy(schema["properties"][field]) for field in schema["required"]}
+            {
+                field: _strategy(schema["properties"][field])
+                for field in _sent_required(name, schema)
+            }
         )
-        for schema in _event_defs().values()
+        for name, schema in _event_defs().items()
     ]
     return st.one_of(choices)
+
+
+def _sent_required(name: str, schema: dict[str, Any]) -> list[str]:
+    """What a runner must send: the def's required fields, and init's effects, which only a
+    recorded init may lack (declared-effects)."""
+    return [*schema["required"], "effects"] if name == "init" else list(schema["required"])
 
 
 @settings(max_examples=200, deadline=None)
@@ -277,6 +291,7 @@ def test_an_init_event_from_a_runner_without_a_model_or_engine_is_valid() -> Non
         "seq": 0,
         "type": "init",
         "runner": {"name": "scripted", "version": "0.1.0"},
+        "effects": "checked",
         "tools": [],
     }
     validate(event, "run-event.schema.json#/$defs/event")
@@ -384,3 +399,62 @@ def test_with_a_runners_schema_bound_its_options_validate_and_an_unknown_key_doe
     validate(_request("run/start", START), "run-start.schema.json")
     unknown = {**START, "options": {**START["options"], "speed": 2}}
     assert not is_valid(_request("run/start", unknown), "run-start.schema.json")
+
+
+# Requirement: Run start's effects are always explicit (declared-effects)
+
+
+def test_a_run_start_for_a_read_only_actor_validates_with_three_empty_lists() -> None:
+    validate(_request("run/start", START), "run-start.schema.json")
+    assert START["effects"] == {"write": [], "delete": [], "move": []}
+
+
+@pytest.mark.parametrize("missing", ["write", "delete", "move"])
+def test_a_run_start_whose_effects_lack_a_list_does_not_validate(missing: str) -> None:
+    effects: dict[str, list[str]] = {
+        key: [] for key in ("write", "delete", "move") if key != missing
+    }
+    assert not is_valid(
+        _request("run/start", {**START, "effects": effects}), "run-start.schema.json"
+    )
+
+
+@pytest.mark.parametrize("field", ["effects", "scratch"])
+def test_a_run_start_without_effects_or_scratch_does_not_validate(field: str) -> None:
+    params = {key: value for key, value in START.items() if key != field}
+    assert not is_valid(_request("run/start", params), "run-start.schema.json")
+
+
+@pytest.mark.parametrize("pattern", ["/abs/**", "../x", "a**", ".troupe/**", ".git/config", ""])
+def test_a_run_start_with_a_malformed_pattern_does_not_validate(pattern: str) -> None:
+    effects = {"write": [pattern], "delete": [], "move": []}
+    assert not is_valid(
+        _request("run/start", {**START, "effects": effects}), "run-start.schema.json"
+    )
+
+
+# Requirement: Init says how the runner applies the effects (declared-effects)
+
+
+def _init(**fields: object) -> dict[str, Any]:
+    event: dict[str, Any] = {
+        "runId": RUN_ID,
+        "seq": 0,
+        "type": "init",
+        "runner": {"name": "scripted", "version": "0.1.0"},
+        "tools": [],
+    }
+    return {**event, **fields}
+
+
+def test_an_init_event_without_effects_does_not_validate() -> None:
+    assert not is_valid(_init(), "run-event.schema.json#/$defs/event")
+
+
+@pytest.mark.parametrize("value", ["checked", "translated"])
+def test_an_init_event_saying_how_effects_are_applied_validates(value: str) -> None:
+    validate(_init(effects=value), "run-event.schema.json#/$defs/event")
+
+
+def test_an_init_event_whose_effects_are_none_does_not_validate() -> None:
+    assert not is_valid(_init(effects="none"), "run-event.schema.json#/$defs/event")

@@ -451,6 +451,30 @@
       "required": [
         "details"
       ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "run.scratch-not-removed"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "scratch"
+          ],
+          "properties": {
+            "scratch": {
+              "description": "The scratch directory that's left, as an absolute path on this machine.",
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
     }
   ],
   "$defs": {

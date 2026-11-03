@@ -17,7 +17,7 @@ from storetesting import git_service, snapshot
 from troupe.core import defaults, interim
 from troupe.core.artifacts import ArtifactStore, MemoryArtifactStore
 from troupe.core.client import messages as m
-from troupe.core.config import aggregate, projection
+from troupe.core.config import aggregate, kinds, projection
 from troupe.core.config.merge import merge
 from troupe.core.config.stream import read as read_config
 from troupe.core.errors import TroupeError
@@ -600,3 +600,51 @@ def test_a_named_variable_perform_doesnt_have_is_left_out_not_passed_empty(
     assert "ANTHROPIC_API_KEY" not in command.env
     assert dict(command.env) == {"PATH": str(tmp_path / "bin")}
     assert "ANTHROPIC_API_KEY" not in claude_stand_in.wait_for_record(record, "env")["env"]
+
+
+# Requirement: Every run gets scratch space outside its declaration (spec: effects)
+
+
+def test_a_scratch_root_inside_the_theatre_is_refused_before_anything_is_recorded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    harness = Harness(theatre(tmp_path))
+    before = configured(harness, request(script(INIT, OK)))
+    inside = harness.repo.path / "scratch"
+    inside.mkdir()
+    monkeypatch.setattr(defaults, "RUN_SCRATCH_ROOT", str(inside))
+    with pytest.raises(TroupeError) as caught:
+        harness.perform(request(script(INIT, OK)))
+    assert caught.value.code == "run.scratch-in-theatre"
+    assert caught.value.details == {"scratchRoot": str(inside)}
+    assert "RUN_SCRATCH_ROOT" in caught.value.fix
+    assert nothing_written(harness, before)
+    assert list(inside.iterdir()) == []
+
+
+# Requirement: Every expected file is covered by the declaration (spec: effects): an actor
+# recorded before the rule can't run.
+
+
+def test_an_actor_whose_expect_isnt_declared_is_refused_at_perform_naming_the_fix(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    harness = Harness(theatre(tmp_path))
+    # Record the actor as an older troupe would have: with no rule tying expect to effects.
+    monkeypatch.setattr(kinds, "_expect_problems", lambda base, actor: [])
+    actor = {**request(script(INIT, OK)), "effectCheck": {"kind": "files", "paths": ["a.txt"]}}
+    before = configured(harness, actor | {"declareExpected": False})
+    monkeypatch.undo()
+    with pytest.raises(TroupeError) as caught:
+        asyncio.run(
+            perform(
+                m.PerformRequest.from_data({"actor": "tester"}),
+                harness.session(),
+                harness.send,
+                backends=harness.backends(),
+            )
+        )
+    assert caught.value.code == "config.invalid"
+    assert "'a.txt' is expected" in caught.value.problem
+    assert "troupe config set actors.tester.effects.write='[\"a.txt\"]'" in caught.value.fix
+    assert nothing_written(harness, before)

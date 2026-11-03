@@ -320,6 +320,10 @@
         "runner": {
           "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/init/properties/runner"
         },
+        "effects": {
+          "description": "How the runner says it applies the effects. Absent: checked, since the scripted runner checks each tool step's call. A script sets it only to test how the value is handled.",
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/init/properties/effects"
+        },
         "engine": {
           "description": "The engine to report. Absent: the init names no engine.",
           "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/init/properties/engine"

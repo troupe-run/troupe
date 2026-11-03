@@ -190,6 +190,8 @@ export TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE=true
 | `run.cancelling` | (notice) Ctrl-C was pressed: the run is stopping within its grace period |
 | `run.interrupted` | (notice) A run has no recorded end, and the `troupe perform` that ran it has stopped |
 | `run.unfinished-elsewhere` | (notice) A run started in another clone has no recorded end here |
+| `run.scratch-not-removed` | (notice) A run's scratch directory couldn't be removed when it ended; it names the directory |
+| `run.scratch-in-theatre` | `RUN_SCRATCH_ROOT` names a directory inside the theatre, so a run's scratch directory would be among the theatre's files; nothing is recorded |
 | `client.invalid-request` | A command's or query's request doesn't match its schema; it names the field. Exits 2 |
 | `client.unknown-method` | A surface called a command or query troupe doesn't offer. Exits 2 |
 

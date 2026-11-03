@@ -34,6 +34,7 @@ from troupe.core.client import messages as m
 from troupe.core.client.dispatch import Send
 from troupe.core.client.session import Session
 from troupe.core.config.commands import sync_files
+from troupe.core.config.kinds import check_actor
 from troupe.core.config.merge import Merged
 from troupe.core.config.projection import merges, plan, refuse, render
 from troupe.core.config.stream import read, refuse_conflicts
@@ -87,6 +88,24 @@ def effect_check_for(check: m.EffectCheck, workspace: Path) -> EffectCheck:
     return ExpectedFiles([workspace.joinpath(*PurePosixPath(path).parts) for path in check.paths])
 
 
+def refuse_scratch_in_theatre(root: Path, theatre: Path) -> Path:
+    """``root``, where runs' scratch directories are made, unless it's inside the theatre, which
+    is refused before anything is recorded (spec: effects, "Every run gets scratch space outside
+    its declaration")."""
+    resolved, inside = root.resolve(), theatre.resolve()
+    # A theatre inside the root is fine: each run's directory is a new one made in the root.
+    if resolved.is_relative_to(inside):
+        raise TroupeError(
+            "run.scratch-in-theatre",
+            problem=f"Runs' scratch directories would be made in {root}, which is inside the "
+            f"theatre {theatre}, so what a run writes there would be among your files.",
+            fix="Set RUN_SCRATCH_ROOT to a directory outside the theatre, or leave it unset to "
+            "use the platform's temporary directory.",
+            details={"scratchRoot": str(root)},
+        )
+    return resolved
+
+
 def _as_troupe_error(error: BaseException) -> TroupeError:
     if isinstance(error, TroupeError):
         return error
@@ -108,6 +127,7 @@ class _What:
     character: str | None
     config: tuple[str, ...]
     workspace: Kind
+    effects: p.EffectsDeclaration = p.READ_ONLY_DECLARATION
 
 
 def _from_config(merged: Merged, name: str) -> _What:
@@ -128,6 +148,12 @@ def _from_config(merged: Merged, name: str) -> _What:
     check: m.EffectCheck = m.FilesEffectCheck(paths=paths) if paths else m.NoEffectCheck()
     character = actor.get("character")
     workspace = actor.get("workspace", defaults.WORKSPACE)
+    declared = actor.get("effects") or {}
+    effects = p.EffectsDeclaration(
+        write=list(declared.get("write") or []),
+        delete=list(declared.get("delete") or []),
+        move=list(declared.get("move") or []),
+    )
     return _What(
         actor=name,
         runner=str(actor["runner"]),
@@ -136,6 +162,7 @@ def _from_config(merged: Merged, name: str) -> _What:
         character=character if isinstance(character, str) else None,
         config=merged.heads,
         workspace="theatre" if workspace == "theatre" else "worktree",
+        effects=effects,
     )
 
 
@@ -269,10 +296,12 @@ async def perform(
     person_identity = await asyncio.to_thread(store.identify)
     stage = load_stage(defaults.STAGE)
     admission = stage.admit(read_policy(session.env))
+    scratch_root = refuse_scratch_in_theatre(defaults.run_scratch_root(), theatre)
     merged = await asyncio.to_thread(read, store)
     refuse_conflicts(merged)
     what = _from_config(merged, request.actor)
     argv = runner_command(what.runner)
+    check_actor(what.actor, merged.config["actors"][what.actor])
     direction = request.direction or ""
     vcs = store.vcs
     base: tuple[str, str] | None = None
@@ -351,13 +380,21 @@ async def perform(
             RunnerCommand(
                 list(argv), cwd=workspace, env=runner_environment(what.runner, session.env)
             ),
-            RunRequest(run_id, direction, workspace, what.options, character=what.character),
+            RunRequest(
+                run_id,
+                direction,
+                workspace,
+                what.options,
+                character=what.character,
+                effects=what.effects,
+            ),
             store=artifacts,
             effect=effect_check_for(what.effect_check, workspace),
             limits=backends.limits,
             on_event=recorder.on_event,
             on_announce=lambda notice: send(_notice(notice)),
             cancel=cancel,
+            scratch_root=scratch_root,
         )
         data = outcome.to_data()
         del data["runId"]

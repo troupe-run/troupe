@@ -225,3 +225,9 @@ def remove_tree(path: str | os.PathLike[str]) -> None:
 
     with contextlib.suppress(FileNotFoundError):
         shutil.rmtree(path, onexc=writable_then_retry)
+
+
+def temporary_directory() -> Path:
+    """The platform's directory for temporary files, resolved: ``TMPDIR`` on POSIX, ``TEMP`` on
+    Windows, as ``tempfile`` finds them."""
+    return Path(tempfile.gettempdir()).resolve()

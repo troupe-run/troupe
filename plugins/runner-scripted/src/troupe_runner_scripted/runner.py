@@ -262,7 +262,11 @@ class Runner:
     def _play(self, step: Step) -> None:
         kind, value = step.kind, step.value
         if kind == "event":
-            self._event(dict(value))
+            event = dict(value)
+            if event.get("type") == "init":
+                # It checks every tool step's call with the SDK's tools (declared-effects D9).
+                event.setdefault("effects", "checked")
+            self._event(event)
         elif kind == "transcript":
             if isinstance(value, dict):
                 self._transcript(value["record"], value.get("encoding"))

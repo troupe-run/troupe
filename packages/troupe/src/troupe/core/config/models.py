@@ -30,6 +30,79 @@ class ExpectItem(RootModel[str]):
     """
 
 
+class WriteItem(RootModel[str]):
+    model_config = ConfigDict(
+        regex_engine="python-re",
+    )
+    root: Annotated[
+        str,
+        Field(
+            min_length=1,
+            pattern="^(?![\\s\\S]*[\\x00-\\x1f\\x7f])(?!\\.git(?:/|$))(?!\\.troupe(?:/|$))(?!\\.\\.?(?:/|$))(?:\\*\\*(?=/|$)|(?:(?!\\*\\*)[^/\\\\:\\x00-\\x1f\\x7f])+)(?:/(?!\\.\\.?(?:/|$))(?:\\*\\*(?=/|$)|(?:(?!\\*\\*)[^/\\\\:\\x00-\\x1f\\x7f])+))*$",
+            title="Effect pattern",
+        ),
+    ]
+    """
+    A path pattern relative to the theatre's root, with / between its parts: * matches within one part, ** as a whole part matches any number of parts, ? matches one character, and anything else matches itself. Never absolute, never with .., \\, :, a control character, an empty part or ** inside a part, and never starting with .git or .troupe, which no effect can allow changing.
+    """
+
+
+class DeleteItem(RootModel[str]):
+    model_config = ConfigDict(
+        regex_engine="python-re",
+    )
+    root: Annotated[
+        str,
+        Field(
+            min_length=1,
+            pattern="^(?![\\s\\S]*[\\x00-\\x1f\\x7f])(?!\\.git(?:/|$))(?!\\.troupe(?:/|$))(?!\\.\\.?(?:/|$))(?:\\*\\*(?=/|$)|(?:(?!\\*\\*)[^/\\\\:\\x00-\\x1f\\x7f])+)(?:/(?!\\.\\.?(?:/|$))(?:\\*\\*(?=/|$)|(?:(?!\\*\\*)[^/\\\\:\\x00-\\x1f\\x7f])+))*$",
+            title="Effect pattern",
+        ),
+    ]
+    """
+    A path pattern relative to the theatre's root, with / between its parts: * matches within one part, ** as a whole part matches any number of parts, ? matches one character, and anything else matches itself. Never absolute, never with .., \\, :, a control character, an empty part or ** inside a part, and never starting with .git or .troupe, which no effect can allow changing.
+    """
+
+
+class MoveItem(RootModel[str]):
+    model_config = ConfigDict(
+        regex_engine="python-re",
+    )
+    root: Annotated[
+        str,
+        Field(
+            min_length=1,
+            pattern="^(?![\\s\\S]*[\\x00-\\x1f\\x7f])(?!\\.git(?:/|$))(?!\\.troupe(?:/|$))(?!\\.\\.?(?:/|$))(?:\\*\\*(?=/|$)|(?:(?!\\*\\*)[^/\\\\:\\x00-\\x1f\\x7f])+)(?:/(?!\\.\\.?(?:/|$))(?:\\*\\*(?=/|$)|(?:(?!\\*\\*)[^/\\\\:\\x00-\\x1f\\x7f])+))*$",
+            title="Effect pattern",
+        ),
+    ]
+    """
+    A path pattern relative to the theatre's root, with / between its parts: * matches within one part, ** as a whole part matches any number of parts, ? matches one character, and anything else matches itself. Never absolute, never with .., \\, :, a control character, an empty part or ** inside a part, and never starting with .git or .troupe, which no effect can allow changing.
+    """
+
+
+class Effects(StrictModel):
+    """
+    What this actor's runs may change: write, delete and move, each a list of patterns relative to the theatre's root. Absent declares nothing, so the actor is read-only. Every path in expect must match a write or move pattern. After each run, troupe audits every change in the workspace against it. Not enforcement: only a stage that enforces effects contains a run.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    write: Annotated[list[WriteItem] | None, Field(title="Write")] = None
+    """
+    Where a run may create or change files (Write and Edit).
+    """
+    delete: Annotated[list[DeleteItem] | None, Field(title="Delete")] = None
+    """
+    Where a run may remove files. Declared apart from write, because it's more destructive.
+    """
+    move: Annotated[list[MoveItem] | None, Field(title="Move")] = None
+    """
+    Where a run may move or rename files: both the source and the destination must match.
+    """
+
+
 class Actor(StrictModel):
     """
     One actor's config file, .troupe/actors/<name>.yaml. The file's name is the actor's name. Its character, when it has one, is the whole of .troupe/actors/<name>.md. troupe writes this file from the theatre's config events, and every field is set with troupe config set.
@@ -59,7 +132,11 @@ class Actor(StrictModel):
     """
     expect: Annotated[list[ExpectItem], Field(title="Effect check")]
     """
-    Files, relative to the theatre's root, that a run must create or change: each must exist after the run, and differ from before it. A file named twice is checked once. An empty list means no effect check, and has to be written.
+    Files, relative to the theatre's root, that a run must create or change: each must exist after the run, and differ from before it, and each must match a write or move pattern in effects. A file named twice is checked once. An empty list means no file has to change; the run's changes are still audited against its effects. It has to be written.
+    """
+    effects: Annotated[Effects | None, Field(title="Effects")] = None
+    """
+    What this actor's runs may change: write, delete and move, each a list of patterns relative to the theatre's root. Absent declares nothing, so the actor is read-only. Every path in expect must match a write or move pattern. After each run, troupe audits every change in the workspace against it. Not enforcement: only a stage that enforces effects contains a run.
     """
     workspace: Annotated[Literal["worktree", "theatre"] | None, Field(title="Workspace")] = None
     """

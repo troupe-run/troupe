@@ -120,8 +120,11 @@ def _event_shape(value: dict[str, Any], where: str) -> None:
     the rest; a step that gives them keeps its own, which is how a script breaks the contract's
     sequence on purpose."""
     seq = 0 if value["type"] == "init" else 1
+    filled: dict[str, Any] = {"runId": _PLACEHOLDER_RUN_ID, "seq": seq}
+    if value["type"] == "init":
+        filled["effects"] = "checked"
     try:
-        p.parse_event({"runId": _PLACEHOLDER_RUN_ID, "seq": seq, **value})
+        p.parse_event({**filled, **value})
     except p.ProtocolError as error:
         raise _invalid(str(error), where) from error
 

@@ -34,10 +34,15 @@ CLAUDE_CODE_MAX_BUDGET_USD = 1
 """The Claude Code example's budget per run, in US dollars: small, and the figure the first-run page
 already used."""
 
-CLAUDE_CODE_TOOLS = ("Read", "Write", "Edit", "Glob", "Grep")
-"""What the Claude Code example may use: enough to read the repository and write a file. Bash isn't
+CLAUDE_CODE_TOOLS = ("Read", "Glob", "Grep")
+"""What the Claude Code example may use besides editing: enough to read the repository. Bash isn't
 allowed, though Claude Code still runs commands it classes as read-only (init-and-audition task
-7.2)."""
+7.2). Editing comes from its effects, never from a tool rule (declared-effects design D8)."""
+
+CLAUDE_CODE_EFFECTS = {"write": ["**"]}
+"""What the Claude Code example may change: any file in its worktree, which reaches the theatre only
+through troupe accept, after troupe diff shows it. It can't delete or move a file, so a direction
+that does fails the run's audit (declared-effects design D10)."""
 
 CHARACTER = (
     "You are a careful developer working in this repository. Read what's there before you change "
@@ -84,10 +89,10 @@ def _claude_code() -> dict[str, Any]:
         "runner": "claude-code",
         "options": {
             "maxBudgetUsd": CLAUDE_CODE_MAX_BUDGET_USD,
-            "permissionMode": "acceptEdits",
             "allowedTools": list(CLAUDE_CODE_TOOLS),
         },
-        # No effect check, so whatever direction the person types can succeed (design D6).
+        "effects": {key: list(value) for key, value in CLAUDE_CODE_EFFECTS.items()},
+        # No file has to change, so whatever direction the person types can succeed (design D6).
         "expect": [],
         "character": CHARACTER,
     }
@@ -102,7 +107,12 @@ def _scripted() -> dict[str, Any]:
     )
     # The effect check is shown where it can't fail by chance; no character, since the scripted
     # runner doesn't read one (design D6).
-    return {"runner": "scripted", "options": {"script": {"steps": list(steps)}}, "expect": [FILE]}
+    return {
+        "runner": "scripted",
+        "options": {"script": {"steps": list(steps)}},
+        "effects": {"write": [FILE]},
+        "expect": [FILE],
+    }
 
 
 AUDITIONS: Mapping[str, Callable[[], dict[str, Any]]] = {

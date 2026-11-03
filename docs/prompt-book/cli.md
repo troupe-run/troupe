@@ -59,7 +59,7 @@ The local stage runs an actor only when policy allows it (`TROUPE_POLICY_ALLOW_U
 [Policy](../the-company/performances-and-runs.md#policy)).
 
 ```text
-troupe config set actors.tester.runner=scripted actors.tester.options=@hello.json 'actors.tester.expect=["out/hello.txt"]'
+troupe config set actors.tester.runner=scripted actors.tester.options=@hello.json 'actors.tester.expect=["out/hello.txt"]' 'actors.tester.effects.write=["out/**"]'
 troupe perform tester --direction "write the hello file"
 troupe logs 1a2b3c4d --follow        # from another terminal, while it runs
 troupe status 1a2b3c4d

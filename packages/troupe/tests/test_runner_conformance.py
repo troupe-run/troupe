@@ -20,7 +20,12 @@ from troupe.core.runners.limits import RunLimits
 
 SCRIPTED = [sys.executable, "-m", "troupe_runner_scripted"]
 FAKE = Path(__file__).with_name("fake_runner.py")
-INIT = {"type": "init", "runner": {"name": "scripted", "version": "0.0.1"}, "tools": []}
+INIT = {
+    "type": "init",
+    "runner": {"name": "scripted", "version": "0.0.1"},
+    "effects": "checked",
+    "tools": [],
+}
 OK = {"type": "result", "status": "ok", "message": "done"}
 LIMITS = RunLimits(start_timeout=10.0, cancel_grace=3.0, run_timeout=10.0)
 """Generous limits, for checks a runner must pass in time: a real Python runner has to exit within
@@ -143,3 +148,18 @@ def test_the_claude_code_runner_passes_every_check_with_a_stand_in_claude(tmp_pa
     )
     assert {name: r.problem for name, r in results.items() if not r.passed} == {}
     assert len(results) == 8
+
+
+# Requirement: Any conforming runner can be checked: init says how the runner applies the effects
+# (declared-effects)
+
+
+def test_a_runner_whose_init_doesnt_say_how_it_applies_the_effects_fails_the_whole_run_check(
+    tmp_path: Path,
+) -> None:
+    results = _check([sys.executable, str(FAKE), "init-without-effects"], {}, tmp_path, EXPIRING)
+    check = results["a whole run: init first, seq, result, shutdown"]
+    assert not check.passed
+    assert check.problem is not None
+    assert "InitEvent" in check.problem
+    assert "effects" in check.problem

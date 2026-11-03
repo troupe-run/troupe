@@ -55,10 +55,14 @@ scripted-runner and stages.
 and a list is one value (config spec), so `troupe config set actors.x.effects.write='["out/**"]'` works with no new
 config machinery, and a merge treats each list whole.
 
+The actor file holds it just after `expect`, so a file written before it existed keeps its layout, and the two
+read together: what a run must change, then what it may.
+
 The pattern is defined once, in a new `protocol/schemas/effects.schema.json` (`$defs/pattern`, `$defs/declaration`
 with all three lists required, for `run/start`), and the actor schema references the pattern. Its ECMA-262 regex
 encodes the SDK's rules (no empty part, `.`, `..`, `\`, `:`, control characters, leading `/`, `**` only as a whole
-part) plus a first part that isn't `.git` or `.troupe`. A hypothesis test checks that the schema's regex and
+part) plus a first part that isn't `.git` or `.troupe`, and no control character anywhere (Python's `$` matches
+before a trailing newline, so without it `"**\n"` would pass the schema and not the SDK). A hypothesis test checks that the schema's regex and
 `pattern_regex` (plus the prefix rule) accept exactly the same strings, so the two can't drift.
 
 - *Rejected: one list of `{effect, pattern}` entries.* Harder to read in YAML, and a reviewer scanning for `delete`
@@ -122,17 +126,26 @@ a large clean repository costs one `ls-files`.
 (runner-protocol spec); this pull request is the protocol change, released as one. The SDK's `RunStartParams` and
 `InitEvent` gain the fields, the host fills them, and the conformance suite checks them.
 
+**History stays readable.** Run events are recorded as they arrive, so an `init` recorded before this change has no
+`effects`. The schema's `$defs/init` keeps `effects` optional, described as absent only in such a record; `$defs/event`
+(what a runner sends) requires it, and `hostEvent` (what's recorded and shown) accepts both. The SDK mirrors the split:
+`InitEvent.effects` may be None, and `parse_event`, which the host uses on a runner's events, refuses an `init` without
+it, so `troupe logs` still reads an old run.
+
 - *Rejected: `effects` optional in `run/start`, absent meaning read-only.* A runner that forgot to read it would look
   identical to one honouring a read-only actor. Explicit lists can't be misread.
 - *Rejected: `init.effects` value `none`.* Every actor is at least read-only, so a runner that can't restrict
   anything doesn't conform. The audit still catches it, but the contract shouldn't describe it as allowed.
 
-### D6. Scratch: made by perform, outside the theatre, removed at the end
+### D6. Scratch: made by the run host, outside the theatre, removed at the end
 
-A named setting, `runs.scratch_root` (default: the platform's temporary directory, through the platform seam), holds
-per-run directories made with `mkdtemp(prefix="troupe-scratch-")` (0700 on POSIX). `perform` makes it after the
-worktree and before the runner starts, and removes it in the same `finally` that ends the run; a failed removal is a
-warning notice naming the directory. A `scratch_root` inside the theatre is refused before anything is recorded.
+A named setting, `RUN_SCRATCH_ROOT` in `troupe.core.defaults` (None: the platform's temporary directory, through the
+platform seam), holds per-run directories made with `mkdtemp(prefix="troupe-scratch-")` (0700 on POSIX). `run_actor`
+makes one when the request names none, just before the runner starts, and removes it in a `finally` around the whole
+run; a failed removal is a `run.scratch-not-removed` notice naming the directory. Owning it in the host, not in
+`perform`, gives every caller a scratch directory (the conformance suite included) and keeps its life in one place.
+`perform` refuses a root inside the theatre with `run.scratch-in-theatre` before anything is recorded; a theatre
+inside the root is fine, since each run's directory is a new one made directly in the root.
 
 Scratch isn't recorded in events: it's ephemeral by contract, and its path is host-specific (hosted deployments
 address theatres by id). The runner learns it from `run/start` only.

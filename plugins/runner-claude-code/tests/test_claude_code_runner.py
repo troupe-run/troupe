@@ -181,6 +181,8 @@ def test_a_second_run_start_is_refused(
             "workspace": str(workspace),
             "options": {},
             "limits": {"eventMaxBytes": 65536},
+            "effects": {"write": [], "delete": [], "move": []},
+            "scratch": str(session.scratch()),
         },
     )
     assert answer["error"]["data"]["code"] == "runner.already-started"

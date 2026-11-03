@@ -38,6 +38,7 @@ TIMEOUT = 30.0
 def _registry() -> Registry[Any]:
     paths = [
         SCHEMAS / "error.schema.json",
+        SCHEMAS / "effects.schema.json",
         *sorted((SCHEMAS / "runner").glob("*.schema.json")),
         *sorted(RUNNER_SCHEMAS.glob("*.schema.json")),
     ]
@@ -143,6 +144,12 @@ class Session:
             if message.get("id") == id_:
                 return message
 
+    def scratch(self) -> Path:
+        """The run's scratch directory: beside the workspace, made when first asked for."""
+        scratch = self.workspace.parent / f"{self.workspace.name}-scratch"
+        scratch.mkdir(exist_ok=True)
+        return scratch
+
     def initialize(self) -> dict[str, Any]:
         return self.request(
             "initialize",
@@ -150,7 +157,12 @@ class Session:
         )
 
     def start(
-        self, options: dict[str, Any], *, valid: bool = True, character: str | None = None
+        self,
+        options: dict[str, Any],
+        *,
+        valid: bool = True,
+        character: str | None = None,
+        effects: dict[str, list[str]] | None = None,
     ) -> dict[str, Any]:
         """Initialize, then send run/start with ``options`` (and ``character``, when given).
         ``valid=False`` marks options the runner must refuse, which the runner's options schema
@@ -164,6 +176,8 @@ class Session:
             "workspace": str(self.workspace),
             "options": options,
             "limits": {"eventMaxBytes": 65536},
+            "effects": {"write": [], "delete": [], "move": [], **(effects or {})},
+            "scratch": str(self.scratch()),
         }
         if character is not None:
             params["character"] = character

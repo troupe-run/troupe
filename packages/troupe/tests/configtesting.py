@@ -20,6 +20,7 @@ TESTER: dict[str, Any] = {
     "runner": "scripted",
     "options": script(INIT, OK),
     "expect": ["out/hello.txt"],
+    "effects": {"write": ["out/**"]},
     "character": "You are the tester.",
 }
 

@@ -45,6 +45,7 @@ EVENT_MAX_BYTES = 65536
 def _registry() -> Registry[Any]:
     paths = [
         SCHEMAS / "error.schema.json",
+        SCHEMAS / "effects.schema.json",
         *sorted((SCHEMAS / "runner").glob("*.schema.json")),
         *sorted(RUNNER_SCHEMAS.glob("*.schema.json")),
     ]
@@ -228,6 +229,7 @@ class Session:
         direction: str = "say hi",
         character: str | None = None,
         event_max_bytes: int = EVENT_MAX_BYTES,
+        effects: dict[str, list[str]] | None = None,
     ) -> dict[str, Any]:
         """Initialize, then send run/start. ``valid=False`` marks options the runner must refuse,
         which the runner's options schema must refuse as well."""
@@ -240,10 +242,18 @@ class Session:
             "workspace": str(self.workspace),
             "options": {} if options is None else options,
             "limits": {"eventMaxBytes": event_max_bytes},
+            "effects": {"write": [], "delete": [], "move": [], **(effects or {})},
+            "scratch": str(self.scratch()),
         }
         if character is not None:
             params["character"] = character
         return self.request("run/start", params)
+
+    def scratch(self) -> Path:
+        """The run's scratch directory: beside the workspace, made when first asked for."""
+        scratch = self.workspace.parent / f"{self.workspace.name}-scratch"
+        scratch.mkdir(exist_ok=True)
+        return scratch
 
     def close_stdin(self) -> None:
         assert self.process.stdin is not None

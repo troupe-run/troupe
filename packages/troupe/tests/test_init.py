@@ -197,22 +197,20 @@ def test_the_claude_code_audition_writes_its_files_as_config_set_would(repo: Rep
 # Requirement: The Claude Code audition can edit files on a small budget (spec: config)
 
 
-def test_the_claude_code_actor_has_a_small_budget_file_tools_and_no_effect_check(
+def test_the_claude_code_actor_has_a_small_budget_read_tools_write_effects_and_no_expect(
     repo: Repo,
 ) -> None:
     _init(repo.path, _env(repo), audition={"runner": "claude-code"})
     lead = read(git_service(repo)).config["actors"]["lead"]
     assert lead == {
         "runner": "claude-code",
-        "options": {
-            "maxBudgetUsd": 1,
-            "permissionMode": "acceptEdits",
-            "allowedTools": ["Read", "Write", "Edit", "Glob", "Grep"],
-        },
+        "options": {"maxBudgetUsd": 1, "allowedTools": ["Read", "Glob", "Grep"]},
+        "effects": {"write": ["**"]},
         "expect": [],
         "character": auditions.CHARACTER,
     }
     assert "workspace" not in lead
+    assert "permissionMode" not in lead["options"]
     assert lead["character"].strip()
 
 
@@ -224,6 +222,7 @@ def test_the_scripted_actor_writes_one_file_checks_it_and_has_no_character(repo:
     lead = read(git_service(repo)).config["actors"]["lead"]
     assert lead["runner"] == "scripted"
     assert lead["expect"] == [auditions.FILE]
+    assert lead["effects"] == {"write": [auditions.FILE]}
     steps = lead["options"]["script"]["steps"]
     assert [next(iter(step)) for step in steps] == ["event", "writeFile", "event"]
     assert steps[1]["writeFile"]["path"] == auditions.FILE

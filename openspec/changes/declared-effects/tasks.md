@@ -2,31 +2,31 @@
 
 ## 1. The protocol: one pattern, the actor, run start and init
 
-- [ ] 1.1 Add `protocol/schemas/effects.schema.json` with `$defs/pattern` (D1's regex) and `$defs/declaration` (all
+- [x] 1.1 Add `protocol/schemas/effects.schema.json` with `$defs/pattern` (D1's regex) and `$defs/declaration` (all
   three lists required), and reference the pattern from `config/actor.schema.json`'s new closed `effects` group.
   Verify the protocol strictness check passes and `uv run scripts/docs_reference.py` regenerates
   `docs/prompt-book/config-schema.md` with `effects`.
-- [ ] 1.2 Write the hypothesis test that the schema's pattern and the SDK's `pattern_regex` plus the `.git`/`.troupe`
+- [x] 1.2 Write the hypothesis test that the schema's pattern and the SDK's `pattern_regex` plus the `.git`/`.troupe`
   first-part rule accept exactly the same strings, generated and near misses. Verify it passes, and fails when a rule
   is dropped from either (effects spec, "The schema and the SDK agree").
-- [ ] 1.3 Add `effects` and `scratch` (required) to `runner/run-start.schema.json`, and `effects`
+- [x] 1.3 Add `effects` and `scratch` (required) to `runner/run-start.schema.json`, and `effects`
   (`checked | translated`, required) to `init` in `run-event.schema.json`. Verify the schema tests: a read-only
   declaration validates, one with a list missing doesn't, an `init` without `effects` doesn't (runner-protocol delta).
-- [ ] 1.4 Regenerate core's config types from the actor schema. Verify `scripts/check.py`'s generated-types check
+- [x] 1.4 Regenerate core's config types from the actor schema. Verify `scripts/check.py`'s generated-types check
   passes and the type/schema agreement property test covers `effects`.
 
 ## 2. The SDK: declaration, translation seam, tools
 
-- [ ] 2.1 Add `scratch` and `effects` to `RunStartParams`, and `effects` to the `init` event type. Verify the SDK's
+- [x] 2.1 Add `scratch` and `effects` to `RunStartParams`, and `effects` to the `init` event type. Verify the SDK's
   schema-agreement tests pass, and fail when either field is removed from a type.
-- [ ] 2.2 Add `Declaration.from_run_start`, `absolute()`, `scratch_absolute()` and the `EffectsTranslation` protocol
+- [x] 2.2 Add `Declaration.from_run_start`, `absolute()`, `scratch_absolute()` and the `EffectsTranslation` protocol
   (D7). Verify unit tests: a `write` run start allows `out/a.txt` only; a malformed pattern raises naming the effect;
   `C:\work\theatre` with `out/**` normalises to `/c/work/theatre/out/**` (run on every OS by building Windows paths
   with `PureWindowsPath`).
 - [ ] 2.3 `Tools` takes `scratch`: absolute paths inside it need no effect; moves across the boundary need the
   workspace end's effect; links out of scratch are refused; no scratch means an absolute path is an error. Verify the
   runner-tools delta's scenarios as tests against the fake model, on Linux, macOS and Windows in CI.
-- [ ] 2.4 Refuse changes under the workspace's top-level `.troupe` (reads allowed), and name scratch in the tool
+- [x] 2.4 Refuse changes under the workspace's top-level `.troupe` (reads allowed), and name scratch in the tool
   definitions. Verify the `.troupe` write and move scenarios, a `Read` of `.troupe/actors/x.yaml` succeeding, and
   `Write`'s description naming the scratch path.
 
@@ -35,10 +35,11 @@
 - [ ] 3.1 In `config/kinds.py`, validate `effects` and check each `expect` path against `write` or `move` (D2),
   with the exact `troupe config set` fix. Verify tests for each effects-spec scenario under "Every expected file is
   covered", including one command setting both, and that a merged config breaking the rule is a conflict.
-- [ ] 3.2 Add the `runs.scratch_root` setting in `defaults.py` (default from the platform seam), refuse one inside the
-  theatre, make scratch before the runner starts and remove it in the run's `finally`, with a warning notice when
-  removal fails. Verify tests: scratch exists and is empty at run start, is gone after `succeeded` and `failed` runs,
-  a failed removal (a file held open on Windows, a read-only directory on POSIX) is a warning, not a failed run.
+- [x] 3.2 Add the `RUN_SCRATCH_ROOT` setting in `defaults.py` (default from the platform seam), refuse one inside the
+  theatre, make scratch in the run host before the runner starts and remove it in the run's `finally`, with a
+  `run.scratch-not-removed` notice when removal fails (design D6). Verify tests: scratch exists and is empty at run
+  start, outside the workspace, is gone after `succeeded` and `failed` runs; a failed removal (simulated, so it's the
+  same on every OS) is a notice, not a failed run; a root inside the theatre is refused with nothing recorded.
 - [ ] 3.3 The host sends the declaration and scratch in `run/start`, and checks `init.effects`; the conformance suite
   checks both. Verify `tests` for "The effects reach the runner" and the conformance scenario for an `init` without
   `effects`, and that the scripted and Claude Code runners pass the suite.

@@ -22,6 +22,10 @@ from troupe_runner_claude_code.defaults import SUMMARY_MAX_BYTES
 ENGINE = "claude-code"
 """The engine's name in the init event."""
 
+EFFECTS_MODE = "translated"
+"""How the runner applies the actor's declared effects, as init reports it: it translates them
+into Claude Code's permission rules (declared-effects design D8)."""
+
 USAGE = {
     "input_tokens": "inputTokens",
     "output_tokens": "outputTokens",
@@ -245,6 +249,7 @@ class Mapper:
         return {
             "type": "init",
             "runner": {"name": NAME, "version": self._runner_version},
+            "effects": EFFECTS_MODE,
             "tools": [],
         }
 
@@ -303,6 +308,7 @@ class Mapper:
             {
                 "type": "init",
                 "runner": {"name": NAME, "version": self._runner_version},
+                "effects": EFFECTS_MODE,
                 "engine": engine,
                 "tools": list(tools),
             }

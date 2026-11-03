@@ -39,7 +39,7 @@ def test_the_run_events_table_lists_exactly_the_event_types_in_the_schema() -> N
     defs = load(RUNNER_SCHEMAS / "run-event.schema.json")["$defs"]
     types = {
         defs[ref["$ref"].rsplit("/", 1)[1]]["properties"]["type"]["const"]
-        for ref in [*defs["event"]["oneOf"], {"$ref": "#/$defs/oversized"}]
+        for ref in defs["hostEvent"]["oneOf"]
     }
     assert _first_column(_section("Run events")) == types
 

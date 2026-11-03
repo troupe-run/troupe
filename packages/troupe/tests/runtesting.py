@@ -98,6 +98,14 @@ class Harness:
             "options": request.get("options", {}),
             "expect": list(check.get("paths", [])),
         }
+        # It may write what it's expected to, and whatever the request declares on top, unless
+        # the request is an actor recorded before expect had to be declared.
+        declared = request.get("effects", {})
+        expected = actor["expect"] if request.get("declareExpected", True) else []
+        write = [*declared.get("write", []), *expected]
+        effects = {**declared, **({"write": write} if write else {})}
+        if effects:
+            actor["effects"] = effects
         if "character" in request:
             actor["character"] = request["character"]
         actor["workspace"] = request.get("workspace", "theatre")

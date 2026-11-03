@@ -252,6 +252,21 @@ def _near_miss(draw: st.DrawFn, data: dict[str, Any], keys: list[str]) -> dict[s
     return result
 
 
+EFFECT_PATTERNS = st.one_of(
+    PATHS,
+    st.sampled_from(["**", "out/**", "src/*.py", "a?c", "a**", ".troupe/**", ".git/x", "**\n"]),
+)
+
+
+@st.composite
+def effects(draw: st.DrawFn) -> dict[str, Any]:
+    lists = st.lists(EFFECT_PATTERNS, max_size=3)
+    data = draw(
+        st.fixed_dictionaries({}, optional={"write": lists, "delete": lists, "move": lists})
+    )
+    return _near_miss(draw, data, list(data))
+
+
 @st.composite
 def actors(draw: st.DrawFn) -> dict[str, Any]:
     data: dict[str, Any] = {
@@ -260,6 +275,8 @@ def actors(draw: st.DrawFn) -> dict[str, Any]:
     }
     if draw(st.booleans()):
         data["options"] = draw(st.dictionaries(st.text(max_size=5), JSON, max_size=3))
+    if draw(st.booleans()):
+        data["effects"] = draw(effects())
     if draw(st.booleans()):
         data["$schema"] = draw(
             st.sampled_from(["../local/schemas/config/actor.schema.json", "actor.json", ""])
