@@ -163,10 +163,10 @@ and troupe checks it did: the actor's `expect` names the file, and a run that di
 ## Define your own actor
 
 `troupe init --audition` is one way to define an actor. `troupe config set` is the other, and works in any theatre.
-Write the actor's options, which say what Claude Code may do, and its character:
+Write the actor's options, which set its budget and the tools it may use besides editing, and its character:
 
 ```json title="claude.json"
-{"permissionMode": "acceptEdits", "allowedTools": ["Read", "Write", "Glob", "Grep"], "maxBudgetUsd": 1}
+{"allowedTools": ["Read", "Glob", "Grep"], "maxBudgetUsd": 1}
 ```
 
 ```markdown title="reviewer.md"
@@ -177,17 +177,19 @@ file you're asked to write.
 Then set all of it in one change, commit, and perform:
 
 ```sh
-troupe config set actors.reviewer.runner=claude-code actors.reviewer.options=@claude.json actors.reviewer.character=@reviewer.md 'actors.reviewer.expect=[]'
+troupe config set actors.reviewer.runner=claude-code actors.reviewer.options=@claude.json actors.reviewer.character=@reviewer.md 'actors.reviewer.expect=[]' 'actors.reviewer.effects.write=["REVIEW.md"]'
 git add .troupe
 git commit -m 'Add the reviewer actor'
 troupe perform reviewer --direction "Review the last commit, and write what you found in REVIEW.md"
 ```
 
-`expect` is what a run is for: the paths it must create or change, or `[]` for no check, so any direction can
-succeed.
+`expect` is what a run is for: the paths it must create or change, or `[]` when no file has to, so any direction can
+succeed. `effects` is what a run may change: here, only `REVIEW.md`.
 
-- **What the agent may do is up to the options.** Without `permissionMode` and `allowedTools`, Claude Code may read
-  but not write. The run then reports each tool it was denied, rather than doing nothing silently.
+- **What the agent may change is up to its effects.** troupe turns `effects.write` into Claude Code's own permission
+  rules, so the reviewer can write `REVIEW.md` and nothing else. With nothing declared, it may read but not write.
+  The run reports each tool it was denied, rather than doing nothing silently, and troupe checks afterwards that
+  nothing changed outside what's declared ([Effects](../the-company/performances-and-runs.md#effects)).
 - **Every run has a budget:** `maxBudgetUsd`, or USD 5 when it isn't set. Claude Code stops when it's spent.
 - **Claude Code uses your existing login,** or `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` when one is set. It
   doesn't load your Claude Code settings, hooks or MCP servers, or the theatre's, or its `CLAUDE.md`: a run doesn't
