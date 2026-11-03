@@ -59,8 +59,10 @@ OWN = "Define your own actor"
 NOTICE = "Changes the run won't see"
 ALLOW = "Allow the local stage, once"
 DIRECTION = "Write NOTES.md: what this code is for, in a few lines"
+EXAMPLE_COUNT = "1 path(s)"
 EXAMPLE_COMMIT = "3f9c2a1b7d4e"
-"""The commit the page's copy of the uncommitted-changes notice names, read as the run's own."""
+"""The count and commit the page's copy of the uncommitted-changes notice names, each read as the
+run's own."""
 
 WALKTHROUGH = [
     "troupe init --audition",
@@ -214,13 +216,19 @@ def test_the_uncommitted_changes_notice_the_page_shows_is_the_one_perform_writes
     project: Repo, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     (shown,) = [body for lang, _, body in blocks_in(section(PAGE, NOTICE)) if lang == "text"]
-    assert EXAMPLE_COMMIT in shown
-    pattern = re.escape(shown.strip()).replace(EXAMPLE_COMMIT, "[0-9a-f]{12}")
+    assert shown.startswith(f"troupe: {EXAMPLE_COUNT} differ from HEAD ({EXAMPLE_COMMIT})")
+    pattern = (
+        re.escape(shown.strip())
+        .replace(re.escape(EXAMPLE_COUNT), r"\d+ path\(s\)")
+        .replace(EXAMPLE_COMMIT, "[0-9a-f]{12}")
+    )
     stand_in_claude(tmp_path, monkeypatch, write="NOTES.md=notes\n")
-    # character.md isn't committed by the page's git add .troupe: it's the one path the run
-    # won't see, as the page says.
+    # character.md isn't committed by the page's git add .troupe, as the page says. A change of
+    # the reader's own makes 2 paths, so the page's count is read as the run's own, not matched.
+    (project.path / "README.md").write_text("# my-app, changed\n", encoding="utf-8")
     code, _, err = perform_walkthrough(monkeypatch, sh_lines(walkthrough()))
     assert code == 0, err
+    assert "troupe: 2 path(s) differ from HEAD" in err
     assert re.search(pattern, err), err
 
 
