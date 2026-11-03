@@ -10,6 +10,7 @@ import pytest
 
 from gitrepo import AUTHOR, Repo, make_repo
 from runtesting import ADA
+from troupe.cli import init as init_cli
 from troupe.cli import main
 from troupe.core import audition as auditions
 from troupe.core.exit_codes import ExitCode
@@ -106,6 +107,48 @@ def test_the_steps_are_commit_then_the_policy_variable_then_perform(repo: Repo) 
     perform = shlex.join(["troupe", "perform", "lead", "--direction", auditions.DIRECTION])
     assert numbered[2] == f"3. {perform}"
     assert "   # Claude Code must be installed and logged in." in lines
+
+
+def _allow_step(out: str) -> list[str]:
+    """The allow step's lines: its numbered line and the notes under it."""
+    lines = _next(out)
+    start = next(n for n, line in enumerate(lines) if ALLOW_VARIABLE in line)
+    end = next((n for n in range(start + 1, len(lines)) if lines[n][:1].isdigit()), len(lines))
+    return lines[start:end]
+
+
+def test_the_allow_step_says_to_add_it_to_the_shell_profile_once_on_linux_and_macos(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(init_cli, "SHELL", init_cli.POSIX)
+    _, out, _ = cli("init", "--audition")
+    line, *notes = _allow_step(out)
+    assert line == f"2. export {ALLOW_VARIABLE}=true"
+    note = " ".join(notes)
+    assert "~/.zshrc" in note
+    assert "~/.bashrc" in note
+    assert "once" in note
+    assert "every theatre" in note
+    assert "each shell" not in note
+
+
+def test_the_allow_step_on_windows_is_the_env_form_and_names_the_powershell_profile(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(init_cli, "SHELL", init_cli.POWERSHELL)
+    _, out, _ = cli("init", "--audition")
+    line, *notes = _allow_step(out)
+    assert line == f'2. $env:{ALLOW_VARIABLE} = "true"'
+    note = " ".join(notes)
+    assert "$PROFILE" in note
+    assert "once" in note
+    assert "every theatre" in note
+    assert "~/.zshrc" not in note
+
+
+def test_the_shell_is_powershell_on_windows_and_posix_elsewhere() -> None:
+    expected = init_cli.POWERSHELL if sys.platform == "win32" else init_cli.POSIX
+    assert init_cli.SHELL is expected
 
 
 def test_no_policy_step_when_policy_already_allows_the_local_stage(
