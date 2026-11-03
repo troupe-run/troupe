@@ -12,6 +12,7 @@ import pytest
 
 from claude_harness import FIXTURES, Session, alive, recording, wait_for_record
 from fake_claude import install
+from troupe_plugin_sdk.declaration import posix_absolute
 
 FIXED = ["-p", "--output-format", "stream-json", "--verbose", "--no-session-persistence"]
 
@@ -198,13 +199,19 @@ def test_claude_runs_in_the_workspace_with_the_fixed_flags_and_the_direction_on_
     session.start(direction=direction)
     seen = wait_for_record(record, "argv")
     assert seen["argv"][: len(FIXED)] == FIXED
-    assert seen["argv"][len(FIXED) :] == [
+    rest = seen["argv"][len(FIXED) :]
+    assert rest[:-2] == [
         "--setting-sources",
         "",
         "--strict-mcp-config",
         "--max-budget-usd",
         "5",
+        "--permission-mode",
+        "dontAsk",
+        "--add-dir",
+        str(session.scratch()),
     ]
+    assert rest[-2] == "--settings"
     assert seen["stdin"] == direction
     assert Path(seen["cwd"]).resolve() == workspace.resolve()
     assert not any("hi" in arg for arg in seen["argv"])
@@ -227,8 +234,13 @@ def test_the_character_and_tool_rules_reach_claude_in_private_files_removed_afte
     argv = seen["argv"]
     assert argv[argv.index("--setting-sources") + 1] == "project"
     assert seen["files"]["--append-system-prompt-file"] == "You test carefully."
+    root, scratch = posix_absolute(workspace), posix_absolute(session.scratch())
     assert json.loads(seen["files"]["--settings"]) == {
-        "permissions": {"allow": ["Bash(git status)", "Read"]}
+        "permissions": {
+            "allow": ["Bash(git status)", "Read", f"Edit(/{scratch}/**)"],
+            "deny": [f"Edit(/{root}/.git/**)", f"Edit(/{root}/.troupe/**)"],
+        },
+        "sandbox": {"autoAllowBashIfSandboxed": False},
     }
     private = Path(argv[argv.index("--settings") + 1]).parent
     assert not private.resolve().is_relative_to(workspace.resolve())
@@ -383,3 +395,99 @@ def test_a_claude_that_cant_be_started_gives_a_synthetic_init_a_log_and_exit_1(
     assert "couldn't be started" in events[1]["message"]
     assert session.wait() == 1
     session.validate_all()
+
+
+# Requirement: Options can't widen the effects; A pattern Claude Code would read differently is
+# refused (declared-effects design D8)
+
+
+def test_an_actor_that_accepts_edits_is_refused_saying_to_declare_effects(
+    tmp_path: Path, workspace: Path, record: Path, sessions: list[Session]
+) -> None:
+    session = _session(sessions, workspace, _env(tmp_path, record))
+    answer = session.start({"permissionMode": "acceptEdits"}, valid=False)
+    data = answer["error"]["data"]
+    assert data["code"] == "claude-code.widens-effects"
+    assert data["details"] == {"where": "options.permissionMode"}
+    assert "effects.write" in data["fix"]
+    assert not record.exists()  # no Claude Code started
+    session.validate_all()
+
+
+def test_an_allowed_edit_rule_is_refused_naming_it(
+    tmp_path: Path, workspace: Path, record: Path, sessions: list[Session]
+) -> None:
+    session = _session(sessions, workspace, _env(tmp_path, record))
+    answer = session.start({"allowedTools": ["Edit(src/**)"]}, valid=False)
+    data = answer["error"]["data"]
+    assert data["code"] == "claude-code.widens-effects"
+    assert data["details"] == {"where": "options.allowedTools[0]"}
+    assert "'Edit(src/**)'" in data["problem"]
+    session.validate_all()
+
+
+def test_a_write_pattern_with_a_bracket_is_refused_naming_it(
+    tmp_path: Path, workspace: Path, record: Path, sessions: list[Session]
+) -> None:
+    session = _session(sessions, workspace, _env(tmp_path, record))
+    answer = session.start(effects={"write": ["app/[id]/page.tsx"]})
+    data = answer["error"]["data"]
+    assert data["code"] == "claude-code.untranslatable-pattern"
+    assert data["details"] == {"where": "effects.write"}
+    assert "'app/[id]/page.tsx'" in data["problem"]
+    assert "'['" in data["problem"]
+    assert not record.exists()
+
+
+# Requirement: Write effects become edit rules; What the translation can't cover is said
+
+
+def test_write_effects_reach_claude_as_edit_rules_and_init_says_translated(
+    tmp_path: Path, workspace: Path, record: Path, sessions: list[Session]
+) -> None:
+    session = _session(
+        sessions, workspace, _env(tmp_path, record, fixture=_fixture("success-with-tools"))
+    )
+    session.start(effects={"write": ["out/**"]})
+    messages = _until_result(session)
+    events = [m["params"] for m in messages if m.get("method") == "run/event"]
+    assert events[0]["type"] == "init"
+    assert events[0]["effects"] == "translated"
+    seen = wait_for_record(record, "files")
+    settings = json.loads(seen["files"]["--settings"])
+    root = posix_absolute(workspace)
+    assert f"Edit(/{root}/out/**)" in settings["permissions"]["allow"]
+    assert "--mcp-config" not in seen["argv"]
+
+
+def test_an_allowed_shell_rule_and_loaded_settings_are_warned_about_before_the_result(
+    tmp_path: Path, workspace: Path, record: Path, sessions: list[Session]
+) -> None:
+    session = _session(
+        sessions, workspace, _env(tmp_path, record, fixture=_fixture("success-with-tools"))
+    )
+    session.start({"allowedTools": ["Bash(uv run pytest *)"], "settingSources": ["project"]})
+    messages = _until_result(session)
+    events = [m["params"] for m in messages if m.get("method") == "run/event"]
+    warnings = [e["message"] for e in events if e["type"] == "log" and e["level"] == "warning"]
+    assert any("'Bash(uv run pytest *)'" in w and "audit" in w for w in warnings)
+    assert any("project settings" in w for w in warnings)
+    assert events[-1]["type"] == "result"
+
+
+# Requirement: Delete and move effects are troupe's own tools
+
+
+def test_declaring_delete_starts_claude_with_troupes_mcp_server(
+    tmp_path: Path, workspace: Path, record: Path, sessions: list[Session]
+) -> None:
+    session = _session(
+        sessions, workspace, _env(tmp_path, record, fixture=_fixture("success-with-tools"))
+    )
+    session.start(effects={"delete": ["drafts/**"]})
+    _until_result(session)
+    seen = wait_for_record(record, "argv")
+    argv = seen["argv"]
+    config = Path(argv[argv.index("--mcp-config") + 1])
+    assert config.name == "mcp.json"
+    assert not config.resolve().is_relative_to(workspace.resolve())

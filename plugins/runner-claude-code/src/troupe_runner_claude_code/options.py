@@ -6,11 +6,27 @@ An option the runner doesn't define, or a value of the wrong shape, is refused, 
 """
 
 import math
+import re
 from dataclasses import dataclass
 from typing import Any
 
-PERMISSION_MODES = ("acceptEdits", "auto", "bypassPermissions", "manual", "dontAsk", "plan")
-"""Claude Code 2.1.302's permission modes."""
+PERMISSION_MODES = ("dontAsk", "plan")
+"""The permission modes an actor may set: both deny whatever no rule allows, so what Claude Code
+may change comes from the actor's effects alone (declared-effects design D8)."""
+
+WIDENING_MODES = ("acceptEdits", "auto", "bypassPermissions", "manual")
+"""Claude Code's other modes, which approve edits, or anything, without a rule: acceptEdits approves
+edits, rm and mv anywhere in the working directory; bypassPermissions ignores allow rules; auto asks
+a classifier; manual is dontAsk only from Claude Code 2.1.302, so it isn't trusted."""
+
+EDIT_TOOLS = ("Edit", "Write", "NotebookEdit", "MultiEdit")
+"""Claude Code's file-editing tools: what they may change comes from the actor's effects alone."""
+
+MCP_SERVER = "troupe"
+"""The name the runner's own MCP server is given, so its tools are mcp__troupe__<tool>."""
+
+_WIDENING_RULE = re.compile(rf"\A\s*(?:(?:{'|'.join(EDIT_TOOLS)})\s*(?:\(|\Z)|mcp__{MCP_SERVER})")
+"""An allow rule for an editing tool, or for troupe's own tools: the schema's pattern too."""
 
 SETTING_SOURCES = ("user", "project", "local")
 """Claude Code's setting sources."""
@@ -104,6 +120,39 @@ def _list(value: object, where: str) -> list[Any]:
     return value
 
 
+def _widens(where: str, problem: str, fix: str) -> OptionsError:
+    return OptionsError("claude-code.widens-effects", where, problem, fix)
+
+
+def _mode(value: object) -> str:
+    where = "options.permissionMode"
+    if value in WIDENING_MODES:
+        raise _widens(
+            where,
+            f"permissionMode {value!r} lets Claude Code change files without a rule, past what "
+            "the actor's effects declare.",
+            "Unset options.permissionMode (troupe runs Claude Code in dontAsk, or plan if you set "
+            "it), and declare what the actor may change in effects.write, effects.delete and "
+            "effects.move.",
+        )
+    return _choice(value, where, PERMISSION_MODES)
+
+
+def _allowed(value: object) -> tuple[str, ...]:
+    where = "options.allowedTools"
+    rules = _rules(value, where)
+    for index, rule in enumerate(rules):
+        if _WIDENING_RULE.match(rule):
+            raise _widens(
+                f"{where}[{index}]",
+                f"allowedTools holds {rule!r}, but what Claude Code may change comes from the "
+                "actor's effects, never from a tool rule.",
+                f"Remove {rule!r} from options.allowedTools, and declare the paths in "
+                "effects.write (or effects.delete, effects.move).",
+            )
+    return rules
+
+
 def _rules(value: object, where: str) -> tuple[str, ...]:
     fix = (
         "Give each rule as a non-empty string with no control characters, such as Bash(git status)."
@@ -140,14 +189,8 @@ def parse_options(value: object) -> Options:
     return Options(
         model=_model(value["model"]) if "model" in value else None,
         max_budget_usd=_budget(value["maxBudgetUsd"]) if "maxBudgetUsd" in value else None,
-        permission_mode=(
-            _choice(value["permissionMode"], "options.permissionMode", PERMISSION_MODES)
-            if "permissionMode" in value
-            else None
-        ),
-        allowed_tools=_rules(value["allowedTools"], "options.allowedTools")
-        if "allowedTools" in value
-        else (),
+        permission_mode=_mode(value["permissionMode"]) if "permissionMode" in value else None,
+        allowed_tools=_allowed(value["allowedTools"]) if "allowedTools" in value else (),
         disallowed_tools=_rules(value["disallowedTools"], "options.disallowedTools")
         if "disallowedTools" in value
         else (),
@@ -155,4 +198,13 @@ def parse_options(value: object) -> Options:
     )
 
 
-__all__ = ["PERMISSION_MODES", "SETTING_SOURCES", "Options", "OptionsError", "parse_options"]
+__all__ = [
+    "EDIT_TOOLS",
+    "MCP_SERVER",
+    "PERMISSION_MODES",
+    "SETTING_SOURCES",
+    "WIDENING_MODES",
+    "Options",
+    "OptionsError",
+    "parse_options",
+]

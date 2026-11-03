@@ -13,6 +13,7 @@ lines that aren't JSON, and summaries cut to fit the event limit.
 import base64
 import json
 from collections import Counter
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any, TypeGuard
 
@@ -153,6 +154,10 @@ class Mapper:
         self._noted: set[str] = set()
         self._result_sent = False
         self._silenced = False
+
+    def hold_warnings(self, messages: Iterable[str]) -> None:
+        """Warnings to send as logs once init is, so they come before the result."""
+        self._held.extend(_log("warning", message) for message in messages)
 
     @property
     def init_sent(self) -> bool:

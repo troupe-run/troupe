@@ -37,6 +37,16 @@
       "description": "The runner couldn't prepare the run, such as making its private directory.",
       "required": ["details"],
       "properties": {"code": {"const": "claude-code.start-failed"}, "details": {"$ref": "#/$defs/where"}}
+    },
+    {
+      "description": "An option would let Claude Code change files the actor's effects don't declare: a permission mode that approves edits without a rule, or an allow rule for an editing tool or troupe's own tools. The fix says what to declare instead.",
+      "required": ["details"],
+      "properties": {"code": {"const": "claude-code.widens-effects"}, "details": {"$ref": "#/$defs/where"}}
+    },
+    {
+      "description": "A declared pattern, or the workspace's or scratch directory's path, holds a character Claude Code's permission rules read differently from troupe's patterns, so no rule would mean what's declared.",
+      "required": ["details"],
+      "properties": {"code": {"const": "claude-code.untranslatable-pattern"}, "details": {"$ref": "#/$defs/where"}}
     }
   ],
   "$defs": {
