@@ -25,7 +25,9 @@
   with `PureWindowsPath`).
 - [ ] 2.3 `Tools` takes `scratch`: absolute paths inside it need no effect; moves across the boundary need the
   workspace end's effect; links out of scratch are refused; no scratch means an absolute path is an error. Verify the
-  runner-tools delta's scenarios as tests against the fake model, on Linux, macOS and Windows in CI.
+  runner-tools delta's scenarios as tests against the fake model, on Linux, macOS and Windows in CI. Open until CI: the code and tests are in
+  (`tools.py`, `paths.py`, `test_tool_scratch.py`) and pass on macOS (local `scripts/check.py`); the Linux and
+  Windows legs run when the pull request is marked ready, and the task is ticked once they pass.
 - [x] 2.4 Refuse changes under the workspace's top-level `.troupe` (reads allowed), and name scratch in the tool
   definitions. Verify the `.troupe` write and move scenarios, a `Read` of `.troupe/actors/x.yaml` succeeding, and
   `Write`'s description naming the scratch path.
@@ -54,7 +56,10 @@
 - [ ] 4.1 Add `file_states(root, at=None)` to the VCS port, with the git adapter (D4: `ls-files -s`, `status
   --porcelain=v2 -z`, `hash-object`, `ls-tree -r`) and the files adapter (walk and hash). Verify adapter tests: clean,
   modified, untracked, ignored (left out), `.git` and `.troupe/` left out, a committed change counted against a base
-  commit, and a path with spaces and non-ASCII characters, on every OS.
+  commit, and a path with spaces and non-ASCII characters, on every OS. Open until CI: the code and tests are in
+  (`vcs.py`, `troupe_vcs_git/states.py`, the files adapter, `test_git_file_states.py`, `test_files_adapter.py`) and
+  pass on macOS; the Linux and Windows legs run when the pull request is marked ready, and the task is ticked once
+  they pass.
 - [x] 4.2 Add the `DeclaredEffects` check and the `Combined` check (D3), with `effects.outside-declared` and
   `effects.check-failed` errors whose `details.changes` follow D3. Verify unit tests for each effects-spec scenario
   under "Each kind of change needs its own effect", including deterministic move pairing with two identical files.
@@ -73,7 +78,9 @@
 - [ ] 5.2 Write the done-when tests through `troupe perform` with `tool` steps: a read-only actor can `Read` but not
   `Write`; `write` for `out/**` writes `out/a.txt` and is refused `src/a.py`; `delete` and `move` each work only where
   declared, and `write` allows neither. Verify they pass on Linux, macOS and Windows in CI, and lineage on each run's
-  events says `unenforced` (stages delta).
+  events says `unenforced` (stages delta). Open until CI: the tests are in
+  (`test_effects_done_when.py`) and pass on macOS; the Linux and Windows legs run when the pull request is marked
+  ready, and the task is ticked once they pass.
 
 ## 6. The Claude Code runner
 
