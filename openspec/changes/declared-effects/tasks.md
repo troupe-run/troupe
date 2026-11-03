@@ -40,11 +40,11 @@
   `run.scratch-not-removed` notice when removal fails (design D6). Verify tests: scratch exists and is empty at run
   start, outside the workspace, is gone after `succeeded` and `failed` runs; a failed removal (simulated, so it's the
   same on every OS) is a notice, not a failed run; a root inside the theatre is refused with nothing recorded.
-- [ ] 3.3 The host sends the declaration and scratch in `run/start`, and checks `init.effects`; the conformance suite
+- [x] 3.3 The host sends the declaration and scratch in `run/start`, and checks `init.effects`; the conformance suite
   checks both. Verify `tests` for "The effects reach the runner" and the conformance scenario for an `init` without
   `effects`, and that the scripted and Claude Code runners pass the suite.
 
-- [ ] 3.4 Make the local stage's `stage.effects-unenforced` refusal and its fix say that changes outside the
+- [x] 3.4 Make the local stage's `stage.effects-unenforced` refusal and its fix say that changes outside the
   workspace are neither prevented nor detected, and that only a stage that enforces effects contains them. Verify
   the stages test for the default-policy refusal checks the new wording, and the effects-spec scenario that a write
   outside the workspace passes the audit with lineage `unenforced`.
@@ -67,7 +67,7 @@
 
 ## 5. The scripted runner
 
-- [ ] 5.1 Add the `tool` step (D9) to the options schema and the runner, with `isError` matching, and report
+- [x] 5.1 Add the `tool` step (D9) to the options schema and the runner, with `isError` matching, and report
   `init.effects: checked`. Verify the scripted-runner delta's scenarios, and the options schema still passes the
   strictness check.
 - [ ] 5.2 Write the done-when tests through `troupe perform` with `tool` steps: a read-only actor can `Read` but not
