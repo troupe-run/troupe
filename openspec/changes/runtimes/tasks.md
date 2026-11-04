@@ -80,10 +80,8 @@
 
 ## 7. The leak test and docs
 
-- [ ] 7.1 Write `test_credential_leak.py` (D12) and its check that it fails with masking turned off. Verify both pass,
-  on Linux, macOS and Windows in CI.
-  Outstanding: both pass locally on macOS (the full check, 4162 tests on f177160); the Linux, macOS and Windows
-  legs run in CI once the pull request is marked ready, and this is ticked when they pass.
+- [x] 7.1 Write `test_credential_leak.py` (D12) and its check that it fails with masking turned off. Verify both pass,
+  on Linux, macOS and Windows in CI. (Linux, macOS and Windows, Python 3.12 to 3.15: CI run 41819326602 on 6f9381f)
 - [x] 7.2 Write `docs/stagecraft/runtimes.md`: defining and overriding a runtime, the environment variables, the
   credential by reference, `config get --resolved`, and the accepted risks of a theatre-chosen endpoint and variable
   (D7). Link it from the config and actor docs. Verify the docs check passes and each example command runs as written
@@ -96,9 +94,10 @@
   follow-up moving the Ollama runner to a runtime. Verify each shows on the board with
   `gh issue view <n> --json projectItems`. (#286, on the board. #277's PR #283 hadn't merged, so its
   follow-up isn't filed: file it if #283 merges before this.)
-- [ ] 8.2 Open the troupe-run/infrastructure pull request recording the `runtimes` spec's Purpose in
+- [x] 8.2 Open the troupe-run/infrastructure pull request recording the `runtimes` spec's Purpose in
   `oob/troupe-spec-purposes.json`, to merge after this one. Verify the record matches the spec's Purpose without
-  its `Capability:` line, and the pull request names this one.
+  its `Capability:` line, and the pull request names this one. (troupe-run/infrastructure#273,
+  for #272, opened by the orchestrating session.)
 - [x] 8.3 Check #162's design D2 against what landed, and comment on #162 with any difference. Verify the comment
   links this pull request. (It matched D2; the comment says what landed and links #287.)
 
