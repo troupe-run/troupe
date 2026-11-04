@@ -97,8 +97,8 @@
 - [ ] 8.2 Open the troupe-run/infrastructure pull request recording the `runtimes` spec's Purpose in
   `oob/troupe-spec-purposes.json`, to merge after this one. Verify the record matches the spec's Purpose without
   its `Capability:` line, and the pull request names this one.
-- [ ] 8.3 Check #162's design D2 against what landed, and comment on #162 with any difference. Verify the comment
-  links this pull request.
+- [x] 8.3 Check #162's design D2 against what landed, and comment on #162 with any difference. Verify the comment
+  links this pull request. (It matched D2; the comment says what landed and links #287.)
 
 ## Workflow follow-up
 
