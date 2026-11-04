@@ -292,3 +292,20 @@ def test_an_expected_file_one_branch_adds_and_another_branch_undeclares_is_a_con
     assert conflict.rule is not None
     assert "'out/more.txt' is expected" in conflict.rule
     assert len(conflict.changes) == 2
+
+
+# Requirement: Config's kinds are actors and runtimes: a merge that removes a runtime an actor uses
+
+
+def test_a_merge_that_removes_a_runtime_an_actor_uses_is_a_conflict(repo: Repo) -> None:
+    on(repo, "main", [(["runtimes", "myhost"], {"endpoint": "https://llm.example/v1"})])
+    repo.git("switch", "-q", "feature")
+    repo.git("merge", "-q", "--no-edit", "main")
+    on(repo, "main", [(["runtimes", "myhost"], UNSET)])
+    on(repo, "feature", [(["actors", "tester", "runtime"], "myhost")])
+    merged = merged_feature(repo)
+    [conflict] = merged.conflicts
+    assert conflict.paths == (tuple(TESTER_PATH),)
+    assert conflict.rule is not None
+    assert "no runtime named 'myhost'" in conflict.rule
+    assert len(conflict.changes) == 2

@@ -18,6 +18,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from troupe.core import runtimes
 from troupe.core.client import messages as m
 from troupe.core.client.dispatch import Method, Send
 from troupe.core.client.session import Session
@@ -41,6 +42,7 @@ from troupe.core.config.projection import (
     stage,
 )
 from troupe.core.config.stream import read, record, refuse_conflicts, refuse_unrecordable
+from troupe.core.errors import TroupeError
 from troupe.core.events import EventStore
 from troupe.core.events.lineage import Actor
 from troupe.core.notices import Notice
@@ -229,8 +231,10 @@ async def config_get(request: m.ConfigGetRequest, session: Session, send: Send) 
     value = merged.config if request.path is None else get(merged.config, request.path)
     if value == {}:
         value = None
+    resolved = _resolved(request.path, merged.config, session.env) if request.resolved else None
     return m.ConfigGetResult(
         value=value,
+        runtimes=resolved,
         conflicts=[
             m.ConflictData(
                 paths=[list(path) for path in conflict.paths],
@@ -250,6 +254,30 @@ async def config_get(request: m.ConfigGetRequest, session: Session, send: Send) 
         heads=list(merged.heads),
         notices=_notices(store.notices()),
     )
+
+
+def _resolved(
+    path: Sequence[str] | None, config: Mapping[str, Any], env: Mapping[str, str]
+) -> dict[str, m.ResolvedRuntime]:
+    """The runtimes ``path`` covers, as troupe resolves them now (spec: runtimes, "Config get
+    shows a runtime's resolved values and their sources"). Only runtimes have resolved values."""
+    if path is None or list(path) == [runtimes.RUNTIMES]:
+        chosen = runtimes.names(config)
+    elif len(path) == 2 and path[0] == runtimes.RUNTIMES:
+        chosen = [path[1]]
+    else:
+        where = ".".join(path)
+        raise TroupeError(
+            "config.not-resolvable",
+            problem=f"{where} has no resolved values: only runtimes do.",
+            fix="Run troupe config get --resolved with no path, runtimes, or runtimes.<name>; "
+            f"or troupe config get {where} without --resolved.",
+            details={"path": list(path)},
+        )
+    return {
+        name: m.ResolvedRuntime.from_data(runtimes.resolve(name, config, env).to_data(env))
+        for name in chosen
+    }
 
 
 async def flush_files(request: m.FlushRequest, session: Session, send: Send) -> Message:

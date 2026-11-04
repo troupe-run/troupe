@@ -22,7 +22,7 @@ from event_schemas import HASH, LINEAGE, ULID
 from protocol_schemas import PROTOCOL_BASE, ROOT, SCHEMAS, SCRIPTED, validator_for
 from runtesting import INIT, OK, script
 from troupe.core.config.base import StrictModel
-from troupe.core.config.models import Actor, ConfigChanged
+from troupe.core.config.models import Actor, ConfigChanged, Runtime
 
 
 def _load() -> ModuleType:
@@ -133,6 +133,63 @@ def test_the_actor_schema_accepts(value: dict[str, Any]) -> None:
 )
 def test_the_actor_schema_refuses(value: dict[str, Any]) -> None:
     assert not ACTOR.is_valid(value)
+
+
+# Requirement: A runtime is a named service with an endpoint, a model and a credential reference
+
+RUNTIME = validator_for(PROTOCOL_BASE + "config/runtime.schema.json")
+RUNTIME_FILE: dict[str, Any] = {
+    "$schema": "https://troupe.run/protocol/0/config/runtime.schema.json",
+    "endpoint": "https://api.openai.com/v1",
+    "model": "gpt-test",
+    "credential": {"env": "OPENAI_API_KEY"},
+}
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param(RUNTIME_FILE, id="a whole runtime file"),
+        pytest.param({}, id="nothing set, overriding nothing of a built-in"),
+        pytest.param({"model": "gpt-test"}, id="only a model"),
+        pytest.param({"endpoint": "http://127.0.0.1:11434"}, id="loopback with a port"),
+        pytest.param({"endpoint": "http://[::1]:1234/v1"}, id="IPv6 loopback"),
+        pytest.param({"endpoint": "https://example.com"}, id="no path"),
+        pytest.param({"credential": {"env": "_MY_KEY_2"}}, id="a variable starting with _"),
+        pytest.param({"credential": {"env": "TROUPEX"}}, id="TROUPE without its underscore"),
+    ],
+)
+def test_the_runtime_schema_accepts(value: dict[str, Any]) -> None:
+    RUNTIME.validate(value)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param({"endpoint": "https://user:secret@example.com/v1"}, id="user info"),
+        pytest.param({"endpoint": "https://example.com/v1?key=x"}, id="a query"),
+        pytest.param({"endpoint": "https://example.com/v1#x"}, id="a fragment"),
+        pytest.param({"endpoint": "ftp://example.com"}, id="ftp"),
+        pytest.param({"endpoint": "localhost:11434"}, id="no scheme"),
+        pytest.param({"endpoint": "https://"}, id="no host"),
+        pytest.param({"endpoint": "https://example.com/a b"}, id="whitespace"),
+        pytest.param({"endpoint": "https://example.com\n"}, id="a trailing newline"),
+        pytest.param({"model": ""}, id="an empty model"),
+        pytest.param({"model": "gpt\n"}, id="a model with a newline"),
+        pytest.param({"credential": {"env": "MY KEY"}}, id="a variable with a space"),
+        pytest.param({"credential": {"env": "1KEY"}}, id="a variable starting with a digit"),
+        pytest.param({"credential": {"env": "OPENAI_API_KEY\n"}}, id="a trailing newline"),
+        pytest.param({"credential": {"env": "TROUPE_RUNTIME_CREDENTIAL"}}, id="troupe's own"),
+        pytest.param({"credential": {"env": "troupe_x"}}, id="troupe's own, in lower case"),
+        pytest.param({"credential": {"value": "sk-x"}}, id="a credential's value"),
+        pytest.param({"credential": {"env": "K", "value": "sk-x"}}, id="a value beside env"),
+        pytest.param({"credential": {}}, id="a credential naming nothing"),
+        pytest.param({"credential": "OPENAI_API_KEY"}, id="a credential that isn't a group"),
+        pytest.param({"api": "openai"}, id="an unknown field"),
+    ],
+)
+def test_the_runtime_schema_refuses(value: dict[str, Any]) -> None:
+    assert not RUNTIME.is_valid(value)
 
 
 def test_without_a_runner_bound_only_empty_options_validate() -> None:
@@ -281,6 +338,49 @@ def actors(draw: st.DrawFn) -> dict[str, Any]:
         data["$schema"] = draw(
             st.sampled_from(["../local/schemas/config/actor.schema.json", "actor.json", ""])
         )
+    if draw(st.booleans()):
+        data["runtime"] = draw(st.one_of(NAMES, st.text(max_size=6)))
+    if draw(st.booleans()):
+        data["model"] = draw(MODELS)
+    return _near_miss(draw, data, list(data))
+
+
+ENDPOINTS = st.one_of(
+    st.sampled_from(
+        [
+            "https://api.openai.com/v1",
+            "http://127.0.0.1:11434",
+            "http://[::1]:1234/v1",
+            "https://u:p@example.com",
+            "https://example.com?q",
+            "https://example.com#f",
+            "https://example.com\n",
+            "ftp://example.com",
+            "https://",
+            "localhost:1",
+        ]
+    ),
+    st.text(max_size=12).map(lambda rest: "https://" + rest),
+)
+MODELS = st.one_of(st.sampled_from(["gpt-test", "llama3.2:1b", "", "a\n"]), st.text(max_size=6))
+VARIABLES = st.one_of(
+    st.sampled_from(["OPENAI_API_KEY", "_K", "1K", "MY KEY", "TROUPE_X", "troupe_x", "K\n"]),
+    st.text(max_size=6),
+)
+
+
+@st.composite
+def runtimes(draw: st.DrawFn) -> dict[str, Any]:
+    data: dict[str, Any] = {}
+    if draw(st.booleans()):
+        data["endpoint"] = draw(ENDPOINTS)
+    if draw(st.booleans()):
+        data["model"] = draw(MODELS)
+    if draw(st.booleans()):
+        credential: dict[str, Any] = {"env": draw(VARIABLES)}
+        data["credential"] = _near_miss(draw, credential, ["env"])
+    if draw(st.booleans()):
+        data["$schema"] = draw(st.sampled_from(["config/runtime.schema.json", "runtime.json"]))
     return _near_miss(draw, data, list(data))
 
 
@@ -326,6 +426,15 @@ def _value(after: object) -> dict[str, Any]:
 @example({"runner": "scripted", "expect": [], "options": {"a": None}})
 def test_the_actor_model_accepts_exactly_what_its_schema_accepts(value: dict[str, Any]) -> None:
     assert _accepts(Actor, value) == _bundled("Actor").is_valid(value)
+
+
+@given(runtimes())
+@example({"endpoint": "https://example.com\n"})
+@example({"model": "gpt\n"})
+@example({"credential": {"env": "K\n"}})
+@example({"credential": {"env": "troupe_x"}})
+def test_the_runtime_model_accepts_exactly_what_its_schema_accepts(value: dict[str, Any]) -> None:
+    assert _accepts(Runtime, value) == _bundled("Runtime").is_valid(value)
 
 
 @given(changes())

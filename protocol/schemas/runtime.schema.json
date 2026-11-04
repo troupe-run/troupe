@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/runtime.schema.json",
+  "title": "Runtimes",
+  "description": "What a runtime is, shared by its config file, run/start, the run's start and the client: a service a runner talks to, named once in config. Definitions only.",
+  "$defs": {
+    "name": {
+      "title": "Runtime name",
+      "description": "A runtime's name: lowercase letters, digits and -, starting with a letter, at most 64. TROUPE_RUNTIME_<NAME>_... variables use it in capitals, with - as _.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,63}$"
+    },
+    "endpoint": {
+      "title": "Endpoint",
+      "description": "An http or https URL with a host, an optional port and an optional path, and no user info, query, fragment, whitespace or control character.",
+      "type": "string",
+      "maxLength": 2048,
+      "pattern": "^(?![\\s\\S]*[\\x00-\\x20\\x7f])https?://(?:[A-Za-z0-9._~-]+|\\[[0-9A-Fa-f:.]+\\])(?::[0-9]{1,5})?(?:/[^?#\\\\]*)?$"
+    },
+    "model": {
+      "title": "Model",
+      "description": "A model's name, as the service names it: not empty, with no control character.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^(?![\\s\\S]*[\\x00-\\x1f\\x7f])[\\s\\S]+$"
+    },
+    "variable": {
+      "title": "Environment variable name",
+      "description": "Letters, digits and _, not starting with a digit, and not starting with TROUPE_ in any case.",
+      "type": "string",
+      "maxLength": 256,
+      "pattern": "^(?![Tt][Rr][Oo][Uu][Pp][Ee]_)(?![\\s\\S]*[\\x00-\\x1f\\x7f])[A-Za-z_][A-Za-z0-9_]*$"
+    },
+    "source": {
+      "title": "Source",
+      "description": "Where a resolved value came from: default (troupe's built-in runtimes), theatre (the theatre's config), env (the person's environment, TROUPE_RUNTIME_<NAME>_...), or actor (the actor's model).",
+      "enum": [
+        "default",
+        "theatre",
+        "env",
+        "actor"
+      ]
+    },
+    "resolved": {
+      "title": "Resolved runtime",
+      "description": "A runtime as troupe resolved it from its defaults, the theatre's config and the person's environment, each value with its source. Never the credential's value.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "endpoint"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/name"
+        },
+        "endpoint": {
+          "description": "The endpoint, and where it came from.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "source"
+          ],
+          "properties": {
+            "value": {
+              "$ref": "#/$defs/endpoint"
+            },
+            "source": {
+              "$ref": "#/$defs/source"
+            }
+          }
+        },
+        "model": {
+          "description": "The model, and where it came from. Absent: nothing sets one, so a run on it is refused.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "source"
+          ],
+          "properties": {
+            "value": {
+              "$ref": "#/$defs/model"
+            },
+            "source": {
+              "$ref": "#/$defs/source"
+            }
+          }
+        },
+        "credential": {
+          "description": "The credential's variable, and where its name came from. Absent: the runtime has no credential.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "env",
+            "set"
+          ],
+          "properties": {
+            "env": {
+              "description": "The variable's name, and where the name came from.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "value",
+                "source"
+              ],
+              "properties": {
+                "value": {
+                  "$ref": "#/$defs/variable"
+                },
+                "source": {
+                  "$ref": "#/$defs/source"
+                }
+              }
+            },
+            "set": {
+              "description": "Whether the variable is set, and not empty, in the person's environment. Its value is never shown.",
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -24,6 +24,7 @@ from troupe.core import interim, schemas, strict_json
 from troupe.core.errors import TroupeError
 
 ACTOR_SCHEMA = "https://troupe.run/protocol/config/actor.schema.json"
+RUNTIME_SCHEMA = "https://troupe.run/protocol/config/runtime.schema.json"
 RUNNER_OPTIONS = "#runnerOptions"
 
 
@@ -120,12 +121,14 @@ def _child(node: Any, resolver: Any, key: str) -> tuple[Any, Any] | None:  # noq
 
 def kinds_at(path: Sequence[str], runner: str | None) -> set[str]:
     """The JSON types the schema allows at ``path``: empty when no single schema says."""
-    if len(path) >= 1 and path[0] != "actors":
+    if len(path) >= 1 and path[0] not in ("actors", "runtimes"):
         return set()
     if len(path) == 1:
         return {"object"}
     if len(path) == 2:
         return {"object"}
+    if path[0] == "runtimes":
+        return _kinds_in(RUNTIME_SCHEMA, path[2:], runner)
     field = path[2]
     if field == "character":
         return {"string"} if len(path) == 3 else set()
@@ -142,10 +145,15 @@ def kinds_at(path: Sequence[str], runner: str | None) -> set[str]:
                 return set()
             at, within = found
         return _kinds(at, within, runner)
+    return _kinds_in(ACTOR_SCHEMA, path[2:], runner)
+
+
+def _kinds_in(schema: str, keys: Sequence[str], runner: str | None) -> set[str]:
+    """The JSON types ``schema`` allows at ``keys`` within it."""
     registry = schemas.registry()
-    resolver = registry.resolver(ACTOR_SCHEMA)
-    node: Any = registry.contents(ACTOR_SCHEMA)
-    for key in path[2:]:
+    resolver = registry.resolver(schema)
+    node: Any = registry.contents(schema)
+    for key in keys:
         found = _child(node, resolver, key)
         if found is None:
             return set()

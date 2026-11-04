@@ -13,6 +13,7 @@ from typing import Any, TextIO
 from troupe.cli.commands import _call, _ignore_cancel, _notices, _session
 from troupe.cli.parser import Command
 from troupe.cli.render import render_notice
+from troupe.cli.runtimes import runtime_lines
 from troupe.cli.values import split_path, value_of
 from troupe.core.errors import TroupeError
 from troupe.core.exit_codes import ExitCode
@@ -186,6 +187,12 @@ def _configure_get(parser: argparse.ArgumentParser) -> None:
         "path", nargs="?", metavar="path", help="a value or group, such as actors.tester"
     )
     parser.add_argument("--json", action="store_true", help="print the result as JSON")
+    parser.add_argument(
+        "--resolved",
+        action="store_true",
+        help="show runtimes as troupe resolves them, from its built-in ones, config and your "
+        "environment, each value with where it came from",
+    )
 
 
 def _conflict_lines(conflict: dict[str, Any]) -> list[str]:
@@ -207,10 +214,18 @@ def _run_get(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> E
     params: dict[str, Any] = {}
     if arguments.path is not None:
         params["path"] = split_path(arguments.path)
+    if arguments.resolved:
+        params["resolved"] = True
     result = _call("config-get", params, _session(), lambda u: None, _ignore_cancel)
     _notices(result, stderr)
     if arguments.json:
         print(json.dumps(result, ensure_ascii=False), file=stdout)
+        return ExitCode.OK
+    if arguments.resolved:
+        for runtime in result["runtimes"].values():
+            print("\n".join(runtime_lines(runtime)), file=stdout)
+        for conflict in result["conflicts"]:
+            print("\n".join(_conflict_lines(conflict)), file=stdout)
         return ExitCode.OK
     if "value" not in result:
         where = arguments.path or "config"

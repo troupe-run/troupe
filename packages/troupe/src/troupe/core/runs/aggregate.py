@@ -69,8 +69,10 @@ class Run(Aggregate):
         config: list[str],
         runner_reported: dict[str, Any] | None = None,
         workspace: dict[str, Any] | None = None,
+        runtime: dict[str, Any] | None = None,
     ) -> None:
         self.run_id = run_id
+        self.runtime = runtime
         self.actor = actor
         self.runner_requested = runner_requested
         self.runner_reported = runner_reported

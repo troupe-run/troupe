@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/config/runtime.schema.json",
+  "title": "Runtime",
+  "description": "One runtime's config file, .troupe/runtimes/<name>.yaml: a service a runner talks to. The file's name is the runtime's name. It holds only what the theatre's config sets: a built-in runtime's other fields are troupe's defaults, and the person's environment overrides any of them (TROUPE_RUNTIME_<NAME>_ENDPOINT, _MODEL, _CREDENTIAL_ENV). troupe writes this file from the theatre's config events, and every field is set with troupe config set.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "title": "Schema",
+      "description": "Where this file's schema is, so editors can check it. troupe writes it.",
+      "type": "string",
+      "pattern": "(^|/)config/runtime\\.schema\\.json$"
+    },
+    "endpoint": {
+      "title": "Endpoint",
+      "description": "The base URL the runner's API is served under: http or https, a host and an optional port and path, with no user info, query or fragment. The runner adds its own paths. Required for a runtime that isn't built in.",
+      "$ref": "../runtime.schema.json#/$defs/endpoint"
+    },
+    "model": {
+      "title": "Model",
+      "description": "The model a run uses when its actor sets none, as the service names it.",
+      "$ref": "../runtime.schema.json#/$defs/model"
+    },
+    "credential": {
+      "title": "Credential",
+      "description": "Where the runtime's credential comes from. Never the credential itself: config is committed, so it holds only a reference.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "env"
+      ],
+      "properties": {
+        "env": {
+          "title": "Environment variable",
+          "description": "The name of the environment variable that holds the credential, read from the person's environment when a run starts. It can't be one of troupe's own (TROUPE_...).",
+          "$ref": "../runtime.schema.json#/$defs/variable"
+        }
+      }
+    }
+  }
+}

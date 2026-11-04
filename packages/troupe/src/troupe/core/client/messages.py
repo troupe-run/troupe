@@ -358,6 +358,38 @@ class RehearsedWorkspace(Message):
             raise fail(where, "base is present exactly when kind is worktree")
 
 
+# Runtimes, as troupe resolves them (runtimes design D8, D9).
+
+RUNTIME_NAME = re.compile(r"\A[a-z][a-z0-9-]{0,63}\Z")
+RuntimeSource = Literal["default", "theatre", "env", "actor"]
+
+
+@dataclass(frozen=True)
+class SourcedValue(Message):
+    """A resolved value, and where it came from."""
+
+    value: str = json_field("value", min_length=1)
+    source: RuntimeSource = json_field("source")
+
+
+@dataclass(frozen=True)
+class ResolvedCredential(Message):
+    """A credential by its variable's name and whether that's set: never its value."""
+
+    env: SourcedValue = json_field("env")
+    set: bool = json_field("set")
+
+
+@dataclass(frozen=True)
+class ResolvedRuntime(Message):
+    """A runtime as troupe resolves it, each value with its source."""
+
+    name: str = json_field("name", pattern=RUNTIME_NAME)
+    endpoint: SourcedValue = json_field("endpoint")
+    model: SourcedValue | None = json_field("model", default=None)
+    credential: ResolvedCredential | None = json_field("credential", default=None)
+
+
 @dataclass(frozen=True, kw_only=True)
 class Rehearsal(Message):
     """What a perform would run, after every check it makes before starting the runner."""
@@ -371,6 +403,7 @@ class Rehearsal(Message):
     character: TextSummary | None = json_field("character", default=None)
     direction: TextSummary | None = json_field("direction", default=None)
     workspace: RehearsedWorkspace = json_field("workspace")
+    runtime: ResolvedRuntime | None = json_field("runtime", default=None)
 
 
 @dataclass(frozen=True)
@@ -473,6 +506,7 @@ class ConfigSetResult(Message):
 @dataclass(frozen=True)
 class ConfigGetRequest(Message):
     path: list[str] | None = json_field("path", default=None, min_items=1)
+    resolved: bool | None = json_field("resolved", default=None)
 
     def _check(self, where: str) -> None:
         if self.path is not None:
@@ -500,6 +534,7 @@ class ConfigGetResult(Message):
     heads: list[str] = json_field("heads")
     notices: list[NoticeData] = json_field("notices")
     value: object | None = json_field("value", default=None)
+    runtimes: dict[str, ResolvedRuntime] | None = json_field("runtimes", default=None)
 
 
 @dataclass(frozen=True)

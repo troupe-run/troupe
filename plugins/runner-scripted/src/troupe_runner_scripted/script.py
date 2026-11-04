@@ -132,6 +132,35 @@ def _event_shape(value: dict[str, Any], where: str) -> None:
 CHECK_CHARACTER = 'a checkCharacter step is {"hash": "sha256:..."} or {"absent": true}'
 
 
+CHECK_RUNTIME = (
+    'a checkRuntime step is {"absent": true}, or any of name, endpoint, model (strings) and '
+    'credentialHash ("sha256:...") or noCredential (true)'
+)
+
+
+def _check_runtime_step(value: Any, here: str) -> None:  # noqa: ANN401
+    if not isinstance(value, dict):
+        raise _invalid(CHECK_RUNTIME, here)
+    if "absent" in value:
+        if value != {"absent": True}:
+            raise _invalid(CHECK_RUNTIME, here)
+        return
+    _require_keys(
+        value, here, set(), {"name", "endpoint", "model", "credentialHash", "noCredential"}
+    )
+    if not value or ("credentialHash" in value and "noCredential" in value):
+        raise _invalid(CHECK_RUNTIME, here)
+    for field in ("name", "endpoint", "model"):
+        if field in value:
+            _str(value[field], f"{here}.{field}")
+    if "noCredential" in value and value["noCredential"] is not True:
+        raise _invalid("must be true", f"{here}.noCredential")
+    if "credentialHash" in value:
+        hash_ = _str(value["credentialHash"], f"{here}.credentialHash")
+        if not re.fullmatch(r"sha256:[0-9a-f]{64}", hash_):
+            raise _invalid("must be sha256: and 64 lowercase hex digits", f"{here}.credentialHash")
+
+
 def _step(data: Any, where: str) -> Step:  # noqa: ANN401
     if not isinstance(data, dict) or len(data) != 1:
         raise _invalid("a step is an object with exactly one key, the step's kind", where)
@@ -176,6 +205,11 @@ def _step(data: Any, where: str) -> Step:  # noqa: ANN401
             raise _invalid(
                 'a checkCharacter step is {"hash": "sha256:..."} or {"absent": true}', here
             )
+    elif kind == "checkRuntime":
+        _check_runtime_step(value, here)
+    elif kind == "echoCredential":
+        if value is not True:
+            raise _invalid('an echoCredential step is {"echoCredential": true}', here)
     elif kind == "tool":
         _require_keys(value, here, {"name", "input"}, {"callId", "isError"})
         if not _str(value["name"], f"{here}.name"):

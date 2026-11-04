@@ -24,6 +24,7 @@ from typing import Any
 from troupe.core import defaults
 from troupe.core.artifacts import ArtifactStore, ArtifactWriter
 from troupe.core.errors import TroupeError
+from troupe.core.masking import Masker
 from troupe.core.notices import Notice
 from troupe.core.runners.effects import Audit, AuditFindings, EffectCheck, EffectVerdict, combined
 from troupe.core.runners.limits import RunLimits
@@ -80,6 +81,11 @@ class RunRequest:
     scratch: Path | None = None
     """The run's scratch directory. None: run_actor makes one, and removes it when the run ends
     (spec: effects, "Every run gets scratch space outside its declaration")."""
+    runtime: p.RunStartRuntime | None = None
+    """The run's runtime as troupe resolved it, for run/start; None when the actor names none."""
+    credential: str | None = field(default=None, repr=False)
+    """The runtime's credential, which the runner's environment holds: never sent in run/start,
+    and masked in everything kept from the run (runtimes design D6)."""
 
 
 class _Violation(Exception):  # noqa: N818 - it carries the protocol error, not a Python failure
@@ -171,6 +177,9 @@ class _Run:
         self.stopping = False
         self.last_event = time.monotonic()
         self.silence_announced = False
+        self.mask = Masker(request.credential)
+        """Masks the run's credential in every line, record and byte of standard error the runner
+        sends, before anything is parsed, stored or passed on (runtimes design D6)."""
 
     # Writing to the runner
 
@@ -208,6 +217,7 @@ class _Run:
         if not line:
             return None
         self.line_number += 1
+        line = self.mask.bytes(line)
         try:
             incoming = p.parse_line(line)
         except p.ProtocolError as error:
@@ -299,6 +309,7 @@ class _Run:
                 ) from error
         else:
             data = record.record.encode()
+        data = self.mask.bytes(data)
         if self.transcript is None:
             raise RuntimeError("the transcript writer isn't open")
         self.transcript.write(data + b"\n")
@@ -382,9 +393,12 @@ class _Run:
 
     async def drain_stderr(self) -> None:
         stream = self._child().stderr
+        masked = self.mask.stream()
         while chunk := await stream.read(64 * 1024):
             if self.stderr is not None:
-                self.stderr.add(chunk)
+                self.stderr.add(masked.feed(chunk))
+        if self.stderr is not None:
+            self.stderr.add(masked.finish())
 
 
 def _start_error(code: str, problem: str, fix: str, **details: object) -> TroupeError:
@@ -647,6 +661,7 @@ async def _start(run: _Run) -> TroupeError | None:
             effects=run.request.effects,
             scratch=str(run.request.scratch),
             character=run.request.character,
+            runtime=run.request.runtime,
         ),
     )
     answer = await _await_response(run, id_)

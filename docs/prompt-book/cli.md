@@ -208,13 +208,14 @@ troupe config unset <path> [--reason <reason>] [--rehearse]
 Show config, or the value or group at a path.
 
 ```text
-troupe config get [<path>] [--json]
+troupe config get [<path>] [--json] [--resolved]
 ```
 
 | Argument | Required | What it is |
 |---|---|---|
 | `<path>` | No | A value or group, such as actors.tester |
 | `--json` | No | Print the result as JSON |
+| `--resolved` | No | Show runtimes as troupe resolves them, from its built-in ones, config and your environment, each value with where it came from |
 
 ### `troupe flush`
 

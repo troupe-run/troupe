@@ -31,7 +31,7 @@ own tool loop (decision [#16](https://github.com/troupe-run/troupe/issues/16)). 
 | Method | Direction | Kind | Params | Result |
 |---|---|---|---|---|
 | `initialize` | troupe → runner | request | `protocolVersions`, `host {name, version}`, `capabilities` | `protocolVersion`, `runner {name, version}`, `capabilities` |
-| `run/start` | troupe → runner | request | `runId`, `direction`, `character` (optional), `workspace`, `effects {write, delete, move}`, `scratch`, `options`, `limits {eventMaxBytes}` | `runId` |
+| `run/start` | troupe → runner | request | `runId`, `direction`, `character` (optional), `workspace`, `effects {write, delete, move}`, `scratch`, `options`, `runtime {name, endpoint, model, credential}` (optional), `limits {eventMaxBytes}` | `runId` |
 | `run/event` | runner → troupe | notification | one run event | — |
 | `run/transcript` | runner → troupe | notification | `runId`, `record`, `encoding` (optional) | — |
 | `run/cancel` | troupe → runner | request | `runId` | `{}` |
@@ -61,6 +61,31 @@ troupe passes through without looking inside them. The runner publishes their sc
 [Publishing a runner's schemas](#publishing-a-runners-schemas)), and refuses an option it doesn't define, with an
 error naming it, rather than ignoring it. `limits.eventMaxBytes` is the largest serialised event troupe
 keeps inline: summarise below it. `effects` and `scratch` are covered in [Applying the effects](#applying-the-effects).
+`runtime` is covered in [The runtime and its credential](#the-runtime-and-its-credential).
+
+### The runtime and its credential
+
+A runner that talks to a service, such as a local engine or a hosted API, takes it from the actor's **runtime**:
+a service defined once in config (`runtimes.<name>`) and resolved by troupe from its built-in runtimes, the
+theatre's config and the person's environment. troupe's runner table says whether a runner takes one (`required`,
+`optional` or `none`), and config refuses an actor whose runtime doesn't fit its runner.
+
+`run/start`'s `runtime` holds what troupe resolved: `name`, `endpoint` (the base URL your API lives under; add your
+own paths), `model`, and `credential`, a boolean. It's absent when the actor names no runtime.
+
+**The credential's value is never in `run/start`**, which troupe records. When `credential` is `true`, your
+environment holds the value as `TROUPE_RUNTIME_CREDENTIAL`; when it's `false`, that variable isn't set. The variable
+config names (`runtimes.openai.credential.env`, say `MY_OPENAI_KEY`) never reaches you: every runner reads the same
+one. The plugin SDK reads it for you (`troupe_plugin_sdk.credential.runtime_credential(params, os.environ)`), and
+refuses a `run/start` and an environment that disagree.
+
+- **Send it only to the runtime's endpoint,** and only as the service expects it (an `Authorization` header, for
+  example). Don't follow a redirect with it.
+- **Never send it back to troupe:** not in a run event, a transcript record, standard error or an error. troupe
+  masks the value as `[credential]` in everything it keeps from a run anyway, but a runner that leaks it is still a
+  bug.
+- troupe refuses a run before starting you when the credential's variable isn't set, when the value is too short
+  to mask safely (under 8 bytes), or when the endpoint is plain `http` to a host that isn't a loopback address.
 
 ### Applying the effects
 
@@ -135,7 +160,8 @@ adds to the conversation, verbatim as it sent it, before the engine's output tha
 history only once: otherwise the tool outputs it sends back, which the contract says belong in the transcript, would
 be missing, and a transcript would grow with the square of its run. `record` is
 the record without its line ending. `encoding` is `utf-8` (the default) or `base64` for bytes that aren't text.
-troupe stores the records, each followed by `\n`, as the run's transcript, and never interprets them. For Claude
+troupe stores the records, each followed by `\n`, as the run's transcript, and never interprets them, apart from
+masking a runtime's credential. For Claude
 Code, that reproduces its stream-json output byte for byte.
 
 ### Where transcripts are kept
@@ -166,7 +192,9 @@ and records only their reference.
 
 A runner starts with only the environment variables troupe's caller names for it, plus the minimum the operating
 system needs (`SYSTEMROOT` on Windows). Nothing is passed through from troupe's own environment: the runner policy,
-`RUNNER_ENVIRONMENT`, selects nothing. A runner that needs a credential or a setting is given it explicitly.
+`RUNNER_ENVIRONMENT`, selects nothing. A runner that needs a credential or a setting is given it explicitly. A runtime's
+credential arrives as `TROUPE_RUNTIME_CREDENTIAL` ([The runtime and its credential](#the-runtime-and-its-credential)).
+
 
 ### Cancel, end of input and shutdown
 

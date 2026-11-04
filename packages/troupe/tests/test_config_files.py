@@ -882,3 +882,67 @@ def test_a_file_depends_only_on_what_config_holds_not_the_order_values_were_set_
     reordered = _reordered(actor, data.draw)
     assert isinstance(reordered, dict)
     assert render_actor(reordered) == render_actor(actor)
+
+
+# Requirement: Each runtime in config is projected to its own file
+
+RUNTIME_FILE = validator_for(PROTOCOL_BASE + "config/runtime.schema.json")
+MYHOST: dict[str, Any] = {
+    "endpoint": "https://llm.example/v1",
+    "model": "llama",
+    "credential": {"env": "MY_KEY"},
+}
+
+
+def _runtime_file(theatre: Path, name: str) -> Path:
+    return theatre / ".troupe" / "runtimes" / f"{name}.yaml"
+
+
+def test_an_override_of_a_built_in_holds_only_what_config_sets() -> None:
+    files = render({"runtimes": {"openai": {"model": "gpt-test"}}})
+    url = f"https://troupe.run/protocol/{schemas.protocol_major()}/config/runtime.schema.json"
+    assert files["runtimes/openai.yaml"].decode("utf-8") == (
+        f"# yaml-language-server: $schema={url}\n$schema: {url}\nmodel: gpt-test\n"
+    )
+
+
+def test_no_runtimes_in_config_means_no_runtimes_directory(tmp_path: Path) -> None:
+    theatre = _theatre(tmp_path)
+    flush(theatre, CONFIG, {})
+    assert not (theatre / ".troupe" / "runtimes").exists()
+
+
+def test_a_removed_runtimes_file_is_removed(tmp_path: Path) -> None:
+    theatre = _theatre(tmp_path)
+    config = {"runtimes": {"myhost": MYHOST}}
+    flush(theatre, config, {})
+    assert _runtime_file(theatre, "myhost").is_file()
+    recorded = {path: frozenset({file_hash(data)}) for path, data in render(config).items()}
+    flush(theatre, {}, recorded)
+    assert not _runtime_file(theatre, "myhost").exists()
+
+
+def test_a_written_runtime_file_validates_against_its_schema_in_its_order() -> None:
+    text = render({"runtimes": {"myhost": MYHOST}})["runtimes/myhost.yaml"]
+    data = YAML(typ="safe", pure=True).load(text)
+    RUNTIME_FILE.validate(data)
+    assert list(data) == ["$schema", "endpoint", "model", "credential"]
+
+
+# Requirement: Runtime files are a known kind
+
+
+def test_a_runtime_file_is_a_known_kind() -> None:
+    assert file_kind("runtimes/openai.yaml") is not None
+    assert file_kind("runtimes/openai.md") is None
+    assert file_kind("runtimes/OpenAI.yaml") is None
+
+
+def test_a_stray_file_among_runtimes_is_refused_naming_it(tmp_path: Path) -> None:
+    theatre = _theatre(tmp_path)
+    (theatre / ".troupe" / "runtimes").mkdir()
+    (theatre / ".troupe" / "runtimes" / "notes.txt").write_text("mine", encoding="utf-8")
+    with pytest.raises(TroupeError) as caught:
+        flush(theatre, CONFIG, {})
+    assert caught.value.code == "config.unknown-file"
+    assert caught.value.details["paths"] == [".troupe/runtimes/notes.txt"]

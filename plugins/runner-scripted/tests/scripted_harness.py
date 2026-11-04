@@ -7,6 +7,7 @@ runner's schemas filling the contract's extension points, as troupe would see th
 """
 
 import json
+import os
 import queue
 import subprocess
 import sys
@@ -39,6 +40,7 @@ def _registry() -> Registry[Any]:
     paths = [
         SCHEMAS / "error.schema.json",
         SCHEMAS / "effects.schema.json",
+        SCHEMAS / "runtime.schema.json",
         *sorted((SCHEMAS / "runner").glob("*.schema.json")),
         *sorted(RUNNER_SCHEMAS.glob("*.schema.json")),
     ]
@@ -82,14 +84,19 @@ def new_run_id() -> str:
 class Session:
     """One scripted runner process. Every message either side sends is kept for validation."""
 
-    def __init__(self, workspace: Path) -> None:
+    def __init__(self, workspace: Path, env: dict[str, str] | None = None) -> None:
+        """``env``: variables added to the runner's environment, such as a run's credential."""
         self.workspace = workspace
+        environment = {
+            k: v for k, v in os.environ.items() if k.upper() != "TROUPE_RUNTIME_CREDENTIAL"
+        }
         self.process = subprocess.Popen(
             [sys.executable, "-m", "troupe_runner_scripted"],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             cwd=workspace,
+            env={**environment, **(env or {})},
         )
         self.sent: list[dict[str, Any]] = []
         self.refused: set[int] = set()
@@ -163,6 +170,7 @@ class Session:
         valid: bool = True,
         character: str | None = None,
         effects: dict[str, list[str]] | None = None,
+        runtime: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Initialize, then send run/start with ``options`` (and ``character``, when given).
         ``valid=False`` marks options the runner must refuse, which the runner's options schema
@@ -181,6 +189,8 @@ class Session:
         }
         if character is not None:
             params["character"] = character
+        if runtime is not None:
+            params["runtime"] = runtime
         return self.request("run/start", params)
 
     def play(
@@ -190,8 +200,11 @@ class Session:
         valid: bool = True,
         character: str | None = None,
         effects: dict[str, list[str]] | None = None,
+        runtime: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        return self.start({"script": script}, valid=valid, character=character, effects=effects)
+        return self.start(
+            {"script": script}, valid=valid, character=character, effects=effects, runtime=runtime
+        )
 
     def notifications(self, count: int) -> list[dict[str, Any]]:
         return [self.message() for _ in range(count)]

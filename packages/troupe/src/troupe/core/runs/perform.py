@@ -28,7 +28,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 from uuid import UUID, uuid4
 
-from troupe.core import defaults
+from troupe.core import defaults, runtimes
 from troupe.core.artifacts import ArtifactStore
 from troupe.core.client import messages as m
 from troupe.core.client.dispatch import Send
@@ -55,6 +55,7 @@ from troupe.core.runners.host import RunnerCommand, RunRequest, not_started, run
 from troupe.core.runners.limits import RunLimits
 from troupe.core.runs.aggregate import Run
 from troupe.core.runs.projections import fold_runs
+from troupe.core.runtimes import RunRuntime
 from troupe.core.stages import load_stage
 from troupe.core.stores import local_dir, open_artifact_store, open_event_store
 from troupe.core.vcs import SharedState, Vcs
@@ -70,6 +71,7 @@ from troupe.core.workspaces import (
     worktree_base,
 )
 from troupe_plugin_sdk import runner as p
+from troupe_plugin_sdk.credential import CREDENTIAL_VARIABLE
 from troupe_plugin_sdk.effects import Effects
 
 
@@ -156,6 +158,8 @@ class _What:
     config: tuple[str, ...]
     workspace: Kind
     effects: p.EffectsDeclaration = p.READ_ONLY_DECLARATION
+    runtime: str | None = None
+    model: str | None = None
 
 
 def _from_config(merged: Merged, name: str) -> _What:
@@ -191,6 +195,8 @@ def _from_config(merged: Merged, name: str) -> _What:
         config=merged.heads,
         workspace="theatre" if workspace == "theatre" else "worktree",
         effects=effects,
+        runtime=actor.get("runtime"),
+        model=actor.get("model"),
     )
 
 
@@ -216,9 +222,11 @@ class _Recorder:
         workspace: dict[str, Any],
         send: Send,
         cancel: asyncio.Event,
+        runtime: RunRuntime | None = None,
     ) -> None:
         self.run_id = run_id
         self.what = what
+        self.runtime = runtime
         self.store = store
         self.stale = False
         self.person = person
@@ -241,6 +249,7 @@ class _Recorder:
             direction=self.direction_ref,
             config=list(self.what.config),
             workspace=self.workspace,
+            runtime=self.runtime.to_data() if self.runtime is not None else None,
         )
         self.person.record(run.collect_events())
         self.run = run
@@ -329,7 +338,12 @@ async def perform(
     refuse_conflicts(merged)
     what = _from_config(merged, request.actor)
     argv = runner_command(what.runner)
-    check_actor(what.actor, merged.config["actors"][what.actor])
+    check_actor(what.actor, merged.config)
+    runtime = (
+        runtimes.for_run(what.runtime, what.actor, what.model, merged.config, session.env)
+        if what.runtime is not None
+        else None
+    )
     direction = request.direction or ""
     vcs = store.vcs
     base: tuple[str, str] | None = None
@@ -351,6 +365,9 @@ async def perform(
                 direction=_summary(direction),
                 workspace=m.RehearsedWorkspace(
                     kind=what.workspace, base=base[0] if base is not None else None
+                ),
+                runtime=(
+                    m.ResolvedRuntime.from_data(runtime.to_data()) if runtime is not None else None
                 ),
             )
         )
@@ -386,6 +403,7 @@ async def perform(
             recorded_workspace,
             send,
             cancel,
+            runtime,
         )
         await recorder.start()
         send(
@@ -405,10 +423,12 @@ async def perform(
             await _could_not_start(recorder, run_id, error, backends.limits)
             raise
         workspace = worktree.cwd if worktree is not None else stage.workspace(theatre)
+        environment = runner_environment(what.runner, session.env)
+        if runtime is not None and runtime.value is not None:
+            # After the table's variables, so one already in perform's environment never passes.
+            environment[CREDENTIAL_VARIABLE] = runtime.value
         outcome = await run_actor(
-            RunnerCommand(
-                list(argv), cwd=workspace, env=runner_environment(what.runner, session.env)
-            ),
+            RunnerCommand(list(argv), cwd=workspace, env=environment),
             RunRequest(
                 run_id,
                 direction,
@@ -416,6 +436,12 @@ async def perform(
                 what.options,
                 character=what.character,
                 effects=what.effects,
+                runtime=(
+                    p.RunStartRuntime.from_data(runtime.run_start())
+                    if runtime is not None
+                    else None
+                ),
+                credential=runtime.value if runtime is not None else None,
             ),
             store=artifacts,
             effect=expected_files_for(what, workspace),

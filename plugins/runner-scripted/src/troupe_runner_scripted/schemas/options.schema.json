@@ -318,6 +318,80 @@
               }
             }
           }
+        },
+        {
+          "description": "Check the runtime run/start carried: any of its name, endpoint and model, and the SHA-256 (of its UTF-8) of the credential in TROUPE_RUNTIME_CREDENTIAL, or noCredential: true for none; or that it carried no runtime. On a mismatch the run ends with an error result naming each field that differs, a credential only by its hash, and no later step is played.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "checkRuntime"
+          ],
+          "properties": {
+            "checkRuntime": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "description": "The runtime's name run/start must carry. Absent: not checked."
+                    },
+                    "endpoint": {
+                      "type": "string",
+                      "description": "The runtime's endpoint run/start must carry. Absent: not checked."
+                    },
+                    "model": {
+                      "type": "string",
+                      "description": "The runtime's model run/start must carry. Absent: not checked."
+                    },
+                    "credentialHash": {
+                      "description": "sha256: and the lowercase hex SHA-256 of the credential's UTF-8. Absent: not checked, unless noCredential is given.",
+                      "type": "string",
+                      "pattern": "^sha256:[0-9a-f]{64}$"
+                    },
+                    "noCredential": {
+                      "description": "The run has no credential: TROUPE_RUNTIME_CREDENTIAL isn't set. Absent: not checked, unless credentialHash is given.",
+                      "const": true
+                    }
+                  },
+                  "minProperties": 1,
+                  "not": {
+                    "required": [
+                      "credentialHash",
+                      "noCredential"
+                    ]
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "absent"
+                  ],
+                  "properties": {
+                    "absent": {
+                      "description": "run/start carried no runtime.",
+                      "const": true
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "description": "Only for tests of troupe's masking: send the run's credential, from TROUPE_RUNTIME_CREDENTIAL, back in a log event, a transcript record and standard error, as a runner that leaks it would. With no credential, the run ends with an error result.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "echoCredential"
+          ],
+          "properties": {
+            "echoCredential": {
+              "const": true
+            }
+          }
         }
       ]
     },

@@ -47,6 +47,16 @@
         "worktree",
         "theatre"
       ]
+    },
+    "runtime": {
+      "title": "Runtime",
+      "description": "The runtime this actor's runs talk to, by name: one of troupe's built-in runtimes or one in config. Only for a runner that takes a runtime; required by one that needs it.",
+      "$ref": "../runtime.schema.json#/$defs/name"
+    },
+    "model": {
+      "title": "Model",
+      "description": "The model this actor's runs use, overriding its runtime's. The person's TROUPE_RUNTIME_<NAME>_MODEL overrides both. Only with a runtime.",
+      "$ref": "../runtime.schema.json#/$defs/model"
     }
   },
   "$defs": {

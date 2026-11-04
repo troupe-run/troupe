@@ -2392,6 +2392,192 @@
       "required": [
         "details"
       ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "runtime.invalid-value"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "variable",
+            "value",
+            "accepted"
+          ],
+          "properties": {
+            "variable": {
+              "type": "string",
+              "minLength": 1
+            },
+            "value": {
+              "type": "string"
+            },
+            "accepted": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "runtime.no-model"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "runtime",
+            "actor",
+            "places"
+          ],
+          "properties": {
+            "runtime": {
+              "type": "string",
+              "minLength": 1
+            },
+            "actor": {
+              "type": "string",
+              "minLength": 1
+            },
+            "places": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "runtime.credential-unset"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "runtime",
+            "variable"
+          ],
+          "properties": {
+            "runtime": {
+              "type": "string",
+              "minLength": 1
+            },
+            "variable": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "runtime.credential-too-short"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "runtime",
+            "variable",
+            "minimumBytes"
+          ],
+          "properties": {
+            "runtime": {
+              "type": "string",
+              "minLength": 1
+            },
+            "variable": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minimumBytes": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "runtime.insecure-endpoint"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "runtime",
+            "endpoint"
+          ],
+          "properties": {
+            "runtime": {
+              "type": "string",
+              "minLength": 1
+            },
+            "endpoint": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "config.not-resolvable"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path"
+          ],
+          "properties": {
+            "path": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
     }
   ],
   "$defs": {
