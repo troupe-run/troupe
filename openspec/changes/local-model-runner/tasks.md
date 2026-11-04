@@ -217,7 +217,7 @@
 
 ## 10. Integration
 
-- [ ] 10.1 Run `uv run scripts/check.py`. Verify: it passes (ruff, mypy --strict, import-linter and the full test
+- [x] 10.1 Run `uv run scripts/check.py`. Verify: it passes (ruff, mypy --strict, import-linter and the full test
   suite). Then push, open the draft PR (`Closes #277`, citing #56), act on Claude's review, and mark it ready. Verify:
   every CI job passes on Linux, macOS and Windows. The Linux and Windows logs show the client's `close()` test
   (3.1) and the runner's cancel and end-of-input tests (6.1) ran rather than being skipped, and every platform's log
