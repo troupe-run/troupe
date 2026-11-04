@@ -3,6 +3,7 @@ claude-code-runner; design D2, D3, D6, D7)."""
 
 import json
 import os
+import subprocess
 import sys
 import time
 from collections.abc import Iterator
@@ -11,7 +12,14 @@ from typing import Any
 
 import pytest
 
-from claude_harness import FIXTURES, Session, alive, recording, wait_for_record
+from claude_harness import (
+    FIXTURES,
+    Session,
+    alive,
+    recording,
+    stand_in_left_running,
+    wait_for_record,
+)
 from fake_claude import install
 from troupe_plugin_sdk.declaration import posix_absolute
 
@@ -532,3 +540,40 @@ def test_declaring_delete_starts_claude_with_troupes_mcp_server(
     config = Path(argv[argv.index("--mcp-config") + 1])
     assert config.name == "mcp.json"
     assert not config.resolve().is_relative_to(workspace.resolve())
+
+
+# The check the sessions fixture runs (reap-fake-claude design D2)
+
+
+def _record_of(path: Path, pid: int) -> str:
+    path.write_text(json.dumps({"pid": pid}), encoding="utf-8")
+    return str(path)
+
+
+def test_the_check_names_a_stand_in_still_running(tmp_path: Path) -> None:
+    running = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+    try:
+        record = _record_of(tmp_path / "record.json", running.pid)
+        assert stand_in_left_running(record, seconds=0.2) == running.pid
+    finally:
+        running.kill()
+        running.wait(timeout=30)
+
+
+def test_the_check_passes_a_stand_in_that_has_ended(tmp_path: Path) -> None:
+    finished = subprocess.Popen([sys.executable, "-c", "pass"])
+    finished.wait(timeout=30)
+    assert stand_in_left_running(_record_of(tmp_path / "record.json", finished.pid)) is None
+
+
+def test_the_check_passes_when_no_stand_in_wrote_a_record(tmp_path: Path) -> None:
+    assert stand_in_left_running(str(tmp_path / "never-written.json")) is None
+    assert stand_in_left_running(None) is None
+
+
+@pytest.mark.parametrize("text", ["", "{}", '{"pid": "x"}', "[1]", "not json"])
+def test_a_record_that_names_no_pid_is_an_error_naming_it(tmp_path: Path, text: str) -> None:
+    record = tmp_path / "record.json"
+    record.write_text(text, encoding="utf-8")
+    with pytest.raises(AssertionError, match="names no pid"):
+        stand_in_left_running(str(record))

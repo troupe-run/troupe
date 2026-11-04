@@ -137,6 +137,33 @@ def recording(name: str) -> list[dict[str, Any]]:
     return [json.loads(line) for line in text.splitlines()]
 
 
+def stand_in_left_running(record: str | None, seconds: float = STAND_IN_EXIT_SECONDS) -> int | None:
+    """The pid in the stand-in claude's ``record``, if that process is still running ``seconds``
+    from now; None if it has ended, or the stand-in never wrote its record (spec:
+    claude-code-runner, "A runner test that leaves its stand-in running fails"). A record that's
+    there but names no pid is an error, never "no stand-in".
+
+    A zombie counts as running (``alive`` can't tell them apart), so this assumes PID 1 reaps the
+    stand-in once its runner is gone, as an init does on a desktop or CI virtual machine. A
+    container without one would fail the test after the wait.
+    """
+    if record is None or not Path(record).exists():
+        return None
+    text = Path(record).read_text(encoding="utf-8")
+    try:
+        pid = int(json.loads(text)["pid"])
+    except (ValueError, KeyError, TypeError) as error:
+        raise AssertionError(
+            f"the stand-in claude's record {record} names no pid ({error}): {text!r}"
+        ) from error
+    deadline = time.monotonic() + seconds
+    while alive(pid):
+        if time.monotonic() > deadline:
+            return pid
+        time.sleep(0.02)
+    return None
+
+
 class Session:
     """One Claude Code runner process. Every message either side sends is kept for validation.
 
@@ -296,19 +323,8 @@ class Session:
 
     def stand_in_left_running(self) -> int | None:
         """The pid of the stand-in claude this session's runner started, if it's still running
-        ``STAND_IN_EXIT_SECONDS`` after the runner was killed; None if it has ended, or never
-        recorded its pid (spec: claude-code-runner, "A runner test that leaves its stand-in running
-        fails")."""
-        try:
-            pid = int(json.loads(Path(self._record or "").read_text(encoding="utf-8"))["pid"])
-        except (OSError, ValueError, KeyError):
-            return None
-        deadline = time.monotonic() + STAND_IN_EXIT_SECONDS
-        while alive(pid):
-            if time.monotonic() > deadline:
-                return pid
-            time.sleep(0.02)
-        return None
+        ``STAND_IN_EXIT_SECONDS`` after the runner was killed (see ``stand_in_left_running``)."""
+        return stand_in_left_running(self._record)
 
     def kill(self) -> None:
         """Kill the runner and everything it started, as troupe's ``kill_tree`` does. Safe to call
