@@ -18,7 +18,12 @@ THINK_LEVELS = ("low", "medium", "high")
 
 _OPTIONS = ("model", "endpoint", "maxTurns", "contextLength", "temperature", "seed", "think")
 
-_ENDPOINT = re.compile(r"\Ahttps?://(?:\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9.-]+)(?::[0-9]{1,5})?/?\Z")
+_ENDPOINT = re.compile(
+    r"\Ahttps?://"
+    r"(?:\[[0-9A-Fa-f:.]+\]|(?:[A-Za-z0-9-]{1,63}\.)*[A-Za-z0-9-]{1,63})"
+    r"(?::(?:6553[0-5]|655[0-2][0-9]|65[0-4][0-9]{2}|6[0-4][0-9]{3}|[1-5][0-9]{4}|[0-9]{1,4}))?"
+    r"/?\Z"
+)
 """An endpoint: the schema's pattern, anchored as Python needs (its ``$`` would also match before a
 final line feed, which the schema's control-character guard refuses)."""
 
@@ -97,7 +102,10 @@ def _endpoint(value: object) -> str:
         elif "/" in rest.rstrip("/") or rest.endswith("//"):
             problem = f"{value!r} has a path; the runner adds /api/... itself."
         else:
-            problem = f"{value!r} isn't a host and an optional port."
+            problem = (
+                f"{value!r} isn't a host and an optional port: each part of a host name is 1 to 63 "
+                "letters, digits or hyphens, and a port is at most 65535."
+            )
         raise invalid(where, problem, fix)
     return value.rstrip("/")
 

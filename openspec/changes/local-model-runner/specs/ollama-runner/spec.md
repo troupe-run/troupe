@@ -53,9 +53,9 @@ naming the option in `details.where`, and no run starts.
 
 ### Requirement: The endpoint is an option with a named default
 The runner SHALL send every request to `endpoint` when the options set it, and otherwise to `http://127.0.0.1:11434`,
-a named setting in one place in the runner. An endpoint SHALL be an `http` or `https` URL with a host, and SHALL be
-refused with `ollama.invalid-options` when it holds a user name or password, a path other than `/`, a query or a
-fragment.
+a named setting in one place in the runner. An endpoint SHALL be an `http` or `https` URL with a host and an optional
+port, and SHALL be refused with `ollama.invalid-options` when it holds a user name or password, a path other than
+`/`, a query, a fragment, a port above 65535, or a host name part that's empty or over 63 characters.
 
 #### Scenario: No endpoint in the options
 - **WHEN** a run starts without `endpoint`
@@ -64,6 +64,10 @@ fragment.
 #### Scenario: An endpoint on another host
 - **WHEN** a run starts with `endpoint` `http://gpu-box.local:11434`
 - **THEN** the runner's requests go to that host
+
+#### Scenario: A port or host name no connection could use
+- **WHEN** `endpoint` is `http://127.0.0.1:99999` or `http://a..b:11434`
+- **THEN** `run/start` is refused with `ollama.invalid-options`, naming `endpoint`, and the runner keeps serving
 
 #### Scenario: Credentials in the endpoint
 - **WHEN** `endpoint` is `http://user:secret@127.0.0.1:11434`
@@ -75,6 +79,10 @@ Before answering `run/start`, the runner SHALL ask Ollama for its version and fo
 limit. It SHALL refuse the run with `ollama.unreachable` when Ollama doesn't answer, `runner.requirement-unmet` when
 Ollama's version doesn't meet its requirements, `ollama.model-not-found` when the model isn't there, and
 `ollama.model-without-tools` when it can't call tools.
+
+#### Scenario: A run start the runner can't carry out
+- **WHEN** a `run/start`'s scratch directory doesn't exist
+- **THEN** it is refused with `runner.invalid-params`, and no run is acknowledged
 
 #### Scenario: Ollama isn't running
 - **WHEN** nothing listens at the endpoint

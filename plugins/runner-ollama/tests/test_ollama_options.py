@@ -115,6 +115,8 @@ def test_think_takes_a_boolean_or_a_level(think: bool | str) -> None:
         "http://[::1]:11434",
         "https://gpu-box.local",
         "http://gpu-box.local:11434",
+        "http://127.0.0.1:65535",
+        "http://" + "a" * 63 + ".example",
     ],
 )
 def test_an_http_or_https_endpoint_with_a_host_is_accepted(endpoint: str) -> None:
@@ -135,6 +137,11 @@ def test_an_http_or_https_endpoint_with_a_host_is_accepted(endpoint: str) -> Non
         ("http://", "isn't an http or https URL"),
         ("http://127.0.0.1:11434\n", "control character"),
         ("http://user:secret@127.0.0.1:11434", "user name or password"),
+        ("http://127.0.0.1:99999", "a port is at most 65535"),
+        ("http://127.0.0.1:65536", "a port is at most 65535"),
+        ("http://a..b:11434", "1 to 63"),
+        ("http://" + "a" * 64 + ".com", "1 to 63"),
+        ("http://host.:11434", "1 to 63"),
         ("http://token@127.0.0.1:11434", "user name or password"),
     ],
 )

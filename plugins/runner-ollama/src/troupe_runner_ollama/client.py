@@ -65,15 +65,16 @@ class EngineError(Exception):
 
 
 def error_text(body: bytes, status: int | None = None) -> str:
-    """Ollama's own message from an error body (``{"error": ...}``), or the status and the body
-    when it holds none."""
+    """The status, then Ollama's own message from an error body (``{"error": ...}``), or the body
+    when it holds none: ``status 503: server busy``."""
     try:
         data = json.loads(body)
     except ValueError:
         data = None
     if isinstance(data, dict) and isinstance(data.get("error"), str):
-        return str(data["error"])
-    text = body.decode("utf-8", "replace").strip()
+        text = str(data["error"])
+    else:
+        text = body.decode("utf-8", "replace").strip()
     prefix = "" if status is None else f"status {status}"
     return f"{prefix}: {text}" if prefix and text else prefix or text or "an empty answer"
 
@@ -88,13 +89,19 @@ class Client:
         idle_timeout: float = STREAM_IDLE_TIMEOUT_SECONDS,
         line_max_bytes: int = LINE_MAX_BYTES,
     ) -> None:
-        parts = urlsplit(endpoint)
+        try:
+            parts = urlsplit(endpoint)
+            port = parts.port
+        except ValueError as error:  # a bracketed host that isn't an IPv6 address
+            raise UnreachableError(
+                f"{endpoint} isn't an address Ollama can be reached at: {error}"
+            ) from error
         if parts.hostname is None:
-            raise ValueError(f"{endpoint!r} has no host")
+            raise UnreachableError(f"{endpoint} has no host")
         self.endpoint = endpoint
         self._https = parts.scheme == "https"
         self._host = parts.hostname
-        self._port = parts.port
+        self._port = port
         self._idle_timeout = idle_timeout
         self._line_max_bytes = line_max_bytes
         self._lock = threading.Lock()
@@ -147,7 +154,8 @@ class Client:
             connection.request(method, path, body=payload, headers=headers)
             response = connection.getresponse()
             return response.status, response.read(ERROR_BODY_MAX_BYTES * 16)
-        except (OSError, http.client.HTTPException) as error:
+        except (OSError, http.client.HTTPException, ValueError) as error:
+            # ValueError: a host name the resolver refuses (UnicodeError), past the options' check.
             if self._closed:
                 raise StoppedError from error
             raise UnreachableError(f"{type(error).__name__}: {error}") from error
@@ -194,7 +202,7 @@ class Client:
                 response = connection.getresponse()
             except TimeoutError as error:
                 raise self._failed(f"Ollama sent nothing for {self._idle_timeout:g}s") from error
-            except (OSError, http.client.HTTPException) as error:
+            except (OSError, http.client.HTTPException, ValueError) as error:
                 raise self._failed(f"couldn't reach Ollama: {error}") from error
             if response.status != 200:
                 error_body = self._read_error(response)
@@ -224,7 +232,8 @@ class Client:
                 raise StoppedError
             if not line:
                 return
-            if len(line) > self._line_max_bytes:
+            if len(line) > self._line_max_bytes and not line.endswith(b"\n"):
+                # readline stopped at the limit, inside a line: the line ending doesn't count.
                 raise RetryableError(
                     "network", f"Ollama sent a line longer than {self._line_max_bytes} bytes"
                 )

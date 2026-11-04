@@ -6,6 +6,7 @@ they were sent, and doesn't wait out retry delays.
 """
 
 import json
+import re
 import threading
 import uuid
 from collections.abc import Sequence
@@ -24,10 +25,15 @@ from troupe_runner_ollama.conversation import (
     NO_TEXT,
     Conversation,
     encode,
+    fit_output,
     tool_budget,
     tool_limits,
 )
-from troupe_runner_ollama.defaults import DEFAULT_CONTEXT_LENGTH, RETRY_MAX_ATTEMPTS
+from troupe_runner_ollama.defaults import (
+    DEFAULT_CONTEXT_LENGTH,
+    READ_NOTE_BYTES,
+    RETRY_MAX_ATTEMPTS,
+)
 from troupe_runner_ollama.options import Options
 
 WINDOW = DEFAULT_CONTEXT_LENGTH
@@ -251,7 +257,7 @@ def test_a_cut_answer_is_a_warning_and_the_run_goes_on(tmp_path: Path) -> None:
 
 def test_the_tool_limits_follow_the_window_and_never_pass_the_sdks_defaults() -> None:
     default = tool_limits(WINDOW)
-    assert default.read_max_bytes == tool_budget(WINDOW)
+    assert default.read_max_bytes == tool_budget(WINDOW) - READ_NOTE_BYTES
     assert default.read_max_bytes < READ_MAX_BYTES
     small, large = tool_limits(8192), tool_limits(32768)
     assert small.read_max_bytes < default.read_max_bytes < large.read_max_bytes
@@ -263,7 +269,7 @@ def test_the_tool_limits_follow_the_window_and_never_pass_the_sdks_defaults() ->
 
 
 @pytest.mark.parametrize("window", [8192, WINDOW, 32768])
-def test_a_large_file_read_fits_the_budget_and_says_offset_reads_on(
+def test_a_large_file_read_fits_the_budget_keeping_the_sdks_note_on_where_to_read_on(
     tmp_path: Path, window: int
 ) -> None:
     workspace = tmp_path / "workspace"
@@ -276,7 +282,9 @@ def test_a_large_file_read_fits_the_budget_and_says_offset_reads_on(
     )
     content = _last_message(fake, 1)["content"]
     assert len(content.encode("utf-8")) <= tool_budget(window)
-    assert "offset" in content
+    # The SDK's own note, naming the line to read on from, not fit_output's generic one.
+    assert re.search(r"\[Stopped before line (\d+) of 2000: read on with offset \1\.\]", content)
+    assert "cut to" not in content
     assert sink.result.status == "ok"
 
 
@@ -519,10 +527,14 @@ def test_a_busy_server_is_two_server_retries_then_the_answer(tmp_path: Path) -> 
 
 
 def test_retries_spent_end_the_run_naming_the_status(tmp_path: Path) -> None:
-    busy = Answer(status=503, body=b"busy")
+    # Ollama's own body for a busy server, as the server-retries fixture holds it.
+    busy = Answer(
+        status=503,
+        body=b'{"error":"server busy, please try again.  maximum pending requests exceeded"}',
+    )
     sink, _ = _run(tmp_path, [busy] * RETRY_MAX_ATTEMPTS)
     assert len(sink.of(p.RetryEvent)) == RETRY_MAX_ATTEMPTS - 1
-    assert "status 503" in sink.result.message
+    assert "status 503: server busy" in sink.result.message
     assert sink.result.status == "error"
 
 
@@ -637,3 +649,50 @@ def test_a_run_that_starts_stopping_sends_nothing_more(tmp_path: Path) -> None:
 
 def test_encode_is_compact_utf8() -> None:
     assert encode({"a": "é", "b": [1, 2]}) == '{"a":"é","b":[1,2]}'.encode()
+
+
+# Found by a review of the code (troupe-run/troupe#283).
+
+
+def test_fail_before_the_result_sends_a_log_error_then_an_error_result(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    sink = Recorder()
+    with serving([]) as fake:
+        conversation = Conversation(
+            start=_start(workspace),
+            options=Options(model="fake"),
+            window=WINDOW,
+            engine_version="0.40.14",
+            client=Client(fake.url),
+            sink=sink,
+        )
+        conversation.fail("The Ollama runner failed: KeyError: 'boom'")
+    (log,) = sink.of(p.LogEvent)
+    assert (log.level, log.message) == ("error", "The Ollama runner failed: KeyError: 'boom'")
+    assert sink.result.status == "error"
+    assert [event.seq for event in sink.events] == [0, 1]
+
+
+def test_fail_after_the_result_sends_only_the_log_error(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    sink = Recorder()
+    with serving([final("done")]) as fake:
+        conversation = Conversation(
+            start=_start(workspace),
+            options=Options(model="fake"),
+            window=WINDOW,
+            engine_version="0.40.14",
+            client=Client(fake.url),
+            sink=sink,
+        )
+        conversation.run()
+        conversation.fail("late")
+    assert [type(event).__name__ for event in sink.events][-2:] == ["ResultEvent", "LogEvent"]
+    assert len(sink.of(p.ResultEvent)) == 1
+
+
+def test_fit_output_stays_within_a_budget_smaller_than_its_note() -> None:
+    assert len(fit_output("x" * 500, 40).encode("utf-8")) <= 40
+    assert fit_output("short", 40) == "short"

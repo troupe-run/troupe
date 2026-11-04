@@ -127,8 +127,21 @@ def test_a_line_over_the_limit_is_a_network_retry_and_never_read_whole() -> None
         assert caught.value.reason == "network"
 
 
-def test_error_text_is_ollamas_message_or_the_status_and_body() -> None:
-    assert error_text(b'{"error":"boom"}', 500) == "boom"
+def test_a_line_of_exactly_the_limit_is_read_since_its_line_ending_doesnt_count() -> None:
+    line = b'{"x":"' + b"a" * 1016 + b'"}'
+    assert len(line) == 1024
+    with serving([Answer([line, done()])]) as fake:
+        lines = list(Client(fake.url, line_max_bytes=1024).chat(b"{}"))
+    assert lines[0] == line
+
+
+def test_a_bracketed_host_that_isnt_an_ipv6_address_is_unreachable_not_a_crash() -> None:
+    with pytest.raises(UnreachableError, match="isn't an address"):
+        Client("http://[:]:11434")
+
+
+def test_error_text_is_the_status_then_ollamas_message_or_the_body() -> None:
+    assert error_text(b'{"error":"boom"}', 500) == "status 500: boom"
     assert error_text(b"bad gateway", 502) == "status 502: bad gateway"
     assert error_text(b"", 503) == "status 503"
 

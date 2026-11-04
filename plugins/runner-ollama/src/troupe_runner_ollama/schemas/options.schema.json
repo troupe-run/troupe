@@ -13,9 +13,9 @@
       "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])[\\s\\S]"
     },
     "endpoint": {
-      "description": "Where Ollama listens: an http or https URL with a host and an optional port, and no user name, password, path, query or fragment. Absent: http://127.0.0.1:11434. Any host is accepted, so a run sends the workspace's contents to wherever this points.",
+      "description": "Where Ollama listens: an http or https URL with a host (each part of a name 1 to 63 characters, or an IPv6 address in brackets) and an optional port up to 65535, and no user name, password, path, query or fragment. Absent: http://127.0.0.1:11434. Any host is accepted, so a run sends the workspace's contents to wherever this points.",
       "type": "string",
-      "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])https?://(?:\\[[0-9A-Fa-f:.]+\\]|[A-Za-z0-9.-]+)(?::[0-9]{1,5})?/?$"
+      "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])https?://(?:\\[[0-9A-Fa-f:.]+\\]|(?:[A-Za-z0-9-]{1,63}\\.)*[A-Za-z0-9-]{1,63})(?::(?:6553[0-5]|655[0-2][0-9]|65[0-4][0-9]{2}|6[0-4][0-9]{3}|[1-5][0-9]{4}|[0-9]{1,4}))?/?$"
     },
     "maxTurns": {
       "description": "The requests one run may make. Reaching it ends the run with an error result. Absent: 50.",
