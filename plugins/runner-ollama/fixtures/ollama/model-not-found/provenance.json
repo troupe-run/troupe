@@ -1,0 +1,18 @@
+{
+  "what": "/api/show's answer for a model that isn't pulled.",
+  "ollamaVersion": "0.40.14",
+  "model": "troupe-capture-no-such-model",
+  "date": "2026-11-04",
+  "command": [
+    "capture_ollama.py",
+    "model-not-found"
+  ],
+  "options": {
+    "model": "troupe-capture-no-such-model"
+  },
+  "direction": "",
+  "effects": {},
+  "credential": "none: Ollama needs none",
+  "scrubbing": "the workspace's and scratch directory's paths are <workspace> and <scratch>; /api/show's license, modelfile and template text are left out",
+  "events": "none: the preflight refuses the run"
+}

@@ -1,0 +1,32 @@
+[
+  {
+    "type": "init",
+    "seq": 0,
+    "runner": {
+      "name": "ollama",
+      "version": "0.0.0"
+    },
+    "tools": [
+      "Read",
+      "Write",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Delete",
+      "Move"
+    ],
+    "engine": {
+      "name": "ollama",
+      "version": "0.40.14",
+      "model": "qwen3:0.6b"
+    },
+    "effects": "checked"
+  },
+  {
+    "type": "result",
+    "seq": 1,
+    "status": "error",
+    "message": "Ollama reported an error: an error was encountered while running the model: unexpected EOF",
+    "turns": 1
+  }
+]

@@ -1,0 +1,32 @@
+[
+  {
+    "type": "init",
+    "seq": 0,
+    "runner": {
+      "name": "ollama",
+      "version": "0.0.0"
+    },
+    "tools": [
+      "Read",
+      "Write",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Delete",
+      "Move"
+    ],
+    "engine": {
+      "name": "ollama",
+      "version": "0.40.14",
+      "model": "qwen3:0.6b"
+    },
+    "effects": "checked"
+  },
+  {
+    "type": "result",
+    "seq": 1,
+    "status": "error",
+    "message": "Ollama answered request (1226 tokens) exceeds the available context size (512 tokens), try increasing it. The run's context window is 512 tokens; raise contextLength, or give the actor a smaller task.",
+    "turns": 1
+  }
+]

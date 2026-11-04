@@ -1,0 +1,6 @@
+[
+  {
+    "status": 400,
+    "body": "{\"error\":\"request (1226 tokens) exceeds the available context size (512 tokens), try increasing it\"}"
+  }
+]

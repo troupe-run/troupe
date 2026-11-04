@@ -1,0 +1,19 @@
+{
+  "what": "/api/show's answer for a model whose template has no tools.",
+  "ollamaVersion": "0.40.14",
+  "model": "troupe-capture-notools",
+  "date": "2026-11-04",
+  "command": [
+    "capture_ollama.py",
+    "no-tools-capability"
+  ],
+  "options": {
+    "model": "troupe-capture-notools"
+  },
+  "direction": "",
+  "effects": {},
+  "credential": "none: Ollama needs none",
+  "scrubbing": "the workspace's and scratch directory's paths are <workspace> and <scratch>; /api/show's license, modelfile and template text are left out",
+  "events": "none: the preflight refuses the run",
+  "note": "Captured from troupe-capture-notools, made with `ollama create` from qwen3:0.6b with TEMPLATE \"{{ .Prompt }}\" and removed with `ollama rm` afterwards. Ollama 0.40.14 still listed tools and thinking for it, since it takes a qwen3-family model's capabilities from the model's own renderer, not its template. So capabilities was edited by hand to [\"completion\"], the shape a model without tools has; everything else is as captured."
+}
