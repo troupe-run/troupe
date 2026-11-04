@@ -89,10 +89,11 @@
 
 ## 8. Follow-ups and records
 
-- [ ] 8.1 File the policy follow-up (policy limits the endpoints a credential may go to and the variables config may
+- [x] 8.1 File the policy follow-up (policy limits the endpoints a credential may go to and the variables config may
   name as credentials, D7) on the board, and, if #277 has merged with its endpoint and model in its options, the
   follow-up moving the Ollama runner to a runtime. Verify each shows on the board with
-  `gh issue view <n> --json projectItems`.
+  `gh issue view <n> --json projectItems`. (#286, on the board. #277's PR #283 hadn't merged, so its
+  follow-up isn't filed: file it if #283 merges before this.)
 - [ ] 8.2 Open the troupe-run/infrastructure pull request recording the `runtimes` spec's Purpose in
   `oob/troupe-spec-purposes.json`, to merge after this one. Verify the record matches the spec's Purpose without
   its `Capability:` line, and the pull request names this one.
