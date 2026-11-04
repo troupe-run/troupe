@@ -6,6 +6,7 @@ root, and the runner's own from its package's schemas/ directory. Messages are v
 runner's schemas filling the contract's extension points, as troupe would see them.
 """
 
+import contextlib
 import json
 import os
 import queue
@@ -134,7 +135,13 @@ def recording(name: str) -> list[dict[str, Any]]:
 
 
 class Session:
-    """One Claude Code runner process. Every message either side sends is kept for validation."""
+    """One Claude Code runner process. Every message either side sends is kept for validation.
+
+    It starts and ends the runner as troupe's platform does (reap-fake-claude design D1): in a
+    process group of its own on POSIX, which ``kill()`` kills whole, as ``kill_tree`` does, so the
+    stand-in claude the runner started ends with it. On Windows the runner's own job for Claude Code
+    ends when the runner does.
+    """
 
     def __init__(self, workspace: Path, env: Mapping[str, str]) -> None:
         self.workspace = workspace
@@ -148,6 +155,7 @@ class Session:
             stderr=subprocess.PIPE,
             cwd=workspace,
             env=environment,
+            start_new_session=sys.platform != "win32",
         )
         self.sent: list[dict[str, Any]] = []
         self.refused: set[int] = set()
@@ -283,6 +291,15 @@ class Session:
                 validate(message["result"], RESULTS[methods[message["id"]]])
 
     def kill(self) -> None:
-        if self.process.poll() is None:
-            self.process.kill()
-            self.process.wait(timeout=TIMEOUT)
+        """Kill the runner and everything it started, as troupe's ``kill_tree`` does. Safe to call
+        more than once, and after the runner has exited: the group outlives its leader while any
+        process in it runs."""
+        if sys.platform == "win32":
+            if self.process.poll() is None:
+                self.process.kill()
+        else:
+            import signal
+
+            with contextlib.suppress(ProcessLookupError, PermissionError):
+                os.killpg(self.process.pid, signal.SIGKILL)
+        self.process.wait(timeout=TIMEOUT)
