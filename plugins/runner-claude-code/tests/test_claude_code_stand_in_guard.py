@@ -59,16 +59,20 @@ def hanging(tmp_path, name):
     return pid
 
 
-def hanging_later(tmp_path, name, delay):
-    '''Start a hanging stand-in ``delay`` seconds from now, from a process that has gone by then,
-    as one that escaped its runner's process group before it recorded itself would.'''
+def hanging_later(tmp_path, name, go):
+    '''Start a hanging stand-in once the file ``go`` exists, from a process this test leaves behind,
+    as one that escaped its runner's process group before it recorded itself would. Waiting for a
+    file another test makes, not a delay, so it records itself only after this test's check.'''
     env = {{**os.environ, "FAKE_CLAUDE_HANG": "1",
             "FAKE_CLAUDE_RECORD": str(Path(os.environ["PIDS"], name + ".json"))}}
     launch = (
-        "import subprocess, sys, time; time.sleep(float(sys.argv[1])); "
-        "subprocess.Popen([sys.executable, sys.argv[2]], stdin=subprocess.DEVNULL)"
+        "import os, subprocess, sys, time\\n"
+        "deadline = time.monotonic() + 60\\n"
+        "while not os.path.exists(sys.argv[1]) and time.monotonic() < deadline:\\n"
+        "    time.sleep(0.02)\\n"
+        "subprocess.Popen([sys.executable, sys.argv[2]], stdin=subprocess.DEVNULL)\\n"
     )
-    subprocess.Popen([sys.executable, "-c", launch, str(delay), STAND_IN], env=env, cwd=tmp_path)
+    subprocess.Popen([sys.executable, "-c", launch, str(go), STAND_IN], env=env, cwd=tmp_path)
 """
 
 
@@ -194,9 +198,10 @@ def test_a_stand_in_that_records_itself_after_its_test_fails_the_next_test_namin
         from helpers import hanging_later
 
         def test_a_starts_one_late(tmp_path):
-            hanging_later(tmp_path, "late", 0.5)
+            hanging_later(tmp_path, "late", Path(os.environ["PIDS"], "go"))
 
         def test_b_runs_while_it_starts():
+            Path(os.environ["PIDS"], "go").touch()  # after test_a's check, however slow that was
             record = Path(os.environ["PIDS"], "late.json")
             deadline = time.monotonic() + 60
             while not record.exists() and time.monotonic() < deadline:
