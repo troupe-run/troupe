@@ -69,9 +69,25 @@ stand-in is still running, and the pid still belongs to it, since a pid isn't re
 `@set` in `claude.cmd`), so it reaches the stand-in whatever environment the runner or perform passes on. When it
 isn't set (the stand-in run by hand, or the capture tool), there's no ledger, which is the old behaviour.
 
+A stand-in is in the ledger only once its Python has taken the lock. Before that, while the shim and the interpreter
+start, it's inside the runner's process group (POSIX, after D1) or job (Windows), so the kill that ends the runner
+ends it too. The model is the same on every OS (owner, 2026-11-04). A stand-in can be missed by its own test's
+check only if it escaped its runner's group or job before it recorded itself. That's the bug D1 removes, and
+`test_a_second_run_start_is_refused` on the old harness shows it: the check after that test found nothing, and the
+next test's check found the stand-in. Such a stand-in is caught by the next check in the same pytest process, with
+a message naming its working directory, which is under the test it came from. At unconfigure, a final sweep stops
+any stand-in in the ledger still holding its lock, so one left by a process's last test doesn't outlive the run.
+
+**Alternative: a `.starting` marker the POSIX shim writes before it execs Python.** Tried and dropped. The check
+still ran before `/bin/sh` had written it, so it narrowed the window without closing it. Closing it would mean
+finding the shim with `ps`, which is OS-specific and has no counterpart on Windows.
+
+Once the check finds an entry has ended, it removes the entry's files. Then a pid the OS reuses later in the session
+can't hide behind an old entry in the next test's snapshot.
+
 The ledger and lock code is in `fake_claude.py`, written with the standard library only: the stand-in's side
-(register) and the reader's side (list entries, see whether a lock is still held, stop a pid). It's the one place
-that branches on the OS for this.
+(register) and the reader's side (list entries, see whether a lock is still held, forget an ended entry, stop a pid).
+It's the one place that branches on the OS for this.
 
 **Alternative: check `alive(pid)` against the pid in the record.** It's simpler, but if the pid is reused while the
 check waits, the check would report another process as a leak, and could stop it. The lock makes "this pid is still
@@ -92,15 +108,21 @@ the stand-in" something the OS answers. Stopping an unrelated process is the one
   bound again, and fails the teardown. The failure names each stand-in's pid, its working directory (from the
   `.json`, or "not recorded yet") and whether stopping it worked. If the stop doesn't work within the bound, the
   failure says so. It never waits silently or without a bound.
-- It's loaded by a `conftest.py` in each suite that uses the stand-in. The plugin's `tests/conftest.py` imports the
-  hooks from `stand_in_guard`. Core's new `packages/troupe/tests/conftest.py` loads `stand_in_guard.py` by path (as
-  `claude_stand_in.py` does) and binds the same hook functions. conftest hooks only apply to tests in their own
-  directory, so each test is checked once, and no other suite loads the check. Core's suite already reaches the
-  plugin through `claude_stand_in.py`, so `check_paths_reach.py` sees no new reach.
+- It's loaded by a `conftest.py` in each suite that uses the stand-in. Each one only re-exports the hook functions:
+  the plugin's `tests/conftest.py` from `stand_in_guard`, and core's new `packages/troupe/tests/conftest.py` from
+  `claude_stand_in.py`, which loads `stand_in_guard.py` by path as it already loads `fake_claude.py`. conftest hooks
+  only apply to tests in their own directory, so each test is checked once, and no other suite loads the check.
+  Core's suite already reaches the plugin through `claude_stand_in.py`, so `check_paths_reach.py` sees no new reach.
+- The two conftests are excluded from mypy. mypy maps these test directories as flat modules, so it refuses a second
+  module named `conftest` (`scripts/tests/conftest.py` already has the name). Since they only re-export, every line
+  of logic is still in a typed module (owner, 2026-11-04).
 
-**Alternative: a `-p stand_in_guard` plugin in `addopts`, as `protocol_guard` is.** That's a single place, but it
-loads for every suite. Its path into `plugins/runner-claude-code` would make every suite reach the plugin, so every
-plugin change would run the scripts' and the other packages' suites.
+**Alternative: a `-p stand_in_guard` plugin in `addopts`, as `protocol_guard` is.** It needs no mypy exclusion, but
+it would load into every suite. `check_paths_reach.py` doesn't see `addopts` plugins, so the reach that adds wouldn't
+be visible.
+
+**Alternative: each test module that starts a stand-in imports an autouse fixture.** It needs no conftest, but a new
+test module that forgets the import goes unchecked.
 
 **Alternative: a check once at session end.** That's cheaper, but it fails the session rather than the test that
 leaked, and under xdist a worker's session-end failure doesn't reach the controller's exit status as a named test.
@@ -117,10 +139,9 @@ started, reads as ended and isn't signalled.
 
 ## Risks / Trade-offs
 
-- [A stand-in that registers after its test's check has run, because the runner was killed between starting the
-  shim and the stand-in's first step] → the next test in the same worker counts it as its own. The failure names the
-  stand-in's working directory, which is under the test it came from, so it can still be traced. The window is the
-  shim's start-up time.
+- [A stand-in that escapes its runner's group or job before it records itself] → its own test's check misses it, and
+  the next check in the same process counts it, naming its working directory, or the sweep at unconfigure stops it.
+  Attribution is only late in the case D1 fixes, and a later leak of that kind still fails a test.
 - [`msvcrt.locking` releases a dead process's lock "after an unspecified time"] → the bounded wait covers it. If
   Windows CI shows false failures, the bound is the one place to change.
 - [Two `conftest.py` files named the same in different suites, with the default import mode] → pytest imports

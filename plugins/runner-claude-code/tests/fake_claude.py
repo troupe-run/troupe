@@ -17,10 +17,19 @@ own environment on):
   agent's tool would.
 - ``FAKE_CLAUDE_HANG``: ``1`` to wait, after writing its lines, until it is stopped.
 - ``FAKE_CLAUDE_EXIT``: the exit code, 0 by default.
+- ``FAKE_CLAUDE_LEDGER``: a directory where it records itself before anything else, so a check can
+  find a stand-in a test left running (reap-fake-claude design D2). It holds an exclusive lock on
+  ``<pid>.lock`` there for as long as it runs, and writes ``<pid>.json`` with its pid, working
+  directory and argv. The OS releases the lock when the process ends, however it ends, so a held
+  lock means the stand-in is still running and the pid is still its own. ``install()`` writes the
+  installing process's value into the shim, so it reaches the stand-in whatever environment the
+  runner passes on. Before it has the lock, while it starts up, it's in the runner's process
+  group or job, so it ends with the runner.
 
 It exits 143 on SIGTERM without writing anything more, as the real CLI does.
 """
 
+import contextlib
 import json
 import os
 import shlex
@@ -29,6 +38,12 @@ import sys
 import time
 from collections.abc import Mapping
 from pathlib import Path
+from typing import IO
+
+LEDGER = "FAKE_CLAUDE_LEDGER"
+
+_held: IO[bytes] | None = None
+"""The stand-in's own lock file, kept open (and so locked) until the process ends."""
 
 
 def install(bin_dir: Path, settings: Mapping[str, str] | None = None) -> Path:
@@ -38,7 +53,9 @@ def install(bin_dir: Path, settings: Mapping[str, str] | None = None) -> Path:
     environment troupe chooses, such as perform's."""
     bin_dir.mkdir(parents=True, exist_ok=True)
     here = Path(__file__).resolve()
-    settings = settings or {}
+    settings = dict(settings or {})
+    if ledger := os.environ.get(LEDGER):
+        settings.setdefault(LEDGER, ledger)
     if sys.platform == "win32":
         shim = bin_dir / "claude.cmd"
         lines = [f'@set "{name}={value}"' for name, value in settings.items()]
@@ -56,6 +73,101 @@ def install(bin_dir: Path, settings: Mapping[str, str] | None = None) -> Path:
         shim.write_text("\n".join(lines) + "\n", encoding="utf-8")
         shim.chmod(0o755)
     return shim
+
+
+if sys.platform == "win32":
+    import msvcrt
+
+    def _try_lock(fd: int) -> bool:
+        """Take an exclusive lock on the file's first byte without waiting: False if it's held."""
+        os.lseek(fd, 0, os.SEEK_SET)
+        try:
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+        except OSError:
+            return False
+        return True
+
+    def _unlock(fd: int) -> None:
+        os.lseek(fd, 0, os.SEEK_SET)
+        msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+
+    _STOP = signal.SIGTERM  # os.kill on Windows terminates the process for any other signal
+
+else:
+    import fcntl
+
+    def _try_lock(fd: int) -> bool:
+        """Take an exclusive lock on the file without waiting: False if it's held."""
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return False
+        return True
+
+    def _unlock(fd: int) -> None:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+
+    _STOP = signal.SIGKILL
+
+
+def _register(ledger: Path) -> None:
+    """Lock ``<pid>.lock`` in the ledger for the rest of this process's life, then describe this
+    stand-in in ``<pid>.json``."""
+    global _held
+    pid = os.getpid()
+    held = (ledger / f"{pid}.lock").open("a+b")
+    if not _try_lock(held.fileno()):
+        held.close()
+        raise RuntimeError(f"the stand-in claude's ledger entry {pid}.lock is locked by another")
+    _held = held
+    _write_record(
+        str(ledger / f"{pid}.json"), {"pid": pid, "cwd": os.getcwd(), "argv": sys.argv[1:]}
+    )
+
+
+def ledger_entries(ledger: Path) -> set[int]:
+    """The pids of every stand-in recorded in ``ledger``, ended or not."""
+    return {int(path.stem) for path in ledger.glob("*.lock") if path.stem.isdigit()}
+
+
+def forget(ledger: Path, pid: int) -> None:
+    """Remove a stand-in's entry once it's been checked, so a later process with its pid is new."""
+    for suffix in (".lock", ".json"):
+        with contextlib.suppress(OSError):  # gone already, or (Windows) still open
+            (ledger / f"{pid}{suffix}").unlink()
+
+
+def still_running(ledger: Path, pid: int) -> bool:
+    """Whether the stand-in recorded as ``pid`` still holds its lock, so is still running.
+
+    A pid the OS has since given to another process reads as ended: only the stand-in's own lock
+    counts, never whether some process has the pid."""
+    try:
+        fd = os.open(ledger / f"{pid}.lock", os.O_RDWR)
+    except FileNotFoundError:
+        return False
+    try:
+        if _try_lock(fd):
+            _unlock(fd)
+            return False
+        return True
+    finally:
+        os.close(fd)
+
+
+def described(ledger: Path, pid: int) -> dict[str, object] | None:
+    """What the stand-in recorded as ``pid`` wrote about itself, or None before it has."""
+    try:
+        record: dict[str, object] = json.loads((ledger / f"{pid}.json").read_text("utf-8"))
+    except (OSError, ValueError):
+        return None
+    return record
+
+
+def stop(pid: int) -> None:
+    """Kill ``pid``. Call it only once ``still_running`` has said the pid is still the stand-in."""
+    with contextlib.suppress(OSError):  # it ended in the meantime
+        os.kill(pid, _STOP)
 
 
 def _write_record(path: str, record: dict[str, object]) -> None:
@@ -90,6 +202,8 @@ def _named_files(argv: list[str]) -> dict[str, str]:
 
 def main() -> None:
     signal.signal(signal.SIGTERM, lambda *_: os._exit(143))
+    if ledger := os.environ.get(LEDGER):
+        _register(Path(ledger))
     record_path = os.environ.get("FAKE_CLAUDE_RECORD")
     record: dict[str, object] = {"pid": os.getpid()}
     if record_path:

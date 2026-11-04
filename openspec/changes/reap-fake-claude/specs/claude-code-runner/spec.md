@@ -23,6 +23,11 @@ process that has taken its pid. It SHALL cover the plugin's tests and core's tes
 - **THEN** the test fails at teardown naming the stand-in's pid and working directory, and the stand-in is no longer
   running
 
+#### Scenario: A stand-in escapes before it has started up
+- **WHEN** a stand-in `claude` outside its runner's process group or job records itself only after its test's check
+- **THEN** a later test's check in the same test process fails naming the stand-in's working directory and stops it,
+  or, after the last test, the end of the run stops it
+
 #### Scenario: A test whose stand-in has ended
 - **WHEN** a test's stand-in `claude` has exited, or been stopped by the runner, before the test ends
 - **THEN** the check passes and stops nothing

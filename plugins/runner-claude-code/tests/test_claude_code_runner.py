@@ -4,6 +4,7 @@ claude-code-runner; design D2, D3, D6, D7)."""
 import json
 import os
 import sys
+import time
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -187,6 +188,34 @@ def test_a_second_run_start_is_refused(
         },
     )
     assert answer["error"]["data"]["code"] == "runner.already-started"
+
+
+def test_killing_a_session_mid_run_ends_the_runner_and_its_hanging_stand_in(
+    tmp_path: Path, workspace: Path, record: Path, sessions: list[Session]
+) -> None:
+    # spec: claude-code-runner, "The runner's tests stop it as troupe would" (reap-fake-claude D1)
+    session = _session(sessions, workspace, _env(tmp_path, record, hang="1"))
+    session.start()
+    second = session.request(
+        "run/start",
+        {
+            "runId": session.run_id,
+            "direction": "again",
+            "workspace": str(workspace),
+            "options": {},
+            "limits": {"eventMaxBytes": 65536},
+            "effects": {"write": [], "delete": [], "move": []},
+            "scratch": str(session.scratch()),
+        },
+    )
+    assert second["error"]["data"]["code"] == "runner.already-started"
+    stand_in = wait_for_record(record, "pid")["pid"]
+    session.kill()
+    assert not alive(session.process.pid)
+    deadline = time.monotonic() + 30
+    while alive(stand_in) and time.monotonic() < deadline:
+        time.sleep(0.02)
+    assert not alive(stand_in)
 
 
 def test_claude_runs_in_the_workspace_with_the_fixed_flags_and_the_direction_on_stdin(
