@@ -62,10 +62,21 @@ INIT_LINE = {
 
 @pytest.fixture
 def sessions() -> Iterator[list[Session]]:
+    """Each test's runners, killed at teardown as troupe would. A stand-in claude still running
+    after that fails the test (reap-fake-claude design D2)."""
     started: list[Session] = []
     yield started
+    left = []
     for session in started:
         session.kill()
+        if (pid := session.stand_in_left_running()) is not None:
+            left.append(f"stand-in claude {pid} (workspace {session.workspace})")
+    if left:
+        pytest.fail(
+            "A stand-in claude was still running after its runner was killed. End the runner as "
+            "troupe does (kill its process group): " + "; ".join(left),
+            pytrace=False,
+        )
 
 
 def _session(sessions: list[Session], workspace: Path, env: dict[str, str]) -> Session:
@@ -175,6 +186,7 @@ def test_a_second_run_start_is_refused(
 ) -> None:
     session = _session(sessions, workspace, _env(tmp_path, record, hang="1"))
     session.start()
+    wait_for_record(record, "pid")  # so the teardown's check sees the stand-in it started
     answer = session.request(
         "run/start",
         {

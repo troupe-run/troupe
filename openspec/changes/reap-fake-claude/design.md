@@ -9,146 +9,70 @@ See proposal.md, "Why". Here's what the fix has to work with:
   (`packages/troupe/src/troupe/platform/processes.py`). The runner keeps Claude Code in its own process group on
   POSIX, so troupe's kill reaches it. On Windows the runner gives Claude Code a job nested in its own, created with
   `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` (`plugins/runner-claude-code/src/troupe_runner_claude_code/processes.py`).
-- The plugin's harness (`tests/claude_harness.py`, `Session`) starts the runner with a plain `Popen`, so it stays in
-  pytest's process group. `Session.kill()` calls `process.kill()` on the runner's pid alone. The `sessions` fixture
-  calls `kill()` on every session at teardown.
-- The plugin's tests import nothing from troupe. Core's tests load `fake_claude.py` by path
-  (`packages/troupe/tests/claude_stand_in.py`) and start the stand-in through troupe's real host, which already
-  kills the group.
-- The runner's environment in these tests is minimal: `PATH` holding only the stand-in, plus `FAKE_CLAUDE_*`. perform
-  chooses its own. Only the shim, which `install()` writes, runs every time a stand-in starts.
-- `scripts/check_paths_reach.py` works out statically which suites reach which package. A module loaded for every
-  suite that names `plugins/runner-claude-code` would make every suite reach that plugin.
+- The plugin's harness (`tests/claude_harness.py`, `Session`) started the runner with a plain `Popen`, so it stayed in
+  pytest's process group, and `Session.kill()` killed the runner's pid alone. The `sessions` fixture calls `kill()` on
+  every session at teardown.
+- Every runner test gives the stand-in a `FAKE_CLAUDE_RECORD` path, and the stand-in writes its pid there first, before
+  it reads standard input.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
 - The harness ends a runner as troupe does, so a test that ends mid-run leaves nothing behind.
-- Any test, in the plugin or in core, that leaves a stand-in running fails, and the stand-in is stopped.
+- A runner test that leaves its stand-in running fails, so the leak can't come back unnoticed.
 
 **Non-Goals:**
 
-- Changing the runner or core. Their teardown is already right. This change only makes the tests match it.
-- The scripted runner's harness. It has the same `kill()`, but the scripted runner starts no process, so it has
-  nothing to leak.
-- Stand-ins left by earlier runs on a developer's machine. Those can be cleared once by hand. The check only covers
-  stand-ins started in the run it's part of.
+- Changing the runner or core. Their teardown is already right.
+- Checking stand-ins started outside `Session`. In the plugin those are the stand-in's own tests, which wait for the
+  processes they start. Core's tests run the runner through troupe's own `kill_tree`, which the platform spec's tests
+  already cover.
+- Stopping a leaked stand-in automatically. The check fails the test. Once the harness is right, nothing leaks, so a
+  failure means the harness is broken again, and that is what needs fixing.
+- The scripted runner's harness. It has the same `kill()`, but the scripted runner starts no process.
 
 ## Decisions
 
 ### D1. The harness starts and kills the runner as troupe's platform does
 
 On POSIX, `Session` starts the runner with `start_new_session=True`, and `kill()` sends `SIGKILL` to the group
-(`os.killpg`), ignoring `ProcessLookupError`, before it waits for the runner. This is what `kill_tree` does. It
-runs even when the runner has already exited, because the group outlives its leader while a member is still
-running. That case would be a contract break (the runner never exits while Claude Code runs), and the check (D3)
-would report it.
+(`os.killpg`), ignoring `ProcessLookupError`, before it waits for the runner. This is what `kill_tree` does. It runs
+even when the runner has already exited, because the group outlives its leader while any process in it runs.
 
 On Windows the harness keeps killing the runner's process. When the runner ends, its handle to Claude Code's job
-closes, and `KILL_ON_JOB_CLOSE` ends the stand-in. troupe's own job reaches the same result.
-
-**Alternative: give the harness a Windows job of its own.** That would mean about forty lines of ctypes, a copy of
-what's in core and the plugin. It's left out because the runner's nested job already covers it. The check (D3)
-runs on Windows CI, so if the job doesn't cover it, the check fails there. One case isn't covered: the runner's job
-can't be created (the fallback in `processes.start`). troupe's own job would still hold the stand-in, but the
-harness has no job. If CI shows that happening, the harness gains a job.
+closes, and `KILL_ON_JOB_CLOSE` ends the stand-in. troupe's own job reaches the same result. The check (D2) runs on
+Windows CI too, so if the job doesn't cover it, CI says so.
 
 **Alternative: stop the stand-in in the test** (cancel the run before the test ends). That fixes one test, not the
 cause. The issue asks for the teardown to work the way a real one does.
 
-### D2. Each stand-in records itself in a ledger, holding a lock while it runs
+### D2. The `sessions` fixture checks each session's stand-in after killing it
 
-When `FAKE_CLAUDE_LEDGER` is set, the stand-in's first step is to create `<ledger>/<pid>.lock` and take an exclusive
-lock on it (`fcntl.flock` on POSIX, `msvcrt.locking` on Windows). It holds the lock until it ends. Then it writes
-`<pid>.json` with its pid, working directory and argv, replacing the file whole as `_write_record` does. The OS
-releases the lock when the process ends, however it ends, `SIGKILL` included. So a lock still held means that
-stand-in is still running, and the pid still belongs to it, since a pid isn't reused while its process exists.
+At teardown the fixture kills each session, then asks it for its stand-in's pid from the record. If that pid is still
+running `STAND_IN_EXIT_SECONDS` (5.0) later, the test fails, naming the pid and the workspace. The check sits where
+the leak came from, and each test is judged on its own stand-in.
 
-`install()` writes `FAKE_CLAUDE_LEDGER`, when it's set in the installing process, into the shim (`export` on POSIX,
-`@set` in `claude.cmd`), so it reaches the stand-in whatever environment the runner or perform passes on. When it
-isn't set (the stand-in run by hand, or the capture tool), there's no ledger, which is the old behaviour.
+The check can only see a stand-in that has written its pid. A test that ends before then, as
+`test_a_second_run_start_is_refused` did, has nothing to check. So that test waits for the record before it ends, as
+the new kill test does. On the old harness the check then fails that test itself, naming its stand-in.
 
-A stand-in is in the ledger only once its Python has taken the lock. Before that, while the shim and the interpreter
-start, it's inside the runner's process group (POSIX, after D1) or job (Windows), so the kill that ends the runner
-ends it too. The model is the same on every OS (owner, 2026-11-04). A stand-in can be missed by its own test's
-check only if it escaped its runner's group or job before it recorded itself. That's the bug D1 removes, and
-`test_a_second_run_start_is_refused` on the old harness shows it: the check after that test found nothing, and the
-next test's check found the stand-in. Such a stand-in is caught by the next check in the same pytest process, with
-a message naming its working directory, which is under the test it came from. At unconfigure, a final sweep stops
-any stand-in in the ledger still holding its lock, so one left by a process's last test doesn't outlive the run.
+A pid the OS reuses during the wait could at worst make the check fail a test that's fine. It never signals anything,
+so it can't stop an unrelated process.
 
-**Alternative: a `.starting` marker the POSIX shim writes before it execs Python.** Tried and dropped. The check
-still ran before `/bin/sh` had written it, so it narrowed the window without closing it. Closing it would mean
-finding the shim with `ps`, which is OS-specific and has no counterpart on Windows.
+### D3. A process ledger and a check for every suite, tried and removed (owner, 2026-11-04)
 
-Once the check finds an entry has ended, it removes the entry's files. Then a pid the OS reuses later in the session
-can't hide behind an old entry in the next test's snapshot.
-
-The ledger and lock code is in `fake_claude.py`, written with the standard library only: the stand-in's side
-(register) and the reader's side (list entries, see whether a lock is still held, forget an ended entry, stop a pid).
-It's the one place that branches on the OS for this.
-
-**Alternative: check `alive(pid)` against the pid in the record.** It's simpler, but if the pid is reused while the
-check waits, the check would report another process as a leak, and could stop it. The lock makes "this pid is still
-the stand-in" something the OS answers. Stopping an unrelated process is the one result this check can never risk.
-
-### D3. A pytest check per suite, in conftest, checks around each test
-
-`plugins/runner-claude-code/tests/stand_in_guard.py` (pytest plus the standard library) holds the check:
-
-- At configure, it sets `FAKE_CLAUDE_LEDGER` to `<tempdir>/troupe-stand-ins-<pid of this pytest process>` and
-  creates the directory. The path is worked out from the pid, so two copies of the module in one process (the
-  plugin's and core's) agree on it. Under xdist each worker has its own process, so it gets its own ledger, and
-  overwrites the controller's value it inherited. At unconfigure it removes the directory, ignoring errors.
-- `pytest_runtest_setup` (a wrapper) records which `.lock` entries exist before the test. A `pytest_runtest_teardown`
-  wrapper, after every fixture's teardown has run, takes the entries added since. For each, it waits up to
-  `STAND_IN_END_SECONDS` (5.0, a named constant with its reason) for the lock to be released. If the lock is still
-  held after that, it stops the pid (`SIGKILL`, or `TerminateProcess` through `os.kill` on Windows), waits the same
-  bound again, and fails the teardown. The failure names each stand-in's pid, its working directory (from the
-  `.json`, or "not recorded yet") and whether stopping it worked. If the stop doesn't work within the bound, the
-  failure says so. It never waits silently or without a bound.
-- It's loaded by a `conftest.py` in each suite that uses the stand-in. Each one only re-exports the hook functions:
-  the plugin's `tests/conftest.py` from `stand_in_guard`, and core's new `packages/troupe/tests/conftest.py` from
-  `claude_stand_in.py`, which loads `stand_in_guard.py` by path as it already loads `fake_claude.py`. conftest hooks
-  only apply to tests in their own directory, so each test is checked once, and no other suite loads the check.
-  Core's suite already reaches the plugin through `claude_stand_in.py`, so `check_paths_reach.py` sees no new reach.
-- The two conftests are excluded from mypy. mypy maps these test directories as flat modules, so it refuses a second
-  module named `conftest` (`scripts/tests/conftest.py` already has the name). Since they only re-export, every line
-  of logic is still in a typed module (owner, 2026-11-04).
-
-**Alternative: a `-p stand_in_guard` plugin in `addopts`, as `protocol_guard` is.** It needs no mypy exclusion, but
-it would load into every suite. `check_paths_reach.py` doesn't see `addopts` plugins, so the reach that adds wouldn't
-be visible.
-
-**Alternative: each test module that starts a stand-in imports an autouse fixture.** It needs no conftest, but a new
-test module that forgets the import goes unchecked.
-
-**Alternative: a check once at session end.** That's cheaper, but it fails the session rather than the test that
-leaked, and under xdist a worker's session-end failure doesn't reach the controller's exit status as a named test.
-
-### D4. Test the check before fixing the harness
-
-The check goes in first, with the harness unchanged, and has to fail `test_a_second_run_start_is_refused` on macOS,
-naming its stand-in. That run is the evidence the check catches the leak #276 describes. Then D1 goes in and the
-same test has to pass. The check's own tests run a child pytest in `tmp_path` (with `--confcutdir`, so the
-repository's conftests don't load into it). They cover a test that leaks a hanging stand-in (it fails, naming it,
-and afterwards it isn't running) and a test whose stand-in ended (it passes). The pid-reuse scenario is tested
-directly on the reader's side: a `.lock` entry with no holder, whose pid now belongs to a live process the test
-started, reads as ended and isn't signalled.
+The first build of this change gave each stand-in a lock file in a per-process ledger, and loaded a pytest check for
+every test in the plugin's and core's suites. The check stopped leaked stand-ins, using the lock to be sure a pid was
+still the stand-in, and charged a late-starting stand-in to the next test. It worked. But it was about 650 lines of
+OS-specific locking, conftests, a mypy exclusion, a ruff setting and child-pytest tests, plus timing races of its own,
+all to cover cases that only arise if the harness bug comes back. The owner's view was that the cure was worse than
+the cause. It's in the branch's history.
 
 ## Risks / Trade-offs
 
-- [A stand-in that escapes its runner's group or job before it records itself] → its own test's check misses it, and
-  the next check in the same process counts it, naming its working directory, or the sweep at unconfigure stops it.
-  Attribution is only late in the case D1 fixes, and a later leak of that kind still fails a test.
-- [`msvcrt.locking` releases a dead process's lock "after an unspecified time"] → the bounded wait covers it. If
-  Windows CI shows false failures, the bound is the one place to change.
-- [Two `conftest.py` files named the same in different suites, with the default import mode] → pytest imports
-  conftests by path, and `scripts/tests/conftest.py` already lives alongside the others. A full `scripts/check.py`
-  run confirms collection.
-- [The check's per-test cost] → a directory listing before and after each test in two suites. It only waits when a
-  stand-in started during the test.
-- [The ledger directory is left behind after a crashed pytest] → it's under the temp directory, named by the pid,
-  and empty apart from small files. The next run with the same pid reuses the directory, and its stale entries are
-  in the setup snapshot, so they're never counted.
+- [A later test that ends before its stand-in records its pid isn't checked] → D2's wait in the test is the pattern.
+  Such a test ends mid-run, so it's one like `test_a_second_run_start_is_refused`, and the kill test is there as the
+  example.
+- [Windows relies on the runner's own job, not one the harness makes] → the check runs on Windows CI, so a stand-in
+  that outlives its runner there fails a test.
