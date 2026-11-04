@@ -67,15 +67,15 @@
   version, `engine.name` `chat-completions`, `engine.model`, the tools, `effects` `checked`), and the threads and
   queue of D5. Verify: a test sees `init` first with those fields, and `run/start` refusals answered before any
   request reaches the fake endpoint.
-- [ ] 5.2 Write the loop: the system and user messages, tools offered, `turn` events, calls carried out in order with
+- [x] 5.2 Write the loop: the system and user messages, tools offered, `turn` events, calls carried out in order with
   made-up ids where needed, tool messages, the `ok` result, refusals and unexpected finishes, the turn limit and the
   token budget. Verify: one test per scenario in the spec's loop requirements, against the fake endpoint, including a
   read-only actor's refused `Write` and arguments that aren't JSON.
-- [ ] 5.3 Sum usage and cost as D9 says, and warn when a response has no usage. Verify: the spec's usage and cost
+- [x] 5.3 Sum usage and cost as D9 says, and warn when a response has no usage. Verify: the spec's usage and cost
   scenarios pass.
 - [ ] 5.4 Send the transcript as D10 frames it, through the masking function. Verify: a test reads a run's transcript
   records back in order, finds no request header in any, and finds a 401's echoed key masked.
-- [ ] 5.5 Cut every summary to fit `eventMaxBytes` and `SUMMARY_MAX_BYTES`. Verify: the spec's 1 MiB reply scenario.
+- [x] 5.5 Cut every summary to fit `eventMaxBytes` and `SUMMARY_MAX_BYTES`. Verify: the spec's 1 MiB reply scenario.
 - [ ] 5.6 Handle `run/cancel`, end of input and `shutdown`. Verify: tests that cancel during a held-open response (the
   fake sees its connection closed, no `result` is sent, the runner exits within troupe's grace), close stdin mid-run,
   and shut down after a result, each passing on all three platforms in CI.
