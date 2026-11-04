@@ -81,7 +81,8 @@
 ## 7. The leak test and docs
 
 - [x] 7.1 Write `test_credential_leak.py` (D12) and its check that it fails with masking turned off. Verify both pass,
-  on Linux, macOS and Windows in CI. (Linux, macOS and Windows, Python 3.12 to 3.15: CI run 41819326602 on 6f9381f)
+  on Linux, macOS and Windows in CI. (Linux, macOS and Windows, Python 3.12 to 3.15: CI run 41822779666 on 58b10e3,
+  after the rebase onto #277's merge; none of Windows' skips is a leak test)
 - [x] 7.2 Write `docs/stagecraft/runtimes.md`: defining and overriding a runtime, the environment variables, the
   credential by reference, `config get --resolved`, and the accepted risks of a theatre-chosen endpoint and variable
   (D7). Link it from the config and actor docs. Verify the docs check passes and each example command runs as written
