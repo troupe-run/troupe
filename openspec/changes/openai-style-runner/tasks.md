@@ -2,7 +2,7 @@
 
 ## 1. Check the runtime's hand-off before building on it (design D2)
 
-- [ ] 1.1 Confirm #278 has merged, and compare what its archived change gives a runner with D2's assumptions: the
+- [x] 1.1 Confirm #278 has merged, and compare what its archived change gives a runner with D2's assumptions: the
   `runtime` in `run/start` (its endpoint, model and whether it has a credential), and the variable the credential's
   value arrives in. If anything differs, stop and update this change (`/opsx:update`) before going on. Verify: the
   comparison, with #278's spec lines, is in the first apply commit's message, or this change's artifacts are updated
@@ -31,9 +31,11 @@
   `openai-chat.insecure-endpoint`, each with its details schema). Verify: a schema test passes the protocol's
   strictness check on both, validates the documented options, and refuses an unknown key and `maxTurns` 0.
 - [ ] 3.2 Write `options.py` (parse and refuse, naming the option in `details.where`) and `runtime.py` (read the
-  runtime from `run/start` and the credential from its variable; refuse a missing runtime, and a credential with an
-  `http` endpoint to a non-loopback host). Verify: unit tests for each refusal in the spec's "options are closed",
-  "service comes from the run's runtime" and "never travels in the clear" scenarios pass, `127.0.0.1`, `::1` and
+  runtime from `run/start`, and the credential with the SDK's `runtime_credential`; refuse a missing runtime, a
+  `run/start` and an environment that disagree about the credential (`openai-chat.credential-mismatch`), and a
+  credential with an `http` endpoint to a non-loopback host). Verify: unit tests for each refusal in the spec's
+  "options are closed", "service comes from the run's runtime", "read from TROUPE_RUNTIME_CREDENTIAL" and "never
+  travels in the clear" scenarios pass, `127.0.0.1`, `::1` and
   `localhost` count as loopback, and `127.0.0.1.example.com` doesn't. That empty options give D7's defaults is
   checked here, by parsing them, and never by running a service on them.
 - [ ] 3.3a Add `TEST_LIMITS` (`maxTurns` 5, `maxTotalTokens` 20,000) in one place in the plugin's tests (design D7).
@@ -98,10 +100,11 @@
 
 ## 7. troupe ships it (design D14)
 
-- [ ] 7.1 Add `openai-chat` to `troupe.core.interim.RUNNERS` with D14's environment, and update
-  `runner.unknown`'s list. Verify: the `runs` delta's scenarios pass in `test_interim.py` and the perform tests
-  (`HTTPS_PROXY` and `SSL_CERT_FILE` reach the runner, `OPENAI_API_KEY` doesn't, and `codex` is refused naming all
-  three runners).
+- [ ] 7.1 Add `openai-chat` to `troupe.core.interim.RUNNERS` with D14's environment and `runtime="required"`, and
+  update `runner.unknown`'s list. Verify: the `runs` delta's scenarios pass in `test_interim.py` and the perform tests
+  (`HTTPS_PROXY` and `SSL_CERT_FILE` reach the runner, the key reaches it only as `TROUPE_RUNTIME_CREDENTIAL` and
+  `OPENAI_API_KEY` doesn't, `codex` is refused naming all four runners, and an `openai-chat` actor naming no runtime
+  is refused by config).
 - [ ] 7.2 Run the conformance suite against the runner with a runtime naming the fake endpoint, as a test in
   `packages/troupe/tests/test_runner_conformance.py`. Verify: every check passes.
 - [ ] 7.3 Write a perform test that runs an `openai-chat` actor end to end against the fake endpoint in a worktree,

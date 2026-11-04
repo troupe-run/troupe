@@ -13,10 +13,13 @@ See proposal.md for why. What the design builds on:
 - **The Claude Code runner** is the pattern to follow: a self-contained plugin with closed options, a `defaults.py`
   holding every limit, published options and error schemas, fixtures that pair real output with expected events,
   a capture tool, and an opt-in live test. It reads stdin on a thread and passes messages over a queue.
-- **Runtimes (#278)**, not yet designed, will say where an actor's service comes from: `runtimes.<name>` with an
-  endpoint, a model and a credential that is the name of an environment variable (owner, 2026-11-04), resolved
-  from troupe's defaults, the theatre's config and the person's environment, with a rule that a credential only
-  goes to an endpoint the person or troupe chose.
+- **Runtimes (#278, PR #287)** say where an actor's service comes from: `runtimes.<name>` with an endpoint, a model
+  and a credential that is the name of an environment variable, resolved from troupe's built-ins (`openai`,
+  `ollama`, `lm-studio`), the theatre's config and the person's environment (`TROUPE_RUNTIME_<NAME>_...`). An actor
+  may set its own `model`. troupe refuses a credential over plain HTTP to another machine, one shorter than 8 bytes,
+  and an unset variable, all before a run is recorded, and masks the credential in what it stores. That config can
+  choose the endpoint, and the variable, is an accepted risk for now, with policy to limit both later (#287's
+  design D7; owner, 2026-11-04).
 - **Order** (#239, NEXT.md): #56 makes the first round of contract changes; this change's contract changes wait for
   it. The owner chose (2026-11-04) to build this runner on version 0 as it stands and file each gap it finds.
 
@@ -45,18 +48,24 @@ It's not an adapter inside #56's local-model plugin, even though Ollama and LM S
 #56 deliberately uses each engine's native API, and #239 chose separate plugins so the two runners test the contract
 independently. The SDK already shares the code they'd have in common.
 
-### D2. The runtime's hand-off, as assumed until #278 decides it
+### D2. The runtime's hand-off, as #278 gives it
 
-This design assumes #278 gives the runner:
+This was assumed before #278 was designed, and checked against PR #287 (task 1.1). The runner gets:
 
-- in `run/start`, a `runtime` object holding at least `endpoint` (a URL ending before `/chat/completions`) and
-  `model`, and whether it has a credential;
-- the credential's value in the runner's environment, under one variable the contract names, never in `run/start`
-  (which troupe records).
+- in `run/start`, `runtime`: `name`, `endpoint` (the base URL; the runner adds `/chat/completions`), `model` (already
+  resolved from the person's environment, the actor and the runtime), and `credential`, a boolean;
+- when `credential` is true, the value in its environment as `TROUPE_RUNTIME_CREDENTIAL`, read with the SDK's
+  `runtime_credential`, which refuses a `run/start` and an environment that disagree
+  (`openai-chat.credential-mismatch`).
 
-The runner touches the runtime in one module (`runtime.py`), so a different shape from #278 changes that module and
-its tests only. **If #278 lands differently, this change is updated (`/opsx:update`) before it's applied.** The
-`run/start` refusal `openai-chat.no-runtime` covers a host that sends none.
+The runner table gives `openai-chat` `runtime="required"`, so config refuses an actor on it that names no runtime; the
+runner still refuses a `run/start` without one (`openai-chat.no-runtime`), from a host that doesn't keep the
+contract. The runner touches the runtime in one module (`runtime.py`).
+
+The built-in `ollama` runtime's endpoint is Ollama's own API (`http://127.0.0.1:11434`, for #56's runner), not its
+OpenAI-style one under `/v1`. An `openai-chat` actor on it gets a 404, so a 404 without OpenAI's error shape names the
+URL it tried and says the endpoint must be the base its Chat Completions API is served under (D8). `lm-studio`'s
+built-in endpoint already ends in `/v1`.
 
 Alternatives: endpoint and model in this runner's options (the issue's first wording) was overtaken by the owner's
 runtime model, which keeps a service's settings in one place for every runner; reading `OPENAI_API_KEY` directly
@@ -168,6 +177,7 @@ options, and says to raise them once the actor behaves.
 | 429 otherwise | yes | `retry` `rate-limit`, delay `Retry-After` if given, else backoff; past the cap, `error` result |
 | 400 with `context_length_exceeded` | no | `error` result: the conversation is longer than the model's context |
 | any other 4xx | no | `error` result naming the status and the service's message |
+| 404 without OpenAI's error shape | no | `error` result naming the URL tried, and that the endpoint must be the API's base, often ending in `/v1` |
 | 3xx | no | `error` result naming the status and `Location` (D3) |
 | 5xx | yes | `retry` `server` |
 | connection refused, reset, DNS, TLS, connect timeout | yes | `retry` `network` |
@@ -220,8 +230,10 @@ headers are never recorded. That a runner must invent this framing is gap 4.
   covers OpenAI's `sk-proj-****...abcd` form. A credential shorter than eight characters is masked whole only; it's
   too short to match safely by its ends.
 - **Defence in depth on the endpoint:** a runtime with a credential and an `http` endpoint to a non-loopback host is
-  refused at `run/start` (`openai-chat.insecure-endpoint`); redirects are refused (D3). The rule for *which* endpoint
-  may get a credential is #278's; these two hold whatever it decides.
+  refused at `run/start` (`openai-chat.insecure-endpoint`), as troupe already refuses it before the run; redirects
+  are refused (D3). Which endpoint config may send a credential to is an accepted risk for now (#287's D7).
+- **troupe masks too:** it masks the credential in the transcript and everything else it stores (#287). The
+  runner's own masking stays, since a log, an error and stderr are also the runner's to keep clean.
 - **Tests** run every fixture and failure mode with a canary credential and scan every byte the runner wrote to
   stdout and stderr for it and its masked forms.
 
@@ -272,11 +284,12 @@ troupe`, `plugins are independent of each other`, and an I/O seam contract namin
 runner's `processes.py`), `scripts/check-paths.toml`, release-please's config and manifest, and the `troupe-run`
 bundle's pins, each as the Claude Code runner was added. `troupe.core.interim.RUNNERS` gains `openai-chat` with its
 environment: the proxy variables, `SSL_CERT_FILE` and `SSL_CERT_DIR`, and on Windows what Python needs to start
-(`SYSTEMROOT` comes from the platform minimum). The credential's variable is added by #278's hand-off, not here.
+(`SYSTEMROOT` comes from the platform minimum), and `runtime="required"`. troupe adds `TROUPE_RUNTIME_CREDENTIAL`
+itself when the runtime has a credential (#287).
 
 ## Risks / Trade-offs
 
-- **#278's shape differs from D2** → the runtime is touched in one module, and the change is updated before apply.
+- **#278's shape differed from D2** → checked against PR #287 (task 1.1); it didn't, beyond the details now in D2.
 - **A compatible host differs from OpenAI** (no `stream_options`, tool calls without ids, no usage, odd finish
   reasons, error bodies of another shape) → each has a defined behaviour (D4, D6, D8, the usage requirement), and the
   local-server fixture and live test exercise one non-OpenAI host.
