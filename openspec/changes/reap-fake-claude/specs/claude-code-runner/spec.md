@@ -15,7 +15,8 @@ group (or the platform's equivalent) of its own, and the test's teardown kills t
 ### Requirement: A runner test that leaves its stand-in running fails
 When a test of the runner process ends, its teardown SHALL kill the runner and then check that the stand-in `claude`
 it started, as named by the pid the stand-in recorded, has ended within a named limit. A stand-in still running SHALL
-fail the test, naming the stand-in's pid and the run's workspace.
+fail the test, naming the stand-in's pid and the run's workspace. A record that names no pid SHALL fail the test,
+naming the record, rather than read as no stand-in.
 
 #### Scenario: A runner killed without its stand-in
 - **WHEN** a test's teardown kills its runner in a way that leaves the stand-in running
@@ -24,3 +25,7 @@ fail the test, naming the stand-in's pid and the run's workspace.
 #### Scenario: A stand-in that ended with its runner
 - **WHEN** a test's stand-in `claude` has ended by the time its runner has been killed
 - **THEN** the test's teardown passes
+
+#### Scenario: A record that names no pid
+- **WHEN** a stand-in's record exists but holds no readable pid
+- **THEN** the check fails, naming the record and what it holds

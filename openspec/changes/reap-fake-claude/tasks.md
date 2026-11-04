@@ -23,6 +23,11 @@
   `test_claude_code_stand_in_guard.py` deleted. Verify that the change's diff from its base touches only
   `claude_harness.py` and `test_claude_code_runner.py`, outside `openspec/`.
 
+- [x] 2.3 From the review: move the check into `stand_in_left_running(record, seconds)`, make a record that names no
+  pid an error naming it, note the zombie assumption, and test the function directly (a live process, an exited one,
+  a missing record, five malformed ones). Verify the tests pass, and that 6 of them fail when the function always
+  returns None.
+
 ## 3. Integration
 
 - [x] 3.1 Run `uv run scripts/check.py` (through the commit) and confirm it passes, and that no `fake_claude.py` from

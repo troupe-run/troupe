@@ -57,6 +57,14 @@ The check can only see a stand-in that has written its pid. A test that ends bef
 `test_a_second_run_start_is_refused` did, has nothing to check. So that test waits for the record before it ends, as
 the new kill test does. On the old harness the check then fails that test itself, naming its stand-in.
 
+A missing record means no stand-in started, and passes. A record that's there but names no pid is malformed, and
+fails naming the record, so a broken record can't make every leak pass. The check is a module function,
+`stand_in_left_running(record, seconds)`, tested directly against a live process, an exited one, a missing record and
+malformed ones (owner, 2026-11-04, from the review's decision). Those tests fail if the check always passes.
+
+A zombie counts as running, since `alive` can't tell them apart. The check assumes PID 1 reaps a stand-in whose runner
+is gone, as an init does on a desktop or a CI virtual machine.
+
 A pid the OS reuses during the wait could at worst make the check fail a test that's fine. It never signals anything,
 so it can't stop an unrelated process.
 
