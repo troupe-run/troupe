@@ -39,6 +39,9 @@ RESULTS = {
     "shutdown": "shutdown.schema.json#/$defs/result",
 }
 TIMEOUT = 30.0
+STAND_IN_EXIT_SECONDS = 5.0
+"""How long a killed session's stand-in claude has to end before the test fails. A kill of the
+runner's group, or of the runner and so its job on Windows, ends it within milliseconds."""
 EVENT_MAX_BYTES = 65536
 
 
@@ -145,6 +148,7 @@ class Session:
 
     def __init__(self, workspace: Path, env: Mapping[str, str]) -> None:
         self.workspace = workspace
+        self._record = env.get("FAKE_CLAUDE_RECORD")
         environment = dict(env)
         if sys.platform == "win32" and "SYSTEMROOT" in os.environ:
             environment.setdefault("SYSTEMROOT", os.environ["SYSTEMROOT"])
@@ -289,6 +293,22 @@ class Session:
             validate(message, "message.schema.json#/$defs/fromRunner")
             if "result" in message:
                 validate(message["result"], RESULTS[methods[message["id"]]])
+
+    def stand_in_left_running(self) -> int | None:
+        """The pid of the stand-in claude this session's runner started, if it's still running
+        ``STAND_IN_EXIT_SECONDS`` after the runner was killed; None if it has ended, or never
+        recorded its pid (spec: claude-code-runner, "A runner test that leaves its stand-in running
+        fails")."""
+        try:
+            pid = int(json.loads(Path(self._record or "").read_text(encoding="utf-8"))["pid"])
+        except (OSError, ValueError, KeyError):
+            return None
+        deadline = time.monotonic() + STAND_IN_EXIT_SECONDS
+        while alive(pid):
+            if time.monotonic() > deadline:
+                return pid
+            time.sleep(0.02)
+        return None
 
     def kill(self) -> None:
         """Kill the runner and everything it started, as troupe's ``kill_tree`` does. Safe to call

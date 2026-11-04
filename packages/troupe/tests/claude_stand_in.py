@@ -18,23 +18,15 @@ NAMES = sorted(path.name for path in FIXTURES.iterdir() if path.is_dir())
 TIMEOUT = 30.0
 
 
-def _load(name: str, filename: str) -> ModuleType:
-    spec = importlib.util.spec_from_file_location(name, PLUGIN / "tests" / filename)
+def _fake() -> ModuleType:
+    spec = importlib.util.spec_from_file_location(
+        "claude_code_fake_claude", PLUGIN / "tests" / "fake_claude.py"
+    )
     if spec is None or spec.loader is None:
-        raise RuntimeError(f"the plugin's {filename} can't be loaded")
+        raise RuntimeError("the stand-in claude can't be loaded")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
-
-
-def _fake() -> ModuleType:
-    return _load("claude_code_fake_claude", "fake_claude.py")
-
-
-def stand_in_guard() -> ModuleType:
-    """The plugin's check that fails a test leaving a stand-in running, for core's conftest
-    (reap-fake-claude design D3)."""
-    return _load("claude_code_stand_in_guard", "stand_in_guard.py")
 
 
 def install(bin_dir: Path, **settings: str) -> Path:

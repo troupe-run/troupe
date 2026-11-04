@@ -91,11 +91,6 @@ src = [
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "UP", "B", "SIM", "RUF", "PT", "N", "ANN", "S"]
 
-[tool.ruff.lint.isort]
-# scripts/tests import their own conftest. Since core's and the Claude Code runner's tests (both in src above) have a
-# conftest.py too (reap-fake-claude design D3), ruff would read it as first-party; this keeps it sorted as before.
-known-third-party = ["conftest"]
-
 [tool.ruff.lint.flake8-bugbear]
 # Field factories for dataclasses that carry JSON metadata: they return dataclasses.field(...).
 extend-immutable-calls = ["troupe_plugin_sdk.messages.json_field"]
@@ -143,13 +138,6 @@ files = [
     "scripts",
 ]
 explicit_package_bases = true
-# mypy reads these tests directories as flat modules, so it refuses a second module named conftest
-# (scripts/tests has one). These only re-export the stand-in check's hooks, whose code is typed in
-# stand_in_guard.py (reap-fake-claude design D3).
-exclude = [
-    "^plugins/runner-claude-code/tests/conftest\\.py$",
-    "^packages/troupe/tests/conftest\\.py$",
-]
 mypy_path = [
     "packages/troupe/src",
     "packages/troupe/tests",
