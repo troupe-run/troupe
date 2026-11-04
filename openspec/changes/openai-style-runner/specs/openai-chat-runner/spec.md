@@ -39,6 +39,19 @@ model SHALL be hard-coded in the runner.
 - **THEN** every request the runner sends asks for `small-model`, and the `init` event's `engine.model` is
   `small-model`
 
+### Requirement: The credential is read from TROUPE_RUNTIME_CREDENTIAL
+The runner SHALL read the run's credential only from `TROUPE_RUNTIME_CREDENTIAL`, and only when `run/start`'s
+`runtime.credential` is `true`. When the two disagree, it SHALL refuse `run/start` with
+`openai-chat.credential-mismatch`, saying which way without the value, and send nothing.
+
+#### Scenario: A credential run start promises and the environment lacks
+- **WHEN** `runtime.credential` is `true` and `TROUPE_RUNTIME_CREDENTIAL` isn't set
+- **THEN** `run/start` is refused with `openai-chat.credential-mismatch`, and no request is sent
+
+#### Scenario: A credential run start doesn't mention
+- **WHEN** `runtime.credential` is `false` and `TROUPE_RUNTIME_CREDENTIAL` holds a value
+- **THEN** `run/start` is refused with `openai-chat.credential-mismatch`, and the error holds no part of the value
+
 ### Requirement: The runner's options are closed
 `run/start` options SHALL be an object with only `maxTurns` (a positive integer) and `maxTotalTokens` (a positive
 integer), each optional. An option the runner doesn't define, or a value of the wrong shape, SHALL be refused with an
@@ -283,6 +296,11 @@ retried. The run SHALL end with an `error` result naming the status and the serv
 - **WHEN** a request is answered 429 with the error code `insufficient_quota`
 - **THEN** it isn't retried, and the run ends with an `error` result saying the account is out of quota
 
+#### Scenario: Nothing at the endpoint's path
+- **WHEN** a request is answered 404 without OpenAI's error shape
+- **THEN** the run ends with an `error` result naming the URL it was sent to, and saying the runtime's endpoint must
+  be the base URL its Chat Completions API is served under, often ending in `/v1`
+
 #### Scenario: The context is too long
 - **WHEN** a request is answered 400 with the error code `context_length_exceeded`
 - **THEN** it isn't retried, and the run ends with an `error` result saying the conversation is longer than the
@@ -338,7 +356,7 @@ request, and exit within troupe's cancel grace period. After a cancel it SHALL s
 ### Requirement: The runner publishes its schemas
 The runner SHALL publish its options schema and its error codes' schema, each passing the protocol's strictness
 check. Its error codes SHALL include `openai-chat.unknown-option`, `openai-chat.invalid-options`,
-`openai-chat.no-runtime` and `openai-chat.insecure-endpoint`.
+`openai-chat.no-runtime`, `openai-chat.insecure-endpoint` and `openai-chat.credential-mismatch`.
 
 #### Scenario: The schemas pass the strictness check
 - **WHEN** the protocol's strictness check runs over the runner's published schemas
