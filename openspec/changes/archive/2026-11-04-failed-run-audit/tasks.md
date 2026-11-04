@@ -72,7 +72,8 @@
 - [x] 5.1 Run `uv run scripts/check.py` and verify it passes (tests, mypy --strict, ruff, schema and docs checks).
   (All gates passed on 65f2219, in the commit guard.)
 - [x] 5.2 Run `openspec validate failed-run-audit --strict` and verify the change is valid.
-- [ ] 5.3 Verify CI passes on Linux, macOS and Windows once the pull request is marked ready, and record the run.
+- [x] 5.3 Verify CI passes on Linux, macOS and Windows once the pull request is marked ready, and record the run.
+  (Linux, macOS and Windows, Python 3.12 to 3.15: CI run 41807688752 on 99cbbdc)
 
 ## Workflow follow-up
 
