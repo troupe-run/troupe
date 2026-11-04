@@ -54,7 +54,7 @@
 
 ## 4. Integration
 
-- [ ] 4.1 Run `uv run scripts/check.py` and confirm it passes. Then run the plugin's and core's suites under xdist
+- [x] 4.1 Run `uv run scripts/check.py` and confirm it passes. Then run the plugin's and core's suites under xdist
   (as `check.py` does) and confirm that no `fake_claude.py` process is left after they finish.
 - [ ] 4.2 Confirm CI passes on Linux, macOS and Windows, with the check on, once the PR is marked ready. Record the
   run id here, as in earlier changes.

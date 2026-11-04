@@ -98,6 +98,7 @@ def _child(tmp_path: Path, pids: Path, tests: str) -> subprocess.CompletedProces
     env = {name: value for name, value in os.environ.items() if name != "FAKE_CLAUDE_LEDGER"}
     env["PIDS"] = str(pids)
     env["PYTHONPATH"] = str(child)
+    env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"  # it needs no installed plugin, only the check
     done = subprocess.run(
         [
             sys.executable,
@@ -106,8 +107,6 @@ def _child(tmp_path: Path, pids: Path, tests: str) -> subprocess.CompletedProces
             "-q",
             "-p",
             "no:cacheprovider",
-            "-p",
-            "no:xdist",
             "--confcutdir",
             str(child),
             "-c",
