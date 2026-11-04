@@ -26,11 +26,15 @@ an engine over MCP is parked for a milestone of its own (owner, 2026-11-04).
     the model as a `tool` message;
   - loops until the model answers without a tool call, or until `maxTurns` is reached, which is an `error` result;
   - always sets the model's context window (`contextLength`, or a named default lowered to the model's maximum),
-    and never carries on past it. Ollama doesn't refuse a conversation that outgrows its window: it drops the start,
-    the actor's direction among it. So when an answer reports that its prompt reached the window, the runner carries
-    out none of that answer's tool calls, and ends the run with an `error` result naming the window. What a run
-    should do instead, for every runner, is Decision #279. This is the conservative default until then, and it loses
-    nothing;
+    and never carries on past it. By default Ollama doesn't refuse a conversation that outgrows its window: it
+    silently drops the start, the actor's direction among it, and its token counts don't show it (checked
+    2026-11-04). So every request asks Ollama to refuse rather than cut (`truncate` and `shift` false), and a refusal
+    ends the run with an `error` result naming the window and `contextLength`. What a run should do instead, for every
+    runner, is Decision #279. This is the conservative default until then, and it loses nothing;
+  - requires Ollama 0.12.6 or later, the first that understands those two fields; older ones ignore them and cut
+    silently. The requirement is published as data beside the runner's schemas, not written into its code, and an
+    older Ollama is refused with a new contract error, `runner.requirement-unmet`. How components declare what they
+    require of the platform and what they provide, in general, is Decision #281;
   - maps the exchange onto run events: `init` (engine `ollama`, its version and the model), a `turn` for each answer
     with text, a `tool_call` and `tool_result` pair for each call, a `retry` for each retry of its own, and one
     `result` with the summed token counts. It reports no cost, since nothing tells it one;

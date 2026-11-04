@@ -373,6 +373,29 @@ def test_unsupported_version_must_name_the_versions_the_runner_supports() -> Non
     validate(_error_response({**data, "details": {"supportedVersions": [0, 1]}}), ERROR_RESPONSE)
 
 
+def test_requirement_unmet_names_the_requirement_and_whats_wanted() -> None:
+    # Spec: runner-protocol, "A runner refuses a platform it can't run on" (local-model-runner D16).
+    data = {"code": "runner.requirement-unmet", "problem": "p", "fix": "f"}
+    found = {"requirement": "ollama", "wanted": ">= 0.12.6", "found": "0.12.5"}
+    assert not is_valid(_error_response(data), ERROR_RESPONSE, runner=None)
+    response = _error_response({**data, "details": found})
+    assert is_valid(response, ERROR_RESPONSE, runner=None)
+
+
+def test_requirement_unmet_leaves_out_found_when_nothing_was_found() -> None:
+    data = {"code": "runner.requirement-unmet", "problem": "p", "fix": "f"}
+    details = {"requirement": "ollama", "wanted": ">= 0.12.6"}
+    assert is_valid(_error_response({**data, "details": details}), ERROR_RESPONSE, runner=None)
+    assert not is_valid(
+        _error_response({**data, "details": {**details, "version": "x"}}),
+        ERROR_RESPONSE,
+        runner=None,
+    )
+    assert not is_valid(
+        _error_response({**data, "details": {"requirement": "ollama"}}), ERROR_RESPONSE, runner=None
+    )
+
+
 def test_a_code_the_runner_has_not_published_does_not_validate_against_the_contract_alone() -> None:
     data = {
         "code": "scripted.invalid-script",

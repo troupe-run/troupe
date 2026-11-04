@@ -89,6 +89,41 @@
         },
         "details": false
       }
+    },
+    {
+      "description": "What the runner runs on doesn't meet one of the runner's own requirements, such as its engine's least version, so it refuses run/start. JSON-RPC code -32000.",
+      "required": [
+        "details"
+      ],
+      "properties": {
+        "code": {
+          "const": "runner.requirement-unmet"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "requirement",
+            "wanted"
+          ],
+          "properties": {
+            "requirement": {
+              "description": "What the runner requires, such as the engine's name.",
+              "type": "string",
+              "minLength": 1
+            },
+            "wanted": {
+              "description": "What the runner needs of it, such as >= 0.12.6.",
+              "type": "string",
+              "minLength": 1
+            },
+            "found": {
+              "description": "What the runner found instead. Absent: it found nothing, such as a version the engine didn't report.",
+              "type": "string"
+            }
+          }
+        }
+      }
     }
   ],
   "$defs": {

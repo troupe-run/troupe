@@ -242,6 +242,17 @@ CASES: list[tuple[type[p.Message], str, st.SearchStrategy[Any]]] = [
             },
             {"path": NAME},
         )
+        | _with_optional(
+            {
+                "code": st.just("runner.requirement-unmet"),
+                "problem": NAME,
+                "fix": NAME,
+                "details": _with_optional(
+                    {"requirement": NAME, "wanted": NAME}, {"found": st.text(max_size=8)}
+                ),
+            },
+            {"path": NAME},
+        )
         | st.fixed_dictionaries(
             {
                 "code": st.sampled_from(["scripted.invalid-script", "scripted.unknown-option"]),

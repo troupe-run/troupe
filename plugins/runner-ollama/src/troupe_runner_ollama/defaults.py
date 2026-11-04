@@ -20,12 +20,7 @@ DEFAULT_CONTEXT_LENGTH = 16384
 """The context window, in tokens, sent as ``options.num_ctx`` when the options don't set
 ``contextLength``, lowered to the model's own maximum (design D15). Never left to Ollama's default,
 which differs between versions and machines. 16384 holds a direction, a character and several file
-reads, and its KV cache fits a laptop (about 2.4 GB for qwen3:4b)."""
-
-CONTEXT_MARGIN_TOKENS = 64
-"""How close to the window an answer's prompt tokens may come before the runner takes the
-conversation to have outgrown it (design D15). Provisional until the context-overflow capture
-(task 4.3) shows what a truncated prompt reports."""
+reads, and its KV cache fits a laptop."""
 
 PREFLIGHT_TIMEOUT_SECONDS = 10.0
 """How long each preflight request (version, model) may take before Ollama counts as unreachable

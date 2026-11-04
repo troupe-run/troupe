@@ -72,14 +72,23 @@ fragment.
 
 ### Requirement: The runner checks the engine before it acknowledges the run
 Before answering `run/start`, the runner SHALL ask Ollama for its version and for the model, within a named time
-limit. It SHALL refuse the run with `ollama.unreachable` when Ollama doesn't answer, with `ollama.model-not-found` when
-the model isn't there, and with `ollama.model-without-tools` when the model can't call tools, each naming the endpoint
-or model and the fix.
+limit. It SHALL refuse the run with `ollama.unreachable` when Ollama doesn't answer, `runner.requirement-unmet` when
+Ollama's version doesn't meet its requirements, `ollama.model-not-found` when the model isn't there, and
+`ollama.model-without-tools` when it can't call tools.
 
 #### Scenario: Ollama isn't running
 - **WHEN** nothing listens at the endpoint
 - **THEN** `run/start` is refused with `ollama.unreachable`, naming the endpoint, and the fix says to start Ollama or
   set `endpoint`
+
+#### Scenario: An Ollama too old for the runner
+- **WHEN** Ollama reports version `0.12.5`
+- **THEN** `run/start` is refused with `runner.requirement-unmet`, naming `ollama`, the version wanted and `0.12.5`,
+  and the fix says to upgrade Ollama
+
+#### Scenario: A version the runner can't read
+- **WHEN** Ollama reports a version that isn't numbers separated by dots, with an optional suffix
+- **THEN** `run/start` is refused with `runner.requirement-unmet`, naming what Ollama reported
 
 #### Scenario: A model that isn't pulled
 - **WHEN** Ollama answers that `qwen3:4b` isn't there
@@ -88,6 +97,19 @@ or model and the fix.
 #### Scenario: A model that can't call tools
 - **WHEN** Ollama's description of the model doesn't list the `tools` capability
 - **THEN** `run/start` is refused with `ollama.model-without-tools`, naming the model
+
+### Requirement: The runner publishes its platform requirements as data
+The runner SHALL publish what it requires of the platform as data in its package, beside its schemas, each with the
+thing required, the least version and why, and SHALL check Ollama against that data, not against a version written in
+its code. The first requirement SHALL be Ollama 0.12.6 or later.
+
+#### Scenario: The published requirement
+- **WHEN** the runner's published requirements are read
+- **THEN** they hold `ollama` at least `0.12.6`, with a reason naming the `truncate` and `shift` fields
+
+#### Scenario: The check reads the data
+- **WHEN** the published requirement is changed to `0.50.0` and Ollama reports `0.40.14`
+- **THEN** `run/start` is refused with `runner.requirement-unmet`, naming `0.50.0`
 
 ### Requirement: The character and the direction start the conversation
 The first request SHALL hold the character as a `system` message, when the actor has one, then the direction as a
@@ -134,18 +156,19 @@ be refused before the run is acknowledged, with `ollama.invalid-options` naming 
 - **THEN** `run/start` is refused with `ollama.invalid-options`, naming `contextLength` and the maximum
 
 ### Requirement: A run never carries on past its context window
-When an answer reports prompt tokens that reach the run's context window, within a named margin, the runner SHALL NOT
-carry out that answer's tool calls or make another request, and SHALL end the run with an `error` result saying the
-conversation outgrew the window, naming its size and `contextLength`.
+Every request SHALL ask Ollama to refuse a conversation longer than the window rather than cut it, and never to drop
+its start to make room (`truncate` and `shift` both `false`). When Ollama refuses a request, the run SHALL end with an
+`error` result holding Ollama's message and naming the window and `contextLength`.
+
+#### Scenario: Every request asks Ollama not to cut
+- **WHEN** a run makes a request
+- **THEN** the request's `truncate` and `shift` are both `false`
 
 #### Scenario: A conversation that outgrows the window
-- **WHEN** a run's second answer reports prompt tokens at the window, and holds a `Write` call
-- **THEN** the `Write` isn't carried out, no third request is made, and the `result` has status `error`, naming the
+- **WHEN** Ollama answers a run's second request with status 400 and a message saying the request exceeds the
+  context size
+- **THEN** no third request is made, and the `result` has status `error`, holding Ollama's message and naming the
   window and `contextLength`
-
-#### Scenario: A conversation within the window
-- **WHEN** every answer reports prompt tokens well below the window
-- **THEN** the run goes on as usual
 
 #### Scenario: A cut answer
 - **WHEN** an answer ends with `done_reason` `length`
