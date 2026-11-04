@@ -16,6 +16,7 @@ members = [
     "troupe-run",
     "troupe-runner-claude-code",
     "troupe-runner-ollama",
+    "troupe-runner-openai-chat",
     "troupe-runner-scripted",
     "troupe-stage-local",
     "troupe-store-text",
@@ -1310,6 +1311,7 @@ dependencies = [
     { name = "troupe-plugin-sdk" },
     { name = "troupe-runner-claude-code" },
     { name = "troupe-runner-ollama" },
+    { name = "troupe-runner-openai-chat" },
     { name = "troupe-runner-scripted" },
     { name = "troupe-stage-local" },
     { name = "troupe-store-text" },
@@ -1325,6 +1327,7 @@ requires-dist = [
     { name = "troupe-plugin-sdk", editable = "packages/troupe-plugin-sdk" },
     { name = "troupe-runner-claude-code", editable = "plugins/runner-claude-code" },
     { name = "troupe-runner-ollama", editable = "plugins/runner-ollama" },
+    { name = "troupe-runner-openai-chat", editable = "plugins/runner-openai-chat" },
     { name = "troupe-runner-scripted", editable = "plugins/runner-scripted" },
     { name = "troupe-stage-local", editable = "packages/troupe-stage-local" },
     { name = "troupe-store-text", editable = "packages/troupe-store-text" },
@@ -1347,6 +1350,17 @@ requires-dist = [{ name = "troupe-plugin-sdk", editable = "packages/troupe-plugi
 name = "troupe-runner-ollama"
 version = "0.0.0"
 source = { editable = "plugins/runner-ollama" }
+dependencies = [
+    { name = "troupe-plugin-sdk" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "troupe-plugin-sdk", editable = "packages/troupe-plugin-sdk" }]
+
+[[package]]
+name = "troupe-runner-openai-chat"
+version = "0.0.0"
+source = { editable = "plugins/runner-openai-chat" }
 dependencies = [
     { name = "troupe-plugin-sdk" },
 ]
@@ -1436,6 +1450,7 @@ dev = [
     { name = "troupe-run" },
     { name = "troupe-runner-claude-code" },
     { name = "troupe-runner-ollama" },
+    { name = "troupe-runner-openai-chat" },
     { name = "troupe-runner-scripted" },
     { name = "troupe-stage-local" },
     { name = "troupe-store-text" },
@@ -1465,6 +1480,7 @@ dev = [
     { name = "troupe-run", editable = "packages/troupe-run" },
     { name = "troupe-runner-claude-code", editable = "plugins/runner-claude-code" },
     { name = "troupe-runner-ollama", editable = "plugins/runner-ollama" },
+    { name = "troupe-runner-openai-chat", editable = "plugins/runner-openai-chat" },
     { name = "troupe-runner-scripted", editable = "plugins/runner-scripted" },
     { name = "troupe-stage-local", editable = "packages/troupe-stage-local" },
     { name = "troupe-store-text", editable = "packages/troupe-store-text" },

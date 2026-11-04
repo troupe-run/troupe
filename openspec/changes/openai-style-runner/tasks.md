@@ -10,22 +10,23 @@
 
 ## 2. Scaffold the plugin and wire it into the workspace (design D1, D14)
 
-- [ ] 2.1 Create `plugins/runner-openai-chat/` as the Claude Code runner was made: `pyproject.toml`
+- [x] 2.1 Create `plugins/runner-openai-chat/` as the Claude Code runner was made: `pyproject.toml`
   (`troupe-runner-openai-chat`, depending only on `troupe-plugin-sdk`, the script `troupe-runner-openai-chat`),
-  `LICENSE`, a stub `README.md` and `CHANGELOG.md`, and `src/troupe_runner_openai_chat/` with `__init__.py` (`NAME`
-  `openai-chat`, `__version__`), `py.typed` and `defaults.py` holding D7's settings, the fixed instructions (D6) and
-  the transcript's header list (D10). Verify: `uv sync` succeeds and `uv run python -c "import
+  `LICENSE` and a stub `README.md` (no `CHANGELOG.md`: release-please writes it at the first release, as for the SDK),
+  and `src/troupe_runner_openai_chat/` with `__init__.py` (`NAME` `openai-chat`, `__version__`), `py.typed` and `defaults.py` holding D7's settings, the fixed instructions (D6) and
+  the transcript's header list (D10). `__main__.py` lands with `runner.py` (5.1), which it imports. Verify: `uv sync` succeeds and `uv run python -c "import
   troupe_runner_openai_chat"` exits 0.
-- [ ] 2.2 Wire the member into the root `pyproject.toml` (workspace source and dev group, ruff, mypy and pytest paths,
+- [x] 2.2 Wire the member into the root `pyproject.toml` (workspace source and dev group, ruff, mypy and pytest paths,
   import-linter root packages, `plugins import nothing from troupe`, `plugins are independent of each other`, and a
-  contract that only `troupe_runner_openai_chat.service` imports `urllib`, `http`, `socket` and `ssl`), and into
-  `release-please-config.json`, `.release-please-manifest.json` and `scripts/check-paths.toml`, each as
-  `runner-claude-code` is. Verify: `uv run pytest scripts/tests/workspace` and `uv run lint-imports` pass, and a
+  contract that only `troupe_runner_openai_chat.service` imports `urllib`, `http`, `socket` and `ssl`: top-level
+  names, since import-linter refuses an external submodule), and into `release-please-config.json`,
+  `.release-please-manifest.json`, `scripts/check-paths.toml` and the `troupe-run` bundle (bare until its first
+  release), each as `runner-claude-code` and the SDK are. Verify: `uv run pytest scripts/tests/workspace` and `uv run lint-imports` pass, and a
   scratch module in the plugin importing `troupe` makes `lint-imports` fail, then is removed.
 
 ## 3. Options, schemas and the runtime (design D2, D7, D11)
 
-- [ ] 3.1 Add `schemas/options.schema.json` (closed: `maxTurns` and `maxTotalTokens`, positive integers) and
+- [x] 3.1 Add `schemas/options.schema.json` (closed: `maxTurns` and `maxTotalTokens`, positive integers) and
   `schemas/errors.schema.json` (`openai-chat.unknown-option`, `openai-chat.invalid-options`, `openai-chat.no-runtime`,
   `openai-chat.insecure-endpoint`, each with its details schema). Verify: a schema test passes the protocol's
   strictness check on both, validates the documented options, and refuses an unknown key and `maxTurns` 0.
@@ -39,16 +40,16 @@
   Every run a test starts uses it, unless the test sets limits of its own and says why: the runner tests, fixture
   replays, conformance, the perform tests and the live test. Verify: a test fails when any test helper starts a run
   whose options set neither limit. It's checked by planting one in a scratch test.
-- [ ] 3.3 Write the masking function (D11) that every outgoing event, record and error passes through. Verify: unit
+- [x] 3.3 Write the masking function (D11) that every outgoing event, record and error passes through. Verify: unit
   tests for the exact value and OpenAI's masked form (`sk-cana*********6789`), a credential under eight characters,
   and a property test that no output holds the credential whatever text surrounds it.
 
 ## 4. Talking to the service (design D3, D4, D8)
 
-- [ ] 4.1 Write the fake endpoint in the plugin's tests (D13): scripted statuses, headers, bodies and streams, pauses,
+- [x] 4.1 Write the fake endpoint in the plugin's tests (D13): scripted statuses, headers, bodies and streams, pauses,
   cut-offs, held-open responses, and a record of every request and its headers. Verify: its own tests show each
   scripted behaviour reaching a plain `urllib` client.
-- [ ] 4.2 Write `service.py`: one request with the runtime's endpoint, model and credential, `stream` and
+- [x] 4.2 Write `service.py`: one request with the runtime's endpoint, model and credential, `stream` and
   `stream_options`, connect and stream timeouts, no redirects, proxies and TLS from the environment, and a handle the
   main thread can close. Verify: tests against the fake endpoint show the `Authorization` header only when there's a
   credential, a 307 not followed (the fake's second host gets nothing), and a held-open response closed from another
