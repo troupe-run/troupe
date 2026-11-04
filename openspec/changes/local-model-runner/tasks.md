@@ -222,9 +222,11 @@
   every CI job passes on Linux, macOS and Windows. The Linux and Windows logs show the client's `close()` test
   (3.1) and the runner's cancel and end-of-input tests (6.1) ran rather than being skipped, and every platform's log
   shows the live test skipped with its reason (9.1).
-- [ ] 10.2 Open the troupe-run/infrastructure pull request that adds the `ollama-runner` spec's Purpose to
-  `oob/troupe-spec-purposes.json`, following its `oob/README.md`, to merge after this one. Verify: its drift job's
-  plan names `ollama-runner`, and the PR is linked from this one.
+- [x] 10.2 Open the troupe-run/infrastructure pull request that adds the `ollama-runner` spec's Purpose to
+  `oob/troupe-spec-purposes.json`, following its `oob/README.md`, to merge after this one. Verify: `oob.py` on its
+  branch names `ollama-runner` (the drift job runs only on `main`, so its output is quoted in the PR), and the PR is
+  linked from this one (troupe-run/infrastructure#267, for #266: `oob.py` reports only the record with no spec, as
+  expected until this merges; linked in a comment on #283).
 
 ## Workflow follow-up
 
