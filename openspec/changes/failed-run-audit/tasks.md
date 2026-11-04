@@ -58,12 +58,12 @@
   `outside` and `error` is refused naming the field, and an end recorded without an audit (a stored event from before
   this change) gives a summary with none (in `test_run_changes_recording.py`, which builds
   recorded runs by hand).
-- [ ] 4.2 Render the audit in `render_run` and after `logs`'s outcome line (D4), with the theatre note for a run in
+- [x] 4.2 Render the audit in `render_run` and after `logs`'s outcome line (D4), with the theatre note for a run in
   the theatre. Verify `test_cli_runs.py` covers each cli delta scenario through `troupe status <run>` and
   `troupe logs <run>` on recorded runs: timed-out with `notes.md` added needing `write`, cancelled with `README.md`
   removed needing `delete`, failed with every change declared, theatre note, and no audit line for a run that never
   started.
-- [ ] 4.3 Update `docs/the-company/performances-and-runs.md` ("How a run ends" and "Effects": the audit runs whatever
+- [x] 4.3 Update `docs/the-company/performances-and-runs.md` ("How a run ends" and "Effects": the audit runs whatever
   the outcome, a failed run keeps its error, and status and logs show what it found) and `docs/prompt-book/cli.md`
   where it describes `status` and `logs` output. Verify `test_cli_docs.py` and the docs checks pass.
 

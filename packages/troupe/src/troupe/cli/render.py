@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from troupe.core.errors import TroupeError
+from troupe.core.runners.effects import Change
 from troupe.platform.paths import friendly
 
 
@@ -67,6 +68,7 @@ def render_run(run: Mapping[str, Any]) -> list[str]:
     ]
     if "error" in run:
         lines.append(f"  error: {run['error']['code']}: {run['error']['problem']}")
+    lines.extend(render_audit(run))
     if "endedAt" in run:
         lines.append(f"  ended: {run['endedAt']}")
     if "transcript" in run:
@@ -80,6 +82,29 @@ def render_run(run: Mapping[str, Any]) -> list[str]:
         )
     if "changes" in run:
         lines.extend(_changes(run["changes"]))
+    return lines
+
+
+def render_audit(run: Mapping[str, Any]) -> list[str]:
+    """What the audit of a run's changes found, for its summary and its logs (spec: cli, "Status
+    and logs show a run's audit"). A run with no audit recorded shows nothing."""
+    audit = run.get("audit")
+    if audit is None:
+        return []
+    if "error" in audit:
+        return [f"  audit couldn't run: {audit['error']['code']}: {audit['error']['problem']}"]
+    outside = audit["outside"]
+    if not outside:
+        return ["  audit: every change the run made was declared"]
+    count = f"{len(outside)} {'change' if len(outside) == 1 else 'changes'}"
+    lines = [f"  audit: {count} outside the declaration"]
+    lines.extend(
+        "    " + Change(c["path"], c["change"], c["needs"], to=c.get("to")).shown() for c in outside
+    )
+    if run["workspace"]["kind"] == "theatre":
+        lines.append(
+            "    A run in the theatre counts every change made there while it ran, by anyone."
+        )
     return lines
 
 

@@ -57,7 +57,7 @@ def test_a_timed_out_run_keeps_its_error_and_records_the_change_outside(tmp_path
     assert run["audit"] == {"outside": [{"path": "notes.md", "change": "added", "needs": "write"}]}
 
 
-class _RemovesThenCancels(Harness):
+class RemovesThenCancels(Harness):
     """A person who removes README.md from the theatre once the run's first event arrives, then
     cancels the run."""
 
@@ -72,7 +72,7 @@ class _RemovesThenCancels(Harness):
 
 
 def test_a_cancelled_run_keeps_no_error_and_records_the_removal_outside(tmp_path: Path) -> None:
-    harness = _RemovesThenCancels(theatre(tmp_path))
+    harness = RemovesThenCancels(theatre(tmp_path))
     (harness.repo.path / "README.md").write_bytes(b"read me\n")
     harness.repo.commit_all("a readme")
     run = _run(harness, request(script(INIT, {"hang": True}), effects={"write": ["**"]}))
@@ -146,7 +146,7 @@ def test_an_ok_run_whose_workspace_cant_be_read_fails_and_its_end_is_still_recor
 def test_a_cancelled_run_whose_workspace_cant_be_read_stays_cancelled(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    harness = _RemovesThenCancels(theatre(tmp_path))
+    harness = RemovesThenCancels(theatre(tmp_path))
     (harness.repo.path / "README.md").write_bytes(b"read me\n")
     harness.repo.commit_all("a readme")
     _unreadable_after_the_start(monkeypatch)
