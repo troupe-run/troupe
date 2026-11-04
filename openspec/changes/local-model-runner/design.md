@@ -89,11 +89,18 @@ lock, so the two threads' lines never interleave.
   runner, and the same on all three platforms.
 - *Alternative:* `asyncio` with a hand-written HTTP/1.1 client. Rejected: it reimplements chunked decoding and TLS
   setup that `http.client` already has, to save one thread.
+- **Backstops** (review, 2026-11-04): an exception on the main thread is reported to standard error and exits 1
+  through `os._exit`, never an interpreter abort. A lone surrogate in Ollama's JSON (a `\ud800` escape) is replaced
+  with `?` in every string decoded from a line, since it can't be UTF-8 and the SDK's summaries and tools would fail
+  on it after an event's `seq` was taken. The transcript keeps the line as Ollama sent it, and every write encodes a
+  lone surrogate as its JSON escape.
 
 ### D4. Preflight before acknowledging `run/start`
 
-The runner first parses the options (D11), then makes two requests, each with a socket timeout of
-`PREFLIGHT_TIMEOUT_SECONDS` (10, well under the host's 30):
+The runner first parses the options (D11), then makes two requests, which share one deadline of
+`PREFLIGHT_TIMEOUT_SECONDS` (10, well under the host's 30): each gets what's left of it as its socket timeout. (A
+review on 2026-11-04 found the first form, a timeout for each, could take 20 s and more against a slow host.) The
+host name's lookup isn't bounded by it:
 
 1. `GET /api/version`. A connection refused, a timeout, or a body without a `version` string means
    `ollama.unreachable`, naming the endpoint (without user info, which D10 refuses anyway). The version is then
@@ -106,7 +113,8 @@ The runner first parses the options (D11), then makes two requests, each with a 
    rather than guess. The same answer gives the model's maximum context, `model_info["<arch>.context_length"]`
    where `<arch>` is `model_info["general.architecture"]`, which D15 uses.
 
-Only then does the runner answer `run/start`, so a misconfigured actor ends `could-not-start` with the runner's own
+It then makes the conversation, which checks the run's workspace and scratch directory, and refuses a run it can't
+make with `runner.invalid-params`. Only then does the runner answer `run/start`, so a misconfigured actor ends `could-not-start` with the runner's own
 error, rather than a run that fails on its first request. The preflight requests aren't transcript records: they come
 before the run starts, and the version and the model are in `init`.
 
@@ -216,7 +224,10 @@ runner is the engine's client, so its own retries are the ones to report. The co
 
 - `endpoint` defaults to `DEFAULT_ENDPOINT` (`http://127.0.0.1:11434`) in the plugin's `defaults.py`. The URL's
   scheme is `http` or `https`, and it has a host and an optional port. Its path is empty or `/`, and it has no query,
-  fragment or user info. User info is refused so a password can't be committed to config, and the refusal never
+  fragment or user info. Its port is at most 65535, and each part of a host name is 1 to 63 letters, digits or
+  hyphens, in the published schema as well as the parser, since `urlsplit` and the resolver raise on either (review,
+  2026-11-04). A bracketed IPv6 address is checked by its shape only; one that isn't an address is
+  `ollama.unreachable` at preflight, naming it, rather than a crash. User info is refused so a password can't be committed to config, and the refusal never
   echoes it. Requests go to `<endpoint>/api/...`.
 - Any host is accepted (owner, 2026-11-04). A run can therefore send the workspace's contents wherever config
   points. The README says so, and restricting it is left to policy.
@@ -238,7 +249,7 @@ runner is the engine's client, so its own retries are the ones to report. The co
 
 `defaults.py` holds `DEFAULT_ENDPOINT`, `MAX_TURNS`, `DEFAULT_CONTEXT_LENGTH`, `TOOL_OUTPUT_SHARE`, `BYTES_PER_TOKEN`, `GLOB_PATH_BYTES`,
 `GREP_MATCH_BYTES`, `PREFLIGHT_TIMEOUT_SECONDS`, `STREAM_IDLE_TIMEOUT_SECONDS`,
-`LINE_MAX_BYTES`, `RETRY_MAX_ATTEMPTS`, `RETRY_DELAY_SECONDS` and `STOP_GRACE_SECONDS`, each documented in the README.
+`LINE_MAX_BYTES`, `READ_NOTE_BYTES`, `RETRY_MAX_ATTEMPTS`, `RETRY_DELAY_SECONDS` and `STOP_GRACE_SECONDS`, each documented in the README.
 
 The error codes are in `errors.schema.json`, each with closed `details`:
 
@@ -349,7 +360,8 @@ it ships, stopping the run, is the one that loses nothing.
   `BYTES_PER_TOKEN` (3, an estimate on the low side for code and English, so the budget errs small), which is about
   12 KB at 16384 tokens. It lowers the SDK's `ToolLimits` to fit it: `read_max_bytes` is the budget, and
   `glob_max_paths` and `grep_max_matches` are the budget over `GLOB_PATH_BYTES` (64) and `GREP_MATCH_BYTES` (128),
-  each no higher than the SDK's own default. The SDK's capped results already say where they stopped and how to read
+  each no higher than the SDK's own default. `read_max_bytes` keeps `READ_NOTE_BYTES` (128) free, for the note the
+  SDK's `Read` adds after a capped read, naming the line to read on from, so it's never cut (review, 2026-11-04). The SDK's capped results already say where they stopped and how to read
   on. `Glob` and `Grep` are capped by count, not bytes, so a result can still be over the budget, for example with
   very long lines. The runner then cuts it on a character boundary and adds a note: `[cut to <n> bytes to fit the
   model's context window; narrow it with path or glob, or read with offset and limit]`. That cut text is what the

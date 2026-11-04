@@ -117,6 +117,10 @@ class Settings:
     """/api/show's answer for each model Ollama has; any other is 404."""
     silent_preflight: bool = False
     """Accept preflight requests and never answer them."""
+    version_delay: float = 0.0
+    """Answer /api/version this many seconds late."""
+    silent_show: bool = False
+    """Accept /api/show and never answer it."""
 
 
 @dataclass(frozen=True)
@@ -227,6 +231,8 @@ class FakeOllama:
             self._send(handler, 404, b'{"error": "not found"}')
         elif settings.silent_preflight:
             self._hold(handler, None)
+        elif settings.version_delay and not self._hold(handler, settings.version_delay):
+            return
         elif settings.version_body is not None:
             self._send(handler, 200, settings.version_body)
         elif settings.version is None:
@@ -236,7 +242,7 @@ class FakeOllama:
 
     def _post(self, handler: BaseHTTPRequestHandler, body: bytes) -> None:
         if handler.path == "/api/show":
-            if self.settings.silent_preflight:
+            if self.settings.silent_preflight or self.settings.silent_show:
                 self._hold(handler, None)
                 return
             model = json.loads(body).get("model")

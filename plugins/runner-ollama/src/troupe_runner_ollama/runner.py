@@ -19,6 +19,7 @@ import os
 import queue
 import sys
 import threading
+import time
 import traceback
 from typing import Any, BinaryIO, NoReturn
 
@@ -76,6 +77,12 @@ def loads_strict(text: str) -> Any:  # noqa: ANN401 - JSON
     return json.loads(text, object_pairs_hook=_no_duplicates, parse_constant=_no_constant)
 
 
+def _left(deadline: float) -> float:
+    """What's left of the preflight's deadline, as a socket timeout: never zero, which would make
+    the socket non-blocking."""
+    return max(0.05, deadline - time.monotonic())
+
+
 def model_maximum(shown: dict[str, Any]) -> int | None:
     """The model's own maximum context, from /api/show's ``model_info``, or None when Ollama
     doesn't say (design D4)."""
@@ -114,7 +121,10 @@ class Runner:
     def _write(self, message: dict[str, Any], *, from_worker: bool = False) -> bool:
         """Write one message as one line. A message from the worker is dropped once the run is
         stopping; False when it was."""
-        line = json.dumps(message, ensure_ascii=False, separators=(",", ":")).encode() + b"\n"
+        # backslashreplace: a lone surrogate becomes its JSON escape, so no write can fail after
+        # an event's seq was taken.
+        text = json.dumps(message, ensure_ascii=False, separators=(",", ":"))
+        line = text.encode("utf-8", "backslashreplace") + b"\n"
         with self._out:
             if from_worker and self._stop.is_set():
                 return False
@@ -191,10 +201,16 @@ class Runner:
                 elif kind == _TROUPE_EOF:
                     self._diagnose("troupe closed standard input; stopping")
                     self._halt()
-                    raise _Exit(0)
+                    raise _Exit(1 if self._failed else 0)
                 # _WORKER_DONE: the result is out (or the run failed); wait for shutdown.
         except _Exit as done:
             return done.code
+        except Exception:
+            # The runner's own bug on the main thread: say so, stop the worker, and exit 1
+            # through main's os._exit, never through an interpreter abort (design D3).
+            self._diagnose("the runner failed:\n" + traceback.format_exc())
+            self._halt()
+            return 1
 
     def _handle(self, line: bytes) -> None:
         try:
@@ -251,7 +267,12 @@ class Runner:
 
     def _initialize(self, id_: object, params: object) -> None:
         offered = params.get("protocolVersions") if isinstance(params, dict) else None
-        if not isinstance(offered, list) or not any(v in p.PROTOCOL_VERSIONS for v in offered):
+        versions = (
+            [v for v in offered if isinstance(v, int) and not isinstance(v, bool)]
+            if isinstance(offered, list)
+            else []
+        )
+        if not any(v in p.PROTOCOL_VERSIONS for v in versions):
             self._error(
                 id_,
                 p.JSONRPC_REFUSED,
@@ -263,7 +284,7 @@ class Runner:
             )
             return
         self._initialized = True
-        chosen = max(v for v in offered if v in p.PROTOCOL_VERSIONS)
+        chosen = max(v for v in versions if v in p.PROTOCOL_VERSIONS)
         self._result(
             id_,
             {
@@ -298,8 +319,7 @@ class Runner:
             return
         try:
             options = parse_options(start.options)
-            client = Client(options.endpoint)
-            engine_version, window = self._preflight(client, options)
+            client, engine_version, window = self._preflight(options)
         except OptionsError as error:
             self._error(
                 id_,
@@ -315,30 +335,46 @@ class Runner:
                 id_, refused.rpc_code, refused.code, refused.problem, refused.fix, refused.details
             )
             return
+        try:
+            # Made before run/start is answered: it checks the workspace and scratch directory, and
+            # a run it can't make is refused, never acknowledged and then dropped.
+            conversation = Conversation(
+                start=start,
+                options=options,
+                window=window,
+                engine_version=engine_version,
+                client=client,
+                sink=self,
+            )
+        except (OSError, ValueError) as error:
+            self._error(
+                id_,
+                p.JSONRPC_INVALID_PARAMS,
+                "runner.invalid-params",
+                f"The run's workspace or scratch directory can't be used: {error}",
+                "Send a workspace that exists, and a scratch directory that exists outside it.",
+            )
+            return
         self._run_id = start.run_id
         self._client = client
         self._result(id_, {"runId": start.run_id})
-        conversation = Conversation(
-            start=start,
-            options=options,
-            window=window,
-            engine_version=engine_version,
-            client=client,
-            sink=self,
-        )
         self._worker = threading.Thread(target=self._converse, args=(conversation,), daemon=True)
         self._worker.start()
 
-    def _preflight(self, client: Client, options: Options) -> tuple[str, int]:
-        """Ollama's version and the run's window, once Ollama, its version and the model pass
-        (design D4, D15, D16). Raises _Refused or OptionsError."""
+    def _preflight(self, options: Options) -> tuple[Client, str, int]:
+        """The client, Ollama's version and the run's window, once Ollama, its version and the
+        model pass (design D4, D15, D16). Both requests share one deadline,
+        PREFLIGHT_TIMEOUT_SECONDS, so the preflight fits inside troupe's start limit. Raises
+        _Refused or OptionsError."""
         endpoint = options.endpoint
+        deadline = time.monotonic() + PREFLIGHT_TIMEOUT_SECONDS
         unreachable_fix = (
             f"Start Ollama (ollama serve) so it listens at {endpoint}, or set options.endpoint to "
             "where it listens."
         )
         try:
-            version = client.version(PREFLIGHT_TIMEOUT_SECONDS)
+            client = Client(endpoint)
+            version = client.version(_left(deadline))
         except (UnreachableError, StoppedError) as error:
             raise _Refused(
                 p.JSONRPC_REFUSED,
@@ -363,7 +399,7 @@ class Runner:
                     unmet_details,
                 )
         try:
-            shown = client.show(options.model, PREFLIGHT_TIMEOUT_SECONDS)
+            shown = client.show(options.model, _left(deadline))
         except (UnreachableError, StoppedError) as error:
             raise _Refused(
                 p.JSONRPC_REFUSED,
@@ -404,8 +440,8 @@ class Runner:
                     "tokens.",
                     f"Give contextLength {maximum} or less.",
                 )
-            return version, options.context_length
-        return version, default_window(maximum)
+            return client, version, options.context_length
+        return client, version, default_window(maximum)
 
     # The run
 

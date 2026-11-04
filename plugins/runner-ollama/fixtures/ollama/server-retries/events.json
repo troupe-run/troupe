@@ -29,7 +29,7 @@
     "delayMs": 1000,
     "reason": "server",
     "maxAttempts": 3,
-    "message": "Ollama answered server busy, please try again.  maximum pending requests exceeded"
+    "message": "Ollama answered status 503: server busy, please try again.  maximum pending requests exceeded"
   },
   {
     "type": "retry",
@@ -38,7 +38,7 @@
     "delayMs": 2000,
     "reason": "server",
     "maxAttempts": 3,
-    "message": "Ollama answered server busy, please try again.  maximum pending requests exceeded"
+    "message": "Ollama answered status 503: server busy, please try again.  maximum pending requests exceeded"
   },
   {
     "type": "tool_call",

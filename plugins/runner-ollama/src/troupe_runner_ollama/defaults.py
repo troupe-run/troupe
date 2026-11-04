@@ -36,9 +36,14 @@ GLOB_PATH_BYTES = 64
 GREP_MATCH_BYTES = 128
 """The bytes one Grep match is taken to need, to scale the SDK's match count to the budget."""
 
+READ_NOTE_BYTES = 128
+"""The bytes kept free in a tool result's budget for the note the SDK's Read adds after a capped
+read, saying which line to read on from, so it's never cut (design D15)."""
+
 PREFLIGHT_TIMEOUT_SECONDS = 10.0
-"""How long each preflight request (version, model) may take before Ollama counts as unreachable
-(design D4). Well under troupe's RUNNER_START_TIMEOUT_SECONDS (30), which covers run/start too."""
+"""How long the whole preflight (version, then model) may take before Ollama counts as unreachable:
+one deadline shared by both requests (design D4). Well under troupe's RUNNER_START_TIMEOUT_SECONDS
+(30), which covers run/start too. Looking up the endpoint's host name isn't bounded by it."""
 
 STREAM_IDLE_TIMEOUT_SECONDS = 300.0
 """How long a request may go without a line from Ollama before it's retried as a network failure

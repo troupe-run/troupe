@@ -21,13 +21,18 @@ from fake_ollama import (
     Line,
     Settings,
     calls,
+    done,
     final,
     message,
     serving,
     tool_call,
 )
 from ollama_harness import Session
-from troupe_runner_ollama.defaults import DEFAULT_CONTEXT_LENGTH, STOP_GRACE_SECONDS
+from troupe_runner_ollama.defaults import (
+    DEFAULT_CONTEXT_LENGTH,
+    PREFLIGHT_TIMEOUT_SECONDS,
+    STOP_GRACE_SECONDS,
+)
 from troupe_runner_ollama.runner import Runner, _Exit
 
 MARGIN = 5.0
@@ -316,3 +321,79 @@ def test_a_failure_of_the_runner_itself_is_reported_and_its_exit_is_1() -> None:
         "id": 1,
         "result": {},
     }
+
+
+# Found by a review of the code (troupe-run/troupe#283), each failing before its fix.
+
+
+def test_a_scratch_directory_that_isnt_there_is_refused_never_acknowledged(
+    workspace: Path,
+) -> None:
+    running = Session(workspace)
+    try:
+        with serving([final("hi")]) as fake:
+            running.initialize()
+            params = {
+                "runId": running.run_id,
+                "direction": "d",
+                "workspace": str(workspace),
+                "options": _options(fake),
+                "limits": {"eventMaxBytes": 65536},
+                "effects": {"write": [], "delete": [], "move": []},
+                "scratch": str(workspace.parent / "no-such-scratch"),
+            }
+            data = _error(running.request("run/start", params))
+            assert data["code"] == "runner.invalid-params"
+            assert "scratch" in data["fix"]
+            running.close_stdin()
+            assert running.rest() == []
+            assert running.wait() == 0
+    finally:
+        running.kill()
+        running.validate_all()
+
+
+@pytest.mark.parametrize("endpoint", ["http://[:]", "http://[1.2.3.4]:11434"])
+def test_a_bracketed_endpoint_that_isnt_an_address_is_unreachable_not_a_crash(
+    session: Session, endpoint: str
+) -> None:
+    data = _error(session.start({"model": "fake", "endpoint": endpoint}))
+    assert data["code"] == "ollama.unreachable"
+    assert "isn't an address" in data["problem"]
+
+
+def test_both_preflight_requests_share_one_deadline(session: Session) -> None:
+    # The version comes late, then the model never: with a limit for each request the refusal
+    # would take nearly twice the limit; with one deadline for both it takes the limit.
+    slow = Settings(version_delay=PREFLIGHT_TIMEOUT_SECONDS * 0.8, silent_show=True)
+    with serving(settings=slow) as fake:
+        started = time.monotonic()
+        data = _error(session.start(_options(fake)))
+        took = time.monotonic() - started
+    assert data["code"] == "ollama.unreachable"
+    assert took < PREFLIGHT_TIMEOUT_SECONDS + MARGIN
+
+
+def test_a_protocol_version_of_false_isnt_version_0(session: Session) -> None:
+    session.refused.add(1)  # the contract's schema refuses it too
+    data = _error(session.initialize([False]))
+    assert data["code"] == "runner.unsupported-version"
+
+
+def test_a_lone_surrogate_from_ollama_leaves_no_gap_in_the_events(session: Session) -> None:
+    # json.loads turns the \ud800 escape into a lone surrogate, which can't be UTF-8.
+    answer = Answer(
+        [b'{"message":{"role":"assistant","content":"x\\ud800y"},"done":false}', done()]
+    )
+    with serving([answer]) as fake:
+        session.start(_options(fake))
+        events = _events(session.until_result())
+    assert [event["seq"] for event in events] == list(range(len(events)))
+    assert events[-1]["status"] == "ok"
+
+
+def test_end_of_input_after_the_runner_failed_exits_1() -> None:
+    stdout, stderr = io.BytesIO(), io.BytesIO()
+    runner = Runner(io.BytesIO(), stdout, stderr)
+    runner._converse(_Exploding())  # type: ignore[arg-type]
+    assert runner.run() == 1  # its standard input is already at its end

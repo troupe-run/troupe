@@ -24,7 +24,7 @@ from troupe_plugin_sdk.defaults import (
     READ_MAX_BYTES,
     ToolLimits,
 )
-from troupe_plugin_sdk.events import EventNumbering, fit, utf8_size
+from troupe_plugin_sdk.events import EventNumbering, cut, fit, utf8_size
 from troupe_plugin_sdk.tools import Tools
 from troupe_runner_ollama import NAME, __version__
 from troupe_runner_ollama.client import Client, EngineError, RetryableError, StoppedError
@@ -32,6 +32,7 @@ from troupe_runner_ollama.defaults import (
     BYTES_PER_TOKEN,
     GLOB_PATH_BYTES,
     GREP_MATCH_BYTES,
+    READ_NOTE_BYTES,
     RETRY_DELAY_SECONDS,
     RETRY_MAX_ATTEMPTS,
     SUMMARY_MAX_BYTES,
@@ -75,7 +76,11 @@ class _RunEnded(Exception):  # noqa: N818 - an ending, not an error of the runne
 def encode(value: object) -> bytes:
     """The bytes the runner sends for a JSON value: compact, UTF-8, the same everywhere, so a
     message recorded on its own is byte for byte what's inside the request (design D7)."""
-    return json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    # A lone surrogate (which a \\ud800 escape in Ollama's JSON decodes to) can't be UTF-8: it's
+    # written back as the same JSON escape, so encoding never fails.
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode(
+        "utf-8", "backslashreplace"
+    )
 
 
 def tool_budget(window: int) -> int:
@@ -89,7 +94,9 @@ def tool_limits(window: int) -> ToolLimits:
     goes above the SDK's own default."""
     budget = tool_budget(window)
     return ToolLimits(
-        read_max_bytes=min(READ_MAX_BYTES, budget),
+        # Room for the SDK's own "read on with offset N" note, which it adds after the text it
+        # read, so fit_output never has to cut it.
+        read_max_bytes=max(1, min(READ_MAX_BYTES, budget - READ_NOTE_BYTES)),
         glob_max_paths=max(1, min(GLOB_MAX_PATHS, budget // GLOB_PATH_BYTES)),
         grep_max_matches=max(1, min(GREP_MAX_MATCHES, budget // GREP_MATCH_BYTES)),
     )
@@ -104,6 +111,8 @@ def fit_output(output: str, budget: int) -> str:
         f"\n[cut to {budget} bytes to fit the model's context window; narrow it with path or "
         "glob, or read with offset and limit]"
     )
+    if utf8_size(note) > budget:  # a window too small for the note: just the output, cut
+        return cut(output, budget)
     data = output.encode("utf-8")
     kept = data[: max(0, budget - utf8_size(note))].decode("utf-8", errors="ignore")
     return kept + note
@@ -117,6 +126,19 @@ class _Answer:
     done_reason: str | None = None
     prompt_tokens: int | None = None
     output_tokens: int | None = None
+
+
+def _clean(value: Any) -> Any:  # noqa: ANN401 - JSON
+    """``value`` with each lone surrogate in its strings replaced by ``?``. JSON can escape one
+    (``\\ud800``), and json.loads decodes it, but it can't be UTF-8, so the SDK's summaries and
+    tools would fail on it after an event's seq was taken. The transcript keeps the line as sent."""
+    if isinstance(value, str):
+        return value.encode("utf-8", "replace").decode("utf-8")
+    if isinstance(value, list):
+        return [_clean(item) for item in value]
+    if isinstance(value, dict):
+        return {_clean(key): _clean(item) for key, item in value.items()}
+    return value
 
 
 def _count(value: object) -> int | None:
@@ -316,7 +338,7 @@ class Conversation:
         for line in lines:
             self._record(line)
             try:
-                data = json.loads(line)
+                data = _clean(json.loads(line))
             except ValueError:
                 data = None
             if not isinstance(data, dict):
@@ -406,7 +428,6 @@ class Conversation:
             return
 
     def _result(self, status: str, message: str) -> None:
-        self._ended = True
         usage = {
             key: value
             for key, value in (
@@ -425,3 +446,4 @@ class Conversation:
         if usage:
             data["usage"] = usage
         self._event(data, summary="message")
+        self._ended = True

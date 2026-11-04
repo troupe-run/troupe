@@ -28,7 +28,7 @@ the wrong shape too (`ollama.invalid-options`), naming the option.
 | Option | Shape | Default | What it does |
 |---|---|---|---|
 | `model` | text | — | The model, as Ollama names it, such as `qwen3.5:4b`. It must be pulled, and able to call tools |
-| `endpoint` | `http` or `https` URL: a host and an optional port | `http://127.0.0.1:11434` | Where Ollama listens. No user name, password, path, query or fragment |
+| `endpoint` | `http` or `https` URL: a host and an optional port | `http://127.0.0.1:11434` | Where Ollama listens. No user name, password, path, query or fragment; a port up to 65535, and each part of a host name 1 to 63 characters |
 | `maxTurns` | 1 to 1000 | 50 | The requests one run may make. Reaching it ends the run with an `error` result |
 | `contextLength` | a whole number of tokens, at most the model's maximum | 16384, or the model's maximum if smaller | The context window, sent as Ollama's `num_ctx` on every request. See [The context window](#the-context-window) |
 | `temperature` | a number, 0 or more | Ollama's | Sent as `options.temperature` |
@@ -43,7 +43,7 @@ points, and config lives in the repository. Restricting where a run may send the
 
 ## Before the run starts
 
-Before it acknowledges `run/start`, the runner asks Ollama for its version and for the model, each within 10 s, and
+Before it acknowledges `run/start`, the runner asks Ollama for its version and for the model, within 10 s for both, and
 refuses the run, so it ends `could-not-start` with the reason, when:
 
 | Error | When | Fix |
@@ -155,7 +155,8 @@ Each is a named setting in [`defaults.py`](src/troupe_runner_ollama/defaults.py)
 | `BYTES_PER_TOKEN` | 3 | The bytes taken to make a token, to turn the window into a byte budget |
 | `GLOB_PATH_BYTES` | 64 | The bytes one `Glob` path is taken to need |
 | `GREP_MATCH_BYTES` | 128 | The bytes one `Grep` match is taken to need |
-| `PREFLIGHT_TIMEOUT_SECONDS` | 10 | Each preflight request |
+| `READ_NOTE_BYTES` | 128 | Room kept in a tool result's budget for the SDK's note saying where a capped `Read` stopped |
+| `PREFLIGHT_TIMEOUT_SECONDS` | 10 | The whole preflight: both requests share one deadline |
 | `STREAM_IDLE_TIMEOUT_SECONDS` | 300 | A stream's silence before it's retried |
 | `LINE_MAX_BYTES` | 16 MiB | The longest line read from Ollama |
 | `RETRY_MAX_ATTEMPTS` | 3 | Attempts per request, the first included |
