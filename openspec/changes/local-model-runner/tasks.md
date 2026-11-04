@@ -211,7 +211,7 @@
   reason naming the variable and `TROUPE_LIVE_OLLAMA_MODEL`. Verify: without the variable,
   `uv run pytest packages/troupe/tests/test_ollama_live.py -rs` reports it skipped with that reason. That it's skipped
   in CI on all three operating systems is 10.1's to check.
-- [ ] 9.2 **Owner:** run the live test once on macOS with Ollama running and `qwen3.5:4b` pulled, and paste the outcome
+- [x] 9.2 **Owner:** run the live test once on macOS with Ollama running and `qwen3.5:4b` pulled, and paste the outcome
   and what it printed into the PR. An agent session runs it only with the owner's go-ahead (as 4.2). Verify: the run
   reached a `result`, and its outcome isn't `crashed`.
 
