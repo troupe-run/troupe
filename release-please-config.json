@@ -163,6 +163,18 @@
         }
       ]
     },
+    "plugins/runner-openai-chat": {
+      "release-type": "python",
+      "package-name": "troupe-runner-openai-chat",
+      "component": "troupe-runner-openai-chat",
+      "extra-files": [
+        {
+          "type": "toml",
+          "path": "/uv.lock",
+          "jsonpath": "$.package[?(@.name.value=='troupe-runner-openai-chat')].version"
+        }
+      ]
+    },
     "plugins/runner-scripted": {
       "release-type": "python",
       "package-name": "troupe-runner-scripted",
