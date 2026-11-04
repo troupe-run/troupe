@@ -192,9 +192,9 @@ and records only their reference.
 
 A runner starts with only the environment variables troupe's caller names for it, plus the minimum the operating
 system needs (`SYSTEMROOT` on Windows). Nothing is passed through from troupe's own environment: the runner policy,
-`RUNNER_ENVIRONMENT`, selects nothing. A runner that needs a credential or a setting is given it explicitly. A runtime's
-credential arrives as `TROUPE_RUNTIME_CREDENTIAL` ([The runtime and its credential](#the-runtime-and-its-credential)).
-
+`RUNNER_ENVIRONMENT`, selects nothing. A runner that needs a credential or a setting is given it explicitly. A
+runtime's credential arrives as `TROUPE_RUNTIME_CREDENTIAL` ([The runtime and its
+credential](#the-runtime-and-its-credential)).
 
 ### Cancel, end of input and shutdown
 
