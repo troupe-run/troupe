@@ -154,6 +154,7 @@ class Loop:
     _made: int = 0
     _warned_usage: bool = False
     _noted_model: bool = False
+    _spend: _Spend = field(default_factory=_Spend)
 
     def run(self, direction: str, character: str | None) -> ResultEvent | None:
         """Run the loop to its result. None when the run was stopped."""
@@ -161,7 +162,7 @@ class Loop:
             {"role": "system", "content": system_message(character)},
             {"role": "user", "content": direction},
         ]
-        spend = _Spend()
+        spend = self._spend
         try:
             for turn in range(1, self.options.max_turns + 1):
                 if self.stopping():
@@ -194,6 +195,10 @@ class Loop:
             return self._result("error", error.message, spend)
         except AbortedError:
             return None
+
+    def failure(self, message: str) -> ResultEvent:
+        """An error result for a failure of the runner's own, with what the run had used."""
+        return self._result("error", message, self._spend)
 
     # One reply
 

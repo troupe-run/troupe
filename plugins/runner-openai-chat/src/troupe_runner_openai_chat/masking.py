@@ -20,8 +20,9 @@ SHORTEST_MATCHED_BY_ENDS: Final = 8
 """A credential shorter than this is masked only where it appears whole: four characters at either
 end of a short value would match too much that isn't it."""
 
-_TOKEN = re.compile(r"[^\s\"'<>(),;]+")
-"""A run of characters an echoed key can be part of."""
+_TOKEN = re.compile(r"[^\s\"'<>(),;\\]+")
+"""A run of characters an echoed key can be part of. Never a backslash, so an echo inside JSON text
+(a transcript record holds a body as JSON) is masked without breaking the escape after it."""
 
 _TRAILING = ".:"
 """Punctuation that ends a sentence after an echoed key, which isn't part of it."""

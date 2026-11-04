@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from chat_harness import TEST_LIMITS
+from chat_harness import TEST_LIMITS, check_limits
 from fake_endpoint import (
     FakeEndpoint,
     Reply,
@@ -65,6 +65,8 @@ def run(
     direction: str = "Do the task.",
     event_max_bytes: int = 65536,
 ) -> Ran:
+    options = TEST_LIMITS if options is None else options
+    check_limits(options, None)
     workspace = tmp_path / "workspace"
     workspace.mkdir(exist_ok=True)
     events: list[RunEvent] = []
@@ -72,7 +74,7 @@ def run(
     with FakeEndpoint(script) as fake:
         loop = Loop(
             runtime=Runtime.checked(fake.endpoint, MODEL, "sk-canary-0123456789"),
-            options=parse_options(TEST_LIMITS if options is None else options),
+            options=parse_options(options),
             tools=Tools(workspace, effects),
             numbering=EventNumbering(str(uuid.uuid4()), event_max_bytes, next_seq=1),
             send=events.append,

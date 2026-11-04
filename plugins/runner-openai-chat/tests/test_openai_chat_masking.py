@@ -1,6 +1,8 @@
 """The credential, and a service's masked echo of it, never reach troupe (spec: openai-chat-runner,
 "A service's echo of the credential is masked"; design D11)."""
 
+import json
+
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
@@ -28,6 +30,12 @@ def test_a_masked_echo_inside_a_json_body_is_masked() -> None:
     assert Mask(CANARY)(body) == (
         '{"error": {"message": "Incorrect API key provided: ' + MASK + '", "code": null}}'
     )
+
+
+def test_an_echo_inside_json_text_is_masked_and_the_text_is_still_json() -> None:
+    record = json.dumps({"kind": "body", "body": json.dumps({"message": "key sk-cana****6789."})})
+    masked = Mask(CANARY)(record)
+    assert json.loads(json.loads(masked)["body"]) == {"message": f"key {MASK}."}
 
 
 @pytest.mark.parametrize(

@@ -22,6 +22,11 @@
       "properties": {"code": {"const": "openai-chat.no-runtime"}, "details": {"$ref": "#/$defs/where"}}
     },
     {
+      "description": "run/start and the runner's environment disagree about the credential: run/start's runtime.credential is true and TROUPE_RUNTIME_CREDENTIAL isn't set, or it's false and the variable is set. The problem says which way, never the value.",
+      "required": ["details"],
+      "properties": {"code": {"const": "openai-chat.credential-mismatch"}, "details": {"$ref": "#/$defs/where"}}
+    },
+    {
       "description": "The runtime has a credential and an http endpoint whose host isn't this machine, so the credential would travel in the clear.",
       "required": ["details"],
       "properties": {

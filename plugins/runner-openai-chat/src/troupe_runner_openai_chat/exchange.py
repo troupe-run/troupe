@@ -118,7 +118,7 @@ def retry_after(value: str | None, now: float | None = None) -> float | None:
     return max(0.0, seconds)
 
 
-def classify(error: StatusError) -> _Retryable:
+def classify(error: StatusError, url: str = "") -> _Retryable:
     """A status the exchange may retry, as a _Retryable. Raises ExchangeFailedError for one it
     mustn't."""
     status = error.status
@@ -144,6 +144,12 @@ def classify(error: StatusError) -> _Retryable:
         raise ExchangeFailedError(
             f"The conversation is longer than the model's context (HTTP 400): {message} Give the "
             "actor a smaller task, or a runtime whose model has a longer context."
+        )
+    if status == 404 and code is None:
+        raise ExchangeFailedError(
+            f"Nothing answered at {url or 'the endpoint'} (HTTP 404): {message} The runtime's "
+            "endpoint must be the base URL its Chat Completions API is served under, often ending "
+            "in /v1, such as http://127.0.0.1:11434/v1 for Ollama."
         )
     if status >= 500:
         return _Retryable("server", said, retry_after(error.headers.get("retry-after")))
@@ -200,7 +206,7 @@ def exchange(
         try:
             return _attempt(call, record)
         except StatusError as error:
-            retryable = classify(error)
+            retryable = classify(error, endpoint.chat_url)
         except (NetworkError, StreamError) as error:
             retryable = _Retryable("network", str(error))
             record({"kind": "dropped", "reason": retryable.message})

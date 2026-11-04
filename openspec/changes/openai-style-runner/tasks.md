@@ -30,7 +30,7 @@
   `schemas/errors.schema.json` (`openai-chat.unknown-option`, `openai-chat.invalid-options`, `openai-chat.no-runtime`,
   `openai-chat.insecure-endpoint`, each with its details schema). Verify: a schema test passes the protocol's
   strictness check on both, validates the documented options, and refuses an unknown key and `maxTurns` 0.
-- [ ] 3.2 Write `options.py` (parse and refuse, naming the option in `details.where`) and `runtime.py` (read the
+- [x] 3.2 Write `options.py` (parse and refuse, naming the option in `details.where`) and `runtime.py` (read the
   runtime from `run/start`, and the credential with the SDK's `runtime_credential`; refuse a missing runtime, a
   `run/start` and an environment that disagree about the credential (`openai-chat.credential-mismatch`), and a
   credential with an `http` endpoint to a non-loopback host). Verify: unit tests for each refusal in the spec's
@@ -38,7 +38,7 @@
   travels in the clear" scenarios pass, `127.0.0.1`, `::1` and
   `localhost` count as loopback, and `127.0.0.1.example.com` doesn't. That empty options give D7's defaults is
   checked here, by parsing them, and never by running a service on them.
-- [ ] 3.3a Add `TEST_LIMITS` (`maxTurns` 5, `maxTotalTokens` 20,000) in one place in the plugin's tests (design D7).
+- [x] 3.3a Add `TEST_LIMITS` (`maxTurns` 5, `maxTotalTokens` 20,000) in one place in the plugin's tests (design D7).
   Every run a test starts uses it, unless the test sets limits of its own and says why: the runner tests, fixture
   replays, conformance, the perform tests and the live test. Verify: a test fails when any test helper starts a run
   whose options set neither limit. It's checked by planting one in a scratch test.
@@ -65,7 +65,7 @@
 
 ## 5. The tool loop and the run's events (design D5, D6, D9, D10)
 
-- [ ] 5.1 Write `runner.py`: the handshake, `run/start` (options, runtime, declaration, `Tools`), `init` (name,
+- [x] 5.1 Write `runner.py`: the handshake, `run/start` (options, runtime, declaration, `Tools`), `init` (name,
   version, `engine.name` `chat-completions`, `engine.model`, the tools, `effects` `checked`), and the threads and
   queue of D5. Verify: a test sees `init` first with those fields, and `run/start` refusals answered before any
   request reaches the fake endpoint.
@@ -75,7 +75,7 @@
   read-only actor's refused `Write` and arguments that aren't JSON.
 - [x] 5.3 Sum usage and cost as D9 says, and warn when a response has no usage. Verify: the spec's usage and cost
   scenarios pass.
-- [ ] 5.4 Send the transcript as D10 frames it, through the masking function. Verify: a test reads a run's transcript
+- [x] 5.4 Send the transcript as D10 frames it, through the masking function. Verify: a test reads a run's transcript
   records back in order, finds no request header in any, and finds a 401's echoed key masked.
 - [x] 5.5 Cut every summary to fit `eventMaxBytes` and `SUMMARY_MAX_BYTES`. Verify: the spec's 1 MiB reply scenario.
 - [ ] 5.6 Handle `run/cancel`, end of input and `shutdown`. Verify: tests that cancel during a held-open response (the
