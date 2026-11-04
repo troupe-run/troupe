@@ -35,6 +35,14 @@ plugin-sdk, "The runner contract's types have one definition")."""
 RUN_ID_PATTERN = re.compile(r"\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\Z")
 """Run ids are UUIDs in canonical lowercase form (design D11)."""
 REF_PATTERN = re.compile(r"\Asha256:[0-9a-f]{64}\Z")
+RUNTIME_NAME_PATTERN = re.compile(r"\A[a-z][a-z0-9-]{0,63}\Z")
+"""A runtime's name, as config names it (protocol/schemas/runtime.schema.json)."""
+ENDPOINT_PATTERN = re.compile(
+    r"\Ahttps?://(?:[A-Za-z0-9._~-]+|\[[0-9A-Fa-f:.]+\])(?::[0-9]{1,5})?(?:/[^?#\\\x00-\x20\x7f]*)?\Z"
+)
+"""An endpoint: http or https, a host, an optional port and path, and no user info, query, fragment,
+whitespace or control character (protocol/schemas/runtime.schema.json)."""
+MODEL_PATTERN = re.compile(r"\A[^\x00-\x1f\x7f]{1,256}\Z")
 
 JSONRPC_PARSE_ERROR = -32700
 JSONRPC_INVALID_REQUEST = -32600
@@ -111,6 +119,18 @@ READ_ONLY_DECLARATION = EffectsDeclaration(write=[], delete=[], move=[])
 
 
 @dataclass(frozen=True)
+class RunStartRuntime(Message):
+    """The service a run talks to, as troupe resolved it. The credential's value is never here:
+    when ``credential`` is true, it's in the runner's environment as ``TROUPE_RUNTIME_CREDENTIAL``
+    (read it with ``troupe_plugin_sdk.credential.runtime_credential``)."""
+
+    name: str = json_field("name", pattern=RUNTIME_NAME_PATTERN)
+    endpoint: str = json_field("endpoint", pattern=ENDPOINT_PATTERN)
+    model: str = json_field("model", pattern=MODEL_PATTERN)
+    credential: bool = json_field("credential")
+
+
+@dataclass(frozen=True)
 class RunStartParams(Message):
     run_id: str = json_field("runId", pattern=RUN_ID_PATTERN)
     direction: str = json_field("direction")
@@ -120,6 +140,7 @@ class RunStartParams(Message):
     effects: EffectsDeclaration = json_field("effects")
     scratch: str = json_field("scratch", min_length=1)
     character: str | None = json_field("character", default=None)
+    runtime: RunStartRuntime | None = json_field("runtime", default=None)
 
 
 @dataclass(frozen=True)

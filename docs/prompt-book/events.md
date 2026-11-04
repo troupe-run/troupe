@@ -102,6 +102,7 @@ The payload of a run's first event (topic troupe.core.runs.aggregate:Run.Started
 | `direction` | string | Yes | The artifact reference of the run's direction: what the actor was asked to do. |
 | `config` | list of string | Yes | The config version the run used: the ids of the config stream's heads, sorted. Working out config at that version gives the actor's runner, options, effect check and character. |
 | `workspace` | object (In the theatre) or object (In its own worktree) | No | Where the run worked. Absent: recorded before runs had workspaces, so in the theatre. |
+| `runtime` | object (Resolved runtime) | No | The runtime the run talked to, as troupe resolved it when the run started, each value with its source: the model is always resolved, and a credential is named by its variable, never its value. Absent: the actor named no runtime, or the run was recorded before runtimes. |
 
 ### Run.WorktreeMade
 

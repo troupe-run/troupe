@@ -130,6 +130,10 @@
               "base": false
             }
           }
+        },
+        "runtime": {
+          "description": "The runtime the run would talk to, each value with its source, and whether its credential's variable is set, never its value. Absent: the actor names no runtime.",
+          "$ref": "../runtime.schema.json#/$defs/resolved"
         }
       }
     }

@@ -1,7 +1,12 @@
-"""The kinds of config, and what each must hold (spec: config; config-model design D6, D7).
+"""The kinds of config, and what each must hold (spec: config; config-model design D6, D7;
+runtimes design D1, D4).
 
-The first kind is the actor: ``actors.<name>``, written to ``actors/<name>.yaml`` and, for its
-character, ``actors/<name>.md``. Its fields, other than the character, are what the actor file's
+The kinds are the actor and the runtime. An actor is ``actors.<name>``, written to
+``actors/<name>.yaml`` and, for its character, ``actors/<name>.md``. A runtime is
+``runtimes.<name>``, written to ``runtimes/<name>.yaml``: a service a runner talks to, which an
+actor names (spec: runtimes). Rules that span the kinds, such as an actor naming a runtime that
+exists, are checked with the rest, so unsetting a runtime an actor uses is refused, and a merge
+that does it is a conflict. Its fields, other than the character, are what the actor file's
 schema (``protocol/schemas/config/actor.schema.json``) describes, and its options are what its
 runner's published options schema describes. Config is checked whole, before a change is recorded
 and when branches' changes are merged, so a change that would make config invalid is refused,
@@ -10,29 +15,43 @@ naming the path and the rule, and records nothing.
 
 import json
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
 import jsonschema
 
-from troupe.core import interim, schemas
+from troupe.core import defaults, interim, schemas
 from troupe.core.config.changes import dotted
 from troupe.core.errors import TroupeError
 from troupe_plugin_sdk.effects import Effects, PatternError, pattern_regex
 
 ACTORS = "actors"
-KINDS = (ACTORS,)
+RUNTIMES = "runtimes"
+KINDS = (ACTORS, RUNTIMES)
 """Every kind of config, by its key at the top of config."""
 
 ACTOR_SCHEMA = "https://troupe.run/protocol/config/actor.schema.json"
 """The actor schema's ``$id``: how troupe finds it among the schemas it carries."""
+RUNTIME_SCHEMA = "https://troupe.run/protocol/config/runtime.schema.json"
+"""The runtime schema's ``$id``."""
+
+
+def schema_url(kind: str) -> str:
+    """Where config files of ``kind`` (``actor`` or ``runtime``) name their schema: troupe.run, by
+    the major version of the protocol troupe carries (website#30; protocol-own-release design
+    D7)."""
+    return f"https://troupe.run/protocol/{schemas.protocol_major()}/config/{kind}.schema.json"
 
 
 def actor_schema_url() -> str:
-    """Where config files name the actor schema: troupe.run, by the major version of the protocol
-    troupe carries (website#30; protocol-own-release design D7)."""
-    return f"https://troupe.run/protocol/{schemas.protocol_major()}/config/actor.schema.json"
+    """Where config files name the actor schema."""
+    return schema_url("actor")
+
+
+def runtime_schema_url() -> str:
+    """Where config files name the runtime schema."""
+    return schema_url("runtime")
 
 
 ACTOR_NAME = re.compile(r"\A[a-z][a-z0-9-]{0,63}\Z")
@@ -47,6 +66,9 @@ class Problem:
     path: tuple[str, ...]
     rule: str
     fix: str
+    related: tuple[tuple[str, ...], ...] = ()
+    """Other paths the rule spans, such as the runtime an actor names: a merge's changes to them
+    count as changes to what broke it."""
 
 
 def problems(config: Mapping[str, Any]) -> list[Problem]:
@@ -62,15 +84,64 @@ def problems(config: Mapping[str, Any]) -> list[Problem]:
                 )
             )
         elif not isinstance(node, Mapping):
-            found.append(Problem((key,), "it must be a group of actors, not a value", "Unset it."))
-        else:
-            for name, actor in sorted(node.items()):
-                found += actor_problems(name, actor)
-    return found
+            found.append(Problem((key,), f"it must be a group of {key}, not a value", "Unset it."))
+        elif key == RUNTIMES:
+            for name, runtime in sorted(node.items()):
+                found += runtime_problems(name, runtime)
+    actors = config.get(ACTORS)
+    if isinstance(actors, Mapping):
+        known = runtime_names(config)
+        for name, actor in sorted(actors.items()):
+            found += actor_problems(name, actor, known)
+    return sorted(found, key=lambda problem: problem.path)
 
 
-def actor_problems(name: str, actor: object) -> list[Problem]:
-    """Every way the actor ``name`` breaks a rule."""
+def runtime_names(config: Mapping[str, Any]) -> list[str]:
+    """Every runtime an actor can name: troupe's built-in ones and those in config, sorted."""
+    node = config.get(RUNTIMES)
+    configured = set(node) if isinstance(node, Mapping) else set()
+    return sorted(set(defaults.RUNTIMES) | configured)
+
+
+def runtime_problems(name: str, runtime: object) -> list[Problem]:
+    """Every way the runtime ``name`` breaks a rule (spec: runtimes)."""
+    base = (RUNTIMES, name)
+    if not ACTOR_NAME.match(name):
+        return [
+            Problem(
+                base,
+                f"{name!r} isn't a runtime name: lowercase letters, digits and -, starting "
+                "with a letter, at most 64",
+                f"Unset {dotted(base)}, and use a name that fits.",
+            )
+        ]
+    if not isinstance(runtime, Mapping):
+        return [Problem(base, "a runtime is a group of values, not a value", "Unset it.")]
+    found: list[Problem] = []
+    for key in WRITTEN_BY_TROUPE:
+        if key in runtime:
+            found.append(
+                Problem((*base, key), f"{key} is written by troupe, never set", "Unset it.")
+            )
+    fields = {k: v for k, v in runtime.items() if k not in WRITTEN_BY_TROUPE}
+    found += _schema_problems(base, fields, schemas.validator(RUNTIME_SCHEMA), against="runtime")
+    if name not in defaults.RUNTIMES and "endpoint" not in runtime:
+        found.append(
+            Problem(
+                (*base, "endpoint"),
+                "it's required for a runtime that isn't one of troupe's built-in ones "
+                f"({', '.join(sorted(defaults.RUNTIMES))})",
+                f"Set {dotted((*base, 'endpoint'))}=<url>.",
+            )
+        )
+    return sorted(found, key=lambda problem: problem.path)
+
+
+def actor_problems(
+    name: str, actor: object, runtimes: Sequence[str] | None = None
+) -> list[Problem]:
+    """Every way the actor ``name`` breaks a rule. ``runtimes`` are the runtimes it can name:
+    troupe's built-in ones when it's None."""
     base = (ACTORS, name)
     if not ACTOR_NAME.match(name):
         return [
@@ -112,7 +183,52 @@ def actor_problems(name: str, actor: object) -> list[Problem]:
                 f"Set it to one of: {known}.",
             )
         )
+    if not schema_problems:
+        known_runtimes = list(runtimes) if runtimes is not None else sorted(defaults.RUNTIMES)
+        found += _runtime_problems(base, actor, known_runtimes)
     return sorted(found, key=lambda problem: problem.path)
+
+
+def _runtime_problems(
+    base: tuple[str, ...], actor: Mapping[str, Any], known: list[str]
+) -> list[Problem]:
+    """Whether the actor's runtime exists and fits its runner, and its model has a runtime (spec:
+    runtimes, "An actor names its runtime and may set its model")."""
+    at = (*base, "runtime")
+    runtime = actor.get("runtime")
+    runner = actor.get("runner")
+    takes = interim.RUNNERS[runner].runtime if runner in interim.RUNNERS else None
+    if runtime is None:
+        if takes == "required":
+            return [
+                Problem(
+                    at,
+                    f"the {runner} runner needs a runtime (there are: {', '.join(known)})",
+                    f"Set {dotted(at)} to one of: {', '.join(known)}.",
+                )
+            ]
+        if "model" in actor:
+            return [
+                Problem(
+                    at,
+                    "a model is a runtime's, and this actor names no runtime",
+                    f"Set {dotted(at)}, or unset {dotted((*base, 'model'))}.",
+                )
+            ]
+        return []
+    if takes == "none":
+        return [Problem(at, f"the {runner} runner takes no runtime", f"Unset {dotted(at)}.")]
+    if runtime not in known:
+        return [
+            Problem(
+                at,
+                f"there's no runtime named {runtime!r} (there are: {', '.join(known)})",
+                f"Set it to one of: {', '.join(known)}, or define it with troupe config set "
+                f"{RUNTIMES}.{runtime}.endpoint=<url>.",
+                related=((RUNTIMES, str(runtime)),),
+            )
+        ]
+    return []
 
 
 def _schema_problems(
@@ -121,8 +237,9 @@ def _schema_problems(
     validator: jsonschema.Draft202012Validator,
     *,
     runner: str | None = None,
+    against: str = "actor",
 ) -> list[Problem]:
-    against = f"the {runner} runner's options schema" if runner else "the actor schema"
+    against = f"the {runner} runner's options schema" if runner else f"the {against} schema"
     found: list[Problem] = []
     for error in sorted(validator.iter_errors(value), key=lambda e: list(e.absolute_path)):
         path = (*base, *(str(part) for part in error.absolute_path))
@@ -249,11 +366,11 @@ def check(config: Mapping[str, Any]) -> None:
     _refuse(problems(config))
 
 
-def check_actor(name: str, actor: object) -> None:
-    """Refuse the actor ``name`` with ``config.invalid`` when it breaks any rule, naming the
-    first: what perform checks, so an actor recorded before a rule was tightened can't run
-    (spec: effects, "Every expected file is covered by the declaration")."""
-    _refuse(actor_problems(name, actor))
+def check_actor(name: str, config: Mapping[str, Any]) -> None:
+    """Refuse the actor ``name`` in ``config`` with ``config.invalid`` when it breaks any rule,
+    naming the first: what perform checks, so an actor recorded before a rule was tightened can't
+    run (spec: effects, "Every expected file is covered by the declaration")."""
+    _refuse(actor_problems(name, config[ACTORS][name], runtime_names(config)))
 
 
 def _refuse(found: list[Problem]) -> None:
@@ -275,7 +392,7 @@ RESERVED = ("events", "local", ".gitignore", ".gitattributes", "troupe.yaml")
 """Never config: the event store's, troupe's own git files, and troupe.yaml, held for #6's root
 file."""
 
-CONFIG_DIRECTORIES = ("actors",)
+CONFIG_DIRECTORIES = ("actors", "runtimes")
 """The directories that hold config files, one per kind."""
 
 OPERATING_SYSTEM_FILES = (".DS_Store", "Thumbs.db", "desktop.ini")
@@ -300,6 +417,7 @@ class FileKind:
 FILE_KINDS = (
     FileKind(re.compile(r"\Aactors/(?P<name>[^/]+)\.yaml\Z"), ACTORS, "fields", ACTOR_SCHEMA),
     FileKind(re.compile(r"\Aactors/(?P<name>[^/]+)\.md\Z"), ACTORS, "character", None),
+    FileKind(re.compile(r"\Aruntimes/(?P<name>[^/]+)\.yaml\Z"), RUNTIMES, "fields", RUNTIME_SCHEMA),
 )
 """Each kind of config file, matched by path. Shaped as a guest's registration will need (a
 pattern, a kind and a schema), though guests can't add to it yet."""
@@ -308,6 +426,11 @@ pattern, a kind and a schema), though guests can't add to it yet."""
 def actor_files(name: str) -> tuple[str, str]:
     """The paths, relative to .troupe/, of the actor ``name``'s YAML file and character file."""
     return f"actors/{name}.yaml", f"actors/{name}.md"
+
+
+def runtime_file(name: str) -> str:
+    """The path, relative to .troupe/, of the runtime ``name``'s file."""
+    return f"runtimes/{name}.yaml"
 
 
 def staged_name(path: str) -> str:

@@ -108,10 +108,16 @@ class Harness:
             actor["effects"] = effects
         if "character" in request:
             actor["character"] = request["character"]
+        for field_ in ("runtime", "model"):
+            if field_ in request:
+                actor[field_] = request[field_]
         actor["workspace"] = request.get("workspace", "theatre")
         store = git_service(self.repo, env={**ADA, **self.env})
         merged = read_config(store)
-        entries = change(merged.config, [(["actors", request["actor"]], actor)])
+        operations: list[tuple[list[str], Any]] = [
+            (["runtimes", name], runtime) for name, runtime in request.get("runtimes", {}).items()
+        ]
+        entries = change(merged.config, [*operations, (["actors", request["actor"]], actor)])
         if entries:
             record_config(store.command(via="cli"), merged, entries, [])
 

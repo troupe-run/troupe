@@ -303,3 +303,92 @@ def test_a_workspace_that_doesnt_exist_is_refused_naming_the_path_and_both_value
     code, _, err = cli("config", "set", "actors.tester.workspace=sandbox")
     assert code == 1
     assert "actors.tester.workspace: it must be one of 'worktree', 'theatre', not 'sandbox'" in err
+
+
+# Requirement: A runtime is a named service... (spec: runtimes), set on the command line
+
+
+def test_a_credential_by_reference_records_only_the_variables_name(repo: Repo) -> None:
+    code, out, err = cli("config", "set", "runtimes.openai.credential.env=MY_OPENAI_KEY")
+    assert code == 0, err
+    assert "wrote .troupe/runtimes/openai.yaml" in out
+    assert _get("runtimes.openai") == {"credential": {"env": "MY_OPENAI_KEY"}}
+
+
+def test_an_actor_on_a_runtime(repo: Repo) -> None:
+    code, _, err = _tester("actors.tester.runtime=ollama", "actors.tester.model=llama3.2")
+    assert code == 0, err
+    assert _get("actors.tester.runtime") == "ollama"
+    assert _get("actors.tester.model") == "llama3.2"
+
+
+def test_a_field_a_runtime_doesnt_have_is_refused(repo: Repo) -> None:
+    code, _, err = cli("config", "set", "runtimes.openai.credential.value=sk-test")
+    assert code == 1
+    assert "runtimes.openai.credential" in err
+
+
+# Requirement: Config get shows a runtime's resolved values and their sources
+
+
+def test_the_built_in_openai_runtime_resolved(repo: Repo, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-canary-0123456789")
+    code, out, err = cli("config", "get", "--resolved", "runtimes.openai")
+    assert code == 0, err
+    assert out.splitlines() == [
+        "runtime openai",
+        "  endpoint: https://api.openai.com/v1 (from default)",
+        "  model: none (an actor's model, runtimes.openai.model or TROUPE_RUNTIME_OPENAI_MODEL "
+        "sets one)",
+        "  credential: from OPENAI_API_KEY (named by default), set",
+    ]
+    assert "sk-test-canary" not in out + err
+
+
+def test_resolved_as_json_shows_each_value_and_its_source(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("TROUPE_RUNTIME_OLLAMA_MODEL", "qwen3")
+    cli("config", "set", "runtimes.openai.model=gpt-test")
+    code, out, _ = cli("config", "get", "--resolved", "--json")
+    assert code == 0
+    result = json.loads(out)
+    check(result, "config-get-result.schema.json")
+    assert sorted(result["runtimes"]) == ["lm-studio", "ollama", "openai"]
+    assert result["runtimes"]["openai"]["model"] == {"value": "gpt-test", "source": "theatre"}
+    assert result["runtimes"]["openai"]["credential"]["set"] is False
+    assert result["runtimes"]["ollama"]["model"] == {"value": "qwen3", "source": "env"}
+    assert result["value"] == {"runtimes": {"openai": {"model": "gpt-test"}}}
+
+
+def test_resolved_with_another_path_is_refused_naming_it(repo: Repo) -> None:
+    code, _, err = cli("config", "get", "--resolved", "actors.tester")
+    assert code == ExitCode.USAGE
+    assert "actors.tester has no resolved values: only runtimes do" in err
+
+
+def test_resolved_for_a_runtime_that_doesnt_exist_is_refused(repo: Repo) -> None:
+    code, _, err = cli("config", "get", "--resolved", "runtimes.nowhere")
+    assert code == 1
+    assert "no runtime named 'nowhere'" in err
+
+
+# Requirement: A rehearsal shows the run's runtime (spec: runs), on the command line
+
+
+def test_a_rehearsal_on_the_command_line_shows_the_runtime(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE", "true")
+    _tester(
+        "actors.tester.runtime=ollama",
+        "actors.tester.model=llama3.2",
+        "actors.tester.workspace=theatre",
+    )
+    code, out, err = cli("perform", "tester", "--rehearse")
+    assert code == ExitCode.WOULD_CHANGE, err
+    assert "  runtime ollama" in out
+    assert "    endpoint: http://127.0.0.1:11434 (from default)" in out
+    assert "    model: llama3.2 (from actor)" in out
+    assert "    credential: none" in out

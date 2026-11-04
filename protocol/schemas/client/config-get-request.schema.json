@@ -9,6 +9,10 @@
     "path": {
       "description": "Where to look. Absent: the whole of config.",
       "$ref": "config.schema.json#/$defs/path"
+    },
+    "resolved": {
+      "description": "Show runtimes as troupe resolves them, from its built-in runtimes, the theatre's config and the session's environment, each value with its source. Only for the whole of config, runtimes, or runtimes.<name>. Absent: false.",
+      "type": "boolean"
     }
   }
 }

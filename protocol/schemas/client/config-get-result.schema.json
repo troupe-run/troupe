@@ -33,6 +33,16 @@
       "items": {
         "$ref": "../notice.schema.json"
       }
+    },
+    "runtimes": {
+      "description": "With resolved: each runtime the path covers, built in or in config, by name, as troupe resolves it now. A credential is shown by its variable and whether that is set, never its value. Absent: resolved wasn't asked for.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "../runtime.schema.json#/$defs/resolved"
+      },
+      "propertyNames": {
+        "$ref": "../runtime.schema.json#/$defs/name"
+      }
     }
   }
 }

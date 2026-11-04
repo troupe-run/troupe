@@ -9,7 +9,7 @@ the runner. When plugins are named and pinned in config (#38), this module is de
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 import jsonschema
 
@@ -31,6 +31,10 @@ class Runner:
     environment: tuple[str, ...] = ()
     """The variables perform copies from its own environment into the runner's, each only when
     set there (claude-code-runner design D8). Nothing else reaches the runner."""
+
+    runtime: Literal["required", "optional", "none"] = "none"
+    """Whether its actors name a runtime: the service it talks to (spec: runtimes; runtimes design
+    D4). Config refuses an actor whose runtime doesn't fit."""
 
 
 CLAUDE_CODE_ENVIRONMENT: tuple[str, ...] = (
@@ -92,6 +96,7 @@ RUNNERS: dict[str, Runner] = {
     "scripted": Runner(
         command=(sys.executable, "-m", "troupe_runner_scripted"),
         package="troupe_runner_scripted",
+        runtime="optional",
     ),
 }
 """Each runner troupe knows, by name."""

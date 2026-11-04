@@ -76,6 +76,10 @@
               "minimum": 1
             }
           }
+        },
+        "runtime": {
+          "description": "The service this run talks to, as troupe resolved it from its defaults, the theatre's config and the person's environment. Absent: the actor names no runtime. The credential's value is never here: when credential is true, it is in the runner's environment as TROUPE_RUNTIME_CREDENTIAL, and the runner sends it only to the endpoint.",
+          "$ref": "#/$defs/runtime"
         }
       }
     }
@@ -98,6 +102,35 @@
       "properties": {
         "runId": {
           "$ref": "jsonrpc.schema.json#/$defs/runId"
+        }
+      }
+    },
+    "runtime": {
+      "title": "Runtime",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "endpoint",
+        "model",
+        "credential"
+      ],
+      "properties": {
+        "name": {
+          "description": "The runtime's name.",
+          "$ref": "../runtime.schema.json#/$defs/name"
+        },
+        "endpoint": {
+          "description": "The base URL the runner's API is served under. The runner adds its own paths.",
+          "$ref": "../runtime.schema.json#/$defs/endpoint"
+        },
+        "model": {
+          "description": "The model the run uses, as the service names it.",
+          "$ref": "../runtime.schema.json#/$defs/model"
+        },
+        "credential": {
+          "description": "true: the runner's environment holds the credential as TROUPE_RUNTIME_CREDENTIAL. false: the runtime has none, and the variable isn't set.",
+          "type": "boolean"
         }
       }
     }

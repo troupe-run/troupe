@@ -12,6 +12,9 @@ python -m troupe_runner_scripted
 
 ## Options
 
+The runner takes a runtime optionally (troupe's runner table says `optional`): `run/start` may carry one, and
+only the `checkRuntime` and `echoCredential` steps use it.
+
 `run/start` options take exactly one of `script` (the script inline) or `scriptPath` (a JSON file), and optionally
 `replayDelays` (`true` to replay a recording's timing). Any other option is refused, with an error naming it.
 
@@ -61,6 +64,8 @@ before anything plays.
 | `rawStdout` | Writes this line to standard output as it is, to break the contract on purpose. |
 | `replay` | Plays a recording (below). A relative path is found next to the script file, or in the workspace for an inline script. |
 | `checkCharacter` | `{"hash": "sha256:..."}` (the SHA-256 of the character's UTF-8) or `{"absent": true}`: checks the character `run/start` carried. On a mismatch, sends an error `result` naming both and plays no later step, so a test can prove the character reached the runner. |
+| `checkRuntime` | `{"name": "...", "endpoint": "...", "model": "...", "credentialHash": "sha256:..."}` (any of them, `"noCredential": true` in place of a hash for none) or `{"absent": true}`: checks the runtime `run/start` carried, and the credential in `TROUPE_RUNTIME_CREDENTIAL` by its hash. On a mismatch, sends an error `result` naming each field that differs, a credential only by its hash, and plays no later step. |
+| `echoCredential` | `true`. **Only for testing troupe's masking:** sends the run's credential back in a `log` event, a transcript record and standard error, as a runner that leaks it would. A real runner never does. With no credential, ends the run with an error `result`. |
 
 `onCancel` says what `run/cancel` does: `honour` (the default: answer and exit without a `result`, as Claude Code
 does), `honour-with-result` (answer, send a `result` with status `error`, exit) or `ignore` (answer and carry on,

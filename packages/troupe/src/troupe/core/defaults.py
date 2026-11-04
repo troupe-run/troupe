@@ -150,3 +150,21 @@ LOGS_LEASE_CHECK_SECONDS = 1.0
 """How often logs --follow checks that the run it follows is still running, so a perform that dies
 without recording an end is noticed though it wrote nothing. One check is one try of a lock. New
 events wake following through the store's subscription, never a timer (watch-event-segments D6)."""
+
+# Runtimes (spec: runtimes; runtimes design D2, D6). contributing/config.md lists them.
+
+RUNTIMES: dict[str, dict[str, object]] = {
+    "openai": {
+        "endpoint": "https://api.openai.com/v1",
+        "credential": {"env": "OPENAI_API_KEY"},
+    },
+    "ollama": {"endpoint": "http://127.0.0.1:11434"},
+    "lm-studio": {"endpoint": "http://127.0.0.1:1234/v1"},
+}
+"""troupe's built-in runtimes, each as a runtime file would hold it. None names a model, since a
+built-in model would go stale. The theatre's config overrides them field by field, and the
+person's environment overrides both."""
+
+CREDENTIAL_MIN_BYTES = 8
+"""The shortest credential a run may send. troupe masks the value in everything it keeps from a
+run, and a shorter one would match ordinary text."""

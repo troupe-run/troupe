@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, BinaryIO, Literal, NoReturn
 
 from troupe_plugin_sdk import runner as p
+from troupe_plugin_sdk.credential import CredentialError, runtime_credential
 from troupe_plugin_sdk.declaration import Declaration
 from troupe_plugin_sdk.events import EventNumbering
 from troupe_plugin_sdk.tools import Tools
@@ -302,6 +303,10 @@ class Runner:
             self._replay(value)
         elif kind == "checkCharacter":
             self._check_character(value)
+        elif kind == "checkRuntime":
+            self._check_runtime(value)
+        elif kind == "echoCredential":
+            self._echo_credential()
         elif kind == "tool":
             self._tool(value)
 
@@ -348,6 +353,64 @@ class Runner:
                 f"the character run/start carried is {got}; the script expected {wanted}"
             )
             raise _Exit(0)
+
+    def _credential(self) -> str | None:
+        """The run's credential, as the SDK reads it; a disagreement ends the run."""
+        try:
+            return runtime_credential(p.RunStartParams.from_data(self._params), os.environ)
+        except CredentialError as error:
+            self._result_event(f"the run's credential: {error}")
+            raise _Exit(0) from error
+
+    def _check_runtime(self, value: dict[str, Any]) -> None:
+        """End the run with an error result unless run/start's runtime, and the credential in the
+        environment, are the ones expected. A credential is only ever named by its hash."""
+        runtime = self._params.get("runtime")
+        if value.get("absent") is True:
+            if runtime is not None:
+                self._result_event(
+                    f"run/start carried the runtime {runtime.get('name')!r}; "
+                    "the script expected none"
+                )
+                raise _Exit(0)
+            return
+        if not isinstance(runtime, dict):
+            self._result_event("run/start carried no runtime; the script expected one")
+            raise _Exit(0)
+        differs = [
+            f"{field}: run/start carried {runtime.get(field)!r}, the script expected "
+            f"{value[field]!r}"
+            for field in ("name", "endpoint", "model")
+            if field in value and runtime.get(field) != value[field]
+        ]
+        if "credentialHash" in value or "noCredential" in value:
+            wanted = value.get("credentialHash")
+            credential = self._credential()
+            got = (
+                None
+                if credential is None
+                else "sha256:" + hashlib.sha256(credential.encode("utf-8")).hexdigest()
+            )
+            if got != wanted:
+                differs.append(
+                    f"credential: the environment held {got or 'none'}, the script expected "
+                    f"{wanted or 'none'}"
+                )
+        if differs:
+            self._result_event("the runtime differs: " + "; ".join(differs))
+            raise _Exit(0)
+
+    def _echo_credential(self) -> None:
+        """Send the run's credential back in a log event, a transcript record and standard error,
+        as a runner that leaks it would, so a test can show what troupe keeps. Only for tests."""
+        credential = self._credential()
+        if credential is None:
+            self._result_event("an echoCredential step needs a credential, and the run has none")
+            raise _Exit(0)
+        self._event({"type": "log", "level": "info", "message": f"the key is {credential}"})
+        self._transcript(json.dumps({"key": credential}))
+        self._stderr.write(f"the key is {credential}\n".encode())
+        self._stderr.flush()
 
     def _started(self) -> tuple[Options, Path]:
         if self._options is None or self._workspace is None:

@@ -36,7 +36,7 @@ from typing import Any
 from troupe.core import strict_json
 from troupe.core.config.aggregate import CHANGED
 from troupe.core.config.changes import Tree, apply, dotted, value_hash
-from troupe.core.config.kinds import ACTORS, problems
+from troupe.core.config.kinds import ACTORS, RUNTIMES, problems
 from troupe.core.errors import TroupeError
 from troupe.core.events.port import RecordedEvent
 
@@ -315,13 +315,17 @@ def _invalid(
     found: list[Conflict] = []
     seen: set[Point] = set()
     for problem in problems(config):
-        where = problem.path[:2] if problem.path[:1] == (ACTORS,) else problem.path[:1]
+        grouped = problem.path[:1] in ((ACTORS,), (RUNTIMES,))
+        where = problem.path[:2] if grouped else problem.path[:1]
         if where in seen or any(_overlaps(p, where) for c in structural for p in c.paths):
             continue
+        spans = (where, *problem.related)
         touched = [
             w.event
             for w in writes
-            if w.event not in common and w.event in changes and _overlaps(w.path, where)
+            if w.event not in common
+            and w.event in changes
+            and any(_overlaps(w.path, at) for at in spans)
         ]
         events_in = list(dict.fromkeys(touched))
         if len(events_in) < 2:

@@ -18,6 +18,7 @@ from event_schemas import (
     lineage,
     without,
 )
+from protocol_schemas import PROTOCOL_BASE, validator_for
 
 EVENT: dict[str, Any] = {
     "format": 1,
@@ -257,3 +258,40 @@ def test_a_payload_field_its_topic_does_not_define_is_refused() -> None:
 )
 def test_event_records_the_schema_refuses(change: dict[str, Any]) -> None:
     assert not is_valid(EVENT | change, "event-record.schema.json")
+
+
+# Requirement: A run's start records its runtime and where each value came from
+
+RESOLVED = validator_for(PROTOCOL_BASE + "events/run-started.schema.json#/properties/runtime")
+RECORDED_RUNTIME: dict[str, Any] = {
+    "name": "openai",
+    "endpoint": {"value": "https://gateway.example/v1", "source": "theatre"},
+    "model": {"value": "gpt-test", "source": "actor"},
+    "credential": {"env": {"value": "OPENAI_API_KEY", "source": "default"}, "set": True},
+}
+
+
+def test_a_recorded_runtime_names_its_credential_by_variable() -> None:
+    RESOLVED.validate(RECORDED_RUNTIME)
+    RESOLVED.validate({k: v for k, v in RECORDED_RUNTIME.items() if k != "credential"})
+
+
+@pytest.mark.parametrize(
+    "runtime",
+    [
+        pytest.param(
+            {**RECORDED_RUNTIME, "credential": {**RECORDED_RUNTIME["credential"], "value": "sk"}},
+            id="the credential's value",
+        ),
+        pytest.param(
+            {**RECORDED_RUNTIME, "endpoint": {"value": "https://x.example", "source": "config"}},
+            id="a source that isn't one",
+        ),
+        pytest.param(
+            {**RECORDED_RUNTIME, "endpoint": "https://x.example"}, id="a value with no source"
+        ),
+        pytest.param({**RECORDED_RUNTIME, "secret": "sk"}, id="an unknown field"),
+    ],
+)
+def test_a_recorded_runtime_refuses_anything_else(runtime: dict[str, Any]) -> None:
+    assert not RESOLVED.is_valid(runtime)

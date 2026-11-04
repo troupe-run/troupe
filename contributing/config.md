@@ -119,6 +119,26 @@ Its default, in `troupe.core.defaults`:
 |---|---|---|
 | `MARK_MERGES_RESOLVED` | false | The setting `mark_merges_resolved`, when nothing sets it |
 
+## Runtimes
+
+A runtime is a service a runner talks to, named once in config (`runtimes.<name>`, spec: runtimes) and resolved by
+`troupe.core.runtimes`: troupe's built-in runtimes (`RUNTIMES` in `troupe.core.defaults`: `openai`, `ollama` and
+`lm-studio`), then the theatre's config field by field, then the session's environment
+(`TROUPE_RUNTIME_<NAME>_ENDPOINT`, `_MODEL` and `_CREDENTIAL_ENV`, the name in capitals with `-` as `_`). Each value
+resolved carries its source (`default`, `theatre`, `env`, or `actor` for an actor's model), and `troupe config get
+--resolved` shows them. An unset or empty variable is absent; one that's set but malformed is `runtime.invalid-value`.
+
+A credential is only ever the **name** of the variable that holds it. perform reads the value when a run starts and
+gives it to the runner as `TROUPE_RUNTIME_CREDENTIAL`, and the run host masks it as `[credential]` in everything it
+keeps from the run (`troupe.core.masking`). Accepted for now, and recorded in the design: the theatre's config, which
+is committed, chooses both the endpoint a credential goes to and the variable that's sent. Policy will limit both.
+
+Its limit, in `troupe.core.defaults`:
+
+| Setting | Default | What it is |
+|---|---|---|
+| `CREDENTIAL_MIN_BYTES` | 8 | The shortest credential a run may send: a shorter one would match ordinary text, so it can't be masked safely |
+
 ## Notices and errors
 
 | Code | When |
@@ -132,4 +152,10 @@ Its default, in `troupe.core.defaults`:
 | `schemas.plugin-missing` | A runner's package isn't installed, or ships no schemas |
 | `config.file-rewritten` | (notice) A config file troupe wrote was missing or older, and was written again |
 | `config.merge-rewritten` | (notice) A config file git merged from versions troupe wrote was written again from the merged config, its bytes kept first. Says whether troupe marked it resolved in git, and if not, why not and to `git add` it |
+| `runtime.invalid-value` | A `TROUPE_RUNTIME_` variable is set to something its field doesn't accept. Names the variable, the value and what's accepted |
+| `runtime.no-model` | Nothing sets the model for a run on a runtime. Names the actor's, the runtime's and the variable's places to set one |
+| `runtime.credential-unset` | A run's runtime reads its credential from a variable that isn't set |
+| `runtime.credential-too-short` | A run's credential is shorter than `CREDENTIAL_MIN_BYTES`. Names the variable, never the value |
+| `runtime.insecure-endpoint` | A run would send its credential over plain HTTP to a host that isn't a loopback address |
+| `config.not-resolvable` | `config get --resolved` was given a path that isn't `runtimes` or `runtimes.<name>` |
 | `config.waiting` | (notice) Another troupe command is writing config files, and this one is waiting |

@@ -45,9 +45,12 @@ from troupe.core.config.kinds import (
     CHARACTER,
     CONFIG_DIRECTORIES,
     OPERATING_SYSTEM_FILES,
+    RUNTIMES,
     actor_files,
     actor_schema_url,
     file_kind,
+    runtime_file,
+    runtime_schema_url,
     staged_name,
     staged_target,
 )
@@ -61,6 +64,8 @@ from troupe.platform.files import WaitCallback, append_bytes
 
 FIELD_ORDER = ("$schema", "runner", "options", "expect")
 """The actor file's keys, in its schema's order."""
+RUNTIME_FIELD_ORDER = ("$schema", "endpoint", "model", "credential")
+"""The runtime file's keys, in its schema's order."""
 
 WRITTEN = "local/config/written.jsonl"
 LOCK = "local/config"
@@ -137,9 +142,27 @@ def render_actor(actor: Mapping[str, Any]) -> dict[str, bytes]:
     return files
 
 
+def render_runtime(runtime: Mapping[str, Any]) -> bytes:
+    """A runtime's file: only the fields config sets (spec: config-files, "Each runtime in config
+    is projected to its own file")."""
+    url = runtime_schema_url()
+    fields: dict[str, Any] = {"$schema": url}
+    for key in RUNTIME_FIELD_ORDER[1:]:
+        if key in runtime:
+            fields[key] = _sorted(runtime[key])
+    text = io.StringIO()
+    text.write(f"# yaml-language-server: $schema={url}\n")
+    _yaml().dump(fields, text)
+    return text.getvalue().encode("utf-8")
+
+
 def render(config: Mapping[str, Any]) -> dict[str, bytes]:
     """Every config file config makes, by its path relative to .troupe/."""
     files: dict[str, bytes] = {}
+    runtimes = config.get(RUNTIMES, {})
+    for name, runtime in sorted(runtimes.items() if isinstance(runtimes, Mapping) else []):
+        if isinstance(runtime, Mapping):
+            files[runtime_file(name)] = render_runtime(runtime)
     actors = config.get(ACTORS, {})
     for name, actor in sorted(actors.items() if isinstance(actors, Mapping) else []):
         if not isinstance(actor, Mapping):

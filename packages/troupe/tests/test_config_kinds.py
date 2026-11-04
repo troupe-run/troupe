@@ -1,11 +1,13 @@
 """Config is checked before a change is recorded, naming the path and the rule (spec: config;
 config-model design D6)."""
 
+from dataclasses import replace
 from typing import Any
 
 import pytest
 
 from protocol_schemas import check_error
+from troupe.core import interim
 from troupe.core.config.kinds import check, problems
 from troupe.core.errors import TroupeError
 
@@ -238,3 +240,132 @@ def test_expecting_a_file_only_delete_covers_is_refused() -> None:
 
 def test_expecting_nothing_needs_no_effect() -> None:
     check(_actor(expect=[], effects=...))
+
+
+# Requirement: Config's kinds are actors and runtimes (spec: config); and spec: runtimes
+
+MYHOST = {"endpoint": "https://llm.example/v1", "model": "llama", "credential": {"env": "K"}}
+
+
+def _with(runtimes: dict[str, Any], **changes: object) -> dict[str, Any]:
+    return {**_actor(**changes), "runtimes": runtimes}
+
+
+def test_a_kind_that_doesnt_exist_is_refused_naming_both_kinds() -> None:
+    error = _refused({**_actor(), "services": {"openai": {"endpoint": "https://x.example"}}})
+    assert error.details["path"] == ["services"]
+    assert "the kinds are: actors, runtimes" in error.problem
+
+
+def test_an_actor_on_a_runtime_in_config_is_valid() -> None:
+    assert problems(_with({"myhost": MYHOST}, runtime="myhost", model="llama3.2")) == []
+
+
+def test_an_actor_on_a_built_in_runtime_needs_no_runtime_config() -> None:
+    assert problems(_actor(runtime="ollama", model="llama3.2")) == []
+
+
+def test_removing_a_runtime_an_actor_uses_is_refused_naming_the_actors_runtime() -> None:
+    error = _refused(_actor(runtime="myhost"))
+    assert error.details["path"] == ["actors", "tester", "runtime"]
+    assert "no runtime named 'myhost'" in error.problem
+    assert "lm-studio, ollama, openai" in error.problem
+
+
+def test_a_runtime_that_doesnt_exist_is_refused_naming_those_that_do() -> None:
+    error = _refused(_with({"myhost": MYHOST}, runtime="nowhere"))
+    assert error.details["path"] == ["actors", "tester", "runtime"]
+    assert "(there are: lm-studio, myhost, ollama, openai)" in error.problem
+
+
+def test_a_runner_that_takes_no_runtime_is_refused() -> None:
+    error = _refused(_actor(runner="claude-code", options={}, runtime="openai"))
+    assert error.details["path"] == ["actors", "tester", "runtime"]
+    assert "the claude-code runner takes no runtime" in error.problem
+
+
+def test_a_model_without_a_runtime_is_refused_naming_the_runtime() -> None:
+    error = _refused(_actor(model="gpt-test"))
+    assert error.details["path"] == ["actors", "tester", "runtime"]
+
+
+def test_a_runner_that_needs_a_runtime_is_refused_without_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scripted = interim.RUNNERS["scripted"]
+    monkeypatch.setitem(interim.RUNNERS, "scripted", replace(scripted, runtime="required"))
+    error = _refused(_actor())
+    assert error.details["path"] == ["actors", "tester", "runtime"]
+    assert "the scripted runner needs a runtime" in error.problem
+
+
+def test_what_each_runner_takes() -> None:
+    assert interim.RUNNERS["claude-code"].runtime == "none"
+    assert interim.RUNNERS["scripted"].runtime == "optional"
+
+
+# Requirement: A runtime is a named service with an endpoint, a model and a credential reference
+
+
+def test_a_credential_by_reference_is_valid() -> None:
+    assert problems({"runtimes": {"openai": {"credential": {"env": "MY_OPENAI_KEY"}}}}) == []
+
+
+@pytest.mark.parametrize(
+    ("runtime", "path", "words"),
+    [
+        pytest.param(
+            {"myhost": {"endpoint": "https://user:secret@example.com/v1"}},
+            ["runtimes", "myhost", "endpoint"],
+            "no user info, query, fragment",
+            id="user info",
+        ),
+        pytest.param(
+            {"openai": {"credential": {"env": "MY KEY"}}},
+            ["runtimes", "openai", "credential", "env"],
+            "Letters, digits and _",
+            id="a variable name that isn't one",
+        ),
+        pytest.param(
+            {"myhost": {"model": "llama"}},
+            ["runtimes", "myhost", "endpoint"],
+            "required for a runtime that isn't one of troupe's built-in ones",
+            id="a new runtime without an endpoint",
+        ),
+        pytest.param(
+            {"MyHost": MYHOST},
+            ["runtimes", "MyHost"],
+            "isn't a runtime name",
+            id="a name that doesn't fit",
+        ),
+        pytest.param(
+            {"myhost": "https://llm.example"},
+            ["runtimes", "myhost"],
+            "a runtime is a group of values",
+            id="a runtime that's a value",
+        ),
+    ],
+)
+def test_a_runtime_that_breaks_a_rule_is_refused_naming_the_path(
+    runtime: dict[str, Any], path: list[str], words: str
+) -> None:
+    error = _refused({"runtimes": runtime})
+    assert error.details["path"] == path
+    assert words in error.problem
+
+
+# Requirement: A credential can't name troupe's own variables
+
+
+def test_troupes_hand_off_variable_is_refused() -> None:
+    error = _refused({"runtimes": {"openai": {"credential": {"env": "TROUPE_RUNTIME_CREDENTIAL"}}}})
+    assert error.details["path"] == ["runtimes", "openai", "credential", "env"]
+    assert "not starting with TROUPE_" in error.problem
+
+
+def test_a_credentials_value_is_refused_saying_it_holds_only_env() -> None:
+    found = problems({"runtimes": {"openai": {"credential": {"value": "sk-x"}}}})
+    by_path = {problem.path: problem.rule for problem in found}
+    assert "there's no such field" in by_path[("runtimes", "openai", "credential", "value")]
+    assert "required" in by_path[("runtimes", "openai", "credential", "env")]
+    _refused({"runtimes": {"openai": {"credential": {"value": "sk-x"}}}})

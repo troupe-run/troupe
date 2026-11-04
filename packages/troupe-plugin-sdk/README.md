@@ -13,6 +13,10 @@ It holds:
   are the source of truth, and the tests check every type against them.
 - **Running a model's tool calls** (`troupe_plugin_sdk.tools`), for a runner whose engine returns tool calls rather than
   carrying them out itself, such as a local model or a Chat Completions API.
+- **The run's credential** (`troupe_plugin_sdk.credential`): `runtime_credential(params, os.environ)` gives the
+  value of a runtime's credential from `TROUPE_RUNTIME_CREDENTIAL`, or `None` when the run has none, and raises
+  `CredentialError` when `run/start` and the environment disagree. Send it only to the runtime's endpoint
+  ([The runtime and its credential](../../contributing/runners.md#the-runtime-and-its-credential)).
 
 [#58](https://github.com/troupe-run/troupe/issues/58) grows it into the full plugin SDK, with JSON-RPC framing and a
 server loop.

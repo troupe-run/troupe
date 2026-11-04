@@ -110,6 +110,7 @@ class Actor(StrictModel):
 
     model_config = ConfigDict(
         extra="forbid",
+        regex_engine="python-re",
     )
     field_schema: Annotated[
         str | None,
@@ -141,6 +142,93 @@ class Actor(StrictModel):
     workspace: Annotated[Literal["worktree", "theatre"] | None, Field(title="Workspace")] = None
     """
     Where a run works. worktree, the default when absent: the run's own git worktree at HEAD, under .troupe/local/worktrees/, whose changes reach the theatre only through troupe accept. theatre: the theatre itself, so what the run writes lands among your files at once.
+    """
+    runtime: Annotated[str | None, Field(pattern="^[a-z][a-z0-9-]{0,63}$", title="Runtime")] = None
+    """
+    The runtime this actor's runs talk to, by name: one of troupe's built-in runtimes or one in config. Only for a runner that takes a runtime; required by one that needs it.
+    """
+    model: Annotated[
+        str | None,
+        Field(
+            max_length=256,
+            min_length=1,
+            pattern="^(?![\\s\\S]*[\\x00-\\x1f\\x7f])[\\s\\S]+$",
+            title="Model",
+        ),
+    ] = None
+    """
+    The model this actor's runs use, overriding its runtime's. The person's TROUPE_RUNTIME_<NAME>_MODEL overrides both. Only with a runtime.
+    """
+
+
+class Credential(StrictModel):
+    """
+    Where the runtime's credential comes from. Never the credential itself: config is committed, so it holds only a reference.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+        regex_engine="python-re",
+    )
+    env: Annotated[
+        str,
+        Field(
+            max_length=256,
+            pattern="^(?![Tt][Rr][Oo][Uu][Pp][Ee]_)(?![\\s\\S]*[\\x00-\\x1f\\x7f])[A-Za-z_][A-Za-z0-9_]*$",
+            title="Environment variable",
+        ),
+    ]
+    """
+    The name of the environment variable that holds the credential, read from the person's environment when a run starts. It can't be one of troupe's own (TROUPE_...).
+    """
+
+
+class Runtime(StrictModel):
+    """
+    One runtime's config file, .troupe/runtimes/<name>.yaml: a service a runner talks to. The file's name is the runtime's name. It holds only what the theatre's config sets: a built-in runtime's other fields are troupe's defaults, and the person's environment overrides any of them (TROUPE_RUNTIME_<NAME>_ENDPOINT, _MODEL, _CREDENTIAL_ENV). troupe writes this file from the theatre's config events, and every field is set with troupe config set.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+        regex_engine="python-re",
+    )
+    field_schema: Annotated[
+        str | None,
+        Field(
+            alias="$schema",
+            pattern="(^|/)config/runtime\\.schema\\.json$",
+            title="Schema",
+        ),
+    ] = None
+    """
+    Where this file's schema is, so editors can check it. troupe writes it.
+    """
+    endpoint: Annotated[
+        str | None,
+        Field(
+            max_length=2048,
+            pattern="^(?![\\s\\S]*[\\x00-\\x20\\x7f])https?://(?:[A-Za-z0-9._~-]+|\\[[0-9A-Fa-f:.]+\\])(?::[0-9]{1,5})?(?:/[^?#\\\\]*)?$",
+            title="Endpoint",
+        ),
+    ] = None
+    """
+    The base URL the runner's API is served under: http or https, a host and an optional port and path, with no user info, query or fragment. The runner adds its own paths. Required for a runtime that isn't built in.
+    """
+    model: Annotated[
+        str | None,
+        Field(
+            max_length=256,
+            min_length=1,
+            pattern="^(?![\\s\\S]*[\\x00-\\x1f\\x7f])[\\s\\S]+$",
+            title="Model",
+        ),
+    ] = None
+    """
+    The model a run uses when its actor sets none, as the service names it.
+    """
+    credential: Annotated[Credential | None, Field(title="Credential")] = None
+    """
+    Where the runtime's credential comes from. Never the credential itself: config is committed, so it holds only a reference.
     """
 
 

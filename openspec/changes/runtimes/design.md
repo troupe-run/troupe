@@ -38,7 +38,8 @@ See proposal.md for why. What this builds on:
 
 ### D1. A runtime holds an endpoint, a model and a credential reference
 
-`protocol/schemas/config/runtime.schema.json`, closed:
+`protocol/schemas/config/runtime.schema.json`, closed, with its field types in a shared `protocol/schemas/runtime.schema.json`
+(as `effects.schema.json` is shared), which `run/start`, the run's start and the client also use:
 
 | Field | Type | Notes |
 |---|---|---|
@@ -206,20 +207,22 @@ Config's own refusals (an unknown runtime, a runner that takes none) are config 
 ### D11. The scripted runner's runtime steps
 
 - `checkRuntime`: `{"name", "endpoint", "model", "credentialHash"}` (each optional; `credentialHash` a `sha256:` of
-  the value's UTF-8, or `null` for none), or `{"absent": true}`. A mismatch is an error result naming each field, with
+  the value's UTF-8, or `"noCredential": true` for none, since the schemas carry no nulls), or `{"absent": true}`. A mismatch is an error result naming each field, with
   hashes in place of the credential, like `checkCharacter`.
 - `echoCredential`: `true`. Sends the value in a `log` event, a transcript record and standard error. It exists only to
   test troupe's masking; its README row says so.
 
 ### D12. The leak test
 
-`packages/troupe/tests/test_credential_leak.py` sets a canary (a random 40-character key with a `/`, so the
-JSON-escaped form differs), defines a runtime on it, and drives the scripted runner through: a successful run that
-echoes it everywhere and ends with it in the result's message; a run whose runner errors with it in the message; a
-refused run (`runtime.insecure-endpoint`); a rehearsal; and `config get --resolved`. It then reads every file under
-`.troupe/` and the artifact store, and every client message the session sent, and fails naming the place if any holds
-the canary, its JSON-escaped form or its base64 form. A second test checks the test would catch a leak: with masking
-turned off through the test's seam, it fails.
+`packages/troupe/tests/test_credential_leak.py` sets a canary (a random 40-character key with a `/`, so the JSON-escaped
+form differs), defines a runtime on it, and drives troupe's command line through: a successful run whose runner echoes
+it in a log event, a transcript record and standard error; a failed run that does the same; a refused run
+(`runtime.insecure-endpoint`); a rehearsal; `config get` with and without `--resolved`; and `status` and `logs`. The
+scripts never hold the key, since config holds them: only the runtime brings it in. A key split across two reads of
+standard error, base64 records and the JSON-escaped forms are tested in perform's and the masker's own tests. It then
+reads every file under `.troupe/` and the artifact store, and every client message the session sent, and fails naming
+the place if any holds the canary, its JSON-escaped form or its base64 form. A second test checks the test would catch a
+leak: with masking turned off through the test's seam, it fails.
 
 ## Risks / Trade-offs
 

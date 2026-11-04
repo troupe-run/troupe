@@ -25,6 +25,7 @@ from troupe.cli.render import (
     render_run,
     render_run_line,
 )
+from troupe.cli.runtimes import runtime_lines
 from troupe.core.client.dispatch import call
 from troupe.core.client.session import CancelSignal, Session
 from troupe.core.errors import TroupeError
@@ -103,8 +104,10 @@ def _render_rehearsal(rehearsal: dict[str, Any], stdout: TextIO) -> None:
         f"  direction: {_text(rehearsal.get('direction'))}",
         f"  config: {', '.join(rehearsal['config'])}",
         f"  workspace: {_planned(rehearsal['workspace'])}",
-        "Rehearsal: nothing was started or recorded.",
     ]
+    if "runtime" in rehearsal:
+        lines += runtime_lines(rehearsal["runtime"], indent="  ")
+    lines.append("Rehearsal: nothing was started or recorded.")
     print("\n".join(lines), file=stdout)
 
 

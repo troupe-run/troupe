@@ -84,6 +84,13 @@ CODES: dict[str, ExitCode] = {
     "theatre.not-found": ExitCode.FAILURE,
     "theatre.exists": ExitCode.FAILURE,
     "runner.unknown": ExitCode.FAILURE,
+    # Runtimes (runtimes design D10). contributing/config.md lists them.
+    "runtime.invalid-value": ExitCode.FAILURE,
+    "runtime.no-model": ExitCode.FAILURE,
+    "runtime.credential-unset": ExitCode.FAILURE,
+    "runtime.credential-too-short": ExitCode.FAILURE,
+    "runtime.insecure-endpoint": ExitCode.FAILURE,
+    "config.not-resolvable": ExitCode.USAGE,
     "run.out-of-sequence": ExitCode.FAILURE,
     "run.recording-failed": ExitCode.FAILURE,
     "run.not-found": ExitCode.FAILURE,

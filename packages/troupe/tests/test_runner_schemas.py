@@ -310,6 +310,43 @@ def test_a_run_start_whose_run_id_is_not_a_canonical_lowercase_uuid_does_not_val
     validate(_request("run/start", START), "run-start.schema.json")
 
 
+# Requirement: Run start carries the run's runtime
+
+RUNTIME = {
+    "name": "openai",
+    "endpoint": "https://api.openai.com/v1",
+    "model": "gpt-test",
+    "credential": True,
+}
+
+
+def test_a_run_start_with_a_runtime_validates() -> None:
+    validate(_request("run/start", {**START, "runtime": RUNTIME}), "run-start.schema.json")
+    validate(
+        _request("run/start", {**START, "runtime": {**RUNTIME, "credential": False}}),
+        "run-start.schema.json",
+    )
+
+
+@pytest.mark.parametrize(
+    "runtime",
+    [
+        pytest.param({**RUNTIME, "value": "sk-test"}, id="a credential's value"),
+        pytest.param({**RUNTIME, "env": "OPENAI_API_KEY"}, id="the variable's name"),
+        pytest.param({**RUNTIME, "credential": {"env": "OPENAI_API_KEY"}}, id="a reference"),
+        pytest.param({k: v for k, v in RUNTIME.items() if k != "model"}, id="no model"),
+        pytest.param({**RUNTIME, "endpoint": "https://u:p@example.com"}, id="user info"),
+        pytest.param(None, id="a null for no runtime"),
+    ],
+)
+def test_a_run_start_whose_runtime_holds_anything_else_does_not_validate(
+    runtime: object,
+) -> None:
+    assert not is_valid(
+        _request("run/start", {**START, "runtime": runtime}), "run-start.schema.json"
+    )
+
+
 # Requirement: A success result matches its method's result schema
 
 SUCCESS = "jsonrpc.schema.json#/$defs/successResponse"
