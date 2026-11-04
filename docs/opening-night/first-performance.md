@@ -160,6 +160,31 @@ Allow the local stage first, as above, if this shell doesn't have it. The run wr
 and troupe checks it did: the actor's `expect` names the file, and a run that didn't create or change it fails.
 `troupe diff`, `accept`, `status` and `logs` work as they do above.
 
+## Try it with a model on your own machine
+
+troupe ships a third runner, the Ollama runner, which runs a model on your own computer through
+[Ollama](https://ollama.com). It needs no account and no credential, costs nothing per run, and works offline once
+the model is downloaded. You need Ollama 0.12.6 or later, running. Try it in a new git repository:
+
+```sh
+ollama pull qwen3.5:4b
+mkdir troupe-local
+cd troupe-local
+git init
+troupe init --audition --runner ollama
+git add .troupe
+git commit -m 'Add a troupe theatre'
+troupe perform lead
+```
+
+Allow the local stage first, as above, if this shell doesn't have it. The model is about 3.4 GB to download. The
+actor's options name it (`model`), and can point at an Ollama elsewhere (`endpoint`) or give the model a larger
+context window (`contextLength`, 16384 tokens unless you set it). A small local model is less reliable at using tools
+than Claude Code: troupe's effects and audit still decide what a run may change, and a run that outgrows its context
+window fails rather than carrying on with its direction cut off. The
+[Ollama runner's README](https://github.com/troupe-run/troupe/blob/main/plugins/runner-ollama/README.md) lists every
+option.
+
 ## Define your own actor
 
 `troupe init --audition` is one way to define an actor. `troupe config set` is the other, and works in any theatre.

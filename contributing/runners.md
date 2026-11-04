@@ -9,9 +9,11 @@ and output. A runner can be written in any language. This page and the schemas i
 In Python, the [plugin SDK](../packages/troupe-plugin-sdk/README.md) (`troupe_plugin_sdk.runner`) has the contract's
 types, checked against those schemas, and core uses the same ones. A runner in another language reads the schemas.
 
-troupe ships two runners: the [scripted runner](../plugins/runner-scripted/README.md), which tests use to produce
-every outcome on demand, and the [Claude Code runner](../plugins/runner-claude-code/README.md). A local-model runner
-follows (decision [#16](https://github.com/troupe-run/troupe/issues/16)).
+troupe ships three runners: the [scripted runner](../plugins/runner-scripted/README.md), which tests use to produce
+every outcome on demand, the [Claude Code runner](../plugins/runner-claude-code/README.md), and the
+[Ollama runner](../plugins/runner-ollama/README.md), which drives a local model through Ollama's own API with troupe's
+own tool loop (decision [#16](https://github.com/troupe-run/troupe/issues/16)). An OpenAI-style runner follows
+([#162](https://github.com/troupe-run/troupe/issues/162)).
 
 ## The contract
 
@@ -105,7 +107,7 @@ repeats.
 | `turn` | `role` (`assistant` or `user`), `text` | One message turn, summarised. |
 | `tool_call` | `callId`, `tool`, `inputSummary` | |
 | `tool_result` | `callId`, `isError`, `outputSummary`, `outputBytes` | `callId` matches an earlier `tool_call`. The full output belongs in the transcript. |
-| `retry` | `attempt`, `maxAttempts` (optional), `delayMs`, `reason`, `message` (optional) | `reason` is `authentication`, `rate-limit`, `network`, `server` or `other`. Send one each time the engine retries. |
+| `retry` | `attempt`, `maxAttempts` (optional), `delayMs`, `reason`, `message` (optional) | `reason` is `authentication`, `rate-limit`, `network`, `server` or `other`. Send one each time the engine retries, or the runner retries a request to its engine itself. |
 | `log` | `level` (`debug`, `info`, `warning`, `error`), `message` | A diagnostic worth keeping with the run. |
 | `result` | `status` (`ok` or `error`), `message`, `turns`, `durationMs`, `usage {inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens}`, `costUsd` (all but the first two optional, and each `usage` counter too) | Exactly one, last, for a run that ends on its own. |
 | `oversized` | `originalType`, `bytes`, `ref` | Written by troupe, never by a runner (see [Oversized events](#oversized-events)). |
@@ -127,7 +129,11 @@ A runner should still summarise below `limits.eventMaxBytes`, because events are
 
 ### The transcript
 
-`run/transcript` carries the engine's native output, one record at a time, unchanged and in order. `record` is
+`run/transcript` carries the engine's native output, one record at a time, unchanged and in order. A runner that
+holds the conversation itself (one that runs the tool loop, as the Ollama runner does) also sends each message it
+adds to the conversation, verbatim as it sent it, before the engine's output that follows it, and sends re-sent
+history only once: otherwise the tool outputs it sends back, which the contract says belong in the transcript, would
+be missing, and a transcript would grow with the square of its run. `record` is
 the record without its line ending. `encoding` is `utf-8` (the default) or `base64` for bytes that aren't text.
 troupe stores the records, each followed by `\n`, as the run's transcript, and never interprets them. For Claude
 Code, that reproduces its stream-json output byte for byte.
@@ -252,6 +258,31 @@ output, each line paired with the events it maps to.
 its init): a `log` about an earlier record waits for `init`. Summaries (`turn` text, `inputSummary`,
 `outputSummary`, and log, retry and result messages) are cut on a character boundary to fit within
 `limits.eventMaxBytes`, ending with how many bytes were left out.
+
+### Mapping an engine: Ollama
+
+The [Ollama runner](../plugins/runner-ollama/README.md) is the other shape: the engine only answers, and the runner
+holds the conversation and runs the tools. It drives Ollama's own `/api/chat`, carries out each tool call with the
+plugin SDK's `Tools` (so `init`'s `effects` is `checked`), and maps the exchange like this. Its fixtures pin it: real
+Ollama answers, with what the runner sent for each.
+
+| From Ollama | Run event |
+|---|---|
+| `/api/version`, and the options' model | `init`, with the engine's name, version and model |
+| an answer's text, once its `done` line has come | a `turn`, if it has any text |
+| an answer's `thinking` | none; the transcript keeps it |
+| each `tool_calls` entry | `tool_call` and `tool_result`, from the SDK. A call with no id gets `call-<request>-<position>` |
+| a request made again: a connection that failed, dropped or went silent, or status 500, 502, 503 or 504 | `retry`: `network` for the connection, `server` for the status |
+| `done_reason` `length` | `log` warning |
+| an answer with no tool call | `result` `ok`, with its text |
+| any other status, an `error` line, `maxTurns` reached, or retries spent | `result` `error`, with Ollama's message |
+| each answer's `prompt_eval_count` and `eval_count` | summed into `result.usage`'s `inputTokens` and `outputTokens` |
+
+Its transcript is the first request's body, then before each later request the messages the runner added (the
+answer and its `tool` messages), each encoded exactly as inside that request, and every line of every answer: each
+record verbatim and once. Every request asks Ollama to refuse a conversation longer than the window rather than cut
+it (`truncate` and `shift` `false`), which Ollama 0.12.6 added, so the runner requires it and refuses an older one with
+`runner.requirement-unmet`.
 
 ## How troupe runs a runner
 

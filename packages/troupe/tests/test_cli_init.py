@@ -8,11 +8,13 @@ from pathlib import Path
 
 import pytest
 
+import ollama_stand_in
 from gitrepo import AUTHOR, Repo, make_repo
 from runtesting import ADA
 from troupe.cli import init as init_cli
 from troupe.cli import main
 from troupe.core import audition as auditions
+from troupe.core.audition import OLLAMA_AUDITION_MODEL as OLLAMA_MODEL
 from troupe.core.exit_codes import ExitCode
 from troupe.core.policy import ALLOW_UNENFORCED_LOCAL_STAGE, env_name
 
@@ -196,6 +198,23 @@ def test_the_scripted_audition_says_nothing_of_claude_code_or_a_character(repo: 
     assert "lead.md" not in out
 
 
+def test_the_ollama_audition_says_ollama_must_run_and_names_ollama_pull_with_its_model(
+    repo: Repo,
+) -> None:
+    # Spec: config, "What init prints for it"; cli, "The Ollama runner".
+    code, out, _ = cli("init", "--audition", "--runner", "ollama")
+    assert code == ExitCode.OK
+    assert "Defined the actor lead, with the ollama runner." in out
+    lines = _next(out)
+    assert (
+        f"   # Ollama must be running, with its model pulled: ollama pull {OLLAMA_MODEL}" in lines
+    )
+    assert "Claude Code must be" not in out
+    assert "runner: ollama" in (repo.path / ".troupe" / "actors" / "lead.yaml").read_text(
+        encoding="utf-8"
+    )
+
+
 # Requirement: Init's audition runner is named with --runner
 
 
@@ -214,7 +233,7 @@ def test_an_unknown_runner_names_the_runners_troupe_has_and_makes_nothing(repo: 
     code, _, err = cli("init", "--audition", "--runner", "gemini")
     assert code == ExitCode.FAILURE
     assert "gemini" in err
-    assert "claude-code, scripted" in err
+    assert "claude-code, ollama, scripted" in err
     assert not (repo.path / ".troupe").exists()
 
 
@@ -295,3 +314,40 @@ def test_the_printed_steps_of_a_scripted_audition_give_a_successful_run_offline(
     code, out, err = cli(*argv[1:])
     assert code == ExitCode.OK, err
     assert out.strip().endswith("succeeded")
+
+
+def test_the_printed_steps_of_an_ollama_audition_give_a_successful_run_with_a_stand_in(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The audition leaves endpoint to the runner's default, the local Ollama, so the test points
+    # it at a stand-in with config set, as a person would for an Ollama elsewhere (task 8.5).
+    fake = ollama_stand_in._fake()
+    model = {"capabilities": ["completion", "tools"]}
+    server = fake.FakeOllama(
+        [fake.final("Nothing to change.")], fake.Settings(models={OLLAMA_MODEL: model})
+    ).start()
+    try:
+        code, out, _ = cli("init", "--audition", "--runner", "ollama")
+        assert code == ExitCode.OK
+        commands = [
+            line.split(". ", 1)[1] if line[:1].isdigit() else line.strip()
+            for line in _next(out)
+            if not line.lstrip().startswith("#")
+        ]
+        add, commit, allow, perform = commands
+        code, _, err = cli("config", "set", f"actors.lead.options.endpoint={server.url}")
+        assert code == ExitCode.OK, err
+        _git(repo, *shlex.split(add)[1:])
+        _git(repo, *shlex.split(commit)[1:])
+        if sys.platform == "win32":
+            variable, value = allow.removeprefix("$env:").split(" = ")
+            monkeypatch.setenv(variable, value.strip('"'))
+        else:
+            variable, value = allow.removeprefix("export ").split("=")
+            monkeypatch.setenv(variable, value)
+        code, out, err = cli(*shlex.split(perform)[1:])
+        assert code == ExitCode.OK, err
+        assert out.strip().endswith("succeeded")
+        assert server.chats()[0]["model"] == OLLAMA_MODEL
+    finally:
+        server.stop()

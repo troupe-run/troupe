@@ -83,6 +83,12 @@ RUNNERS: dict[str, Runner] = {
         package="troupe_runner_claude_code",
         environment=CLAUDE_CODE_ENVIRONMENT,
     ),
+    "ollama": Runner(
+        command=(sys.executable, "-m", "troupe_runner_ollama"),
+        package="troupe_runner_ollama",
+        # Nothing: the runner reads no variable, not even OLLAMA_HOST, since its endpoint is an
+        # option (local-model-runner design D10).
+    ),
     "scripted": Runner(
         command=(sys.executable, "-m", "troupe_runner_scripted"),
         package="troupe_runner_scripted",

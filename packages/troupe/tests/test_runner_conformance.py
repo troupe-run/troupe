@@ -14,6 +14,7 @@ from typing import Any
 import pytest
 
 import claude_stand_in
+import ollama_stand_in
 from troupe.core.runners.conformance import CheckResult, check_runner
 from troupe.core.runners.host import RunnerCommand
 from troupe.core.runners.limits import RunLimits
@@ -146,6 +147,22 @@ def test_the_claude_code_runner_passes_every_check_with_a_stand_in_claude(tmp_pa
         RunLimits(start_timeout=10.0, cancel_grace=10.0, run_timeout=30.0),
         env,
     )
+    assert {name: r.problem for name, r in results.items() if not r.passed} == {}
+    assert len(results) == 8
+
+
+def test_the_ollama_runner_passes_every_check_with_a_stand_in_ollama(tmp_path: Path) -> None:
+    # Spec: ollama-runner, "The runner conforms to the contract" (local-model-runner task 8.3).
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    with ollama_stand_in.answering(count=20, delay=0.2) as fake:
+        results = _check(
+            [sys.executable, "-m", "troupe_runner_ollama"],
+            {"model": "fake", "endpoint": fake.url},
+            workspace,
+            RunLimits(start_timeout=10.0, cancel_grace=10.0, run_timeout=30.0),
+            {},
+        )
     assert {name: r.problem for name, r in results.items() if not r.passed} == {}
     assert len(results) == 8
 

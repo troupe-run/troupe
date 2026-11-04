@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://troupe.run/protocol/runner/run-transcript.schema.json",
   "title": "run/transcript",
-  "description": "One record of the engine's native output, unchanged, in the order produced. troupe stores the records as the run's transcript and does not interpret them.",
+  "description": "One record of the engine's native output, unchanged, in the order produced. A runner that holds the conversation itself, such as one that runs the tool loop, also sends each message it adds to the conversation, verbatim as it sent it and once, before the engine's output that follows it. troupe stores the records as the run's transcript and does not interpret them.",
   "type": "object",
   "additionalProperties": false,
   "required": ["jsonrpc", "method", "params"],

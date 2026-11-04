@@ -90,8 +90,17 @@ def _step_lines(step: dict[str, Any]) -> list[str]:
     return [shlex.join(["troupe", "perform", step["actor"], "--direction", step["direction"]])]
 
 
-def _step_notes(step: dict[str, Any]) -> list[str]:
-    """What a person should know about one step, after its commands."""
+def _option(entries: list[dict[str, Any]], actor: str, name: str) -> object:
+    """The value the audition's change set for ``actors.<actor>.options.<name>``, or None."""
+    for entry in entries:
+        if entry.get("path") == ["actors", actor, "options", name]:
+            return entry.get("after")
+    return None
+
+
+def _step_notes(step: dict[str, Any], entries: list[dict[str, Any]]) -> list[str]:
+    """What a person should know about one step, after its commands. ``entries`` are the audition's
+    config changes, which say what the step's actor runs with."""
     kind = step["kind"]
     if kind == "commit":
         return ["A run works from your latest commit, so commit the theatre first."]
@@ -103,6 +112,13 @@ def _step_notes(step: dict[str, Any]) -> list[str]:
     notes = []
     if step["runner"] == "claude-code":
         notes.append("Claude Code must be installed and logged in.")
+    if step["runner"] == "ollama":
+        model = _option(entries, step["actor"], "model")
+        notes.append(
+            f"Ollama must be running, with its model pulled: ollama pull {model}"
+            if isinstance(model, str)
+            else "Ollama must be running, with the actor's model pulled."
+        )
     notes.append(
         "The run works in its own worktree: see what it did with troupe diff, and keep it with "
         "troupe accept."
@@ -148,7 +164,7 @@ def render_init(result: dict[str, Any], directory: Path, stdout: TextIO) -> None
         print(f"{number}. {lines[0]}", file=stdout)
         for line in lines[1:]:
             print(f"   {line}", file=stdout)
-        for note in _step_notes(step):
+        for note in _step_notes(step, result["entries"]):
             # A comment in sh and PowerShell alike, so the whole block can be copied as it is.
             print(f"   # {note}", file=stdout)
 
