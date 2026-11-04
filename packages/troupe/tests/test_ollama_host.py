@@ -15,7 +15,7 @@ import ollama_stand_in
 from runner_schemas import validate
 from troupe.core.artifacts import MemoryArtifactStore
 from troupe.core.interim import runner_command
-from troupe.core.runners.effects import NoEffectExpected
+from troupe.core.runners.effects import NoAudit, NoEffectExpected
 from troupe.core.runners.host import RunnerCommand, RunRequest, run_actor
 from troupe.core.runners.limits import RunLimits
 from troupe.core.runners.outcome import RunOutcome
@@ -65,6 +65,7 @@ def _run(
             ),
             store=store,
             effect=NoEffectExpected(),
+            audit=NoAudit(),
             limits=RunLimits(cancel_grace=10.0),
             on_message=lambda direction, message: messages.append((direction, dict(message))),
         )
@@ -141,6 +142,7 @@ def test_cancelling_an_ollama_run_mid_stream_ends_it_cancelled_within_the_grace(
                 ),
                 store=MemoryArtifactStore(),
                 effect=NoEffectExpected(),
+                audit=NoAudit(),
                 limits=RunLimits(cancel_grace=grace),
                 cancel=cancel,
             )

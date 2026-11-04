@@ -23,7 +23,7 @@ from runner_schemas import validate
 from troupe.core.artifacts import MemoryArtifactStore
 from troupe.core.audition import OLLAMA_AUDITION_MODEL
 from troupe.core.interim import runner_command, runner_environment
-from troupe.core.runners.effects import NoEffectExpected
+from troupe.core.runners.effects import NoAudit, NoEffectExpected
 from troupe.core.runners.host import RunnerCommand, RunRequest, run_actor
 from troupe.core.runners.limits import RunLimits
 from troupe_plugin_sdk import runner as p
@@ -60,6 +60,7 @@ def test_a_live_run_keeps_the_contract_and_reaches_a_result(tmp_path: Path) -> N
             ),
             store=MemoryArtifactStore(),
             effect=NoEffectExpected(),
+            audit=NoAudit(),
             limits=RunLimits(run_timeout=600.0),
             on_message=lambda direction, message: messages.append((direction, dict(message))),
         )
