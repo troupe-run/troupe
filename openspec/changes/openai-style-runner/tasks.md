@@ -54,7 +54,7 @@
   main thread can close. Verify: tests against the fake endpoint show the `Authorization` header only when there's a
   credential, a 307 not followed (the fake's second host gets nothing), and a held-open response closed from another
   thread within a second.
-- [ ] 4.3 Write the stream parser (D4): text, refusal, reasoning and tool-call deltas by index, the finish reason, and
+- [x] 4.3 Write the stream parser (D4): text, refusal, reasoning and tool-call deltas by index, the finish reason, and
   the final usage chunk, with a broken stream detected as the spec says. Verify: tests on a recorded stream, and a
   property test that any split of its bytes into reads gives the same response.
 - [ ] 4.4 Write the retry and failure classification (D8): each row of the table, `Retry-After` within the cap, and

@@ -54,6 +54,9 @@ class Reply:
     headers: Sequence[tuple[str, str]] = ()
     body: bytes | None = None
     lines: Sequence[StreamItem] | None = None
+    chunks: Sequence[bytes] | None = None
+    """A streamed body as raw bytes, each piece written and flushed on its own, so a line can
+    arrive split across reads anywhere."""
 
 
 @dataclass(frozen=True)
@@ -116,6 +119,16 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_response(reply.status)
         for name, value in reply.headers:
             self.send_header(name, value)
+        if reply.chunks is not None:
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            self.close_connection = True
+            for piece in reply.chunks:
+                self.wfile.write(piece)
+                self.wfile.flush()
+                time.sleep(0.001)
+            return
         if reply.lines is None:
             body = reply.body or b""
             if not any(name.lower() == "content-type" for name, _ in reply.headers):
