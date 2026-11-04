@@ -68,6 +68,7 @@ tests = [
     "packages/troupe-vcs-files/tests/**",
     "packages/troupe-vcs-git/tests/**",
     "plugins/runner-claude-code/tests/**",
+    "plugins/runner-ollama/tests/**",
     "plugins/runner-scripted/tests/**",
     "scripts/tests/**",
     "scripts/tests/workspace/**",
@@ -163,6 +164,26 @@ tests = [
     "packages/troupe-plugin-sdk/tests/**",
     "packages/troupe-store-text/tests/**",
     "plugins/runner-claude-code/tests/**",
+    "scripts/tests/workspace/**",
+]
+
+# Started as a subprocess by the core suite (the host, conformance and perform tests), with core's own stand-in for
+# Ollama, and its schemas read through core's runner table (local-model-runner design D12).
+[scopes.runner_ollama]
+paths = [
+    "plugins/runner-ollama/src/**",
+    "plugins/runner-ollama/tests/**",
+    "plugins/runner-ollama/fixtures/**",
+    "plugins/runner-ollama/tools/**",
+    "plugins/runner-ollama/README.md",
+    "plugins/runner-ollama/LICENSE",
+]
+tests = [
+    "packages/troupe/tests/**",
+    "packages/troupe-artifacts-local/tests/**",
+    "packages/troupe-plugin-sdk/tests/**",
+    "packages/troupe-store-text/tests/**",
+    "plugins/runner-ollama/tests/**",
     "scripts/tests/workspace/**",
 ]
 
