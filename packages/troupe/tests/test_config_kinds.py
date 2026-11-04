@@ -301,6 +301,7 @@ def test_a_runner_that_needs_a_runtime_is_refused_without_one(
 
 def test_what_each_runner_takes() -> None:
     assert interim.RUNNERS["claude-code"].runtime == "none"
+    assert interim.RUNNERS["ollama"].runtime == "none"  # its endpoint and model are options for now
     assert interim.RUNNERS["scripted"].runtime == "optional"
 
 
