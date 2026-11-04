@@ -1,0 +1,26 @@
+{
+  "what": "A Write the effects allow, then a final answer.",
+  "ollamaVersion": "0.40.14",
+  "model": "qwen3:0.6b",
+  "date": "2026-11-04",
+  "command": [
+    "capture_ollama.py",
+    "success-with-tools"
+  ],
+  "options": {
+    "model": "qwen3:0.6b",
+    "think": false,
+    "temperature": 0,
+    "seed": 1
+  },
+  "direction": "Create the file out/hello.txt containing exactly: hello",
+  "effects": {
+    "write": [
+      "out/**"
+    ]
+  },
+  "credential": "none: Ollama needs none",
+  "scrubbing": "the workspace's and scratch directory's paths are <workspace> and <scratch>; /api/show's license, modelfile and template text are left out",
+  "events": "recorded at capture, then reviewed by hand",
+  "window": 16384
+}

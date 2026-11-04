@@ -1,0 +1,57 @@
+[
+  {
+    "type": "init",
+    "seq": 0,
+    "runner": {
+      "name": "ollama",
+      "version": "0.0.0"
+    },
+    "tools": [
+      "Read",
+      "Write",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Delete",
+      "Move"
+    ],
+    "engine": {
+      "name": "ollama",
+      "version": "0.40.14",
+      "model": "qwen3:0.6b"
+    },
+    "effects": "checked"
+  },
+  {
+    "type": "tool_call",
+    "seq": 1,
+    "callId": "call_gawv4ee5",
+    "tool": "Write",
+    "inputSummary": "{\"file_path\":\"out/hello.txt\",\"content\":\"hello /no_think\"}"
+  },
+  {
+    "type": "tool_result",
+    "seq": 2,
+    "callId": "call_gawv4ee5",
+    "isError": false,
+    "outputSummary": "Wrote 15 bytes to out/hello.txt.",
+    "outputBytes": 32
+  },
+  {
+    "type": "turn",
+    "seq": 3,
+    "role": "assistant",
+    "text": "The file `out/hello.txt` has been created with the content: `hello /no_think`."
+  },
+  {
+    "type": "result",
+    "seq": 4,
+    "status": "ok",
+    "message": "The file `out/hello.txt` has been created with the content: `hello /no_think`.",
+    "turns": 2,
+    "usage": {
+      "inputTokens": 2498,
+      "outputTokens": 56
+    }
+  }
+]

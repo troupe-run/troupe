@@ -1,0 +1,26 @@
+{
+  "what": "Ollama reports an error part-way through a stream: the run ends with an error result, with no retry.",
+  "ollamaVersion": "0.40.14",
+  "model": "qwen3:0.6b",
+  "date": "2026-11-04",
+  "command": [
+    "hand-written from success-with-tools"
+  ],
+  "options": {
+    "model": "qwen3:0.6b",
+    "think": false,
+    "temperature": 0,
+    "seed": 1
+  },
+  "direction": "Create the file out/hello.txt containing exactly: hello",
+  "effects": {
+    "write": [
+      "out/**"
+    ]
+  },
+  "credential": "none: Ollama needs none",
+  "scrubbing": "the workspace's and scratch directory's paths are <workspace> and <scratch>; /api/show's license, modelfile and template text are left out",
+  "events": "recorded by replaying the answers through the runner, then reviewed by hand",
+  "window": 16384,
+  "answers": "hand-written: success-with-tools' captured answers, with the failure put in front"
+}

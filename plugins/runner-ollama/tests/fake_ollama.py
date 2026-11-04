@@ -128,6 +128,12 @@ class Request:
         return json.loads(self.body)
 
 
+class _Server(ThreadingHTTPServer):
+    def handle_error(self, request: Any, client_address: Any) -> None:  # noqa: ANN401
+        """A client that resets its connection is a client the fake was told to expect: say
+        nothing, rather than print a traceback."""
+
+
 class FakeOllama:
     """The fake server, on 127.0.0.1 and a free port."""
 
@@ -157,7 +163,7 @@ class FakeOllama:
                 fake._record(self.path, body)
                 fake._post(self, body)
 
-        self._server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self._server = _Server(("127.0.0.1", 0), Handler)
         self._server.daemon_threads = True
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
 

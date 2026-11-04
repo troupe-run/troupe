@@ -1,0 +1,22 @@
+{
+  "what": "A thinking model's answer, with no tool call: its thinking stays in the transcript.",
+  "ollamaVersion": "0.40.14",
+  "model": "qwen3:0.6b",
+  "date": "2026-11-04",
+  "command": [
+    "capture_ollama.py",
+    "thinking"
+  ],
+  "options": {
+    "model": "qwen3:0.6b",
+    "think": true,
+    "temperature": 0,
+    "seed": 1
+  },
+  "direction": "What is 2 + 2? Answer with only the number, and use no tools.",
+  "effects": {},
+  "credential": "none: Ollama needs none",
+  "scrubbing": "the workspace's and scratch directory's paths are <workspace> and <scratch>; /api/show's license, modelfile and template text are left out",
+  "events": "recorded at capture, then reviewed by hand",
+  "window": 16384
+}

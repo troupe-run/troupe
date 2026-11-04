@@ -1,0 +1,42 @@
+[
+  {
+    "type": "init",
+    "seq": 0,
+    "runner": {
+      "name": "ollama",
+      "version": "0.0.0"
+    },
+    "tools": [
+      "Read",
+      "Write",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Delete",
+      "Move"
+    ],
+    "engine": {
+      "name": "ollama",
+      "version": "0.40.14",
+      "model": "qwen3:0.6b"
+    },
+    "effects": "checked"
+  },
+  {
+    "type": "turn",
+    "seq": 1,
+    "role": "assistant",
+    "text": "The answer is 4."
+  },
+  {
+    "type": "result",
+    "seq": 2,
+    "status": "ok",
+    "message": "The answer is 4.",
+    "turns": 1,
+    "usage": {
+      "inputTokens": 1238,
+      "outputTokens": 107
+    }
+  }
+]

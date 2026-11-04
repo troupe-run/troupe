@@ -63,21 +63,26 @@
   mid-stream close and recorded request. Verify: that test passes.
 ## 4. Real Ollama fixtures and the capture tool (design D12)
 
-- [ ] 4.1 Add `tools/capture_ollama.py`. It drives a loopback Ollama through the runner's client (it imports 3.1), in a temporary workspace, with a fixed direction, model, `seed` and `temperature` 0. It writes
+- [x] 4.1 Add `tools/capture_ollama.py`. It drives a loopback Ollama through the runner's client (it imports 3.1), in a temporary workspace, with a fixed direction, model, `seed` and `temperature` 0. It writes
   `exchange.jsonl` and `provenance.json` for a named fixture, and refuses an endpoint that isn't loopback. Verify: a
   unit test runs the tool against the fake endpoint from 3.2 and checks the files it writes, and a second checks it
   refuses `http://example.com:11434`.
-- [ ] 4.2 Capture from the owner's Ollama, already installed and running (owner, 2026-11-04: Ollama 0.40.14 at
+- [x] 4.2 Capture from the owner's Ollama, already installed and running (owner, 2026-11-04: Ollama 0.40.14 at
   `/opt/homebrew/bin/ollama`, with `qwen3.5:4b`, `qwen3.5:0.8b` and `qwen3:0.6b` pulled; nothing is pulled for this
   change). Capture with the smallest model that does each one, so captures stay quick: `success-with-tools`,
   `refused-by-effects`, `thinking`, `model-not-found`, and `context-overflow` (`contextLength` 512 and a `Read` of a
   file larger than that, which `truncate: false` turns into Ollama's 400). For `no-tools-capability`, make a model
   without the `tools` capability from `qwen3:0.6b` with `ollama create` and a template with no tools section. Remove
   it with `ollama rm` afterwards, and say so in the provenance. Record each provenance's Ollama version.
-  Hand-write the failure fixtures D12 lists (503, dropped connection, an `error` line, a silent stream), and mark
-  their provenance hand-written. Verify: every fixture directory has its three files, the provenance test (5.2)
+  Hand-write the failure fixtures D12 lists (503, dropped connection, an `error` line), and mark their
+  provenance hand-written. As done (2026-11-04): the events of every fixture are recorded, by the capture or by
+  replaying hand-written answers, then reviewed by hand, since real tool calls carry random ids only a recording
+  reproduces. A silent stream isn't a fixture: the runner's idle limit is a named 300 s, so it stays covered by the
+  client's and the conversation's tests, which lower it. Ollama 0.40.14 still listed `tools` for the made model (a
+  qwen3-family model's capabilities come from its renderer), so `no-tools-capability`'s capabilities were edited to
+  `["completion"]` by hand, as its provenance says. Verify: every fixture directory has its three files, the provenance test (5.2)
   passes, and `ollama list` afterwards shows only the models that were there before.
-- [ ] 4.3 Record what the captures settle (design D15, D16): the 400 Ollama sends for a request over the window, in
+- [x] 4.3 Record what the captures settle (design D15, D16): the 400 Ollama sends for a request over the window, in
   `context-overflow`; that `prompt_eval_cached_count` is reported apart from `prompt_eval_count`; and where
   `/api/show` gives the model's maximum context. Write each into the plugin README's usage and context sections,
   citing its fixture, and open a follow-up issue (on the board) to map `prompt_eval_cached_count` to
@@ -112,7 +117,7 @@
   - the transcript scenarios: the first body once, each added message verbatim as it appears inside the next
     request's body (checked by finding its bytes there), no re-sent history, and a non-UTF-8 line as `base64`;
   - a record that leads to an event comes before it.
-- [ ] 5.2 Add `test_ollama_fixtures.py`. For every fixture, replaying it through the fake gives exactly its
+- [x] 5.2 Add `test_ollama_fixtures.py`. For every fixture, replaying it through the fake gives exactly its
   `exchange.jsonl` records and `events.json` events. Also check each provenance names Ollama's version, the model, the
   date and whether it was captured or hand-written, and that a secret scan (copied from the Claude Code runner's) finds
   nothing. Verify: the file passes with 4.2's fixtures.
@@ -140,7 +145,7 @@
   - a run's environment holds nothing the test didn't give it, and `OLLAMA_HOST` set to another port is ignored.
 
   Run it on all three platforms in CI (task 10.1).
-- [ ] 6.2 Write the plugin README: what the runner does, the options and their defaults (D11, with the README test
+- [x] 6.2 Write the plugin README: what the runner does, the options and their defaults (D11, with the README test
   from the Claude Code runner checking every option has a row and every row an option), the endpoint and that any
   host is accepted, the preflight's errors and their fixes, the transcript's records and how to rebuild a request,
   retries, cancelling, exit codes, usage, the context window (its default, why, raising `contextLength`, and how a run that outgrows it ends, citing

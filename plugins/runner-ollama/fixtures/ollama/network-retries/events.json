@@ -1,0 +1,66 @@
+[
+  {
+    "type": "init",
+    "seq": 0,
+    "runner": {
+      "name": "ollama",
+      "version": "0.0.0"
+    },
+    "tools": [
+      "Read",
+      "Write",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Delete",
+      "Move"
+    ],
+    "engine": {
+      "name": "ollama",
+      "version": "0.40.14",
+      "model": "qwen3:0.6b"
+    },
+    "effects": "checked"
+  },
+  {
+    "type": "retry",
+    "seq": 1,
+    "attempt": 1,
+    "delayMs": 1000,
+    "reason": "network",
+    "maxAttempts": 3,
+    "message": "the connection ended before Ollama finished its answer"
+  },
+  {
+    "type": "tool_call",
+    "seq": 2,
+    "callId": "call_gawv4ee5",
+    "tool": "Write",
+    "inputSummary": "{\"file_path\":\"out/hello.txt\",\"content\":\"hello /no_think\"}"
+  },
+  {
+    "type": "tool_result",
+    "seq": 3,
+    "callId": "call_gawv4ee5",
+    "isError": false,
+    "outputSummary": "Wrote 15 bytes to out/hello.txt.",
+    "outputBytes": 32
+  },
+  {
+    "type": "turn",
+    "seq": 4,
+    "role": "assistant",
+    "text": "The file `out/hello.txt` has been created with the content: `hello /no_think`."
+  },
+  {
+    "type": "result",
+    "seq": 5,
+    "status": "ok",
+    "message": "The file `out/hello.txt` has been created with the content: `hello /no_think`.",
+    "turns": 2,
+    "usage": {
+      "inputTokens": 2498,
+      "outputTokens": 56
+    }
+  }
+]

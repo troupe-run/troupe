@@ -1,0 +1,9 @@
+[
+  {
+    "status": 200,
+    "lines": [
+      "{\"model\":\"qwen3:0.6b\",\"created_at\":\"2026-11-04T05:38:25.983867Z\",\"message\":{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{\"id\":\"call_gawv4ee5\",\"function\":{\"index\":0,\"name\":\"Write\",\"arguments\":{\"file_path\":\"out/hello.txt\",\"content\":\"hello /no_think\"}}}]},\"done\":false}",
+      "{\"error\": \"an error was encountered while running the model: unexpected EOF\"}"
+    ]
+  }
+]

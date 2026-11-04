@@ -1,0 +1,21 @@
+{
+  "what": "A window too small for the conversation: with truncate false, Ollama refuses the request with status 400 instead of cutting it.",
+  "ollamaVersion": "0.40.14",
+  "model": "qwen3:0.6b",
+  "date": "2026-11-04",
+  "command": [
+    "capture_ollama.py",
+    "context-overflow"
+  ],
+  "options": {
+    "model": "qwen3:0.6b",
+    "think": false,
+    "contextLength": 512
+  },
+  "direction": "Read notes.txt and summarise it.",
+  "effects": {},
+  "credential": "none: Ollama needs none",
+  "scrubbing": "the workspace's and scratch directory's paths are <workspace> and <scratch>; /api/show's license, modelfile and template text are left out",
+  "events": "recorded at capture, then reviewed by hand",
+  "window": 512
+}

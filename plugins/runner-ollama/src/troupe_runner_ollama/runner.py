@@ -89,6 +89,12 @@ def model_maximum(shown: dict[str, Any]) -> int | None:
     return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else None
 
 
+def default_window(maximum: int | None) -> int:
+    """The context window when the options set none: the runner's default, lowered to the model's
+    own maximum (design D15)."""
+    return DEFAULT_CONTEXT_LENGTH if maximum is None else min(DEFAULT_CONTEXT_LENGTH, maximum)
+
+
 class Runner:
     def __init__(self, stdin: BinaryIO, stdout: BinaryIO, stderr: BinaryIO) -> None:
         self._stdin = stdin
@@ -399,8 +405,7 @@ class Runner:
                     f"Give contextLength {maximum} or less.",
                 )
             return version, options.context_length
-        window = DEFAULT_CONTEXT_LENGTH if maximum is None else min(DEFAULT_CONTEXT_LENGTH, maximum)
-        return version, window
+        return version, default_window(maximum)
 
     # The run
 
