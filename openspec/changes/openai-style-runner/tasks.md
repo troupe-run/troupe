@@ -57,7 +57,7 @@
 - [x] 4.3 Write the stream parser (D4): text, refusal, reasoning and tool-call deltas by index, the finish reason, and
   the final usage chunk, with a broken stream detected as the spec says. Verify: tests on a recorded stream, and a
   property test that any split of its bytes into reads gives the same response.
-- [ ] 4.4 Write the retry and failure classification (D8): each row of the table, `Retry-After` within the cap, and
+- [x] 4.4 Write the retry and failure classification (D8): each row of the table, `Retry-After` within the cap, and
   backoff. Verify: one test per row against the fake endpoint, each checking the `retry` events' attempt, reason,
   delay and message, or the `error` result's message, as the spec's scenarios state.
 
