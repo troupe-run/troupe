@@ -82,7 +82,7 @@
 
 - [ ] 7.1 Write `test_credential_leak.py` (D12) and its check that it fails with masking turned off. Verify both pass,
   on Linux, macOS and Windows in CI.
-- [ ] 7.2 Write `docs/stagecraft/runtimes.md`: defining and overriding a runtime, the environment variables, the
+- [x] 7.2 Write `docs/stagecraft/runtimes.md`: defining and overriding a runtime, the environment variables, the
   credential by reference, `config get --resolved`, and the accepted risks of a theatre-chosen endpoint and variable
   (D7). Link it from the config and actor docs. Verify the docs check passes and each example command runs as written
   in a test theatre.
