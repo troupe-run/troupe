@@ -47,7 +47,7 @@
 
 ## 3. The engine client and the fake Ollama (design D2, D9, D12)
 
-- [ ] 3.1 Add `client.py`, the `/api/*` client on `http.client`, with these parts:
+- [x] 3.1 Add `client.py`, the `/api/*` client on `http.client`, with these parts:
   - `version()` and `show(model)` with the preflight timeout;
   - `chat(body)`, which yields lines with the idle timeout and `LINE_MAX_BYTES`;
   - `close()`, which shuts down the socket in flight;
@@ -58,7 +58,7 @@
   - a silent stream is `network`. A dropped connection ends the lines before Ollama's `done` line, since
     http.client reads a stream cut short as ended, and 5.1 checks the conversation makes that a `network` retry;
   - a line over `LINE_MAX_BYTES` is a stream error and is never read whole;
-  - `close()` from another thread wakes a blocked read within a second, on all three platforms.
+  - `close()` from another thread wakes a blocked read within a second (here; on Linux and Windows, 10.1).
 - [x] 3.2 Add `tests/fake_ollama.py` (D12), and a test that runs it directly and checks each scripted answer, delay,
   mid-stream close and recorded request. Verify: that test passes.
 ## 4. Real Ollama fixtures and the capture tool (design D12)
@@ -129,7 +129,7 @@
 
 ## 6. The runner process (design D3, D4)
 
-- [ ] 6.1 Add `runner.py` and `__main__.py`: the JSON-RPC loop on the main thread, the preflight (D4) before
+- [x] 6.1 Add `runner.py` and `__main__.py`: the JSON-RPC loop on the main thread, the preflight (D4) before
   answering `run/start`, the worker thread, the stdout lock, stopping, and D3's exit codes. Add `tests/ollama_harness.py`,
   following `claude_harness.py`, which validates every message against the bound schemas. Verify with
   `test_ollama_runner.py`:
@@ -144,7 +144,7 @@
   - an exception in the loop gives exit 1, a `log` error and an `error` result;
   - a run's environment holds nothing the test didn't give it, and `OLLAMA_HOST` set to another port is ignored.
 
-  Run it on all three platforms in CI (task 10.1).
+  On Linux and Windows, CI checks it (10.1).
 - [x] 6.2 Write the plugin README: what the runner does, the options and their defaults (D11, with the README test
   from the Claude Code runner checking every option has a row and every row an option), the endpoint and that any
   host is accepted, the preflight's errors and their fixes, the transcript's records and how to rebuild a request,
@@ -207,10 +207,10 @@
 
 ## 9. The opt-in live test (spec: ollama-runner, "A live test runs a real model only when asked"; design D14)
 
-- [ ] 9.1 Add `packages/troupe/tests/test_ollama_live.py` as D14 says, skipped unless `TROUPE_LIVE_OLLAMA=1`, with a
+- [x] 9.1 Add `packages/troupe/tests/test_ollama_live.py` as D14 says, skipped unless `TROUPE_LIVE_OLLAMA=1`, with a
   reason naming the variable and `TROUPE_LIVE_OLLAMA_MODEL`. Verify: without the variable,
-  `uv run pytest packages/troupe/tests/test_ollama_live.py -rs` reports it skipped with that reason. CI's logs show it
-  skipped on all three operating systems (10.1).
+  `uv run pytest packages/troupe/tests/test_ollama_live.py -rs` reports it skipped with that reason. That it's skipped
+  in CI on all three operating systems is 10.1's to check.
 - [ ] 9.2 **Owner:** run the live test once on macOS with Ollama running and `qwen3.5:4b` pulled, and paste the outcome
   and what it printed into the PR. An agent session runs it only with the owner's go-ahead (as 4.2). Verify: the run
   reached a `result`, and its outcome isn't `crashed`.
@@ -219,8 +219,9 @@
 
 - [ ] 10.1 Run `uv run scripts/check.py`. Verify: it passes (ruff, mypy --strict, import-linter and the full test
   suite). Then push, open the draft PR (`Closes #277`, citing #56), act on Claude's review, and mark it ready. Verify:
-  every CI job passes on Linux, macOS and Windows. The Windows logs show the cancel and `close()` tests ran rather than
-  being skipped, and show the live test skipped.
+  every CI job passes on Linux, macOS and Windows. The Linux and Windows logs show the client's `close()` test
+  (3.1) and the runner's cancel and end-of-input tests (6.1) ran rather than being skipped, and every platform's log
+  shows the live test skipped with its reason (9.1).
 - [ ] 10.2 Open the troupe-run/infrastructure pull request that adds the `ollama-runner` spec's Purpose to
   `oob/troupe-spec-purposes.json`, following its `oob/README.md`, to merge after this one. Verify: its drift job's
   plan names `ollama-runner`, and the PR is linked from this one.
