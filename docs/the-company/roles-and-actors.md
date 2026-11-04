@@ -30,6 +30,9 @@ This is decided, and not yet built ([#61](https://github.com/troupe-run/troupe/i
   observed, such as a merge.
 - **An actor's config lives in its own file,** named for it: `actors/tester.yaml`, with `actors/tester.md` for its
   prompt, is the actor `tester` ([#60](https://github.com/troupe-run/troupe/issues/60)).
+- **An actor whose runner talks to a service names a runtime:** the service, defined once in config, with its
+  endpoint, its model and the variable its key is in, never the key ([Point actors at a
+  service](../stagecraft/runtimes.md)).
 
 The same person can arrive as different ids: a git email on one computer, a login name in a container,
 `TROUPE_ACTOR` in CI. How those map to one person isn't decided yet: it's open in

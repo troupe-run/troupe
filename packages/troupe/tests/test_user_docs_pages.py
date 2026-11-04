@@ -462,3 +462,47 @@ def test_no_page_is_still_planned() -> None:
         if read(path).front["status"] == "planned"
     ]
     assert planned == []
+
+
+# Point actors at a service (runtimes design; spec: runtimes).
+
+RUNTIMES_PAGE = "stagecraft/runtimes.md"
+
+
+def test_the_runtimes_pages_commands_run_as_written_and_show_what_it_says(
+    project: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    assert cli("init")[0] == 0  # the page is for a theatre you have
+    text = (DOCS / RUNTIMES_PAGE).read_text(encoding="utf-8")
+    lines = sh_lines(text)
+    assert lines[0] == "troupe config get --resolved runtimes.openai"
+    code, out, err = run_line(lines[0], monkeypatch)
+    assert code == 0, err
+    shown = next(body for lang, _, body in blocks_in(text) if lang == "text")
+    assert out == shown
+    for line in lines[1:]:
+        code, out, err = run_line(line, monkeypatch)
+        assert code == 0, (line, err)
+    assert "runtime office-llm\n  endpoint: https://llm.example.com/v1 (from theatre)" in out
+    written = (project.path / ".troupe" / "runtimes" / "openai.yaml").read_text(encoding="utf-8")
+    assert "model: gpt-4.1-mini" in written
+    assert "env: MY_OPENAI_KEY" in written
+
+
+def test_the_runtimes_page_gives_the_built_in_runtimes_as_the_code_does() -> None:
+    text = section(RUNTIMES_PAGE, "The runtimes troupe knows")
+    rows = re.findall(r"^\| `([a-z-]+)` \| `([^`]+)` \| (?:`([A-Z_]+)`|none) \|$", text, re.M)
+    documented = {name: (endpoint, env or None) for name, endpoint, env in rows}
+    built_in: dict[str, tuple[str, object]] = {}
+    for name, runtime in defaults.RUNTIMES.items():
+        credential = runtime.get("credential")
+        env = credential.get("env") if isinstance(credential, dict) else None
+        built_in[name] = (str(runtime["endpoint"]), env)
+    assert documented == built_in
+
+
+def test_the_runtimes_page_gives_the_shortest_key_as_the_code_does() -> None:
+    assert f"a key under {defaults.CREDENTIAL_MIN_BYTES} bytes is refused" in (
+        DOCS / RUNTIMES_PAGE
+    ).read_text(encoding="utf-8")
