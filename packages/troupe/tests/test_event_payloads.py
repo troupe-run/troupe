@@ -233,6 +233,115 @@ def test_an_end_that_contradicts_its_ending_does_not_validate(
     assert validator.is_valid(state), f"{label}, once consistent"
 
 
+def _ended(outcome: dict[str, Any]) -> dict[str, Any]:
+    """A Run.Ended payload around ``outcome``, with an exited runner unless it says otherwise."""
+    return {
+        "lineage": {
+            "actor": {"kind": "unknown"},
+            "via": "runner",
+            "at": "2026-10-13T00:00:00.000Z",
+            "change": "01K7ZX3N8V4Q2M6R9T5W1Y0B3C",
+            "cause": {"kind": "command", "id": "01K7ZX3N8V4Q2M6R9T5W1Y0B3C"},
+            "approvals": [],
+            "vcs": {"adapter": "files"},
+        },
+        "timestamp": {"_type_": "datetime_iso", "_data_": "2026-10-13T00:00:00+00:00"},
+        "outcome": {
+            "outcome": "cancelled",
+            "exitCode": 0,
+            "ending": "exited",
+            "transcript": "sha256:" + "a" * 64,
+            "stderr": "sha256:" + "b" * 64,
+            "limits": {
+                "start_timeout": 1,
+                "run_timeout": 1,
+                "cancel_grace": 1,
+                "silence_announce": 1,
+                "max_message_bytes": 1,
+                "event_max_bytes": 1,
+                "transcript_max_bytes": 1,
+                "stderr_max_bytes": 1,
+                "fail_fast_on_auth_retry": False,
+            },
+            **outcome,
+        },
+    }
+
+
+AUDIT_ERROR = {
+    "code": "vcs.failed",
+    "problem": "git ls-files failed.",
+    "fix": "Check the repository with git status.",
+    "details": {"command": "git ls-files", "exitStatus": 128},
+}
+
+
+@pytest.mark.parametrize(
+    ("audit", "valid"),
+    [
+        ({"outside": []}, True),
+        ({"outside": [{"path": "src/a.py", "change": "added", "needs": "write"}]}, True),
+        (
+            {
+                "outside": [
+                    {"path": "drafts/a.md", "change": "moved", "needs": "move", "to": "docs/a.md"}
+                ]
+            },
+            True,
+        ),
+        ({"error": AUDIT_ERROR}, True),
+        ({"outside": [], "error": AUDIT_ERROR}, False),
+        ({}, False),
+        ({"outside": [{"path": "drafts/a.md", "change": "moved", "needs": "move"}]}, False),
+        (
+            {"outside": [{"path": "a", "change": "added", "needs": "write", "to": "b"}]},
+            False,
+        ),
+        ({"outside": [{"path": "a", "change": "renamed", "needs": "write"}]}, False),
+    ],
+    ids=[
+        "every change declared",
+        "a change outside",
+        "a move outside",
+        "an audit that couldn't run",
+        "both findings and an error",
+        "neither findings nor an error",
+        "a move with no destination",
+        "a destination that isn't a move's",
+        "an unknown kind of change",
+    ],
+)
+def test_an_ends_audit_validates_exactly_when_it_holds_findings_or_an_error(
+    audit: dict[str, Any], valid: bool
+) -> None:
+    ended = load(SCHEMAS / "events" / "run-ended.schema.json")
+    validator = validator_for(ended["$id"], SCRIPTED)
+    assert validator.is_valid(_ended({"audit": audit})) is valid
+
+
+def test_an_end_whose_runner_never_started_validates_only_without_an_audit() -> None:
+    ended = load(SCHEMAS / "events" / "run-ended.schema.json")
+    validator = validator_for(ended["$id"], SCRIPTED)
+    start_failed = {
+        "code": "runner.start-failed",
+        "problem": "Couldn't start the runner.",
+        "fix": "Check that the runner is installed.",
+        "details": {"command": "nothing"},
+    }
+    never = {"outcome": "could-not-start", "ending": "never-started", "error": start_failed}
+    state = _ended(never)
+    for field in ("exitCode", "transcript", "stderr"):
+        del state["outcome"][field]
+    assert validator.is_valid(state)
+    state["outcome"]["audit"] = {"outside": []}
+    assert not validator.is_valid(state)
+
+
+def test_an_end_recorded_before_audits_with_none_validates() -> None:
+    ended = load(SCHEMAS / "events" / "run-ended.schema.json")
+    assert validator_for(ended["$id"], SCRIPTED).is_valid(_ended({}))
+
+
 def test_a_recorded_payload_with_a_field_its_topic_does_not_define_is_refused(
     tmp_path: Path,
 ) -> None:

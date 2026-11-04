@@ -162,6 +162,7 @@ class RunView:
             "state": state,
             "outcome": outcome.get("outcome"),
             "error": outcome.get("error"),
+            "audit": outcome.get("audit"),
             "events": self.events,
             "startedAt": self.started_at,
             "endedAt": self.ended_at,

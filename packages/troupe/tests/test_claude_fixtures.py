@@ -12,7 +12,7 @@ import pytest
 
 from runner_schemas import validate
 from troupe.core.artifacts import MemoryArtifactStore
-from troupe.core.runners.effects import NoEffectExpected
+from troupe.core.runners.effects import NoAudit, NoEffectExpected
 from troupe.core.runners.host import RunnerCommand, RunRequest, run_actor
 from troupe.core.runners.limits import RunLimits
 from troupe.core.runners.outcome import RunOutcome
@@ -35,6 +35,7 @@ def _replay(name: str, limits: RunLimits, tmp_path: Path) -> tuple[RunOutcome, l
             RunRequest(str(uuid.uuid4()), "replay", tmp_path, {"script": script}),
             store=store,
             effect=NoEffectExpected(),
+            audit=NoAudit(),
             limits=limits,
             on_message=lambda direction, message: messages.append((direction, dict(message))),
         )

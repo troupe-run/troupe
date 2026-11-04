@@ -167,6 +167,32 @@ def test_a_run_recorded_before_workspaces_reads_back_as_in_the_theatre(store: Ev
     assert view.changes() is None
 
 
+# A run summary carries its run's audit (spec: client-protocol, runs; failed-run-audit design D4)
+
+
+def _summary(store: EventStore, run: Run) -> dict[str, Any]:
+    [view] = fold_runs(store.history(UUID(run.run_id))).values()
+    data: dict[str, Any] = view.summary("ended").to_data()
+    return data
+
+
+def test_an_ended_runs_audit_reaches_its_summary_as_recorded(store: EventStore) -> None:
+    run = new_run({"kind": "theatre"})
+    audit = {"outside": [{"path": "notes.md", "change": "added", "needs": "write"}]}
+    run.end({**outcome("cancelled"), "audit": audit}, None)
+    record(store, run)
+    assert _summary(store, run)["audit"] == audit
+
+
+def test_an_end_recorded_before_audits_gives_a_summary_with_none(store: EventStore) -> None:
+    run = new_run({"kind": "theatre"})
+    run.end(outcome("failed"), None)  # no audit, as every end recorded before this change
+    record(store, run)
+    summary = _summary(store, run)
+    assert summary["outcome"] == "failed"
+    assert "audit" not in summary
+
+
 # The event schemas refuse what contradicts itself
 
 

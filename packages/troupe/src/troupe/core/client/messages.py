@@ -207,6 +207,33 @@ class ChangesData(Message):
 
 
 @dataclass(frozen=True, kw_only=True)
+class OutsideChangeData(Message):
+    """One change outside a run's declared effects (effects.schema.json#/$defs/change)."""
+
+    path: str = json_field("path", pattern=THEATRE_PATH)
+    change: Literal["added", "modified", "removed", "moved"] = json_field("change")
+    needs: Literal["write", "delete", "move"] = json_field("needs")
+    to: str | None = json_field("to", default=None, pattern=THEATRE_PATH)
+
+    def _check(self, where: str) -> None:
+        if (self.change == "moved") != (self.to is not None):
+            raise fail(where, "to is present exactly when the change is moved")
+
+
+@dataclass(frozen=True, kw_only=True)
+class AuditData(Message):
+    """What the audit of a run's changes found: the changes outside its declaration (none when
+    every change was declared), or the error that kept it from running."""
+
+    outside: list[OutsideChangeData] | None = json_field("outside", default=None)
+    error: p.ErrorData | None = json_field("error", default=None)
+
+    def _check(self, where: str) -> None:
+        if (self.outside is None) == (self.error is None):
+            raise fail(where, "an audit holds either outside or error")
+
+
+@dataclass(frozen=True, kw_only=True)
 class RunSummary(Message):
     """A run as status, logs and perform report it. A field with nothing to say is left out; an
     ended run, and only an ended one, has an outcome and an end time."""
@@ -221,6 +248,7 @@ class RunSummary(Message):
     state: State = json_field("state")
     outcome: OutcomeName | None = json_field("outcome", default=None)
     error: p.ErrorData | None = json_field("error", default=None)
+    audit: AuditData | None = json_field("audit", default=None)
     events: int = json_field("events", minimum=0)
     started_at: str = json_field("startedAt", pattern=TIME)
     ended_at: str | None = json_field("endedAt", default=None, pattern=TIME)
@@ -233,6 +261,8 @@ class RunSummary(Message):
         ended = self.state == "ended"
         if ended != (self.outcome is not None) or ended != (self.ended_at is not None):
             raise fail(where, "outcome and endedAt are present exactly when state is ended")
+        if self.audit is not None and not ended:
+            raise fail(where, "audit is present only when state is ended")
         if isinstance(self.workspace, WorktreeWorkspace) != (self.changes is not None):
             raise fail(where, "changes are present exactly when the workspace is a worktree")
 

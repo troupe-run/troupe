@@ -2,7 +2,8 @@
 
 Usage: python fake_runner.py <mode>. Not collected by pytest. Every mode ignores run/start's
 options; ``ignore-options`` does nothing else unusual, for checks that a runner refuses an unknown
-option. ``refuse-character`` refuses a run/start that carries a character, as a runner that
+option. ``write-then-silent`` writes ``stray.txt`` in its working directory and then never answers.
+``refuse-character`` refuses a run/start that carries a character, as a runner that
 treats the contract's own field as unknown would.
 """
 
@@ -53,6 +54,10 @@ def answer_initialize(message: dict[str, Any], **result: Any) -> None:  # noqa: 
 
 def main(mode: str) -> None:
     global RUN_ID
+    if mode == "write-then-silent":  # changes its workspace, then never answers the handshake
+        with open("stray.txt", "w", encoding="utf-8") as stray:
+            stray.write("written before the handshake\n")
+        mode = "silent"
     for message in requests():
         method = message.get("method")
         if mode == "silent":

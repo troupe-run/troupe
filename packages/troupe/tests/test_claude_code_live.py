@@ -18,7 +18,7 @@ import pytest
 
 from troupe.core.artifacts import MemoryArtifactStore
 from troupe.core.interim import runner_command, runner_environment
-from troupe.core.runners.effects import ExpectedFiles
+from troupe.core.runners.effects import ExpectedFiles, NoAudit
 from troupe.core.runners.host import RunnerCommand, RunRequest, run_actor
 from troupe.core.runners.limits import RunLimits
 from troupe_plugin_sdk import runner as p
@@ -74,6 +74,7 @@ def test_a_live_run_writes_and_reads_back_a_file_its_effects_declare_with_only_r
             ),
             store=MemoryArtifactStore(),
             effect=ExpectedFiles([workspace / "out" / "hello.txt"]),
+            audit=NoAudit(),
             limits=RunLimits(run_timeout=300.0),
             on_event=keep,
         )

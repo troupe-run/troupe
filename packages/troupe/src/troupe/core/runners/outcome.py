@@ -11,7 +11,7 @@ from enum import StrEnum
 from typing import Any
 
 from troupe.core.errors import TroupeError
-from troupe.core.runners.effects import EffectVerdict
+from troupe.core.runners.effects import AuditFindings, EffectVerdict
 from troupe.core.runners.limits import RunLimits
 from troupe_plugin_sdk.runner import ResultEvent
 
@@ -57,7 +57,9 @@ class RunFacts:
     stop: StopReason | None = None
     result: ResultEvent | None = None
     effect: EffectVerdict | None = None
-    """Checked only when the result's status is ok."""
+    """Checked only when the result's status is ok: the expected files' verdict with the audit's.
+    The audit's findings for any other result never reach the outcome (failed-run-audit design
+    D1)."""
 
     def __post_init__(self) -> None:
         if (self.exit_code is None) != (self.ending is Ending.NEVER_STARTED):
@@ -160,6 +162,9 @@ class RunOutcome:
     """The transcript's artifact reference; None only when the runner never started."""
     stderr: str | None
     limits: RunLimits
+    audit: AuditFindings | None = None
+    """What the audit of the run's changes found; None exactly when the runner never started, or
+    the caller had no workspace to audit (NoAudit)."""
 
     def to_data(self) -> dict[str, Any]:
         """The outcome as recorded, leaving out what didn't happen: no error, no result, and for
@@ -180,4 +185,6 @@ class RunOutcome:
             data["transcript"] = self.transcript
         if self.stderr is not None:
             data["stderr"] = self.stderr
+        if self.audit is not None:
+            data["audit"] = self.audit.to_data()
         return data
