@@ -17,13 +17,23 @@ from protocol_schemas import check_error, check_notice
 from runner_schemas import is_valid, validate
 from troupe.core import defaults
 from troupe.core.artifacts import ArtifactStore, MemoryArtifactStore, load_store
+from troupe.core.errors import TroupeError
 from troupe.core.notices import Notice
-from troupe.core.runners.effects import EffectCheck, ExpectedFiles, NoEffectExpected
+from troupe.core.runners.effects import (
+    Audit,
+    Change,
+    DeclaredEffects,
+    EffectCheck,
+    ExpectedFiles,
+    NoAudit,
+    NoEffectExpected,
+)
 from troupe.core.runners.host import RunnerCommand, RunRequest, run_actor
 from troupe.core.runners.limits import RunLimits
 from troupe.core.runners.outcome import Ending, Outcome, RunOutcome
 from troupe.platform import processes
 from troupe_plugin_sdk import runner as p
+from troupe_plugin_sdk.effects import Effects
 
 FAKE = Path(__file__).with_name("fake_runner.py")
 INIT = {"type": "init", "runner": {"name": "scripted", "version": "0.0.1"}, "tools": ["Write"]}
@@ -61,6 +71,7 @@ def _run(
     *,
     argv: list[str] | None = None,
     effect: EffectCheck | None = None,
+    audit: Audit | None = None,
     limits: RunLimits = FAST,
     store: ArtifactStore | None = None,
     env: dict[str, str] | None = None,
@@ -105,6 +116,7 @@ def _run(
             request,
             store=store,
             effect=effect or NoEffectExpected(),
+            audit=audit or NoAudit(),
             limits=limits,
             on_event=on_event,
             on_announce=ran["notices"].append,
@@ -728,3 +740,178 @@ def test_the_actors_effects_reach_the_runner_with_all_three_lists(tmp_path: Path
 def test_a_read_only_actors_run_start_carries_three_empty_lists(tmp_path: Path) -> None:
     ran = _run(tmp_path, {"steps": [{"event": INIT}, {"event": OK}]})
     assert _run_start(ran)["effects"] == {"write": [], "delete": [], "move": []}
+
+
+# Requirement: The audit's findings are part of the outcome (failed-run-audit design D1)
+
+
+def _states(root: Path) -> dict[str, str]:
+    """Every file under ``root``, as the files adapter reads a workspace: path to content."""
+    return {
+        path.relative_to(root).as_posix(): path.read_bytes().hex()
+        for path in sorted(root.rglob("*"))
+        if path.is_file()
+    }
+
+
+def _audit(tmp_path: Path, effects: Effects | None = None) -> DeclaredEffects:
+    """The real audit, over the run's workspace, as perform builds it for a run in the theatre."""
+    return DeclaredEffects(
+        "tester", effects or Effects(), lambda: _states(tmp_path), lambda: _states(tmp_path)
+    )
+
+
+def _outside(ran: Ran) -> tuple[Change, ...] | None:
+    assert ran.outcome.audit is not None, "the runner started, so the run has an audit"
+    return ran.outcome.audit.outside
+
+
+WRITE_STRAY = {"writeFile": {"path": "src/a.py", "content": "stray\n"}}
+STRAY = (Change("src/a.py", "added", "write"),)
+
+
+def test_an_error_result_keeps_its_error_and_its_audit_names_the_change(tmp_path: Path) -> None:
+    ran = _run(
+        tmp_path,
+        {"steps": [{"event": INIT}, WRITE_STRAY, {"event": ERROR_RESULT}]},
+        audit=_audit(tmp_path, Effects(write=("out/**",))),
+    )
+    assert (ran.outcome.outcome, _code(ran)) == (Outcome.FAILED, "run.error-result")
+    assert _outside(ran) == STRAY
+    assert ran.outcome.to_data()["audit"] == {
+        "outside": [{"path": "src/a.py", "change": "added", "needs": "write"}]
+    }
+
+
+def test_a_timed_out_run_keeps_its_error_and_its_audit_names_the_change(tmp_path: Path) -> None:
+    ran = _run(
+        tmp_path,
+        {"steps": [{"event": INIT}, WRITE_STRAY, {"hang": True}]},
+        audit=_audit(tmp_path),
+        limits=RunLimits(run_timeout=0.5, cancel_grace=2.0),
+    )
+    assert (ran.outcome.outcome, _code(ran)) == (Outcome.TIMED_OUT, "run.timeout")
+    assert _outside(ran) == STRAY
+
+
+def test_a_cancelled_run_keeps_no_error_and_its_audit_names_the_change(tmp_path: Path) -> None:
+    ran = _run(
+        tmp_path,
+        {"steps": [{"event": INIT}, WRITE_STRAY, {"hang": True}]},
+        audit=_audit(tmp_path),
+        cancel_after=0.5,
+    )
+    assert (ran.outcome.outcome, ran.outcome.error) == (Outcome.CANCELLED, None)
+    assert _outside(ran) == STRAY
+
+
+def test_a_crashed_run_keeps_its_error_and_its_audit_names_the_change(tmp_path: Path) -> None:
+    ran = _run(
+        tmp_path,
+        {"steps": [{"event": INIT}, WRITE_STRAY, {"exit": 3}]},
+        audit=_audit(tmp_path),
+    )
+    assert (ran.outcome.outcome, _code(ran)) == (Outcome.CRASHED, "runner.crashed")
+    assert _outside(ran) == STRAY
+
+
+def test_a_failed_run_that_stayed_inside_its_declaration_has_an_empty_audit(
+    tmp_path: Path,
+) -> None:
+    ran = _run(
+        tmp_path,
+        {"steps": [{"event": INIT}, WRITE_STRAY, {"event": ERROR_RESULT}]},
+        audit=_audit(tmp_path, Effects(write=("src/**",))),
+    )
+    assert (ran.outcome.outcome, _code(ran)) == (Outcome.FAILED, "run.error-result")
+    assert _outside(ran) == ()
+
+
+def test_a_runner_that_never_answers_the_handshake_is_audited(tmp_path: Path) -> None:
+    ran = _run(
+        tmp_path,
+        argv=_fake("write-then-silent"),
+        audit=_audit(tmp_path),
+        limits=RunLimits(start_timeout=1.0, cancel_grace=2.0),
+    )
+    assert (ran.outcome.outcome, _code(ran)) == (Outcome.COULD_NOT_START, "runner.start-timeout")
+    assert _outside(ran) == (Change("stray.txt", "added", "write"),)
+
+
+def test_a_runner_that_couldnt_be_started_has_no_audit(tmp_path: Path) -> None:
+    ran = _run(tmp_path, argv=["troupe-no-such-runner"], audit=_audit(tmp_path))
+    assert (ran.outcome.outcome, _code(ran)) == (Outcome.COULD_NOT_START, "runner.start-failed")
+    assert ran.outcome.audit is None
+    assert "audit" not in ran.outcome.to_data()
+
+
+def test_an_ok_result_with_a_change_outside_fails_with_the_same_findings(tmp_path: Path) -> None:
+    ran = _run(
+        tmp_path,
+        {"steps": [{"event": INIT}, WRITE_STRAY, {"event": OK}]},
+        audit=_audit(tmp_path, Effects(write=("out/**",))),
+    )
+    assert (ran.outcome.outcome, _code(ran)) == (Outcome.FAILED, "effects.outside-declared")
+    assert ran.outcome.error is not None
+    assert ran.outcome.error.details["changes"] == [c.to_data() for c in _outside(ran) or ()]
+    assert _outside(ran) == STRAY
+
+
+def test_an_ok_result_whose_audit_finds_every_change_declared_succeeds(tmp_path: Path) -> None:
+    ran = _run(
+        tmp_path,
+        {"steps": [{"event": INIT}, WRITE_STRAY, {"event": OK}]},
+        audit=_audit(tmp_path, Effects(write=("src/**",))),
+    )
+    assert (ran.outcome.outcome, ran.outcome.error) == (Outcome.SUCCEEDED, None)
+    assert ran.outcome.to_data()["audit"] == {"outside": []}
+
+
+def _unreadable(tmp_path: Path) -> DeclaredEffects:
+    """The audit, over a workspace that can't be read once the run has ended."""
+
+    def unreadable() -> dict[str, str]:
+        raise TroupeError(
+            "vcs.failed",
+            problem="git ls-files failed.",
+            fix="Check the repository with git status.",
+            details={"command": "git ls-files", "exitStatus": 128},
+        )
+
+    return DeclaredEffects("tester", Effects(), lambda: _states(tmp_path), unreadable)
+
+
+def test_an_ok_result_whose_workspace_cant_be_read_fails_with_audit_failed(
+    tmp_path: Path,
+) -> None:
+    ran = _run(tmp_path, {"steps": [{"event": INIT}, {"event": OK}]}, audit=_unreadable(tmp_path))
+    assert (ran.outcome.outcome, _code(ran)) == (Outcome.FAILED, "effects.audit-failed")
+    assert ran.outcome.audit is not None
+    assert ran.outcome.audit.error is not None
+    assert ran.outcome.audit.error.code == "vcs.failed"
+
+
+def test_a_cancelled_run_whose_workspace_cant_be_read_stays_cancelled(tmp_path: Path) -> None:
+    ran = _run(
+        tmp_path,
+        {"steps": [{"event": INIT}, {"hang": True}]},
+        audit=_unreadable(tmp_path),
+        cancel_after=0.5,
+    )
+    assert (ran.outcome.outcome, ran.outcome.error) == (Outcome.CANCELLED, None)
+    assert ran.outcome.audit is not None
+    assert ran.outcome.audit.error is not None
+
+
+def test_an_error_result_with_its_expected_file_missing_fails_with_its_error_alone(
+    tmp_path: Path,
+) -> None:
+    ran = _run(
+        tmp_path,
+        {"steps": [{"event": INIT}, {"event": ERROR_RESULT}]},
+        effect=ExpectedFiles([tmp_path / "out" / "hello.txt"]),
+        audit=_audit(tmp_path),
+    )
+    assert (ran.outcome.outcome, _code(ran)) == (Outcome.FAILED, "run.error-result")
+    assert ran.outcome.error is not None
+    assert "hello.txt" not in ran.outcome.error.problem

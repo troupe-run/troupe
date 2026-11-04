@@ -114,6 +114,7 @@
         "state": {"$ref": "#/$defs/state"},
         "outcome": {"description": "How the run ended. Present exactly when state is ended.", "$ref": "#/$defs/outcome"},
         "error": {"description": "Why the run didn't succeed. Absent: the outcome has no error, or the run hasn't ended.", "$ref": "../error.schema.json"},
+        "audit": {"description": "What the audit of the run's changes against its actor's declared effects found, as its end recorded it. Absent: the run hasn't ended, its runner never started, or its end was recorded before troupe recorded audits.", "$ref": "../events/run-ended.schema.json#/$defs/audit"},
         "events": {"description": "How many run events are recorded.", "type": "integer", "minimum": 0},
         "startedAt": {"$ref": "#/$defs/timestamp"},
         "endedAt": {"description": "When the run's end was recorded. Present exactly when state is ended.", "$ref": "#/$defs/timestamp"},
@@ -138,7 +139,7 @@
         {
           "if": {"properties": {"state": {"const": "ended"}}},
           "then": {"required": ["outcome", "endedAt"]},
-          "else": {"properties": {"outcome": false, "endedAt": false}}
+          "else": {"properties": {"outcome": false, "endedAt": false, "audit": false}}
         },
         {
           "if": {"properties": {"workspace": {"$ref": "../events/run-started.schema.json#/$defs/worktreeWorkspace"}}},

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://troupe.run/protocol/events/run-ended.schema.json",
   "title": "Run.Ended",
-  "description": "The payload of a run's last event (topic troupe.core.runs.aggregate:Run.Ended): the outcome the run host derived, and whether recording failed part-way.",
+  "description": "The payload of a run's last event (topic troupe.core.runs.aggregate:Run.Ended): the outcome the run host derived, with what the audit of the run's changes found, and whether recording failed part-way.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -18,7 +18,7 @@
       "$ref": "../event-record.schema.json#/$defs/libraryTimestamp"
     },
     "outcome": {
-      "description": "How the run ended, as the run host derived it from what the runner reported, never from its exit code alone: the outcome, whether the runner exited, was killed or never started, and the limits it ran under.",
+      "description": "How the run ended, as the run host derived it from what the runner reported, never from its exit code alone: the outcome, whether the runner exited, was killed or never started, the limits it ran under, and what the audit of its changes found.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -63,6 +63,10 @@
         "stderr": {
           "description": "The artifact reference of the runner's standard error. Present exactly when the runner started.",
           "$ref": "../lineage.schema.json#/$defs/hash"
+        },
+        "audit": {
+          "description": "What the audit of the run's changes against its actor's declared effects found, whatever the outcome. Absent: the runner never started, or the end was recorded before troupe recorded audits.",
+          "$ref": "#/$defs/audit"
         },
         "limits": {
           "description": "The limits the run ran under, by setting.",
@@ -130,7 +134,8 @@
           "exitCode": false,
           "transcript": false,
           "stderr": false,
-          "result": false
+          "result": false,
+          "audit": false
         }
       },
       "else": {
@@ -330,6 +335,41 @@
             "shared": {
               "description": "What changed in the repository's shared state during the run. Absent: nothing did.",
               "$ref": "#/$defs/shared"
+            }
+          }
+        }
+      ]
+    },
+    "audit": {
+      "title": "Audit",
+      "description": "What the audit of a run's changes found: each change its actor's declared effects don't allow, in path order (none when every change was declared); or, when the audit couldn't read the workspace, the error.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "outside"
+          ],
+          "properties": {
+            "outside": {
+              "description": "Each change outside the declaration, in path order. Empty: every change was declared.",
+              "type": "array",
+              "items": {
+                "$ref": "../effects.schema.json#/$defs/change"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "error"
+          ],
+          "properties": {
+            "error": {
+              "description": "Why the audit couldn't run.",
+              "$ref": "../error.schema.json"
             }
           }
         }

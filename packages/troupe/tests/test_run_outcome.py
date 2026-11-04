@@ -8,7 +8,14 @@ from hypothesis import strategies as st
 
 from protocol_schemas import check_error
 from troupe.core.errors import TroupeError
-from troupe.core.runners.effects import EffectVerdict, ExpectedFiles, NoEffectExpected
+from troupe.core.runners.effects import (
+    AuditFindings,
+    Change,
+    EffectVerdict,
+    ExpectedFiles,
+    NoEffectExpected,
+    audit_failed,
+)
 from troupe.core.runners.limits import RunLimits
 from troupe.core.runners.outcome import (
     Ending,
@@ -27,6 +34,21 @@ ERROR = ResultEvent(RUN, 5, "error", "API Error: 401")
 PASSED = EffectVerdict(passed=True)
 MISSING = EffectVerdict(
     passed=False, error=TroupeError("run.effect-missing", problem="p", fix="f", path="/w/out")
+)
+OUTSIDE = EffectVerdict(
+    passed=False,
+    error=TroupeError(
+        "effects.outside-declared",
+        problem="p",
+        fix="f",
+        details={
+            "actor": "tester",
+            "changes": [{"path": "src/a.py", "change": "added", "needs": "write"}],
+        },
+    ),
+)
+UNREADABLE = EffectVerdict(
+    passed=False, error=audit_failed(TroupeError("internal.unexpected", problem="p", fix="f"))
 )
 START_ERROR = TroupeError("runner.start-failed", problem="p", fix="f")
 VIOLATION = TroupeError("runner.protocol", problem="p", fix="f")
@@ -181,6 +203,39 @@ def test_every_combination_of_facts_yields_one_outcome_and_success_needs_all_thr
         assert outcome is not Outcome.SUCCEEDED
 
 
+@settings(max_examples=500, deadline=None)
+@given(
+    ending=st.sampled_from(Ending),
+    exit_code=st.integers(-15, 255),
+    start_error=st.none() | st.just(START_ERROR),
+    violation=st.none() | st.just(VIOLATION),
+    stop=st.none() | st.sampled_from(StopReason),
+    result=st.none() | st.just(ERROR),
+    effect=st.sampled_from([PASSED, MISSING, OUTSIDE, UNREADABLE]),
+)
+def test_without_an_ok_result_no_effect_or_audit_verdict_changes_the_outcome_or_its_error(
+    ending: Ending,
+    exit_code: int,
+    start_error: TroupeError | None,
+    violation: TroupeError | None,
+    stop: StopReason | None,
+    result: ResultEvent | None,
+    effect: EffectVerdict,
+) -> None:
+    # A failed run's audit is recorded beside its outcome, never in it (failed-run-audit D1).
+    code = None if ending is Ending.NEVER_STARTED else exit_code
+    without = RunFacts(LIMITS, ending, code, start_error, violation, stop, result, None)
+    with_verdict = RunFacts(LIMITS, ending, code, start_error, violation, stop, result, effect)
+    assert _as_data(derive_outcome(with_verdict)) == _as_data(derive_outcome(without))
+
+
+def _as_data(
+    derived: tuple[Outcome, TroupeError | None],
+) -> tuple[Outcome, dict[str, object] | None]:
+    outcome, error = derived
+    return outcome, None if error is None else error.to_data()
+
+
 @pytest.mark.parametrize(
     ("ending", "exit_code"),
     [(Ending.NEVER_STARTED, 0), (Ending.EXITED, None), (Ending.KILLED, None)],
@@ -208,6 +263,27 @@ def test_the_run_outcome_records_every_fact_as_data() -> None:
     assert record["exitCode"] == 3
     assert record["result"] == OK.to_data()
     assert record["limits"] == LIMITS.to_data()
+    assert "audit" not in record
+
+
+def test_the_run_outcome_records_its_audit_after_the_runners_standard_error() -> None:
+    findings = AuditFindings(outside=(Change("src/a.py", "added", "write"),))
+    record = RunOutcome(
+        run_id=RUN,
+        outcome=Outcome.CANCELLED,
+        error=None,
+        result=None,
+        exit_code=0,
+        ending=Ending.EXITED,
+        transcript="sha256:" + "0" * 64,
+        stderr="sha256:" + "1" * 64,
+        limits=LIMITS,
+        audit=findings,
+    ).to_data()
+    assert record["audit"] == {
+        "outside": [{"path": "src/a.py", "change": "added", "needs": "write"}]
+    }
+    assert list(record)[-1] == "audit"
 
 
 # Effect checks (design D10)

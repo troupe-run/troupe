@@ -25,7 +25,7 @@ from troupe.core import defaults
 from troupe.core.artifacts import ArtifactStore, ArtifactWriter
 from troupe.core.errors import TroupeError
 from troupe.core.notices import Notice
-from troupe.core.runners.effects import EffectCheck, EffectVerdict
+from troupe.core.runners.effects import Audit, AuditFindings, EffectCheck, EffectVerdict, combined
 from troupe.core.runners.limits import RunLimits
 from troupe.core.runners.outcome import (
     Ending,
@@ -397,6 +397,7 @@ async def run_actor(
     *,
     store: ArtifactStore,
     effect: EffectCheck,
+    audit: Audit,
     limits: RunLimits | None = None,
     on_event: EventCallback | None = None,
     on_announce: AnnounceCallback | None = None,
@@ -409,14 +410,23 @@ async def run_actor(
     Unless the request names one, the run gets a scratch directory, made under ``scratch_root``
     (default: the platform's temporary directory) and removed when the run ends.
 
-    Set ``cancel`` to cancel the run. The effect check has no default: a run with nothing to check
-    passes NoEffectExpected.
+    Set ``cancel`` to cancel the run. The effect check and the audit have no default: a run with
+    nothing to check passes NoEffectExpected, and one with no workspace to audit NoAudit.
     """
     if not p.RUN_ID_PATTERN.match(request.run_id):
         raise ValueError(f"run id {request.run_id!r} isn't a canonical lowercase UUID")
     if request.scratch is not None:
         return await _run_actor(
-            command, request, store, effect, limits, on_event, on_announce, on_message, cancel
+            command,
+            request,
+            store,
+            effect,
+            audit,
+            limits,
+            on_event,
+            on_announce,
+            on_message,
+            cancel,
         )
     scratch = await asyncio.to_thread(make_scratch, scratch_root)
     try:
@@ -425,6 +435,7 @@ async def run_actor(
             replace(request, scratch=scratch),
             store,
             effect,
+            audit,
             limits,
             on_event,
             on_announce,
@@ -468,6 +479,7 @@ async def _run_actor(
     request: RunRequest,
     store: ArtifactStore,
     effect: EffectCheck,
+    audit: Audit,
     limits: RunLimits | None,
     on_event: EventCallback | None,
     on_announce: AnnounceCallback | None,
@@ -477,6 +489,7 @@ async def _run_actor(
     limits = limits or RunLimits()
     run = _Run(command, request, store, effect, limits, on_event, on_announce, on_message, cancel)
     effect.before()
+    audit.before()
     try:
         run.child = await processes.start(
             command.argv,
@@ -527,9 +540,15 @@ async def _run_actor(
         stderr_ref = run.stderr.finish()
         run._child().release()
     ending = Ending.KILLED if run._child().ended_by_kill(exit_code) else Ending.EXITED
+    # The runner started, so whatever the outcome, the audit says what it changed (spec: effects,
+    # "Every run's changes are audited against its declaration"; failed-run-audit design D1).
+    findings: AuditFindings | None = audit.after()
     verdict: EffectVerdict | None = None
     if run.result is not None and run.result.status == "ok" and start_error is None:
-        verdict = effect.after()
+        verdict = combined(
+            effect.after(),
+            findings.verdict if findings is not None else EffectVerdict(passed=True),
+        )
     outcome, outcome_error = derive_outcome(
         RunFacts(
             limits=limits,
@@ -552,6 +571,7 @@ async def _run_actor(
         transcript_ref,
         stderr_ref,
         limits,
+        findings,
     )
 
 

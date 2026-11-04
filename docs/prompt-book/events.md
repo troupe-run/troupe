@@ -63,13 +63,13 @@ The payload of a run's discard (topic troupe.core.runs.aggregate:Run.ChangesDisc
 
 ### Run.Ended
 
-The payload of a run's last event (topic troupe.core.runs.aggregate:Run.Ended): the outcome the run host derived, and whether recording failed part-way.
+The payload of a run's last event (topic troupe.core.runs.aggregate:Run.Ended): the outcome the run host derived, with what the audit of the run's changes found, and whether recording failed part-way.
 
 | Field | Holds | Always there | What it is |
 |---|---|---|---|
 | `lineage` | object (Lineage) | Yes | Where an event came from: who made it, through what, when, why, as part of which command and in reaction to what, with whose approval, and in what version-control state. Every event troupe records carries it. It is left out of the event's content hash, so two clones that make the same change agree on the event's id. |
 | `timestamp` | object (Library timestamp) | Yes | When the event-sourcing library created the event, as its transcoder writes a datetime. |
-| `outcome` | object | Yes | How the run ended, as the run host derived it from what the runner reported, never from its exit code alone: the outcome, whether the runner exited, was killed or never started, and the limits it ran under. |
+| `outcome` | object | Yes | How the run ended, as the run host derived it from what the runner reported, never from its exit code alone: the outcome, whether the runner exited, was killed or never started, the limits it ran under, and what the audit of its changes found. |
 | `recording` | object | No | Where recording the run's events failed, and why. Absent: recording didn't fail. |
 | `changes` | object | No | What a worktree run changed, captured when it ended. Present exactly when the run's workspace was a worktree. |
 

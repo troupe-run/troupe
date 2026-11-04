@@ -258,6 +258,7 @@ def test_a_worktree_that_fails_to_fill_ends_the_run_could_not_start_and_leaves_n
     assert (outcome["outcome"], outcome["ending"]) == ("could-not-start", "never-started")
     assert outcome["error"]["code"] == "vcs.failed"
     assert "changes" not in history(made, run_id)[-1]
+    assert "audit" not in outcome, "the runner never started, so there's nothing to audit"
 
 
 def failing_worktree_made(store: EventStore) -> EventStore:

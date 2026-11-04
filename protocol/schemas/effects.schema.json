@@ -62,6 +62,60 @@
           "$ref": "#/$defs/patterns"
         }
       }
+    },
+    "change": {
+      "title": "Change outside the declaration",
+      "description": "One change in a run's workspace that its actor's declared effects don't allow: the file's path, what happened to it, the effect that would allow it and, for a move, where the file went.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "change",
+        "needs"
+      ],
+      "properties": {
+        "path": {
+          "description": "The file's path, relative to the workspace. For a move, where it was.",
+          "$ref": "client/run.schema.json#/$defs/theatrePath"
+        },
+        "change": {
+          "enum": [
+            "added",
+            "modified",
+            "removed",
+            "moved"
+          ]
+        },
+        "to": {
+          "description": "For a move, where the file went. Present exactly when the change is moved.",
+          "$ref": "client/run.schema.json#/$defs/theatrePath"
+        },
+        "needs": {
+          "description": "The effect that would allow it.",
+          "enum": [
+            "write",
+            "delete",
+            "move"
+          ]
+        }
+      },
+      "if": {
+        "properties": {
+          "change": {
+            "const": "moved"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "to"
+        ]
+      },
+      "else": {
+        "properties": {
+          "to": false
+        }
+      }
     }
   }
 }

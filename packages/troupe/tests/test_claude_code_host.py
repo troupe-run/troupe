@@ -14,7 +14,7 @@ import claude_stand_in
 from runner_schemas import validate
 from troupe.core.artifacts import MemoryArtifactStore
 from troupe.core.interim import runner_command
-from troupe.core.runners.effects import NoEffectExpected
+from troupe.core.runners.effects import NoAudit, NoEffectExpected
 from troupe.core.runners.host import RunnerCommand, RunRequest, run_actor
 from troupe.core.runners.limits import RunLimits
 from troupe.core.runners.outcome import RunOutcome
@@ -47,6 +47,7 @@ def _run(
             RunRequest(str(uuid.uuid4()), "say hi", command.cwd, {}),
             store=store,
             effect=NoEffectExpected(),
+            audit=NoAudit(),
             limits=limits,
             on_message=None
             if messages is None
@@ -115,6 +116,7 @@ def test_cancelling_a_claude_code_run_ends_it_cancelled_within_the_grace(tmp_pat
                 RunRequest(str(uuid.uuid4()), "say hi", command.cwd, {}),
                 store=MemoryArtifactStore(),
                 effect=NoEffectExpected(),
+                audit=NoAudit(),
                 limits=RunLimits(cancel_grace=grace),
                 cancel=cancel,
             )

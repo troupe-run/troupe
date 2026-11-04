@@ -16,7 +16,7 @@ from pathlib import Path
 
 from troupe.core import defaults
 from troupe.core.artifacts import MemoryArtifactStore
-from troupe.core.runners.effects import NoEffectExpected
+from troupe.core.runners.effects import NoAudit, NoEffectExpected
 from troupe.core.runners.host import (
     RunnerCommand,
     RunRequest,
@@ -239,6 +239,7 @@ async def check_runner(
         RunRequest(str(uuid.uuid4()), "conformance check", workspace, options),
         store=MemoryArtifactStore(),
         effect=NoEffectExpected(),
+        audit=NoAudit(),
         limits=limits,
     )
     whole_run: str | None = None

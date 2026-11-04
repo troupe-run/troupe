@@ -11,6 +11,7 @@ from client_schemas import CLIENT_SCHEMAS, MESSAGES, is_valid
 RUN_ID = "0f8fad5b-d9cb-469f-a165-70867728950e"
 HASH = "sha256:" + "ab" * 32
 AT = "2026-10-12T03:04:05.678Z"
+OUTSIDE: dict[str, Any] = {"path": "src/a.py", "change": "modified", "needs": "write"}
 PERFORM: dict[str, Any] = {"actor": "tester", "direction": "say hello", "rehearse": False}
 SUMMARY: dict[str, Any] = {
     "runId": RUN_ID,
@@ -177,6 +178,16 @@ ACCEPTED = [
         "a run whose recording failed",
     ),
     ("flush-result.schema.json", {"files": [MARKED], "notices": []}, "a file marked resolved"),
+    (
+        "status-result.schema.json",
+        {"runs": [changed(SUMMARY, audit={"outside": [OUTSIDE]})], "notices": []},
+        "a failed run's audit naming a change outside the declaration",
+    ),
+    (
+        "status-result.schema.json",
+        {"runs": [changed(SUMMARY, audit={"outside": []})], "notices": []},
+        "an audit that found every change declared",
+    ),
 ]
 
 
@@ -272,7 +283,7 @@ REFUSED = [
             {"run": changed(SUMMARY, **{field: None})},
             f"a null {field}",
         )
-        for field in ("outcome", "error", "endedAt", "transcript", "stderr", "recording")
+        for field in ("outcome", "error", "endedAt", "transcript", "stderr", "recording", "audit")
     ],
     (
         "perform-result.schema.json",
@@ -287,6 +298,39 @@ REFUSED = [
     ("logs-request.schema.json", {}, "logs with no run"),
     ("logs-request.schema.json", {"run": RUN_ID, "follow": "yes"}, "follow that isn't a boolean"),
     ("logs-result.schema.json", {"run": SUMMARY, "events": [{}], "notices": []}, "an empty event"),
+    (
+        "status-result.schema.json",
+        {
+            "runs": [
+                changed(
+                    SUMMARY,
+                    audit={
+                        "outside": [OUTSIDE],
+                        "error": {"code": "internal.unexpected", "problem": "p", "fix": "f"},
+                    },
+                )
+            ],
+            "notices": [],
+        },
+        "an audit with both findings and an error",
+    ),
+    (
+        "status-result.schema.json",
+        {
+            "runs": [
+                changed(
+                    SUMMARY,
+                    state="running",
+                    drop_outcome=None,
+                    drop_error=None,
+                    drop_endedAt=None,
+                    audit={"outside": []},
+                )
+            ],
+            "notices": [],
+        },
+        "a running run with an audit",
+    ),
 ]
 
 

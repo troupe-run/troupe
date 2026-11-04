@@ -135,6 +135,18 @@ def run_changes(draw: st.DrawFn) -> dict[str, Any]:
 
 
 RUN_CHANGES = run_changes()
+OUTSIDE_CHANGES = st.fixed_dictionaries(
+    {
+        "path": PATHS,
+        "change": st.sampled_from(["added", "modified", "removed"]),
+        "needs": st.sampled_from(["write", "delete", "move"]),
+    }
+) | st.fixed_dictionaries(
+    {"path": PATHS, "change": st.just("moved"), "needs": st.just("move"), "to": PATHS}
+)
+AUDITS = st.fixed_dictionaries(
+    {"outside": st.lists(OUTSIDE_CHANGES, max_size=3)}
+) | st.fixed_dictionaries({"error": ERRORS})
 OUTCOMES = st.sampled_from(
     ["succeeded", "failed", "cancelled", "timed-out", "crashed", "could-not-start"]
 )
@@ -176,6 +188,8 @@ def summaries(draw: st.DrawFn) -> dict[str, Any]:
     if summary["state"] == "ended":
         summary["outcome"] = draw(OUTCOMES)
         summary["endedAt"] = draw(TIMES)
+        if draw(st.booleans()):
+            summary["audit"] = draw(AUDITS)
     if summary["workspace"] != {"kind": "theatre"}:
         summary["changes"] = draw(RUN_CHANGES)
     return summary
@@ -559,7 +573,16 @@ ENDED_SUMMARY: dict[str, Any] = {
 
 @pytest.mark.parametrize(
     "field",
-    ["outcome", "error", "endedAt", "transcript", "stderr", "recording", "runner.reported"],
+    [
+        "outcome",
+        "error",
+        "audit",
+        "endedAt",
+        "transcript",
+        "stderr",
+        "recording",
+        "runner.reported",
+    ],
 )
 def test_reading_a_summary_with_a_null_field_fails_naming_the_field(field: str) -> None:
     data = copy.deepcopy(ENDED_SUMMARY)
@@ -611,3 +634,53 @@ def test_a_running_runs_summary_has_no_outcome_or_end_and_round_trips() -> None:
     assert summary.ended_at is None
     assert summary.to_data() == data
     check({"run": data}, "perform-result.schema.json")
+
+
+# A run summary carries its run's audit (spec: client-protocol; failed-run-audit design D4).
+
+OUTSIDE = {"path": "src/a.py", "change": "modified", "needs": "write"}
+
+
+def test_a_failed_runs_summary_with_its_audit_round_trips() -> None:
+    data = {**copy.deepcopy(ENDED_SUMMARY), "audit": {"outside": [OUTSIDE]}}
+    summary = m.RunSummary.from_data(data)
+    assert summary.audit is not None
+    assert summary.audit.outside is not None
+    assert summary.audit.outside[0].path == "src/a.py"
+    assert summary.to_data() == data
+    check({"run": data}, "perform-result.schema.json")
+
+
+@pytest.mark.parametrize(
+    ("audit", "named"),
+    [
+        (
+            {"outside": [OUTSIDE], "error": ENDED_SUMMARY["error"]},
+            "either outside or error",
+        ),
+        ({}, "either outside or error"),
+        (
+            {"outside": [{"path": "a.md", "change": "moved", "needs": "move"}]},
+            "to is present exactly when the change is moved",
+        ),
+    ],
+    ids=["both", "neither", "a move with nowhere to go"],
+)
+def test_a_summary_whose_audit_contradicts_itself_is_refused_naming_it(
+    audit: dict[str, Any], named: str
+) -> None:
+    data = {**copy.deepcopy(ENDED_SUMMARY), "audit": audit}
+    with pytest.raises(ProtocolError, match=rf"RunSummary\.audit.*{named}"):
+        m.RunSummary.from_data(data)
+
+
+def test_a_running_runs_summary_with_an_audit_is_refused() -> None:
+    data = {
+        key: value
+        for key, value in ENDED_SUMMARY.items()
+        if key not in ("outcome", "endedAt", "error", "transcript", "stderr", "recording")
+    }
+    data["state"] = "running"
+    data["audit"] = {"outside": []}
+    with pytest.raises(ProtocolError, match="audit is present only when state is ended"):
+        m.RunSummary.from_data(data)
