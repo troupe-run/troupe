@@ -177,9 +177,9 @@ every code raised in any worker process, and SHALL run once per run, never in ea
 ### Requirement: Each package outside core has a scope
 troupe SHALL declare one scope per workspace package other than core: `artifacts_local`, `identity_local`,
 `stage_local`, `store_text`, `vcs_files`, `vcs_git`, `plugin_sdk` and `run` for `packages/troupe-<name>/`, and
-`runner_claude_code` and `runner_scripted` for `plugins/runner-<name>/`. Each SHALL cover its package's files except
-`pyproject.toml`. Core (`packages/troupe/**`) and every `pyproject.toml` SHALL be in no scope, so a change to them
-runs the full check.
+`runner_claude_code`, `runner_ollama` and `runner_scripted` for `plugins/runner-<name>/`. Each SHALL cover its
+package's files except `pyproject.toml`. Core (`packages/troupe/**`) and every `pyproject.toml` SHALL be in no scope,
+so a change to them runs the full check.
 
 #### Scenario: A commit that changes one leaf package
 - **WHEN** a commit stages only files under `packages/troupe-stage-local/`, possibly with files under `openspec/`
@@ -207,7 +207,12 @@ runs the full check.
 #### Scenario: A commit that changes the plugin SDK
 - **WHEN** a commit stages only files under `packages/troupe-plugin-sdk/src/`
 - **THEN** the commit guard runs `scripts/check.py --scope plugin_sdk`, and the tests that run are the SDK's suite
-  and every suite that reaches it, core's and both runners' among them
+  and every suite that reaches it, core's and every runner's among them
+
+#### Scenario: A commit that changes the Ollama runner
+- **WHEN** a commit stages only files under `plugins/runner-ollama/src/`
+- **THEN** the commit guard runs `scripts/check.py --scope runner_ollama`, and the tests that run are the Ollama
+  runner's suite and the suites that reach it
 
 ### Requirement: The scripts have a scope that leaves out the check and the guard
 troupe SHALL declare a scope `scripts` covering `scripts/tests/**` and each other file under `scripts/` by its exact

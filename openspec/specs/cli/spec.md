@@ -469,9 +469,13 @@ runners troupe has, before anything is made. `--runner` without `--audition` SHA
 - **WHEN** a person runs `troupe init --audition --runner scripted`
 - **THEN** `.troupe/actors/lead.yaml` names the runner `scripted`
 
+#### Scenario: The Ollama runner
+- **WHEN** a person runs `troupe init --audition --runner ollama`
+- **THEN** `.troupe/actors/lead.yaml` names the runner `ollama`
+
 #### Scenario: A runner troupe doesn't know
 - **WHEN** a person runs `troupe init --audition --runner gemini`
-- **THEN** it fails with `runner.unknown`, naming `gemini`, `claude-code` and `scripted`
+- **THEN** it fails with `runner.unknown`, naming `gemini`, `claude-code`, `ollama` and `scripted`
 - **AND** no `.troupe/` is made
 
 #### Scenario: A runner without an audition
