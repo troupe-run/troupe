@@ -74,9 +74,10 @@ def sessions() -> Iterator[list[Session]]:
     after that fails the test (reap-fake-claude design D2)."""
     started: list[Session] = []
     yield started
+    for session in started:  # every one first, so a check that raises can't leave one running
+        session.kill()
     left = []
     for session in started:
-        session.kill()
         if (pid := session.stand_in_left_running()) is not None:
             left.append(f"stand-in claude {pid} (workspace {session.workspace})")
     if left:
