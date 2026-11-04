@@ -155,6 +155,25 @@ be refused before the run is acknowledged, with `ollama.invalid-options` naming 
 - **WHEN** `contextLength` is above the maximum Ollama reports for the model
 - **THEN** `run/start` is refused with `ollama.invalid-options`, naming `contextLength` and the maximum
 
+### Requirement: One tool result fits the context window
+Each tool result the runner sends the model SHALL be at most a named share of the run's context window, counted in
+bytes at a named estimate of bytes per token. The runner SHALL lower the SDK's tool limits to fit that budget, and SHALL
+cut a result still over it, adding a note that says it was cut to fit the window and how to narrow the call.
+
+#### Scenario: A large file read with the default window
+- **WHEN** a run with the default window reads a 200 KB text file
+- **THEN** the `tool` message holds the file's first lines up to the budget, saying where it stopped and that
+  `offset` reads on, and the run goes on
+
+#### Scenario: A budget that follows the window
+- **WHEN** one run sets `contextLength` 8192 and another 32768, and each reads the same large file
+- **THEN** the second run's `tool` message holds more of the file than the first's, and each is within its budget
+
+#### Scenario: A search with very long lines
+- **WHEN** a `Grep` matches lines whose text together is over the budget
+- **THEN** the `tool` message is cut to the budget and ends with a note saying it was cut to fit the context window,
+  and to narrow the search with `path` or `glob`
+
 ### Requirement: A run never carries on past its context window
 Every request SHALL ask Ollama to refuse a conversation longer than the window rather than cut it, and never to drop
 its start to make room (`truncate` and `shift` both `false`). When Ollama refuses a request, the run SHALL end with an

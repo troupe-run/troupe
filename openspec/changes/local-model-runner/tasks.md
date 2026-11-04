@@ -93,7 +93,7 @@
 
 ## 5. The conversation and the mapping (design D5, D6, D7, D8)
 
-- [ ] 5.1 Add `conversation.py`: it builds the first request (D5), gathers an answer from its lines, appends the
+- [x] 5.1 Add `conversation.py`: it builds the first request (D5), gathers an answer from its lines, appends the
   `assistant` and `tool` messages, makes call ids, and yields transcript records and events as D6, D7 and D8 say,
   numbered with the SDK's `EventNumbering` and carried out with `Tools.for_declaration`. Verify with
   `test_ollama_conversation.py`, against scripted answers with no network:
@@ -105,6 +105,10 @@
     model maximum), every request has `truncate` and `shift` both `false`, and a status-400 refusal gets no further
     request and ends in an `error` result holding Ollama's message and naming the window and `contextLength`;
   - a stream that ends before Ollama's `done` line is a `network` retry (3.1 leaves this to the conversation);
+  - one tool result fits the window (D15): the `ToolLimits` given to the SDK for the default window, for
+    `contextLength` 8192 and 32768, and for a window so large that every limit stays at the SDK's default; a 200 KB
+    file read through the conversation gives a `tool` message within the budget that says where it stopped; and a
+    `Grep` over very long lines is cut with the note;
   - the transcript scenarios: the first body once, each added message verbatim as it appears inside the next
     request's body (checked by finding its bytes there), no re-sent history, and a non-UTF-8 line as `base64`;
   - a record that leads to an event comes before it.
@@ -112,7 +116,7 @@
   `exchange.jsonl` records and `events.json` events. Also check each provenance names Ollama's version, the model, the
   date and whether it was captured or hand-written, and that a secret scan (copied from the Claude Code runner's) finds
   nothing. Verify: the file passes with 4.2's fixtures.
-- [ ] 5.3 Add a hypothesis property test. It feeds the conversation random answer lines: random bytes, random JSON
+- [x] 5.3 Add a hypothesis property test. It feeds the conversation random answer lines: random bytes, random JSON
   objects, mutated fixture lines, and tool calls with random names and arguments. It asserts the conversation never
   raises, and that every event validates against `run-event.schema.json`, fits `eventMaxBytes`, has its `tool_result`
   after its `tool_call`, and never follows a `result`. Verify: it passes at the `ci` profile. A scratch break (a

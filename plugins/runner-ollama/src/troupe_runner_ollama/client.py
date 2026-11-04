@@ -17,7 +17,7 @@ import http.client
 import json
 import socket
 import threading
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 from dataclasses import dataclass
 from typing import Any, Literal
 from urllib.parse import urlsplit
@@ -181,7 +181,7 @@ class Client:
             raise UnreachableError(f"/api/show answered {error_text(body, status)}")
         return data
 
-    def chat(self, body: bytes) -> Iterator[bytes]:
+    def chat(self, body: bytes) -> Generator[bytes]:
         """Stream one ``/api/chat`` answer to ``body``, the request's exact bytes. Yields each line
         without its line ending, until Ollama ends the answer. Raises RetryableError, EngineError or
         StoppedError."""

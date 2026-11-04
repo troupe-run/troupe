@@ -236,7 +236,8 @@ runner is the engine's client, so its own retries are the ones to report. The co
 | `seed` | integer | Ollama's own | `options.seed` |
 | `think` | boolean, or `low`, `medium` or `high` | Ollama's own | `think` |
 
-`defaults.py` holds `DEFAULT_ENDPOINT`, `MAX_TURNS`, `DEFAULT_CONTEXT_LENGTH`, `PREFLIGHT_TIMEOUT_SECONDS`, `STREAM_IDLE_TIMEOUT_SECONDS`,
+`defaults.py` holds `DEFAULT_ENDPOINT`, `MAX_TURNS`, `DEFAULT_CONTEXT_LENGTH`, `TOOL_OUTPUT_SHARE`, `BYTES_PER_TOKEN`, `GLOB_PATH_BYTES`,
+`GREP_MATCH_BYTES`, `PREFLIGHT_TIMEOUT_SECONDS`, `STREAM_IDLE_TIMEOUT_SECONDS`,
 `LINE_MAX_BYTES`, `RETRY_MAX_ATTEMPTS`, `RETRY_DELAY_SECONDS` and `STOP_GRACE_SECONDS`, each documented in the README.
 
 The error codes are in `errors.schema.json`, each with closed `details`:
@@ -342,6 +343,22 @@ it ships, stopping the run, is the one that loses nothing.
   <n> tokens; raise contextLength, or give the actor a smaller task.` Every status-400 refusal gets that sentence.
   The runner doesn't match Ollama's wording to decide whether the refusal was about the window, so a change in that
   wording can't hide it.
+- **One tool result fits the window** (found 2026-11-04 by a side review). The SDK's `Read` returns up to 256 KB,
+  about four times the default window, so one read of a large file would make the next request overflow and end
+  the run. The runner gives each tool result a budget: `TOOL_OUTPUT_SHARE` (a quarter) of the window, at
+  `BYTES_PER_TOKEN` (3, an estimate on the low side for code and English, so the budget errs small), which is about
+  12 KB at 16384 tokens. It lowers the SDK's `ToolLimits` to fit it: `read_max_bytes` is the budget, and
+  `glob_max_paths` and `grep_max_matches` are the budget over `GLOB_PATH_BYTES` (64) and `GREP_MATCH_BYTES` (128),
+  each no higher than the SDK's own default. The SDK's capped results already say where they stopped and how to read
+  on. `Glob` and `Grep` are capped by count, not bytes, so a result can still be over the budget, for example with
+  very long lines. The runner then cuts it on a character boundary and adds a note: `[cut to <n> bytes to fit the
+  model's context window; narrow it with path or glob, or read with offset and limit]`. That cut text is what the
+  model gets, so the `tool` message, and the transcript record of it, is what was sent (D7). A conversation that
+  grows past the window over many calls still ends the run, as #279's interim default says.
+  - *Alternative:* raise the default window. Rejected as the fix, because a 256 KB read needs about 85,000 tokens
+    and a KV cache no laptop has to spare. It only moves where the failure happens.
+  - *Alternative:* add a byte cap for every tool to the SDK. Deferred: it would be a change to runner-tools for one
+    runner's need. #162's runner will need the same, which is when it's worth moving into the SDK.
 - **Alternatives:**
   - Comparing each answer's prompt counts with the window. Rejected: the capture above shows a truncated prompt
     reports about half the window, so the comparison misses every truncation.
