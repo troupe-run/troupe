@@ -16,6 +16,7 @@ troupe = { workspace = true }
 troupe-artifacts-local = { workspace = true }
 troupe-plugin-sdk = { workspace = true }
 troupe-runner-claude-code = { workspace = true }
+troupe-runner-ollama = { workspace = true }
 troupe-runner-scripted = { workspace = true }
 troupe-run = { workspace = true }
 troupe-stage-local = { workspace = true }
@@ -30,6 +31,7 @@ dev = [
     "troupe-artifacts-local",
     "troupe-plugin-sdk",
     "troupe-runner-claude-code",
+    "troupe-runner-ollama",
     "troupe-runner-scripted",
     "troupe-run",
     "troupe-stage-local",
@@ -79,6 +81,8 @@ src = [
     "packages/troupe-vcs-git/tests",
     "plugins/runner-claude-code/src",
     "plugins/runner-claude-code/tests",
+    "plugins/runner-ollama/src",
+    "plugins/runner-ollama/tests",
     "plugins/runner-scripted/src",
     "plugins/runner-scripted/tests",
     "scripts",
@@ -127,6 +131,8 @@ files = [
     "packages/troupe-vcs-git/tests",
     "plugins/runner-claude-code/src",
     "plugins/runner-claude-code/tests",
+    "plugins/runner-ollama/src",
+    "plugins/runner-ollama/tests",
     "plugins/runner-scripted/src",
     "plugins/runner-scripted/tests",
     "scripts",
@@ -145,6 +151,8 @@ mypy_path = [
     "packages/troupe-vcs-git/src",
     "plugins/runner-claude-code/src",
     "plugins/runner-claude-code/tests",
+    "plugins/runner-ollama/src",
+    "plugins/runner-ollama/tests",
     "plugins/runner-scripted/src",
     "plugins/runner-scripted/tests",
     "scripts",
@@ -162,6 +170,7 @@ testpaths = [
     "packages/troupe-vcs-files/tests",
     "packages/troupe-vcs-git/tests",
     "plugins/runner-claude-code/tests",
+    "plugins/runner-ollama/tests",
     "plugins/runner-scripted/tests",
     "scripts/tests",
     # The scripts' tests that name packages' paths (the flake campaign's selection, the release configuration, the
@@ -202,6 +211,7 @@ root_packages = [
     "troupe_vcs_files",
     "troupe_vcs_git",
     "troupe_runner_claude_code",
+    "troupe_runner_ollama",
     "troupe_runner_scripted",
 ]
 include_external_packages = true
@@ -223,6 +233,9 @@ source_modules = [
     "troupe_store_text",
     "troupe_vcs_files",
     "troupe_vcs_git",
+    # The Ollama runner starts no process and keeps no OS-specific behaviour, so it needs no seam of its own
+    # (local-model-runner design D3).
+    "troupe_runner_ollama",
 ]
 forbidden_modules = ["fcntl", "msvcrt", "termios", "signal", "winreg", "pwd", "grp", "ctypes"]
 ignore_imports = ["troupe.platform.** -> *"]
@@ -240,14 +253,14 @@ forbidden_modules = ["troupe_artifacts_local"]
 # fails the check when a plugin is missing from this contract or the next.
 name = "plugins import nothing from troupe"
 type = "forbidden"
-source_modules = ["troupe_runner_claude_code", "troupe_runner_scripted"]
+source_modules = ["troupe_runner_claude_code", "troupe_runner_ollama", "troupe_runner_scripted"]
 forbidden_modules = ["troupe", "troupe_run", "troupe_artifacts_local", "troupe_identity_local", "troupe_stage_local", "troupe_store_text", "troupe_vcs_files", "troupe_vcs_git"]
 
 [[tool.importlinter.contracts]]
 # Each plugin is self-contained, so it can move to its own repository (plugins/README.md; spec: plugin-sdk).
 name = "plugins are independent of each other"
 type = "independence"
-modules = ["troupe_runner_claude_code", "troupe_runner_scripted"]
+modules = ["troupe_runner_claude_code", "troupe_runner_ollama", "troupe_runner_scripted"]
 
 [[tool.importlinter.contracts]]
 # Core and the plugins depend on the plugin SDK, never the other way round, so it imports nothing of troupe's: not
@@ -255,7 +268,7 @@ modules = ["troupe_runner_claude_code", "troupe_runner_scripted"]
 name = "the plugin SDK imports nothing of troupe's"
 type = "forbidden"
 source_modules = ["troupe_plugin_sdk"]
-forbidden_modules = ["troupe", "troupe_artifacts_local", "troupe_identity_local", "troupe_stage_local", "troupe_store_text", "troupe_vcs_files", "troupe_vcs_git", "troupe_runner_claude_code", "troupe_runner_scripted"]
+forbidden_modules = ["troupe", "troupe_artifacts_local", "troupe_identity_local", "troupe_stage_local", "troupe_store_text", "troupe_vcs_files", "troupe_vcs_git", "troupe_runner_claude_code", "troupe_runner_ollama", "troupe_runner_scripted"]
 
 [[tool.importlinter.contracts]]
 # The Claude Code runner can't use troupe.platform, so it keeps its own OS-specific behaviour (signals, Windows

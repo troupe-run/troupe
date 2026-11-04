@@ -2,7 +2,7 @@
 
 ## 1. Scaffold the plugin and wire it into the workspace (design D1, D2)
 
-- [ ] 1.1 Create `plugins/runner-ollama/`:
+- [x] 1.1 Create `plugins/runner-ollama/`:
   - `pyproject.toml`: `troupe-runner-ollama`, at the version a new package starts at today (check what the last new
     member used and what `scripts/bundle.py` and the release tests expect), `requires-python` as the other runners'
     have it, `dependencies = ["troupe-plugin-sdk"]`, and the script `troupe-runner-ollama`;
@@ -11,7 +11,7 @@
     `defaults.py` with D11's settings, each documented.
 
   Verify: `uv sync` succeeds, and `uv run python -c "import troupe_runner_ollama"` exits 0.
-- [ ] 1.2 Wire the member in:
+- [x] 1.2 Wire the member in:
   - the root `pyproject.toml`: `[tool.uv.sources]`, the dev group, ruff `src`, mypy `files` and `mypy_path`, pytest
     `testpaths`, import-linter `root_packages`, and the plugin's module in `plugins import nothing from troupe`, in
     `plugins are independent of each other`, and in the forbidden list of core's contracts;
@@ -23,19 +23,19 @@
   Verify: these pass: `uv run lint-imports`, `uv run pytest scripts/tests/workspace`, and the bundle, plugin-import
   and check-paths tests. Then make a scratch module in the plugin that imports `troupe`, check that `lint-imports`
   fails, and remove it.
-- [ ] 1.3 Update the quality-check spec's scenarios in tests (spec: quality-check). Verify: a test in the check-paths
+- [x] 1.3 Update the quality-check spec's scenarios in tests (spec: quality-check). Verify: a test in the check-paths
   suite shows that a commit staging only `plugins/runner-ollama/src/` gets `--scope runner_ollama`, and that the
   `plugin_sdk` scope's reached suites include `runner_ollama`'s.
 
 ## 2. Options, schemas and errors (design D10, D11)
 
-- [ ] 2.1 Add `schemas/options.schema.json` and `schemas/errors.schema.json` in the package, with `$id`s under
+- [x] 2.1 Add `schemas/options.schema.json` and `schemas/errors.schema.json` in the package, with `$id`s under
   `https://troupe.run/plugins/runner-ollama/`. The options schema has D11's options, `model` required, and the
   endpoint pattern from D10. The errors schema has D11's five codes and their closed `details`. Verify: a schema test,
   following `test_claude_code_schemas.py`, loads both with the contract's schemas and checks each is draft 2020-12 and
   passes the protocol's strictness check. A `run/start` with the documented options validates against the bound
   schema, and one with `troupeConformanceUnknownOption` doesn't.
-- [ ] 2.2 Add `options.py`: `parse_options(value) -> Options`, raising an error that carries a code, `where`, a
+- [x] 2.2 Add `options.py`: `parse_options(value) -> Options`, raising an error that carries a code, `where`, a
   problem and a fix, for `ollama.unknown-option` and `ollama.invalid-options`. Verify with `test_ollama_options.py`:
   - one accepted value and one refused value for each rule in D10 and D11, including `maxTurns` 0 and 1001,
     `think` `"maximum"`, a missing or empty `model`, and an endpoint with user info, a path, a query, a fragment, or

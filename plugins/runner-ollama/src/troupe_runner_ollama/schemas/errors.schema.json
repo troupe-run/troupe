@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/plugins/runner-ollama/errors.schema.json",
+  "title": "Ollama runner errors",
+  "description": "The Ollama runner's own error codes, beyond the runner contract's. They fill the contract's runnerErrors extension point. Each refuses run/start, so no run starts.",
+  "$ref": "https://troupe.run/protocol/error.schema.json#/$defs/fields",
+  "unevaluatedProperties": false,
+  "oneOf": [
+    {
+      "description": "The run/start options hold a key the runner doesn't define.",
+      "required": ["details"],
+      "properties": {"code": {"const": "ollama.unknown-option"}, "details": {"$ref": "#/$defs/where"}}
+    },
+    {
+      "description": "An option is missing or its value has the wrong shape, or contextLength is above the model's maximum. The fix names what is valid.",
+      "required": ["details"],
+      "properties": {"code": {"const": "ollama.invalid-options"}, "details": {"$ref": "#/$defs/where"}}
+    },
+    {
+      "description": "Ollama didn't answer at the endpoint in time, or answered with something that isn't Ollama's version.",
+      "required": ["details"],
+      "properties": {
+        "code": {"const": "ollama.unreachable"},
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["endpoint"],
+          "properties": {"endpoint": {"$ref": "#/$defs/endpoint"}}
+        }
+      }
+    },
+    {
+      "description": "Ollama has no model of that name: it isn't pulled. The fix names ollama pull.",
+      "required": ["details"],
+      "properties": {
+        "code": {"const": "ollama.model-not-found"},
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["endpoint", "model"],
+          "properties": {"endpoint": {"$ref": "#/$defs/endpoint"}, "model": {"$ref": "#/$defs/model"}}
+        }
+      }
+    },
+    {
+      "description": "Ollama doesn't list the tools capability for the model, or doesn't say what the model can do, so the runner can't give it troupe's tools.",
+      "required": ["details"],
+      "properties": {
+        "code": {"const": "ollama.model-without-tools"},
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["model"],
+          "properties": {
+            "model": {"$ref": "#/$defs/model"},
+            "capabilities": {
+              "description": "The capabilities Ollama listed. Absent: Ollama listed none.",
+              "type": "array",
+              "items": {"type": "string"}
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "where": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["where"],
+      "properties": {
+        "where": {
+          "description": "Where the problem is, such as options.endpoint.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "endpoint": {
+      "description": "The endpoint the runner used.",
+      "type": "string",
+      "minLength": 1
+    },
+    "model": {
+      "description": "The model, as the options named it.",
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

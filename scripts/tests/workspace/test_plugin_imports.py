@@ -63,8 +63,9 @@ def test_a_plugin_removed_from_the_forbidden_contracts_sources_is_named(copy: Pa
     replace(
         copy,
         PYPROJECT,
-        'source_modules = ["troupe_runner_claude_code", "troupe_runner_scripted"]',
-        'source_modules = ["troupe_runner_claude_code"]',
+        'source_modules = ["troupe_runner_claude_code", "troupe_runner_ollama", '
+        '"troupe_runner_scripted"]',
+        'source_modules = ["troupe_runner_claude_code", "troupe_runner_ollama"]',
     )
 
     found = plugin_imports.problems(copy)

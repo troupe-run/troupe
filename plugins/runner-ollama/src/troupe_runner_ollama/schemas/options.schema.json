@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/plugins/runner-ollama/options.schema.json",
+  "title": "Ollama runner options",
+  "description": "The run/start options the Ollama runner takes. Only model is required. They fill the runner contract's runnerOptions extension point. Nothing here names a program to run, and nothing is read from the environment instead.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["model"],
+  "properties": {
+    "model": {
+      "description": "The Ollama model to run, as Ollama names it, such as qwen3:4b. It must be pulled, and able to call tools.",
+      "type": "string",
+      "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])[\\s\\S]"
+    },
+    "endpoint": {
+      "description": "Where Ollama listens: an http or https URL with a host and an optional port, and no user name, password, path, query or fragment. Absent: http://127.0.0.1:11434. Any host is accepted, so a run sends the workspace's contents to wherever this points.",
+      "type": "string",
+      "pattern": "^(?![\\s\\S]*[\\u0000-\\u001f\\u007f])https?://(?:\\[[0-9A-Fa-f:.]+\\]|[A-Za-z0-9.-]+)(?::[0-9]{1,5})?/?$"
+    },
+    "maxTurns": {
+      "description": "The requests one run may make. Reaching it ends the run with an error result. Absent: 50.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000
+    },
+    "contextLength": {
+      "description": "The context window, in tokens, sent as Ollama's num_ctx. At most the model's own maximum. Absent: 16384, or the model's maximum if that's smaller. A run whose conversation outgrows it ends with an error result.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "temperature": {
+      "description": "The sampling temperature, sent as Ollama's options.temperature. Absent: Ollama's own.",
+      "type": "number",
+      "minimum": 0
+    },
+    "seed": {
+      "description": "The sampling seed, sent as Ollama's options.seed. Absent: Ollama's own.",
+      "type": "integer"
+    },
+    "think": {
+      "description": "Whether a thinking model thinks, sent as Ollama's think: true, false, or low, medium or high for a model that takes a level. Absent: Ollama's own. The thinking is kept in the transcript only.",
+      "oneOf": [{"type": "boolean"}, {"enum": ["low", "medium", "high"]}]
+    }
+  }
+}

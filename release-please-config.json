@@ -151,6 +151,18 @@
         }
       ]
     },
+    "plugins/runner-ollama": {
+      "release-type": "python",
+      "package-name": "troupe-runner-ollama",
+      "component": "troupe-runner-ollama",
+      "extra-files": [
+        {
+          "type": "toml",
+          "path": "/uv.lock",
+          "jsonpath": "$.package[?(@.name.value=='troupe-runner-ollama')].version"
+        }
+      ]
+    },
     "plugins/runner-scripted": {
       "release-type": "python",
       "package-name": "troupe-runner-scripted",
