@@ -223,6 +223,13 @@ def test_another_client_error_names_its_status_and_message() -> None:
     assert message == "The service refused the request (HTTP 404): The model `nope` does not exist"
 
 
+def test_a_404_without_openais_shape_names_the_url_and_says_what_the_endpoint_must_be() -> None:
+    with FakeEndpoint([Reply(404, body=b"404 page not found")]) as fake:
+        message = _failed(Run(fake))
+    assert message.startswith(f"Nothing answered at {fake.endpoint}/chat/completions (HTTP 404)")
+    assert "often ending in /v1" in message
+
+
 def test_a_body_that_isnt_openais_shape_is_quoted_as_text() -> None:
     with FakeEndpoint([Reply(422, body=b"bad things\n")]) as fake:
         assert _failed(Run(fake)) == "The service refused the request (HTTP 422): bad things"

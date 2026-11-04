@@ -2,13 +2,16 @@
 from the run's runtime"; openai-style-runner design D2, D11).
 
 The runtime's endpoint, model and credential come from troupe (#278), never from the runner's
-options. This module is the one place the runner touches the runtime, so the shape #278 settles on
-changes it and its tests only. Reading the runtime from run/start waits for that shape: until
-then, the runner's tests make a Runtime directly.
+options. run/start carries the runtime as troupe resolved it, and the credential's value is in
+the runner's environment as TROUPE_RUNTIME_CREDENTIAL (spec: runner-protocol). This module is the
+one place the runner touches the runtime.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 
+from troupe_plugin_sdk.credential import CREDENTIAL_VARIABLE, CredentialError, runtime_credential
+from troupe_plugin_sdk.runner import RunStartParams
 from troupe_runner_openai_chat.service import Endpoint, EndpointError, parse_endpoint
 
 
@@ -64,4 +67,28 @@ class Runtime:
         return cls(parsed, model, credential)
 
 
-__all__ = ["Runtime", "RuntimeRefusedError"]
+def from_run_start(params: RunStartParams, environ: Mapping[str, str]) -> Runtime:
+    """The run's runtime: run/start's, with its credential from ``environ``. Refused when there's
+    no runtime, when run/start and ``environ`` disagree about the credential, and as
+    Runtime.checked refuses."""
+    if params.runtime is None:
+        raise RuntimeRefusedError(
+            "openai-chat.no-runtime",
+            "run/start names no runtime, so the OpenAI-style runner has no service to talk to.",
+            "Name a runtime for the actor, such as troupe config set actors.<name>.runtime=openai.",
+            {"where": "runtime"},
+        )
+    try:
+        credential = runtime_credential(params, environ)
+    except CredentialError as error:
+        raise RuntimeRefusedError(
+            "openai-chat.credential-mismatch",
+            f"{error}, so the runner can't tell whether to send a credential.",
+            "troupe sets the variable exactly when run/start says the runtime has a credential; "
+            "start the runner through troupe, or report the mismatch.",
+            {"where": CREDENTIAL_VARIABLE},
+        ) from None
+    return Runtime.checked(params.runtime.endpoint, params.runtime.model, credential)
+
+
+__all__ = ["Runtime", "RuntimeRefusedError", "from_run_start"]

@@ -1,10 +1,15 @@
-"""The runtime value the runner talks to (spec: openai-chat-runner, "A credential never travels in
-the clear"; design D2, D11). Reading it from run/start waits for #278's shape (task 1.1)."""
+"""The runtime the runner talks to, read from run/start (spec: openai-chat-runner, "The service
+comes from the run's runtime", "The credential is read from TROUPE_RUNTIME_CREDENTIAL", "A
+credential never travels in the clear"; design D2, D11)."""
+
+import uuid
+from typing import Any
 
 import pytest
 
 from chat_harness import own_validator
-from troupe_runner_openai_chat.runtime import Runtime, RuntimeRefusedError
+from troupe_plugin_sdk.runner import RunStartParams
+from troupe_runner_openai_chat.runtime import Runtime, RuntimeRefusedError, from_run_start
 
 KEY = "sk-canary-0123456789"
 
@@ -69,3 +74,74 @@ def test_each_refusals_details_match_its_published_error_code(
 
 def test_a_runtimes_repr_never_shows_its_credential() -> None:
     assert KEY not in repr(Runtime.checked("https://api.openai.com/v1", "m", KEY))
+
+
+def _start(runtime: dict[str, Any] | None) -> RunStartParams:
+    data: dict[str, Any] = {
+        "runId": str(uuid.uuid4()),
+        "direction": "d",
+        "workspace": "/w",
+        "options": {},
+        "limits": {"eventMaxBytes": 65536},
+        "effects": {"write": [], "delete": [], "move": []},
+        "scratch": "/s",
+    }
+    if runtime is not None:
+        data["runtime"] = runtime
+    return RunStartParams.from_data(data)
+
+
+OPENAI = {"name": "openai", "endpoint": "https://api.openai.com/v1", "model": "gpt-test"}
+
+
+def test_run_starts_runtime_with_the_credential_from_troupe_runtime_credential() -> None:
+    runtime = from_run_start(
+        _start({**OPENAI, "credential": True}), {"TROUPE_RUNTIME_CREDENTIAL": KEY}
+    )
+    assert (runtime.endpoint.url, runtime.model, runtime.credential) == (
+        "https://api.openai.com/v1",
+        "gpt-test",
+        KEY,
+    )
+
+
+def test_a_runtime_without_a_credential_has_none() -> None:
+    runtime = from_run_start(_start({**OPENAI, "credential": False}), {})
+    assert runtime.credential is None
+
+
+def test_a_key_under_any_other_name_isnt_read() -> None:
+    runtime = from_run_start(_start({**OPENAI, "credential": False}), {"OPENAI_API_KEY": KEY})
+    assert runtime.credential is None
+
+
+def test_a_run_start_without_a_runtime_is_refused_saying_to_name_one() -> None:
+    with pytest.raises(RuntimeRefusedError) as raised:
+        from_run_start(_start(None), {})
+    assert raised.value.code == "openai-chat.no-runtime"
+    assert "runtime" in raised.value.fix
+
+
+@pytest.mark.parametrize(
+    ("credential", "environ"),
+    [
+        (True, {}),
+        (True, {"TROUPE_RUNTIME_CREDENTIAL": ""}),
+        (False, {"TROUPE_RUNTIME_CREDENTIAL": KEY}),
+    ],
+)
+def test_a_run_start_and_an_environment_that_disagree_are_refused_without_the_value(
+    credential: bool, environ: dict[str, str]
+) -> None:
+    with pytest.raises(RuntimeRefusedError) as raised:
+        from_run_start(_start({**OPENAI, "credential": credential}), environ)
+    error = raised.value
+    assert error.code == "openai-chat.credential-mismatch"
+    assert KEY not in f"{error.problem} {error.fix} {error.details}"
+    data = {
+        "code": error.code,
+        "problem": error.problem,
+        "fix": error.fix,
+        "details": error.details,
+    }
+    assert own_validator("errors.schema.json").is_valid(data)
