@@ -55,10 +55,11 @@
 
   Verify with `test_ollama_client.py` against the fake (3.2):
   - each status in D9 is classified as D9 says;
-  - a dropped connection and a silent stream are `network`;
+  - a silent stream is `network`. A dropped connection ends the lines before Ollama's `done` line, since
+    http.client reads a stream cut short as ended, and 5.1 checks the conversation makes that a `network` retry;
   - a line over `LINE_MAX_BYTES` is a stream error and is never read whole;
   - `close()` from another thread wakes a blocked read within a second, on all three platforms.
-- [ ] 3.2 Add `tests/fake_ollama.py` (D12), and a test that runs it directly and checks each scripted answer, delay,
+- [x] 3.2 Add `tests/fake_ollama.py` (D12), and a test that runs it directly and checks each scripted answer, delay,
   mid-stream close and recorded request. Verify: that test passes.
 ## 4. Real Ollama fixtures and the capture tool (design D12)
 
@@ -66,25 +67,29 @@
   `exchange.jsonl` and `provenance.json` for a named fixture, and refuses an endpoint that isn't loopback. Verify: a
   unit test runs the tool against the fake endpoint from 3.2 and checks the files it writes, and a second checks it
   refuses `http://example.com:11434`.
-- [ ] 4.2 **Ask the owner first** (the model is about 2.5 GB, and pulling and running it loads the machine): install
-  Ollama, pull `qwen3:4b`, and capture `success-with-tools`, `refused-by-effects`, `thinking`, `model-not-found`,
-  `no-tools-capability` (with a pulled model that has no `tools` capability) and `context-overflow` (a run with
-  `contextLength` 512 that reads a file larger than that, so Ollama truncates). Record each provenance's
-  Ollama version. Hand-write the failure fixtures D12 lists (503, dropped connection, an `error` line, a silent
-  stream), and mark their provenance hand-written. Verify: every fixture directory has its three files, and the
-  provenance test (5.2) passes.
-- [ ] 4.3 From the captures, settle what the window check (design D15) and `usage` depend on, **before 5.1 builds
-  them**:
-  - whether `prompt_eval_count` includes cached tokens, and whether Ollama reports a separate cached count;
-  - what an answer whose prompt was truncated reports, in `context-overflow`, and so the value of
-    `CONTEXT_MARGIN_TOKENS`;
-  - where `/api/show` gives the model's maximum context.
-
-  Write the answers into the plugin README's usage and context sections, citing the fixtures. If `context-overflow`'s
-  counts can't show the truncation, stop and ask the owner, since the spec's "A run never carries on past its context
-  window" would need another mechanism. If there's a cached count, open a follow-up issue (on the board) to map it to
-  `cacheReadTokens`. Verify: the README states each answer and cites its fixture, and `CONTEXT_MARGIN_TOKENS` in
-  `defaults.py` cites the same.
+- [ ] 4.2 Capture from the owner's Ollama, already installed and running (owner, 2026-11-04: Ollama 0.40.14 at
+  `/opt/homebrew/bin/ollama`, with `qwen3.5:4b`, `qwen3.5:0.8b` and `qwen3:0.6b` pulled; nothing is pulled for this
+  change). Capture with the smallest model that does each one, so captures stay quick: `success-with-tools`,
+  `refused-by-effects`, `thinking`, `model-not-found`, and `context-overflow` (`contextLength` 512 and a `Read` of a
+  file larger than that, which `truncate: false` turns into Ollama's 400). For `no-tools-capability`, make a model
+  without the `tools` capability from `qwen3:0.6b` with `ollama create` and a template with no tools section. Remove
+  it with `ollama rm` afterwards, and say so in the provenance. Record each provenance's Ollama version.
+  Hand-write the failure fixtures D12 lists (503, dropped connection, an `error` line, a silent stream), and mark
+  their provenance hand-written. Verify: every fixture directory has its three files, the provenance test (5.2)
+  passes, and `ollama list` afterwards shows only the models that were there before.
+- [ ] 4.3 Record what the captures settle (design D15, D16): the 400 Ollama sends for a request over the window, in
+  `context-overflow`; that `prompt_eval_cached_count` is reported apart from `prompt_eval_count`; and where
+  `/api/show` gives the model's maximum context. Write each into the plugin README's usage and context sections,
+  citing its fixture, and open a follow-up issue (on the board) to map `prompt_eval_cached_count` to
+  `cacheReadTokens`. Verify: the README states each one and cites its fixture, and the issue exists on the board.
+- [x] 4.4 Add `requirements.json` (design D16) beside the schemas, holding `ollama` at least `0.12.6` and why, and
+  `requirements.py`, which loads it and compares a reported version. It refuses an unknown field, a malformed
+  `minimum`, and a version it can't read. Verify with `test_ollama_requirements.py`:
+  - the published file's one requirement and its reason (spec: "The published requirement");
+  - comparing `0.12.5`, `0.12.6`, `0.12.10`, `0.40.14`, `0.12.6-rc1` and `1.0` with `0.12.6`;
+  - an unreadable version, an unknown field and a malformed `minimum` are each refused, naming what's wrong;
+  - with the data changed to `0.50.0` in a temporary copy, `0.40.14` doesn't meet it (spec: "The check reads the
+    data").
 
 ## 5. The conversation and the mapping (design D5, D6, D7, D8)
 
@@ -97,8 +102,9 @@
     turn limit, turns and thinking, the result's counts (and a counter no answer reported left out), Ollama's errors,
     `done_reason` `length`, and summaries cut below `eventMaxBytes`;
   - the context window (D15): `num_ctx` is always sent (the option, the default, and the default lowered to a smaller
-    model maximum), and an answer at the window has its tool calls left undone, gets no further request, and ends
-    in an `error` result naming the window and `contextLength`, while an answer just below the margin goes on;
+    model maximum), every request has `truncate` and `shift` both `false`, and a status-400 refusal gets no further
+    request and ends in an `error` result holding Ollama's message and naming the window and `contextLength`;
+  - a stream that ends before Ollama's `done` line is a `network` retry (3.1 leaves this to the conversation);
   - the transcript scenarios: the first body once, each added message verbatim as it appears inside the next
     request's body (checked by finding its bytes there), no re-sent history, and a non-UTF-8 line as `base64`;
   - a record that leads to an event comes before it.
@@ -119,8 +125,9 @@
   following `claude_harness.py`, which validates every message against the bound schemas. Verify with
   `test_ollama_runner.py`:
   - every spec scenario for the handshake, the identification and `init`, the options' refusals, the endpoint (its
-    default, another host, credentials), the preflight's three refusals (each naming its fix), a missing
-    `capabilities` field, and a `contextLength` above the model's maximum;
+    default, another host, credentials), the preflight's refusals (each naming its fix), a missing
+    `capabilities` field, a `contextLength` above the model's maximum, and `runner.requirement-unmet` for an
+    Ollama reporting `0.12.5` and for one reporting a version that can't be read;
   - cancel while an answer streams slowly: the fake sees its connection closed, no event follows the acknowledgement,
     and the runner exits 0 within `STOP_GRACE_SECONDS` plus a margin;
   - end of input while a request waits, and `shutdown` after the result;
@@ -139,12 +146,17 @@
 
 ## 7. The contract amendments (spec: runner-protocol; design D7, D9)
 
-- [ ] 7.1 Update `protocol/schemas/runner/run-transcript.schema.json`'s description for D7. In contributing/runners.md,
+- [x] 7.1 Add `runner.requirement-unmet` (design D16) to the contract: `protocol/schemas/runner/errors.schema.json`
+  and its packaged copy in core, with closed `details` (`requirement`, `wanted`, optional `found`), and its row in
+  contributing/runners.md's error table. Verify: the SDK's and core's runner-schema tests cover the new code, both
+  of the runner-protocol spec's new scenarios validate against the contract alone, the strictness check passes,
+  and the packaged copy matches the protocol's.
+- [ ] 7.2 Update `protocol/schemas/runner/run-transcript.schema.json`'s description for D7. In contributing/runners.md,
   update "The transcript" for a runner that holds the conversation, "Run events"' `retry` row for a runner's own
   retries, and the runner list. Add a "Mapping an engine: Ollama" section with D6's table and D7's records. Verify:
   `uv run pytest packages/troupe/tests -k "runners_doc or schema"` passes, and the schemas' strictness check still
   passes.
-- [ ] 7.2 Add tests for the two amended requirements' new scenarios: through the host, the Ollama runner's `tool`
+- [ ] 7.3 Add tests for the two amended requirements' new scenarios: through the host, the Ollama runner's `tool`
   message is a stored transcript record before the next answer's lines, a three-request run stores the user message
   once, and a dropped connection gives a `retry` with reason `network` before the next attempt. Verify: the tests pass,
   in `test_ollama_host.py` (8.2).
@@ -190,7 +202,7 @@
   reason naming the variable and `TROUPE_LIVE_OLLAMA_MODEL`. Verify: without the variable,
   `uv run pytest packages/troupe/tests/test_ollama_live.py -rs` reports it skipped with that reason. CI's logs show it
   skipped on all three operating systems (10.1).
-- [ ] 9.2 **Owner:** run the live test once on macOS with Ollama running and `qwen3:4b` pulled, and paste the outcome
+- [ ] 9.2 **Owner:** run the live test once on macOS with Ollama running and `qwen3.5:4b` pulled, and paste the outcome
   and what it printed into the PR. An agent session runs it only with the owner's go-ahead (as 4.2). Verify: the run
   reached a `result`, and its outcome isn't `crashed`.
 

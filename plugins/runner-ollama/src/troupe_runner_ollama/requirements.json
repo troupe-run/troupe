@@ -1,0 +1,9 @@
+{
+  "requires": [
+    {
+      "name": "ollama",
+      "minimum": "0.12.6",
+      "why": "Every request sends truncate and shift as false, so Ollama refuses a conversation longer than the context window instead of silently dropping its start. Ollama added both fields in 0.12.6 (ollama/ollama#12582); an older one ignores them and cuts the conversation without saying so."
+    }
+  ]
+}

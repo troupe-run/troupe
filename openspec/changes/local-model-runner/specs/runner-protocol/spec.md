@@ -32,3 +32,19 @@ history again. Transcript records SHALL NOT be interpreted by the host.
 #### Scenario: History sent again
 - **WHEN** a runner sends its engine the whole conversation with each request
 - **THEN** each message appears in the transcript once
+
+## ADDED Requirements
+
+### Requirement: A runner refuses a platform it can't run on
+A runner that finds, before it acknowledges `run/start`, that what it runs on doesn't meet a requirement of its own
+SHALL refuse `run/start` with the contract's `runner.requirement-unmet`. Its details SHALL name the requirement and
+what's wanted, and what was found when the runner could find it.
+
+#### Scenario: An engine too old
+- **WHEN** a runner that needs its engine at version 0.12.6 or later finds version 0.12.5
+- **THEN** it refuses `run/start` with `runner.requirement-unmet`, whose details name the engine, `>= 0.12.6` and
+  `0.12.5`, and the error validates against the contract alone
+
+#### Scenario: Nothing found
+- **WHEN** a runner can't find out what it requires, such as a version its engine didn't report
+- **THEN** its `runner.requirement-unmet` details have no `found`

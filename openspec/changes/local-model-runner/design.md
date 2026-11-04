@@ -96,7 +96,9 @@ The runner first parses the options (D11), then makes two requests, each with a 
 `PREFLIGHT_TIMEOUT_SECONDS` (10, well under the host's 30):
 
 1. `GET /api/version`. A connection refused, a timeout, or a body without a `version` string means
-   `ollama.unreachable`, naming the endpoint (without user info, which D10 refuses anyway).
+   `ollama.unreachable`, naming the endpoint (without user info, which D10 refuses anyway). The version is then
+   checked against the runner's published requirements (D16): an Ollama older than 0.12.6, or a version the runner
+   can't read, is `runner.requirement-unmet`.
 2. `POST /api/show` with `{"model": ...}`. A 404 means `ollama.model-not-found`, with the fix
    `ollama pull <model>`. A `capabilities` list without `tools` means `ollama.model-without-tools`. A missing
    `capabilities` field, which is the case in Ollama versions older than the field, is refused the same way. Its
@@ -133,7 +135,6 @@ before the run starts, and the version and the model are in `init`.
   calling tools`.
 - `done_reason` `length`, meaning the output limit was hit, is a `log` warning. The answer is still used. Whether a
   cut answer should fail the run is #279's question 4.
-- Before carrying out an answer's tool calls, the runner checks it against the window (D15).
 
 ### D6. Mapping onto run events
 
@@ -145,7 +146,7 @@ before the run starts, and the version and the model are in `init`.
 | each `tool_calls` entry | `tool_call` and `tool_result`, from the SDK (D5) |
 | a request made again | `retry` (D9) |
 | `done_reason` `length` | `log` warning |
-| prompt tokens at the window (D15) | `result` `error`, and the answer's calls aren't carried out |
+| a request refused for outgrowing the window (D15) | `result` `error`, holding Ollama's message and naming the window |
 | an answer with no tool call | `result` `ok` |
 | `maxTurns` reached, an error not retried, retries spent | `result` `error` |
 
@@ -235,7 +236,7 @@ runner is the engine's client, so its own retries are the ones to report. The co
 | `seed` | integer | Ollama's own | `options.seed` |
 | `think` | boolean, or `low`, `medium` or `high` | Ollama's own | `think` |
 
-`defaults.py` holds `DEFAULT_ENDPOINT`, `MAX_TURNS`, `DEFAULT_CONTEXT_LENGTH`, `CONTEXT_MARGIN_TOKENS`, `PREFLIGHT_TIMEOUT_SECONDS`, `STREAM_IDLE_TIMEOUT_SECONDS`,
+`defaults.py` holds `DEFAULT_ENDPOINT`, `MAX_TURNS`, `DEFAULT_CONTEXT_LENGTH`, `PREFLIGHT_TIMEOUT_SECONDS`, `STREAM_IDLE_TIMEOUT_SECONDS`,
 `LINE_MAX_BYTES`, `RETRY_MAX_ATTEMPTS`, `RETRY_DELAY_SECONDS` and `STOP_GRACE_SECONDS`, each documented in the README.
 
 The error codes are in `errors.schema.json`, each with closed `details`:
@@ -247,6 +248,8 @@ The error codes are in `errors.schema.json`, each with closed `details`:
 | `ollama.unreachable` | -32000 | `endpoint` |
 | `ollama.model-not-found` | -32000 | `endpoint`, `model` |
 | `ollama.model-without-tools` | -32000 | `model`, `capabilities` (when Ollama gave them) |
+
+The preflight's version check uses the contract's `runner.requirement-unmet` (D16), not a code of the runner's own.
 
 `parse_options` follows the Claude Code runner's `options.py`, and a hypothesis test checks that it agrees with the
 schema.
@@ -278,16 +281,18 @@ schema.
   does for Claude Code. Core's tests import nothing from a plugin's tests. It is used for the conformance suite, the
   host's end-to-end test, and `perform` and audition tests.
 
-### D13. The audition: `qwen3:4b`
+### D13. The audition: `qwen3.5:4b`
 
-`troupe.core.audition` gets `OLLAMA_AUDITION_MODEL = "qwen3:4b"` and an `ollama` entry: options `{"model": ...}`,
-`effects.write: ["**"]`, `expect: []`, and the Claude Code audition's character. `qwen3:4b` calls tools, is about
-2.5 GB, and runs on a laptop without a GPU.
+`troupe.core.audition` gets `OLLAMA_AUDITION_MODEL = "qwen3.5:4b"` and an `ollama` entry: options `{"model": ...}`,
+`effects.write: ["**"]`, `expect: []`, and the Claude Code audition's character. `qwen3.5:4b` calls tools and thinks,
+is about 3.4 GB, and runs on a laptop. It was first chosen as `qwen3:4b`, then changed on 2026-11-04 to the model
+the owner already has pulled, from the newer family, so trying the audition pulls nothing more.
 
 - `llama3.2:3b` was rejected because it's weaker at tool calls. `qwen3:8b` (about 5 GB) was rejected because it's
-  slower to pull for a first try.
+  slower to pull for a first try. `qwen3.5:0.8b` was rejected as too small to call tools reliably for a first
+  impression.
 - The model is named in one place, so changing it is a one-line change.
-- The perform step's note says Ollama must be running and gives `ollama pull qwen3:4b`. The CLI takes the model from
+- The perform step's note says Ollama must be running and gives `ollama pull qwen3.5:4b`. The CLI takes the model from
   the audition's change entries (`actors.lead.options.model`), which the init result already carries, so the client
   protocol doesn't change.
 
@@ -317,33 +322,62 @@ it ships, stopping the run, is the one that loses nothing.
   to the model's maximum from the preflight's `/api/show` (D4). It is never left to Ollama's default, which differs
   between versions and machines. A `contextLength` above the model's maximum is refused at preflight. When Ollama
   reports no maximum, the value is used as it is.
-- **Why 16384:** the KV cache grows with the window. For `qwen3:4b` that's about 2.4 GB at 16384 and about 4.8 GB at
+- **Why 16384:** the KV cache grows with the window. For a 4B model that's a few GB at 16384, and double that at
   32768, on top of the model. 16384 holds a direction, a character and several file reads, and fits a laptop. It's
   a named setting, and the README says when to raise `contextLength`.
-- **Detecting it:** after each answer, the runner compares the prompt tokens that answer reports with the window.
-  It stops when they're within `CONTEXT_MARGIN_TOKENS` of it, because a truncated prompt is filled to the window.
-  "Prompt tokens" means `prompt_eval_count`, plus a separately reported cached count if there is one. Which of
-  those Ollama reports is the open question task 4.3 settles from a real capture (`context-overflow`, run with a
-  small `contextLength`). Task 4.3 also sets `CONTEXT_MARGIN_TOKENS` from what the capture shows, and the detection
-  isn't built (5.1) until it has. If the counts can't show a truncation, the owner is asked before going on, since
-  the spec's requirement would then need another mechanism.
-- **Stopping:** the overflowing answer's tool calls are not carried out, since they come from a model that can no
-  longer see its direction. No further request is made. The `result` is `error`: `the conversation outgrew the
-  model's context window of <n> tokens; Ollama drops the start of the conversation, the direction among it. Raise
-  contextLength, or give the actor a smaller task.`
+- **Refusing rather than cutting** (owner, 2026-11-04). Every request sends `truncate: false` and `shift: false`.
+  Checked against Ollama 0.40.14 on 2026-11-04, with `qwen3:0.6b`, a 512-token window and a prompt of about 3,000
+  tokens:
+  - With neither field, Ollama silently kept a part of the prompt and answered. Its counts didn't show it:
+    `prompt_eval_count` was 258, with 4 more in `prompt_eval_cached_count`, about half the window rather than all
+    of it. So the first plan, which compared the counts with the window, could never have seen a truncation.
+  - With `truncate: false`, Ollama refused the request with status 400: `request (3031 tokens) exceeds the available
+    context size (512 tokens), try increasing it`.
+  - With `shift: false` as well, an answer that reaches the window stops with `done_reason` `length`, instead of
+    Ollama dropping the conversation's start to make room.
+  Both fields came in Ollama 0.12.6 (ollama/ollama#12582, October 2025). An older Ollama ignores them and cuts
+  silently, so the runner requires 0.12.6 or later (D16).
+- **Stopping:** a refused request is an `EngineError` (D9), so it isn't retried, and the run ends with an `error`
+  result. Its message is Ollama's, followed by the window and how to raise it: `... The run's context window is
+  <n> tokens; raise contextLength, or give the actor a smaller task.` Every status-400 refusal gets that sentence.
+  The runner doesn't match Ollama's wording to decide whether the refusal was about the window, so a change in that
+  wording can't hide it.
 - **Alternatives:**
+  - Comparing each answer's prompt counts with the window. Rejected: the capture above shows a truncated prompt
+    reports about half the window, so the comparison misses every truncation.
   - Estimating the next request's tokens from its bytes, to stop before sending it. Rejected: a byte count is only a
     loose bound (one token is one to several bytes), so it would stop runs far too early or miss overflows.
   - Compacting the conversation (dropping old tool output, keeping the character and direction). Deferred to #279:
     it changes what the model sees, which is a product decision.
 
+### D16. Platform requirements are published data, checked by the runner (interim, until #281)
+
+The runner needs Ollama 0.12.6 or later (D15). That is a requirement of the platform, the other side of what a
+component provides, such as a stage with a filesystem or version control. Decision #281 settles the general model:
+who declares, who checks, when, and how a mismatch is reported (owner, 2026-11-04). This change doesn't wait for it,
+and doesn't write the version into code either:
+
+- **Published as data:** `requirements.json` sits beside the options and errors schemas, installed with the package:
+  `{"requires": [{"name": "ollama", "minimum": "0.12.6", "why": "..."}]}`. Each entry has a name, the least version,
+  and why it's needed. A loader refuses an unknown field or a malformed version, so a typo can't loosen the check.
+  This isn't published as a schema yet: #281 decides the format, and a schema would fix it too early.
+- **Checked by the runner at preflight:** the version Ollama reports is compared with `minimum` as numbers, part by
+  part. A suffix such as `-rc1` counts as before its release. A version that isn't numbers separated by dots, with
+  an optional suffix, is refused as unreadable, rather than guessed at.
+- **Refused in the contract's words:** `runner.requirement-unmet` is a new contract error code, JSON-RPC -32000,
+  whose `details` are `requirement` (the name), `wanted` (`>= 0.12.6`) and `found` (left out when nothing was found).
+  It's the contract's, not the runner's own, so every runner refuses a platform the same way, and #281 can move the
+  check without changing what troupe receives. The fix names upgrading Ollama.
+- **Alternative:** `ollama.unsupported-version` in the runner's own errors, with the version in code. Rejected by
+  the owner: it models one runner's need, where #281 is about a general one.
+
 ## Risks / Trade-offs
 
-- **Ollama silently cuts the conversation to its context window.** → D15: the runner always sets the window, and
-  ends the run when an answer reaches it. The remaining risk is that Ollama's counts don't show a truncation
-  clearly. Task 4.3 checks that against a real capture before the detection is built, and asks the owner if they
-  don't. A run that stops at the window loses no data, but it is a failed run. #279 decides whether something better
-  than stopping is wanted.
+- **Ollama silently cuts the conversation to its context window.** → D15: the runner always sets the window, asks
+  Ollama to refuse rather than cut, and requires an Ollama that understands the request (D16). A run that stops at
+  the window loses no data, but it is a failed run. #279 decides whether something better than stopping is wanted.
+- **Ollama changes what `truncate` or `shift` mean.** → The fixture `context-overflow` (task 4.2) pins today's
+  refusal, and the live test runs against the person's Ollama.
 - **Small models are bad at tool calls.** They describe a call in text instead of making one, or give arguments
   that don't fit. → A malformed call is an SDK error result that the model can recover from. A model that does
   nothing ends `ok`, and `expect` and the effect audit are what catch it. The live test doesn't assert the model's
@@ -366,7 +400,9 @@ infrastructure pull request adds the `ollama-runner` spec's Purpose to `oob/trou
 
 ## Open Questions
 
-- Whether Ollama reports a separate cached prompt count. Task 4.3 finds out, because D15 needs it. If there is one,
-  mapping it to `cacheReadTokens` in `usage` is a follow-up change. This change maps only the two counters the spec
-  names.
+- Ollama reports cached prompt tokens separately, as `prompt_eval_cached_count`, apart from `prompt_eval_count` (seen
+  2026-11-04, D15). Mapping it to `cacheReadTokens` in `usage` is a follow-up issue (task 4.3). This change maps only
+  the two counters the spec names.
 - What a run should do when an engine runs out of context or cuts its output, beyond D15's default: Decision #279.
+- How components declare what they require of the platform and what they provide, and who checks it: Decision #281.
+  D16 is this change's interim form of it.

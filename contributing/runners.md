@@ -181,7 +181,7 @@ optionally a `path` and `details`. The JSON-RPC `code` is a standard value (-327
 runner refuses a valid request (such as a second `run/start`).
 
 The contract defines these codes ([`runner/errors.schema.json`](../protocol/schemas/runner/errors.schema.json)).
-Only `runner.unsupported-version` carries `details`:
+Only `runner.unsupported-version` and `runner.requirement-unmet` carry `details`:
 
 | Code | JSON-RPC code | When |
 |---|---|---|
@@ -192,6 +192,7 @@ Only `runner.unsupported-version` carries `details`:
 | `runner.unsupported-version` | -32000 | None of the offered versions is supported; `details.supportedVersions` names the ones that are |
 | `runner.already-started` | -32000 | A second `run/start` |
 | `runner.invalid-params` | -32602 | The params aren't the ones the contract defines |
+| `runner.requirement-unmet` | -32000 | What the runner runs on doesn't meet one of its requirements, such as its engine's least version, so it refuses `run/start`. `details` name the `requirement`, what's `wanted` (such as `>= 0.12.6`) and what was `found`, left out when it found nothing. How components declare requirements in general is Decision [#281](https://github.com/troupe-run/troupe/issues/281) |
 
 Any other code is the runner's own, and the runner publishes it (next section).
 
