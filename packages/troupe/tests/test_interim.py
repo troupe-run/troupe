@@ -42,8 +42,16 @@ def test_claude_code_resolves_to_the_claude_code_runners_module() -> None:
     assert list(runner_command("claude-code"))[1:] == ["-m", "troupe_runner_claude_code"]
 
 
-def test_an_unknown_runner_is_refused_naming_both_runners_troupe_ships() -> None:
+def test_ollama_resolves_to_the_ollama_runners_module_given_no_variables() -> None:
+    assert list(runner_command("ollama"))[1:] == ["-m", "troupe_runner_ollama"]
+    assert RUNNERS["ollama"].environment == ()
+
+
+def test_an_unknown_runner_is_refused_naming_every_runner_troupe_ships() -> None:
     with pytest.raises(TroupeError) as caught:
         runner_command("codex")
-    assert caught.value.details == {"runner": "codex", "known": ["claude-code", "scripted"]}
-    assert "claude-code, scripted" in caught.value.fix
+    assert caught.value.details == {
+        "runner": "codex",
+        "known": ["claude-code", "ollama", "scripted"],
+    }
+    assert "claude-code, ollama, scripted" in caught.value.fix

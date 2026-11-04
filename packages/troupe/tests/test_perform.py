@@ -12,6 +12,7 @@ from uuid import UUID
 import pytest
 
 import claude_stand_in
+import ollama_stand_in
 from runtesting import ADA, ALLOW, INIT, OK, Harness, failing_at, request, script, theatre, turn
 from storetesting import git_service, snapshot
 from troupe.core import defaults, interim
@@ -539,6 +540,26 @@ def test_a_scripted_actors_runner_is_given_no_variables_even_with_path_and_a_sec
     harness.perform(request(script(INIT, OK)))
     [command] = commands
     assert dict(command.env) == {}
+
+
+def test_an_ollama_actors_runner_is_given_no_variables_even_with_ollama_host_and_a_proxy_set(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Spec: runs, "The Ollama runner gets nothing new" (local-model-runner design D10).
+    commands = _runner_commands(monkeypatch)
+    harness = Harness(theatre(tmp_path))
+    harness.env = {
+        **harness.env,
+        "PATH": "/usr/bin",
+        "OLLAMA_HOST": "127.0.0.1:1",
+        "HTTPS_PROXY": "http://proxy:3128",
+    }
+    with ollama_stand_in.serving("success-with-tools") as fake:
+        options = {**ollama_stand_in.options("success-with-tools"), "endpoint": fake.url}
+        result = harness.perform(request(options, runner="ollama"))
+    [command] = commands
+    assert dict(command.env) == {}
+    assert result.run.outcome == "succeeded"
 
 
 FAKE_TOKEN = "oauth-token"  # noqa: S105 - a stand-in value, checked for where it arrives

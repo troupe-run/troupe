@@ -194,6 +194,26 @@ def test_the_claude_code_audition_writes_its_files_as_config_set_would(repo: Rep
     assert all(f["action"] == "write" for f in result["files"])
 
 
+# Requirement: The Ollama audition can edit files with a small local model (spec: config;
+# local-model-runner design D13)
+
+
+def test_the_ollama_actor_has_only_a_model_write_effects_no_expect_and_the_character(
+    repo: Repo,
+) -> None:
+    _init(repo.path, _env(repo), audition={"runner": "ollama"})
+    lead = read(git_service(repo)).config["actors"]["lead"]
+    assert lead == {
+        "runner": "ollama",
+        "options": {"model": auditions.OLLAMA_AUDITION_MODEL},
+        "effects": {"write": ["**"]},
+        "expect": [],
+        "character": auditions.CHARACTER,
+    }
+    assert "workspace" not in lead
+    assert (repo.path / ".troupe" / "actors" / "lead.md").read_text(encoding="utf-8").strip()
+
+
 # Requirement: The Claude Code audition can edit files on a small budget (spec: config)
 
 
@@ -264,7 +284,7 @@ def test_an_unknown_runner_is_refused_naming_the_known_ones_and_nothing_is_made(
     error = _refused(repo.path, _env(repo), audition={"runner": "gemini"})
     assert error.code == "runner.unknown"
     assert "gemini" in error.problem
-    assert error.details["known"] == ["claude-code", "scripted"]
+    assert error.details["known"] == ["claude-code", "ollama", "scripted"]
     assert not (repo.path / ".troupe").exists()
 
 

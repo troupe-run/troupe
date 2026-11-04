@@ -11,7 +11,7 @@ swap the agent by swapping its runner, and your process stays the same.
 
 ## Runners today
 
-troupe ships two runners:
+troupe ships three runners:
 
 - **The scripted runner** plays a script instead of running an agent, so you can try troupe offline.
 - **The Claude Code runner** runs [Claude Code](https://code.claude.com) with your existing login. It leaves out your
@@ -19,9 +19,14 @@ troupe ships two runners:
   options choose the model, the budget and what the agent may do
   ([Define your own actor](../opening-night/first-performance.md#define-your-own-actor)).
 
-The runners planned next are one for a model on your own computer
-([#56](https://github.com/troupe-run/troupe/issues/56)), and Claude Code on a local model
-([#160](https://github.com/troupe-run/troupe/issues/160)).
+- **The Ollama runner** runs a model on your own computer through [Ollama](https://ollama.com)'s own API, with
+  troupe's own tool loop: the model asks for a file tool, and troupe carries it out, checked against the actor's
+  effects. It needs no credential, costs nothing per run, and works offline. Its options name the model, where Ollama
+  listens (`endpoint`, any host: a run sends what the model reads there) and the context window (`contextLength`)
+  ([Try it with a model on your own machine](../opening-night/first-performance.md#try-it-with-a-model-on-your-own-machine)).
+
+The runner planned next is one for any OpenAI-style API ([#162](https://github.com/troupe-run/troupe/issues/162)),
+which LM Studio will use too ([#56](https://github.com/troupe-run/troupe/issues/56)).
 
 You can write a runner for any agent today, and check it against the contract, but you can't run it with
 `troupe perform` yet: until config names runners ([#60](https://github.com/troupe-run/troupe/issues/60)),

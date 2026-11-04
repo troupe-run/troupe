@@ -160,35 +160,35 @@
   contributing/runners.md's error table. Verify: the SDK's and core's runner-schema tests cover the new code, both
   of the runner-protocol spec's new scenarios validate against the contract alone, the strictness check passes,
   and the packaged copy matches the protocol's.
-- [ ] 7.2 Update `protocol/schemas/runner/run-transcript.schema.json`'s description for D7. In contributing/runners.md,
+- [x] 7.2 Update `protocol/schemas/runner/run-transcript.schema.json`'s description for D7. In contributing/runners.md,
   update "The transcript" for a runner that holds the conversation, "Run events"' `retry` row for a runner's own
   retries, and the runner list. Add a "Mapping an engine: Ollama" section with D6's table and D7's records. Verify:
   `uv run pytest packages/troupe/tests -k "runners_doc or schema"` passes, and the schemas' strictness check still
   passes.
-- [ ] 7.3 Add tests for the two amended requirements' new scenarios: through the host, the Ollama runner's `tool`
+- [x] 7.3 Add tests for the two amended requirements' new scenarios: through the host, the Ollama runner's `tool`
   message is a stored transcript record before the next answer's lines, a three-request run stores the user message
   once, and a dropped connection gives a `retry` with reason `network` before the next attempt. Verify: the tests pass,
   in `test_ollama_host.py` (8.2).
 
 ## 8. troupe runs the Ollama runner (specs: runs, cli, config; design D12, D13)
 
-- [ ] 8.1 Before changing the table, write a test that passes on main and must keep passing: a `scripted` actor's
+- [x] 8.1 Before changing the table, write a test that passes on main and must keep passing: a `scripted` actor's
   runner gets only the platform minimum. Then add the `ollama` entry to `interim.RUNNERS`, with no environment.
   Verify with `test_interim.py` and `test_perform.py`:
   - the scripted test still passes;
   - `ollama` resolves to the plugin's module;
   - `codex` is refused naming `claude-code`, `ollama` and `scripted`;
   - the spec's "The Ollama runner gets nothing new" scenario, using the stand-in's record of what reached it.
-- [ ] 8.2 Add `packages/troupe/tests/ollama_stand_in.py` (D12) and `test_ollama_host.py`. For each fixture, run it
+- [x] 8.2 Add `packages/troupe/tests/ollama_stand_in.py` (D12) and `test_ollama_host.py`. For each fixture, run it
   through `run_actor` and check the outcome its `events.json` implies, and that every message validates. Also check:
   the stored transcript is the fixture's records byte for byte; a cancel mid-stream ends `cancelled` within
   `RUNNER_CANCEL_GRACE_SECONDS`; and each preflight refusal ends `could-not-start` with the runner's own error code.
   Verify: the file passes.
-- [ ] 8.3 Add the Ollama runner, with the stand-in, to `test_runner_conformance.py`. Verify: every check passes.
-- [ ] 8.4 Check `troupe config set actors.x.runner=ollama` with valid options, and with an option the runner doesn't
+- [x] 8.3 Add the Ollama runner, with the stand-in, to `test_runner_conformance.py`. Verify: every check passes.
+- [x] 8.4 Check `troupe config set actors.x.runner=ollama` with valid options, and with an option the runner doesn't
   define, beside the other runners' cases. Verify: the valid one is accepted, and the other is refused naming the
   runner's options schema.
-- [ ] 8.5 Add the audition (D13): `OLLAMA_AUDITION_MODEL`, the `ollama` entry in `AUDITIONS`, and the perform
+- [x] 8.5 Add the audition (D13): `OLLAMA_AUDITION_MODEL`, the `ollama` entry in `AUDITIONS`, and the perform
   step's note in `cli/init.py`, with the model read from the entries. Verify with the audition and init tests:
   - the config spec's two scenarios;
   - the cli spec's "The Ollama runner" and the updated `gemini` scenario;
@@ -196,10 +196,10 @@
   - `troupe init --audition --runner ollama` in a scratch repository, then each printed step, with the stand-in as
     the endpoint (since the audition leaves `endpoint` unset, the test points it at the stand-in through config after
     init), ends `succeeded`.
-- [ ] 8.6 Add `test_perform_ollama.py`: `troupe perform` on a theatre with an `ollama` actor and the
+- [x] 8.6 Add `test_perform_ollama.py`: `troupe perform` on a theatre with an `ollama` actor and the
   `success-with-tools` stand-in. Verify: the run ends `succeeded`, its recorded start names runner `ollama` and engine
-  `ollama` with the fixture's version and model, and the file the fixture wrote is in the worktree.
-- [ ] 8.7 Update the user docs: "Runners today" in `docs/stagecraft/bring-your-own-agent.md` names the Ollama runner
+  `ollama` with the fixture's version and model, and the file the fixture wrote is in the run's workspace.
+- [x] 8.7 Update the user docs: "Runners today" in `docs/stagecraft/bring-your-own-agent.md` names the Ollama runner
   (no credential, the endpoint, any host accepted, `contextLength`), and `docs/opening-night/first-performance.md`'s
   "Choose a runner" shows an `ollama` actor and `troupe init --audition --runner ollama`. Verify:
   `uv run pytest packages/troupe/tests -k docs` passes, and the documented commands behave as written against a

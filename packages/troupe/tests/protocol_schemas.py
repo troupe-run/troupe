@@ -70,9 +70,36 @@ def validator_for(uri: str, runner: str | None = None) -> jsonschema.Draft202012
     return validator(bound(uri, runner) if runner is not None else {"$ref": uri})
 
 
+def shipped_runners() -> list[str]:
+    """Every runner troupe ships: each plugin directory that publishes a runner's errors schema."""
+    return sorted(
+        path.name
+        for path in PLUGINS.glob("runner-*")
+        if any(path.glob("src/*/schemas/errors.schema.json"))
+    )
+
+
 def bound(uri: str, runner: str) -> dict[str, Any]:
     """The schema at ``uri``, with ``runner``'s options and errors schemas bound to the contract's
-    ``runnerOptions`` and ``runnerErrors`` extension points (strict-schemas design D2)."""
+    ``runnerOptions`` and ``runnerErrors`` extension points (strict-schemas design D2). With
+    ``SHIPPED``, each runner troupe ships is bound, any of whose options or errors validates."""
+    if runner == SHIPPED:
+        runners = shipped_runners()
+        return {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$id": f"{PLUGINS_BASE}shipped-runners.schema.json",
+            "$ref": uri,
+            "$defs": {
+                "options": {
+                    "$dynamicAnchor": "runnerOptions",
+                    "anyOf": [{"$ref": f"{PLUGINS_BASE}{r}/options.schema.json"} for r in runners],
+                },
+                "errors": {
+                    "$dynamicAnchor": "runnerErrors",
+                    "anyOf": [{"$ref": f"{PLUGINS_BASE}{r}/errors.schema.json"} for r in runners],
+                },
+            },
+        }
     own = f"{PLUGINS_BASE}{runner}/"
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -86,13 +113,17 @@ def bound(uri: str, runner: str) -> dict[str, Any]:
 
 
 SCRIPTED = "runner-scripted"
-"""troupe's tests drive the scripted runner, so its own error codes can appear inside troupe's
-errors (``runner.start-failed`` keeps the runner's answer)."""
+"""troupe's tests drive the scripted runner most, so its schemas are the usual ones bound."""
+
+SHIPPED = "shipped"
+"""Every runner troupe ships, bound at once: any of their own error codes can appear inside
+troupe's errors and records (``runner.start-failed`` keeps the runner's answer), whichever runner a
+test drives (local-model-runner: the Ollama runner's refusals, through the host)."""
 
 
 def check_error(data: object) -> None:
     """Validate ``data`` as an error, against its code's details schema."""
-    validator_for(PROTOCOL_BASE + "error.schema.json", SCRIPTED).validate(data)
+    validator_for(PROTOCOL_BASE + "error.schema.json", SHIPPED).validate(data)
 
 
 def check_notice(data: object) -> None:

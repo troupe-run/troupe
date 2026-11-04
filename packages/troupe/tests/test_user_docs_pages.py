@@ -15,11 +15,13 @@ from typing import get_args
 import pytest
 
 import claude_stand_in
+import ollama_stand_in
 from gitrepo import AUTHOR, Repo, make_repo
 from runtesting import ADA
 from troupe.cli import init as init_cli
 from troupe.cli import main
 from troupe.core import defaults, settings
+from troupe.core.audition import OLLAMA_AUDITION_MODEL
 from troupe.core.client.messages import State
 from troupe.core.policy import ALLOW_UNENFORCED_LOCAL_STAGE, Policy, env_name
 from troupe.core.runs.aggregate import TOPICS
@@ -55,6 +57,7 @@ def cli(*argv: str) -> tuple[int, str, str]:
 
 PAGE = "opening-night/first-performance.md"
 OFFLINE = "Try it offline, with no account"
+LOCAL = "Try it with a model on your own machine"
 OWN = "Define your own actor"
 NOTICE = "Changes the run won't see"
 ALLOW = "Allow the local stage, once"
@@ -81,6 +84,16 @@ OFFLINE_WALKTHROUGH = [
     "cd troupe-offline",
     "git init",
     "troupe init --audition --runner scripted",
+    "git add .troupe",
+    "git commit -m 'Add a troupe theatre'",
+    "troupe perform lead",
+]
+LOCAL_WALKTHROUGH = [
+    "ollama pull qwen3.5:4b",
+    "mkdir troupe-local",
+    "cd troupe-local",
+    "git init",
+    "troupe init --audition --runner ollama",
     "git add .troupe",
     "git commit -m 'Add a troupe theatre'",
     "troupe perform lead",
@@ -292,6 +305,51 @@ def test_the_offline_walkthrough_runs_as_written_with_no_claude(
     code, out, err = run_line(lines[-1], monkeypatch)
     assert code == 0, err
     assert out == f"run {out.split()[1]} succeeded\n"
+
+
+def test_the_local_model_walkthrough_runs_as_written_with_a_stand_in_ollama(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A stand-in serves the model the page pulls. The reader's Ollama listens at the runner's
+    # default address, which a test can't take, so the actor is pointed at the stand-in before it
+    # performs.
+    made = make_repo(tmp_path)
+    for name, value in {**made.env, **ADA}.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv(env_name(ALLOW_UNENFORCED_LOCAL_STAGE), "true")
+    lines = sh_lines(section(PAGE, LOCAL))
+    assert lines == LOCAL_WALKTHROUGH
+    pull, mkdir, cd, *rest = lines
+    model = pull.split()[-1]
+    assert model == OLLAMA_AUDITION_MODEL
+    start = tmp_path / "work"
+    start.mkdir()
+    monkeypatch.chdir(start)
+    (Path.cwd() / mkdir.split()[1]).mkdir()
+    monkeypatch.chdir(Path.cwd() / cd.split()[1])
+    fake = ollama_stand_in._fake()
+    server = fake.FakeOllama(
+        [fake.final("Nothing to change.")],
+        fake.Settings(models={model: {"capabilities": ["completion", "tools"]}}),
+    ).start()
+    try:
+        for line in rest[:-1]:
+            if line.startswith("git add"):
+                code, _, err = cli("config", "set", f"actors.lead.options.endpoint={server.url}")
+                assert code == 0, err
+            code, _, err = run_line(line, monkeypatch)
+            assert code == 0, (line, err)
+        code, out, err = run_line(rest[-1], monkeypatch)
+    finally:
+        server.stop()
+    assert code == 0, err
+    assert out == f"run {out.split()[1]} succeeded\n"
+
+
+def test_the_local_model_section_states_the_ollama_the_runner_requires() -> None:
+    text = section(PAGE, LOCAL)
+    assert "Ollama 0.12.6 or later" in text
+    assert "16384 tokens" in text
 
 
 def test_defining_your_own_actor_runs_as_written_with_a_stand_in_claude(

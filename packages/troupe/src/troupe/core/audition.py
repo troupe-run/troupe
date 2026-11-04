@@ -51,6 +51,10 @@ CHARACTER = (
 """The Claude Code example's character. It is sent to the model as it is, so it holds no note to
 the person: the printed output says how to change it."""
 
+OLLAMA_AUDITION_MODEL = "qwen3.5:4b"
+"""The Ollama example's model: it calls tools and thinks, is about 3.4 GB, and runs on a laptop
+(local-model-runner design D13). Named here alone, so changing it is one line."""
+
 SCRIPTED_CONTENT = (
     "# Audition\n\nWritten by troupe's scripted runner, which plays a script instead of running an "
     "agent. Swap the runner for claude-code to run a real one.\n"
@@ -98,6 +102,18 @@ def _claude_code() -> dict[str, Any]:
     }
 
 
+def _ollama() -> dict[str, Any]:
+    # Like the Claude Code example: it may write any file in its worktree, and no file has to
+    # change. The endpoint is left to the runner's default, the local Ollama (design D13).
+    return {
+        "runner": "ollama",
+        "options": {"model": OLLAMA_AUDITION_MODEL},
+        "effects": {key: list(value) for key, value in CLAUDE_CODE_EFFECTS.items()},
+        "expect": [],
+        "character": CHARACTER,
+    }
+
+
 def _scripted() -> dict[str, Any]:
     runner = {"name": "scripted", "version": version(interim.RUNNERS["scripted"].package)}
     steps: Sequence[Mapping[str, Any]] = (
@@ -117,6 +133,7 @@ def _scripted() -> dict[str, Any]:
 
 AUDITIONS: Mapping[str, Callable[[], dict[str, Any]]] = {
     "claude-code": _claude_code,
+    "ollama": _ollama,
     "scripted": _scripted,
 }
 """Each runner's example actor, by the runner's name."""

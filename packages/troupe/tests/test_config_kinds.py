@@ -84,6 +84,34 @@ def test_a_claude_code_option_of_the_wrong_shape_is_refused_naming_its_path() ->
     assert error.details["path"] == ["actors", "tester", "options", "permissionMode"]
 
 
+def test_an_ollama_actor_with_valid_options_is_accepted() -> None:
+    options = {
+        "model": "qwen3.5:4b",
+        "endpoint": "http://gpu-box.local:11434",
+        "contextLength": 32768,
+    }
+    check(_actor(runner="ollama", options=options))
+
+
+def test_an_option_the_ollama_runner_doesnt_define_is_refused_naming_its_schema() -> None:
+    error = _refused(_actor(runner="ollama", options={"model": "qwen3.5:4b", "speed": 2}))
+    assert error.details["path"] == ["actors", "tester", "options", "speed"]
+    assert "the ollama runner's options schema" in error.problem
+
+
+def test_an_ollama_actor_without_a_model_is_refused_naming_model_as_required() -> None:
+    error = _refused(_actor(runner="ollama", options={}))
+    assert error.details["path"] == ["actors", "tester", "options", "model"]
+    assert "required" in error.problem
+
+
+def test_an_ollama_endpoint_holding_a_password_is_refused_without_repeating_it() -> None:
+    options = {"model": "m", "endpoint": "http://user:secret@127.0.0.1:11434"}
+    error = _refused(_actor(runner="ollama", options=options))
+    assert error.details["path"] == ["actors", "tester", "options", "endpoint"]
+    assert "secret" not in f"{error.problem} {error.fix} {error.details}"
+
+
 def test_an_actor_without_an_effect_check_is_refused_saying_an_empty_list_means_none() -> None:
     error = _refused(_actor(expect=...))
     assert error.details["path"] == ["actors", "tester", "expect"]

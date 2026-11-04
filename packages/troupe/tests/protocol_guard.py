@@ -29,7 +29,7 @@ import jsonschema
 import pytest
 
 from catalogues import branches
-from protocol_schemas import PROTOCOL_BASE, SCHEMAS, SCRIPTED, load, validator_for
+from protocol_schemas import PROTOCOL_BASE, SCHEMAS, SHIPPED, load, validator_for
 from troupe.core import errors, notices
 from troupe.core.events import EventStore
 
@@ -128,7 +128,7 @@ def _guard_recording() -> None:
     record = load(SCHEMAS / "event-record.schema.json")["$defs"]["troupeEvent"]["allOf"]
     schemas = {
         branch["if"]["properties"]["topic"]["const"]: validator_for(
-            PROTOCOL_BASE + branch["then"]["properties"]["state"]["$ref"], SCRIPTED
+            PROTOCOL_BASE + branch["then"]["properties"]["state"]["$ref"], SHIPPED
         )
         for branch in record
     }
@@ -152,7 +152,7 @@ def _guard_recording() -> None:
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    _guard(errors.TroupeError, "error.schema.json", SCRIPTED)
+    _guard(errors.TroupeError, "error.schema.json", SHIPPED)
     _guard(notices.Notice, "notice.schema.json", None)
     _guard_recording()
 
