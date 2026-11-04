@@ -32,7 +32,8 @@
 
 - [x] 3.1 Run `uv run scripts/check.py` (through the commit) and confirm it passes, and that no `fake_claude.py` from
   this worktree is left after it.
-- [ ] 3.2 Confirm CI passes on Linux, macOS and Windows once the PR is marked ready. Record the run id here.
+- [x] 3.2 Confirm CI passes on Linux, macOS and Windows once the PR is marked ready. Record the run id here. (Linux,
+  macOS and Windows, Python 3.12 to 3.15: CI run 41822899177 on 851950e)
 
 ## Workflow follow-up
 
