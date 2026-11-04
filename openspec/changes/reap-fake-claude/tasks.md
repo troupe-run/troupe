@@ -25,7 +25,7 @@
 
 ## 3. Integration
 
-- [ ] 3.1 Run `uv run scripts/check.py` (through the commit) and confirm it passes, and that no `fake_claude.py` from
+- [x] 3.1 Run `uv run scripts/check.py` (through the commit) and confirm it passes, and that no `fake_claude.py` from
   this worktree is left after it.
 - [ ] 3.2 Confirm CI passes on Linux, macOS and Windows once the PR is marked ready. Record the run id here.
 
