@@ -62,6 +62,14 @@ failed, was cancelled, timed out, crashed or couldn't start, and the error says 
 run must create or change, and troupe checks them afterwards; `expect: []` says no file has to change. Then troupe
 audits every change the run made against the actor's [effects](#effects), whatever its `expect`.
 
+**Every run is audited, whatever its outcome.** Once a run's runner has ended, troupe audits its changes even when
+the run failed, timed out, was cancelled or crashed, and records what it found with the run's end. A run that had
+already failed keeps the error it failed with; the audit only adds what it found. `troupe status <run>` and
+`troupe logs <run>` show it beside the outcome: each change outside the declaration and the effect it needed, or that
+every change was declared. So before you accept or discard a failed run's changes, you can see whether it also
+changed files it wasn't allowed to. A run whose runner never started has no audit, and if troupe can't read the
+workspace to audit it, it says so, and a run that would otherwise have succeeded fails.
+
 ## Effects
 
 An actor's **effects** say what its runs may change. Each is a list of patterns, relative to the theatre:
@@ -86,8 +94,9 @@ An actor's **effects** say what its runs may change. Each is a list of patterns,
   for deleting and moving.
 - **After each run, troupe audits what changed** in its workspace, as git sees it: added or changed files need
   `write`, removed ones `delete`, and a moved file `move` for both ends. Files git ignores, `.git` and `.troupe/`
-  are left out. A change outside the declaration fails the run, naming each file and the effect it needed. A run in
-  the theatre counts every change made there while it ran, by anyone.
+  are left out. A change outside the declaration fails the run, naming each file and the effect it needed; a run
+  that had already failed keeps its error, and records the audit beside it. A run in the theatre counts every
+  change made there while it ran, by anyone.
 - **Every run gets scratch space:** an empty directory outside the theatre, for temporary files, removed when the
   run ends. Nothing written there needs an effect or reaches the theatre. `RUN_SCRATCH_ROOT` says where it's made
   (by default, your system's temporary directory).

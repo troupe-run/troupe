@@ -24,8 +24,10 @@ Every command but `init` runs in a **theatre**: the nearest directory, from wher
 - **`troupe perform`** runs one actor, as config defines it, and records the run. Progress goes to standard error;
   on success, standard output gets `run <id> succeeded`. It exits by the run's outcome: 0 succeeded, 130 cancelled
   with Ctrl-C, 1 otherwise.
-- **`troupe status`** lists the most recent runs, newest first, or shows one run.
-- **`troupe logs`** shows a run's events in order; `--follow` waits for more until the run ends.
+- **`troupe status`** lists the most recent runs, newest first, or shows one run, with what the audit of its
+  changes found beside its outcome.
+- **`troupe logs`** shows a run's events in order, then its outcome and its audit; `--follow` waits for more until
+  the run ends.
 - **`troupe diff`** shows what a run in its own worktree changed, as git's binary diff, byte for byte, so you can
   pipe it to `git apply`.
 - **`troupe accept`** applies a worktree run's changes to your files, unstaged, all or nothing, then removes its

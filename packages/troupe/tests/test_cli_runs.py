@@ -21,8 +21,9 @@ import pytest
 
 from client_schemas import check
 from gitrepo import Repo
-from runtesting import ADA, ALLOW, INIT, OK, script, theatre, turn
+from runtesting import ADA, ALLOW, INIT, OK, Harness, request, script, theatre, turn
 from storetesting import git_service
+from test_perform_failed_audit import RemovesThenCancels
 from test_run_queries import Child
 from troupe.cli import COMMANDS, commands, main
 from troupe.cli.parser import parse
@@ -31,6 +32,7 @@ from troupe.core.client import messages as m
 from troupe.core.config import aggregate
 from troupe.core.errors import TroupeError
 from troupe.core.exit_codes import ExitCode
+from troupe.core.runners.limits import RunLimits
 
 # troupe.core.runs re-exports perform the function, so the module is reached by name.
 PERFORM = importlib.import_module("troupe.core.runs.perform")
@@ -479,7 +481,10 @@ def test_logs_follow_in_another_process_shows_a_running_runs_events_and_exits_0_
     assert troupe.finish()[0] == 0
     assert follow.returncode == 0, follow.stderr
     assert "turn: assistant: later" in follow.stdout
-    assert follow.stdout.splitlines()[-1] == f"run {run_id}: succeeded"
+    assert follow.stdout.splitlines()[-2:] == [
+        f"run {run_id}: succeeded",
+        "  audit: every change the run made was declared",
+    ]
 
 
 def test_each_ctrl_c_during_perform_announces_cancelling_and_counts_the_presses(
@@ -521,3 +526,100 @@ def test_a_failed_audit_names_the_path_the_effect_and_the_config_set_that_declar
     shown = out + err
     assert "src/a.py added (needs write)" in shown
     assert 'troupe config set actors.tester.effects.write=\'["out/**", "src/a.py"]\'' in shown
+
+
+# Requirement: Status and logs show a run's audit (spec: cli; failed-run-audit design D4). Each run
+# is performed in process, as the perform tests do, and then read through the command line.
+
+
+def _harnessed(repo: Repo, asked: dict[str, Any], harness: Harness | None = None) -> str:
+    result = (harness or Harness(repo)).perform_result(asked)
+    assert result.run is not None
+    return result.run.run_id
+
+
+def test_status_of_a_timed_out_run_shows_the_file_it_added_outside_its_declaration(
+    repo: Repo,
+) -> None:
+    harness = Harness(repo, limits=RunLimits(start_timeout=10.0, cancel_grace=2.0, run_timeout=1.0))
+    write = {"writeFile": {"path": "notes.md", "content": "x\n"}}
+    run_id = _harnessed(repo, request(script(INIT, write, {"hang": True})), harness)
+    code, out, _ = cli("status", run_id)
+    assert code == 0
+    lines = out.splitlines()
+    assert "  outcome: timed-out" in lines
+    assert "  audit: 1 change outside the declaration" in lines
+    assert "    notes.md added (needs write)" in lines
+
+
+def test_logs_of_a_cancelled_run_show_the_file_it_removed_after_its_outcome(repo: Repo) -> None:
+    (repo.path / "README.md").write_bytes(b"read me\n")
+    repo.commit_all("a readme")
+    harness = RemovesThenCancels(repo)
+    run_id = _harnessed(
+        repo, request(script(INIT, {"hang": True}), effects={"write": ["**"]}), harness
+    )
+    code, out, _ = cli("logs", run_id)
+    assert code == 0
+    lines = out.splitlines()
+    end = lines.index(f"run {run_id}: cancelled")
+    assert lines[end + 1 :][:2] == [
+        "  audit: 1 change outside the declaration",
+        "    README.md removed (needs delete)",
+    ]
+
+
+def test_status_of_a_failed_run_whose_changes_were_all_declared_says_so(repo: Repo) -> None:
+    write = {"writeFile": {"path": "out/a.txt", "content": "x\n"}}
+    error = {"event": {"type": "result", "status": "error", "message": "no"}}
+    run_id = _harnessed(repo, request(script(INIT, write, error), effects={"write": ["out/**"]}))
+    code, out, _ = cli("status", run_id)
+    assert code == 0
+    assert "  outcome: failed" in out.splitlines()
+    assert "  audit: every change the run made was declared" in out.splitlines()
+
+
+def test_status_of_a_theatre_run_says_its_audit_counts_every_change_made_there(
+    repo: Repo,
+) -> None:
+    write = {"writeFile": {"path": "notes.md", "content": "x\n"}}
+    error = {"event": {"type": "result", "status": "error", "message": "no"}}
+    run_id = _harnessed(repo, request(script(INIT, write, error)))
+    _, out, _ = cli("status", run_id)
+    assert (
+        "    A run in the theatre counts every change made there while it ran, by anyone."
+        in out.splitlines()
+    )
+
+
+def test_status_of_a_run_whose_runner_never_started_shows_no_audit_line(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(PERFORM, "runner_command", lambda _: ["troupe-no-such-runner"])
+    configure(repo, script(INIT, OK))
+    _, _, err = cli("perform", "tester")
+    run_id = err.split("  run: ")[1].split()[0]
+    _, out, _ = cli("status", run_id)
+    assert "outcome: could-not-start" in out
+    assert "audit" not in out
+
+
+def test_an_audit_that_couldnt_run_is_shown_with_its_error() -> None:
+    lines = render_run(
+        {
+            "runId": "0f8fad5b-d9cb-469f-a165-70867728950e",
+            "actor": "tester",
+            "startedBy": {"kind": "unknown"},
+            "runner": {"requested": "scripted"},
+            "stage": {"name": "local", "effects": "unenforced"},
+            "effectCheck": {"kind": "none"},
+            "workspace": {"kind": "theatre"},
+            "state": "ended",
+            "outcome": "cancelled",
+            "events": 1,
+            "startedAt": "2026-10-13T00:00:00.000Z",
+            "endedAt": "2026-10-13T00:00:01.000Z",
+            "audit": {"error": {"code": "vcs.failed", "problem": "git failed.", "fix": "Look."}},
+        }
+    )
+    assert "  audit couldn't run: vcs.failed: git failed." in lines

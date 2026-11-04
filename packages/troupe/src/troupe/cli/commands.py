@@ -17,7 +17,14 @@ from pathlib import Path
 from typing import Any, TextIO
 
 from troupe.cli.parser import Command
-from troupe.cli.render import render_error, render_event, render_notice, render_run, render_run_line
+from troupe.cli.render import (
+    render_audit,
+    render_error,
+    render_event,
+    render_notice,
+    render_run,
+    render_run_line,
+)
 from troupe.core.client.dispatch import call
 from troupe.core.client.session import CancelSignal, Session
 from troupe.core.errors import TroupeError
@@ -271,6 +278,8 @@ def _run_logs(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> 
             print(render_event(event), file=stdout)
         run = result["run"]
         print(f"run {run['runId']}: {run.get('outcome', run['state'])}", file=stdout)
+        for line in render_audit(run):
+            print(line, file=stdout)
     return ExitCode.CANCELLED if session.cancel.requested else ExitCode.OK
 
 

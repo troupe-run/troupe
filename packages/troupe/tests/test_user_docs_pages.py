@@ -201,7 +201,9 @@ def test_the_claude_code_walkthrough_runs_as_written_with_a_stand_in_claude(
     assert run_id[:8] in out
     code, out, _ = run_line(lines[9].replace("<run>", run_id[:8]), monkeypatch)
     assert code == 0
-    assert out.endswith(f"run {run_id}: succeeded\n"), out
+    assert out.endswith(
+        f"run {run_id}: succeeded\n  audit: every change the run made was declared\n"
+    ), out
 
 
 def test_the_walkthroughs_commit_and_allow_lines_are_the_ones_init_prints(

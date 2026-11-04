@@ -17,8 +17,8 @@ troupe status <run>
 ```
 
 `troupe status` with a run's id, or its first 8 characters, shows the run: its actor, who started it, its runner,
-its stage, its state, its outcome and error, how many events it has, its times, and references to its transcript
-and standard error. Without an id, it lists the most recent runs, newest first.
+its stage, its state, its outcome and error, what the audit of its changes found, how many events it has, its times,
+and references to its transcript and standard error. Without an id, it lists the most recent runs, newest first.
 
 ## What happened, in order?
 
@@ -26,8 +26,8 @@ and standard error. Without an id, it lists the most recent runs, newest first.
 troupe logs <run>
 ```
 
-`troupe logs` shows each of a run's events in order, with when troupe recorded it. Add `--follow` to keep watching
-until the run ends.
+`troupe logs` shows each of a run's events in order, with when troupe recorded it, then the run's outcome and what
+its audit found. Add `--follow` to keep watching until the run ends.
 
 ## The whole record
 
