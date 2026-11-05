@@ -17,6 +17,7 @@ from troupe.cli.commands import _call, _ignore_cancel, _notices
 from troupe.cli.parser import Command
 from troupe.cli.render import render_notice
 from troupe.core.client.session import CancelSignal, Session
+from troupe.core.defaults import RUNTIMES
 from troupe.core.errors import TroupeError
 from troupe.core.exit_codes import ExitCode
 from troupe.core.theatre import THEATRE_DIR
@@ -98,6 +99,22 @@ def _option(entries: list[dict[str, Any]], actor: str, name: str) -> object:
     return None
 
 
+def _value(entries: list[dict[str, Any]], actor: str, name: str) -> object:
+    """The value the audition's change set for ``actors.<actor>.<name>``, or None."""
+    for entry in entries:
+        if entry.get("path") == ["actors", actor, name]:
+            return entry.get("after")
+    return None
+
+
+def _key_variable(runtime: object) -> str | None:
+    """The variable a built-in runtime's key is read from, or None when it has none."""
+    built_in = RUNTIMES.get(runtime) if isinstance(runtime, str) else None
+    credential = None if built_in is None else built_in.get("credential")
+    env = credential.get("env") if isinstance(credential, dict) else None
+    return env if isinstance(env, str) else None
+
+
 def _step_notes(step: dict[str, Any], entries: list[dict[str, Any]]) -> list[str]:
     """What a person should know about one step, after its commands. ``entries`` are the audition's
     config changes, which say what the step's actor runs with."""
@@ -118,6 +135,19 @@ def _step_notes(step: dict[str, Any], entries: list[dict[str, Any]]) -> list[str
             f"Ollama must be running, with its model pulled: ollama pull {model}"
             if isinstance(model, str)
             else "Ollama must be running, with the actor's model pulled."
+        )
+    if step["runner"] == "openai":
+        runtime = _value(entries, step["actor"], "runtime")
+        variable = _key_variable(runtime)
+        tokens = _option(entries, step["actor"], "maxTotalTokens")
+        notes.append(
+            (f"Set {variable} to your API key for the {runtime} runtime. " if variable else "")
+            + "A run costs money"
+            + (
+                f", within the actor's budget of {tokens:,} tokens."
+                if isinstance(tokens, int)
+                else "."
+            )
         )
     notes.append(
         "The run works in its own worktree: see what it did with troupe diff, and keep it with "

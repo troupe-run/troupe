@@ -12,7 +12,7 @@ name of the environment variable the key is in (`credential.env`). Never the key
 
 Today the scripted runner is the only one that takes a runtime, for troupe's own tests. The Ollama runner still takes
 its endpoint and model in its own options, and moves to the `ollama` runtime next
-([#289](https://github.com/troupe-run/troupe/issues/289)). The OpenAI-style runner uses runtimes when it arrives.
+([#289](https://github.com/troupe-run/troupe/issues/289)). The OpenAI runner uses runtimes when it arrives.
 
 ## The runtimes troupe knows
 

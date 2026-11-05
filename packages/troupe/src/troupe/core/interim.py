@@ -81,6 +81,22 @@ CLAUDE_CODE_ENVIRONMENT: tuple[str, ...] = (
 runner with only what it is given (claude-code-runner design D8)."""
 
 
+OPENAI_ENVIRONMENT: tuple[str, ...] = (
+    # Networks behind a proxy.
+    "HTTPS_PROXY",
+    "HTTP_PROXY",
+    "NO_PROXY",
+    "https_proxy",
+    "http_proxy",
+    "no_proxy",
+    # Certificates a service's TLS is signed with, where Python's own store doesn't have them.
+    "SSL_CERT_FILE",
+    "SSL_CERT_DIR",
+)
+"""What the OpenAI runner needs to reach a service, and nothing more: no credential, which
+reaches it only as TROUPE_RUNTIME_CREDENTIAL, from its runtime (openai-style-runner design D14)."""
+
+
 RUNNERS: dict[str, Runner] = {
     "claude-code": Runner(
         command=(sys.executable, "-m", "troupe_runner_claude_code"),
@@ -92,6 +108,12 @@ RUNNERS: dict[str, Runner] = {
         package="troupe_runner_ollama",
         # Nothing: the runner reads no variable, not even OLLAMA_HOST, since its endpoint is an
         # option (local-model-runner design D10).
+    ),
+    "openai": Runner(
+        command=(sys.executable, "-m", "troupe_runner_openai"),
+        package="troupe_runner_openai",
+        environment=OPENAI_ENVIRONMENT,
+        runtime="required",
     ),
     "scripted": Runner(
         command=(sys.executable, "-m", "troupe_runner_scripted"),

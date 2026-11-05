@@ -1,0 +1,23 @@
+[project]
+name = "troupe-runner-openai"
+version = "0.0.0"
+description = "An actor runner for troupe that drives any OpenAI-style Chat Completions service with troupe's own tool loop."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.12,<3.16"
+# The plugin SDK only, for the runner contract's types and the file tools (spec: plugin-sdk). A plugin imports nothing
+# else of troupe's; it speaks the runner contract. HTTP is the standard library's (openai-style-runner design D3).
+# Bare, like an adapter's dependency on troupe: the bundle pins it (runner-sdk D12).
+dependencies = ["troupe-plugin-sdk"]
+
+[project.urls]
+Homepage = "https://troupe.run"
+Repository = "https://github.com/troupe-run/troupe"
+
+[project.scripts]
+troupe-runner-openai = "troupe_runner_openai.runner:main"
+
+[build-system]
+requires = ["uv_build>=0.13.5,<0.14"]
+build-backend = "uv_build"

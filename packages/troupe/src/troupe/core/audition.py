@@ -55,6 +55,15 @@ OLLAMA_AUDITION_MODEL = "qwen3.5:4b"
 """The Ollama example's model: it calls tools and thinks, is about 3.4 GB, and runs on a laptop
 (local-model-runner design D13). Named here alone, so changing it is one line."""
 
+OPENAI_AUDITION_MODEL = "gpt-6-luna"
+"""The OpenAI example's model: OpenAI's cheapest current model, which calls tools over the Responses
+API at its default reasoning (#290's probe, 2026-11-05). Named here alone, so changing it is one
+line."""
+
+OPENAI_AUDITION_LIMITS = {"maxTurns": 10, "maxTotalTokens": 100_000}
+"""The OpenAI example's limits: enough to read a few files and write one, on a small budget
+(owner, 2026-11-05; openai-style-runner design D7)."""
+
 SCRIPTED_CONTENT = (
     "# Audition\n\nWritten by troupe's scripted runner, which plays a script instead of running an "
     "agent. Swap the runner for claude-code to run a real one.\n"
@@ -114,6 +123,20 @@ def _ollama() -> dict[str, Any]:
     }
 
 
+def _openai() -> dict[str, Any]:
+    # Like the Claude Code example: it may write any file in its worktree, and no file has to
+    # change. Its service is the built-in openai runtime, so its key is OPENAI_API_KEY's.
+    return {
+        "runner": "openai",
+        "runtime": "openai",
+        "model": OPENAI_AUDITION_MODEL,
+        "options": dict(OPENAI_AUDITION_LIMITS),
+        "effects": {key: list(value) for key, value in CLAUDE_CODE_EFFECTS.items()},
+        "expect": [],
+        "character": CHARACTER,
+    }
+
+
 def _scripted() -> dict[str, Any]:
     runner = {"name": "scripted", "version": version(interim.RUNNERS["scripted"].package)}
     steps: Sequence[Mapping[str, Any]] = (
@@ -134,6 +157,7 @@ def _scripted() -> dict[str, Any]:
 AUDITIONS: Mapping[str, Callable[[], dict[str, Any]]] = {
     "claude-code": _claude_code,
     "ollama": _ollama,
+    "openai": _openai,
     "scripted": _scripted,
 }
 """Each runner's example actor, by the runner's name."""

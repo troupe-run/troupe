@@ -12,7 +12,7 @@ types, checked against those schemas, and core uses the same ones. A runner in a
 troupe ships three runners: the [scripted runner](../plugins/runner-scripted/README.md), which tests use to produce
 every outcome on demand, the [Claude Code runner](../plugins/runner-claude-code/README.md), and the
 [Ollama runner](../plugins/runner-ollama/README.md), which drives a local model through Ollama's own API with troupe's
-own tool loop (decision [#16](https://github.com/troupe-run/troupe/issues/16)). An OpenAI-style runner follows
+own tool loop (decision [#16](https://github.com/troupe-run/troupe/issues/16)). An OpenAI runner follows
 ([#162](https://github.com/troupe-run/troupe/issues/162)).
 
 ## The contract

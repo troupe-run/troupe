@@ -69,7 +69,7 @@ tests = [
     "packages/troupe-vcs-git/tests/**",
     "plugins/runner-claude-code/tests/**",
     "plugins/runner-ollama/tests/**",
-    "plugins/runner-openai-chat/tests/**",
+    "plugins/runner-openai/tests/**",
     "plugins/runner-scripted/tests/**",
     "scripts/tests/**",
     "scripts/tests/workspace/**",
@@ -190,21 +190,21 @@ tests = [
 
 # Started as a subprocess by the core suite (the conformance and perform tests) against a fake endpoint. Reached through
 # the bundle by its tests (scripts/tests/workspace).
-[scopes.runner_openai_chat]
+[scopes.runner_openai]
 paths = [
-    "plugins/runner-openai-chat/src/**",
-    "plugins/runner-openai-chat/tests/**",
-    "plugins/runner-openai-chat/fixtures/**",
-    "plugins/runner-openai-chat/tools/**",
-    "plugins/runner-openai-chat/README.md",
-    "plugins/runner-openai-chat/LICENSE",
+    "plugins/runner-openai/src/**",
+    "plugins/runner-openai/tests/**",
+    "plugins/runner-openai/fixtures/**",
+    "plugins/runner-openai/tools/**",
+    "plugins/runner-openai/README.md",
+    "plugins/runner-openai/LICENSE",
 ]
 tests = [
     "packages/troupe/tests/**",
     "packages/troupe-artifacts-local/tests/**",
     "packages/troupe-plugin-sdk/tests/**",
     "packages/troupe-store-text/tests/**",
-    "plugins/runner-openai-chat/tests/**",
+    "plugins/runner-openai/tests/**",
     "scripts/tests/workspace/**",
 ]
 
