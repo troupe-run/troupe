@@ -214,6 +214,28 @@ def test_the_ollama_actor_has_only_a_model_write_effects_no_expect_and_the_chara
     assert (repo.path / ".troupe" / "actors" / "lead.md").read_text(encoding="utf-8").strip()
 
 
+# Requirement: The OpenAI audition can edit files on a small budget (spec: config;
+# openai-style-runner design D14)
+
+
+def test_the_openai_actor_names_its_runtime_and_model_with_small_limits_and_write_effects(
+    repo: Repo,
+) -> None:
+    _init(repo.path, _env(repo), audition={"runner": "openai"})
+    lead = read(git_service(repo)).config["actors"]["lead"]
+    assert lead == {
+        "runner": "openai",
+        "runtime": "openai",
+        "model": auditions.OPENAI_AUDITION_MODEL,
+        "options": {"maxTurns": 10, "maxTotalTokens": 100_000},
+        "effects": {"write": ["**"]},
+        "expect": [],
+        "character": auditions.CHARACTER,
+    }
+    assert "workspace" not in lead
+    assert (repo.path / ".troupe" / "actors" / "lead.md").read_text(encoding="utf-8").strip()
+
+
 # Requirement: The Claude Code audition can edit files on a small budget (spec: config)
 
 
@@ -284,7 +306,7 @@ def test_an_unknown_runner_is_refused_naming_the_known_ones_and_nothing_is_made(
     error = _refused(repo.path, _env(repo), audition={"runner": "gemini"})
     assert error.code == "runner.unknown"
     assert "gemini" in error.problem
-    assert error.details["known"] == ["claude-code", "ollama", "scripted"]
+    assert error.details["known"] == ["claude-code", "ollama", "openai", "scripted"]
     assert not (repo.path / ".troupe").exists()
 
 

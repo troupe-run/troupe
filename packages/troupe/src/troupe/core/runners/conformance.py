@@ -2,7 +2,10 @@
 
 Each check starts the runner afresh. ``options`` are the runner's own run/start options for a short
 run that succeeds, so the checks work for runners whose behaviour can't be scripted (Claude Code is
-given a cheap prompt). A check passes or fails with a problem naming what the runner did.
+given a cheap prompt). A runner that requires a runtime is given one, ``runtime``, in every
+run/start; when it has a credential, the command's environment holds it as
+TROUPE_RUNTIME_CREDENTIAL, as perform's does, and ``credential`` is that value, masked in the whole
+run as perform masks it. A check passes or fails with a problem naming what the runner did.
 """
 
 import asyncio
@@ -48,9 +51,15 @@ class _Failed(Exception):  # noqa: N818 - a check's verdict, not a Python failur
 class _Driver:
     """Talks to a runner directly, for checks the run host would never let happen."""
 
-    def __init__(self, child: processes.ChildProcess, limits: RunLimits) -> None:
+    def __init__(
+        self,
+        child: processes.ChildProcess,
+        limits: RunLimits,
+        runtime: p.RunStartRuntime | None = None,
+    ) -> None:
         self.child = child
         self.limits = limits
+        self.runtime = runtime
         self.next_id = 1
         self.scratches: list[Path] = []
 
@@ -107,12 +116,16 @@ class _Driver:
             effects=p.READ_ONLY_DECLARATION,
             scratch=str(scratch),
             character=character,
+            runtime=self.runtime,
         )
         return await self.answer(await self.send("run/start", params))
 
 
 async def _with_runner(
-    command: RunnerCommand, limits: RunLimits, body: Callable[[_Driver], Awaitable[None]]
+    command: RunnerCommand,
+    limits: RunLimits,
+    body: Callable[[_Driver], Awaitable[None]],
+    runtime: p.RunStartRuntime | None = None,
 ) -> None:
     child = await processes.start(
         command.argv,
@@ -121,7 +134,7 @@ async def _with_runner(
         line_limit=limits.max_message_bytes,
         search_path=command.search_path,
     )
-    driver = _Driver(child, limits)
+    driver = _Driver(child, limits, runtime)
     try:
         await body(driver)
     finally:
@@ -144,6 +157,8 @@ async def check_runner(
     *,
     workspace: Path,
     limits: RunLimits | None = None,
+    runtime: p.RunStartRuntime | None = None,
+    credential: str | None = None,
 ) -> list[CheckResult]:
     """Run every conformance check against the runner ``command``."""
     limits = limits or RunLimits(run_timeout=120.0)
@@ -227,7 +242,7 @@ async def check_runner(
     ]
     for name, body in checks:
         try:
-            await _with_runner(command, limits, body)
+            await _with_runner(command, limits, body, runtime)
         except (_Failed, TimeoutError, OSError) as failure:
             problem = str(failure) or f"it didn't answer within {limits.start_timeout:g}s"
             results.append(CheckResult(name, False, problem))
@@ -236,7 +251,14 @@ async def check_runner(
 
     outcome = await run_actor(
         command,
-        RunRequest(str(uuid.uuid4()), "conformance check", workspace, options),
+        RunRequest(
+            str(uuid.uuid4()),
+            "conformance check",
+            workspace,
+            options,
+            runtime=runtime,
+            credential=credential,
+        ),
         store=MemoryArtifactStore(),
         effect=NoEffectExpected(),
         audit=NoAudit(),

@@ -215,6 +215,25 @@ def test_the_ollama_audition_says_ollama_must_run_and_names_ollama_pull_with_its
     )
 
 
+def test_the_openai_audition_says_which_key_to_set_and_that_a_run_costs_money(
+    repo: Repo,
+) -> None:
+    # Spec: config, "What init prints for it"; cli, "The OpenAI runner".
+    code, out, _ = cli("init", "--audition", "--runner", "openai")
+    assert code == ExitCode.OK
+    assert "Defined the actor lead, with the openai runner." in out
+    lines = _next(out)
+    assert (
+        "   # Set OPENAI_API_KEY to your API key for the openai runtime. A run costs money, "
+        "within the actor's budget of 100,000 tokens." in lines
+    )
+    assert "Claude Code must be" not in out
+    # The file names the runner. Its runtime and model are in config (checked in test_init.py);
+    # the file leaves them out until #288.
+    lead = (repo.path / ".troupe" / "actors" / "lead.yaml").read_text(encoding="utf-8")
+    assert "runner: openai" in lead
+
+
 # Requirement: Init's audition runner is named with --runner
 
 
@@ -233,7 +252,7 @@ def test_an_unknown_runner_names_the_runners_troupe_has_and_makes_nothing(repo: 
     code, _, err = cli("init", "--audition", "--runner", "gemini")
     assert code == ExitCode.FAILURE
     assert "gemini" in err
-    assert "claude-code, ollama, scripted" in err
+    assert "claude-code, ollama, openai, scripted" in err
     assert not (repo.path / ".troupe").exists()
 
 

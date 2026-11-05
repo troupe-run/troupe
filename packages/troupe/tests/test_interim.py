@@ -52,6 +52,30 @@ def test_an_unknown_runner_is_refused_naming_every_runner_troupe_ships() -> None
         runner_command("codex")
     assert caught.value.details == {
         "runner": "codex",
-        "known": ["claude-code", "ollama", "scripted"],
+        "known": ["claude-code", "ollama", "openai", "scripted"],
     }
-    assert "claude-code, ollama, scripted" in caught.value.fix
+    assert "claude-code, ollama, openai, scripted" in caught.value.fix
+
+
+def test_openai_resolves_to_its_module_requiring_a_runtime_and_naming_no_credential() -> None:
+    assert list(runner_command("openai"))[1:] == ["-m", "troupe_runner_openai"]
+    assert RUNNERS["openai"].runtime == "required"
+    assert set(RUNNERS["openai"].environment) == {
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "NO_PROXY",
+        "https_proxy",
+        "http_proxy",
+        "no_proxy",
+        "SSL_CERT_FILE",
+        "SSL_CERT_DIR",
+    }
+
+
+def test_what_each_runner_takes_as_a_runtime() -> None:
+    assert {name: runner.runtime for name, runner in RUNNERS.items()} == {
+        "claude-code": "none",
+        "ollama": "none",
+        "openai": "required",
+        "scripted": "optional",
+    }

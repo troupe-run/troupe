@@ -42,10 +42,10 @@ The runners are released on their own, like the other parts, and `troupe-run` sh
 
 - [troupe-runner-claude-code](https://github.com/troupe-run/troupe/blob/main/plugins/runner-claude-code/CHANGELOG.md)
 - [troupe-runner-ollama](https://github.com/troupe-run/troupe/blob/main/plugins/runner-ollama/CHANGELOG.md)
-- [troupe-runner-openai-chat](https://github.com/troupe-run/troupe/blob/main/plugins/runner-openai-chat/CHANGELOG.md)
+- [troupe-runner-openai](https://github.com/troupe-run/troupe/blob/main/plugins/runner-openai/CHANGELOG.md)
 - [troupe-runner-scripted](https://github.com/troupe-run/troupe/blob/main/plugins/runner-scripted/CHANGELOG.md)
 
-The Ollama and OpenAI-style runners' changelogs start with their first releases.
+The Ollama and OpenAI runners' changelogs start with their first releases.
 
 The plugin SDK, the library the runners and the core share for the runner contract, is released on its own too. Its
 changelog starts with its first release.

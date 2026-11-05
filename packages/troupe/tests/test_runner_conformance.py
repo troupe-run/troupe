@@ -15,9 +15,11 @@ import pytest
 
 import claude_stand_in
 import ollama_stand_in
+import openai_stand_in
 from troupe.core.runners.conformance import CheckResult, check_runner
 from troupe.core.runners.host import RunnerCommand
 from troupe.core.runners.limits import RunLimits
+from troupe_plugin_sdk.runner import RunStartRuntime
 
 SCRIPTED = [sys.executable, "-m", "troupe_runner_scripted"]
 FAKE = Path(__file__).with_name("fake_runner.py")
@@ -164,6 +166,35 @@ def test_the_ollama_runner_passes_every_check_with_a_stand_in_ollama(tmp_path: P
             {},
         )
     assert {name: r.problem for name, r in results.items() if not r.passed} == {}
+    assert len(results) == 8
+
+
+def test_the_openai_style_runner_passes_every_check_given_a_runtime_naming_a_stand_in(
+    tmp_path: Path,
+) -> None:
+    # Spec: openai-runner, "The runner conforms to the contract" (openai-style-runner 7.2).
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    key = "sk-conformance-0123456789"
+    with openai_stand_in.serving([openai_stand_in.text_reply("Done.")] * 20) as fake:
+        runtime = RunStartRuntime("test", fake.endpoint, "fake-model", credential=True)
+        results = asyncio.run(
+            check_runner(
+                RunnerCommand(
+                    [sys.executable, "-m", "troupe_runner_openai"],
+                    cwd=workspace,
+                    env={"TROUPE_RUNTIME_CREDENTIAL": key},
+                ),
+                openai_stand_in.TEST_LIMITS,
+                workspace=workspace,
+                limits=RunLimits(start_timeout=10.0, cancel_grace=10.0, run_timeout=30.0),
+                runtime=runtime,
+                credential=key,
+            )
+        )
+        assert fake.requests
+        assert {r.headers["authorization"] for r in fake.requests} == {f"Bearer {key}"}
+    assert {r.name: r.problem for r in results if not r.passed} == {}
     assert len(results) == 8
 
 

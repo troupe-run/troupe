@@ -1,0 +1,231 @@
+"""One exchange with the service: a request, its retries, and the reply (openai-style-runner design
+D8, D10).
+
+``exchange`` sends a request, reads its streamed response into a reply, and retries what retrying
+can fix: a rate limit (429), a server error (5xx), a network error, a timeout and a broken stream.
+Each retry is reported through ``on_retry`` before its delay. What retrying can't fix (a refused
+credential, quota, a context-length error, any other client error, a redirect, a wait longer than
+the cap, or attempts running out) raises ExchangeFailedError, with the message the run's result
+carries.
+
+Every request body, response status and kept header, stream line, error body and dropped stream
+is passed to ``record``, framed as design D10 says, for the transcript. Masking the credential is
+the runner's: it masks everything it sends.
+"""
+
+import email.utils
+import json
+import math
+import time
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any, Literal
+
+from troupe_runner_openai.defaults import (
+    MAX_ATTEMPTS,
+    RETRY_BASE_DELAY_SECONDS,
+    RETRY_MAX_DELAY_SECONDS,
+    SUMMARY_MAX_BYTES,
+    TRANSCRIPT_HEADER_PREFIXES,
+    TRANSCRIPT_HEADERS,
+)
+from troupe_runner_openai.service import (
+    AbortedError,
+    Call,
+    Endpoint,
+    NetworkError,
+    StatusError,
+)
+from troupe_runner_openai.stream import Reply, StreamError, StreamParser
+
+RetryReason = Literal["rate-limit", "server", "network"]
+
+
+class ExchangeFailedError(Exception):
+    """The exchange failed in a way retrying can't fix. ``message`` is the result's message."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
+
+
+@dataclass(frozen=True)
+class Retry:
+    """A retry about to happen: the attempt that failed, the delay before the next, and why."""
+
+    attempt: int
+    max_attempts: int
+    delay_seconds: float
+    reason: RetryReason
+    message: str
+
+
+@dataclass(frozen=True)
+class _Retryable:
+    reason: RetryReason
+    message: str
+    wait: float | None = None
+    """The delay the service asked for, in seconds, or None when it didn't ask."""
+
+
+Record = Callable[[dict[str, Any]], None]
+Wait = Callable[[float], bool]
+"""Wait up to the given seconds; true if the wait was cut short because the run is stopping."""
+
+
+def _cut(text: str, limit: int = SUMMARY_MAX_BYTES) -> str:
+    data = text.encode("utf-8")
+    if len(data) <= limit:
+        return text
+    return data[:limit].decode("utf-8", "ignore") + f"… ({len(data) - limit} bytes left out)"
+
+
+def _service_error(body: bytes) -> tuple[str, str | None]:
+    """The service's own message and error code, from a body in OpenAI's shape, or the body as
+    text when it isn't that shape."""
+    text = body.decode("utf-8", "replace").strip()
+    try:
+        data = json.loads(text)
+    except ValueError:
+        return _cut(text) or "(no message)", None
+    error = data.get("error") if isinstance(data, dict) else None
+    if isinstance(error, dict):
+        message = error.get("message")
+        codes = [error.get("code"), error.get("type")]
+        code = next((c for c in codes if isinstance(c, str) and c), None)
+        return _cut(message) if isinstance(message, str) and message else _cut(text), code
+    if isinstance(error, str):
+        return _cut(error), None
+    return _cut(text) or "(no message)", None
+
+
+def retry_after(value: str | None, now: float | None = None) -> float | None:
+    """A Retry-After header's delay in seconds, from seconds or an HTTP date, or None when there's
+    none or it can't be read."""
+    if value is None:
+        return None
+    value = value.strip()
+    try:
+        seconds = float(value)
+    except ValueError:
+        try:
+            when = email.utils.parsedate_to_datetime(value)
+        except (TypeError, ValueError):
+            return None
+        seconds = when.timestamp() - (time.time() if now is None else now)
+    if not math.isfinite(seconds):
+        return None
+    return max(0.0, seconds)
+
+
+def classify(error: StatusError, url: str = "") -> _Retryable:
+    """A status the exchange may retry, as a _Retryable. Raises ExchangeFailedError for one it
+    mustn't."""
+    status = error.status
+    message, code = _service_error(error.body)
+    said = f"HTTP {status}: {message}"
+    if 300 <= status < 400:
+        location = error.headers.get("location", "(no Location)")
+        raise ExchangeFailedError(
+            f"The service redirected the request (HTTP {status}) to {location}. troupe never "
+            "follows a redirect, so the credential and the conversation go only where the "
+            "runtime names: point the runtime's endpoint at the service itself."
+        )
+    if status in (401, 403):
+        raise ExchangeFailedError(
+            f"The service refused the credential (HTTP {status}): {message} Check the key the "
+            "actor's runtime names, and that it's allowed to use this model."
+        )
+    if status == 429 and code == "insufficient_quota":
+        raise ExchangeFailedError(f"The account is out of quota (HTTP 429): {message}")
+    if status == 429:
+        return _Retryable("rate-limit", said, retry_after(error.headers.get("retry-after")))
+    if status == 400 and code == "context_length_exceeded":
+        raise ExchangeFailedError(
+            f"The conversation is longer than the model's context (HTTP 400): {message} Give the "
+            "actor a smaller task, or a runtime whose model has a longer context."
+        )
+    if status == 404 and code is None:
+        raise ExchangeFailedError(
+            f"Nothing answered at {url or 'the endpoint'} (HTTP 404): {message} The runtime's "
+            "endpoint must be the base URL its Chat Completions API is served under, often ending "
+            "in /v1, such as http://127.0.0.1:11434/v1 for Ollama."
+        )
+    if status >= 500:
+        return _Retryable("server", said, retry_after(error.headers.get("retry-after")))
+    raise ExchangeFailedError(f"The service refused the request (HTTP {status}): {message}")
+
+
+def _kept(headers: dict[str, str]) -> dict[str, str]:
+    return {
+        name: value
+        for name, value in sorted(headers.items())
+        if name in TRANSCRIPT_HEADERS or name.startswith(TRANSCRIPT_HEADER_PREFIXES)
+    }
+
+
+def _attempt(call: Call, record: Record) -> Reply:
+    try:
+        response = call.open()
+    except StatusError as error:
+        record({"kind": "response", "status": error.status, "headers": _kept(error.headers)})
+        record({"kind": "body", "body": error.body.decode("utf-8", "replace")})
+        raise
+    record({"kind": "response", "status": response.status, "headers": _kept(response.headers)})
+    parser = StreamParser()
+    try:
+        for line in response.lines():
+            record({"kind": "stream", "line": line})
+            if parser.feed(line):
+                break
+        return parser.reply()
+    finally:
+        response.close()
+
+
+def exchange(
+    endpoint: Endpoint,
+    body: bytes,
+    credential: str | None,
+    on_retry: Callable[[Retry], None],
+    record: Record,
+    wait: Wait,
+    make_call: Callable[[Endpoint, bytes, str | None], Call] = Call,
+    on_call: Callable[[Call | None], None] = lambda _: None,
+    max_attempts: int = MAX_ATTEMPTS,
+    base_delay: float = RETRY_BASE_DELAY_SECONDS,
+    max_delay: float = RETRY_MAX_DELAY_SECONDS,
+) -> Reply:
+    """Send ``body`` and return the reply, retrying as the module docstring says. ``on_call`` is
+    given each call as it starts, and None when it's over, so another thread can abort it. Raises
+    ExchangeFailedError, or AbortedError when the run is stopping."""
+    record({"kind": "request", "url": endpoint.chat_url, "body": body.decode("utf-8")})
+    for attempt in range(1, max_attempts + 1):
+        call = make_call(endpoint, body, credential)
+        on_call(call)
+        try:
+            return _attempt(call, record)
+        except StatusError as error:
+            retryable = classify(error, endpoint.chat_url)
+        except (NetworkError, StreamError) as error:
+            retryable = _Retryable("network", str(error))
+            record({"kind": "dropped", "reason": retryable.message})
+        finally:
+            on_call(None)
+        if attempt == max_attempts:
+            raise ExchangeFailedError(f"{retryable.message} Gave up after {max_attempts} attempts.")
+        delay = min(base_delay * 2 ** (attempt - 1), max_delay)
+        if retryable.wait is not None:
+            if retryable.wait > max_delay:
+                raise ExchangeFailedError(
+                    f"The service asked to wait {retryable.wait:g} seconds before retrying "
+                    f"({retryable.message}), longer than the runner waits ({max_delay:g} seconds)."
+                )
+            delay = retryable.wait
+        on_retry(Retry(attempt, max_attempts, delay, retryable.reason, retryable.message))
+        if wait(delay):
+            raise AbortedError
+    raise AssertionError("unreachable: the last attempt returns or raises")  # pragma: no cover
+
+
+__all__ = ["ExchangeFailedError", "Retry", "RetryReason", "classify", "exchange", "retry_after"]
