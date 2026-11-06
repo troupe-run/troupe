@@ -1,0 +1,34 @@
+{
+  "requests": 1,
+  "events": [
+    {
+      "type": "init",
+      "seq": 0,
+      "runner": {
+        "name": "openai",
+        "version": "0.0.0"
+      },
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "Delete",
+        "Move"
+      ],
+      "engine": {
+        "name": "responses",
+        "model": "gpt-6-luna"
+      },
+      "effects": "checked"
+    },
+    {
+      "type": "result",
+      "seq": 1,
+      "status": "error",
+      "message": "The service refused the credential (HTTP 401): Incorrect API key provided: [credential]. You can find your API key at https://platform.openai.com/account/api-keys. Check the key the actor's runtime names, and that it's allowed to use this model.",
+      "turns": 0
+    }
+  ]
+}

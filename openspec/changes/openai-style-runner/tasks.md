@@ -109,18 +109,18 @@ note; they're ticked again when their Responses version passes.
 
 ## 7. Fixtures, the capture tool and the credential scan (design D13)
 
-- [ ] 7.1 Write `tools/capture_openai.py` (records a run's responses against an endpoint, writes provenance, and
+- [x] 7.1 Write `tools/capture_openai.py` (records a run's responses against an endpoint, writes provenance, and
   scrubs the credential and the host's home path). Make the two recordings of D15 fixtures, with their provenance:
   OpenAI's two-turn run (`gpt-6-luna`, the owner's working key) and local Ollama's (no key). Capture a rejected
   credential from OpenAI with an invalid key. Verify: each fixture's provenance says which key was used, and none
   holds a credential.
-- [ ] 7.2 Build the rate-limit, server-error, failed-response, incomplete-response and refusal fixtures from the
+- [x] 7.2 Build the rate-limit, server-error, failed-response, incomplete-response and refusal fixtures from the
   recorded shapes and OpenAI's documented ones, and the broken stream from a recorded success, each provenance naming
   its source. Verify: the provenance of each says recorded, derived or built.
-- [ ] 7.3 Write each fixture's `expected.json` and the fixture tests: replay through the fake endpoint and match the
+- [x] 7.3 Write each fixture's `expected.json` and the fixture tests: replay through the fake endpoint and match the
   events and outcome; the list of required fixtures; and the secret scan. Verify: the fixture tests pass, and a
   planted `sk-` string in a scratch copy of a fixture fails the scan, naming the fixture and line.
-- [ ] 7.4 Extend the canary test to every fixture: each run with `sk-canary-0123456789`, every byte of the runner's
+- [x] 7.4 Extend the canary test to every fixture: each run with `sk-canary-0123456789`, every byte of the runner's
   stdout and stderr scanned for it and its masked forms. Verify: it passes, and fails when masking is switched off in
   a scratch edit.
 
@@ -131,10 +131,10 @@ note; they're ticked again when their Responses version passes.
   perform tests (`HTTPS_PROXY` and `SSL_CERT_FILE` reach the runner, the key reaches it only as
   `TROUPE_RUNTIME_CREDENTIAL` and `OPENAI_API_KEY` doesn't, `codex` is refused naming all four runners, and an
   `openai` actor naming no runtime is refused by config). (Built as `openai-chat`, uncommitted; renamed in 6.1.)
-- [ ] 8.2 Let the conformance suite give a runner a runtime and its credential, and run it against the runner with a
+- [x] 8.2 Let the conformance suite give a runner a runtime and its credential, and run it against the runner with a
   runtime naming the fake endpoint, as a test in `packages/troupe/tests/test_runner_conformance.py`. Verify: every
   check passes. (Built, uncommitted.)
-- [ ] 8.3 Write a perform test that runs an `openai` actor end to end against the fake endpoint in a worktree,
+- [x] 8.3 Write a perform test that runs an `openai` actor end to end against the fake endpoint in a worktree,
   writing a declared file. Verify: the outcome is `succeeded`, `troupe logs` shows its events, and `troupe diff`
   shows the file. (Built for Chat Completions, uncommitted.)
 - [x] 8.4 Add the OpenAI audition (D14, the `config` and `cli` deltas): `OPENAI_AUDITION_MODEL` (`gpt-6-luna`) in one
@@ -142,7 +142,7 @@ note; they're ticked again when their Responses version passes.
   100,000, `effects.write: ["**"]`, `expect: []` and the character, and `init`'s note on `OPENAI_API_KEY` and cost.
   Verify: the `config` and `cli` deltas' scenarios pass, and the test that every runner troupe knows has a valid
   audition passes for `openai`.
-- [ ] 8.5 Check the `troupe-run` bundle includes the runner, respecting #262's check. Verify: `uv run pytest
+- [x] 8.5 Check the `troupe-run` bundle includes the runner, respecting #262's check. Verify: `uv run pytest
   scripts/tests` passes, including the release config tests.
 
 ## 9. Docs

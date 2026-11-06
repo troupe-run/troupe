@@ -1,0 +1,10 @@
+{
+  "service": "Ollama 0.40.14, /v1/responses on 127.0.0.1:11434",
+  "model": "qwen3.5:4b",
+  "captured": "2026-11-05",
+  "how": "recorded: tests/data/ollama-responses-loop, a two-turn tool loop sent by hand with store false",
+  "credential": "none: a local server needs none",
+  "workspace": {
+    "notes/todo.txt": "buy milk\nwrite the troupe docs\n"
+  }
+}

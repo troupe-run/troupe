@@ -1,0 +1,34 @@
+{
+  "requests": 1,
+  "events": [
+    {
+      "type": "init",
+      "seq": 0,
+      "runner": {
+        "name": "openai",
+        "version": "0.0.0"
+      },
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "Delete",
+        "Move"
+      ],
+      "engine": {
+        "name": "responses",
+        "model": "gpt-6-luna"
+      },
+      "effects": "checked"
+    },
+    {
+      "type": "result",
+      "seq": 1,
+      "status": "error",
+      "message": "The service failed the response (invalid_prompt: Invalid prompt: your prompt was flagged as potentially violating our usage policy).",
+      "turns": 0
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "requests": 3,
+  "events": [
+    {
+      "type": "init",
+      "seq": 0,
+      "runner": {
+        "name": "openai",
+        "version": "0.0.0"
+      },
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "Delete",
+        "Move"
+      ],
+      "engine": {
+        "name": "responses",
+        "model": "gpt-6-luna"
+      },
+      "effects": "checked"
+    },
+    {
+      "type": "retry",
+      "seq": 1,
+      "attempt": 1,
+      "delayMs": 1000,
+      "reason": "network",
+      "maxAttempts": 5,
+      "message": "The response's stream ended before the service finished it."
+    },
+    {
+      "type": "tool_call",
+      "seq": 2,
+      "callId": "call_NPKm1VnAslnyZfbP0a5BAqMq",
+      "tool": "Read",
+      "inputSummary": "{\"file_path\":\"notes/todo.txt\"}"
+    },
+    {
+      "type": "tool_result",
+      "seq": 3,
+      "callId": "call_NPKm1VnAslnyZfbP0a5BAqMq",
+      "isError": false,
+      "outputSummary": "1\tbuy milk\n2\twrite the troupe docs",
+      "outputBytes": 34
+    },
+    {
+      "type": "turn",
+      "seq": 4,
+      "role": "assistant",
+      "text": "Buy milk and write the troupe docs."
+    },
+    {
+      "type": "result",
+      "seq": 5,
+      "status": "ok",
+      "message": "Buy milk and write the troupe docs.",
+      "turns": 2,
+      "usage": {
+        "inputTokens": 192,
+        "outputTokens": 33,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      }
+    }
+  ]
+}

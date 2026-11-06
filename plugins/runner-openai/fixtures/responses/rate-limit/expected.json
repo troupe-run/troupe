@@ -1,0 +1,55 @@
+{
+  "requests": 2,
+  "events": [
+    {
+      "type": "init",
+      "seq": 0,
+      "runner": {
+        "name": "openai",
+        "version": "0.0.0"
+      },
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "Delete",
+        "Move"
+      ],
+      "engine": {
+        "name": "responses",
+        "model": "gpt-6-luna"
+      },
+      "effects": "checked"
+    },
+    {
+      "type": "retry",
+      "seq": 1,
+      "attempt": 1,
+      "delayMs": 0,
+      "reason": "rate-limit",
+      "maxAttempts": 5,
+      "message": "HTTP 429: Rate limit reached for gpt-6-luna on requests per min (RPM): Limit 3, Used 3, Requested 1. Please try again in 0s."
+    },
+    {
+      "type": "turn",
+      "seq": 2,
+      "role": "assistant",
+      "text": "Buy milk and write the troupe docs."
+    },
+    {
+      "type": "result",
+      "seq": 3,
+      "status": "ok",
+      "message": "Buy milk and write the troupe docs.",
+      "turns": 1,
+      "usage": {
+        "inputTokens": 117,
+        "outputTokens": 12,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      }
+    }
+  ]
+}

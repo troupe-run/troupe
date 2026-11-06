@@ -1,0 +1,46 @@
+{
+  "requests": 1,
+  "events": [
+    {
+      "type": "init",
+      "seq": 0,
+      "runner": {
+        "name": "openai",
+        "version": "0.0.0"
+      },
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "Delete",
+        "Move"
+      ],
+      "engine": {
+        "name": "responses",
+        "model": "gpt-6-luna"
+      },
+      "effects": "checked"
+    },
+    {
+      "type": "turn",
+      "seq": 1,
+      "role": "assistant",
+      "text": "Buy milk and"
+    },
+    {
+      "type": "result",
+      "seq": 2,
+      "status": "error",
+      "message": "The response reached the service's output limit before the model finished.",
+      "turns": 1,
+      "usage": {
+        "inputTokens": 117,
+        "outputTokens": 12,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      }
+    }
+  ]
+}
