@@ -86,3 +86,13 @@ def test_no_masked_text_holds_the_credential_whatever_surrounds_it(
 ) -> None:
     masked = Mask(credential)(before + credential + after)
     assert credential not in masked or credential in MASK
+
+
+def test_a_text_cut_inside_the_key_keeps_none_of_its_start() -> None:
+    from troupe_plugin_sdk.events import cut
+    from troupe_runner_openai.exchange import _cut
+
+    text = "a service said " + CANARY + " and more" * 40
+    for limit in range(len("a service said ") + 8, len(text)):
+        for kept in (cut(text, limit + 40), _cut(text, limit), text[:limit]):
+            assert CANARY[:8] not in Mask(CANARY)(kept), (limit, kept)

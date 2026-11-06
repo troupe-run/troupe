@@ -402,3 +402,34 @@ def test_the_events_validate_as_the_contracts_run_events(tmp_path: Path) -> None
     check = validator("run-event.schema.json#/$defs/event")
     for event in [*ran.events, _result(ran)]:
         assert check.is_valid(event), event
+
+
+def test_a_stop_after_one_call_carries_out_none_of_the_rest(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    first = ("c1", "Write", {"file_path": "a.txt", "content": "a"})
+    second = ("c2", "Write", {"file_path": "b.txt", "content": "b"})
+    with FakeEndpoint([tool_reply([first, second])]) as fake:
+        loop = Loop(
+            runtime=Runtime.checked(fake.endpoint, MODEL, None),
+            options=parse_options(TEST_LIMITS),
+            tools=Tools(workspace, Effects(write=("*.txt",))),
+            numbering=EventNumbering(str(uuid.uuid4()), 65536, next_seq=1),
+            send=lambda _: None,
+            record=lambda _: None,
+            wait=lambda _: False,
+            stopping=(workspace / "a.txt").exists,
+        )
+        assert loop.run("Write both.", None) is None
+    assert (workspace / "a.txt").exists()
+    assert not (workspace / "b.txt").exists()
+    assert len(fake.requests) == 1
+
+
+def test_a_last_reply_past_the_budget_ends_the_run_ok_reporting_what_it_used(
+    tmp_path: Path,
+) -> None:
+    ran = run(tmp_path, [text_reply("Done.", 900, 300)], {**TEST_LIMITS, "maxTotalTokens": 1000})
+    result = _result(ran)
+    assert result["status"] == "ok"
+    assert result["usage"]["inputTokens"] + result["usage"]["outputTokens"] == 1200

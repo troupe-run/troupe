@@ -41,9 +41,9 @@ Every command but `init` runs in a **theatre**: the nearest directory, from wher
 A run is named by its full id or by its first 8 or more characters. [Performances and
 runs](../the-company/performances-and-runs.md) describes runs, their states and what is recorded.
 
-**`perform` names an actor, and config says the rest:** its runner (`claude-code` or `scripted`), the
-runner's options, its effect check (`expect`: the files a run must create or change, relative to the theatre's
-root, where `[]` means no check), its character and its workspace. `--direction` says what this run is asked to do.
+**`perform` names an actor, and config says the rest:** its runner (`claude-code`, `ollama`, `openai` or `scripted`),
+the runner's options, its effect check (`expect`: the files a run must create or change, relative to the theatre's root,
+where `[]` means no check), its character and its workspace. `--direction` says what this run is asked to do.
 
 **A run works in its own git worktree** by default, made from your latest commit: your files change only when you
 `troupe accept` it. An actor with `workspace: theatre` works in your files directly instead. See

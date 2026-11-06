@@ -55,6 +55,15 @@ class Runtime:
                 {"where": "runtime.model"},
             )
         credential = credential or None
+        if credential is not None and any(c.isspace() or not c.isprintable() for c in credential):
+            raise RuntimeRefusedError(
+                "openai.malformed-credential",
+                f"The run's credential in {CREDENTIAL_VARIABLE} holds whitespace or a control "
+                "character, such as a line ending left from the file it was read from, so it can't "
+                "go in a request header.",
+                "Set the runtime's key variable to the key alone, with no spaces or line endings.",
+                {"where": CREDENTIAL_VARIABLE},
+            )
         if parsed.is_insecure_for(credential is not None):
             raise RuntimeRefusedError(
                 "openai.insecure-endpoint",

@@ -52,3 +52,19 @@ def test_the_tool_refuses_to_send_a_key_over_plain_http_to_another_host() -> Non
 
 def test_the_tool_never_follows_a_redirect() -> None:
     assert _tool()._NoRedirect().redirect_request() is None
+
+
+def test_the_tool_sends_nothing_to_a_proxy_for_an_endpoint_on_this_machine(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from fake_endpoint import FakeEndpoint, text_reply
+
+    with FakeEndpoint([text_reply("proxied")]) as proxy, FakeEndpoint([text_reply("ok")]) as fake:
+        base = proxy.endpoint.removesuffix("/v1")
+        for name in ("HTTP_PROXY", "http_proxy"):
+            monkeypatch.setenv(name, base)
+        for name in ("NO_PROXY", "no_proxy"):
+            monkeypatch.delenv(name, raising=False)
+        _tool()._post(fake.endpoint, {}, KEY)
+        assert proxy.requests == []
+        assert len(fake.requests) == 1

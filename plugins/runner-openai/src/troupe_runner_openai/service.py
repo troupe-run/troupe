@@ -313,6 +313,9 @@ def _words(error: BaseException) -> str:
 
 
 def _connect_words(endpoint: Endpoint, error: BaseException) -> str:
+    if isinstance(error, ValueError):
+        # Its text can quote a header, credential included: say only that the request was refused.
+        return f"The request to {endpoint.url} couldn't be made: a value in it was refused."
     reason = error.reason if isinstance(error, urllib.error.URLError) else error
     if isinstance(reason, str):
         return f"Couldn't reach {endpoint.url}: {reason.rstrip('.')}."

@@ -11,7 +11,17 @@ from typing import Any
 
 import pytest
 
-from fake_endpoint import FakeEndpoint, Hold, Reply, error_reply, text_reply, tool_reply
+from fake_endpoint import (
+    FakeEndpoint,
+    Hold,
+    Reply,
+    error_reply,
+    event,
+    response,
+    sse,
+    text_reply,
+    tool_reply,
+)
 from openai_harness import (
     CANARY,
     TEST_LIMITS,
@@ -144,6 +154,17 @@ def test_a_credential_the_runtime_doesnt_mention_is_refused_without_its_value(
     assert CANARY not in json.dumps(answer)
 
 
+def test_a_key_read_with_its_line_ending_is_refused_without_any_part_of_it(
+    sessions: list[Session], workspace: Path
+) -> None:
+    with FakeEndpoint() as fake:
+        session = _session(sessions, workspace, credential=CANARY + "\r\n")
+        answer = session.start(fake.endpoint)
+        assert fake.requests == []
+    assert answer["error"]["data"]["code"] == "openai.malformed-credential"
+    assert CANARY[:8] not in json.dumps(answer)
+
+
 def test_a_second_run_start_is_refused_and_the_first_run_goes_on(
     sessions: list[Session], workspace: Path
 ) -> None:
@@ -220,20 +241,32 @@ def test_the_credential_is_nowhere_in_what_the_runner_writes_however_the_run_end
 
 # Stopping
 
+HELD = Reply(
+    lines=sse([event("response.created", response=response([], status="in_progress")), Hold()])
+)
+"""A response the service has started, then holds open: a well-formed first event, then nothing,
+so the runner is still reading it when it's stopped."""
+
+STOPPED_WITHIN = 3.0
+"""Seconds from a stop to the held request's connection closing."""
+
 
 def test_cancel_during_a_held_response_closes_it_and_exits_without_a_result(
     sessions: list[Session], workspace: Path
 ) -> None:
-    with FakeEndpoint([Reply(lines=["data: {}", "", Hold()])]) as fake:
+    with FakeEndpoint([HELD]) as fake:
         session = _session(sessions, workspace)
         session.start(fake.endpoint)
         assert session.message()["params"]["type"] == "init"
         time.sleep(0.3)
+        assert len(fake.requests) == 1
+        assert not fake.wait_for_client_to_close(0), "the request ended before the cancel"
         started = time.monotonic()
         answer = session.request("run/cancel", {"runId": session.run_id})
+        # Closed by the cancel, not by the runner's exit: a runner that only exits takes longer.
+        assert fake.wait_for_client_to_close(STOPPED_WITHIN)
         rest = session.rest()
         code = session.wait()
-        assert fake.wait_for_client_to_close(5)
     assert answer["result"] == {}
     assert time.monotonic() - started < 10
     assert all(e["type"] != "result" for e in _events(rest))
@@ -244,14 +277,16 @@ def test_cancel_during_a_held_response_closes_it_and_exits_without_a_result(
 def test_end_of_input_mid_run_stops_the_request_and_exits(
     sessions: list[Session], workspace: Path
 ) -> None:
-    with FakeEndpoint([Reply(lines=["data: {}", "", Hold()])]) as fake:
+    with FakeEndpoint([HELD]) as fake:
         session = _session(sessions, workspace)
         session.start(fake.endpoint)
         session.message()
         time.sleep(0.3)
+        assert len(fake.requests) == 1
+        assert not fake.wait_for_client_to_close(0), "the request ended before end of input"
         session.close_stdin()
+        assert fake.wait_for_client_to_close(STOPPED_WITHIN)
         assert session.wait() == 0
-        assert fake.wait_for_client_to_close(5)
 
 
 # The test limits

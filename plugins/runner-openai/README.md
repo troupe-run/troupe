@@ -160,6 +160,7 @@ no request is sent:
 | `openai.no-runtime` | `run/start` names no runtime, or one whose endpoint or model can't be used |
 | `openai.insecure-endpoint` | a key, and plain `http` to another machine |
 | `openai.credential-mismatch` | `run/start` and `TROUPE_RUNTIME_CREDENTIAL` disagree about whether there's a key |
+| `openai.malformed-credential` | the key holds whitespace or a control character, such as a line ending from a file |
 
 ## Fixtures
 

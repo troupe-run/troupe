@@ -86,7 +86,8 @@ def _post(base: str, body: dict[str, Any], key: str) -> dict[str, Any]:
     parts = urllib.parse.urlsplit(base)
     if key and parts.scheme != "https" and not _local(parts.hostname or ""):
         raise SystemExit(f"Refusing to send a key over plain http to {base}: use https.")
-    opener = urllib.request.build_opener(_NoRedirect())
+    proxies = urllib.request.ProxyHandler({} if _local(parts.hostname or "") else None)
+    opener = urllib.request.build_opener(proxies, _NoRedirect())
     headers = {"Content-Type": "application/json", "Accept": "text/event-stream"}
     if key:
         headers["Authorization"] = f"Bearer {key}"

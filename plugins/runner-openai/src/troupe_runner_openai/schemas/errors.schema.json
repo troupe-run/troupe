@@ -41,6 +41,15 @@
         }
       }
     }
+,
+    {
+      "description": "The run's credential holds whitespace or a control character, such as a line ending left from the file it was read from, so it can't go in a request header. The problem names the variable, never the value.",
+      "required": ["details"],
+      "properties": {
+        "code": {"const": "openai.malformed-credential"},
+        "details": {"$ref": "#/$defs/where"}
+      }
+    }
   ],
   "$defs": {
     "where": {

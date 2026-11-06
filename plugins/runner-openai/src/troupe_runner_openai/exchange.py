@@ -81,6 +81,11 @@ def _cut(text: str, limit: int = SUMMARY_MAX_BYTES) -> str:
     return data[:limit].decode("utf-8", "ignore") + f"… ({len(data) - limit} bytes left out)"
 
 
+def _sentence(text: str) -> str:
+    """``text`` ending as a sentence, so another can follow it."""
+    return text if text.endswith((".", "!", "?", ")", "]")) else f"{text}."
+
+
 def _service_error(body: bytes) -> tuple[str, str | None]:
     """The service's own message and error code, from a body in OpenAI's shape, or the body as
     text when it isn't that shape."""
@@ -229,15 +234,19 @@ def exchange(
         finally:
             on_call(None)
         if attempt == max_attempts:
-            raise ExchangeFailedError(f"{retryable.message} Gave up after {max_attempts} attempts.")
+            raise ExchangeFailedError(
+                f"{_sentence(retryable.message)} Gave up after {max_attempts} attempts."
+            )
         delay = min(base_delay * 2 ** (attempt - 1), max_delay)
-        if retryable.wait is not None:
-            if retryable.wait > max_delay:
-                raise ExchangeFailedError(
-                    f"The service asked to wait {retryable.wait:g} seconds before retrying "
-                    f"({retryable.message}), longer than the runner waits ({max_delay:g} seconds)."
-                )
-            delay = retryable.wait
+        asked = retryable.wait
+        if asked is not None and asked > max_delay and retryable.reason == "rate-limit":
+            raise ExchangeFailedError(
+                f"The service asked to wait {asked:g} seconds before retrying "
+                f"({retryable.message}), longer than the runner waits ({max_delay:g} seconds)."
+            )
+        if asked is not None:
+            # A server error's wait is capped rather than fatal: the cap is a rate limit's (D8).
+            delay = min(asked, max_delay)
         on_retry(Retry(attempt, max_attempts, delay, retryable.reason, retryable.message))
         if wait(delay):
             raise AbortedError
