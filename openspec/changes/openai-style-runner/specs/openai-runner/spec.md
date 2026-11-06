@@ -122,12 +122,12 @@ reasoning model's earlier reasoning can be sent back.
 
 ### Requirement: The model is offered the SDK's tools
 Each request SHALL offer the model the plugin SDK's tool definitions as Responses function tools, each with its name,
-description and input schema unchanged, and the `init` event SHALL list the same tools.
+description and input schema unchanged and `strict` false, and the `init` event SHALL list the same tools.
 
 #### Scenario: The tools offered
 - **WHEN** the first request is sent
 - **THEN** its `tools` are the SDK's seven tools, `Read`, `Write`, `Edit`, `Glob`, `Grep`, `Delete` and `Move`, in
-  that order, each of type `function` with its `name`, `description` and `parameters`
+  that order, each of type `function` with its `name`, `description`, `parameters` and `strict` false
 
 ### Requirement: The runner applies the effects by checking each call
 The runner SHALL carry out each tool call the model asks for through the plugin SDK, which checks it against the

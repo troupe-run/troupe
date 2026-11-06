@@ -61,7 +61,7 @@ note; they're ticked again when their Responses version passes.
   endpoint show the `Authorization` header only when there's a credential, a 307 not followed (the fake's second host
   gets nothing), and a held-open response closed from another thread within a second. (Its path changes to
   `/responses` in 6.2.)
-- [ ] 4.3 Write the stream reader (D4): server-sent events with `event:` lines and no `[DONE]`, the reply taken from
+- [x] 4.3 Write the stream reader (D4): server-sent events with `event:` lines and no `[DONE]`, the reply taken from
   the final event's response object (`response.completed`, `response.incomplete`, `response.failed`, or an `error`
   event), and a broken stream detected as the spec says. Verify: tests on the recorded OpenAI and Ollama streams, and a
   property test that any split of a recorded stream's bytes into reads gives the same reply. (Built for Chat
@@ -73,17 +73,17 @@ note; they're ticked again when their Responses version passes.
 
 ## 5. The tool loop and the run's events (design D5, D6, D9, D10)
 
-- [ ] 5.1 Write `runner.py`: the handshake, `run/start` (options, runtime, declaration, `Tools`), `init` (name,
+- [x] 5.1 Write `runner.py`: the handshake, `run/start` (options, runtime, declaration, `Tools`), `init` (name,
   version, `engine.name` `responses`, `engine.model`, the tools, `effects` `checked`), and the threads and write lock
   of D5. Verify: a test sees `init` first with those fields, and `run/start` refusals answered before any request
   reaches the fake endpoint. (Built with `engine.name` `chat-completions`; changed in 6.3.)
-- [ ] 5.2 Write the loop (D6): `instructions` and the first `input`, the Responses function tools, `store: false` and
+- [x] 5.2 Write the loop (D6): `instructions` and the first `input`, the Responses function tools, `store: false` and
   `include`, `turn` events, calls carried out in order, the output items sent back unchanged with one
   `function_call_output` per call, the `ok` result, refusals, incomplete and failed responses and unknown statuses, a
   call without a `call_id`, the turn limit and the token budget. Verify: one test per scenario in the spec's loop
   requirements, against the fake endpoint, including a read-only actor's refused `Write`, arguments that aren't JSON,
   and reasoning sent back unchanged. (Built for Chat Completions messages; replaced in 6.3.)
-- [ ] 5.3 Sum usage and cost as D9 says (cache reads and writes apart), and warn when a response has no usage. Verify:
+- [x] 5.3 Sum usage and cost as D9 says (cache reads and writes apart), and warn when a response has no usage. Verify:
   the spec's usage and cost scenarios pass. (Built for Chat Completions' `prompt_tokens`; replaced in 6.3.)
 - [x] 5.4 Send the transcript as D10 frames it, through the masking function. Verify: a test reads a run's transcript
   records back in order, finds no request header in any, and finds a 401's echoed key masked.
@@ -100,11 +100,11 @@ note; they're ticked again when their Responses version passes.
   contracts, release-please's config and manifest, `scripts/check-paths.toml`, the bundle, the changelog page,
   `scripts/tests/workspace/test_plugin_imports.py`, core's stand-in, and the uncommitted core work of 8.1 to 8.3).
   Verify: a search for `openai-chat` and `openai_chat` finds nothing outside `openspec/`, and the full check passes.
-- [ ] 6.2 Replace the stream reader and point requests at `/responses` (4.3): the fake endpoint's helpers build
+- [x] 6.2 Replace the stream reader and point requests at `/responses` (4.3): the fake endpoint's helpers build
   Responses streams (`event:` and `data:` lines, deltas, a final event with the response object), the 404 hint names
   the Responses API, and the recorded OpenAI and Ollama streams (D15, made on 2026-11-05) are tested against. Verify:
   4.3's verification passes, and tick 4.3.
-- [ ] 6.3 Replace the loop's request and continuation, and the usage mapping (5.2, 5.3), and change `init`'s engine to
+- [x] 6.3 Replace the loop's request and continuation, and the usage mapping (5.2, 5.3), and change `init`'s engine to
   `responses` (5.1). Verify: 5.1's, 5.2's and 5.3's verifications pass, and tick them.
 
 ## 7. Fixtures, the capture tool and the credential scan (design D13)

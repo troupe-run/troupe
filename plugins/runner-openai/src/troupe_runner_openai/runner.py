@@ -33,7 +33,7 @@ from troupe_runner_openai.options import OptionsError, parse_options
 from troupe_runner_openai.runtime import Runtime, RuntimeRefusedError, from_run_start
 from troupe_runner_openai.service import Call
 
-ENGINE = "chat-completions"
+ENGINE = "responses"
 """The engine the init event names: the API the runner speaks, whichever service serves it."""
 
 _TROUPE = "troupe"

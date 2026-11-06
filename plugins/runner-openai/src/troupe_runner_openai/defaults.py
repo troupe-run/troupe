@@ -54,6 +54,11 @@ INSTRUCTIONS = (
 """The runner's fixed instructions: the first part of every run's system message, before the
 actor's character (design D6)."""
 
+SERVICE_FAILURE_CODES: tuple[str, ...] = ("server_error",)
+"""The error codes of a failed response or an error event that are the service's own failure, so
+the request is retried as a server failure (design D8). Any other code ends the run, which loses
+nothing; a code is added here when a service is seen to use it."""
+
 STREAM_LINE_MAX_BYTES = 16 * 1024 * 1024
 """The longest one line of a response's stream may be. A longer one counts as a broken stream."""
 

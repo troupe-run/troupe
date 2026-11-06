@@ -13,9 +13,12 @@ from fake_endpoint import (
     FakeEndpoint,
     Pause,
     Reply,
-    chunk,
+    error_event_reply,
     error_reply,
+    event,
+    function_call,
     sse,
+    status_reply,
     text_reply,
     tool_reply,
 )
@@ -74,14 +77,14 @@ def test_a_reply_is_returned_with_the_request_response_and_lines_recorded_in_ord
     assert set(kinds[2:]) == {"stream"}
     assert run.records[0] == {
         "kind": "request",
-        "url": fake.endpoint + "/chat/completions",
+        "url": fake.endpoint + "/responses",
         "body": '{"model": "m"}',
     }
     assert run.records[1]["status"] == 200
-    assert run.records[-2:] == [
-        {"kind": "stream", "line": "data: [DONE]"},
-        {"kind": "stream", "line": ""},
-    ]
+    *_, named, data, blank = run.records
+    assert named == {"kind": "stream", "line": "event: response.completed"}
+    assert data["line"].startswith('data: {"type": "response.completed"')
+    assert blank == {"kind": "stream", "line": ""}
 
 
 def test_only_the_named_response_headers_are_kept_and_no_request_header() -> None:
@@ -152,18 +155,12 @@ def test_a_refused_connection_is_retried_as_network() -> None:
 
 
 def test_a_stream_cut_mid_tool_call_is_dropped_and_retried_as_network() -> None:
-    start = chunk(
-        {
-            "tool_calls": [
-                {"index": 0, "id": "c1", "function": {"name": "Write", "arguments": '{"fi'}}
-            ]
-        }
-    )
-    broken = Reply(lines=[*sse([start], done=False), Cut()])
+    start = event("response.output_item.added", item=function_call("c1", "Write", '{"fi'))
+    broken = Reply(lines=[*sse([start]), Cut()])
     with FakeEndpoint([broken, tool_reply([("c2", "Read", {"file_path": "a"})])]) as fake:
         run = Run(fake)
         reply = run()
-    assert [c.id for c in reply.tool_calls] == ["c2"]
+    assert [c.call_id for c in reply.tool_calls] == ["c2"]
     assert [r.reason for r in run.retries] == ["network"]
     assert any(r["kind"] == "dropped" for r in run.records)
 
@@ -184,7 +181,32 @@ def test_a_stop_during_the_retry_delay_ends_the_exchange() -> None:
     assert len(fake.requests) == 1
 
 
+def test_a_response_the_service_failed_on_its_side_is_retried_as_server() -> None:
+    failed = status_reply("failed", error={"code": "server_error", "message": "boom"})
+    with FakeEndpoint([failed, text_reply("ok")]) as fake:
+        run = Run(fake)
+        assert run().text == "ok"
+    assert [(r.reason, r.message) for r in run.retries] == [
+        ("server", "The service failed the response (server_error: boom)")
+    ]
+
+
+def test_an_error_event_with_the_services_own_code_is_retried_as_server() -> None:
+    with FakeEndpoint([error_event_reply("server_error", "overloaded"), text_reply("ok")]) as fake:
+        run = Run(fake)
+        assert run().text == "ok"
+    assert [r.reason for r in run.retries] == ["server"]
+
+
 # Not retried
+
+
+def test_a_response_failed_for_another_reason_isnt_retried_and_names_the_code() -> None:
+    failed = status_reply("failed", error={"code": "invalid_prompt", "message": "flagged"})
+    with FakeEndpoint([failed]) as fake:
+        message = _failed(Run(fake))
+    assert message == "The service failed the response (invalid_prompt: flagged)."
+    assert len(fake.requests) == 1
 
 
 def test_a_rejected_credential_isnt_retried_and_names_the_services_message() -> None:
@@ -226,7 +248,7 @@ def test_another_client_error_names_its_status_and_message() -> None:
 def test_a_404_without_openais_shape_names_the_url_and_says_what_the_endpoint_must_be() -> None:
     with FakeEndpoint([Reply(404, body=b"404 page not found")]) as fake:
         message = _failed(Run(fake))
-    assert message.startswith(f"Nothing answered at {fake.endpoint}/chat/completions (HTTP 404)")
+    assert message.startswith(f"Nothing answered at {fake.endpoint}/responses (HTTP 404)")
     assert "often ending in /v1" in message
 
 
@@ -236,7 +258,7 @@ def test_a_body_that_isnt_openais_shape_is_quoted_as_text() -> None:
 
 
 def test_a_redirect_names_its_status_and_location_and_isnt_followed() -> None:
-    location = "https://elsewhere.example/v1/chat/completions"
+    location = "https://elsewhere.example/v1/responses"
     with FakeEndpoint([Reply(307, headers=[("Location", location)])]) as fake:
         message = _failed(Run(fake))
     assert "(HTTP 307)" in message

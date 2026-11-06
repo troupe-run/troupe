@@ -26,7 +26,7 @@ from referencing.jsonschema import DRAFT202012
 ROOT = Path(__file__).resolve().parents[3]
 SCHEMAS = ROOT / "protocol" / "schemas"
 RUNNER_SCHEMAS = Path(__file__).resolve().parents[1] / "src" / "troupe_runner_openai" / "schemas"
-FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "chat-completions"
+FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "responses"
 BASE = "https://troupe.run/protocol/runner/"
 RESULTS = {
     "initialize": "initialize.schema.json#/$defs/result",

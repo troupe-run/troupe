@@ -1,6 +1,6 @@
-"""The tool loop, run in-process against the fake endpoint (spec: openai-runner's loop
-requirements; design D6, D7, D9). Every run uses TEST_LIMITS unless a test sets its own and says
-why (design D7)."""
+"""The tool loop over the Responses API, run in-process against the fake endpoint (spec:
+openai-runner's loop requirements; design D6, D7, D9). Every run uses TEST_LIMITS unless a test sets
+its own and says why (design D7)."""
 
 import json
 import uuid
@@ -12,14 +12,18 @@ import pytest
 from fake_endpoint import (
     FakeEndpoint,
     Reply,
-    chunk,
     error_reply,
+    final,
+    message,
+    reasoning,
+    refusal,
     sse,
+    status_reply,
     text_reply,
     tool_reply,
     usage,
 )
-from openai_harness import TEST_LIMITS, check_limits
+from openai_harness import TEST_LIMITS, check_limits, validator
 from troupe_plugin_sdk.effects import READ_ONLY, Effects
 from troupe_plugin_sdk.events import EventNumbering, encoded_size
 from troupe_plugin_sdk.runner import ResultEvent, RunEvent
@@ -30,7 +34,7 @@ from troupe_runner_openai.options import parse_options
 from troupe_runner_openai.runtime import Runtime
 
 MODEL = "fake-model"
-"""The model the fake endpoint's chunks say answered, so a run notes no other model."""
+"""The model the fake endpoint's responses say answered, so a run notes no other model."""
 
 
 class Ran:
@@ -91,52 +95,56 @@ def _result(ran: Ran) -> dict[str, Any]:
     return ran.result.to_data()
 
 
-# The conversation
+GLOB = ("c1", "Glob", {"pattern": "*"})
 
 
-def test_every_request_asks_for_the_runtimes_model(tmp_path: Path) -> None:
-    ran = run(tmp_path, [tool_reply([("c1", "Glob", {"pattern": "*"})]), text_reply("Done.")])
+# The request
+
+
+def test_every_request_goes_to_responses_asking_for_the_runtimes_model(tmp_path: Path) -> None:
+    ran = run(tmp_path, [tool_reply([GLOB]), text_reply("Done.")])
+    assert [r.path for r in ran.fake.requests] == ["/v1/responses", "/v1/responses"]
     assert [b["model"] for b in ran.bodies] == [MODEL, MODEL]
 
 
-def test_the_first_request_is_the_system_message_ending_with_the_character_then_the_direction(
+def test_the_character_follows_the_instructions_and_the_direction_is_the_first_input(
     tmp_path: Path,
 ) -> None:
     ran = run(
         tmp_path, [text_reply("ok")], character="You are terse.", direction="Write out/hello.txt"
     )
-    system, user = ran.bodies[0]["messages"]
-    assert system == {"role": "system", "content": f"{INSTRUCTIONS}\n\nYou are terse."}
-    assert user == {"role": "user", "content": "Write out/hello.txt"}
+    body = ran.bodies[0]
+    assert body["instructions"] == f"{INSTRUCTIONS}\n\nYou are terse."
+    assert body["input"] == [{"role": "user", "content": "Write out/hello.txt"}]
 
 
-def test_without_a_character_the_system_message_is_only_the_instructions(tmp_path: Path) -> None:
-    ran = run(tmp_path, [text_reply("ok")])
-    assert ran.bodies[0]["messages"][0] == {"role": "system", "content": INSTRUCTIONS}
+def test_without_a_character_the_instructions_are_only_the_runners(tmp_path: Path) -> None:
+    assert run(tmp_path, [text_reply("ok")]).bodies[0]["instructions"] == INSTRUCTIONS
 
 
-def test_each_request_offers_the_sdks_seven_tools_as_functions_streamed_with_usage(
+def test_every_request_is_streamed_stored_nowhere_and_asks_for_encrypted_reasoning(
     tmp_path: Path,
 ) -> None:
-    body = run(tmp_path, [text_reply("ok")]).bodies[0]
-    assert [t["function"]["name"] for t in body["tools"]] == [
-        "Read",
-        "Write",
-        "Edit",
-        "Glob",
-        "Grep",
-        "Delete",
-        "Move",
-    ]
-    assert {t["type"] for t in body["tools"]} == {"function"}
+    for body in run(tmp_path, [tool_reply([GLOB]), text_reply("ok")]).bodies:
+        assert body["stream"] is True
+        assert body["store"] is False
+        assert "previous_response_id" not in body
+        assert body["include"] == ["reasoning.encrypted_content"]
+
+
+def test_each_request_offers_the_sdks_seven_tools_as_functions_that_arent_strict(
+    tmp_path: Path,
+) -> None:
+    tools = run(tmp_path, [text_reply("ok")]).bodies[0]["tools"]
+    assert [t["name"] for t in tools] == ["Read", "Write", "Edit", "Glob", "Grep", "Delete", "Move"]
     first = Tools.definitions()[0]
-    assert body["tools"][0]["function"] == {
+    assert tools[0] == {
+        "type": "function",
         "name": first.name,
         "description": first.description,
         "parameters": first.input_schema,
+        "strict": False,
     }
-    assert body["stream"] is True
-    assert body["stream_options"] == {"include_usage": True}
 
 
 # Tool calls
@@ -145,30 +153,28 @@ def test_each_request_offers_the_sdks_seven_tools_as_functions_streamed_with_usa
 def test_a_write_a_read_only_actor_didnt_declare_is_refused_naming_the_effect(
     tmp_path: Path,
 ) -> None:
-    script = [
-        tool_reply([("c1", "Write", {"file_path": "out/hello.txt", "content": "hi"})]),
-        text_reply("I couldn't."),
-    ]
-    ran = run(tmp_path, script)
+    write = ("c1", "Write", {"file_path": "out/hello.txt", "content": "hi"})
+    ran = run(tmp_path, [tool_reply([write]), text_reply("I couldn't.")])
     assert not (tmp_path / "workspace" / "out" / "hello.txt").exists()
     (result,) = ran.of("tool_result")
     assert result["isError"] is True
     assert "write effect" in result["outputSummary"]
-    tool_message = ran.bodies[1]["messages"][-1]
-    assert tool_message["role"] == "tool"
-    assert "write effect" in tool_message["content"]
+    sent = ran.bodies[1]["input"][-1]
+    assert (sent["type"], sent["call_id"]) == ("function_call_output", "c1")
+    assert "write effect" in sent["output"]
 
 
 def test_a_declared_write_is_carried_out(tmp_path: Path) -> None:
-    script = [
-        tool_reply([("c1", "Write", {"file_path": "out/hello.txt", "content": "hi"})]),
-        text_reply("Wrote it."),
-    ]
-    run(tmp_path, script, effects=Effects(write=("out/**",)))
+    write = ("c1", "Write", {"file_path": "out/hello.txt", "content": "hi"})
+    run(
+        tmp_path, [tool_reply([write]), text_reply("Wrote it.")], effects=Effects(write=("out/**",))
+    )
     assert (tmp_path / "workspace" / "out" / "hello.txt").read_text(encoding="utf-8") == "hi"
 
 
-def test_two_calls_in_one_response_run_in_order_and_answer_in_order(tmp_path: Path) -> None:
+def test_two_calls_run_in_order_and_the_next_input_sends_the_output_back_then_both_answers(
+    tmp_path: Path,
+) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     (workspace / "a.txt").write_text("A", encoding="utf-8")
@@ -182,21 +188,34 @@ def test_two_calls_in_one_response_run_in_order_and_answer_in_order(tmp_path: Pa
         ("tool_call", "cb"),
         ("tool_result", "cb"),
     ]
-    assistant, first, second = ran.bodies[1]["messages"][-3:]
-    assert [c["id"] for c in assistant["tool_calls"]] == ["ca", "cb"]
-    assert (first["tool_call_id"], second["tool_call_id"]) == ("ca", "cb")
-    assert "A" in first["content"]
-    assert "B" in second["content"]
+    second = ran.bodies[1]["input"]
+    assert second[0] == ran.bodies[0]["input"][0]
+    assert [i["type"] for i in second[1:]] == [
+        "function_call",
+        "function_call",
+        "function_call_output",
+        "function_call_output",
+    ]
+    assert [i["call_id"] for i in second[3:]] == ["ca", "cb"]
+    assert "A" in second[3]["output"]
+    assert "B" in second[4]["output"]
 
 
-def test_a_call_without_an_id_is_given_one_used_in_its_events_and_its_tool_message(
-    tmp_path: Path,
-) -> None:
-    ran = run(tmp_path, [tool_reply([("", "Glob", {"pattern": "*"})]), text_reply("ok")])
-    (call,) = ran.of("tool_call")
-    assert call["callId"] == "call-1"
-    assert ran.bodies[1]["messages"][-2]["tool_calls"][0]["id"] == "call-1"
-    assert ran.bodies[1]["messages"][-1]["tool_call_id"] == "call-1"
+def test_reasoning_is_sent_back_unchanged_before_its_call(tmp_path: Path) -> None:
+    thought = reasoning("look first")
+    ran = run(tmp_path, [tool_reply([GLOB], before=[thought]), text_reply("ok")])
+    sent = ran.bodies[1]["input"]
+    assert sent[1] == thought
+    assert sent[2]["type"] == "function_call"
+
+
+def test_a_call_without_a_call_id_ends_the_run_naming_its_tool(tmp_path: Path) -> None:
+    ran = run(tmp_path, [tool_reply([(None, "Glob", {"pattern": "*"})])])
+    result = _result(ran)
+    assert result["status"] == "error"
+    assert "no call_id" in result["message"]
+    assert "Glob" in result["message"]
+    assert ran.of("tool_call") == []
 
 
 def test_arguments_that_arent_json_are_an_error_result_the_model_is_sent(tmp_path: Path) -> None:
@@ -204,62 +223,61 @@ def test_arguments_that_arent_json_are_an_error_result_the_model_is_sent(tmp_pat
     (result,) = ran.of("tool_result")
     assert result["isError"] is True
     assert "JSON" in result["outputSummary"]
-    assert ran.bodies[1]["messages"][-1]["content"] == result["outputSummary"]
+    assert ran.bodies[1]["input"][-1]["output"] == result["outputSummary"]
     assert _result(ran)["status"] == "ok"
 
 
 # How a run ends
 
 
-def test_a_reply_without_tool_calls_is_a_turn_then_an_ok_result_with_its_text(
+def test_a_completed_reply_without_calls_is_a_turn_then_an_ok_result_with_its_text(
     tmp_path: Path,
 ) -> None:
     ran = run(tmp_path, [text_reply("Wrote out/hello.txt.")])
-    assert ran.of("turn") == [
-        {
-            "runId": ran.events[0]["runId"],
-            "seq": 1,
-            "type": "turn",
-            "role": "assistant",
-            "text": "Wrote out/hello.txt.",
-        }
-    ]
+    assert [e["text"] for e in ran.of("turn")] == ["Wrote out/hello.txt."]
     result = _result(ran)
     assert (result["status"], result["message"], result["seq"]) == ("ok", "Wrote out/hello.txt.", 2)
 
 
 def test_text_and_a_tool_call_send_the_turn_before_the_call(tmp_path: Path) -> None:
-    script = [tool_reply([("c1", "Glob", {"pattern": "*"})], text="I'll look."), text_reply("ok")]
+    script = [tool_reply([GLOB], text="I'll look."), text_reply("ok")]
     kinds = [e["type"] for e in run(tmp_path, script).events]
     assert kinds[:3] == ["turn", "tool_call", "tool_result"]
 
 
 def test_a_refusal_ends_the_run_with_an_error_holding_it(tmp_path: Path) -> None:
-    refusal = Reply(
-        lines=sse([chunk({"refusal": "I can't help with that."}), chunk(finish="stop")])
+    refused = Reply(lines=sse([final([refusal("I can't help with that.")], used=usage(1, 1))]))
+    result = _result(run(tmp_path, [refused]))
+    assert (result["status"], result["message"]) == (
+        "error",
+        "The model refused: I can't help with that.",
     )
-    result = _result(run(tmp_path, [refusal]))
-    assert result["status"] == "error"
-    assert result["message"] == "The model refused: I can't help with that."
 
 
 @pytest.mark.parametrize(
-    ("finish", "words"),
+    ("reason", "words"),
     [
+        ("max_output_tokens", "reached the service's output limit"),
         ("content_filter", "content filter stopped the response"),
-        ("length", "reached the service's output limit"),
-        ("paused", "finished with 'paused'"),
+        ("something_new", "left incomplete (something_new)"),
     ],
 )
-def test_an_unexpected_finish_ends_the_run_with_an_error_naming_it(
-    tmp_path: Path, finish: str, words: str
+def test_an_incomplete_response_ends_the_run_with_an_error_naming_why(
+    tmp_path: Path, reason: str, words: str
 ) -> None:
-    reply = Reply(lines=sse([chunk({"content": "partial"}), chunk(finish=finish)]))
-    ran = run(tmp_path, [reply])
+    ran = run(tmp_path, [status_reply("incomplete", [message("partial")], incomplete=reason)])
     result = _result(ran)
     assert result["status"] == "error"
     assert words in result["message"]
     assert len(ran.fake.requests) == 1
+
+
+def test_a_status_the_runner_doesnt_know_ends_the_run_naming_it(tmp_path: Path) -> None:
+    paused = final([message("hm")], used=usage(1, 1))
+    paused["response"]["status"] = "paused"
+    result = _result(run(tmp_path, [Reply(lines=sse([paused]))]))
+    assert result["status"] == "error"
+    assert "'paused'" in result["message"]
 
 
 def test_a_failed_exchange_is_an_error_result(tmp_path: Path) -> None:
@@ -271,13 +289,13 @@ def test_a_failed_exchange_is_an_error_result(tmp_path: Path) -> None:
 def test_a_retry_is_sent_as_a_retry_event_before_the_next_request(tmp_path: Path) -> None:
     ran = run(tmp_path, [error_reply(503, "overloaded"), text_reply("ok")])
     (retry,) = ran.of("retry")
-    assert {k: retry[k] for k in ("attempt", "maxAttempts", "reason", "delayMs")} == {
+    assert {k: retry[k] for k in ("attempt", "maxAttempts", "reason", "delayMs", "message")} == {
         "attempt": 1,
         "maxAttempts": 5,
         "reason": "server",
         "delayMs": 0,
+        "message": "HTTP 503: overloaded",
     }
-    assert retry["message"] == "HTTP 503: overloaded"
 
 
 # The limits (each test sets the limit it checks, and says so)
@@ -298,7 +316,7 @@ def test_the_turn_limit_carries_out_the_last_replys_calls_then_ends_with_an_erro
 def test_a_spent_token_budget_carries_out_the_calls_then_ends_naming_the_tokens(
     tmp_path: Path,
 ) -> None:
-    script = [tool_reply([("c1", "Glob", {"pattern": "*"})], prompt=1100, completion=100)] * 2
+    script = [tool_reply([GLOB], prompt=1100, completion=100)] * 2
     ran = run(tmp_path, script, options={"maxTurns": 5, "maxTotalTokens": 1000})  # under test
     assert len(ran.fake.requests) == 1
     assert len(ran.of("tool_result")) == 1
@@ -311,33 +329,40 @@ def test_a_spent_token_budget_carries_out_the_calls_then_ends_naming_the_tokens(
 # Usage and cost
 
 
-def _usage_reply(text: str, **record: Any) -> Reply:  # noqa: ANN401
-    return Reply(lines=sse([chunk({"content": text}), chunk(finish="stop"), chunk(usage=record)]))
+def _used(text: str, used: dict[str, Any] | None) -> Reply:
+    return Reply(lines=sse([final([message(text)], used=used)]))
+
+
+def _called(used: dict[str, Any]) -> Reply:
+    reply = tool_reply([GLOB])
+    lines = [line for line in reply.lines or [] if isinstance(line, str)]
+    *_, data, _blank = lines
+    final_event = json.loads(data[6:])
+    final_event["response"]["usage"] = used
+    return Reply(lines=[*lines[:-2], f"data: {json.dumps(final_event)}", ""])
 
 
 def test_usage_is_summed_with_cached_input_counted_apart(tmp_path: Path) -> None:
-    first = tool_reply([("c1", "Glob", {"pattern": "*"})])
-    first = Reply(
-        lines=[
-            line.replace('"prompt_tokens": 10', '"prompt_tokens": 100')
-            .replace('"cached_tokens": 0', '"cached_tokens": 40')
-            .replace('"completion_tokens": 5', '"completion_tokens": 10')
-            if isinstance(line, str)
-            else line
-            for line in first.lines or []
-        ]
-    )
-    second = _usage_reply("ok", **usage(200, 20))
-    result = _result(run(tmp_path, [first, second]))
+    script = [_called(usage(100, 10, cached=40)), _used("ok", usage(200, 20))]
+    result = _result(run(tmp_path, script))
     assert result["usage"] == {"inputTokens": 260, "outputTokens": 30, "cacheReadTokens": 40}
     assert result["turns"] == 2
+
+
+def test_tokens_written_to_the_cache_are_counted_apart_too(tmp_path: Path) -> None:
+    result = _result(run(tmp_path, [_used("ok", usage(300, 10, cached=100, cache_write=50))]))
+    assert result["usage"] == {
+        "inputTokens": 150,
+        "outputTokens": 10,
+        "cacheReadTokens": 100,
+        "cacheWriteTokens": 50,
+    }
 
 
 def test_a_service_that_reports_no_usage_gets_a_warning_and_a_result_without_usage(
     tmp_path: Path,
 ) -> None:
-    no_usage = Reply(lines=sse([chunk({"content": "ok"}), chunk(finish="stop")]))
-    ran = run(tmp_path, [no_usage])
+    ran = run(tmp_path, [_used("ok", None)])
     (warning,) = ran.of("log")
     assert warning["level"] == "warning"
     assert "reported no usage" in warning["message"]
@@ -349,50 +374,22 @@ def test_a_service_that_reports_no_cost_gives_a_result_without_cost(tmp_path: Pa
 
 
 def test_costs_the_service_reports_are_summed(tmp_path: Path) -> None:
-    first = Reply(
-        lines=sse(
-            [
-                chunk(
-                    {
-                        "tool_calls": [
-                            {
-                                "index": 0,
-                                "id": "c1",
-                                "function": {"name": "Glob", "arguments": '{"pattern": "*"}'},
-                            }
-                        ]
-                    }
-                ),
-                chunk(finish="tool_calls"),
-                chunk(usage=usage(10, 5, cost=0.001)),
-            ]
-        )
-    )
-    result = _result(run(tmp_path, [first, _usage_reply("ok", **usage(10, 5, cost=0.002))]))
-    assert result["costUsd"] == pytest.approx(0.003)
+    script = [_called(usage(10, 5, cost=0.001)), _used("ok", usage(10, 5, cost=0.002))]
+    assert _result(run(tmp_path, script))["costUsd"] == pytest.approx(0.003)
 
 
 def test_a_model_other_than_the_one_asked_for_is_noted_once(tmp_path: Path) -> None:
-    reply = Reply(
-        lines=sse(
-            [
-                chunk({"content": "ok"}, model="fake-model-2026"),
-                chunk(finish="stop", model="fake-model-2026"),
-                chunk(usage=usage(1, 1), model="fake-model-2026"),
-            ]
-        )
-    )
+    reply = Reply(lines=sse([final([message("ok")], used=usage(1, 1), model="fake-model-2026")]))
     (note,) = run(tmp_path, [reply]).of("log")
     assert note["level"] == "info"
     assert "fake-model-2026" in note["message"]
 
 
-# Sizes
+# Sizes, and the contract
 
 
 def test_a_long_final_reply_is_cut_to_fit_in_its_turn_and_its_result(tmp_path: Path) -> None:
-    long = "x" * (1024 * 1024)
-    ran = run(tmp_path, [text_reply(long)], event_max_bytes=65536)
+    ran = run(tmp_path, [text_reply("x" * (1024 * 1024))], event_max_bytes=65536)
     turn = ran.of("turn")[0]
     result = _result(ran)
     for event, key in ((turn, "text"), (result, "message")):
@@ -401,11 +398,7 @@ def test_a_long_final_reply_is_cut_to_fit_in_its_turn_and_its_result(tmp_path: P
 
 
 def test_the_events_validate_as_the_contracts_run_events(tmp_path: Path) -> None:
-    from openai_harness import validator
-
-    ran = run(
-        tmp_path, [tool_reply([("c1", "Glob", {"pattern": "*"})], text="look"), text_reply("ok")]
-    )
+    ran = run(tmp_path, [tool_reply([GLOB], text="look"), text_reply("ok")])
     check = validator("run-event.schema.json#/$defs/event")
     for event in [*ran.events, _result(ran)]:
-        assert check.is_valid(event), json.dumps(event)
+        assert check.is_valid(event), event

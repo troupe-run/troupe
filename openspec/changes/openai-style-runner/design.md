@@ -147,7 +147,10 @@ this way in the recordings (D15). Sending the output items back as the service g
 the service needs from them (ids, encrypted reasoning) without the runner having to know it.
 
 `Tools.for_declaration(Declaration.from_run_start(params))` makes the tools; `Tools.offered()` gives the definitions,
-sent as `{"type": "function", "name", "description", "parameters"}` without `strict`, which not every host accepts.
+sent as `{"type": "function", "name", "description", "parameters", "strict": false}`. The Responses API makes a
+function tool strict when the request doesn't say: OpenAI's recording echoed the tool back with `"strict": true`. Strict
+mode needs every property required and no others, and the SDK's tools have optional fields (`Read`'s `offset` and
+`limit`), so the runner says `false` (found while building, 2026-11-06).
 The calls of one response run in order, one at a time: the SDK's tools share a workspace, and order is what the model
 asked for. A `function_call` without a `call_id` can't be answered (its output has nowhere to go), so it ends the run
 with an error naming its tool, rather than the runner inventing an id the service wouldn't know.

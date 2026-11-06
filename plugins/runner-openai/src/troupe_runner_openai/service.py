@@ -1,4 +1,4 @@
-"""Talking to a Chat Completions service: the runner's only network I/O (openai-style-runner design
+"""Talking to a Responses API service: the runner's only network I/O (openai-style-runner design
 D3).
 
 Requests go through the standard library's urllib, which honours HTTPS_PROXY and NO_PROXY and the
@@ -35,8 +35,8 @@ from troupe_runner_openai.defaults import (
     STREAM_TIMEOUT_SECONDS,
 )
 
-CHAT_PATH = "/chat/completions"
-"""Where a Chat Completions request goes, below the runtime's endpoint."""
+RESPONSES_PATH = "/responses"
+"""Where a Responses API request goes, below the runtime's endpoint."""
 
 
 # Endpoints
@@ -56,8 +56,8 @@ class Endpoint:
     host: str
 
     @property
-    def chat_url(self) -> str:
-        return self.url.rstrip("/") + CHAT_PATH
+    def responses_url(self) -> str:
+        return self.url.rstrip("/") + RESPONSES_PATH
 
     @property
     def is_loopback(self) -> bool:
@@ -260,7 +260,7 @@ class Call:
         if self._credential:
             headers["Authorization"] = f"Bearer {self._credential}"
         request = urllib.request.Request(  # noqa: S310 - the scheme is checked: http or https
-            self.endpoint.chat_url, data=self._body, headers=headers, method="POST"
+            self.endpoint.responses_url, data=self._body, headers=headers, method="POST"
         )
         proxies = urllib.request.ProxyHandler({} if self.endpoint.is_loopback else None)
         opener = urllib.request.build_opener(
@@ -328,7 +328,7 @@ def _connect_words(endpoint: Endpoint, error: BaseException) -> str:
 
 
 __all__ = [
-    "CHAT_PATH",
+    "RESPONSES_PATH",
     "AbortedError",
     "Call",
     "Endpoint",

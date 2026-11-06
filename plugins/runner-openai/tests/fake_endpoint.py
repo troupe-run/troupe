@@ -6,7 +6,7 @@ every request it got, headers included, so a test can check what the runner sent
 status, headers and a body, or a stream of server-sent event lines that can pause, stop short or be
 held open until the client goes away.
 
-    with FakeEndpoint([stream(text_chunks("Done.")), Reply(500)]) as fake:
+    with FakeEndpoint([text_reply("Done."), Reply(500)]) as fake:
         fake.endpoint      # http://127.0.0.1:<port>/v1
         fake.requests      # each Request: method, path, headers, body
 
@@ -22,8 +22,6 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
-
-ENDED = "[DONE]"
 
 
 @dataclass(frozen=True)
@@ -179,7 +177,7 @@ class FakeEndpoint:
 
     @property
     def endpoint(self) -> str:
-        """The base URL a runtime names: requests go to its /chat/completions."""
+        """The base URL a runtime names: requests go to its /responses."""
         host, port = self._server.server_address[:2]
         return f"http://{host!s}:{port}/v1"
 
@@ -207,106 +205,192 @@ class FakeEndpoint:
         self._server.server_close()
 
 
-# Building replies
+# Building Responses API replies (openai-style-runner design D4, D15): each event is an ``event:``
+# line, a ``data:`` line and a blank line, with no [DONE]; the final event carries the whole
+# response.
 
 
-def chunk(
-    delta: dict[str, Any] | None = None,
-    finish: str | None = None,
-    model: str = "fake-model",
-    usage: dict[str, Any] | None = None,
+def usage(
+    input_tokens: int,
+    output_tokens: int,
+    cached: int = 0,
+    cache_write: int | None = None,
+    **more: Any,  # noqa: ANN401
 ) -> dict[str, Any]:
-    """One chat.completion.chunk: a delta for choice 0 and its finish reason, or (with no delta and
-    no finish) the final usage chunk, whose choices are empty."""
-    choices = (
-        []
-        if delta is None and finish is None
-        else [{"index": 0, "delta": delta or {}, "finish_reason": finish}]
-    )
-    data: dict[str, Any] = {
-        "id": "chatcmpl-fake",
-        "object": "chat.completion.chunk",
-        "created": 1,
-        "model": model,
-        "choices": choices,
-    }
-    if usage is not None:
-        data["usage"] = usage
-    return data
-
-
-def usage(prompt: int, completion: int, cached: int = 0, **more: Any) -> dict[str, Any]:  # noqa: ANN401
-    """A usage record as OpenAI reports it."""
+    """A usage record as the Responses API reports it; ``cache_write`` as OpenAI adds it."""
+    details: dict[str, Any] = {"cached_tokens": cached}
+    if cache_write is not None:
+        details["cache_write_tokens"] = cache_write
     return {
-        "prompt_tokens": prompt,
-        "completion_tokens": completion,
-        "total_tokens": prompt + completion,
-        "prompt_tokens_details": {"cached_tokens": cached},
+        "input_tokens": input_tokens,
+        "input_tokens_details": details,
+        "output_tokens": output_tokens,
+        "output_tokens_details": {"reasoning_tokens": 0},
+        "total_tokens": input_tokens + output_tokens,
         **more,
     }
 
 
-def sse(chunks: Iterable[dict[str, Any] | StreamItem], done: bool = True) -> list[StreamItem]:
-    """Server-sent event lines for ``chunks``: each a ``data:`` line and a blank line, then
-    ``data: [DONE]`` unless ``done`` is false. Pauses, cuts and holds pass through."""
+def message(text: str) -> dict[str, Any]:
+    """An output message item holding ``text``."""
+    return {
+        "id": "msg_fake",
+        "type": "message",
+        "status": "completed",
+        "role": "assistant",
+        "content": [{"type": "output_text", "text": text, "annotations": []}],
+    }
+
+
+def refusal(text: str) -> dict[str, Any]:
+    """An output message item holding a refusal."""
+    return {
+        "id": "msg_fake",
+        "type": "message",
+        "status": "completed",
+        "role": "assistant",
+        "content": [{"type": "refusal", "refusal": text}],
+    }
+
+
+def function_call(
+    call_id: str | None, name: str, arguments: dict[str, Any] | str
+) -> dict[str, Any]:
+    """A function_call output item; ``call_id`` None leaves it out."""
+    raw = arguments if isinstance(arguments, str) else json.dumps(arguments)
+    item: dict[str, Any] = {
+        "id": f"fc_{call_id or 'none'}",
+        "type": "function_call",
+        "status": "completed",
+        "name": name,
+        "arguments": raw,
+    }
+    if call_id is not None:
+        item["call_id"] = call_id
+    return item
+
+
+def reasoning(summary: str) -> dict[str, Any]:
+    """A reasoning output item, with encrypted content to send back."""
+    return {
+        "id": "rs_fake",
+        "type": "reasoning",
+        "summary": [{"type": "summary_text", "text": summary}],
+        "encrypted_content": "opaque-reasoning",
+    }
+
+
+def response(
+    output: list[dict[str, Any]],
+    status: str = "completed",
+    used: dict[str, Any] | None = None,
+    model: str = "fake-model",
+    incomplete: str | None = None,
+    error: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """A response object, as a final event carries it."""
+    return {
+        "id": "resp_fake",
+        "object": "response",
+        "status": status,
+        "model": model,
+        "output": output,
+        "incomplete_details": None if incomplete is None else {"reason": incomplete},
+        "error": error,
+        "usage": used,
+    }
+
+
+def event(kind: str, **fields: Any) -> dict[str, Any]:  # noqa: ANN401
+    return {"type": kind, **fields}
+
+
+def sse(items: Iterable[dict[str, Any] | StreamItem]) -> list[StreamItem]:
+    """Server-sent event lines for ``items``: each event as an ``event:`` line, a ``data:`` line and
+    a blank line. Pauses, cuts and holds pass through."""
     lines: list[StreamItem] = []
-    for item in chunks:
+    for item in items:
         if isinstance(item, dict):
-            lines += [f"data: {json.dumps(item)}", ""]
+            lines += [f"event: {item['type']}", f"data: {json.dumps(item)}", ""]
         else:
             lines.append(item)
-    if done:
-        lines += [f"data: {ENDED}", ""]
     return lines
 
 
+def _created() -> dict[str, Any]:
+    return event("response.created", response=response([], status="in_progress"))
+
+
+def final(
+    output: list[dict[str, Any]],
+    status: str = "completed",
+    used: dict[str, Any] | None = None,
+    **fields: Any,  # noqa: ANN401
+) -> dict[str, Any]:
+    """The final event for a response with ``output``."""
+    return event(f"response.{status}", response=response(output, status, used, **fields))
+
+
 def text_reply(text: str, prompt: int = 10, completion: int = 5) -> Reply:
-    """A streamed reply that says ``text`` and stops, with usage."""
+    """A streamed reply that says ``text`` and completes, with usage."""
     return Reply(
         lines=sse(
             [
-                chunk({"role": "assistant", "content": ""}),
-                chunk({"content": text}),
-                chunk(finish="stop"),
-                chunk(usage=usage(prompt, completion)),
+                _created(),
+                event("response.output_text.delta", delta=text, output_index=0),
+                final([message(text)], used=usage(prompt, completion)),
             ]
         )
     )
 
 
 def tool_reply(
-    calls: Sequence[tuple[str, str, dict[str, Any] | str]],
+    calls: Sequence[tuple[str | None, str, dict[str, Any] | str]],
     text: str | None = None,
     prompt: int = 10,
     completion: int = 5,
+    before: Sequence[dict[str, Any]] = (),
 ) -> Reply:
-    """A streamed reply asking for ``calls``, each (id, name, arguments), with optional text."""
-    chunks: list[dict[str, Any] | StreamItem] = [chunk({"role": "assistant", "content": None})]
-    if text:
-        chunks.append(chunk({"content": text}))
+    """A streamed reply asking for ``calls``, each (call_id, name, arguments), after any ``before``
+    output items and optional text. Each call's arguments stream as two deltas."""
+    output = [*before, *([message(text)] if text else [])]
+    items: list[dict[str, Any] | StreamItem] = [_created()]
     for index, (call_id, name, arguments) in enumerate(calls):
-        raw = arguments if isinstance(arguments, str) else json.dumps(arguments)
-        head: dict[str, Any] = {"index": index, "type": "function", "function": {"name": name}}
-        if call_id:
-            head["id"] = call_id
-        half = len(raw) // 2
-        chunks.append(
-            chunk({"tool_calls": [{**head, "function": {"name": name, "arguments": raw[:half]}}]})
+        item = function_call(call_id, name, arguments)
+        output.append(item)
+        half = len(item["arguments"]) // 2
+        items.append(
+            event("response.output_item.added", item={**item, "arguments": ""}, output_index=index)
         )
-        chunks.append(
-            chunk({"tool_calls": [{"index": index, "function": {"arguments": raw[half:]}}]})
-        )
-    chunks += [chunk(finish="tool_calls"), chunk(usage=usage(prompt, completion))]
-    return Reply(lines=sse(chunks))
+        for part in (item["arguments"][:half], item["arguments"][half:]):
+            items.append(
+                event("response.function_call_arguments.delta", delta=part, output_index=index)
+            )
+    items.append(final(output, used=usage(prompt, completion)))
+    return Reply(lines=sse(items))
+
+
+def status_reply(
+    status: str,
+    output: list[dict[str, Any]] | None = None,
+    **fields: Any,  # noqa: ANN401
+) -> Reply:
+    """A streamed reply whose final event has ``status`` (incomplete, failed or another)."""
+    return Reply(lines=sse([_created(), final(output or [], status, usage(10, 5), **fields)]))
+
+
+def error_event_reply(code: str, text: str) -> Reply:
+    """A stream that ends with an error event."""
+    return Reply(lines=sse([_created(), event("error", code=code, message=text)]))
 
 
 def error_reply(
     status: int,
-    message: str,
+    text: str,
     code: str | None = None,
     kind: str = "invalid_request_error",
     headers: Sequence[tuple[str, str]] = (),
 ) -> Reply:
-    """An error response in OpenAI's shape."""
-    body = {"error": {"message": message, "type": kind, "param": None, "code": code}}
+    """An HTTP error response in OpenAI's shape."""
+    body = {"error": {"message": text, "type": kind, "param": None, "code": code}}
     return Reply(status, headers=headers, body=json.dumps(body).encode("utf-8"))

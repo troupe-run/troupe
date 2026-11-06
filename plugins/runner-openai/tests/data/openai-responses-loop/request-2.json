@@ -1,0 +1,48 @@
+{
+  "model": "gpt-6-luna",
+  "instructions": "You work in a workspace only through the tools offered.",
+  "input": [
+    {
+      "role": "user",
+      "content": "Read notes/todo.txt, then tell me in one line what it says."
+    },
+    {
+      "id": "fc_095ff5e48d8891ed016aec6c3a4f7c87d1b457472379390bde",
+      "type": "function_call",
+      "status": "completed",
+      "arguments": "{\"file_path\":\"notes/todo.txt\"}",
+      "call_id": "call_NPKm1VnAslnyZfbP0a5BAqMq",
+      "name": "Read"
+    },
+    {
+      "type": "function_call_output",
+      "call_id": "call_NPKm1VnAslnyZfbP0a5BAqMq",
+      "output": "1  buy milk\n2  write the troupe docs"
+    }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "name": "Read",
+      "description": "Read a text file in the workspace.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "file_path"
+        ],
+        "additionalProperties": false
+      }
+    }
+  ],
+  "stream": true,
+  "store": false,
+  "include": [
+    "reasoning.encrypted_content"
+  ],
+  "max_output_tokens": 400
+}

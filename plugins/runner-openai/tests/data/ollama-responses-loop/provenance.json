@@ -1,0 +1,8 @@
+{
+  "service": "Ollama 0.40.14, OpenAI-compatible /v1/responses on 127.0.0.1:11434",
+  "model": "qwen3.5:4b",
+  "captured": "2026-11-05",
+  "how": "recorded: request-1.json sent, stream-1.txt saved unchanged; then request-2.json (the first request's input, the first response's output items unchanged, and a function_call_output) sent, and stream-2.txt saved unchanged",
+  "credential": "none: a local server needs none",
+  "why": "a second service's Responses stream, with reasoning items, for the stream reader's and the loop's tests (openai-style-runner design D15)"
+}
