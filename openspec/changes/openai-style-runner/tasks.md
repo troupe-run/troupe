@@ -162,7 +162,7 @@ note; they're ticked again when their Responses version passes.
 - [x] 10.1 Write the live test (`TROUPE_LIVE_OPENAI=1`, model pinned in the test, `TEST_LIMITS`). Run it against
   local Ollama's `/v1`. Verify: skipped without the variable, saying how to run it; `succeeded` against local Ollama,
   with the output shown.
-- [ ] 10.2 Ask the owner to run the live test against OpenAI, and check D9's assumption that `input_tokens` includes
+- [x] 10.2 Ask the owner to run the live test against OpenAI, and check D9's assumption that `input_tokens` includes
   cache writes. Verify: the owner's run ends `succeeded`, and its endpoint, model and token use are recorded in the PR.
 - [x] 10.3 For each gap in D12 that building confirmed, check #56's issues and pull requests for the same gap, then
   file it as its own issue (on the board, 0.2.0, naming this change and the runner's behaviour today), and list them
