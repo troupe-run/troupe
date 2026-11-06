@@ -17,11 +17,13 @@ capturing host's home directory. ``expected.json`` is written separately and rev
 
 import argparse
 import datetime
+import ipaddress
 import json
 import os
 import re
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any
@@ -64,7 +66,27 @@ def _scrub(text: str, key: str) -> str:
     return text.replace(str(Path.home()), "~")
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuses every redirect, so the key is never resent to another host, as the runner does."""
+
+    def redirect_request(self, *_: Any) -> None:  # noqa: ANN401
+        return None
+
+
+def _local(host: str) -> bool:
+    if host.lower() == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host.strip("[]")).is_loopback
+    except ValueError:
+        return False
+
+
 def _post(base: str, body: dict[str, Any], key: str) -> dict[str, Any]:
+    parts = urllib.parse.urlsplit(base)
+    if key and parts.scheme != "https" and not _local(parts.hostname or ""):
+        raise SystemExit(f"Refusing to send a key over plain http to {base}: use https.")
+    opener = urllib.request.build_opener(_NoRedirect())
     headers = {"Content-Type": "application/json", "Accept": "text/event-stream"}
     if key:
         headers["Authorization"] = f"Bearer {key}"
@@ -72,7 +94,7 @@ def _post(base: str, body: dict[str, Any], key: str) -> dict[str, Any]:
         base.rstrip("/") + "/responses", json.dumps(body).encode(), headers, method="POST"
     )
     try:
-        with urllib.request.urlopen(request, timeout=180) as response:  # noqa: S310
+        with opener.open(request, timeout=180) as response:
             status, raw, got = response.status, response.read(), response.headers
     except urllib.error.HTTPError as error:
         status, raw, got = error.code, error.read(), error.headers

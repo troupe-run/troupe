@@ -1,8 +1,0 @@
-{
-  "service": "Ollama 0.40.14, OpenAI-compatible /v1/chat/completions on 127.0.0.1:11434",
-  "model": "qwen3.5:4b",
-  "captured": "2026-11-04",
-  "how": "recorded: request.json sent with curl -N, the response body saved unchanged as stream.txt",
-  "credential": "none: a local server needs none",
-  "why": "a real stream's shape for the stream parser's tests (openai-style-runner task 4.3): reasoning in its own field, an empty content on each chunk, a tool call arriving whole, and usage in a last chunk with no choices"
-}

@@ -27,21 +27,35 @@ REQUIRED = {
 """The fixtures the spec names: a successful tool loop against OpenAI and one against local Ollama,
 and each way a hosted service fails that a fixture can show."""
 
-SECRET = re.compile(r"sk-[A-Za-z0-9_\-]{8,}")
-"""A string shaped like an OpenAI key."""
+DATA = Path(__file__).parent / "data"
+"""The raw recordings the fixtures were made from, scanned as well."""
+
+SECRETS = {
+    "an OpenAI key": re.compile(r"sk-[A-Za-z0-9_\-]{8,}"),
+    "an organisation or project id": re.compile(
+        r"\borg-[A-Za-z0-9]{8,}|\bproj_[A-Za-z0-9]{8,}|openai-(?:organization|project)",
+        re.IGNORECASE,
+    ),
+    "a home directory": re.compile(
+        r"/Users/[^/\s\"]+|/home/[^/\s\"]+|[A-Za-z]:\\{1,2}Users\\{1,2}"
+    ),
+    "a 1Password reference": re.compile(r"op://"),
+}
+"""What no fixture or recording may hold, on any machine that captured it (spec: openai-runner,
+"Fixtures hold no secrets")."""
 
 
 def scan(directory: Path) -> list[str]:
-    """Each line in a fixture directory holding something shaped like a key, or the capturing
-    host's home directory, as ``<fixture>/<file>:<line>``."""
-    home = str(Path.home())
+    """Each line under ``directory`` holding something in SECRETS, as
+    ``<directory>/<file>:<line> (<what>)``."""
     found = []
     for path in sorted(directory.rglob("*")):
         if not path.is_file():
             continue
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            if SECRET.search(line) or home in line:
-                found.append(f"{path.parent.name}/{path.name}:{number}")
+            for what, pattern in SECRETS.items():
+                if pattern.search(line):
+                    found.append(f"{path.parent.name}/{path.name}:{number} ({what})")
     return found
 
 
@@ -79,16 +93,28 @@ def test_the_rejected_credential_fixture_used_no_working_credential() -> None:
     assert "[credential]" in (FIXTURES / "rejected-credential" / "replies.json").read_text()
 
 
-def test_no_fixture_holds_a_key_or_the_capturing_hosts_home() -> None:
+def test_no_fixture_or_recording_holds_a_key_an_account_id_or_a_home_directory() -> None:
     assert scan(FIXTURES) == []
+    assert scan(DATA) == []
 
 
-def test_the_scan_names_the_fixture_and_line_of_a_planted_key(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("planted", "what"),
+    [
+        ("sk-proj-planted0123456789", "an OpenAI key"),
+        ('"openai-organization": "org-AbCdEf0123456789"', "an organisation or project id"),
+        ("/Users/someone/troupe/notes.txt", "a home directory"),
+        ("/home/runner/work/troupe", "a home directory"),
+        ("C:\\Users\\someone\\troupe", "a home directory"),
+        ("op://vault/item/credential", "a 1Password reference"),
+    ],
+)
+def test_the_scan_names_the_file_line_and_kind_of_whatever_is_planted(
+    tmp_path: Path, planted: str, what: str
+) -> None:
     copy = tmp_path / "fixtures"
     shutil.copytree(FIXTURES / "refusal", copy / "refusal")
     provenance = copy / "refusal" / "provenance.json"
-    provenance.write_text(
-        provenance.read_text(encoding="utf-8") + "sk-proj-planted0123456789\n", encoding="utf-8"
-    )
+    provenance.write_text(provenance.read_text(encoding="utf-8") + planted + "\n", encoding="utf-8")
     lines = provenance.read_text(encoding="utf-8").splitlines()
-    assert scan(copy) == [f"refusal/provenance.json:{len(lines)}"]
+    assert f"refusal/provenance.json:{len(lines)} ({what})" in scan(copy)

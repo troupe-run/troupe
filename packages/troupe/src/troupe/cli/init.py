@@ -20,6 +20,7 @@ from troupe.core.client.session import CancelSignal, Session
 from troupe.core.defaults import RUNTIMES
 from troupe.core.errors import TroupeError
 from troupe.core.exit_codes import ExitCode
+from troupe.core.runtimes import env_name
 from troupe.core.theatre import THEATRE_DIR
 
 COMMAND = "troupe init"
@@ -108,7 +109,13 @@ def _value(entries: list[dict[str, Any]], actor: str, name: str) -> object:
 
 
 def _key_variable(runtime: object) -> str | None:
-    """The variable a built-in runtime's key is read from, or None when it has none."""
+    """The variable a built-in runtime's key is read from: the person's
+    ``TROUPE_RUNTIME_<NAME>_CREDENTIAL_ENV`` when it's set, else the built-in's, or None when it has
+    none. A fresh theatre's config names none of its own."""
+    if isinstance(runtime, str):
+        chosen = os.environ.get(env_name(runtime, "credential_env"))
+        if chosen:
+            return chosen
     built_in = RUNTIMES.get(runtime) if isinstance(runtime, str) else None
     credential = None if built_in is None else built_in.get("credential")
     env = credential.get("env") if isinstance(credential, dict) else None

@@ -17,7 +17,7 @@
       "properties": {"code": {"const": "openai.invalid-options"}, "details": {"$ref": "#/$defs/where"}}
     },
     {
-      "description": "The run/start names no runtime, so the runner has no service to talk to. The fix says to name a runtime for the actor.",
+      "description": "The run/start names no runtime, or one whose endpoint or model can't be used, so the runner has no service to talk to. The fix says what to give the runtime.",
       "required": ["details"],
       "properties": {"code": {"const": "openai.no-runtime"}, "details": {"$ref": "#/$defs/where"}}
     },

@@ -8,6 +8,8 @@ from functools import cache
 from pathlib import Path
 from types import ModuleType
 
+import pytest
+
 TOOL = Path(__file__).resolve().parents[1] / "tools" / "capture_openai.py"
 KEY = "sk-proj-capture0123456789abcd"
 
@@ -41,3 +43,12 @@ def test_the_capturing_hosts_home_is_scrubbed() -> None:
 
 def test_the_invalid_key_the_tool_sends_is_shaped_to_fail() -> None:
     assert _tool().INVALID_KEY.startswith("sk-troupe-capture-invalid-")
+
+
+def test_the_tool_refuses_to_send_a_key_over_plain_http_to_another_host() -> None:
+    with pytest.raises(SystemExit, match="plain http"):
+        _tool()._post("http://models.example.com/v1", {}, KEY)
+
+
+def test_the_tool_never_follows_a_redirect() -> None:
+    assert _tool()._NoRedirect().redirect_request() is None

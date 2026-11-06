@@ -20,6 +20,12 @@ def test_troupes_declaration_scopes_the_ollama_runners_source_to_runner_ollama()
     assert guard.check_scope(paths, declaration).names == ("runner_ollama",)
 
 
+def test_troupes_declaration_scopes_the_openai_runners_source_to_runner_openai() -> None:
+    declaration = _troupes_declaration()
+    paths = ["plugins/runner-openai/src/troupe_runner_openai/runner.py"]
+    assert guard.check_scope(paths, declaration).names == ("runner_openai",)
+
+
 def test_the_plugin_sdks_scope_reaches_every_runner_plugins_suite() -> None:
     root = Path(__file__).resolve().parents[3]
     text = (root / guard.CHECK_PATHS).read_text(encoding="utf-8")

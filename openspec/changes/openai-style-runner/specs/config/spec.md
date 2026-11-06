@@ -8,8 +8,9 @@ Claude Code audition. It SHALL leave `workspace` unset.
 
 #### Scenario: The OpenAI actor's file
 - **WHEN** a person runs `troupe init --audition --runner openai`
-- **THEN** `.troupe/actors/lead.yaml` holds runner `openai`, runtime `openai`, the model, options with `maxTurns` 10
-  and `maxTotalTokens` 100000, `effects.write: ["**"]` and `expect: []`, and no `workspace`
+- **THEN** config's `actors.lead` holds runner `openai`, runtime `openai`, the model, options with `maxTurns` 10 and
+  `maxTotalTokens` 100000, `effects.write: ["**"]` and `expect: []`, and no `workspace`
+- **AND** `.troupe/actors/lead.yaml` names the runner (its runtime, model and effects reach the file with #288)
 - **AND** `.troupe/actors/lead.md` holds the character
 
 #### Scenario: What init prints for it

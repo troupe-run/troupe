@@ -6,5 +6,8 @@ itself through the plugin SDK. It imports nothing from troupe but the SDK. Run i
 ``python -m troupe_runner_openai``.
 """
 
+from importlib.metadata import version
+
 NAME = "openai"
-__version__ = "0.0.0"
+__version__ = version("troupe-runner-openai")
+"""The installed package's version, so release-please's bump is what the handshake reports."""

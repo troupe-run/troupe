@@ -234,6 +234,15 @@ def test_the_openai_audition_says_which_key_to_set_and_that_a_run_costs_money(
     assert "runner: openai" in lead
 
 
+def test_the_openai_audition_names_the_key_variable_the_person_chose(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("TROUPE_RUNTIME_OPENAI_CREDENTIAL_ENV", "MY_OPENAI_KEY")
+    code, out, _ = cli("init", "--audition", "--runner", "openai")
+    assert code == ExitCode.OK
+    assert "Set MY_OPENAI_KEY to your API key for the openai runtime." in out
+
+
 # Requirement: Init's audition runner is named with --runner
 
 

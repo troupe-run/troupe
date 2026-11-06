@@ -15,7 +15,7 @@ runners troupe has, before anything is made. `--runner` without `--audition` SHA
 
 #### Scenario: The OpenAI runner
 - **WHEN** a person runs `troupe init --audition --runner openai`
-- **THEN** `.troupe/actors/lead.yaml` names the runner `openai` and the runtime `openai`
+- **THEN** `.troupe/actors/lead.yaml` names the runner `openai`, and config's `actors.lead.runtime` is `openai`
 
 #### Scenario: A runner troupe doesn't know
 - **WHEN** a person runs `troupe init --audition --runner gemini`
