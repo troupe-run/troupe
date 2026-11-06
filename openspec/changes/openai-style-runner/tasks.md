@@ -147,11 +147,11 @@ note; they're ticked again when their Responses version passes.
 
 ## 9. Docs
 
-- [ ] 9.1 Write the plugin's `README.md` (what it is, options, runtimes, limits, failures, transcript framing, how to
+- [x] 9.1 Write the plugin's `README.md` (what it is, options, runtimes, limits, failures, transcript framing, how to
   capture fixtures and run the live test). Add its row to `plugins/README.md`, and a "Mapping an engine: the
   Responses API" section to `contributing/runners.md` with D8's and D10's tables. Verify: a README test, as the
   Claude Code runner has, checks the options and error codes it lists match the published schemas.
-- [ ] 9.2 Add the runner to the user docs where runners are chosen (`docs/prompt-book/config-schema.md` and the
+- [x] 9.2 Add the runner to the user docs where runners are chosen (`docs/prompt-book/config-schema.md` and the
   first-performance or bring-your-own-agent page), with an actor and runtime example. The example sets `maxTurns` 5
   and `maxTotalTokens` 20,000, and says to raise them once the actor behaves (design D7). Verify: `uv run
   scripts/check.py` passes, including the docs checks, and the example's `troupe config set` commands run in a
@@ -159,7 +159,7 @@ note; they're ticked again when their Responses version passes.
 
 ## 10. The live test, and the contract's gaps
 
-- [ ] 10.1 Write the live test (`TROUPE_LIVE_OPENAI=1`, model pinned in the test, `TEST_LIMITS`). Run it against
+- [x] 10.1 Write the live test (`TROUPE_LIVE_OPENAI=1`, model pinned in the test, `TEST_LIMITS`). Run it against
   local Ollama's `/v1`. Verify: skipped without the variable, saying how to run it; `succeeded` against local Ollama,
   with the output shown.
 - [ ] 10.2 Ask the owner to run the live test against OpenAI, and check D9's assumption that `input_tokens` includes

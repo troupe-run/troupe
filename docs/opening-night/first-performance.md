@@ -185,6 +185,32 @@ window fails rather than carrying on with its direction cut off. The
 [Ollama runner's README](https://github.com/troupe-run/troupe/blob/main/plugins/runner-ollama/README.md) lists every
 option.
 
+## Try it on OpenAI
+
+troupe ships a fourth runner, the OpenAI runner, which runs an OpenAI model through its Responses API, with troupe's own
+tool loop. It needs an OpenAI API key in `OPENAI_API_KEY`, and **a run costs money**, on your OpenAI account. troupe
+never writes the key down: config only names the variable it's in. Set the key first.
+Try it in a new git repository:
+
+```sh
+mkdir troupe-openai
+cd troupe-openai
+git init
+troupe init --audition --runner openai
+git add .troupe
+git commit -m 'Add a troupe theatre'
+troupe perform lead
+```
+
+Allow the local stage first, as above, if this shell doesn't have it. The actor runs on the built-in `openai` runtime
+with a small, cheap model, and a small budget: at most 10 requests and 100,000 tokens a run. A run that reaches either
+stops and says which option to raise (`maxTurns`, `maxTotalTokens`). When you define your own actor on it, start with
+lower limits still, such as `maxTurns` 5 and `maxTotalTokens` 20,000, and raise them once it behaves.
+[Point actors at a service](../stagecraft/runtimes.md) says how to use another model, another key, or another service
+that serves the Responses API. The
+[OpenAI runner's README](https://github.com/troupe-run/troupe/blob/main/plugins/runner-openai/README.md) lists every
+option.
+
 ## Define your own actor
 
 `troupe init --audition` is one way to define an actor. `troupe config set` is the other, and works in any theatre.

@@ -312,6 +312,31 @@ record verbatim and once. Every request asks Ollama to refuse a conversation lon
 it (`truncate` and `shift` `false`), which Ollama 0.12.6 added, so the runner requires it and refuses an older one with
 `runner.requirement-unmet`.
 
+### Mapping an engine: the Responses API
+
+The [OpenAI runner](../plugins/runner-openai/README.md) is the same shape as Ollama's, on OpenAI's Responses API: the
+service only answers, and the runner holds the conversation and runs the tools with the plugin SDK's `Tools`, so
+`init`'s `effects` is `checked`. Its service comes from the actor's runtime, and the key arrives as
+`TROUPE_RUNTIME_CREDENTIAL`. Every request is `store: false` and carries the whole conversation: after tool calls, the
+response's output items unchanged, then one `function_call_output` per call. Its fixtures pin it, recorded from OpenAI
+and from local Ollama's `/v1`.
+
+| From the service | Run event |
+|---|---|
+| the runtime's model | `init`, with engine `responses` and the model |
+| the final event's response (`response.completed`, `.incomplete` or `.failed`, or an `error` event); deltas are read past | everything below |
+| its output text | a `turn` |
+| its reasoning items | none; the transcript keeps them, and the next request sends them back |
+| each `function_call` | `tool_call` and `tool_result`, from the SDK |
+| 429, 5xx, a failure whose code is the service's own, or a connection that failed, dropped or went silent | `retry`: `rate-limit`, `server` or `network` |
+| completed, with no function call | `result` `ok`, with its text |
+| 401, 403, quota, context length, another 4xx, a redirect, a refusal, `incomplete`, another failure, `maxTurns` or `maxTotalTokens`, or retries spent | `result` `error`, saying which |
+| its `usage` | summed into `result.usage`: cache reads and, where reported, writes counted apart from input |
+
+Its transcript records are JSON objects of its own, each with a `kind`: the request body as sent, the status with only
+named headers, each stream line unchanged, an error's body, and a stream dropped. The key, and a masked echo of it, are
+masked in everything it sends.
+
 ## How troupe runs a runner
 
 `troupe.core.runners.host.run_actor` starts the runner, performs the handshake, starts the run and supervises it.
