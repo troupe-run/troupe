@@ -230,9 +230,10 @@ The Responses API's `usage` has `input_tokens`, `output_tokens`, `input_tokens_d
 OpenAI, `input_tokens_details.cache_write_tokens` (Ollama's has no write count). Anthropic's `input_tokens`, which the
 Claude Code runner maps to `inputTokens`, excludes cache reads and writes. So that the four counters mean the same
 whichever runner reported them, `cacheReadTokens` is `cached_tokens`, `cacheWriteTokens` is `cache_write_tokens` when
-reported, and `inputTokens` is `input_tokens` less both. That `input_tokens` includes the cache writes is OpenAI's
-documented shape for reads and an assumption for writes, which the recordings can't show (both reported 0 writes):
-the live test checks it, and if it's wrong only this subtraction changes. That the contract doesn't say what
+reported, and `inputTokens` is `input_tokens` less both. That `input_tokens` includes the cache writes was an
+assumption the recordings couldn't show (both reported 0 writes). The owner's live run against OpenAI confirmed it
+(2026-11-06, `gpt-6-luna`, three requests): `inputTokens` 9, `cacheReadTokens` 2184 and `cacheWriteTokens` 1149, so
+OpenAI's `input_tokens` was 3342 in all; without the writes in it, the subtraction would have gone below zero. That the contract doesn't say what
 `inputTokens` counts is gap 3.
 
 `costUsd` is defined as what the engine reports. OpenAI reports no cost, so OpenAI runs have none. A service that puts
