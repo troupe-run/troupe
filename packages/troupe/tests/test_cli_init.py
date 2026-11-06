@@ -225,7 +225,7 @@ def test_the_openai_audition_says_which_key_to_set_and_that_a_run_costs_money(
     lines = _next(out)
     assert (
         "   # Set OPENAI_API_KEY to your API key for the openai runtime. A run costs money, "
-        "within the actor's budget of 100,000 tokens." in lines
+        "and stops once it has used the actor's budget of 100,000 tokens." in lines
     )
     assert "Claude Code must be" not in out
     # The file names the runner. Its runtime and model are in config (checked in test_init.py);
@@ -241,6 +241,16 @@ def test_the_openai_audition_names_the_key_variable_the_person_chose(
     code, out, _ = cli("init", "--audition", "--runner", "openai")
     assert code == ExitCode.OK
     assert "Set MY_OPENAI_KEY to your API key for the openai runtime." in out
+
+
+def test_an_openai_key_override_that_isnt_a_variable_is_named_but_never_shown(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("TROUPE_RUNTIME_OPENAI_CREDENTIAL_ENV", "sk-proj-not-a-variable-name")
+    code, out, err = cli("init", "--audition", "--runner", "openai")
+    assert code == ExitCode.OK
+    assert "TROUPE_RUNTIME_OPENAI_CREDENTIAL_ENV isn't the name of a variable" in out
+    assert "sk-proj" not in out + err
 
 
 # Requirement: Init's audition runner is named with --runner

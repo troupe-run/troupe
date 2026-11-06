@@ -55,7 +55,8 @@ model SHALL be hard-coded in the runner.
 ### Requirement: The credential is read from TROUPE_RUNTIME_CREDENTIAL
 The runner SHALL read the run's credential only from `TROUPE_RUNTIME_CREDENTIAL`, and only when `run/start`'s
 `runtime.credential` is `true`. When the two disagree, it SHALL refuse `run/start` with `openai.credential-mismatch`,
-saying which way without the value, and send nothing.
+saying which way without the value, and send nothing. A credential holding whitespace or a control character SHALL be
+refused with `openai.malformed-credential`, naming the variable and never the value.
 
 #### Scenario: A credential run start promises and the environment lacks
 - **WHEN** `runtime.credential` is `true` and `TROUPE_RUNTIME_CREDENTIAL` isn't set
@@ -64,6 +65,11 @@ saying which way without the value, and send nothing.
 #### Scenario: A credential run start doesn't mention
 - **WHEN** `runtime.credential` is `false` and `TROUPE_RUNTIME_CREDENTIAL` holds a value
 - **THEN** `run/start` is refused with `openai.credential-mismatch`, and the error holds no part of the value
+
+#### Scenario: A key read with its line ending
+- **WHEN** `TROUPE_RUNTIME_CREDENTIAL` holds a key followed by `\r\n`
+- **THEN** `run/start` is refused with `openai.malformed-credential`, the error holds no part of the key, and no
+  request is sent
 
 ### Requirement: The runner's options are closed
 `run/start` options SHALL be an object with only `maxTurns` (a positive integer) and `maxTotalTokens` (a positive
@@ -80,9 +86,10 @@ error naming it, and no request SHALL be sent.
   names what is valid
 
 ### Requirement: Every run has a turn limit and a token budget
-The runner SHALL always limit a run to `maxTurns` requests and to `maxTotalTokens` tokens, the sum of every
-response's reported input and output tokens. Each SHALL default, when the options don't set it, to a named setting
-in one place in the runner.
+The runner SHALL always limit a run to `maxTurns` requests, a retried request counting once, and SHALL send no request
+once the run has used `maxTotalTokens` tokens, the sum of every response's reported input and output tokens. Each
+response is counted whole after it arrives, so a run can end above its budget. Each limit SHALL default, when the
+options don't set it, to a named setting in one place in the runner.
 
 #### Scenario: The turn limit is reached
 - **WHEN** a run with `maxTurns` 3 gets a tool call in each of its first three responses
@@ -97,6 +104,10 @@ in one place in the runner.
 #### Scenario: No limits in the options
 - **WHEN** a run starts with empty options
 - **THEN** its turn limit and token budget are the runner's named defaults
+
+#### Scenario: A last reply past the budget
+- **WHEN** a run with `maxTotalTokens` 1000 gets a reply without a tool call that brings its usage to 1200
+- **THEN** the run ends with an `ok` result reporting the 1200 tokens
 
 ### Requirement: The character is the instructions and the direction the first input
 The first request SHALL carry `instructions` made of the runner's fixed instructions followed by the actor's character
@@ -307,7 +318,8 @@ location it pointed to, so neither the credential nor the conversation is sent a
 ### Requirement: Transient failures are retried and reported
 A request that fails with a rate limit (429), a server error (500 or above), a network error or a timeout SHALL be
 retried up to the runner's named maximum attempts, with a growing delay, each retry reported first as a `retry` event
-with reason `rate-limit`, `server` or `network`. When the attempts run out, the run SHALL end with an `error` result.
+with reason `rate-limit`, `server` or `network`. A server error's `Retry-After` SHALL set its delay, up to the runner's
+named maximum delay. When the attempts run out, the run SHALL end with an `error` result.
 
 #### Scenario: A server error, then success
 - **WHEN** the first request is answered 503 and the second succeeds
@@ -317,6 +329,10 @@ with reason `rate-limit`, `server` or `network`. When the attempts run out, the 
 #### Scenario: Retries run out
 - **WHEN** every attempt is answered 500
 - **THEN** after the last attempt the run ends with an `error` result naming the status and the attempts made
+
+#### Scenario: A server error asking a long wait
+- **WHEN** a request is answered 503 with `Retry-After: 120`
+- **THEN** the `retry` event has reason `server` and the runner's maximum delay, and the request is sent again
 
 ### Requirement: A rate limit's Retry-After is honoured within a named cap
 When a 429 response carries `Retry-After`, the retry's delay SHALL be that value. When it is longer than the runner's
@@ -393,13 +409,18 @@ how many bytes were left out.
   out
 
 ### Requirement: Cancel and end of input stop the request in flight
-On `run/cancel`, or when its standard input closes, the runner SHALL abandon any request in flight, send no further
-request, and exit within troupe's cancel grace period. After a cancel it SHALL send no `result`.
+On `run/cancel`, or when its standard input closes, the runner SHALL abandon any request in flight, carry out no further
+tool call, send no further request, and exit within troupe's cancel grace period. After a cancel it SHALL send no
+`result`.
 
 #### Scenario: Cancel during a slow response
 - **WHEN** the host cancels a run while the fake endpoint is holding a response open
 - **THEN** the runner acknowledges the cancel, the endpoint sees its connection closed, and the runner exits without
   a `result`
+
+#### Scenario: A stop between tool calls
+- **WHEN** the run is stopped after the first of a response's two tool calls is carried out
+- **THEN** the second isn't carried out, and no further request is sent
 
 ### Requirement: The runner publishes its schemas
 The runner SHALL publish its options schema and its error codes' schema, each passing the protocol's strictness

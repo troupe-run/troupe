@@ -203,8 +203,9 @@ troupe perform lead
 ```
 
 Allow the local stage first, as above, if this shell doesn't have it. The actor runs on the built-in `openai` runtime
-with a small, cheap model, and a small budget: at most 10 requests and 100,000 tokens a run. A run that reaches either
-stops and says which option to raise (`maxTurns`, `maxTotalTokens`). When you define your own actor on it, start with
+with a small, cheap model, and a small budget: a run stops after 10 requests, or once it has used 100,000 tokens. Each
+response is counted whole, so a run can end a little over. A run that stops says which option to raise (`maxTurns`,
+`maxTotalTokens`). When you define your own actor on it, start with
 lower limits still, such as `maxTurns` 5 and `maxTotalTokens` 20,000, and raise them once it behaves.
 [Point actors at a service](../stagecraft/runtimes.md) says how to use another model, another key, or another service
 that serves the Responses API. The

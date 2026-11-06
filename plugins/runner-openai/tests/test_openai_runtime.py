@@ -55,7 +55,11 @@ def test_an_unusable_endpoint_or_no_model_is_refused_naming_where(
 
 @pytest.mark.parametrize(
     "runtime",
-    [("http://models.example.com/v1", "m", KEY), ("ftp://x/v1", "m", None)],
+    [
+        ("http://models.example.com/v1", "m", KEY),
+        ("ftp://x/v1", "m", None),
+        ("https://x/v1", "m", KEY + "\r"),
+    ],
 )
 def test_each_refusals_details_match_its_published_error_code(
     runtime: tuple[str, str, str | None],
@@ -145,3 +149,17 @@ def test_a_run_start_and_an_environment_that_disagree_are_refused_without_the_va
         "details": error.details,
     }
     assert own_validator("errors.schema.json").is_valid(data)
+
+
+@pytest.mark.parametrize("ending", ["\n", "\r", "\r\n", " ", "\t", "\x00"], ids=repr)
+def test_a_key_with_a_line_ending_or_control_character_is_refused_without_its_value(
+    ending: str,
+) -> None:
+    with pytest.raises(RuntimeRefusedError) as raised:
+        Runtime.checked("https://api.openai.com/v1", "m", KEY + ending)
+    error = raised.value
+    assert error.code == "openai.malformed-credential"
+    assert error.details == {"where": "TROUPE_RUNTIME_CREDENTIAL"}
+    for text in (error.problem, error.fix):
+        assert KEY not in text
+        assert KEY[:8] not in text

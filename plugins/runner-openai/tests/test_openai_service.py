@@ -191,3 +191,12 @@ def test_a_call_aborted_before_it_opens_sends_nothing() -> None:
         with pytest.raises(AbortedError):
             call.open()
         assert fake.requests == []
+
+
+def test_a_header_the_key_cant_go_in_is_reported_without_the_key() -> None:
+    with FakeEndpoint([text_reply("ok")]) as fake:
+        call = Call(parse_endpoint(fake.endpoint), b"{}", KEY + "\r")
+        with pytest.raises(NetworkError) as raised:
+            call.open()
+    assert KEY not in str(raised.value)
+    assert KEY[:8] not in str(raised.value)

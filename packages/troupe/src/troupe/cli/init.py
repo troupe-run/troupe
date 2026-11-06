@@ -20,7 +20,7 @@ from troupe.core.client.session import CancelSignal, Session
 from troupe.core.defaults import RUNTIMES
 from troupe.core.errors import TroupeError
 from troupe.core.exit_codes import ExitCode
-from troupe.core.runtimes import env_name
+from troupe.core.runtimes import VARIABLE_PATTERN, env_name
 from troupe.core.theatre import THEATRE_DIR
 
 COMMAND = "troupe init"
@@ -108,14 +108,27 @@ def _value(entries: list[dict[str, Any]], actor: str, name: str) -> object:
     return None
 
 
-def _key_variable(runtime: object) -> str | None:
-    """The variable a built-in runtime's key is read from: the person's
-    ``TROUPE_RUNTIME_<NAME>_CREDENTIAL_ENV`` when it's set, else the built-in's, or None when it has
-    none. A fresh theatre's config names none of its own."""
+def _key_note(runtime: object) -> str:
+    """What to set for a built-in runtime's key: the variable it's read from, the person's
+    ``TROUPE_RUNTIME_<NAME>_CREDENTIAL_ENV`` when it's set, else the built-in's; empty when it has
+    none. An override that isn't a variable's name is named but never shown, since it may hold the
+    key itself. A fresh theatre's config names none of its own."""
     if isinstance(runtime, str):
-        chosen = os.environ.get(env_name(runtime, "credential_env"))
+        override = env_name(runtime, "credential_env")
+        chosen = os.environ.get(override)
+        if chosen and not VARIABLE_PATTERN.match(chosen):
+            return (
+                f"{override} isn't the name of a variable, so a run will be refused: set it to the "
+                "name of the variable that holds your key, not the key, or unset it. "
+            )
         if chosen:
-            return chosen
+            return f"Set {chosen} to your API key for the {runtime} runtime. "
+    variable = _key_variable(runtime)
+    return f"Set {variable} to your API key for the {runtime} runtime. " if variable else ""
+
+
+def _key_variable(runtime: object) -> str | None:
+    """The variable a built-in runtime's key is read from, or None when it has none."""
     built_in = RUNTIMES.get(runtime) if isinstance(runtime, str) else None
     credential = None if built_in is None else built_in.get("credential")
     env = credential.get("env") if isinstance(credential, dict) else None
@@ -145,13 +158,12 @@ def _step_notes(step: dict[str, Any], entries: list[dict[str, Any]]) -> list[str
         )
     if step["runner"] == "openai":
         runtime = _value(entries, step["actor"], "runtime")
-        variable = _key_variable(runtime)
         tokens = _option(entries, step["actor"], "maxTotalTokens")
         notes.append(
-            (f"Set {variable} to your API key for the {runtime} runtime. " if variable else "")
+            _key_note(runtime)
             + "A run costs money"
             + (
-                f", within the actor's budget of {tokens:,} tokens."
+                f", and stops once it has used the actor's budget of {tokens:,} tokens."
                 if isinstance(tokens, int)
                 else "."
             )

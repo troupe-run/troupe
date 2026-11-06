@@ -125,7 +125,7 @@ def test_each_retry_doubles_the_delay_up_to_the_cap() -> None:
 def test_when_the_attempts_run_out_the_failure_names_the_status_and_the_attempts() -> None:
     with FakeEndpoint([error_reply(500, "boom")] * 3) as fake:
         message = _failed(Run(fake, max_attempts=3))
-    assert message == "HTTP 500: boom Gave up after 3 attempts."
+    assert message == "HTTP 500: boom. Gave up after 3 attempts."
 
 
 def test_a_rate_limit_waits_what_retry_after_asks() -> None:
@@ -287,3 +287,12 @@ def test_retry_after_is_read_as_seconds(value: str | None, seconds: float | None
 
 def test_retry_after_as_an_http_date_is_the_seconds_until_it() -> None:
     assert retry_after("Wed, 21 Oct 2015 07:28:10 GMT", now=1445412480.0) == 10.0
+
+
+def test_a_server_error_asking_longer_than_the_cap_is_retried_after_the_cap() -> None:
+    reply = error_reply(503, "busy", headers=[("Retry-After", "120")])
+    with FakeEndpoint([reply, text_reply("ok")]) as fake:
+        run = Run(fake)
+        run()
+    assert run.retries == [Retry(1, 5, 60.0, "server", "HTTP 503: busy")]
+    assert len(fake.requests) == 2

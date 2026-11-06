@@ -392,7 +392,10 @@ def test_the_openai_walkthrough_runs_as_written_with_a_stand_in_service(
 def test_the_openai_section_states_the_auditions_limits_as_the_code_does() -> None:
     text = section(PAGE, OPENAI)
     limits = OPENAI_AUDITION_LIMITS
-    assert f"at most {limits['maxTurns']} requests and {limits['maxTotalTokens']:,} tokens" in text
+    assert (
+        f"a run stops after {limits['maxTurns']} requests, or once it has used "
+        f"{limits['maxTotalTokens']:,} tokens" in " ".join(text.split())
+    )
     assert "OPENAI_API_KEY" in text
 
 

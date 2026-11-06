@@ -27,6 +27,9 @@ _TOKEN = re.compile(r"[^\s\"'<>(),;\\]+")
 _TRAILING = ".:"
 """Punctuation that ends a sentence after an echoed key, which isn't part of it."""
 
+_CUT = "…"
+"""What a cut text ends with (the SDK's ``cut`` and the exchange's), after the part it kept."""
+
 
 class Mask:
     """Masks one credential in text. With no credential, text is unchanged."""
@@ -41,7 +44,9 @@ class Mask:
         text = text.replace(credential, MASK)
         if len(credential) < SHORTEST_MATCHED_BY_ENDS:
             return text
-        return _TOKEN.sub(lambda match: _echo(match.group(0), credential), text)
+        return _TOKEN.sub(
+            lambda match: _cut_short(_echo(match.group(0), credential), credential), text
+        )
 
     def json(self, value: object) -> object:
         """``value``, a decoded JSON value, with every string in it (keys included) masked."""
@@ -56,6 +61,16 @@ def _echo(token: str, credential: str) -> str:
     core = token.rstrip(_TRAILING)
     if "*" in core and (core.startswith(credential[:ENDS]) or core.endswith(credential[-ENDS:])):
         return MASK + token[len(core) :]
+    return token
+
+
+def _cut_short(token: str, credential: str) -> str:
+    """``token`` with the start of ``credential`` masked where it ends the token: a text cut to a
+    limit inside the credential keeps only its start, which the whole-value match misses."""
+    core = token.rstrip(_CUT + _TRAILING)
+    for size in range(len(credential) - 1, SHORTEST_MATCHED_BY_ENDS - 1, -1):
+        if core.endswith(credential[:size]):
+            return core[: len(core) - size] + MASK + token[len(core) :]
     return token
 
 

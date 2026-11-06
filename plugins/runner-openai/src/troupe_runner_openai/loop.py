@@ -285,6 +285,8 @@ class Loop:
         reply's output items unchanged, then each call's output."""
         outputs: list[dict[str, Any]] = []
         for call in reply.tool_calls:
+            if self.stopping():
+                break  # the run is stopping: carry out no more of its calls
             call_id = call.call_id or ""
             step = self.tools.run(call_id, call.name, call.arguments, self.numbering)
             for event in step.events:

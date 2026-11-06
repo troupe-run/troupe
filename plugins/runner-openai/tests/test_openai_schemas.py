@@ -32,7 +32,7 @@ def test_the_options_schema_is_closed_and_defines_only_the_two_limits() -> None:
     assert set(schema["properties"]) == {"maxTurns", "maxTotalTokens"}
 
 
-def test_the_errors_schema_closes_each_error_and_lists_the_five_codes() -> None:
+def test_the_errors_schema_closes_each_error_and_lists_the_six_codes() -> None:
     schema = _schema("errors.schema.json")
     assert schema["unevaluatedProperties"] is False
     codes = {branch["properties"]["code"]["const"] for branch in schema["oneOf"]}
@@ -42,6 +42,7 @@ def test_the_errors_schema_closes_each_error_and_lists_the_five_codes() -> None:
         "openai.no-runtime",
         "openai.insecure-endpoint",
         "openai.credential-mismatch",
+        "openai.malformed-credential",
     }
 
 
