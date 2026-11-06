@@ -100,7 +100,7 @@ note; they're ticked again when their Responses version passes.
   package to `troupe-runner-openai` and the module to `troupe_runner_openai`, the runner's name to `openai`, its error
   codes to `openai.*` and its schemas' `$id`s, and everything that names them (the root `pyproject.toml` and its
   contracts, release-please's config and manifest, `scripts/check-paths.toml`, the bundle, the changelog page,
-  `scripts/tests/workspace/test_plugin_imports.py`, core's stand-in, and the uncommitted core work of 8.1 to 8.3).
+  `scripts/tests/workspace/test_plugin_imports.py`, core's stand-in, and the core work of 8.1 to 8.3, built before the rename).
   Verify: a search for `openai-chat` and `openai_chat` finds nothing outside `openspec/`, and the full check passes.
 - [x] 6.2 Replace the stream reader and point requests at `/responses` (4.3): the fake endpoint's helpers build
   Responses streams (`event:` and `data:` lines, deltas, a final event with the response object), the 404 hint names
@@ -132,13 +132,13 @@ note; they're ticked again when their Responses version passes.
   every list of the runners troupe knows. Verify: the `runs` delta's scenarios pass in `test_interim.py` and the
   perform tests (`HTTPS_PROXY` and `SSL_CERT_FILE` reach the runner, the key reaches it only as
   `TROUPE_RUNTIME_CREDENTIAL` and `OPENAI_API_KEY` doesn't, `codex` is refused naming all four runners, and an
-  `openai` actor naming no runtime is refused by config). (Built as `openai-chat`, uncommitted; renamed in 6.1.)
+  `openai` actor naming no runtime is refused by config). (First built as `openai-chat`; renamed in 6.1.)
 - [x] 8.2 Let the conformance suite give a runner a runtime and its credential, and run it against the runner with a
   runtime naming the fake endpoint, as a test in `packages/troupe/tests/test_runner_conformance.py`. Verify: every
-  check passes. (Built, uncommitted.)
+  check passes.
 - [x] 8.3 Write a perform test that runs an `openai` actor end to end against the fake endpoint in a worktree,
   writing a declared file. Verify: the outcome is `succeeded`, `troupe logs` shows its events, and `troupe diff`
-  shows the file. (Built for Chat Completions, uncommitted.)
+  shows the file. (First built for Chat Completions.)
 - [x] 8.4 Add the OpenAI audition (D14, the `config` and `cli` deltas): `OPENAI_AUDITION_MODEL` (`gpt-6-luna`) in one
   place in `troupe.core.audition`, the actor with `runtime: openai`, the model, `maxTurns` 10, `maxTotalTokens`
   100,000, `effects.write: ["**"]`, `expect: []` and the character, and `init`'s note on `OPENAI_API_KEY` and cost.

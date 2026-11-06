@@ -192,7 +192,8 @@ def test_a_401_that_echoes_part_of_the_key_is_masked_in_the_result_and_transcrip
 SCRIPTS: dict[str, list[Reply]] = {
     "success": [tool_reply([("c1", "Glob", {"pattern": "*"})]), text_reply(f"done {CANARY}")],
     "rejected": [error_reply(401, f"Incorrect API key provided: {MASKED_ECHO}.")],
-    "server errors": [error_reply(500, f"boom {CANARY}")] * 5,
+    # Retry-After: 0 keeps every retry until they run out, without the real backoff between them.
+    "server errors": [error_reply(500, f"boom {CANARY}", headers=[("Retry-After", "0")])] * 5,
     "quota": [error_reply(429, f"quota for {CANARY}", code="insufficient_quota")],
     "redirect": [Reply(307, headers=[("Location", f"https://x.example/{CANARY}")])],
     "tool echo": [
