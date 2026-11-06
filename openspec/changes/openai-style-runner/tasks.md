@@ -164,7 +164,7 @@ note; they're ticked again when their Responses version passes.
   with the output shown.
 - [ ] 10.2 Ask the owner to run the live test against OpenAI, and check D9's assumption that `input_tokens` includes
   cache writes. Verify: the owner's run ends `succeeded`, and its endpoint, model and token use are recorded in the PR.
-- [ ] 10.3 For each gap in D12 that building confirmed, check #56's issues and pull requests for the same gap, then
+- [x] 10.3 For each gap in D12 that building confirmed, check #56's issues and pull requests for the same gap, then
   file it as its own issue (on the board, 0.2.0, naming this change and the runner's behaviour today), and list them
   in the PR. Verify: each is on the board (`gh issue view <n> --json projectItems`).
 

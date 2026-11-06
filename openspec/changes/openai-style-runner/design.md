@@ -273,19 +273,19 @@ headers are never recorded. That a runner must invent this framing is gap 4.
 
 ### D12. The contract's gaps, found so far
 
-Candidates, each confirmed while building and then filed as its own issue on the board, and adopted by this runner
+Each was confirmed while building and filed as its own issue on the board (2026-11-06), to be adopted by this runner
 when it lands:
 
-1. **A failed result has no reason troupe can act on.** Authentication, quota, rate limit exhausted, context length,
+1. **A failed result has no reason troupe can act on** (#296). Authentication, quota, rate limit exhausted, context length,
    refusal, output limit, budget and turn limit are all `status: error` with a message. troupe can't tell a person
    "fix your key" from "raise the budget" without parsing text.
-2. **No estimated cost.** `costUsd` can only be what the engine reports, so a service that reports no price has no
+2. **No estimated cost** (#292). `costUsd` can only be what the engine reports, so a service that reports no price has no
    cost at all, and a price-list estimate has nowhere to go.
-3. **`inputTokens` doesn't say what it counts.** OpenAI's input tokens include cache reads and (D9) writes;
+3. **`inputTokens` doesn't say what it counts** (#293). OpenAI's input tokens include cache reads and (D9) writes;
    Anthropic's don't. Each runner subtracts to match Claude Code's, which is a convention, not the contract.
-4. **Transcript records have no kind.** A runner that drives an API, rather than an engine with its own output,
+4. **Transcript records have no kind** (#294). A runner that drives an API, rather than an engine with its own output,
    invents a framing (D10), and nothing can read two runners' transcripts the same way.
-5. **The model served isn't the model asked for.** Each response names the model that answered (often a dated
+5. **The model served isn't the model asked for** (#295). Each response names the model that answered (often a dated
    version), after `init` has gone; it can only be a `log`.
 
 #56's runner may find some of these too; filing checks its issues first, so each gap is filed once.
