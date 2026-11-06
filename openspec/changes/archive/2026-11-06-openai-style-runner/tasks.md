@@ -91,7 +91,7 @@ note; they're ticked again when their Responses version passes.
 - [x] 5.6 Handle `run/cancel`, end of input and `shutdown`. Verify: tests that cancel during a held-open response (the
   fake sees its connection closed, no `result` is sent, the runner exits within troupe's grace), close stdin mid-run,
   and shut down after a result, each passing on all three platforms in CI.
-  Done: passed on Linux, macOS and Windows (Python 3.12 to 3.15) in CI run [42208118314](https://github.com/troupe-run/troupe/actions/runs/42208118314) on 9d5f62d,
+  Done: passed on Linux, macOS and Windows (Python 3.12 to 3.15) in CI run [42210243221](https://github.com/troupe-run/troupe/actions/runs/42210243221) on 1d56580,
   the last code change; only the opt-in live test was skipped.
 
 ## 6. Move to the Responses API and the new names (design D1, D4, D6, D9, D15)
@@ -175,7 +175,7 @@ note; they're ticked again when their Responses version passes.
 
 - [x] 11.1 Run `uv run scripts/check.py`. Verify: it passes locally, and CI passes on Linux, macOS and Windows once
   the PR is marked ready.
-  Done: passes locally, and CI run [42208118314](https://github.com/troupe-run/troupe/actions/runs/42208118314) passed all twelve jobs on 9d5f62d, the last code change.
+  Done: passes locally, and CI run [42210243221](https://github.com/troupe-run/troupe/actions/runs/42210243221) passed all twelve jobs on 1d56580, the last code change.
 
 ## Workflow follow-up
 
