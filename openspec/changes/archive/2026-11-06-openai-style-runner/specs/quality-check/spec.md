@@ -1,11 +1,11 @@
 ## MODIFIED Requirements
 
 ### Requirement: Each package outside core has a scope
-troupe SHALL declare one scope per workspace package other than core: `artifacts_local`, `identity_local`,
-`stage_local`, `store_text`, `vcs_files`, `vcs_git`, `plugin_sdk` and `run` for `packages/troupe-<name>/`, and
-`runner_claude_code`, `runner_ollama`, `runner_openai` and `runner_scripted` for `plugins/runner-<name>/`. Each SHALL cover its
-package's files except `pyproject.toml`. Core (`packages/troupe/**`) and every `pyproject.toml` SHALL be in no scope,
-so a change to them runs the full check.
+troupe SHALL declare a scope for each workspace package but core: `artifacts_local`, `identity_local`, `stage_local`,
+`store_text`, `vcs_files`, `vcs_git`, `plugin_sdk` and `run` for `packages/troupe-<name>/`, and `runner_claude_code`,
+`runner_ollama`, `runner_openai` and `runner_scripted` for `plugins/runner-<name>/`. Each SHALL cover its package's
+files but `pyproject.toml`. Core (`packages/troupe/**`) and every `pyproject.toml` SHALL be in no scope, so changing
+them runs the full check.
 
 #### Scenario: A commit that changes one leaf package
 - **WHEN** a commit stages only files under `packages/troupe-stage-local/`, possibly with files under `openspec/`

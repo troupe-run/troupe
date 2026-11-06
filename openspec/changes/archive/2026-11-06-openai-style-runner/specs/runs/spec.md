@@ -29,11 +29,11 @@ knows, before anything is recorded.
   one
 
 ### Requirement: Perform passes a runner only the variables it is known to need
-`perform` SHALL start a runner with the environment variables troupe's runner table names for it, each taken from
-`perform`'s own environment when set there, and, when the run's runtime has a credential, `TROUPE_RUNTIME_CREDENTIAL`
-holding its value, and SHALL pass no others. The scripted runner and the Ollama runner SHALL be named none. The
-Claude Code runner SHALL be named what Claude Code needs to run and find the person's login. The OpenAI runner
-SHALL be named only what it needs to reach a service through a proxy and trust its certificate.
+`perform` SHALL start a runner with only the environment variables troupe's runner table names for it, each taken from
+`perform`'s own environment when set there, plus `TROUPE_RUNTIME_CREDENTIAL` holding the credential when the run's
+runtime has one. The scripted and Ollama runners SHALL be named none, the Claude Code runner what Claude Code needs to
+run and find the person's login, and the OpenAI runner only what it needs to reach a service through a proxy and trust
+its certificate.
 
 #### Scenario: The Claude Code runner gets its login's variables
 - **WHEN** `perform` runs with `PATH`, `HOME` and `CLAUDE_CODE_OAUTH_TOKEN` set, and performs a `claude-code` actor
