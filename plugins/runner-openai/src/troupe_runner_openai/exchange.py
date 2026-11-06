@@ -130,6 +130,7 @@ def classify(error: StatusError, url: str = "") -> _Retryable:
     status = error.status
     message, code = _service_error(error.body)
     said = f"HTTP {status}: {message}"
+    told = _sentence(message)  # ending as a sentence, so a fix can follow it
     if 300 <= status < 400:
         location = error.headers.get("location", "(no Location)")
         raise ExchangeFailedError(
@@ -139,7 +140,7 @@ def classify(error: StatusError, url: str = "") -> _Retryable:
         )
     if status in (401, 403):
         raise ExchangeFailedError(
-            f"The service refused the credential (HTTP {status}): {message} Check the key the "
+            f"The service refused the credential (HTTP {status}): {told} Check the key the "
             "actor's runtime names, and that it's allowed to use this model."
         )
     if status == 429 and code == "insufficient_quota":
@@ -148,12 +149,12 @@ def classify(error: StatusError, url: str = "") -> _Retryable:
         return _Retryable("rate-limit", said, retry_after(error.headers.get("retry-after")))
     if status == 400 and code == "context_length_exceeded":
         raise ExchangeFailedError(
-            f"The conversation is longer than the model's context (HTTP 400): {message} Give the "
+            f"The conversation is longer than the model's context (HTTP 400): {told} Give the "
             "actor a smaller task, or a runtime whose model has a longer context."
         )
     if status == 404 and code is None:
         raise ExchangeFailedError(
-            f"Nothing answered at {url or 'the endpoint'} (HTTP 404): {message} The runtime's "
+            f"Nothing answered at {url or 'the endpoint'} (HTTP 404): {told} The runtime's "
             "endpoint must be the base URL its Responses API is served under, often ending "
             "in /v1, such as http://127.0.0.1:11434/v1 for Ollama."
         )
