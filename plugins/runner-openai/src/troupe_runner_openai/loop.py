@@ -1,18 +1,22 @@
-"""The tool loop: from the direction to one result (spec: openai-runner; openai-style-runner
-design D6, D7, D9).
+"""The tool loop: from the direction to one result, over the Responses API (spec: openai-runner;
+openai-style-runner design D6, D7, D9).
 
-    messages = [system(instructions + character?), user(direction)]
+    instructions = runner instructions + character?
+    input = [user(direction)]
     for turn in 1..maxTurns:
-        reply = exchange(messages)               # retries inside
+        reply = exchange(instructions, input)    # retries inside
         turn event for its text, if any
-        a refusal, content filter, length or unknown finish without calls: error result
-        no tool calls: ok result with the text
-        carry out each call in order through the SDK; add the assistant and tool messages
+        a refusal, an incomplete or unknown status, a call without a call_id: error result
+        no function call: ok result with the text
+        carry out each call in order through the SDK
+        input += the reply's output items, unchanged, then one function_call_output per call
         the token budget spent: error result
     the turn limit reached: error result
 
-The loop sends nothing itself: it hands each event and transcript record to the runner, which
-masks and sends them. It returns the result event, or None when the run was stopped.
+Every request is ``store: false`` and names no previous response, so the service keeps nothing of
+the run and each request carries the whole conversation. The loop sends nothing itself: it hands
+each event and transcript record to the runner, which masks and sends them. It returns the result
+event, or None when the run was stopped.
 """
 
 import json
@@ -43,36 +47,44 @@ from troupe_runner_openai.runtime import Runtime
 from troupe_runner_openai.service import AbortedError, Call
 from troupe_runner_openai.stream import Reply
 
-TOOL_FINISHES = ("tool_calls", "function_call", "stop")
-"""Finish reasons a reply with tool calls may carry. Some compatible hosts finish a reply that asks
-for tools with stop."""
+INCOMPLETE = {
+    "max_output_tokens": (
+        "The response reached the service's output limit before the model finished."
+    ),
+    "content_filter": "The service's content filter stopped the response.",
+}
+"""What an incomplete response's reason means, in the result's words (design D8)."""
 
 
-def system_message(character: str | None) -> str:
-    """The run's system message: the runner's fixed instructions, then the actor's character."""
+def instructions(character: str | None) -> str:
+    """The run's instructions: the runner's fixed instructions, then the actor's character."""
     return INSTRUCTIONS if character is None else f"{INSTRUCTIONS}\n\n{character}"
 
 
-def request_body(runtime: Runtime, messages: list[dict[str, Any]], tools: Tools) -> bytes:
-    """One request's body: the runtime's model, the conversation, the SDK's tools, streamed with
-    usage."""
+def request_body(
+    runtime: Runtime, instructions_: str, input_: list[dict[str, Any]], tools: Tools
+) -> bytes:
+    """One request's body: the runtime's model, the instructions and the whole conversation, the
+    SDK's tools (not strict, which the Responses API defaults to and the SDK's optional fields
+    don't fit), streamed, and stored nowhere."""
     offered = [
         {
             "type": "function",
-            "function": {
-                "name": tool.name,
-                "description": tool.description,
-                "parameters": tool.input_schema,
-            },
+            "name": tool.name,
+            "description": tool.description,
+            "parameters": tool.input_schema,
+            "strict": False,
         }
         for tool in tools.offered()
     ]
     body = {
         "model": runtime.model,
-        "messages": messages,
+        "instructions": instructions_,
+        "input": input_,
         "tools": offered,
         "stream": True,
-        "stream_options": {"include_usage": True},
+        "store": False,
+        "include": ["reasoning.encrypted_content"],
     }
     return json.dumps(body, ensure_ascii=False).encode("utf-8")
 
@@ -83,9 +95,11 @@ class _Spend:
 
     input_tokens: int = 0
     output_tokens: int = 0
-    cached_tokens: int = 0
+    cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
     cost_usd: float = 0.0
     usage_known: bool = True
+    writes_known: bool = True
     cost_known: bool = True
     requests: int = 0
 
@@ -97,18 +111,24 @@ class _Spend:
         """Add one reply's usage. False when it reported none, or a shape that can't be read."""
         self.requests += 1
         if usage is None:
-            self.usage_known = self.cost_known = False
+            self.usage_known = self.writes_known = self.cost_known = False
             return False
-        prompt, completion = usage.get("prompt_tokens"), usage.get("completion_tokens")
-        if not _count(prompt) or not _count(completion):
-            self.usage_known = self.cost_known = False
+        given, made = usage.get("input_tokens"), usage.get("output_tokens")
+        if not _count(given) or not _count(made):
+            self.usage_known = self.writes_known = self.cost_known = False
             return False
-        details = usage.get("prompt_tokens_details")
-        found = details.get("cached_tokens") if isinstance(details, dict) else None
-        cached = found if _count(found) else 0
-        self.input_tokens += prompt
-        self.output_tokens += completion
-        self.cached_tokens += min(cached, prompt)
+        details = usage.get("input_tokens_details")
+        details = details if isinstance(details, dict) else {}
+        read, written = details.get("cached_tokens"), details.get("cache_write_tokens")
+        read = read if _count(read) else 0
+        if _count(written):
+            self.cache_write_tokens += written
+        else:
+            self.writes_known = False
+            written = 0
+        self.input_tokens += given
+        self.output_tokens += made
+        self.cache_read_tokens += min(read, given)
         cost = usage.get("cost")
         if isinstance(cost, int | float) and not isinstance(cost, bool) and cost >= 0:
             self.cost_usd += float(cost)
@@ -117,12 +137,16 @@ class _Spend:
         return True
 
     def usage(self) -> Usage | None:
+        """The four counters (design D9): input less what was read from and written to the cache,
+        the cache's reads and, when every response reported them, its writes."""
         if not self.usage_known or self.requests == 0:
             return None
+        writes = self.cache_write_tokens if self.writes_known else 0
         return Usage(
-            input_tokens=self.input_tokens - self.cached_tokens,
+            input_tokens=max(0, self.input_tokens - self.cache_read_tokens - writes),
             output_tokens=self.output_tokens,
-            cache_read_tokens=self.cached_tokens,
+            cache_read_tokens=self.cache_read_tokens,
+            cache_write_tokens=self.cache_write_tokens if self.writes_known else None,
         )
 
     def cost(self) -> float | None:
@@ -150,31 +174,27 @@ class Loop:
     stopping: Callable[[], bool] = lambda: False
     make_call: Callable[..., Call] = Call
     exchange_limits: dict[str, Any] = field(default_factory=dict)
-    _ids: set[str] = field(default_factory=set)
-    _made: int = 0
     _warned_usage: bool = False
     _noted_model: bool = False
     _spend: _Spend = field(default_factory=_Spend)
 
     def run(self, direction: str, character: str | None) -> ResultEvent | None:
         """Run the loop to its result. None when the run was stopped."""
-        messages: list[dict[str, Any]] = [
-            {"role": "system", "content": system_message(character)},
-            {"role": "user", "content": direction},
-        ]
+        told = instructions(character)
+        conversation: list[dict[str, Any]] = [{"role": "user", "content": direction}]
         spend = self._spend
         try:
             for turn in range(1, self.options.max_turns + 1):
                 if self.stopping():
                     return None
-                reply = self._exchange(messages)
+                reply = self._exchange(told, conversation)
                 self._count(spend, reply)
                 if reply.text:
                     self._send_turn(reply.text)
                 ended = self._ended(reply, spend)
                 if ended is not None:
                     return ended
-                self._carry_out(reply, messages)
+                conversation += self._carry_out(reply)
                 if self.stopping():
                     return None
                 if spend.usage_known and spend.tokens >= self.options.max_total_tokens:
@@ -202,10 +222,10 @@ class Loop:
 
     # One reply
 
-    def _exchange(self, messages: list[dict[str, Any]]) -> Reply:
+    def _exchange(self, told: str, conversation: list[dict[str, Any]]) -> Reply:
         return exchange(
             self.runtime.endpoint,
-            request_body(self.runtime, messages, self.tools),
+            request_body(self.runtime, told, conversation, self.tools),
             self.runtime.credential,
             self._send_retry,
             self.record,
@@ -235,61 +255,44 @@ class Loop:
         """The result a reply ends the run with, or None when it asks for tools."""
         if reply.refusal is not None:
             return self._result("error", f"The model refused: {reply.refusal}", spend)
-        if reply.finish == "content_filter":
-            return self._result(
-                "error", "The service's content filter stopped the response.", spend
+        if reply.status == "incomplete":
+            reason = reply.incomplete_reason
+            said = INCOMPLETE.get(reason or "") or (
+                f"The response was left incomplete ({reason or 'no reason given'})."
             )
-        if reply.finish == "length":
+            return self._result("error", said, spend)
+        if reply.status != "completed":
             return self._result(
                 "error",
-                "The response reached the service's output limit before the model finished.",
+                f"The response ended with the status {reply.status!r}, which the runner doesn't "
+                "know.",
                 spend,
             )
-        if reply.tool_calls and reply.finish in TOOL_FINISHES:
-            return None
-        if reply.finish == "stop" and not reply.tool_calls:
+        missing = [call.name or "(no name)" for call in reply.tool_calls if not call.call_id]
+        if missing:
+            return self._result(
+                "error",
+                f"The service sent a tool call it can't be answered for, since it has no call_id: "
+                f"{', '.join(missing)}.",
+                spend,
+            )
+        if not reply.tool_calls:
             return self._result("ok", reply.text or "The model finished without a reply.", spend)
-        if reply.tool_calls:
-            return None
-        return self._result(
-            "error",
-            f"The response finished with {reply.finish!r}, which the runner doesn't know, and "
-            "asked for no tool.",
-            spend,
-        )
+        return None
 
-    def _carry_out(self, reply: Reply, messages: list[dict[str, Any]]) -> None:
-        calls = []
+    def _carry_out(self, reply: Reply) -> list[dict[str, Any]]:
+        """Carry out the reply's calls in order; what the next request adds to its input: the
+        reply's output items unchanged, then each call's output."""
+        outputs: list[dict[str, Any]] = []
         for call in reply.tool_calls:
-            call_id = call.id if call.id and call.id not in self._ids else self._new_id()
-            self._ids.add(call_id)
-            calls.append((call_id, call))
-        messages.append(
-            {
-                "role": "assistant",
-                "content": reply.text or None,
-                "tool_calls": [
-                    {
-                        "id": call_id,
-                        "type": "function",
-                        "function": {"name": call.name, "arguments": call.arguments},
-                    }
-                    for call_id, call in calls
-                ],
-            }
-        )
-        for call_id, call in calls:
+            call_id = call.call_id or ""
             step = self.tools.run(call_id, call.name, call.arguments, self.numbering)
             for event in step.events:
                 self.send(event)
-            messages.append({"role": "tool", "tool_call_id": call_id, "content": step.output})
-
-    def _new_id(self) -> str:
-        while True:
-            self._made += 1
-            call_id = f"call-{self._made}"
-            if call_id not in self._ids:
-                return call_id
+            outputs.append(
+                {"type": "function_call_output", "call_id": call_id, "output": step.output}
+            )
+        return [*reply.output, *outputs]
 
     # Events
 
@@ -348,4 +351,4 @@ class Loop:
         return fit(data, key, limit, self.numbering.event_max_bytes)
 
 
-__all__ = ["TOOL_FINISHES", "Loop", "request_body", "system_message"]
+__all__ = ["INCOMPLETE", "Loop", "instructions", "request_body"]

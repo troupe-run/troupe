@@ -1,210 +1,217 @@
-"""Reading a streamed Chat Completions response into one reply (openai-style-runner design D4).
+"""Reading a streamed Responses API response into one reply (openai-style-runner design D4).
 
-The response is server-sent events: ``data:`` lines, each event ended by a blank line, and
-``data: [DONE]`` at the end. Each event's data is a ``chat.completion.chunk``. The reply is built
-from choice 0's deltas: its text, a refusal, reasoning (kept only for the transcript), and tool
-calls accumulated by ``index`` (the first delta of each gives its id and name, later ones append to
-its arguments). Usage comes from whichever chunk carries it, normally the last, whose choices are
-empty.
+The stream is server-sent events: an ``event:`` line naming the type, a ``data:`` line holding it as
+JSON (whose ``type`` says the same), and a blank line. There's no ``[DONE]``: the stream ends after
+its final event. The reply is the response object the final event carries, never something built
+from deltas: ``response.completed``, ``response.incomplete`` and ``response.failed`` each carry the
+whole response, its output items, status and usage. An ``error`` event, which a service can send
+mid-stream, is final too. Deltas only show the model working, and are read past.
 
-A reply is complete only when a finish reason has arrived and the stream has ended. Anything else,
-or an event that isn't a chunk, is a broken stream: StreamError, and the reply is dropped whole,
-tool calls it had begun included.
+A stream that ends without a final event, or holds an event that can't be read, is broken:
+StreamError, and the partial response is dropped whole, tool calls it had begun included.
 
     parser = StreamParser()
     for line in response.lines():
-        if parser.feed(line):    # true at data: [DONE]
+        if parser.feed(line):    # true once the final event is read
             break
     reply = parser.reply()       # or StreamError
 """
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
-DONE = "[DONE]"
+FINAL = ("response.completed", "response.incomplete", "response.failed")
+"""The events that carry the whole response and end the stream."""
+
+ERROR = "error"
+"""The event a service sends mid-stream when it fails; it ends the stream too."""
 
 
 class StreamError(Exception):
-    """The stream broke, or held something that isn't a chunk. The message says what, in words a
+    """The stream broke, or held something that isn't an event. The message says what, in words a
     person can act on."""
 
 
-@dataclass
+@dataclass(frozen=True)
 class ToolCall:
-    """One tool call the model asked for."""
+    """One ``function_call`` output item."""
 
-    index: int
-    id: str | None
+    call_id: str | None
     name: str
     arguments: str
     """The arguments as the model wrote them: JSON text, which may not be valid."""
 
 
-@dataclass
-class Reply:
-    """One complete response."""
+@dataclass(frozen=True)
+class Failure:
+    """Why the service failed the response: its error code and message."""
 
+    code: str | None
+    message: str
+
+
+@dataclass(frozen=True)
+class Reply:
+    """One response, as its final event gave it."""
+
+    status: str
+    """completed, incomplete or failed as the service said, or ``error`` for an error event."""
+    output: list[dict[str, Any]]
+    """The output items unchanged, to send back in the next request's input."""
     text: str
     refusal: str | None
-    reasoning: str
     tool_calls: list[ToolCall]
-    finish: str
+    incomplete_reason: str | None
+    failure: Failure | None
     usage: dict[str, Any] | None
-    """The service's usage record as it sent it, or None when it sent none."""
     model: str | None
-    """The model the service says answered, or None when it didn't say."""
-
-
-@dataclass
-class _Building:
-    text: list[str] = field(default_factory=list)
-    refusal: list[str] = field(default_factory=list)
-    reasoning: list[str] = field(default_factory=list)
-    calls: dict[int, ToolCall] = field(default_factory=dict)
-    finish: str | None = None
-    usage: dict[str, Any] | None = None
-    model: str | None = None
 
 
 def _string(value: object, where: str) -> str | None:
     if value is None or isinstance(value, str):
         return value
-    raise StreamError(f"The stream's {where} is {type(value).__name__}, not text.")
+    raise StreamError(f"The response's {where} is {type(value).__name__}, not text.")
+
+
+def _dict(value: object, where: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise StreamError(f"The response's {where} isn't an object.")
+    return value
+
+
+def _failure(error: object) -> Failure:
+    if isinstance(error, dict):
+        code = error.get("code")
+        message = error.get("message")
+        return Failure(
+            code if isinstance(code, str) and code else None,
+            message if isinstance(message, str) and message else "(no message)",
+        )
+    return Failure(None, str(error) if error else "(no message)")
+
+
+def read_response(response: dict[str, Any], status: str | None = None) -> Reply:
+    """A reply from a response object. Its own status wins; ``status``, from the final event's
+    name, stands in when it gives none. Raises StreamError for one that can't be read."""
+    said = _string(response.get("status"), "status")
+    status = said or status
+    if not status:
+        raise StreamError("The response has no status.")
+    output = response.get("output") or []
+    if not isinstance(output, list):
+        raise StreamError("The response's output isn't a list.")
+    texts: list[str] = []
+    refusals: list[str] = []
+    calls: list[ToolCall] = []
+    for index, raw in enumerate(output):
+        item = _dict(raw, f"output item {index}")
+        kind = item.get("type")
+        if kind == "message":
+            content = item.get("content") or []
+            if not isinstance(content, list):
+                raise StreamError(f"The response's output item {index}'s content isn't a list.")
+            for part in content:
+                part = _dict(part, f"output item {index}'s content")
+                if part.get("type") == "output_text":
+                    texts.append(_string(part.get("text"), "output text") or "")
+                elif part.get("type") == "refusal":
+                    refusals.append(_string(part.get("refusal"), "refusal") or "")
+        elif kind == "function_call":
+            calls.append(
+                ToolCall(
+                    _string(item.get("call_id"), "call_id") or None,
+                    _string(item.get("name"), "tool call's name") or "",
+                    _string(item.get("arguments"), "tool call's arguments") or "",
+                )
+            )
+    details = response.get("incomplete_details")
+    reason = (
+        _string(details.get("reason"), "incomplete reason") if isinstance(details, dict) else None
+    )
+    error = response.get("error")
+    usage = response.get("usage")
+    if usage is not None and not isinstance(usage, dict):
+        raise StreamError("The response's usage isn't an object.")
+    return Reply(
+        status=status,
+        output=list(output),
+        text="".join(texts),
+        refusal="".join(refusals) if refusals else None,
+        tool_calls=calls,
+        incomplete_reason=reason,
+        failure=_failure(error) if error else None,
+        usage=usage,
+        model=_string(response.get("model"), "model") or None,
+    )
 
 
 class StreamParser:
-    """Builds one Reply from a response's lines, fed in order."""
+    """Reads one response's stream, line by line, to its final event."""
 
     def __init__(self) -> None:
-        self._building = _Building()
         self._data: list[str] = []
-        self._done = False
+        self._reply: Reply | None = None
 
     def feed(self, line: str) -> bool:
-        """Read one line. Returns True once ``data: [DONE]`` has been read; feeding more after it
-        is a mistake of the caller's. Raises StreamError for an event that isn't a chunk."""
-        if self._done:
-            raise ValueError("the stream has already ended")
+        """Read one line. True once the final event has been read: the caller stops there.
+        Raises StreamError for an event that can't be read."""
+        if self._reply is not None:
+            raise ValueError("the stream's final event has already been read")
         if line == "":
             return self._dispatch()
         if line.startswith(":"):
             return False
         name, _, value = line.partition(":")
-        if name != "data":
-            return False  # event, id and retry fields: Chat Completions doesn't use them
-        self._data.append(value.removeprefix(" "))
+        if name == "data":
+            self._data.append(value.removeprefix(" "))
+        # event:, id: and retry: lines: the data's own type is what's read.
         return False
 
     def end(self) -> None:
-        """The body ended: read any event it ended without a blank line after."""
-        if self._data and not self._done:
+        """The body ended: read an event it ended without a blank line after."""
+        if self._data and self._reply is None:
             self._dispatch()
 
     def reply(self) -> Reply:
-        """The reply, once the stream has ended. Raises StreamError when it ended before a finish
-        reason."""
+        """The reply, once the stream has ended. Raises StreamError when it ended without a final
+        event."""
         self.end()
-        building = self._building
-        if building.finish is None:
-            raise StreamError("The response's stream ended before the model finished its reply.")
-        calls = [building.calls[index] for index in sorted(building.calls)]
-        return Reply(
-            text="".join(building.text),
-            refusal="".join(building.refusal) if building.refusal else None,
-            reasoning="".join(building.reasoning),
-            tool_calls=calls,
-            finish=building.finish,
-            usage=building.usage,
-            model=building.model,
-        )
+        if self._reply is None:
+            raise StreamError("The response's stream ended before the service finished it.")
+        return self._reply
 
     def _dispatch(self) -> bool:
         if not self._data:
             return False
         data, self._data = "\n".join(self._data), []
-        if data == DONE:
-            self._done = True
-            return True
         try:
-            chunk = json.loads(data)
+            event = json.loads(data)
         except ValueError:
             raise StreamError(
                 f"An event in the response's stream isn't JSON: {data[:200]!r}."
             ) from None
-        if not isinstance(chunk, dict):
-            raise StreamError("An event in the response's stream isn't a JSON object.")
-        self._chunk(chunk)
+        if not isinstance(event, dict) or not isinstance(event.get("type"), str):
+            raise StreamError("An event in the response's stream has no type.")
+        kind = event["type"]
+        if kind in FINAL:
+            response = _dict(event.get("response"), f"{kind} event's response")
+            self._reply = read_response(response, kind.removeprefix("response."))
+            return True
+        if kind == ERROR:
+            failure = _failure(event.get("error") or event)
+            self._reply = Reply("error", [], "", None, [], None, failure, None, None)
+            return True
         return False
 
-    def _chunk(self, chunk: dict[str, Any]) -> None:
-        building = self._building
-        if "error" in chunk:
-            error = chunk["error"]
-            message = error.get("message") if isinstance(error, dict) else error
-            raise StreamError(f"The service reported an error mid-stream: {message}.")
-        model = _string(chunk.get("model"), "model")
-        if model:
-            building.model = model
-        usage = chunk.get("usage")
-        if usage is not None:
-            if not isinstance(usage, dict):
-                raise StreamError("The stream's usage isn't an object.")
-            building.usage = usage
-        choices = chunk.get("choices", [])
-        if not isinstance(choices, list):
-            raise StreamError("The stream's choices aren't a list.")
-        for choice in choices:
-            if not isinstance(choice, dict):
-                raise StreamError("A choice in the stream isn't an object.")
-            if choice.get("index", 0) != 0:
-                continue
-            self._choice(choice)
 
-    def _choice(self, choice: dict[str, Any]) -> None:
-        building = self._building
-        delta = choice.get("delta") or {}
-        if not isinstance(delta, dict):
-            raise StreamError("A delta in the stream isn't an object.")
-        for key, parts in (("content", building.text), ("refusal", building.refusal)):
-            value = _string(delta.get(key), key)
-            if value:
-                parts.append(value)
-        for key in ("reasoning_content", "reasoning"):
-            value = _string(delta.get(key), key)
-            if value:
-                building.reasoning.append(value)
-        calls = delta.get("tool_calls") or []
-        if not isinstance(calls, list):
-            raise StreamError("The stream's tool_calls aren't a list.")
-        for call in calls:
-            self._call(call)
-        finish = _string(choice.get("finish_reason"), "finish_reason")
-        if finish:
-            building.finish = finish
-
-    def _call(self, call: object) -> None:
-        calls = self._building.calls
-        if not isinstance(call, dict):
-            raise StreamError("A tool call in the stream isn't an object.")
-        index = call.get("index", len(calls))
-        if isinstance(index, bool) or not isinstance(index, int) or index < 0:
-            raise StreamError(f"A tool call's index in the stream is {index!r}.")
-        function = call.get("function") or {}
-        if not isinstance(function, dict):
-            raise StreamError("A tool call's function in the stream isn't an object.")
-        call_id = _string(call.get("id"), "tool call id")
-        name = _string(function.get("name"), "tool call name")
-        arguments = _string(function.get("arguments"), "tool call arguments")
-        if index not in calls:
-            calls[index] = ToolCall(index, call_id or None, name or "", arguments or "")
-            return
-        existing = calls[index]
-        if call_id and not existing.id:
-            existing.id = call_id
-        if name and not existing.name:
-            existing.name = name
-        existing.arguments += arguments or ""
-
-
-__all__ = ["DONE", "Reply", "StreamError", "StreamParser", "ToolCall"]
+__all__ = [
+    "ERROR",
+    "FINAL",
+    "Failure",
+    "Reply",
+    "StreamError",
+    "StreamParser",
+    "ToolCall",
+    "read_response",
+]

@@ -25,6 +25,7 @@ from troupe_runner_openai.defaults import (
     MAX_ATTEMPTS,
     RETRY_BASE_DELAY_SECONDS,
     RETRY_MAX_DELAY_SECONDS,
+    SERVICE_FAILURE_CODES,
     SUMMARY_MAX_BYTES,
     TRANSCRIPT_HEADER_PREFIXES,
     TRANSCRIPT_HEADERS,
@@ -148,12 +149,24 @@ def classify(error: StatusError, url: str = "") -> _Retryable:
     if status == 404 and code is None:
         raise ExchangeFailedError(
             f"Nothing answered at {url or 'the endpoint'} (HTTP 404): {message} The runtime's "
-            "endpoint must be the base URL its Chat Completions API is served under, often ending "
+            "endpoint must be the base URL its Responses API is served under, often ending "
             "in /v1, such as http://127.0.0.1:11434/v1 for Ollama."
         )
     if status >= 500:
         return _Retryable("server", said, retry_after(error.headers.get("retry-after")))
     raise ExchangeFailedError(f"The service refused the request (HTTP {status}): {message}")
+
+
+def _failed(reply: Reply) -> _Retryable:
+    """A failed response or error event the exchange may retry, as a _Retryable: only when its code
+    is the service's own failure (design D8). Raises ExchangeFailedError for any other."""
+    failure = reply.failure
+    code = None if failure is None else failure.code
+    message = "(no message)" if failure is None else failure.message
+    said = f"{code or 'no code'}: {message}"
+    if code in SERVICE_FAILURE_CODES:
+        return _Retryable("server", f"The service failed the response ({said})")
+    raise ExchangeFailedError(f"The service failed the response ({said}).")
 
 
 def _kept(headers: dict[str, str]) -> dict[str, str]:
@@ -199,14 +212,17 @@ def exchange(
     """Send ``body`` and return the reply, retrying as the module docstring says. ``on_call`` is
     given each call as it starts, and None when it's over, so another thread can abort it. Raises
     ExchangeFailedError, or AbortedError when the run is stopping."""
-    record({"kind": "request", "url": endpoint.chat_url, "body": body.decode("utf-8")})
+    record({"kind": "request", "url": endpoint.responses_url, "body": body.decode("utf-8")})
     for attempt in range(1, max_attempts + 1):
         call = make_call(endpoint, body, credential)
         on_call(call)
         try:
-            return _attempt(call, record)
+            reply = _attempt(call, record)
+            if reply.failure is None or reply.status not in ("failed", "error"):
+                return reply
+            retryable = _failed(reply)
         except StatusError as error:
-            retryable = classify(error, endpoint.chat_url)
+            retryable = classify(error, endpoint.responses_url)
         except (NetworkError, StreamError) as error:
             retryable = _Retryable("network", str(error))
             record({"kind": "dropped", "reason": retryable.message})

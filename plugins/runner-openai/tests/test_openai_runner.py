@@ -75,7 +75,7 @@ def test_init_comes_first_naming_the_engine_the_model_the_tools_and_checked(
         events = _events(session.until_result())
     init = events[0]
     assert (init["seq"], init["type"], init["effects"]) == (0, "init", "checked")
-    assert init["engine"] == {"name": "chat-completions", "model": "fake-model"}
+    assert init["engine"] == {"name": "responses", "model": "fake-model"}
     assert init["tools"] == ["Read", "Write", "Edit", "Glob", "Grep", "Delete", "Move"]
     assert [e["seq"] for e in events] == list(range(len(events)))
 

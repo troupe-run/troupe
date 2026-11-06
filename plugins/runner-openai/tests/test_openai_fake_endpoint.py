@@ -25,7 +25,7 @@ from fake_endpoint import (
 
 def _post(endpoint: str, body: bytes = b"{}", headers: dict[str, str] | None = None) -> bytes:
     request = urllib.request.Request(  # noqa: S310 - the fake's own http URL
-        endpoint + "/chat/completions", data=body, headers=headers or {}, method="POST"
+        endpoint + "/responses", data=body, headers=headers or {}, method="POST"
     )
     with urllib.request.urlopen(request, timeout=10) as response:  # noqa: S310
         data: bytes = response.read()
@@ -36,28 +36,31 @@ def test_each_request_is_recorded_with_its_headers_and_body() -> None:
     with FakeEndpoint([text_reply("hi")]) as fake:
         _post(fake.endpoint, b'{"model": "m"}', {"Authorization": "Bearer k"})
         (request,) = fake.requests
-    assert (request.method, request.path) == ("POST", "/v1/chat/completions")
+    assert (request.method, request.path) == ("POST", "/v1/responses")
     assert request.headers["authorization"] == "Bearer k"
     assert request.json() == {"model": "m"}
 
 
-def test_a_streamed_reply_is_server_sent_events_ending_in_done() -> None:
+def test_a_streamed_reply_is_responses_events_ending_in_the_final_one_with_no_done() -> None:
     with FakeEndpoint([text_reply("hello")]) as fake:
         lines = _post(fake.endpoint).decode().splitlines()
-    data = [line.removeprefix("data: ") for line in lines if line.startswith("data: ")]
-    assert data[-1] == "[DONE]"
-    contents = [json.loads(d)["choices"][0]["delta"].get("content") for d in data[0:2]]
-    assert contents == ["", "hello"]
+    named = [line.removeprefix("event: ") for line in lines if line.startswith("event: ")]
+    data = [json.loads(line[6:]) for line in lines if line.startswith("data: ")]
+    assert named == [d["type"] for d in data]
+    assert named[-1] == "response.completed"
+    assert not any("[DONE]" in line for line in lines)
+    assert data[-1]["response"]["output"][0]["content"][0]["text"] == "hello"
 
 
-def test_a_tool_reply_splits_each_calls_arguments_over_two_chunks() -> None:
+def test_a_tool_reply_streams_each_calls_arguments_as_two_deltas_and_ends_with_the_call() -> None:
     with FakeEndpoint([tool_reply([("call_1", "Read", {"file_path": "a.txt"})])]) as fake:
         lines = _post(fake.endpoint).decode().splitlines()
-    chunks = [json.loads(line[6:]) for line in lines if line.startswith("data: {")]
-    deltas = [c["choices"][0]["delta"] for c in chunks if c["choices"]]
-    parts = [d["tool_calls"][0]["function"]["arguments"] for d in deltas if "tool_calls" in d]
+    data = [json.loads(line[6:]) for line in lines if line.startswith("data: ")]
+    parts = [d["delta"] for d in data if d["type"] == "response.function_call_arguments.delta"]
     assert json.loads("".join(parts)) == {"file_path": "a.txt"}
     assert len(parts) == 2
+    (call,) = data[-1]["response"]["output"]
+    assert (call["type"], call["call_id"], call["name"]) == ("function_call", "call_1", "Read")
 
 
 def test_an_error_reply_has_its_status_and_openais_error_shape() -> None:
@@ -78,7 +81,7 @@ def test_a_pause_delays_the_rest_of_the_stream() -> None:
 
 def test_a_cut_ends_the_stream_without_done() -> None:
     with FakeEndpoint([Reply(lines=["data: {}", "", Cut(), "data: [DONE]"])]) as fake:
-        request = urllib.request.Request(fake.endpoint + "/chat/completions", data=b"{}")  # noqa: S310
+        request = urllib.request.Request(fake.endpoint + "/responses", data=b"{}")  # noqa: S310
         with urllib.request.urlopen(request, timeout=10) as response:  # noqa: S310
             received = b""
             try:
@@ -92,7 +95,7 @@ def test_a_cut_ends_the_stream_without_done() -> None:
 
 def test_a_held_reply_sees_the_client_close_its_connection() -> None:
     with FakeEndpoint([Reply(lines=["data: {}", "", Hold()])]) as fake:
-        request = urllib.request.Request(fake.endpoint + "/chat/completions", data=b"{}")  # noqa: S310
+        request = urllib.request.Request(fake.endpoint + "/responses", data=b"{}")  # noqa: S310
         response = urllib.request.urlopen(request, timeout=10)  # noqa: S310
         response.readline()
 

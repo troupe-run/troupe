@@ -78,8 +78,8 @@ def test_an_endpoint_that_isnt_a_base_http_url_is_refused(endpoint: str) -> None
 
 
 def test_requests_go_below_the_endpoint() -> None:
-    assert parse_endpoint("https://api.openai.com/v1/").chat_url == (
-        "https://api.openai.com/v1/chat/completions"
+    assert parse_endpoint("https://api.openai.com/v1/").responses_url == (
+        "https://api.openai.com/v1/responses"
     )
 
 
@@ -107,7 +107,7 @@ def test_the_request_is_a_json_post_asking_for_a_stream() -> None:
         list(_call(fake.endpoint).open().lines())
         (request,) = fake.requests
     assert request.method == "POST"
-    assert request.path == "/v1/chat/completions"
+    assert request.path == "/v1/responses"
     assert request.headers["content-type"] == "application/json"
     assert request.headers["accept"] == "text/event-stream"
     assert request.json() == {"model": "m"}
@@ -119,7 +119,7 @@ def test_the_request_is_a_json_post_asking_for_a_stream() -> None:
 @pytest.mark.parametrize("status", [301, 302, 303, 307, 308])
 def test_a_redirect_is_never_followed(status: int) -> None:
     with FakeEndpoint([text_reply("elsewhere")]) as elsewhere:
-        location = elsewhere.endpoint + "/chat/completions"
+        location = elsewhere.endpoint + "/responses"
         with (
             FakeEndpoint([Reply(status, headers=[("Location", location)])]) as fake,
             pytest.raises(StatusError) as raised,
