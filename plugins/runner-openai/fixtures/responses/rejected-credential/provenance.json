@@ -1,0 +1,7 @@
+{
+  "service": "https://api.openai.com/v1",
+  "model": "gpt-6-luna",
+  "captured": "2026-11-06",
+  "how": "recorded with tools/capture_openai.py rejected",
+  "credential": "a deliberately invalid key; no working credential was used"
+}

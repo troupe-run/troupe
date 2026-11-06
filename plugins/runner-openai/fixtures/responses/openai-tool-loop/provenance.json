@@ -1,0 +1,10 @@
+{
+  "service": "OpenAI, https://api.openai.com/v1/responses",
+  "model": "gpt-6-luna",
+  "captured": "2026-11-05",
+  "how": "recorded: tests/data/openai-responses-loop, a two-turn tool loop sent by hand with store false",
+  "credential": "the owner's working key, never written",
+  "workspace": {
+    "notes/todo.txt": "buy milk\nwrite the troupe docs\n"
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "requests": 1,
+  "events": [
+    {
+      "type": "init",
+      "seq": 0,
+      "runner": {
+        "name": "openai",
+        "version": "0.0.0"
+      },
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "Delete",
+        "Move"
+      ],
+      "engine": {
+        "name": "responses",
+        "model": "gpt-6-luna"
+      },
+      "effects": "checked"
+    },
+    {
+      "type": "result",
+      "seq": 1,
+      "status": "error",
+      "message": "The model refused: I can't help with that.",
+      "turns": 1,
+      "usage": {
+        "inputTokens": 117,
+        "outputTokens": 12,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      }
+    }
+  ]
+}

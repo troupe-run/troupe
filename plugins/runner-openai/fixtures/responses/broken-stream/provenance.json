@@ -1,0 +1,9 @@
+{
+  "service": "OpenAI",
+  "model": "gpt-6-luna",
+  "how": "derived: openai-tool-loop's first stream cut after half its lines, then the whole recording",
+  "credential": "none",
+  "workspace": {
+    "notes/todo.txt": "buy milk\nwrite the troupe docs\n"
+  }
+}

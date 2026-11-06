@@ -1,0 +1,6 @@
+{
+  "service": "OpenAI",
+  "model": "gpt-6-luna",
+  "how": "built: openai-tool-loop's recorded final event, as response.incomplete with reason max_output_tokens (https://developers.openai.com/api/docs/guides/streaming-responses)",
+  "credential": "none"
+}

@@ -162,7 +162,7 @@ def _failed(reply: Reply) -> _Retryable:
     is the service's own failure (design D8). Raises ExchangeFailedError for any other."""
     failure = reply.failure
     code = None if failure is None else failure.code
-    message = "(no message)" if failure is None else failure.message
+    message = "(no message)" if failure is None else failure.message.rstrip(".")
     said = f"{code or 'no code'}: {message}"
     if code in SERVICE_FAILURE_CODES:
         return _Retryable("server", f"The service failed the response ({said})")

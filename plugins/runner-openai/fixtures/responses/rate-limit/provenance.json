@@ -1,0 +1,6 @@
+{
+  "service": "OpenAI",
+  "model": "gpt-6-luna",
+  "how": "built: a 429 in OpenAI's error shape (https://developers.openai.com/api/docs/guides/error-codes), then openai-tool-loop's recorded final message",
+  "credential": "none"
+}
