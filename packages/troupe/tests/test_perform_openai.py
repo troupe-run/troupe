@@ -1,6 +1,6 @@
-"""perform runs the OpenAI runner, against a stand-in Chat Completions service (spec: runs,
+"""perform runs the OpenAI runner, against a stand-in Responses API service (spec: runs,
 "Perform knows the runners troupe ships by name", "Perform passes a runner only the variables it
-is known to need"; openai-runner; openai-style-runner tasks 7.1, 7.3).
+is known to need"; openai-runner; openai-style-runner tasks 8.1, 8.3).
 
 Every run uses the plugin's TEST_LIMITS (design D7)."""
 

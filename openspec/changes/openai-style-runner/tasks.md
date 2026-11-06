@@ -151,11 +151,12 @@ note; they're ticked again when their Responses version passes.
   capture fixtures and run the live test). Add its row to `plugins/README.md`, and a "Mapping an engine: the
   Responses API" section to `contributing/runners.md` with D8's and D10's tables. Verify: a README test, as the
   Claude Code runner has, checks the options and error codes it lists match the published schemas.
-- [x] 9.2 Add the runner to the user docs where runners are chosen (`docs/prompt-book/config-schema.md` and the
-  first-performance or bring-your-own-agent page), with an actor and runtime example. The example sets `maxTurns` 5
-  and `maxTotalTokens` 20,000, and says to raise them once the actor behaves (design D7). Verify: `uv run
-  scripts/check.py` passes, including the docs checks, and the example's `troupe config set` commands run in a
-  scratch theatre.
+- [x] 9.2 Add the runner to the user docs where runners are chosen: a "Try it on OpenAI" section on the
+  first-performance page (the audition, the key it needs, that a run costs money, and its limits; it recommends
+  `maxTurns` 5 and `maxTotalTokens` 20,000 for your own actors, design D7), the bring-your-own-agent page's list of
+  runners, and the runtimes page. `docs/prompt-book/config-schema.md` is generated from the schemas and names no
+  runner, so it needs nothing. Verify: `uv run scripts/check.py` passes, including the docs checks, and the new
+  walkthrough runs as written against a stand-in (`test_the_openai_walkthrough_runs_as_written_with_a_stand_in_service`).
 
 ## 10. The live test, and the contract's gaps
 

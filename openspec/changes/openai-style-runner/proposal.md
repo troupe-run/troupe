@@ -67,6 +67,7 @@ Out: Chat Completions (#290), each engine's native API (#56), other providers' o
 - `runs`: `perform` knows `openai` by name, says it requires a runtime, and passes it only the variables it needs.
 - `config`: the OpenAI audition.
 - `cli`: `troupe init --audition --runner openai`.
+- `quality-check`: the OpenAI runner's package has its own check scope, `runner_openai`.
 
 ## Impact
 

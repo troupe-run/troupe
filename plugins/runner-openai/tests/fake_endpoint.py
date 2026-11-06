@@ -1,4 +1,4 @@
-"""A fake Chat Completions service for the OpenAI runner's tests (openai-style-runner design
+"""A fake Responses API service for the OpenAI runner's tests (openai-style-runner design
 D13).
 
 It listens on 127.0.0.1, answers each request with the next reply from its script, and records
@@ -164,7 +164,7 @@ class _Handler(BaseHTTPRequestHandler):
 
 
 class FakeEndpoint:
-    """A fake Chat Completions service, answering from ``script`` in order."""
+    """A fake Responses API service, answering from ``script`` in order."""
 
     def __init__(self, script: Iterable[Reply] = ()) -> None:
         self._state = _State(list(script))

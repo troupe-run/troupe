@@ -1,4 +1,4 @@
-"""A stand-in Chat Completions service for core's tests (openai-style-runner design D13).
+"""A stand-in Responses API service for core's tests (openai-style-runner design D13).
 
 The fake lives with the plugin's tests (plugins/runner-openai/tests/fake_endpoint.py) and uses
 only the standard library, so it's loaded here by path, as ollama_stand_in.py loads Ollama's. Core's
@@ -28,7 +28,7 @@ def fake() -> ModuleType:
         "openai_stand_in_fake", PLUGIN / "tests" / "fake_endpoint.py"
     )
     if spec is None or spec.loader is None:
-        raise RuntimeError("the stand-in Chat Completions service can't be loaded")
+        raise RuntimeError("the stand-in Responses API service can't be loaded")
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module  # dataclasses look their module up while they're made
     spec.loader.exec_module(module)
