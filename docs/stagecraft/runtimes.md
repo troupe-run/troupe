@@ -10,9 +10,10 @@ service a **runtime**. You define it once, by name, and each actor that uses it 
 service is (`endpoint`), the model to use when an actor doesn't choose one (`model`), and, if it needs a key, the
 name of the environment variable the key is in (`credential.env`). Never the key itself.
 
-Today the scripted runner is the only one that takes a runtime, for troupe's own tests. The Ollama runner still takes
-its endpoint and model in its own options, and moves to the `ollama` runtime next
-([#289](https://github.com/troupe-run/troupe/issues/289)). The OpenAI runner uses runtimes when it arrives.
+The OpenAI runner needs a runtime: the built-in `openai`, or one of your own whose service serves OpenAI's Responses
+API, such as local Ollama's under `/v1` (`http://127.0.0.1:11434/v1`, not the built-in `ollama`'s address). The
+scripted runner takes one optionally, for troupe's own tests. The Ollama runner still takes its endpoint and model in
+its own options, and moves to the `ollama` runtime next ([#289](https://github.com/troupe-run/troupe/issues/289)).
 
 ## The runtimes troupe knows
 

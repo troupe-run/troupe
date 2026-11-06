@@ -16,12 +16,13 @@ import pytest
 
 import claude_stand_in
 import ollama_stand_in
+import openai_stand_in
 from gitrepo import AUTHOR, Repo, make_repo
 from runtesting import ADA
 from troupe.cli import init as init_cli
 from troupe.cli import main
 from troupe.core import defaults, settings
-from troupe.core.audition import OLLAMA_AUDITION_MODEL
+from troupe.core.audition import OLLAMA_AUDITION_MODEL, OPENAI_AUDITION_LIMITS
 from troupe.core.client.messages import State
 from troupe.core.policy import ALLOW_UNENFORCED_LOCAL_STAGE, Policy, env_name
 from troupe.core.runs.aggregate import TOPICS
@@ -58,6 +59,7 @@ def cli(*argv: str) -> tuple[int, str, str]:
 PAGE = "opening-night/first-performance.md"
 OFFLINE = "Try it offline, with no account"
 LOCAL = "Try it with a model on your own machine"
+OPENAI = "Try it on OpenAI"
 OWN = "Define your own actor"
 NOTICE = "Changes the run won't see"
 ALLOW = "Allow the local stage, once"
@@ -94,6 +96,15 @@ LOCAL_WALKTHROUGH = [
     "cd troupe-local",
     "git init",
     "troupe init --audition --runner ollama",
+    "git add .troupe",
+    "git commit -m 'Add a troupe theatre'",
+    "troupe perform lead",
+]
+OPENAI_WALKTHROUGH = [
+    "mkdir troupe-openai",
+    "cd troupe-openai",
+    "git init",
+    "troupe init --audition --runner openai",
     "git add .troupe",
     "git commit -m 'Add a troupe theatre'",
     "troupe perform lead",
@@ -344,6 +355,45 @@ def test_the_local_model_walkthrough_runs_as_written_with_a_stand_in_ollama(
         server.stop()
     assert code == 0, err
     assert out == f"run {out.split()[1]} succeeded\n"
+
+
+def test_the_openai_walkthrough_runs_as_written_with_a_stand_in_service(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The reader's key is in OPENAI_API_KEY and their runs go to OpenAI. Here the key is made up,
+    # and TROUPE_RUNTIME_OPENAI_ENDPOINT, the reader's own override, points the runtime at a
+    # stand-in, so nothing reaches OpenAI.
+    made = make_repo(tmp_path)
+    for name, value in {**made.env, **ADA}.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv(env_name(ALLOW_UNENFORCED_LOCAL_STAGE), "true")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-docs-walkthrough-0123456789")
+    lines = sh_lines(section(PAGE, OPENAI))
+    assert lines == OPENAI_WALKTHROUGH
+    mkdir, cd, *rest = lines
+    start = tmp_path / "work"
+    start.mkdir()
+    monkeypatch.chdir(start)
+    (Path.cwd() / mkdir.split()[1]).mkdir()
+    monkeypatch.chdir(Path.cwd() / cd.split()[1])
+    with openai_stand_in.serving([openai_stand_in.text_reply("Nothing to change.")]) as fake:
+        monkeypatch.setenv("TROUPE_RUNTIME_OPENAI_ENDPOINT", fake.endpoint)
+        for line in rest[:-1]:
+            code, _, err = run_line(line, monkeypatch)
+            assert code == 0, (line, err)
+        code, out, err = run_line(rest[-1], monkeypatch)
+        assert [r.headers["authorization"] for r in fake.requests] == [
+            "Bearer sk-docs-walkthrough-0123456789"
+        ]
+    assert code == 0, err
+    assert out == f"run {out.split()[1]} succeeded\n"
+
+
+def test_the_openai_section_states_the_auditions_limits_as_the_code_does() -> None:
+    text = section(PAGE, OPENAI)
+    limits = OPENAI_AUDITION_LIMITS
+    assert f"at most {limits['maxTurns']} requests and {limits['maxTotalTokens']:,} tokens" in text
+    assert "OPENAI_API_KEY" in text
 
 
 def test_the_local_model_section_states_the_ollama_the_runner_requires() -> None:
