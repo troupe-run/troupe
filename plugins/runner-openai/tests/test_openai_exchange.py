@@ -296,3 +296,9 @@ def test_a_server_error_asking_longer_than_the_cap_is_retried_after_the_cap() ->
         run()
     assert run.retries == [Retry(1, 5, 60.0, "server", "HTTP 503: busy")]
     assert len(fake.requests) == 2
+
+
+def test_a_refusal_whose_message_has_no_full_stop_still_reads_as_two_sentences() -> None:
+    with FakeEndpoint([error_reply(401, "bad key", code="invalid_api_key")]) as fake:
+        message = _failed(Run(fake))
+    assert "bad key. Check" in message
