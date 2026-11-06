@@ -236,6 +236,9 @@ assumption the recordings couldn't show (both reported 0 writes). The owner's li
 OpenAI's `input_tokens` was 3342 in all; without the writes in it, the subtraction would have gone below zero. That the contract doesn't say what
 `inputTokens` counts is gap 3.
 
+A failed response's usage isn't counted: the exchange ends before the loop counts it, and the run ends there
+(OpenAI's failed responses carry none in the shapes seen so far).
+
 `costUsd` is defined as what the engine reports. OpenAI reports no cost, so OpenAI runs have none. A service that puts
 a `cost` in usage has it summed, when every response has one. A configured price would give an *estimate*, which
 version 0 has no field for (gap 2), so the token budget, not a price, bounds spend.
@@ -297,7 +300,7 @@ when it lands:
   script (a status, headers, a body, a stream of lines with optional pauses, a cut-off or a held-open response, or
   raw byte chunks), and records every request it got with its headers. Its helpers build Responses API streams:
   `event:` and `data:` lines, deltas, and a final event carrying the response object. Tests drive the runner as a
-  subprocess; core's tests load the same fake by path (`chat_stand_in.py`, renamed for the Responses API).
+  subprocess; core's tests load the same fake by path (`openai_stand_in.py`).
 - **Fixtures** in `plugins/runner-openai/fixtures/responses/<name>/`: the responses, `expected.json` (events and
   outcome) and `provenance.json` (service, model, date, and recorded, derived or built). Recorded: a two-turn tool loop
   against OpenAI (`gpt-6-luna`, the owner's key, 2026-11-05) and one against local Ollama (0.40.14, `qwen3.5:4b`, no

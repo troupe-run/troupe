@@ -3,6 +3,6 @@
   "model": "gpt-6-luna",
   "captured": "2026-11-05",
   "how": "recorded: request-1.json sent, stream-1.txt saved unchanged; then request-2.json (the first request's input, the first response's output items unchanged, and a function_call_output) sent, and stream-2.txt saved unchanged",
-  "credential": "the owner's working key (op://troupe.run/OPENAI_API_KEY), never written here",
+  "credential": "the owner's working key, never written here",
   "why": "the Responses API's real stream shape and stateless continuation, for the stream reader's and the loop's tests (openai-style-runner design D15)"
 }

@@ -1,12 +1,13 @@
 {
   "requests": 3,
+  "outcome": "succeeded",
   "events": [
     {
       "type": "init",
       "seq": 0,
       "runner": {
         "name": "openai",
-        "version": "0.0.0"
+        "version": "<package version>"
       },
       "tools": [
         "Read",

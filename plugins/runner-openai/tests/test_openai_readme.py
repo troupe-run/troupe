@@ -1,5 +1,5 @@
-"""The README documents exactly what the runner has: its options, its named settings and its error
-codes (openai-style-runner task 9.1)."""
+"""The README names exactly the runner's options, named settings and error codes: no more and no
+fewer (openai-style-runner task 9.1). Their values are checked by eye, not here."""
 
 import json
 import re

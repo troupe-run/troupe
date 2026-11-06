@@ -9,6 +9,7 @@ runs on TEST_LIMITS with a canary credential, so a fixture's run can be scanned 
 """
 
 import json
+from importlib.metadata import version
 from pathlib import Path
 from typing import Any
 
@@ -52,12 +53,19 @@ class Replayed:
 
     @property
     def events(self) -> list[dict[str, Any]]:
-        """The run events, without their run id."""
-        return [
-            {k: v for k, v in m["params"].items() if k != "runId"}
-            for m in self.messages
-            if m.get("method") == "run/event"
-        ]
+        """The run events, without their run id, and with ``init``'s runner version, once checked
+        against the installed package's, as ``<package version>``, so a release changes no
+        fixture."""
+        events = []
+        for message in self.messages:
+            if message.get("method") != "run/event":
+                continue
+            event = {k: v for k, v in message["params"].items() if k != "runId"}
+            if event["type"] == "init":
+                assert event["runner"]["version"] == version("troupe-runner-openai")
+                event["runner"] = {**event["runner"], "version": "<package version>"}
+            events.append(event)
+        return events
 
     @property
     def written(self) -> bytes:

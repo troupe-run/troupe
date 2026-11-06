@@ -5,6 +5,7 @@ test says why not (design D7)."""
 import json
 import time
 from collections.abc import Iterator
+from importlib.metadata import version
 from pathlib import Path
 from typing import Any
 
@@ -63,7 +64,10 @@ def _records(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def test_the_runner_names_itself_openai(sessions: list[Session], workspace: Path) -> None:
     answer = _session(sessions, workspace).initialize()
-    assert answer["result"]["runner"] == {"name": "openai", "version": "0.0.0"}
+    assert answer["result"]["runner"] == {
+        "name": "openai",
+        "version": version("troupe-runner-openai"),
+    }
 
 
 def test_init_comes_first_naming_the_engine_the_model_the_tools_and_checked(

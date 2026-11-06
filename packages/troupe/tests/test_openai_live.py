@@ -6,7 +6,8 @@
 By default it runs on OpenAI with the audition's model, and needs ``OPENAI_API_KEY``: a few cents,
 within TEST_LIMITS. ``TROUPE_LIVE_OPENAI_ENDPOINT`` and ``TROUPE_LIVE_OPENAI_MODEL`` point it
 elsewhere, such as local Ollama's ``http://127.0.0.1:11434/v1``, which costs nothing and needs no
-key. It prints the endpoint, the model, the outcome and the tokens used.
+key. It sends ``OPENAI_API_KEY`` to any endpoint that isn't on this machine, so point it only at a
+service that key is for. It prints the endpoint, the model, the outcome and the tokens used.
 """
 
 import asyncio
