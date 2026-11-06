@@ -357,7 +357,7 @@ remove whatever part of the worktree was made, and end the run.
 
 ### Requirement: Perform knows the runners troupe ships by name
 `perform` SHALL turn an actor's runner name into a command line only through troupe's table of runners it ships,
-which SHALL name `scripted`, `claude-code` and `ollama`, and say for each whether it takes a runtime:
+which SHALL name `scripted`, `claude-code`, `ollama` and `openai`, and say for each whether it takes a runtime:
 `required`, `optional` or `none`. Any other name SHALL be refused with `runner.unknown`, naming the runners troupe
 knows, before anything is recorded.
 
@@ -369,19 +369,26 @@ knows, before anything is recorded.
 - **WHEN** a person performs an actor whose runner is `ollama`
 - **THEN** `perform` starts the Ollama runner
 
+#### Scenario: The OpenAI runner
+- **WHEN** a person performs an actor whose runner is `openai`
+- **THEN** `perform` starts the OpenAI runner
+
 #### Scenario: A runner troupe doesn't ship
 - **WHEN** a person performs an actor whose runner is `codex`
-- **THEN** it is refused with `runner.unknown`, naming `claude-code`, `ollama` and `scripted`, and nothing is recorded
+- **THEN** it is refused with `runner.unknown`, naming `claude-code`, `ollama`, `openai` and `scripted`, and
+  nothing is recorded
 
 #### Scenario: What each runner takes
 - **WHEN** troupe's runner table is read
-- **THEN** `claude-code` and `ollama` take no runtime, and `scripted` takes one optionally
+- **THEN** `claude-code` and `ollama` take no runtime, `scripted` takes one optionally, and `openai` requires
+  one
 
 ### Requirement: Perform passes a runner only the variables it is known to need
-`perform` SHALL start a runner with the environment variables troupe's runner table names for it, each taken from
-`perform`'s own environment when set there, and, when the run's runtime has a credential, `TROUPE_RUNTIME_CREDENTIAL`
-holding its value, and SHALL pass no others. The scripted runner and the Ollama runner SHALL be named none. The
-Claude Code runner SHALL be named what Claude Code needs to run and find the person's login.
+`perform` SHALL start a runner with only the environment variables troupe's runner table names for it, each taken from
+`perform`'s own environment when set there, plus `TROUPE_RUNTIME_CREDENTIAL` holding the credential when the run's
+runtime has one. The scripted and Ollama runners SHALL be named none, the Claude Code runner what Claude Code needs to
+run and find the person's login, and the OpenAI runner only what it needs to reach a service through a proxy and trust
+its certificate.
 
 #### Scenario: The Claude Code runner gets its login's variables
 - **WHEN** `perform` runs with `PATH`, `HOME` and `CLAUDE_CODE_OAUTH_TOKEN` set, and performs a `claude-code` actor
@@ -406,6 +413,12 @@ Claude Code runner SHALL be named what Claude Code needs to run and find the per
 #### Scenario: The credential under troupe's name only
 - **WHEN** `MY_KEY` holds a key, a runtime's credential names `MY_KEY`, and a `scripted` actor on it is performed
 - **THEN** the runner's environment holds the key as `TROUPE_RUNTIME_CREDENTIAL`, and has no `MY_KEY`
+
+#### Scenario: The OpenAI runner gets its proxy, its certificates and its credential
+- **WHEN** `perform` runs with `HTTPS_PROXY`, `SSL_CERT_FILE` and `OPENAI_API_KEY` set, and performs an `openai`
+  actor on the runtime `openai`
+- **THEN** the runner's environment holds `HTTPS_PROXY` and `SSL_CERT_FILE` with the same values, and the key as
+  `TROUPE_RUNTIME_CREDENTIAL`, and has no `OPENAI_API_KEY`
 
 ### Requirement: A failure before the runner starts ends the run
 When anything fails after a run's start is recorded and before its runner starts, such as making its worktree or

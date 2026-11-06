@@ -88,9 +88,11 @@ note; they're ticked again when their Responses version passes.
 - [x] 5.4 Send the transcript as D10 frames it, through the masking function. Verify: a test reads a run's transcript
   records back in order, finds no request header in any, and finds a 401's echoed key masked.
 - [x] 5.5 Cut every summary to fit `eventMaxBytes` and `SUMMARY_MAX_BYTES`. Verify: the spec's 1 MiB reply scenario.
-- [ ] 5.6 Handle `run/cancel`, end of input and `shutdown`. Verify: tests that cancel during a held-open response (the
+- [x] 5.6 Handle `run/cancel`, end of input and `shutdown`. Verify: tests that cancel during a held-open response (the
   fake sees its connection closed, no `result` is sent, the runner exits within troupe's grace), close stdin mid-run,
   and shut down after a result, each passing on all three platforms in CI.
+  Done: passed on Linux, macOS and Windows (Python 3.12 to 3.15) in CI run [42174356887](https://github.com/troupe-run/troupe/actions/runs/42174356887) on 9f6a927;
+  only the opt-in live test was skipped.
 
 ## 6. Move to the Responses API and the new names (design D1, D4, D6, D9, D15)
 
@@ -171,8 +173,9 @@ note; they're ticked again when their Responses version passes.
 
 ## 11. Integration
 
-- [ ] 11.1 Run `uv run scripts/check.py`. Verify: it passes locally, and CI passes on Linux, macOS and Windows once
+- [x] 11.1 Run `uv run scripts/check.py`. Verify: it passes locally, and CI passes on Linux, macOS and Windows once
   the PR is marked ready.
+  Done: passes locally (4,734 passed), and CI run [42174356887](https://github.com/troupe-run/troupe/actions/runs/42174356887) passed all twelve jobs on 9f6a927.
 
 ## Workflow follow-up
 
