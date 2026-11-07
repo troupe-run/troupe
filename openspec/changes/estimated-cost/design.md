@@ -130,6 +130,11 @@ before the result is recorded or passed on, which keeps the guess out of the sto
 raises the notice `run.estimate-dropped` (details: the runner's name, from its `init`). The notice is shown as
 `run.retrying` is, so the runner's bug is visible without costing the run.
 
+The notice is live only: troupe keeps no run notice in the run's history, so after an unattended run nothing records
+that an estimate was dropped (raised by a side agent). The owner chose to fix that for every run notice rather than
+special-case this one ([#327](https://github.com/troupe-run/troupe/issues/327), 2026-11-07). Until #327 lands, a
+dropped estimate is visible only to whoever watched the run.
+
 The host doesn't recompute an estimate to check its value. That would re-derive D7 in core, and a runner that gets
 the arithmetic wrong is a bug in that runner, caught by its own tests.
 
