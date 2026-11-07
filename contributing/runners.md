@@ -390,6 +390,9 @@ callback and a cancel signal.
   `RUN_SILENCE_ANNOUNCE_SECONDS`, and `run.retrying` for each `retry` event. A `retry` with reason
   `authentication` stops the run at once (`RUNNER_FAIL_FAST_ON_AUTH_RETRY`): a bad credential otherwise looks like
   a hang for minutes.
+- **A `context` event is recorded and shown, and nothing more.** troupe raises no notice for it and it doesn't
+  change the outcome. Acting on lost content (a gate, an escalation) is later work, and the event carries what it
+  will need.
 - **Standard error** is kept in the artifact store too, up to `RUNNER_STDERR_MAX_BYTES`: its first and last halves,
   with a marker saying how much was left out between them.
 

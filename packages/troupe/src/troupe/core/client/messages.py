@@ -273,6 +273,7 @@ HostEvent = (
     | p.ToolCallEvent
     | p.ToolResultEvent
     | p.RetryEvent
+    | p.ContextEvent
     | p.LogEvent
     | p.ResultEvent
     | p.OversizedEvent

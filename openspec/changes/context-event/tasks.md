@@ -35,14 +35,14 @@
 
 ## 3. Core: recording and showing it
 
-- [ ] 3.1 Add `p.ContextEvent` to `troupe.core.client.messages.HostEvent`, and verify `test_client_messages.py` and
+- [x] 3.1 Add `p.ContextEvent` to `troupe.core.client.messages.HostEvent`, and verify `test_client_messages.py` and
   `test_client_schemas.py` pass with a logged `context` event round-tripping through `LoggedEvent` and validating
   against the client protocol's `logs-result` schema.
-- [ ] 3.2 Add a `context` summary to `troupe.cli.render.render_event` (design D6): the kind, `by`, and each count
-  present, as `tokens <before> → <after>` and `messages <before> → <after>` with a missing side left blank. Test the
+- [x] 3.2 Add a `context` summary to `troupe.cli.render.render_event` (design D6): the kind, `by`, and each count
+  present, as `tokens <before> → <after>` and `messages <before> → <after>` with `?` for a side the event leaves out. Test the
   line for `compacted` by `engine` with only `tokensBefore` 41000, and for `truncated` by `runner` with both message
   counts. Verify the tests pass.
-- [ ] 3.3 End-to-end test through the scripted runner (spec: runs, "A context event is recorded and shown like every
+- [x] 3.3 End-to-end test through the scripted runner (spec: runs, "A context event is recorded and shown like every
   run event"): a script sending `init`, a `context` event and an `ok` result. Assert the run's events hold a
   `Run.Reported` with that event unchanged and with lineage, the outcome is `succeeded`, and `troupe logs` shows its
   line. Add the oversized case: a `context` event larger than `eventMaxBytes` is recorded as `oversized` with

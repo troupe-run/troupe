@@ -69,6 +69,32 @@ def test_a_successful_run_records_its_start_each_event_in_seq_order_then_its_end
     assert "runner_reported" not in states(records)[0]  # it's read from the init, seq 0
 
 
+CONTEXT = {
+    "event": {
+        "type": "context",
+        "kind": "compacted",
+        "by": "engine",
+        "message": "Claude Code compacted the conversation",
+        "tokensBefore": 41000,
+    }
+}
+
+
+def test_a_context_event_is_recorded_unchanged_with_lineage_and_the_run_still_succeeds(
+    tmp_path: Path,
+) -> None:
+    harness = Harness(theatre(tmp_path))
+    result = harness.perform(request(script(INIT, CONTEXT, OK)))
+    records = history(harness, result.run.run_id)
+    assert [r.topic for r in records] == [STARTED, REPORTED, REPORTED, REPORTED, ENDED]
+    reported = states(records)[2]
+    assert reported["seq"] == 1
+    assert reported["event"] == {"runId": result.run.run_id, "seq": 1, **CONTEXT["event"]}
+    assert reported["lineage"]["cause"] == states(records)[1]["lineage"]["cause"]
+    assert reported["lineage"]["change"] == states(records)[0]["lineage"]["change"]
+    assert result.run.outcome == "succeeded"
+
+
 class Watching(Harness):
     """A harness that notes the run's recorded topics when the runner's first event arrives."""
 
