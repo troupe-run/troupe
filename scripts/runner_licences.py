@@ -47,6 +47,9 @@ CLASSIFIERS: Mapping[str, str] = {
 """Licence classifiers, for a package that declares no SPDX expression. One that isn't here isn't
 guessed at: the package fails, and the mapping grows in a reviewed change."""
 
+UNSPECIFIC = frozenset({"License :: OSI Approved"})
+"""Classifiers that name no licence, so say nothing either way."""
+
 _SPDX_ID = re.compile(r"[A-Za-z0-9.+-]+")
 
 Metadata = Mapping[str, list[str]]
@@ -86,7 +89,12 @@ def licence_of(meta: Metadata) -> str | None:
     for field in meta.get("License", []):
         if _SPDX_ID.fullmatch(field.strip()):
             return field.strip()
-    mapped = [CLASSIFIERS[c] for c in meta.get("Classifier", []) if c in CLASSIFIERS]
+    licences = [
+        c for c in meta.get("Classifier", []) if c.startswith("License ::") and c not in UNSPECIFIC
+    ]
+    if any(c not in CLASSIFIERS for c in licences):
+        return None  # one this can't read isn't dropped because another maps (review of #338)
+    mapped = [CLASSIFIERS[c] for c in licences]
     if mapped:
         return " OR ".join(mapped) if len(mapped) > 1 else mapped[0]
     return None
@@ -143,12 +151,12 @@ def tier(expression: str, licences: Licences) -> str | None:
         return rank(word)
 
     try:
-        reached = either()
+        best = either()
     except ValueError:
         return None
     if position != len(tokens):
         return None
-    return {2: "permissive", 1: "weak-copyleft"}.get(reached)
+    return {2: "permissive", 1: "weak-copyleft"}.get(best)
 
 
 def _lock(root: Path) -> dict[str, dict[str, Any]]:
@@ -159,36 +167,42 @@ def _lock(root: Path) -> dict[str, dict[str, Any]]:
 def dependencies_of_runners(root: Path) -> dict[str, list[str]]:
     """Each runner plugin that depends on anything outside the workspace, with every such package
     it pulls in, directly or not, by name, in the order found."""
+    return {runner: list(found) for runner, found in reached(root).items()}
+
+
+def reached(root: Path) -> dict[str, dict[str, bool]]:
+    """Each runner plugin that depends on anything outside the workspace, with every such package
+    it pulls in, and whether some path to it holds on every platform: a path with a lock edge that
+    has a marker (colorama, only on win32) holds only where the marker does, so this environment
+    may not have installed the package, and the leg where it holds checks it (review of #338)."""
     workspace = {normalise(name): path for path, name in members(root).items()}
     locked = _lock(root)
-    found: dict[str, list[str]] = {}
+    found: dict[str, dict[str, bool]] = {}
     for name, path in sorted(workspace.items(), key=lambda item: item[1]):
         if not path.startswith(PLUGINS):
             continue
-        seen: list[str] = []
-        queue = [name]
-        visited = {name}
+        always: dict[str, bool] = {name: True}
+        queue: list[tuple[str, bool]] = [(name, True)]
         while queue:
-            package = locked.get(queue.pop(0), {})
+            current, unconditional = queue.pop(0)
             # A dependency on a package's extra brings that extra's requirements, which the lock
             # lists under the package's optional-dependencies.
-            for dependency in package.get("dependencies", []):
+            for dependency in locked.get(current, {}).get("dependencies", []):
                 wanted = normalise(str(dependency["name"]))
-                extras = dependency.get("extra", [])
+                holds = unconditional and "marker" not in dependency
                 more = [
-                    d
-                    for e in extras
+                    (normalise(str(d["name"])), holds and "marker" not in d)
+                    for e in dependency.get("extra", [])
                     for d in locked.get(wanted, {}).get("optional-dependencies", {}).get(e, [])
                 ]
-                for item in [wanted, *(normalise(str(d["name"])) for d in more)]:
-                    if item in visited:
+                for item, item_holds in [(wanted, holds), *more]:
+                    if item in always and (always[item] or not item_holds):
                         continue
-                    visited.add(item)
-                    queue.append(item)
-                    if item not in workspace:
-                        seen.append(item)
-        if seen:
-            found[workspace_name(root, name)] = seen
+                    always[item] = item_holds
+                    queue.append((item, item_holds))
+        outside = {item: holds for item, holds in always.items() if item not in workspace}
+        if outside:
+            found[workspace_name(root, name)] = outside
     return found
 
 
@@ -221,10 +235,12 @@ def problems(
         normalise(n) for n in root_project.get("tool", {}).get("uv", {}).get("sources", {})
     }
     found: list[str] = []
-    for runner, packages in dependencies_of_runners(root).items():
-        for name in packages:
+    for runner, packages in reached(root).items():
+        for name, everywhere in packages.items():
             who = f"{name}, which {runner} depends on,"
             meta = metadata(name)
+            if meta is None and not everywhere:
+                continue  # locked only for another platform: the leg where it holds checks it
             if meta is None:
                 found.append(
                     f"{who} isn't installed, so its licence can't be read: run uv sync, which "
@@ -239,14 +255,14 @@ def problems(
                     f"{LIST}. Replace it, or find its licence and raise it with the owner."
                 )
                 continue
-            reached = tier(expression, licences)
-            if reached is None:
+            level = tier(expression, licences)
+            if level is None:
                 found.append(
                     f"{who} is licensed {expression}, which isn't on either tier of {LIST}: "
                     "replace the dependency, or, if the licence is compatible with Apache-2.0, add "
                     f"it to {LIST} in a reviewed change."
                 )
-            elif reached == "weak-copyleft":
+            elif level == "weak-copyleft":
                 why = _not_unmodified(name, locked.get(name, {}), overridden)
                 if why is not None:
                     found.append(

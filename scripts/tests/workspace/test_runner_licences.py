@@ -50,7 +50,13 @@ class Tree:
         )
 
     def lock(self, name: str, dependencies: list[str], source: str = PYPI) -> None:
-        deps = ", ".join(f'{{ name = "{d}" }}' for d in dependencies)
+        # "name; marker" locks an edge that holds only where the marker does, as uv.lock writes it.
+        edges = []
+        for dependency in dependencies:
+            named, _, marker = (part.strip() for part in dependency.partition(";"))
+            held = f", marker = {json.dumps(marker)}" if marker else ""
+            edges.append(f'{{ name = "{named}"{held} }}')
+        deps = ", ".join(edges)
         self.locked.append(
             f'[[package]]\nname = "{name}"\nversion = "1.0.0"\n{source}\ndependencies = [{deps}]\n'
         )
@@ -163,6 +169,60 @@ def test_grouped_expressions_are_read_with_and_binding_tighter_than_or(
     """A grouped AND can't pass on one branch of its group (review of #338). A WITH exception, or
     an expression this can't parse, reaches no tier: it fails safe, for a reviewed addition."""
     assert runner_licences.tier(expression, runner_licences.load_list(REPO)) == expected
+
+
+def test_a_package_locked_only_for_another_platform_is_skipped_where_it_isnt_installed(
+    tree: Tree,
+) -> None:
+    """tqdm needs colorama only on Windows: a leg elsewhere hasn't installed it, and the Windows
+    leg checks it (review of #338)."""
+    tree.runner("tqdm")
+    tree.package("tqdm", "colorama; sys_platform == 'win32'", expression="MIT")
+    tree.lock("colorama", [])
+    assert tree.problems() == []
+
+
+def test_a_package_locked_only_for_another_platform_is_still_checked_where_it_is_installed(
+    tree: Tree,
+) -> None:
+    tree.runner("tqdm")
+    tree.package("tqdm", "colorama; sys_platform == 'win32'", expression="MIT")
+    tree.package("colorama", expression="GPL-3.0-only")
+    [problem] = tree.problems()
+    assert problem.startswith("colorama, which troupe-runner-lm-studio depends on, is licensed GPL")
+
+
+def test_a_package_reached_unconditionally_too_isnt_skipped_when_missing(tree: Tree) -> None:
+    tree.runner("tqdm", "colorama")
+    tree.package("tqdm", "colorama; sys_platform == 'win32'", expression="MIT")
+    tree.lock("colorama", [])
+    assert tree.problems() == [
+        "colorama, which troupe-runner-lm-studio depends on, isn't installed, so its licence can't "
+        "be read: run uv sync, which installs every runner's dependencies."
+    ]
+
+
+def test_an_unmapped_licence_classifier_beside_a_mapped_one_fails(tree: Tree) -> None:
+    """A classifier this can't read isn't dropped because another one maps (review of #338)."""
+    tree.runner("both")
+    tree.package(
+        "both",
+        classifiers=(
+            "License :: OSI Approved :: MIT License",
+            "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+        ),
+    )
+    [problem] = tree.problems()
+    assert "declares no licence in its metadata" in problem
+
+
+def test_the_bare_osi_approved_classifier_says_nothing_and_is_ignored(tree: Tree) -> None:
+    tree.runner("plain")
+    tree.package(
+        "plain",
+        classifiers=("License :: OSI Approved", "License :: OSI Approved :: MIT License"),
+    )
+    assert tree.problems() == []
 
 
 def test_a_classifier_is_mapped_to_spdx(tree: Tree) -> None:
