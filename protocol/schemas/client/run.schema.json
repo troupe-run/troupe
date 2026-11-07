@@ -121,14 +121,14 @@
         "transcript": {"description": "The transcript's artifact reference. Absent: the run hasn't ended, or its runner never started.", "$ref": "#/$defs/hash"},
         "stderr": {"description": "The artifact reference of the runner's standard error. Absent: the run hasn't ended, or its runner never started.", "$ref": "#/$defs/hash"},
         "recording": {
-          "description": "The first seq that wasn't recorded, and why. Absent: recording the run's events didn't fail.",
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["failedAt", "error"],
-          "properties": {
-            "failedAt": {"type": "integer", "minimum": 0},
-            "error": {"$ref": "../error.schema.json"}
-          }
+          "description": "What wasn't recorded first, and why: the first run event, by its seq, or a notice troupe raised for the run, by its code. Absent: recording didn't fail.",
+          "$ref": "../events/run-ended.schema.json#/$defs/recording"
+        },
+        "notices": {
+          "description": "The notices troupe raised for the run and recorded in its history, in recorded order, each with when it was recorded. Absent: the run recorded none.",
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/runNotice"}
         },
         "changes": {
           "description": "What a worktree run changed, and what has been done with it. Present exactly when the workspace is a worktree.",
@@ -222,6 +222,30 @@
         "seq": {"type": "integer", "minimum": 0},
         "at": {"$ref": "#/$defs/timestamp"},
         "event": {"$ref": "../runner/run-event.schema.json#/$defs/hostEvent"}
+      }
+    },
+    "runNotice": {
+      "title": "Recorded run notice",
+      "description": "A notice troupe raised for a run, as its history recorded it, and when.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["at", "notice"],
+      "properties": {
+        "at": {"$ref": "#/$defs/timestamp"},
+        "notice": {"$ref": "../notice.schema.json"}
+      }
+    },
+    "loggedNotice": {
+      "title": "Logged run notice",
+      "description": "A notice troupe raised for a run and recorded in its history, in its place among the run's events, and when troupe recorded it. It has no seq: seq numbers only the runner's events. Its kind isn't notice, which marks the notices a query sends itself, outside the run's history.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "runId", "at", "notice"],
+      "properties": {
+        "kind": {"const": "run-notice"},
+        "runId": {"$ref": "#/$defs/runId"},
+        "at": {"$ref": "#/$defs/timestamp"},
+        "notice": {"$ref": "../notice.schema.json"}
       }
     },
     "noticeUpdate": {

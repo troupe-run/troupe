@@ -125,8 +125,16 @@ class RunnerData(Message):
 
 @dataclass(frozen=True)
 class RecordingFailure(Message):
-    failed_at: int = json_field("failedAt", minimum=0)
+    """What wasn't recorded first, and why: the first run event, by its seq, or a notice troupe
+    raised for the run, by its code; exactly one of them."""
+
     error: p.ErrorData = json_field("error")
+    failed_at: int | None = json_field("failedAt", default=None, minimum=0)
+    notice: str | None = json_field("notice", default=None, pattern=CODE)
+
+    def _check(self, where: str) -> None:
+        if (self.failed_at is None) == (self.notice is None):
+            raise fail(where, "a recording failure names exactly one of failedAt and notice")
 
 
 COMMIT = re.compile(r"\A[0-9a-f]{40}([0-9a-f]{24})?\Z")
@@ -233,6 +241,34 @@ class AuditData(Message):
             raise fail(where, "an audit holds either outside or error")
 
 
+@dataclass(frozen=True)
+class NoticeData(Message):
+    """A notice (notice.schema.json)."""
+
+    code: str = json_field("code", pattern=CODE)
+    problem: str = json_field("problem", min_length=1)
+    fix: str = json_field("fix", min_length=1)
+    path: str | None = json_field("path", default=None, min_length=1)
+    details: dict[str, object] | None = json_field("details", default=None)
+
+    @classmethod
+    def of(cls, notice: Notice) -> "NoticeData":
+        return cls.from_data(notice.to_data())
+
+    def to_notice(self) -> Notice:
+        if self.code not in NOTICE_CODES:
+            raise ProtocolError(f"notice: {self.code!r} isn't a notice code troupe declares")
+        return Notice(self.code, self.problem, self.fix, self.path, dict(self.details or {}))
+
+
+@dataclass(frozen=True)
+class RunNotice(Message):
+    """A notice troupe raised for a run, as the run's history recorded it, and when."""
+
+    at: str = json_field("at", pattern=TIME)
+    notice: NoticeData = json_field("notice")
+
+
 @dataclass(frozen=True, kw_only=True)
 class RunSummary(Message):
     """A run as status, logs and perform report it. A field with nothing to say is left out; an
@@ -255,6 +291,7 @@ class RunSummary(Message):
     transcript: str | None = json_field("transcript", default=None, pattern=p.REF_PATTERN)
     stderr: str | None = json_field("stderr", default=None, pattern=p.REF_PATTERN)
     recording: RecordingFailure | None = json_field("recording", default=None)
+    notices: list[RunNotice] | None = json_field("notices", default=None, min_items=1)
     changes: ChangesData | None = json_field("changes", default=None)
 
     def _check(self, where: str) -> None:
@@ -295,26 +332,6 @@ class LoggedEvent(Tagged):
             raise fail(where, "the event's runId and seq must be the logged event's own")
 
 
-@dataclass(frozen=True)
-class NoticeData(Message):
-    """A notice (notice.schema.json)."""
-
-    code: str = json_field("code", pattern=CODE)
-    problem: str = json_field("problem", min_length=1)
-    fix: str = json_field("fix", min_length=1)
-    path: str | None = json_field("path", default=None, min_length=1)
-    details: dict[str, object] | None = json_field("details", default=None)
-
-    @classmethod
-    def of(cls, notice: Notice) -> "NoticeData":
-        return cls.from_data(notice.to_data())
-
-    def to_notice(self) -> Notice:
-        if self.code not in NOTICE_CODES:
-            raise ProtocolError(f"notice: {self.code!r} isn't a notice code troupe declares")
-        return Notice(self.code, self.problem, self.fix, self.path, dict(self.details or {}))
-
-
 # Updates.
 
 
@@ -326,13 +343,29 @@ class Started(Tagged):
 
 
 @dataclass(frozen=True)
+class LoggedNotice(Tagged):
+    """A notice troupe raised for a run and recorded in its history, in its place among the run's
+    events, and when troupe recorded it. Its kind isn't ``notice``, which marks the notices a query
+    sends itself, outside the run's history (run-notices-in-history design D8)."""
+
+    TYPE: ClassVar[str | None] = "run-notice"
+    run_id: str = json_field("runId", pattern=p.RUN_ID_PATTERN)
+    at: str = json_field("at", pattern=TIME)
+    notice: NoticeData = json_field("notice")
+
+
+LogEntry = LoggedEvent | LoggedNotice
+"""One entry of a run's log: a run event or a recorded notice."""
+
+
+@dataclass(frozen=True)
 class NoticeUpdate(Tagged):
     TYPE: ClassVar[str | None] = "notice"
     notice: NoticeData = json_field("notice")
 
 
 PerformUpdate = Started | LoggedEvent | NoticeUpdate
-LogsUpdate = LoggedEvent | NoticeUpdate
+LogsUpdate = LoggedEvent | LoggedNotice | NoticeUpdate
 
 
 # Results and the queries' requests.
@@ -445,7 +478,7 @@ class LogsRequest(Message):
 @dataclass(frozen=True)
 class LogsResult(Message):
     run: RunSummary = json_field("run")
-    events: list[LoggedEvent] = json_field("events")
+    log: list[LogEntry] = json_field("log")
     notices: list[NoticeData] = json_field("notices")
 
 

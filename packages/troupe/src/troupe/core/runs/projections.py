@@ -10,6 +10,9 @@ so the summary takes it as an argument. So is the state of a worktree run's chan
 A run's reported runner is read from its init, its first reported event, and a worktree's clone
 mechanisms from Run.WorktreeMade. A start an older troupe recorded holds both itself, and they're
 read from there (account-for-every-worktree design D3, D4, D7).
+
+A run's recorded notices are kept always, since a run has few, and in its log among its events in
+the order they were recorded (run-notices-in-history design D8).
 """
 
 from collections.abc import Iterable, Mapping
@@ -23,6 +26,7 @@ from troupe.core.runs.aggregate import (
     CHANGES_ACCEPTED,
     CHANGES_DISCARDED,
     ENDED,
+    NOTICED,
     REPORTED,
     STARTED,
     WORKTREE_MADE,
@@ -72,7 +76,8 @@ class RunView:
     ended_at: str | None = None
     settled: str | None = None
     settled_at: str | None = None
-    log: list[m.LoggedEvent] = field(default_factory=list)
+    notices: list[m.RunNotice] = field(default_factory=list)
+    log: list[m.LogEntry] = field(default_factory=list)
 
     def apply(self, recording: Recording, *, keep_log: bool) -> None:
         state = _state(recording)
@@ -90,6 +95,12 @@ class RunView:
                 self.reported = {"name": runner["name"], "version": runner["version"]}
             if keep_log:
                 self.log.append(logged(self.run_id, state, _at(recording)))
+        elif recording.topic == NOTICED:
+            at = _at(recording)
+            notice = m.NoticeData.from_data(state["notice"])
+            self.notices.append(m.RunNotice(at=at, notice=notice))
+            if keep_log:
+                self.log.append(m.LoggedNotice(run_id=self.run_id, at=at, notice=notice))
         elif recording.topic == ENDED:
             self.ended = state
             self.ended_at = _at(recording)
@@ -169,6 +180,7 @@ class RunView:
             "transcript": outcome.get("transcript"),
             "stderr": outcome.get("stderr"),
             "recording": (self.ended or {}).get("recording"),
+            "notices": [notice.to_data() for notice in self.notices] or None,
             "changes": self.changes(),
         }
         return m.RunSummary.from_data(_present(summary))

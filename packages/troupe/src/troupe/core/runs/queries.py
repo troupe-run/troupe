@@ -186,10 +186,11 @@ def _once(notices: list[Notice]) -> list[Notice]:
 async def logs(
     request: m.LogsRequest, session: Session, send: Send, *, backends: Backends | None = None
 ) -> m.LogsResult:
-    """A run's events in seq order. With follow, each new event is sent as it is recorded, until
-    the run ends or stops running. Following listens to the store's subscription, which wakes it
-    whenever anything is recorded; a wake re-reads the run. Every LOGS_LEASE_CHECK_SECONDS it also
-    checks that the run is still running. If the store can only poll, its notice is sent at once.
+    """A run's log: its events in seq order and its recorded notices, each in its recorded place.
+    With follow, each new entry is sent as it is recorded, until the run ends or stops running.
+    Following listens to the store's subscription, which wakes it whenever anything is recorded; a
+    wake re-reads the run. Every LOGS_LEASE_CHECK_SECONDS it also checks that the run is still
+    running. If the store can only poll, its notice is sent at once.
     """
     backends = backends or Backends()
     store = await asyncio.to_thread(backends.event_store, session)
@@ -201,7 +202,7 @@ async def logs(
         summary = _summary(view, session.theatre, notices)
         return m.LogsResult(
             run=summary,
-            events=view.log,
+            log=view.log,
             notices=[m.NoticeData.of(n) for n in [*store.notices(), *notices]],
         )
     cancel = session.cancel.bind()
@@ -217,16 +218,16 @@ async def logs(
         view = await asyncio.to_thread(_log, store, run_id)
         sent = 0
         while True:
-            for event in view.log[sent:]:
-                send(event)
+            for entry in view.log[sent:]:
+                send(entry)
             sent = len(view.log)
             if view.ended is not None or cancel.is_set():
                 break
             if run_state(view, session.theatre) != "running":
                 # One last read: the end may have been recorded as the lease was released.
                 view = await asyncio.to_thread(_log, store, run_id)
-                for event in view.log[sent:]:
-                    send(event)
+                for entry in view.log[sent:]:
+                    send(entry)
                 break
             if await _woken(wake, cancel, defaults.LOGS_LEASE_CHECK_SECONDS):
                 wake.clear()  # before reading, so a write during the read wakes the next wait
@@ -238,6 +239,6 @@ async def logs(
     summary = _summary(view, session.theatre, notices)
     return m.LogsResult(
         run=summary,
-        events=view.log,
+        log=view.log,
         notices=[m.NoticeData.of(n) for n in _once([*found, *notices])],
     )

@@ -147,22 +147,8 @@
       }
     },
     "recording": {
-      "description": "Where recording the run's events failed, and why. Absent: recording didn't fail.",
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "failedAt",
-        "error"
-      ],
-      "properties": {
-        "failedAt": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "error": {
-          "$ref": "../error.schema.json"
-        }
-      }
+      "description": "What wasn't recorded first, and why: the first run event, by its seq, or a notice troupe raised for the run, by its code. Absent: recording didn't fail.",
+      "$ref": "#/$defs/recording"
     },
     "changes": {
       "description": "What a worktree run changed, captured when it ended. Present exactly when the run's workspace was a worktree.",
@@ -369,6 +355,48 @@
           "properties": {
             "error": {
               "description": "Why the audit couldn't run.",
+              "$ref": "../error.schema.json"
+            }
+          }
+        }
+      ]
+    },
+    "recording": {
+      "title": "Recording failure",
+      "oneOf": [
+        {
+          "title": "A run event wasn't recorded",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "failedAt",
+            "error"
+          ],
+          "properties": {
+            "failedAt": {
+              "description": "The seq of the first run event that wasn't recorded.",
+              "type": "integer",
+              "minimum": 0
+            },
+            "error": {
+              "$ref": "../error.schema.json"
+            }
+          }
+        },
+        {
+          "title": "A notice wasn't recorded",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "notice",
+            "error"
+          ],
+          "properties": {
+            "notice": {
+              "description": "The code of the notice that wasn't recorded, before any run event failed to be.",
+              "$ref": "../notice.schema.json#/$defs/fields/properties/code"
+            },
+            "error": {
               "$ref": "../error.schema.json"
             }
           }

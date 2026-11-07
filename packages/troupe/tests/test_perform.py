@@ -404,12 +404,14 @@ def test_a_failure_to_record_an_event_cancels_the_run_and_its_end_says_where_it_
     assert error.details["failedAt"] == 2
     assert error.details["error"]["code"] == "artifact.write-failed"
     assert "endError" not in error.details
+    assert "notice" not in error.details
     run_id = error.details["run"]
     records = history(harness, run_id)
     assert [r.topic for r in records] == [STARTED, REPORTED, REPORTED, ENDED]
     end = states(records)[-1]
     assert end["outcome"]["outcome"] == "cancelled"
     assert end["recording"]["failedAt"] == 2
+    assert "notice" not in end["recording"]
     assert end["recording"]["error"]["code"] == "artifact.write-failed"
     transcript = end["outcome"]["transcript"]
     assert transcript in error.fix
@@ -425,6 +427,7 @@ def test_when_only_the_end_cannot_be_recorded_the_error_has_an_end_error_and_no_
     assert error.code == "run.recording-failed"
     assert error.details["endError"]["code"] == "artifact.write-failed"
     assert "failedAt" not in error.details
+    assert "notice" not in error.details
     assert error.details["transcript"].startswith("sha256:")
     records = history(harness, error.details["run"])
     assert [r.topic for r in records] == [STARTED, REPORTED, REPORTED, REPORTED]

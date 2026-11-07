@@ -7,6 +7,7 @@ import io
 import json
 import os
 import queue
+import re
 import signal
 import subprocess
 import sys
@@ -24,6 +25,7 @@ from gitrepo import Repo
 from runtesting import ADA, ALLOW, INIT, OK, Harness, request, script, theatre, turn
 from storetesting import git_service
 from test_perform_failed_audit import RemovesThenCancels
+from test_run_notices import interrupted_with_a_notice
 from test_run_queries import Child
 from troupe.cli import COMMANDS, commands, main
 from troupe.cli.parser import parse
@@ -325,7 +327,11 @@ def test_logs_json_is_the_logs_result_as_its_schema_shapes_it(repo: Repo) -> Non
     assert code == 0
     result = json.loads(out)
     check(result, "logs-result.schema.json")
-    assert [e["seq"] for e in result["events"]] == [0, 1, 2]
+    assert [(e["kind"], e["seq"]) for e in result["log"]] == [
+        ("event", 0),
+        ("event", 1),
+        ("event", 2),
+    ]
 
 
 def test_logs_follow_json_writes_each_update_on_a_line_then_the_result(repo: Repo) -> None:
@@ -623,3 +629,93 @@ def test_an_audit_that_couldnt_run_is_shown_with_its_error() -> None:
         }
     )
     assert "  audit couldn't run: vcs.failed: git failed." in lines
+
+
+# Requirement: Status and logs show a run's recorded notices
+
+QUICK_SILENCE = RunLimits(
+    start_timeout=10.0, cancel_grace=2.0, run_timeout=20.0, silence_announce=0.3
+)
+WAIT = {"wait": {"ms": 800}}
+RETRY = {"event": {"type": "retry", "attempt": 1, "delayMs": 10, "reason": "network"}}
+
+
+def test_status_of_a_run_that_fell_silent_lists_the_notice_with_its_time_code_and_problem(
+    repo: Repo,
+) -> None:
+    harness = Harness(repo, limits=QUICK_SILENCE)
+    run_id = _harnessed(repo, request(script(INIT, WAIT, OK)), harness)
+    [recorded] = harness.status(run=run_id).runs[0].notices or []
+    code, out, _ = cli("status", run_id)
+    assert code == 0
+    lines = out.splitlines()
+    at = lines.index("  notices:")
+    assert lines[at + 1] == f"    {recorded.at} run.silent: {recorded.notice.problem}"
+    assert lines[at + 1].startswith("    20")
+
+
+def test_the_list_of_runs_counts_notices_only_on_the_run_that_recorded_them(repo: Repo) -> None:
+    quiet = _harnessed(repo, request(script(INIT, OK)))
+    noisy = _harnessed(
+        repo, request(script(INIT, WAIT, RETRY, OK)), Harness(repo, limits=QUICK_SILENCE)
+    )
+    code, out, _ = cli("status")
+    assert code == 0
+    [noisy_line] = [line for line in out.splitlines() if line.startswith(noisy)]
+    [quiet_line] = [line for line in out.splitlines() if line.startswith(quiet)]
+    assert noisy_line.endswith("events, 2 notices")
+    assert "notice" not in quiet_line
+
+
+LOG_LINE = re.compile(r"\A  +(?:\d+ )?\d{4}-\d{2}-\d{2}T\S+ (\S+)")
+"""A line of a run's log as troupe logs prints it: its seq (blank for a notice), its time, then
+what it is: an event's type, or ``notice``."""
+
+
+def log_kinds(out: str) -> list[str]:
+    """What each line of a run's log is, in order: an event's type, or ``notice``."""
+    return [
+        found.group(1).rstrip(":") for line in out.splitlines() if (found := LOG_LINE.match(line))
+    ]
+
+
+def test_logs_of_a_run_that_retried_show_the_notice_line_after_the_retry(repo: Repo) -> None:
+    run_id = _harnessed(repo, request(script(INIT, RETRY, OK)))
+    code, out, err = cli("logs", run_id)
+    assert code == 0
+    assert log_kinds(out) == ["init", "retry", "notice", "result"]
+    [line] = [line for line in out.splitlines() if " notice " in line]
+    assert " notice run.retrying: The runner's engine is retrying" in line
+    assert "retrying" not in err
+
+
+def test_following_a_run_shows_each_recorded_notice_update_on_stdout_among_the_events_once(
+    repo: Repo,
+) -> None:
+    """With --follow, a recorded notice arrives as an update; troupe logs prints it on standard
+    output in its place, and not again with the result. (That following sends it as soon as it is
+    recorded is test_run_notices.py's.)"""
+    run_id = _harnessed(repo, request(script(INIT, WAIT, OK)), Harness(repo, limits=QUICK_SILENCE))
+    code, out, err = cli("logs", run_id, "--follow")
+    assert code == 0
+    assert log_kinds(out) == ["init", "notice", "result"]
+    assert "run.silent" not in err
+
+
+def test_status_of_a_run_with_no_notices_has_no_notice_line(repo: Repo) -> None:
+    run_id = performed(repo, script(INIT, OK))
+    code, out, _ = cli("status", run_id)
+    assert code == 0
+    assert "notice" not in out
+
+
+def test_logs_of_an_interrupted_run_show_its_recorded_notice_on_stdout_and_why_on_stderr(
+    repo: Repo,
+) -> None:
+    run_id = interrupted_with_a_notice(Harness(repo))
+    code, out, err = cli("logs", run_id)
+    assert code == 0
+    assert " notice run.silent: The run has sent no event for 30s." in out
+    assert "run.silent" not in err
+    assert "has no recorded end" in err
+    assert "has no recorded end" not in out

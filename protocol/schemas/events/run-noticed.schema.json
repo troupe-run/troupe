@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/events/run-noticed.schema.json",
+  "title": "Run.Noticed",
+  "description": "The payload of one notice troupe raised for a run (topic troupe.core.runs.aggregate:Run.Noticed), kept in the run's stream in the order troupe raised it among the run's events, so status and logs show it after the run. Recorded by the person's command, between the run's start and its end; a notice raised before the start is recorded straight after it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "lineage",
+    "timestamp",
+    "notice"
+  ],
+  "properties": {
+    "lineage": {
+      "$ref": "../lineage.schema.json"
+    },
+    "timestamp": {
+      "$ref": "../event-record.schema.json#/$defs/libraryTimestamp"
+    },
+    "notice": {
+      "description": "The notice as troupe raised it and sent it live, with the run's credential masked.",
+      "$ref": "../notice.schema.json"
+    }
+  }
+}

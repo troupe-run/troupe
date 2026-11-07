@@ -15,6 +15,10 @@ A run is its own stream, keyed by its run id (a UUID minted by perform). Its eve
 - ``Run.Reported``: one per run event, holding the runner's ``seq`` and the event as received. The
   ``seq`` is payload, never the stream's version (the library numbers versions from 1). The first
   is the runner's init, which names the runner that reported.
+- ``Run.Noticed``: one per notice troupe raised for the run, holding the notice as protocol data, in
+  the order troupe raised it among the run's events. Recorded by the person's command, between the
+  start and the end; it has no ``seq``, which numbers only the runner's events (run-notices-in-
+  history design D1, D4).
 - ``Run.Ended``: the outcome the run host derived, whether recording failed part-way, and, for a
   worktree run, the changes captured from its worktree.
 - ``Run.ChangesAccepted`` or ``Run.ChangesDiscarded``: what the person did with a worktree run's
@@ -24,8 +28,8 @@ A field with nothing to say (recording that didn't fail, a start with no reporte
 out of the stored event, so each such parameter defaults to None and the event reads back without
 it (omit-nulls design D4).
 
-The aggregate refuses a ``seq`` that isn't the next one, a report before the start or after the end,
-a second end, a worktree made for a run in the theatre, twice, or after the runner reported, and a
+The aggregate refuses a ``seq`` that isn't the next one, a report or a notice after the end, a
+second end, a worktree made for a run in the theatre, twice, or after the runner reported, and a
 second settling of the changes: each is a fault (a bug or a replay), never retried. The commands
 that settle changes check the run first (troupe.core.runs.changes), so the aggregate's refusals are
 the backstop. The topics are these classes' import paths, so this module isn't moved without
@@ -122,6 +126,19 @@ class Run(Aggregate):
     def _reported(self, seq: int, event: dict[str, Any]) -> None:
         self.next_seq = seq + 1
 
+    def notice(self, notice: dict[str, Any]) -> None:
+        """Record a notice troupe raised for the run (notice.schema.json data). Refused once the
+        run has ended. It doesn't count as a run event: the next ``seq`` is unchanged."""
+        if self.ended:
+            raise _out_of_sequence(
+                self.run_id, f"notice {notice.get('code')} arrived after the run ended."
+            )
+        self._noticed(notice=notice)
+
+    @event("Noticed")
+    def _noticed(self, notice: dict[str, Any]) -> None:
+        pass
+
     def end(
         self,
         outcome: dict[str, Any],
@@ -183,8 +200,9 @@ class Run(Aggregate):
 STARTED = "troupe.core.runs.aggregate:Run.Started"
 WORKTREE_MADE = "troupe.core.runs.aggregate:Run.WorktreeMade"
 REPORTED = "troupe.core.runs.aggregate:Run.Reported"
+NOTICED = "troupe.core.runs.aggregate:Run.Noticed"
 ENDED = "troupe.core.runs.aggregate:Run.Ended"
 CHANGES_ACCEPTED = "troupe.core.runs.aggregate:Run.ChangesAccepted"
 CHANGES_DISCARDED = "troupe.core.runs.aggregate:Run.ChangesDiscarded"
-TOPICS = (STARTED, WORKTREE_MADE, REPORTED, ENDED, CHANGES_ACCEPTED, CHANGES_DISCARDED)
+TOPICS = (STARTED, WORKTREE_MADE, REPORTED, NOTICED, ENDED, CHANGES_ACCEPTED, CHANGES_DISCARDED)
 """Every topic a run records."""

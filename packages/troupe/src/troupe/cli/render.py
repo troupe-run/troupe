@@ -49,6 +49,31 @@ def render_event(logged: Mapping[str, Any]) -> str:
     return f"  {logged['seq']:>4} {logged['at']} {kind}: {summaries.get(kind, '')}".rstrip()
 
 
+def render_logged_notice(logged: Mapping[str, Any]) -> str:
+    """One line for a notice a run recorded, among its events (run.schema.json#/$defs/loggedNotice
+    data): its seq column is blank, since a notice has none."""
+    notice = logged["notice"]
+    return f"  {'':>4} {logged['at']} notice {notice['code']}: {_first_line(notice['problem'])}"
+
+
+def render_log_entry(entry: Mapping[str, Any]) -> str:
+    """One line for an entry of a run's log: a run event or a recorded notice."""
+    return render_logged_notice(entry) if entry["kind"] == "run-notice" else render_event(entry)
+
+
+def _notices(run: Mapping[str, Any]) -> list[str]:
+    """The notices a run recorded, for its summary: none when it recorded none."""
+    if "notices" not in run:
+        return []
+    lines = ["  notices:"]
+    lines.extend(
+        f"    {recorded['at']} {recorded['notice']['code']}: "
+        f"{_first_line(recorded['notice']['problem'])}"
+        for recorded in run["notices"]
+    )
+    return lines
+
+
 def render_run(run: Mapping[str, Any]) -> list[str]:
     """A run's summary (run.schema.json#/$defs/summary data), one fact per line. A field the
     summary leaves out has nothing to say, so its line is left out too (or shows -)."""
@@ -77,11 +102,11 @@ def render_run(run: Mapping[str, Any]) -> list[str]:
         lines.append(f"  stderr: {run['stderr']}")
     if "recording" in run:
         failed = run["recording"]
-        lines.append(
-            f"  recording stopped at event {failed['failedAt']}: {failed['error']['code']}"
-        )
+        at = f"event {failed['failedAt']}" if "failedAt" in failed else f"notice {failed['notice']}"
+        lines.append(f"  recording stopped at {at}: {failed['error']['code']}")
     if "changes" in run:
         lines.extend(_changes(run["changes"]))
+    lines.extend(_notices(run))
     return lines
 
 
@@ -144,7 +169,9 @@ def _changes(changes: Mapping[str, Any]) -> list[str]:
 def render_run_line(run: Mapping[str, Any]) -> str:
     """One line for a run in a list."""
     status = run["outcome"] if run["state"] == "ended" else run["state"]
+    count = len(run.get("notices", []))
+    noticed = f", {count} {'notice' if count == 1 else 'notices'}" if count else ""
     return (
         f"{run['runId']}  {status:<20} {run['actor']:<16} {run['startedAt']}  "
-        f"{run['events']} events"
+        f"{run['events']} events{noticed}"
     )

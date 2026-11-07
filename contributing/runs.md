@@ -21,7 +21,8 @@ event store ([contributing/event-store.md](event-store.md)). The runner contract
 4. **The run's lease** is taken: a lock on `.troupe/local/runs/<run id>/`, held while `perform` runs.
 5. **The direction** is stored as an artifact and referenced by hash, since it can be large or hold what shouldn't
    be in git. The options aren't stored again: the run's start records the config version, which holds them.
-6. **Each run event is recorded as it arrives,** then the run's end, with the outcome the run host derived.
+6. **Each run event is recorded as it arrives,** and each notice troupe raises for the run, then the run's end, with
+   the outcome the run host derived.
 
 ### Run events
 
@@ -32,6 +33,7 @@ A run is its own stream, keyed by its run id. Its events, in order:
 | `Run.Started` | Before the run's workspace is made and its runner starts, once every check that can refuse it has passed, and after its direction is stored. It holds the actor's name, the runner asked for, the stage's admission, the effect check, the direction's reference, the config version (the config stream's heads, sorted), and the workspace: the worktree's path, base commit and whether the theatre was dirty, or `theatre`. A start an older troupe recorded also holds the runner `init` reported and the clone mechanisms | You, through `cli` |
 | `Run.WorktreeMade` | For a worktree run, once its worktree is made and filled, before the runner starts. It holds the clone mechanisms | You, through `cli` |
 | `Run.Reported` | Once per run event, in `seq` order. It holds the event's `seq` and the event as received. The first is `init`, and a run's reported runner is read from it | The agent (`source: troupe`), through `runner` |
+| `Run.Noticed` | Once per notice troupe raises for the run, in the order it was raised among the run's events, before the end. It holds the notice, its credential masked. One raised before the start (planning the worktree) is recorded straight after it. It has no `seq` | You, through `cli` |
 | `Run.Ended` | Once, when the run host returns. It holds the outcome, its error, the result, the exit code, the transcript's and standard error's references and the limits; if recording failed part-way, where and why; and for a worktree run, the changes captured: the diff's reference and counts, or why capturing failed, and what changed in the repository's shared state | The agent, through `runner` |
 | `Run.ChangesAccepted` | When a person accepts a worktree run's changes, after the diff applied. It holds the diff's reference and the files it changed | You, through `cli`, with no `stage` |
 | `Run.ChangesDiscarded` | When a person discards a worktree run's changes, after its worktree was removed | You, through `cli`, with no `stage` |
@@ -40,9 +42,23 @@ All of a run's events share one change id. `seq` is the runner's numbering, kept
 stream's version, which counts `Run.Started` too. Recording a `seq` that isn't the next one is refused
 (`run.out-of-sequence`).
 
-**If an event can't be recorded,** the run is cancelled and no later event is recorded, because a gap would break the
-`seq` rule. The run's end is still recorded if it can be, saying from which `seq` recording stopped and why, and
-`perform` fails with `run.recording-failed`. The transcript is always kept.
+**A run's notices** are every notice `perform` raises for it from when it mints the run id until the end is recorded:
+the run host's (`run.silent`, `run.retrying`, `run.scratch-not-removed`) and the workspace operations'
+(`workspace.*`). They're still sent live as they're raised; recording one doesn't delay it. Not a run's: the config
+notices `perform` raises before it mints the id, the event store's, those `status` and `logs` work out when they read
+a run (`run.interrupted`, `run.unfinished-elsewhere`), and those `accept` and `discard` raise, which their results
+carry. One writer records a run's events and notices, one at a time, in the order they reach it, so the stream's order
+is the order troupe raised them.
+
+**A run notice says what bounds it.** A run's notices aren't capped, because each one already is: `run.silent` once
+per silence (it resets on the next event), `run.retrying` once per `retry` event, `workspace.waiting` once per
+workspace operation, and the rest once per run. A new run notice that can repeat states its bound where its code is
+listed, or it doesn't ship.
+
+**If an event or a notice can't be recorded,** the run is cancelled and nothing later is recorded, because a gap would
+break the `seq` rule and the history would read as whole. Notices are still sent live. The run's end is still recorded
+if it can be, saying what wasn't recorded first, the run event's `seq` (`failedAt`) or the notice's code (`notice`),
+and why, and `perform` fails with `run.recording-failed`. The transcript is always kept.
 
 ### Ctrl-C
 
@@ -69,10 +85,13 @@ show how far it got. Lease directories stay in `.troupe/local/runs/` (they're lo
 
 `troupe status` lists the most recent runs, newest first (`STATUS_RUNS_LIMIT` of them, or `--limit`). `troupe status
 <run>` shows one run: its actor, who started it, its runner, its stage, its state, its outcome and error, how many
-events it has, its times, and its transcript's and standard error's references.
+events it has, the notices it recorded, its times, and its transcript's and standard error's references. The list
+adds a count to a run's line when it recorded notices.
 
-`troupe logs <run>` shows a run's events in order, each with the time troupe recorded it. `--follow` then waits for
-more, showing each event as it's recorded, and stops when the run's end is recorded, when it stops running, or at
+`troupe logs <run>` shows a run's log in order: its events and its recorded notices, each with the time troupe
+recorded it. A recorded notice is part of the run's history, so it's on standard output among the events, marked
+`notice`; the notices `logs` works out itself, such as `run.interrupted`, are on standard error. `--follow` then waits for
+more, showing each event and notice as it's recorded, and stops when the run's end is recorded, when it stops running, or at
 Ctrl-C, saying why.
 
 - **Woken by the write.** Following subscribes to the event store, which wakes it when anything is recorded, by
@@ -171,8 +190,8 @@ export TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE=true
 | `stage.unknown` | No stage of that name is installed |
 | `stage.effects-unenforced` | The stage can't enforce the actor's effects, and policy doesn't allow running it anyway |
 | `policy.invalid-value` | A policy variable is set to something other than `true` or `false` |
-| `run.out-of-sequence` | A run event isn't the next one its run expects, or arrived after the run ended: a fault, never retried |
-| `run.recording-failed` | A run event, or the run's end, couldn't be recorded, so the run was stopped |
+| `run.out-of-sequence` | A run event isn't the next one its run expects, or a run event or notice arrived after the run ended: a fault, never retried |
+| `run.recording-failed` | A run event, a notice raised for the run, or the run's end, couldn't be recorded, so the run was stopped |
 | `run.not-found` | No run here has an id starting with what was given |
 | `run.ambiguous-id` | More than one run's id starts with what was given; it lists them |
 | `run.not-ended` | A run's changes can't be shown or accepted, or a running run discarded, before its end is recorded |
@@ -183,7 +202,7 @@ export TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE=true
 | `run.changes-settled` | A run's changes were already accepted or discarded: settling them is final |
 | `workspace.no-head` | A worktree run needs a commit to start from, and the theatre has none yet |
 | `workspace.diff-too-large` | A run's changes make a diff larger than `GIT_DIFF_MAX_BYTES`, so they weren't captured |
-| `workspace.waiting` | (notice) Making, filling, capturing or removing a run's worktree has taken longer than `WORKSPACE_ANNOUNCE_AFTER_SECONDS` |
+| `workspace.waiting` | (notice) Making, filling, capturing or removing a run's worktree has taken longer than `WORKSPACE_ANNOUNCE_AFTER_SECONDS`; at most once per operation |
 | `workspace.not-removed` | (notice) A run's changes were accepted, but its worktree couldn't be removed; it names the path and `git worktree remove` |
 | `workspace.uncommitted-unseen` | (notice) The theatre has changes that differ from HEAD; the worktree run starts from HEAD and won't see them |
 | `workspace.shared-git-changed` | (notice) Refs, config or hooks that every worktree shares changed during the run; it names hooks first, and discarding won't undo any of them |
