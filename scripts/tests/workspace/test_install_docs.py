@@ -12,7 +12,9 @@ Each property is broken in a copy of the real pages to show the check catches it
 page and line. The last tests run it on the real pages."""
 
 import json
+import re
 import shutil
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -29,6 +31,9 @@ INSTALL_PAGES = release_config.TAGGED_PAGES
 PYTHON_PAGE = "README.md"
 """The install page checked here for the Python versions: core's tests check the user docs' one."""
 OTHER_PAGES = ("packages/troupe-run/README.md",)
+BUNDLE_PYPROJECT = "packages/troupe-run/pyproject.toml"
+EXTRAS_PAGE = "docs/opening-night/install.md"
+"""The page that gives the extras form and lists each extra (runner-extras design D10)."""
 COMMAND = "uv tool install "
 """What marks a line as a copy of the install command, with or without --no-sources."""
 START = "<!-- x-release-please-start-version -->"
@@ -55,9 +60,47 @@ def expected(root: Path) -> list[str]:
     return [install_check.command(release_config.REPOSITORY, ref) for ref in refs]
 
 
+_EXTRAS = re.compile(r'"troupe-run\[([^\]]*)\] @ ')
+"""The extras form's name before the URL (runner-extras design D10)."""
+
+
+def extras_of(command: str) -> list[str]:
+    """The extras a copy of the command names, or none for the plain form."""
+    matched = _EXTRAS.search(command)
+    return [e.strip() for e in matched.group(1).split(",")] if matched else []
+
+
+def without_extras(command: str) -> str:
+    """A copy of the command in the plain form: what every other rule checks."""
+    return _EXTRAS.sub('"', command, count=1)
+
+
+def bundle_extras(root: Path) -> list[str]:
+    """The extras troupe-run declares, sorted."""
+    project = tomllib.loads((root / BUNDLE_PYPROJECT).read_text(encoding="utf-8"))["project"]
+    return sorted(project.get("optional-dependencies", {}))
+
+
+def listed_extras(text: str) -> list[str]:
+    """The extras the install page's table lists, by the backticked name in each row's first
+    cell, under its | Extra | header."""
+    lines = text.splitlines()
+    start = next((n for n, line in enumerate(lines) if line.startswith("| Extra |")), None)
+    if start is None:
+        return []
+    found: list[str] = []
+    for line in lines[start + 2 :]:
+        if not line.startswith("|"):
+            break
+        cell = line.split("|")[1].strip()
+        found.append(cell.strip("`"))
+    return found
+
+
 def ref_of(command: str) -> str | None:
     """The ref a copy of the command names, when it's otherwise the documented form for some ref,
-    with or without --no-sources (release-each-package design D3)."""
+    with or without --no-sources (release-each-package design D3) and extras (runner-extras D10)."""
+    command = without_extras(command)
     command = command.replace(COMMAND + install_check.PINNED, COMMAND, 1)
     if command.startswith(_BEFORE) and command.endswith(_AFTER):
         return command[len(_BEFORE) : len(command) - len(_AFTER)]
@@ -111,9 +154,20 @@ def problems(root: Path) -> list[str]:
     for page in pages(root):
         lines = (root / page).read_text(encoding="utf-8").splitlines()
         between = marked(lines)
-        for number, line in enumerate(lines, start=1):
-            if COMMAND not in line:
+        for number, original in enumerate(lines, start=1):
+            if COMMAND not in original:
                 continue
+            extras = extras_of(original)
+            have = bundle_extras(root)
+            unknown = [extra for extra in extras if extra not in have]
+            if unknown:
+                found.append(
+                    f"{page}:{number} names troupe-run[{','.join(extras)}], but troupe-run has no "
+                    f"extra {unknown[0]!r} (it has: {', '.join(have)}): name one of those, as "
+                    f"{BUNDLE_PYPROJECT} declares them."
+                )
+                continue
+            line = without_extras(original)
             ref = ref_of(line.strip())
             if ref is not None and ref.startswith(install_check.TAG_PREFIX):
                 problem = _tag_problem(root, page, number, ref)
@@ -148,10 +202,22 @@ def problems(root: Path) -> list[str]:
                     f"so a release wouldn't move its tag: put its code block between {START} and "
                     f"{END}."
                 )
+    have = bundle_extras(root)
+    shown = listed_extras((root / EXTRAS_PAGE).read_text(encoding="utf-8"))
+    if sorted(shown) != have:
+        fixes = [f"add a row for {extra}" for extra in have if extra not in shown]
+        fixes += [f"remove the row for {extra}" for extra in shown if extra not in have]
+        names = release_config.listed(sorted(shown)) if shown else "none"
+        found.append(
+            f"{EXTRAS_PAGE}'s list of extras names {names}, "
+            f"but troupe-run has {release_config.listed(have)}: {', '.join(fixes)}, under its "
+            "| Extra | header."
+        )
     versions = python_versions.supported(root)
     needs = f"Python {versions[0]} to {versions[-1]}"
     for page in INSTALL_PAGES:
-        if COMMAND not in (root / page).read_text(encoding="utf-8"):
+        text = (root / page).read_text(encoding="utf-8")
+        if not any(COMMAND in line and "troupe-run[" not in line for line in text.splitlines()):
             found.append(f"{page} doesn't give the install command: give {suggested(page)!r}.")
     if needs not in (root / PYTHON_PAGE).read_text(encoding="utf-8"):
         found.append(
@@ -167,6 +233,8 @@ def copy(tmp_path: Path) -> Path:
     shutil.copy(REPO / "pyproject.toml", tmp_path / "pyproject.toml")
     shutil.copy(REPO / release_config.MANIFEST, tmp_path / release_config.MANIFEST)
     shutil.copy(REPO / release_config.CONFIG, tmp_path / release_config.CONFIG)
+    (tmp_path / BUNDLE_PYPROJECT).parent.mkdir(parents=True)
+    shutil.copy(REPO / BUNDLE_PYPROJECT, tmp_path / BUNDLE_PYPROJECT)
     for page in pages(REPO):
         (tmp_path / page).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(REPO / page, tmp_path / page)
@@ -189,6 +257,14 @@ def released(root: Path, version: str) -> None:
     ref = "main" if version == NO_RELEASE else install_check.TAG_PREFIX + version
     for page in INSTALL_PAGES:
         given(root, page, ref)
+    # A release moves the extras form's tag with the plain one's (runner-extras design D10).
+    path = root / EXTRAS_PAGE
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    for index, line in enumerate(lines):
+        if COMMAND in line and "troupe-run[" in line:
+            extras = tuple(extras_of(line))
+            lines[index] = install_check.command(release_config.REPOSITORY, ref, extras) + "\n"
+    path.write_text("".join(lines), encoding="utf-8")
 
 
 def given(root: Path, page: str, ref: str) -> str:
@@ -200,12 +276,24 @@ def given(root: Path, page: str, ref: str) -> str:
     [index] = [
         index
         for index, line in enumerate(lines)
-        if COMMAND in line and (page not in INSTALL_PAGES or index + 1 in between)
+        if COMMAND in line
+        and "troupe-run[" not in line
+        and (page not in INSTALL_PAGES or index + 1 in between)
     ]
     command = install_check.command(release_config.REPOSITORY, ref)
     lines[index] = command + "\n"
     (root / page).write_text("".join(lines), encoding="utf-8")
     return command
+
+
+def given_extras(root: Path, command: str) -> bool:
+    """Make the install page's extras form command, in place of the one it gives."""
+    path = root / EXTRAS_PAGE
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    [index] = [i for i, line in enumerate(lines) if COMMAND in line and "troupe-run[" in line]
+    lines[index] = command + "\n"
+    path.write_text("".join(lines), encoding="utf-8")
+    return True
 
 
 def test_the_copy_of_the_real_pages_has_no_problems(copy: Path) -> None:
@@ -387,3 +475,53 @@ def test_the_commit_command_outside_the_markers_passes(copy: Path) -> None:
 
 def test_every_install_command_in_the_docs_is_the_one_the_install_check_runs() -> None:
     assert problems(REPO) == []
+
+
+# The extras form of the command, and the install page's list of extras (spec: installation, "The
+# install command is documented in one form" and "The install page lists each runner's extra";
+# runner-extras design D10).
+
+
+def add_extra(root: Path, name: str) -> None:
+    """Give the copy's bundle an extra, as #291 will add lm-studio's."""
+    path = root / BUNDLE_PYPROJECT
+    text = path.read_text(encoding="utf-8")
+    old = "[project.optional-dependencies]\n"
+    assert old in text
+    path.write_text(text.replace(old, f'{old}{name} = ["troupe-runner-{name}"]\n'), "utf-8")
+
+
+def test_the_install_page_gives_the_extras_form_and_lists_the_extras() -> None:
+    text = (REPO / EXTRAS_PAGE).read_text(encoding="utf-8")
+    assert '"troupe-run[all] @ git+' in text
+    assert listed_extras(text) == ["all"]
+
+
+def test_the_extras_form_at_the_released_tag_passes(copy: Path) -> None:
+    released(copy, "0.1.0")
+    tag = install_check.TAG_PREFIX + "0.1.0"
+    command = install_check.command(release_config.REPOSITORY, tag, ("all",))
+    assert command in (copy / EXTRAS_PAGE).read_text(encoding="utf-8").splitlines()
+    assert problems(copy) == []
+
+
+def test_an_extra_the_bundle_doesnt_have_is_named_with_the_page_line_and_its_extras(
+    copy: Path,
+) -> None:
+    released(copy, "0.1.0")
+    tag = install_check.TAG_PREFIX + "0.1.0"
+    command = install_check.command(release_config.REPOSITORY, tag, ("gemini",))
+    given_extras(copy, command)
+    number = line_of(copy, EXTRAS_PAGE, "troupe-run[gemini]")
+    assert problems(copy) == [
+        f"{EXTRAS_PAGE}:{number} names troupe-run[gemini], but troupe-run has no extra 'gemini' "
+        f"(it has: all): name one of those, as {BUNDLE_PYPROJECT} declares them."
+    ]
+
+
+def test_an_extra_missing_from_the_install_pages_list_is_named(copy: Path) -> None:
+    add_extra(copy, "lm-studio")
+    assert problems(copy) == [
+        f"{EXTRAS_PAGE}'s list of extras names all, but troupe-run has all and lm-studio: add a "
+        "row for lm-studio, under its | Extra | header."
+    ]

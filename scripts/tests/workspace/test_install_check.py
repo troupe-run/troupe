@@ -4,6 +4,7 @@ Spec: installation. Design: install-with-uv D3 and D4. What needs an install (th
 and performing with it) is run by CI's install step on every platform and Python, not here: each
 test here checks what the check does without installing anything."""
 
+import json
 import os
 import sys
 from pathlib import Path
@@ -223,3 +224,124 @@ def test_an_install_that_prints_the_expected_version_passes() -> None:
     install_check.confirm_printed(
         "troupe 0.1.0 (protocol 0.1.0)\n", "0.1.0", "troupe-run-v0.1.0", "abc"
     )
+
+
+# The extras (spec: installation; runner-extras design D9, D10). No runner is in an extra yet, so
+# each case uses a fixture lm-studio runner, as #291 will add it.
+
+
+def test_the_extras_form_names_the_extras_before_the_url_in_both_ref_forms() -> None:
+    assert install_check.command(release_config.REPOSITORY, "main", ("all",)) == (
+        'uv tool install "troupe-run[all] @ git+https://github.com/troupe-run/troupe@main'
+        '#subdirectory=packages/troupe-run"'
+    )
+    assert install_check.command(release_config.REPOSITORY, "troupe-run-v0.1.0", ("all",)) == (
+        'uv tool install --no-sources "troupe-run[all] @ git+https://github.com/troupe-run/troupe'
+        '@troupe-run-v0.1.0#subdirectory=packages/troupe-run"'
+    )
+
+
+def test_the_install_arguments_with_extras_name_them_before_the_url() -> None:
+    assert install_check.install_arguments("file:///checkout", "abc", "3.12", extras=("all",)) == [
+        "tool",
+        "install",
+        "troupe-run[all] @ git+file:///checkout@abc#subdirectory=packages/troupe-run",
+        "--python",
+        "3.12",
+    ]
+
+
+def with_extras(text: str, extras: dict[str, list[str]]) -> str:
+    """A bundle pyproject.toml's text with these extras added."""
+    block = "\n[project.optional-dependencies]\n" + "".join(
+        f"{name} = {json.dumps(requirements)}\n" for name, requirements in extras.items()
+    )
+    return text + block
+
+
+def test_a_tag_with_a_runner_bare_in_an_extra_is_refused_naming_the_extra() -> None:
+    text = with_extras(
+        bundle("0.2.0", pinned("troupe", "0.1.0")),
+        {"lm-studio": ["troupe-runner-lm-studio"], "all": ["troupe-runner-lm-studio"]},
+    )
+    with pytest.raises(InstallCheckError) as caught:
+        install_check.expected_version("troupe-run-v0.2.0", "0.1.0", text, "abc")
+    assert str(caught.value) == (
+        "--ref troupe-run-v0.2.0: troupe-run doesn't pin troupe-runner-lm-studio (in its "
+        "'lm-studio' extra) at abc, so --no-sources would look for them on a package index. A "
+        "pinning pull request pins them, and the bundle's next release ships them."
+    )
+
+
+TABLE = """
+RUNNERS: dict[str, Runner] = {
+    "scripted": Runner(command=("python",), package="troupe_runner_scripted"),
+    "lm-studio": Runner(command=("python",), package="troupe_runner_lm_studio", in_extra=True),
+}
+"""
+
+
+def test_the_runners_are_read_from_cores_table_as_text() -> None:
+    runners = install_check.runners_in(TABLE, "abc")
+    assert [(r.name, r.in_extra) for r in runners] == [("scripted", False), ("lm-studio", True)]
+
+
+def test_a_commit_without_a_runner_table_is_refused_naming_it() -> None:
+    with pytest.raises(InstallCheckError) as caught:
+        install_check.runners_in("RUNNERS = 1\n", "abc")
+    assert str(caught.value) == (
+        "read core's runners: packages/troupe/src/troupe/core/interim.py at abc has no RUNNERS "
+        "table to read."
+    )
+
+
+def test_the_base_refuses_each_runner_in_an_extra_and_all_rehearses_every_runner() -> None:
+    runners = install_check.runners_in(TABLE, "abc")
+    assert install_check.refused_in_the_base(runners) == ["lm-studio"]
+    assert install_check.rehearsed_with_all(runners) == ["scripted", "lm-studio"]
+
+
+def test_only_a_bundle_with_an_all_extra_is_installed_with_it() -> None:
+    plain = bundle("0.2.0", pinned("troupe", "0.1.0"))
+    assert not install_check.has_all(plain)
+    assert install_check.has_all(with_extras(plain, {"all": []}))
+
+
+def test_a_refusal_naming_the_extra_passes() -> None:
+    install_check.confirm_refused(
+        "lm-studio", 1, "", "  fix: Install troupe-run[lm-studio] with ..."
+    )
+
+
+@pytest.mark.parametrize(
+    ("code", "stderr"),
+    [(3, ""), (0, ""), (1, "troupe: something else\n  fix: something")],
+    ids=["rehearsed", "made", "another refusal"],
+)
+def test_anything_but_a_refusal_naming_the_extra_fails_naming_the_runner(
+    code: int, stderr: str
+) -> None:
+    with pytest.raises(InstallCheckError) as caught:
+        install_check.confirm_refused("lm-studio", code, "out", stderr)
+    message = str(caught.value)
+    assert message.startswith(
+        "base install: rehearsing an audition on lm-studio should be refused, naming "
+        f"troupe-run[lm-studio], but it exited {code}."
+    )
+    assert "out" in message
+
+
+def test_a_rehearsal_that_would_change_passes_and_anything_else_fails() -> None:
+    install_check.confirm_rehearsed("lm-studio", install_check.WOULD_CHANGE, "", "")
+    with pytest.raises(InstallCheckError) as caught:
+        install_check.confirm_rehearsed("lm-studio", 1, "", "troupe: not installed")
+    assert str(caught.value).startswith(
+        "all install: rehearsing an audition on lm-studio should succeed with the would-change "
+        f"code ({install_check.WOULD_CHANGE}), but it exited 1."
+    )
+
+
+def test_the_would_change_code_is_troupes() -> None:
+    from troupe.core.exit_codes import ExitCode
+
+    assert install_check.WOULD_CHANGE == ExitCode.WOULD_CHANGE
