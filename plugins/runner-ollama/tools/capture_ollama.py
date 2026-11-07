@@ -37,12 +37,16 @@ from urllib.parse import urlsplit
 from troupe_plugin_sdk import runner as p
 from troupe_runner_ollama.client import Client, EngineError, RetryableError
 from troupe_runner_ollama.conversation import Conversation
-from troupe_runner_ollama.defaults import DEFAULT_ENDPOINT, PREFLIGHT_TIMEOUT_SECONDS
+from troupe_runner_ollama.defaults import PREFLIGHT_TIMEOUT_SECONDS
 from troupe_runner_ollama.options import parse_options
 from troupe_runner_ollama.runner import default_window, model_maximum
+from troupe_runner_ollama.runtime import checked
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "ollama"
 LOOPBACK = ("127.0.0.1", "::1", "localhost")
+LOCAL_OLLAMA = "http://127.0.0.1:11434"
+"""Where the tool looks for Ollama without --endpoint: Ollama's own default address, as troupe's
+built-in ollama runtime has it. The runner itself holds no endpoint (ollama-uses-runtime D2)."""
 EVENT_MAX_BYTES = 65536
 
 
@@ -51,6 +55,8 @@ class Scenario:
     """One fixture's run."""
 
     what: str
+    model: str
+    """The runtime's model."""
     options: dict[str, Any]
     direction: str = ""
     effects: dict[str, list[str]] = field(default_factory=dict)
@@ -63,36 +69,42 @@ class Scenario:
 SCENARIOS: dict[str, Scenario] = {
     "success-with-tools": Scenario(
         "A Write the effects allow, then a final answer.",
-        {"model": "qwen3:0.6b", "think": False, "temperature": 0, "seed": 1},
+        "qwen3:0.6b",
+        {"think": False, "temperature": 0, "seed": 1},
         "Create the file out/hello.txt containing exactly: hello",
         {"write": ["out/**"]},
     ),
     "refused-by-effects": Scenario(
         "A Write outside the declared effects, refused by the SDK, then the model's answer.",
-        {"model": "qwen3:0.6b", "think": False, "temperature": 0, "seed": 1, "maxTurns": 3},
+        "qwen3:0.6b",
+        {"think": False, "temperature": 0, "seed": 1, "maxTurns": 3},
         "Create the file src/hello.txt containing exactly: hello",
         {"write": ["out/**"]},
     ),
     "thinking": Scenario(
         "A thinking model's answer, with no tool call: its thinking stays in the transcript.",
-        {"model": "qwen3:0.6b", "think": True, "temperature": 0, "seed": 1},
+        "qwen3:0.6b",
+        {"think": True, "temperature": 0, "seed": 1},
         "What is 2 + 2? Answer with only the number, and use no tools.",
     ),
     "context-overflow": Scenario(
         "A window too small for the conversation: with truncate false, Ollama refuses the "
         "request with status 400 instead of cutting it.",
-        {"model": "qwen3:0.6b", "think": False, "contextLength": 512},
+        "qwen3:0.6b",
+        {"think": False, "contextLength": 512},
         "Read notes.txt and summarise it.",
         files={"notes.txt": "A line of notes.\n" * 200},
     ),
     "model-not-found": Scenario(
         "/api/show's answer for a model that isn't pulled.",
-        {"model": "troupe-capture-no-such-model"},
+        "troupe-capture-no-such-model",
+        {},
         preflight_only=True,
     ),
     "no-tools-capability": Scenario(
         "/api/show's answer for a model whose template has no tools.",
-        {"model": "troupe-capture-notools"},
+        "troupe-capture-notools",
+        {},
         preflight_only=True,
         note="Made for the capture with `ollama create troupe-capture-notools` from qwen3:0.6b "
         'with TEMPLATE "{{ .Prompt }}", and removed with `ollama rm` afterwards. Ollama 0.40.14 '
@@ -164,20 +176,24 @@ def capture(name: str, endpoint: str, out: Path = FIXTURES) -> Path:
             "Ollama (127.0.0.1, ::1 or localhost)."
         )
     scenario = SCENARIOS[name]
-    options = parse_options({**scenario.options, "endpoint": endpoint})
-    client = RecordingClient(endpoint)
+    options = parse_options(scenario.options)
+    runtime = p.RunStartRuntime(
+        name="ollama", endpoint=endpoint, model=scenario.model, credential=False
+    )
+    model = scenario.model
+    client = RecordingClient(checked(runtime).endpoint)
     version = client.version(PREFLIGHT_TIMEOUT_SECONDS)
-    shown = client.show(options.model, PREFLIGHT_TIMEOUT_SECONDS)
+    shown = client.show(model, PREFLIGHT_TIMEOUT_SECONDS)
     if shown is not None:
         for bulky in ("license", "modelfile", "template", "template_source"):
             shown.pop(bulky, None)
     directory = out / name
     directory.mkdir(parents=True, exist_ok=True)
-    _write(directory, "preflight.json", {"model": options.model, "version": version, "show": shown})
+    _write(directory, "preflight.json", {"model": model, "version": version, "show": shown})
     provenance: dict[str, Any] = {
         "what": scenario.what,
         "ollamaVersion": version,
-        "model": options.model,
+        "model": model,
         "date": datetime.date.today().isoformat(),
         "command": ["capture_ollama.py", name],
         "options": scenario.options,
@@ -212,6 +228,7 @@ def capture(name: str, endpoint: str, out: Path = FIXTURES) -> Path:
                 move=scenario.effects.get("move", []),
             ),
             scratch=str(scratch),
+            runtime=runtime,
         )
         maximum = model_maximum(shown or {})
         window = options.context_length or default_window(maximum)
@@ -219,6 +236,7 @@ def capture(name: str, endpoint: str, out: Path = FIXTURES) -> Path:
         Conversation(
             start=start,
             options=options,
+            model=model,
             window=window,
             engine_version=version,
             client=client,
@@ -246,7 +264,7 @@ def capture(name: str, endpoint: str, out: Path = FIXTURES) -> Path:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0] if __doc__ else None)
     parser.add_argument("scenario", nargs="?", choices=sorted(SCENARIOS))
-    parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT)
+    parser.add_argument("--endpoint", default=LOCAL_OLLAMA)
     parser.add_argument("--list", action="store_true", help="list the scenarios and exit")
     args = parser.parse_args(argv)
     if args.list or args.scenario is None:

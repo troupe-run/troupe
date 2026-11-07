@@ -15,6 +15,7 @@ naming the path and the rule, and records nothing.
 
 import json
 import re
+import shlex
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -169,11 +170,19 @@ def actor_problems(
     if not schema_problems:
         found += _expect_problems(base, actor)
     runner = actor.get("runner")
+    moved: list[Problem] = []
     if isinstance(runner, str) and runner in interim.RUNNERS:
         options = actor.get("options", {})
-        found += _schema_problems(
-            (*base, "options"), options, interim.options_validator(runner), runner=runner
-        )
+        moved = _moved_problems(base, actor, runner)
+        moved_paths = {problem.path for problem in moved}
+        found += moved
+        found += [
+            problem
+            for problem in _schema_problems(
+                (*base, "options"), options, interim.options_validator(runner), runner=runner
+            )
+            if problem.path not in moved_paths
+        ]
     elif isinstance(runner, str) and ACTOR_NAME.match(runner):
         known = ", ".join(sorted(interim.RUNNERS))
         found.append(
@@ -183,10 +192,73 @@ def actor_problems(
                 f"Set it to one of: {known}.",
             )
         )
-    if not schema_problems:
+    if not schema_problems and not moved:
+        # A moved option's fix names the runtime too, so the actor gets one rule with one fix.
         known_runtimes = list(runtimes) if runtimes is not None else sorted(defaults.RUNTIMES)
         found += _runtime_problems(base, actor, known_runtimes)
     return sorted(found, key=lambda problem: problem.path)
+
+
+def _moved_problems(base: tuple[str, ...], actor: Mapping[str, Any], runner: str) -> list[Problem]:
+    """A problem for each option the actor's runner moved to its runtime, whose fix is one config
+    set built from the actor's own values (spec: runtimes, "Options a runner moved to its runtime
+    are refused with the move"; ollama-uses-runtime design D5)."""
+    built_in = interim.MOVED_TO_RUNTIME.get(runner)
+    options = actor.get("options")
+    if built_in is None or not isinstance(options, Mapping):
+        return []
+    held = [key for key in interim.MOVED_OPTIONS if key in options]
+    if not held:
+        return []
+    fix = _move_fix(base, actor, options, built_in)
+    return [
+        Problem(
+            (*base, "options", key),
+            f"{key} moved to the actor's runtime: the {runner} runner takes its endpoint and "
+            "model from a runtime now, not from its options",
+            fix,
+        )
+        for key in held
+    ]
+
+
+def _move_fix(
+    base: tuple[str, ...], actor: Mapping[str, Any], options: Mapping[str, Any], built_in: str
+) -> str:
+    """The config set that moves the actor's endpoint and model to a runtime, changing no runtime
+    that exists. An endpoint that isn't the built-in runtime's needs a runtime of its own, whose
+    name the person chooses."""
+    assignments: list[str] = []
+    note = ""
+    runtime = actor.get("runtime")
+    endpoint = options.get("endpoint")
+    default = str(defaults.RUNTIMES[built_in]["endpoint"])
+    if not isinstance(runtime, str):
+        if endpoint is None or (
+            isinstance(endpoint, str) and endpoint.rstrip("/") == default.rstrip("/")
+        ):
+            runtime = built_in
+        else:
+            runtime = "<name>"
+            # Never repeat an endpoint with user info (it may hold a password) or one that isn't
+            # plain text: the person gives the URL again.
+            shown = (
+                endpoint
+                if isinstance(endpoint, str) and "@" not in endpoint and endpoint.isprintable()
+                else "<url>"
+            )
+            assignments.append(f"{RUNTIMES}.<name>.endpoint={shown}")
+            note = ", choosing a <name> for that Ollama, such as gpu-box"
+    assignments.append(f"{dotted((*base, 'runtime'))}={runtime}")
+    model = actor.get("model", options.get("model"))
+    if model is not None:
+        assignments.append(f"{dotted((*base, 'model'))}={model}")
+    rest = {k: v for k, v in options.items() if k not in interim.MOVED_OPTIONS}
+    assignments.append(
+        f"{dotted((*base, 'options'))}={json.dumps(rest, separators=(',', ':'), sort_keys=True)}"
+    )
+    command = " ".join(["troupe", "config", "set", *(shlex.quote(a) for a in assignments)])
+    return f"Move it in one change{note}: {command}"
 
 
 def _runtime_problems(

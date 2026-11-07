@@ -3,8 +3,11 @@ config-model design D10)."""
 
 import io
 import json
+import shlex
+from dataclasses import replace
 from pathlib import Path
 
+import jsonschema
 import pytest
 
 from client_schemas import check
@@ -15,6 +18,7 @@ from storetesting import git_service
 from troupe.cli import COMMANDS, main
 from troupe.cli.config import SHOWN
 from troupe.cli.parser import parse
+from troupe.core import interim
 from troupe.core.config import aggregate
 from troupe.core.config.projection import file_hash
 from troupe.core.errors import CODES, TroupeError
@@ -320,6 +324,44 @@ def test_an_actor_on_a_runtime(repo: Repo) -> None:
     assert code == 0, err
     assert _get("actors.tester.runtime") == "ollama"
     assert _get("actors.tester.model") == "llama3.2"
+
+
+def _record_an_old_ollama_actor(monkeypatch: pytest.MonkeyPatch, options: str) -> None:
+    """Record ``lead`` as the Ollama audition did before its options moved to a runtime, under
+    the rules of the time: no runtime, and model and endpoint as options."""
+    with monkeypatch.context() as then:
+        then.setitem(interim.RUNNERS, "ollama", replace(interim.RUNNERS["ollama"], runtime="none"))
+        then.setattr(interim, "MOVED_TO_RUNTIME", {})
+        then.setattr(interim, "options_validator", lambda name: jsonschema.Draft202012Validator({}))
+        code, _, err = cli(
+            "config",
+            "set",
+            "--json",
+            'actors.lead.runner="ollama"',
+            "actors.lead.expect=[]",
+            f"actors.lead.options={options}",
+        )
+        assert code == 0, err
+
+
+def test_an_old_ollama_actor_is_moved_by_running_its_refusals_fix_as_given(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Spec: runtimes, "The fix run as given" (ollama-uses-runtime design D5).
+    _record_an_old_ollama_actor(monkeypatch, '{"model": "qwen3:4b", "maxTurns": 20}')
+    code, _, err = _tester()  # an unrelated change is refused: config would still break the rule
+    assert code == 1
+    assert "actors.lead.options.model: model moved to the actor's runtime" in err
+    fix = err.split("Move it in one change: ", 1)[1].splitlines()[0]
+    argv = shlex.split(fix)
+    assert argv[:3] == ["troupe", "config", "set"]
+    code, _, err = cli(*argv[1:])
+    assert code == 0, err
+    assert _get("actors.lead.runtime") == "ollama"
+    assert _get("actors.lead.model") == "qwen3:4b"
+    assert _get("actors.lead.options") == {"maxTurns": 20}
+    code, _, err = _tester()
+    assert code == 0, err
 
 
 def test_a_field_a_runtime_doesnt_have_is_refused(repo: Repo) -> None:

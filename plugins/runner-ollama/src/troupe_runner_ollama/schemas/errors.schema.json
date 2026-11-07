@@ -12,9 +12,33 @@
       "properties": {"code": {"const": "ollama.unknown-option"}, "details": {"$ref": "#/$defs/where"}}
     },
     {
-      "description": "An option is missing or its value has the wrong shape, or contextLength is above the model's maximum. The fix names what is valid.",
+      "description": "An option's value has the wrong shape, or contextLength is above the model's maximum. The fix names what is valid.",
       "required": ["details"],
       "properties": {"code": {"const": "ollama.invalid-options"}, "details": {"$ref": "#/$defs/where"}}
+    },
+    {
+      "description": "run/start names no runtime, so the runner has no service to talk to. The fix says to name one for the actor.",
+      "required": ["details"],
+      "properties": {
+        "code": {"const": "ollama.no-runtime"},
+        "details": {"$ref": "#/$defs/where"}
+      }
+    },
+    {
+      "description": "The runtime's endpoint has a path, or a port or host name no connection could use. Ollama's own API is at the endpoint's root. The fix names the runtime's config path and its TROUPE_RUNTIME_<NAME>_ENDPOINT variable.",
+      "required": ["details"],
+      "properties": {
+        "code": {"const": "ollama.invalid-runtime"},
+        "details": {"$ref": "#/$defs/where"}
+      }
+    },
+    {
+      "description": "The runtime has a credential, which the Ollama runner never sends. Its value isn't read, and isn't in the error.",
+      "required": ["details"],
+      "properties": {
+        "code": {"const": "ollama.credential-unsupported"},
+        "details": {"$ref": "#/$defs/where"}
+      }
     },
     {
       "description": "Ollama didn't answer at the endpoint in time, or answered with something that isn't Ollama's version.",
@@ -70,7 +94,7 @@
       "required": ["where"],
       "properties": {
         "where": {
-          "description": "Where the problem is, such as options.endpoint.",
+          "description": "Where the problem is, such as options.maxTurns or runtime.endpoint.",
           "type": "string",
           "minLength": 1
         }
@@ -82,7 +106,7 @@
       "minLength": 1
     },
     "model": {
-      "description": "The model, as the options named it.",
+      "description": "The model, as the run's runtime named it.",
       "type": "string",
       "minLength": 1
     }

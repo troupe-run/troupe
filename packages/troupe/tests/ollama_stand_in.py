@@ -3,7 +3,7 @@
 The fake lives with the plugin's tests (plugins/runner-ollama/tests/fake_ollama.py) and uses only
 the standard library, so it's loaded here by path, as claude_stand_in.py loads the stand-in claude.
 ``serving(fixture)`` serves one of the plugin's fixtures: its preflight answers and its /api/chat
-answers, in turn. Core's tests point the real runner's ``endpoint`` at it, through the host, the
+answers, in turn. Core's tests point the real runner's runtime at it, through the host, the
 conformance suite and perform.
 """
 
@@ -40,7 +40,8 @@ def load(name: str, file: str) -> Any:  # noqa: ANN401 - JSON
 
 
 def options(name: str) -> dict[str, Any]:
-    """The runner options the fixture was captured with, without an endpoint."""
+    """The runner options the fixture was captured with. Its model is the runtime's: see
+    ``provenance``."""
     loaded: dict[str, Any] = load(name, "provenance.json")["options"]
     return dict(loaded)
 

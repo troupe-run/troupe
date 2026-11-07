@@ -47,6 +47,7 @@ def _check(
     workspace: Path,
     limits: RunLimits = LIMITS,
     env: dict[str, str] | None = None,
+    runtime: RunStartRuntime | None = None,
 ) -> dict[str, CheckResult]:
     results = asyncio.run(
         check_runner(
@@ -54,6 +55,7 @@ def _check(
             options,
             workspace=workspace,
             limits=limits,
+            runtime=runtime,
         )
     )
     return {result.name: result for result in results}
@@ -153,17 +155,21 @@ def test_the_claude_code_runner_passes_every_check_with_a_stand_in_claude(tmp_pa
     assert len(results) == 8
 
 
-def test_the_ollama_runner_passes_every_check_with_a_stand_in_ollama(tmp_path: Path) -> None:
-    # Spec: ollama-runner, "The runner conforms to the contract" (local-model-runner task 8.3).
+def test_the_ollama_runner_passes_every_check_given_a_runtime_naming_a_stand_in(
+    tmp_path: Path,
+) -> None:
+    # Spec: ollama-runner, "The runner conforms to the contract" (local-model-runner task 8.3,
+    # ollama-uses-runtime D7).
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     with ollama_stand_in.answering(count=20, delay=0.2) as fake:
         results = _check(
             [sys.executable, "-m", "troupe_runner_ollama"],
-            {"model": "fake", "endpoint": fake.url},
+            {},
             workspace,
             RunLimits(start_timeout=10.0, cancel_grace=10.0, run_timeout=30.0),
             {},
+            RunStartRuntime("test", fake.url, "fake", credential=False),
         )
     assert {name: r.problem for name, r in results.items() if not r.passed} == {}
     assert len(results) == 8

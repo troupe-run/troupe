@@ -20,8 +20,8 @@ in its options. So its endpoint can't be overridden from the person's environmen
   `model` leave its options and its published options schema, and the runner holds no default endpoint. Its other
   options (`maxTurns`, `contextLength`, `temperature`, `seed`, `think`) stay. A `run/start` with no runtime is refused
   with `ollama.no-runtime`.
-- The runner still checks the endpoint it's given against its own rules (no path, no user info, a port and host a
-  connection can use), now refused as `ollama.invalid-runtime`, naming `runtime.endpoint`. A runtime with a
+- The runner still checks the endpoint it's given against its own rules (no path, and a port and host a connection
+  can use), now refused as `ollama.invalid-runtime`, naming `runtime.endpoint`. A runtime with a
   credential is refused with `ollama.credential-unsupported`, since the runner sends no credential.
 - An actor recorded with `options.model` or `options.endpoint` on the `ollama` runner is refused by config, wherever
   config is checked (any `config set`, and `perform`), with a rule that says the value moved to the actor's runtime,

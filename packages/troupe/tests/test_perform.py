@@ -555,8 +555,16 @@ def test_an_ollama_actors_runner_is_given_no_variables_even_with_ollama_host_and
         "HTTPS_PROXY": "http://proxy:3128",
     }
     with ollama_stand_in.serving("success-with-tools") as fake:
-        options = {**ollama_stand_in.options("success-with-tools"), "endpoint": fake.url}
-        result = harness.perform(request(options, runner="ollama"))
+        options = ollama_stand_in.options("success-with-tools")
+        result = harness.perform(
+            request(
+                options,
+                runner="ollama",
+                runtime="ollama",
+                model=ollama_stand_in.provenance("success-with-tools")["model"],
+                runtimes={"ollama": {"endpoint": fake.url}},
+            )
+        )
     [command] = commands
     assert dict(command.env) == {}
     assert result.run.outcome == "succeeded"

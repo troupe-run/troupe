@@ -22,6 +22,7 @@ import pytest
 from runner_schemas import validate
 from troupe.core.artifacts import MemoryArtifactStore
 from troupe.core.audition import OLLAMA_AUDITION_MODEL
+from troupe.core.defaults import RUNTIMES
 from troupe.core.interim import runner_command, runner_environment
 from troupe.core.runners.effects import NoAudit, NoEffectExpected
 from troupe.core.runners.host import RunnerCommand, RunRequest, run_actor
@@ -29,6 +30,8 @@ from troupe.core.runners.limits import RunLimits
 from troupe_plugin_sdk import runner as p
 
 OPT_IN = "TROUPE_LIVE_OLLAMA"
+OLLAMA_ENDPOINT = str(RUNTIMES["ollama"]["endpoint"])
+"""The built-in ollama runtime's endpoint: Ollama's default address."""
 MODEL = "TROUPE_LIVE_OLLAMA_MODEL"
 DIRECTION = "Use the Write tool to create out/hello.txt containing exactly: hello"
 
@@ -55,8 +58,9 @@ def test_a_live_run_keeps_the_contract_and_reaches_a_result(tmp_path: Path) -> N
                 str(uuid.uuid4()),
                 DIRECTION,
                 workspace,
-                {"model": model, "temperature": 0, "seed": 1},
+                {"temperature": 0, "seed": 1},
                 effects=p.EffectsDeclaration(write=["out/**"], delete=[], move=[]),
+                runtime=p.RunStartRuntime("ollama", OLLAMA_ENDPOINT, model, False),
             ),
             store=MemoryArtifactStore(),
             effect=NoEffectExpected(),

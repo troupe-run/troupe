@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from fake_ollama import Answer, FakeOllama, Settings
-from ollama_harness import FIXTURES, Session
+from ollama_harness import FIXTURES, Session, runtime
 
 FILES = {"context-overflow": {"notes.txt": "A line of notes.\n" * 200}}
 """The files a fixture's workspace starts with, as its capture made them."""
@@ -80,9 +80,12 @@ def replay(name: str, root: Path) -> Replayed:
     fake = FakeOllama(answers(name), settings(name)).start()
     session = Session(workspace)
     try:
-        options = {**provenance["options"], "endpoint": fake.url}
+        # The fixture's model is the runtime's; its options are the rest (ollama-uses-runtime D7).
         response = session.start(
-            options, direction=provenance.get("direction", ""), effects=provenance.get("effects")
+            provenance["options"],
+            direction=provenance.get("direction", ""),
+            effects=provenance.get("effects"),
+            runtime=runtime(fake.url, provenance["model"], name="ollama"),
         )
         if "error" in response:
             return Replayed(response["error"]["data"], [], [])

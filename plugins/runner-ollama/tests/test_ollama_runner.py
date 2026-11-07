@@ -27,13 +27,16 @@ from fake_ollama import (
     serving,
     tool_call,
 )
-from ollama_harness import Session
+from ollama_harness import Session, runtime
 from troupe_runner_ollama.defaults import (
     DEFAULT_CONTEXT_LENGTH,
     PREFLIGHT_TIMEOUT_SECONDS,
     STOP_GRACE_SECONDS,
 )
 from troupe_runner_ollama.runner import Runner, _Exit
+
+TOOLS: dict[str, Any] = {"capabilities": ["completion", "tools"]}
+"""/api/show's answer for a model that can call tools."""
 
 MARGIN = 5.0
 """Time allowed beyond the runner's own stop grace, for a loaded machine."""
@@ -63,8 +66,9 @@ def _free_port() -> int:
         return port
 
 
-def _options(fake: FakeOllama, **more: Any) -> dict[str, Any]:  # noqa: ANN401 - JSON values
-    return {"model": "fake", "endpoint": fake.url, **more}
+def _run(fake: FakeOllama, model: str = "fake", **options: Any) -> dict[str, Any]:  # noqa: ANN401
+    """Session.start's keywords for a run on ``fake``: its runtime, and ``options``."""
+    return {"options": options, "runtime": runtime(fake.url, model)}
 
 
 def _events(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -96,7 +100,7 @@ def test_an_unsupported_protocol_version_is_refused_naming_the_supported_ones(
 
 def test_a_whole_run_is_init_events_and_one_result_then_shutdown(session: Session) -> None:
     with serving([final("All done.")]) as fake:
-        assert session.start(_options(fake))["result"] == {"runId": session.run_id}
+        assert session.start(**_run(fake))["result"] == {"runId": session.run_id}
         events = _events(session.until_result())
         assert session.request("shutdown", {})["result"] == {}
         assert session.wait() == 0
@@ -109,7 +113,7 @@ def test_a_whole_run_is_init_events_and_one_result_then_shutdown(session: Sessio
 
 def test_a_second_run_start_is_refused(session: Session) -> None:
     with serving([final("hi")]) as fake:
-        session.start(_options(fake))
+        session.start(**_run(fake))
         session.until_result()
         params = session.sent[-1]["params"]
         data = _error(session.request("run/start", params))
@@ -121,24 +125,101 @@ def test_a_second_run_start_is_refused(session: Session) -> None:
 
 def test_an_unknown_option_is_refused_and_no_run_starts(session: Session) -> None:
     with serving() as fake:
-        response = session.start(_options(fake, troupeConformanceUnknownOption=1), valid=False)
+        response = session.start(**_run(fake, troupeConformanceUnknownOption=1), valid=False)
         assert _error(response)["code"] == "ollama.unknown-option"
         assert _error(response)["details"] == {"where": "options.troupeConformanceUnknownOption"}
         assert fake.requests == []
 
 
-def test_options_without_a_model_are_refused_naming_model(session: Session) -> None:
-    response = session.start({}, valid=False)
-    assert _error(response)["code"] == "ollama.invalid-options"
-    assert _error(response)["details"] == {"where": "options.model"}
+def test_no_options_start_a_run_with_the_runtimes_model(session: Session) -> None:
+    with serving([final("hi")], settings=Settings(models={"qwen3:4b": TOOLS})) as fake:
+        assert "result" in session.start(runtime=runtime(fake.url, "qwen3:4b"))
+        events = _events(session.until_result())
+        assert all(chat["model"] == "qwen3:4b" for chat in fake.chats())
+    assert events[-1]["status"] == "ok"
 
 
-def test_credentials_in_the_endpoint_are_refused_without_repeating_them(session: Session) -> None:
-    response = session.start(
-        {"model": "fake", "endpoint": "http://user:secret@127.0.0.1:11434"}, valid=False
-    )
-    assert _error(response)["details"] == {"where": "options.endpoint"}
-    assert all("secret" not in str(m) for m in session.received)
+# Requirement: The service comes from the run's runtime
+
+
+def test_the_runtimes_endpoint_and_model_are_where_and_what_every_request_asks_for(
+    session: Session,
+) -> None:
+    write = calls(tool_call("Write", {"file_path": "a.txt", "content": "x"}))
+    with serving([write, final("done")], settings=Settings(models={"small": TOOLS})) as fake:
+        session.start(runtime=runtime(fake.url, "small"), effects={"write": ["*"]})
+        events = _events(session.until_result())
+        assert len(fake.chats()) == 2
+        assert all(chat["model"] == "small" for chat in fake.chats())
+    assert events[0]["engine"]["model"] == "small"
+
+
+def test_a_run_start_without_a_runtime_is_refused_and_sends_nothing(session: Session) -> None:
+    with serving() as fake:
+        data = _error(session.start())
+        assert fake.requests == []
+    assert data["code"] == "ollama.no-runtime"
+    assert data["details"] == {"where": "runtime"}
+    assert "actors.<name>.runtime" in data["fix"]
+
+
+@pytest.mark.parametrize(
+    ("key", "value"), [("model", "fake"), ("endpoint", "http://127.0.0.1:11434")]
+)
+def test_an_endpoint_or_model_in_the_options_is_refused_as_unknown(
+    session: Session, key: str, value: str
+) -> None:
+    with serving() as fake:
+        response = session.start({key: value}, runtime=runtime(fake.url), valid=False)
+        assert fake.requests == []
+    assert _error(response)["code"] == "ollama.unknown-option"
+    assert _error(response)["details"] == {"where": f"options.{key}"}
+
+
+@pytest.mark.parametrize(
+    "endpoint",
+    ["http://127.0.0.1:11434/v1", "http://127.0.0.1:99999", "http://a..b:11434"],
+)
+def test_a_runtime_endpoint_the_runner_cant_use_is_refused_and_it_keeps_serving(
+    session: Session, endpoint: str
+) -> None:
+    data = _error(session.start(runtime=runtime(endpoint, name="ollama")))
+    assert data["code"] == "ollama.invalid-runtime"
+    assert data["details"] == {"where": "runtime.endpoint"}
+    assert "runtimes.ollama.endpoint" in data["fix"]
+    assert "TROUPE_RUNTIME_OLLAMA_ENDPOINT" in data["fix"]
+    assert session.request("shutdown", {})["result"] == {}
+    assert session.wait() == 0
+
+
+def test_credentials_in_the_runtimes_endpoint_are_refused_by_the_contract(
+    session: Session,
+) -> None:
+    # The contract's own pattern refuses user info, before the runner reads the runtime.
+    data = _error(session.start(runtime=runtime("http://user:secret@127.0.0.1:11434"), valid=False))
+    assert data["code"] == "runner.invalid-params"
+
+
+# Requirement: A runtime with a credential is refused
+
+
+def test_a_runtime_with_a_credential_is_refused_without_reading_it(workspace: Path) -> None:
+    canary = "troupe-canary-0123456789"
+    running = Session(workspace, {"TROUPE_RUNTIME_CREDENTIAL": canary})
+    try:
+        with serving() as fake:
+            data = _error(running.start(runtime=runtime(fake.url, name="cloud", credential=True)))
+            assert fake.requests == []
+        assert data["code"] == "ollama.credential-unsupported"
+        assert data["details"] == {"where": "runtime.credential"}
+        assert "'cloud'" in data["problem"]
+        running.close_stdin()
+        running.wait()
+        assert all(canary not in json.dumps(m) for m in running.received)
+        assert canary.encode() not in running.stderr()
+    finally:
+        running.kill()
+        running.validate_all()
 
 
 # Requirement: The runner checks the engine before it acknowledges the run
@@ -146,24 +227,25 @@ def test_credentials_in_the_endpoint_are_refused_without_repeating_them(session:
 
 def test_nothing_listening_is_unreachable_naming_the_endpoint_and_the_fix(session: Session) -> None:
     endpoint = f"http://127.0.0.1:{_free_port()}"
-    data = _error(session.start({"model": "fake", "endpoint": endpoint}))
+    data = _error(session.start(runtime=runtime(endpoint, name="lm-box")))
     assert data["code"] == "ollama.unreachable"
     assert data["details"] == {"endpoint": endpoint}
     assert "ollama serve" in data["fix"]
-    assert "options.endpoint" in data["fix"]
+    assert "runtimes.lm-box.endpoint" in data["fix"]
+    assert "TROUPE_RUNTIME_LM_BOX_ENDPOINT" in data["fix"]
 
 
 def test_a_silent_ollama_is_unreachable_within_the_preflight_limit(session: Session) -> None:
     with serving(settings=Settings(silent_preflight=True)) as fake:
         started = time.monotonic()
-        data = _error(session.start(_options(fake)))
+        data = _error(session.start(**_run(fake)))
         assert data["code"] == "ollama.unreachable"
         assert time.monotonic() - started < 10 + MARGIN
 
 
 def test_an_ollama_too_old_is_refused_naming_the_requirement(session: Session) -> None:
     with serving(settings=Settings(version="0.12.5")) as fake:
-        data = _error(session.start(_options(fake)))
+        data = _error(session.start(**_run(fake)))
     assert data["code"] == "runner.requirement-unmet"
     assert data["details"] == {"requirement": "ollama", "wanted": ">= 0.12.6", "found": "0.12.5"}
     assert "Upgrade Ollama" in data["fix"]
@@ -173,14 +255,14 @@ def test_a_version_the_runner_cant_read_is_refused_naming_what_ollama_reported(
     session: Session,
 ) -> None:
     with serving(settings=Settings(version="latest")) as fake:
-        data = _error(session.start(_options(fake)))
+        data = _error(session.start(**_run(fake)))
     assert data["code"] == "runner.requirement-unmet"
     assert data["details"]["found"] == "latest"
 
 
 def test_a_model_that_isnt_pulled_is_refused_naming_ollama_pull(session: Session) -> None:
     with serving() as fake:
-        data = _error(session.start(_options(fake, model="qwen3:4b")))
+        data = _error(session.start(**_run(fake, model="qwen3:4b")))
     assert data["code"] == "ollama.model-not-found"
     assert data["details"] == {"endpoint": fake.url, "model": "qwen3:4b"}
     assert data["fix"] == "Pull it with: ollama pull qwen3:4b"
@@ -189,7 +271,7 @@ def test_a_model_that_isnt_pulled_is_refused_naming_ollama_pull(session: Session
 def test_a_model_that_cant_call_tools_is_refused_naming_its_capabilities(session: Session) -> None:
     settings = Settings(models={"plain": {"capabilities": ["completion"]}})
     with serving(settings=settings) as fake:
-        data = _error(session.start(_options(fake, model="plain")))
+        data = _error(session.start(**_run(fake, model="plain")))
     assert data["code"] == "ollama.model-without-tools"
     assert data["details"] == {"model": "plain", "capabilities": ["completion"]}
 
@@ -197,7 +279,7 @@ def test_a_model_that_cant_call_tools_is_refused_naming_its_capabilities(session
 def test_a_model_ollama_says_nothing_about_is_refused_saying_so(session: Session) -> None:
     settings = Settings(models={"old": {"details": {}}})
     with serving(settings=settings) as fake:
-        data = _error(session.start(_options(fake, model="old")))
+        data = _error(session.start(**_run(fake, model="old")))
     assert data["code"] == "ollama.model-without-tools"
     assert data["details"] == {"model": "old"}
     assert "didn't say" in data["problem"]
@@ -208,7 +290,7 @@ def test_a_model_ollama_says_nothing_about_is_refused_saying_so(session: Session
 
 def test_without_context_length_the_window_is_the_default(session: Session) -> None:
     with serving([final("hi")]) as fake:
-        session.start(_options(fake))
+        session.start(**_run(fake))
         session.until_result()
     assert fake.chats()[0]["options"]["num_ctx"] == DEFAULT_CONTEXT_LENGTH
 
@@ -219,7 +301,7 @@ def test_a_model_with_a_smaller_maximum_gets_its_maximum(session: Session) -> No
         "model_info": {"general.architecture": "a", "a.context_length": 4096},
     }
     with serving([final("hi")], Settings(models={"small": small})) as fake:
-        session.start(_options(fake, model="small"))
+        session.start(**_run(fake, model="small"))
         session.until_result()
     assert fake.chats()[0]["options"]["num_ctx"] == 4096
 
@@ -228,7 +310,7 @@ def test_a_context_length_the_model_cant_hold_is_refused_naming_the_maximum(
     session: Session,
 ) -> None:
     with serving() as fake:
-        data = _error(session.start(_options(fake, contextLength=50000)))
+        data = _error(session.start(**_run(fake, contextLength=50000)))
     assert data["code"] == "ollama.invalid-options"
     assert data["details"] == {"where": "options.contextLength"}
     assert "40960" in data["problem"]
@@ -241,7 +323,7 @@ def test_cancel_while_an_answer_streams_closes_it_and_nothing_follows_the_answer
     session: Session,
 ) -> None:
     with serving([Answer([message("a"), Line(b"{}", delay=60)])]) as fake:
-        session.start(_options(fake))
+        session.start(**_run(fake))
         while not any(m.get("method") == "run/transcript" for m in session.received[2:]):
             session.message()
         cancel = session.send("run/cancel", {"runId": session.run_id})
@@ -258,7 +340,7 @@ def test_end_of_input_while_a_request_waits_closes_it_and_the_runner_exits(
     session: Session,
 ) -> None:
     with serving([Answer([Line(b"{}", delay=60)])]) as fake:
-        session.start(_options(fake))
+        session.start(**_run(fake))
         while not fake.chats():
             time.sleep(0.02)
         session.close_stdin()
@@ -272,7 +354,7 @@ def test_the_runner_takes_nothing_from_its_environment(workspace: Path) -> None:
     with serving([final("hi")]) as fake:
         running = Session(workspace, {"OLLAMA_HOST": f"127.0.0.1:{_free_port()}"})
         try:
-            running.start({"model": "fake", "endpoint": fake.url})
+            running.start(runtime=runtime(fake.url))
             events = _events(running.until_result())
             assert events[-1]["status"] == "ok"
             assert len(fake.chats()) == 1
@@ -286,7 +368,7 @@ def test_a_tool_call_runs_in_the_workspace_and_its_events_validate(
 ) -> None:
     write = calls(tool_call("Write", {"file_path": "out/a.txt", "content": "hello"}))
     with serving([write, final("done")]) as fake:
-        session.start(_options(fake), effects={"write": ["out/**"]})
+        session.start(**_run(fake), effects={"write": ["out/**"]})
         events = _events(session.until_result())
     assert (workspace / "out" / "a.txt").read_text(encoding="utf-8") == "hello"
     assert [e["type"] for e in events] == ["init", "tool_call", "tool_result", "turn", "result"]
@@ -337,7 +419,8 @@ def test_a_scratch_directory_that_isnt_there_is_refused_never_acknowledged(
                 "runId": running.run_id,
                 "direction": "d",
                 "workspace": str(workspace),
-                "options": _options(fake),
+                "options": {},
+                "runtime": runtime(fake.url),
                 "limits": {"eventMaxBytes": 65536},
                 "effects": {"write": [], "delete": [], "move": []},
                 "scratch": str(workspace.parent / "no-such-scratch"),
@@ -357,7 +440,7 @@ def test_a_scratch_directory_that_isnt_there_is_refused_never_acknowledged(
 def test_a_bracketed_endpoint_that_isnt_an_address_is_unreachable_not_a_crash(
     session: Session, endpoint: str
 ) -> None:
-    data = _error(session.start({"model": "fake", "endpoint": endpoint}))
+    data = _error(session.start(runtime=runtime(endpoint)))
     assert data["code"] == "ollama.unreachable"
     assert "isn't an address" in data["problem"]
 
@@ -368,7 +451,7 @@ def test_both_preflight_requests_share_one_deadline(session: Session) -> None:
     slow = Settings(version_delay=PREFLIGHT_TIMEOUT_SECONDS * 0.8, silent_show=True)
     with serving(settings=slow) as fake:
         started = time.monotonic()
-        data = _error(session.start(_options(fake)))
+        data = _error(session.start(**_run(fake)))
         took = time.monotonic() - started
     assert data["code"] == "ollama.unreachable"
     assert took < PREFLIGHT_TIMEOUT_SECONDS + MARGIN
@@ -386,7 +469,7 @@ def test_a_lone_surrogate_from_ollama_leaves_no_gap_in_the_events(session: Sessi
         [b'{"message":{"role":"assistant","content":"x\\ud800y"},"done":false}', done()]
     )
     with serving([answer]) as fake:
-        session.start(_options(fake))
+        session.start(**_run(fake))
         events = _events(session.until_result())
     assert [event["seq"] for event in events] == list(range(len(events)))
     assert events[-1]["status"] == "ok"

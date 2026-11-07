@@ -24,10 +24,10 @@ and no request SHALL be sent.
 - **THEN** `run/start` is refused with `ollama.unknown-option`, naming the option
 
 ### Requirement: The runtime's endpoint is one the runner can use
-The runner SHALL refuse a runtime whose endpoint holds a user name or password, a path other than `/`, a query, a
-fragment, a port above 65535, or a host name part that's empty or over 63 characters, with `ollama.invalid-runtime`
-naming `runtime.endpoint`, before any request is sent. The fix SHALL name the runtime's config path and its
-`TROUPE_RUNTIME_<NAME>_ENDPOINT` variable.
+The runner SHALL refuse a runtime whose endpoint has a path other than `/`, a port above 65535, or a host name part
+that's empty or over 63 characters, with `ollama.invalid-runtime` naming `runtime.endpoint`, before any request is
+sent. The fix SHALL name the runtime's config path and its `TROUPE_RUNTIME_<NAME>_ENDPOINT` variable. An endpoint
+with user info, a query or a fragment is refused by the runner contract's own pattern, as `runner.invalid-params`.
 
 #### Scenario: A path in the endpoint
 - **WHEN** a run's runtime `ollama` has the endpoint `http://127.0.0.1:11434/v1`
@@ -41,8 +41,7 @@ naming `runtime.endpoint`, before any request is sent. The fix SHALL name the ru
 
 #### Scenario: Credentials in the endpoint
 - **WHEN** the runtime's endpoint is `http://user:secret@127.0.0.1:11434`
-- **THEN** `run/start` is refused with `ollama.invalid-runtime`, naming `runtime.endpoint`, and its message doesn't
-  hold `secret`
+- **THEN** `run/start` is refused with `runner.invalid-params`, and no request is sent
 
 ### Requirement: A runtime with a credential is refused
 The runner SHALL send no credential. A `run/start` whose `runtime.credential` is `true` SHALL be refused with

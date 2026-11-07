@@ -2,7 +2,8 @@
 (local-model-runner design D3, D4).
 
 The main thread reads troupe's messages and answers them. Before it answers run/start, it checks
-everything that can be refused: the params, the options, and the preflight (Ollama answers, its
+everything that can be refused: the params, the options, the run's runtime (the service, which
+troupe resolves: ollama-uses-runtime design D2), and the preflight (Ollama answers, its
 version meets the runner's published requirements, the model is there and can call tools, and the
 context window fits it). After it answers, a worker thread runs the conversation.
 
@@ -34,6 +35,7 @@ from troupe_runner_ollama.defaults import (
 )
 from troupe_runner_ollama.options import Options, OptionsError, parse_options
 from troupe_runner_ollama.requirements import check, load
+from troupe_runner_ollama.runtime import Runtime, RuntimeRefusedError, from_run_start
 
 _TROUPE = "troupe"
 _TROUPE_EOF = "troupe-eof"
@@ -318,9 +320,12 @@ class Runner:
             )
             return
         try:
+            # Options before the runtime, so a run/start that still holds options.model is told
+            # that, not only that it has no runtime (design D2).
             options = parse_options(start.options)
-            client, engine_version, window = self._preflight(options)
-        except OptionsError as error:
+            runtime = from_run_start(start)
+            client, engine_version, window = self._preflight(options, runtime)
+        except (OptionsError, RuntimeRefusedError) as error:
             self._error(
                 id_,
                 p.JSONRPC_INVALID_PARAMS,
@@ -341,6 +346,7 @@ class Runner:
             conversation = Conversation(
                 start=start,
                 options=options,
+                model=runtime.model,
                 window=window,
                 engine_version=engine_version,
                 client=client,
@@ -361,16 +367,17 @@ class Runner:
         self._worker = threading.Thread(target=self._converse, args=(conversation,), daemon=True)
         self._worker.start()
 
-    def _preflight(self, options: Options) -> tuple[Client, str, int]:
+    def _preflight(self, options: Options, runtime: Runtime) -> tuple[Client, str, int]:
         """The client, Ollama's version and the run's window, once Ollama, its version and the
         model pass (design D4, D15, D16). Both requests share one deadline,
         PREFLIGHT_TIMEOUT_SECONDS, so the preflight fits inside troupe's start limit. Raises
         _Refused or OptionsError."""
-        endpoint = options.endpoint
+        endpoint = runtime.endpoint
+        model = runtime.model
         deadline = time.monotonic() + PREFLIGHT_TIMEOUT_SECONDS
         unreachable_fix = (
-            f"Start Ollama (ollama serve) so it listens at {endpoint}, or set options.endpoint to "
-            "where it listens."
+            f"Start Ollama (ollama serve) so it listens at {endpoint}, or point the runtime "
+            f"{runtime.name!r} at where it listens: {runtime.endpoint_fix()}."
         )
         try:
             client = Client(endpoint)
@@ -399,12 +406,12 @@ class Runner:
                     unmet_details,
                 )
         try:
-            shown = client.show(options.model, _left(deadline))
+            shown = client.show(model, _left(deadline))
         except (UnreachableError, StoppedError) as error:
             raise _Refused(
                 p.JSONRPC_REFUSED,
                 "ollama.unreachable",
-                f"Ollama at {endpoint} didn't describe the model {options.model!r}: {error}.",
+                f"Ollama at {endpoint} didn't describe the model {model!r}: {error}.",
                 unreachable_fix,
                 {"endpoint": endpoint},
             ) from error
@@ -412,22 +419,22 @@ class Runner:
             raise _Refused(
                 p.JSONRPC_REFUSED,
                 "ollama.model-not-found",
-                f"Ollama at {endpoint} has no model {options.model!r}.",
-                f"Pull it with: ollama pull {options.model}",
-                {"endpoint": endpoint, "model": options.model},
+                f"Ollama at {endpoint} has no model {model!r}.",
+                f"Pull it with: ollama pull {model}",
+                {"endpoint": endpoint, "model": model},
             )
         capabilities = shown.get("capabilities")
         if not isinstance(capabilities, list) or "tools" not in capabilities:
-            details: dict[str, Any] = {"model": options.model}
+            details: dict[str, Any] = {"model": model}
             if isinstance(capabilities, list) and all(isinstance(c, str) for c in capabilities):
                 details["capabilities"] = capabilities
                 problem = (
-                    f"Ollama says the model {options.model!r} can't call tools (it can: "
+                    f"Ollama says the model {model!r} can't call tools (it can: "
                     f"{', '.join(capabilities) or 'nothing listed'})."
                 )
                 fix = "Use a model that can call tools, such as qwen3.5:4b."
             else:
-                problem = f"Ollama didn't say whether the model {options.model!r} can call tools."
+                problem = f"Ollama didn't say whether the model {model!r} can call tools."
                 fix = "Upgrade Ollama, so it says what each model can do."
             raise _Refused(p.JSONRPC_REFUSED, "ollama.model-without-tools", problem, fix, details)
         maximum = model_maximum(shown)

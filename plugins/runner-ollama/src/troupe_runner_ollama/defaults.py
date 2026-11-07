@@ -5,10 +5,6 @@ troupe's own limits (contributing/runners.md, "Limits") are troupe's; these are 
 is documented in the README, and a test checks every one has a row there.
 """
 
-DEFAULT_ENDPOINT = "http://127.0.0.1:11434"
-"""Where requests go when the options don't set ``endpoint``: Ollama's own default address (design
-D10)."""
-
 MAX_TURNS = 50
 """The requests one run may make when the options don't set ``maxTurns``. Reaching it ends the run
 with an error result (design D5)."""

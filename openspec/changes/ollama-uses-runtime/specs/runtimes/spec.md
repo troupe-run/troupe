@@ -2,14 +2,14 @@
 
 ### Requirement: Options a runner moved to its runtime are refused with the move
 An `ollama` actor whose options hold `model` or `endpoint` SHALL be refused wherever config is checked, naming the
-option and saying it moved to the actor's runtime. The fix SHALL be one `troupe config set` that, run as given, sets
-the actor's runtime and model and its options to the rest, leaves config valid, and changes no existing runtime.
+option and saying it moved to the actor's runtime. The fix SHALL be one `troupe config set`, built from the actor's
+own values, that sets its runtime and model and its options to the rest. It SHALL change no existing runtime.
 
 #### Scenario: The model the audition used to write
 - **WHEN** config holds an actor `lead` on `ollama` with `options.model` `qwen3:4b`, no runtime and no other option,
   and a person performs it
 - **THEN** perform fails with `config.invalid`, naming `actors.lead.options.model` and saying it moved to the
-  runtime, and its fix is `troupe config set actors.lead.runtime=ollama actors.lead.model=qwen3:4b
+  runtime, and its fix gives `troupe config set actors.lead.runtime=ollama actors.lead.model=qwen3:4b
   'actors.lead.options={}'`, and nothing is recorded
 
 #### Scenario: The fix run as given
@@ -21,25 +21,18 @@ the actor's runtime and model and its options to the rest, leaves config valid, 
 - **WHEN** the actor's options are `{"model": "qwen3:4b", "maxTurns": 20}`
 - **THEN** the fix sets `'actors.lead.options={"maxTurns":20}'`, keeping `maxTurns`
 
-#### Scenario: An endpoint on another host
-- **WHEN** the actor `lead`'s options hold `endpoint` `http://gpu-box.local:11434`, and no runtime has that endpoint
-- **THEN** the fix sets `actors.lead.runtime=lead` and `runtimes.lead.endpoint=http://gpu-box.local:11434`, and sets
-  nothing under `runtimes.ollama`, so other actors on `ollama` keep their endpoint
-
-#### Scenario: An endpoint a runtime already has
-- **WHEN** the actor's options hold `endpoint` `http://gpu-box.local:11434`, and config's runtime `gpu` has that
-  endpoint
-- **THEN** the fix sets the actor's runtime to `gpu`, and defines no runtime
-
-#### Scenario: Two actors on different hosts
-- **WHEN** two old actors hold different `options.endpoint`s, and a person runs the first one's fix, then the second's
-- **THEN** each actor's runs go to the endpoint it held, and so do the runs of every actor that was already on
-  `ollama`
-
 #### Scenario: The default endpoint
-- **WHEN** the actor's options hold `endpoint` `http://127.0.0.1:11434`, the built-in runtime's, and config doesn't
-  change `runtimes.ollama.endpoint`
-- **THEN** the fix sets the runtime `ollama` and defines no runtime
+- **WHEN** the actor's options hold `endpoint` `http://127.0.0.1:11434`, the built-in `ollama` runtime's
+- **THEN** the fix sets the runtime `ollama`, and defines no runtime
+
+#### Scenario: An endpoint on another host
+- **WHEN** the actor's options hold `endpoint` `http://gpu-box.local:11434`
+- **THEN** the fix sets `runtimes.<name>.endpoint=http://gpu-box.local:11434` and `actors.lead.runtime=<name>`, says
+  to choose the name, and sets nothing under `runtimes.ollama`
+
+#### Scenario: An endpoint holding a password
+- **WHEN** the actor's options hold `endpoint` `http://user:secret@127.0.0.1:11434`
+- **THEN** the refusal and its fix hold no part of `secret`
 
 #### Scenario: An unrelated change
 - **WHEN** config holds such an actor and a person sets a value on another actor

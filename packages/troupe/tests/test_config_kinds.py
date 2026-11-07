@@ -86,32 +86,100 @@ def test_a_claude_code_option_of_the_wrong_shape_is_refused_naming_its_path() ->
     assert error.details["path"] == ["actors", "tester", "options", "permissionMode"]
 
 
+OLLAMA: dict[str, Any] = {"runner": "ollama", "runtime": "ollama", "model": "qwen3.5:4b"}
+
+
 def test_an_ollama_actor_with_valid_options_is_accepted() -> None:
-    options = {
-        "model": "qwen3.5:4b",
-        "endpoint": "http://gpu-box.local:11434",
-        "contextLength": 32768,
-    }
-    check(_actor(runner="ollama", options=options))
+    check(_actor(**OLLAMA, options={"contextLength": 32768, "think": False}))
 
 
 def test_an_option_the_ollama_runner_doesnt_define_is_refused_naming_its_schema() -> None:
-    error = _refused(_actor(runner="ollama", options={"model": "qwen3.5:4b", "speed": 2}))
+    error = _refused(_actor(**OLLAMA, options={"speed": 2}))
     assert error.details["path"] == ["actors", "tester", "options", "speed"]
     assert "the ollama runner's options schema" in error.problem
 
 
-def test_an_ollama_actor_without_a_model_is_refused_naming_model_as_required() -> None:
-    error = _refused(_actor(runner="ollama", options={}))
+# Requirement: Options a runner moved to its runtime are refused with the move (spec: runtimes;
+# ollama-uses-runtime design D5)
+
+
+def _old_ollama(options: dict[str, Any], **fields: Any) -> dict[str, Any]:  # noqa: ANN401
+    """An ollama actor as the audition wrote it before its options moved to a runtime."""
+    return _actor(runner="ollama", options=options, **fields)
+
+
+def _move(error: TroupeError) -> str:
+    """The command a moved-option refusal's fix gives."""
+    assert error.fix is not None
+    prefix, _, command = error.fix.partition(": ")
+    assert prefix.startswith("Move it in one change")
+    return command
+
+
+@pytest.mark.parametrize(
+    ("key", "value"), [("model", "qwen3.5:4b"), ("endpoint", "http://gpu-box.local:11434")]
+)
+def test_an_ollama_actors_endpoint_or_model_in_its_options_is_refused_naming_it(
+    key: str, value: str
+) -> None:
+    error = _refused(_actor(**OLLAMA, options={key: value}))
+    assert error.details["path"] == ["actors", "tester", "options", key]
+    assert f"{key} moved to the actor's runtime" in error.problem
+
+
+def test_the_model_the_audition_used_to_write_is_refused_with_the_set_that_moves_it() -> None:
+    error = _refused(_old_ollama({"model": "qwen3:4b"}))
     assert error.details["path"] == ["actors", "tester", "options", "model"]
-    assert "required" in error.problem
+    assert "moved to the actor's runtime" in error.problem
+    assert "more)" not in error.problem  # one rule: no schema or missing-runtime problem too
+    assert _move(error) == (
+        "troupe config set actors.tester.runtime=ollama actors.tester.model=qwen3:4b "
+        "'actors.tester.options={}'"
+    )
+
+
+def test_the_moves_other_options_are_kept() -> None:
+    error = _refused(_old_ollama({"model": "qwen3:4b", "maxTurns": 20}))
+    assert _move(error).endswith(""" 'actors.tester.options={"maxTurns":20}'""")
+
+
+def test_the_built_in_endpoint_moves_to_the_ollama_runtime_defining_none() -> None:
+    error = _refused(_old_ollama({"model": "m", "endpoint": "http://127.0.0.1:11434/"}))
+    assert error.details["path"] == ["actors", "tester", "options", "endpoint"]
+    assert "actors.tester.runtime=ollama" in _move(error)
+    assert "runtimes." not in _move(error)
+
+
+def test_an_endpoint_on_another_host_needs_a_runtime_whose_name_the_person_chooses() -> None:
+    error = _refused(_old_ollama({"model": "m", "endpoint": "http://gpu-box.local:11434"}))
+    command = _move(error)
+    assert "'runtimes.<name>.endpoint=http://gpu-box.local:11434'" in command
+    assert "'actors.tester.runtime=<name>'" in command
+    assert "runtimes.ollama" not in command
+    assert "choosing a <name>" in str(error.fix)
+
+
+def test_the_actors_own_runtime_and_model_are_kept() -> None:
+    error = _refused(_old_ollama({"model": "old"}, runtime="ollama", model="new"))
+    command = _move(error)
+    assert "actors.tester.runtime=ollama" in command
+    assert "actors.tester.model=new" in command
+    assert "old" not in command
 
 
 def test_an_ollama_endpoint_holding_a_password_is_refused_without_repeating_it() -> None:
-    options = {"model": "m", "endpoint": "http://user:secret@127.0.0.1:11434"}
-    error = _refused(_actor(runner="ollama", options=options))
+    error = _refused(_old_ollama({"endpoint": "http://user:secret@127.0.0.1:11434"}))
     assert error.details["path"] == ["actors", "tester", "options", "endpoint"]
     assert "secret" not in f"{error.problem} {error.fix} {error.details}"
+    assert "runtimes.<name>.endpoint=<url>" in str(error.fix)
+
+
+def test_a_moved_option_refuses_a_change_to_another_actor_with_the_same_fix() -> None:
+    config = _old_ollama({"model": "qwen3:4b"})
+    config["actors"]["other"] = dict(TESTER)
+    error = _refused(config)
+    assert error.details["path"] == ["actors", "tester", "options", "model"]
+    assert "actors.tester.model=qwen3:4b" in _move(error)
 
 
 def test_an_actor_without_an_effect_check_is_refused_saying_an_empty_list_means_none() -> None:
@@ -301,8 +369,21 @@ def test_a_runner_that_needs_a_runtime_is_refused_without_one(
 
 def test_what_each_runner_takes() -> None:
     assert interim.RUNNERS["claude-code"].runtime == "none"
-    assert interim.RUNNERS["ollama"].runtime == "none"  # its endpoint and model are options for now
+    assert interim.RUNNERS["ollama"].runtime == "required"
+    assert interim.RUNNERS["openai"].runtime == "required"
     assert interim.RUNNERS["scripted"].runtime == "optional"
+
+
+def test_an_ollama_actor_without_a_runtime_is_refused_naming_the_runtimes_there_are() -> None:
+    # Spec: runtimes, "An Ollama actor without a runtime".
+    error = _refused(_actor(runner="ollama", options={}))
+    assert error.details["path"] == ["actors", "tester", "runtime"]
+    assert "the ollama runner needs a runtime" in error.problem
+    assert "(there are: lm-studio, ollama, openai)" in error.problem
+
+
+def test_an_ollama_actor_on_the_ollama_runtime_with_a_model_is_valid() -> None:
+    assert problems(_actor(runner="ollama", options={}, runtime="ollama", model="qwen3:4b")) == []
 
 
 # Requirement: A runtime is a named service with an endpoint, a model and a credential reference

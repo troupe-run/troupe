@@ -7,9 +7,7 @@
     "capture_ollama.py",
     "no-tools-capability"
   ],
-  "options": {
-    "model": "troupe-capture-notools"
-  },
+  "options": {},
   "direction": "",
   "effects": {},
   "credential": "none: Ollama needs none",

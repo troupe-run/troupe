@@ -106,8 +106,9 @@ RUNNERS: dict[str, Runner] = {
     "ollama": Runner(
         command=(sys.executable, "-m", "troupe_runner_ollama"),
         package="troupe_runner_ollama",
-        # Nothing: the runner reads no variable, not even OLLAMA_HOST, since its endpoint is an
-        # option (local-model-runner design D10).
+        # No variables: the runner reads none, not even OLLAMA_HOST. Its endpoint and model are
+        # its runtime's, which reach it in run/start (ollama-uses-runtime design D1).
+        runtime="required",
     ),
     "openai": Runner(
         command=(sys.executable, "-m", "troupe_runner_openai"),
@@ -122,6 +123,16 @@ RUNNERS: dict[str, Runner] = {
     ),
 }
 """Each runner troupe knows, by name."""
+
+
+MOVED_TO_RUNTIME: dict[str, str] = {"ollama": "ollama"}
+"""Runners whose ``model`` and ``endpoint`` options moved to a runtime, each with the built-in
+runtime that replaces them. Config refuses an actor still holding them, with the config set that
+moves them (spec: runtimes, "Options a runner moved to its runtime are refused with the move";
+ollama-uses-runtime design D5)."""
+
+MOVED_OPTIONS = ("endpoint", "model")
+"""The options that moved, in path order."""
 
 
 def runner(name: str) -> Runner:
