@@ -77,17 +77,17 @@
 
 ## 6. The install check, CI and the install page cover the extras (design D9, D10; spec: installation)
 
-- [ ] 6.1 Write the tests first, in `scripts/tests/workspace/`. They cover: `command()` with and without extras, in
+- [x] 6.1 Write the tests first, in `scripts/tests/workspace/`. They cover: `command()` with and without extras, in
   both ref forms; the docs check accepting the extras form, refusing an extra `troupe-run` doesn't have, and refusing
   an install page whose list of extras differs from `troupe-run`'s; the tag pre-check failing on a bare runner in an
   extra; and the plan of steps the check runs for a fixture bundle with an `lm-studio` extra (base install, refusal
   rehearsal naming `troupe-run[lm-studio]`, the `[all]` install into a second tool directory, a rehearsal for every
   runner). Verify: they fail on main, run and shown.
-- [ ] 6.2 Extend `scripts/install_check.py` (`TEMPLATE`, `command()`, the tag pre-check, and steps (a) and (b) of D9,
+- [x] 6.2 Extend `scripts/install_check.py` (`TEMPLATE`, `command()`, the tag pre-check, and steps (a) and (b) of D9,
   reading the extras and the table from the commit under test) and `scripts/docs_reference.py`. Verify: 6.1's tests
   pass, and `uv run scripts/install_check.py --ref HEAD` passes locally, its output showing both installs and the
   rehearsals.
-- [ ] 6.3 Update `docs/opening-night/install.md`. Add a "Runners that come as extras" section with the extras form
+- [x] 6.3 Update `docs/opening-night/install.md`. Add a "Runners that come as extras" section with the extras form
   between the release-please markers and the list of extras (today only `all`), and say a plain install has every
   runner in the base. Add a line to `packages/troupe-run/README.md`. The README keeps the plain form. Check the
   release-please config updates the new copy. Verify: the docs check passes, and `uv run scripts/check.py` passes.
@@ -95,7 +95,7 @@
   install is part of the check), and that their timeouts cover two installs. Verify: on the PR's CI, every platform
   and Python leg's log shows both installs and the rehearsals. Record each platform's added time from the job logs
   (`gh run view --job <id> --log`) in the PR description.
-- [ ] 6.5 Commit as `feat(installation): ...`. Verify: `uv run scripts/check.py` passes before the commit.
+- [x] 6.5 Commit as `feat(installation): ...`. Verify: `uv run scripts/check.py` passes before the commit.
 
 ## 7. Runners' dependencies are licensed compatibly (design D11; spec: runner-protocol)
 
