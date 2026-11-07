@@ -12,8 +12,11 @@ name of the environment variable the key is in (`credential.env`). Never the key
 
 The OpenAI runner needs a runtime: the built-in `openai`, or one of your own whose service serves OpenAI's Responses
 API, such as local Ollama's under `/v1` (`http://127.0.0.1:11434/v1`, not the built-in `ollama`'s address). The
-scripted runner takes one optionally, for troupe's own tests. The Ollama runner still takes its endpoint and model in
-its own options, and moves to the `ollama` runtime next ([#289](https://github.com/troupe-run/troupe/issues/289)).
+Ollama runner needs one too: the built-in `ollama`, or one of your own for an Ollama elsewhere, whose endpoint is
+Ollama's own address with no path, such as `http://gpu-box.local:11434`. It refuses a runtime with a credential,
+since Ollama takes none. An Ollama actor still holding `model` or `endpoint` in its options, as early versions of
+`troupe init --audition` wrote it, is refused with the one `troupe config set` that moves them. The scripted runner
+takes one optionally, for troupe's own tests.
 
 ## The runtimes troupe knows
 

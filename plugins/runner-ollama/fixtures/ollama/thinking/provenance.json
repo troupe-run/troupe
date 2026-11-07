@@ -8,7 +8,6 @@
     "thinking"
   ],
   "options": {
-    "model": "qwen3:0.6b",
     "think": true,
     "temperature": 0,
     "seed": 1

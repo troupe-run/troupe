@@ -21,8 +21,9 @@ troupe ships four runners:
 
 - **The Ollama runner** runs a model on your own computer through [Ollama](https://ollama.com)'s own API, with
   troupe's own tool loop: the model asks for a file tool, and troupe carries it out, checked against the actor's
-  effects. It needs no credential, costs nothing per run, and works offline. Its options name the model, where Ollama
-  listens (`endpoint`, any host: a run sends what the model reads there) and the context window (`contextLength`)
+  effects. It needs no credential, costs nothing per run, and works offline. Where Ollama listens comes from a
+  [runtime](runtimes.md), the built-in `ollama` for the Ollama on your machine (any host can be named: a run sends
+  what the model reads there). The actor names the model, and its options the context window (`contextLength`)
   ([Try it with a model on your own machine](../opening-night/first-performance.md#try-it-with-a-model-on-your-own-machine)).
 
 - **The OpenAI runner** runs an OpenAI model through its Responses API, or a model on any service that serves that API

@@ -321,9 +321,9 @@ def test_the_offline_walkthrough_runs_as_written_with_no_claude(
 def test_the_local_model_walkthrough_runs_as_written_with_a_stand_in_ollama(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # A stand-in serves the model the page pulls. The reader's Ollama listens at the runner's
-    # default address, which a test can't take, so the actor is pointed at the stand-in before it
-    # performs.
+    # A stand-in serves the model the page pulls. The reader's Ollama listens at the built-in
+    # ollama runtime's address, which a test can't take, so TROUPE_RUNTIME_OLLAMA_ENDPOINT, the
+    # reader's own override, points the runtime at the stand-in.
     made = make_repo(tmp_path)
     for name, value in {**made.env, **ADA}.items():
         monkeypatch.setenv(name, value)
@@ -343,11 +343,9 @@ def test_the_local_model_walkthrough_runs_as_written_with_a_stand_in_ollama(
         [fake.final("Nothing to change.")],
         fake.Settings(models={model: {"capabilities": ["completion", "tools"]}}),
     ).start()
+    monkeypatch.setenv("TROUPE_RUNTIME_OLLAMA_ENDPOINT", server.url)
     try:
         for line in rest[:-1]:
-            if line.startswith("git add"):
-                code, _, err = cli("config", "set", f"actors.lead.options.endpoint={server.url}")
-                assert code == 0, err
             code, _, err = run_line(line, monkeypatch)
             assert code == 0, (line, err)
         code, out, err = run_line(rest[-1], monkeypatch)

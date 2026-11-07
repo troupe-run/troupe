@@ -109,6 +109,7 @@ def _run(
     answers: Sequence[Answer],
     *,
     options: Options | None = None,
+    model: str = "fake",
     window: int = WINDOW,
     idle_timeout: float = 30.0,
     **start: Any,  # noqa: ANN401 - _start's keywords
@@ -119,7 +120,8 @@ def _run(
     with serving(answers) as fake:
         Conversation(
             start=_start(workspace, **start),
-            options=options or Options(model="fake"),
+            options=options or Options(),
+            model=model,
             window=window,
             engine_version="0.40.14",
             client=Client(fake.url, idle_timeout=idle_timeout),
@@ -137,7 +139,7 @@ def _last_message(fake: FakeOllama, request: int) -> dict[str, Any]:
 
 
 def test_init_names_the_runner_the_engine_the_tools_and_checked_effects(tmp_path: Path) -> None:
-    sink, _ = _run(tmp_path, [final("hi")], options=Options(model="qwen3:4b"))
+    sink, _ = _run(tmp_path, [final("hi")], model="qwen3:4b")
     init = sink.events[0]
     assert isinstance(init, p.InitEvent)
     assert init.seq == 0
@@ -189,7 +191,7 @@ def test_every_request_offers_the_sdks_seven_tools_naming_the_scratch_directory(
 
 
 def test_the_options_become_ollamas_own_fields_and_nothing_else_is_sent(tmp_path: Path) -> None:
-    options = Options(model="fake", temperature=0.0, seed=7, think="low")
+    options = Options(temperature=0.0, seed=7, think="low")
     _, fake = _run(tmp_path, [final("hi")], options=options, window=32768)
     body = fake.chats()[0]
     assert body["options"] == {"num_ctx": 32768, "temperature": 0.0, "seed": 7}
@@ -403,7 +405,7 @@ def test_an_empty_final_answer_says_it_had_no_text(tmp_path: Path) -> None:
 
 def test_the_turn_limit_ends_the_run_with_an_error_and_no_further_request(tmp_path: Path) -> None:
     glob = calls(tool_call("Glob", {"pattern": "*"}))
-    sink, fake = _run(tmp_path, [glob, glob, glob], options=Options(model="fake", max_turns=2))
+    sink, fake = _run(tmp_path, [glob, glob, glob], options=Options(max_turns=2))
     assert len(fake.chats()) == 2
     assert len(sink.of(p.ToolCallEvent)) == 2
     assert sink.result.status == "error"
@@ -628,7 +630,8 @@ def test_a_run_that_starts_stopping_sends_nothing_more(tmp_path: Path) -> None:
         client = Client(fake.url)
         conversation = Conversation(
             start=_start(workspace),
-            options=Options(model="fake"),
+            options=Options(),
+            model="fake",
             window=WINDOW,
             engine_version="0.40.14",
             client=client,
@@ -661,7 +664,8 @@ def test_fail_before_the_result_sends_a_log_error_then_an_error_result(tmp_path:
     with serving([]) as fake:
         conversation = Conversation(
             start=_start(workspace),
-            options=Options(model="fake"),
+            options=Options(),
+            model="fake",
             window=WINDOW,
             engine_version="0.40.14",
             client=Client(fake.url),
@@ -681,7 +685,8 @@ def test_fail_after_the_result_sends_only_the_log_error(tmp_path: Path) -> None:
     with serving([final("done")]) as fake:
         conversation = Conversation(
             start=_start(workspace),
-            options=Options(model="fake"),
+            options=Options(),
+            model="fake",
             window=WINDOW,
             engine_version="0.40.14",
             client=Client(fake.url),

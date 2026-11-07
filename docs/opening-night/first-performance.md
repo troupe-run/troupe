@@ -178,10 +178,12 @@ troupe perform lead
 ```
 
 Allow the local stage first, as above, if this shell doesn't have it. The model is about 3.4 GB to download. The
-actor's options name it (`model`), and can point at an Ollama elsewhere (`endpoint`) or give the model a larger
-context window (`contextLength`, 16384 tokens unless you set it). A small local model is less reliable at using tools
-than Claude Code: troupe's effects and audit still decide what a run may change, and a run that outgrows its context
-window fails rather than carrying on with its direction cut off. The
+actor names it (`model`), and the [runtime](../stagecraft/runtimes.md) its runs talk to: `ollama`, troupe's built-in
+one for the Ollama on your machine (`http://127.0.0.1:11434`). Point it at an Ollama elsewhere with
+`troupe config set runtimes.ollama.endpoint=<url>` for the theatre, or `TROUPE_RUNTIME_OLLAMA_ENDPOINT` for you alone.
+The actor's options can give the model a larger context window (`contextLength`, 16384 tokens unless you set it). A
+small local model is less reliable at using tools than Claude Code: troupe's effects and audit still decide what a run
+may change, and a run that outgrows its context window fails rather than carrying on with its direction cut off. The
 [Ollama runner's README](https://github.com/troupe-run/troupe/blob/main/plugins/runner-ollama/README.md) lists every
 option.
 
