@@ -80,8 +80,10 @@ None.
 ## Impact
 
 - `packages/troupe-run/pyproject.toml`: `[project.optional-dependencies]`, with `all` and no runner extras yet.
-- `packages/troupe/src/troupe/core/interim.py`: each `Runner` gets its `extra`, and `runner()` refuses with
-  `runner.not-installed`. Also `core/config/kinds.py`, `core/audition.py`, `cli/init.py`, `core/schemas.py`'s
+- `packages/troupe/src/troupe/core/interim.py`: each `Runner` gets `in_extra` (the extra's name is the runner's, so
+  none is stored), and a new `installed_runner()` refuses with `runner.not-installed`, while `runner()` stays the
+  name-only lookup. Also `core/config/kinds.py`, `core/config/stream.py`, `core/init.py`, `core/client/messages.py`
+  and the init result schema, `core/audition.py`, `cli/init.py`, `core/schemas.py`'s
   missing-plugin fix, `core/errors.py` and the protocol's error catalogue (`error.schema.json`, both copies).
 - `scripts/bundle.py`, `scripts/pin_bundle.py`, `scripts/release_config.py`, `scripts/install_check.py`,
   `scripts/tests/workspace/test_install_docs.py` (the docs check), with a new licence check of runner dependencies, and their tests.
