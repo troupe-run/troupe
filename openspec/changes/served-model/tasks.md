@@ -69,7 +69,7 @@
 
 - [ ] 6.1 Run `uv run scripts/check.py` and show it passing; then mark the pull request ready and cite the CI run on
   Linux, macOS and Windows for the last code change.
-- [ ] 6.2 Run `openspec validate served-model --strict` and show it passing.
+- [x] 6.2 Run `openspec validate served-model --strict` and show it passing.
 
 ## Workflow follow-up
 
