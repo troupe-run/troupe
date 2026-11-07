@@ -13,7 +13,6 @@ and when branches' changes are merged, so a change that would make config invali
 naming the path and the rule, and records nothing.
 """
 
-import dataclasses
 import json
 import re
 from collections.abc import Collection, Mapping, Sequence
@@ -181,7 +180,13 @@ def actor_problems(
             try:
                 interim.installed_runner(runner)
             except TroupeError as error:
-                raise dataclasses.replace(error, path=dotted((*base, "runner"))) from None
+                at = (*base, "runner")
+                raise TroupeError(
+                    error.code,
+                    problem=f"{dotted(at)}: {error.problem}",
+                    fix=error.fix,
+                    details={**error.details, "path": list(at)},
+                ) from None
     elif isinstance(runner, str) and runner in interim.RUNNERS:
         options = actor.get("options", {})
         found += _schema_problems(

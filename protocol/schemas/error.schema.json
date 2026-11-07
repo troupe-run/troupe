@@ -1828,6 +1828,15 @@
               "type": "string",
               "minLength": 1
             },
+            "path": {
+              "description": "The config path of the actor's runner, when a config change was refused. Absent: the refusal wasn't a config change's.",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
             "extra": {
               "description": "The troupe-run extra that installs the runner, named after it. Absent: the runner is in the base install, so troupe itself is missing it.",
               "type": "string",
