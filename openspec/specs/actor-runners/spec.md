@@ -107,6 +107,14 @@ default. The violations are listed in the scenarios.
 - **WHEN** a runner sends a transcript record with encoding `base64` that is not valid base64
 - **THEN** it is a protocol violation, and nothing is written to the transcript for it
 
+#### Scenario: A served model that is init's
+- **WHEN** a runner's `init` names the model `m-1` and it later sends `served_model` with `model` `m-1`
+- **THEN** it is a protocol violation naming the model
+
+#### Scenario: A served model reported twice
+- **WHEN** a runner sends `served_model` with `model` `m-2` twice in one run
+- **THEN** the second is a protocol violation naming the model
+
 ### Requirement: Runners start with an explicit environment
 The host SHALL start a runner under the runner environment policy, a named default that selects nothing from the
 host: the runner gets only the variables the caller names, plus the minimum the operating system needs to start a
