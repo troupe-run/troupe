@@ -24,54 +24,30 @@ dependency other than the SDK, and SHALL start no process.
 
 ### Requirement: The runner identifies itself as ollama
 The runner SHALL answer `initialize` with the name `ollama` and its package's version. Its `init` event SHALL name
-the runner the same way, the engine `ollama` with the version Ollama reports and the model from the options, the
+the runner the same way, the engine `ollama` with the version Ollama reports and the model from the run's runtime, the
 seven SDK tools, and `effects` `checked`.
 
 #### Scenario: Init for a run
-- **WHEN** a run starts with `model` `qwen3:4b` against an Ollama that reports version `0.12.6`
+- **WHEN** a run starts with a runtime whose model is `qwen3:4b`, against an Ollama that reports version `0.12.6`
 - **THEN** the `init` event's engine is `{"name": "ollama", "version": "0.12.6", "model": "qwen3:4b"}`, its tools are
   `Read`, `Write`, `Edit`, `Glob`, `Grep`, `Delete` and `Move`, and its `effects` is `checked`
 
 ### Requirement: The runner's options are closed
-`run/start` options SHALL be an object with `model` (required) and optionally `endpoint`, `maxTurns`, `contextLength`,
-`temperature`, `seed` and `think`. An option the runner doesn't define SHALL be refused with
-`ollama.unknown-option`, and a missing `model` or a value of the wrong shape with `ollama.invalid-options`, each
-naming the option in `details.where`, and no run starts.
+`run/start` options SHALL be an object with optionally `maxTurns`, `contextLength`, `temperature`, `seed` and `think`.
+An option the runner doesn't define SHALL be refused with `ollama.unknown-option`, and a value of the wrong shape with
+`ollama.invalid-options`, each naming the option in `details.where`, and no run starts.
 
 #### Scenario: An unknown option
 - **WHEN** the options hold `troupeConformanceUnknownOption`
 - **THEN** `run/start` is refused with `ollama.unknown-option`, whose `details.where` names the option
 
 #### Scenario: No model
-- **WHEN** the options are `{}`
-- **THEN** `run/start` is refused with `ollama.invalid-options`, naming `model`
+- **WHEN** the options are `{}`, so they name no model, and the run's runtime names `qwen3:4b`
+- **THEN** the run starts, asking for `qwen3:4b`, with the runner's defaults for every option
 
 #### Scenario: A malformed value
 - **WHEN** `maxTurns` is `0` or `think` is `"maximum"`
 - **THEN** `run/start` is refused with `ollama.invalid-options`, naming the option, and its fix names what is valid
-
-### Requirement: The endpoint is an option with a named default
-The runner SHALL send every request to `endpoint` when the options set it, and otherwise to `http://127.0.0.1:11434`,
-a named setting in one place in the runner. An endpoint SHALL be an `http` or `https` URL with a host and an optional
-port, and SHALL be refused with `ollama.invalid-options` when it holds a user name or password, a path other than
-`/`, a query, a fragment, a port above 65535, or a host name part that's empty or over 63 characters.
-
-#### Scenario: No endpoint in the options
-- **WHEN** a run starts without `endpoint`
-- **THEN** the runner's requests go to `http://127.0.0.1:11434`
-
-#### Scenario: An endpoint on another host
-- **WHEN** a run starts with `endpoint` `http://gpu-box.local:11434`
-- **THEN** the runner's requests go to that host
-
-#### Scenario: A port or host name no connection could use
-- **WHEN** `endpoint` is `http://127.0.0.1:99999` or `http://a..b:11434`
-- **THEN** `run/start` is refused with `ollama.invalid-options`, naming `endpoint`, and the runner keeps serving
-
-#### Scenario: Credentials in the endpoint
-- **WHEN** `endpoint` is `http://user:secret@127.0.0.1:11434`
-- **THEN** `run/start` is refused with `ollama.invalid-options`, naming `endpoint`, and its message doesn't hold
-  `secret`
 
 ### Requirement: The runner checks the engine before it acknowledges the run
 Before answering `run/start`, the runner SHALL ask Ollama for its version and for the model, within a named time
@@ -84,9 +60,10 @@ Ollama's version doesn't meet its requirements, `ollama.model-not-found` when th
 - **THEN** it is refused with `runner.invalid-params`, and no run is acknowledged
 
 #### Scenario: Ollama isn't running
-- **WHEN** nothing listens at the endpoint
+- **WHEN** nothing listens at the runtime's endpoint
 - **THEN** `run/start` is refused with `ollama.unreachable`, naming the endpoint, and the fix says to start Ollama or
-  set `endpoint`
+  to set the runtime's endpoint, naming `runtimes.<name>.endpoint` and `TROUPE_RUNTIME_<NAME>_ENDPOINT` for the run's
+  runtime
 
 #### Scenario: An Ollama too old for the runner
 - **WHEN** Ollama reports version `0.12.5`
@@ -338,8 +315,8 @@ strictness check, and its options parser SHALL accept and refuse exactly the opt
 The Ollama runner SHALL pass troupe's conformance suite against a fake Ollama endpoint.
 
 #### Scenario: The conformance suite
-- **WHEN** the conformance suite runs against the Ollama runner, with options naming a fake endpoint that serves a
-  short successful run
+- **WHEN** the conformance suite runs against the Ollama runner, with a runtime naming a fake endpoint that serves a
+  short successful run, and no credential
 - **THEN** every check passes
 
 ### Requirement: Fixtures pair real Ollama output with protocol events
@@ -358,3 +335,56 @@ skipped, naming the variable. CI SHALL NOT set it.
 #### Scenario: Without the variable
 - **WHEN** the tests run without `TROUPE_LIVE_OLLAMA`
 - **THEN** the live test is skipped with a reason naming `TROUPE_LIVE_OLLAMA`
+
+### Requirement: The service comes from the run's runtime
+The runner SHALL take its endpoint and model from the runtime troupe resolves for the run (spec: runtimes), and from
+nowhere else. Its options SHALL hold no endpoint or model, and no endpoint or model SHALL be written in the runner. A
+`run/start` with no runtime SHALL be refused with `ollama.no-runtime`, whose fix says to name a runtime for the actor,
+and no request SHALL be sent.
+
+#### Scenario: The runtime's endpoint and model
+- **WHEN** a run's runtime has the endpoint `http://gpu-box.local:11434` and the model `qwen3:4b`
+- **THEN** the runner's requests go to that host, and every request asks for `qwen3:4b`
+
+#### Scenario: The built-in runtime
+- **WHEN** a run's runtime is troupe's built-in `ollama`, with no endpoint set in config or the environment
+- **THEN** the runner's requests go to `http://127.0.0.1:11434`
+
+#### Scenario: A run without a runtime
+- **WHEN** a `run/start` carries no runtime
+- **THEN** `run/start` is refused with `ollama.no-runtime`, whose fix says to name a runtime for the actor, and no
+  request is sent
+
+#### Scenario: An endpoint or model in the options
+- **WHEN** a `run/start`'s options hold `endpoint` or `model`
+- **THEN** `run/start` is refused with `ollama.unknown-option`, naming the option
+
+### Requirement: The runtime's endpoint is one the runner can use
+The runner SHALL refuse a runtime whose endpoint has a path other than `/`, a port above 65535, or a host name part
+that's empty or over 63 characters, with `ollama.invalid-runtime` naming `runtime.endpoint`, before any request is
+sent. The fix SHALL name the runtime's config path and its `TROUPE_RUNTIME_<NAME>_ENDPOINT` variable. An endpoint
+with user info, a query or a fragment is refused by the runner contract's own pattern, as `runner.invalid-params`.
+
+#### Scenario: A path in the endpoint
+- **WHEN** a run's runtime `ollama` has the endpoint `http://127.0.0.1:11434/v1`
+- **THEN** `run/start` is refused with `ollama.invalid-runtime`, naming `runtime.endpoint`, and its fix names
+  `runtimes.ollama.endpoint` and `TROUPE_RUNTIME_OLLAMA_ENDPOINT`
+
+#### Scenario: A port or host name no connection could use
+- **WHEN** the runtime's endpoint is `http://127.0.0.1:99999` or `http://a..b:11434`
+- **THEN** `run/start` is refused with `ollama.invalid-runtime`, naming `runtime.endpoint`, and the runner keeps
+  serving
+
+#### Scenario: Credentials in the endpoint
+- **WHEN** the runtime's endpoint is `http://user:secret@127.0.0.1:11434`
+- **THEN** `run/start` is refused with `runner.invalid-params`, and no request is sent
+
+### Requirement: A runtime with a credential is refused
+The runner SHALL send no credential. A `run/start` whose `runtime.credential` is `true` SHALL be refused with
+`ollama.credential-unsupported`, naming the runtime, before any request is sent. The runner SHALL NOT read
+`TROUPE_RUNTIME_CREDENTIAL`, and the error SHALL hold no part of its value.
+
+#### Scenario: A runtime that names a key
+- **WHEN** a run's runtime has `credential` `true`, and `TROUPE_RUNTIME_CREDENTIAL` holds a canary
+- **THEN** `run/start` is refused with `ollama.credential-unsupported`, naming the runtime, no request is sent, and
+  the error holds no part of the canary

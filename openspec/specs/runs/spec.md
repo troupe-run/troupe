@@ -366,8 +366,9 @@ knows, before anything is recorded.
 - **THEN** `perform` starts the Claude Code runner
 
 #### Scenario: The Ollama runner
-- **WHEN** a person performs an actor whose runner is `ollama`
-- **THEN** `perform` starts the Ollama runner
+- **WHEN** a person performs an actor whose runner is `ollama` and whose runtime is `ollama`
+- **THEN** `perform` starts the Ollama runner, its `run/start` carries the runtime `ollama` with the actor's model,
+  and the run's start records that runtime
 
 #### Scenario: The OpenAI runner
 - **WHEN** a person performs an actor whose runner is `openai`
@@ -380,8 +381,7 @@ knows, before anything is recorded.
 
 #### Scenario: What each runner takes
 - **WHEN** troupe's runner table is read
-- **THEN** `claude-code` and `ollama` take no runtime, `scripted` takes one optionally, and `openai` requires
-  one
+- **THEN** `claude-code` takes no runtime, `scripted` takes one optionally, and `ollama` and `openai` require one
 
 ### Requirement: Perform passes a runner only the variables it is known to need
 `perform` SHALL start a runner with only the environment variables troupe's runner table names for it, each taken from
