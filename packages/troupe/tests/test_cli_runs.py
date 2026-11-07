@@ -605,21 +605,27 @@ def test_status_of_a_run_whose_runner_never_started_shows_no_audit_line(
 
 
 def test_an_audit_that_couldnt_run_is_shown_with_its_error() -> None:
-    lines = render_run(
-        {
-            "runId": "0f8fad5b-d9cb-469f-a165-70867728950e",
-            "actor": "tester",
-            "startedBy": {"kind": "unknown"},
-            "runner": {"requested": "scripted"},
-            "stage": {"name": "local", "effects": "unenforced"},
-            "effectCheck": {"kind": "none"},
-            "workspace": {"kind": "theatre"},
-            "state": "ended",
-            "outcome": "cancelled",
-            "events": 1,
-            "startedAt": "2026-10-13T00:00:00.000Z",
-            "endedAt": "2026-10-13T00:00:01.000Z",
-            "audit": {"error": {"code": "vcs.failed", "problem": "git failed.", "fix": "Look."}},
-        }
-    )
+    summary = {
+        "runId": "0f8fad5b-d9cb-469f-a165-70867728950e",
+        "actor": "tester",
+        "startedBy": {"kind": "unknown"},
+        "runner": {"requested": "scripted"},
+        "stage": {
+            "name": "local",
+            "effects": "unenforced",
+            "allowedBy": {"setting": "allow_unenforced_local_stage", "source": "env"},
+        },
+        "effectCheck": {"kind": "none"},
+        "workspace": {"kind": "theatre"},
+        "state": "ended",
+        "outcome": "cancelled",
+        "events": 1,
+        "startedAt": "2026-10-13T00:00:00.000Z",
+        "endedAt": "2026-10-13T00:00:01.000Z",
+        "transcript": "sha256:" + "a" * 64,
+        "stderr": "sha256:" + "b" * 64,
+        "audit": {"error": {"code": "vcs.failed", "problem": "git failed.", "fix": "Look."}},
+    }
+    m.RunSummary.from_data(summary)  # a shape troupe sends
+    lines = render_run(summary)
     assert "  audit couldn't run: vcs.failed: git failed." in lines

@@ -125,6 +125,9 @@ def test_the_start_a_worktree_run_records_validates(worktree_start: dict[str, An
 def test_a_start_that_leaves_out_its_workspace_or_holds_an_older_troupes_fields_does_not_validate(
     worktree_start: dict[str, Any], label: str
 ) -> None:
+    started = load(SCHEMAS / "events" / "run-started.schema.json")
+    validator = validator_for(started["$id"], SCRIPTED)
+    assert validator.is_valid(worktree_start)
     state = json.loads(json.dumps(worktree_start))
     if label == "a start without its workspace":
         del state["workspace"]
@@ -132,8 +135,7 @@ def test_a_start_that_leaves_out_its_workspace_or_holds_an_older_troupes_fields_
         state["runner_reported"] = {"name": "scripted", "version": "0.1.0"}
     else:
         state["workspace"]["clones"] = ["copy"]
-    started = load(SCHEMAS / "events" / "run-started.schema.json")
-    assert not validator_for(started["$id"], SCRIPTED).is_valid(state), label
+    assert not validator.is_valid(state), label
 
 
 def test_every_line_a_failed_run_records_validates_by_topic(tmp_path: Path) -> None:
