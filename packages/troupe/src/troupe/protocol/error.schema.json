@@ -2451,16 +2451,12 @@
           "additionalProperties": false,
           "required": [
             "variable",
-            "value",
             "accepted"
           ],
           "properties": {
             "variable": {
               "type": "string",
               "minLength": 1
-            },
-            "value": {
-              "type": "string"
             },
             "accepted": {
               "type": "array",
