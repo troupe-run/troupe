@@ -53,9 +53,21 @@ def test_a_counter_at_zero_with_no_rate_doesnt_block_the_estimate() -> None:
     assert estimate(usage, Price(input=2, output=8)) == 2
 
 
-def test_the_openai_runners_example_rounds_to_ten_places() -> None:
+def test_the_openai_runners_example_is_0_00078() -> None:
     usage = Usage(input_tokens=260, output_tokens=30, cache_read_tokens=40)
     assert estimate(usage, Price(input=2, output=8, cache_read=0.5)) == 0.00078
+
+
+def test_an_estimate_with_more_than_ten_decimal_places_is_rounded_to_ten() -> None:
+    # 1 token at 0.123456789123 per million is 1.23456789123e-07 before rounding.
+    usage = Usage(input_tokens=1, output_tokens=0)
+    assert estimate(usage, Price(input=0.123456789123, output=0)) == 1.235e-07
+
+
+def test_float_noise_in_the_sum_is_rounded_away() -> None:
+    # 3 x 0.1 + 7 x 0.2 per million is 1.7000000000000002e-06 in floating point.
+    usage = Usage(input_tokens=3, output_tokens=7)
+    assert estimate(usage, Price(input=0.1, output=0.2)) == 1.7e-06
 
 
 COUNT = st.none() | st.integers(0, 10**9)
