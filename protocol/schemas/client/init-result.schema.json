@@ -142,6 +142,11 @@
             "direction": {
               "type": "string",
               "minLength": 1
+            },
+            "extra": {
+              "description": "The troupe-run extra the runner comes with, named after it, which whoever runs the theatre installs. Absent: the runner is in the base install.",
+              "type": "string",
+              "minLength": 1
             }
           }
         }

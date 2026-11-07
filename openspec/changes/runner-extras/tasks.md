@@ -67,13 +67,13 @@
 
 ## 5. Init refuses an uninstalled runner and names an installed runner's extra (design D8; spec: cli)
 
-- [ ] 5.1 Write the tests first, in the init tests. They cover: `troupe init --audition --runner <fixture>` refused
+- [x] 5.1 Write the tests first, in the init tests. They cover: `troupe init --audition --runner <fixture>` refused
   with `runner.not-installed`, rehearsed or not, with no `.troupe/` made; with the fixture runner installed and in an
   extra, the perform step's notes naming `troupe-run[<runner>]` and the install page; and the scripted audition's
   notes mentioning no extra. Verify: they fail on main, run and shown.
-- [ ] 5.2 Call `installed_runner` from `audition()`, and add the extra note to `cli/init.py`'s `_step_notes` from
+- [x] 5.2 Call `installed_runner` from `audition()`, and add the extra note to `cli/init.py`'s `_step_notes` from
   `in_extra`. Verify: 5.1's tests pass, and the existing init tests pass unchanged.
-- [ ] 5.3 Commit as `feat(cli): ...`. Verify: `uv run scripts/check.py` passes before the commit.
+- [x] 5.3 Commit as `feat(cli): ...`. Verify: `uv run scripts/check.py` passes before the commit.
 
 ## 6. The install check, CI and the install page cover the extras (design D9, D10; spec: installation)
 
