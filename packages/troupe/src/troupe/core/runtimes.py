@@ -7,6 +7,11 @@ environment (``TROUPE_RUNTIME_<NAME>_ENDPOINT``, ``_MODEL`` and ``_CREDENTIAL_EN
 its own, and each resolved value carries its source, as settings and policy do. A run's model is
 the environment's, then its actor's, then the runtime's.
 
+A runtime may price its models (``prices``, by model name). A run's price is the price for its
+model, matched exactly, from the theatre's config only: troupe has no built-in prices and no
+variable sets one (spec: runtimes, "A run's price is the price of its model"; estimated-cost design
+D3, D6). It goes to the runner in ``run/start``, the only price a runner may estimate a cost from.
+
 A credential is only ever a reference: the name of the variable that holds it. Its value is read
 from the session's environment when a run starts (``for_run``), never written to config, and
 masked in everything troupe keeps from the run (troupe.core.masking). A variable that is set but
@@ -65,6 +70,31 @@ class Sourced:
         return {"value": self.value, "source": self.source}
 
 
+PRICES = "prices"
+
+
+@dataclass(frozen=True)
+class Price:
+    """A model's price as config holds it (runtime.schema.json#/$defs/price), and where it came
+    from: always the theatre's config, since troupe has no built-in prices."""
+
+    value: Mapping[str, float]
+    source: Source = "theatre"
+
+    def to_data(self) -> dict[str, Any]:
+        return {"value": dict(self.value), "source": self.source}
+
+
+def model_price(theatre: Mapping[str, Any], model: str | None) -> Price | None:
+    """The price ``theatre`` (one runtime's config) holds for ``model``, matched exactly, or None.
+    Config has been checked, so each price has the schema's shape."""
+    prices = theatre.get(PRICES)
+    if model is None or not isinstance(prices, Mapping):
+        return None
+    price = prices.get(model)
+    return Price(price) if isinstance(price, Mapping) else None
+
+
 @dataclass(frozen=True)
 class Resolved:
     """A runtime as troupe resolved it: each value with its source. ``credential`` is the name of
@@ -74,6 +104,12 @@ class Resolved:
     endpoint: Sourced
     model: Sourced | None
     credential: Sourced | None
+    prices: Mapping[str, Any]
+    """The runtime's prices in the theatre's config, by model name; empty when it has none."""
+
+    def price(self, model: Sourced | None) -> Price | None:
+        """The price of ``model`` on this runtime, or None."""
+        return model_price({PRICES: self.prices}, model.value if model is not None else None)
 
     def to_data(self, env: Mapping[str, str]) -> dict[str, Any]:
         """The protocol's resolved runtime (runtime.schema.json#/$defs/resolved), saying whether
@@ -86,6 +122,9 @@ class Resolved:
                 "env": self.credential.to_data(),
                 "set": bool(read_variable(env, self.credential.value)),
             }
+        price = self.price(self.model)
+        if price is not None:
+            data["price"] = price.to_data()
         return data
 
 
@@ -107,16 +146,23 @@ class RunRuntime:
         }
         if self.resolved.credential is not None:
             data["credential"] = {"env": self.resolved.credential.to_data(), "set": True}
+        price = self.resolved.price(self.model)
+        if price is not None:
+            data["price"] = price.to_data()
         return data
 
     def run_start(self) -> dict[str, Any]:
-        """``run/start``'s ``runtime``."""
-        return {
+        """``run/start``'s ``runtime``, with the run's model's price when it has one."""
+        data: dict[str, Any] = {
             "name": self.resolved.name,
             "endpoint": self.resolved.endpoint.value,
             "model": self.model.value,
             "credential": self.value is not None,
         }
+        price = self.resolved.price(self.model)
+        if price is not None:
+            data["price"] = dict(price.value)
+        return data
 
 
 def env_name(runtime: str, field: str) -> str:
@@ -202,8 +248,13 @@ def resolve(name: str, config: Mapping[str, Any], env: Mapping[str, str]) -> Res
     if endpoint is None:  # config's check refuses a runtime with no endpoint
         msg = f"the runtime {name!r} has no endpoint"
         raise RuntimeError(msg)
+    prices = theatre.get(PRICES)
     return Resolved(
-        name=name, endpoint=endpoint, model=resolved["model"], credential=resolved["credential_env"]
+        name=name,
+        endpoint=endpoint,
+        model=resolved["model"],
+        credential=resolved["credential_env"],
+        prices=prices if isinstance(prices, Mapping) else {},
     )
 
 

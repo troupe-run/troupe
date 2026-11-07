@@ -383,6 +383,11 @@ class Runner:
             for field in ("name", "endpoint", "model")
             if field in value and runtime.get(field) != value[field]
         ]
+        if ("price" in value or "noPrice" in value) and runtime.get("price") != value.get("price"):
+            differs.append(
+                f"price: run/start carried {runtime.get('price') or 'none'}, the script expected "
+                f"{value.get('price') or 'none'}"
+            )
         if "credentialHash" in value or "noCredential" in value:
             wanted = value.get("credentialHash")
             credential = self._credential()

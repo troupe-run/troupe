@@ -119,6 +119,18 @@ READ_ONLY_DECLARATION = EffectsDeclaration(write=[], delete=[], move=[])
 
 
 @dataclass(frozen=True)
+class Price(Message):
+    """What a model costs, in US dollars per million tokens of each kind, as troupe resolved it
+    from the runtime's prices (protocol/schemas/runtime.schema.json#/$defs/price). A rate that's
+    absent is unknown, not zero."""
+
+    input: float = json_field("input", minimum=0)
+    output: float = json_field("output", minimum=0)
+    cache_read: float | None = json_field("cacheRead", default=None, minimum=0)
+    cache_write: float | None = json_field("cacheWrite", default=None, minimum=0)
+
+
+@dataclass(frozen=True)
 class RunStartRuntime(Message):
     """The service a run talks to, as troupe resolved it. The credential's value is never here:
     when ``credential`` is true, it's in the runner's environment as ``TROUPE_RUNTIME_CREDENTIAL``
@@ -128,6 +140,9 @@ class RunStartRuntime(Message):
     endpoint: str = json_field("endpoint", pattern=ENDPOINT_PATTERN)
     model: str = json_field("model", pattern=MODEL_PATTERN)
     credential: bool = json_field("credential")
+    price: Price | None = json_field("price", default=None)
+    """The run's model's price, when the theatre prices it: the only price a runner may estimate
+    a cost from (``troupe_plugin_sdk.cost.estimate``)."""
 
 
 @dataclass(frozen=True)
@@ -263,6 +278,13 @@ class ResultEvent(RunEvent):
     duration_ms: int | None = json_field("durationMs", default=None, minimum=0)
     usage: Usage | None = json_field("usage", default=None)
     cost_usd: float | None = json_field("costUsd", default=None, minimum=0)
+    """What the engine or its service reported. Never a number the runner worked out."""
+    estimated_cost_usd: float | None = json_field("estimatedCostUsd", default=None, minimum=0)
+    """An estimate from run/start's price, sent only when nothing reported a cost."""
+
+    def _check(self, where: str) -> None:
+        if self.cost_usd is not None and self.estimated_cost_usd is not None:
+            raise fail(where, "a result carries costUsd or estimatedCostUsd, never both")
 
 
 EventType = Literal["init", "turn", "tool_call", "tool_result", "retry", "log", "result"]

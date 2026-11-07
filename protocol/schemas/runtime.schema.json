@@ -42,6 +42,38 @@
         "actor"
       ]
     },
+    "price": {
+      "title": "Price",
+      "description": "What a model costs at a service, in US dollars per million tokens of each kind, named after the result's usage counters. A rate a price doesn't give is unknown, not zero: an estimate needs a rate for every kind of token the run used.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "input",
+        "output"
+      ],
+      "properties": {
+        "input": {
+          "description": "US dollars per million input tokens, cache reads and writes excluded.",
+          "type": "number",
+          "minimum": 0
+        },
+        "output": {
+          "description": "US dollars per million output tokens.",
+          "type": "number",
+          "minimum": 0
+        },
+        "cacheRead": {
+          "description": "US dollars per million input tokens read from the service's prompt cache.",
+          "type": "number",
+          "minimum": 0
+        },
+        "cacheWrite": {
+          "description": "US dollars per million input tokens written to the service's prompt cache.",
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
     "resolved": {
       "title": "Resolved runtime",
       "description": "A runtime as troupe resolved it from its defaults, the theatre's config and the person's environment, each value with its source. Never the credential's value.",
@@ -118,6 +150,23 @@
             "set": {
               "description": "Whether the variable is set, and not empty, in the person's environment. Its value is never shown.",
               "type": "boolean"
+            }
+          }
+        },
+        "price": {
+          "description": "The price of the resolved model, and where it came from. Absent: nothing prices that model, or nothing sets a model.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "source"
+          ],
+          "properties": {
+            "value": {
+              "$ref": "#/$defs/price"
+            },
+            "source": {
+              "$ref": "#/$defs/source"
             }
           }
         }

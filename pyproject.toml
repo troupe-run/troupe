@@ -108,8 +108,9 @@ extend-immutable-calls = ["troupe_plugin_sdk.messages.json_field"]
 "scripts/tests/**" = ["S101", "S603", "S607"]
 # Repository scripts run the project's own tools (git, uv) from PATH with fixed arguments.
 "scripts/**" = ["S603", "S607"]
-# Generated from the config schemas (scripts/generate_models.py): docstrings are the schemas' descriptions, unwrapped.
-"packages/troupe/src/troupe/core/config/models.py" = ["E501", "UP007"]
+# Generated from the config schemas (scripts/generate_models.py): docstrings are the schemas' descriptions, unwrapped,
+# and field names are the schemas' JSON names, camelCase included (a price's cacheRead).
+"packages/troupe/src/troupe/core/config/models.py" = ["E501", "UP007", "N815"]
 
 [tool.mypy]
 strict = true

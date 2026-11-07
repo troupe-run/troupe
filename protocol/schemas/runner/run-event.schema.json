@@ -150,7 +150,7 @@
     },
     "result": {
       "title": "result",
-      "description": "What the runner saw at the end. status is error whenever the engine reported an error, whatever else it reported alongside it.",
+      "description": "What the runner saw at the end. status is error whenever the engine reported an error, whatever else it reported alongside it. It carries a reported cost or an estimate, never both.",
       "type": "object",
       "additionalProperties": false,
       "required": ["runId", "seq", "type", "status", "message"],
@@ -173,8 +173,10 @@
             "cacheWriteTokens": {"description": "Input tokens written to the engine's prompt cache. Absent: the runner couldn't report them, and never estimates them.", "type": "integer", "minimum": 0}
           }
         },
-        "costUsd": {"description": "What the run cost in US dollars, as the engine reports it. Absent: the engine reports no cost.", "type": "number", "minimum": 0}
-      }
+        "costUsd": {"description": "What the run cost in US dollars, as the engine or its service reported it; never worked out by the runner. Absent: nothing reported a cost.", "type": "number", "minimum": 0},
+        "estimatedCostUsd": {"description": "An estimate, not a reported cost: the run's usage at the price troupe gave in run/start's runtime.price, in US dollars. Sent only when nothing reported a cost and run/start carried a price. Absent: no price, or the usage has a kind of token the price has no rate for, or a rate for a counter that wasn't reported.", "type": "number", "minimum": 0}
+      },
+      "not": {"required": ["costUsd", "estimatedCostUsd"]}
     },
     "oversized": {
       "title": "oversized",

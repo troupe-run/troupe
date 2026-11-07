@@ -64,8 +64,9 @@ from troupe.platform.files import WaitCallback, append_bytes
 
 FIELD_ORDER = ("$schema", "runner", "options", "expect")
 """The actor file's keys, in its schema's order."""
-RUNTIME_FIELD_ORDER = ("$schema", "endpoint", "model", "credential")
-"""The runtime file's keys, in its schema's order."""
+RUNTIME_FIELD_ORDER = ("$schema", "endpoint", "model", "credential", "prices")
+"""The runtime file's keys, in its schema's order. A test checks it against the schema, so a field
+added there can't be left out of the file."""
 
 WRITTEN = "local/config/written.jsonl"
 LOCK = "local/config"
