@@ -100,6 +100,19 @@ def differences(cls: type[Message], node: Any, base: str, where: str) -> list[st
     return found
 
 
+def test_every_event_type_the_schema_lets_a_runner_send_has_an_sdk_type() -> None:
+    uri = urljoin(BASE, "run-event.schema.json#/$defs/event")
+    defs = _load(urljoin(BASE, "run-event.schema.json#/$defs"))
+    schema_types = set()
+    for choice in _load(uri)["oneOf"]:
+        refs = [choice] if "$ref" in choice else choice["allOf"]
+        for ref in refs:
+            if "$ref" in ref:
+                schema_types.add(defs[ref["$ref"].rsplit("/", 1)[1]]["properties"]["type"]["const"])
+    assert schema_types == set(p.EVENT_TYPES)
+    assert schema_types == set(typing.get_args(p.EventType))
+
+
 @pytest.mark.parametrize(("cls", "ref"), TYPES, ids=[cls.__name__ for cls, _ in TYPES])
 def test_each_types_fields_are_exactly_its_schemas_properties(cls: type[Message], ref: str) -> None:
     uri = urljoin(BASE, ref)

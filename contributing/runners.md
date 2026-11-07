@@ -134,6 +134,7 @@ repeats.
 | `tool_call` | `callId`, `tool`, `inputSummary` | |
 | `tool_result` | `callId`, `isError`, `outputSummary`, `outputBytes` | `callId` matches an earlier `tool_call`. The full output belongs in the transcript. |
 | `retry` | `attempt`, `maxAttempts` (optional), `delayMs`, `reason`, `message` (optional) | `reason` is `authentication`, `rate-limit`, `network`, `server` or `other`. Send one each time the engine retries, or the runner retries a request to its engine itself. |
+| `context` | `kind`, `by`, `message`, `tokensBefore`, `tokensAfter`, `messagesBefore`, `messagesAfter` (the four counts optional) | `kind` is `compacted`, `truncated` or `other`, and `by` is `engine` or `runner`. Send one each time content of the conversation is lost and the run carries on (see [Lost content](#lost-content)). |
 | `log` | `level` (`debug`, `info`, `warning`, `error`), `message` | A diagnostic worth keeping with the run. |
 | `result` | `status` (`ok` or `error`), `message`, `turns`, `durationMs`, `usage {inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens}`, `costUsd` (all but the first two optional, and each `usage` counter too) | Exactly one, last, for a run that ends on its own. |
 | `oversized` | `originalType`, `bytes`, `ref` | Written by troupe, never by a runner (see [Oversized events](#oversized-events)). |
@@ -145,6 +146,35 @@ repeats.
   every native record, or in the runner's own `options`. A run event carries no field the contract doesn't
   define. A runner with no model leaves out `engine`.
 - **Events are summaries.** Full tool inputs and outputs go in the transcript.
+
+### Lost content
+
+An engine never loses content without the run saying so ([#279](https://github.com/troupe-run/troupe/issues/279)).
+When the loss ends the run, the `result` says so. When content of the conversation is lost and the run carries on,
+send a `context` event at that point, before any event that follows from the reduced conversation. A `context` event
+never ends the run, and troupe records it with the run's other events.
+
+- **`kind`** says what happened: `compacted` when earlier content was replaced by a summary of it, `truncated` when it
+  was dropped outright, or `other` for a loss neither names. A runner can't add kinds of its own. Use `other` and say
+  in `message` what was lost, and if you keep meeting the same loss, file an issue to add a kind for it.
+- **`by`** says who did it: `engine` when the engine reduced its conversation on its own (Claude Code compacting),
+  or `runner` when the runner reduced the conversation it holds and sends to its engine.
+- **The counts** are the conversation's tokens and messages before and after the loss. Send each one only when the
+  engine or runner knows it, and leave it out otherwise. Claude Code, for example, reports only the tokens before.
+- **`message`** says what happened, in words.
+- A cut answer at the engine's output limit isn't a `context` event. It ends the run.
+
+The SDK builds the event with `context_event` from `troupe_plugin_sdk.events`. It numbers the event with the run's
+`EventNumbering`, cuts the message to the run's limits, and leaves out each count you pass as `None`:
+
+```python
+from troupe_plugin_sdk.events import EventNumbering, context_event
+
+numbering = EventNumbering(run_id, event_max_bytes)
+event = context_event(
+    numbering, "compacted", "engine", "Claude Code compacted", tokens_before=41000
+)
+```
 
 ### Oversized events
 

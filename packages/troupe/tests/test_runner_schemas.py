@@ -166,6 +166,15 @@ EVENTS: dict[str, dict[str, Any]] = {
     "tool_call": {"callId": "c1", "tool": "Write", "inputSummary": "out/hello.txt"},
     "tool_result": {"callId": "c1", "isError": False, "outputSummary": "ok", "outputBytes": 2},
     "retry": {"attempt": 1, "maxAttempts": 10, "delayMs": 500, "reason": "authentication"},
+    "context": {
+        "kind": "compacted",
+        "by": "engine",
+        "message": "the engine summarised the earlier conversation",
+        "tokensBefore": 41000,
+        "tokensAfter": 9000,
+        "messagesBefore": 120,
+        "messagesAfter": 34,
+    },
     "log": {"level": "info", "message": "starting"},
     "result": {
         "status": "error",
@@ -202,6 +211,77 @@ def test_the_oversized_event_is_a_host_event_but_never_a_runner_event() -> None:
     }
     validate(event, "run-event.schema.json#/$defs/hostEvent")
     assert not is_valid(event, "run-event.schema.json#/$defs/event")
+
+
+# Requirement: A context event names what happened from a closed list (and says who, and how much)
+
+
+def _context(**fields: object) -> dict[str, Any]:
+    event: dict[str, Any] = {
+        "runId": RUN_ID,
+        "seq": 2,
+        "type": "context",
+        "kind": "compacted",
+        "by": "engine",
+        "message": "compacted",
+    }
+    event.update(fields)
+    return {name: value for name, value in event.items() if value is not ...}
+
+
+@pytest.mark.parametrize(
+    ("kind", "by"), [("compacted", "engine"), ("truncated", "runner"), ("other", "runner")]
+)
+def test_a_context_event_of_each_listed_kind_and_by_validates(kind: str, by: str) -> None:
+    validate(_context(kind=kind, by=by), "run-event.schema.json#/$defs/event")
+
+
+def test_a_context_event_whose_kind_is_the_runners_own_does_not_validate() -> None:
+    assert not is_valid(_context(kind="pruned"), "run-event.schema.json#/$defs/event")
+
+
+def test_a_context_event_whose_by_is_off_the_list_does_not_validate() -> None:
+    assert not is_valid(_context(by="host"), "run-event.schema.json#/$defs/event")
+
+
+@pytest.mark.parametrize("field", ["kind", "by", "message"])
+def test_a_context_event_without_a_required_field_does_not_validate(field: str) -> None:
+    assert not is_valid(_context(**{field: ...}), "run-event.schema.json#/$defs/event")
+
+
+def test_a_context_event_with_only_tokens_before_validates() -> None:
+    validate(_context(tokensBefore=41000), "run-event.schema.json#/$defs/event")
+
+
+def test_a_context_event_with_only_the_message_counts_validates() -> None:
+    validate(
+        _context(kind="truncated", by="runner", messagesBefore=120, messagesAfter=34),
+        "run-event.schema.json#/$defs/event",
+    )
+
+
+@pytest.mark.parametrize(
+    "field", ["tokensBefore", "tokensAfter", "messagesBefore", "messagesAfter"]
+)
+def test_a_context_event_with_a_null_or_negative_count_does_not_validate(field: str) -> None:
+    assert not is_valid(_context(**{field: None}), "run-event.schema.json#/$defs/event")
+    assert not is_valid(_context(**{field: -1}), "run-event.schema.json#/$defs/event")
+
+
+def test_a_context_event_with_a_count_the_contract_doesnt_define_does_not_validate() -> None:
+    assert not is_valid(_context(turnsBefore=3), "run-event.schema.json#/$defs/event")
+
+
+def test_an_oversized_context_event_is_a_host_event() -> None:
+    event = {
+        "runId": RUN_ID,
+        "seq": 2,
+        "type": "oversized",
+        "originalType": "context",
+        "bytes": 70000,
+        "ref": HASH,
+    }
+    validate(event, "run-event.schema.json#/$defs/hostEvent")
 
 
 # Requirement: The contract is not specific to one engine

@@ -5,12 +5,19 @@ A runner numbers every event it sends from 0, with no gaps. ``EventNumbering`` i
 the runner uses it for its own events too, so tool events slot into the same sequence. Summaries
 are cut at a UTF-8 boundary to the summary limit, then further until the whole event fits
 run/start's ``eventMaxBytes``, measured as troupe's host measures it: the event's compact JSON.
+
+``context_event`` builds the event a runner sends when content of the conversation is lost and the
+run carries on (spec: plugin-sdk, "The SDK builds a context event fitted to the run's limits";
+context-event design D7).
 """
 
 import json
+import typing
 from typing import Any
 
 from troupe_plugin_sdk.defaults import SUMMARY_MAX_BYTES
+from troupe_plugin_sdk.messages import fail
+from troupe_plugin_sdk.runner import ContextBy, ContextEvent, ContextKind
 
 
 class EventNumbering:
@@ -75,3 +82,53 @@ def fit(data: dict[str, Any], field: str, limit: int, event_max_bytes: int) -> d
         limit = max(0, utf8_size(fitted[field]) - over)
         fitted = {**data, field: cut(full, limit)}
     return fitted
+
+
+_COUNTS = (
+    ("tokensBefore", "tokens_before"),
+    ("tokensAfter", "tokens_after"),
+    ("messagesBefore", "messages_before"),
+    ("messagesAfter", "messages_after"),
+)
+
+
+def context_event(
+    numbering: EventNumbering,
+    kind: ContextKind,
+    by: ContextBy,
+    message: str,
+    *,
+    tokens_before: int | None = None,
+    tokens_after: int | None = None,
+    messages_before: int | None = None,
+    messages_after: int | None = None,
+) -> ContextEvent:
+    """A numbered ``context`` event: ``kind`` and ``by`` from the contract's lists, ``message``
+    fitted like a summary, and each count left out when it's None. A kind or ``by`` off its list
+    raises a protocol error before a ``seq`` is taken, so the counter is left as it was."""
+    if kind not in typing.get_args(ContextKind):
+        raise fail(
+            "ContextEvent.kind", f"{kind!r} isn't one of {list(typing.get_args(ContextKind))}"
+        )
+    if by not in typing.get_args(ContextBy):
+        raise fail("ContextEvent.by", f"{by!r} isn't one of {list(typing.get_args(ContextBy))}")
+    given = {
+        "tokens_before": tokens_before,
+        "tokens_after": tokens_after,
+        "messages_before": messages_before,
+        "messages_after": messages_after,
+    }
+    data: dict[str, Any] = {
+        "runId": numbering.run_id,
+        "seq": numbering.next_seq,
+        "type": "context",
+        "kind": kind,
+        "by": by,
+        "message": message,
+    }
+    data.update({name: given[arg] for name, arg in _COUNTS if given[arg] is not None})
+    event = ContextEvent.from_data(
+        fit(data, "message", numbering.summary_max_bytes, numbering.event_max_bytes)
+    )
+    numbering.take()
+    return event
