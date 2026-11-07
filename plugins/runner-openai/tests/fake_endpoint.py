@@ -213,12 +213,15 @@ class FakeEndpoint:
 def usage(
     input_tokens: int,
     output_tokens: int,
-    cached: int = 0,
+    cached: int | None = 0,
     cache_write: int | None = None,
     **more: Any,  # noqa: ANN401
 ) -> dict[str, Any]:
-    """A usage record as the Responses API reports it; ``cache_write`` as OpenAI adds it."""
-    details: dict[str, Any] = {"cached_tokens": cached}
+    """A usage record as the Responses API reports it; ``cache_write`` as OpenAI adds it.
+    ``cached=None`` leaves ``cached_tokens`` out, as a service that doesn't report it would."""
+    details: dict[str, Any] = {}
+    if cached is not None:
+        details["cached_tokens"] = cached
     if cache_write is not None:
         details["cache_write_tokens"] = cache_write
     return {

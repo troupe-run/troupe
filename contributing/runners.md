@@ -349,7 +349,7 @@ and from local Ollama's `/v1`.
 | 429, 5xx, a failure whose code is the service's own, or a connection that failed, dropped or went silent | `retry`: `rate-limit`, `server` or `network` |
 | completed, with no function call | `result` `ok`, with its text |
 | 401, 403, quota, context length, another 4xx, a redirect, a refusal, `incomplete`, another failure, `maxTurns` or `maxTotalTokens`, or retries spent | `result` `error`, saying which |
-| its `usage` | summed into `result.usage`: cache reads and, where reported, writes counted apart from input |
+| its `usage` | summed into `result.usage`: cache reads and writes each counted apart from input where every response reports them |
 
 Its transcript records are JSON objects of its own, each with a `kind`: the request body as sent, the status with only
 named headers, each stream line unchanged, an error's body, and a stream dropped. The key, and a masked echo of it, are
