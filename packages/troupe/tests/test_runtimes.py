@@ -418,20 +418,22 @@ def test_a_built_in_name_is_named_in_a_refusal(value: str | None, code: str) -> 
     assert "OPENAI_API_KEY" in raised.value.problem
 
 
-@pytest.mark.parametrize(
-    "details",
-    [
-        {"runtime": "myhost", "variable": "K", "namedBy": BY_ENV},
-        {"runtime": "myhost"},
-    ],
-    ids=["both", "neither"],
-)
-def test_the_schema_takes_exactly_one_of_variable_and_named_by(details: dict[str, str]) -> None:
+@pytest.mark.parametrize(("value", "code"), CREDENTIAL_REFUSALS)
+@pytest.mark.parametrize("keys", ["both", "neither"])
+def test_each_credential_refusals_schema_takes_exactly_one_of_variable_and_named_by(
+    value: str | None, code: str, keys: str
+) -> None:
+    env = {"K": value} if value is not None else {}
     with pytest.raises(TroupeError) as raised:
-        for_run("myhost", "tester", None, _on("https://x.example"), {})
-    error = raised.value.to_data() | {"details": details}
-    assert validator_for(PROTOCOL_BASE + "error.schema.json").is_valid(raised.value.to_data())
-    assert not validator_for(PROTOCOL_BASE + "error.schema.json").is_valid(error)
+        for_run("myhost", "tester", None, _on("https://x.example"), env)
+    assert raised.value.code == code
+    emitted = raised.value.to_data()
+    details = {k: v for k, v in emitted["details"].items() if k != "variable"}
+    if keys == "both":
+        details |= {"variable": "K", "namedBy": BY_ENV}
+    schema = validator_for(PROTOCOL_BASE + "error.schema.json")
+    assert schema.is_valid(emitted)
+    assert not schema.is_valid(emitted | {"details": details})
 
 
 # The environment's values are checked as the schema checks config's (design D3)
