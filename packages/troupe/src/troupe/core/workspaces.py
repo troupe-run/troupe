@@ -27,6 +27,7 @@ from typing import Any, Literal
 
 from troupe.core import defaults
 from troupe.core.artifacts import ArtifactStore
+from troupe.core.config_paths import shown
 from troupe.core.errors import TroupeError
 from troupe.core.files import clone_file
 from troupe.core.notices import Notice
@@ -87,7 +88,7 @@ def worktree_base(vcs: Vcs, actor: str) -> tuple[str, str]:
             problem=f"Actor {actor} works in its own worktree, made at HEAD, and this theatre "
             "has no commit yet.",
             fix=f"Commit your files first, or run {actor} in the theatre: troupe config set "
-            f"actors.{actor}.workspace=theatre",
+            f"{shown(('actors', actor, 'workspace'))}=theatre",
             details={"actor": actor},
         )
     return base, prefix

@@ -7,6 +7,8 @@ value, and the model's price when the theatre prices it.
 
 from typing import Any
 
+from troupe.core.config_paths import shown
+
 
 def runtime_lines(runtime: dict[str, Any], indent: str = "") -> list[str]:
     """The lines that show ``runtime`` (the protocol's resolved runtime)."""
@@ -19,7 +21,7 @@ def runtime_lines(runtime: dict[str, Any], indent: str = "") -> list[str]:
         lines.append(f"{indent}  model: {model['value']} (from {model['source']})")
     else:
         variable = "TROUPE_RUNTIME_" + name.upper().replace("-", "_") + "_MODEL"
-        sets = f"an actor's model, runtimes.{name}.model or {variable} sets one"
+        sets = f"an actor's model, {shown(('runtimes', name, 'model'))} or {variable} sets one"
         lines.append(f"{indent}  model: none ({sets})")
     credential = runtime.get("credential")
     if credential is None:

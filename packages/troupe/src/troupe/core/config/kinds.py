@@ -304,7 +304,7 @@ def _runtime_problems(
                 at,
                 f"there's no runtime named {runtime!r} (there are: {', '.join(known)})",
                 f"Set it to one of: {', '.join(known)}, or define it with troupe config set "
-                f"{RUNTIMES}.{runtime}.endpoint=<url>.",
+                f"{shown((RUNTIMES, str(runtime), 'endpoint'))}=<url>.",
                 related=((RUNTIMES, str(runtime)),),
             )
         ]

@@ -17,6 +17,7 @@ from troupe.cli.commands import _call, _ignore_cancel, _notices
 from troupe.cli.parser import Command
 from troupe.cli.render import render_notice
 from troupe.core.client.session import CancelSignal, Session
+from troupe.core.config_paths import shown
 from troupe.core.defaults import RUNTIMES
 from troupe.core.errors import TroupeError
 from troupe.core.exit_codes import ExitCode
@@ -201,7 +202,8 @@ def render_init(result: dict[str, Any], directory: Path, stdout: TextIO) -> None
         # next command refuse with config.file-not-troupes (first-run-walkthrough design D8).
         print(
             f"Its character, the prompt it runs with, is {character}. To change it, write yours "
-            f"in a file and run: troupe config set actors.{actor['name']}.character=@<file>",
+            "in a file and run: troupe config set "
+            f"{shown(('actors', actor['name'], 'character'))}=@<file>",
             file=stdout,
         )
     if rehearsed:

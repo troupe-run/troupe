@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, Protocol
 
+from troupe.core.config_paths import shown
 from troupe.core.errors import TroupeError
 from troupe_plugin_sdk.effects import Effect, Effects
 
@@ -158,7 +159,7 @@ def _fix(actor: str, effects: Effects, changes: Sequence[Change]) -> str:
         listed = wanted.setdefault(change.needs, list(effects.declared(change.needs)))
         listed.extend(path for path in paths if path not in listed)
     assignments = " ".join(
-        f"actors.{actor}.effects.{effect}='{json.dumps(paths)}'"
+        f"{shown(('actors', actor, 'effects', effect))}='{json.dumps(paths)}'"
         for effect, paths in sorted(wanted.items())
     )
     return (
