@@ -59,13 +59,15 @@
 - [x] 5.1 Run `uv run scripts/check.py` and verify it passes, with the openai runner's tests, mypy --strict and ruff
   clean. Done 2026-11-07 on 26dcf86: the full check passed every gate (tests in 188 s); the commit's scoped check
   passed 3694 tests.
-- [ ] 5.2 Ask the owner to run the opt-in live tests (`TROUPE_LIVE_OPENAI=1` in `packages/troupe/tests/test_openai_live.py`,
+- [x] 5.2 Ask the owner to run the opt-in live tests (`TROUPE_LIVE_OPENAI=1` in `packages/troupe/tests/test_openai_live.py`,
   and the Ollama live test against a local Ollama if it's running) and verify both pass, so D4's `Content-Type` check
   is shown to accept the real services' streams. Record the result in this task. Correction: `test_ollama_live.py`
   runs the Ollama runner, which this change doesn't touch; the OpenAI runner's live test pointed at local Ollama is
   the one that does. Ollama, 2026-11-07 on 26dcf86: `TROUPE_LIVE_OPENAI=1
   TROUPE_LIVE_OPENAI_ENDPOINT=http://127.0.0.1:11434/v1 TROUPE_LIVE_OPENAI_MODEL=qwen3.5:4b` passed (succeeded,
-  wrote and read back `out/hello.txt`). OpenAI: waiting on the owner.
+  wrote and read back `out/hello.txt`). OpenAI, 2026-11-07 on 7ad54d5, run by the owner: passed (endpoint
+  `https://api.openai.com/v1`, `gpt-6-luna`, succeeded, usage `inputTokens` 9, `outputTokens` 51, `cacheReadTokens`
+  2170, `cacheWriteTokens` 1142; 344 s, with the machine under other sessions' load).
 - [x] 5.3 Run `openspec validate openai-wrong-shape-ends-run --strict` and verify it passes, and that the spec delta,
   the code and the README agree. Done 2026-11-07: valid; the delta's requirements, the README's retried and "How a
   run ends" rows, and the exchange's handling each name the same cases (cut short retried; finished wrong shape and
