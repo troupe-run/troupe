@@ -12,7 +12,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from protocol_schemas import check_error
-from troupe.core.config import paths
+from troupe.core import config_paths as paths
 from troupe.core.errors import TroupeError
 
 PLAIN = st.text(st.characters(codec="utf-8", exclude_characters=".[]=\\"), min_size=1)

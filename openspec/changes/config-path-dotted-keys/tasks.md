@@ -14,7 +14,7 @@
   closed, required details `text`, `offset` (integer ≥ 0) and `rule`, and give it exit code 1 in
   `troupe.core.errors`. Add its row to `contributing/config.md`'s code table. Verify: the schema tests pass, and
   `uv run scripts/check.py` shows the copies agree.
-- [x] 2.2 Add `troupe.core.config.paths` with `parse`, `parse_prefix` (stops at the first `=` outside brackets and
+- [x] 2.2 Add `troupe.core.config_paths` (design D3 says why it isn't in `troupe.core.config`) with `parse`, `parse_prefix` (stops at the first `=` outside brackets and
   returns where) and `shown`, as D2 and D3 give them, raising `config.path-malformed` with the rule and offset for
   each refusal. Verify: a table test with one row per refusal in D2 checks the rule, the offset and that the error
   validates against the schema, and the spec's parse scenarios pass (brackets, escapes, colon, brackets around a
@@ -26,29 +26,29 @@
 
 ## 3. Show every config path through `shown` (design D3)
 
-- [ ] 3.1 Remove `troupe.core.config.changes.dotted` and use `paths.shown` at every call site in `changes.py`,
+- [x] 3.1 Remove `troupe.core.config.changes.dotted` and use `paths.shown` at every call site in `changes.py`,
   `kinds.py` and `merge.py`, and for `config.not-resolvable` in `commands.py`. Verify: the existing config tests
   pass unchanged, and a new test gets `config set runtimes[my.rt].endpoint=…` refused and checks that the problem and
   fix name `runtimes[my.rt]` while `details.path` is `["runtimes", "my.rt"]`.
-- [ ] 3.2 Use `paths.shown` in `cli/config.py`'s entry and conflict lines, and in `config get`'s "Nothing is set at …"
+- [x] 3.2 Use `paths.shown` in `cli/config.py`'s entry and conflict lines, and in `config get`'s "Nothing is set at …"
   (show the parsed path, not the typed text). Verify: rendering tests with result data for an entry and a conflict at
   `["runtimes", "openai", "prices", "gpt-4.1", "input"]` show `runtimes.openai.prices[gpt-4.1].input`, and
   `config set actors[tester].runner=scripted` prints `actors.tester.runner`.
-- [ ] 3.3 Check that no `".".join` over config keys is left in `packages/troupe/src`. Verify: a grep for `".".join` and
+- [x] 3.3 Check that no `".".join` over config keys is left in `packages/troupe/src`. Verify: a grep for `".".join` and
   `split(".")` in `core/config/` and `cli/` lists only uses that aren't config paths, each named in the commit
   message.
 
 ## 4. Read every typed path with `parse` (design D4)
 
-- [ ] 4.1 Replace `values.split_path` with `paths.parse` for `config unset`, `config get` and `config get --resolved`.
+- [x] 4.1 Replace `values.split_path` with `paths.parse` for `config unset`, `config get` and `config get --resolved`.
   `_usage` takes parsed keys, not text. Verify: CLI tests for the spec's unset, get and `--resolved runtimes[openai]`
   scenarios pass, and the unset test checks the request's path is `["runtimes", "openai", "prices", "gpt-4.1"]`.
-- [ ] 4.2 Have `config set` find the end of each path with `paths.parse_prefix`, pass the parsed keys to `value_of`,
+- [x] 4.2 Have `config set` find the end of each path with `paths.parse_prefix`, pass the parsed keys to `value_of`,
   and compare parsed paths in `_runner_of`. Keep "doesn't set anything" for text with no `=` outside brackets, and
   raise `config.path-malformed` first when the path can't be read. Verify: CLI tests for `'actors[a=b].runner=scripted'`
   (details path `["actors", "a=b"]`), `runtimes[my.rt]=@runtime.json`, and `actors[tester].runner=scripted` with
   options typed by the scripted runner's schema (which proves `_runner_of` matched).
-- [ ] 4.3 Test the spec's malformed-path scenarios through the CLI, each refused with `config.path-malformed` and
+- [x] 4.3 Test the spec's malformed-path scenarios through the CLI, each refused with `config.path-malformed` and
   nothing recorded, including `a..b`, which moves from `config.invalid`. Update the existing tests that expected
   `config.invalid` for an empty key. Verify: the tests pass, and the config stream is unchanged after each refusal.
 
