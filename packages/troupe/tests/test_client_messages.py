@@ -181,6 +181,12 @@ def summaries(draw: st.DrawFn) -> dict[str, Any]:
                 "stderr": HASHES,
                 "recording": st.fixed_dictionaries(
                     {"failedAt": st.integers(0, 99), "error": ERRORS}
+                )
+                | st.fixed_dictionaries(
+                    {"notice": st.sampled_from(["run.silent", "run.retrying"]), "error": ERRORS}
+                ),
+                "notices": st.lists(
+                    st.fixed_dictionaries({"at": TIMES, "notice": NOTICES}), min_size=1, max_size=2
                 ),
             },
         )
@@ -228,6 +234,9 @@ def logged_events(draw: st.DrawFn) -> dict[str, Any]:
 
 
 NOTICE_UPDATES = st.fixed_dictionaries({"kind": st.just("notice"), "notice": NOTICES})
+LOGGED_NOTICES = st.fixed_dictionaries(
+    {"kind": st.just("run-notice"), "runId": RUN_IDS, "at": TIMES, "notice": NOTICES}
+)
 CASES: list[tuple[object, str, st.SearchStrategy[Any]]] = [
     (
         m.PerformRequest,
@@ -267,14 +276,14 @@ CASES: list[tuple[object, str, st.SearchStrategy[Any]]] = [
         "logs-request.schema.json",
         st.fixed_dictionaries({"run": RUN_IDS}, optional={"follow": st.booleans()}),
     ),
-    (m.LogsUpdate, "logs-update.schema.json", logged_events() | NOTICE_UPDATES),
+    (m.LogsUpdate, "logs-update.schema.json", logged_events() | LOGGED_NOTICES | NOTICE_UPDATES),
     (
         m.LogsResult,
         "logs-result.schema.json",
         st.fixed_dictionaries(
             {
                 "run": SUMMARIES,
-                "events": st.lists(logged_events(), max_size=2),
+                "log": st.lists(logged_events() | LOGGED_NOTICES, max_size=3),
                 "notices": st.lists(NOTICES, max_size=2),
             }
         ),
@@ -585,6 +594,7 @@ ENDED_SUMMARY: dict[str, Any] = {
         "transcriptFormat",
         "stderr",
         "recording",
+        "notices",
         "runner.reported",
     ],
 )
@@ -722,3 +732,37 @@ def test_a_running_runs_summary_with_an_audit_is_refused() -> None:
     data["audit"] = {"outside": []}
     with pytest.raises(ProtocolError, match="audit is present only when state is ended"):
         m.RunSummary.from_data(data)
+
+
+# Requirement: A run summary carries what its state knows (a recording names exactly one thing)
+
+
+@pytest.mark.parametrize(
+    "recording",
+    [{"failedAt": 0, "notice": "run.silent"}, {}],
+    ids=["both a seq and a notice", "neither"],
+)
+def test_reading_a_recording_that_names_both_or_neither_fails(recording: dict[str, Any]) -> None:
+    data = copy.deepcopy(ENDED_SUMMARY)
+    data["recording"] = {**recording, "error": data["recording"]["error"]}
+    with pytest.raises(ProtocolError, match=r"exactly one of failedAt and notice"):
+        m.RunSummary.from_data(data)
+
+
+def test_reading_a_summary_with_an_empty_notices_list_fails_naming_it() -> None:
+    data = copy.deepcopy(ENDED_SUMMARY)
+    data["notices"] = []
+    with pytest.raises(ProtocolError, match=r"RunSummary\.notices"):
+        m.RunSummary.from_data(data)
+
+
+def test_a_logged_notice_reads_back_as_its_own_kind_not_a_notice_update() -> None:
+    data = {
+        "kind": "run-notice",
+        "runId": ENDED_SUMMARY["runId"],
+        "at": ENDED_SUMMARY["startedAt"],
+        "notice": {"code": "run.silent", "problem": "p", "fix": "f", "details": {"seconds": 1}},
+    }
+    update = m.parse_update(m.LogsUpdate, data)
+    assert isinstance(update, m.LoggedNotice)
+    assert update.to_data() == data

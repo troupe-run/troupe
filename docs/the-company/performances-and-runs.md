@@ -23,7 +23,8 @@ its [effects](#effects) and its character. `--direction` says what this run is a
 2. **The config files are made what config says,** as every command that uses config does first.
 3. **The run gets an id,** shown at once, so you can follow it from another terminal.
 4. **The direction is stored** and referred to by hash, since it can be large or hold what shouldn't be in git.
-5. **Each event the runner reports is recorded as it arrives,** then the run's end, with its outcome.
+5. **Each event the runner reports is recorded as it arrives,** and each notice troupe shows you about the run,
+   then the run's end, with its outcome.
 
 `troupe perform <actor> --rehearse` makes every check in step 1 and stops there: it shows what would run, and
 starts and records nothing.
@@ -42,6 +43,9 @@ A run is recorded as its own stream of [events](../prompt-book/events.md), all s
 - **`Run.WorktreeMade`:** for a run in its own worktree, that the worktree is made, and how its files were copied.
 - **`Run.Reported`:** one for each event the runner reports, in order. The first is the runner's `init`, which says
   which runner answered. The agent reported it, through its runner.
+- **`Run.Noticed`:** one for each notice troupe showed about the run while it went, such as a long silence, a retry,
+  a slow worktree, or a scratch directory it couldn't remove, in its place among the run's events. troupe raised it
+  for you, so it's yours, through the command line.
 - **`Run.Ended`:** the outcome, its error, the runner's result, references to the transcript and standard error, how
   the transcript's lines are written, and the limits the run ran under. For a run in its own worktree, it also holds
   the changes: a reference to the diff, with how many files it adds, modifies and deletes, and any branches, tags,
@@ -49,8 +53,14 @@ A run is recorded as its own stream of [events](../prompt-book/events.md), all s
 - **`Run.ChangesAccepted`:** you accepted the run's changes, and its diff was applied to your files.
 - **`Run.ChangesDiscarded`:** you discarded the run's changes, and its worktree was removed.
 
-If an event can't be recorded, troupe stops the run, so the record never has a gap, and still records the end if it
-can, saying where recording stopped and why. The transcript is always kept.
+If an event or a notice can't be recorded, troupe stops the run, so the record never has a gap, and still records
+the end if it can, saying where recording stopped and why. The transcript is always kept.
+
+**A run's notices stay with it.** What `troupe perform` tells you while a run goes, troupe keeps in the run's
+history too, so a run nobody watched still shows them: `troupe status <run>` lists them with when each happened,
+`troupe status` counts them on the run's line, and `troupe logs <run>` shows each in its place among the events. The
+notices about troupe itself, such as a config file it rewrote before the run, aren't the run's, and aren't kept with
+it.
 
 ## How a run ends
 

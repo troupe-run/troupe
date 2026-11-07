@@ -21,6 +21,7 @@ from troupe.cli.render import (
     render_audit,
     render_error,
     render_event,
+    render_log_entry,
     render_notice,
     render_run,
     render_run_line,
@@ -250,7 +251,7 @@ def _run_status(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -
 def _configure_logs(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("run", help="a run's id, or at least its first 8 characters")
     parser.add_argument(
-        "--follow", action="store_true", help="wait for new events until the run ends"
+        "--follow", action="store_true", help="wait for new events and notices until the run ends"
     )
     parser.add_argument("--json", action="store_true", help="print updates and the result as JSON")
 
@@ -265,8 +266,9 @@ def _run_logs(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> 
         nonlocal shown
         if arguments.json:
             print(json.dumps(update, ensure_ascii=False), file=stdout, flush=True)
-        elif update["kind"] == "event":
-            print(render_event(update), file=stdout, flush=True)
+        elif update["kind"] in ("event", "run-notice"):
+            # Both are the run's history: standard output, in the order they were recorded.
+            print(render_log_entry(update), file=stdout, flush=True)
             shown += 1
         else:
             print(render_notice(update["notice"]), file=stderr, flush=True)
@@ -277,8 +279,8 @@ def _run_logs(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> 
     if arguments.json:
         print(json.dumps(result, ensure_ascii=False), file=stdout)
     else:
-        for event in result["events"][shown:]:
-            print(render_event(event), file=stdout)
+        for entry in result["log"][shown:]:
+            print(render_log_entry(entry), file=stdout)
         run = result["run"]
         print(f"run {run['runId']}: {run.get('outcome', run['state'])}", file=stdout)
         for line in render_audit(run):
@@ -386,7 +388,7 @@ def _run_discard(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) 
 COMMANDS: tuple[Command, ...] = (
     Command("perform", "Run one actor and record the run.", _configure_perform, _run_perform),
     Command("status", "Show the most recent runs, or one run.", _configure_status, _run_status),
-    Command("logs", "Show a run's events in order.", _configure_logs, _run_logs),
+    Command("logs", "Show a run's events and notices in order.", _configure_logs, _run_logs),
     Command("diff", "Show the changes a worktree run captured.", _configure_diff, _run_diff),
     Command(
         "accept",

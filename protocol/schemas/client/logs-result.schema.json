@@ -2,25 +2,34 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://troupe.run/protocol/client/logs-result.schema.json",
   "title": "logs: result",
-  "description": "The run's summary and every event recorded for it, in seq order, whether or not it was followed, and any notices, such as why following stopped.",
+  "description": "The run's summary and its log: every event recorded for it, in seq order, and every notice troupe raised for it and recorded, each in its recorded place, whether or not it was followed; and any notices the query raised itself, such as why following stopped.",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "run",
-    "events",
+    "log",
     "notices"
   ],
   "properties": {
     "run": {
       "$ref": "run.schema.json#/$defs/summary"
     },
-    "events": {
+    "log": {
+      "description": "The run's events and recorded notices, in the order they were recorded.",
       "type": "array",
       "items": {
-        "$ref": "run.schema.json#/$defs/loggedEvent"
+        "oneOf": [
+          {
+            "$ref": "run.schema.json#/$defs/loggedEvent"
+          },
+          {
+            "$ref": "run.schema.json#/$defs/loggedNotice"
+          }
+        ]
       }
     },
     "notices": {
+      "description": "Notices the query raised itself, outside the run's history.",
       "type": "array",
       "items": {
         "$ref": "../notice.schema.json"

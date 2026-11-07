@@ -2,10 +2,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://troupe.run/protocol/client/logs-update.schema.json",
   "title": "logs: update",
-  "description": "Sent while following a run: each event as it is recorded, and each notice.",
+  "description": "Sent while following a run: each event and each notice troupe raised for the run as it is recorded, and each notice the query raises itself.",
   "oneOf": [
     {
       "$ref": "run.schema.json#/$defs/loggedEvent"
+    },
+    {
+      "$ref": "run.schema.json#/$defs/loggedNotice"
     },
     {
       "$ref": "run.schema.json#/$defs/noticeUpdate"

@@ -428,9 +428,10 @@ callback and a cancel signal.
   every process it started. The same happens after `shutdown`.
 - **Notices** tell the caller what is happening without waiting silently. They have the shape of
   [`notice.schema.json`](../protocol/schemas/notice.schema.json): `run.silent` when no event has arrived for
-  `RUN_SILENCE_ANNOUNCE_SECONDS`, `run.retrying` for each `retry` event, and `run.estimate-dropped` when a result
-  carries an estimate troupe gave no price for (see [Cost: reported or estimated](#cost-reported-or-estimated)). A
-  `retry` with reason
+  `RUN_SILENCE_ANNOUNCE_SECONDS`, once per silence, `run.retrying` for each `retry` event, and
+  `run.estimate-dropped` when a result carries an estimate troupe gave no price for (see
+  [Cost: reported or estimated](#cost-reported-or-estimated)). `perform` records each in the run's history too
+  ([contributing/runs.md](runs.md#run-events)). A `retry` with reason
   `authentication` stops the run at once (`RUNNER_FAIL_FAST_ON_AUTH_RETRY`): a bad credential otherwise looks like
   a hang for minutes.
 - **Standard error** is kept in the artifact store too, up to `RUNNER_STDERR_MAX_BYTES`: its first and last halves,

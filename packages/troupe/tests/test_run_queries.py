@@ -29,6 +29,7 @@ from storetesting import (
     watched_delays,
 )
 from troupe.core import defaults
+from troupe.core.client import messages as m
 from troupe.core.errors import TroupeError
 from troupe.core.events import EventStore
 from troupe.core.notices import Notice
@@ -95,6 +96,11 @@ class Child:
         assert self.process.stdout is not None
         out, _ = self.process.communicate(timeout=60)
         return out
+
+
+def events_of(result: m.LogsResult) -> list[m.LoggedEvent]:
+    """The run events in a logs result's log, without its recorded notices."""
+    return [entry for entry in result.log if isinstance(entry, m.LoggedEvent)]
 
 
 def recorded_start(store: EventStore, run_id: str) -> None:
@@ -345,14 +351,14 @@ def test_logs_return_a_runs_events_in_seq_order_with_their_recording_times(tmp_p
     harness = Harness(theatre(tmp_path))
     run_id = harness.perform(request(script(INIT, turn("a"), turn("b"), OK))).run.run_id
     result = harness.logs(run=run_id)
-    assert [(e.seq, e.event.TYPE) for e in result.events] == [
+    assert [(e.seq, e.event.TYPE) for e in events_of(result)] == [
         (0, "init"),
         (1, "turn"),
         (2, "turn"),
         (3, "result"),
     ]
     recorded = harness.stores[-1].history(UUID(run_id))[1:5]
-    assert [e.at for e in result.events] == [(r.lineage or {}).get("at") for r in recorded]
+    assert [e.at for e in events_of(result)] == [(r.lineage or {}).get("at") for r in recorded]
     assert result.run.state == "ended"
 
 
@@ -368,7 +374,7 @@ def test_following_from_another_process_sees_each_event_and_stops_at_the_end(
     assert "ENDED succeeded" in child.finish()
     followed = [(u["seq"], u["event"]["type"]) for u in harness.updates if u["kind"] == "event"]
     assert followed == [(0, "init"), (1, "turn"), (2, "turn"), (3, "result")]
-    assert [e.seq for e in result.events] == [0, 1, 2, 3]
+    assert [e.seq for e in events_of(result)] == [0, 1, 2, 3]
     assert result.run.state == "ended"
     assert time.monotonic() - started >= 2.0  # it waited for events still to come
 
@@ -592,6 +598,6 @@ def test_a_run_whose_init_was_recorded_without_effects_still_shows_in_status_and
     store.command(via="runner").record(run.collect_events())
     [summary] = harness.status(run=run.run_id).runs
     assert summary.to_data()["runner"]["reported"] == {"name": "scripted", "version": "0.1.0"}
-    [logged] = [e for e in harness.logs(run=run.run_id).events if e.seq == 0]
+    [logged] = [e for e in events_of(harness.logs(run=run.run_id)) if e.seq == 0]
     assert isinstance(logged.event, p.InitEvent)
     assert logged.event.effects is None

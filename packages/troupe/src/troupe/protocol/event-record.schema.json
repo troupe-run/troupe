@@ -161,6 +161,7 @@
             "troupe.core.runs.aggregate:Run.Started",
             "troupe.core.runs.aggregate:Run.WorktreeMade",
             "troupe.core.runs.aggregate:Run.Reported",
+            "troupe.core.runs.aggregate:Run.Noticed",
             "troupe.core.runs.aggregate:Run.Ended",
             "troupe.core.runs.aggregate:Run.ChangesAccepted",
             "troupe.core.runs.aggregate:Run.ChangesDiscarded",
@@ -214,6 +215,22 @@
             "properties": {
               "state": {
                 "$ref": "events/run-reported.schema.json"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "topic": {
+                "const": "troupe.core.runs.aggregate:Run.Noticed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "state": {
+                "$ref": "events/run-noticed.schema.json"
               }
             }
           }
@@ -321,6 +338,7 @@
               "troupe.core.runs.aggregate:Run.Started",
               "troupe.core.runs.aggregate:Run.WorktreeMade",
               "troupe.core.runs.aggregate:Run.Reported",
+              "troupe.core.runs.aggregate:Run.Noticed",
               "troupe.core.runs.aggregate:Run.Ended",
               "troupe.core.runs.aggregate:Run.ChangesAccepted",
               "troupe.core.runs.aggregate:Run.ChangesDiscarded",
