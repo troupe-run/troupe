@@ -1,6 +1,6 @@
 """The scripted runner's runtime steps (spec: scripted-runner, "The scripted runner takes an
 optional runtime", "A script can check the runtime it received", "A script can echo the
-credential"; runtimes design D11)."""
+credential", "A script's result can carry an estimated cost"; runtimes design D11)."""
 
 import hashlib
 from collections.abc import Iterator
@@ -122,6 +122,67 @@ def test_a_malformed_runtime_check_is_refused_as_an_invalid_script(
 ) -> None:
     answer = plain.play({"steps": [{"checkRuntime": step}]}, valid=False)
     assert answer["error"]["data"]["code"] == "scripted.invalid-script"
+    plain.validate_all()
+
+
+PRICE = {"input": 2, "output": 8, "cacheRead": 0.5}
+
+
+def test_the_price_matches(plain: Session) -> None:
+    runtime = {**RUNTIME, "credential": False, "price": PRICE}
+    plain.play(_then({"checkRuntime": {"price": {**PRICE, "input": 2.0}}}), runtime=runtime)
+    assert _events(plain, 2)[-1]["status"] == "ok"
+    plain.validate_all()
+
+
+def test_no_price_matches_a_check_that_there_is_none(plain: Session) -> None:
+    runtime = {**RUNTIME, "credential": False}
+    plain.play(_then({"checkRuntime": {"noPrice": True}}), runtime=runtime)
+    assert _events(plain, 2)[-1]["status"] == "ok"
+
+
+def test_the_price_differs_when_a_script_expects_none(plain: Session) -> None:
+    runtime = {**RUNTIME, "credential": False, "price": PRICE}
+    plain.play(_then({"checkRuntime": {"noPrice": True}}), runtime=runtime)
+    _, result = _events(plain, 2)
+    assert result["status"] == "error"
+    assert "price: run/start carried" in result["message"]
+    assert "the script expected none" in result["message"]
+    assert plain.wait() == 0
+
+
+def test_the_price_differs_rate_for_rate(plain: Session) -> None:
+    runtime = {**RUNTIME, "credential": False, "price": PRICE}
+    plain.play(_then({"checkRuntime": {"price": {"input": 2, "output": 8}}}), runtime=runtime)
+    _, result = _events(plain, 2)
+    assert result["status"] == "error"
+    assert "price:" in result["message"]
+
+
+@pytest.mark.parametrize(
+    "step",
+    [
+        pytest.param({"price": PRICE, "noPrice": True}, id="price and noPrice"),
+        pytest.param({"price": {"input": 2}}, id="a price without output"),
+        pytest.param({"noPrice": False}, id="noPrice false"),
+    ],
+)
+def test_a_malformed_price_check_is_refused_as_an_invalid_script(
+    plain: Session, step: dict[str, Any]
+) -> None:
+    answer = plain.play({"steps": [{"checkRuntime": step}]}, valid=False)
+    assert answer["error"]["data"]["code"] == "scripted.invalid-script"
+
+
+# Requirement: A script's result can carry an estimated cost
+
+
+def test_an_estimate_with_no_price_is_sent_as_given(plain: Session) -> None:
+    estimate = {**OK, "estimatedCostUsd": 0.5}
+    plain.play({"steps": [{"event": INIT}, {"event": estimate}]})
+    _, result = _events(plain, 2)
+    assert result["estimatedCostUsd"] == 0.5
+    assert "costUsd" not in result
     plain.validate_all()
 
 

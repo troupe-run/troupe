@@ -172,6 +172,8 @@ class _Run:
         self.next_seq = 0
         self.tool_calls: set[str] = set()
         self.result: p.ResultEvent | None = None
+        self.runner_name: str | None = None
+        """The runner's name, from its init event, for notices about it."""
         self.violation: TroupeError | None = None
         self.stop: StopReason | None = None
         self.stopping = False
@@ -276,7 +278,13 @@ class _Run:
         self.next_seq += 1
         self.last_event = time.monotonic()
         self.silence_announced = False
+        if isinstance(event, p.InitEvent):
+            self.runner_name = event.runner.name
         if isinstance(event, p.ResultEvent):
+            if event.estimated_cost_usd is not None and (
+                self.request.runtime is None or self.request.runtime.price is None
+            ):
+                event, params, line = self.drop_estimate(event)
             self.result = event
         passed_on: p.RunEvent = event
         size = len(json.dumps(params, ensure_ascii=False, separators=(",", ":")).encode())
@@ -289,6 +297,26 @@ class _Run:
             self.announce_retry(event)
             if event.reason == "authentication" and self.limits.fail_fast_on_auth_retry:
                 await self.request_stop(StopReason.AUTHENTICATION)
+
+    def drop_estimate(self, event: p.ResultEvent) -> tuple[p.ResultEvent, object, bytes]:
+        """``event`` without its estimate, which troupe gave no price for, as an event, its JSON
+        and its line; and a notice that says so. The run keeps its outcome: a bad estimate is a
+        runner's bug, not a reason to doubt the rest of the run (estimated-cost design D9)."""
+        runner = self.runner_name or "the runner"
+        self.notice(
+            Notice(
+                "run.estimate-dropped",
+                problem=f"The runner {runner!r} sent an estimated cost, but troupe gave it no "
+                "price in run/start, so troupe left the estimate out of what it records.",
+                fix="Report it to the runner's maintainers: a runner estimates a cost only from "
+                "the price troupe gives it. To get an estimate, price the run's model in "
+                "runtimes.<name>.prices.",
+                details={"runner": runner},
+            )
+        )
+        dropped = replace(event, estimated_cost_usd=None)
+        message = p.notification("run/event", dropped)
+        return dropped, message["params"], json.dumps(message, separators=(",", ":")).encode()
 
     def transcript_record(self, params: object) -> None:
         try:

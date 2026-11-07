@@ -11,7 +11,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from troupe_plugin_sdk.credential import CREDENTIAL_VARIABLE, CredentialError, runtime_credential
-from troupe_plugin_sdk.runner import RunStartParams
+from troupe_plugin_sdk.runner import Price, RunStartParams
 from troupe_runner_openai.service import Endpoint, EndpointError, parse_endpoint
 
 
@@ -33,9 +33,15 @@ class Runtime:
     endpoint: Endpoint
     model: str
     credential: str | None = field(default=None, repr=False)
+    price: Price | None = None
+    """The model's price troupe gave in run/start, the only one the runner may estimate a cost
+    from (spec: openai-runner, "Cost is estimated from troupe's price when the service reports
+    none"); None when the theatre doesn't price the model."""
 
     @classmethod
-    def checked(cls, endpoint: str, model: str, credential: str | None) -> "Runtime":
+    def checked(
+        cls, endpoint: str, model: str, credential: str | None, price: Price | None = None
+    ) -> "Runtime":
         """A Runtime from its parts, refused when the endpoint isn't a base http or https URL, the
         model is empty, or a credential would go in the clear to another machine."""
         try:
@@ -73,7 +79,7 @@ class Runtime:
                 "machine (localhost or a loopback address).",
                 {"endpoint": endpoint},
             )
-        return cls(parsed, model, credential)
+        return cls(parsed, model, credential, price)
 
 
 def from_run_start(params: RunStartParams, environ: Mapping[str, str]) -> Runtime:
@@ -97,7 +103,9 @@ def from_run_start(params: RunStartParams, environ: Mapping[str, str]) -> Runtim
             "start the runner through troupe, or report the mismatch.",
             {"where": CREDENTIAL_VARIABLE},
         ) from None
-    return Runtime.checked(params.runtime.endpoint, params.runtime.model, credential)
+    return Runtime.checked(
+        params.runtime.endpoint, params.runtime.model, credential, params.runtime.price
+    )
 
 
 __all__ = ["Runtime", "RuntimeRefusedError", "from_run_start"]

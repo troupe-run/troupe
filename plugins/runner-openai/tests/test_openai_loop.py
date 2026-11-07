@@ -26,7 +26,7 @@ from fake_endpoint import (
 from openai_harness import TEST_LIMITS, check_limits, validator
 from troupe_plugin_sdk.effects import READ_ONLY, Effects
 from troupe_plugin_sdk.events import EventNumbering, encoded_size
-from troupe_plugin_sdk.runner import ResultEvent, RunEvent
+from troupe_plugin_sdk.runner import Price, ResultEvent, RunEvent
 from troupe_plugin_sdk.tools import Tools
 from troupe_runner_openai.defaults import INSTRUCTIONS
 from troupe_runner_openai.loop import Loop
@@ -68,6 +68,7 @@ def run(
     character: str | None = None,
     direction: str = "Do the task.",
     event_max_bytes: int = 65536,
+    price: Price | None = None,
 ) -> Ran:
     options = TEST_LIMITS if options is None else options
     check_limits(options, None)
@@ -77,7 +78,7 @@ def run(
     records: list[dict[str, Any]] = []
     with FakeEndpoint(script) as fake:
         loop = Loop(
-            runtime=Runtime.checked(fake.endpoint, MODEL, "sk-canary-0123456789"),
+            runtime=Runtime.checked(fake.endpoint, MODEL, "sk-canary-0123456789", price),
             options=parse_options(options),
             tools=Tools(workspace, effects),
             numbering=EventNumbering(str(uuid.uuid4()), event_max_bytes, next_seq=1),
@@ -418,6 +419,43 @@ def test_a_service_that_reports_no_cost_gives_a_result_without_cost(tmp_path: Pa
 def test_costs_the_service_reports_are_summed(tmp_path: Path) -> None:
     script = [_called(usage(10, 5, cost=0.001)), _used("ok", usage(10, 5, cost=0.002))]
     assert _result(run(tmp_path, script))["costUsd"] == pytest.approx(0.003)
+
+
+# Cost estimated from troupe's price (spec: openai-runner, "Cost is estimated from troupe's price
+# when the service reports none")
+
+PRICE = Price(input=2, output=8, cache_read=0.5)
+CACHED = [_called(usage(100, 10, cached=40)), _used("ok", usage(200, 20))]
+
+
+def test_with_a_price_a_service_reporting_no_cost_gives_an_estimate(tmp_path: Path) -> None:
+    result = _result(run(tmp_path, CACHED, price=PRICE))
+    assert result["usage"] == {"inputTokens": 260, "outputTokens": 30, "cacheReadTokens": 40}
+    assert result["estimatedCostUsd"] == 0.00078
+    assert "costUsd" not in result
+
+
+def test_without_a_price_there_is_no_estimate(tmp_path: Path) -> None:
+    result = _result(run(tmp_path, CACHED))
+    assert "estimatedCostUsd" not in result
+    assert "costUsd" not in result
+
+
+def test_cache_reads_the_price_has_no_rate_for_give_no_estimate(tmp_path: Path) -> None:
+    result = _result(run(tmp_path, CACHED, price=Price(input=2, output=8)))
+    assert "estimatedCostUsd" not in result
+
+
+def test_with_a_price_and_no_usage_reported_there_is_no_estimate(tmp_path: Path) -> None:
+    result = _result(run(tmp_path, [_used("ok", None)], price=PRICE))
+    assert "estimatedCostUsd" not in result
+
+
+def test_a_cost_the_service_reports_is_kept_and_nothing_is_estimated(tmp_path: Path) -> None:
+    script = [_called(usage(10, 5, cost=0.001)), _used("ok", usage(10, 5, cost=0.002))]
+    result = _result(run(tmp_path, script, price=PRICE))
+    assert result["costUsd"] == pytest.approx(0.003)
+    assert "estimatedCostUsd" not in result
 
 
 def test_a_model_other_than_the_one_asked_for_is_noted_once(tmp_path: Path) -> None:

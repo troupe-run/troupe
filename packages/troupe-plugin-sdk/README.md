@@ -17,6 +17,9 @@ It holds:
   value of a runtime's credential from `TROUPE_RUNTIME_CREDENTIAL`, or `None` when the run has none, and raises
   `CredentialError` when `run/start` and the environment disagree. Send it only to the runtime's endpoint
   ([The runtime and its credential](../../contributing/runners.md#the-runtime-and-its-credential)).
+- **A cost estimated from troupe's price** (`troupe_plugin_sdk.cost`): `estimate(usage, price)` gives a run's usage at
+  `run/start`'s `runtime.price` in US dollars, for `result.estimatedCostUsd`, or `None` when the contract says an
+  estimate is absent ([Cost: reported or estimated](../../contributing/runners.md#cost-reported-or-estimated)).
 
 [#58](https://github.com/troupe-run/troupe/issues/58) grows it into the full plugin SDK, with JSON-RPC framing and a
 server loop.

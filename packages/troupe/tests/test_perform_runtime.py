@@ -16,6 +16,7 @@ from test_perform import configured, nothing_written
 from troupe.core.errors import TroupeError
 from troupe.core.masking import MARKER
 from troupe.core.runs.aggregate import STARTED
+from troupe_plugin_sdk import runner as p
 
 KEY = "sk-test/canary-0123456789abcdef"
 KEY_HASH = "sha256:" + hashlib.sha256(KEY.encode()).hexdigest()
@@ -125,6 +126,68 @@ def test_a_run_on_a_theatre_chosen_endpoint_records_where_each_value_came_from(
     assert KEY not in json.dumps(started)
 
 
+PRICE = {"input": 2, "output": 8, "cacheRead": 0.5, "cacheWrite": 0}
+PRICED = {"openai": {"prices": {"gpt-test": PRICE, "gpt-other": {"input": 1, "output": 1}}}}
+
+
+def test_a_run_on_a_priced_model_hands_over_and_records_the_same_price(tmp_path: Path) -> None:
+    harness = _harness(tmp_path, OPENAI_API_KEY=KEY)
+    check = {"checkRuntime": {"model": "gpt-test", "price": PRICE}}
+    result = harness.perform(request(script(INIT, check, OK), runtimes=PRICED, **OPENAI))
+    assert result.run.outcome == "succeeded"
+    started = _start(harness, result.run.run_id)
+    assert started["runtime"]["price"] == {"value": PRICE, "source": "theatre"}
+
+
+def test_a_run_on_a_model_config_doesnt_price_hands_over_and_records_no_price(
+    tmp_path: Path,
+) -> None:
+    harness = _harness(tmp_path, OPENAI_API_KEY=KEY)
+    check = {"checkRuntime": {"model": "gpt-unpriced", "noPrice": True}}
+    result = harness.perform(
+        request(script(INIT, check, OK), runtimes=PRICED, runtime="openai", model="gpt-unpriced")
+    )
+    assert result.run.outcome == "succeeded"
+    assert "price" not in _start(harness, result.run.run_id)["runtime"]
+
+
+# Requirement: The host drops an estimate it gave no price for (spec: runner-protocol)
+
+ESTIMATE = {"event": {**OK["event"], "estimatedCostUsd": 0.5}}
+
+
+def _dropped(harness: Harness) -> list[dict[str, Any]]:
+    return [
+        u["notice"]
+        for u in harness.updates
+        if u.get("kind") == "notice" and u["notice"]["code"] == "run.estimate-dropped"
+    ]
+
+
+def test_an_estimate_with_no_price_given_is_dropped_and_the_run_succeeds_with_a_notice(
+    tmp_path: Path,
+) -> None:
+    harness = _harness(tmp_path, OPENAI_API_KEY=KEY)
+    result = harness.perform(request(script(INIT, ESTIMATE), **OPENAI))
+    assert result.run.outcome == "succeeded"
+    logged = harness.logs(run=result.run.run_id).events
+    [ended] = [e.event for e in logged if isinstance(e.event, p.ResultEvent)]
+    assert ended.estimated_cost_usd is None
+    [notice] = _dropped(harness)
+    assert notice["details"] == {"runner": "scripted"}
+
+
+def test_an_estimate_with_a_price_given_records_the_result_as_sent(tmp_path: Path) -> None:
+    harness = _harness(tmp_path, OPENAI_API_KEY=KEY)
+    result = harness.perform(request(script(INIT, ESTIMATE), runtimes=PRICED, **OPENAI))
+    assert result.run.outcome == "succeeded"
+    logged = harness.logs(run=result.run.run_id).events
+    [ended] = [e.event for e in logged if isinstance(e.event, p.ResultEvent)]
+    assert ended.estimated_cost_usd == 0.5
+    assert ended.cost_usd is None
+    assert _dropped(harness) == []
+
+
 def test_a_run_with_no_runtime_records_none(tmp_path: Path) -> None:
     harness = _harness(tmp_path)
     result = harness.perform(request(script(INIT, OK)))
@@ -222,6 +285,17 @@ def test_a_rehearsal_on_openai_shows_the_runtime_and_no_part_of_the_key(tmp_path
         "credential": {"env": {"value": "OPENAI_API_KEY", "source": "default"}, "set": True},
     }
     assert KEY not in json.dumps(result.to_data())
+
+
+def test_a_rehearsal_on_a_priced_model_shows_the_price(tmp_path: Path) -> None:
+    harness = _harness(tmp_path, OPENAI_API_KEY=KEY)
+    result = harness.perform_result(
+        request(script(INIT, OK), rehearse=True, runtimes=PRICED, **OPENAI)
+    )
+    assert result.rehearsal is not None
+    assert result.rehearsal.runtime is not None
+    shown = result.rehearsal.runtime.to_data()
+    assert shown["price"] == {"value": PRICE, "source": "theatre"}
 
 
 def test_a_rehearsal_refuses_what_perform_would(tmp_path: Path) -> None:

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal, Union
 
-from pydantic import ConfigDict, Field, RootModel
+from pydantic import ConfigDict, Field, RootModel, StringConstraints
 
 from troupe.core.config.base import StrictModel
 
@@ -183,6 +183,32 @@ class Credential(StrictModel):
     """
 
 
+class Prices(StrictModel):
+    """
+    What a model costs at a service, in US dollars per million tokens of each kind, named after the result's usage counters. A rate a price doesn't give is unknown, not zero: an estimate needs a rate for every kind of token the run used.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    input: Annotated[float, Field(ge=0.0)]
+    """
+    US dollars per million input tokens, cache reads and writes excluded.
+    """
+    output: Annotated[float, Field(ge=0.0)]
+    """
+    US dollars per million output tokens.
+    """
+    cacheRead: Annotated[float | None, Field(ge=0.0)] = None
+    """
+    US dollars per million input tokens read from the service's prompt cache.
+    """
+    cacheWrite: Annotated[float | None, Field(ge=0.0)] = None
+    """
+    US dollars per million input tokens written to the service's prompt cache.
+    """
+
+
 class Runtime(StrictModel):
     """
     One runtime's config file, .troupe/runtimes/<name>.yaml: a service a runner talks to. The file's name is the runtime's name. It holds only what the theatre's config sets: a built-in runtime's other fields are troupe's defaults, and the person's environment overrides any of them (TROUPE_RUNTIME_<NAME>_ENDPOINT, _MODEL, _CREDENTIAL_ENV). troupe writes this file from the theatre's config events, and every field is set with troupe config set.
@@ -229,6 +255,22 @@ class Runtime(StrictModel):
     credential: Annotated[Credential | None, Field(title="Credential")] = None
     """
     Where the runtime's credential comes from. Never the credential itself: config is committed, so it holds only a reference.
+    """
+    prices: Annotated[
+        dict[
+            Annotated[
+                str,
+                StringConstraints(
+                    pattern=r"^(?![\s\S]*[\x00-\x1f\x7f])[\s\S]+$", min_length=1, max_length=256
+                ),
+            ],
+            Prices,
+        ]
+        | None,
+        Field(title="Prices"),
+    ] = None
+    """
+    What each model costs at this service, by the model's name exactly as a run names it, in US dollars per million tokens. A runner whose service reports no cost estimates one from the run's model's price, marked as an estimate; a model with no price gets none. Set a rate for every kind of token the service's runs use, cacheRead and cacheWrite included (0 for a kind it doesn't charge for), or runs that use it get no estimate. A model's name with a dot can't be part of a config set path: set the whole map as JSON.
     """
 
 

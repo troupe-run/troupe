@@ -10,7 +10,7 @@ from hypothesis import example, given
 from hypothesis import strategies as st
 
 from protocol_schemas import PROTOCOL_BASE, validator_for
-from troupe.core import runtimes
+from troupe.core import defaults, runtimes
 from troupe.core.errors import TroupeError
 from troupe.core.runtimes import Sourced, for_run, resolve
 
@@ -188,6 +188,79 @@ def test_the_recorded_runtime_names_the_variable_and_never_the_value() -> None:
     }
     validator_for(PROTOCOL_BASE + "runtime.schema.json#/$defs/resolved").validate(recorded)
     assert KEY not in json.dumps(recorded)
+
+
+# Requirement: troupe has built-in runtimes (no built-in price)
+# Requirement: A run's price is the price of its model
+
+PRICE_A = {"input": 1, "output": 4}
+PRICE_B = {"input": 2, "output": 8, "cacheRead": 0.5, "cacheWrite": 0}
+PRICED = {"openai": {"prices": {"gpt-a": PRICE_A, "gpt-b": PRICE_B}}}
+
+
+def test_no_built_in_runtime_names_a_price() -> None:
+    assert all("prices" not in runtime for runtime in defaults.RUNTIMES.values())
+
+
+def test_a_built_in_runtime_with_no_config_gives_a_run_no_price() -> None:
+    run = for_run("openai", "tester", "gpt-test", NO_CONFIG, {"OPENAI_API_KEY": KEY})
+    assert run.run_start() == {
+        "name": "openai",
+        "endpoint": "https://api.openai.com/v1",
+        "model": "gpt-test",
+        "credential": True,
+    }
+    assert "price" not in run.to_data()
+
+
+def test_the_actors_model_is_priced() -> None:
+    run = for_run("openai", "tester", "gpt-b", _config(**PRICED), {"OPENAI_API_KEY": KEY})
+    assert run.run_start()["price"] == PRICE_B
+    assert run.to_data()["price"] == {"value": PRICE_B, "source": "theatre"}
+    validator_for(PROTOCOL_BASE + "runtime.schema.json#/$defs/resolved").validate(run.to_data())
+
+
+def test_the_runtimes_own_model_is_priced() -> None:
+    config = _config(openai={**PRICED["openai"], "model": "gpt-a"})
+    run = for_run("openai", "tester", None, config, {"OPENAI_API_KEY": KEY})
+    assert run.run_start()["price"] == PRICE_A
+
+
+def test_the_model_from_the_environment_has_no_price() -> None:
+    env = {"OPENAI_API_KEY": KEY, "TROUPE_RUNTIME_OPENAI_MODEL": "gpt-c"}
+    run = for_run("openai", "tester", "gpt-b", _config(**PRICED), env)
+    assert run.model == Sourced("gpt-c", "env")
+    assert "price" not in run.run_start()
+    assert "price" not in run.to_data()
+
+
+def test_the_model_from_the_environment_is_priced_when_config_prices_it() -> None:
+    env = {"OPENAI_API_KEY": KEY, "TROUPE_RUNTIME_OPENAI_MODEL": "gpt-a"}
+    run = for_run("openai", "tester", "gpt-b", _config(**PRICED), env)
+    assert run.run_start()["price"] == PRICE_A
+
+
+@pytest.mark.parametrize("model", ["gpt-b-2026-01-01", "GPT-B", "gpt-b ", "gpt"])
+def test_a_near_match_has_no_price(model: str) -> None:
+    run = for_run("openai", "tester", model, _config(**PRICED), {"OPENAI_API_KEY": KEY})
+    assert "price" not in run.run_start()
+
+
+def test_no_variable_sets_a_price() -> None:
+    env = {
+        "OPENAI_API_KEY": KEY,
+        "TROUPE_RUNTIME_OPENAI_PRICE": json.dumps(PRICE_B),
+        "TROUPE_RUNTIME_OPENAI_PRICES": json.dumps({"gpt-b": PRICE_B}),
+    }
+    run = for_run("openai", "tester", "gpt-b", NO_CONFIG, env)
+    assert "price" not in run.run_start()
+
+
+def test_a_resolved_runtime_shows_the_price_of_its_own_model_only() -> None:
+    config = _config(openai={**PRICED["openai"], "model": "gpt-a"})
+    shown = resolve("openai", config, {}).to_data({})
+    assert shown["price"] == {"value": PRICE_A, "source": "theatre"}
+    assert "price" not in resolve("openai", _config(**PRICED), {}).to_data({})
 
 
 # Requirement: A credential is sent only over HTTPS or to a loopback address

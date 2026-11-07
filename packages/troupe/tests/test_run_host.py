@@ -2,6 +2,7 @@
 
 import asyncio
 import base64
+import dataclasses
 import json
 import shutil
 import sys
@@ -82,6 +83,7 @@ def _run(
     direction: str = "test",
     effects: p.EffectsDeclaration = p.READ_ONLY_DECLARATION,
     scratch_root: Path | None = None,
+    runtime: p.RunStartRuntime | None = None,
 ) -> Ran:
     """Run the scripted runner (or ``argv``) and check every message troupe sent against the
     contract, with the scripted runner's schemas bound. ``valid_options=False`` marks options the
@@ -97,6 +99,7 @@ def _run(
         options if options is not None else {"script": script or {"steps": []}},
         character=character,
         effects=effects,
+        runtime=runtime,
     )
     ran: dict[str, Any] = {"events": [], "notices": [], "sent": [], "received": [], "times": []}
 
@@ -306,6 +309,45 @@ def test_each_protocol_violation_crashes_the_run_naming_it(
     assert expected in ran.outcome.error.problem
     assert "line" in ran.outcome.error.problem
     assert ran.outcome.ending is Ending.KILLED
+
+
+# Requirement: The host drops an estimate it gave no price for (spec: runner-protocol)
+
+ESTIMATE = {**OK, "estimatedCostUsd": 0.5}
+UNPRICED = p.RunStartRuntime("lm-studio", "http://127.0.0.1:1234/v1", "m", credential=False)
+
+
+@pytest.mark.parametrize(
+    "runtime",
+    [pytest.param(None, id="no runtime"), pytest.param(UNPRICED, id="a runtime with no price")],
+)
+def test_an_estimate_troupe_gave_no_price_for_is_dropped_with_a_notice_naming_the_runner(
+    tmp_path: Path, runtime: p.RunStartRuntime | None
+) -> None:
+    ran = _run(tmp_path, {"steps": [{"event": INIT}, {"event": ESTIMATE}]}, runtime=runtime)
+    assert ran.outcome.outcome is Outcome.SUCCEEDED
+    [result] = [e for e in ran.events if isinstance(e, p.ResultEvent)]
+    assert result.estimated_cost_usd is None
+    assert "estimatedCostUsd" not in result.to_data()
+    [notice] = [n for n in ran.notices if n.code == "run.estimate-dropped"]
+    assert notice.details == {"runner": "scripted"}
+    check_notice(notice.to_data())
+
+
+def test_an_estimate_troupe_gave_a_price_for_is_recorded_as_sent(tmp_path: Path) -> None:
+    priced = dataclasses.replace(UNPRICED, price=p.Price(input=2, output=8))
+    ran = _run(tmp_path, {"steps": [{"event": INIT}, {"event": ESTIMATE}]}, runtime=priced)
+    assert ran.outcome.outcome is Outcome.SUCCEEDED
+    [result] = [e for e in ran.events if isinstance(e, p.ResultEvent)]
+    assert result.estimated_cost_usd == 0.5
+    assert result.cost_usd is None
+    assert not [n for n in ran.notices if n.code == "run.estimate-dropped"]
+
+
+def test_a_reported_cost_needs_no_price(tmp_path: Path) -> None:
+    reported = {**OK, "costUsd": 0.5}
+    ran = _run(tmp_path, {"steps": [{"event": INIT}, {"event": reported}]})
+    assert ran.outcome.outcome is Outcome.SUCCEEDED
 
 
 KILL_STATUS = processes.KILLED_EXIT_CODE if sys.platform == "win32" else -9
@@ -572,6 +614,29 @@ def test_an_oversized_event_is_kept_whole_out_of_line_and_the_run_carries_on(
     assert stored["params"]["inputSummary"] == "y" * 3000
     assert stored == ran.received[3]  # after the two responses and init
     assert ran.outcome.outcome is Outcome.SUCCEEDED
+
+
+def test_an_oversized_result_with_an_unpriced_estimate_is_stored_without_it(
+    tmp_path: Path,
+) -> None:
+    big = {**ESTIMATE, "message": "z" * 3000}
+    ran = _run(
+        tmp_path,
+        {"steps": [{"event": INIT}, {"event": big}]},
+        limits=RunLimits(event_max_bytes=1024, cancel_grace=2.0),
+    )
+    assert ran.outcome.outcome is Outcome.SUCCEEDED
+    oversized = ran.events[1]
+    assert isinstance(oversized, p.OversizedEvent)
+    assert oversized.original_type == "result"
+    stored = json.loads(ran.store.read(oversized.ref))
+    assert stored["method"] == "run/event"
+    assert stored["params"]["message"] == "z" * 3000
+    assert "estimatedCostUsd" not in stored["params"]
+    assert "estimatedCostUsd" in ran.received[3]["params"]  # the runner did send it
+    assert [n.code for n in ran.notices if n.code == "run.estimate-dropped"] == [
+        "run.estimate-dropped"
+    ]
 
 
 def test_a_message_larger_than_64_kib_is_received_whole(tmp_path: Path) -> None:

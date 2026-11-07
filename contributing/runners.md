@@ -32,7 +32,7 @@ own tool loop (decision [#16](https://github.com/troupe-run/troupe/issues/16)), 
 | Method | Direction | Kind | Params | Result |
 |---|---|---|---|---|
 | `initialize` | troupe → runner | request | `protocolVersions`, `host {name, version}`, `capabilities` | `protocolVersion`, `runner {name, version}`, `capabilities` |
-| `run/start` | troupe → runner | request | `runId`, `direction`, `character` (optional), `workspace`, `effects {write, delete, move}`, `scratch`, `options`, `runtime {name, endpoint, model, credential}` (optional), `limits {eventMaxBytes}` | `runId` |
+| `run/start` | troupe → runner | request | `runId`, `direction`, `character` (optional), `workspace`, `effects {write, delete, move}`, `scratch`, `options`, `runtime {name, endpoint, model, credential, price}` (optional, and `price` within it), `limits {eventMaxBytes}` | `runId` |
 | `run/event` | runner → troupe | notification | one run event | — |
 | `run/transcript` | runner → troupe | notification | `runId`, `record`, `encoding` (optional) | — |
 | `run/cancel` | troupe → runner | request | `runId` | `{}` |
@@ -72,7 +72,8 @@ theatre's config and the person's environment. troupe's runner table says whethe
 `optional` or `none`), and config refuses an actor whose runtime doesn't fit its runner.
 
 `run/start`'s `runtime` holds what troupe resolved: `name`, `endpoint` (the base URL your API lives under; add your
-own paths), `model`, and `credential`, a boolean. It's absent when the actor names no runtime.
+own paths), `model`, `credential`, a boolean, and `price` when the theatre prices the run's model. It's absent when
+the actor names no runtime.
 
 **The credential's value is never in `run/start`**, which troupe records. When `credential` is `true`, your
 environment holds the value as `TROUPE_RUNTIME_CREDENTIAL`; when it's `false`, that variable isn't set. The variable
@@ -122,6 +123,24 @@ class MyEngineRules:  # an EffectsTranslation
 Neither way is enforcement. troupe audits every run's changes in its workspace afterwards, whatever the runner did,
 and lineage records the local stage's effects as `unenforced`.
 
+### Cost: reported or estimated
+
+`result` has two cost fields, and a result carries at most one of them:
+
+- **`costUsd` is what the engine or its service reported,** summed over the run. Never put a number you worked out in
+  it.
+- **`estimatedCostUsd` is an estimate,** and only from troupe's price: `run/start`'s `runtime.price`, in US dollars per
+  million tokens (`input` and `output`, and optionally `cacheRead` and `cacheWrite`). Send it only when nothing
+  reported a cost and `run/start` carried a price, and never estimate from a price list of your own. troupe drops an
+  estimate from a run it gave no price, records the result without it, and warns with `run.estimate-dropped`.
+- **An estimate prices every token or is absent.** Leave it out when `usage` has no `inputTokens` or `outputTokens`,
+  when the price has a rate for a counter your engine didn't report, or when a counter holds tokens the price has no
+  rate for. Never price one kind of token at another's rate. `inputTokens` leaves out cache reads and writes (see
+  [What usage counts](#what-usage-counts)), so each token is priced once.
+
+The plugin SDK does the arithmetic and applies those rules: `troupe_plugin_sdk.cost.estimate(usage, price)` returns
+the estimate, rounded to ten decimal places, or `None`. Use it rather than your own.
+
 ### Run events
 
 Every event has `runId`, `seq` and `type`. `seq` starts at 0 and goes up by one with each event: no gaps, no
@@ -135,7 +154,7 @@ repeats.
 | `tool_result` | `callId`, `isError`, `outputSummary`, `outputBytes` | `callId` matches an earlier `tool_call`. The full output belongs in the transcript. |
 | `retry` | `attempt`, `maxAttempts` (optional), `delayMs`, `reason`, `message` (optional) | `reason` is `authentication`, `rate-limit`, `network`, `server` or `other`. Send one each time the engine retries, or the runner retries a request to its engine itself. |
 | `log` | `level` (`debug`, `info`, `warning`, `error`), `message` | A diagnostic worth keeping with the run. |
-| `result` | `status` (`ok` or `error`), `message`, `turns`, `durationMs`, `usage {inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens}`, `costUsd` (all but the first two optional, and each `usage` counter too) | Exactly one, last, for a run that ends on its own. See [What usage counts](#what-usage-counts). |
+| `result` | `status` (`ok` or `error`), `message`, `turns`, `durationMs`, `usage {inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens}`, `costUsd` or `estimatedCostUsd` (all but the first two optional, and each `usage` counter too) | Exactly one, last, for a run that ends on its own. See [What usage counts](#what-usage-counts). At most one of the two costs (see [Cost: reported or estimated](#cost-reported-or-estimated)). |
 | `oversized` | `originalType`, `bytes`, `ref` | Written by troupe, never by a runner (see [Oversized events](#oversized-events)). |
 
 - **`result.status` is `error` whenever the engine reported an error,** whatever else it reported alongside it.
@@ -167,7 +186,9 @@ example, if only some report cache writes, subtract none and leave `cacheWriteTo
 
 An event larger than `RUN_EVENT_MAX_BYTES` isn't refused. troupe stores the whole event in the artifact store and
 passes on an `oversized` event in its place, with the same `seq`, the original type, its size in bytes and the
-stored event's `ref` (`sha256:` and the hex SHA-256 of the event's bytes). The run carries on and nothing is lost.
+stored event's `ref` (`sha256:` and the hex SHA-256 of the event's bytes). The run carries on and nothing is lost,
+except an estimate troupe gave no price for: troupe drops that from a `result` first, so the stored event is the
+result without it (see [Cost: reported or estimated](#cost-reported-or-estimated)).
 A runner should still summarise below `limits.eventMaxBytes`, because events are destined for git.
 
 ### The transcript
@@ -350,6 +371,8 @@ and from local Ollama's `/v1`.
 | completed, with no function call | `result` `ok`, with its text |
 | 401, 403, quota, context length, another 4xx, a redirect, a refusal, `incomplete`, another failure, `maxTurns` or `maxTotalTokens`, or retries spent | `result` `error`, saying which |
 | its `usage` | summed into `result.usage`: cache reads and, where reported, writes counted apart from input |
+| a `cost` in every response's usage | summed into `result.costUsd` |
+| no cost, and a price in `run/start` | `result.estimatedCostUsd`, from the SDK's estimator |
 
 Its transcript records are JSON objects of its own, each with a `kind`: the request body as sent, the status with only
 named headers, each stream line unchanged, an error's body, and a stream dropped. The key, and a masked echo of it, are
@@ -374,7 +397,9 @@ callback and a cancel signal.
   every process it started. The same happens after `shutdown`.
 - **Notices** tell the caller what is happening without waiting silently. They have the shape of
   [`notice.schema.json`](../protocol/schemas/notice.schema.json): `run.silent` when no event has arrived for
-  `RUN_SILENCE_ANNOUNCE_SECONDS`, and `run.retrying` for each `retry` event. A `retry` with reason
+  `RUN_SILENCE_ANNOUNCE_SECONDS`, `run.retrying` for each `retry` event, and `run.estimate-dropped` when a result
+  carries an estimate troupe gave no price for (see [Cost: reported or estimated](#cost-reported-or-estimated)). A
+  `retry` with reason
   `authentication` stops the run at once (`RUNNER_FAIL_FAST_ON_AUTH_RETRY`): a bad credential otherwise looks like
   a hang for minutes.
 - **Standard error** is kept in the artifact store too, up to `RUNNER_STDERR_MAX_BYTES`: its first and last halves,

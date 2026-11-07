@@ -131,6 +131,10 @@
         "credential": {
           "description": "true: the runner's environment holds the credential as TROUPE_RUNTIME_CREDENTIAL. false: the runtime has none, and the variable isn't set.",
           "type": "boolean"
+        },
+        "price": {
+          "description": "The price troupe has for the run's model, from the runtime's prices in config. Absent: nothing prices the model, and the runner sends no estimate.",
+          "$ref": "../runtime.schema.json#/$defs/price"
         }
       }
     }
