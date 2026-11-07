@@ -2,26 +2,26 @@
 
 ## 1. Never echo a refused runtime variable (spec: "A malformed runtime variable is an error"; design D1, D2)
 
-- [ ] 1.1 Before changing `_from_env`, add a test in `packages/troupe/tests/test_runtimes.py` that every
+- [x] 1.1 Before changing `_from_env`, add a test in `packages/troupe/tests/test_runtimes.py` that every
   `runtime.invalid-value` from the existing malformed cases (a non-URL endpoint, an endpoint with user info, a model
   with a newline, a variable name with a space, a `TROUPE_` name) holds the variable's name and what's accepted in
   `problem`, `fix` and `details`. Verify: it passes on the current code, so it guards what must stay the same.
-- [ ] 1.2 Add tests that the error holds no part of the value. A `hypothesis` property test generates malformed
+- [x] 1.2 Add tests that the error holds no part of the value. A `hypothesis` property test generates malformed
   values for each of the three fields (including keys with `-` and spaces, and endpoints with a password in their user
   info) and checks the serialised error (problem, fix and details) contains none of them. Also add the spec's two named
   scenarios: a key in `_CREDENTIAL_ENV`, and `https://user:hunter2-secret@example.com/v1`. Verify: they fail on the
   current code with the value found in the error.
-- [ ] 1.3 Change `_from_env` so its problem names the variable and what it accepts without the value, and its details
+- [x] 1.3 Change `_from_env` so its problem names the variable and what it accepts without the value, and its details
   are `{variable, accepted}`. Verify: 1.1 and 1.2 pass, and the existing
   `test_a_malformed_variable_is_an_error_naming_it` is updated to the new details.
-- [ ] 1.4 Remove `value` from `runtime.invalid-value`'s details (`required` and `properties`) in
+- [x] 1.4 Remove `value` from `runtime.invalid-value`'s details (`required` and `properties`) in
   `protocol/schemas/error.schema.json` and the troupe package's copy, in the same commit as 1.3 (the details schema
   is closed, so either half alone fails validation). Verify: `cmp` shows the two copies identical, and
   the protocol schema tests (`protocol_schemas`, `protocol_guard`) pass with the new details.
-- [ ] 1.5 Add a case to `test_perform_runtime.py`, and one through the client for `config get --resolved`, where
+- [x] 1.5 Add a case to `test_perform_runtime.py`, and one through the client for `config get --resolved`, where
   `TROUPE_RUNTIME_OPENAI_CREDENTIAL_ENV` holds a key: the command fails with `runtime.invalid-value`, nothing is
   recorded, and no message the client received holds the key. Verify: the tests pass.
-- [ ] 1.6 Update `contributing/config.md`'s row for `runtime.invalid-value` to say it names the variable and what's
+- [x] 1.6 Update `contributing/config.md`'s row for `runtime.invalid-value` to say it names the variable and what's
   accepted, never the value. Verify: the row reads so, and `uv run scripts/check.py` passes.
 
 ## 2. One definition of a well-formed credential (design D5)

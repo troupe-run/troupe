@@ -209,6 +209,11 @@ def test_a_run_with_no_runtime_records_none(tmp_path: Path) -> None:
             "runtime.invalid-value",
             id="a malformed variable",
         ),
+        pytest.param(
+            {"OPENAI_API_KEY": KEY, "TROUPE_RUNTIME_OPENAI_CREDENTIAL_ENV": "sk-test q7ZxW9pL4vR2"},
+            "runtime.invalid-value",
+            id="a key where a variable's name should be",
+        ),
     ],
 )
 def test_a_refused_runtime_records_nothing(tmp_path: Path, env: dict[str, str], code: str) -> None:
@@ -220,6 +225,16 @@ def test_a_refused_runtime_records_nothing(tmp_path: Path, env: dict[str, str], 
     assert raised.value.code == code
     assert nothing_written(harness, before)
     assert harness.updates == []
+
+
+def test_a_key_where_a_variables_name_should_be_reaches_no_client_message(tmp_path: Path) -> None:
+    harness = _harness(
+        tmp_path, OPENAI_API_KEY=KEY, TROUPE_RUNTIME_OPENAI_CREDENTIAL_ENV="sk-test q7ZxW9pL4vR2"
+    )
+    with pytest.raises(TroupeError) as raised:
+        harness.perform(request(script(INIT, OK), **OPENAI))
+    assert raised.value.code == "runtime.invalid-value"
+    assert "q7ZxW9pL4vR2" not in json.dumps([raised.value.to_data(), *harness.updates])
 
 
 def test_no_model_anywhere_is_refused_before_anything_is_recorded(tmp_path: Path) -> None:
