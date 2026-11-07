@@ -64,7 +64,13 @@ def runner_table(root: Path) -> list[Runner] | None:
     file = root / RUNNER_TABLE
     if not file.is_file():
         return None
-    for node in ast.parse(file.read_text(encoding="utf-8")).body:
+    return parse_runner_table(file.read_text(encoding="utf-8"))
+
+
+def parse_runner_table(source: str) -> list[Runner] | None:
+    """The runners a copy of core's table module names, or None when it has no RUNNERS table: read
+    as source, so any commit's copy can be read without importing it."""
+    for node in ast.parse(source).body:
         target: ast.expr
         if isinstance(node, ast.AnnAssign):
             target, value = node.target, node.value

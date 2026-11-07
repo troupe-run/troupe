@@ -16,7 +16,11 @@ bundle's, every component must be pinned, and the installed troupe must print th
 pinned at (release-each-package design D3, D10). Any other ref installs everything from that
 commit, and troupe must print core's version there.
 Then it runs the installed `troupe --version`, and a scripted performance in a new theatre outside
-the checkout, as "Your first performance" does. Nothing is installed into your own uv tool directory
+the checkout, as "Your first performance" does. Then it rehearses an audition on each runner that
+comes as an extra, which that install must refuse, naming the extra; installs troupe-run[all] into
+a second tool directory, unless the ref's bundle has no 'all' extra; and rehearses an audition on
+every runner troupe knows with it, so every runner's dependencies are shown to install on each
+platform and Python (runner-extras design D9). Nothing is installed into your own uv tool directory
 or onto your path, and everything is removed afterwards. CI runs it against the commit under test
 on every platform and Python (design D5).
 
@@ -38,15 +42,17 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
+from bundle import ALL, RUNNER_TABLE, Runner, parse_runner_table
 from release_config import REPOSITORY, distinct_requirements, read_pin, requirement_name
 
 ROOT = Path(__file__).resolve().parent.parent
 SUBDIRECTORY = "packages/troupe-run"
 """The bundle (design D1), which installs troupe with everything it bundles."""
-TEMPLATE = 'uv tool install {flags}"git+{repository}@{ref}#subdirectory=' + SUBDIRECTORY + '"'
+TEMPLATE = 'uv tool install {flags}"{name}git+{repository}@{ref}#subdirectory=' + SUBDIRECTORY + '"'
 """The install command the README, the user docs and this check use (design D3). For a bundle tag
 its flags are --no-sources, so each component comes from the tag's pins rather than the tag's
-own workspace (release-each-package design D3); for any other ref, none."""
+own workspace (release-each-package design D3); for any other ref, none. With extras, its name is
+`troupe-run[<extras>] @ ` before the URL; without, nothing (runner-extras design D10)."""
 PINNED = "--no-sources "
 CORE = "troupe"
 DOCUMENTED_REFS = ("main", "<commit>")
@@ -55,6 +61,11 @@ of your choosing."""
 TAG_PREFIX = "troupe-run-v"
 """A release's tag is this and the bundle's version (install-from-tag design D1): the bundle's own
 tag, since the command installs the bundle."""
+
+WOULD_CHANGE = 3
+"""The exit code of a rehearsal that would succeed and change something: troupe's
+ExitCode.WOULD_CHANGE, which a test keeps this equal to (this script imports nothing of
+troupe's)."""
 
 INSTALL_TIMEOUT = 600.0
 """Seconds the install may take: the first one resolves and builds every package."""
@@ -86,10 +97,14 @@ class InstallCheckError(Exception):
     """A step failed. The message names the step, the command and what it printed."""
 
 
-def command(repository: str, ref: str) -> str:
-    """The documented install command, for a repository URL and a ref."""
+def command(repository: str, ref: str, extras: Sequence[str] = ()) -> str:
+    """The documented install command, for a repository URL, a ref and any extras."""
     flags = PINNED if tagged_version(ref) is not None else ""
-    return TEMPLATE.format(flags=flags, repository=repository, ref=ref)
+    return TEMPLATE.format(flags=flags, name=_name(extras), repository=repository, ref=ref)
+
+
+def _name(extras: Sequence[str]) -> str:
+    return f"troupe-run[{','.join(extras)}] @ " if extras else ""
 
 
 def tagged_version(ref: str) -> str | None:
@@ -113,10 +128,11 @@ def expected_version(ref: str, declared: str, bundle: str, sha: str) -> str:
         )
     pins: dict[str, str] = {}
     bare: list[str] = []
-    for _, requirement in distinct_requirements(project):
+    for extra, requirement in distinct_requirements(project):
         found = read_pin(requirement)
         if found is None:
-            bare.append(requirement_name(requirement))
+            name = requirement_name(requirement)
+            bare.append(name if extra is None else f"{name} (in its {extra!r} extra)")
         else:
             pins[found[0]] = found[1]
     if bare:
@@ -128,6 +144,56 @@ def expected_version(ref: str, declared: str, bundle: str, sha: str) -> str:
     if CORE not in pins:
         raise InstallCheckError(f"--ref {ref}: troupe-run doesn't pin {CORE} at {sha}.")
     return pins[CORE]
+
+
+def runners_in(source: str, sha: str) -> list[Runner]:
+    """The runners core's table names, from its module's source at a commit."""
+    runners = parse_runner_table(source)
+    if runners is None:
+        raise InstallCheckError(
+            f"read core's runners: {RUNNER_TABLE} at {sha} has no RUNNERS table to read."
+        )
+    return runners
+
+
+def refused_in_the_base(runners: Sequence[Runner]) -> list[str]:
+    """The runners an install without extras must refuse, naming their extra: those in one."""
+    return [runner.name for runner in runners if runner.in_extra]
+
+
+def rehearsed_with_all(runners: Sequence[Runner]) -> list[str]:
+    """The runners an install of troupe-run[all] must have: every one troupe knows."""
+    return [runner.name for runner in runners]
+
+
+def has_all(bundle: str) -> bool:
+    """Whether a bundle pyproject.toml's text has the 'all' extra: a tag made before it hasn't."""
+    extras = tomllib.loads(bundle)["project"].get("optional-dependencies", {})
+    return ALL in extras
+
+
+def confirm_refused(runner: str, code: int, stdout: str, stderr: str) -> None:
+    """Refused, naming what happened, unless rehearsing an audition on ``runner`` in the base
+    install was refused, its fix naming the runner's extra (runner-extras design D9)."""
+    extra = f"troupe-run[{runner}]"
+    if code not in (0, WOULD_CHANGE) and extra in stderr:
+        return
+    raise InstallCheckError(
+        f"base install: rehearsing an audition on {runner} should be refused, naming {extra}, "
+        f"but it exited {code}.\nstandard output:\n{stdout}\nstandard error:\n{stderr}"
+    )
+
+
+def confirm_rehearsed(runner: str, code: int, stdout: str, stderr: str) -> None:
+    """Refused, naming what happened, unless rehearsing an audition on ``runner`` with
+    troupe-run[all] installed would succeed (runner-extras design D9)."""
+    if code == WOULD_CHANGE:
+        return
+    raise InstallCheckError(
+        f"all install: rehearsing an audition on {runner} should succeed with the would-change "
+        f"code ({WOULD_CHANGE}), but it exited {code}.\nstandard output:\n{stdout}\n"
+        f"standard error:\n{stderr}"
+    )
 
 
 def confirm_printed(shown: str, version: str, ref: str, sha: str) -> None:
@@ -142,11 +208,15 @@ def confirm_printed(shown: str, version: str, ref: str, sha: str) -> None:
 
 
 def install_arguments(
-    repository: str, ref: str, python: str | None, pinned: bool = False
+    repository: str,
+    ref: str,
+    python: str | None,
+    pinned: bool = False,
+    extras: Sequence[str] = (),
 ) -> list[str]:
     """The arguments `uv` runs for the documented command, with `--python` when one is given. A
     bundle tag is pinned: it installs with --no-sources, even from the checkout by commit."""
-    url = f"git+{repository}@{ref}#subdirectory={SUBDIRECTORY}"
+    url = f"{_name(extras)}git+{repository}@{ref}#subdirectory={SUBDIRECTORY}"
     flags = [PINNED.strip()] if pinned else []
     return ["tool", "install", *flags, url, *(["--python", python] if python else [])]
 
@@ -282,7 +352,87 @@ def check(root: Path, ref: str, python: str | None, hosted: bool = False) -> str
         troupe = _program("troupe", path=str(tools.bin))
         shown = run("troupe --version", [troupe, "--version"], place, env, COMMAND_TIMEOUT)
         confirm_printed(shown, version, ref, sha)
-        return _perform(place / "theatre", troupe, env)
+        performed = _perform(place / "theatre", troupe, env)
+        print(f"install check: base install performed ({performed})", flush=True)
+        runners = runners_in(core_runners(root, sha), sha)
+        for name in refused_in_the_base(runners):
+            confirm_refused(name, *_audition(place, troupe, name, env))
+            print(f"install check: base install refuses {name}, naming its extra", flush=True)
+        if not has_all(bundle_pyproject(root, sha)):
+            print(
+                f"install check: troupe-run has no {ALL!r} extra at {sha}, so it isn't installed",
+                flush=True,
+            )
+            return performed
+        everything = Tools(directory=place / "tools-all", bin=place / "bin-all")
+        run(
+            f"install troupe-run[{ALL}]",
+            [
+                _program("uv"),
+                *install_arguments(
+                    repository,
+                    install_ref,
+                    python,
+                    pinned=tagged_version(ref) is not None,
+                    extras=(ALL,),
+                ),
+            ],
+            place,
+            everything.environment(os.environ),
+            INSTALL_TIMEOUT,
+        )
+        troupe_all = _program("troupe", path=str(everything.bin))
+        for name in rehearsed_with_all(runners):
+            found = _audition(place, troupe_all, name, everything.environment(os.environ))
+            confirm_rehearsed(name, *found)
+            print(f"install check: troupe-run[{ALL}] rehearses an audition on {name}", flush=True)
+        return performed
+
+
+def core_runners(root: Path, sha: str) -> str:
+    """Core's runner table module at a commit, as text."""
+    return run(
+        "read core's runners",
+        [_program("git"), "show", f"{sha}:{RUNNER_TABLE}"],
+        root,
+        os.environ,
+        COMMAND_TIMEOUT,
+    )
+
+
+def _audition(
+    place: Path, troupe: str, runner: str, env: Mapping[str, str]
+) -> tuple[int, str, str]:
+    """Rehearse an audition on ``runner`` in a new repository of its own, which troupe init needs:
+    its exit code, standard output and standard error. A rehearsal makes nothing, and doesn't
+    start the runner, so it needs no engine or credential."""
+    git = _program("git")
+    where = place / f"audition-{runner}-{len(list(place.glob('audition-*')))}"
+    where.mkdir()
+    for step, argv in [
+        ("make the audition's repository", [git, "init", "--quiet"]),
+        ("set its identity", [git, "config", "user.email", "install-check@troupe.run"]),
+        ("set its identity", [git, "config", "user.name", "install check"]),
+    ]:
+        run(step, argv, where, env, COMMAND_TIMEOUT)
+    argv = [troupe, "init", "--audition", "--runner", runner, "--rehearse"]
+    try:
+        done = subprocess.run(
+            argv,
+            cwd=where,
+            env=dict(env),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=COMMAND_TIMEOUT,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise InstallCheckError(
+            f"rehearse an audition: `{' '.join(argv)}` didn't finish within {COMMAND_TIMEOUT:g}s."
+        ) from error
+    return done.returncode, done.stdout, done.stderr
 
 
 def _perform(theatre: Path, troupe: str, env: dict[str, str]) -> str:

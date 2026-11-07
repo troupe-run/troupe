@@ -166,7 +166,9 @@ jobs:
           $checkArgs = if ($env:CHECK_ARGS) { -split $env:CHECK_ARGS } else { @() }
           uv run scripts/check.py @checkArgs
       # Installs troupe the documented way from this commit, on this leg's Python, and performs with
-      # it (spec: installation; install-with-uv design D5). Only after a full check: what the bundle
+      # it, then installs troupe-run[all] and rehearses an audition on every runner, so each extra's
+      # dependencies install here (spec: installation; install-with-uv design D5; runner-extras D9).
+      # Only after a full check: what the bundle
       # holds changes only through a pyproject.toml, which always runs the full check. No arguments
       # need splitting, so each OS's default shell runs it.
       - name: Install check (the documented install, from this commit)
