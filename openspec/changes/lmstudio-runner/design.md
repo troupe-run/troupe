@@ -212,9 +212,16 @@ finished. If they keep the process alive past the grace, the runner ends it from
 - **Redirects** aren't followed. httpx doesn't follow them unless asked, and the library doesn't ask. The greeting
   check treats any 3xx as "not LM Studio here" (`lm-studio.unreachable`, naming the status and the location). A test
   pins that nothing connects to the location.
-- **Timeouts**: the library's wait for server messages is set from a named setting for each handle, not its global
-  default. Load progress, prompt-processing progress and prediction fragments count as messages, so a long but live
-  round isn't a timeout.
+- **Timeouts**: every timeout the library applies comes from one of the runner's named settings, never the library's
+  default (runner-protocol, "Retries follow troupe's named limits, not the library's", from #333): the wait for server
+  messages for each handle, the websocket's close (`WS_DISCONNECT_TIMEOUT`), and the greeting check's HTTP timeout.
+  Where the library offers no knob, the call runs under the runner's own named deadline. Load progress,
+  prompt-processing progress and prediction fragments count as messages, so a long but live round isn't a timeout.
+- **#333's guarantees** (runner-protocol's requirements for a runner with a library, listed in
+  `contributing/runners.md`, "Runners with client libraries"): retries and timeouts as above; no redirect and the
+  credential only in its header (here no credential is ever sent, D4, and the passkeys the library makes up are scrubbed
+  from fixtures); cancel within the grace (D9); the transcript as the library exposes it (D11); and pinned dependencies
+  on the licence list, certifi only from PyPI (D15, task 4.1). The runner's tests show each against the fake endpoint.
 
 ### D11. The transcript is what the library exposes
 
@@ -307,8 +314,8 @@ with `maxTurns` 10 and `maxTotalTokens` 100,000, as the OpenAI audition's. `init
 LM Studio's server must be running with "Require Authentication" off, and the `lms get` for the model.
 
 The spec `lm-studio-runner` is new, so its Purpose goes into troupe-run/infrastructure's
-`oob/troupe-spec-purposes.json`, in a pull request that merges right after this one (troupe first, as for infrastructure#263, so neither waits on the
-other). The `runtimes` spec changes a requirement, not its Purpose.
+`oob/troupe-spec-purposes.json`, in a pull request that merges right after this one (troupe first, as for
+infrastructure#263, so neither waits on the other). The `runtimes` spec changes a requirement, not its Purpose.
 
 ## Risks / Trade-offs
 

@@ -121,10 +121,11 @@ has merged.
   effects", "Every run has a turn limit and a token budget", "Assistant text is reported as turns", "A round without a
   tool call ends the run", "The result carries the run's counts", "LM Studio's failures end the run as error results"
   and "Summaries fit below the event limit".
-- [ ] 9.4 Write the retries: a failed or dropped connection retried with `retry` events within the named attempts,
-  only while no tool call has run. Verify: tests for each scenario under "A connection is retried only before any tool
-  call has run", including that one dropped connection gives exactly one `retry` event and that the fake endpoint saw
-  no second chat after a call.
+- [ ] 9.4 Write the retries and timeouts: a failed or dropped connection retried with `retry` events within the named
+  attempts, only while no tool call has run, and every timeout the library applies set from a named setting. Verify:
+  tests for each scenario under "A connection is retried only before any tool call has run", including that one dropped
+  connection gives exactly one `retry` event and that the fake endpoint saw no second chat after a call, and for "Every
+  limit the library applies is one of the runner's named settings".
 - [ ] 9.5 Write the transcript: the model's info, the chat and tools, each round's result and each tool message,
   serialised, each before the events it leads to. Verify: tests for "The transcript is what the library exposes".
 - [ ] 9.6 Write cancel, end of input and shutdown: the stop flag under the lock, the prediction cancelled and the client
@@ -145,15 +146,19 @@ has merged.
 
 ## 11. Ship it in troupe (design D3, D15)
 
-- [ ] 11.1 Once #333 (change `runner-extras`) has merged, join its extras as it lists for a library-backed runner:
-  `lmstudio` in the plugin's dependencies, an `lm-studio` extra in `troupe-run` and the same entry in `all`,
-  `in_extra=True` on the runner table's `lm-studio` entry (with `runtime="required"` and no environment), a row in the
-  install page's list of extras, and the release-please exclusion while the plugin is bare. Coordinate details with the
-  #333 session (`track-b-26-333-troupe-runner-extras`). Verify: the repo check passes (it fails when any of these is
-  missing), core tests that an `lm-studio` actor with no runtime is refused naming `actors.<name>.runtime` and that one
-  without the extra gets `runner.not-installed` naming `troupe-run[lm-studio]`, that perform starts the runner with no
-  variable from the person's environment, and CI's install check, which rehearses every runner's audition, passes on
-  Linux, macOS and Windows for every supported Python.
+- [ ] 11.1 Once #333 (change `runner-extras`) has merged, rebase onto it and join its extras, each step as
+  `contributing/runners.md`, "Runners with client libraries", lists it: the plugin in `troupe-run`'s
+  `[project.optional-dependencies]` as `lm-studio = ["troupe-runner-lm-studio"]` and the same entry in `all` (bare
+  until it releases), never in `dependencies`; `in_extra=True` on `interim.RUNNERS["lm-studio"]` (with
+  `runtime="required"` and no environment); the bundle's exclude-paths while it names the plugin bare after the bundle
+  has released (`scripts/release_config.py` says when); a row for `lm-studio` in `docs/opening-night/install.md`'s
+  `| Extra | Installs |` table; and every package `lmstudio` pulls in on a tier of `scripts/licences.toml`, certifi
+  only from PyPI. Coordinate with the #333 session (`track-b-26-333-troupe-runner-extras`). Verify: `uv sync
+  --locked`, the bundle check, the release configuration check, the install docs check and the licence check pass;
+  core tests show an `lm-studio` actor with no runtime refused naming `actors.<name>.runtime`, and the base install
+  refusing an `lm-studio` actor with `runner.not-installed` naming `troupe-run[lm-studio]` at `config set`, `perform`
+  and `init --audition`; perform starts the runner with no variable from the person's environment; and CI's install
+  check (`troupe-run[all]` on every OS and Python, an audition rehearsed on every runner) passes.
 - [ ] 11.2 Add the audition: `_lm_studio` in `core/audition.py`, `LM_STUDIO_AUDITION_MODEL` in one place, `maxTurns` 10
   and `maxTotalTokens` 100,000, and the note `init` prints. Verify: tests for the cli delta's scenarios ("The LM Studio
   runner", and the unknown-runner error naming `lm-studio`) and the config delta's ("The LM Studio actor's file", "What
