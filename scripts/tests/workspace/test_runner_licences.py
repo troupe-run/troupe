@@ -143,6 +143,28 @@ def test_an_and_expression_needs_every_part_on_the_list(tree: Tree) -> None:
     assert "licensed MIT AND GPL-3.0-only" in problem
 
 
+@pytest.mark.parametrize(
+    ("expression", "expected"),
+    [
+        ("GPL-3.0-only AND (MIT OR Apache-2.0)", None),
+        ("(MIT OR Apache-2.0) AND GPL-3.0-only", None),
+        ("MIT AND (BSD-3-Clause OR GPL-3.0-only)", "permissive"),
+        ("(MIT OR GPL-3.0-only) AND (MPL-2.0 OR GPL-3.0-only)", "weak-copyleft"),
+        ("((MIT))", "permissive"),
+        ("MIT OR (GPL-3.0-only AND ISC)", "permissive"),
+        ("Apache-2.0 WITH LLVM-exception", None),
+        ("MIT AND (ISC", None),
+        ("MIT OR", None),
+    ],
+)
+def test_grouped_expressions_are_read_with_and_binding_tighter_than_or(
+    expression: str, expected: str | None
+) -> None:
+    """A grouped AND can't pass on one branch of its group (review of #338). A WITH exception, or
+    an expression this can't parse, reaches no tier: it fails safe, for a reviewed addition."""
+    assert runner_licences.tier(expression, runner_licences.load_list(REPO)) == expected
+
+
 def test_a_classifier_is_mapped_to_spdx(tree: Tree) -> None:
     tree.runner("old")
     tree.package("old", classifiers=("License :: OSI Approved :: MIT License",))

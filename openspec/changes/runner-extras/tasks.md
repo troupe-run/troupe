@@ -46,7 +46,7 @@
   `runner_command`, `options_schema`, `options_validator` and perform's actor check, before anything is recorded.
   Reword `schemas.plugin-missing`'s fix in `core/schemas.py`. Verify: 3.1's tests pass.
 - [x] 3.3 Catalogue `runner.not-installed`, with closed details (`runner`, `package`, `extra` only for a runner in an extra; config's
-  actor path is the error's own `path`, per D6), in `protocol/schemas/error.schema.json`, copy it to `packages/troupe/src/troupe/protocol/`, and add it to
+  refusal adds the actor's `path` list, per D6), in `protocol/schemas/error.schema.json`, copy it to `packages/troupe/src/troupe/protocol/`, and add it to
   `core/errors.py` with the failure exit code. Verify: the catalogue-agreement test and `protocol_guard` pass in a full
   run (a code that's catalogued but never raised fails the run), and `diff` of the two schema copies is empty.
 - [x] 3.4 Commit as `feat(protocol): ...` for the code and catalogue, and `feat(runs): ...` for the refusal, if they

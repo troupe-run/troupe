@@ -93,18 +93,62 @@ def licence_of(meta: Metadata) -> str | None:
 
 
 def tier(expression: str, licences: Licences) -> str | None:
-    """'permissive', 'weak-copyleft' or None, for an SPDX expression of ORs of ANDs: the best tier
-    any branch reaches, where a branch reaches the worst tier of its parts."""
-    best: str | None = None
-    for branch in expression.replace("(", " ").replace(")", " ").split(" OR "):
-        parts = [part.strip() for part in branch.split(" AND ")]
-        if any(" " in part or not part for part in parts):
-            continue  # a WITH exception, or anything else this doesn't read: no tier
-        if all(part in licences.permissive for part in parts):
-            return "permissive"
-        if all(part in licences.permissive or part in licences.weak for part in parts):
-            best = "weak-copyleft"
-    return best
+    """'permissive', 'weak-copyleft' or None, for an SPDX expression: AND binds tighter than OR,
+    and parentheses group. An OR reaches the best tier of its sides, an AND the worst, so a grouped
+    AND can't pass on one branch of its group. A WITH exception, a licence on neither tier, or an
+    expression this can't parse reaches none: it fails safe, for a reviewed addition."""
+    tokens = expression.replace("(", " ( ").replace(")", " ) ").split()
+
+    def rank(name: str) -> int:
+        if name in licences.permissive:
+            return 2
+        return 1 if name in licences.weak else 0
+
+    position = 0
+
+    def peek() -> str | None:
+        return tokens[position] if position < len(tokens) else None
+
+    def take() -> str:
+        nonlocal position
+        token = peek()
+        if token is None:
+            raise ValueError("the expression ends early")
+        position += 1
+        return token
+
+    def either() -> int:
+        best = both()
+        while peek() == "OR":
+            take()
+            best = max(best, both())
+        return best
+
+    def both() -> int:
+        worst = one()
+        while peek() == "AND":
+            take()
+            worst = min(worst, one())
+        return worst
+
+    def one() -> int:
+        word = take()
+        if word == "(":
+            inside = either()
+            if take() != ")":
+                raise ValueError("a group isn't closed")
+            return inside
+        if word in ("AND", "OR", "WITH", ")") or peek() == "WITH":
+            raise ValueError(f"{word!r} isn't a licence")
+        return rank(word)
+
+    try:
+        reached = either()
+    except ValueError:
+        return None
+    if position != len(tokens):
+        return None
+    return {2: "permissive", 1: "weak-copyleft"}.get(reached)
 
 
 def _lock(root: Path) -> dict[str, dict[str, Any]]:
