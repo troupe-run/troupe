@@ -368,6 +368,18 @@ def test_resolved_with_another_path_is_refused_naming_it(repo: Repo) -> None:
     assert "actors.tester has no resolved values: only runtimes do" in err
 
 
+@pytest.mark.parametrize("as_json", [False, True], ids=["text", "json"])
+def test_resolved_with_a_key_where_a_variables_name_should_be_never_shows_the_key(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch, as_json: bool
+) -> None:
+    monkeypatch.setenv("TROUPE_RUNTIME_OPENAI_CREDENTIAL_ENV", "sk-test q7ZxW9pL4vR2")
+    flags = ["--json"] if as_json else []
+    code, out, err = cli("config", "get", "--resolved", *flags, "runtimes.openai")
+    assert code == CODES["runtime.invalid-value"]
+    assert "TROUPE_RUNTIME_OPENAI_CREDENTIAL_ENV" in out + err
+    assert "q7ZxW9pL4vR2" not in out + err
+
+
 def test_resolved_for_a_runtime_that_doesnt_exist_is_refused(repo: Repo) -> None:
     code, _, err = cli("config", "get", "--resolved", "runtimes.nowhere")
     assert code == 1

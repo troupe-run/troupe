@@ -152,7 +152,7 @@ Its limit, in `troupe.core.defaults`:
 | `schemas.plugin-missing` | A runner's package isn't installed, or ships no schemas |
 | `config.file-rewritten` | (notice) A config file troupe wrote was missing or older, and was written again |
 | `config.merge-rewritten` | (notice) A config file git merged from versions troupe wrote was written again from the merged config, its bytes kept first. Says whether troupe marked it resolved in git, and if not, why not and to `git add` it |
-| `runtime.invalid-value` | A `TROUPE_RUNTIME_` variable is set to something its field doesn't accept. Names the variable, the value and what's accepted |
+| `runtime.invalid-value` | A `TROUPE_RUNTIME_` variable is set to something its field doesn't accept. Names the variable and what's accepted, never the value |
 | `runtime.no-model` | Nothing sets the model for a run on a runtime. Names the actor's, the runtime's and the variable's places to set one |
 | `runtime.credential-unset` | A run's runtime reads its credential from a variable that isn't set |
 | `runtime.credential-too-short` | A run's credential is shorter than `CREDENTIAL_MIN_BYTES`. Names the variable, never the value |

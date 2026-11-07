@@ -149,12 +149,14 @@ def _from_env(runtime: str, field: str, env: Mapping[str, str]) -> str | None:
     if raw == "":
         return None
     if not PATTERNS[field].match(raw):
+        # Never the value: a key put here by mistake, or an endpoint's password, would be
+        # printed and recorded (#298). The person can read it from their own environment.
         raise TroupeError(
             "runtime.invalid-value",
-            problem=f"The runtime variable {variable} is set to {raw!r}, which isn't "
+            problem=f"The runtime variable {variable} is set to something that isn't "
             f"{ACCEPTED[field]}.",
             fix=f"Set {variable} to {ACCEPTED[field]}, or unset it to use the runtime's own.",
-            details={"variable": variable, "value": raw, "accepted": [ACCEPTED[field]]},
+            details={"variable": variable, "accepted": [ACCEPTED[field]]},
         )
     return raw
 

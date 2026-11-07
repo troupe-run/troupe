@@ -108,9 +108,81 @@ def test_a_malformed_variable_is_an_error_naming_it(variable: str, value: str) -
     assert raised.value.code == "runtime.invalid-value"
     assert raised.value.details == {
         "variable": variable,
-        "value": value,
         "accepted": [runtimes.ACCEPTED[variable.removeprefix("TROUPE_RUNTIME_OLLAMA_").lower()]],
     }
+
+
+MALFORMED = [
+    ("TROUPE_RUNTIME_OLLAMA_ENDPOINT", "localhost:11434"),
+    ("TROUPE_RUNTIME_OLLAMA_ENDPOINT", "https://u:p@example.com"),
+    ("TROUPE_RUNTIME_OLLAMA_MODEL", "a\nb"),
+    ("TROUPE_RUNTIME_OLLAMA_CREDENTIAL_ENV", "MY KEY"),
+    ("TROUPE_RUNTIME_OLLAMA_CREDENTIAL_ENV", "TROUPE_RUNTIME_CREDENTIAL"),
+]
+
+
+@pytest.mark.parametrize(("variable", "value"), MALFORMED)
+def test_a_malformed_variable_names_it_and_whats_accepted_in_problem_fix_and_details(
+    variable: str, value: str
+) -> None:
+    accepted = runtimes.ACCEPTED[variable.removeprefix("TROUPE_RUNTIME_OLLAMA_").lower()]
+    with pytest.raises(TroupeError) as raised:
+        resolve("ollama", NO_CONFIG, {variable: value})
+    error = raised.value
+    assert variable in error.problem
+    assert accepted in error.problem
+    assert variable in error.fix
+    assert accepted in error.fix
+    assert error.details["variable"] == variable
+    assert error.details["accepted"] == [accepted]
+
+
+CANARY = st.text(alphabet="ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789", min_size=12)
+SHAPES = {
+    "ENDPOINT": [
+        "https://user:{}@example.com/v1",
+        "{}.example:11434",
+        "https://example.com/{}?q=1",
+        "https://example.com/#{}",
+    ],
+    "MODEL": ["{}\n", "\x00{}", "gpt-{}\r\n"],
+    "CREDENTIAL_ENV": ["sk-{}", "sk-test {}", "9{}", "TROUPE_{}", "{}\n"],
+}
+
+
+@given(
+    st.sampled_from([(field, shape) for field, shapes in SHAPES.items() for shape in shapes]),
+    CANARY,
+)
+def test_a_malformed_variables_refusal_holds_no_part_of_its_value(
+    field_and_shape: tuple[str, str], canary: str
+) -> None:
+    field, shape = field_and_shape
+    variable, value = f"TROUPE_RUNTIME_OLLAMA_{field}", shape.format(canary)
+    with pytest.raises(TroupeError) as raised:
+        resolve("ollama", NO_CONFIG, {variable: value})
+    assert raised.value.code == "runtime.invalid-value"
+    error = _error(raised)
+    assert canary not in error
+    assert json.dumps(value)[1:-1] not in error
+
+
+def test_a_key_where_a_variables_name_should_be_isnt_in_the_refusal() -> None:
+    variable = "TROUPE_RUNTIME_OPENAI_CREDENTIAL_ENV"
+    with pytest.raises(TroupeError) as raised:
+        resolve("openai", NO_CONFIG, {variable: "sk-test q7ZxW9pL"})
+    assert raised.value.code == "runtime.invalid-value"
+    assert variable in raised.value.problem
+    assert "q7ZxW9pL" not in _error(raised)
+
+
+def test_an_endpoint_carrying_a_password_isnt_in_the_refusal() -> None:
+    endpoint = "https://user:hunter2-secret@example.com/v1"
+    with pytest.raises(TroupeError) as raised:
+        resolve("ollama", NO_CONFIG, {"TROUPE_RUNTIME_OLLAMA_ENDPOINT": endpoint})
+    assert raised.value.code == "runtime.invalid-value"
+    assert "hunter2-secret" not in _error(raised)
+    assert "example.com" not in _error(raised)
 
 
 # Requirement: The run's model comes from the environment, the actor, then the runtime
