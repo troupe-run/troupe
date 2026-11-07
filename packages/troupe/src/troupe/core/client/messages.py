@@ -274,6 +274,7 @@ HostEvent = (
     | p.ToolResultEvent
     | p.RetryEvent
     | p.LogEvent
+    | p.ServedModelEvent
     | p.ResultEvent
     | p.OversizedEvent
 )

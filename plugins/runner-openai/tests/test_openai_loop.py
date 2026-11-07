@@ -14,6 +14,7 @@ from fake_endpoint import (
     Reply,
     error_reply,
     final,
+    function_call,
     message,
     reasoning,
     refusal,
@@ -378,11 +379,43 @@ def test_costs_the_service_reports_are_summed(tmp_path: Path) -> None:
     assert _result(run(tmp_path, script))["costUsd"] == pytest.approx(0.003)
 
 
-def test_a_model_other_than_the_one_asked_for_is_noted_once(tmp_path: Path) -> None:
-    reply = Reply(lines=sse([final([message("ok")], used=usage(1, 1), model="fake-model-2026")]))
-    (note,) = run(tmp_path, [reply]).of("log")
-    assert note["level"] == "info"
-    assert "fake-model-2026" in note["message"]
+# Requirement: A response's model, when not the runtime's, is a served_model event
+
+
+def _answered_by(model: str, *output: dict[str, Any]) -> Reply:
+    return Reply(lines=sse([final(list(output), used=usage(1, 1), model=model)]))
+
+
+def test_another_model_is_a_served_model_before_the_replys_turn_and_no_log(tmp_path: Path) -> None:
+    # Built, not recorded: a compatible host answering under another model's name.
+    ran = run(tmp_path, [_answered_by("qwen3.5:4b", message("ok"))])
+    assert [e["type"] for e in ran.events] == ["served_model", "turn"]
+    assert ran.of("served_model")[0]["model"] == "qwen3.5:4b"
+    assert ran.of("log") == []
+
+
+def test_the_same_other_model_twice_is_one_served_model(tmp_path: Path) -> None:
+    glob = function_call("c1", "Glob", {"pattern": "*"})
+    called = Reply(lines=sse([final([glob], used=usage(1, 1), model="m-2026")]))
+    ran = run(tmp_path, [called, _answered_by("m-2026", message("ok"))])
+    assert [e["model"] for e in ran.of("served_model")] == ["m-2026"]
+    assert ran.events[0]["type"] == "served_model"
+
+
+def test_the_runtimes_own_model_sends_no_served_model_and_no_log(tmp_path: Path) -> None:
+    ran = run(tmp_path, [_answered_by(MODEL, message("ok"))])
+    assert ran.of("served_model") == []
+    assert ran.of("log") == []
+
+
+def test_a_model_name_with_a_control_character_is_a_log_warning_not_a_served_model(
+    tmp_path: Path,
+) -> None:
+    ran = run(tmp_path, [_answered_by("bad\nname", message("ok"))])
+    assert ran.of("served_model") == []
+    (note,) = ran.of("log")
+    assert note["level"] == "warning"
+    assert "can't record" in note["message"]
 
 
 # Sizes, and the contract

@@ -9,7 +9,7 @@ schema, so the property covers exactly what the schema accepts that the strategi
 import copy
 import re
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, get_args
 
 import pytest
 from hypothesis import given, settings
@@ -18,6 +18,7 @@ from hypothesis import strategies as st
 from client_schemas import check
 from troupe.core.client import messages as m
 from troupe.core.events.lineage import timestamp
+from troupe_plugin_sdk import runner as p
 from troupe_plugin_sdk.messages import Message, ProtocolError
 
 RUN_IDS = st.uuids().map(str)
@@ -206,6 +207,7 @@ def logged_events(draw: st.DrawFn) -> dict[str, Any]:
             [
                 {"type": "turn", "role": "assistant", "text": "hi"},
                 {"type": "log", "level": "info", "message": "m"},
+                {"type": "served_model", "model": "m-2026"},
                 {"type": "result", "status": "ok", "message": "done"},
                 {
                     "type": "oversized",
@@ -684,3 +686,8 @@ def test_a_running_runs_summary_with_an_audit_is_refused() -> None:
     data["audit"] = {"outside": []}
     with pytest.raises(ProtocolError, match="audit is present only when state is ended"):
         m.RunSummary.from_data(data)
+
+
+def test_a_logged_event_holds_every_event_type_a_runner_sends_and_the_oversized_one() -> None:
+    held = {cls.TYPE for cls in get_args(m.HostEvent)}
+    assert held == {*p.EVENT_TYPES, "oversized"}

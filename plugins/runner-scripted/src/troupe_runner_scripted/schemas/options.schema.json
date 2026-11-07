@@ -418,6 +418,9 @@
           "$ref": "#/$defs/log"
         },
         {
+          "$ref": "#/$defs/served_model"
+        },
+        {
           "$ref": "#/$defs/result"
         }
       ]
@@ -619,6 +622,30 @@
         },
         "message": {
           "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/log/properties/message"
+        }
+      }
+    },
+    "served_model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "model"
+      ],
+      "properties": {
+        "type": {
+          "const": "served_model"
+        },
+        "runId": {
+          "description": "The run id to send. Absent: the run's own id. A script sets one only to test how a wrong id is handled.",
+          "$ref": "https://troupe.run/protocol/runner/jsonrpc.schema.json#/$defs/runId"
+        },
+        "seq": {
+          "description": "The sequence number to send. Absent: the one after the last event sent.",
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/seq"
+        },
+        "model": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/served_model/properties/model"
         }
       }
     },

@@ -26,7 +26,8 @@ model, and its result's `modelUsage` lists every model the run used, including o
   each model in `modelUsage` not yet reported.
 - **The Ollama runner** sends `served_model` when an answer's `model` isn't the one it asked for. Ollama echoes the
   name today, so this is a guard, not a fix.
-- **The scripted runner** needs no change: a script can already send any valid event, so it can send this one.
+- **The scripted runner's options schema** gains a `served_model` event step, since it lists each event a script may
+  send (found applying: its test that the steps cover every runner event type).
 - A runner contract change, released as a protocol change. Version 0 is the draft and changes in place; an older
   troupe reading a newer runner's `served_model` refuses it, as it would any unknown event.
 
@@ -57,10 +58,12 @@ None.
 - `protocol/schemas/runner/run-event.schema.json` (and troupe's carried copy): the `served_model` definition, both
   `oneOf` lists, `oversized.originalType`. The client and event schemas reach it through `hostEvent`, unchanged.
 - `packages/troupe-plugin-sdk`: `ServedModelEvent`, `EventType`, `EVENT_TYPES`.
-- `packages/troupe`: the host's checks (`core/runners/host.py`), `cli/render.py`, the generated event reference
+- `packages/troupe`: the host's checks (`core/runners/host.py`), the client's `HostEvent` (`core/client/messages.py`),
+  `cli/render.py`, the generated event reference
   (`docs/prompt-book/events.md`).
 - `plugins/runner-openai` (`loop.py`), `plugins/runner-claude-code` (`mapping.py`, fixtures' expected events),
   `plugins/runner-ollama` (`conversation.py`), each with tests and README mapping rows.
+- `plugins/runner-scripted`: a `served_model` event step in its options schema.
 - `contributing/runners.md`: the events table and the three mapping tables.
 - `protocol/CHANGELOG.md` is written by the release; the commit is `feat(runner-protocol): ...`.
 - In flight on the same files: #292, #293, #294 and #296 (contract changes to `result` and transcripts), #289 (the

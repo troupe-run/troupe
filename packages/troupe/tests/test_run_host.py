@@ -266,6 +266,23 @@ def test_an_ok_result_followed_by_an_unclean_exit_fails_as_uncertain(tmp_path: P
         ),
         (
             [
+                {"event": {**INIT, "engine": {"name": "e", "model": "m-1"}}},
+                {"event": {"type": "served_model", "model": "m-1"}},
+                {"hang": True},
+            ],
+            "served_model named 'm-1', the model its init named",
+        ),
+        (
+            [
+                {"event": INIT},
+                {"event": {"type": "served_model", "model": "m-2"}},
+                {"event": {"type": "served_model", "model": "m-2"}},
+                {"hang": True},
+            ],
+            "served_model named 'm-2', which an earlier served_model did",
+        ),
+        (
+            [
                 {"event": INIT},
                 {"transcript": {"record": "not base64!", "encoding": "base64"}},
                 {"hang": True},
@@ -292,6 +309,8 @@ def test_an_ok_result_followed_by_an_unclean_exit_fails_as_uncertain(tmp_path: P
         "before init",
         "unknown method",
         "tool result without call",
+        "served model that is init's",
+        "served model twice",
         "invalid base64",
         "other run id",
         "duplicate key",
@@ -572,6 +591,37 @@ def test_an_oversized_event_is_kept_whole_out_of_line_and_the_run_carries_on(
     assert stored["params"]["inputSummary"] == "y" * 3000
     assert stored == ran.received[3]  # after the two responses and init
     assert ran.outcome.outcome is Outcome.SUCCEEDED
+
+
+def test_served_models_other_than_inits_are_reported_and_the_run_succeeds(tmp_path: Path) -> None:
+    init = {**INIT, "engine": {"name": "e", "model": "m-1"}}
+    served = [{"event": {"type": "served_model", "model": m}} for m in ("m-2", "m-3")]
+    ran = _run(tmp_path, {"steps": [{"event": init}, *served, {"event": OK}]})
+    assert ran.types == ["init", "served_model", "served_model", "result"]
+    assert [e.model for e in ran.events if isinstance(e, p.ServedModelEvent)] == ["m-2", "m-3"]
+    assert ran.outcome.outcome is Outcome.SUCCEEDED
+
+
+def test_with_no_model_on_init_a_served_model_is_accepted(tmp_path: Path) -> None:
+    served = {"event": {"type": "served_model", "model": "m-1"}}
+    ran = _run(tmp_path, {"steps": [{"event": INIT}, served, {"event": OK}]})
+    assert ran.types == ["init", "served_model", "result"]
+    assert ran.outcome.outcome is Outcome.SUCCEEDED
+
+
+def test_an_oversized_served_model_is_kept_out_of_line(tmp_path: Path) -> None:
+    served = {"type": "served_model", "model": "m" * 256}
+    ran = _run(
+        tmp_path,
+        {"steps": [{"event": INIT}, {"event": served}, {"event": OK}]},
+        limits=RunLimits(event_max_bytes=200, cancel_grace=2.0),
+    )
+    assert ran.types == ["init", "oversized", "result"]
+    oversized = ran.events[1]
+    assert isinstance(oversized, p.OversizedEvent)
+    assert oversized.original_type == "served_model"
+    validate(oversized.to_data(), "run-event.schema.json#/$defs/hostEvent")
+    assert json.loads(ran.store.read(oversized.ref))["params"]["model"] == "m" * 256
 
 
 def test_a_message_larger_than_64_kib_is_received_whole(tmp_path: Path) -> None:

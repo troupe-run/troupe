@@ -3,9 +3,10 @@ D12).
 
 It serves ``/api/version`` and ``/api/show`` from its settings, and each ``/api/chat`` request from
 a queue of scripted answers: a status, lines (each with an optional delay before it), and
-optionally a close part-way through, or silence. It records every request's path and body, and
-notices when a client closes a connection it is still answering. Standard library only, so core's
-tests can copy it.
+optionally a close part-way through, or silence. A built line names the model the request asked
+for, as Ollama echoes it, unless the answer names another. It records every request's path and
+body, and notices when a client closes a connection it is still answering. Standard library only,
+so core's tests can copy it.
 """
 
 import json
@@ -43,8 +44,12 @@ class Answer:
     """Close the connection after this many lines, without ending the answer."""
     silent: bool = False
     """After the lines, send nothing more until the client goes away or the server stops."""
+    model: str | None = None
+    """The model the answer's built lines name. None: the model the request asked for, as Ollama
+    echoes it. Recorded lines (bytes) are sent as recorded."""
 
-    def encoded(self) -> list[Line]:
+    def encoded(self, asked: object = None) -> list[Line]:
+        named = self.model if self.model is not None else asked
         lines = []
         for line in self.lines:
             if isinstance(line, Line):
@@ -52,6 +57,8 @@ class Answer:
             elif isinstance(line, bytes):
                 lines.append(Line(line))
             else:
+                if "model" in line and isinstance(named, str):
+                    line = {**line, "model": named}
                 lines.append(Line(json.dumps(line).encode()))
         return lines
 
@@ -264,15 +271,19 @@ class FakeOllama:
         if answer.status != 200:
             self._send(handler, answer.status, answer.body)
             return
-        self._stream(handler, answer)
+        try:
+            asked = json.loads(body).get("model")
+        except (ValueError, AttributeError):
+            asked = None
+        self._stream(handler, answer, asked)
 
-    def _stream(self, handler: BaseHTTPRequestHandler, answer: Answer) -> None:
+    def _stream(self, handler: BaseHTTPRequestHandler, answer: Answer, asked: object) -> None:
         handler.send_response(200)
         handler.send_header("Content-Type", "application/x-ndjson")
         handler.send_header("Transfer-Encoding", "chunked")
         handler.end_headers()
         try:
-            for index, line in enumerate(answer.encoded()):
+            for index, line in enumerate(answer.encoded(asked)):
                 if answer.close_after is not None and index >= answer.close_after:
                     handler.close_connection = True
                     handler.connection.shutdown(socket.SHUT_RDWR)
