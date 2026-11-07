@@ -1,8 +1,8 @@
 """A resolved runtime, as text (spec: runtimes; runtimes design D9).
 
 ``config get --resolved`` and a rehearsed ``perform`` both show a runtime this way: each value with
-the source it came from, and a credential by its variable's name and whether that is set, never its
-value.
+the source it came from, a credential by its variable's name and whether that is set, never its
+value, and the model's price when the theatre prices it.
 """
 
 from typing import Any
@@ -30,4 +30,18 @@ def runtime_lines(runtime: dict[str, Any], indent: str = "") -> list[str]:
         lines.append(
             f"{indent}  credential: from {env['value']} (named by {env['source']}), {state}"
         )
+    price = runtime.get("price")
+    if price is not None:
+        lines.append(f"{indent}  price: {price_text(price['value'])} (from {price['source']})")
     return lines
+
+
+RATES = (("input", "input"), ("cacheRead", "cache read"), ("cacheWrite", "cache write"))
+
+
+def price_text(price: dict[str, Any]) -> str:
+    """``price`` in words: each rate it gives, in US dollars per million tokens."""
+    rates = [(label, price[key]) for key, label in RATES if key in price]
+    rates.append(("output", price["output"]))
+    shown = ", ".join(f"{label} {rate:g}" for label, rate in rates)
+    return f"US$ per million tokens: {shown}"

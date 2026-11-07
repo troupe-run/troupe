@@ -133,8 +133,8 @@ CHECK_CHARACTER = 'a checkCharacter step is {"hash": "sha256:..."} or {"absent":
 
 
 CHECK_RUNTIME = (
-    'a checkRuntime step is {"absent": true}, or any of name, endpoint, model (strings) and '
-    'credentialHash ("sha256:...") or noCredential (true)'
+    'a checkRuntime step is {"absent": true}, or any of name, endpoint, model (strings), '
+    'credentialHash ("sha256:...") or noCredential (true), and price (a price) or noPrice (true)'
 )
 
 
@@ -146,10 +146,24 @@ def _check_runtime_step(value: Any, here: str) -> None:  # noqa: ANN401
             raise _invalid(CHECK_RUNTIME, here)
         return
     _require_keys(
-        value, here, set(), {"name", "endpoint", "model", "credentialHash", "noCredential"}
+        value,
+        here,
+        set(),
+        {"name", "endpoint", "model", "credentialHash", "noCredential", "price", "noPrice"},
     )
-    if not value or ("credentialHash" in value and "noCredential" in value):
+    if (
+        not value
+        or ("credentialHash" in value and "noCredential" in value)
+        or ("price" in value and "noPrice" in value)
+    ):
         raise _invalid(CHECK_RUNTIME, here)
+    if "noPrice" in value and value["noPrice"] is not True:
+        raise _invalid("must be true", f"{here}.noPrice")
+    if "price" in value:
+        try:
+            p.Price.from_data(value["price"])
+        except p.ProtocolError as error:
+            raise _invalid(str(error), f"{here}.price") from error
     for field in ("name", "endpoint", "model"):
         if field in value:
             _str(value[field], f"{here}.{field}")

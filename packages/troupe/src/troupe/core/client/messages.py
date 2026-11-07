@@ -381,6 +381,14 @@ class ResolvedCredential(Message):
 
 
 @dataclass(frozen=True)
+class SourcedPrice(Message):
+    """A model's price, and where it came from."""
+
+    value: p.Price = json_field("value")
+    source: RuntimeSource = json_field("source")
+
+
+@dataclass(frozen=True)
 class ResolvedRuntime(Message):
     """A runtime as troupe resolves it, each value with its source."""
 
@@ -388,6 +396,7 @@ class ResolvedRuntime(Message):
     endpoint: SourcedValue = json_field("endpoint")
     model: SourcedValue | None = json_field("model", default=None)
     credential: ResolvedCredential | None = json_field("credential", default=None)
+    price: SourcedPrice | None = json_field("price", default=None)
 
 
 @dataclass(frozen=True, kw_only=True)

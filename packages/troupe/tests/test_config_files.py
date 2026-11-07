@@ -18,10 +18,19 @@ from ruamel.yaml import YAML
 
 from configtesting import TESTER
 from gitrepo import make_repo
-from protocol_schemas import PROTOCOL_BASE, SCRIPTED, check_error, check_notice, validator_for
+from protocol_schemas import (
+    PROTOCOL_BASE,
+    SCHEMAS,
+    SCRIPTED,
+    check_error,
+    check_notice,
+    load,
+    validator_for,
+)
 from troupe.core import schemas
 from troupe.core.config.kinds import file_kind, staged_name, staged_target
 from troupe.core.config.projection import (
+    RUNTIME_FIELD_ORDER,
     WRITTEN,
     Action,
     Resolved,
@@ -923,10 +932,20 @@ def test_a_removed_runtimes_file_is_removed(tmp_path: Path) -> None:
 
 
 def test_a_written_runtime_file_validates_against_its_schema_in_its_order() -> None:
-    text = render({"runtimes": {"myhost": MYHOST}})["runtimes/myhost.yaml"]
+    prices = {
+        "gpt-4.1": {"input": 2, "output": 8, "cacheRead": 0.5},
+        "llama": {"input": 0, "output": 0},
+    }
+    text = render({"runtimes": {"myhost": {**MYHOST, "prices": prices}}})["runtimes/myhost.yaml"]
     data = YAML(typ="safe", pure=True).load(text)
     RUNTIME_FILE.validate(data)
-    assert list(data) == ["$schema", "endpoint", "model", "credential"]
+    assert list(data) == ["$schema", "endpoint", "model", "credential", "prices"]
+    assert data["prices"] == prices
+
+
+def test_the_runtime_files_fields_are_every_field_its_schema_defines_in_its_order() -> None:
+    schema = load(SCHEMAS / "config" / "runtime.schema.json")
+    assert list(RUNTIME_FIELD_ORDER) == list(schema["properties"])
 
 
 # Requirement: Runtime files are a known kind

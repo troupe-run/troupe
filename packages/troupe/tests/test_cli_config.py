@@ -328,6 +328,47 @@ def test_a_field_a_runtime_doesnt_have_is_refused(repo: Repo) -> None:
     assert "runtimes.openai.credential" in err
 
 
+# Requirement: A runtime can price its models (spec: runtimes), set on the command line
+
+
+def test_pricing_a_model(repo: Repo) -> None:
+    code, _, err = cli("config", "set", 'runtimes.openai.prices.gpt-test={"input": 2, "output": 8}')
+    assert code == 0, err
+    assert _get("runtimes.openai") == {"prices": {"gpt-test": {"input": 2, "output": 8}}}
+
+
+def test_one_rate_of_a_models_price(repo: Repo) -> None:
+    cli("config", "set", 'runtimes.openai.prices.gpt-test={"input": 2, "output": 8}')
+    code, _, err = cli("config", "set", "runtimes.openai.prices.gpt-test.cacheRead=0.5")
+    assert code == 0, err
+    assert _get("runtimes.openai.prices.gpt-test") == {"input": 2, "output": 8, "cacheRead": 0.5}
+
+
+def test_a_price_with_an_unknown_field_is_refused_naming_the_path(repo: Repo) -> None:
+    code, _, err = cli(
+        "config",
+        "set",
+        'runtimes.openai.prices.gpt-test={"input": 2, "output": 8, "currency": "EUR"}',
+    )
+    assert code == 1
+    assert "runtimes.openai.prices.gpt-test" in err
+    assert "currency" in err
+
+
+def test_a_price_without_an_output_rate_is_refused_naming_the_path(repo: Repo) -> None:
+    code, _, err = cli("config", "set", 'runtimes.openai.prices.gpt-test={"input": 2}')
+    assert code == 1
+    assert "runtimes.openai.prices.gpt-test" in err
+    assert "output" in err
+
+
+def test_a_models_name_with_a_dot_is_priced_by_setting_the_whole_map(repo: Repo) -> None:
+    prices = {"gpt-4.1": {"input": 2, "output": 8}}
+    code, _, err = cli("config", "set", f"runtimes.openai.prices={json.dumps(prices)}")
+    assert code == 0, err
+    assert _get("runtimes.openai") == {"prices": prices}
+
+
 # Requirement: Config get shows a runtime's resolved values and their sources
 
 
@@ -360,6 +401,29 @@ def test_resolved_as_json_shows_each_value_and_its_source(
     assert result["runtimes"]["openai"]["credential"]["set"] is False
     assert result["runtimes"]["ollama"]["model"] == {"value": "qwen3", "source": "env"}
     assert result["value"] == {"runtimes": {"openai": {"model": "gpt-test"}}}
+
+
+def test_the_price_of_the_runtimes_model_resolved(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-canary-0123456789")
+    price = {"input": 2, "output": 8, "cacheRead": 0.5, "cacheWrite": 0}
+    cli(
+        "config",
+        "set",
+        "runtimes.openai.model=gpt-test",
+        f"runtimes.openai.prices.gpt-test={json.dumps(price)}",
+    )
+    code, out, err = cli("config", "get", "--resolved", "runtimes.openai")
+    assert code == 0, err
+    assert out.splitlines()[-1] == (
+        "  price: US$ per million tokens: input 2, cache read 0.5, cache write 0, output 8 "
+        "(from theatre)"
+    )
+    code, out, _ = cli("config", "get", "--resolved", "--json")
+    result = json.loads(out)
+    check(result, "config-get-result.schema.json")
+    assert result["runtimes"]["openai"]["price"] == {"value": price, "source": "theatre"}
 
 
 def test_resolved_with_another_path_is_refused_naming_it(repo: Repo) -> None:

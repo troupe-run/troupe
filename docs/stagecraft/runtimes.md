@@ -78,6 +78,36 @@ Your environment overrides the theatre's config, for you alone, without a change
 counts as unset. One that's set but malformed, such as an endpoint that isn't a URL, stops the command and names it,
 rather than quietly using another value.
 
+## Price a model, for an estimated cost
+
+Claude Code reports what a run cost. OpenAI reports only the tokens it used, so without a price an OpenAI run has no
+cost. Give a model a price, in US dollars per million tokens of each kind, and a runner whose service reports no cost
+sends an **estimate**, marked as one (`estimatedCostUsd` in the run's result, never `costUsd`):
+
+```sh
+troupe config set 'runtimes.openai.prices.gpt-5-mini={"input": 0.25, "cacheRead": 0.025, "cacheWrite": 0, "output": 2}'
+```
+
+The rates are `input`, `output`, `cacheRead` (input read from the service's prompt cache) and `cacheWrite` (input
+written to it). `input` and `output` are required. Set the cache rates too, with `0` for one the service doesn't
+charge: OpenAI runs nearly always read from and write to the cache, and **a run gets no estimate when it used a kind
+of token the price has no rate for**, or when the price has a rate for a kind the service didn't count. troupe leaves
+the cost out rather than guess. Copy the rates from the service's price list; troupe ships none, so they never go
+stale behind your back.
+
+A price applies to the model a run uses, matched exactly: `gpt-5-mini` doesn't price `gpt-5-mini-2026-01-01`. A
+model priced in config but overridden by `TROUPE_RUNTIME_<NAME>_MODEL` gets the overriding model's price, or none.
+No variable sets a price. `troupe config get --resolved` and `troupe perform --rehearse` show the price that applies,
+and every run records the price it used, so an estimate can always be checked against its tokens.
+
+A model whose name holds a dot, like `gpt-4.1`, can't be named in a `config set` path, since dots separate the keys
+([#303](https://github.com/troupe-run/troupe/issues/303)). Set the runtime's whole price list instead, which replaces
+it, so include every model:
+
+```sh
+troupe config set 'runtimes.openai.prices={"gpt-4.1": {"input": 2, "cacheRead": 0.5, "cacheWrite": 0, "output": 8}, "gpt-5-mini": {"input": 0.25, "cacheRead": 0.025, "cacheWrite": 0, "output": 2}}'
+```
+
 ## Keys stay in your environment
 
 Config is committed, and travels with every clone. So it only ever names the variable a key is in. troupe reads the

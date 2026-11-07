@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import get_args
 
 import pytest
+from ruamel.yaml import YAML
 
 import claude_stand_in
 import ollama_stand_in
@@ -534,13 +535,22 @@ def test_the_runtimes_pages_commands_run_as_written_and_show_what_it_says(
     assert code == 0, err
     shown = next(body for lang, _, body in blocks_in(text) if lang == "text")
     assert out == shown
+    outputs: dict[str, str] = {}
     for line in lines[1:]:
         code, out, err = run_line(line, monkeypatch)
         assert code == 0, (line, err)
-    assert "runtime office-llm\n  endpoint: https://llm.example.com/v1 (from theatre)" in out
+        outputs[line] = out
+    office = "troupe config get --resolved runtimes.office-llm"
+    assert (
+        "runtime office-llm\n  endpoint: https://llm.example.com/v1 (from theatre)"
+        in (outputs[office])
+    )
     written = (project.path / ".troupe" / "runtimes" / "openai.yaml").read_text(encoding="utf-8")
     assert "model: gpt-4.1-mini" in written
     assert "env: MY_OPENAI_KEY" in written
+    prices = YAML(typ="safe", pure=True).load(written)["prices"]
+    assert sorted(prices) == ["gpt-4.1", "gpt-5-mini"]  # the whole list replaced the one price
+    assert prices["gpt-4.1"] == {"input": 2, "cacheRead": 0.5, "cacheWrite": 0, "output": 8}
 
 
 def test_the_runtimes_page_gives_the_built_in_runtimes_as_the_code_does() -> None:

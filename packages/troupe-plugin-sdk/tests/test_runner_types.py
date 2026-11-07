@@ -37,6 +37,20 @@ def _event(
 
 
 SEQ = st.integers(min_value=1, max_value=10**9)
+RATE = st.floats(0, 100, allow_nan=False)
+PRICES = _with_optional({"input": RATE, "output": RATE}, {"cacheRead": RATE, "cacheWrite": RATE})
+COST = st.floats(0, 1000, allow_nan=False)
+RESULT_FIELDS: dict[str, st.SearchStrategy[Any]] = {
+    "turns": st.integers(0, 999),
+    "durationMs": st.integers(0, 10**9),
+    "usage": _with_optional(
+        {},
+        {
+            key: st.integers(0, 10**9)
+            for key in ("inputTokens", "outputTokens", "cacheReadTokens", "cacheWriteTokens")
+        },
+    ),
+}
 
 # (type, schema reference, strategy for valid JSON data of that type)
 CASES: list[tuple[type[p.Message], str, st.SearchStrategy[Any]]] = [
@@ -84,6 +98,19 @@ CASES: list[tuple[type[p.Message], str, st.SearchStrategy[Any]]] = [
                 ),
                 "scratch": NAME,
             }
+        ),
+    ),
+    (
+        p.RunStartRuntime,
+        "run-start.schema.json#/$defs/runtime",
+        _with_optional(
+            {
+                "name": st.sampled_from(["openai", "lm-studio"]),
+                "endpoint": st.sampled_from(["https://api.openai.com/v1", "http://127.0.0.1:1234"]),
+                "model": NAME.filter(lambda s: s.isprintable()),
+                "credential": st.booleans(),
+            },
+            {"price": PRICES},
         ),
     ),
     (
@@ -176,27 +203,18 @@ CASES: list[tuple[type[p.Message], str, st.SearchStrategy[Any]]] = [
     (
         p.ResultEvent,
         "run-event.schema.json#/$defs/result",
+        # A reported cost or an estimate, never both.
         _event(
             "result",
             SEQ,
             required={"status": st.sampled_from(["ok", "error"]), "message": TEXT},
-            optional={
-                "turns": st.integers(0, 999),
-                "durationMs": st.integers(0, 10**9),
-                "usage": _with_optional(
-                    {},
-                    {
-                        key: st.integers(0, 10**9)
-                        for key in (
-                            "inputTokens",
-                            "outputTokens",
-                            "cacheReadTokens",
-                            "cacheWriteTokens",
-                        )
-                    },
-                ),
-                "costUsd": st.floats(0, 1000, allow_nan=False),
-            },
+            optional={**RESULT_FIELDS, "costUsd": COST},
+        )
+        | _event(
+            "result",
+            SEQ,
+            required={"status": st.sampled_from(["ok", "error"]), "message": TEXT},
+            optional={**RESULT_FIELDS, "estimatedCostUsd": COST},
         ),
     ),
     (
@@ -363,6 +381,33 @@ REFUSED: list[tuple[str, type[p.Message], dict[str, Any], str]] = [
         "one of",
     ),
     ("wrong type field", p.TurnEvent, {**INIT, "type": "init"}, "type must be 'turn'"),
+    (
+        "both costs",
+        p.ResultEvent,
+        {
+            "runId": RUN,
+            "seq": 1,
+            "type": "result",
+            "status": "ok",
+            "message": "",
+            "costUsd": 0.4,
+            "estimatedCostUsd": 0.4,
+        },
+        "never both",
+    ),
+    (
+        "negative estimate",
+        p.ResultEvent,
+        {
+            "runId": RUN,
+            "seq": 1,
+            "type": "result",
+            "status": "ok",
+            "message": "",
+            "estimatedCostUsd": -1,
+        },
+        "at least 0",
+    ),
     (
         "no versions",
         p.InitializeParams,
