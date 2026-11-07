@@ -15,6 +15,14 @@ CREDENTIAL_VARIABLE = "TROUPE_RUNTIME_CREDENTIAL"
 """The one variable a runner reads its runtime's credential from."""
 
 
+def well_formed(value: str) -> bool:
+    """Whether a credential's value can be sent as it is: no character in it is whitespace or
+    unprintable (a control character, a separator, a line ending left from the file it was read
+    from). The one definition troupe and its runners refuse a credential by (runtimes design D5);
+    each says so in its own words, and never shows the value."""
+    return not any(c.isspace() or not c.isprintable() for c in value)
+
+
 class CredentialError(Exception):
     """``run/start`` and the runner's environment disagree about the credential. The message says
     which way, and never holds the value."""

@@ -10,7 +10,12 @@ one place the runner touches the runtime.
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from troupe_plugin_sdk.credential import CREDENTIAL_VARIABLE, CredentialError, runtime_credential
+from troupe_plugin_sdk.credential import (
+    CREDENTIAL_VARIABLE,
+    CredentialError,
+    runtime_credential,
+    well_formed,
+)
 from troupe_plugin_sdk.runner import Price, RunStartParams
 from troupe_runner_openai.service import Endpoint, EndpointError, parse_endpoint
 
@@ -61,7 +66,7 @@ class Runtime:
                 {"where": "runtime.model"},
             )
         credential = credential or None
-        if credential is not None and any(c.isspace() or not c.isprintable() for c in credential):
+        if credential is not None and not well_formed(credential):
             raise RuntimeRefusedError(
                 "openai.malformed-credential",
                 f"The run's credential in {CREDENTIAL_VARIABLE} holds whitespace or a control "
