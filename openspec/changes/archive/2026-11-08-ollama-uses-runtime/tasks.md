@@ -56,10 +56,11 @@
 
 ## 3. Docs
 
-- [x] 3.1 Update `docs/stagecraft/runtimes.md` (drop the note that the runner still takes its options, and say the
-  Ollama runner requires a runtime), `docs/stagecraft/bring-your-own-agent.md`'s Ollama entry, and
-  `docs/opening-night/first-performance.md`'s Ollama section (the actor's `runtime` and `model`, another host via
-  `runtimes.<name>.endpoint` or `TROUPE_RUNTIME_OLLAMA_ENDPOINT`, and the move for an old actor). Check that
+- [x] 3.1 Update `docs/stagecraft/runtimes.md` (drop the note that the runner still takes its options, say the
+  Ollama runner requires a runtime, and the move for an old actor), `docs/stagecraft/bring-your-own-agent.md`'s
+  Ollama entry, and `docs/opening-night/first-performance.md`'s Ollama section (the actor's `runtime` and `model`, and
+  another host via `runtimes.<name>.endpoint` or `TROUPE_RUNTIME_OLLAMA_ENDPOINT`; it links to `runtimes.md`, and a
+  newcomer has no old actor to move). Check that
   `docs/prompt-book/config-schema.md` (generated, and it names no runner) and `cli.md` need nothing. Verify:
   `uv run scripts/check.py` passes, including the docs checks and any walkthrough test that runs the Ollama page as
   written.
