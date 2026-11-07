@@ -58,11 +58,15 @@
 
 ## 4. Check it end to end
 
-- [ ] 4.1 Run the live test against the local Ollama (`TROUPE_LIVE_OLLAMA=1 uv run pytest
+- [x] 4.1 Run the live test against the local Ollama (`TROUPE_LIVE_OLLAMA=1 uv run pytest
   packages/troupe/tests/test_ollama_live.py`), and read the `result` it recorded. Verify: the test passes, and if the
   run made more than one request, its `usage` holds `cacheReadTokens`, with `inputTokens + cacheReadTokens` equal to
   the sum of its answers' `prompt_eval_count` in the transcript. Note what was seen in the commit message. The test
   runs one small model, so ask the owner before running it if anything else heavy is running.
+  (Done on 2026-11-07, owner's go-ahead, with `TROUPE_LIVE_OLLAMA_MODEL=qwen3:0.6b` against Ollama 0.40.14:
+  passed, wrote `out/hello.txt`. Two answers: prompt 1240 with 0 cached, then 1390 with 1241 cached. The result had
+  `inputTokens` 1389, `cacheReadTokens` 1241 and `outputTokens` 296, and 1389 + 1241 = 1240 + 1390. Read through
+  temporary prints in the test, reverted after the run.)
 - [ ] 4.2 Run `uv run scripts/check.py` and `openspec validate ollama-cache-read-tokens --strict`. Verify: both pass,
   and CI passes on Linux, macOS and Windows on the pull request's last code commit.
 
