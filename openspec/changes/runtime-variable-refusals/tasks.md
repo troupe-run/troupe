@@ -26,11 +26,11 @@
 
 ## 2. One definition of a well-formed credential (design D5)
 
-- [ ] 2.1 Add `well_formed(value: str) -> bool` to `troupe_plugin_sdk.credential`, with tests in
+- [x] 2.1 Add `well_formed(value: str) -> bool` to `troupe_plugin_sdk.credential`, with tests in
   `packages/troupe-plugin-sdk/tests/test_credential.py`: false for a space, tab, `\r`, `\n`, NUL, DEL, a C1 control and
   a non-breaking space; true for a typical key (`sk-test-q7ZxW9pL4vR2`). Also add a `hypothesis` test that it agrees
   with "no character is whitespace or unprintable" on generated text. Verify: the tests pass.
-- [ ] 2.2 Make the OpenAI runner's `Runtime` use `well_formed` in place of its inline check, keeping
+- [x] 2.2 Make the OpenAI runner's `Runtime` use `well_formed` in place of its inline check, keeping
   `openai.malformed-credential` and its message. Verify: the runner's existing malformed-credential tests
   (`test_openai_runtime.py`, `test_openai_runner.py`) pass unchanged, and `uv run lint-imports` passes.
 

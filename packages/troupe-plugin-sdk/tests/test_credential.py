@@ -4,8 +4,10 @@ the runner's environment as TROUPE_RUNTIME_CREDENTIAL")."""
 from dataclasses import replace
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
-from troupe_plugin_sdk.credential import CredentialError, runtime_credential
+from troupe_plugin_sdk.credential import CredentialError, runtime_credential, well_formed
 from troupe_plugin_sdk.runner import (
     READ_ONLY_DECLARATION,
     RunStartParams,
@@ -63,3 +65,42 @@ def test_run_start_reads_its_runtime_and_refuses_one_with_a_value() -> None:
     assert RunStartParams.from_data(data).runtime == RUNTIME
     with pytest.raises(Exception, match="value"):
         RunStartParams.from_data({**data, "runtime": {**RUNTIME.to_data(), "value": KEY}})
+
+
+# What a credential may hold (runtimes design D5)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "sk-test 0123",
+        "sk-test\t0123",
+        "sk-test-0123\r",
+        "sk-test-0123\n",
+        "sk\x00test",
+        "sk\x7ftest",
+        "sk\x85test",
+        "sk\u00a0test",
+    ],
+    ids=[
+        "space",
+        "tab",
+        "carriage return",
+        "line feed",
+        "NUL",
+        "DEL",
+        "C1 control",
+        "non-breaking space",
+    ],
+)
+def test_whitespace_or_a_control_character_isnt_well_formed(value: str) -> None:
+    assert not well_formed(value)
+
+
+def test_a_typical_key_is_well_formed() -> None:
+    assert well_formed("sk-test-q7ZxW9pL4vR2")
+
+
+@given(st.text(max_size=40))
+def test_well_formed_means_no_character_is_whitespace_or_unprintable(value: str) -> None:
+    assert well_formed(value) == all(not c.isspace() and c.isprintable() for c in value)
