@@ -13,6 +13,7 @@ from protocol_schemas import PROTOCOL_BASE, validator_for
 from troupe.core import runtimes
 from troupe.core.errors import TroupeError
 from troupe.core.runtimes import Sourced, for_run, resolve
+from troupe_runner_ollama import runtime as ollama_runtime
 
 KEY = "sk-test-0123456789abcdef"
 NO_CONFIG: dict[str, Any] = {}
@@ -292,3 +293,19 @@ def test_the_variable_check_and_the_schema_accept_the_same(value: str) -> None:
     assert bool(runtimes.VARIABLE_PATTERN.match(value)) == validator_for(
         SCHEMA + "variable"
     ).is_valid(value)
+
+
+# The Ollama runner names a runtime's endpoint variable in its fixes, with its own copy of core's
+# rule, since it can't import core (ollama-uses-runtime design D2, "Risks / Trade-offs"). This is
+# the guard against the two drifting apart.
+
+
+@pytest.mark.parametrize("name", ["ollama", "openai", "lm-studio", "my-gpu-box-2"])
+@pytest.mark.parametrize("field", ["endpoint", "model", "credential_env"])
+def test_the_ollama_runners_variable_names_are_cores(name: str, field: str) -> None:
+    assert ollama_runtime.env_name(name, field) == runtimes.env_name(name, field)
+
+
+@given(st.from_regex(r"\A[a-z][a-z0-9-]{0,63}\Z"))
+def test_the_ollama_runners_endpoint_variable_is_cores_for_any_runtime_name(name: str) -> None:
+    assert ollama_runtime.env_name(name, "endpoint") == runtimes.env_name(name, "endpoint")
