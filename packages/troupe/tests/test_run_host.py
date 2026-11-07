@@ -311,7 +311,7 @@ def test_each_protocol_violation_crashes_the_run_naming_it(
     assert ran.outcome.ending is Ending.KILLED
 
 
-# Requirement: The host refuses an estimate it gave no price for (spec: runner-protocol)
+# Requirement: The host drops an estimate it gave no price for (spec: runner-protocol)
 
 ESTIMATE = {**OK, "estimatedCostUsd": 0.5}
 UNPRICED = p.RunStartRuntime("lm-studio", "http://127.0.0.1:1234/v1", "m", credential=False)
@@ -321,15 +321,17 @@ UNPRICED = p.RunStartRuntime("lm-studio", "http://127.0.0.1:1234/v1", "m", crede
     "runtime",
     [pytest.param(None, id="no runtime"), pytest.param(UNPRICED, id="a runtime with no price")],
 )
-def test_an_estimate_troupe_gave_no_price_for_crashes_the_run_naming_it(
+def test_an_estimate_troupe_gave_no_price_for_is_dropped_with_a_notice_naming_the_runner(
     tmp_path: Path, runtime: p.RunStartRuntime | None
 ) -> None:
     ran = _run(tmp_path, {"steps": [{"event": INIT}, {"event": ESTIMATE}]}, runtime=runtime)
-    assert (ran.outcome.outcome, _code(ran)) == (Outcome.CRASHED, "runner.protocol")
-    assert ran.outcome.error is not None
-    assert "estimatedCostUsd" in ran.outcome.error.problem
-    assert "no price" in ran.outcome.error.problem
-    assert "result" not in ran.types
+    assert ran.outcome.outcome is Outcome.SUCCEEDED
+    [result] = [e for e in ran.events if isinstance(e, p.ResultEvent)]
+    assert result.estimated_cost_usd is None
+    assert "estimatedCostUsd" not in result.to_data()
+    [notice] = [n for n in ran.notices if n.code == "run.estimate-dropped"]
+    assert notice.details == {"runner": "scripted"}
+    check_notice(notice.to_data())
 
 
 def test_an_estimate_troupe_gave_a_price_for_is_recorded_as_sent(tmp_path: Path) -> None:
@@ -339,6 +341,7 @@ def test_an_estimate_troupe_gave_a_price_for_is_recorded_as_sent(tmp_path: Path)
     [result] = [e for e in ran.events if isinstance(e, p.ResultEvent)]
     assert result.estimated_cost_usd == 0.5
     assert result.cost_usd is None
+    assert not [n for n in ran.notices if n.code == "run.estimate-dropped"]
 
 
 def test_a_reported_cost_needs_no_price(tmp_path: Path) -> None:
