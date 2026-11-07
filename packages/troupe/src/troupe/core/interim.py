@@ -157,12 +157,18 @@ def runner(name: str) -> Runner:
     return RUNNERS[name]
 
 
+def installed(name: str) -> bool:
+    """Whether the runner named ``name``, which troupe knows, has its package installed here, found
+    without importing it (runner-extras design D6)."""
+    return importlib.util.find_spec(runner(name).package) is not None
+
+
 def installed_runner(name: str) -> Runner:
     """The runner named ``name``, refused with runner.unknown when troupe doesn't know it, and with
     runner.not-installed, naming the extra that installs it, when its package can't be found. Found
     without importing it (runner-extras design D6)."""
     entry = runner(name)
-    if importlib.util.find_spec(entry.package) is None:
+    if not installed(name):
         extra = name if entry.in_extra else None
         if extra is not None:
             fix = (

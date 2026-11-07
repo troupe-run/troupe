@@ -13,7 +13,7 @@ from eventsourcing.utils import get_topic
 
 from troupe.core.config import aggregate
 from troupe.core.config.changes import apply
-from troupe.core.config.kinds import check
+from troupe.core.config.kinds import ACTORS, check
 from troupe.core.config.merge import Change, Merged, merge
 from troupe.core.errors import TroupeError
 from troupe.core.events import Command, EventStore, Recorded
@@ -53,7 +53,15 @@ def refuse_unrecordable(
 ) -> None:
     """Refuse, recording nothing, a change whose config breaks a rule, or that leaves a conflict
     unresolved: it's merged as though recorded after every head, and must leave none."""
-    check(apply(merged.config, entries))
+    after = apply(merged.config, entries)
+    # The actors this change sets or unsets anything under and leaves in config: one on a runner
+    # that isn't installed is refused, since its options can't be checked (runner-extras D7).
+    touched = {
+        str(entry["path"][1])
+        for entry in entries
+        if len(entry["path"]) > 1 and entry["path"][0] == ACTORS
+    }
+    check(after, touched & set(after.get(ACTORS, {})))
     if merged.conflicts:
         proposed = Change("proposed", "", {}, "", tuple(entries), ())
         refuse_conflicts(merge(store.history(aggregate.STREAM), extra=proposed))

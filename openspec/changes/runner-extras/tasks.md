@@ -54,16 +54,16 @@
 
 ## 4. Config refuses only changes to that actor (design D7; spec: config)
 
-- [ ] 4.1 Write the tests first, in `packages/troupe/tests/` beside the config-kinds tests, with the fixture entry from
+- [x] 4.1 Write the tests first, in `packages/troupe/tests/` beside the config-kinds tests, with the fixture entry from
   3.1. They cover each scenario of config's two new requirements: defining or changing the actor is refused with
   `runner.not-installed` naming the actor's path, and nothing is recorded; removing it whole is recorded; moving it
   to `scripted` is checked against the scripted schema; changing another actor is recorded; a merge that changed its
   options isn't in conflict, and performing it afterwards is refused; and an unknown field on it in a merge is still a
   conflict. Verify: they fail on main, run and shown.
-- [ ] 4.2 Give `kinds.actor_problems` (and its callers in `kinds.check`, `check_actor` and the change path in
+- [x] 4.2 Give `kinds.actor_problems` (and its callers in `kinds.check`, `check_actor` and the change path in
   `config/changes.py`) the set of actors a change touches, and apply D7. Verify: 4.1's tests pass, and the existing
   config and merge tests pass unchanged.
-- [ ] 4.3 Commit as `feat(config): ...`. Verify: `uv run scripts/check.py` passes before the commit.
+- [x] 4.3 Commit as `feat(config): ...`. Verify: `uv run scripts/check.py` passes before the commit.
 
 ## 5. Init refuses an uninstalled runner and names an installed runner's extra (design D8; spec: cli)
 

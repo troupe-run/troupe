@@ -42,7 +42,7 @@ rather than refused. Its options are checked when it is next changed or performe
 - **THEN** the merge isn't in conflict for `lead`'s options, and performing `lead` there is refused with
   `runner.not-installed`
 
-#### Scenario: The actor's schema is still checked
-- **WHEN** `lead` is on the `lm-studio` runner, which isn't installed, and a merge leaves `lead` with a field the actor
-  schema doesn't define
-- **THEN** the merge is in conflict, naming the field
+#### Scenario: The actor's effects are still checked
+- **WHEN** `lead` is on the `lm-studio` runner, which isn't installed, one branch expects `docs/a.md` while `lead` may
+  write `docs/**`, and another narrows its writes to `out/**`, and they are merged
+- **THEN** the merge is in conflict, naming `lead` and that `docs/a.md` is expected but no effect covers it
