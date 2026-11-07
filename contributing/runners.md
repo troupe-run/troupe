@@ -322,7 +322,7 @@ Ollama answers, with what the runner sent for each.
 | `done_reason` `length` | `log` warning |
 | an answer with no tool call | `result` `ok`, with its text |
 | any other status, an `error` line, `maxTurns` reached, or retries spent | `result` `error`, with Ollama's message |
-| each answer's `prompt_eval_count` and `eval_count` | summed into `result.usage`'s `inputTokens` and `outputTokens`. `prompt_eval_count` leaves out the prompt tokens Ollama took from its cache, so `inputTokens` has the contract's meaning, but those tokens aren't reported yet: until #282 reports them as `cacheReadTokens`, the counters add up to less than the whole input |
+| each answer's `prompt_eval_count`, `prompt_eval_cached_count` and `eval_count` | summed into `result.usage`. `prompt_eval_count` includes the prompt tokens Ollama took from its cache, which it reports as `prompt_eval_cached_count`: that is `cacheReadTokens`, `prompt_eval_count` less it is `inputTokens`, and `eval_count` is `outputTokens`. If any answer leaves out its cached count, nothing is subtracted and `cacheReadTokens` is left out (see [What usage counts](#what-usage-counts)) |
 
 Its transcript is the first request's body, then before each later request the messages the runner added (the
 answer and its `tool` messages), each encoded exactly as inside that request, and every line of every answer: each

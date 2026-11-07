@@ -4,7 +4,8 @@ map to turns and tool calls", "Summaries fit below the event limit"; runner-prot
 Random answers (random bytes, random JSON objects, mutated real-shaped lines, and tool calls with
 random names and arguments) are fed to the conversation through a stand-in client. Every event must
 validate against run-event.schema.json, fit eventMaxBytes, have each tool_result after its
-tool_call, and never follow the result.
+tool_call, and never follow the result. The result's usage never holds a negative counter, nor
+cache reads without input ("The result carries the run's counts").
 """
 
 import json
@@ -67,13 +68,27 @@ _LINE = st.fixed_dictionaries(
         "done": st.booleans() | _JSON,
         "done_reason": st.sampled_from(["stop", "length"]) | _JSON,
         "prompt_eval_count": st.integers(-5, 10**6) | _JSON,
+        "prompt_eval_cached_count": st.integers(-5, 10**6) | _JSON,
         "eval_count": st.integers(-5, 10**6) | _JSON,
         "error": st.text(max_size=20),
     },
 )
 _RAW = st.binary(max_size=40) | _LINE.map(lambda line: json.dumps(line).encode())
 _DONE = json.dumps({"message": {"content": ""}, "done": True}).encode()
-_ANSWER = st.lists(_RAW, max_size=6).map(lambda lines: [*lines, _DONE])
+_COUNT = st.integers(-2, 50) | _JSON
+_COUNTED = st.fixed_dictionaries(
+    {"message": st.just({"content": ""}), "done": st.just(True)},
+    optional={
+        "prompt_eval_count": _COUNT,
+        "prompt_eval_cached_count": _COUNT,
+        "eval_count": _COUNT,
+    },
+).map(lambda line: json.dumps(line).encode())
+"""A last line with counts, so the counts' every combination (absent, malformed, a cached count
+larger than its prompt count) reaches the result often, not only by chance."""
+_ANSWER = st.tuples(st.lists(_RAW, max_size=6), st.just(_DONE) | _COUNTED).map(
+    lambda answer: [*answer[0], answer[1]]
+)
 _STATUS = st.sampled_from([None, None, None, 400, 503])
 
 
@@ -136,3 +151,8 @@ def test_any_answers_give_events_that_keep_the_contract(
         if event["type"] == "tool_result":
             assert event["callId"] in calls
     assert [event["type"] for event in events].count("result") == 1
+    # "The result carries the run's counts": no counter is negative, and cache reads are only
+    # ever counted beside the input they're part of (design D2).
+    usage = events[-1].get("usage", {})
+    assert all(value >= 0 for value in usage.values()), usage
+    assert "cacheReadTokens" not in usage or "inputTokens" in usage, usage

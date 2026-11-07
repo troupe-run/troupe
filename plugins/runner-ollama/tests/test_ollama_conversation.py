@@ -456,7 +456,9 @@ def test_thinking_goes_back_to_ollama_with_the_calls_it_led_to(tmp_path: Path) -
 # Requirement: The result carries the run's counts
 
 
-def test_the_result_sums_each_answers_counts_and_carries_no_cost(tmp_path: Path) -> None:
+def test_with_no_cached_counts_the_result_sums_the_prompt_counts_as_input_and_carries_no_cost(
+    tmp_path: Path,
+) -> None:
     sink, _ = _run(
         tmp_path,
         [
@@ -474,6 +476,40 @@ def test_the_result_sums_each_answers_counts_and_carries_no_cost(tmp_path: Path)
 def test_a_counter_no_answer_reported_is_left_out(tmp_path: Path) -> None:
     sink, _ = _run(tmp_path, [Answer([message("ok"), done(prompt=None, generated=7)])])
     assert sink.result.usage == p.Usage(output_tokens=7)
+
+
+def test_cached_prompt_tokens_are_cache_reads_and_left_out_of_the_input(tmp_path: Path) -> None:
+    sink, _ = _run(
+        tmp_path,
+        [
+            calls(tool_call("Glob", {"pattern": "*"}), prompt=1222, generated=33, cached=88),
+            final("ok", 1276, 23, cached=1218),
+        ],
+    )
+    assert sink.result.usage == p.Usage(input_tokens=1192, output_tokens=56, cache_read_tokens=1306)
+
+
+def test_when_an_answer_has_no_cached_count_no_cache_read_is_reported_or_subtracted(
+    tmp_path: Path,
+) -> None:
+    sink, _ = _run(
+        tmp_path,
+        [
+            calls(tool_call("Glob", {"pattern": "*"}), prompt=120, generated=40, cached=20),
+            final("ok", 300, 25),
+        ],
+    )
+    assert sink.result.usage == p.Usage(input_tokens=420, output_tokens=65)
+
+
+def test_a_cached_count_with_no_prompt_count_is_left_out(tmp_path: Path) -> None:
+    sink, _ = _run(tmp_path, [Answer([message("ok"), done(prompt=None, generated=7, cached=50)])])
+    assert sink.result.usage == p.Usage(output_tokens=7)
+
+
+def test_a_cached_count_larger_than_its_prompt_count_is_cut_to_it(tmp_path: Path) -> None:
+    sink, _ = _run(tmp_path, [final("ok", 10, 5, cached=12)])
+    assert sink.result.usage == p.Usage(input_tokens=0, output_tokens=5, cache_read_tokens=10)
 
 
 # Requirement: Ollama's errors end the run as error results
