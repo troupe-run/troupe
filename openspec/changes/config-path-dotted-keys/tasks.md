@@ -2,7 +2,7 @@
 
 ## 1. Pin today's behaviour before changing it (design D6)
 
-- [ ] 1.1 Write the differential property tests first and run them against the current reader
+- [x] 1.1 Write the differential property tests first and run them against the current reader
   (`troupe.cli.values.split_path`), marked to target the new module once it exists. The first checks that any text
   with no `[`, `]`, `\` or `=` and no empty key reads as `text.split(".")`. The second checks that `".".join(p)` reads
   back as `p` for keys without `.[]=\`. Verify: both pass on main's code before any other change, and the commit
