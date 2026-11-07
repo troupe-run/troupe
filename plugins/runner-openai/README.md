@@ -83,7 +83,17 @@ Each request is `POST <endpoint>/responses`, streamed, with:
 
 `result.usage` sums each response's usage: `cacheReadTokens` is `input_tokens_details.cached_tokens`,
 `cacheWriteTokens` is `cache_write_tokens` when every response reports it, and `inputTokens` is the input less both.
-`costUsd` is set only when the service reports a cost; OpenAI reports none.
+`costUsd` is set only when the service reports a cost; OpenAI reports none. When no cost is reported and the theatre
+prices the run's model, the result carries `estimatedCostUsd` instead: the usage at that price, marked as an estimate.
+Price a model with every rate its runs use, cache reads and writes included (OpenAI runs nearly always use the prompt
+cache, and a run that used a kind of token the price has no rate for gets no estimate):
+
+```sh
+troupe config set 'runtimes.openai.prices.gpt-5-mini={"input": 0.25, "cacheRead": 0.025, "cacheWrite": 0, "output": 2}'
+```
+
+[Price a model](../../docs/stagecraft/runtimes.md#price-a-model-for-an-estimated-cost) says more. The runner never
+estimates from a price of its own.
 
 ## Retries
 

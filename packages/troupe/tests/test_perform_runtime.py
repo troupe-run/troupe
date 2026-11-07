@@ -16,6 +16,7 @@ from test_perform import configured, nothing_written
 from troupe.core.errors import TroupeError
 from troupe.core.masking import MARKER
 from troupe.core.runs.aggregate import STARTED
+from troupe_plugin_sdk import runner as p
 
 KEY = "sk-test/canary-0123456789abcdef"
 KEY_HASH = "sha256:" + hashlib.sha256(KEY.encode()).hexdigest()
@@ -148,6 +149,32 @@ def test_a_run_on_a_model_config_doesnt_price_hands_over_and_records_no_price(
     )
     assert result.run.outcome == "succeeded"
     assert "price" not in _start(harness, result.run.run_id)["runtime"]
+
+
+# Requirement: The host refuses an estimate it gave no price for (spec: runner-protocol)
+
+ESTIMATE = {"event": {**OK["event"], "estimatedCostUsd": 0.5}}
+
+
+def test_an_estimate_with_no_price_given_ends_the_run_as_a_protocol_violation(
+    tmp_path: Path,
+) -> None:
+    harness = _harness(tmp_path, OPENAI_API_KEY=KEY)
+    result = harness.perform(request(script(INIT, ESTIMATE), **OPENAI))
+    assert result.run.outcome == "crashed"
+    assert result.run.error is not None
+    assert result.run.error.code == "runner.protocol"
+    assert "estimatedCostUsd" in result.run.error.problem
+
+
+def test_an_estimate_with_a_price_given_records_the_result_as_sent(tmp_path: Path) -> None:
+    harness = _harness(tmp_path, OPENAI_API_KEY=KEY)
+    result = harness.perform(request(script(INIT, ESTIMATE), runtimes=PRICED, **OPENAI))
+    assert result.run.outcome == "succeeded"
+    logged = harness.logs(run=result.run.run_id).events
+    [ended] = [e.event for e in logged if isinstance(e.event, p.ResultEvent)]
+    assert ended.estimated_cost_usd == 0.5
+    assert ended.cost_usd is None
 
 
 def test_a_run_with_no_runtime_records_none(tmp_path: Path) -> None:

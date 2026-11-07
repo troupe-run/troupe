@@ -133,6 +133,11 @@ all show it, through the generated pydantic model `ResolvedRuntime`, and the cli
 estimate can then be checked from its `Run.Started` price and its `result` usage alone. `RunRuntime.run_start()`
 passes the bare price to `run/start`.
 
+Found while building (task 4.2's scratch run): `.troupe/runtimes/<name>.yaml` was rendered from a hand-kept field list
+(`RUNTIME_FIELD_ORDER`), so `prices` was recorded but left out of the file. The list gains `prices`, and a test now
+pins it to the schema's properties, so a later field can't be left out silently. The actor file has the same gap
+for other fields, already tracked as [#288](https://github.com/troupe-run/troupe/issues/288), and is left to it.
+
 ### D11. Compatibility and release
 
 Every addition is optional. An older troupe never sends a price, so a newer runner never sends it an estimate. The
