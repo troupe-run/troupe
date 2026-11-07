@@ -10,6 +10,32 @@
       "type": "string",
       "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
     },
+    "workspace": {
+      "title": "Workspace",
+      "description": "Where a run works: its own worktree, or the theatre itself, as its start recorded it, with a worktree's clone mechanisms once it is made.",
+      "oneOf": [
+        {"$ref": "../events/run-started.schema.json#/$defs/theatreWorkspace"},
+        {"$ref": "#/$defs/worktreeWorkspace"}
+      ]
+    },
+    "worktreeWorkspace": {
+      "title": "In its own worktree",
+      "description": "A run that works in its own git worktree: what its start recorded, and the clone mechanisms its Run.WorktreeMade recorded.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "path", "base", "dirty"],
+      "properties": {
+        "kind": {"$ref": "../events/run-started.schema.json#/$defs/worktreeWorkspace/properties/kind"},
+        "path": {"$ref": "../events/run-started.schema.json#/$defs/worktreeWorkspace/properties/path"},
+        "prefix": {"description": "Where the theatre is in its repository, such as apps/web/, when it isn't the top level. Absent: the theatre is the repository's top level.", "$ref": "../events/run-started.schema.json#/$defs/worktreeWorkspace/properties/prefix"},
+        "base": {"$ref": "../events/run-started.schema.json#/$defs/worktreeWorkspace/properties/base"},
+        "dirty": {"$ref": "../events/run-started.schema.json#/$defs/worktreeWorkspace/properties/dirty"},
+        "clones": {
+          "description": "The clone mechanisms used for the files that matched HEAD, sorted. Absent: the worktree isn't made yet.",
+          "$ref": "../events/run-worktree-made.schema.json#/$defs/clones"
+        }
+      }
+    },
     "runRef": {
       "title": "Run reference",
       "description": "A run's full id, or a prefix of at least 8 hex digits that matches exactly one run.",
@@ -109,12 +135,12 @@
         "effectCheck": {"$ref": "#/$defs/effectCheck"},
         "workspace": {
           "description": "Where the run works: its own worktree, or the theatre. A worktree's clones are absent until it is made.",
-          "$ref": "../events/run-started.schema.json#/$defs/workspace"
+          "$ref": "#/$defs/workspace"
         },
         "state": {"$ref": "#/$defs/state"},
         "outcome": {"description": "How the run ended. Present exactly when state is ended.", "$ref": "#/$defs/outcome"},
         "error": {"description": "Why the run didn't succeed. Absent: the outcome has no error, or the run hasn't ended.", "$ref": "../error.schema.json"},
-        "audit": {"description": "What the audit of the run's changes against its actor's declared effects found, as its end recorded it. Absent: the run hasn't ended, its runner never started, or its end was recorded before troupe recorded audits.", "$ref": "../events/run-ended.schema.json#/$defs/audit"},
+        "audit": {"description": "What the audit of the run's changes against its actor's declared effects found, as its end recorded it. Present exactly when the run has ended and its runner started, that is when an ended run's summary has a transcript.", "$ref": "../events/run-ended.schema.json#/$defs/audit"},
         "events": {"description": "How many run events are recorded.", "type": "integer", "minimum": 0},
         "startedAt": {"$ref": "#/$defs/timestamp"},
         "endedAt": {"description": "When the run's end was recorded. Present exactly when state is ended.", "$ref": "#/$defs/timestamp"},
@@ -140,11 +166,16 @@
       "allOf": [
         {
           "if": {"properties": {"state": {"const": "ended"}}},
-          "then": {"required": ["outcome", "endedAt"]},
+          "then": {
+            "required": ["outcome", "endedAt"],
+            "if": {"required": ["transcript"]},
+            "then": {"required": ["audit"]},
+            "else": {"properties": {"audit": false}}
+          },
           "else": {"properties": {"outcome": false, "endedAt": false, "audit": false}}
         },
         {
-          "if": {"properties": {"workspace": {"$ref": "../events/run-started.schema.json#/$defs/worktreeWorkspace"}}},
+          "if": {"properties": {"workspace": {"$ref": "#/$defs/worktreeWorkspace"}}},
           "then": {"required": ["changes"]},
           "else": {"properties": {"changes": false}}
         }

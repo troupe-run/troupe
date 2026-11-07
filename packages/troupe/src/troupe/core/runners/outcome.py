@@ -257,7 +257,8 @@ class RunOutcome:
     limits: RunLimits
     audit: AuditFindings | None = None
     """What the audit of the run's changes found; None exactly when the runner never started, or
-    the caller had no workspace to audit (NoAudit)."""
+    the caller had no workspace to audit (NoAudit). perform always audits, so a recorded end whose
+    runner started always has one (require-always-written-fields design D4)."""
 
     def __post_init__(self) -> None:
         if (self.transcript is None) != (self.transcript_format is None):

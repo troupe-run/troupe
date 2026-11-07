@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://troupe.run/protocol/events/run-worktree-made.schema.json",
   "title": "Run.WorktreeMade",
-  "description": "The payload of a worktree run's second event (topic troupe.core.runs.aggregate:Run.WorktreeMade): its worktree, named by the run's start, is made and filled, and the runner hasn't started yet. Recorded by the person's command, which made it. Absent from a run: its worktree wasn't made, or its start was recorded by an older troupe, which held the clone mechanisms itself.",
+  "description": "The payload of a worktree run's second event (topic troupe.core.runs.aggregate:Run.WorktreeMade): its worktree, named by the run's start, is made and filled, and the runner hasn't started yet. Recorded by the person's command, which made it. Absent from a run: its worktree wasn't made.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -19,7 +19,24 @@
     },
     "clones": {
       "description": "The clone mechanisms used for the files that matched HEAD, sorted. Empty: every file was checked out.",
-      "$ref": "run-started.schema.json#/$defs/clones"
+      "$ref": "#/$defs/clones"
+    }
+  },
+  "$defs": {
+    "clones": {
+      "title": "Clone mechanisms",
+      "description": "The clone mechanisms used for a worktree's files that matched HEAD, sorted. Empty: every file was checked out.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "clonefile",
+          "ficlone",
+          "copyfile2",
+          "copy",
+          "symlink"
+        ]
+      }
     }
   }
 }

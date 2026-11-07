@@ -37,6 +37,7 @@ EVENT: dict[str, Any] = {
             "seq": 0,
             "type": "init",
             "runner": {"name": "scripted", "version": "0"},
+            "effects": "checked",
             "tools": [],
         },
     },
