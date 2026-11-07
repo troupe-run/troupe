@@ -84,7 +84,7 @@ Each task's verification runs before it is ticked. `uv run scripts/check.py` pas
 
 ## 8. Integration
 
-- [ ] 8.1 Run the full check (`uv run scripts/check.py`) and `openspec validate estimated-cost --strict`. Verify: both
+- [x] 8.1 Run the full check (`uv run scripts/check.py`) and `openspec validate estimated-cost --strict`. Verify: both
   pass, and the existing `costUsd` tests (Claude Code mapping, OpenAI loop) pass without edits.
 - [ ] 8.2 CI on Linux, macOS and Windows passes on the pull request's last code commit. Verify: cite the run.
 
