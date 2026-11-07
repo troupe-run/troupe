@@ -194,15 +194,16 @@ A runner should still summarise below `limits.eventMaxBytes`, because events are
 
 ### The transcript
 
-`run/transcript` carries the engine's native output, one record at a time, unchanged and in order. A runner that
+`run/transcript` carries the run's transcript, one record at a time, in order. Without a kind, each record is the
+engine's native output, unchanged. A runner that
 holds the conversation itself (one that runs the tool loop, as the Ollama runner does) also sends each message it
 adds to the conversation, verbatim as it sent it, before the engine's output that follows it, and sends re-sent
 history only once: otherwise the tool outputs it sends back, which the contract says belong in the transcript, would
 be missing, and a transcript would grow with the square of its run. `record` is
 the record without its line ending. `encoding` is `utf-8` (the default) or `base64` for bytes that aren't text.
-troupe stores the records, each followed by `\n`, as the run's transcript, and never interprets them, apart from
-masking a runtime's credential. For Claude
-Code, that reproduces its stream-json output byte for byte.
+troupe never interprets the records, apart from masking a runtime's credential. In a run without kinds it stores
+each record followed by `\n`, as the run's transcript: for Claude Code, that reproduces its stream-json output byte
+for byte. A run with kinds is stored framed, as [Record kinds](#record-kinds) says.
 
 #### Record kinds
 
@@ -400,9 +401,10 @@ and from local Ollama's `/v1`.
 | a `cost` in every response's usage | summed into `result.costUsd` |
 | no cost, and a price in `run/start` | `result.estimatedCostUsd`, from the SDK's estimator |
 
-Its transcript records are JSON objects of its own, each with a `kind`: the request body as sent, the status with only
-named headers, each stream line unchanged, an error's body, and a stream dropped. The key, and a masked echo of it, are
-masked in everything it sends.
+Its transcript records use the contract's [record kinds](#record-kinds): the request body as sent is `sent`; each
+stream line unchanged, and an error's body, are `received`; the status with only named headers, and a stream it drops,
+are `note`s. The request's URL isn't recorded, since the run's start records the runtime's endpoint. The key, and a
+masked echo of it, are masked in everything it sends.
 
 ## How troupe runs a runner
 
@@ -418,7 +420,8 @@ callback and a cancel signal.
   JSON-RPC, a duplicated JSON key, `NaN` or `Infinity`, a method the contract doesn't define, an answer to a
   request troupe never sent, a version or capability troupe didn't offer, another run's id, an event out of
   sequence, before `init` or after `result`, a `tool_result` with no earlier `tool_call`, a `base64` record that
-  isn't base64, or a message over `RUNNER_MAX_MESSAGE_BYTES`. troupe never reads such a message with a guess.
+  isn't base64, a transcript record without a kind after the runner accepted `transcript-kinds` or with one when
+  it didn't, or a message over `RUNNER_MAX_MESSAGE_BYTES`. troupe never reads such a message with a guess.
 - **Cancelling** sends `run/cancel` and gives the runner `RUNNER_CANCEL_GRACE_SECONDS` to exit, then kills it and
   every process it started. The same happens after `shutdown`.
 - **Notices** tell the caller what is happening without waiting silently. They have the shape of
