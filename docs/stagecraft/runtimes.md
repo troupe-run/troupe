@@ -93,7 +93,9 @@ value from your environment when a run starts and gives it to the runner, and no
 - **Not too short to hide:** a key under 8 bytes is refused, since troupe couldn't tell it apart from ordinary text.
   A service that needs no key, like a local model, needs no credential at all.
 
-A run whose key isn't set stops before it starts, naming the variable to set.
+A run whose key isn't set stops before it starts, naming the variable to set. When
+`TROUPE_RUNTIME_<NAME>_CREDENTIAL_ENV` chose that variable, the error names `TROUPE_RUNTIME_<NAME>_CREDENTIAL_ENV`
+instead, and never repeats what it holds, in case it's a key put there by mistake.
 
 ## What a theatre's config can still choose
 

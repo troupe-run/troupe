@@ -55,24 +55,24 @@
 
 ## 4. A credential refusal never repeats a name from the environment (spec: "A refusal never repeats a credential variable's name taken from the environment"; design D6)
 
-- [ ] 4.1 Add tests in `test_runtimes.py`, one per code (`credential-unset`, `credential-malformed`,
+- [x] 4.1 Add tests in `test_runtimes.py`, one per code (`credential-unset`, `credential-malformed`,
   `credential-too-short`), where `TROUPE_RUNTIME_MYHOST_CREDENTIAL_ENV` holds a hex name such as
   `a3f9c2e17b4d8e05f6a1` (set to a malformed or short value for the last two). Each asserts the details are
   `{runtime, namedBy: "TROUPE_RUNTIME_MYHOST_CREDENTIAL_ENV"}` and that the serialised error holds no part of the name.
   Also add one per code with the name from config (`runtimes.myhost.credential.env=K`) asserting `{runtime, variable:
   "K"}`, and one from the built-in `openai` naming `OPENAI_API_KEY`. Verify: the environment cases fail on the code
   after group 3, the config and built-in ones pass.
-- [ ] 4.2 Add one helper in `troupe.core.runtimes` that, given the credential's `Sourced` name and the runtime, gives
+- [x] 4.2 Add one helper in `troupe.core.runtimes` that, given the credential's `Sourced` name and the runtime, gives
   the words for the problem and fix and the `variable`/`namedBy` detail. Use it in all three refusals. Verify: 4.1
   passes, and `test_no_refusal_holds_any_part_of_the_value` gains environment-sourced cases.
-- [ ] 4.3 In both copies of `error.schema.json`, make the three codes' details take `runtime` and exactly one of
+- [x] 4.3 In both copies of `error.schema.json`, make the three codes' details take `runtime` and exactly one of
   `variable` and `namedBy` (`oneOf`, still `additionalProperties: false`), in the same commit as 4.2. Verify: `cmp`
   shows the copies identical; a schema test refuses details with both keys and with neither; `protocol_schemas` and
   `protocol_guard` pass.
-- [ ] 4.4 Add the spec's scenario to `test_perform_runtime.py`: `TROUPE_RUNTIME_OPENAI_CREDENTIAL_ENV` is a hex name
+- [x] 4.4 Add the spec's scenario to `test_perform_runtime.py`: `TROUPE_RUNTIME_OPENAI_CREDENTIAL_ENV` is a hex name
   that isn't set, perform fails with `runtime.credential-unset` naming the `TROUPE_RUNTIME_` variable, nothing is
   recorded, and no client message holds the name. Verify: the test passes, and fails when 4.2's helper is bypassed.
-- [ ] 4.5 Update `contributing/config.md`'s rows for the three codes: each names the runtime and the variable, or the
+- [x] 4.5 Update `contributing/config.md`'s rows for the three codes: each names the runtime and the variable, or the
   `TROUPE_RUNTIME_` variable when that set the name, never the value. Verify: `uv run scripts/check.py` passes.
 
 ## 5. Whole-change checks

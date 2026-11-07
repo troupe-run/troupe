@@ -2469,8 +2469,7 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "runtime",
-            "variable"
+            "runtime"
           ],
           "properties": {
             "runtime": {
@@ -2478,10 +2477,28 @@
               "minLength": 1
             },
             "variable": {
+              "description": "The variable the credential is read from, named by the theatre's config or a built-in runtime. Absent: an environment variable named it, and namedBy says which.",
+              "type": "string",
+              "minLength": 1
+            },
+            "namedBy": {
+              "description": "The TROUPE_RUNTIME_ variable that named the credential's variable, whose value is never repeated, since a key can pass for a name. Absent: config or a built-in runtime named it, and variable says which.",
               "type": "string",
               "minLength": 1
             }
-          }
+          },
+          "oneOf": [
+            {
+              "required": [
+                "variable"
+              ]
+            },
+            {
+              "required": [
+                "namedBy"
+              ]
+            }
+          ]
         }
       },
       "required": [
@@ -2497,8 +2514,7 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "runtime",
-            "variable"
+            "runtime"
           ],
           "properties": {
             "runtime": {
@@ -2506,10 +2522,28 @@
               "minLength": 1
             },
             "variable": {
+              "description": "The variable the credential is read from, named by the theatre's config or a built-in runtime. Absent: an environment variable named it, and namedBy says which.",
+              "type": "string",
+              "minLength": 1
+            },
+            "namedBy": {
+              "description": "The TROUPE_RUNTIME_ variable that named the credential's variable, whose value is never repeated, since a key can pass for a name. Absent: config or a built-in runtime named it, and variable says which.",
               "type": "string",
               "minLength": 1
             }
-          }
+          },
+          "oneOf": [
+            {
+              "required": [
+                "variable"
+              ]
+            },
+            {
+              "required": [
+                "namedBy"
+              ]
+            }
+          ]
         }
       },
       "required": [
@@ -2526,7 +2560,6 @@
           "additionalProperties": false,
           "required": [
             "runtime",
-            "variable",
             "minimumBytes"
           ],
           "properties": {
@@ -2535,6 +2568,12 @@
               "minLength": 1
             },
             "variable": {
+              "description": "The variable the credential is read from, named by the theatre's config or a built-in runtime. Absent: an environment variable named it, and namedBy says which.",
+              "type": "string",
+              "minLength": 1
+            },
+            "namedBy": {
+              "description": "The TROUPE_RUNTIME_ variable that named the credential's variable, whose value is never repeated, since a key can pass for a name. Absent: config or a built-in runtime named it, and variable says which.",
               "type": "string",
               "minLength": 1
             },
@@ -2542,7 +2581,19 @@
               "type": "integer",
               "minimum": 1
             }
-          }
+          },
+          "oneOf": [
+            {
+              "required": [
+                "variable"
+              ]
+            },
+            {
+              "required": [
+                "namedBy"
+              ]
+            }
+          ]
         }
       },
       "required": [
