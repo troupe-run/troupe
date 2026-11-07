@@ -287,6 +287,16 @@ end the run with an `error` result saying a retry could run a tool twice.
 - **WHEN** the connection drops after a `Write` call was carried out
 - **THEN** nothing is retried, and the run ends with an `error` result saying a retry could run a tool twice
 
+### Requirement: Every limit the library applies is one of the runner's named settings
+Each timeout the library applies (the greeting check, waiting for a server message, closing the websocket) SHALL be
+set from one of the runner's named settings, never left to the library's default. Where the library offers no way to
+set one, the runner's own named deadline SHALL bound the call.
+
+#### Scenario: A server that never answers
+- **WHEN** the fake endpoint accepts the websocket and then sends nothing, and the message timeout setting is 2 seconds
+- **THEN** the run ends with an `error` result naming the timeout within the setting plus the runner's grace, not the
+  library's default
+
 ### Requirement: Redirects are never followed
 A redirect from LM Studio's endpoint SHALL refuse `run/start` with `lm-studio.unreachable`, naming the status and where
 it pointed, and SHALL NOT be followed.
