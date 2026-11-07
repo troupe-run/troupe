@@ -315,8 +315,8 @@ class _Run:
             )
         )
         dropped = replace(event, estimated_cost_usd=None)
-        params = dropped.to_data()
-        return dropped, params, json.dumps(params, separators=(",", ":")).encode()
+        message = p.notification("run/event", dropped)
+        return dropped, message["params"], json.dumps(message, separators=(",", ":")).encode()
 
     def transcript_record(self, params: object) -> None:
         try:

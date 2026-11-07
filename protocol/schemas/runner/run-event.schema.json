@@ -180,7 +180,7 @@
     },
     "oversized": {
       "title": "oversized",
-      "description": "Written by troupe, never by a runner: stands in for an event larger than the maximum event size. The original is in the artifact store under ref.",
+      "description": "Written by troupe, never by a runner: stands in for an event larger than the maximum event size. The original is in the artifact store under ref, less any estimatedCostUsd troupe gave the runner no price for.",
       "type": "object",
       "additionalProperties": false,
       "required": ["runId", "seq", "type", "originalType", "bytes", "ref"],
