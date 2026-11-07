@@ -38,7 +38,12 @@ from troupe_plugin_sdk.effects import Effects
 FAKE = Path(__file__).with_name("fake_runner.py")
 INIT = {"type": "init", "runner": {"name": "scripted", "version": "0.0.1"}, "tools": ["Write"]}
 OK = {"type": "result", "status": "ok", "message": "done"}
-ERROR_RESULT = {"type": "result", "status": "error", "message": "API Error: 401"}
+ERROR_RESULT = {
+    "type": "result",
+    "status": "error",
+    "reason": "authentication",
+    "message": "API Error: 401",
+}
 FAST = RunLimits(cancel_grace=2.0, start_timeout=30.0)
 
 
@@ -310,6 +315,23 @@ def test_each_protocol_violation_crashes_the_run_naming_it(
 
 KILL_STATUS = processes.KILLED_EXIT_CODE if sys.platform == "win32" else -9
 """The exit status troupe's kill gives a runner: its named code on Windows, SIGKILL elsewhere."""
+
+
+# Requirement: An error result names one reason from a closed list
+
+
+def test_an_error_result_without_a_reason_crashes_the_run_naming_reason(tmp_path: Path) -> None:
+    ran = _run(tmp_path, argv=_fake("error-without-reason"))
+    assert (ran.outcome.outcome, _code(ran)) == (Outcome.CRASHED, "runner.protocol")
+    assert ran.outcome.error is not None
+    assert "reason" in ran.outcome.error.problem
+
+
+def test_an_error_results_reason_reaches_the_outcomes_details(tmp_path: Path) -> None:
+    ran = _run(tmp_path, {"steps": [{"event": INIT}, {"event": ERROR_RESULT}]})
+    assert (ran.outcome.outcome, _code(ran)) == (Outcome.FAILED, "run.error-result")
+    assert ran.outcome.error is not None
+    assert ran.outcome.error.details == {"reason": "authentication", "message": "API Error: 401"}
 
 
 def test_a_late_event_after_the_result_crashes_the_run_whether_the_runner_answers_shutdown_first(

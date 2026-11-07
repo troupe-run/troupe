@@ -34,6 +34,7 @@
       "type": "result",
       "seq": 2,
       "status": "error",
+      "reason": "output-limit",
       "message": "The response reached the service's output limit before the model finished.",
       "turns": 1,
       "usage": {

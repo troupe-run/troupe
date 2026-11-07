@@ -53,12 +53,12 @@ before anything plays.
 
 | Step | What it does |
 |---|---|
-| `event` | Sends a run event. `runId` and `seq` are filled in, unless the step sets them (to break the contract on purpose), and so is an `init`'s `effects`, as `checked`. |
+| `event` | Sends a run event. `runId` and `seq` are filled in, unless the step sets them (to break the contract on purpose), and so is an `init`'s `effects`, as `checked`. A `result` with status `error` names its `reason`, so a test can drive each one; a script whose `error` result has none is refused before anything plays. |
 | `transcript` | Sends a transcript record: a string, or `{"record": "...", "encoding": "base64"}`. |
 | `stderr` | Writes text to standard error. |
 | `wait` | `{"ms": n}`: waits, still answering troupe, so a cancel or end of input ends it early. |
 | `writeFile` | `{"path": "...", "content": "..."}`: writes a file under the workspace, raw: no effect checks it, so a test can show what troupe's audit catches. Absolute paths, drives, UNC paths and `..` are refused. |
-| `tool` | `{"name": "Write", "input": {...}, "callId": "c1", "isError": true}`: carries out one tool call with the [plugin SDK's tools](../../packages/troupe-plugin-sdk/README.md), as a model's call would be: checked against `run/start`'s effects, in its workspace and scratch directory, and sent as a `tool_call` and a `tool_result`. `input` is an object of the tool's fields, or the JSON text of one (malformed on purpose, if need be). `callId` is `tool-<n>` when absent. With `isError`, a result that isn't what the step expects ends the run with an error `result` naming the step. |
+| `tool` | `{"name": "Write", "input": {...}, "callId": "c1", "isError": true}`: carries out one tool call with the [plugin SDK's tools](../../packages/troupe-plugin-sdk/README.md), as a model's call would be: checked against `run/start`'s effects, in its workspace and scratch directory, and sent as a `tool_call` and a `tool_result`. `input` is an object of the tool's fields, or the JSON text of one (malformed on purpose, if need be). `callId` is `tool-<n>` when absent. With `isError`, a result that isn't what the step expects ends the run with an error `result` naming the step, with reason `other`, as every check a step makes does. |
 | `hang` | `true`: blocks until a cancel it honours, `shutdown` or end of input. |
 | `exit` | Exits at once with this code, without a `result`. |
 | `rawStdout` | Writes this line to standard output as it is, to break the contract on purpose. |
@@ -68,7 +68,7 @@ before anything plays.
 | `echoCredential` | `true`. **Only for testing troupe's masking:** sends the run's credential back in a `log` event, a transcript record and standard error, as a runner that leaks it would. A real runner never does. With no credential, ends the run with an error `result`. |
 
 `onCancel` says what `run/cancel` does: `honour` (the default: answer and exit without a `result`, as Claude Code
-does), `honour-with-result` (answer, send a `result` with status `error`, exit) or `ignore` (answer and carry on,
+does), `honour-with-result` (answer, send a `result` with status `error` and reason `cancelled`, exit) or `ignore` (answer and carry on,
 so only a kill stops it).
 
 ## Recordings

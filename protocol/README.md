@@ -50,7 +50,9 @@ Every schema here, and every schema a plugin publishes, is strict (decision [#7]
 - **A place that varies is an extension point** with a closed default: `{"$dynamicRef": "#name"}`, whose
   `$dynamicAnchor` default accepts only what is safe without the outside schema. A runner's options
   (`runnerOptions`) and its own error codes (`runnerErrors`) are the two so far; a runner's published schemas fill
-  them ([contributing/runners.md](../contributing/runners.md#publishing-a-runners-schemas)).
+  them ([contributing/runners.md](../contributing/runners.md#publishing-a-runners-schemas)). A list troupe acts
+  on the same way for every runner is not one: a failed result's `reason`
+  ([contributing/runners.md](../contributing/runners.md#why-a-run-failed)) is closed, with no extension point.
 - **Codes are catalogued:** the error and notice schemas list every code, so an unlisted code doesn't validate,
   and each code's `details` keys are camelCase.
 

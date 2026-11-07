@@ -18,7 +18,9 @@ from troupe.core.workspaces import worktree_path
 from troupe_plugin_sdk.messages import Message
 
 perform_module = importlib.import_module("troupe.core.runs.perform")
-FAIL = {"event": {"type": "result", "status": "error", "message": "it went wrong"}}
+FAIL = {
+    "event": {"type": "result", "status": "error", "reason": "other", "message": "it went wrong"}
+}
 
 
 def write(path: str, content: str) -> dict[str, Any]:

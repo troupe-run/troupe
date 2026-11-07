@@ -12,7 +12,7 @@ check a step makes that fails (the character, the runtime, the credential, a too
 #### Scenario: A scripted error result without a reason
 - **WHEN** a script's `event` step sends a `result` with status `error` and no `reason`
 - **THEN** the script doesn't validate against the scripted runner's options schema, and the run is refused before it
-  starts
+  starts with `scripted.invalid-script`, naming `reason`
 
 #### Scenario: A cancel honoured with a result
 - **WHEN** a script sets the cancel behaviour to honour with a result, and the host cancels the run

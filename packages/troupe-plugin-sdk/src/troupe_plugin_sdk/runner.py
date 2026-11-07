@@ -16,7 +16,7 @@ or a value out of range raises ProtocolError, which the host treats as a protoco
 import json
 import re
 from dataclasses import dataclass
-from typing import Any, ClassVar, Literal
+from typing import Any, ClassVar, Literal, get_args
 
 from troupe_plugin_sdk.effects import PatternError, pattern_regex
 
@@ -247,15 +247,46 @@ class LogEvent(RunEvent):
     message: str = json_field("message")
 
 
+FailureReason = Literal[
+    "authentication",
+    "quota",
+    "rate-limit",
+    "network",
+    "server",
+    "configuration",
+    "context-length",
+    "output-limit",
+    "refused",
+    "turn-limit",
+    "budget",
+    "cancelled",
+    "engine",
+    "runner",
+    "other",
+]
+"""Why a run failed: the contract's closed list (run-event.schema.json ``$defs/failureReason``,
+which says what each means). A failure the list has no entry for is ``other``."""
+
+FAILURE_REASONS: tuple[FailureReason, ...] = get_args(FailureReason)
+
+
 @dataclass(frozen=True)
 class ResultEvent(RunEvent):
     TYPE: ClassVar[str | None] = "result"
     status: Literal["ok", "error"] = json_field("status")
     message: str = json_field("message")
+    reason: FailureReason | None = json_field("reason", default=None)
+    """Why the run failed: present exactly when status is error, wherever a result appears."""
     turns: int | None = json_field("turns", default=None, minimum=0)
     duration_ms: int | None = json_field("durationMs", default=None, minimum=0)
     usage: Usage | None = json_field("usage", default=None)
     cost_usd: float | None = json_field("costUsd", default=None, minimum=0)
+
+    def __post_init__(self) -> None:
+        if self.status == "error" and self.reason is None:
+            raise fail("ResultEvent", "an error result needs a reason")
+        if self.status == "ok" and self.reason is not None:
+            raise fail("ResultEvent", f"an ok result has no reason, not {self.reason!r}")
 
 
 EventType = Literal["init", "turn", "tool_call", "tool_result", "retry", "log", "result"]

@@ -38,6 +38,14 @@ def _event(
 
 SEQ = st.integers(min_value=1, max_value=10**9)
 
+
+def _with_reason_when_failed(data: dict[str, Any]) -> st.SearchStrategy[Any]:
+    """An error result always has a reason, and an ok result never does."""
+    if data["status"] == "ok":
+        return st.just(data)
+    return st.sampled_from(p.FAILURE_REASONS).map(lambda reason: {**data, "reason": reason})
+
+
 # (type, schema reference, strategy for valid JSON data of that type)
 CASES: list[tuple[type[p.Message], str, st.SearchStrategy[Any]]] = [
     (
@@ -197,7 +205,7 @@ CASES: list[tuple[type[p.Message], str, st.SearchStrategy[Any]]] = [
                 ),
                 "costUsd": st.floats(0, 1000, allow_nan=False),
             },
-        ),
+        ).flatmap(_with_reason_when_failed),
     ),
     (
         p.OversizedEvent,
@@ -357,6 +365,38 @@ REFUSED: list[tuple[str, type[p.Message], dict[str, Any], str]] = [
         "at least 0",
     ),
     (
+        "error result without a reason",
+        p.ResultEvent,
+        {"runId": RUN, "seq": 1, "type": "result", "status": "error", "message": ""},
+        "ResultEvent: an error result needs a reason",
+    ),
+    (
+        "ok result with a reason",
+        p.ResultEvent,
+        {
+            "runId": RUN,
+            "seq": 1,
+            "type": "result",
+            "status": "ok",
+            "message": "",
+            "reason": "budget",
+        },
+        "ResultEvent: an ok result has no reason",
+    ),
+    (
+        "reason off the list",
+        p.ResultEvent,
+        {
+            "runId": RUN,
+            "seq": 1,
+            "type": "result",
+            "status": "error",
+            "message": "",
+            "reason": "timeout",
+        },
+        "one of",
+    ),
+    (
         "bad enum",
         p.ResultEvent,
         {"runId": RUN, "seq": 1, "type": "result", "status": "success", "message": ""},
@@ -503,3 +543,28 @@ def test_an_init_recorded_before_effects_existed_still_reads_as_a_host_event() -
     event = p.InitEvent.from_data(legacy)
     assert event.effects is None
     validate(legacy, "run-event.schema.json#/$defs/hostEvent")
+
+
+# Requirement: The SDK's result type carries the reason
+
+
+def test_a_runner_cant_build_an_error_result_without_a_reason() -> None:
+    with pytest.raises(p.ProtocolError, match=r"ResultEvent: an error result needs a reason"):
+        p.ResultEvent(run_id=RUN, seq=1, status="error", message="401")
+
+
+def test_a_runner_cant_build_an_ok_result_with_a_reason() -> None:
+    with pytest.raises(p.ProtocolError, match=r"ResultEvent: an ok result has no reason"):
+        p.ResultEvent(run_id=RUN, seq=1, status="ok", message="done", reason="budget")
+
+
+def test_the_host_parsing_an_error_result_without_a_reason_refuses_it_naming_reason() -> None:
+    data = {"runId": RUN, "seq": 1, "type": "result", "status": "error", "message": "401"}
+    with pytest.raises(p.ProtocolError, match=r"ResultEvent: .*reason"):
+        p.parse_event(data)
+
+
+def test_an_error_result_with_a_reason_round_trips() -> None:
+    event = p.ResultEvent(run_id=RUN, seq=1, status="error", message="401", reason="authentication")
+    assert event.to_data()["reason"] == "authentication"
+    assert p.parse_event(event.to_data()) == event

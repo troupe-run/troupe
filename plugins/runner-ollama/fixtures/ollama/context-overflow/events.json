@@ -26,6 +26,7 @@
     "type": "result",
     "seq": 1,
     "status": "error",
+    "reason": "context-length",
     "message": "Ollama answered status 400: request (1226 tokens) exceeds the available context size (512 tokens), try increasing it. The run's context window is 512 tokens; raise contextLength, or give the actor a smaller task.",
     "turns": 1
   }

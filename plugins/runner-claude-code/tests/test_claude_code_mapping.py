@@ -293,6 +293,7 @@ def test_an_error_under_a_success_subtype_is_an_error_result() -> None:
     assert _feed(INIT, record)[1] == {
         "type": "result",
         "status": "error",
+        "reason": "other",
         "message": "Invalid API key",
     }
 
@@ -302,8 +303,107 @@ def test_a_budget_stop_with_no_text_is_an_error_result_named_by_its_subtype() ->
     assert _feed(INIT, record)[1] == {
         "type": "result",
         "status": "error",
+        "reason": "budget",
         "message": "error_max_budget_usd",
     }
+
+
+# Requirement: An error result's reason comes from Claude Code's own fields
+
+
+@pytest.mark.parametrize(
+    ("subtype", "reason"),
+    [
+        ("error_max_turns", "turn-limit"),
+        ("error_max_budget_usd", "budget"),
+        ("error_during_execution", "engine"),
+        ("error_widget", "other"),
+    ],
+)
+def test_a_failed_subtype_maps_to_its_reason(subtype: str, reason: str) -> None:
+    record = {"type": "result", "subtype": subtype, "is_error": True}
+    (result,) = [e for e in _feed(INIT, record) if e["type"] == "result"]
+    assert (result["status"], result["reason"]) == ("error", reason)
+
+
+def test_an_ok_result_has_no_reason() -> None:
+    (result,) = [e for e in _feed(INIT, _result()) if e["type"] == "result"]
+    assert "reason" not in result
+
+
+# Requirement: An API error maps by its error code, then the last retry, then its status
+
+
+def _api_error(error: str) -> dict[str, Any]:
+    """An assistant record standing for an API error, shaped like the recorded fixtures'."""
+    return _assistant({"type": "text", "text": "API Error"}, error=error, is_api_error_message=True)
+
+
+def _api_failure(status: int | None) -> dict[str, Any]:
+    return _result(
+        is_error=True, result="API Error", terminal_reason="api_error", api_error_status=status
+    )
+
+
+@pytest.mark.parametrize(
+    ("error", "reason"),
+    [
+        ("authentication_failed", "authentication"),
+        ("billing_error", "quota"),
+        ("rate_limit", "rate-limit"),
+        ("max_output_tokens", "output-limit"),
+    ],
+)
+def test_an_api_error_code_that_names_its_cause_gives_the_reason(error: str, reason: str) -> None:
+    events = _feed(INIT, _retry("unknown", None), _api_error(error), _api_failure(None))
+    assert events[-1]["reason"] == reason
+
+
+def test_a_generic_api_error_after_retries_ends_with_the_last_retrys_reason() -> None:
+    events = _feed(
+        INIT,
+        _retry("unknown", None),
+        _retry("rate_limit", 429),
+        _api_error("server_error"),
+        _api_failure(429),
+    )
+    assert events[-1]["reason"] == "rate-limit"
+
+
+@pytest.mark.parametrize(
+    ("status", "reason"), [(503, "server"), (429, "rate-limit"), (None, "network"), (400, "other")]
+)
+def test_an_api_error_without_a_retry_or_a_named_code_goes_by_its_status(
+    status: int | None, reason: str
+) -> None:
+    events = _feed(INIT, _api_error("widget_error"), _api_failure(status))
+    assert events[-1]["reason"] == reason
+
+
+def test_an_error_with_nothing_to_go_on_is_other() -> None:
+    events = _feed(INIT, _result(is_error=True, result="?", terminal_reason="completed"))
+    assert events[-1]["reason"] == "other"
+
+
+@pytest.mark.parametrize(
+    ("name", "reason"),
+    [
+        ("is-error-success-subtype", "authentication"),
+        ("rate-limit-retries", "rate-limit"),
+        ("server-retries", "server"),
+        ("network-retries", "network"),
+    ],
+)
+def test_a_recorded_failure_maps_to_its_reason(name: str, reason: str) -> None:
+    mapper = Mapper(FIXTURE_RUNNER_VERSION, LIMIT)
+    events = [
+        out.event
+        for line in recording(name)
+        if "transcript" in line
+        for out in mapper.feed(line["transcript"].encode())
+        if isinstance(out, Event)
+    ]
+    assert (events[-1]["type"], events[-1]["reason"]) == ("result", reason)
 
 
 def test_permission_denials_are_warnings_immediately_before_the_result() -> None:

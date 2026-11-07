@@ -21,9 +21,9 @@ group's own tests pass when it's done.
   `hostEvent` and in `run-ended`'s outcome; that no `$dynamicRef` reaches `reason`; and `test_protocol_strict.py`
   passes.
 - [ ] 2.2 Write each scenario of the runner-protocol delta that the schema alone can't check as a host test: an `error`
-  result without a reason from a scripted `rawStdout` line crashes the run with `runner.protocol`; a `Run.Ended`
-  record whose result lacks a reason is refused as malformed when read. Verify: those tests pass, and fail with the
-  schema's `if`/`then` removed.
+  result without a reason from a scripted `rawStdout` line crashes the run with `runner.protocol`; a recorded
+  `result` event without a reason is refused naming `reason` when read back as a logged event. Verify: those tests pass, and fail with the
+  SDK's check removed (the host parses a runner's events with the SDK).
 - [ ] 2.3 Document the result's `reason` in `contributing/runners.md` (the events table, a "Why a run failed" section
   with D2's table and D3's rule for `other`, the last-retry rule, and a cancelled result) and in `protocol/README.md`
   where it describes runner events. Verify: `uv run scripts/check.py`'s docs checks pass, and every reason in the
@@ -57,7 +57,7 @@ group's own tests pass when it's done.
   send `cancelled` for `honour-with-result`, and `other` for its own check failures; update every script and fixture
   in the repository that sends an `error` result (core's tests, the auditions) to name a reason. Verify: the
   scripted-runner scenarios pass as tests, a script with an `error` result and no reason is refused at `run/start`
-  with `runner.invalid-params`, and the scripted harness validates every message it sends; update its README.
+  with `scripted.invalid-script`, and the scripted harness validates every message it sends; update its README.
 
 ## 6. The three engine runners (design D6)
 
