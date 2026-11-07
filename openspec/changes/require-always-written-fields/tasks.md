@@ -48,7 +48,7 @@ edit, regenerate the packaged copy with `uv run scripts/package_schemas.py` and 
 
 ## 3. The audit is required wherever the runner started
 
-- [ ] 3.1 Write the new tests first and run them on the current code to see them fail: an end with ending `exited` or
+- [x] 3.1 Write the new tests first and run them on the current code to see them fail: an end with ending `exited` or
   `killed` and no `outcome.audit` fails `run-ended.schema.json`; an ended summary with a `transcript` and no `audit`
   fails `client/run.schema.json` and `RunSummary.from_data`, naming `audit`; an ended summary with no `transcript`
   and an `audit` fails both (runs and client-protocol deltas). Verify each fails on the current code.
