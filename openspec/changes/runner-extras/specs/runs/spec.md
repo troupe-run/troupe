@@ -54,7 +54,7 @@ or run `uv sync` in a checkout of troupe.
 
 #### Scenario: A base runner missing from a broken install
 - **WHEN** a person performs an actor whose runner is `scripted`, and `troupe_runner_scripted` isn't installed
-- **THEN** it is refused with `runner.not-installed`, with a null extra, and a fix naming the install page and
+- **THEN** it is refused with `runner.not-installed`, with no extra in its details, and a fix naming the install page and
   `uv sync`
 
 #### Scenario: Rehearsing
