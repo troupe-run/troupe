@@ -4,6 +4,7 @@ D12)."""
 
 import asyncio
 import json
+import sys
 import time
 import uuid
 from pathlib import Path
@@ -43,7 +44,9 @@ def _run(
 ) -> tuple[RunOutcome, MemoryArtifactStore, list[tuple[str, dict[str, Any]]], Path]:
     provenance = ollama_stand_in.provenance(name)
     workspace = _workspace(tmp_path, name)
-    scratch = tmp_path / "scratch"
+    # A backslash in the name makes the path need escaping on every OS, as a Windows path does
+    # (where a backslash is the separator, so the plain name is enough).
+    scratch = tmp_path / ("scratch" if sys.platform == "win32" else "scra\\tch")
     scratch.mkdir()
     effects = provenance.get("effects") or {}
     store = MemoryArtifactStore()
@@ -75,10 +78,17 @@ def _run(
 
 
 def _stored(outcome: RunOutcome, store: MemoryArtifactStore, scratch: Path) -> list[str]:
+    """The stored transcript's lines, with ``<scratch>`` for the run's scratch path. Each line is
+    a record framed with its kind, so the path is scrubbed in the record and the line framed again,
+    as the fixture's were: in the framed line, a path that needs escaping is escaped twice."""
     assert outcome.transcript is not None
-    text = store.read(outcome.transcript).decode("utf-8")
-    text = text.replace(json.dumps(str(scratch))[1:-1], "<scratch>")
-    return text.splitlines()
+    assert outcome.transcript_format is TranscriptFormat.KINDS
+    lines = []
+    for text in store.read(outcome.transcript).decode("utf-8").splitlines():
+        line = json.loads(text)
+        line["record"] = line["record"].replace(json.dumps(str(scratch))[1:-1], "<scratch>")
+        lines.append(json.dumps(line, ensure_ascii=False, separators=(",", ":")))
+    return lines
 
 
 @pytest.mark.parametrize("name", RUNS)
@@ -177,7 +187,6 @@ def test_a_runners_tool_message_is_a_stored_record_before_the_next_answers_lines
     with ollama_stand_in.serving("success-with-tools") as fake:
         outcome, store, _, scratch = _run("success-with-tools", tmp_path, fake.url)
     lines = [json.loads(line) for line in _stored(outcome, store, scratch)]
-    assert outcome.transcript_format is TranscriptFormat.KINDS
     stored = [json.loads(line["record"]) for line in lines]
     tool = next(i for i, r in enumerate(stored) if r.get("role") == "tool")
     first_line_after = next(i for i, r in enumerate(stored) if i > tool and "done" in r)
@@ -192,7 +201,7 @@ def test_history_sent_again_is_stored_once(tmp_path: Path) -> None:
         outcome, store, _, scratch = _run("success-with-tools", tmp_path, fake.url)
         assert len(fake.chats()) == 2
     direction = ollama_stand_in.provenance("success-with-tools")["direction"]
-    stored = "\n".join(_stored(outcome, store, scratch))
+    stored = "\n".join(json.loads(line)["record"] for line in _stored(outcome, store, scratch))
     assert stored.count(json.dumps(direction)[1:-1]) == 1
 
 
