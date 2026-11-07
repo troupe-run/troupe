@@ -37,6 +37,7 @@ SUMMARY: dict[str, Any] = {
     "startedAt": AT,
     "endedAt": AT,
     "transcript": HASH,
+    "transcriptFormat": "native",
     "stderr": HASH,
 }
 EVENT: dict[str, Any] = {
@@ -134,6 +135,7 @@ ACCEPTED = [
                 runner={"requested": "scripted"},
                 outcome="could-not-start",
                 drop_transcript=None,
+                drop_transcriptFormat=None,
                 drop_stderr=None,
             )
         },
@@ -144,6 +146,11 @@ ACCEPTED = [
     ("status-request.schema.json", {"run": "0f8fad5b"}, "an 8-digit prefix"),
     ("status-request.schema.json", {"run": RUN_ID}, "a full id"),
     ("status-result.schema.json", {"runs": [SUMMARY], "notices": []}, "a list"),
+    (
+        "status-result.schema.json",
+        {"runs": [changed(SUMMARY, transcriptFormat="kinds")], "notices": []},
+        "a run whose transcript has kinds",
+    ),
     (
         "status-result.schema.json",
         {
@@ -277,13 +284,37 @@ REFUSED = [
         {"runs": [changed(SUMMARY, drop_outcome=None)], "notices": []},
         "an ended run without an outcome",
     ),
+    (
+        "status-result.schema.json",
+        {"runs": [changed(SUMMARY, drop_transcriptFormat=None)], "notices": []},
+        "a transcript without its format",
+    ),
+    (
+        "status-result.schema.json",
+        {"runs": [changed(SUMMARY, drop_transcript=None)], "notices": []},
+        "a transcript format without a transcript",
+    ),
+    (
+        "status-result.schema.json",
+        {"runs": [changed(SUMMARY, transcriptFormat="framed")], "notices": []},
+        "a transcript format the schema doesn't define",
+    ),
     *[
         (
             "perform-result.schema.json",
             {"run": changed(SUMMARY, **{field: None})},
             f"a null {field}",
         )
-        for field in ("outcome", "error", "endedAt", "transcript", "stderr", "recording", "audit")
+        for field in (
+            "outcome",
+            "error",
+            "endedAt",
+            "transcript",
+            "transcriptFormat",
+            "stderr",
+            "recording",
+            "audit",
+        )
     ],
     (
         "perform-result.schema.json",

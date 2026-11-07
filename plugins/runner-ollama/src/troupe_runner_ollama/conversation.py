@@ -49,8 +49,10 @@ class Sink(Protocol):
 
     def event(self, event: p.RunEvent) -> None: ...
 
-    def transcript(self, record: bytes) -> None:
-        """One transcript record, verbatim; the sink sends it as base64 when it isn't UTF-8."""
+    def transcript(self, kind: p.TranscriptKind, record: bytes) -> None:
+        """One transcript record, verbatim, and its kind: ``sent`` for what the runner sent
+        Ollama, ``received`` for what Ollama sent back. The sink sends it as base64 when it isn't
+        UTF-8, and its kind only when troupe offered transcript-kinds."""
         ...
 
     def stopping(self) -> bool:
@@ -219,7 +221,7 @@ class Conversation:
         encoded = encode(message)
         self._messages.append(encoded)
         if record:
-            self._sink.transcript(encoded)
+            self._sink.transcript("sent", encoded)
 
     # Sending
 
@@ -231,10 +233,10 @@ class Conversation:
             data = fit(data, summary, SUMMARY_MAX_BYTES, self._start.limits.event_max_bytes)
         self._sink.event(p.parse_event(data))
 
-    def _record(self, line: bytes) -> None:
+    def _record(self, kind: p.TranscriptKind, line: bytes) -> None:
         if self._sink.stopping():
             raise _Stop
-        self._sink.transcript(line)
+        self._sink.transcript(kind, line)
 
     # The run
 
@@ -279,7 +281,7 @@ class Conversation:
                 )
             body = self._body()
             if first:
-                self._record(body)
+                self._record("sent", body)
                 first = False
             answer = self._request(body)
             self._after(answer)
@@ -297,7 +299,7 @@ class Conversation:
             except StoppedError as error:
                 raise _Stop from error
             except EngineError as error:
-                self._record(error.body)
+                self._record("received", error.body)
                 message = error.message
                 if error.status == 400:
                     message += (
@@ -307,7 +309,7 @@ class Conversation:
                 raise _RunEnded(message) from error
             except RetryableError as error:
                 if error.body is not None:
-                    self._record(error.body)
+                    self._record("received", error.body)
                 if attempt == RETRY_MAX_ATTEMPTS:
                     raise _RunEnded(
                         f"gave up after {RETRY_MAX_ATTEMPTS} attempts: {error.message}"
@@ -336,7 +338,7 @@ class Conversation:
 
     def _gather(self, answer: _Answer, lines: Iterator[bytes]) -> _Answer:
         for line in lines:
-            self._record(line)
+            self._record("received", line)
             try:
                 data = _clean(json.loads(line))
             except ValueError:

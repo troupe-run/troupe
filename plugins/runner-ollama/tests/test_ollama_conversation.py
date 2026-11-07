@@ -43,15 +43,16 @@ WINDOW = DEFAULT_CONTEXT_LENGTH
 class Recorder:
     """A sink that keeps what it's sent, in order."""
 
-    sent: list[p.RunEvent | bytes] = field(default_factory=list)
+    sent: list[p.RunEvent | tuple[p.TranscriptKind, bytes]] = field(default_factory=list)
+    """Each event, and each transcript record as its kind and bytes, in the order sent."""
     stop: threading.Event = field(default_factory=threading.Event)
     waits: list[float] = field(default_factory=list)
 
     def event(self, event: p.RunEvent) -> None:
         self.sent.append(event)
 
-    def transcript(self, record: bytes) -> None:
-        self.sent.append(record)
+    def transcript(self, kind: p.TranscriptKind, record: bytes) -> None:
+        self.sent.append((kind, record))
 
     def stopping(self) -> bool:
         return self.stop.is_set()
@@ -66,7 +67,12 @@ class Recorder:
 
     @property
     def records(self) -> list[bytes]:
-        return [item for item in self.sent if isinstance(item, bytes)]
+        return [item[1] for item in self.sent if isinstance(item, tuple)]
+
+    @property
+    def kinds(self) -> list[p.TranscriptKind]:
+        """Each transcript record's kind, in the order sent."""
+        return [item[0] for item in self.sent if isinstance(item, tuple)]
 
     def of(self, kind: type[p.RunEvent]) -> list[Any]:
         return [event for event in self.events if isinstance(event, kind)]
@@ -569,6 +575,26 @@ def test_a_run_with_one_tool_call_records_each_exchange_in_order(tmp_path: Path)
     assert json.loads(tool)["role"] == "tool"
 
 
+def test_what_the_runner_sends_is_sent_and_every_answer_line_is_received(tmp_path: Path) -> None:
+    first = calls(tool_call("Glob", {"pattern": "*"}))
+    second = final("done")
+    sink, _ = _run(tmp_path, [first, second])
+    lines = len(first.encoded()), len(second.encoded())
+    assert sink.kinds == [
+        "sent",  # the first request's body
+        *["received"] * lines[0],
+        "sent",  # the assistant message
+        "sent",  # the tool message
+        *["received"] * lines[1],
+    ]
+
+
+def test_an_error_body_is_a_received_record(tmp_path: Path) -> None:
+    refused = b'{"error": "invalid"}'
+    sink, _ = _run(tmp_path, [Answer(status=400, body=refused)])
+    assert ("received", refused) in [item for item in sink.sent if isinstance(item, tuple)]
+
+
 def test_each_added_message_is_recorded_exactly_as_it_is_sent(tmp_path: Path) -> None:
     sink, fake = _run(
         tmp_path,
@@ -593,7 +619,7 @@ def test_a_record_that_leads_to_an_event_comes_before_it(tmp_path: Path) -> None
     final_line = next(
         index
         for index, item in enumerate(sink.sent)
-        if isinstance(item, bytes) and json.loads(item).get("done") is True
+        if isinstance(item, tuple) and json.loads(item[1]).get("done") is True
     )
     turn = next(index for index, item in enumerate(sink.sent) if isinstance(item, p.TurnEvent))
     assert final_line < turn

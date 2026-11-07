@@ -635,3 +635,75 @@ def test_a_character_that_doesnt_match_ends_the_run_with_an_error_naming_both(
 def test_a_malformed_character_check_is_refused_as_an_invalid_script(session: Session) -> None:
     answer = session.play({"steps": [{"checkCharacter": {"hash": "md5:abc"}}]}, valid=False)
     assert answer["error"]["data"]["code"] == "scripted.invalid-script"
+
+
+# Requirement: The scripted runner can use transcript kinds
+
+
+def test_started_with_transcript_kinds_it_accepts_the_capability_when_offered(
+    tmp_path: Path,
+) -> None:
+    session = Session(tmp_path, args=["--transcript-kinds"])
+    try:
+        answer = session.initialize(["transcript-kinds"])
+        assert answer["result"]["capabilities"] == ["transcript-kinds"]
+        session.validate_all()
+    finally:
+        session.kill()
+
+
+def test_started_with_transcript_kinds_but_not_offered_it_accepts_no_capability(
+    tmp_path: Path,
+) -> None:
+    session = Session(tmp_path, args=["--transcript-kinds"])
+    try:
+        assert session.initialize()["result"]["capabilities"] == []
+    finally:
+        session.kill()
+
+
+def test_started_without_the_flag_it_accepts_no_capability_even_when_offered(
+    session: Session,
+) -> None:
+    assert session.initialize(["transcript-kinds"])["result"]["capabilities"] == []
+    session.validate_all()
+
+
+def test_a_transcript_step_with_a_kind_is_sent_with_that_kind(session: Session) -> None:
+    session.play(
+        {
+            "steps": [
+                {"event": INIT},
+                {"transcript": {"record": "data: {}", "kind": "received"}},
+                {"event": OK},
+            ]
+        }
+    )
+    records = [m["params"] for m in session.notifications(3) if m["method"] == "run/transcript"]
+    assert records == [{"runId": session.run_id, "record": "data: {}", "kind": "received"}]
+    session.validate_all()
+
+
+def test_a_transcript_step_of_a_kind_the_contract_doesnt_define_is_refused(
+    session: Session,
+) -> None:
+    script = {"steps": [{"transcript": {"record": "x", "kind": "request"}}]}
+    error = session.play(script, valid=False)["error"]["data"]
+    assert error["code"] == "scripted.invalid-script"
+    assert "steps[0].transcript.kind" in error["problem"]
+    assert "not 'request'" in error["problem"]
+    session.validate_all()
+
+
+def test_an_unknown_command_line_argument_stops_the_runner_with_a_usage_message(
+    tmp_path: Path,
+) -> None:
+    session = Session(tmp_path, args=["--kinds"])
+    try:
+        assert session.wait() == 2
+        assert session.process.stderr is not None
+        assert (
+            b"usage: troupe-runner-scripted [--transcript-kinds]" in session.process.stderr.read()
+        )
+    finally:
+        session.kill()

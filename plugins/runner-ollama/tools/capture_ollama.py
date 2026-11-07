@@ -12,7 +12,8 @@ fixtures/ollama/<scenario>/:
 - ``preflight.json``: what Ollama answered to /api/version and /api/show;
 - ``answers.json``: each /api/chat answer, its status and its lines (or its error body), which the
   fake Ollama replays;
-- ``transcript.jsonl`` and ``events.json``: the transcript records and run events the runner sent,
+- ``transcript.jsonl`` and ``events.json``: the transcript records, each with its kind as troupe
+  stores it, and run events the runner sent,
   for the replay test to compare with. Review the events before committing: they're what the runner
   did, recorded, not what it should do;
 - ``provenance.json``: Ollama's version, the model, the date, the command and the scrubbing.
@@ -130,11 +131,13 @@ class RecordingClient(Client):
 class _Sink:
     events: list[p.RunEvent] = field(default_factory=list)
     records: list[bytes] = field(default_factory=list)
+    kinds: list[p.TranscriptKind] = field(default_factory=list)
 
     def event(self, event: p.RunEvent) -> None:
         self.events.append(event)
 
-    def transcript(self, record: bytes) -> None:
+    def transcript(self, kind: p.TranscriptKind, record: bytes) -> None:
+        self.kinds.append(kind)
         self.records.append(record)
 
     def stopping(self) -> bool:
@@ -225,7 +228,15 @@ def capture(name: str, endpoint: str, out: Path = FIXTURES) -> Path:
             sink=sink,
         ).run()
         paths = {str(scratch): "<scratch>", str(workspace): "<workspace>"}
-        records = [scrub(record.decode("utf-8"), paths) for record in sink.records]
+        # Each line as troupe stores a record of a run that uses kinds (transcript-record.schema).
+        records = [
+            json.dumps(
+                {"kind": kind, "record": scrub(record.decode("utf-8"), paths)},
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+            for kind, record in zip(sink.kinds, sink.records, strict=True)
+        ]
         events = []
         for event in sink.events:
             data = event.to_data()

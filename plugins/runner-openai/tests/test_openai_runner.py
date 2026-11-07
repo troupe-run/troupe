@@ -2,6 +2,7 @@
 against the fake endpoint (spec: openai-runner; design D5). Every run uses TEST_LIMITS unless a
 test says why not (design D7)."""
 
+import base64
 import json
 import time
 from collections.abc import Iterator
@@ -53,8 +54,9 @@ def _session(
     workspace: Path,
     credential: str | None = CANARY,
     env: dict[str, str] | None = None,
+    capabilities: list[str] | None = None,
 ) -> Session:
-    session = Session(workspace, credential, env)
+    session = Session(workspace, credential, env, capabilities)
     sessions.append(session)
     return session
 
@@ -63,10 +65,14 @@ def _events(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [m["params"] for m in messages if m.get("method") == "run/event"]
 
 
+def _handshake(session: Session) -> dict[str, Any]:
+    """The runner's answer to initialize."""
+    return next(m for m in session.received if "capabilities" in m.get("result", {}))
+
+
 def _records(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [
-        json.loads(m["params"]["record"]) for m in messages if m.get("method") == "run/transcript"
-    ]
+    """Each run/transcript notification's params: its record, kind and encoding."""
+    return [m["params"] for m in messages if m.get("method") == "run/transcript"]
 
 
 # The handshake and init
@@ -180,17 +186,34 @@ def test_a_second_run_start_is_refused_and_the_first_run_goes_on(
 # The credential and the transcript
 
 
-def test_the_transcript_is_the_exchange_framed_with_no_request_header(
+def test_the_transcript_is_the_exchange_with_kinds_and_no_request_header(
     sessions: list[Session], workspace: Path
 ) -> None:
     with FakeEndpoint([text_reply("Done.")]) as fake:
         session = _session(sessions, workspace)
         session.start(fake.endpoint)
         records = _records(session.until_result())
-    assert [r["kind"] for r in records[:2]] == ["request", "response"]
-    assert json.loads(records[0]["body"])["model"] == "fake-model"
-    assert {r["kind"] for r in records[2:]} == {"stream"}
+        answer = _handshake(session)
+        assert json.loads(records[0]["record"]) == fake.requests[0].json()
+    assert answer["result"]["capabilities"] == ["transcript-kinds"]
+    assert [r["kind"] for r in records[:2]] == ["sent", "note"]
+    assert {r["kind"] for r in records[2:]} == {"received"}
     assert all("authorization" not in json.dumps(r).lower() for r in records)
+
+
+def test_offered_no_capability_it_sends_the_same_records_without_a_kind(
+    sessions: list[Session], workspace: Path
+) -> None:
+    runs = []
+    for capabilities in (["transcript-kinds"], []):
+        with FakeEndpoint([text_reply("Done.")]) as fake:
+            session = _session(sessions, workspace, capabilities=capabilities)
+            session.start(fake.endpoint)
+            runs.append((_handshake(session), _records(session.until_result())))
+    (_, with_kinds), (answer, without) = runs
+    assert answer["result"]["capabilities"] == []
+    assert all("kind" not in r for r in without)
+    assert [r["record"] for r in without] == [r["record"] for r in with_kinds]
 
 
 def test_a_401_that_echoes_part_of_the_key_is_masked_in_the_result_and_transcript(
@@ -205,9 +228,23 @@ def test_a_401_that_echoes_part_of_the_key_is_masked_in_the_result_and_transcrip
     result = _events(messages)[-1]
     assert result["status"] == "error"
     assert "Incorrect API key provided: [credential]." in result["message"]
-    body = next(r for r in _records(messages) if r["kind"] == "body")
-    assert "[credential]" in body["body"]
+    body = next(r for r in _records(messages) if r["record"].startswith('{"error"'))
+    assert body["kind"] == "received"
+    assert "[credential]" in body["record"]
     assert MASKED_ECHO not in json.dumps(messages)
+
+
+def test_a_body_that_isnt_utf_8_is_sent_as_base64_with_the_credential_masked_first(
+    sessions: list[Session], workspace: Path
+) -> None:
+    body = b"\xff refused " + CANARY.encode() + b" \xfe"
+    with FakeEndpoint([Reply(400, body=body)]) as fake:
+        session = _session(sessions, workspace)
+        session.start(fake.endpoint)
+        records = _records(session.until_result())
+    [binary] = [r for r in records if r.get("encoding") == "base64"]
+    assert binary["kind"] == "received"
+    assert base64.b64decode(binary["record"]) == b"\xff refused [credential] \xfe"
 
 
 SCRIPTS: dict[str, list[Reply]] = {

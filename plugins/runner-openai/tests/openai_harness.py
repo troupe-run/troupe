@@ -119,9 +119,13 @@ class Session:
         workspace: Path,
         credential: str | None = None,
         env: Mapping[str, str] | None = None,
+        capabilities: list[str] | None = None,
     ) -> None:
+        """``capabilities``: what the handshake offers; troupe's offer (transcript-kinds) unless
+        given."""
         self.workspace = workspace
         self.credential = credential
+        self.capabilities = ["transcript-kinds"] if capabilities is None else capabilities
         environment = dict(env or {})
         if credential is not None:
             environment["TROUPE_RUNTIME_CREDENTIAL"] = credential
@@ -216,7 +220,7 @@ class Session:
             {
                 "protocolVersions": [0] if versions is None else versions,
                 "host": {"name": "test", "version": "1"},
-                "capabilities": [],
+                "capabilities": self.capabilities,
             },
         )
 

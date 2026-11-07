@@ -47,7 +47,7 @@ CASES: list[tuple[type[p.Message], str, st.SearchStrategy[Any]]] = [
             {
                 "protocolVersions": st.lists(st.integers(0, 9), min_size=1, unique=True),
                 "host": NAMED,
-                "capabilities": st.lists(NAME, unique=True, max_size=3),
+                "capabilities": st.lists(st.sampled_from(p.CAPABILITIES), unique=True),
             }
         ),
     ),
@@ -58,7 +58,7 @@ CASES: list[tuple[type[p.Message], str, st.SearchStrategy[Any]]] = [
             {
                 "protocolVersion": st.integers(0, 9),
                 "runner": NAMED,
-                "capabilities": st.lists(NAME, unique=True, max_size=3),
+                "capabilities": st.lists(st.sampled_from(p.CAPABILITIES), unique=True),
             }
         ),
     ),
@@ -217,7 +217,10 @@ CASES: list[tuple[type[p.Message], str, st.SearchStrategy[Any]]] = [
         "run-transcript.schema.json#/properties/params",
         _with_optional(
             {"runId": RUN_IDS, "record": TEXT},
-            {"encoding": st.sampled_from(["utf-8", "base64"])},
+            {
+                "encoding": st.sampled_from(["utf-8", "base64"]),
+                "kind": st.sampled_from(p.TRANSCRIPT_KINDS),
+            },
         ),
     ),
     (
@@ -369,6 +372,32 @@ REFUSED: list[tuple[str, type[p.Message], dict[str, Any], str]] = [
         {"protocolVersions": [], "host": {"name": "t", "version": "1"}, "capabilities": []},
         "at least 1",
     ),
+    (
+        "unknown capability offered",
+        p.InitializeParams,
+        {
+            "protocolVersions": [0],
+            "host": {"name": "t", "version": "1"},
+            "capabilities": ["widgets"],
+        },
+        "capabilities",
+    ),
+    (
+        "unknown capability answered",
+        p.InitializeResult,
+        {
+            "protocolVersion": 0,
+            "runner": {"name": "t", "version": "1"},
+            "capabilities": ["widgets"],
+        },
+        "capabilities",
+    ),
+    (
+        "unknown transcript kind",
+        p.TranscriptRecord,
+        {"runId": RUN, "record": "x", "kind": "request"},
+        "kind",
+    ),
 ]
 
 
@@ -384,6 +413,8 @@ def test_from_data_refuses_what_the_schema_refuses(
         p.ResultEvent: "run-event.schema.json#/$defs/result",
         p.TurnEvent: "run-event.schema.json#/$defs/turn",
         p.InitializeParams: "initialize.schema.json#/properties/params",
+        p.InitializeResult: "initialize.schema.json#/$defs/result",
+        p.TranscriptRecord: "run-transcript.schema.json#/properties/params",
     }[cls]
     assert not is_valid(data, ref)
     with pytest.raises(p.ProtocolError, match=match):

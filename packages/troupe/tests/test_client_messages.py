@@ -190,6 +190,8 @@ def summaries(draw: st.DrawFn) -> dict[str, Any]:
         summary["endedAt"] = draw(TIMES)
         if draw(st.booleans()):
             summary["audit"] = draw(AUDITS)
+    if "transcript" in summary:
+        summary["transcriptFormat"] = draw(st.sampled_from(["native", "kinds"]))
     if summary["workspace"] != {"kind": "theatre"}:
         summary["changes"] = draw(RUN_CHANGES)
     return summary
@@ -558,6 +560,7 @@ ENDED_SUMMARY: dict[str, Any] = {
     "startedAt": "2026-10-13T00:00:00.000Z",
     "endedAt": "2026-10-13T00:00:01.000Z",
     "transcript": "sha256:" + "a" * 64,
+    "transcriptFormat": "native",
     "stderr": "sha256:" + "b" * 64,
     "recording": {
         "failedAt": 0,
@@ -579,6 +582,7 @@ ENDED_SUMMARY: dict[str, Any] = {
         "audit",
         "endedAt",
         "transcript",
+        "transcriptFormat",
         "stderr",
         "recording",
         "runner.reported",
@@ -622,11 +626,36 @@ def test_a_summary_whose_outcome_and_end_disagree_with_its_state_is_refused(
         m.RunSummary.from_data(data)
 
 
+@pytest.mark.parametrize(
+    "drop", ["transcript", "transcriptFormat"], ids=["format alone", "transcript alone"]
+)
+def test_a_summary_with_one_of_transcript_and_its_format_is_refused(drop: str) -> None:
+    data = copy.deepcopy(ENDED_SUMMARY)
+    del data[drop]
+    with pytest.raises(ProtocolError, match="transcriptFormat is present exactly when transcript"):
+        m.RunSummary.from_data(data)
+
+
+def test_a_summary_with_a_transcript_format_the_schema_doesnt_define_is_refused() -> None:
+    data = {**copy.deepcopy(ENDED_SUMMARY), "transcriptFormat": "framed"}
+    with pytest.raises(ProtocolError, match=r"RunSummary\.transcriptFormat"):
+        m.RunSummary.from_data(data)
+
+
 def test_a_running_runs_summary_has_no_outcome_or_end_and_round_trips() -> None:
     data = {
         key: value
         for key, value in ENDED_SUMMARY.items()
-        if key not in ("outcome", "endedAt", "error", "transcript", "stderr", "recording")
+        if key
+        not in (
+            "outcome",
+            "endedAt",
+            "error",
+            "transcript",
+            "transcriptFormat",
+            "stderr",
+            "recording",
+        )
     }
     data["state"] = "running"
     summary = m.RunSummary.from_data(data)
@@ -678,7 +707,16 @@ def test_a_running_runs_summary_with_an_audit_is_refused() -> None:
     data = {
         key: value
         for key, value in ENDED_SUMMARY.items()
-        if key not in ("outcome", "endedAt", "error", "transcript", "stderr", "recording")
+        if key
+        not in (
+            "outcome",
+            "endedAt",
+            "error",
+            "transcript",
+            "transcriptFormat",
+            "stderr",
+            "recording",
+        )
     }
     data["state"] = "running"
     data["audit"] = {"outside": []}

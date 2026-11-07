@@ -15,6 +15,8 @@ import time
 from typing import Any
 
 RUN_ID = ""
+ESCAPE_CANARY = "nsecret-token-0123456789"
+"""A credential that starts with n, the letter JSON's escape for a newline ends with."""
 
 
 def send(message: dict[str, Any]) -> None:
@@ -85,6 +87,9 @@ def main(mode: str) -> None:
                 answer_initialize(message, protocolVersion=1)
             elif mode == "capability":
                 answer_initialize(message, capabilities=["resume"])
+            elif mode in ("accept-transcript-kinds", "escaped-newline-credential"):
+                # accept-transcript-kinds: whether or not troupe offered it
+                answer_initialize(message, capabilities=["transcript-kinds"])
             else:
                 answer_initialize(message)
         elif method == "run/start":
@@ -119,7 +124,20 @@ def main(mode: str) -> None:
                 event(1, type="result", status="ok", message="done")
                 continue
             init()
-            if mode == "echo-env":
+            if mode == "escaped-newline-credential":
+                # A newline written as \u000a, then the rest of ESCAPE_CANARY: the wire line never
+                # holds the credential, but JSON's own escape for the newline (\n) would.
+                record = '"\\u000a' + ESCAPE_CANARY[1:] + '"'
+                sys.stdout.write(
+                    '{"jsonrpc": "2.0", "method": "run/transcript", "params": {"runId": "'
+                    + RUN_ID
+                    + '", "kind": "received", "record": '
+                    + record
+                    + "}}\n"
+                )
+                sys.stdout.flush()
+                event(1, type="result", status="ok", message="done")
+            elif mode == "echo-env":
                 event(1, type="log", level="info", message=json.dumps(dict(os.environ)))
                 event(2, type="result", status="ok", message="done")
             elif mode == "echo-argv-and-env":

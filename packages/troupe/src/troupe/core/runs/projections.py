@@ -167,6 +167,7 @@ class RunView:
             "startedAt": self.started_at,
             "endedAt": self.ended_at,
             "transcript": outcome.get("transcript"),
+            "transcriptFormat": outcome.get("transcriptFormat"),
             "stderr": outcome.get("stderr"),
             "recording": (self.ended or {}).get("recording"),
             "changes": self.changes(),

@@ -65,3 +65,15 @@ def test_the_errors_table_lists_exactly_the_contracts_error_codes() -> None:
     schema = load(RUNNER_SCHEMAS / "errors.schema.json")
     codes = {branch["properties"]["code"]["const"] for branch in schema["oneOf"]}
     assert _first_column(_section("Errors")) == codes
+
+
+def test_the_record_kinds_table_lists_exactly_the_kinds_in_the_schema() -> None:
+    kinds = load(RUNNER_SCHEMAS / "run-transcript.schema.json")["$defs"]["kind"]["enum"]
+    assert _first_column(_section("The transcript")) == set(kinds)
+
+
+def test_the_handshake_names_every_capability_the_schema_defines() -> None:
+    capabilities = load(RUNNER_SCHEMAS / "initialize.schema.json")["$defs"]["capability"]["enum"]
+    for capability in capabilities:
+        handshake = _section("Messages").split("\n1. ", 1)[1].split("\n2. ", 1)[0]
+        assert f"`{capability}`" in handshake
