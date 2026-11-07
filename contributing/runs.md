@@ -187,6 +187,7 @@ export TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE=true
 | `theatre.not-found` | No directory from here upwards holds `.troupe/` |
 | `theatre.exists` | `troupe init` was run where a theatre already is, here or above, or where a `.troupe` that isn't a directory is in the way |
 | `runner.unknown` | The actor's runner isn't one troupe knows: it was uninstalled after it was configured |
+| `runner.not-installed` | troupe knows the actor's runner but its package isn't installed here; it names the `troupe-run[<runner>]` extra that installs it, or, for a runner in the base install, says to reinstall troupe or run `uv sync` in a checkout |
 | `stage.unknown` | No stage of that name is installed |
 | `stage.effects-unenforced` | The stage can't enforce the actor's effects, and policy doesn't allow running it anyway |
 | `policy.invalid-value` | A policy variable is set to something other than `true` or `false` |

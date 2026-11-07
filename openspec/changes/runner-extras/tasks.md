@@ -36,20 +36,20 @@
 
 ## 3. Core refuses a known runner that isn't installed (design D5, D6; specs: runs, protocol)
 
-- [ ] 3.1 Write the tests first, in `packages/troupe/tests/`. They cover: a fixture table entry with `in_extra=True`
+- [x] 3.1 Write the tests first, in `packages/troupe/tests/`. They cover: a fixture table entry with `in_extra=True`
   and a package that doesn't exist, refused at perform and at `--rehearse` with `runner.not-installed`, with details
   `runner`, `package`, `extra: "lm-studio"`, a fix naming `troupe-run[lm-studio]` and the install page, and no run
-  stream, run directory or worktree made; a base entry with a missing package, refused with `extra: null` and a fix
+  stream, run directory or worktree made; a base entry with a missing package, refused with no `extra` in its details and a fix
   naming the install page and `uv sync`; every real table entry having `in_extra` false today; and
   `schemas.plugin-missing`'s fix no longer saying "brings every runner". Verify: they fail on main, run and shown.
-- [ ] 3.2 Add `in_extra: bool = False` to `interim.Runner` and `interim.installed_runner()`. Call it from
+- [x] 3.2 Add `in_extra: bool = False` to `interim.Runner` and `interim.installed_runner()`. Call it from
   `runner_command`, `options_schema`, `options_validator` and perform's actor check, before anything is recorded.
   Reword `schemas.plugin-missing`'s fix in `core/schemas.py`. Verify: 3.1's tests pass.
-- [ ] 3.3 Catalogue `runner.not-installed`, with closed details (`runner`, `package`, `extra` string-or-null, optional
-  `path`), in `protocol/schemas/error.schema.json`, copy it to `packages/troupe/src/troupe/protocol/`, and add it to
+- [x] 3.3 Catalogue `runner.not-installed`, with closed details (`runner`, `package`, `extra` only for a runner in an extra; config's
+  actor path is the error's own `path`, per D6), in `protocol/schemas/error.schema.json`, copy it to `packages/troupe/src/troupe/protocol/`, and add it to
   `core/errors.py` with the failure exit code. Verify: the catalogue-agreement test and `protocol_guard` pass in a full
   run (a code that's catalogued but never raised fails the run), and `diff` of the two schema copies is empty.
-- [ ] 3.4 Commit as `feat(protocol): ...` for the code and catalogue, and `feat(runs): ...` for the refusal, if they
+- [x] 3.4 Commit as `feat(protocol): ...` for the code and catalogue, and `feat(runs): ...` for the refusal, if they
   split cleanly, otherwise one `feat(protocol)` commit. Verify: `uv run scripts/check.py` passes before each commit.
 
 ## 4. Config refuses only changes to that actor (design D7; spec: config)

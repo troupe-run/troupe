@@ -65,8 +65,8 @@ def plugin_schemas_directory(package: str) -> Path:
     raise TroupeError(
         "schemas.plugin-missing",
         problem=f"The plugin package {package!r} isn't installed, or ships no schemas/ directory.",
-        fix=f"Reinstall troupe with the install command at {INSTALL_PAGE}, which brings every "
-        "runner troupe knows. If you run troupe from a checkout of troupe, run uv sync there "
+        fix=f"Reinstall troupe with the install command at {INSTALL_PAGE}, adding the runner's "
+        "extra if it has one. If you run troupe from a checkout of troupe, run uv sync there "
         "instead.",
         details={"package": package},
     )

@@ -108,8 +108,9 @@ already reads the manifests.
 `options_schema`, `options_validator` and `audition()` call it. `interim.runner()` stays the name-only lookup (the
 environment and runtime facts don't need the package).
 
-`runner.not-installed` is a new catalogued code. Its details are closed: `runner`, `package`, `extra` (string or
-null) and, from config, the actor's `path`. Its fix is: for an extra, "install `troupe-run[<extra>]` with the command
+`runner.not-installed` is a new catalogued code. Its details are closed: `runner`, `package` and, for a runner in an extra, `extra`;
+absent for a base runner, since shipped schemas allow no `null`. From config, the actor's path is the error's own `path`, which every error carries, so it isn't repeated in
+the details. Its fix is: for an extra, "install `troupe-run[<extra>]` with the command
 at <install page>, in place of the command you installed troupe with"; for a base runner, the current
 `schemas.plugin-missing` fix with "which brings every runner troupe knows" removed. `schemas.plugin-missing` stays for
 a plugin installed without its `schemas/` directory, with the same wording fix. Adding the code is a protocol change
