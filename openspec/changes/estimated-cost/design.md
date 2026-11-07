@@ -24,8 +24,8 @@ See proposal.md for why. What the code does today:
   event store alone.
 
 **Non-Goals:**
-- Changing what `usage.inputTokens` counts (#293). The estimate relies on the runners' current convention: input tokens
-  exclude cache reads and writes, so each counter is priced once.
+- Changing what `usage.inputTokens` counts (#293, merged while this change was in review). The estimate relies on the
+  contract's rule that input tokens leave out cache reads and writes, so each counter is priced once.
 - Tiered or long-context prices, batch discounts, reasoning tokens priced apart from output. A price is four flat
   rates. A service whose billing doesn't fit leaves the price unset.
 - Addressing a model's name containing a dot in a `config set` path (D5).
@@ -182,8 +182,9 @@ the changelog. No spec Purpose changes, so there's no infrastructure pull reques
   of its own.
 - [Dotted model names can't be priced one at a time] → the whole map as JSON or a file works today. Documented, and
   #303 tracks escaping or quoting in config paths (D5).
-- [The estimate relies on the input-token convention #293 will formalise] → the convention is what every runner here
-  already does. If #293 changes it, D7's rule moves with it in that change.
+- [The estimate relies on what `inputTokens` counts] → #293 has made it the contract's rule ("Usage's input counters
+  add up to the whole input"), the convention every runner here already followed. A change to it moves D7's rule
+  with it.
 - [A price with only `input` and `output` gives most OpenAI runs no estimate, because nearly every run reads from or
   writes to the prompt cache (the owner's live run: about 2,200 tokens read, 1,150 written)] → the runtimes docs and the
   OpenAI runner's README say to set `cacheRead` and `cacheWrite` too, with 0 for a kind the service doesn't charge for.
