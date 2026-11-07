@@ -69,7 +69,7 @@
           "$ref": "../lineage.schema.json#/$defs/hash"
         },
         "audit": {
-          "description": "What the audit of the run's changes against its actor's declared effects found, whatever the outcome. Absent: the runner never started, or the end was recorded before troupe recorded audits.",
+          "description": "What the audit of the run's changes against its actor's declared effects found, whatever the outcome. Present exactly when the runner started.",
           "$ref": "#/$defs/audit"
         },
         "limits": {
@@ -148,7 +148,8 @@
           "exitCode",
           "transcript",
           "transcriptFormat",
-          "stderr"
+          "stderr",
+          "audit"
         ]
       }
     },

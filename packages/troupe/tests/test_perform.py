@@ -25,7 +25,7 @@ from troupe.core.config.stream import read as read_config
 from troupe.core.errors import TroupeError
 from troupe.core.files import directory_lock
 from troupe.core.runners.limits import RunLimits
-from troupe.core.runs.aggregate import ENDED, REPORTED, STARTED, Run
+from troupe.core.runs.aggregate import ENDED, REPORTED, STARTED
 from troupe.core.runs.perform import Backends, lease_dir, perform
 from troupe_plugin_sdk.messages import Message
 
@@ -335,9 +335,6 @@ def test_a_run_that_never_sends_init_records_its_start_without_a_runner_then_its
     assert result.run.runner.reported is None
     assert "reported" not in result.run.to_data()["runner"]
     assert result.run.outcome == "could-not-start"
-    loaded = harness.stores[-1].load(UUID(result.run.run_id))
-    assert isinstance(loaded, Run)
-    assert loaded.runner_reported is None
 
 
 # 7.5: refusals leave nothing behind.

@@ -16,7 +16,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from client_schemas import check
+from client_schemas import check, is_valid
 from troupe.core.client import messages as m
 from troupe.core.events.lineage import timestamp
 from troupe_plugin_sdk import runner as p
@@ -199,7 +199,7 @@ def summaries(draw: st.DrawFn) -> dict[str, Any]:
     if summary["state"] == "ended":
         summary["outcome"] = draw(OUTCOMES)
         summary["endedAt"] = draw(TIMES)
-        if draw(st.booleans()):
+        if "transcript" in summary:
             summary["audit"] = draw(AUDITS)
     if "transcript" in summary:
         summary["transcriptFormat"] = draw(st.sampled_from(["native", "kinds"]))
@@ -600,6 +600,25 @@ def test_a_recorded_error_result_without_a_reason_is_refused_naming_reason() -> 
     assert "reason" in _refused(m.LogsUpdate, data)
 
 
+def test_a_logged_init_without_effects_is_refused_naming_it() -> None:
+    run_id = "0f8fad5b-d9cb-469f-a165-70867728950e"
+    data = {
+        "kind": "event",
+        "runId": run_id,
+        "seq": 0,
+        "at": "2026-10-12T03:04:05.678Z",
+        "event": {
+            "runId": run_id,
+            "seq": 0,
+            "type": "init",
+            "runner": {"name": "scripted", "version": "0.1.0"},
+            "tools": [],
+        },
+    }
+    assert "'effects'" in _refused(m.LogsUpdate, data)
+    assert not is_valid(data, "logs-update.schema.json")
+
+
 def test_an_unknown_notice_code_is_refused_when_turned_into_a_notice() -> None:
     data = m.NoticeData.from_data({"code": "run.made-up", "problem": "p", "fix": "f"})
     with pytest.raises(ProtocolError, match=r"run\.made-up"):
@@ -630,6 +649,7 @@ ENDED_SUMMARY: dict[str, Any] = {
     "transcript": "sha256:" + "a" * 64,
     "transcriptFormat": "native",
     "stderr": "sha256:" + "b" * 64,
+    "audit": {"outside": []},
     "recording": {
         "failedAt": 0,
         "error": {
@@ -723,6 +743,7 @@ def test_a_running_runs_summary_has_no_outcome_or_end_and_round_trips() -> None:
             "transcript",
             "transcriptFormat",
             "stderr",
+            "audit",
             "recording",
         )
     }
@@ -737,6 +758,22 @@ def test_a_running_runs_summary_has_no_outcome_or_end_and_round_trips() -> None:
 # A run summary carries its run's audit (spec: client-protocol; failed-run-audit design D4).
 
 OUTSIDE = {"path": "src/a.py", "change": "modified", "needs": "write"}
+
+
+def test_an_ended_summary_with_a_transcript_and_no_audit_is_refused_naming_it() -> None:
+    data = {key: value for key, value in ENDED_SUMMARY.items() if key != "audit"}
+    assert "transcript" in data
+    assert "audit" in _refused(m.RunSummary, data)
+    assert not is_valid({"run": data}, "perform-result.schema.json")
+
+
+def test_an_ended_summary_with_an_audit_and_no_transcript_is_refused() -> None:
+    data = {
+        key: value for key, value in ENDED_SUMMARY.items() if key not in ("transcript", "stderr")
+    }
+    data["audit"] = {"outside": []}
+    assert "audit" in _refused(m.RunSummary, data)
+    assert not is_valid({"run": data}, "perform-result.schema.json")
 
 
 def test_a_failed_runs_summary_with_its_audit_round_trips() -> None:
@@ -784,6 +821,7 @@ def test_a_running_runs_summary_with_an_audit_is_refused() -> None:
             "transcript",
             "transcriptFormat",
             "stderr",
+            "audit",
             "recording",
         )
     }
