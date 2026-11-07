@@ -113,8 +113,9 @@ have been made (`error`), or when Ollama refuses (`error`).
 
 `usage.inputTokens` is the sum of each answer's `prompt_eval_count`, and `outputTokens` the sum of its `eval_count`.
 Ollama reports the prompt tokens it took from its cache apart, as `prompt_eval_cached_count` (for example, 4 cached
-beside 258 evaluated): they aren't in `inputTokens`, and reporting them as `cacheReadTokens` is #282. A run reports no
-cost: nothing tells the runner a price.
+beside 258 evaluated): they aren't in `inputTokens`, which is what the runner contract means by it (the input not
+counted in a cache counter). Until #282 reports them as `cacheReadTokens`, a run's counters add up to less than its
+whole input. A run reports no cost: nothing tells the runner a price.
 
 ## The transcript
 

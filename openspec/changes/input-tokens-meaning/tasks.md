@@ -18,27 +18,27 @@
   Anthropic's; one that includes it, as OpenAI's) and the subtraction. Verify: the row's anchor link reaches the note
   in a rendered preview (`gh markdown-preview` or GitHub's file view on the pushed branch), and every counter name in
   it matches the schema.
-- [ ] 1.5 Commit 1.1 to 1.4 as `fix(runner-protocol): ...` (subject ≤ 72 characters), so the protocol and troupe
+- [x] 1.5 Commit 1.1 to 1.4 as `fix(runner-protocol): ...` (subject ≤ 72 characters), so the protocol and troupe
   release it (D4). Verify: `uv run scripts/check.py` passes before the commit, and `git log -1 --stat` shows
   `protocol/` and the troupe copy in it.
 
 ## 2. Each shipped runner is checked against the meaning (design D3, D5, D6)
 
-- [ ] 2.1 Claude Code: add a sentence to its mapping row in `contributing/runners.md` that Anthropic's `input_tokens`
+- [x] 2.1 Claude Code: add a sentence to its mapping row in `contributing/runners.md` that Anthropic's `input_tokens`
   already leaves out cache reads and writes, so it maps unchanged. Verify: cite the `success-with-tools` fixture's
   result (6 beside 42158 read and 5737 written) and `test_claude_code_mapping.py`'s case in the commit message.
-- [ ] 2.2 Ollama: in `plugins/runner-ollama/README.md` and its mapping row in `contributing/runners.md`, say that
+- [x] 2.2 Ollama: in `plugins/runner-ollama/README.md` and its mapping row in `contributing/runners.md`, say that
   `prompt_eval_count` leaves out the prompt tokens served from the cache, so `inputTokens` has the contract's meaning,
   and that its counters add up to less than the whole input until #282 reports those as `cacheReadTokens`. Verify:
   the wording matches #282's scope, and `openspec/specs/ollama-runner/spec.md` needs no change (its requirement
   doesn't contradict D1).
-- [ ] 2.3 The scripted runner sends whatever `usage` its script gives, and its options schema takes that by `$ref` to
+- [x] 2.3 The scripted runner sends whatever `usage` its script gives, and its options schema takes that by `$ref` to
   the contract's `usage`, so the new descriptions reach a script's author with no change. Confirm the `$ref` at
   `options.schema.json`'s `usage` still resolves to `result.properties.usage`, and that no fixture or test script in
   `plugins/runner-scripted` and `packages/troupe/tests` gives a usage that contradicts D1, such as a comment or name
   calling `inputTokens` the whole input beside cache counters. Verify: the grep and
   its result in the commit message.
-- [ ] 2.4 OpenAI: leave its README and Responses mapping row as they are (#304 changes them with the runner). Verify:
+- [x] 2.4 OpenAI: leave its README and Responses mapping row as they are (#304 changes them with the runner). Verify:
   `test_usage_is_summed_with_cached_input_counted_apart` and `test_tokens_written_to_the_cache_are_counted_apart_too`
   pass and match the runner-protocol scenario "An engine whose input count includes the cache", cited with #304 in
   the commit message, and nothing this change writes calls the runner's handling of unreported reads conforming.

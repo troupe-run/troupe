@@ -295,7 +295,7 @@ output, each line paired with the events it maps to.
 | `rate_limit_event` | None while its status is `allowed` (the transcript keeps it); otherwise a `log` warning naming the status |
 | `user` message with `tool_result` blocks | one `tool_result` per block. A block whose call was never reported is a `log` warning instead, since a `tool_result` needs its `tool_call` |
 | `system/api_retry` | `retry`: `authentication_failed` → `authentication`, HTTP 429 → `rate-limit`, 5xx → `server`, no HTTP status (a connection error, which Claude Code reports as `"error": "unknown"`) → `network`, anything else → `other` |
-| `result` | `result`, with `status` `error` whenever `is_error` is true, whatever `subtype` says. Its `usage` maps `input_tokens`, `output_tokens`, `cache_read_input_tokens` and `cache_creation_input_tokens` onto `inputTokens`, `outputTokens`, `cacheReadTokens` and `cacheWriteTokens`. Each tool in `permission_denials` is a `log` warning just before it |
+| `result` | `result`, with `status` `error` whenever `is_error` is true, whatever `subtype` says. Its `usage` maps `input_tokens`, `output_tokens`, `cache_read_input_tokens` and `cache_creation_input_tokens` onto `inputTokens`, `outputTokens`, `cacheReadTokens` and `cacheWriteTokens`; Anthropic's `input_tokens` already leaves out cache reads and writes, so it maps unchanged (see [What usage counts](#what-usage-counts)). Each tool in `permission_denials` is a `log` warning just before it |
 | a record type or `system` subtype not named here | a `log` at `debug` the first time it appears in the run, so a format change shows without failing the run |
 | a line that isn't a JSON object | a `log` warning |
 | every line | one `run/transcript` record, verbatim (`base64` if it isn't UTF-8), before any event it maps to |
@@ -322,7 +322,7 @@ Ollama answers, with what the runner sent for each.
 | `done_reason` `length` | `log` warning |
 | an answer with no tool call | `result` `ok`, with its text |
 | any other status, an `error` line, `maxTurns` reached, or retries spent | `result` `error`, with Ollama's message |
-| each answer's `prompt_eval_count` and `eval_count` | summed into `result.usage`'s `inputTokens` and `outputTokens` |
+| each answer's `prompt_eval_count` and `eval_count` | summed into `result.usage`'s `inputTokens` and `outputTokens`. `prompt_eval_count` leaves out the prompt tokens Ollama took from its cache, so `inputTokens` has the contract's meaning, but those tokens aren't reported yet: until #282 reports them as `cacheReadTokens`, the counters add up to less than the whole input |
 
 Its transcript is the first request's body, then before each later request the messages the runner added (the
 answer and its `tool` messages), each encoded exactly as inside that request, and every line of every answer: each
