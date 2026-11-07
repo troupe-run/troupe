@@ -23,7 +23,7 @@ library-backed runners.
   pinning pull request moves it the same way. A bare member named in an extra holds back the bundle's release the
   same way.
 - **An actor on a runner that isn't installed is refused, naming its extra.** There's a new error code,
-  `runner.not-installed`, with the runner, its package and its extra (null for a base runner). It's raised for
+  `runner.not-installed`, with the runner, its package and its extra (absent for a base runner). It's raised for
   `troupe config set` on that actor, at run start (before anything is recorded) and for `troupe init --audition
   --runner <name>`. Its fix names `troupe-run[<extra>]` and the install page, or, for a base runner, reinstalling
   troupe or `uv sync` in a checkout. Checks of the whole config (other actors' changes, merges) don't refuse because

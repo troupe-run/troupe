@@ -6,6 +6,7 @@ whose published schemas describe the runner's options, so config can check them 
 the runner. When plugins are named and pinned in config (#38), this module is deleted.
 """
 
+import importlib.util
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -15,6 +16,7 @@ import jsonschema
 
 from troupe.core import schemas
 from troupe.core.errors import TroupeError
+from troupe.core.schemas import INSTALL_PAGE
 from troupe.platform.processes import EnvironmentPolicy
 
 
@@ -35,6 +37,12 @@ class Runner:
     runtime: Literal["required", "optional", "none"] = "none"
     """Whether its actors name a runtime: the service it talks to (spec: runtimes; runtimes design
     D4). Config refuses an actor whose runtime doesn't fit."""
+
+    in_extra: bool = False
+    """Whether it's installed through troupe-run's extra named exactly after it, rather than the
+    base install: true for a runner whose plugin depends on more than the plugin SDK (spec: runs,
+    installation; runner-extras design D1, D5). scripts/bundle.py checks it against troupe-run's
+    pyproject.toml."""
 
 
 CLAUDE_CODE_ENVIRONMENT: tuple[str, ...] = (
@@ -138,9 +146,40 @@ def runner(name: str) -> Runner:
     return RUNNERS[name]
 
 
+def installed_runner(name: str) -> Runner:
+    """The runner named ``name``, refused with runner.unknown when troupe doesn't know it, and with
+    runner.not-installed, naming the extra that installs it, when its package can't be found. Found
+    without importing it (runner-extras design D6)."""
+    entry = runner(name)
+    if importlib.util.find_spec(entry.package) is None:
+        extra = name if entry.in_extra else None
+        if extra is not None:
+            fix = (
+                f"Install troupe-run[{extra}] with the command at {INSTALL_PAGE}, in place of the "
+                "command you installed troupe with. If you run troupe from a checkout of troupe, "
+                "run uv sync there instead."
+            )
+        else:
+            fix = (
+                f"Reinstall troupe with the install command at {INSTALL_PAGE}. If you run troupe "
+                "from a checkout of troupe, run uv sync there instead."
+            )
+        raise TroupeError(
+            "runner.not-installed",
+            problem=(
+                f"The {name!r} runner isn't installed here (its package, {entry.package}, can't be "
+                "found)" + (f": it comes with troupe-run[{extra}]." if extra is not None else ".")
+            ),
+            fix=fix,
+            details={"runner": name, "package": entry.package}
+            | ({"extra": extra} if extra is not None else {}),
+        )
+    return entry
+
+
 def runner_command(name: str) -> Sequence[str]:
-    """The command line that starts the runner named ``name``."""
-    return runner(name).command
+    """The command line that starts the runner named ``name``, refused when it isn't installed."""
+    return installed_runner(name).command
 
 
 def runner_environment(name: str, source: Mapping[str, str]) -> dict[str, str]:
@@ -154,12 +193,12 @@ def runner_environment(name: str, source: Mapping[str, str]) -> dict[str, str]:
 def options_schema(name: str) -> dict[str, Any]:
     """The options schema the runner named ``name`` publishes, read from the installed runner
     without starting it."""
-    return schemas.plugin_schema(runner(name).package, "options.schema.json")
+    return schemas.plugin_schema(installed_runner(name).package, "options.schema.json")
 
 
 def options_validator(name: str) -> jsonschema.Draft202012Validator:
     """A validator for the runner named ``name``'s options, against its published options schema,
     which may refer to the runner contract's schemas by their ``$id``s."""
-    runner_ = runner(name)
+    runner_ = installed_runner(name)
     uri = schemas.plugin_schema(runner_.package, "options.schema.json")["$id"]
     return schemas.validator(uri, runner_.package)

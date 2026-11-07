@@ -1810,6 +1810,39 @@
     {
       "properties": {
         "code": {
+          "const": "runner.not-installed"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "runner",
+            "package"
+          ],
+          "properties": {
+            "runner": {
+              "type": "string",
+              "minLength": 1
+            },
+            "package": {
+              "type": "string",
+              "minLength": 1
+            },
+            "extra": {
+              "description": "The troupe-run extra that installs the runner, named after it. Absent: the runner is in the base install, so troupe itself is missing it.",
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
           "const": "run.out-of-sequence"
         },
         "details": {
