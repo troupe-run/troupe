@@ -221,6 +221,12 @@ SCRIPTS: dict[str, list[Reply]] = {
         tool_reply([("c1", "Read", {"file_path": f"{CANARY}.txt"})]),
         text_reply("ok"),
     ],
+    # A finished event that isn't JSON: the result quotes its start, so the canary is in it.
+    "wrong shape": [Reply(lines=[f"data: not json {CANARY}", ""])],
+    # A 200 that isn't a stream: the result quotes its body, and the transcript records it.
+    "not a stream": [
+        Reply(200, body=json.dumps({"error": {"message": f"for {MASKED_ECHO}"}}).encode())
+    ],
 }
 
 

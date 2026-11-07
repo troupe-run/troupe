@@ -1,0 +1,6 @@
+{
+  "service": "OpenAI",
+  "model": "gpt-6-luna",
+  "how": "derived: openai-tool-loop's first stream, with its response.completed event's function_call arguments made the JSON object they encode rather than its text (troupe-run/troupe#300)",
+  "credential": "none"
+}

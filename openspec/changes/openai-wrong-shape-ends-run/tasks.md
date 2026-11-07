@@ -14,7 +14,7 @@
 
 ## 2. Tell a finished event from a cut one
 
-- [ ] 2.1 Add `ShapeError` to `stream.py` (not a `StreamError` subclass), carrying the response's `usage` when it's an
+- [x] 2.1 Add `ShapeError` to `stream.py` (not a `StreamError` subclass), carrying the response's `usage` when it's an
   object; raise it from `_string`, `_dict` and `read_response`'s checks, and from `_dispatch` for a finished event that
   isn't JSON or has no type, keeping `StreamError` for an event `end()` dispatched whose data isn't JSON and for a
   stream with no final event (design D1, D2). Update the module and `StreamError` docstrings to say which is which.
@@ -24,32 +24,32 @@
 
 ## 3. End the exchange on the wrong shape
 
-- [ ] 3.1 In `exchange.py`, catch `ShapeError` and raise `ExchangeFailedError` at once with D3's message and the
+- [x] 3.1 In `exchange.py`, catch `ShapeError` and raise `ExchangeFailedError` at once with D3's message and the
   error's `usage`, sending no `retry` and recording no `dropped` record; give `ExchangeFailedError` an optional
   `usage`. Verify with exchange tests that a wrong-shaped final event and a finished non-JSON event each make one
   request, no retry, and fail with a message naming what was wrong and saying retrying can't fix it; and that
   `test_a_stream_cut_mid_tool_call_is_dropped_and_retried_as_network` still passes.
-- [ ] 3.2 Add `Response.body()` to `service.py` (up to `ERROR_BODY_MAX_BYTES`), and in `_attempt` check a 2xx's
+- [x] 3.2 Add `Response.body()` to `service.py` (up to `ERROR_BODY_MAX_BYTES`), and in `_attempt` check a 2xx's
   `Content-Type` as D4 says: present and not `text/event-stream` records a `body` record and raises
   `ExchangeFailedError` naming the status, the type and the service's message (or the body's start); absent reads a
   stream. Verify with exchange tests for a 200 `application/json` body (one request, no retry, a `body` record, the
   message), a 200 in OpenAI's error shape (its message quoted), `text/event-stream; charset=utf-8` and a missing
   `Content-Type` (each read as a stream), and a service test for `body()` on a body cut short.
-- [ ] 3.3 In `loop.py`, add an `ExchangeFailedError`'s `usage` to the run's spend before making the result (design
+- [x] 3.3 In `loop.py`, add an `ExchangeFailedError`'s `usage` to the run's spend before making the result (design
   D5). Verify with a loop test of the spec's "Readable usage beside unreadable output" scenario (`inputTokens` 300,
   `outputTokens` 30, `turns` 2), and one where the wrong-shaped response's usage can't be read (the result has no
   usage).
 
 ## 4. Through the runner, and the docs
 
-- [ ] 4.1 Add a "wrong shape" and a "not a stream" ending, each holding the canary, to `SCRIPTS` in
+- [x] 4.1 Add a "wrong shape" and a "not a stream" ending, each holding the canary, to `SCRIPTS` in
   `test_openai_runner.py`. Verify the parametrized
   `test_the_credential_is_nowhere_in_what_the_runner_writes_however_the_run_ends` passes for both.
-- [ ] 4.2 Add the replay fixture `plugins/runner-openai/fixtures/responses/wrong-shape`: the recorded OpenAI tool-loop
+- [x] 4.2 Add the replay fixture `plugins/runner-openai/fixtures/responses/wrong-shape`: the recorded OpenAI tool-loop
   `stream-1.txt` with its `function_call`'s `arguments` made an object, a `provenance.json` saying it was derived and
   how, and expected events ending in the error result after one request. Verify `uv run pytest
   plugins/runner-openai/tests/test_openai_fixtures.py` replays it.
-- [ ] 4.3 Update `plugins/runner-openai/README.md`: the retried table's `network` row says a stream cut short, "How a
+- [x] 4.3 Update `plugins/runner-openai/README.md`: the retried table's `network` row says a stream cut short, "How a
   run ends" gains a response finished in the wrong shape and a 2xx that isn't a stream, and the transcript section
   says a non-stream 2xx's body is a `body` record. Verify `uv run pytest plugins/runner-openai/tests/test_openai_readme.py`
   passes and the tables match the spec delta.

@@ -84,8 +84,10 @@ the header is the service's answer to it; sniffing would guess where the service
 ### D5. A wrong-shaped final event's readable usage is counted
 
 When a final event's `response` is an object and its `usage` is an object, `ShapeError.usage` carries it.
-`ExchangeFailedError` gains an optional `usage`, and the loop adds it to the run's spend (`_Spend.add`, which already
-refuses a usage it can't read) before making the result. The response counts as a request in `turns`, as it was one.
+`ExchangeFailedError` gains `answered` (the service finished a response the run must count) and an optional `usage`,
+and when `answered` is true the loop adds the usage to the run's spend (`_Spend.add`, which already refuses a usage
+it can't read, so an unreadable one leaves the result without usage) before making the result. Every other failure
+has `answered` false and counts nothing, as before. The response counts as a request in `turns`, as it was one.
 A failed response's usage stays uncounted, as the archived D9 says: this is only for a response the service
 completed in the wrong shape, where it did the work.
 

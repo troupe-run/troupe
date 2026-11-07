@@ -95,7 +95,7 @@ first as a `retry` event:
 | 429, unless its code is `insufficient_quota`. The delay is `Retry-After` when it gives one; a longer wait than 60 s ends the run instead | `rate-limit` |
 | 500 or above | `server` |
 | a failed response or an `error` event whose code is the service's own failure (`server_error`) | `server` |
-| no connection, a timeout, a stream silent for 120 s, or one that ended before its final event | `network` |
+| no connection, a timeout, or a stream cut short: silent for 120 s, broken, ended before its final event, or ended in the middle of an event | `network` |
 
 ## How a run ends
 
@@ -114,6 +114,8 @@ Besides a completed reply, each of these ends the run with an `error` result nam
 | a refusal in an output message | the model refused, with its words |
 | a function call with no `call_id` | it can't be answered |
 | a status the runner doesn't know | the status |
+| a response the service finished in a shape it can't read: an event (ended by its blank line, or whole JSON) that isn't JSON or has no type, or a final event with a field of the wrong type, such as a tool call's arguments as an object | what was wrong, and that retrying can't fix it; the response's usage is counted when it can be read |
+| a 2xx whose `Content-Type` is set and isn't `text/event-stream`, such as a plain JSON body | the status, the type, and the service's message or the start of the body |
 | `maxTurns` reached, or `maxTotalTokens` spent | which, and the option to raise |
 | retries run out | the last failure, and the attempts made |
 
@@ -122,8 +124,9 @@ Besides a completed reply, each of these ends the run with an `error` result nam
 The runner conducts an HTTP exchange, so each transcript record is a JSON object of its own, in order:
 `{"kind": "request", "url", "body"}` with the body as sent, `{"kind": "response", "status", "headers"}` with only the
 headers in `TRANSCRIPT_HEADERS` and `TRANSCRIPT_HEADER_PREFIXES`, `{"kind": "stream", "line"}` for each line of the
-stream unchanged (its `event:` and blank lines too), `{"kind": "body", "body"}` for an error's body, and
-`{"kind": "dropped", "reason"}` when a broken stream is abandoned. No request header is ever recorded.
+stream unchanged (its `event:` and blank lines too), `{"kind": "body", "body"}` for the body of an error or of a 2xx
+that isn't a stream, and `{"kind": "dropped", "reason"}` when a stream cut short is abandoned. No request header is
+ever recorded.
 
 ## Limits
 
@@ -167,7 +170,7 @@ no request is sent:
 [`fixtures/responses/`](fixtures/responses) holds, for each run, the service's replies, their provenance, and the
 events they map to. Recorded: a two-turn tool loop on OpenAI and one on local Ollama, and a rejected credential from
 OpenAI with a deliberately invalid key. Derived from those, or built from OpenAI's shapes: a broken stream, a rate
-limit, a server error, an incomplete response, a refusal and a failed response.
+limit, a server error, an incomplete response, a refusal, a failed response and a response in the wrong shape.
 [`tools/capture_openai.py`](tools/capture_openai.py) records new ones, and scrubs the key and the host's home.
 
 ## Tests

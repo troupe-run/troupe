@@ -7,14 +7,17 @@ from deltas: ``response.completed``, ``response.incomplete`` and ``response.fail
 whole response, its output items, status and usage. An ``error`` event, which a service can send
 mid-stream, is final too. Deltas only show the model working, and are read past.
 
-A stream that ends without a final event, or holds an event that can't be read, is broken:
-StreamError, and the partial response is dropped whole, tool calls it had begun included.
+A stream cut short (it ends without a final event, or ends inside an event whose data isn't whole
+JSON yet) raises StreamError: the partial response is dropped whole, tool calls it had begun
+included, and the request is retried. An event the service finished (its blank line arrived, or its
+data is whole JSON) that can't be read raises ShapeError instead: retrying can't fix a response the
+service finished, so the run ends (openai-wrong-shape-ends-run design D1, D2).
 
     parser = StreamParser()
     for line in response.lines():
         if parser.feed(line):    # true once the final event is read
             break
-    reply = parser.reply()       # or StreamError
+    reply = parser.reply()       # or StreamError (cut short), ShapeError (wrong shape)
 """
 
 import json
@@ -29,8 +32,19 @@ ERROR = "error"
 
 
 class StreamError(Exception):
-    """The stream broke, or held something that isn't an event. The message says what, in words a
+    """The stream was cut short, so the request is retried. The message says what, in words a
     person can act on."""
+
+
+class ShapeError(Exception):
+    """The service finished a response that can't be read, so retrying can't fix it. The message
+    names what was wrong; ``usage`` is the response's usage when that can still be read.
+
+    Not a StreamError: the exchange retries a StreamError, and this must never be retried."""
+
+    def __init__(self, message: str, usage: dict[str, Any] | None = None) -> None:
+        super().__init__(message)
+        self.usage = usage
 
 
 @dataclass(frozen=True)
@@ -71,13 +85,26 @@ class Reply:
 def _string(value: object, where: str) -> str | None:
     if value is None or isinstance(value, str):
         return value
-    raise StreamError(f"The response's {where} is {type(value).__name__}, not text.")
+    raise ShapeError(f"The response's {where} is {_kind(value)}, not text.")
 
 
 def _dict(value: object, where: str) -> dict[str, Any]:
     if not isinstance(value, dict):
-        raise StreamError(f"The response's {where} isn't an object.")
+        raise ShapeError(f"The response's {where} isn't an object.")
     return value
+
+
+def _kind(value: object) -> str:
+    """What a JSON value is, in words: an object, a list, a number, true or false."""
+    if isinstance(value, bool):
+        return "true or false"
+    if isinstance(value, int | float):
+        return "a number"
+    if isinstance(value, list):
+        return "a list"
+    if isinstance(value, dict):
+        return "an object"
+    return type(value).__name__
 
 
 def _failure(error: object) -> Failure:
@@ -93,14 +120,14 @@ def _failure(error: object) -> Failure:
 
 def read_response(response: dict[str, Any], status: str | None = None) -> Reply:
     """A reply from a response object. Its own status wins; ``status``, from the final event's
-    name, stands in when it gives none. Raises StreamError for one that can't be read."""
+    name, stands in when it gives none. Raises ShapeError for one that can't be read."""
     said = _string(response.get("status"), "status")
     status = said or status
     if not status:
-        raise StreamError("The response has no status.")
+        raise ShapeError("The response has no status.")
     output = response.get("output") or []
     if not isinstance(output, list):
-        raise StreamError("The response's output isn't a list.")
+        raise ShapeError("The response's output isn't a list.")
     texts: list[str] = []
     refusals: list[str] = []
     calls: list[ToolCall] = []
@@ -110,7 +137,7 @@ def read_response(response: dict[str, Any], status: str | None = None) -> Reply:
         if kind == "message":
             content = item.get("content") or []
             if not isinstance(content, list):
-                raise StreamError(f"The response's output item {index}'s content isn't a list.")
+                raise ShapeError(f"The response's output item {index}'s content isn't a list.")
             for part in content:
                 part = _dict(part, f"output item {index}'s content")
                 if part.get("type") == "output_text":
@@ -132,7 +159,7 @@ def read_response(response: dict[str, Any], status: str | None = None) -> Reply:
     error = response.get("error")
     usage = response.get("usage")
     if usage is not None and not isinstance(usage, dict):
-        raise StreamError("The response's usage isn't an object.")
+        raise ShapeError("The response's usage isn't an object.")
     return Reply(
         status=status,
         output=list(output),
@@ -155,11 +182,11 @@ class StreamParser:
 
     def feed(self, line: str) -> bool:
         """Read one line. True once the final event has been read: the caller stops there.
-        Raises StreamError for an event that can't be read."""
+        Raises ShapeError for an event that can't be read."""
         if self._reply is not None:
             raise ValueError("the stream's final event has already been read")
         if line == "":
-            return self._dispatch()
+            return self._dispatch(finished=True)
         if line.startswith(":"):
             return False
         name, _, value = line.partition(":")
@@ -169,34 +196,45 @@ class StreamParser:
         return False
 
     def end(self) -> None:
-        """The body ended: read an event it ended without a blank line after."""
+        """The body ended: read an event it ended without a blank line after. Raises StreamError
+        when its data isn't whole JSON, since the stream was cut inside it."""
         if self._data and self._reply is None:
-            self._dispatch()
+            self._dispatch(finished=False)
 
     def reply(self) -> Reply:
-        """The reply, once the stream has ended. Raises StreamError when it ended without a final
-        event."""
+        """The reply, once the stream has ended. Raises StreamError when it was cut short, and
+        ShapeError when its last event can't be read."""
         self.end()
         if self._reply is None:
             raise StreamError("The response's stream ended before the service finished it.")
         return self._reply
 
-    def _dispatch(self) -> bool:
+    def _dispatch(self, *, finished: bool) -> bool:
+        """Read the event gathered so far. ``finished`` is whether its blank line arrived; an event
+        without one is finished too once its data is whole JSON (design D1)."""
         if not self._data:
             return False
         data, self._data = "\n".join(self._data), []
         try:
             event = json.loads(data)
         except ValueError:
-            raise StreamError(
+            if not finished:
+                raise StreamError(
+                    "The response's stream ended in the middle of an event."
+                ) from None
+            raise ShapeError(
                 f"An event in the response's stream isn't JSON: {data[:200]!r}."
             ) from None
         if not isinstance(event, dict) or not isinstance(event.get("type"), str):
-            raise StreamError("An event in the response's stream has no type.")
+            raise ShapeError("An event in the response's stream has no type.")
         kind = event["type"]
         if kind in FINAL:
             response = _dict(event.get("response"), f"{kind} event's response")
-            self._reply = read_response(response, kind.removeprefix("response."))
+            try:
+                self._reply = read_response(response, kind.removeprefix("response."))
+            except ShapeError as error:
+                usage = response.get("usage")
+                raise ShapeError(str(error), usage if isinstance(usage, dict) else None) from None
             return True
         if kind == ERROR:
             failure = _failure(event.get("error") or event)
@@ -210,6 +248,7 @@ __all__ = [
     "FINAL",
     "Failure",
     "Reply",
+    "ShapeError",
     "StreamError",
     "StreamParser",
     "ToolCall",

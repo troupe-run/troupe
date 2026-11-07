@@ -55,6 +55,9 @@ class Reply:
     chunks: Sequence[bytes] | None = None
     """A streamed body as raw bytes, each piece written and flushed on its own, so a line can
     arrive split across reads anywhere."""
+    no_content_type: bool = False
+    """Send no Content-Type at all. Otherwise one in ``headers`` is sent, or the default: a stream
+    as text/event-stream, a body as application/json."""
 
 
 @dataclass(frozen=True)
@@ -117,8 +120,14 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_response(reply.status)
         for name, value in reply.headers:
             self.send_header(name, value)
+        streamed = reply.chunks is not None or reply.lines is not None
+        if not reply.no_content_type and not any(
+            name.lower() == "content-type" for name, _ in reply.headers
+        ):
+            self.send_header(
+                "Content-Type", "text/event-stream" if streamed else "application/json"
+            )
         if reply.chunks is not None:
-            self.send_header("Content-Type", "text/event-stream")
             self.send_header("Connection", "close")
             self.end_headers()
             self.close_connection = True
@@ -129,13 +138,10 @@ class _Handler(BaseHTTPRequestHandler):
             return
         if reply.lines is None:
             body = reply.body or b""
-            if not any(name.lower() == "content-type" for name, _ in reply.headers):
-                self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
             return
-        self.send_header("Content-Type", "text/event-stream")
         self.send_header("Connection", "close")
         self.end_headers()
         self.close_connection = True

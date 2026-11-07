@@ -24,7 +24,7 @@ from fake_endpoint import (
 )
 from troupe_runner_openai.service import Call, parse_endpoint
 from troupe_runner_openai.stream import Reply as Parsed
-from troupe_runner_openai.stream import StreamError, StreamParser
+from troupe_runner_openai.stream import ShapeError, StreamError, StreamParser
 
 DATA = Path(__file__).parent / "data"
 OPENAI = DATA / "openai-responses-loop"
@@ -164,21 +164,62 @@ def test_a_stream_cut_before_its_final_event_is_broken() -> None:
         _parse([*sse([started]), Cut()])
 
 
+def _args_as_object() -> dict[str, Any]:
+    """A final event whose function_call's arguments are a JSON object rather than its text."""
+    done = final([function_call("c1", "Write", "{}")])
+    done["response"]["output"][0]["arguments"] = {"file_path": "a.txt"}
+    return done
+
+
 @pytest.mark.parametrize(
     ("data", "words"),
     [
-        ("not json", "isn't JSON"),
+        ("not json", r"isn't JSON: 'not json'"),
         ("[1, 2]", "has no type"),
         ('{"type": "response.completed", "response": "x"}', "response isn't an object"),
         (
             '{"type": "response.completed", "response": {"status": "completed", "output": 3}}',
-            "output",
+            "output isn't a list",
+        ),
+        (
+            json.dumps(_args_as_object()),
+            "tool call's arguments is an object, not text",
         ),
     ],
 )
-def test_an_event_that_cant_be_read_breaks_the_stream(data: str, words: str) -> None:
-    with pytest.raises(StreamError, match=words):
+def test_a_finished_event_that_cant_be_read_is_the_wrong_shape_not_a_cut(
+    data: str, words: str
+) -> None:
+    with pytest.raises(ShapeError, match=words):
         _parse([f"data: {data}", ""])
+
+
+def test_a_final_events_usage_is_kept_when_its_output_cant_be_read() -> None:
+    done = final([message("hi")], used=usage(200, 20))
+    done["response"]["output"] = 3
+    with pytest.raises(ShapeError, match="output isn't a list") as raised:
+        _parse([f"data: {json.dumps(done)}", ""])
+    assert raised.value.usage is not None
+    assert (raised.value.usage["input_tokens"], raised.value.usage["output_tokens"]) == (200, 20)
+
+
+def test_a_final_events_usage_that_cant_be_read_is_none() -> None:
+    done = final([message("hi")], used=usage(200, 20))
+    done["response"]["usage"] = 3
+    with pytest.raises(ShapeError, match="usage isn't an object") as raised:
+        _parse([f"data: {json.dumps(done)}", ""])
+    assert raised.value.usage is None
+
+
+def test_an_event_the_body_ended_inside_is_cut_short() -> None:
+    data = json.dumps(final([message("hi")]))
+    with pytest.raises(StreamError, match="ended in the middle of an event"):
+        _parse([f"data: {data[: len(data) // 2]}"])
+
+
+def test_a_whole_event_the_body_ended_before_its_blank_line_is_the_wrong_shape() -> None:
+    with pytest.raises(ShapeError, match="has no type"):
+        _parse(['data: {"no": "type"}'])
 
 
 # Wherever a stream is cut
