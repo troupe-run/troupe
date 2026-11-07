@@ -167,6 +167,29 @@ def test_the_actors_own_runtime_and_model_are_kept() -> None:
     assert "old" not in command
 
 
+def test_an_endpoint_elsewhere_isnt_lost_when_the_actor_already_names_a_runtime() -> None:
+    # Found by a review of PR #322: the fix kept the actor's runtime and dropped the endpoint.
+    error = _refused(
+        _old_ollama({"model": "m", "endpoint": "http://gpu-box:11434"}, runtime="ollama")
+    )
+    command = _move(error)
+    assert "'runtimes.<name>.endpoint=http://gpu-box:11434'" in command
+    assert "'actors.tester.runtime=<name>'" in command
+
+
+def test_a_runtime_the_actor_names_that_doesnt_exist_isnt_kept_in_the_fix() -> None:
+    # Found by a review of PR #322: the fix kept runtime=gpu, which config then refused.
+    error = _refused(_old_ollama({"model": "m"}, runtime="gpu"))
+    assert "actors.tester.runtime=ollama" in _move(error)
+    assert "gpu" not in _move(error)
+
+
+@pytest.mark.parametrize("model", [5, {"a": 1}, ""])
+def test_a_model_that_isnt_text_is_left_out_of_the_fix(model: object) -> None:
+    error = _refused(_old_ollama({"model": model}))
+    assert "actors.tester.model=" not in _move(error)
+
+
 def test_an_ollama_endpoint_holding_a_password_is_refused_without_repeating_it() -> None:
     error = _refused(_old_ollama({"endpoint": "http://user:secret@127.0.0.1:11434"}))
     assert error.details["path"] == ["actors", "tester", "options", "endpoint"]

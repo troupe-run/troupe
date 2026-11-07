@@ -173,7 +173,8 @@ def actor_problems(
     moved: list[Problem] = []
     if isinstance(runner, str) and runner in interim.RUNNERS:
         options = actor.get("options", {})
-        moved = _moved_problems(base, actor, runner)
+        known_runtimes = list(runtimes) if runtimes is not None else sorted(defaults.RUNTIMES)
+        moved = _moved_problems(base, actor, runner, known_runtimes)
         moved_paths = {problem.path for problem in moved}
         found += moved
         found += [
@@ -199,7 +200,9 @@ def actor_problems(
     return sorted(found, key=lambda problem: problem.path)
 
 
-def _moved_problems(base: tuple[str, ...], actor: Mapping[str, Any], runner: str) -> list[Problem]:
+def _moved_problems(
+    base: tuple[str, ...], actor: Mapping[str, Any], runner: str, known: Sequence[str]
+) -> list[Problem]:
     """A problem for each option the actor's runner moved to its runtime, whose fix is one config
     set built from the actor's own values (spec: runtimes, "Options a runner moved to its runtime
     are refused with the move"; ollama-uses-runtime design D5)."""
@@ -210,7 +213,7 @@ def _moved_problems(base: tuple[str, ...], actor: Mapping[str, Any], runner: str
     held = [key for key in interim.MOVED_OPTIONS if key in options]
     if not held:
         return []
-    fix = _move_fix(base, actor, options, built_in)
+    fix = _move_fix(base, actor, options, built_in, known)
     return [
         Problem(
             (*base, "options", key),
@@ -223,35 +226,40 @@ def _moved_problems(base: tuple[str, ...], actor: Mapping[str, Any], runner: str
 
 
 def _move_fix(
-    base: tuple[str, ...], actor: Mapping[str, Any], options: Mapping[str, Any], built_in: str
+    base: tuple[str, ...],
+    actor: Mapping[str, Any],
+    options: Mapping[str, Any],
+    built_in: str,
+    known: Sequence[str],
 ) -> str:
     """The config set that moves the actor's endpoint and model to a runtime, changing no runtime
     that exists. An endpoint that isn't the built-in runtime's needs a runtime of its own, whose
-    name the person chooses."""
+    name the person chooses, whatever runtime the actor already names, so the endpoint is never
+    lost. Otherwise the actor keeps a runtime it names that exists, else gets the built-in one."""
     assignments: list[str] = []
     note = ""
-    runtime = actor.get("runtime")
     endpoint = options.get("endpoint")
     default = str(defaults.RUNTIMES[built_in]["endpoint"])
-    if not isinstance(runtime, str):
-        if endpoint is None or (
-            isinstance(endpoint, str) and endpoint.rstrip("/") == default.rstrip("/")
-        ):
-            runtime = built_in
-        else:
-            runtime = "<name>"
-            # Never repeat an endpoint with user info (it may hold a password) or one that isn't
-            # plain text: the person gives the URL again.
-            shown = (
-                endpoint
-                if isinstance(endpoint, str) and "@" not in endpoint and endpoint.isprintable()
-                else "<url>"
-            )
-            assignments.append(f"{RUNTIMES}.<name>.endpoint={shown}")
-            note = ", choosing a <name> for that Ollama, such as gpu-box"
+    named = actor.get("runtime")
+    if endpoint is None or (
+        isinstance(endpoint, str) and endpoint.rstrip("/") == default.rstrip("/")
+    ):
+        runtime = named if isinstance(named, str) and named in known else built_in
+    else:
+        runtime = "<name>"
+        # Never repeat an endpoint with user info (it may hold a password) or one that isn't
+        # plain text: the person gives the URL again.
+        shown = (
+            endpoint
+            if isinstance(endpoint, str) and "@" not in endpoint and endpoint.isprintable()
+            else "<url>"
+        )
+        assignments.append(f"{RUNTIMES}.<name>.endpoint={shown}")
+        note = ", choosing a <name> for that Ollama, such as gpu-box"
     assignments.append(f"{dotted((*base, 'runtime'))}={runtime}")
-    model = actor.get("model", options.get("model"))
-    if model is not None:
+    # The actor's own model wins at run time; a model that isn't text is left for the person.
+    model = actor.get("model") if isinstance(actor.get("model"), str) else options.get("model")
+    if isinstance(model, str) and model and model.isprintable():
         assignments.append(f"{dotted((*base, 'model'))}={model}")
     rest = {k: v for k, v in options.items() if k not in interim.MOVED_OPTIONS}
     assignments.append(

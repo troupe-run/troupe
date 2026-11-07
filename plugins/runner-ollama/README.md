@@ -52,7 +52,7 @@ The runner refuses `run/start`, before any request, when:
 |---|---|---|
 | `ollama.no-runtime` | `run/start` carries no runtime | Name one for the actor: `troupe config set actors.<name>.runtime=ollama` |
 | `ollama.invalid-runtime` | The runtime's endpoint has a path (Ollama's own API is at the root; an address ending `/v1` is its OpenAI-style API, for the `openai` runner), a port above 65535, or a host name part that's empty or over 63 characters | Set `runtimes.<name>.endpoint`, or `TROUPE_RUNTIME_<NAME>_ENDPOINT` |
-| `ollama.credential-unsupported` | The runtime has a credential: the runner sends none | Unset the runtime's `credential`, or use a runner that sends a key |
+| `ollama.credential-unsupported` | The runtime has a credential: the runner sends none | Name a runtime without one, such as `ollama`, or use a runner that sends a key |
 
 An endpoint with a user name, password, query or fragment never reaches the runner: config refuses it, and so does the
 runner contract's own pattern (`runner.invalid-params`).

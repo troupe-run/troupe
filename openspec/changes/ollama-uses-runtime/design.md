@@ -105,11 +105,12 @@ rule with one fix.
 
 The fix is one command, built from the actor's own values and nothing else in config:
 
-- **runtime**: the actor's `runtime` if it names one. Otherwise `ollama` when `options.endpoint` is absent or the
-  built-in runtime's endpoint (ignoring a trailing `/`). Otherwise `<name>`, a placeholder, with
-  `runtimes.<name>.endpoint=<endpoint>` added, and the fix says to choose the name.
+- **runtime**: when `options.endpoint` is absent or the built-in runtime's endpoint (ignoring a trailing `/`), the
+  actor's own `runtime` if it names one that exists, else `ollama`. Any other endpoint gets `<name>`, a placeholder,
+  with `runtimes.<name>.endpoint=<endpoint>` added and the fix saying to choose the name, even when the actor already
+  names a runtime, so the endpoint is never dropped. An endpoint with user info is shown as `<url>`.
 - **model**: the actor's `model` if it sets one (it wins at run time anyway, spec: runtimes), else `options.model`.
-  Left out when neither is set.
+  Left out when neither is text.
 - **options**: the options without the moved keys, as compact JSON in one group set (`'actors.<n>.options={...}'`,
   or `{}`). Setting a group replaces it whole (`changes.set_value`), so the moved keys go in the same change. That's
   what makes one command enough. `config set` and `config unset` are separate commands, and each is checked against
@@ -158,6 +159,11 @@ journey points the run at its stand-in with `TROUPE_RUNTIME_OLLAMA_ENDPOINT` in 
 - **[A theatre with an old Ollama actor can't record any config change until it's moved]** → The refusal's fix is the
   move, in one command, so the dead end lasts one copy-paste. The runner is unreleased (0.2.0 milestone), so only
   people on a development install have such actors.
+- **[The fix compares the old endpoint with the built-in runtime's, not the theatre's]** → In a theatre that set
+  `runtimes.ollama.endpoint`, an old actor with no `options.endpoint` is moved to `ollama`, and so to that theatre's
+  endpoint. The fix shows `runtime=ollama` before anything changes, and such a theatre is rare pre-release, since
+  `runtimes.ollama` had no Ollama actors until this change. Comparing with the theatre's runtime would need config in
+  the check, which the static form deliberately leaves out (a review of PR #322 raised it).
 - **[An old actor on a non-default endpoint gets a fix with a `<name>` to fill in]** → It's the rare case
   (pre-release, and the audition never set an endpoint), and the fix says what to choose. The default-endpoint case,
   the audition's, is copy-pasteable.
