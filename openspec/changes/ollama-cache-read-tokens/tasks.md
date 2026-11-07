@@ -50,10 +50,11 @@
   `eval_count`, no `cacheWriteTokens` because Ollama reports none, and the total input is `inputTokens +
   cacheReadTokens`. Verify: `test_ollama_readme.py` passes, and `grep -n "#282" plugins/runner-ollama/README.md`
   finds nothing.
-- [ ] 3.2 In `contributing/runners.md`'s Ollama table, change the usage row to map `prompt_eval_count` less
+- [x] 3.2 In `contributing/runners.md`'s Ollama table, change the usage row to map `prompt_eval_count` less
   `prompt_eval_cached_count` to `inputTokens`, `prompt_eval_cached_count` to `cacheReadTokens` and `eval_count` to
   `outputTokens`. Leave the contract's own section to troupe#293. Verify: the row reads as the README does, and
   `uv run scripts/check.py` passes.
+  (Done: the full check passed on f402e01, 3652 tests, as the guard ran it at commit.)
 
 ## 4. Check it end to end
 
