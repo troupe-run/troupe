@@ -18,7 +18,7 @@ from troupe.core.interim import runner_command
 from troupe.core.runners.effects import NoAudit, NoEffectExpected
 from troupe.core.runners.host import RunnerCommand, RunRequest, run_actor
 from troupe.core.runners.limits import RunLimits
-from troupe.core.runners.outcome import RunOutcome
+from troupe.core.runners.outcome import RunOutcome, TranscriptFormat
 from troupe_plugin_sdk import runner as p
 
 RUNNER = "runner-ollama"
@@ -171,11 +171,15 @@ def test_a_runners_tool_message_is_a_stored_record_before_the_next_answers_lines
 ) -> None:
     with ollama_stand_in.serving("success-with-tools") as fake:
         outcome, store, _, scratch = _run("success-with-tools", tmp_path, fake.url)
-    stored = _stored(outcome, store, scratch)
-    tool = next(i for i, r in enumerate(stored) if json.loads(r).get("role") == "tool")
-    first_line_after = next(i for i, r in enumerate(stored) if i > tool and "done" in json.loads(r))
+    lines = [json.loads(line) for line in _stored(outcome, store, scratch)]
+    assert outcome.transcript_format is TranscriptFormat.KINDS
+    stored = [json.loads(line["record"]) for line in lines]
+    tool = next(i for i, r in enumerate(stored) if r.get("role") == "tool")
+    first_line_after = next(i for i, r in enumerate(stored) if i > tool and "done" in r)
     assert tool < first_line_after
-    assert "Wrote" in json.loads(stored[tool])["content"]
+    assert lines[tool]["kind"] == "sent"
+    assert lines[first_line_after]["kind"] == "received"
+    assert "Wrote" in stored[tool]["content"]
 
 
 def test_history_sent_again_is_stored_once(tmp_path: Path) -> None:

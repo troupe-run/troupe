@@ -33,6 +33,7 @@ from troupe.core.runners.outcome import (
     RunFacts,
     RunOutcome,
     StopReason,
+    TranscriptFormat,
     derive_outcome,
 )
 from troupe.platform import processes
@@ -48,8 +49,8 @@ AnnounceCallback = Callable[[Notice], None]
 MessageCallback = Callable[[str, Mapping[str, Any]], None]
 """Receives ("sent" or "received", message) for every protocol message, for tracing and tests."""
 
-OFFERED_CAPABILITIES: tuple[str, ...] = ()
-"""The capabilities this troupe offers runners. Version 0 defines none."""
+OFFERED_CAPABILITIES: tuple[p.Capability, ...] = p.CAPABILITIES
+"""The capabilities this troupe offers runners: every one the contract defines."""
 
 _POLL_SECONDS = 0.05
 _FIX_RUNNER_BUG = (
@@ -164,6 +165,8 @@ class _Run:
         self.child: processes.ChildProcess | None = None
         self.transcript: ArtifactWriter | None = None
         self.transcript_bytes = 0
+        self.transcript_format = TranscriptFormat.NATIVE
+        """KINDS once the runner accepted transcript-kinds at the handshake."""
         self.stderr: _StderrSink | None = None
         self.line_number = 0
         self.next_id = 1
@@ -300,6 +303,18 @@ class _Run:
                 f"it sent a transcript record for run {record.run_id}, not this run",
                 self.line_number,
             )
+        kinds = self.transcript_format is TranscriptFormat.KINDS
+        if kinds and record.kind is None:
+            raise _violation(
+                "it sent a transcript record without a kind, after accepting transcript-kinds",
+                self.line_number,
+            )
+        if not kinds and record.kind is not None:
+            raise _violation(
+                f"it sent a transcript record of kind {record.kind!r} without accepting "
+                "transcript-kinds",
+                self.line_number,
+            )
         if record.encoding == "base64":
             try:
                 data = base64.b64decode(record.record, validate=True)
@@ -310,6 +325,8 @@ class _Run:
         else:
             data = record.record.encode()
         data = self.mask.bytes(data)
+        if record.kind is not None:
+            data = framed_record(record.kind, data, base64_=record.encoding == "base64")
         if self.transcript is None:
             raise RuntimeError("the transcript writer isn't open")
         self.transcript.write(data + b"\n")
@@ -583,6 +600,7 @@ async def _run_actor(
         exit_code,
         ending,
         transcript_ref,
+        run.transcript_format,
         stderr_ref,
         limits,
         findings,
@@ -597,8 +615,23 @@ def not_started(run_id: str, limits: RunLimits | None, error: TroupeError) -> Ru
         RunFacts(limits=limits, ending=Ending.NEVER_STARTED, start_error=error)
     )
     return RunOutcome(
-        run_id, outcome, error_out, None, None, Ending.NEVER_STARTED, None, None, limits
+        run_id, outcome, error_out, None, None, Ending.NEVER_STARTED, None, None, None, limits
     )
+
+
+def framed_record(kind: p.TranscriptKind, data: bytes, *, base64_: bool) -> bytes:
+    """One stored line of a transcript whose run used kinds, without its line feed
+    (protocol/schemas/transcript-record.schema.json; transcript-record-kinds design D3). ``data``
+    is the record's bytes after masking. A record the runner sent as text stays text: masking
+    replaces a valid UTF-8 needle with ASCII, so the bytes still decode. One sent as base64 is
+    base64 of the masked bytes."""
+    line: dict[str, str] = {"kind": kind}
+    if base64_:
+        line["record"] = base64.b64encode(data).decode("ascii")
+        line["encoding"] = "base64"
+    else:
+        line["record"] = data.decode("utf-8")
+    return json.dumps(line, ensure_ascii=False, separators=(",", ":")).encode()
 
 
 async def _await_response(run: _Run, id_: int) -> p.Incoming | None:
@@ -650,6 +683,8 @@ async def _start(run: _Run) -> TroupeError | None:
         raise _violation(
             f"it named capabilities troupe didn't offer ({', '.join(unoffered)})", run.line_number
         )
+    if p.TRANSCRIPT_KINDS_CAPABILITY in result.capabilities:
+        run.transcript_format = TranscriptFormat.KINDS
     id_ = await run.send(
         "run/start",
         p.RunStartParams(

@@ -12,13 +12,17 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from hypothesis import assume, given, settings
+from hypothesis import strategies as st
 
-from protocol_schemas import check_error, check_notice
+from protocol_schemas import check_error, check_notice, validator_for
 from runner_schemas import is_valid, validate
 from troupe.core import defaults
 from troupe.core.artifacts import ArtifactStore, MemoryArtifactStore, load_store
 from troupe.core.errors import TroupeError
+from troupe.core.masking import Masker
 from troupe.core.notices import Notice
+from troupe.core.runners import host as host_module
 from troupe.core.runners.effects import (
     Audit,
     Change,
@@ -28,9 +32,9 @@ from troupe.core.runners.effects import (
     NoAudit,
     NoEffectExpected,
 )
-from troupe.core.runners.host import RunnerCommand, RunRequest, run_actor
+from troupe.core.runners.host import RunnerCommand, RunRequest, framed_record, run_actor
 from troupe.core.runners.limits import RunLimits
-from troupe.core.runners.outcome import Ending, Outcome, RunOutcome
+from troupe.core.runners.outcome import Ending, Outcome, RunOutcome, TranscriptFormat
 from troupe.platform import processes
 from troupe_plugin_sdk import runner as p
 from troupe_plugin_sdk.effects import Effects
@@ -40,6 +44,7 @@ INIT = {"type": "init", "runner": {"name": "scripted", "version": "0.0.1"}, "too
 OK = {"type": "result", "status": "ok", "message": "done"}
 ERROR_RESULT = {"type": "result", "status": "error", "message": "API Error: 401"}
 FAST = RunLimits(cancel_grace=2.0, start_timeout=30.0)
+STORED_RECORD = "https://troupe.run/protocol/transcript-record.schema.json"
 
 
 @dataclass
@@ -82,6 +87,7 @@ def _run(
     direction: str = "test",
     effects: p.EffectsDeclaration = p.READ_ONLY_DECLARATION,
     scratch_root: Path | None = None,
+    credential: str | None = None,
 ) -> Ran:
     """Run the scripted runner (or ``argv``) and check every message troupe sent against the
     contract, with the scripted runner's schemas bound. ``valid_options=False`` marks options the
@@ -97,6 +103,7 @@ def _run(
         options if options is not None else {"script": script or {"steps": []}},
         character=character,
         effects=effects,
+        credential=credential,
     )
     ran: dict[str, Any] = {"events": [], "notices": [], "sent": [], "received": [], "times": []}
 
@@ -359,7 +366,7 @@ def test_a_message_over_the_maximum_size_is_a_violation_naming_the_limit(tmp_pat
     ("mode", "expected"),
     [
         ("wrong-version", "protocol version 1"),
-        ("capability", "capabilities troupe didn't offer (resume)"),
+        ("capability", "must be one of 'transcript-kinds', not 'resume'"),
         ("wrong-run-id", "not this run"),
         ("unsent-id", "never sent"),
     ],
@@ -386,8 +393,19 @@ def test_a_runner_that_never_answers_the_handshake_could_not_start(tmp_path: Pat
 def test_a_compatible_runner_is_offered_version_1_and_answers_it(tmp_path: Path) -> None:
     ran = _run(tmp_path, {"steps": [{"event": INIT}, {"event": OK}]})
     assert ran.sent[0]["params"]["protocolVersions"] == [0]
-    assert ran.sent[0]["params"]["capabilities"] == []
+    assert ran.sent[0]["params"]["capabilities"] == ["transcript-kinds"]
     assert ran.received[0]["result"]["protocolVersion"] == 0
+
+
+def test_a_capability_the_contract_defines_but_troupe_didnt_offer_is_a_violation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(host_module, "OFFERED_CAPABILITIES", ())
+    ran = _run(tmp_path, argv=_fake("accept-transcript-kinds"))
+    assert ran.sent[0]["params"]["capabilities"] == []
+    assert (ran.outcome.outcome, _code(ran)) == (Outcome.CRASHED, "runner.protocol")
+    assert ran.outcome.error is not None
+    assert "capabilities troupe didn't offer (transcript-kinds)" in ran.outcome.error.problem
 
 
 def test_an_incompatible_runner_could_not_start_and_no_run_is_started(tmp_path: Path) -> None:
@@ -915,3 +933,144 @@ def test_an_error_result_with_its_expected_file_missing_fails_with_its_error_alo
     assert (ran.outcome.outcome, _code(ran)) == (Outcome.FAILED, "run.error-result")
     assert ran.outcome.error is not None
     assert "hello.txt" not in ran.outcome.error.problem
+
+
+# Requirement: The transcript-kinds capability (spec: runner-protocol)
+
+KINDS = [sys.executable, "-m", "troupe_runner_scripted", "--transcript-kinds"]
+"""The scripted runner, accepting transcript-kinds when troupe offers it."""
+
+
+def test_troupe_offers_transcript_kinds_and_a_runner_that_accepts_it_uses_kinds(
+    tmp_path: Path,
+) -> None:
+    ran = _run(tmp_path, {"steps": [{"event": INIT}, {"event": OK}]}, argv=KINDS)
+    assert ran.sent[0]["params"]["capabilities"] == ["transcript-kinds"]
+    assert ran.received[0]["result"]["capabilities"] == ["transcript-kinds"]
+    assert ran.outcome.transcript_format is TranscriptFormat.KINDS
+
+
+def test_a_runner_that_doesnt_accept_transcript_kinds_has_a_native_transcript(
+    tmp_path: Path,
+) -> None:
+    ran = _run(tmp_path, {"steps": [{"event": INIT}, {"event": OK}]})
+    assert ran.received[0]["result"]["capabilities"] == []
+    assert ran.outcome.transcript_format is TranscriptFormat.NATIVE
+
+
+# Requirement: Kinds are all or nothing in a run (spec: runner-protocol)
+
+
+@pytest.mark.parametrize(
+    ("argv", "record", "expected"),
+    [
+        (KINDS, {"record": "bare"}, "without a kind, after accepting transcript-kinds"),
+        (None, {"record": "x", "kind": "received"}, "of kind 'received' without accepting"),
+    ],
+    ids=["no kind in a run with kinds", "a kind in a run without them"],
+)
+def test_a_record_that_breaks_the_kinds_rule_is_a_violation_and_isnt_stored(
+    tmp_path: Path, argv: list[str] | None, record: dict[str, str], expected: str
+) -> None:
+    first = {"record": "kept", "kind": "sent"} if argv else {"record": "kept"}
+    steps = [{"event": INIT}, {"transcript": first}, {"transcript": record}, {"hang": True}]
+    ran = _run(tmp_path, {"onCancel": "ignore", "steps": steps}, argv=argv)
+    assert (ran.outcome.outcome, _code(ran)) == (Outcome.CRASHED, "runner.protocol")
+    assert ran.outcome.error is not None
+    assert expected in ran.outcome.error.problem
+    kept = b'{"kind":"sent","record":"kept"}\n' if argv else b"kept\n"
+    assert ran.transcript() == kept
+
+
+# Requirement: A run that uses kinds stores each record with its kind (spec: actor-runners)
+
+
+def test_a_run_with_kinds_stores_each_record_as_a_line_with_its_kind(tmp_path: Path) -> None:
+    steps = [
+        {"event": INIT},
+        {"transcript": {"record": '{"model":"m"}', "kind": "sent"}},
+        {"transcript": {"record": "data: {}", "kind": "received"}},
+        {"event": OK},
+    ]
+    ran = _run(tmp_path, {"steps": steps}, argv=KINDS)
+    assert ran.transcript() == (
+        b'{"kind":"sent","record":"{\\"model\\":\\"m\\"}"}\n'
+        b'{"kind":"received","record":"data: {}"}\n'
+    )
+    for line in ran.transcript().splitlines():
+        validator_for(STORED_RECORD).validate(json.loads(line))
+
+
+def test_a_base64_record_in_a_run_with_kinds_is_stored_as_base64_of_its_masked_bytes(
+    tmp_path: Path,
+) -> None:
+    raw = b"\x00\xffsk-test-canary-0123456789\xfe"
+    record = {"record": base64.b64encode(raw).decode(), "encoding": "base64", "kind": "received"}
+    steps = [{"event": INIT}, {"transcript": record}, {"event": OK}]
+    ran = _run(tmp_path, {"steps": steps}, argv=KINDS, credential="sk-test-canary-0123456789")
+    line = json.loads(ran.transcript())
+    assert (line["kind"], line["encoding"]) == ("received", "base64")
+    assert base64.b64decode(line["record"]) == b"\x00\xff[credential]\xfe"
+
+
+def test_the_credential_in_a_record_with_kinds_is_masked_and_the_line_stays_json(
+    tmp_path: Path,
+) -> None:
+    canary = 'sk-"test/canary'
+    record = {"record": json.dumps({"key": canary}), "kind": "sent"}
+    steps = [{"event": INIT}, {"transcript": record}, {"event": OK}]
+    ran = _run(tmp_path, {"steps": steps}, argv=KINDS, credential=canary)
+    line = json.loads(ran.transcript())
+    assert line == {"kind": "sent", "record": '{"key": "[credential]"}'}
+    assert canary.encode() not in ran.transcript()
+
+
+# Requirement: The transcript limit counts what is stored (spec: actor-runners)
+
+
+def test_framing_that_passes_the_transcript_limit_stops_the_run(tmp_path: Path) -> None:
+    # Ten records of 40 bytes are 410 stored bytes natively, under the limit of 500, and about
+    # 700 framed: the framing alone passes the limit.
+    record = {"record": "x" * 40, "kind": "received"}
+    steps = [{"event": INIT}] + [{"transcript": record}] * 10 + [{"hang": True}]
+    limits = RunLimits(transcript_max_bytes=500, cancel_grace=2.0)
+    native = _run(
+        tmp_path, {"steps": [{"event": INIT}] + [{"transcript": "x" * 40}] * 10 + [{"event": OK}]}
+    )
+    assert len(native.transcript()) < 500
+    ran = _run(tmp_path, {"steps": steps}, argv=KINDS, limits=limits)
+    assert (ran.outcome.outcome, _code(ran)) == (Outcome.FAILED, "run.transcript-too-large")
+
+
+@settings(max_examples=200, deadline=None)
+@given(
+    kind=st.sampled_from(p.TRANSCRIPT_KINDS),
+    before=st.text(),
+    after=st.text(),
+    secret=st.sampled_from(["sk-test-canary-0123456789", 'sk-"q/uo\\teé-canary']),
+    embed=st.booleans(),
+)
+def test_a_masked_text_record_framed_validates_and_decodes_to_the_masked_bytes(
+    kind: p.TranscriptKind, before: str, after: str, secret: str, embed: bool
+) -> None:
+    assume(not any(0xD800 <= ord(c) <= 0xDFFF for c in before + after))  # a lone surrogate: #311
+    masked = Masker(secret).bytes((before + (secret if embed else "") + after).encode())
+    line = json.loads(framed_record(kind, masked, base64_=False))
+    validator_for(STORED_RECORD).validate(line)
+    assert line["kind"] == kind
+    assert "encoding" not in line
+    assert line["record"].encode("utf-8") == masked
+    assert not embed or secret not in line["record"]
+
+
+@settings(max_examples=200, deadline=None)
+@given(kind=st.sampled_from(p.TRANSCRIPT_KINDS), data=st.binary())
+def test_a_masked_byte_record_framed_validates_and_decodes_to_the_masked_bytes(
+    kind: p.TranscriptKind, data: bytes
+) -> None:
+    masked = Masker("sk-test-canary-0123456789").bytes(data + b"sk-test-canary-0123456789")
+    line = json.loads(framed_record(kind, masked, base64_=True))
+    validator_for(STORED_RECORD).validate(line)
+    assert (line["kind"], line["encoding"]) == (kind, "base64")
+    assert base64.b64decode(line["record"]) == masked
+    assert masked.endswith(b"[credential]")

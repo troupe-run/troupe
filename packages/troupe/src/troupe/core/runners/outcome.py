@@ -16,6 +16,16 @@ from troupe.core.runners.limits import RunLimits
 from troupe_plugin_sdk.runner import ResultEvent
 
 
+class TranscriptFormat(StrEnum):
+    """How a stored transcript's lines are written (spec: runs, actor-runners)."""
+
+    NATIVE = "native"
+    """Each line is a record as the runner sent it, after masking."""
+    KINDS = "kinds"
+    """The runner accepted transcript-kinds: each line is a record with its kind
+    (protocol/schemas/transcript-record.schema.json)."""
+
+
 class Outcome(StrEnum):
     SUCCEEDED = "succeeded"
     FAILED = "failed"
@@ -160,11 +170,19 @@ class RunOutcome:
     ending: Ending
     transcript: str | None
     """The transcript's artifact reference; None only when the runner never started."""
+    transcript_format: TranscriptFormat | None
+    """How the transcript's lines are written; None exactly when ``transcript`` is."""
     stderr: str | None
     limits: RunLimits
     audit: AuditFindings | None = None
     """What the audit of the run's changes found; None exactly when the runner never started, or
     the caller had no workspace to audit (NoAudit)."""
+
+    def __post_init__(self) -> None:
+        if (self.transcript is None) != (self.transcript_format is None):
+            raise ValueError(
+                "a run outcome has a transcript format exactly when it has a transcript"
+            )
 
     def to_data(self) -> dict[str, Any]:
         """The outcome as recorded, leaving out what didn't happen: no error, no result, and for
@@ -183,6 +201,8 @@ class RunOutcome:
             data["exitCode"] = self.exit_code
         if self.transcript is not None:
             data["transcript"] = self.transcript
+        if self.transcript_format is not None:
+            data["transcriptFormat"] = str(self.transcript_format)
         if self.stderr is not None:
             data["stderr"] = self.stderr
         if self.audit is not None:

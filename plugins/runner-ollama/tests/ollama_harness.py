@@ -90,7 +90,15 @@ def new_run_id() -> str:
 class Session:
     """One Ollama runner process. Every message either side sends is kept for validation."""
 
-    def __init__(self, workspace: Path, env: Mapping[str, str] | None = None) -> None:
+    def __init__(
+        self,
+        workspace: Path,
+        env: Mapping[str, str] | None = None,
+        capabilities: list[str] | None = None,
+    ) -> None:
+        """``capabilities``: what the handshake offers; troupe's offer (transcript-kinds) unless
+        given."""
+        self.capabilities = ["transcript-kinds"] if capabilities is None else capabilities
         self.workspace = workspace
         environment = dict(env or {})
         if sys.platform == "win32" and "SYSTEMROOT" in os.environ:
@@ -181,7 +189,7 @@ class Session:
             {
                 "protocolVersions": [0] if versions is None else versions,
                 "host": {"name": "test", "version": "1"},
-                "capabilities": [],
+                "capabilities": self.capabilities,
             },
         )
 

@@ -34,7 +34,7 @@ own tool loop (decision [#16](https://github.com/troupe-run/troupe/issues/16)), 
 | `initialize` | troupe → runner | request | `protocolVersions`, `host {name, version}`, `capabilities` | `protocolVersion`, `runner {name, version}`, `capabilities` |
 | `run/start` | troupe → runner | request | `runId`, `direction`, `character` (optional), `workspace`, `effects {write, delete, move}`, `scratch`, `options`, `runtime {name, endpoint, model, credential}` (optional), `limits {eventMaxBytes}` | `runId` |
 | `run/event` | runner → troupe | notification | one run event | — |
-| `run/transcript` | runner → troupe | notification | `runId`, `record`, `encoding` (optional) | — |
+| `run/transcript` | runner → troupe | notification | `runId`, `record`, `encoding` (optional), `kind` (exactly when the runner accepted `transcript-kinds`) | — |
 | `run/cancel` | troupe → runner | request | `runId` | `{}` |
 | `shutdown` | troupe → runner | request | `{}` | `{}` |
 
@@ -43,14 +43,15 @@ A run goes like this:
 1. troupe sends `initialize` with the protocol versions it supports (version 0 today: the draft contract, which changes in place with no
    compatibility promise until troupe commits to version 1) and the capability names
    it supports. The runner answers with one of the offered versions, its name and version, and the capabilities
-   it will use, each one from the offer (version 0 defines none, so the offer and the answer are empty lists). A
-   version or capability troupe didn't offer is a protocol violation. If the runner supports none of the offered
+   it will use, each one from the offer. The contract defines one capability, `transcript-kinds` (see
+   [Record kinds](#record-kinds)), and troupe offers it. A capability the contract doesn't define, or one troupe
+   didn't offer, is a protocol violation. If the runner supports none of the offered
    versions, it answers with an error whose `details` name the versions it does support, and troupe starts no
    run.
 2. troupe sends one `run/start`, with a new run id (a UUID, in canonical lowercase form). The runner answers
    with the same run id, then starts the actor. **A runner process
    serves one run.** A second `run/start` is refused.
-3. The runner sends `run/event` notifications as the actor works, and the engine's native output as
+3. The runner sends `run/event` notifications as the actor works, and its transcript records as
    `run/transcript` notifications.
 4. When the actor finishes, the runner sends one `result` event. troupe then sends `shutdown`; the runner answers
    and exits.
@@ -164,6 +165,30 @@ the record without its line ending. `encoding` is `utf-8` (the default) or `base
 troupe stores the records, each followed by `\n`, as the run's transcript, and never interprets them, apart from
 masking a runtime's credential. For Claude
 Code, that reproduces its stream-json output byte for byte.
+
+#### Record kinds
+
+A runner that drives an API has no native output: it conducts an exchange, and what it sends matters as much as
+what comes back. Rather than invent a framing for its records, it accepts the `transcript-kinds` capability at
+`initialize`, and gives every record a `kind`:
+
+| Kind | The record is |
+|---|---|
+| `sent` | What the runner sent its engine, verbatim: a request body, or a message it added to the conversation. |
+| `received` | What the engine sent back, verbatim: a stream line, a body. |
+| `note` | The runner's own record about the exchange, in its own form, such as a response's status and the headers it keeps, or a stream it gave up on. |
+
+It's all or nothing for the run: a runner that accepted the capability gives every record a kind, and one that
+didn't gives none. A record that breaks this is a protocol violation, and isn't stored. Offered no capability (a
+troupe from before it), send the same records without a kind. A runner that passes on an engine's native output,
+such as Claude Code's, has nothing to label and doesn't accept it.
+
+In a run that uses kinds, troupe stores each line as compact JSON: `{"kind": ..., "record": ...}`, with
+`"encoding": "base64"` when the runner sent the record as base64
+([`transcript-record.schema.json`](../protocol/schemas/transcript-record.schema.json)). It masks the credential in
+the record's bytes before it frames them. The transcript limit counts the stored bytes, framing included. The run's
+end records `transcriptFormat`, `native` or `kinds`, beside the transcript's reference, so a reader always knows
+which form its lines are. The OpenAI and Ollama runners use kinds.
 
 ### Where transcripts are kept
 

@@ -7,6 +7,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from protocol_schemas import validator_for
 from runner_schemas import RUNNER_SCHEMAS, is_valid, load, validate
 
 RUN_ID = "0f8fad5b-d9cb-469f-a165-70867728950e"
@@ -82,12 +83,12 @@ EXAMPLES: list[tuple[str, object, object]] = [
         {
             "protocolVersion": 0,
             "runner": {"name": "scripted", "version": "0.1"},
-            "capabilities": ["resume"],
+            "capabilities": ["transcript-kinds"],
         },
         {
             "protocolVersion": 0,
             "runner": {"name": "scripted", "version": "0.1"},
-            "capabilities": ["resume", "resume"],
+            "capabilities": ["transcript-kinds", "transcript-kinds"],
         },
     ),
     (
@@ -153,6 +154,54 @@ def test_each_message_schema_accepts_a_valid_example_and_refuses_an_invalid_one(
 ) -> None:
     validate(valid, ref)
     assert not is_valid(invalid, ref)
+
+
+# Requirement: A transcript record can say what kind it is
+
+
+@pytest.mark.parametrize("kind", ["sent", "received", "note"])
+def test_a_transcript_record_with_each_kind_validates(kind: str) -> None:
+    validate(
+        _notification("run/transcript", {"runId": RUN_ID, "record": "x", "kind": kind}),
+        "run-transcript.schema.json",
+    )
+
+
+def test_a_transcript_record_without_a_kind_validates() -> None:
+    validate(
+        _notification("run/transcript", {"runId": RUN_ID, "record": "x"}),
+        "run-transcript.schema.json",
+    )
+
+
+def test_a_transcript_record_of_an_unknown_kind_does_not_validate() -> None:
+    record = {"runId": RUN_ID, "record": "x", "kind": "request"}
+    assert not is_valid(_notification("run/transcript", record), "run-transcript.schema.json")
+
+
+# Requirement: The transcript-kinds capability
+
+
+def test_an_initialize_answer_naming_transcript_kinds_validates() -> None:
+    result = {"protocolVersion": 0, "runner": {"name": "s", "version": "1"}}
+    validate(
+        {**result, "capabilities": ["transcript-kinds"]}, "initialize.schema.json#/$defs/result"
+    )
+
+
+def test_a_capability_the_contract_doesnt_define_does_not_validate_offered_or_answered() -> None:
+    result = {
+        "protocolVersion": 0,
+        "runner": {"name": "s", "version": "1"},
+        "capabilities": ["widgets"],
+    }
+    offer = {
+        "protocolVersions": [0],
+        "host": {"name": "troupe", "version": "1"},
+        "capabilities": ["widgets"],
+    }
+    assert not is_valid(result, "initialize.schema.json#/$defs/result")
+    assert not is_valid(_request("initialize", offer), "initialize.schema.json")
 
 
 EVENTS: dict[str, dict[str, Any]] = {
@@ -518,3 +567,36 @@ def test_an_init_event_saying_how_effects_are_applied_validates(value: str) -> N
 
 def test_an_init_event_whose_effects_are_none_does_not_validate() -> None:
     assert not is_valid(_init(effects="none"), "run-event.schema.json#/$defs/event")
+
+
+# Requirement: A run that uses kinds stores each record with its kind
+
+STORED = "https://troupe.run/protocol/transcript-record.schema.json"
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        {"kind": "sent", "record": '{"model":"m"}'},
+        {"kind": "note", "record": "x"},
+        {"kind": "received", "record": "AP8=", "encoding": "base64"},
+    ],
+)
+def test_a_stored_transcript_line_validates(line: dict[str, Any]) -> None:
+    validator_for(STORED).validate(line)
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        {"kind": "sent", "record": "x", "encoding": "utf-8"},
+        {"kind": "sent", "record": "x", "extra": 1},
+        {"kind": "request", "record": "x"},
+        {"record": "x"},
+    ],
+    ids=["utf-8 encoding", "extra key", "unknown kind", "no kind"],
+)
+def test_a_stored_transcript_line_that_breaks_the_form_does_not_validate(
+    line: dict[str, Any],
+) -> None:
+    assert not validator_for(STORED).is_valid(line)

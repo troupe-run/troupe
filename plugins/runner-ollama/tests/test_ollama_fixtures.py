@@ -85,7 +85,7 @@ def test_the_context_overflow_fixture_is_ollamas_refusal_naming_the_window() -> 
 
 
 def test_the_thinking_fixtures_thinking_is_in_its_transcript_only() -> None:
-    assert any('"thinking"' in record for record in fixture_records("thinking"))
+    assert any('"thinking"' in json.loads(line)["record"] for line in fixture_records("thinking"))
     assert all("thinking" not in json.dumps(event) for event in load("thinking", "events.json"))
 
 

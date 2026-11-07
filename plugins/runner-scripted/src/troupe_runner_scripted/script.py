@@ -172,10 +172,13 @@ def _step(data: Any, where: str) -> Step:  # noqa: ANN401
         _event_shape(value, here)
     elif kind == "transcript":
         if isinstance(value, dict):
-            _require_keys(value, here, {"record"}, {"encoding"})
+            _require_keys(value, here, {"record"}, {"encoding", "kind"})
             _str(value["record"], f"{here}.record")
             if value.get("encoding", "utf-8") not in ("utf-8", "base64"):
                 raise _invalid("encoding must be 'utf-8' or 'base64'", f"{here}.encoding")
+            if "kind" in value and value["kind"] not in p.TRANSCRIPT_KINDS:
+                kinds = ", ".join(repr(kind) for kind in p.TRANSCRIPT_KINDS)
+                raise _invalid(f"kind must be one of {kinds}", f"{here}.kind")
         else:
             _str(value, here)
     elif kind in ("stderr", "rawStdout", "replay"):

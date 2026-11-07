@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/transcript-record.schema.json",
+  "title": "Transcript record",
+  "description": "One line of a stored transcript whose run used kinds (its run's end records transcriptFormat kinds): a record the runner sent with run/transcript, with its kind, after troupe masked the run's credential in it. Each line is compact JSON with its keys in this order, followed by a line feed. A transcript whose run didn't use kinds holds the records themselves, one per line, and no such object.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "record"],
+  "properties": {
+    "kind": {"description": "What kind of record it is.", "$ref": "runner/run-transcript.schema.json#/$defs/kind"},
+    "record": {
+      "description": "The record as the runner sent it, without its line ending, with the run's credential masked: the text, or base64 of the bytes when encoding is base64.",
+      "type": "string"
+    },
+    "encoding": {
+      "description": "base64: the runner sent the record as base64 of bytes that aren't text. Absent: the record is the text.",
+      "const": "base64"
+    }
+  }
+}
