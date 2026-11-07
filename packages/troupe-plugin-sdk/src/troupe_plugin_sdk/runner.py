@@ -198,10 +198,9 @@ class InitEvent(RunEvent):
     TYPE: ClassVar[str | None] = "init"
     runner: Named = json_field("runner")
     tools: list[str] = json_field("tools")
+    effects: Literal["checked", "translated"] = json_field("effects")
+    """How the runner applies the declared effects."""
     engine: Engine | None = json_field("engine", default=None)
-    effects: Literal["checked", "translated"] | None = json_field("effects", default=None)
-    """How the runner applies the declared effects. A runner always sends it (``parse_event``
-    refuses an init without it); None only in an init recorded before runners said."""
 
     def _check(self, where: str) -> None:
         if self.seq != 0:
@@ -301,10 +300,7 @@ def parse_event(data: object) -> RunEvent:
     kind = data.get("type")
     if not isinstance(kind, str) or kind not in EVENT_TYPES:
         raise fail("run event", f"unknown event type {kind!r}")
-    event = EVENT_TYPES[kind].from_data(data)
-    if isinstance(event, InitEvent) and event.effects is None:
-        raise fail("InitEvent", "missing required field 'effects'")
-    return event
+    return EVENT_TYPES[kind].from_data(data)
 
 
 @dataclass(frozen=True)

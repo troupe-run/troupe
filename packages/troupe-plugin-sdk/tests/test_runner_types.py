@@ -487,19 +487,20 @@ def test_parse_line_reads_a_message_ending_in_a_carriage_return_and_line_feed() 
     assert note.method == "run/event"
 
 
-# Requirement: Init says how the runner applies the effects (declared-effects): a runner must send
-# it, and an init troupe recorded before it existed still reads.
+# Requirement: Init says how the runner applies the effects (spec: runner-protocol;
+# require-always-written-fields design D1): an init without it doesn't validate wherever troupe
+# reads one, as a runner sends it and as troupe recorded it.
 
 
 def test_a_runner_sent_init_without_effects_is_refused_naming_it() -> None:
-    legacy = {key: value for key, value in INIT.items() if key != "effects"}
+    without = {key: value for key, value in INIT.items() if key != "effects"}
     with pytest.raises(p.ProtocolError, match="InitEvent: missing required field 'effects'"):
-        p.parse_event(legacy)
-    assert not is_valid(legacy, "run-event.schema.json#/$defs/event")
+        p.parse_event(without)
+    assert not is_valid(without, "run-event.schema.json#/$defs/event")
 
 
-def test_an_init_recorded_before_effects_existed_still_reads_as_a_host_event() -> None:
-    legacy = {key: value for key, value in INIT.items() if key != "effects"}
-    event = p.InitEvent.from_data(legacy)
-    assert event.effects is None
-    validate(legacy, "run-event.schema.json#/$defs/hostEvent")
+def test_a_recorded_init_without_effects_is_refused_as_a_host_event_naming_it() -> None:
+    without = {key: value for key, value in INIT.items() if key != "effects"}
+    with pytest.raises(p.ProtocolError, match="InitEvent: missing required field 'effects'"):
+        p.InitEvent.from_data(without)
+    assert not is_valid(without, "run-event.schema.json#/$defs/hostEvent")

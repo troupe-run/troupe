@@ -25,6 +25,7 @@ def outcome(name: str) -> dict[str, Any]:
         "ending": "exited",
         "transcript": "sha256:" + "a" * 64,
         "stderr": "sha256:" + "b" * 64,
+        "audit": {"outside": []},
         "limits": RunLimits().to_data(),
     }
 
@@ -201,23 +202,10 @@ def test_a_worktree_made_out_of_place_is_refused_as_out_of_sequence(
     assert run.collect_events() == []
 
 
-def test_a_start_recorded_by_an_older_troupe_with_its_reported_runner_replays(
-    tmp_path: Path,
-) -> None:
+def test_a_worktree_runs_start_replays_with_its_workspace(tmp_path: Path) -> None:
     store = files_service(tmp_path)
-    run = Run(
-        run_id=str(uuid4()),
-        actor="tester",
-        runner_requested="scripted",
-        runner_reported={"name": "scripted", "version": "0.1.0"},
-        stage=STAGE,
-        effect_check={"kind": "none"},
-        direction="sha256:" + "a" * 64,
-        config=["sha256:" + "b" * 64],
-        workspace={**WORKTREE, "clones": ["copy"]},
-    )
+    run = new_run(workspace=WORKTREE)
     store.command(via="cli").record(run.collect_events())
     loaded = store.load(UUID(run.run_id))
     assert isinstance(loaded, Run)
-    assert loaded.runner_reported == {"name": "scripted", "version": "0.1.0"}
-    assert loaded.workspace == {**WORKTREE, "clones": ["copy"]}
+    assert loaded.workspace == WORKTREE

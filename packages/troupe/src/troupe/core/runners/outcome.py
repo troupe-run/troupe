@@ -164,7 +164,8 @@ class RunOutcome:
     limits: RunLimits
     audit: AuditFindings | None = None
     """What the audit of the run's changes found; None exactly when the runner never started, or
-    the caller had no workspace to audit (NoAudit)."""
+    the caller had no workspace to audit (NoAudit). perform always audits, so a recorded end whose
+    runner started always has one (require-always-written-fields design D4)."""
 
     def to_data(self) -> dict[str, Any]:
         """The outcome as recorded, leaving out what didn't happen: no error, no result, and for

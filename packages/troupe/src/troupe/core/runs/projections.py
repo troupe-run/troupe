@@ -8,8 +8,8 @@ so the summary takes it as an argument. So is the state of a worktree run's chan
 (worktree-stage design D7): pending, accepted, discarded, none or uncaptured.
 
 A run's reported runner is read from its init, its first reported event, and a worktree's clone
-mechanisms from Run.WorktreeMade. A start an older troupe recorded holds both itself, and they're
-read from there (account-for-every-worktree design D3, D4, D7).
+mechanisms from Run.WorktreeMade (account-for-every-worktree design D3, D4, D7;
+require-always-written-fields design D2, D3).
 """
 
 from collections.abc import Iterable, Mapping
@@ -100,11 +100,11 @@ class RunView:
     @property
     def workspace(self) -> dict[str, Any]:
         """The run's workspace as its start recorded it, with a worktree's clone mechanisms once
-        it is made; a run recorded before runs had workspaces worked in the theatre."""
-        recorded = (self.started or {}).get("workspace")
-        if not isinstance(recorded, dict):
-            return {"kind": "theatre"}
-        if self.clones is not None and "clones" not in recorded:
+        it is made."""
+        if self.started is None:
+            raise ValueError(f"run {self.run_id} has no recorded start to read its workspace from")
+        recorded: dict[str, Any] = self.started["workspace"]
+        if self.clones is not None:
             return {**recorded, "clones": self.clones}
         return recorded
 
@@ -153,7 +153,7 @@ class RunView:
             "runner": _present(
                 {
                     "requested": started["runner_requested"],
-                    "reported": started.get("runner_reported") or self.reported,
+                    "reported": self.reported,
                 }
             ),
             "stage": started["stage"],

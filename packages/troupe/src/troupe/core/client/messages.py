@@ -263,6 +263,12 @@ class RunSummary(Message):
             raise fail(where, "outcome and endedAt are present exactly when state is ended")
         if self.audit is not None and not ended:
             raise fail(where, "audit is present only when state is ended")
+        if ended and (self.audit is None) != (self.transcript is None):
+            raise fail(
+                where,
+                "audit is present exactly when an ended run's runner started, that is when it "
+                "has a transcript",
+            )
         if isinstance(self.workspace, WorktreeWorkspace) != (self.changes is not None):
             raise fail(where, "changes are present exactly when the workspace is a worktree")
 
