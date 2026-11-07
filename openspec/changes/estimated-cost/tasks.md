@@ -68,10 +68,14 @@ Each task's verification runs before it is ticked. `uv run scripts/check.py` pas
 
 ## 6. The host's check (design D9)
 
-- [x] 6.1 In `troupe.core.runners.host`, treat a `result` with `estimatedCostUsd` as a protocol violation when the
-  `run/start` it sent had no price. The violation's problem names the field and says troupe gave no price. Verify: a
-  perform test with a scripted result carrying an estimate and no price ends with the protocol-violation outcome, and
-  the same script on a priced runtime records the result as sent.
+- [ ] 6.1 In `troupe.core.runners.host`, when the `run/start` it sent had no price, drop `estimatedCostUsd` from a
+  `result` before it's recorded or passed on, keep the run's outcome, and raise the notice `run.estimate-dropped`
+  naming the runner. Add the code to the notice catalogue (`troupe.core.notices` and the protocol's notice schema),
+  and change `contributing/runners.md`'s sentence about the protocol violation to say troupe drops the estimate and
+  warns. (Replaces the protocol violation first built here: owner, 2026-11-07.) Verify: a perform test with a
+  scripted ok result carrying an estimate and no price succeeds, records no estimate and raises the notice; the same
+  script on a priced runtime records the result as sent and raises no notice; the notice validates against the
+  catalogue.
 
 ## 7. The OpenAI runner (design D8)
 
