@@ -43,8 +43,9 @@ None.
 
 ## Impact
 
-- **Code:** a new path module in `troupe.core.config` (parse and format). `troupe.core.config.changes.dotted` uses
-  it, and with it every message in `kinds.py`, `merge.py`, `changes.py` and `commands.py` (`config.not-resolvable`).
+- **Code:** a new path module, `troupe.core.config_paths` (parse and show), beside `strict_json` because the CLI
+  may not import `troupe.core.config` (design D3). It replaces `troupe.core.config.changes.dotted`, which is removed,
+  in every message in `kinds.py`, `merge.py`, `changes.py` and `commands.py` (`config.not-resolvable`).
   `troupe.cli.values` (`split_path`, `_usage`) and `troupe.cli.config` (assignments, entry and conflict lines,
   `_runner_of`) switch to it.
 - **Protocol:** `error.schema.json` gains `config.path-malformed` and its details, in `protocol/schemas/` and the

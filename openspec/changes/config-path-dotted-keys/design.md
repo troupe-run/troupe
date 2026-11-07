@@ -107,7 +107,7 @@ one grammar in two places, which is exactly what the "one named place" rule exis
 `_assignments` no longer partitions at the first `=`. The reader reads the path from the start of the argument and
 stops at the first `=` outside brackets (`parse_prefix(text) -> (keys, end)`). Text with no such `=` keeps its
 current error ("doesn't set anything"). When the text can't be read as a path, the `config.path-malformed` error comes
-first. `_runner_of` compares parsed paths (`path == ["actors", actor, "runner"]`), so `actors[tester].runner=…`
+first. `_runner_of` compares parsed paths (`path == ("actors", actor, "runner")`, on the tuple of keys), so `actors[tester].runner=…`
 counts as setting the runner too. `value_of` takes the parsed keys rather than the text.
 
 ### D5. A new error code, `config.path-malformed`, exit 1
