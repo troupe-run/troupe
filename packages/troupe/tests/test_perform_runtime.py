@@ -246,6 +246,23 @@ def test_a_key_where_a_variables_name_should_be_reaches_no_client_message(tmp_pa
     assert "q7ZxW9pL4vR2" not in json.dumps([raised.value.to_data(), *harness.updates])
 
 
+def test_a_name_from_the_environment_that_isnt_set_is_refused_without_repeating_it(
+    tmp_path: Path,
+) -> None:
+    harness = _harness(tmp_path, TROUPE_RUNTIME_OPENAI_CREDENTIAL_ENV="a3f9c2e17b4d8e05f6a1")
+    asked = request(script(INIT, OK), **OPENAI)
+    before = configured(harness, asked)
+    with pytest.raises(TroupeError) as raised:
+        harness.perform(asked)
+    assert raised.value.code == "runtime.credential-unset"
+    assert raised.value.details == {
+        "runtime": "openai",
+        "namedBy": "TROUPE_RUNTIME_OPENAI_CREDENTIAL_ENV",
+    }
+    assert nothing_written(harness, before)
+    assert "a3f9c2e1" not in json.dumps([raised.value.to_data(), *harness.updates])
+
+
 def test_no_model_anywhere_is_refused_before_anything_is_recorded(tmp_path: Path) -> None:
     harness = _harness(tmp_path, OPENAI_API_KEY=KEY)
     with pytest.raises(TroupeError) as raised:
