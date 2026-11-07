@@ -16,6 +16,7 @@
   and `cacheReadTokens` 10. Verify: each fails on the unchanged runner, for the reason its name gives.
   (Done: three failed on the unchanged runner. The no-prompt-count case passed there, because that runner ignored
   cached counts altogether. It can only fail once the runner reads them; 1.5's property catches that mutation.)
+  (Changed by 5.2: a second answer with no cached count now gives `inputTokens` 420 and no `cacheReadTokens`.)
 - [x] 1.4 In `conversation.py`, read `prompt_eval_cached_count` through `_count` beside the other two counters, and
   when the answer is counted add `prompt - min(cached, prompt)` to the input total and `min(cached, prompt)` to a new
   cache-read total, only when the prompt count was read. `_result` adds `cacheReadTokens` to `usage`, left out while
@@ -69,6 +70,19 @@
   temporary prints in the test, reverted after the run.)
 - [ ] 4.2 Run `uv run scripts/check.py` and `openspec validate ollama-cache-read-tokens --strict`. Verify: both pass,
   and CI passes on Linux, macOS and Windows on the pull request's last code commit.
+
+## 5. Follow the merged contract (troupe#293, PR #312; design D5)
+
+- [x] 5.1 Rebase onto main at 9d0b909 (#312 archived), resolving the README's and `contributing/runners.md`'s conflicts
+  with text that corrects #312's statement that `prompt_eval_count` leaves out the cached tokens. Verify: the rebase
+  completes, no conflict markers remain, and the Ollama row links the contract's "What usage counts".
+- [x] 5.2 Report and subtract cache reads only when every answer reported a cached count beside its prompt count
+  (runner-protocol, "A cache counter left out was not reported"): update the spec's "A request that reports no cached
+  count" scenario, add design D5, and change the runner. Verify: the renamed test
+  `test_when_an_answer_has_no_cached_count_no_cache_read_is_reported_or_subtracted` fails on d21fcc1's runner
+  (`inputTokens` 400 with `cacheReadTokens` 20) and passes on the new one, with the other usage tests.
+- [ ] 5.3 Run the plugin's tests and the full check on the rebased branch. Verify: `uv run pytest plugins/runner-ollama`
+  passes, and so does the guard's full check at commit.
 
 ## Workflow follow-up
 
