@@ -113,3 +113,9 @@ gave it no price.
 #### Scenario: An estimate with a price given
 - **WHEN** a runner whose `run/start` carried a price sends a `result` with `estimatedCostUsd`
 - **THEN** the host records the `result` as sent, and raises no notice
+
+#### Scenario: An oversized result with an estimate and no price given
+- **WHEN** a runner whose `run/start` had no `runtime.price` sends a `result` with `estimatedCostUsd` that is over
+  the run's event size
+- **THEN** the host stores the result without `estimatedCostUsd`, and the `oversized` event's `ref` holds that result,
+  not the line the runner sent
