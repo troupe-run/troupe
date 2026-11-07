@@ -59,9 +59,13 @@ class Run:
 
 
 def _failed(run: Run) -> str:
+    return _failure(run).message
+
+
+def _failure(run: Run) -> ExchangeFailedError:
     with pytest.raises(ExchangeFailedError) as raised:
         run()
-    return raised.value.message
+    return raised.value
 
 
 # Success, and what the transcript keeps
@@ -302,3 +306,73 @@ def test_a_refusal_whose_message_has_no_full_stop_still_reads_as_two_sentences()
     with FakeEndpoint([error_reply(401, "bad key", code="invalid_api_key")]) as fake:
         message = _failed(Run(fake))
     assert "bad key. Check" in message
+
+
+# Requirement: Each failure reports its reason
+# Requirement: An endpoint or service that can't serve the run is a configuration failure
+
+
+@pytest.mark.parametrize(
+    ("replies", "reason"),
+    [
+        pytest.param([error_reply(401, "Incorrect API key")], "authentication", id="401"),
+        pytest.param([error_reply(403, "model not allowed")], "authentication", id="403"),
+        pytest.param(
+            [error_reply(429, "You exceeded your quota.", code="insufficient_quota")],
+            "quota",
+            id="out of quota",
+        ),
+        pytest.param(
+            [error_reply(429, "slow down", headers=[("Retry-After", "3600")])],
+            "rate-limit",
+            id="a wait longer than the cap",
+        ),
+        pytest.param(
+            [error_reply(400, "too long", code="context_length_exceeded")],
+            "context-length",
+            id="context length",
+        ),
+        pytest.param([Reply(404, body=b"404 page not found")], "configuration", id="nothing there"),
+        pytest.param(
+            [Reply(301, headers=[("Location", "https://elsewhere.example/v1/responses")])],
+            "configuration",
+            id="a redirect",
+        ),
+        pytest.param(
+            [error_reply(404, "The model `nope` does not exist", code="model_not_found")],
+            "configuration",
+            id="no such model",
+        ),
+        pytest.param([Reply(422, body=b"bad things\n")], "other", id="another client error"),
+        pytest.param(
+            [status_reply("failed", error={"code": "invalid_prompt", "message": "flagged"})],
+            "other",
+            id="a failed response retrying can't fix",
+        ),
+        pytest.param([error_reply(500, "boom")] * 3, "server", id="server retries run out"),
+        pytest.param(
+            [error_reply(429, "slow down", kind="requests")] * 3,
+            "rate-limit",
+            id="rate-limit retries run out",
+        ),
+    ],
+)
+def test_each_failure_that_ends_the_exchange_names_its_reason(
+    replies: list[Reply], reason: str
+) -> None:
+    with FakeEndpoint(replies) as fake:
+        assert _failure(Run(fake, max_attempts=3)).reason == reason
+
+
+def test_network_retries_that_run_out_end_with_the_network_reason() -> None:
+    with FakeEndpoint() as gone:
+        endpoint = gone.endpoint
+    assert _failure(Run(endpoint, max_attempts=2)).reason == "network"
+
+
+def test_a_model_the_service_doesnt_have_says_to_check_the_runtimes_model() -> None:
+    reply = error_reply(404, "The model `nope` does not exist", code="model_not_found")
+    with FakeEndpoint([reply]) as fake:
+        message = _failed(Run(fake))
+    assert message.startswith("The service has no such model (HTTP 404): The model `nope`")
+    assert "Check the model the actor's runtime names." in message

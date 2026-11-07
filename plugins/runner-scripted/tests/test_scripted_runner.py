@@ -170,6 +170,12 @@ def test_a_script_is_read_from_the_file_the_options_name(session: Session, tmp_p
         ({"steps": [{"event": {"type": "result", "status": "ok"}}]}, "missing required field"),
         ({"steps": [{"event": {**OK, "colour": "red"}}]}, "unknown field(s) 'colour'"),
         ({"steps": [{"event": {**OK, "status": "maybe"}}]}, "ResultEvent.status"),
+        ({"steps": [{"event": {**OK, "status": "error"}}]}, "an error result needs a reason"),
+        ({"steps": [{"event": {**OK, "reason": "budget"}}]}, "an ok result has no reason"),
+        (
+            {"steps": [{"event": {**OK, "status": "error", "reason": "timeout"}}]},
+            "ResultEvent.reason",
+        ),
         ({"steps": [{"event": {"type": "dance"}}]}, "unknown event type 'dance'"),
         ({"steps": [{"event": {"type": "oversized"}}]}, "unknown event type 'oversized'"),
     ],
@@ -243,7 +249,19 @@ def test_with_cancel_honoured_with_a_result_the_runner_reports_an_error_then_exi
     session.request("run/cancel", {"runId": session.run_id})
     result = session.message()["params"]
     assert (result["type"], result["status"], result["seq"]) == ("result", "error", 1)
+    assert result["reason"] == "cancelled"
     assert session.wait() == 0
+    session.validate_all()
+
+
+# Requirement: A script's error result names its reason
+
+
+def test_a_scripted_error_result_is_sent_with_its_reason(session: Session) -> None:
+    quota = {"type": "result", "status": "error", "reason": "quota", "message": "out of credit"}
+    session.play({"steps": [{"event": INIT}, {"event": quota}]})
+    _, result = _events(session.notifications(2))
+    assert (result["status"], result["reason"]) == ("error", "quota")
     session.validate_all()
 
 
@@ -625,7 +643,7 @@ def test_a_character_that_doesnt_match_ends_the_run_with_an_error_naming_both(
     session.play(_check_then(step), character=character)
     init, result = _events(session.notifications(2))
     assert init["type"] == "init"
-    assert result["status"] == "error"
+    assert (result["status"], result["reason"]) == ("error", "other")
     assert got in result["message"]
     assert (step.get("hash") or "none") in result["message"]
     assert session.wait() == 0  # and the ok result after it was never sent

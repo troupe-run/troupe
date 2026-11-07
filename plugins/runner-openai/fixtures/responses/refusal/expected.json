@@ -28,6 +28,7 @@
       "type": "result",
       "seq": 1,
       "status": "error",
+      "reason": "refused",
       "message": "The model refused: I can't help with that.",
       "turns": 1,
       "usage": {

@@ -58,6 +58,11 @@ troupe works out the outcome from everything it saw, never from the runner's exi
 only when the runner reports an `ok` result, the effect check passes and the runner exits cleanly. Otherwise it has
 failed, was cancelled, timed out, crashed or couldn't start, and the error says which and why.
 
+**When the runner reports a failure,** it says why from one list every runner shares: a refused credential, an
+account out of quota, a rate limit, the turn limit, the budget, a conversation too long for the model, and so on.
+troupe tells you what to do for that reason, such as checking the runtime's credential or raising the budget in the
+actor's options, and `troupe logs` shows it on the result's line, as in `error (turn-limit): …`.
+
 **The effect check** is what the run was for, and what it was allowed to do. The actor's `expect` names each file the
 run must create or change, and troupe checks them afterwards; `expect: []` says no file has to change. Then troupe
 audits every change the run made against the actor's [effects](#effects), whatever its `expect`.

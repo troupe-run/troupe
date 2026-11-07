@@ -26,6 +26,7 @@ from typing import Any, TypeGuard
 
 from troupe_plugin_sdk.events import EventNumbering, fit
 from troupe_plugin_sdk.runner import (
+    FailureReason,
     LogEvent,
     ResultEvent,
     RetryEvent,
@@ -47,13 +48,15 @@ from troupe_runner_openai.runtime import Runtime
 from troupe_runner_openai.service import AbortedError, Call
 from troupe_runner_openai.stream import Reply
 
-INCOMPLETE = {
+INCOMPLETE: dict[str, tuple[str, FailureReason]] = {
     "max_output_tokens": (
-        "The response reached the service's output limit before the model finished."
+        "The response reached the service's output limit before the model finished.",
+        "output-limit",
     ),
-    "content_filter": "The service's content filter stopped the response.",
+    "content_filter": ("The service's content filter stopped the response.", "refused"),
 }
-"""What an incomplete response's reason means, in the result's words (design D8)."""
+"""What an incomplete response's reason means, in the result's words (design D8), and the
+failure reason it ends the run with (failure-reason design D6). Any other is ``other``."""
 
 
 def instructions(character: str | None) -> str:
@@ -198,27 +201,27 @@ class Loop:
                 if self.stopping():
                     return None
                 if spend.usage_known and spend.tokens >= self.options.max_total_tokens:
-                    return self._result(
-                        "error",
+                    return self._failed(
+                        "budget",
                         f"The token budget of {self.options.max_total_tokens} was spent: the run "
                         f"used {spend.tokens} tokens over {turn} requests. Raise maxTotalTokens "
                         "in the actor's options to let it go further.",
                         spend,
                     )
-            return self._result(
-                "error",
+            return self._failed(
+                "turn-limit",
                 f"The turn limit of {self.options.max_turns} was reached while the model was still "
                 "calling tools. Raise maxTurns in the actor's options to let it go further.",
                 spend,
             )
         except ExchangeFailedError as error:
-            return self._result("error", error.message, spend)
+            return self._failed(error.reason, error.message, spend)
         except AbortedError:
             return None
 
     def failure(self, message: str) -> ResultEvent:
         """An error result for a failure of the runner's own, with what the run had used."""
-        return self._result("error", message, self._spend)
+        return self._failed("runner", message, self._spend)
 
     # One reply
 
@@ -254,24 +257,25 @@ class Loop:
     def _ended(self, reply: Reply, spend: _Spend) -> ResultEvent | None:
         """The result a reply ends the run with, or None when it asks for tools."""
         if reply.refusal is not None:
-            return self._result("error", f"The model refused: {reply.refusal}", spend)
+            return self._failed("refused", f"The model refused: {reply.refusal}", spend)
         if reply.status == "incomplete":
             reason = reply.incomplete_reason
-            said = INCOMPLETE.get(reason or "") or (
-                f"The response was left incomplete ({reason or 'no reason given'})."
+            said, failure = INCOMPLETE.get(reason or "") or (
+                f"The response was left incomplete ({reason or 'no reason given'}).",
+                "other",
             )
-            return self._result("error", said, spend)
+            return self._failed(failure, said, spend)
         if reply.status != "completed":
-            return self._result(
-                "error",
+            return self._failed(
+                "other",
                 f"The response ended with the status {reply.status!r}, which the runner doesn't "
                 "know.",
                 spend,
             )
         missing = [call.name or "(no name)" for call in reply.tool_calls if not call.call_id]
         if missing:
-            return self._result(
-                "error",
+            return self._failed(
+                "engine",
                 f"The service sent a tool call it can't be answered for, since it has no call_id: "
                 f"{', '.join(missing)}.",
                 spend,
@@ -331,7 +335,12 @@ class Loop:
         }
         self.send(LogEvent.from_data(self._fit(data, "message")))
 
-    def _result(self, status: str, message: str, spend: _Spend) -> ResultEvent:
+    def _failed(self, reason: FailureReason, message: str, spend: _Spend) -> ResultEvent:
+        return self._result("error", message, spend, reason)
+
+    def _result(
+        self, status: str, message: str, spend: _Spend, reason: FailureReason | None = None
+    ) -> ResultEvent:
         data: dict[str, Any] = {
             "runId": self.numbering.run_id,
             "seq": self.numbering.take(),
@@ -340,6 +349,8 @@ class Loop:
             "message": message,
             "turns": spend.requests,
         }
+        if reason is not None:
+            data["reason"] = reason
         usage = spend.usage()
         if usage is not None:
             data["usage"] = usage.to_data()

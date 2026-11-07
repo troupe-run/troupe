@@ -135,7 +135,7 @@ repeats.
 | `tool_result` | `callId`, `isError`, `outputSummary`, `outputBytes` | `callId` matches an earlier `tool_call`. The full output belongs in the transcript. |
 | `retry` | `attempt`, `maxAttempts` (optional), `delayMs`, `reason`, `message` (optional) | `reason` is `authentication`, `rate-limit`, `network`, `server` or `other`. Send one each time the engine retries, or the runner retries a request to its engine itself. |
 | `log` | `level` (`debug`, `info`, `warning`, `error`), `message` | A diagnostic worth keeping with the run. |
-| `result` | `status` (`ok` or `error`), `message`, `turns`, `durationMs`, `usage {inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens}`, `costUsd` (all but the first two optional, and each `usage` counter too) | Exactly one, last, for a run that ends on its own. |
+| `result` | `status` (`ok` or `error`), `message`, `reason`, `turns`, `durationMs`, `usage {inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens}`, `costUsd` (all but `status` and `message` optional, and each `usage` counter too) | Exactly one, last, for a run that ends on its own. `reason` is present exactly when `status` is `error` (see [Why a run failed](#why-a-run-failed)). |
 | `oversized` | `originalType`, `bytes`, `ref` | Written by troupe, never by a runner (see [Oversized events](#oversized-events)). |
 
 - **`result.status` is `error` whenever the engine reported an error,** whatever else it reported alongside it.
@@ -145,6 +145,39 @@ repeats.
   every native record, or in the runner's own `options`. A run event carries no field the contract doesn't
   define. A runner with no model leaves out `engine`.
 - **Events are summaries.** Full tool inputs and outputs go in the transcript.
+
+### Why a run failed
+
+A `result` with status `error` says why in `reason`, from this closed list, so troupe can act on a failure the same
+way whichever runner reported it. An `ok` result has no `reason`. The rule is the same wherever a result appears:
+what a runner sends, what troupe records, and what it reads back. A result that breaks it is a protocol violation.
+
+| Reason | When |
+|---|---|
+| `authentication` | the engine or service refused the credential |
+| `quota` | the account is out of quota, credit or billing |
+| `rate-limit` | rate limited past what the runner will wait or retry |
+| `network` | the engine couldn't be reached |
+| `server` | the engine or service kept failing on its side |
+| `configuration` | the endpoint or model can't serve the run: nothing there, a redirect, no such model |
+| `context-length` | the conversation outgrew the model's context |
+| `output-limit` | an answer was cut at the output limit, and the runner ended the run for it |
+| `refused` | the model refused, or the service's content filter stopped it |
+| `turn-limit` | the runner's or engine's turn limit was reached |
+| `budget` | the runner's or engine's token or cost budget was spent |
+| `cancelled` | the run was cancelled and the runner still sent a result |
+| `engine` | the engine failed in a way of its own, or sent what the runner can't act on |
+| `runner` | the runner itself failed unexpectedly |
+| `other` | none of these; the message says what happened |
+
+- **Choose the reason from the engine's structured fields** (a status, an error code, a subtype), never by reading
+  its text.
+- **A failure the list has no entry for is `other`.** A runner can't add reasons of its own: the list has no
+  extension point. A runner that keeps meeting such a failure asks for a reason to be added, as a contract change.
+- **Retries that run out end with the last retry's reason.** The four reasons a `retry` can name mean the same on
+  both, so a run whose last retry was `rate-limit` ends `rate-limit`.
+- **The message still says what happened,** in the engine's or the runner's words: the reason is what to act on,
+  the message is what to read.
 
 ### Oversized events
 
@@ -200,7 +233,7 @@ credential](#the-runtime-and-its-credential)).
 ### Cancel, end of input and shutdown
 
 - **`run/cancel`** may arrive at any time after `run/start`. Answer it, stop the actor and exit. You may send a
-  final `result` with status `error` first; troupe doesn't require one.
+  final `result` with status `error` and reason `cancelled` first; troupe doesn't require one.
 - **End of input:** when standard input closes, stop the actor and exit. That is how a runner avoids outliving a
   troupe that has gone away.
 - **`shutdown`** follows the `result`. Answer it and exit.
@@ -278,7 +311,7 @@ output, each line paired with the events it maps to.
 | `rate_limit_event` | None while its status is `allowed` (the transcript keeps it); otherwise a `log` warning naming the status |
 | `user` message with `tool_result` blocks | one `tool_result` per block. A block whose call was never reported is a `log` warning instead, since a `tool_result` needs its `tool_call` |
 | `system/api_retry` | `retry`: `authentication_failed` → `authentication`, HTTP 429 → `rate-limit`, 5xx → `server`, no HTTP status (a connection error, which Claude Code reports as `"error": "unknown"`) → `network`, anything else → `other` |
-| `result` | `result`, with `status` `error` whenever `is_error` is true, whatever `subtype` says. Its `usage` maps `input_tokens`, `output_tokens`, `cache_read_input_tokens` and `cache_creation_input_tokens` onto `inputTokens`, `outputTokens`, `cacheReadTokens` and `cacheWriteTokens`. Each tool in `permission_denials` is a `log` warning just before it |
+| `result` | `result`, with `status` `error` whenever `is_error` is true, whatever `subtype` says. An `error` result's `reason` comes from Claude Code's fields, never its text: a failed `subtype` by name (`error_max_turns` → `turn-limit`, `error_max_budget_usd` → `budget`, `error_during_execution` → `engine`, any other → `other`); for an API error, the last `assistant` record's `error` code when it names its cause (`authentication_failed`, `billing_error` → `quota`, `rate_limit`, `max_output_tokens` → `output-limit`), else the last `retry`'s reason (Claude Code calls a refused connection `server_error`), else `api_error_status` as for a retry; else `other`. Its `usage` maps `input_tokens`, `output_tokens`, `cache_read_input_tokens` and `cache_creation_input_tokens` onto `inputTokens`, `outputTokens`, `cacheReadTokens` and `cacheWriteTokens`. Each tool in `permission_denials` is a `log` warning just before it |
 | a record type or `system` subtype not named here | a `log` at `debug` the first time it appears in the run, so a format change shows without failing the run |
 | a line that isn't a JSON object | a `log` warning |
 | every line | one `run/transcript` record, verbatim (`base64` if it isn't UTF-8), before any event it maps to |
@@ -304,7 +337,7 @@ Ollama answers, with what the runner sent for each.
 | a request made again: a connection that failed, dropped or went silent, or status 500, 502, 503 or 504 | `retry`: `network` for the connection, `server` for the status |
 | `done_reason` `length` | `log` warning |
 | an answer with no tool call | `result` `ok`, with its text |
-| any other status, an `error` line, `maxTurns` reached, or retries spent | `result` `error`, with Ollama's message |
+| any other status, an `error` line, `maxTurns` reached, or retries spent | `result` `error`, with Ollama's message. Its `reason`: a 400 saying the request exceeds the context size → `context-length`, 401 or 403 → `authentication`, 404 → `configuration`, an `error` line → `engine`, `maxTurns` → `turn-limit`, retries spent → the last retry's reason, any other status → `other` |
 | each answer's `prompt_eval_count` and `eval_count` | summed into `result.usage`'s `inputTokens` and `outputTokens` |
 
 Its transcript is the first request's body, then before each later request the messages the runner added (the
@@ -331,7 +364,7 @@ and from local Ollama's `/v1`.
 | each `function_call` | `tool_call` and `tool_result`, from the SDK |
 | 429, 5xx, a failure whose code is the service's own, or a connection that failed, dropped or went silent | `retry`: `rate-limit`, `server` or `network` |
 | completed, with no function call | `result` `ok`, with its text |
-| 401, 403, quota, context length, another 4xx, a redirect, a refusal, `incomplete`, another failure, `maxTurns` or `maxTotalTokens`, or retries spent | `result` `error`, saying which |
+| 401, 403, quota, context length, another 4xx, a redirect, a refusal, `incomplete`, another failure, `maxTurns` or `maxTotalTokens`, or retries spent | `result` `error`, saying which. Its `reason`: 401 or 403 → `authentication`, quota → `quota`, a `Retry-After` past the cap → `rate-limit`, context length → `context-length`, a redirect, a 404 without OpenAI's shape or `model_not_found` → `configuration`, a refusal or `content_filter` → `refused`, `max_output_tokens` → `output-limit`, a call without a `call_id` → `engine`, `maxTurns` → `turn-limit`, `maxTotalTokens` → `budget`, retries spent → the last retry's reason, anything else → `other` |
 | its `usage` | summed into `result.usage`: cache reads and, where reported, writes counted apart from input |
 
 Its transcript records are JSON objects of its own, each with a `kind`: the request body as sent, the status with only
@@ -374,7 +407,7 @@ for every outcome but `succeeded` and `cancelled`. The first row that matches wi
 | `crashed` | The runner broke the contract | `runner.protocol` |
 | `failed` | The run was stopped because authentication failed | `run.authentication` |
 | `failed` | The transcript passed `RUN_TRANSCRIPT_MAX_BYTES` | `run.transcript-too-large` |
-| `failed` | The `result` had status `error` | `run.error-result` |
+| `failed` | The `result` had status `error`. The error's details carry its `reason` and message, and its fix says what to do for that reason | `run.error-result` |
 | `failed` | The `result` was `ok`, but the effect check failed: an expected file wasn't made or changed, the run changed a file its actor's effects don't declare, or both | `run.effect-missing`, `effects.outside-declared`, `effects.check-failed` |
 | `failed` | The `result` was `ok` and the effect check passed, but the runner exited non-zero or had to be killed: the run's state is uncertain | `run.unclean-exit` |
 | `succeeded` | The `result` was `ok`, the effect check passed, and the runner exited with code 0 | — |

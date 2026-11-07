@@ -65,3 +65,8 @@ def test_the_errors_table_lists_exactly_the_contracts_error_codes() -> None:
     schema = load(RUNNER_SCHEMAS / "errors.schema.json")
     codes = {branch["properties"]["code"]["const"] for branch in schema["oneOf"]}
     assert _first_column(_section("Errors")) == codes
+
+
+def test_the_failure_reasons_table_lists_exactly_the_reasons_in_the_schema() -> None:
+    reasons = load(RUNNER_SCHEMAS / "run-event.schema.json")["$defs"]["failureReason"]["enum"]
+    assert _first_column(_section("Why a run failed")) == set(reasons)

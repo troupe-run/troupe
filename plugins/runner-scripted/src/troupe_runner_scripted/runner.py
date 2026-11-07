@@ -231,7 +231,7 @@ class Runner:
         if mode == "honour":
             raise _Exit(0)
         if mode == "honour-with-result":
-            self._result_event("cancelled")
+            self._result_event("cancelled", reason="cancelled")
             raise _Exit(0)
         self._cancel_ignored = True
 
@@ -253,10 +253,13 @@ class Runner:
             raise RuntimeError("a step played before run/start")
         return self._run_id
 
-    def _result_event(self, message: str) -> None:
-        """End the run with an error result, built with the SDK's type."""
+    def _result_event(self, message: str, reason: p.FailureReason = "other") -> None:
+        """End the run with an error result, built with the SDK's type. A check a step makes that
+        fails is ``other``: the list has no entry for a script's own expectations."""
         seq, self._next_seq = self._next_seq, self._next_seq + 1
-        event = p.ResultEvent(run_id=self._started_run(), seq=seq, status="error", message=message)
+        event = p.ResultEvent(
+            run_id=self._started_run(), seq=seq, status="error", message=message, reason=reason
+        )
         self._send(p.notification("run/event", event))
 
     def _pause(self, seconds: float) -> None:
