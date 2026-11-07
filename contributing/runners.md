@@ -291,13 +291,14 @@ its init): a `log` about an earlier record waits for `init`. Summaries (`turn` t
 ### Mapping an engine: Ollama
 
 The [Ollama runner](../plugins/runner-ollama/README.md) is the other shape: the engine only answers, and the runner
-holds the conversation and runs the tools. It drives Ollama's own `/api/chat`, carries out each tool call with the
-plugin SDK's `Tools` (so `init`'s `effects` is `checked`), and maps the exchange like this. Its fixtures pin it: real
-Ollama answers, with what the runner sent for each.
+holds the conversation and runs the tools. Its endpoint and model come from the actor's runtime, as the OpenAI runner's
+do. It drives Ollama's own `/api/chat`, carries out each tool call with the plugin SDK's `Tools` (so `init`'s `effects`
+is `checked`), and maps the exchange like this. Its fixtures pin it: real Ollama answers, with what the runner sent for
+each.
 
 | From Ollama | Run event |
 |---|---|
-| `/api/version`, and the options' model | `init`, with the engine's name, version and model |
+| `/api/version`, and the runtime's model | `init`, with the engine's name, version and model |
 | an answer's text, once its `done` line has come | a `turn`, if it has any text |
 | an answer's `thinking` | none; the transcript keeps it |
 | each `tool_calls` entry | `tool_call` and `tool_result`, from the SDK. A call with no id gets `call-<request>-<position>` |
