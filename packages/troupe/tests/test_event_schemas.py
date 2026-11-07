@@ -231,6 +231,25 @@ def test_a_recorded_served_model_is_a_run_reported_payload() -> None:
     assert is_valid(served, "event-record.schema.json#/$defs/troupeEvent")
 
 
+def test_a_recorded_context_event_is_a_run_reported_payload_with_lineage() -> None:
+    record = copy.deepcopy(EVENT)
+    record["state"]["seq"] = 1
+    record["state"]["event"] = {
+        "runId": "6c1e2a3b-0000-4000-8000-000000000001",
+        "seq": 1,
+        "type": "context",
+        "kind": "compacted",
+        "by": "engine",
+        "message": "Claude Code compacted the conversation",
+        "tokensBefore": 41000,
+    }
+    assert is_valid(record, "event-record.schema.json#/$defs/troupeEvent")
+    record["state"]["event"]["kind"] = "pruned"
+    assert not is_valid(record, "event-record.schema.json#/$defs/troupeEvent")
+    record["state"]["event"]["kind"] = "compacted"
+    assert not is_valid(without(record["state"], "lineage"), "events/run-reported.schema.json")
+
+
 def test_a_library_event_without_lineage_is_still_a_record() -> None:
     raw = without(EVENT, "state") | {"topic": "tests:Thing.Created", "state_b64": "c3RhdGUx"}
     assert is_valid(raw, "event-record.schema.json")

@@ -272,6 +272,30 @@ class RetryEvent(RunEvent):
     message: str | None = json_field("message", default=None)
 
 
+ContextKind = Literal["compacted", "truncated", "other"]
+"""What a ``context`` event says happened: earlier content summarised, dropped outright, or a
+loss neither names (the message then says what)."""
+
+ContextBy = Literal["engine", "runner"]
+"""Who reduced the conversation: the engine on its own, or the runner in the conversation it
+holds."""
+
+
+@dataclass(frozen=True)
+class ContextEvent(RunEvent):
+    """Content of the run's conversation was compacted or dropped and the run carries on. Each
+    count is None when the engine or runner doesn't know it, and is then left out."""
+
+    TYPE: ClassVar[str | None] = "context"
+    kind: ContextKind = json_field("kind")
+    by: ContextBy = json_field("by")
+    message: str = json_field("message")
+    tokens_before: int | None = json_field("tokensBefore", default=None, minimum=0)
+    tokens_after: int | None = json_field("tokensAfter", default=None, minimum=0)
+    messages_before: int | None = json_field("messagesBefore", default=None, minimum=0)
+    messages_after: int | None = json_field("messagesAfter", default=None, minimum=0)
+
+
 @dataclass(frozen=True)
 class LogEvent(RunEvent):
     TYPE: ClassVar[str | None] = "log"
@@ -339,7 +363,7 @@ class ResultEvent(RunEvent):
 
 
 EventType = Literal[
-    "init", "turn", "tool_call", "tool_result", "retry", "log", "served_model", "result"
+    "init", "turn", "tool_call", "tool_result", "retry", "context", "log", "served_model", "result"
 ]
 
 
@@ -361,6 +385,7 @@ EVENT_TYPES: dict[str, type[RunEvent]] = {
         ToolCallEvent,
         ToolResultEvent,
         RetryEvent,
+        ContextEvent,
         LogEvent,
         ServedModelEvent,
         ResultEvent,

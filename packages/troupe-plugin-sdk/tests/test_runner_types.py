@@ -197,6 +197,25 @@ CASES: list[tuple[type[p.Message], str, st.SearchStrategy[Any]]] = [
         ),
     ),
     (
+        p.ContextEvent,
+        "run-event.schema.json#/$defs/context",
+        _event(
+            "context",
+            SEQ,
+            required={
+                "kind": st.sampled_from(["compacted", "truncated", "other"]),
+                "by": st.sampled_from(["engine", "runner"]),
+                "message": TEXT,
+            },
+            optional={
+                "tokensBefore": st.integers(0, 10**7),
+                "tokensAfter": st.integers(0, 10**7),
+                "messagesBefore": st.integers(0, 10**4),
+                "messagesAfter": st.integers(0, 10**4),
+            },
+        ),
+    ),
+    (
         p.LogEvent,
         "run-event.schema.json#/$defs/log",
         _event(
@@ -334,6 +353,15 @@ INIT = {
     "tools": [],
 }
 
+CONTEXT = {
+    "runId": RUN,
+    "seq": 1,
+    "type": "context",
+    "kind": "compacted",
+    "by": "engine",
+    "message": "m",
+}
+
 REFUSED: list[tuple[str, type[p.Message], dict[str, Any], str]] = [
     ("unknown field", p.InitEvent, {**INIT, "colour": "red"}, "unknown field"),
     (
@@ -432,6 +460,16 @@ REFUSED: list[tuple[str, type[p.Message], dict[str, Any], str]] = [
         {"runId": RUN, "seq": 1, "type": "result", "status": "success", "message": ""},
         "one of",
     ),
+    ("context kind of its own", p.ContextEvent, {**CONTEXT, "kind": "pruned"}, "one of"),
+    ("context by off the list", p.ContextEvent, {**CONTEXT, "by": "host"}, "one of"),
+    ("context unknown count", p.ContextEvent, {**CONTEXT, "turnsBefore": 3}, "unknown field"),
+    ("context null count", p.ContextEvent, {**CONTEXT, "tokensAfter": None}, "tokensAfter"),
+    (
+        "context without message",
+        p.ContextEvent,
+        {k: v for k, v in CONTEXT.items() if k != "message"},
+        "missing",
+    ),
     ("wrong type field", p.TurnEvent, {**INIT, "type": "init"}, "type must be 'turn'"),
     (
         "both costs",
@@ -520,6 +558,7 @@ def test_from_data_refuses_what_the_schema_refuses(
     ref = {
         p.InitEvent: "run-event.schema.json#/$defs/init",
         p.RetryEvent: "run-event.schema.json#/$defs/retry",
+        p.ContextEvent: "run-event.schema.json#/$defs/context",
         p.ToolCallEvent: "run-event.schema.json#/$defs/tool_call",
         p.ToolResultEvent: "run-event.schema.json#/$defs/tool_result",
         p.ResultEvent: "run-event.schema.json#/$defs/result",
@@ -548,6 +587,18 @@ def test_parse_event_dispatches_on_type_and_refuses_troupes_own_oversized_event(
         p.parse_event(oversized)
     with pytest.raises(p.ProtocolError, match="unknown event type"):
         p.parse_event({"type": "thought"})
+
+
+def test_parse_event_reads_a_context_event_with_only_the_counts_it_carries() -> None:
+    event = p.parse_event({**CONTEXT, "tokensBefore": 41000})
+    assert isinstance(event, p.ContextEvent)
+    assert (event.kind, event.by, event.tokens_before, event.tokens_after) == (
+        "compacted",
+        "engine",
+        41000,
+        None,
+    )
+    assert event.to_data() == {**CONTEXT, "tokensBefore": 41000}
 
 
 # Reading lines from a runner

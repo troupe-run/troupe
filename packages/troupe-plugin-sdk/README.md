@@ -110,6 +110,31 @@ the first time another model answers. Send it before the events that report that
 model's shape (1 to 256 characters, no control character) is a `log` warning instead, since a cut name would record
 a model that doesn't exist.
 
+## Lost content
+
+When content of the run's conversation is lost and the run carries on, because the engine compacted it or the runner
+dropped or summarised part of the conversation it holds, the runner sends a `context` event at that point.
+`context_event` builds it, numbered from the same counter as the runner's other events:
+
+```python
+from troupe_plugin_sdk.events import EventNumbering, context_event
+
+numbering = EventNumbering(run_id, event_max_bytes, next_seq=1)  # after init, seq 0
+
+event = context_event(
+    numbering,
+    "compacted",  # or "truncated", or "other" with the message saying what was lost
+    "engine",  # or "runner", when the runner reduced the conversation itself
+    "The engine summarised the earlier conversation.",
+    tokens_before=41000,  # each count is optional: pass only what the engine or runner knows
+)
+send(event)
+```
+
+The message is cut to the summary limit and to `eventMaxBytes`, like a tool event's summaries. A count left as `None`
+is left out of the event. A kind or `by` off the contract's list raises a `ProtocolError`, and the counter is left as
+it was. A loss that ends the run isn't a `context` event: the run's `result` reports it.
+
 ## Limits
 
 Each limit has its default in `troupe_plugin_sdk.defaults`. A runner may lower any of them with `ToolLimits`, never
