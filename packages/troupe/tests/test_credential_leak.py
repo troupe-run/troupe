@@ -92,6 +92,16 @@ def _drive(repo: Repo, monkeypatch: pytest.MonkeyPatch) -> list[bytes]:
     assert cli("perform", "echoer", "--direction", "go") != 0  # refused: insecure endpoint
     assert b"runtime.insecure-endpoint" in printed[-1] or b"plain HTTP" in printed[-1]
     monkeypatch.delenv("TROUPE_RUNTIME_CANARY_ENDPOINT")
+    monkeypatch.setenv("MY_CANARY_KEY", CANARY + "\r\n")  # a key read with its line ending
+    assert cli("perform", "echoer", "--direction", "go") != 0
+    assert b"runtime.credential-malformed" in printed[-1] or b"whitespace" in printed[-1]
+    monkeypatch.setenv("MY_CANARY_KEY", CANARY)
+    monkeypatch.setenv("TROUPE_RUNTIME_CANARY_CREDENTIAL_ENV", CANARY)  # the key, not its name
+    assert cli("perform", "echoer", "--direction", "go") != 0
+    assert b"TROUPE_RUNTIME_CANARY_CREDENTIAL_ENV" in printed[-1]
+    assert cli("config", "get", "--resolved", "runtimes.canary") != 0
+    assert cli("config", "get", "--resolved", "--json", "runtimes.canary") != 0
+    monkeypatch.delenv("TROUPE_RUNTIME_CANARY_CREDENTIAL_ENV")
     assert cli("config", "get", "--resolved") == 0
     assert cli("config", "get", "--resolved", "--json") == 0
     assert cli("config", "get", "--json") == 0

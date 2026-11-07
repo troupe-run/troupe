@@ -77,7 +77,7 @@
 
 ## 5. Whole-change checks
 
-- [ ] 5.1 Run `uv run pytest packages/troupe/tests/test_credential_leak.py` with a malformed credential variable added
+- [x] 5.1 Run `uv run pytest packages/troupe/tests/test_credential_leak.py` with a malformed credential variable added
   to its canary cases if it can take one, and the full `uv run scripts/check.py`. Verify: both pass, and the output is
   recorded in the commit or the PR.
 - [ ] 5.2 `openspec validate runtime-variable-refusals --strict` passes, and CI passes on Linux, macOS and Windows on
