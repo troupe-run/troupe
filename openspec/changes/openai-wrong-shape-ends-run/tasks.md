@@ -7,7 +7,7 @@
   it isn't, stop and revise design D4 with the owner before building it. (Ollama was checked on 2026-11-07:
   `text/event-stream` streamed, `application/json` not.) Done 2026-11-07: the owner's streamed request to OpenAI
   (`gpt-6-luna`) was answered `HTTP/2 200` with `content-type: text/event-stream; charset=utf-8`.
-- [ ] 1.1 Write the property test (design D6) in `plugins/runner-openai/tests/test_openai_stream.py`: cut the recorded
+- [x] 1.1 Write the property test (design D6) in `plugins/runner-openai/tests/test_openai_stream.py`: cut the recorded
   OpenAI and Ollama `stream-1.txt` at every byte offset, feed the lines to `StreamParser`, and check each cut either
   reads the same reply as the whole stream or raises `StreamError` and nothing else. Verify it passes on the code as
   it is before any change, and commit it on its own.
