@@ -155,3 +155,124 @@ def _insert_after(file: Path, marker: str, line: str) -> None:
     ending = held[len(held.rstrip("\r\n")) :]
     lines.insert(index + 1, f"{indent}{line}{ending}")
     file.write_bytes("".join(lines).encode("utf-8"))
+
+
+RUNNER_TABLE = "packages/troupe/src/troupe/core/interim.py"
+"""Core's table of the runners it knows, which the bundle check reads for each runner's name and
+whether it's in an extra (runner-extras design D5)."""
+
+
+def copy_runner_table(source: Path, root: Path) -> None:
+    """Copy core's runner table from source to root, where the bundle check reads it."""
+    (root / RUNNER_TABLE).parent.mkdir(parents=True, exist_ok=True)
+    (root / RUNNER_TABLE).write_bytes((source / RUNNER_TABLE).read_bytes())
+
+
+def extras(root: Path) -> dict[str, list[str]]:
+    """The bundle's extras, by name, in file order."""
+    import tomllib
+
+    project = tomllib.loads(bundle_pyproject(root).read_bytes().decode("utf-8"))["project"]
+    found: dict[str, list[str]] = project.get("optional-dependencies", {})
+    return found
+
+
+def set_extras(root: Path, wanted: dict[str, list[str]]) -> None:
+    """Make the bundle's [project.optional-dependencies] exactly wanted, written as the bundle
+    writes it: one requirement a line. An empty wanted removes the table."""
+    pyproject = bundle_pyproject(root)
+    text = pyproject.read_bytes().decode("utf-8")
+    header = "[project.optional-dependencies]\n"
+    if header in text:
+        start = text.index(header)
+        end = text.find("\n[", start + len(header))
+        text = text[:start] + text[end + 1 :] if end != -1 else text[:start]
+    if wanted:
+        block = header
+        for extra, requirements in wanted.items():
+            if requirements:
+                lines = "".join(f'    "{requirement}",\n' for requirement in requirements)
+                block += f"{extra} = [\n{lines}]\n"
+            else:
+                block += f"{extra} = []\n"
+        marker = "\n[project.urls]"
+        assert marker in text, f"{pyproject} has no [project.urls] to put the extras before"
+        text = text.replace(marker, "\n" + block + marker, 1)
+    pyproject.write_bytes(text.encode("utf-8"))
+
+
+def add_runner(
+    root: Path,
+    runner: str,
+    *,
+    library: str | None = "lmstudio>=1.5",
+    extra: str | None = None,
+    in_extra: bool | None = None,
+) -> str:
+    """Add a runner plugin, plugins/runner-<runner> (distribution troupe-runner-<runner>), as a
+    commit adding one would: its pyproject.toml depending on the SDK and, unless library is None,
+    on library; its release config, manifest and lock entries; and its entry in core's runner
+    table (copy it first). With extra, the bundle names it bare in that extra and in all;
+    without, in its dependencies. in_extra is what the table says, by default whether extra is
+    given. Returns the distribution's name."""
+    name = f"troupe-runner-{runner}"
+    package = name.replace("-", "_")
+    path = f"plugins/runner-{runner}"
+    dependencies = ["troupe-plugin-sdk"] + ([library] if library is not None else [])
+    _member_files(root, path, name, dependencies)
+    if extra is None:
+        _insert_after(bundle_pyproject(root), "dependencies = [", f'"{name}",')
+    else:
+        held = extras(root)
+        held.setdefault(extra, []).append(name)
+        held.setdefault("all", [])
+        held["all"] = [*held["all"], name]
+        set_extras(root, {**{k: v for k, v in held.items() if k != "all"}, "all": held["all"]})
+    table = root / RUNNER_TABLE
+    assert table.exists(), f"copy core's runner table into {root} first"
+    flag = (extra is not None) if in_extra is None else in_extra
+    entry = (
+        f'    "{runner}": Runner(\n'
+        f'        command=(sys.executable, "-m", "{package}"),\n'
+        f'        package="{package}",\n'
+        f"        in_extra={flag},\n"
+        "    ),\n"
+    )
+    text = table.read_bytes().decode("utf-8")
+    start = text.index("RUNNERS: dict[str, Runner] = {")
+    end = text.index("\n}\n", start)
+    table.write_bytes((text[: end + 1] + entry + text[end + 1 :]).encode("utf-8"))
+    return name
+
+
+def _member_files(root: Path, path: str, name: str, dependencies: list[str]) -> None:
+    """A new member's pyproject.toml, release config entry, manifest version (0.0.0, no tag yet)
+    and uv.lock package, inserted as text so every other byte stays as it was."""
+    (root / path).mkdir(parents=True)
+    listed = ", ".join(json.dumps(d) for d in dependencies)
+    (root / path / "pyproject.toml").write_bytes(
+        f'[project]\nname = "{name}"\nversion = "0.0.0"\ndependencies = [{listed}]\n'.encode()
+    )
+    entry = {
+        "release-type": "python",
+        "package-name": name,
+        "component": name,
+        "extra-files": [
+            {"type": "toml", "path": f"/{LOCK}", "jsonpath": release_config.lock_jsonpath(name)}
+        ],
+    }
+    if (root / CONFIG).exists():
+        _insert_after(root / CONFIG, '"packages": {', f"{json.dumps(path)}: {json.dumps(entry)},")
+    manifest = root / MANIFEST
+    if manifest.exists():
+        versions = json.loads(manifest.read_bytes())
+        versions[path] = "0.0.0"
+        manifest.write_bytes((json.dumps(versions, indent=2) + "\n").encode("utf-8"))
+    lock = root / LOCK
+    if lock.exists():
+        text = lock.read_bytes().decode("utf-8")
+        text += (
+            f'\n[[package]]\nname = "{name}"\nversion = "0.0.0"\n'
+            f'source = {{ editable = "{path}" }}\n'
+        )
+        lock.write_bytes(text.encode("utf-8"))

@@ -62,6 +62,7 @@ def copy(tmp_path: Path, request: pytest.FixtureRequest, bundle: str) -> Path:
         shutil.copy(REPO / path / "pyproject.toml", tmp_path / path / "pyproject.toml")
     (tmp_path / PROTOCOL_RECORD).parent.mkdir(parents=True)
     shutil.copy(REPO / PROTOCOL_RECORD, tmp_path / PROTOCOL_RECORD)
+    bundle_state.copy_runner_table(REPO, tmp_path)
     bundle_state.unpinned(tmp_path)
     if bundle == "pinned":
         bundle_state.pinned(tmp_path)
@@ -304,14 +305,20 @@ def unexcluded(root: Path) -> None:
 
 
 def bare(root: Path) -> list[str]:
-    """The workspace members the bundle in root names bare, sorted: what the rule reads."""
+    """The workspace members the bundle in root names bare, in its dependencies or its extras,
+    sorted: what the rule reads."""
     workspace = {release_config.normalise(n): n for n in release_config.members(root).values()}
     text = (root / bundle_member(root) / "pyproject.toml").read_text(encoding="utf-8")
-    requirements = tomllib.loads(text)["project"]["dependencies"]
+    project = tomllib.loads(text)["project"]
+    requirements = list(project["dependencies"])
+    for extra in project.get("optional-dependencies", {}).values():
+        requirements += extra
     return sorted(
-        workspace[release_config.requirement_name(r)]
-        for r in requirements
-        if r.strip() in workspace.values()
+        {
+            workspace[release_config.requirement_name(r)]
+            for r in requirements
+            if r.strip() in workspace.values()
+        }
     )
 
 
@@ -339,6 +346,7 @@ def everything_pinned(tmp_path: Path) -> Path:
         shutil.copy(REPO / path / "pyproject.toml", tmp_path / path / "pyproject.toml")
     (tmp_path / PROTOCOL_RECORD).parent.mkdir(parents=True)
     shutil.copy(REPO / PROTOCOL_RECORD, tmp_path / PROTOCOL_RECORD)
+    bundle_state.copy_runner_table(REPO, tmp_path)
     bundle_state.unpinned(tmp_path)
     edit_json(
         tmp_path,
@@ -657,3 +665,50 @@ def test_a_bundle_that_doesnt_move_an_install_pages_tag_is_named_with_the_update
 
 def test_every_workspace_member_is_configured_for_release() -> None:
     assert release_config.problems(REPO) == []
+
+
+# The bundle's extras are pinned like its dependencies (spec: releases, "The bundle's extras are
+# pinned like its dependencies"; runner-extras design D3).
+
+LM_STUDIO = "troupe-runner-lm-studio"
+LM_STUDIO_PATH = "plugins/runner-lm-studio"
+
+
+def test_a_pin_in_an_extra_to_another_subdirectory_names_the_extra(copy: Path) -> None:
+    bundle_state.add_runner(copy, "lm-studio", extra="lm-studio")
+    set_version(copy, LM_STUDIO_PATH, "0.1.0")
+    wrong = release_config.pin(LM_STUDIO, "0.1.0", "plugins/runner-ollama")
+    bundle_state.set_extras(copy, {"lm-studio": [wrong], "all": [wrong]})
+    pyproject = f"{bundle_member(copy)}/pyproject.toml"
+    expected = release_config.pin(LM_STUDIO, "0.1.0", LM_STUDIO_PATH)
+    assert release_config.problems(copy) == [
+        f"{LM_STUDIO}'s entry in the 'lm-studio' extra of {pyproject} is {wrong!r}: pin it as "
+        f'"{expected}", or name it bare.'
+    ]
+
+
+def test_a_pin_in_an_extra_ahead_of_the_release_names_the_extra(copy: Path) -> None:
+    bundle_state.add_runner(copy, "lm-studio", extra="lm-studio")
+    set_version(copy, LM_STUDIO_PATH, "0.1.0")
+    ahead = release_config.pin(LM_STUDIO, "0.2.0", LM_STUDIO_PATH)
+    bundle_state.set_extras(copy, {"lm-studio": [ahead], "all": [ahead]})
+    pyproject = f"{bundle_member(copy)}/pyproject.toml"
+    assert release_config.problems(copy) == [
+        f"{pyproject}'s 'lm-studio' extra pins {LM_STUDIO} at 0.2.0, but {MANIFEST} gives "
+        f"{LM_STUDIO_PATH} 0.1.0: pin a version it has released, at most 0.1.0."
+    ]
+
+
+def test_a_member_bare_in_an_extra_counts_as_bare(everything_pinned: Path) -> None:
+    bundle_state.add_runner(everything_pinned, "lm-studio", extra="lm-studio")
+    assert bare(everything_pinned) == [LM_STUDIO]
+    assert release_config.problems(everything_pinned) == [missing(everything_pinned, [LM_STUDIO])]
+
+
+def test_a_member_bare_in_an_extra_with_the_exclusion_has_no_problems(
+    everything_pinned: Path,
+) -> None:
+    bundle_state.add_runner(everything_pinned, "lm-studio", extra="lm-studio")
+    bundle_state.exclude(everything_pinned)
+    assert release_config.problems(everything_pinned) == []
+    assert bundle_check.problems(everything_pinned) == []

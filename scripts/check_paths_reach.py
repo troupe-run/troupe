@@ -12,7 +12,7 @@ already imported, nor subprocesses. So the reach is computed here, statically, w
    sources. Every import counts, including those inside functions and `TYPE_CHECKING` blocks, and
    `importlib.import_module` with a literal name. One with a computed name reaches every package.
 2. A suite reaches each package that owns a module in its closure, and each package's workspace
-   `dependencies`, transitively.
+   `dependencies` and `optional-dependencies`, transitively.
 3. A module that calls `entry_points(group=...)` reaches every package registered in that group.
    The group is read from a string, a module-level string constant (here or imported), or, failing
    those, the group names written in the same module. A call with none of those is an error, so a
@@ -146,7 +146,12 @@ def load_workspace(root: Path = ROOT) -> Workspace:
     names = {str(project.get("name")) for _, project in found}
     packages = []
     for member, project in found:
-        requirements = (_REQUIREMENT_NAME.match(r) for r in _strings(project.get("dependencies")))
+        # Its extras' requirements too: a runner in the bundle's extra installs with it, so a suite
+        # that reaches the bundle reaches the runner (runner-extras design D3).
+        declared = list(_strings(project.get("dependencies")))
+        for extra in _table(project, "optional-dependencies").values():
+            declared += _strings(extra)
+        requirements = (_REQUIREMENT_NAME.match(r) for r in declared)
         source = member / "src"
         modules = (
             {

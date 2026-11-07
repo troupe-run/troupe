@@ -2,7 +2,7 @@
 
 ## 1. Confirm what uv accepts before building on it (design D4, D10)
 
-- [ ] 1.1 In the scratchpad, with a throwaway `UV_TOOL_DIR` and `UV_TOOL_BIN_DIR`, confirm three things against this
+- [x] 1.1 In the scratchpad, with a throwaway `UV_TOOL_DIR` and `UV_TOOL_BIN_DIR`, confirm three things against this
   branch's commit. (a) `[project.optional-dependencies] all = []` in a copy of `troupe-run`'s `pyproject.toml`
   builds and installs. (b) `uv tool install "troupe-run[all] @ git+<repo>@<sha>#subdirectory=packages/troupe-run"`
   installs. (c) The same with `--no-sources` against `troupe-run-v0.1.0`, a tag whose base is all pinned, resolves
@@ -11,27 +11,27 @@
 
 ## 2. The bundle's extras, and one reader of its requirements (design D2, D3, D4, D5; specs: installation, releases)
 
-- [ ] 2.1 Write the tests first, in `scripts/tests/workspace/`, with fixture manifests, a fixture `lm-studio` plugin
+- [x] 2.1 Write the tests first, in `scripts/tests/workspace/`, with fixture manifests, a fixture `lm-studio` plugin
   that depends on a library, and a fixture runner table. They cover each scenario of installation's "A runner with
   dependencies beyond the SDK is an extra named after it", "The all extra installs every runner", the modified "One
   package installs troupe…" (an SDK-only runner in the base), runs' "The table and the bundle agree", and releases'
   "The bundle's extras are pinned like its dependencies" (a pin to another subdirectory, a bare member without the
   exclusion, the released SDK bare). Verify: each new test fails on main, run and shown.
-- [ ] 2.2 Add the shared reader to `scripts/release_config.py`. It yields each requirement in `dependencies` and in each
+- [x] 2.2 Add the shared reader to `scripts/release_config.py`. It yields each requirement in `dependencies` and in each
   extra, with where it came from. Switch `bundle.py`, `pin_bundle.py`, `release_config.py` (both reads) and
   `install_check.py` to it. Verify: the existing bundle, pinning, release-config and install-check tests pass
   unchanged, and `grep -n 'get("dependencies"' scripts/*.py` finds only the reader and core's own read in
   `bundle.py`.
-- [ ] 2.3 In `scripts/bundle.py`, add the rules for base or extra (D2), `all` (D4) and agreement with core's table
+- [x] 2.3 In `scripts/bundle.py`, add the rules for base or extra (D2), `all` (D4) and agreement with core's table
   (D5, read from `interim.py`'s source without importing core). Messages name the plugin, the extra, the file and
   where it belongs. Verify: 2.1's bundle tests pass.
-- [ ] 2.4 `pin_bundle.py`: a test where the `lm-studio` extra and `all` hold the same pin, and a release of the fixture
+- [x] 2.4 `pin_bundle.py`: a test where the `lm-studio` extra and `all` hold the same pin, and a release of the fixture
   runner moves both and nothing else. Verify: the test fails before 2.2's switch is used for rewriting and passes
   after.
-- [ ] 2.5 Add `[project.optional-dependencies]` with `all = []` to `packages/troupe-run/pyproject.toml`, with a comment
+- [x] 2.5 Add `[project.optional-dependencies]` with `all = []` to `packages/troupe-run/pyproject.toml`, with a comment
   citing this design (D2, D4), and run `uv lock`. Verify: `uv sync --locked` succeeds, and `uv run scripts/check.py`
   passes.
-- [ ] 2.6 Commit as `feat(bundle): ...` (subject ≤ 72 characters). Verify: `uv run scripts/check.py` passes before the
+- [x] 2.6 Commit as `feat(bundle): ...` (subject ≤ 72 characters). Verify: `uv run scripts/check.py` passes before the
   commit.
 
 ## 3. Core refuses a known runner that isn't installed (design D5, D6; specs: runs, protocol)

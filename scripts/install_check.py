@@ -38,7 +38,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
-from release_config import REPOSITORY, read_pin, requirement_name
+from release_config import REPOSITORY, distinct_requirements, read_pin, requirement_name
 
 ROOT = Path(__file__).resolve().parent.parent
 SUBDIRECTORY = "packages/troupe-run"
@@ -113,7 +113,7 @@ def expected_version(ref: str, declared: str, bundle: str, sha: str) -> str:
         )
     pins: dict[str, str] = {}
     bare: list[str] = []
-    for requirement in project.get("dependencies", []):
+    for _, requirement in distinct_requirements(project):
         found = read_pin(requirement)
         if found is None:
             bare.append(requirement_name(requirement))
