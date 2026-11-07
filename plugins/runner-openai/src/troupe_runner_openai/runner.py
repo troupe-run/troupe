@@ -12,6 +12,7 @@ written, so nothing the worker sends can follow it. Then the request in flight i
 wakes the worker wherever it waits.
 """
 
+import base64
 import contextlib
 import json
 import os
@@ -80,6 +81,8 @@ class Runner:
         self._out = threading.Lock()
         self._stop = threading.Event()
         self._mask = Mask(None)
+        self._kinds = False
+        """Whether troupe offered transcript-kinds, which this runner then accepts."""
         self._initialized = False
         self._run_id: str | None = None
         self._worker: threading.Thread | None = None
@@ -139,15 +142,21 @@ class Runner:
             {"jsonrpc": "2.0", "method": "run/event", "params": event.to_data()}, from_worker=True
         )
 
-    def transcript(self, record: dict[str, Any]) -> None:
-        text = json.dumps(record, ensure_ascii=False, separators=(",", ":"))
+    def transcript(self, kind: p.TranscriptKind, data: bytes) -> None:
+        """Send one transcript record: its kind only when troupe offered transcript-kinds, and
+        its bytes as text, or as base64 when they aren't UTF-8. Base64 hides the credential from
+        the masking every message gets, so those bytes are masked first."""
+        params: dict[str, Any] = {"runId": self._run_id}
+        try:
+            params["record"] = data.decode("utf-8")
+        except UnicodeDecodeError:
+            masked = self._mask(data.decode("utf-8", "surrogateescape"))
+            params["record"] = base64.b64encode(masked.encode("utf-8", "surrogateescape")).decode()
+            params["encoding"] = "base64"
+        if self._kinds:
+            params["kind"] = kind
         self._write(
-            {
-                "jsonrpc": "2.0",
-                "method": "run/transcript",
-                "params": {"runId": self._run_id, "record": text},
-            },
-            from_worker=True,
+            {"jsonrpc": "2.0", "method": "run/transcript", "params": params}, from_worker=True
         )
 
     def _in_flight(self, call: Call | None) -> None:
@@ -256,12 +265,16 @@ class Runner:
             return
         self._initialized = True
         chosen = max(v for v in versions if v in p.PROTOCOL_VERSIONS)
+        offered_capabilities = params.get("capabilities") if isinstance(params, dict) else None
+        self._kinds = isinstance(offered_capabilities, list) and (
+            p.TRANSCRIPT_KINDS_CAPABILITY in offered_capabilities
+        )
         self._result(
             id_,
             {
                 "protocolVersion": chosen,
                 "runner": {"name": NAME, "version": __version__},
-                "capabilities": [],
+                "capabilities": [p.TRANSCRIPT_KINDS_CAPABILITY] if self._kinds else [],
             },
         )
 

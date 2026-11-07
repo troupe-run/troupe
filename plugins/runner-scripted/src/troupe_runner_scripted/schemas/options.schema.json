@@ -75,7 +75,7 @@
           }
         },
         {
-          "description": "Send a transcript record: the record itself, or the record and its encoding.",
+          "description": "Send a transcript record: the record itself, or the record with its encoding and kind.",
           "type": "object",
           "additionalProperties": false,
           "required": [
@@ -102,6 +102,14 @@
                       "enum": [
                         "utf-8",
                         "base64"
+                      ]
+                    },
+                    "kind": {
+                      "description": "The record's kind, sent as given whether or not the run accepted transcript-kinds, so a script can break the contract's rule on purpose. Absent: the record is sent without a kind.",
+                      "enum": [
+                        "sent",
+                        "received",
+                        "note"
                       ]
                     }
                   }

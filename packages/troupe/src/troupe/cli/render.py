@@ -72,7 +72,8 @@ def render_run(run: Mapping[str, Any]) -> list[str]:
     if "endedAt" in run:
         lines.append(f"  ended: {run['endedAt']}")
     if "transcript" in run:
-        lines.append(f"  transcript: {run['transcript']}")
+        kinds = " (kinds)" if run.get("transcriptFormat") == "kinds" else ""
+        lines.append(f"  transcript: {run['transcript']}{kinds}")
     if "stderr" in run:
         lines.append(f"  stderr: {run['stderr']}")
     if "recording" in run:

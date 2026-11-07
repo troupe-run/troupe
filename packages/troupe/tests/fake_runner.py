@@ -85,6 +85,8 @@ def main(mode: str) -> None:
                 answer_initialize(message, protocolVersion=1)
             elif mode == "capability":
                 answer_initialize(message, capabilities=["resume"])
+            elif mode == "accept-transcript-kinds":  # whether or not troupe offered it
+                answer_initialize(message, capabilities=["transcript-kinds"])
             else:
                 answer_initialize(message)
         elif method == "run/start":

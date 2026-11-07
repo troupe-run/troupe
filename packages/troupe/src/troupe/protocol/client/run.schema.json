@@ -119,6 +119,7 @@
         "startedAt": {"$ref": "#/$defs/timestamp"},
         "endedAt": {"description": "When the run's end was recorded. Present exactly when state is ended.", "$ref": "#/$defs/timestamp"},
         "transcript": {"description": "The transcript's artifact reference. Absent: the run hasn't ended, or its runner never started.", "$ref": "#/$defs/hash"},
+        "transcriptFormat": {"description": "How the transcript's lines are written, as the run's end recorded it: native (each line a record as the runner sent it) or kinds (each line a record with its kind, transcript-record.schema.json). Present exactly when transcript is.", "$ref": "../events/run-ended.schema.json#/$defs/transcriptFormat"},
         "stderr": {"description": "The artifact reference of the runner's standard error. Absent: the run hasn't ended, or its runner never started.", "$ref": "#/$defs/hash"},
         "recording": {
           "description": "The first seq that wasn't recorded, and why. Absent: recording the run's events didn't fail.",
@@ -135,6 +136,7 @@
           "$ref": "#/$defs/changes"
         }
       },
+      "dependentRequired": {"transcript": ["transcriptFormat"], "transcriptFormat": ["transcript"]},
       "allOf": [
         {
           "if": {"properties": {"state": {"const": "ended"}}},

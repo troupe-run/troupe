@@ -296,6 +296,32 @@ def test_a_running_runs_summary_renders_no_outcome_end_transcript_or_stderr() ->
     assert not [line for line in lines if line.startswith(("  ended", "  transcript", "  stderr"))]
 
 
+@pytest.mark.parametrize(("format_", "shown"), [("native", ""), ("kinds", " (kinds)")])
+def test_an_ended_runs_transcript_line_names_kinds_only_when_its_records_have_them(
+    format_: str, shown: str
+) -> None:
+    summary = m.RunSummary.from_data(
+        {
+            "runId": "0f8fad5b-d9cb-469f-a165-70867728950e",
+            "actor": "tester",
+            "startedBy": {"kind": "human", "id": "ada@example.com", "source": "env"},
+            "runner": {"requested": "scripted"},
+            "stage": {"name": "local", "effects": "unenforced", "allowedBy": ALLOWANCE},
+            "effectCheck": {"kind": "none"},
+            "workspace": {"kind": "theatre"},
+            "state": "ended",
+            "outcome": "succeeded",
+            "events": 2,
+            "startedAt": "2026-10-13T00:00:00.000Z",
+            "endedAt": "2026-10-13T00:00:01.000Z",
+            "transcript": "sha256:" + "a" * 64,
+            "transcriptFormat": format_,
+            "stderr": "sha256:" + "b" * 64,
+        }
+    )
+    assert f"  transcript: sha256:{'a' * 64}{shown}" in render_run(summary.to_data())
+
+
 def test_status_shows_one_run_and_lists_runs(repo: Repo) -> None:
     run_id = performed(repo, script(INIT, OK))
     code, out, _ = cli("status", run_id)

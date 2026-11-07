@@ -43,18 +43,23 @@
           "$ref": "jsonrpc.schema.json#/$defs/named"
         },
         "capabilities": {
-          "description": "The capability names troupe supports. Version 0 defines none.",
+          "description": "The capability names troupe supports.",
           "type": "array",
           "uniqueItems": true,
           "items": {
-            "type": "string",
-            "minLength": 1
+            "$ref": "#/$defs/capability"
           }
         }
       }
     }
   },
   "$defs": {
+    "capability": {
+      "description": "A capability of the contract. transcript-kinds: every transcript record of the run says what kind it is (sent, received or note), and troupe stores each with its kind.",
+      "enum": [
+        "transcript-kinds"
+      ]
+    },
     "result": {
       "title": "initialize result",
       "type": "object",
@@ -77,8 +82,7 @@
           "type": "array",
           "uniqueItems": true,
           "items": {
-            "type": "string",
-            "minLength": 1
+            "$ref": "#/$defs/capability"
           }
         }
       }

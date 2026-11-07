@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://troupe.run/protocol/runner/run-transcript.schema.json",
   "title": "run/transcript",
-  "description": "One record of the engine's native output, unchanged, in the order produced. A runner that holds the conversation itself, such as one that runs the tool loop, also sends each message it adds to the conversation, verbatim as it sent it and once, before the engine's output that follows it. troupe stores the records as the run's transcript and does not interpret them.",
+  "description": "One transcript record, in the order produced. Without a kind, a record is the engine's native output, unchanged. A runner that holds the conversation itself, such as one that runs the tool loop, also sends each message it adds to the conversation, verbatim as it sent it and once, before the engine's output that follows it. A runner that accepted the transcript-kinds capability gives every record a kind, and one that didn't gives none. troupe stores the records as the run's transcript and does not interpret them.",
   "type": "object",
   "additionalProperties": false,
   "required": ["jsonrpc", "method", "params"],
@@ -16,14 +16,25 @@
       "properties": {
         "runId": {"$ref": "jsonrpc.schema.json#/$defs/runId"},
         "record": {
-          "description": "One native record, without its line ending.",
+          "description": "One record, without its line ending.",
           "type": "string"
+        },
+        "kind": {
+          "description": "What kind of record this is, in a run whose runner accepted transcript-kinds. sent: what the runner sent its engine, verbatim, such as a request body or a message it added to the conversation. received: what the engine sent back, verbatim, such as a stream line or a body. note: the runner's own record about the exchange, such as a response's status, in its own form. Absent: the runner didn't accept transcript-kinds, and the record is the engine's native output.",
+          "$ref": "#/$defs/kind"
         },
         "encoding": {
           "description": "utf-8 (the default): the record is the text. base64: the record is base64 of bytes that aren't text.",
           "enum": ["utf-8", "base64"]
         }
       }
+    }
+  },
+  "$defs": {
+    "kind": {
+      "title": "Transcript record kind",
+      "description": "sent: what the runner sent its engine, verbatim. received: what the engine sent back, verbatim. note: the runner's own record about the exchange.",
+      "enum": ["sent", "received", "note"]
     }
   }
 }

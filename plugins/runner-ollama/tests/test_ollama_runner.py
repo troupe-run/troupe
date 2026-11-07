@@ -87,7 +87,45 @@ def test_initialize_names_the_runner_and_version_0(session: Session) -> None:
     answer = session.initialize()
     assert answer["result"]["protocolVersion"] == 0
     assert answer["result"]["runner"]["name"] == "ollama"
-    assert answer["result"]["capabilities"] == []
+
+
+# Requirement: The Ollama runner uses transcript kinds
+
+
+def _transcript(capabilities: list[str], workspace: Path) -> tuple[list[str], list[dict[str, Any]]]:
+    """The capabilities the runner accepted, and its transcript records' params, for a run with one
+    tool call, offered ``capabilities``."""
+    session = Session(workspace, capabilities=capabilities)
+    try:
+        with serving([calls(tool_call("Glob", {"pattern": "*"})), final("done")]) as fake:
+            session.start(_options(fake))
+            messages = session.until_result()
+        accepted = next(m for m in session.received if "capabilities" in m.get("result", {}))
+        session.validate_all()
+    finally:
+        session.kill()
+    records = [m["params"] for m in messages if m.get("method") == "run/transcript"]
+    return accepted["result"]["capabilities"], records
+
+
+def test_offered_transcript_kinds_it_accepts_and_every_record_has_a_kind(workspace: Path) -> None:
+    accepted, records = _transcript(["transcript-kinds"], workspace)
+    assert accepted == ["transcript-kinds"]
+    assert {r["kind"] for r in records} == {"sent", "received"}
+    assert records[0]["kind"] == "sent"
+
+
+def test_offered_no_capability_it_sends_the_same_records_without_a_kind(
+    workspace: Path, tmp_path: Path
+) -> None:
+    _, with_kinds = _transcript(["transcript-kinds"], workspace)
+    other = tmp_path / "other"
+    other.mkdir()
+    accepted, without = _transcript([], other)
+    assert accepted == []
+    assert all("kind" not in r for r in without)
+    scrubbed = [r["record"].replace(str(other), "<workspace>") for r in without]
+    assert scrubbed == [r["record"].replace(str(workspace), "<workspace>") for r in with_kinds]
 
 
 def test_an_unsupported_protocol_version_is_refused_naming_the_supported_ones(

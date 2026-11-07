@@ -140,10 +140,14 @@ whole input. A run reports no cost: nothing tells the runner a price.
 
 The runner holds the conversation, so the transcript is the exchange as it happened, each record verbatim and once:
 
-1. the first request's body, exactly as sent;
+1. the first request's body, exactly as sent, kind `sent`;
 2. before each later request, each message the runner added to the conversation (the answer, then its `tool`
-   messages), encoded exactly as it is inside that request;
-3. every line of every answer, and every error body.
+   messages), encoded exactly as it is inside that request, kind `sent`;
+3. every line of every answer, and every error body, kind `received`.
+
+The runner accepts the contract's `transcript-kinds` capability to label them
+([contributing/runners.md](../../contributing/runners.md#record-kinds)). Offered no capability (a troupe from before
+it), it sends the same records without a kind.
 
 Request *n* is the first request's messages, followed by every message recorded under 2 up to it, with the first
 request's other fields. Re-sent history isn't recorded again, so a transcript grows with the run, not its square.
@@ -200,7 +204,7 @@ checks).
   `stream-error`.
 
 Each holds what Ollama answered (`preflight.json`, `answers.json`) and what the runner sent for it (`transcript.jsonl`,
-`events.json`), recorded and then reviewed by hand. The tests replay each through the runner against a fake Ollama and
+each line a record and its kind as troupe stores it, and `events.json`), recorded and then reviewed by hand. The tests replay each through the runner against a fake Ollama and
 check it sends exactly that. To capture again, with Ollama running on this machine:
 
 ```console

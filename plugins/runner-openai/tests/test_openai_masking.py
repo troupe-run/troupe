@@ -33,9 +33,9 @@ def test_a_masked_echo_inside_a_json_body_is_masked() -> None:
 
 
 def test_an_echo_inside_json_text_is_masked_and_the_text_is_still_json() -> None:
-    record = json.dumps({"kind": "body", "body": json.dumps({"message": "key sk-cana****6789."})})
+    record = json.dumps({"record": json.dumps({"message": "key sk-cana****6789."})})
     masked = Mask(CANARY)(record)
-    assert json.loads(json.loads(masked)["body"]) == {"message": f"key {MASK}."}
+    assert json.loads(json.loads(masked)["record"]) == {"message": f"key {MASK}."}
 
 
 @pytest.mark.parametrize(

@@ -45,7 +45,7 @@ class Ran:
         fake: FakeEndpoint,
         result: ResultEvent | None,
         events: list[RunEvent],
-        records: list[dict[str, Any]],
+        records: list[tuple[str, bytes]],
     ) -> None:
         self.fake = fake
         self.result = result
@@ -75,7 +75,7 @@ def run(
     workspace = tmp_path / "workspace"
     workspace.mkdir(exist_ok=True)
     events: list[RunEvent] = []
-    records: list[dict[str, Any]] = []
+    records: list[tuple[str, bytes]] = []
     with FakeEndpoint(script) as fake:
         loop = Loop(
             runtime=Runtime.checked(fake.endpoint, MODEL, "sk-canary-0123456789", price),
@@ -83,7 +83,7 @@ def run(
             tools=Tools(workspace, effects),
             numbering=EventNumbering(str(uuid.uuid4()), event_max_bytes, next_seq=1),
             send=events.append,
-            record=records.append,
+            record=lambda kind, data: records.append((kind, data)),
             wait=lambda _: False,
             exchange_limits={"base_delay": 0.0},
         )
@@ -496,7 +496,7 @@ def test_a_stop_after_one_call_carries_out_none_of_the_rest(tmp_path: Path) -> N
             tools=Tools(workspace, Effects(write=("*.txt",))),
             numbering=EventNumbering(str(uuid.uuid4()), 65536, next_seq=1),
             send=lambda _: None,
-            record=lambda _: None,
+            record=lambda _kind, _data: None,
             wait=lambda _: False,
             stopping=(workspace / "a.txt").exists,
         )

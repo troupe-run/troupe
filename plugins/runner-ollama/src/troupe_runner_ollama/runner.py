@@ -112,6 +112,8 @@ class Runner:
         self._inbox: queue.Queue[tuple[str, bytes]] = queue.Queue()
         self._out = threading.Lock()
         self._stop = threading.Event()
+        self._kinds = False
+        """Whether troupe offered transcript-kinds, which this runner then accepts."""
         self._initialized = False
         self._run_id: str | None = None
         self._client: Client | None = None
@@ -168,8 +170,10 @@ class Runner:
             {"jsonrpc": "2.0", "method": "run/event", "params": event.to_data()}, from_worker=True
         )
 
-    def transcript(self, record: bytes) -> None:
+    def transcript(self, kind: p.TranscriptKind, record: bytes) -> None:
         params: dict[str, Any] = {"runId": self._run_id}
+        if self._kinds:
+            params["kind"] = kind
         try:
             params["record"] = record.decode("utf-8")
         except UnicodeDecodeError:
@@ -287,12 +291,16 @@ class Runner:
             return
         self._initialized = True
         chosen = max(v for v in versions if v in p.PROTOCOL_VERSIONS)
+        offered_capabilities = params.get("capabilities") if isinstance(params, dict) else None
+        self._kinds = isinstance(offered_capabilities, list) and (
+            p.TRANSCRIPT_KINDS_CAPABILITY in offered_capabilities
+        )
         self._result(
             id_,
             {
                 "protocolVersion": chosen,
                 "runner": {"name": NAME, "version": __version__},
-                "capabilities": [],
+                "capabilities": [p.TRANSCRIPT_KINDS_CAPABILITY] if self._kinds else [],
             },
         )
 

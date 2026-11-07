@@ -36,7 +36,8 @@ class Run:
     def __init__(self, fake: FakeEndpoint | str, **limits: Any) -> None:  # noqa: ANN401
         self.endpoint = fake if isinstance(fake, str) else fake.endpoint
         self.retries: list[Retry] = []
-        self.records: list[dict[str, Any]] = []
+        self.records: list[tuple[str, bytes]] = []
+        """Each transcript record: its kind and its bytes."""
         self.waits: list[float] = []
         self.limits = limits
 
@@ -53,7 +54,7 @@ class Run:
             b'{"model": "m"}',
             KEY,
             self.retries.append,
-            self.records.append,
+            lambda kind, data: self.records.append((kind, data)),
             wait,
             make_call=make,
             **self.limits,
@@ -74,19 +75,15 @@ def test_a_reply_is_returned_with_the_request_response_and_lines_recorded_in_ord
         run = Run(fake)
         reply = run()
     assert reply.text == "Done."
-    kinds = [r["kind"] for r in run.records]
-    assert kinds[:2] == ["request", "response"]
-    assert set(kinds[2:]) == {"stream"}
-    assert run.records[0] == {
-        "kind": "request",
-        "url": fake.endpoint + "/responses",
-        "body": '{"model": "m"}',
-    }
-    assert run.records[1]["status"] == 200
+    kinds = [kind for kind, _ in run.records]
+    assert kinds[:2] == ["sent", "note"]
+    assert set(kinds[2:]) == {"received"}
+    assert run.records[0] == ("sent", b'{"model": "m"}')
+    assert json.loads(run.records[1][1])["status"] == 200
     *_, named, data, blank = run.records
-    assert named == {"kind": "stream", "line": "event: response.completed"}
-    assert data["line"].startswith('data: {"type": "response.completed"')
-    assert blank == {"kind": "stream", "line": ""}
+    assert named == ("received", b"event: response.completed")
+    assert data[1].startswith(b'data: {"type": "response.completed"')
+    assert blank == ("received", b"")
 
 
 def test_only_the_named_response_headers_are_kept_and_no_request_header() -> None:
@@ -94,11 +91,11 @@ def test_only_the_named_response_headers_are_kept_and_no_request_header() -> Non
     with FakeEndpoint([Reply(headers=headers, lines=text_reply("ok").lines)]) as fake:
         run = Run(fake)
         run()
-    assert run.records[1]["headers"] == {
+    assert json.loads(run.records[1][1])["headers"] == {
         "x-ratelimit-remaining-requests": "9",
         "x-request-id": "r1",
     }
-    assert all("authorization" not in json.dumps(r).lower() for r in run.records)
+    assert all(b"authorization" not in data.lower() for _, data in run.records)
 
 
 # Retried
@@ -164,7 +161,11 @@ def test_a_stream_cut_mid_tool_call_is_dropped_and_retried_as_network() -> None:
         reply = run()
     assert [c.call_id for c in reply.tool_calls] == ["c2"]
     assert [r.reason for r in run.retries] == ["network"]
-    assert any(r["kind"] == "dropped" for r in run.records)
+    kinds = [kind for kind, _ in run.records]
+    dropped = next(i for i, (kind, data) in enumerate(run.records) if b'"dropped"' in data)
+    assert kinds[dropped] == "note"
+    assert kinds[dropped - 1] == "received"  # after the broken stream's last line
+    assert json.loads(run.records[dropped][1]) == {"dropped": run.retries[0].message}
 
 
 def _args_as_object() -> Reply:
@@ -190,7 +191,7 @@ def test_a_response_finished_in_the_wrong_shape_ends_the_exchange_without_a_retr
         message = _failed(run)
     assert len(fake.requests) == 1
     assert run.retries == []
-    assert not any(r["kind"] == "dropped" for r in run.records)
+    assert not any(b'"dropped"' in data for _, data in run.records)
     assert message.startswith("The service's response can't be read: ")
     assert words in message
     assert "Retrying can't fix a response the service finished" in message
@@ -229,7 +230,7 @@ def test_a_200_with_a_json_body_ends_the_exchange_naming_the_type_without_a_retr
         "(text/event-stream) the runner asked for: "
     )
     assert '"id": "resp_1"' in message
-    assert {"kind": "body", "body": body.decode()} in run.records
+    assert ("received", body) in run.records
 
 
 def test_a_200_in_openais_error_shape_quotes_the_services_message() -> None:
@@ -376,8 +377,27 @@ def test_an_error_body_is_recorded_for_the_transcript() -> None:
     with FakeEndpoint([error_reply(400, "nope")]) as fake:
         run = Run(fake)
         _failed(run)
-    assert run.records[1] == {"kind": "response", "status": 400, "headers": {}}
-    assert json.loads(run.records[2]["body"])["error"]["message"] == "nope"
+    assert run.records[1] == ("note", b'{"status":400,"headers":{}}')
+    kind, body = run.records[2]
+    assert kind == "received"
+    assert json.loads(body)["error"]["message"] == "nope"
+
+
+def test_a_429_is_recorded_as_a_status_note_then_its_body_byte_for_byte() -> None:
+    reply = error_reply(429, "slow down", headers=[("retry-after", "0")])
+    with FakeEndpoint([reply, text_reply("ok")]) as fake:
+        run = Run(fake)
+        run()
+    assert run.records[1] == ("note", b'{"status":429,"headers":{"retry-after":"0"}}')
+    assert run.records[2] == ("received", reply.body)
+
+
+def test_an_error_body_that_isnt_utf_8_is_recorded_as_its_bytes() -> None:
+    body = b"\xff\xfe not text"
+    with FakeEndpoint([Reply(400, body=body)]) as fake:
+        run = Run(fake)
+        _failed(run)
+    assert run.records[2] == ("received", body)
 
 
 # Retry-After

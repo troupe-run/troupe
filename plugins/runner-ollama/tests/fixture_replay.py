@@ -4,8 +4,10 @@ against them (local-model-runner design D12).
 A fixture is a directory under fixtures/ollama/ holding ``preflight.json`` (what Ollama answered to
 /api/version and /api/show), ``provenance.json`` (the run's options, direction and effects), and,
 for a run that gets past the preflight, ``answers.json`` (each /api/chat answer), with the
-``transcript.jsonl`` and ``events.json`` the runner sent. The workspace's and scratch directory's
-paths are ``<workspace>`` and ``<scratch>`` in the fixture.
+``transcript.jsonl`` and ``events.json`` the runner sent. Each line of ``transcript.jsonl`` is a
+record and its kind, in the form troupe stores a transcript whose runner accepted transcript-kinds
+(protocol/schemas/transcript-record.schema.json). The workspace's and scratch directory's paths are
+``<workspace>`` and ``<scratch>`` in the fixture.
 """
 
 import json
@@ -27,6 +29,7 @@ class Replayed:
     refused: dict[str, Any] | None
     """run/start's error data, when the preflight refused the run."""
     records: list[str]
+    """Each transcript record as a stored line: its kind and record, compact JSON."""
     events: list[dict[str, Any]]
 
 
@@ -98,7 +101,7 @@ def replay(name: str, root: Path) -> Replayed:
         fake.stop()
     scratch = session.scratch()
     records = [
-        _scrub(m["params"]["record"], workspace, scratch)
+        stored_line({**m["params"], "record": _scrub(m["params"]["record"], workspace, scratch)})
         for m in messages
         if m.get("method") == "run/transcript"
     ]
@@ -111,6 +114,15 @@ def replay(name: str, root: Path) -> Replayed:
         event.pop("durationMs", None)
         events.append(json.loads(_scrub(json.dumps(event, ensure_ascii=False), workspace, scratch)))
     return Replayed(None, records, events)
+
+
+def stored_line(params: dict[str, Any]) -> str:
+    """A run/transcript notification's params as troupe stores them in a run that uses kinds:
+    kind, record and, for bytes that aren't text, encoding."""
+    line = {"kind": params["kind"], "record": params["record"]}
+    if params.get("encoding") == "base64":
+        line["encoding"] = "base64"
+    return json.dumps(line, ensure_ascii=False, separators=(",", ":"))
 
 
 def fixture_records(name: str) -> list[str]:

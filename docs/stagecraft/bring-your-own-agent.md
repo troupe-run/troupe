@@ -48,7 +48,8 @@ A runner is a program, in any language, that speaks troupe's runner contract ove
 - **troupe starts the conversation.** It sends `initialize`, then one `run/start` with the run's direction, the
   actor's character (when it has one), the workspace and your runner's options. One runner process serves one run.
 - **The runner reports as the agent works,** with `run/event` notifications (such as `init` first and one `result`
-  last) and the engine's own output as `run/transcript`, which troupe keeps out of git.
+  last) and the engine's own output as `run/transcript`, which troupe keeps out of git. A runner that drives an
+  API, with no output of its own to pass on, labels each record as sent, received or a note of its own.
 - **troupe ends it,** with `run/cancel` if you press Ctrl-C, and `shutdown` when the run's done.
 - **Nothing in the contract belongs to one engine or vendor.** A runner maps its agent's output onto it.
 

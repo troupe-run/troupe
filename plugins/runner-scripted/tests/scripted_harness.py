@@ -84,14 +84,17 @@ def new_run_id() -> str:
 class Session:
     """One scripted runner process. Every message either side sends is kept for validation."""
 
-    def __init__(self, workspace: Path, env: dict[str, str] | None = None) -> None:
-        """``env``: variables added to the runner's environment, such as a run's credential."""
+    def __init__(
+        self, workspace: Path, env: dict[str, str] | None = None, args: list[str] | None = None
+    ) -> None:
+        """``env``: variables added to the runner's environment, such as a run's credential.
+        ``args``: the runner's command-line arguments, such as ``--transcript-kinds``."""
         self.workspace = workspace
         environment = {
             k: v for k, v in os.environ.items() if k.upper() != "TROUPE_RUNTIME_CREDENTIAL"
         }
         self.process = subprocess.Popen(
-            [sys.executable, "-m", "troupe_runner_scripted"],
+            [sys.executable, "-m", "troupe_runner_scripted", *(args or [])],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -157,10 +160,12 @@ class Session:
         scratch.mkdir(exist_ok=True)
         return scratch
 
-    def initialize(self) -> dict[str, Any]:
+    def initialize(self, capabilities: list[str] | None = None) -> dict[str, Any]:
+        """The handshake, offering ``capabilities`` (none unless given)."""
+        offer = {"name": "test", "version": "1"}
         return self.request(
             "initialize",
-            {"protocolVersions": [0], "host": {"name": "test", "version": "1"}, "capabilities": []},
+            {"protocolVersions": [0], "host": offer, "capabilities": capabilities or []},
         )
 
     def start(
