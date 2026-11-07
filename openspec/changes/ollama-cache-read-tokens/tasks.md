@@ -81,8 +81,10 @@
   count" scenario, add design D5, and change the runner. Verify: the renamed test
   `test_when_an_answer_has_no_cached_count_no_cache_read_is_reported_or_subtracted` fails on d21fcc1's runner
   (`inputTokens` 400 with `cacheReadTokens` 20) and passes on the new one, with the other usage tests.
-- [ ] 5.3 Run the plugin's tests and the full check on the rebased branch. Verify: `uv run pytest plugins/runner-ollama`
+- [x] 5.3 Run the plugin's tests and the full check on the rebased branch. Verify: `uv run pytest plugins/runner-ollama`
   passes, and so does the guard's full check at commit.
+  (Done: 249 passed; the guard's check at 565dea7 ran the `runner_ollama` scope and passed, and
+  `scripts/check.py --scope docs` passed on it for the rebased README and contributing text.)
 
 ## Workflow follow-up
 
