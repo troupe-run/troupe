@@ -248,6 +248,13 @@ def test_an_ok_result_followed_by_an_unclean_exit_fails_as_uncertain(tmp_path: P
     assert ran.outcome.exit_code == 3
 
 
+CONTEXT = {"type": "context", "kind": "compacted", "by": "engine", "message": "compacted"}
+"""A context event step: the engine compacted and the run carries on (spec: runner-protocol)."""
+
+OTHER_RUN = "11111111-1111-4111-8111-111111111111"
+"""A run id for a raw line, which can't carry the run's own: the event is refused for its shape
+before its id is read."""
+
 # Requirement: Protocol violations end the run
 
 
@@ -259,6 +266,23 @@ def test_an_ok_result_followed_by_an_unclean_exit_fails_as_uncertain(tmp_path: P
         ([{"event": INIT}, {"event": {**OK, "seq": 3}}, {"hang": True}], "should have been 1"),
         ([{"event": INIT}, {"event": {**OK, "seq": 0}}, {"hang": True}], "should have been 1"),
         ([{"event": {**OK, "seq": 0}}, {"hang": True}], "not 'init'"),
+        ([{"event": {**CONTEXT, "seq": 0}}, {"hang": True}], "not 'init'"),
+        (
+            [
+                {"event": INIT},
+                {
+                    "rawStdout": json.dumps(
+                        {
+                            "jsonrpc": "2.0",
+                            "method": "run/event",
+                            "params": {**CONTEXT, "runId": OTHER_RUN, "seq": 1, "kind": "pruned"},
+                        }
+                    )
+                },
+                {"hang": True},
+            ],
+            "pruned",
+        ),
         (
             [{"rawStdout": '{"jsonrpc":"2.0","method":"run/pause","params":{}}'}, {"hang": True}],
             "doesn't define",
@@ -322,6 +346,8 @@ def test_an_ok_result_followed_by_an_unclean_exit_fails_as_uncertain(tmp_path: P
         "seq gap",
         "seq repeat",
         "before init",
+        "context before init",
+        "context kind of its own",
         "unknown method",
         "tool result without call",
         "served model that is init's",
@@ -402,14 +428,20 @@ def test_an_error_results_reason_reaches_the_outcomes_details(tmp_path: Path) ->
     assert ran.outcome.error.details == {"reason": "authentication", "message": "API Error: 401"}
 
 
+@pytest.mark.parametrize(
+    "late",
+    [{"type": "log", "level": "info", "message": "late"}, CONTEXT],
+    ids=["log", "context"],
+)
 def test_a_late_event_after_the_result_crashes_the_run_whether_the_runner_answers_shutdown_first(
-    tmp_path: Path,
+    tmp_path: Path, late: dict[str, Any]
 ) -> None:
     # The host sends shutdown on the result, and the hanging runner answers it by exiting 0. That
     # exit and the host's kill for the late event race, so either can end the runner, and the
     # ending must say which did.
-    late = {"event": {"type": "log", "level": "info", "message": "late"}}
-    ran = _run(tmp_path, {"steps": [{"event": INIT}, {"event": OK}, late, {"hang": True}]})
+    ran = _run(
+        tmp_path, {"steps": [{"event": INIT}, {"event": OK}, {"event": late}, {"hang": True}]}
+    )
     assert (ran.outcome.outcome, _code(ran)) == (Outcome.CRASHED, "runner.protocol")
     assert ran.outcome.error is not None
     assert "after its result" in ran.outcome.error.problem
@@ -727,6 +759,25 @@ def test_an_oversized_served_model_is_kept_out_of_line(tmp_path: Path) -> None:
     assert oversized.original_type == "served_model"
     validate(oversized.to_data(), "run-event.schema.json#/$defs/hostEvent")
     assert json.loads(ran.store.read(oversized.ref))["params"]["model"] == "m" * 256
+
+
+def test_an_oversized_context_event_is_kept_whole_out_of_line_and_the_run_carries_on(
+    tmp_path: Path,
+) -> None:
+    big = {**CONTEXT, "message": "z" * 3000, "tokensBefore": 41000}
+    ran = _run(
+        tmp_path,
+        {"steps": [{"event": INIT}, {"event": big}, {"event": OK}]},
+        limits=RunLimits(event_max_bytes=1024, cancel_grace=2.0),
+    )
+    assert ran.types == ["init", "oversized", "result"]
+    oversized = ran.events[1]
+    assert isinstance(oversized, p.OversizedEvent)
+    assert (oversized.seq, oversized.original_type) == (1, "context")
+    validate(oversized.to_data(), "run-event.schema.json#/$defs/hostEvent")
+    stored = json.loads(ran.store.read(oversized.ref))
+    assert stored["params"]["message"] == "z" * 3000
+    assert ran.outcome.outcome is Outcome.SUCCEEDED
 
 
 def test_a_message_larger_than_64_kib_is_received_whole(tmp_path: Path) -> None:

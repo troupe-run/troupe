@@ -315,6 +315,7 @@ HostEvent = (
     | p.ToolCallEvent
     | p.ToolResultEvent
     | p.RetryEvent
+    | p.ContextEvent
     | p.LogEvent
     | p.ServedModelEvent
     | p.ResultEvent

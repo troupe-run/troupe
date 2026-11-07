@@ -220,6 +220,13 @@ def logged_events(draw: st.DrawFn) -> dict[str, Any]:
                 {"type": "turn", "role": "assistant", "text": "hi"},
                 {"type": "log", "level": "info", "message": "m"},
                 {"type": "served_model", "model": "m-2026"},
+                {
+                    "type": "context",
+                    "kind": "compacted",
+                    "by": "engine",
+                    "message": "m",
+                    "tokensBefore": 41000,
+                },
                 {"type": "result", "status": "ok", "message": "done"},
                 {"type": "result", "status": "error", "reason": "budget", "message": "spent"},
                 {
@@ -539,6 +546,31 @@ def test_a_malformed_perform_request_is_refused_naming_the_field(data: object, n
 )
 def test_a_malformed_status_request_is_refused_naming_the_field(data: object, named: str) -> None:
     assert named in _refused(m.StatusRequest, data)
+
+
+def test_a_logged_context_event_round_trips_and_is_a_valid_logs_update() -> None:
+    run_id = "0f8fad5b-d9cb-469f-a165-70867728950e"
+    data = {
+        "kind": "event",
+        "runId": run_id,
+        "seq": 1,
+        "at": "2026-10-12T03:04:05.678Z",
+        "event": {
+            "runId": run_id,
+            "seq": 1,
+            "type": "context",
+            "kind": "truncated",
+            "by": "runner",
+            "message": "dropped the oldest tool output",
+            "messagesBefore": 120,
+            "messagesAfter": 34,
+        },
+    }
+    check(data, "logs-update.schema.json")
+    update = _parse(m.LogsUpdate, data)
+    assert isinstance(update, m.LoggedEvent)
+    assert isinstance(update.event, p.ContextEvent)
+    assert update.to_data() == data
 
 
 def test_a_logged_event_whose_event_belongs_to_another_seq_is_refused() -> None:
