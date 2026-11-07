@@ -39,8 +39,8 @@ release-please writes the changelog).
 
 Out of scope: budgets in money (later, once a cost can be trusted, per the issue); showing cost in `troupe status` or
 `logs` (nothing shows `costUsd` today either); a published price table; what `usage.inputTokens` counts
-([#293](https://github.com/troupe-run/troupe/issues/293)), which this change relies on as the runners already apply
-it (cache reads and writes excluded).
+([#293](https://github.com/troupe-run/troupe/issues/293)), which this change relies on and which the contract now
+states (cache reads and writes left out).
 
 ## Capabilities
 
