@@ -72,8 +72,11 @@
   `turn`, `result`; it wrote `out/hello.txt` holding `hello`). `troupe init --audition --runner ollama` then
   `troupe perform lead` in a new repository also `succeeded`, and the run's start recorded the runtime `ollama`, its
   endpoint from `default` and the model `qwen3.5:4b` from `actor`.
-- [ ] 4.2 Run `uv run scripts/check.py`. Verify: it passes locally, and CI passes on Linux, macOS and Windows on the
+- [x] 4.2 Run `uv run scripts/check.py`. Verify: it passes locally, and CI passes on Linux, macOS and Windows on the
   last code change once the PR is marked ready.
+  Done: passes locally, and CI run [42378312160](https://github.com/troupe-run/troupe/actions/runs/42378312160)
+  passed all twelve legs on 373320c, the branch head. macOS with Python 3.13 failed once on an unrelated flaky Claude
+  Code runner test (#337) and passed when re-run.
 
 ## Workflow follow-up
 

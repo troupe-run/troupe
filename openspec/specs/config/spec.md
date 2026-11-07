@@ -350,16 +350,18 @@ The scripted example actor SHALL have `runner: scripted`, an inline script that 
 - **THEN** no `.troupe/actors/lead.md` is written
 
 ### Requirement: The Ollama audition can edit files with a small local model
-The Ollama example actor SHALL have `runner: ollama`, options holding only `model`, a small tool-capable model named
-in one place in core, `effects` with `write: ["**"]`, an empty `expect`, and the same short character as the Claude
-Code audition. It SHALL leave `endpoint` and `workspace` unset, so its runs use the local Ollama and work in a
-worktree.
+The Ollama example actor SHALL have `runner: ollama`, `runtime: ollama`, a `model` that is a small tool-capable model
+named in one place in core, no options, `effects` with `write: ["**"]`, an empty `expect`, and the same short
+character as the Claude Code audition. It SHALL leave `workspace` unset, and set no runtime of its own, so its runs
+use the local Ollama and work in a worktree.
 
 #### Scenario: The Ollama actor's file
 - **WHEN** a person runs `troupe init --audition --runner ollama`
-- **THEN** `.troupe/actors/lead.yaml` holds runner `ollama`, options with only `model`, `effects.write: ["**"]` and
-  `expect: []`, and no `workspace`
+- **THEN** config's actor `lead` holds runner `ollama`, runtime `ollama`, the model, no options,
+  `effects.write: ["**"]` and `expect: []`, and no `workspace`
+- **AND** `.troupe/actors/lead.yaml` names the runner `ollama` and holds no options
 - **AND** `.troupe/actors/lead.md` holds the character
+- **AND** no file under `.troupe/runtimes/` is written
 
 #### Scenario: What init prints for it
 - **WHEN** a person runs `troupe init --audition --runner ollama`
