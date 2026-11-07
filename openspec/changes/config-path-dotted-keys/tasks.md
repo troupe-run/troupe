@@ -10,16 +10,16 @@
 
 ## 2. The path module and its error (design D1, D2, D3, D5)
 
-- [ ] 2.1 Add `config.path-malformed` to `error.schema.json` in `protocol/schemas/` and the package's copy, with
+- [x] 2.1 Add `config.path-malformed` to `error.schema.json` in `protocol/schemas/` and the package's copy, with
   closed, required details `text`, `offset` (integer ≥ 0) and `rule`, and give it exit code 1 in
   `troupe.core.errors`. Add its row to `contributing/config.md`'s code table. Verify: the schema tests pass, and
   `uv run scripts/check.py` shows the copies agree.
-- [ ] 2.2 Add `troupe.core.config.paths` with `parse`, `parse_prefix` (stops at the first `=` outside brackets and
+- [x] 2.2 Add `troupe.core.config.paths` with `parse`, `parse_prefix` (stops at the first `=` outside brackets and
   returns where) and `shown`, as D2 and D3 give them, raising `config.path-malformed` with the rule and offset for
   each refusal. Verify: a table test with one row per refusal in D2 checks the rule, the offset and that the error
   validates against the schema, and the spec's parse scenarios pass (brackets, escapes, colon, brackets around a
   plain key).
-- [ ] 2.3 Point task 1.1's tests at `paths.parse`/`paths.shown`, and add D6's round-trip property, where
+- [x] 2.3 Point task 1.1's tests at `paths.parse`/`paths.shown`, and add D6's round-trip property, where
   `parse(shown(p)) == p` for any non-empty keys from all of Unicode, and its property that `parse` only ever returns
   keys or raises `config.path-malformed`. Verify: they pass, and they fail when `shown` stops escaping `]` (checked by
   hand once, then reverted).
