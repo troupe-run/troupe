@@ -58,11 +58,18 @@ class Runtime:
 
     def endpoint_fix(self) -> str:
         """How a person points this runtime somewhere else."""
-        return (
-            f"set runtimes.{self.name}.endpoint in config (troupe config set "
-            f"runtimes.{self.name}.endpoint=<url>), or {env_name(self.name, 'endpoint')} in your "
-            "environment"
-        )
+        return endpoint_fix(self.name)
+
+
+def endpoint_fix(name: str) -> str:
+    """How a person points the runtime ``name`` somewhere else. The runner can't see where the
+    endpoint came from, so it says the variable wins over config."""
+    variable = env_name(name, "endpoint")
+    return (
+        f"set runtimes.{name}.endpoint in config (troupe config set "
+        f"runtimes.{name}.endpoint=<url>), or {variable} in your environment, which wins over "
+        f"config: if {variable} is set, change or unset it"
+    )
 
 
 def _endpoint(name: str, value: str) -> str:
@@ -80,7 +87,7 @@ def _endpoint(name: str, value: str) -> str:
             f"{value!r} isn't a host and an optional port: each part of a host name is 1 to 63 "
             "letters, digits or hyphens, and a port is at most 65535."
         )
-    fix = Runtime(name, value, "").endpoint_fix()
+    fix = endpoint_fix(name)
     raise RuntimeRefusedError(
         "ollama.invalid-runtime",
         "runtime.endpoint",
@@ -114,10 +121,19 @@ def checked(runtime: RunStartRuntime) -> Runtime:
             "runtime.credential",
             f"The runtime {runtime.name!r} has a credential, but the Ollama runner sends none, so "
             "a service that needs it would refuse every request.",
-            f"Unset runtimes.{runtime.name}.credential for a local Ollama, or use a runner that "
-            "sends a key, such as openai, for a service that needs one.",
+            "Name a runtime without a credential for the actor, such as the built-in ollama "
+            "(troupe config set actors.<name>.runtime=ollama), or use a runner that sends a key, "
+            "such as openai, for a service that needs one.",
         )
     return Runtime(runtime.name, _endpoint(runtime.name, runtime.endpoint), runtime.model)
 
 
-__all__ = ["ENV_PREFIX", "Runtime", "RuntimeRefusedError", "checked", "env_name", "from_run_start"]
+__all__ = [
+    "ENV_PREFIX",
+    "Runtime",
+    "RuntimeRefusedError",
+    "checked",
+    "endpoint_fix",
+    "env_name",
+    "from_run_start",
+]

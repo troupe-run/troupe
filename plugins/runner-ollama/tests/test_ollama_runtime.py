@@ -65,7 +65,7 @@ def test_a_runtime_with_a_credential_is_refused_naming_the_runtime() -> None:
     assert error.code == "ollama.credential-unsupported"
     assert error.where == "runtime.credential"
     assert "'cloud'" in error.problem
-    assert "runtimes.cloud.credential" in error.fix
+    assert "actors.<name>.runtime=ollama" in error.fix
 
 
 @pytest.mark.parametrize(
