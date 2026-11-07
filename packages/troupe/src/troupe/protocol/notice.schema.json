@@ -475,6 +475,30 @@
       "required": [
         "details"
       ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "run.estimate-dropped"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "runner"
+          ],
+          "properties": {
+            "runner": {
+              "description": "The runner's name, as its init event gave it.",
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
     }
   ],
   "$defs": {
