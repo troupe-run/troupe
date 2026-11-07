@@ -7,7 +7,6 @@
     "hand-written from success-with-tools"
   ],
   "options": {
-    "model": "qwen3:0.6b",
     "think": false,
     "temperature": 0,
     "seed": 1

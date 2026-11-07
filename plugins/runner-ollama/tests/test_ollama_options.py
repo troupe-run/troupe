@@ -1,6 +1,6 @@
 """The Ollama runner's options: closed, checked, and in agreement with the published schema (spec:
-ollama-runner, "The runner's options are closed", "The endpoint is an option with a named default",
-"The runner publishes its schemas"; local-model-runner design D10, D11)."""
+ollama-runner, "The runner's options are closed", "The service comes from the run's runtime",
+"The runner publishes its schemas"; local-model-runner design D10, D11; ollama-uses-runtime D2)."""
 
 import json
 from typing import Any
@@ -10,7 +10,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from ollama_harness import own_validator
-from troupe_runner_ollama.defaults import DEFAULT_ENDPOINT, MAX_TURNS
+from troupe_runner_ollama.defaults import MAX_TURNS
 from troupe_runner_ollama.options import Options, OptionsError, parse_options
 
 SCHEMA = own_validator("options.schema.json")
@@ -25,17 +25,14 @@ def _refused(options: object) -> OptionsError:
 # Requirement: The runner's options are closed
 
 
-def test_the_model_alone_takes_every_default() -> None:
-    assert parse_options({"model": "qwen3:4b"}) == Options(model="qwen3:4b")
-    assert parse_options({"model": "qwen3:4b"}).endpoint == DEFAULT_ENDPOINT
-    assert parse_options({"model": "qwen3:4b"}).max_turns == MAX_TURNS
+def test_no_options_take_every_default() -> None:
+    assert parse_options({}) == Options()
+    assert parse_options({}).max_turns == MAX_TURNS
 
 
 def test_every_option_is_read() -> None:
     options = parse_options(
         {
-            "model": "qwen3:4b",
-            "endpoint": "https://gpu-box.local:8443/",
             "maxTurns": 3.0,
             "contextLength": 32768,
             "temperature": 0,
@@ -44,8 +41,6 @@ def test_every_option_is_read() -> None:
         }
     )
     assert options == Options(
-        model="qwen3:4b",
-        endpoint="https://gpu-box.local:8443",
         max_turns=3,
         context_length=32768,
         temperature=0.0,
@@ -55,33 +50,35 @@ def test_every_option_is_read() -> None:
 
 
 def test_an_unknown_option_is_refused_naming_it() -> None:
-    error = _refused({"model": "m", "troupeConformanceUnknownOption": True})
+    error = _refused({"troupeConformanceUnknownOption": True})
     assert error.code == "ollama.unknown-option"
     assert error.where == "options.troupeConformanceUnknownOption"
 
 
-def test_options_without_a_model_are_refused_naming_model() -> None:
-    error = _refused({})
-    assert error.code == "ollama.invalid-options"
-    assert error.where == "options.model"
+@pytest.mark.parametrize(
+    ("key", "value"), [("model", "qwen3:4b"), ("endpoint", "http://127.0.0.1:11434")]
+)
+def test_an_endpoint_or_model_in_the_options_is_refused_as_unknown(key: str, value: str) -> None:
+    # They're the run's runtime's now (spec: "An endpoint or model in the options").
+    error = _refused({key: value})
+    assert error.code == "ollama.unknown-option"
+    assert error.where == f"options.{key}"
+    assert not SCHEMA.is_valid({key: value})
 
 
 @pytest.mark.parametrize(
     ("options", "where", "valid"),
     [
-        ({"model": ""}, "options.model", "qwen3:4b"),
-        ({"model": "qwen\n3"}, "options.model", "control"),
-        ({"model": 3}, "options.model", "qwen3:4b"),
-        ({"model": "m", "maxTurns": 0}, "options.maxTurns", "1 to 1000"),
-        ({"model": "m", "maxTurns": 1001}, "options.maxTurns", "1 to 1000"),
-        ({"model": "m", "maxTurns": 2.5}, "options.maxTurns", "1 to 1000"),
-        ({"model": "m", "maxTurns": True}, "options.maxTurns", "1 to 1000"),
-        ({"model": "m", "contextLength": 0}, "options.contextLength", "tokens"),
-        ({"model": "m", "temperature": -0.1}, "options.temperature", "0 or more"),
-        ({"model": "m", "temperature": "hot"}, "options.temperature", "0 or more"),
-        ({"model": "m", "seed": 1.5}, "options.seed", "whole number"),
-        ({"model": "m", "think": "maximum"}, "options.think", "low, medium, high"),
-        ({"model": "m", "think": None}, "options.think", "low, medium, high"),
+        ({"maxTurns": 0}, "options.maxTurns", "1 to 1000"),
+        ({"maxTurns": 1001}, "options.maxTurns", "1 to 1000"),
+        ({"maxTurns": 2.5}, "options.maxTurns", "1 to 1000"),
+        ({"maxTurns": True}, "options.maxTurns", "1 to 1000"),
+        ({"contextLength": 0}, "options.contextLength", "tokens"),
+        ({"temperature": -0.1}, "options.temperature", "0 or more"),
+        ({"temperature": "hot"}, "options.temperature", "0 or more"),
+        ({"seed": 1.5}, "options.seed", "whole number"),
+        ({"think": "maximum"}, "options.think", "low, medium, high"),
+        ({"think": None}, "options.think", "low, medium, high"),
     ],
 )
 def test_a_malformed_value_is_refused_naming_the_option_with_a_fix_saying_whats_valid(
@@ -96,67 +93,12 @@ def test_a_malformed_value_is_refused_naming_the_option_with_a_fix_saying_whats_
 
 @pytest.mark.parametrize("turns", [1, 1000])
 def test_max_turns_takes_each_bound(turns: int) -> None:
-    assert parse_options({"model": "m", "maxTurns": turns}).max_turns == turns
+    assert parse_options({"maxTurns": turns}).max_turns == turns
 
 
 @pytest.mark.parametrize("think", [True, False, "low", "medium", "high"])
 def test_think_takes_a_boolean_or_a_level(think: bool | str) -> None:
-    assert parse_options({"model": "m", "think": think}).think == think
-
-
-# Requirement: The endpoint is an option with a named default
-
-
-@pytest.mark.parametrize(
-    "endpoint",
-    [
-        "http://127.0.0.1:11434",
-        "http://localhost:11434/",
-        "http://[::1]:11434",
-        "https://gpu-box.local",
-        "http://gpu-box.local:11434",
-        "http://127.0.0.1:65535",
-        "http://" + "a" * 63 + ".example",
-    ],
-)
-def test_an_http_or_https_endpoint_with_a_host_is_accepted(endpoint: str) -> None:
-    options = {"model": "m", "endpoint": endpoint}
-    assert parse_options(options).endpoint == endpoint.rstrip("/")
-    assert SCHEMA.is_valid(options)
-
-
-@pytest.mark.parametrize(
-    ("endpoint", "problem"),
-    [
-        ("ftp://127.0.0.1:11434", "isn't an http or https URL"),
-        ("127.0.0.1:11434", "isn't an http or https URL"),
-        ("http://127.0.0.1:11434/api", "has a path"),
-        ("http://127.0.0.1:11434//", "has a path"),
-        ("http://127.0.0.1:11434?x=1", "query or a fragment"),
-        ("http://127.0.0.1:11434#top", "query or a fragment"),
-        ("http://", "isn't an http or https URL"),
-        ("http://127.0.0.1:11434\n", "control character"),
-        ("http://user:secret@127.0.0.1:11434", "user name or password"),
-        ("http://127.0.0.1:99999", "a port is at most 65535"),
-        ("http://127.0.0.1:65536", "a port is at most 65535"),
-        ("http://a..b:11434", "1 to 63"),
-        ("http://" + "a" * 64 + ".com", "1 to 63"),
-        ("http://host.:11434", "1 to 63"),
-        ("http://token@127.0.0.1:11434", "user name or password"),
-    ],
-)
-def test_an_endpoint_that_isnt_a_host_and_port_is_refused(endpoint: str, problem: str) -> None:
-    options = {"model": "m", "endpoint": endpoint}
-    error = _refused(options)
-    assert error.code == "ollama.invalid-options"
-    assert error.where == "options.endpoint"
-    assert problem in error.problem
-    assert not SCHEMA.is_valid(options)
-
-
-def test_an_endpoints_password_is_never_repeated_in_the_refusal() -> None:
-    error = _refused({"model": "m", "endpoint": "http://user:secret@127.0.0.1:11434"})
-    assert "secret" not in f"{error} {error.problem} {error.fix} {error.where}"
+    assert parse_options({"think": think}).think == think
 
 
 # Requirement: The runner publishes its schemas (the parser and the schema agree)
@@ -220,7 +162,7 @@ _VALUES: dict[str, st.SearchStrategy[object]] = {
 def test_the_code_and_the_published_schema_agree_on_each_options_values(
     key: str, data: st.DataObject
 ) -> None:
-    options = {"model": "qwen3:4b", key: data.draw(_VALUES[key])}
+    options = {key: data.draw(_VALUES[key])}
     assert _accepted(options) == SCHEMA.is_valid(options), json.dumps(options, default=str)
 
 

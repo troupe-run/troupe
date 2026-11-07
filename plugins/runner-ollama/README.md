@@ -6,6 +6,11 @@ the [plugin SDK](../../packages/troupe-plugin-sdk/README.md)'s seven file tools,
 effects, and sends the result back. No Claude Code is involved, no credential is needed, a run costs nothing, and it
 works offline.
 
+The Ollama service it talks to is the actor's [runtime](../../docs/stagecraft/runtimes.md): troupe's built-in `ollama`
+(`http://127.0.0.1:11434`) or one defined in config. The runtime gives the endpoint, and the model troupe resolves for
+the run (the person's `TROUPE_RUNTIME_<NAME>_MODEL`, then the actor's `model`, then the runtime's). Both reach the
+runner in `run/start`'s `runtime`, and nowhere else: the runner holds no endpoint of its own.
+
 It speaks the [runner contract](../../contributing/runners.md) over standard input and output, imports nothing of
 troupe's but the SDK, and depends on nothing else: it talks to Ollama with the standard library. It starts no
 process. Ollama has to be running already, with the model pulled.
@@ -13,8 +18,8 @@ process. Ollama has to be running already, with the model pulled.
 ```yaml
 # .troupe/actors/lead.yaml
 runner: ollama
-options:
-  model: qwen3.5:4b
+runtime: ollama
+model: qwen3.5:4b
 effects:
   write: ["**"]
 expect: []
@@ -22,24 +27,38 @@ expect: []
 
 ## Options
 
-Only `model` is required. Any option the runner doesn't define is refused (`ollama.unknown-option`), and a value of
-the wrong shape too (`ollama.invalid-options`), naming the option.
+Every option is optional. Any option the runner doesn't define is refused (`ollama.unknown-option`), `endpoint` and
+`model` included, since they're the runtime's. A value of the wrong shape is refused too (`ollama.invalid-options`),
+naming the option.
 
 | Option | Shape | Default | What it does |
 |---|---|---|---|
-| `model` | text | — | The model, as Ollama names it, such as `qwen3.5:4b`. It must be pulled, and able to call tools |
-| `endpoint` | `http` or `https` URL: a host and an optional port | `http://127.0.0.1:11434` | Where Ollama listens. No user name, password, path, query or fragment; a port up to 65535, and each part of a host name 1 to 63 characters |
 | `maxTurns` | 1 to 1000 | 50 | The requests one run may make. Reaching it ends the run with an `error` result |
 | `contextLength` | a whole number of tokens, at most the model's maximum | 16384, or the model's maximum if smaller | The context window, sent as Ollama's `num_ctx` on every request. See [The context window](#the-context-window) |
 | `temperature` | a number, 0 or more | Ollama's | Sent as `options.temperature` |
 | `seed` | a whole number | Ollama's | Sent as `options.seed` |
 | `think` | `true`, `false`, `low`, `medium` or `high` | Ollama's | Whether a thinking model thinks. The thinking is kept in the transcript only |
 
-The runner reads nothing from its environment: not `OLLAMA_HOST`, not a proxy. Configuration comes only from
-`run/start`, so a run doesn't depend on who runs it.
+The runner reads nothing from its environment: not `OLLAMA_HOST`, not a proxy, not `TROUPE_RUNTIME_CREDENTIAL`.
+Configuration comes only from `run/start`, so a run doesn't depend on who runs it. troupe resolves the runtime from
+config and the person's environment, so `TROUPE_RUNTIME_OLLAMA_ENDPOINT` points the built-in runtime elsewhere for one
+person, and `troupe config get --resolved runtimes.ollama` shows where it points and why.
 
-**Any endpoint is accepted.** A run sends the workspace's contents (whatever the model reads) to wherever `endpoint`
-points, and config lives in the repository. Restricting where a run may send them is policy's job, later.
+## The runtime
+
+The runner refuses `run/start`, before any request, when:
+
+| Error | When | Fix |
+|---|---|---|
+| `ollama.no-runtime` | `run/start` carries no runtime | Name one for the actor: `troupe config set actors.<name>.runtime=ollama` |
+| `ollama.invalid-runtime` | The runtime's endpoint has a path (Ollama's own API is at the root; an address ending `/v1` is its OpenAI-style API, for the `openai` runner), a port above 65535, or a host name part that's empty or over 63 characters | Set `runtimes.<name>.endpoint`, or `TROUPE_RUNTIME_<NAME>_ENDPOINT` |
+| `ollama.credential-unsupported` | The runtime has a credential: the runner sends none | Unset the runtime's `credential`, or use a runner that sends a key |
+
+An endpoint with a user name, password, query or fragment never reaches the runner: config refuses it, and so does the
+runner contract's own pattern (`runner.invalid-params`).
+
+**Any host is accepted.** A run sends the workspace's contents (whatever the model reads) to wherever the runtime's
+endpoint points, and config lives in the repository. Restricting where a run may send them is policy's job, later.
 
 ## Before the run starts
 
@@ -48,7 +67,7 @@ refuses the run, so it ends `could-not-start` with the reason, when:
 
 | Error | When | Fix |
 |---|---|---|
-| `ollama.unreachable` | Nothing answers at the endpoint, or what answers isn't Ollama | Start Ollama (`ollama serve`), or set `endpoint` |
+| `ollama.unreachable` | Nothing answers at the endpoint, or what answers isn't Ollama | Start Ollama (`ollama serve`), or point the runtime at it (`runtimes.<name>.endpoint`, or `TROUPE_RUNTIME_<NAME>_ENDPOINT`) |
 | `runner.requirement-unmet` | Ollama is older than the runner needs, or reports a version the runner can't read | Upgrade Ollama |
 | `ollama.model-not-found` | Ollama has no model of that name | `ollama pull <model>` |
 | `ollama.model-without-tools` | Ollama doesn't list `tools` among the model's capabilities, or doesn't say what it can do | Use a model that can call tools |
@@ -103,7 +122,7 @@ have been made (`error`), or when Ollama refuses (`error`).
 
 | From Ollama | Run event |
 |---|---|
-| the preflight's version, and the options' model | `init`: engine `ollama`, its version and the model; the seven tools; `effects` `checked` |
+| the preflight's version, and the runtime's model | `init`: engine `ollama`, its version and the model; the seven tools; `effects` `checked` |
 | an answer's text, once its last line has come | one `turn` (`assistant`), when the text isn't empty |
 | an answer's thinking | none: the transcript keeps it |
 | each tool call | `tool_call` and `tool_result`, from the SDK |
@@ -148,7 +167,6 @@ Each is a named setting in [`defaults.py`](src/troupe_runner_ollama/defaults.py)
 
 | Setting | Default | What it limits |
 |---|---|---|
-| `DEFAULT_ENDPOINT` | `http://127.0.0.1:11434` | Where requests go without `endpoint` |
 | `MAX_TURNS` | 50 | Requests per run without `maxTurns` |
 | `MAX_TURNS_LIMIT` | 1000 | The largest `maxTurns` |
 | `DEFAULT_CONTEXT_LENGTH` | 16384 | The window without `contextLength`, lowered to the model's maximum |

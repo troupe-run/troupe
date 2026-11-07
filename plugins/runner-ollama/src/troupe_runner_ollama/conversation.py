@@ -153,6 +153,7 @@ class Conversation:
         *,
         start: p.RunStartParams,
         options: Options,
+        model: str,
         window: int,
         engine_version: str,
         client: Client,
@@ -161,6 +162,8 @@ class Conversation:
     ) -> None:
         self._start = start
         self._options = options
+        self._model = model
+        """The run's runtime's model (ollama-uses-runtime design D2)."""
         self._window = window
         self._engine_version = engine_version
         self._client = client
@@ -188,7 +191,7 @@ class Conversation:
         if self._options.seed is not None:
             options["seed"] = self._options.seed
         fields: dict[str, Any] = {
-            "model": self._options.model,
+            "model": self._model,
             "tools": [
                 {
                     "type": "function",
@@ -253,7 +256,7 @@ class Conversation:
                 "engine": {
                     "name": "ollama",
                     "version": self._engine_version,
-                    "model": self._options.model,
+                    "model": self._model,
                 },
                 "tools": Tools.names(),
                 "effects": self._tools.mode,

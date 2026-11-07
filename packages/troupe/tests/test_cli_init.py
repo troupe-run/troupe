@@ -1,6 +1,7 @@
 """troupe init on the command line (spec: cli; init-and-audition design D4, D8, D9)."""
 
 import io
+import json
 import shlex
 import subprocess
 import sys
@@ -215,6 +216,28 @@ def test_the_ollama_audition_says_ollama_must_run_and_names_ollama_pull_with_its
     )
 
 
+def test_the_ollama_actor_names_the_ollama_runtime_and_its_model_with_no_options(
+    repo: Repo,
+) -> None:
+    # Spec: config, "The Ollama actor's file". The file leaves runtime and model out until #288,
+    # so they're read from config, as config get shows them.
+    code, _, err = cli("init", "--audition", "--runner", "ollama")
+    assert code == ExitCode.OK, err
+    code, out, err = cli("config", "get", "actors.lead", "--json")
+    assert code == ExitCode.OK, err
+    actor = json.loads(out)["value"]
+    assert actor["runner"] == "ollama"
+    assert actor["runtime"] == "ollama"
+    assert actor["model"] == OLLAMA_MODEL
+    assert "options" not in actor
+    assert "workspace" not in actor
+    lead = (repo.path / ".troupe" / "actors" / "lead.yaml").read_text(encoding="utf-8")
+    assert "runner: ollama" in lead
+    assert "options" not in lead
+    assert (repo.path / ".troupe" / "actors" / "lead.md").is_file()
+    assert not (repo.path / ".troupe" / "runtimes").exists()
+
+
 def test_the_openai_audition_says_which_key_to_set_and_that_a_run_costs_money(
     repo: Repo,
 ) -> None:
@@ -357,8 +380,9 @@ def test_the_printed_steps_of_a_scripted_audition_give_a_successful_run_offline(
 def test_the_printed_steps_of_an_ollama_audition_give_a_successful_run_with_a_stand_in(
     repo: Repo, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # The audition leaves endpoint to the runner's default, the local Ollama, so the test points
-    # it at a stand-in with config set, as a person would for an Ollama elsewhere (task 8.5).
+    # The audition names the built-in ollama runtime, the local Ollama, so the test points it at
+    # a stand-in through the person's environment, as a person would for an Ollama elsewhere
+    # (ollama-uses-runtime design D6).
     fake = ollama_stand_in._fake()
     model = {"capabilities": ["completion", "tools"]}
     server = fake.FakeOllama(
@@ -373,8 +397,7 @@ def test_the_printed_steps_of_an_ollama_audition_give_a_successful_run_with_a_st
             if not line.lstrip().startswith("#")
         ]
         add, commit, allow, perform = commands
-        code, _, err = cli("config", "set", f"actors.lead.options.endpoint={server.url}")
-        assert code == ExitCode.OK, err
+        monkeypatch.setenv("TROUPE_RUNTIME_OLLAMA_ENDPOINT", server.url)
         _git(repo, *shlex.split(add)[1:])
         _git(repo, *shlex.split(commit)[1:])
         if sys.platform == "win32":

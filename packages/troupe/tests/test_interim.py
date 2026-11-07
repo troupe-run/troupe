@@ -75,7 +75,7 @@ def test_openai_resolves_to_its_module_requiring_a_runtime_and_naming_no_credent
 def test_what_each_runner_takes_as_a_runtime() -> None:
     assert {name: runner.runtime for name, runner in RUNNERS.items()} == {
         "claude-code": "none",
-        "ollama": "none",
+        "ollama": "required",
         "openai": "required",
         "scripted": "optional",
     }

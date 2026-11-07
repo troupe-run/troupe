@@ -118,7 +118,8 @@ def test_any_answers_give_events_that_keep_the_contract(
     )
     Conversation(
         start=start,
-        options=Options(model="m", max_turns=4),
+        options=Options(max_turns=4),
+        model="m",
         window=4096,
         engine_version="0.40.14",
         client=_ScriptedClient(list(answers)),  # type: ignore[arg-type]

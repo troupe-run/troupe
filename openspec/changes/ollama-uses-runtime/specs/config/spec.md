@@ -8,8 +8,9 @@ use the local Ollama and work in a worktree.
 
 #### Scenario: The Ollama actor's file
 - **WHEN** a person runs `troupe init --audition --runner ollama`
-- **THEN** `.troupe/actors/lead.yaml` holds runner `ollama`, runtime `ollama`, the model, no options,
+- **THEN** config's actor `lead` holds runner `ollama`, runtime `ollama`, the model, no options,
   `effects.write: ["**"]` and `expect: []`, and no `workspace`
+- **AND** `.troupe/actors/lead.yaml` names the runner `ollama` and holds no options
 - **AND** `.troupe/actors/lead.md` holds the character
 - **AND** no file under `.troupe/runtimes/` is written
 

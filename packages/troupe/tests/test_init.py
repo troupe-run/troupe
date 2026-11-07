@@ -195,17 +195,18 @@ def test_the_claude_code_audition_writes_its_files_as_config_set_would(repo: Rep
 
 
 # Requirement: The Ollama audition can edit files with a small local model (spec: config;
-# local-model-runner design D13)
+# local-model-runner design D13, ollama-uses-runtime design D6)
 
 
-def test_the_ollama_actor_has_only_a_model_write_effects_no_expect_and_the_character(
+def test_the_ollama_actor_has_its_runtime_a_model_write_effects_no_expect_and_the_character(
     repo: Repo,
 ) -> None:
     _init(repo.path, _env(repo), audition={"runner": "ollama"})
     lead = read(git_service(repo)).config["actors"]["lead"]
     assert lead == {
         "runner": "ollama",
-        "options": {"model": auditions.OLLAMA_AUDITION_MODEL},
+        "runtime": "ollama",
+        "model": auditions.OLLAMA_AUDITION_MODEL,
         "effects": {"write": ["**"]},
         "expect": [],
         "character": auditions.CHARACTER,

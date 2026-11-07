@@ -16,8 +16,6 @@ from ollama_harness import OWN, RUNNER_SCHEMAS, new_run_id, own_validator, valid
 NAMES = ("options.schema.json", "errors.schema.json")
 
 EVERY_OPTION = {
-    "model": "qwen3:4b",
-    "endpoint": "http://127.0.0.1:11434",
     "maxTurns": 10,
     "contextLength": 32768,
     "temperature": 0,
@@ -44,6 +42,12 @@ def _run_start(options: dict[str, Any]) -> dict[str, Any]:
             "limits": {"eventMaxBytes": 65536},
             "effects": {"write": [], "delete": [], "move": []},
             "scratch": "/s",
+            "runtime": {
+                "name": "ollama",
+                "endpoint": "http://127.0.0.1:11434",
+                "model": "qwen3:4b",
+                "credential": False,
+            },
         },
     }
 
@@ -56,13 +60,18 @@ def test_each_schema_is_draft_2020_12_with_an_id_under_the_plugin(name: str) -> 
     jsonschema.Draft202012Validator.check_schema(schema)
 
 
-def test_the_options_schema_is_closed_and_requires_only_the_model() -> None:
+def test_the_options_schema_is_closed_and_requires_nothing() -> None:
     schema = _schema("options.schema.json")
     assert schema["additionalProperties"] is False
-    assert schema["required"] == ["model"]
+    assert "required" not in schema
 
 
-def test_the_errors_schema_closes_each_error_and_lists_the_five_codes() -> None:
+def test_the_options_schema_defines_no_endpoint_or_model() -> None:
+    # They're the run's runtime's (spec: "The service comes from the run's runtime").
+    assert not {"endpoint", "model"} & set(_schema("options.schema.json")["properties"])
+
+
+def test_the_errors_schema_closes_each_error_and_lists_the_eight_codes() -> None:
     schema = _schema("errors.schema.json")
     assert schema["unevaluatedProperties"] is False
     codes = {branch["properties"]["code"]["const"] for branch in schema["oneOf"]}
@@ -72,16 +81,15 @@ def test_the_errors_schema_closes_each_error_and_lists_the_five_codes() -> None:
         "ollama.unreachable",
         "ollama.model-not-found",
         "ollama.model-without-tools",
+        "ollama.no-runtime",
+        "ollama.invalid-runtime",
+        "ollama.credential-unsupported",
     }
 
 
-def test_the_options_schema_accepts_the_model_alone_and_every_option_together() -> None:
-    assert own_validator("options.schema.json").is_valid({"model": "qwen3:4b"})
+def test_the_options_schema_accepts_no_options_and_every_option_together() -> None:
+    assert own_validator("options.schema.json").is_valid({})
     assert own_validator("options.schema.json").is_valid(EVERY_OPTION)
-
-
-def test_the_options_schema_refuses_empty_options() -> None:
-    assert not own_validator("options.schema.json").is_valid({})
 
 
 def test_a_run_start_with_every_option_validates_against_the_bound_contract() -> None:
@@ -89,7 +97,7 @@ def test_a_run_start_with_every_option_validates_against_the_bound_contract() ->
 
 
 def test_a_run_start_with_an_option_the_runner_doesnt_define_doesnt_validate() -> None:
-    options = {"model": "qwen3:4b", "troupeConformanceUnknownOption": True}
+    options = {"troupeConformanceUnknownOption": True}
     assert not validator("message.schema.json#/$defs/fromHost").is_valid(_run_start(options))
 
 
@@ -108,6 +116,14 @@ def test_a_run_start_with_an_option_the_runner_doesnt_define_doesnt_validate() -
             "fix": "f",
             "details": {"endpoint": "http://127.0.0.1:11434"},
         },
+        *(
+            {"code": code, "problem": "p", "fix": "f", "details": {"where": where}}
+            for code, where in (
+                ("ollama.no-runtime", "runtime"),
+                ("ollama.invalid-runtime", "runtime.endpoint"),
+                ("ollama.credential-unsupported", "runtime.credential"),
+            )
+        ),
         {
             "code": "ollama.model-not-found",
             "problem": "p",

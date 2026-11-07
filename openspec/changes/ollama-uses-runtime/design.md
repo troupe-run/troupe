@@ -94,46 +94,43 @@ OpenAI-compatible `…/v1` address. The fix says so: the native API is at the ro
 *Alternative:* accept a path as a prefix (`https://host/ollama` → `https://host/ollama/api/chat`). It's reasonable
 for reverse proxies, but it widens what the runner accepts, and nobody has asked for it.
 
-### D5. Moved options are a named problem, with a computed fix, in `kinds.py`
+### D5. Moved options are a named problem, with a fix built from the actor alone, in `kinds.py`
 
-A table in core, `MOVED_OPTIONS = {"ollama": ("model", "endpoint")}`, sits beside the runner table in `interim.py`.
-`actor_problems` checks it before the options schema. For each moved key the actor's options hold, it reports a
-`Problem` at `actors.<name>.options.<key>` with the rule "<key> moved to the actor's runtime (the ollama runner reads
-its service from a runtime now)". The schema's own "no such field" problem for that key is left out, and so is the
-missing-runtime problem for the same actor, so the person sees one rule with one fix.
+A table in core, `MOVED_TO_RUNTIME = {"ollama": "ollama"}`, sits beside the runner table in `interim.py`. It maps a
+runner whose `model` and `endpoint` options moved to the built-in runtime that replaces them. `actor_problems`
+checks it before the options schema. For each moved key the actor's options hold, it reports a `Problem` at
+`actors.<name>.options.<key>` with the rule "<key> moved to the actor's runtime". The schema's own "no such field"
+problem for that key is left out, and so is the missing-runtime problem for the same actor, so the person sees one
+rule with one fix.
 
-The fix is one command, worked out from the actor and the config:
+The fix is one command, built from the actor's own values and nothing else in config:
 
-- **runtime**: chosen by endpoint, and never by editing a runtime that exists, so moving one actor can't repoint
-  another. The endpoint the actor ran against is `options.endpoint`, or the built-in `http://127.0.0.1:11434` when
-  it set none. The fix keeps the actor's own `runtime` if it names one whose endpoint is that. Otherwise it picks
-  the first runtime whose endpoint is that, `ollama` first, then the rest by name. Otherwise it defines a new runtime
-  named after the actor (`runtimes.<actor>.endpoint=<endpoint>`), or `<actor>-2`, `-3` and so on when that name is
-  taken, with the base cut so the name fits 64 characters. Endpoints are compared as config and troupe's defaults
-  resolve them, ignoring the environment, which is the person's and not the theatre's. They're compared after the
-  runner's own normalising (no trailing `/`).
+- **runtime**: the actor's `runtime` if it names one. Otherwise `ollama` when `options.endpoint` is absent or the
+  built-in runtime's endpoint (ignoring a trailing `/`). Otherwise `<name>`, a placeholder, with
+  `runtimes.<name>.endpoint=<endpoint>` added, and the fix says to choose the name.
 - **model**: the actor's `model` if it sets one (it wins at run time anyway, spec: runtimes), else `options.model`.
-  Left out when neither is set; the runtime may name one.
-- **options**: the options without the moved keys, written as compact JSON in one group set
-  (`'actors.<n>.options={...}'`, or `{}`). Setting a group replaces it whole (`changes.set_value`), so the moved keys
-  go in the same change. That's what makes one command enough: `config set` and `config unset` are separate commands,
-  and each is checked against the whole config, so no sequence of two could pass through a valid state.
+  Left out when neither is set.
+- **options**: the options without the moved keys, as compact JSON in one group set (`'actors.<n>.options={...}'`,
+  or `{}`). Setting a group replaces it whole (`changes.set_value`), so the moved keys go in the same change. That's
+  what makes one command enough. `config set` and `config unset` are separate commands, and each is checked against
+  the whole config, so no sequence of two could pass through a valid state.
 
-Quoting follows the existing fixes (`_expect_problems`): POSIX single quotes around a value with JSON in it. A test
-runs each fix through the CLI exactly as given (split with `shlex`) and checks config is then valid. That's the only
-claim the spec makes about the fix.
+Each assignment is quoted with `shlex.quote`, so a value with JSON in it is in POSIX single quotes, as the existing
+fixes are (`_expect_problems`). A test runs the fix through the CLI exactly as given, then checks config is valid.
+
+The owner chose this static form on 2026-11-07, over the computed fix an earlier draft of this design described.
+Pre-1.0 there are no theatres to migrate (no compat leniency before 1.0), but without a named rule an old actor is a
+dead end: the generic "Unset actors.x.options.model" change is refused on its own, since the actor then has no runtime.
+The static rule removes the dead end without migration machinery.
 
 *Alternatives considered:*
-- **Tolerate the old options at config time and refuse only at perform.** Unrelated config changes would keep working,
-  but it loosens a closed schema for one runner and still leaves the actor broken. And the whole-config check exists
-  so config never records a state that breaks a rule.
-- **Migrate silently**, rewriting the actor on read. It's a projection that disagrees with the events, and it's
-  against "never rewrite what the user didn't ask to change".
-- **Override `runtimes.ollama.endpoint`** for a non-default endpoint. It's shorter and needs no invented name, but it
-  repoints every other actor on `ollama`. That includes actors already moved, and the audition's, which use the
-  local default. And two old actors on different hosts would overwrite each other. A side review caught this in an
-  earlier draft of this design. A runtime named after the actor is a name the person can rename later, and it
-  changes nothing they didn't ask to change.
+- **The computed fix** (the earlier draft): it picks an existing runtime with the same endpoint, or defines one named
+  after the actor, so the fix is always copy-pasteable. That's more code and more spec, for actors that may not exist.
+- **Config's generic refusal only.** The least code, but the dead end above.
+- **Override `runtimes.ollama.endpoint`** for a non-default endpoint. It's copy-pasteable, but it repoints every
+  other actor on `ollama`. A side review caught this in an earlier draft.
+- **Tolerate the old options at config time, refuse at perform**, or **migrate silently on read.** Both loosen a
+  closed schema or rewrite what the person didn't ask to change.
 
 ### D6. The audition writes the runtime and the model
 
@@ -161,9 +158,9 @@ journey points the run at its stand-in with `TROUPE_RUNTIME_OLLAMA_ENDPOINT` in 
 - **[A theatre with an old Ollama actor can't record any config change until it's moved]** → The refusal's fix is the
   move, in one command, so the dead end lasts one copy-paste. The runner is unreleased (0.2.0 milestone), so only
   people on a development install have such actors.
-- **[An old actor on a non-default endpoint gets a runtime named after it, which the person didn't choose]** → The
-  fix shows the name before anything is recorded. The person can run it with another name, or rename the runtime
-  later. Any name works as long as config stays valid.
+- **[An old actor on a non-default endpoint gets a fix with a `<name>` to fill in]** → It's the rare case
+  (pre-release, and the audition never set an endpoint), and the fix says what to choose. The default-endpoint case,
+  the audition's, is copy-pasteable.
 - **[An Ollama runtime with a credential is refused at the runner, after the run's start is recorded]** → The run ends
   `could-not-start` with `ollama.credential-unsupported`, which names the runtime. D3 says how a follow-up can move it
   earlier.

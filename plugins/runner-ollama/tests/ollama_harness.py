@@ -42,6 +42,7 @@ def _registry() -> Registry[Any]:
     paths = [
         SCHEMAS / "error.schema.json",
         SCHEMAS / "effects.schema.json",
+        SCHEMAS / "runtime.schema.json",
         *sorted((SCHEMAS / "runner").glob("*.schema.json")),
         *sorted(RUNNER_SCHEMAS.glob("*.schema.json")),
     ]
@@ -194,9 +195,11 @@ class Session:
         character: str | None = None,
         event_max_bytes: int = EVENT_MAX_BYTES,
         effects: dict[str, list[str]] | None = None,
+        runtime: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Initialize, then send run/start. ``valid=False`` marks options the runner must refuse,
-        which the runner's options schema must refuse as well."""
+        """Initialize, then send run/start, with ``runtime`` (see ``runtime``) when given.
+        ``valid=False`` marks options the runner must refuse, which the runner's options schema
+        must refuse as well."""
         self.initialize()
         if not valid:
             self.refused.add(self._next_id)
@@ -211,6 +214,8 @@ class Session:
         }
         if character is not None:
             params["character"] = character
+        if runtime is not None:
+            params["runtime"] = runtime
         return self.request("run/start", params)
 
     def scratch(self) -> Path:
@@ -250,3 +255,10 @@ class Session:
         if self.process.poll() is None:
             self.process.kill()
             self.process.wait(timeout=TIMEOUT)
+
+
+def runtime(
+    endpoint: str, model: str = "fake", *, name: str = "test", credential: bool = False
+) -> dict[str, Any]:
+    """run/start's ``runtime``, as troupe sends it: the service a run talks to."""
+    return {"name": name, "endpoint": endpoint, "model": model, "credential": credential}

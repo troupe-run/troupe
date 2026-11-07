@@ -150,7 +150,7 @@ def _step_notes(step: dict[str, Any], entries: list[dict[str, Any]]) -> list[str
     if step["runner"] == "claude-code":
         notes.append("Claude Code must be installed and logged in.")
     if step["runner"] == "ollama":
-        model = _option(entries, step["actor"], "model")
+        model = _value(entries, step["actor"], "model")
         notes.append(
             f"Ollama must be running, with its model pulled: ollama pull {model}"
             if isinstance(model, str)

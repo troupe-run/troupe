@@ -113,10 +113,12 @@ def _claude_code() -> dict[str, Any]:
 
 def _ollama() -> dict[str, Any]:
     # Like the Claude Code example: it may write any file in its worktree, and no file has to
-    # change. The endpoint is left to the runner's default, the local Ollama (design D13).
+    # change. Its service is the built-in ollama runtime, the local Ollama, and it takes no
+    # options (ollama-uses-runtime design D6).
     return {
         "runner": "ollama",
-        "options": {"model": OLLAMA_AUDITION_MODEL},
+        "runtime": "ollama",
+        "model": OLLAMA_AUDITION_MODEL,
         "effects": {key: list(value) for key, value in CLAUDE_CODE_EFFECTS.items()},
         "expect": [],
         "character": CHARACTER,
