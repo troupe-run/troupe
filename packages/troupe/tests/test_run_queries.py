@@ -35,7 +35,6 @@ from troupe.core.notices import Notice
 from troupe.core.runs.aggregate import Run
 from troupe.platform.errors import WatchUnavailableError
 from troupe.platform.watching import DirectoryWatch
-from troupe_plugin_sdk import runner as p
 
 CHILD = Path(__file__).with_name("perform_child.py")
 HANG = script(INIT, turn("one"), {"hang": True})
@@ -107,6 +106,7 @@ def recorded_start(store: EventStore, run_id: str) -> None:
         effect_check={"kind": "none"},
         direction="sha256:" + "a" * 64,
         config=["sha256:" + "b" * 64],
+        workspace={"kind": "theatre"},
     )
     store.command(via="cli").record(run.collect_events())
     run.report(0, {"runId": run_id, "seq": 0, "type": "log", "level": "info", "message": "m"})
@@ -266,11 +266,8 @@ WORKTREE = {
 }
 
 
-def started(
-    store: EventStore, workspace: dict[str, Any], runner_reported: dict[str, Any] | None = None
-) -> Run:
-    """A run's start as perform records it, or, with ``runner_reported``, as an older troupe
-    did."""
+def started(store: EventStore, workspace: dict[str, Any]) -> Run:
+    """A run's start as perform records it."""
     run = Run(
         run_id="6f1d2c3b-0000-4000-8000-000000000002",
         actor="tester",
@@ -280,14 +277,13 @@ def started(
         direction="sha256:" + "a" * 64,
         config=["sha256:" + "b" * 64],
         workspace=workspace,
-        runner_reported=runner_reported,
     )
     store.command(via="cli").record(run.collect_events())
     return run
 
 
 def init(run: Run) -> dict[str, Any]:
-    return {**INIT["event"], "runId": run.run_id, "seq": 0}
+    return {**INIT["event"], "effects": "checked", "runId": run.run_id, "seq": 0}
 
 
 def test_a_runs_reported_runner_is_read_from_its_init_event(tmp_path: Path) -> None:
@@ -323,19 +319,6 @@ def test_a_worktree_not_made_yet_has_no_clones_and_one_made_has_them(tmp_path: P
     store.command(via="cli").record(run.collect_events())
     [summary] = harness.status(run=run.run_id).runs
     assert summary.to_data()["workspace"] == {**WORKTREE, "clones": ["copy"]}
-
-
-def test_a_start_an_older_troupe_recorded_reads_back_its_runner_and_clones(
-    tmp_path: Path,
-) -> None:
-    harness = Harness(theatre(tmp_path))
-    store = git_service(harness.repo)
-    reported = {"name": "scripted", "version": "0.0.9"}
-    run = started(store, {**WORKTREE, "clones": ["symlink"]}, runner_reported=reported)
-    [summary] = harness.status(run=run.run_id).runs
-    data = summary.to_data()
-    assert data["runner"]["reported"] == reported
-    assert data["workspace"]["clones"] == ["symlink"]
 
 
 # 8.3: logs.
@@ -574,24 +557,3 @@ def test_killing_perform_while_its_run_is_followed_stops_following_within_the_le
     assert time.monotonic() - killed < defaults.LOGS_LEASE_CHECK_SECONDS + 3
     assert result[0].run.state == "interrupted"
     assert [n.code for n in result[0].notices] == ["run.interrupted"]
-
-
-# Requirement: Init says how the runner applies the effects (declared-effects): a run recorded
-# before runners said still reads.
-
-
-def test_a_run_whose_init_was_recorded_without_effects_still_shows_in_status_and_logs(
-    tmp_path: Path,
-) -> None:
-    harness = Harness(theatre(tmp_path))
-    store = git_service(harness.repo)
-    run = started(store, {"kind": "theatre"})
-    legacy = {key: value for key, value in init(run).items() if key != "effects"}
-    assert "effects" not in legacy
-    run.report(0, legacy)
-    store.command(via="runner").record(run.collect_events())
-    [summary] = harness.status(run=run.run_id).runs
-    assert summary.to_data()["runner"]["reported"] == {"name": "scripted", "version": "0.1.0"}
-    [logged] = [e for e in harness.logs(run=run.run_id).events if e.seq == 0]
-    assert isinstance(logged.event, p.InitEvent)
-    assert logged.event.effects is None

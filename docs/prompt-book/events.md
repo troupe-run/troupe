@@ -82,7 +82,7 @@ The payload of one run event (topic troupe.core.runs.aggregate:Run.Reported): th
 | `lineage` | object (Lineage) | Yes | Where an event came from: who made it, through what, when, why, as part of which command and in reaction to what, with whose approval, and in what version-control state. Every event troupe records carries it. It is left out of the event's content hash, so two clones that make the same change agree on the event's id. |
 | `timestamp` | object (Library timestamp) | Yes | When the event-sourcing library created the event, as its transcoder writes a datetime. |
 | `seq` | integer | Yes | The runner's number for the event, counting from 0. Each run event is recorded in seq order, and one that isn't the next is refused. |
-| `event` | object (init) or object (turn) or object (tool_call) or object (tool_result) or object (retry) or object (log) or object (result) or object (oversized) | Yes | A run event, or the oversized event troupe writes in place of one larger than the maximum event size. As troupe records it, an init may lack effects: one recorded before runners said how they apply effects. |
+| `event` | object (init) or object (turn) or object (tool_call) or object (tool_result) or object (retry) or object (log) or object (result) or object (oversized) | Yes | A run event, or the oversized event troupe writes in place of one larger than the maximum event size. |
 
 ### Run.Started
 
@@ -96,17 +96,16 @@ The payload of a run's first event (topic troupe.core.runs.aggregate:Run.Started
 | `run_id` | string | Yes | Chosen by troupe for each run attempt: a UUID in canonical lowercase form. |
 | `actor` | string | Yes | The actor's name. It becomes the agent's id in lineage. |
 | `runner_requested` | string | Yes | A runner troupe knows by name. A request never carries a command line. |
-| `runner_reported` | object (Name and version) | No | The runner's name and version from its init, as troupe recorded them before a run's start came before its runner. Absent: recorded since, when the run's first reported event, its init, names the runner; or the runner never sent one. |
 | `stage` | object | Yes | Where the actor whose run recorded this event ran, and whether troupe enforced its declared effects there. An unenforced stage names the policy setting, and the source of its value, that allowed the run; an enforced one has no allowedBy. |
 | `effect_check` | object | Yes | How troupe checks, after a run, that it did what it was for. There is no default: none must be said explicitly. |
 | `direction` | string | Yes | The artifact reference of the run's direction: what the actor was asked to do. |
 | `config` | list of string | Yes | The config version the run used: the ids of the config stream's heads, sorted. Working out config at that version gives the actor's runner, options, effect check and character. |
-| `workspace` | object (In the theatre) or object (In its own worktree) | No | Where the run worked. Absent: recorded before runs had workspaces, so in the theatre. |
-| `runtime` | object (Resolved runtime) | No | The runtime the run talked to, as troupe resolved it when the run started, each value with its source: the model is always resolved, and a credential is named by its variable, never its value. Absent: the actor named no runtime, or the run was recorded before runtimes. |
+| `workspace` | object (In the theatre) or object (In its own worktree) | Yes | Where the run works. |
+| `runtime` | object (Resolved runtime) | No | The runtime the run talked to, as troupe resolved it when the run started, each value with its source: the model is always resolved, and a credential is named by its variable, never its value. Absent: the actor named no runtime. |
 
 ### Run.WorktreeMade
 
-The payload of a worktree run's second event (topic troupe.core.runs.aggregate:Run.WorktreeMade): its worktree, named by the run's start, is made and filled, and the runner hasn't started yet. Recorded by the person's command, which made it. Absent from a run: its worktree wasn't made, or its start was recorded by an older troupe, which held the clone mechanisms itself.
+The payload of a worktree run's second event (topic troupe.core.runs.aggregate:Run.WorktreeMade): its worktree, named by the run's start, is made and filled, and the runner hasn't started yet. Recorded by the person's command, which made it. Absent from a run: its worktree wasn't made.
 
 | Field | Holds | Always there | What it is |
 |---|---|---|---|

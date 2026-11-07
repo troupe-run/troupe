@@ -38,6 +38,7 @@ SUMMARY: dict[str, Any] = {
     "endedAt": AT,
     "transcript": HASH,
     "stderr": HASH,
+    "audit": {"outside": []},
 }
 EVENT: dict[str, Any] = {
     "kind": "event",
@@ -49,6 +50,7 @@ EVENT: dict[str, Any] = {
         "seq": 0,
         "type": "init",
         "runner": {"name": "scripted", "version": "0.1.0"},
+        "effects": "checked",
         "tools": [],
     },
 }
@@ -135,6 +137,7 @@ ACCEPTED = [
                 outcome="could-not-start",
                 drop_transcript=None,
                 drop_stderr=None,
+                drop_audit=None,
             )
         },
         "a run whose runner never started",
@@ -149,7 +152,14 @@ ACCEPTED = [
         {
             "runs": [
                 changed(
-                    SUMMARY, state="running", drop_outcome=None, drop_error=None, drop_endedAt=None
+                    SUMMARY,
+                    state="running",
+                    drop_outcome=None,
+                    drop_error=None,
+                    drop_endedAt=None,
+                    drop_transcript=None,
+                    drop_stderr=None,
+                    drop_audit=None,
                 )
             ],
             "notices": [NOTICE["notice"]],

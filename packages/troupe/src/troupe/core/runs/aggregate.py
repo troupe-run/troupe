@@ -8,8 +8,6 @@ A run is its own stream, keyed by its run id (a UUID minted by perform). Its eve
   stage's admission, the effect check, the direction as an artifact reference, the config version
   the run used (config-model design D14), and its workspace (worktree-stage design D7). For a
   worktree, that's where the worktree will be, so an event names it before any part of it exists.
-  A start recorded by an older troupe also holds the runner its init reported, and the worktree's
-  clone mechanisms; both read back.
 - ``Run.WorktreeMade``: a worktree run's clone mechanisms, once its worktree is made and before its
   runner starts.
 - ``Run.Reported``: one per run event, holding the runner's ``seq`` and the event as received. The
@@ -20,7 +18,7 @@ A run is its own stream, keyed by its run id (a UUID minted by perform). Its eve
 - ``Run.ChangesAccepted`` or ``Run.ChangesDiscarded``: what the person did with a worktree run's
   changes. At most one of them, after the end: settling is final (worktree-stage design D6, D7).
 
-A field with nothing to say (recording that didn't fail, a start with no reported runner) is left
+A field with nothing to say (recording that didn't fail, a start with no runtime) is left
 out of the stored event, so each such parameter defaults to None and the event reads back without
 it (omit-nulls design D4).
 
@@ -67,15 +65,13 @@ class Run(Aggregate):
         effect_check: dict[str, Any],
         direction: str,
         config: list[str],
-        runner_reported: dict[str, Any] | None = None,
-        workspace: dict[str, Any] | None = None,
+        workspace: dict[str, Any],
         runtime: dict[str, Any] | None = None,
     ) -> None:
         self.run_id = run_id
         self.runtime = runtime
         self.actor = actor
         self.runner_requested = runner_requested
-        self.runner_reported = runner_reported
         self.stage = stage
         self.effect_check = effect_check
         self.direction = direction
@@ -89,7 +85,7 @@ class Run(Aggregate):
     def made_worktree(self, clones: list[str]) -> None:
         """Record that the run's worktree is made, with the clone mechanisms it used. Refused for a
         run in the theatre, a second time, and once the runner has reported or the run ended."""
-        if (self.workspace or {}).get("kind") != "worktree":
+        if self.workspace.get("kind") != "worktree":
             raise _out_of_sequence(self.run_id, "a worktree was made for a run in the theatre.")
         if self.worktree_made:
             raise _out_of_sequence(self.run_id, "its worktree is already recorded as made.")

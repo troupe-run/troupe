@@ -88,6 +88,54 @@ def test_every_line_a_worktree_run_records_validates_by_topic_with_its_worktree_
     assert _problems(lines) == []
 
 
+@pytest.fixture(scope="module")
+def worktree_start(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
+    """The Run.Started payload a real worktree run records."""
+    harness = Harness(theatre(tmp_path_factory.mktemp("start")))
+    (harness.repo.path / "a.txt").write_text("one\n", encoding="utf-8")
+    harness.repo.commit_all("base")
+    asked = request(script(INIT, OK), workspace="worktree")
+    harness.configure(asked)
+    harness.repo.commit_all("config")
+    harness.perform(asked)
+    started: dict[str, Any] = next(
+        line for line in _lines(harness) if line.get("topic") == STARTED
+    )["state"]
+    return started
+
+
+# Requirement: What a run was asked to do is kept, and The reported runner comes from the run's
+# init (spec: runs; require-always-written-fields design D2, D3): a start holds what troupe writes
+# now, and nothing troupe no longer writes.
+
+
+def test_the_start_a_worktree_run_records_validates(worktree_start: dict[str, Any]) -> None:
+    started = load(SCHEMAS / "events" / "run-started.schema.json")
+    assert validator_for(started["$id"], SCRIPTED).is_valid(worktree_start)
+
+
+@pytest.mark.parametrize(
+    "label",
+    [
+        "a start without its workspace",
+        "a start that names the reported runner",
+        "a start with clones",
+    ],
+)
+def test_a_start_that_leaves_out_its_workspace_or_holds_an_older_troupes_fields_does_not_validate(
+    worktree_start: dict[str, Any], label: str
+) -> None:
+    state = json.loads(json.dumps(worktree_start))
+    if label == "a start without its workspace":
+        del state["workspace"]
+    elif label == "a start that names the reported runner":
+        state["runner_reported"] = {"name": "scripted", "version": "0.1.0"}
+    else:
+        state["workspace"]["clones"] = ["copy"]
+    started = load(SCHEMAS / "events" / "run-started.schema.json")
+    assert not validator_for(started["$id"], SCRIPTED).is_valid(state), label
+
+
 def test_every_line_a_failed_run_records_validates_by_topic(tmp_path: Path) -> None:
     harness = Harness(theatre(tmp_path))
     harness.perform(request(script(INIT, ERROR)))
@@ -212,6 +260,8 @@ def test_an_end_that_contradicts_its_ending_does_not_validate(
         del outcome[change["drop"]]
     if change["ending"] == "never-started":
         del outcome["exitCode"], outcome["stderr"]
+    else:
+        outcome["audit"] = {"outside": []}
     state = {
         "lineage": {
             "actor": {"kind": "unknown"},
@@ -337,9 +387,12 @@ def test_an_end_whose_runner_never_started_validates_only_without_an_audit() -> 
     assert not validator.is_valid(state)
 
 
-def test_an_end_recorded_before_audits_with_none_validates() -> None:
+@pytest.mark.parametrize("ending", ["exited", "killed"])
+def test_an_end_whose_runner_started_does_not_validate_without_its_audit(ending: str) -> None:
     ended = load(SCHEMAS / "events" / "run-ended.schema.json")
-    assert validator_for(ended["$id"], SCRIPTED).is_valid(_ended({}))
+    validator = validator_for(ended["$id"], SCRIPTED)
+    assert validator.is_valid(_ended({"ending": ending, "audit": {"outside": []}}))
+    assert not validator.is_valid(_ended({"ending": ending}))
 
 
 def test_a_recorded_payload_with_a_field_its_topic_does_not_define_is_refused(
@@ -396,11 +449,11 @@ def _run() -> Run:
         run_id="0f8fad5b-d9cb-469f-a165-70867728950e",
         actor="tester",
         runner_requested="scripted",
-        runner_reported=None,
         stage=STAGE,
         effect_check={"kind": "none"},
         direction=HASH,
         config=[HASH],
+        workspace={"kind": "theatre"},
     )
 
 
@@ -409,7 +462,7 @@ def test_recording_a_payload_with_a_field_its_topic_does_not_define_fails_naming
 ) -> None:
     store = git_service(theatre(tmp_path))
     run = _run()
-    event = {**INIT["event"], "runId": run.run_id, "seq": 0, "colour": "blue"}
+    event = {**INIT["event"], "effects": "checked", "runId": run.run_id, "seq": 0, "colour": "blue"}
     run.report(0, event)
     with pytest.raises(ProtocolGuardError, match=r"Run\.Reported.*'colour' was unexpected"):
         store.command(via="cli").record(run.collect_events())
@@ -420,29 +473,11 @@ def test_recording_a_run_whose_payloads_match_their_topics_passes_the_guard(
 ) -> None:
     store = git_service(theatre(tmp_path))
     run = _run()
-    run.report(0, {**INIT["event"], "runId": run.run_id, "seq": 0})
+    run.report(0, {**INIT["event"], "effects": "checked", "runId": run.run_id, "seq": 0})
     assert len(store.command(via="cli").record(run.collect_events())) == 2
 
 
 WORKTREE = {"kind": "worktree", "path": ".troupe/local/worktrees/run", "base": "c" * 40}
-
-
-def test_a_start_an_older_troupe_recorded_with_its_runner_and_clones_passes_the_guard(
-    tmp_path: Path,
-) -> None:
-    store = git_service(theatre(tmp_path))
-    run = Run(
-        run_id="0f8fad5b-d9cb-469f-a165-70867728950e",
-        actor="tester",
-        runner_requested="scripted",
-        runner_reported={"name": "scripted", "version": "0.1.0"},
-        stage=STAGE,
-        effect_check={"kind": "none"},
-        direction=HASH,
-        config=[HASH],
-        workspace={**WORKTREE, "dirty": False, "clones": ["copy"]},
-    )
-    assert len(store.command(via="cli").record(run.collect_events())) == 1
 
 
 def test_a_worktree_made_with_a_field_its_topic_does_not_define_fails_naming_the_topic(

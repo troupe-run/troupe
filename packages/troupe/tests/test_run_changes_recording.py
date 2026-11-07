@@ -24,14 +24,13 @@ WORKTREE: dict[str, Any] = {
     "path": PATH,
     "base": BASE,
     "dirty": False,
-    "clones": ["clonefile"],
 }
 CAPTURED: dict[str, Any] = {"diff": DIFF, "added": 1, "modified": 1, "deleted": 0, "leftOut": 0}
 ENDED = validator_for(PROTOCOL_BASE + "events/run-ended.schema.json")
 STARTED = validator_for(PROTOCOL_BASE + "events/run-started.schema.json")
 
 
-def new_run(workspace: dict[str, Any] | None = WORKTREE) -> Run:
+def new_run(workspace: dict[str, Any] = WORKTREE) -> Run:
     return Run(
         run_id=str(uuid4()),
         actor="tester",
@@ -159,14 +158,6 @@ def test_a_run_in_the_theatre_has_no_changes(store: EventStore) -> None:
     assert changes_of(store, run) is None
 
 
-def test_a_run_recorded_before_workspaces_reads_back_as_in_the_theatre(store: EventStore) -> None:
-    run = new_run(None)  # leaves workspace out, as every run recorded before this change did
-    record(store, run)
-    [view] = fold_runs(store.history(UUID(run.run_id))).values()
-    assert view.workspace == {"kind": "theatre"}
-    assert view.changes() is None
-
-
 # A run summary carries its run's audit (spec: client-protocol, runs; failed-run-audit design D4)
 
 
@@ -182,15 +173,6 @@ def test_an_ended_runs_audit_reaches_its_summary_as_recorded(store: EventStore) 
     run.end({**outcome("cancelled"), "audit": audit}, None)
     record(store, run)
     assert _summary(store, run)["audit"] == audit
-
-
-def test_an_end_recorded_before_audits_gives_a_summary_with_none(store: EventStore) -> None:
-    run = new_run({"kind": "theatre"})
-    run.end(outcome("failed"), None)  # no audit, as every end recorded before this change
-    record(store, run)
-    summary = _summary(store, run)
-    assert summary["outcome"] == "failed"
-    assert "audit" not in summary
 
 
 # The event schemas refuse what contradicts itself
