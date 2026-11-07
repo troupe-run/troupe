@@ -47,7 +47,11 @@ def events(repo: Repo) -> int:
 
 def refused(caught: pytest.ExceptionInfo[TroupeError], path: str) -> None:
     assert caught.value.code == "runner.not-installed"
-    assert caught.value.path == path
+    # The actor's config path is in the details, as config.invalid's is: the error's own path is a
+    # file's (error.schema.json; review of #338).
+    assert caught.value.details["path"] == path.split(".")
+    assert caught.value.path is None
+    assert caught.value.problem.startswith(f"{path}: ")
     assert caught.value.details["extra"] == "lm-studio"
     assert "troupe-run[lm-studio]" in caught.value.fix
 
