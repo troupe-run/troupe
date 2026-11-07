@@ -114,6 +114,17 @@ def test_a_runtime_without_a_credential_has_none() -> None:
     assert runtime.credential is None
 
 
+def test_run_starts_price_is_the_runtimes_price() -> None:
+    price = {"input": 2, "output": 8, "cacheRead": 0.5}
+    runtime = from_run_start(_start({**OPENAI, "credential": False, "price": price}), {})
+    assert runtime.price is not None
+    assert runtime.price.to_data() == price
+
+
+def test_a_run_start_without_a_price_gives_a_runtime_without_one() -> None:
+    assert from_run_start(_start({**OPENAI, "credential": False}), {}).price is None
+
+
 def test_a_key_under_any_other_name_isnt_read() -> None:
     runtime = from_run_start(_start({**OPENAI, "credential": False}), {"OPENAI_API_KEY": KEY})
     assert runtime.credential is None

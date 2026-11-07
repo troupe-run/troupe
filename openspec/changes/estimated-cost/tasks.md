@@ -68,18 +68,18 @@ Each task's verification runs before it is ticked. `uv run scripts/check.py` pas
 
 ## 6. The host's check (design D9)
 
-- [ ] 6.1 In `troupe.core.runners.host`, treat a `result` with `estimatedCostUsd` as a protocol violation when the
+- [x] 6.1 In `troupe.core.runners.host`, treat a `result` with `estimatedCostUsd` as a protocol violation when the
   `run/start` it sent had no price. The violation's problem names the field and says troupe gave no price. Verify: a
   perform test with a scripted result carrying an estimate and no price ends with the protocol-violation outcome, and
   the same script on a priced runtime records the result as sent.
 
 ## 7. The OpenAI runner (design D8)
 
-- [ ] 7.1 In `plugins/runner-openai/src/troupe_runner_openai/loop.py`, when `_Spend.cost()` is `None` and the run has a
+- [x] 7.1 In `plugins/runner-openai/src/troupe_runner_openai/loop.py`, when `_Spend.cost()` is `None` and the run has a
   price, set `estimatedCostUsd` from the SDK's estimator. Verify: fake-endpoint tests for the openai-runner spec's
   scenarios (0.00078 with a price, nothing without one, cache reads without a `cacheRead` rate, no usage), plus a
   service that reports a cost giving `costUsd` and no estimate, all pass. The fixture replays pass unchanged.
-- [ ] 7.2 Update `plugins/runner-openai/README.md`'s cost paragraph: reported when the service reports one, otherwise
+- [x] 7.2 Update `plugins/runner-openai/README.md`'s cost paragraph: reported when the service reports one, otherwise
   estimated from the runtime's price, and how to set one. Verify: `test_openai_readme.py` passes.
 
 ## 8. Integration

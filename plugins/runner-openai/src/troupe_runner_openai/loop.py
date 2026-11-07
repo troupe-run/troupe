@@ -24,6 +24,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, TypeGuard
 
+from troupe_plugin_sdk.cost import estimate
 from troupe_plugin_sdk.events import EventNumbering, fit
 from troupe_plugin_sdk.runner import (
     LogEvent,
@@ -346,6 +347,11 @@ class Loop:
         cost = spend.cost()
         if cost is not None:
             data["costUsd"] = cost
+        else:
+            # Nothing reported a cost: estimate one, but only from troupe's price (design D8).
+            estimated = estimate(usage, self.runtime.price)
+            if estimated is not None:
+                data["estimatedCostUsd"] = estimated
         return ResultEvent.from_data(self._fit(data, "message"))
 
     def _fit(self, data: dict[str, Any], key: str) -> dict[str, Any]:
