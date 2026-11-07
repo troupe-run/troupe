@@ -42,6 +42,7 @@ from troupe.core.config.projection import (
     stage,
 )
 from troupe.core.config.stream import read, record, refuse_conflicts, refuse_unrecordable
+from troupe.core.config_paths import shown
 from troupe.core.errors import TroupeError
 from troupe.core.events import EventStore
 from troupe.core.events.lineage import Actor
@@ -266,7 +267,7 @@ def _resolved(
     elif len(path) == 2 and path[0] == runtimes.RUNTIMES:
         chosen = [path[1]]
     else:
-        where = ".".join(path)
+        where = shown(path)
         raise TroupeError(
             "config.not-resolvable",
             problem=f"{where} has no resolved values: only runtimes do.",
