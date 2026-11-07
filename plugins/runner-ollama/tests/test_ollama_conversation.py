@@ -491,7 +491,9 @@ def test_cached_prompt_tokens_are_cache_reads_and_left_out_of_the_input(tmp_path
     assert sink.result.usage == p.Usage(input_tokens=1192, output_tokens=56, cache_read_tokens=1306)
 
 
-def test_an_answer_with_no_cached_count_counts_its_whole_prompt_as_input(tmp_path: Path) -> None:
+def test_when_an_answer_has_no_cached_count_no_cache_read_is_reported_or_subtracted(
+    tmp_path: Path,
+) -> None:
     sink, _ = _run(
         tmp_path,
         [
@@ -499,7 +501,7 @@ def test_an_answer_with_no_cached_count_counts_its_whole_prompt_as_input(tmp_pat
             final("ok", 300, 25),
         ],
     )
-    assert sink.result.usage == p.Usage(input_tokens=400, output_tokens=65, cache_read_tokens=20)
+    assert sink.result.usage == p.Usage(input_tokens=420, output_tokens=65)
 
 
 def test_a_cached_count_with_no_prompt_count_is_left_out(tmp_path: Path) -> None:
