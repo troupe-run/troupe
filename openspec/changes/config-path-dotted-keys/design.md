@@ -81,7 +81,7 @@ command reads it.
 A whitespace or non-ASCII key is plain. The reader reads whatever reaches it in argv, and quoting for the shell is the
 person's job, as it is for values.
 
-### D3. One module in the core: `troupe.core.config.paths`
+### D3. One module in the core: `troupe.core.config_paths`
 
 `parse(text) -> tuple[str, ...]` and `shown(path) -> str`, with `parse(shown(p)) == p` for every path of non-empty
 keys. `shown` brackets a key that holds `.`, `[`, `]`, `=` or `\`, escaping `\` and `]`. Any other key is plain. An
@@ -90,8 +90,14 @@ back, which is correct, because it can't be addressed.
 
 It goes in the core, not the CLI, because the core writes paths into problems and fixes and must write them in the
 form the CLI reads. A later surface (the run server, a UI) that takes text paths reads them with the same function.
-`changes.dotted` is removed and its call sites use `paths.shown`, so there's one name for one rule. Every `".".join(path)` over config keys in `core/config/commands.py` and `cli/config.py` moves to
-it.
+`changes.dotted` is removed and its call sites use `shown`, so there's one name for one rule. Every `".".join(path)`
+over config keys in `core/config/commands.py` and `cli/config.py` moves to it.
+
+It sits beside `troupe.core.strict_json` and `troupe.core.schemas`, not inside `troupe.core.config`. The import
+contract "the CLI reaches runs and config only through the client protocol" forbids the CLI importing
+`troupe.core.config`, and the CLI must read paths. The module holds only the text form of a path, no config
+behaviour, so it doesn't open a way round the protocol. This was found at apply, when the contract refused the first
+placement (`troupe.core.config.paths`). Loosening the contract was the alternative, and it's worse.
 
 The alternative was to keep parsing in the CLI (`values.split_path`) and only fix the showing in the core. That puts
 one grammar in two places, which is exactly what the "one named place" rule exists to stop.

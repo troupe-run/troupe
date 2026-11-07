@@ -35,8 +35,9 @@ from typing import Any
 
 from troupe.core import strict_json
 from troupe.core.config.aggregate import CHANGED
-from troupe.core.config.changes import Tree, apply, dotted, value_hash
+from troupe.core.config.changes import Tree, apply, value_hash
 from troupe.core.config.kinds import ACTORS, RUNTIMES, problems
+from troupe.core.config_paths import shown
 from troupe.core.errors import TroupeError
 from troupe.core.events.port import RecordedEvent
 
@@ -65,7 +66,7 @@ class Conflict:
     rule: str | None = None
 
     def describe(self) -> str:
-        where = ", ".join(dotted(path) for path in self.paths)
+        where = ", ".join(shown(path) for path in self.paths)
         made = "; ".join(
             f"change {c.change} by {c.actor.get('id', 'someone unknown')} at {c.at}"
             for c in self.changes

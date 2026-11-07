@@ -14,7 +14,8 @@ from troupe.cli.commands import _call, _ignore_cancel, _notices, _session
 from troupe.cli.parser import Command
 from troupe.cli.render import render_notice
 from troupe.cli.runtimes import runtime_lines
-from troupe.cli.values import split_path, value_of
+from troupe.cli.values import value_of
+from troupe.core.config_paths import parse, parse_prefix, shown
 from troupe.core.errors import TroupeError
 from troupe.core.exit_codes import ExitCode
 
@@ -30,16 +31,16 @@ SHOWN = 72
 
 def _entry_line(entry: dict[str, Any], *, value: bool = False) -> str:
     """What one entry did. With ``value``, what it set the value to, shortened past ``SHOWN``."""
-    path = ".".join(entry["path"])
+    path = shown(entry["path"])
     if "after" not in entry:
         return f"unset {path}"
     line = f"{'changed' if 'before' in entry else 'set'} {path}"
     if not value:
         return line
-    shown = json.dumps(entry["after"], ensure_ascii=False)
-    if len(shown) > SHOWN:
-        shown = f"{shown[:SHOWN]}... ({len(shown)} characters in all)"
-    return f"{line} to {shown}"
+    after = json.dumps(entry["after"], ensure_ascii=False)
+    if len(after) > SHOWN:
+        after = f"{after[:SHOWN]}... ({len(after)} characters in all)"
+    return f"{line} to {after}"
 
 
 def _file_line(file: dict[str, Any], *, rehearse: bool = False) -> str:
@@ -76,10 +77,14 @@ def _configure_set(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def _runner_of(actor: str, assignments: list[tuple[str, str]]) -> str | None:
+Assignment = tuple[tuple[str, ...], str]
+"""A path's keys and the text of the value set there."""
+
+
+def _runner_of(actor: str, assignments: list[Assignment]) -> str | None:
     """The runner the actor will have: set in this command, or already in config."""
-    for dotted, text in assignments:
-        if dotted == f"actors.{actor}.runner" and not text.startswith("@"):
+    for path, text in assignments:
+        if path == ("actors", actor, "runner") and not text.startswith("@"):
             return text
     result = _call(
         "config-get",
@@ -92,21 +97,22 @@ def _runner_of(actor: str, assignments: list[tuple[str, str]]) -> str | None:
     return runner if isinstance(runner, str) else None
 
 
-def _assignments(raw: list[str]) -> list[tuple[str, str]]:
-    found: list[tuple[str, str]] = []
+def _assignments(raw: list[str]) -> list[Assignment]:
+    """Each ``<path>=<value>``: the path ends at the first ``=`` outside brackets (design D4)."""
+    found: list[Assignment] = []
     for each in raw:
-        dotted, equals, text = each.partition("=")
-        if not equals:
+        path, end = parse_prefix(each)
+        if end == len(each):
             raise TroupeError(
                 "config.invalid",
                 problem=f"{each!r} doesn't set anything: a value is written <path>=<value>.",
                 fix=f"Write it as {each}=<value>, or use troupe config unset {each} to remove it.",
                 details={
-                    "path": [k for k in dotted.split(".") if k] or [dotted],
+                    "path": list(path),
                     "rule": "a value is written <path>=<value>",
                 },
             )
-        found.append((dotted, text))
+        found.append((path, each[end + 1 :]))
     return found
 
 
@@ -130,13 +136,12 @@ def _render_change(result: dict[str, Any], stdout: TextIO, *, rehearse: bool) ->
 def _run_set(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
     assignments = _assignments(arguments.assignments)
     operations: list[dict[str, Any]] = []
-    for dotted, text in assignments:
-        path = split_path(dotted)
+    for path, text in assignments:
         runner = (
-            _runner_of(path[1], assignments) if path[:1] == ["actors"] and len(path) > 3 else None
+            _runner_of(path[1], assignments) if path[:1] == ("actors",) and len(path) > 3 else None
         )
-        value = value_of(dotted, text, runner=runner, as_json=arguments.json)
-        operations.append({"path": path, "value": value})
+        value = value_of(path, text, runner=runner, as_json=arguments.json)
+        operations.append({"path": list(path), "value": value})
     params: dict[str, Any] = {"operations": operations}
     if arguments.reason is not None:
         params["reason"] = arguments.reason
@@ -166,7 +171,7 @@ def _configure_unset(parser: argparse.ArgumentParser) -> None:
 
 def _run_unset(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
     params: dict[str, Any] = {
-        "operations": [{"path": split_path(p), "unset": True} for p in arguments.paths]
+        "operations": [{"path": list(parse(p)), "unset": True} for p in arguments.paths]
     }
     if arguments.reason is not None:
         params["reason"] = arguments.reason
@@ -196,7 +201,7 @@ def _configure_get(parser: argparse.ArgumentParser) -> None:
 
 
 def _conflict_lines(conflict: dict[str, Any]) -> list[str]:
-    where = ", ".join(".".join(path) for path in conflict["paths"])
+    where = ", ".join(shown(path) for path in conflict["paths"])
     head = (
         f"conflict at {where}: together these changes break a rule ({conflict['rule']})"
         if "rule" in conflict
@@ -212,8 +217,9 @@ def _conflict_lines(conflict: dict[str, Any]) -> list[str]:
 
 def _run_get(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
     params: dict[str, Any] = {}
-    if arguments.path is not None:
-        params["path"] = split_path(arguments.path)
+    path = None if arguments.path is None else parse(arguments.path)
+    if path is not None:
+        params["path"] = list(path)
     if arguments.resolved:
         params["resolved"] = True
     result = _call("config-get", params, _session(), lambda u: None, _ignore_cancel)
@@ -228,9 +234,7 @@ def _run_get(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> E
             print("\n".join(_conflict_lines(conflict)), file=stdout)
         return ExitCode.OK
     if "value" not in result:
-        where = arguments.path or "config"
-        print(f"Nothing is set at {where}." if arguments.path else "Config is empty.", file=stdout)
-        del where
+        print(f"Nothing is set at {shown(path)}." if path else "Config is empty.", file=stdout)
     elif isinstance(result["value"], str):
         print(result["value"], file=stdout)
     else:
