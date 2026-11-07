@@ -20,10 +20,13 @@ has merged.
 
 ## 2. Record the new spec's Purpose in infrastructure (design D15)
 
-- [ ] 2.1 Add `lm-studio-runner`'s Purpose (without its `Capability:` line) to troupe-run/infrastructure's
-  `oob/troupe-spec-purposes.json`, following its `oob/README.md`, in a pull request of its own that cites troupe#291.
-  Verify: that pull request's checks pass and it has merged (the owner merges) before this change's pull request is
-  marked ready.
+- [ ] 2.1 Once the spec's Purpose is final (after 1.2), raise an infrastructure issue on the board and open its pull
+  request adding `lm-studio-runner`'s Purpose (without its `Capability:` line, whitespace collapsed) to
+  `oob/troupe-spec-purposes.json`, following its `oob/README.md`, and check `cap:actor-runners`' description still
+  covers it. This change's pull request merges first and the infrastructure one right after, so neither waits on the
+  other (infrastructure#263's order; a short red drift window is accepted, owner, 2026-10-30). Verify: the recorded
+  Purpose matches this branch's spec verbatim, the infrastructure pull request's checks pass, and this change's pull
+  request says it merges first and links it.
 
 ## 3. The built-in runtime (design D3)
 
@@ -171,9 +174,9 @@ has merged.
 
 - [ ] 13.1 Run `uv run scripts/check.py` (the full check). Verify: it passes, and its summary line is quoted in the
   last commit's message or the pull request.
-- [ ] 13.2 Mark the pull request ready once #333 and the infrastructure Purpose pull request have merged and the review
-  of its last push is clean, and confirm CI passes on Linux, macOS and Windows. Verify: `gh pr checks` shows every job
-  passing on the head commit.
+- [ ] 13.2 Mark the pull request ready once #333 has merged, the infrastructure Purpose pull request is open with its
+  checks passing, and the review of its last push is clean, and confirm CI passes on Linux, macOS and Windows.
+  Verify: `gh pr checks` shows every job passing on the head commit.
 
 ## Workflow follow-up
 
