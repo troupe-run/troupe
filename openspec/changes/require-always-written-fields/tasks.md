@@ -41,8 +41,8 @@ edit, regenerate the packaged copy with `uv run scripts/package_schemas.py` and 
   the module docstrings that describe the older troupe's start (D2, D3). Verify `mypy --strict` is clean, and
   `test_run_aggregate.py`, `test_event_payloads.py`, `test_run_queries.py`, `test_run_workspaces.py` and
   `test_perform.py` pass once their old-shape starts are rewritten or removed as design D7 lists.
-- [x] 2.5 Rewrite `test_run_changes_recording.py`'s run that leaves out its workspace "as every run recorded before
-  this change did", so it builds the start `perform` records. Verify the file passes, and
+- [x] 2.5 Remove `test_run_changes_recording.py`'s run that leaves out its workspace "as every run recorded before
+  this change did": the start `perform` records is covered by the file's other tests. Verify the file passes, and
   `grep -rn "recorded before this change\|older troupe" packages/troupe/tests` finds only the actor re-check in
   `test_perform.py` (proposal, "Not changed").
 
@@ -60,8 +60,9 @@ edit, regenerate the packaged copy with `uv run scripts/package_schemas.py` and 
   has `transcript` (D5). Update `RunOutcome.audit`'s docstring in `core/runners/outcome.py` to say `perform` always
   audits (D4). In `test_client_messages.py`, make the summary generator draw `audit` for an ended summary exactly when
   it drew `transcript`. Verify 3.1's message tests pass, and the property test passes over its full example count.
-- [x] 3.4 Rewrite `test_run_changes_recording.py`'s end recorded with no audit "as every end recorded before this
-  change", and any other end fixture whose runner started but has no audit, to carry one. Verify
+- [x] 3.4 Remove `test_run_changes_recording.py`'s end recorded with no audit "as every end recorded before this
+  change", and make every other end fixture whose runner started but has no audit carry one (including
+  `test_cli_runs.py`'s audit-error summary, checked with `RunSummary.from_data`). Verify
   `uv run pytest packages/troupe` passes.
 
 ## 4. Nothing else keeps a form for older records

@@ -48,7 +48,8 @@ See [proposal.md](proposal.md) for why. Behaviour is in the deltas to [runner-pr
 recorded form are one definition again. `hostEvent`'s description loses its sentence about older inits.
 
 In the SDK, `InitEvent.effects` becomes `Literal["checked", "translated"]` with no default. It moves above `engine`
-in the dataclass, since a field with no default can't follow one with a default. Order in the JSON is unaffected.
+in the dataclass, since a field with no default can't follow one with a default. So `to_data()` now writes
+`effects` before `engine`. Nothing compares an init's key order, and readers look fields up by name.
 `parse_event` loses its own check: `from_data` now refuses a missing `effects` with the SDK's usual "missing required
 field 'effects'". That is the message `parse_event` gave before, so a runner sees the same refusal.
 
@@ -115,9 +116,12 @@ minor version before 1.0, as #305 asks. Nothing reads records from before this c
 - Removed: the SDK test that an init without `effects` reads as a host event (`test_runner_types.py`), the query test
   that a recorded init without `effects` still reads (`test_run_queries.py`), and the query test of a start that holds
   `runner_reported` and clones (`started(..., runner_reported=...)`).
-- Rewritten: `test_run_aggregate.py`'s and `test_event_payloads.py`'s starts with `runner_reported` and clones,
-  `test_run_changes_recording.py`'s run without a workspace and end without an audit, and `test_perform.py`'s check
-  of `loaded.runner_reported`. Each builds what troupe writes now.
+- Rewritten: `test_run_aggregate.py`'s start with `runner_reported` and clones, now a worktree start that replays
+  with its workspace, and every fixture that built an init without `effects`, a start without a workspace or an end
+  without an audit, which now build what troupe writes.
+- Also removed: `test_run_changes_recording.py`'s run without a workspace and end without an audit,
+  `test_event_payloads.py`'s older-troupe start, and `test_perform.py`'s check of `loaded.runner_reported`. The
+  current shapes are covered by the tests around them.
 - Added, one per spec scenario that's new: an init without `effects` fails `hostEvent` and `InitEvent.from_data`; a
   start without `workspace`, with `runner_reported`, or with workspace `clones` fails the start schema; an end whose
   runner started and that has no audit fails the end schema; a summary with a transcript and no audit, or an audit
