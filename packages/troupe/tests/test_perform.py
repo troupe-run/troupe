@@ -69,6 +69,21 @@ def test_a_successful_run_records_its_start_each_event_in_seq_order_then_its_end
     assert "runner_reported" not in states(records)[0]  # it's read from the init, seq 0
 
 
+def test_a_served_model_is_recorded_as_a_run_reported_event_in_its_place(tmp_path: Path) -> None:
+    harness = Harness(theatre(tmp_path))
+    served = {"event": {"type": "served_model", "model": "m-2026"}}
+    result = harness.perform(request(script(INIT, served, turn("one"), OK)))
+    records = history(harness, result.run.run_id)
+    assert [r.topic for r in records] == [STARTED, REPORTED, REPORTED, REPORTED, REPORTED, ENDED]
+    assert states(records)[2]["event"] == {
+        "runId": result.run.run_id,
+        "seq": 1,
+        "type": "served_model",
+        "model": "m-2026",
+    }
+    assert result.run.outcome == "succeeded"
+
+
 class Watching(Harness):
     """A harness that notes the run's recorded topics when the runner's first event arrives."""
 

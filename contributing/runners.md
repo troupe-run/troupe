@@ -371,8 +371,9 @@ callback and a cancel signal.
   `runner.protocol`, naming what was wrong and on which line of the runner's output: a line that isn't JSON or
   JSON-RPC, a duplicated JSON key, `NaN` or `Infinity`, a method the contract doesn't define, an answer to a
   request troupe never sent, a version or capability troupe didn't offer, another run's id, an event out of
-  sequence, before `init` or after `result`, a `tool_result` with no earlier `tool_call`, a `base64` record that
-  isn't base64, or a message over `RUNNER_MAX_MESSAGE_BYTES`. troupe never reads such a message with a guess.
+  sequence, before `init` or after `result`, a `tool_result` with no earlier `tool_call`, a `served_model` naming
+  `init`'s model or one already reported, a `base64` record that isn't base64, or a message over
+  `RUNNER_MAX_MESSAGE_BYTES`. troupe never reads such a message with a guess.
 - **Cancelling** sends `run/cancel` and gives the runner `RUNNER_CANCEL_GRACE_SECONDS` to exit, then kills it and
   every process it started. The same happens after `shutdown`.
 - **Notices** tell the caller what is happening without waiting silently. They have the shape of
