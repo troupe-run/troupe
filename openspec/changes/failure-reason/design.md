@@ -113,8 +113,9 @@ the new contract refuses), marked `!` in its commit.
   `configuration`; other 4xx `other`; a failed response with a code not named as the service's `other`; refusal and
   `content_filter` `refused`; `max_output_tokens` `output-limit`; other incomplete reasons and unknown statuses
   `other`; tool call without `call_id` `engine`; turn limit `turn-limit`; token budget `budget`; retries run out
-  the last retry's reason; the runner's own exception `runner`. `invalid_prompt` stays `other`: OpenAI uses it for
-  more than policy refusals, and refusing to guess beats a wrong `refused`.
+  the last retry's reason; the runner's own exception `runner`. `invalid_prompt` stays `other` (owner, 2026-11-07): OpenAI's docs
+  describe it only as an invalid prompt, though its recorded message is a usage-policy flag, and refusing to guess
+  beats a wrong `refused`. The message still says what OpenAI said.
 - **Ollama:** 400 whose message says the request exceeds the available context size `context-length` (and only then
   does the message name the window: today every 400 gets the window text appended, which misleads for a 400 about
   something else); other 400 `other`; 401/403 `authentication`; 404 `configuration`; other non-retried status
