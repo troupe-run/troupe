@@ -1,6 +1,6 @@
 [project]
 name = "troupe-runner-openai"
-version = "0.0.0"
+version = "0.1.0"
 description = "An actor runner for troupe that drives OpenAI's Responses API, or any service that serves it, with troupe's own tool loop."
 readme = "README.md"
 license = "Apache-2.0"

@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.0](https://github.com/troupe-run/troupe/compare/troupe-runner-scripted-v0.1.0...troupe-runner-scripted-v0.2.0) (2026-11-07)
+
+
+### Features
+
+* carry declared effects and a scratch directory to runners ([ce62005](https://github.com/troupe-run/troupe/commit/ce6200565f60b7a1b6661f2061aa7994cedb7d86))
+* **runtimes:** name runtimes in config and hand runs their credential ([5e14751](https://github.com/troupe-run/troupe/commit/5e14751ac70c364326dedd44a2e6b8c8186cb05c))
+* **scripted:** a tool step that runs calls through the SDK's tools ([949996a](https://github.com/troupe-run/troupe/commit/949996a22aeaa537ab821abebb752af75c74c5d5))
+
 ## 0.1.0 (2026-11-01)
 
 

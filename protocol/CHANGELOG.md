@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.2.0](https://github.com/troupe-run/troupe/compare/protocol-v0.1.0...protocol-v0.2.0) (2026-11-07)
+
+
+### Features
+
+* audit every run's changes against its declared effects ([3f5e31e](https://github.com/troupe-run/troupe/commit/3f5e31e85ef2d2b4f421a75d4fd918cd7ee7ffb4))
+* carry declared effects and a scratch directory to runners ([ce62005](https://github.com/troupe-run/troupe/commit/ce6200565f60b7a1b6661f2061aa7994cedb7d86))
+* **cli:** troupe init, and init --audition for an example actor ([fc34264](https://github.com/troupe-run/troupe/commit/fc342642ac4ec34ef08369688b925cbda3c00fcf))
+* **runner-ollama:** talk to Ollama and check what it requires ([#277](https://github.com/troupe-run/troupe/issues/277)) ([8893bae](https://github.com/troupe-run/troupe/commit/8893baef1b7a6055235fd1a0da79ea59f216d140))
+* **runs:** audit every started run and record what it found ([ac99c89](https://github.com/troupe-run/troupe/commit/ac99c8938a494fff2f14bfa89dfd708e67427107))
+* **runs:** perform runs the Ollama runner by name ([#277](https://github.com/troupe-run/troupe/issues/277)) ([d50be0c](https://github.com/troupe-run/troupe/commit/d50be0c411cf9b1d87510e17ca8f403de6769e79))
+* **runtimes:** name runtimes in config and hand runs their credential ([5e14751](https://github.com/troupe-run/troupe/commit/5e14751ac70c364326dedd44a2e6b8c8186cb05c))
+* **vcs:** say whether a directory is in a repository ([09abe93](https://github.com/troupe-run/troupe/commit/09abe93e078ef6635ab10a4e240ca79ddc6a852e))
+
+
+### Bug Fixes
+
+* **runner-protocol:** say usage.inputTokens leaves out cache tokens ([f6d80b5](https://github.com/troupe-run/troupe/commit/f6d80b50f51845773243bcf22ebbfadbbc985da5))
+
 ## 0.1.0 (2026-11-01)
 
 
