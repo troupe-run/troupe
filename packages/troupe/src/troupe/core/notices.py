@@ -11,6 +11,9 @@ from typing import Any
 CODES: dict[str, str] = {
     "run.silent": "A run has sent no event for the silence threshold.",
     "run.retrying": "A runner reported that its engine is retrying.",
+    # The run host's, like the two above: contributing/runners.md lists them.
+    "run.estimate-dropped": "A runner sent an estimated cost troupe gave it no price for, so the "
+    "estimate was left out of what troupe records.",
     # The event store (event-store design D12). contributing/event-store.md lists them.
     "events.other-branch": "Uncommitted events made on another branch were left out of a read.",
     "events.order-rebuilt": "The local notification order was rebuilt, so followers start again.",
@@ -22,8 +25,6 @@ CODES: dict[str, str] = {
     "run.interrupted": "A run has no recorded end, and the perform that ran it has stopped.",
     "run.unfinished-elsewhere": "A run started in another clone has no recorded end here.",
     "run.scratch-not-removed": "A run's scratch directory couldn't be removed when it ended.",
-    "run.estimate-dropped": "A runner sent an estimated cost troupe gave it no price for, so the "
-    "estimate was left out of what troupe records.",
     # Config (config-model design D8). contributing/config.md lists them.
     "config.file-rewritten": "A config file troupe wrote was missing or older, so it was written "
     "again from config.",
