@@ -186,7 +186,9 @@ example, if only some report cache writes, subtract none and leave `cacheWriteTo
 
 An event larger than `RUN_EVENT_MAX_BYTES` isn't refused. troupe stores the whole event in the artifact store and
 passes on an `oversized` event in its place, with the same `seq`, the original type, its size in bytes and the
-stored event's `ref` (`sha256:` and the hex SHA-256 of the event's bytes). The run carries on and nothing is lost.
+stored event's `ref` (`sha256:` and the hex SHA-256 of the event's bytes). The run carries on and nothing is lost,
+except an estimate troupe gave no price for: troupe drops that from a `result` first, so the stored event is the
+result without it (see [Cost: reported or estimated](#cost-reported-or-estimated)).
 A runner should still summarise below `limits.eventMaxBytes`, because events are destined for git.
 
 ### The transcript
