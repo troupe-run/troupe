@@ -167,7 +167,7 @@ for any of them.
 
 `uv tool install [--no-sources ]"troupe-run[<extras>] @ git+https://github.com/troupe-run/troupe@<ref>#subdirectory=packages/troupe-run"`.
 `install_check.TEMPLATE` gets an optional extras part, and `command()` takes the extras. The docs check
-(`scripts/docs_reference.py`) accepts either form, applies the same ref rules to both, refuses an extra `troupe-run`
+(in `scripts/tests/workspace/test_install_docs.py`, where the install-command checks live) accepts either form, applies the same ref rules to both, refuses an extra `troupe-run`
 doesn't have, and checks that the install page's list of extras is exactly `troupe-run`'s. The extras form goes on
 the install page between the release-please markers, so a release moves its tag too. The README keeps only the plain
 form.
@@ -185,8 +185,10 @@ A new `scripts/runner_licences.py`, run by `scripts/check.py` with the bundle ch
   `License-Expression`, else a single SPDX-like `License` value, else `License :: OSI Approved :: …` classifiers mapped
   to SPDX ids.
 - It compares each against `scripts/licences.toml`, the one list, in two tiers (D13). The permissive tier is
-  Apache-2.0, MIT, BSD-2-Clause, BSD-3-Clause, ISC and PSF-2.0. The weak-copyleft tier is MPL-2.0. An `OR`
-  expression passes if any branch is on either tier, and it's treated as permissive if any permissive branch passes.
+  Apache-2.0, MIT, BSD-2-Clause, BSD-3-Clause, ISC and PSF-2.0. The weak-copyleft tier is MPL-2.0. The
+  licence is read as an SPDX expression, with `AND` binding tighter than `OR` and parentheses grouping. An `OR`
+  reaches the best tier of its sides, and an `AND` the worst of its parts. A `WITH` exception, or anything it can't
+  parse, reaches no tier, so it fails safe (review of #338).
 
 A package that's missing, has no licence or has one on neither tier fails, naming the package, the runner, what was
 found and `scripts/licences.toml`. Today it checks nothing, and fixture locks and metadata test it. Adding a licence

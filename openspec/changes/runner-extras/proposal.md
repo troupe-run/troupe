@@ -84,7 +84,7 @@ None.
   `runner.not-installed`. Also `core/config/kinds.py`, `core/audition.py`, `cli/init.py`, `core/schemas.py`'s
   missing-plugin fix, `core/errors.py` and the protocol's error catalogue (`error.schema.json`, both copies).
 - `scripts/bundle.py`, `scripts/pin_bundle.py`, `scripts/release_config.py`, `scripts/install_check.py`,
-  `scripts/docs_reference.py`, with a new licence check of runner dependencies, and their tests.
+  `scripts/tests/workspace/test_install_docs.py` (the docs check), with a new licence check of runner dependencies, and their tests.
 - `.github/workflows/ci.yml` and `release-install-check.yml`, `docs/opening-night/install.md`, `README.md`,
   `packages/troupe-run/README.md` and `contributing/runners.md`.
 - No spec is added or removed, and no Purpose changes, so troupe-run/infrastructure's `oob/troupe-spec-purposes.json`

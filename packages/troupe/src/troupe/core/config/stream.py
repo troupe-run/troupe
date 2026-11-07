@@ -6,7 +6,7 @@ would leave config invalid, or leave any conflict unresolved; and when the strea
 same batch first settles the fork, with the merged config as the settled state.
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from eventsourcing.utils import get_topic
@@ -61,7 +61,9 @@ def refuse_unrecordable(
         for entry in entries
         if len(entry["path"]) > 1 and entry["path"][0] == ACTORS
     }
-    check(after, touched & set(after.get(ACTORS, {})))
+    # actors may not be a group at all, which check refuses with config.invalid: nothing to touch.
+    actors = after.get(ACTORS)
+    check(after, touched & set(actors) if isinstance(actors, Mapping) else set())
     if merged.conflicts:
         proposed = Change("proposed", "", {}, "", tuple(entries), ())
         refuse_conflicts(merge(store.history(aggregate.STREAM), extra=proposed))
