@@ -26,13 +26,14 @@ from dataclasses import dataclass, field
 from typing import Any, TypeGuard
 
 from troupe_plugin_sdk.cost import estimate
-from troupe_plugin_sdk.events import EventNumbering, fit
+from troupe_plugin_sdk.events import EventNumbering, ServedModels, fit
 from troupe_plugin_sdk.runner import (
     FailureReason,
     LogEvent,
     ResultEvent,
     RetryEvent,
     RunEvent,
+    ServedModelEvent,
     TurnEvent,
     Usage,
 )
@@ -184,7 +185,7 @@ class Loop:
     make_call: Callable[..., Call] = Call
     exchange_limits: dict[str, Any] = field(default_factory=dict)
     _warned_usage: bool = False
-    _noted_model: bool = False
+    _served: ServedModels | None = None
     _spend: _Spend = field(default_factory=_Spend)
 
     def run(self, direction: str, character: str | None) -> ResultEvent | None:
@@ -257,13 +258,14 @@ class Loop:
                 "The service reported no usage for a response, so the run's token budget can't "
                 "be checked: only its turn limit bounds it, and its result has no usage.",
             )
-        if reply.model and reply.model != self.runtime.model and not self._noted_model:
-            self._noted_model = True
-            self._log(
-                "info",
-                f"The service answered with the model {reply.model} (the runtime asked for "
-                f"{self.runtime.model}).",
-            )
+        if self._served is None:
+            self._served = ServedModels(self.runtime.model)
+        for body in self._served.note(reply.model):
+            if body["type"] == "served_model":
+                data = {"runId": self.numbering.run_id, "seq": self.numbering.take(), **body}
+                self.send(ServedModelEvent.from_data(data))
+            else:
+                self._log(body["level"], body["message"])
 
     def _ended(self, reply: Reply, spend: _Spend) -> ResultEvent | None:
         """The result a reply ends the run with, or None when it asks for tools."""

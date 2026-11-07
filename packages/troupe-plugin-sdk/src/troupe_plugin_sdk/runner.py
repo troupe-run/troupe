@@ -297,6 +297,16 @@ FAILURE_REASONS: tuple[FailureReason, ...] = get_args(FailureReason)
 
 
 @dataclass(frozen=True)
+class ServedModelEvent(RunEvent):
+    """A model other than the one init named answered part of the run: sent the first time each
+    such model answers, never for init's model, never twice for one model (``ServedModels``
+    decides)."""
+
+    TYPE: ClassVar[str | None] = "served_model"
+    model: str = json_field("model", pattern=MODEL_PATTERN)
+
+
+@dataclass(frozen=True)
 class ResultEvent(RunEvent):
     TYPE: ClassVar[str | None] = "result"
     status: Literal["ok", "error"] = json_field("status")
@@ -322,7 +332,9 @@ class ResultEvent(RunEvent):
             raise fail("ResultEvent", f"an ok result has no reason, not {self.reason!r}")
 
 
-EventType = Literal["init", "turn", "tool_call", "tool_result", "retry", "log", "result"]
+EventType = Literal[
+    "init", "turn", "tool_call", "tool_result", "retry", "log", "served_model", "result"
+]
 
 
 @dataclass(frozen=True)
@@ -344,6 +356,7 @@ EVENT_TYPES: dict[str, type[RunEvent]] = {
         ToolResultEvent,
         RetryEvent,
         LogEvent,
+        ServedModelEvent,
         ResultEvent,
     )
     if cls.TYPE is not None

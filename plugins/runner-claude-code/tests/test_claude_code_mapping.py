@@ -416,6 +416,82 @@ def test_permission_denials_are_warnings_immediately_before_the_result() -> None
     assert events[2]["type"] == "result"
 
 
+# Requirement: An assistant message's other model is a served_model event
+# Built on the recorded shapes: every recording's assistant records name init's model, or
+# <synthetic> for the API errors Claude Code reports itself.
+
+INIT_OPUS = {**INIT, "model": "claude-opus-5-5"}
+
+
+def _said_by(model: object, *content: dict[str, Any], **extra: object) -> dict[str, Any]:
+    return {"type": "assistant", "message": {"model": model, "content": list(content)}, **extra}
+
+
+def test_a_fallback_models_message_sends_served_model_before_its_turn_and_calls() -> None:
+    said = _said_by("claude-sonnet-5-5", {"type": "text", "text": "hi"}, _tool_use("toolu_1"))
+    assert [e["type"] for e in _feed(INIT_OPUS, said)] == [
+        "init",
+        "served_model",
+        "turn",
+        "tool_call",
+    ]
+    assert _feed(INIT_OPUS, said)[1] == {"type": "served_model", "model": "claude-sonnet-5-5"}
+
+
+def test_a_message_claude_code_made_itself_sends_no_served_model() -> None:
+    said = _said_by("<synthetic>", {"type": "text", "text": "API Error: 401"})
+    assert [e["type"] for e in _feed(INIT_OPUS, said)] == ["init", "turn"]
+
+
+def test_messages_from_inits_own_model_send_no_served_model() -> None:
+    said = _said_by("claude-opus-5-5", {"type": "text", "text": "hi"})
+    assert [e["type"] for e in _feed(INIT_OPUS, said, said)] == ["init", "turn", "turn"]
+
+
+def test_a_subagents_message_from_another_model_counts_the_same_and_only_once() -> None:
+    said = _said_by(
+        "claude-haiku-5-5", {"type": "text", "text": "found it"}, parent_tool_use_id="toolu_9"
+    )
+    events = _feed(INIT_OPUS, said, said)
+    assert [e for e in events if e["type"] == "served_model"] == [
+        {"type": "served_model", "model": "claude-haiku-5-5"}
+    ]
+
+
+def test_a_model_that_isnt_a_string_sends_no_served_model() -> None:
+    said = _said_by(7, {"type": "text", "text": "hi"})
+    assert [e["type"] for e in _feed(INIT_OPUS, said)] == ["init", "turn"]
+
+
+# Requirement: The result's other models are served_model events before it
+
+
+def test_a_model_only_the_results_model_usage_names_is_sent_before_denials_and_the_result() -> None:
+    used: dict[str, dict[str, int]] = {
+        "claude-opus-5-5": {},
+        "claude-haiku-5-5": {},
+        "<synthetic>": {},
+    }
+    record = _result(modelUsage=used, permission_denials=[{"tool_name": "Bash"}])
+    events = _feed(INIT_OPUS, record)[1:]
+    assert [e["type"] for e in events] == ["served_model", "log", "result"]
+    assert events[0] == {"type": "served_model", "model": "claude-haiku-5-5"}
+
+
+def test_a_model_usage_model_already_reported_is_not_sent_again() -> None:
+    said = _said_by("claude-sonnet-5-5", {"type": "text", "text": "hi"})
+    record = _result(modelUsage={"claude-sonnet-5-5": {}, "claude-opus-5-5": {}})
+    events = _feed(INIT_OPUS, said, record)
+    assert [e["model"] for e in events if e["type"] == "served_model"] == ["claude-sonnet-5-5"]
+
+
+def test_with_no_init_record_every_model_is_served_once() -> None:
+    # No system/init, so the synthetic init names no model and each model that answered is new.
+    said = _said_by("claude-opus-5-5", {"type": "text", "text": "hi"})
+    events = _feed(said, _result(modelUsage={"claude-opus-5-5": {}}))
+    assert [e["type"] for e in events] == ["init", "served_model", "turn", "result"]
+
+
 def test_a_result_record_it_cant_read_is_a_log_error_and_no_result() -> None:
     mapper = Mapper("1.0", LIMIT)
     events = _feed(INIT, {"type": "result", "subtype": "success"}, mapper=mapper)

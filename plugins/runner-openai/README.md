@@ -79,7 +79,7 @@ Each request is `POST <endpoint>/responses`, streamed, with:
 | a response's reasoning | none; the transcript keeps it |
 | each `function_call` output item | `tool_call` and `tool_result`, from the SDK |
 | a request made again (see [Retries](#retries)) | `retry` |
-| a model other than the one asked for | a `log` at `info`, once |
+| a response's `model`, when it isn't the runtime's | `served_model`, the first time that model answers, before the response's other events; a name that isn't a model's shape is a `log` warning instead |
 | a response with no usage | a `log` warning, once; the result then has no usage |
 | a completed response with no function call | `result` `ok`, with its text |
 | anything in [How a run ends](#how-a-run-ends) | `result` `error`, saying why |

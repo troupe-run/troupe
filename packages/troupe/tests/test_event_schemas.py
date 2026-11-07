@@ -219,6 +219,18 @@ def test_an_event_troupe_recorded_must_carry_valid_lineage() -> None:
     assert not is_valid(bad, "event-record.schema.json#/$defs/troupeEvent")
 
 
+def test_a_recorded_served_model_is_a_run_reported_payload() -> None:
+    served = copy.deepcopy(EVENT)
+    served["state"]["seq"] = 1
+    served["state"]["event"] = {
+        "runId": EVENT["stream"],
+        "seq": 1,
+        "type": "served_model",
+        "model": "gpt-6-luna-2026-03-05",
+    }
+    assert is_valid(served, "event-record.schema.json#/$defs/troupeEvent")
+
+
 def test_a_library_event_without_lineage_is_still_a_record() -> None:
     raw = without(EVENT, "state") | {"topic": "tests:Thing.Created", "state_b64": "c3RhdGUx"}
     assert is_valid(raw, "event-record.schema.json")

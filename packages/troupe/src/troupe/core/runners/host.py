@@ -174,6 +174,8 @@ class _Run:
         self.responses: dict[int, asyncio.Future[p.Incoming]] = {}
         self.next_seq = 0
         self.tool_calls: set[str] = set()
+        self.asked_model: str | None = None
+        self.served_models: set[str] = set()
         self.result: p.ResultEvent | None = None
         self.runner_name: str | None = None
         """The runner's name, from its init event, for notices about it."""
@@ -254,6 +256,20 @@ class _Run:
                 self.line_number,
             )
 
+    def _served(self, model: str) -> None:
+        """A served_model names neither init's model nor one already reported (spec:
+        actor-runners, "Protocol violations end the run"; served-model design D2)."""
+        if model == self.asked_model:
+            raise _violation(
+                f"a served_model named {model!r}, the model its init named", self.line_number
+            )
+        if model in self.served_models:
+            raise _violation(
+                f"a served_model named {model!r}, which an earlier served_model did",
+                self.line_number,
+            )
+        self.served_models.add(model)
+
     async def event(self, params: object, line: bytes) -> None:
         try:
             event = p.parse_event(params)
@@ -271,6 +287,10 @@ class _Run:
             )
         if self.next_seq == 0 and not isinstance(event, p.InitEvent):
             raise _violation(f"its first event was {event.TYPE!r}, not 'init'", self.line_number)
+        if isinstance(event, p.InitEvent) and event.engine is not None:
+            self.asked_model = event.engine.model
+        if isinstance(event, p.ServedModelEvent):
+            self._served(event.model)
         if isinstance(event, p.ToolCallEvent):
             self.tool_calls.add(event.call_id)
         if isinstance(event, p.ToolResultEvent) and event.call_id not in self.tool_calls:

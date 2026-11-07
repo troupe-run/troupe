@@ -95,6 +95,21 @@ reply_to_model(call_id, step.output)
 path or effect, and a call that fails are each an error result the model can read and act on. None of them ends the
 run. The two events are numbered from the same counter as the runner's other events, and fitted to `eventMaxBytes`.
 
+## The model that answered
+
+```python
+from troupe_plugin_sdk.events import ServedModels
+
+served = ServedModels(asked_model)  # the model init named, or None
+for body in served.note(reply_model):  # the model the service says answered
+    send({"runId": run_id, "seq": numbering.take(), **body})
+```
+
+`note` returns nothing for an empty name, the model init named, or a model already noted, and a `served_model` body
+the first time another model answers. Send it before the events that report that answer. A name that isn't a
+model's shape (1 to 256 characters, no control character) is a `log` warning instead, since a cut name would record
+a model that doesn't exist.
+
 ## Limits
 
 Each limit has its default in `troupe_plugin_sdk.defaults`. A runner may lower any of them with `ToolLimits`, never

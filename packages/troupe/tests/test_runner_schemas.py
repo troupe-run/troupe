@@ -216,6 +216,7 @@ EVENTS: dict[str, dict[str, Any]] = {
     "tool_result": {"callId": "c1", "isError": False, "outputSummary": "ok", "outputBytes": 2},
     "retry": {"attempt": 1, "maxAttempts": 10, "delayMs": 500, "reason": "authentication"},
     "log": {"level": "info", "message": "starting"},
+    "served_model": {"model": "gpt-6-luna-2026-03-05"},
     "result": {
         "status": "error",
         "reason": "authentication",
@@ -363,6 +364,37 @@ def test_no_runner_can_extend_the_failure_reasons() -> None:
     assert list(_dynamic_refs(defs["result"])) == []
 
 
+# Requirement: A served model's name has a model's shape
+
+
+@pytest.mark.parametrize("model", ["", "m" * 257, "bad\nname", "tab\there", "del\x7f"])
+def test_a_served_model_outside_a_models_shape_does_not_validate(model: str) -> None:
+    event = {"runId": RUN_ID, "seq": 3, "type": "served_model", "model": model}
+    assert not is_valid(event, "run-event.schema.json#/$defs/event")
+
+
+def test_a_served_model_of_256_characters_validates() -> None:
+    event = {"runId": RUN_ID, "seq": 3, "type": "served_model", "model": "m" * 256}
+    validate(event, "run-event.schema.json#/$defs/event")
+
+
+def test_a_served_model_without_its_model_does_not_validate() -> None:
+    event = {"runId": RUN_ID, "seq": 3, "type": "served_model"}
+    assert not is_valid(event, "run-event.schema.json#/$defs/event")
+
+
+def test_an_oversized_served_model_is_a_host_event() -> None:
+    event = {
+        "runId": RUN_ID,
+        "seq": 4,
+        "type": "oversized",
+        "originalType": "served_model",
+        "bytes": 70000,
+        "ref": HASH,
+    }
+    validate(event, "run-event.schema.json#/$defs/hostEvent")
+
+
 def test_a_usage_counter_the_contract_doesnt_name_is_refused() -> None:
     event = {"runId": RUN_ID, "seq": 3, "type": "result", **EVENTS["result"]}
     event["usage"] = {"reasoningTokens": 2}
@@ -384,6 +416,9 @@ def test_usage_says_input_counters_add_up_and_an_absent_cache_counter_wasnt_repo
         assert "Absent: the runner couldn't report them" in counters[name]["description"], name
 
 
+_CONTROL = [chr(c) for c in [*range(0x20), 0x7F]]
+
+
 def _strategy(schema: dict[str, Any]) -> st.SearchStrategy[Any]:
     """Values for the small subset of JSON Schema the required event fields use."""
     if "$ref" in schema:
@@ -396,6 +431,12 @@ def _strategy(schema: dict[str, Any]) -> st.SearchStrategy[Any]:
             )
         if ref.endswith("/seq"):
             return st.integers(min_value=1)
+        if ref.endswith("/model"):
+            return st.text(
+                st.characters(blacklist_categories=["Cs"], blacklist_characters=_CONTROL),
+                min_size=1,
+                max_size=256,
+            )
         raise AssertionError(f"no strategy for {ref}")
     if "const" in schema:
         return st.just(schema["const"])
