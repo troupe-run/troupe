@@ -20,6 +20,6 @@
   },
   "credential": "none: Ollama needs none",
   "scrubbing": "the workspace's and scratch directory's paths are <workspace> and <scratch>; /api/show's license, modelfile and template text are left out",
-  "events": "recorded at capture, then reviewed by hand",
+  "events": "recorded at capture, then reviewed by hand; the result's usage was updated by hand on 2026-11-07 for troupe#282, which counts prompt_eval_cached_count as cacheReadTokens and leaves it out of inputTokens",
   "window": 16384
 }

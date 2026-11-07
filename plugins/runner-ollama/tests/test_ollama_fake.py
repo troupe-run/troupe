@@ -93,3 +93,8 @@ def test_preflight_can_be_made_silent() -> None:
             pass
         else:
             raise AssertionError("the silent preflight answered")
+
+
+def test_a_done_line_holds_a_cached_count_only_when_given_one() -> None:
+    assert done(cached=4)["prompt_eval_cached_count"] == 4
+    assert "prompt_eval_cached_count" not in done()

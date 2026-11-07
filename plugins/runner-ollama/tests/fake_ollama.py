@@ -67,9 +67,13 @@ def message(content: str = "", **fields: Any) -> dict[str, Any]:  # noqa: ANN401
 
 
 def done(
-    prompt: int | None = 10, generated: int | None = 5, reason: str = "stop"
+    prompt: int | None = 10,
+    generated: int | None = 5,
+    reason: str = "stop",
+    cached: int | None = None,
 ) -> dict[str, Any]:
-    """An answer's last line, with its counts."""
+    """An answer's last line, with its counts. ``cached`` is the prompt tokens Ollama took from
+    its cache, part of ``prompt``; None leaves ``prompt_eval_cached_count`` out."""
     line: dict[str, Any] = {
         "model": "fake",
         "created_at": "2026-11-04T00:00:01Z",
@@ -80,6 +84,8 @@ def done(
     }
     if prompt is not None:
         line["prompt_eval_count"] = prompt
+    if cached is not None:
+        line["prompt_eval_cached_count"] = cached
     if generated is not None:
         line["eval_count"] = generated
     return line
@@ -90,14 +96,16 @@ def tool_call(name: str, arguments: object, index: int = 0) -> dict[str, Any]:
     return {"function": {"index": index, "name": name, "arguments": arguments}}
 
 
-def final(text: str, prompt: int = 10, generated: int = 5) -> Answer:
+def final(text: str, prompt: int = 10, generated: int = 5, cached: int | None = None) -> Answer:
     """An answer with only text: it ends the run."""
-    return Answer([message(text), done(prompt, generated)])
+    return Answer([message(text), done(prompt, generated, cached=cached)])
 
 
-def calls(*entries: dict[str, Any], prompt: int = 10, generated: int = 5) -> Answer:
+def calls(
+    *entries: dict[str, Any], prompt: int = 10, generated: int = 5, cached: int | None = None
+) -> Answer:
     """An answer holding these tool calls."""
-    return Answer([message("", tool_calls=list(entries)), done(prompt, generated)])
+    return Answer([message("", tool_calls=list(entries)), done(prompt, generated, cached=cached)])
 
 
 @dataclass

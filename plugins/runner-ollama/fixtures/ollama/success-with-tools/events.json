@@ -50,8 +50,9 @@
     "message": "The file `out/hello.txt` has been created with the content: `hello /no_think`.",
     "turns": 2,
     "usage": {
-      "inputTokens": 2498,
-      "outputTokens": 56
+      "inputTokens": 1192,
+      "outputTokens": 56,
+      "cacheReadTokens": 1306
     }
   }
 ]

@@ -35,8 +35,9 @@
     "message": "The answer is 4.",
     "turns": 1,
     "usage": {
-      "inputTokens": 1238,
-      "outputTokens": 107
+      "inputTokens": 1120,
+      "outputTokens": 107,
+      "cacheReadTokens": 118
     }
   }
 ]
