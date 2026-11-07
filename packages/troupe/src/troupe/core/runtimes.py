@@ -284,6 +284,17 @@ def is_loopback(endpoint: str) -> bool:
         return False
 
 
+def _naming(runtime: str, credential: Sourced) -> tuple[str, dict[str, str]]:
+    """How a credential refusal names the credential's variable: its words, and its detail
+    (design D6). A name from the environment is never repeated, since a key can pass for one:
+    the refusal names the TROUPE_RUNTIME_ variable that held it, where the person can read it. A
+    name from config or a built-in is named as it is."""
+    if credential.source == "env":
+        named_by = env_name(runtime, "credential_env")
+        return f"the variable {named_by} names", {"namedBy": named_by}
+    return credential.value, {"variable": credential.value}
+
+
 def for_run(
     name: str,
     actor: str,
@@ -314,33 +325,34 @@ def for_run(
         return RunRuntime(resolved, model, None)
     variable = resolved.credential.value
     value = read_variable(env, variable)
+    where, naming = _naming(name, resolved.credential)
     if not value:
         raise TroupeError(
             "runtime.credential-unset",
-            problem=f"The runtime {name!r} reads its credential from {variable}, which isn't set.",
-            fix=f"Set {variable} in your environment to the key for {name}, or point the runtime "
+            problem=f"The runtime {name!r} reads its credential from {where}, which isn't set.",
+            fix=f"Set {where} in your environment to the key for {name}, or point the runtime "
             f"at another variable with {env_name(name, 'credential_env')}.",
-            details={"runtime": name, "variable": variable},
+            details={"runtime": name, **naming},
         )
     if not well_formed(value):  # before too short: "abc\n" is likelier a file's line ending (D4)
         raise TroupeError(
             "runtime.credential-malformed",
-            problem=f"The credential in {variable}, for the runtime {name!r}, holds whitespace or "
+            problem=f"The credential in {where}, for the runtime {name!r}, holds whitespace or "
             "a control character, such as a line ending left from the file it was read from.",
-            fix=f"Set {variable} to the key alone, with no spaces or line endings.",
-            details={"runtime": name, "variable": variable},
+            fix=f"Set {where} to the key alone, with no spaces or line endings.",
+            details={"runtime": name, **naming},
         )
     if len(value.encode("utf-8")) < defaults.CREDENTIAL_MIN_BYTES:
         raise TroupeError(
             "runtime.credential-too-short",
-            problem=f"The credential in {variable}, for the runtime {name!r}, is shorter than "
+            problem=f"The credential in {where}, for the runtime {name!r}, is shorter than "
             f"{defaults.CREDENTIAL_MIN_BYTES} bytes, too short for troupe to keep out of what "
             "it records.",
-            fix=f"Set {variable} to the real key. A service that needs no key needs no "
+            fix=f"Set {where} to the real key. A service that needs no key needs no "
             f"credential: define a runtime without one.",
             details={
                 "runtime": name,
-                "variable": variable,
+                **naming,
                 "minimumBytes": defaults.CREDENTIAL_MIN_BYTES,
             },
         )
