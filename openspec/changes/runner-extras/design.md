@@ -139,8 +139,9 @@ Rehearsing follows the same path.
 `audition()` calls `installed_runner`, so `troupe init --audition --runner <name>` (rehearsed or not) is refused
 before anything is made, as `runner.unknown` already is. For an installed runner with an extra, `cli/init.py`'s
 `_step_notes` adds one note to the perform step: the runner comes with `troupe-run[<extra>]`, and whoever runs this
-theatre elsewhere installs that (the install page's address). It reads `in_extra` from the table, so there's no
-runner-specific branch.
+theatre elsewhere installs that (the install page's address). Core puts the extra in the perform step's data (an
+optional `extra`, from the table's `in_extra`), and the CLI only phrases it, since the CLI is a thin client and the run
+server will want the same fact. There's no runner-specific branch.
 
 ### D9. The install check installs the base and then `[all]`, in the same leg
 

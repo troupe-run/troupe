@@ -2,6 +2,7 @@
 init-and-audition design D1, D2, D6, D8)."""
 
 import asyncio
+import dataclasses
 import hashlib
 from importlib.metadata import version
 from pathlib import Path
@@ -310,6 +311,23 @@ def test_an_unknown_runner_is_refused_naming_the_known_ones_and_nothing_is_made(
     assert not (repo.path / ".troupe").exists()
 
 
+@pytest.mark.parametrize("rehearse", [False, True], ids=["init", "rehearse"])
+def test_a_runner_that_isnt_installed_is_refused_naming_its_extra_and_nothing_is_made(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch, rehearse: bool
+) -> None:
+    """cli: "A runner that isn't installed" (runner-extras design D8)."""
+    absent = dataclasses.replace(
+        interim.RUNNERS["scripted"], package="troupe_runner_lm_studio", in_extra=True
+    )
+    monkeypatch.setitem(interim.RUNNERS, "lm-studio", absent)
+    asked = {"audition": {"runner": "lm-studio"}} | ({"rehearse": True} if rehearse else {})
+    error = _refused(repo.path, _env(repo), **asked)
+    assert error.code == "runner.not-installed"
+    assert error.details["extra"] == "lm-studio"
+    assert "troupe-run[lm-studio]" in error.fix
+    assert not (repo.path / ".troupe").exists()
+
+
 # Requirement: An audition needs an identity before it makes anything (spec: config)
 
 
@@ -343,6 +361,28 @@ def test_the_steps_are_commit_allow_the_local_stage_then_perform(repo: Repo) -> 
             "direction": auditions.DIRECTION,
         },
     ]
+
+
+def test_the_perform_step_names_the_extra_of_a_runner_in_one(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """client-protocol: "A runner in an extra" (runner-extras design D8)."""
+    entry = dataclasses.replace(interim.RUNNERS["scripted"], in_extra=True)
+    monkeypatch.setitem(interim.RUNNERS, "lm-studio", entry)
+    monkeypatch.setitem(
+        auditions.AUDITIONS,
+        "lm-studio",
+        lambda: {**auditions.AUDITIONS["scripted"](), "runner": "lm-studio"},
+    )
+    result = _init(repo.path, _env(repo), audition={"runner": "lm-studio"})
+    [perform] = [step for step in result["steps"] if step["kind"] == "perform"]
+    assert perform["extra"] == "lm-studio"
+
+
+def test_the_perform_step_of_a_base_runner_has_no_extra(repo: Repo) -> None:
+    result = _init(repo.path, _env(repo), audition={"runner": "scripted"})
+    [perform] = [step for step in result["steps"] if step["kind"] == "perform"]
+    assert "extra" not in perform
 
 
 def test_no_local_stage_step_when_policy_already_allows_it(repo: Repo) -> None:

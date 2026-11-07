@@ -17,7 +17,7 @@ import shutil
 from collections.abc import Mapping
 from typing import Any
 
-from troupe.core import defaults
+from troupe.core import defaults, interim
 from troupe.core.audition import ACTOR, Audition, audition
 from troupe.core.client import messages as m
 from troupe.core.client.dispatch import Method, Send
@@ -56,7 +56,11 @@ def _steps(session: Session, chosen: Audition) -> list[m.InitStep]:
         steps.append(
             m.AllowLocalStageStep(variable=env_name(ALLOW_UNENFORCED_LOCAL_STAGE), value="true")
         )
-    steps.append(m.PerformStep(actor=ACTOR, runner=chosen.runner, direction=chosen.direction))
+    # The extra a runner comes with is its own name (runner-extras design D1, D8).
+    extra = chosen.runner if interim.RUNNERS[chosen.runner].in_extra else None
+    steps.append(
+        m.PerformStep(actor=ACTOR, runner=chosen.runner, direction=chosen.direction, extra=extra)
+    )
     return steps
 
 
