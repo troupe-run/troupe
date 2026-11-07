@@ -21,6 +21,7 @@ from ruamel.yaml import YAML
 from ruamel.yaml.error import YAMLError
 
 from troupe.core import interim, schemas, strict_json
+from troupe.core.config_paths import shown
 from troupe.core.errors import TroupeError
 
 ACTOR_SCHEMA = "https://troupe.run/protocol/config/actor.schema.json"
@@ -28,20 +29,12 @@ RUNTIME_SCHEMA = "https://troupe.run/protocol/config/runtime.schema.json"
 RUNNER_OPTIONS = "#runnerOptions"
 
 
-def split_path(dotted: str) -> list[str]:
-    """``actors.tester.runner`` as keys. Refused when a key is empty."""
-    keys = dotted.split(".")
-    if not dotted or any(not key for key in keys):
-        raise _usage(dotted, f"{dotted!r} isn't a path: keys joined by dots, none empty")
-    return keys
-
-
-def _usage(path: str, problem: str, fix: str | None = None) -> TroupeError:
+def _usage(path: Sequence[str], problem: str, fix: str | None = None) -> TroupeError:
     return TroupeError(
         "config.invalid",
         problem=f"{problem}.",
         fix=fix or "Run `troupe config set --help` for how values are written.",
-        details={"path": [k for k in path.split(".") if k] or [path], "rule": problem},
+        details={"path": list(path), "rule": problem},
     )
 
 
@@ -164,7 +157,7 @@ def _kinds_in(schema: str, keys: Sequence[str], runner: str | None) -> set[str]:
 # Reading a value.
 
 
-def _from_file(path: str, typed: str, want_text: bool) -> object:
+def _from_file(path: Sequence[str], typed: str, want_text: bool) -> object:
     try:
         data = Path(typed).read_bytes()
     except OSError as error:
@@ -179,42 +172,42 @@ def _from_file(path: str, typed: str, want_text: bool) -> object:
         raise _usage(path, f"{typed} isn't JSON or YAML: {error}") from error
 
 
-def value_of(dotted: str, text: str, *, runner: str | None, as_json: bool) -> object:
-    """The value ``text`` gives the path ``dotted``, typed by its schema."""
-    path = split_path(dotted)
+def value_of(path: Sequence[str], text: str, *, runner: str | None, as_json: bool) -> object:
+    """The value ``text`` gives ``path``, typed by its schema."""
+    dotted = shown(path)
     kinds = kinds_at(path, runner)
     if text.startswith("@"):
-        return _from_file(dotted, text[1:], want_text=kinds == {"string"} and not as_json)
+        return _from_file(path, text[1:], want_text=kinds == {"string"} and not as_json)
     if as_json:
         try:
             return strict_json.loads(text)
         except strict_json.StrictJSONError as error:
-            raise _usage(dotted, f"{text!r} isn't JSON ({error})") from error
+            raise _usage(path, f"{text!r} isn't JSON ({error})") from error
     if kinds == {"string"}:
         return text
     if kinds == {"boolean"}:
         if text not in ("true", "false"):
-            raise _usage(dotted, f"{dotted} is true or false, not {text!r}", "Write true or false.")
+            raise _usage(path, f"{dotted} is true or false, not {text!r}", "Write true or false.")
         return text == "true"
     if kinds <= {"integer", "number"} and kinds:
         try:
             return int(text) if kinds == {"integer"} else float(text)
         except ValueError as error:
-            raise _usage(dotted, f"{dotted} is a number, not {text!r}") from error
+            raise _usage(path, f"{dotted} is a number, not {text!r}") from error
     if kinds in ({"array"}, {"object"}):
         try:
             value = strict_json.loads(text)
         except strict_json.StrictJSONError as error:
             raise _usage(
-                dotted,
+                path,
                 f"{dotted} is a JSON {'list' if 'array' in kinds else 'group'}"
                 f", and {text!r} isn't JSON ({error})",
             ) from error
         if _json_type(value) not in kinds:
-            raise _usage(dotted, f"{dotted} is a {'list' if 'array' in kinds else 'group'}")
+            raise _usage(path, f"{dotted} is a {'list' if 'array' in kinds else 'group'}")
         return value
     raise _usage(
-        dotted,
+        path,
         f"the schema doesn't give {dotted} one type, so troupe can't tell how to read {text!r}",
         "Give the value as JSON, with --json.",
     )

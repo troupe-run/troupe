@@ -20,6 +20,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from troupe.core import strict_json
+from troupe.core.config_paths import shown
 from troupe.core.errors import TroupeError
 
 Tree = dict[str, Any]
@@ -30,11 +31,6 @@ Entry = dict[str, Any]
 def value_hash(value: object) -> str:
     """``sha256:`` and the SHA-256 of ``value``'s canonical JSON, the form event ids hash."""
     return "sha256:" + hashlib.sha256(strict_json.dumps(value).encode("utf-8")).hexdigest()
-
-
-def dotted(path: Sequence[str]) -> str:
-    """A path as people read it: ``actors.tester.runner``."""
-    return ".".join(path)
 
 
 def get(tree: Mapping[str, Any], path: Sequence[str]) -> object:
@@ -162,8 +158,8 @@ def _refuse_null(path: Path, value: object) -> None:
         if node is None or _holds_null(node):
             raise TroupeError(
                 "config.invalid",
-                problem=f"{dotted(leaf)} is null: config has no null values.",
-                fix=f"To remove {dotted(leaf)}, unset it (troupe config unset {dotted(leaf)}).",
+                problem=f"{shown(leaf)} is null: config has no null values.",
+                fix=f"To remove {shown(leaf)}, unset it (troupe config unset {shown(leaf)}).",
                 details={"path": list(leaf), "rule": "config has no null values"},
             )
 

@@ -23,7 +23,7 @@ from typing import Any
 import jsonschema
 
 from troupe.core import defaults, interim, schemas
-from troupe.core.config.changes import dotted
+from troupe.core.config_paths import shown
 from troupe.core.errors import TroupeError
 from troupe_plugin_sdk.effects import Effects, PatternError, pattern_regex
 
@@ -113,7 +113,7 @@ def runtime_problems(name: str, runtime: object) -> list[Problem]:
                 base,
                 f"{name!r} isn't a runtime name: lowercase letters, digits and -, starting "
                 "with a letter, at most 64",
-                f"Unset {dotted(base)}, and use a name that fits.",
+                f"Unset {shown(base)}, and use a name that fits.",
             )
         ]
     if not isinstance(runtime, Mapping):
@@ -132,7 +132,7 @@ def runtime_problems(name: str, runtime: object) -> list[Problem]:
                 (*base, "endpoint"),
                 "it's required for a runtime that isn't one of troupe's built-in ones "
                 f"({', '.join(sorted(defaults.RUNTIMES))})",
-                f"Set {dotted((*base, 'endpoint'))}=<url>.",
+                f"Set {shown((*base, 'endpoint'))}=<url>.",
             )
         )
     return sorted(found, key=lambda problem: problem.path)
@@ -150,7 +150,7 @@ def actor_problems(
                 base,
                 f"{name!r} isn't an actor name: lowercase letters, digits and -, starting "
                 "with a letter, at most 64",
-                f"Unset {dotted(base)}, and use a name that fits.",
+                f"Unset {shown(base)}, and use a name that fits.",
             )
         ]
     if not isinstance(actor, Mapping):
@@ -284,7 +284,7 @@ def _runtime_problems(
                 Problem(
                     at,
                     f"the {runner} runner needs a runtime (there are: {', '.join(known)})",
-                    f"Set {dotted(at)} to one of: {', '.join(known)}.",
+                    f"Set {shown(at)} to one of: {', '.join(known)}.",
                 )
             ]
         if "model" in actor:
@@ -292,12 +292,12 @@ def _runtime_problems(
                 Problem(
                     at,
                     "a model is a runtime's, and this actor names no runtime",
-                    f"Set {dotted(at)}, or unset {dotted((*base, 'model'))}.",
+                    f"Set {shown(at)}, or unset {shown((*base, 'model'))}.",
                 )
             ]
         return []
     if takes == "none":
-        return [Problem(at, f"the {runner} runner takes no runtime", f"Unset {dotted(at)}.")]
+        return [Problem(at, f"the {runner} runner takes no runtime", f"Unset {shown(at)}.")]
     if runtime not in known:
         return [
             Problem(
@@ -330,7 +330,7 @@ def _schema_problems(
                     Problem(
                         (*path, extra),
                         f"there's no such field: {against} doesn't define it",
-                        f"Unset {dotted((*path, extra))}.",
+                        f"Unset {shown((*path, extra))}.",
                     )
                 )
             continue
@@ -341,7 +341,7 @@ def _schema_problems(
                     Problem(
                         (*path, missing),
                         f"it's required{hint}",
-                        f"Set {dotted((*path, missing))}{hint}.",
+                        f"Set {shown((*path, missing))}{hint}.",
                     )
                 )
             continue
@@ -350,7 +350,7 @@ def _schema_problems(
             found.append(pattern)
             continue
         found.append(
-            Problem(path, _rule(error, against), f"Set {dotted(path)} to a value {against} allows.")
+            Problem(path, _rule(error, against), f"Set {shown(path)} to a value {against} allows.")
         )
     return found
 
@@ -367,7 +367,7 @@ def _effect_pattern_problem(
         return None
     if len(path) < 5 or path[2] != EFFECTS:
         return None
-    where = dotted(path[:4])
+    where = shown(path[:4])
     try:
         pattern_regex(error.instance, where)
     except PatternError as refused:
@@ -400,7 +400,7 @@ def _expect_problems(base: tuple[str, ...], actor: Mapping[str, Any]) -> list[Pr
                 (*base, "expect", str(index)),
                 f"{path!r} is expected, but no write or move effect covers it, so the run "
                 "couldn't make it",
-                f"Declare it: troupe config set {dotted(target)}='{fix}'",
+                f"Declare it: troupe config set {shown(target)}='{fix}'",
             )
         )
     return found
@@ -459,7 +459,7 @@ def _refuse(found: list[Problem]) -> None:
         more = f" ({len(found) - 1} more)" if len(found) > 1 else ""
         raise TroupeError(
             "config.invalid",
-            problem=f"{dotted(first.path)}: {first.rule}{more}.",
+            problem=f"{shown(first.path)}: {first.rule}{more}.",
             fix=first.fix,
             details={"path": list(first.path), "rule": first.rule},
         )
