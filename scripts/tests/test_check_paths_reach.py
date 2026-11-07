@@ -137,6 +137,20 @@ def test_a_declared_dependency_counts_transitively(tree: Tree) -> None:
     assert tree.reach(SUITE) == {"alpha", "beta", "gamma"}
 
 
+def test_an_optional_dependency_counts_transitively(tree: Tree) -> None:
+    """A runner in one of the bundle's extras is installed with it, so a suite that reaches the
+    bundle reaches the runner (runner-extras design D3)."""
+    tree.package("alpha")
+    tree.write(
+        "packages/alpha/pyproject.toml",
+        '[project]\nname = "alpha"\ndependencies = ["troupe"]\n'
+        '[project.optional-dependencies]\nbeta = ["beta"]\nall = ["beta"]\n',
+    )
+    tree.package("beta", under="plugins")
+    tree.test(SUITE, "test_extras", "import alpha\n")
+    assert tree.reach(SUITE) == {"alpha", "beta"}
+
+
 def test_a_helpers_import_counts_for_the_suite_that_imports_the_helper(tree: Tree) -> None:
     tree.package("alpha")
     tree.write("packages/troupe/tests/helper.py", "import alpha\n")
