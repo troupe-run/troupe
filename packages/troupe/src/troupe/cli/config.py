@@ -64,7 +64,7 @@ def _configure_set(parser: argparse.ArgumentParser) -> None:
         nargs="+",
         metavar="path=value",
         help="a value to set, such as actors.tester.runner=scripted; path=@file reads it "
-        "from a file",
+        "from a file. A key that holds a dot goes in brackets: prices[gpt-4.1]",
     )
     parser.add_argument("--reason", help="why, recorded with the change")
     parser.add_argument(
@@ -159,7 +159,8 @@ def _configure_unset(parser: argparse.ArgumentParser) -> None:
         "paths",
         nargs="+",
         metavar="path",
-        help="a value or a group to remove, such as actors.tester",
+        help="a value or a group to remove, such as actors.tester. A key that holds a dot goes "
+        "in brackets: prices[gpt-4.1]",
     )
     parser.add_argument("--reason", help="why, recorded with the change")
     parser.add_argument(
@@ -189,7 +190,11 @@ def _run_unset(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) ->
 
 def _configure_get(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
-        "path", nargs="?", metavar="path", help="a value or group, such as actors.tester"
+        "path",
+        nargs="?",
+        metavar="path",
+        help="a value or group, such as actors.tester. A key that holds a dot goes in brackets: "
+        "prices[gpt-4.1]",
     )
     parser.add_argument("--json", action="store_true", help="print the result as JSON")
     parser.add_argument(

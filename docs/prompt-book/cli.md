@@ -53,6 +53,21 @@ where `[]` means no check), its character and its workspace. `--direction` says 
 boolean is parsed strictly (`true`, never `yes`), and a list or a group is JSON. `<path>=@<file>` reads a value
 from a file: a string field gets the file's text exactly, anything else the file's JSON or YAML.
 
+**A config path is keys joined by dots, and any key can be written in square brackets.** Nothing inside brackets
+splits, so a key that holds a dot, such as a model's name, goes in them: `runtimes.openai.prices[gpt-4.1].input`.
+Inside brackets, `\]` is a `]` and `\\` is a `\`. A key that holds `=` goes in brackets too, since `config set`
+reads the path up to the first `=` outside them. Every config command reads paths this way, and troupe shows them
+this way, so a path in its output or in an error can be typed back as it is. Brackets were chosen over quotes or
+backslashes because no shell drops them without saying so. In zsh an unquoted `[` starts a pattern and stops the
+command with "no matches found", so quote the argument there:
+
+```text
+troupe config unset 'runtimes.openai.prices[gpt-4.1]'
+```
+
+A backslash outside brackets (`gpt-4\.1`) is refused rather than read, as is an unclosed `[` or an empty key, with
+`config.path-malformed` naming the text and where it went wrong.
+
 **`--rehearse`** on any command that changes anything runs its checks, shows what it would do, and changes nothing.
 It exits 3 when it would change something, 0 when there's nothing to do, and with the refusal's own code when the
 command would be refused.
@@ -184,7 +199,7 @@ troupe config set <path=value> [--reason <reason>] [--json] [--rehearse]
 
 | Argument | Required | What it is |
 |---|---|---|
-| `<path=value>` | Yes | A value to set, such as actors.tester.runner=scripted; path=@file reads it from a file |
+| `<path=value>` | Yes | A value to set, such as actors.tester.runner=scripted; path=@file reads it from a file. A key that holds a dot goes in brackets: prices[gpt-4.1] |
 | `--reason <reason>` | No | Why, recorded with the change |
 | `--json` | No | Read every value as JSON, whatever its schema says |
 | `--rehearse` | No | Change nothing: show what would be recorded and written |
@@ -199,7 +214,7 @@ troupe config unset <path> [--reason <reason>] [--rehearse]
 
 | Argument | Required | What it is |
 |---|---|---|
-| `<path>` | Yes | A value or a group to remove, such as actors.tester |
+| `<path>` | Yes | A value or a group to remove, such as actors.tester. A key that holds a dot goes in brackets: prices[gpt-4.1] |
 | `--reason <reason>` | No | Why, recorded with the change |
 | `--rehearse` | No | Change nothing: show what would be recorded and written |
 
@@ -213,7 +228,7 @@ troupe config get [<path>] [--json] [--resolved]
 
 | Argument | Required | What it is |
 |---|---|---|
-| `<path>` | No | A value or group, such as actors.tester |
+| `<path>` | No | A value or group, such as actors.tester. A key that holds a dot goes in brackets: prices[gpt-4.1] |
 | `--json` | No | Print the result as JSON |
 | `--resolved` | No | Show runtimes as troupe resolves them, from its built-in ones, config and your environment, each value with where it came from |
 
