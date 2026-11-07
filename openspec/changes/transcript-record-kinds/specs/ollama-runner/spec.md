@@ -4,8 +4,9 @@
 
 ### Requirement: Every exchange with Ollama is a transcript record
 The runner SHALL send as transcript records, before any event they lead to: the first request's body, then before each
-later request each message it added to the conversation, each verbatim as sent, kind `sent`; and every line of every
-streamed answer and every error body, verbatim, kind `received`. It SHALL NOT send a request's re-sent history again.
+later request each message it added to the conversation, each verbatim as sent (kind `sent` when it uses kinds); and
+every line of every streamed answer and every error body, verbatim (kind `received`). It SHALL NOT send a request's
+re-sent history again.
 
 #### Scenario: A run with one tool call
 - **WHEN** a run's first answer calls `Read` once and its second answer ends the run

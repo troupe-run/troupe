@@ -31,7 +31,8 @@ run's credential (spec: runs).
 ### Requirement: A transcript record can say what kind it is
 `run/transcript` SHALL accept an optional `kind`: `sent` for what the runner sent its engine, verbatim; `received`
 for what the engine sent back, verbatim; `note` for the runner's own record about the exchange. A record without a
-kind is the engine's native output. Any other kind SHALL NOT validate against the contract's schema.
+kind is unlabelled: the engine's native output, or a runner's own record when it wasn't offered `transcript-kinds`.
+Any other kind SHALL NOT validate against the contract's schema.
 
 #### Scenario: A request body
 - **WHEN** a runner that drives an API sends the body of a request it made as a transcript record

@@ -1872,7 +1872,19 @@
             "transcript": {
               "description": "The transcript's artifact reference, which is kept. Absent: the runner never started, so there is none.",
               "$ref": "lineage.schema.json#/$defs/hash"
+            },
+            "transcriptFormat": {
+              "description": "How the transcript's lines are written, since the run's end may not have been recorded to say so. Present exactly when transcript is.",
+              "$ref": "events/run-ended.schema.json#/$defs/transcriptFormat"
             }
+          },
+          "dependentRequired": {
+            "transcript": [
+              "transcriptFormat"
+            ],
+            "transcriptFormat": [
+              "transcript"
+            ]
           }
         }
       },

@@ -22,7 +22,8 @@ end of a short value would match too much that isn't it."""
 
 _TOKEN = re.compile(r"[^\s\"'<>(),;\\]+")
 """A run of characters an echoed key can be part of. Never a backslash, so an echo inside JSON text
-(a transcript record holds a body as JSON) is masked without breaking the escape after it."""
+(a request or error body, or a stream line, is often JSON) is masked without breaking the escape
+after it."""
 
 _TRAILING = ".:"
 """Punctuation that ends a sentence after an echoed key, which isn't part of it."""
