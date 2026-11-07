@@ -68,8 +68,10 @@
   passed, wrote `out/hello.txt`. Two answers: prompt 1240 with 0 cached, then 1390 with 1241 cached. The result had
   `inputTokens` 1389, `cacheReadTokens` 1241 and `outputTokens` 296, and 1389 + 1241 = 1240 + 1390. Read through
   temporary prints in the test, reverted after the run.)
-- [ ] 4.2 Run `uv run scripts/check.py` and `openspec validate ollama-cache-read-tokens --strict`. Verify: both pass,
+- [x] 4.2 Run `uv run scripts/check.py` and `openspec validate ollama-cache-read-tokens --strict`. Verify: both pass,
   and CI passes on Linux, macOS and Windows on the pull request's last code commit.
+  (Done: both pass; CI run 42376532437 passed every job, Linux, macOS and Windows on Python 3.12 to 3.15, on
+  84a8638, whose last code commit is 565dea7.)
 
 ## 5. Follow the merged contract (troupe#293, PR #312; design D5)
 
