@@ -36,19 +36,19 @@
 
 ## 3. core refuses a malformed credential (spec: "A credential holding whitespace or a control character is refused"; design D3, D4)
 
-- [ ] 3.1 Catalogue `runtime.credential-malformed` in `core/errors.py` (exit code `FAILURE`) and in both copies of
+- [x] 3.1 Catalogue `runtime.credential-malformed` in `core/errors.py` (exit code `FAILURE`) and in both copies of
   `error.schema.json` (closed details: `runtime` and `variable`, both required; 4.3 adds `namedBy` as the alternative to `variable`). This lands with the code that raises
   it (3.2), in the same commit, so `protocol_guard` never sees an unraised code. Verify: `protocol_guard` passes after
   3.2.
-- [ ] 3.2 In `for_run`, after the unset check and before the too-short one, refuse a value that isn't `well_formed`
+- [x] 3.2 In `for_run`, after the unset check and before the too-short one, refuse a value that isn't `well_formed`
   with `runtime.credential-malformed`, naming the runtime and the variable, never the value. Verify: tests in
   `test_runtimes.py` for a trailing `\r\n`, a space inside, and a short value with a line ending (`"abc\n"`, which gets
   `credential-malformed` and not `credential-too-short`); a well-formed key still starts; and the parametrised
   `test_no_refusal_holds_any_part_of_the_value` gains the malformed case. Each error passes the error schema.
-- [ ] 3.3 Add the malformed key to `test_perform_runtime.py`'s `test_a_refused_runtime_records_nothing`, and check
+- [x] 3.3 Add the malformed key to `test_perform_runtime.py`'s `test_a_refused_runtime_records_nothing`, and check
   that no runner was launched (the scripted runner's script would leave a mark it can be seen to have run). Also check
   that a rehearsal is refused the same way. Verify: the tests pass, and fail when the check in 3.2 is removed.
-- [ ] 3.4 Add `runtime.credential-malformed` to `contributing/config.md`'s error table ("names the runtime and the
+- [x] 3.4 Add `runtime.credential-malformed` to `contributing/config.md`'s error table ("names the runtime and the
   variable, never the value"). In the OpenAI runner's README, say that troupe refuses such a key before the runner is
   started, and that the runner still checks. Verify: `uv run pytest packages/troupe-plugin-sdk/tests/test_readme.py`
   and any README tests for the runner pass, and `uv run scripts/check.py` passes.

@@ -2539,6 +2539,34 @@
     {
       "properties": {
         "code": {
+          "const": "runtime.credential-malformed"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "runtime",
+            "variable"
+          ],
+          "properties": {
+            "runtime": {
+              "type": "string",
+              "minLength": 1
+            },
+            "variable": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
           "const": "runtime.credential-too-short"
         },
         "details": {
