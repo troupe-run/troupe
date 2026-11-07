@@ -135,7 +135,7 @@ repeats.
 | `tool_result` | `callId`, `isError`, `outputSummary`, `outputBytes` | `callId` matches an earlier `tool_call`. The full output belongs in the transcript. |
 | `retry` | `attempt`, `maxAttempts` (optional), `delayMs`, `reason`, `message` (optional) | `reason` is `authentication`, `rate-limit`, `network`, `server` or `other`. Send one each time the engine retries, or the runner retries a request to its engine itself. |
 | `log` | `level` (`debug`, `info`, `warning`, `error`), `message` | A diagnostic worth keeping with the run. |
-| `result` | `status` (`ok` or `error`), `message`, `turns`, `durationMs`, `usage {inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens}`, `costUsd` (all but the first two optional, and each `usage` counter too) | Exactly one, last, for a run that ends on its own. |
+| `result` | `status` (`ok` or `error`), `message`, `turns`, `durationMs`, `usage {inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens}`, `costUsd` (all but the first two optional, and each `usage` counter too) | Exactly one, last, for a run that ends on its own. See [What usage counts](#what-usage-counts). |
 | `oversized` | `originalType`, `bytes`, `ref` | Written by troupe, never by a runner (see [Oversized events](#oversized-events)). |
 
 - **`result.status` is `error` whenever the engine reported an error,** whatever else it reported alongside it.
@@ -145,6 +145,23 @@ repeats.
   every native record, or in the runner's own `options`. A run event carries no field the contract doesn't
   define. A runner with no model leaves out `engine`.
 - **Events are summaries.** Full tool inputs and outputs go in the transcript.
+
+### What usage counts
+
+`inputTokens`, `cacheReadTokens` and `cacheWriteTokens` add up to the run's whole input. `inputTokens` is the input
+not counted in either cache counter, whatever the engine calls its own input count:
+
+- **An engine whose input count leaves the cache out**, as Anthropic's `input_tokens` does: report it as
+  `inputTokens` unchanged. 6 input tokens beside 42158 read from the cache and 5737 written to it is `inputTokens` 6,
+  `cacheReadTokens` 42158 and `cacheWriteTokens` 5737.
+- **An engine whose input count includes the cache**, as OpenAI's `input_tokens` does: subtract the cache's reads and
+  writes. 300 input tokens, 100 read from the cache and 50 written to it, is `inputTokens` 150, `cacheReadTokens` 100
+  and `cacheWriteTokens` 50.
+
+Leave a cache counter out when you can't report it, and never estimate one: an absent counter means it wasn't
+reported, not that it was 0. Input your engine counted that you can't separate into a cache counter stays in
+`inputTokens`. When a run sums several requests, report a cache counter only if every request reported it; for
+example, if only some report cache writes, subtract none and leave `cacheWriteTokens` out.
 
 ### Oversized events
 
