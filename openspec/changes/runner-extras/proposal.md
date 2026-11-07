@@ -72,6 +72,8 @@ None.
   check doesn't refuse for another actor's uninstalled runner.
 - `cli`: `troupe init --audition --runner <name>` refuses an uninstalled runner, naming its extra, and an audition on
   a library-backed runner names its extra in its next steps.
+- `client-protocol`: init's perform step names the `troupe-run` extra its runner comes with, when it has one, so
+  each surface can say so.
 - `protocol`: the missing-plugin refusal no longer says an install brings every runner, and `runner.not-installed`
   is catalogued.
 

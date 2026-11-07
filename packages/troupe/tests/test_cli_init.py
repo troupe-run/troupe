@@ -1,5 +1,6 @@
 """troupe init on the command line (spec: cli; init-and-audition design D4, D8, D9)."""
 
+import dataclasses
 import io
 import json
 import shlex
@@ -15,9 +16,11 @@ from runtesting import ADA
 from troupe.cli import init as init_cli
 from troupe.cli import main
 from troupe.core import audition as auditions
+from troupe.core import interim
 from troupe.core.audition import OLLAMA_AUDITION_MODEL as OLLAMA_MODEL
 from troupe.core.exit_codes import ExitCode
 from troupe.core.policy import ALLOW_UNENFORCED_LOCAL_STAGE, env_name
+from troupe.core.schemas import INSTALL_PAGE
 
 ALLOW_VARIABLE = env_name(ALLOW_UNENFORCED_LOCAL_STAGE)
 
@@ -412,3 +415,31 @@ def test_the_printed_steps_of_an_ollama_audition_give_a_successful_run_with_a_st
         assert server.chats()[0]["model"] == OLLAMA_MODEL
     finally:
         server.stop()
+
+
+# Requirement: An audition on a runner in an extra names the extra (spec: cli; runner-extras D8)
+
+
+def test_an_audition_on_a_runner_in_an_extra_names_the_extra_in_the_perform_step(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # lm-studio as #291 will add it: installed, in an extra. Its audition is the scripted one's.
+    entry = dataclasses.replace(interim.RUNNERS["scripted"], in_extra=True)
+    monkeypatch.setitem(interim.RUNNERS, "lm-studio", entry)
+    monkeypatch.setitem(
+        auditions.AUDITIONS,
+        "lm-studio",
+        lambda: {**auditions.AUDITIONS["scripted"](), "runner": "lm-studio"},
+    )
+    code, out, err = cli("init", "--audition", "--runner", "lm-studio")
+    assert code == 0, err
+    lines = _next(out)
+    perform = next(n for n, line in enumerate(lines) if "troupe perform lead" in line)
+    notes = lines[perform + 1 :]
+    assert any("troupe-run[lm-studio]" in line and INSTALL_PAGE in line for line in notes), notes
+
+
+def test_an_audition_on_a_base_runner_mentions_no_extra(repo: Repo) -> None:
+    code, out, err = cli("init", "--audition", "--runner", "scripted")
+    assert code == 0, err
+    assert "troupe-run[" not in out
