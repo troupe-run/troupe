@@ -42,7 +42,7 @@
   `test_usage_is_summed_with_cached_input_counted_apart` and `test_tokens_written_to_the_cache_are_counted_apart_too`
   pass and match the runner-protocol scenario "An engine whose input count includes the cache", cited with #304 in
   the commit message, and nothing this change writes calls the runner's handling of unreported reads conforming.
-- [ ] 2.5 Commit 2.1 to 2.4 as `docs(runners): ...`. Verify: `uv run scripts/check.py` passes before the commit.
+- [x] 2.5 Commit 2.1 to 2.4 as `docs(runners): ...`. Verify: `uv run scripts/check.py` passes before the commit.
 
 ## 3. Whole change
 
