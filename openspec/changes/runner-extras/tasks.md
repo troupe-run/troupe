@@ -119,7 +119,7 @@
   one, and lists the steps for adding an extra (D12), naming the check behind each. Link to it from the plugin
   section of the README, if there is one. Verify: each anchor resolves on the pushed branch (GitHub's rendered file
   view, grepping `user-content-<slug>`), and every check it names exists.
-- [ ] 8.2 Commit as `docs(runners): ...`. Verify: `uv run scripts/check.py` passes before the commit.
+- [x] 8.2 Commit as `docs(runners): ...`. Verify: `uv run scripts/check.py` passes before the commit.
 
 ## 9. Integration
 
