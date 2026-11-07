@@ -192,7 +192,9 @@ def _step(data: Any, where: str) -> Step:  # noqa: ANN401
                 raise _invalid("encoding must be 'utf-8' or 'base64'", f"{here}.encoding")
             if "kind" in value and value["kind"] not in p.TRANSCRIPT_KINDS:
                 kinds = ", ".join(repr(kind) for kind in p.TRANSCRIPT_KINDS)
-                raise _invalid(f"kind must be one of {kinds}", f"{here}.kind")
+                raise _invalid(
+                    f"kind must be one of {kinds}, not {value['kind']!r}", f"{here}.kind"
+                )
         else:
             _str(value, here)
     elif kind in ("stderr", "rawStdout", "replay"):

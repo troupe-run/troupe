@@ -44,8 +44,9 @@ A run goes like this:
    compatibility promise until troupe commits to version 1) and the capability names
    it supports. The runner answers with one of the offered versions, its name and version, and the capabilities
    it will use, each one from the offer. The contract defines one capability, `transcript-kinds` (see
-   [Record kinds](#record-kinds)), and troupe offers it. A capability the contract doesn't define, or one troupe
-   didn't offer, is a protocol violation. If the runner supports none of the offered
+   [Record kinds](#record-kinds)), and troupe offers it. In the runner's answer, a capability the contract doesn't
+   define, or one troupe didn't offer, is a protocol violation. Capability names are a closed list in the schemas,
+   so a new capability is a change to the contract, released as a protocol release, like any other. If the runner supports none of the offered
    versions, it answers with an error whose `details` name the versions it does support, and troupe starts no
    run.
 2. troupe sends one `run/start`, with a new run id (a UUID, in canonical lowercase form). The runner answers
@@ -194,8 +195,9 @@ A runner should still summarise below `limits.eventMaxBytes`, because events are
 
 ### The transcript
 
-`run/transcript` carries the run's transcript, one record at a time, in order. Without a kind, each record is the
-engine's native output, unchanged. A runner that
+`run/transcript` carries the run's transcript, one record at a time, in order. Without a kind, a record is the
+engine's native output, unchanged, or, from a runner that wasn't offered `transcript-kinds`, one of the records it
+would otherwise have labelled. A runner that
 holds the conversation itself (one that runs the tool loop, as the Ollama runner does) also sends each message it
 adds to the conversation, verbatim as it sent it, before the engine's output that follows it, and sends re-sent
 history only once: otherwise the tool outputs it sends back, which the contract says belong in the transcript, would

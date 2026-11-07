@@ -250,7 +250,8 @@ def test_an_end_that_contradicts_its_ending_does_not_validate(
         "outcome": outcome,
     }
     assert not validator.is_valid(state), label
-    outcome.pop("transcript"), outcome.pop("transcriptFormat")
+    outcome.pop("transcript")
+    outcome.pop("transcriptFormat")
     if change["drop"]:
         outcome[change["drop"]] = 0
         outcome["transcript"] = "sha256:" + "a" * 64
@@ -384,6 +385,13 @@ def test_an_end_with_a_format_the_schema_doesnt_define_does_not_validate() -> No
     assert not validator_for(ended["$id"], SCRIPTED).is_valid(
         _ended({"transcriptFormat": "framed"})
     )
+
+
+def test_an_exited_end_with_a_format_and_no_transcript_does_not_validate() -> None:
+    ended = load(SCHEMAS / "events" / "run-ended.schema.json")
+    state = _ended({})
+    del state["outcome"]["transcript"]
+    assert not validator_for(ended["$id"], SCRIPTED).is_valid(state)
 
 
 def test_a_never_started_end_with_a_format_and_no_transcript_does_not_validate() -> None:

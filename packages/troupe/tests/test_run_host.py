@@ -1015,12 +1015,13 @@ def test_troupe_offers_transcript_kinds_and_a_runner_that_accepts_it_uses_kinds(
     assert ran.outcome.transcript_format is TranscriptFormat.KINDS
 
 
-def test_a_runner_that_doesnt_accept_transcript_kinds_has_a_native_transcript(
+def test_a_runner_that_doesnt_accept_transcript_kinds_has_its_records_stored_unframed(
     tmp_path: Path,
 ) -> None:
-    ran = _run(tmp_path, {"steps": [{"event": INIT}, {"event": OK}]})
+    ran = _run(tmp_path, {"steps": [{"event": INIT}, {"transcript": '{"a":1}'}, {"event": OK}]})
     assert ran.received[0]["result"]["capabilities"] == []
     assert ran.outcome.transcript_format is TranscriptFormat.NATIVE
+    assert ran.transcript() == b'{"a":1}\n'
 
 
 # Requirement: Kinds are all or nothing in a run (spec: runner-protocol)
@@ -1098,13 +1099,29 @@ def test_framing_that_passes_the_transcript_limit_stops_the_run(tmp_path: Path) 
     # 700 framed: the framing alone passes the limit.
     record = {"record": "x" * 40, "kind": "received"}
     steps = [{"event": INIT}] + [{"transcript": record}] * 10 + [{"hang": True}]
-    limits = RunLimits(transcript_max_bytes=500, cancel_grace=2.0)
-    native = _run(
-        tmp_path, {"steps": [{"event": INIT}] + [{"transcript": "x" * 40}] * 10 + [{"event": OK}]}
-    )
+    # A short run timeout, so counting the wrong bytes fails quickly rather than at the default.
+    limits = RunLimits(transcript_max_bytes=500, run_timeout=20.0, cancel_grace=2.0)
+    native_steps = [{"event": INIT}] + [{"transcript": "x" * 40}] * 10 + [{"event": OK}]
+    native = _run(tmp_path, {"steps": native_steps}, limits=limits)
+    assert native.outcome.outcome is Outcome.SUCCEEDED
     assert len(native.transcript()) < 500
     ran = _run(tmp_path, {"steps": steps}, argv=KINDS, limits=limits)
     assert (ran.outcome.outcome, _code(ran)) == (Outcome.FAILED, "run.transcript-too-large")
+
+
+def test_a_record_that_framing_would_turn_into_the_credential_is_stored_as_base64(
+    tmp_path: Path,
+) -> None:
+    # JSON writes a newline as \n, so a newline before the rest of a credential that starts with
+    # n would put the whole credential in the stored line.
+    # The runner writes the newline as \u000a, so its line never holds the credential.
+    canary = "nsecret-token-0123456789"
+    ran = _run(tmp_path, argv=_fake("escaped-newline-credential"), credential=canary)
+    assert ran.outcome.outcome is Outcome.SUCCEEDED, ran.outcome.error
+    assert canary.encode() not in ran.transcript()
+    line = json.loads(ran.transcript())
+    assert (line["kind"], line["encoding"]) == ("received", "base64")
+    assert base64.b64decode(line["record"]) == ("\n" + canary[1:]).encode()
 
 
 @settings(max_examples=200, deadline=None)

@@ -30,6 +30,20 @@ the run's workspace was a worktree that was made.
 - **WHEN** a run whose workspace is `theatre` ends
 - **THEN** its end has no `changes`
 
+### Requirement: A recording failure leaves out what it can't name
+`run.recording-failed` SHALL leave out `failedAt` when only the run's end failed to record, `endError` when the end
+was recorded, and `transcript` and `transcriptFormat` when the runner never started. It SHALL carry
+`transcriptFormat` exactly when it carries `transcript`.
+
+#### Scenario: Only the end fails to record
+- **WHEN** every run event is recorded and recording the run's end fails
+- **THEN** `perform` fails with `run.recording-failed`, whose details have `endError` and no `failedAt`
+- **AND** its details carry the transcript's reference and its `transcriptFormat`
+
+#### Scenario: A run event fails to record and the end is recorded
+- **WHEN** recording the run event with `seq` 2 fails and the run's end is recorded
+- **THEN** the details have `failedAt` 2 and no `endError`
+
 ## ADDED Requirements
 
 ### Requirement: A run's end says which form its transcript is

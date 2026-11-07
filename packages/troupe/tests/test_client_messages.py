@@ -636,6 +636,12 @@ def test_a_summary_with_one_of_transcript_and_its_format_is_refused(drop: str) -
         m.RunSummary.from_data(data)
 
 
+def test_a_summary_with_a_transcript_format_the_schema_doesnt_define_is_refused() -> None:
+    data = {**copy.deepcopy(ENDED_SUMMARY), "transcriptFormat": "framed"}
+    with pytest.raises(ProtocolError, match=r"RunSummary\.transcriptFormat"):
+        m.RunSummary.from_data(data)
+
+
 def test_a_running_runs_summary_has_no_outcome_or_end_and_round_trips() -> None:
     data = {
         key: value

@@ -54,6 +54,7 @@ from troupe.core.runners.effects import (
 )
 from troupe.core.runners.host import RunnerCommand, RunRequest, not_started, run_actor
 from troupe.core.runners.limits import RunLimits
+from troupe.core.runners.outcome import RunOutcome
 from troupe.core.runs.aggregate import Run
 from troupe.core.runs.projections import fold_runs
 from troupe.core.runtimes import RunRuntime
@@ -466,10 +467,10 @@ async def perform(
             await recorder.end(data, changes)
         except Exception as error:
             raise _recording_failed(
-                run_id, recorder.failure, outcome.transcript, ended=_as_troupe_error(error)
+                run_id, recorder.failure, outcome, ended=_as_troupe_error(error)
             ) from error
         if recorder.failure is not None:
-            raise _recording_failed(run_id, recorder.failure, outcome.transcript, ended=None)
+            raise _recording_failed(run_id, recorder.failure, outcome, ended=None)
         history = await asyncio.to_thread(store.history, UUID(run_id))
     [view] = fold_runs(history).values()
     return m.PerformResult(run=view.summary("ended"))
@@ -521,10 +522,11 @@ def _changes(
 def _recording_failed(
     run_id: str,
     failure: tuple[int, TroupeError] | None,
-    transcript: str | None,
+    outcome: RunOutcome,
     *,
     ended: TroupeError | None,
 ) -> TroupeError:
+    transcript = outcome.transcript
     first = failure[1] if failure is not None else ended
     if first is None:
         raise ValueError("a recording failure needs something that failed")
@@ -539,7 +541,7 @@ def _recording_failed(
         problem=f"Run {run_id} couldn't be recorded {where}: {first.problem} The run was "
         f"stopped. {end}",
         fix=f"{first.fix} The run's transcript is kept as {transcript or 'nothing'}.",
-        details=_recording_details(run_id, failure, first, transcript, ended=ended),
+        details=_recording_details(run_id, failure, first, outcome, ended=ended),
     )
 
 
@@ -547,19 +549,21 @@ def _recording_details(
     run_id: str,
     failure: tuple[int, TroupeError] | None,
     first: TroupeError,
-    transcript: str | None,
+    outcome: RunOutcome,
     *,
     ended: TroupeError | None,
 ) -> dict[str, object]:
     """run.recording-failed's details, leaving out what it can't name: no seq when only the end
-    failed, no end error when the end was recorded, no transcript when the runner never started."""
+    failed, no end error when the end was recorded, no transcript or its format when the runner
+    never started."""
     details: dict[str, object] = {"run": run_id, "error": first.to_data()}
     if failure is not None:
         details["failedAt"] = failure[0]
     if ended is not None:
         details["endError"] = ended.to_data()
-    if transcript is not None:
-        details["transcript"] = transcript
+    if outcome.transcript is not None and outcome.transcript_format is not None:
+        details["transcript"] = outcome.transcript
+        details["transcriptFormat"] = str(outcome.transcript_format)
     return details
 
 

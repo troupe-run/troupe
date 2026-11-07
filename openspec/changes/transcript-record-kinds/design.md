@@ -67,7 +67,13 @@ error code), and nothing is stored for it.
   host doesn't refuse an unknown field, and then it would be two declarations for one choice.
 - **Capability names become a closed list** (`enum: ["transcript-kinds"]`) in both `initialize` schemas, and in the
   SDK's types, per the strictness rule that unknown values are errors. The host's existing check (a name it didn't
-  offer) stays as the runtime check.
+  offer) stays as the runtime check. A consequence (review of #315): a runner built on this SDK refuses an offer
+  naming a capability it doesn't know, so adding a capability is a contract change, released as a protocol
+  release with the SDK that knows it, as any other change to version 0 is. "Compatible both ways" above means
+  between a host and a runner on either side of this change, not across future capabilities.
+- **A record without a kind is unlabelled, not necessarily native.** A runner that would label its records, but
+  wasn't offered the capability, sends the same records without one, its own `note`s included. The schema's and
+  the docs' wording says so (review of #315).
 
 ### D3. The stored form of a framed line
 
@@ -83,6 +89,12 @@ strictness test covers it.
   before JSON escapes them is what removes the escape problem OpenAI's masking had to handle.
 - **The encoding the runner chose is kept,** rather than troupe choosing it again from the bytes, so a reader gets
   back exactly what the runner sent, minus the credential.
+- **Framing must not make the credential.** Masking runs on the record's bytes, before JSON escapes them. An escape
+  can then complete a form of the credential: a newline sent as `\u000a` before the rest of a credential that
+  starts with `n` becomes `\n…` in the line. When masking the framed line would change it, the host stores that
+  record as base64 of its masked bytes instead, so no stored byte holds the credential (review of #315). The
+  host's masking of the wire line before it is parsed is unchanged; it has its own problem with escapes, filed
+  as #330.
 - **The limit counts stored bytes**, the framing included. The limit protects the store, and a framed line is what
   goes there.
 - *Alternative:* store kinds in a second artifact beside native lines. Rejected because two artifacts have to be
@@ -94,12 +106,17 @@ strictness test covers it.
 ### D4. The run's end names the form
 
 `Run.Ended`'s outcome gains `transcriptFormat`: `native` or `kinds`. The host decides it at `initialize` and it travels
-in the outcome (`outcome.py`) beside `transcript`. Schema: `transcript` and `transcriptFormat` each require the other
-(`dependentRequired` both ways), and `never-started` forbids both, as it forbids `transcript` today.
+in the outcome (`outcome.py`) beside `transcript`. Schema: the end's existing `ending` rule carries it, as it carries
+`transcript`: `never-started` forbids both, and any other ending requires both. Since `ending` is a closed list, that
+ties the two together both ways without a separate `dependentRequired`.
 
 - **No leniency for older ends.** Pre-1.0 there are no recorded runs to read back, so the field is required wherever
   a transcript is, with no "absent: recorded before this" form (owner, 2026-11-07, on #296). The `audit` precedent
   isn't followed.
+
+`run.recording-failed`'s details carry `transcriptFormat` beside `transcript` too (`dependentRequired` both ways):
+when the end itself failed to record, the error is the only place that names the transcript, so it must also say
+how its lines are written.
 
 The client's run summary carries `transcriptFormat` exactly when it carries `transcript` (`dependentRequired` both
 ways), projected straight from the end. `troupe status` shows it after the reference: `transcript: sha256:… (kinds)`,
