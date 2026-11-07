@@ -123,9 +123,9 @@
 
 ## 9. Integration
 
-- [ ] 9.1 Run the full check (`uv run scripts/check.py`) and `openspec validate runner-extras --strict` on the
+- [x] 9.1 Run the full check (`uv run scripts/check.py`) and `openspec validate runner-extras --strict` on the
   branch's head. Verify: both pass, output shown.
-- [ ] 9.2 Reply to the #291 session (track-b-11-291-troupe-lmstudio-runner). Say what #291's pull request adds once
+- [x] 9.2 Reply to the #291 session (track-b-11-291-troupe-lmstudio-runner). Say what #291's pull request adds once
   this merges: the plugin's dependency, the `lm-studio` extra and its `all` entry, `in_extra=True` in the table, the
   install page's list row, and the release exclusion while the plugin is bare. Verify: the message is sent and quoted
   in the PR description.
