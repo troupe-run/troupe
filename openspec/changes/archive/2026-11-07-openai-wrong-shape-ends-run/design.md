@@ -62,7 +62,8 @@ on a finished event. `_dispatch` raises `ShapeError` for a finished event that i
 record (nothing is dropped to be retried; the stream lines are already in the transcript). The message is
 `The service's response can't be read: <what the parser said> Retrying can't fix a response the service finished, so
 the run ends here. Check that the runtime's endpoint serves OpenAI's Responses API.` The parser's own messages stay
-the "what" (they already name the field, such as "The response's tool call's arguments is dict, not text.").
+the "what": they name the field, and the wrong type in words rather than as a Python type name, such as "The
+response's tool call's arguments is an object, not text."
 
 ### D4. A 2xx is a stream only when its Content-Type says so, or says nothing
 
