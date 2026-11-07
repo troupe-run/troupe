@@ -81,8 +81,9 @@ Each request is `POST <endpoint>/responses`, streamed, with:
 | a completed response with no function call | `result` `ok`, with its text |
 | anything in [How a run ends](#how-a-run-ends) | `result` `error`, saying why |
 
-`result.usage` sums each response's usage: `cacheReadTokens` is `input_tokens_details.cached_tokens`,
-`cacheWriteTokens` is `cache_write_tokens` when every response reports it, and `inputTokens` is the input less both.
+`result.usage` sums each response's usage: `cacheReadTokens` is `input_tokens_details.cached_tokens` and
+`cacheWriteTokens` is `cache_write_tokens`, each when every response reports it, and `inputTokens` is the input less
+whichever of them the result carries. A cache counter the service didn't report is left out, never given as 0.
 `costUsd` is set only when the service reports a cost; OpenAI reports none. When no cost is reported and the theatre
 prices the run's model, the result carries `estimatedCostUsd` instead: the usage at that price, marked as an estimate.
 Price a model with every rate its runs use, cache reads and writes included (OpenAI runs nearly always use the prompt
