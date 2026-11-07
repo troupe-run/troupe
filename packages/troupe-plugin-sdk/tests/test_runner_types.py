@@ -174,6 +174,15 @@ CASES: list[tuple[type[p.Message], str, st.SearchStrategy[Any]]] = [
         ),
     ),
     (
+        p.ServedModelEvent,
+        "run-event.schema.json#/$defs/served_model",
+        _event(
+            "served_model",
+            SEQ,
+            required={"model": st.from_regex(p.MODEL_PATTERN)},
+        ),
+    ),
+    (
         p.ResultEvent,
         "run-event.schema.json#/$defs/result",
         _event(
@@ -364,6 +373,24 @@ REFUSED: list[tuple[str, type[p.Message], dict[str, Any], str]] = [
     ),
     ("wrong type field", p.TurnEvent, {**INIT, "type": "init"}, "type must be 'turn'"),
     (
+        "served model with a control character",
+        p.ServedModelEvent,
+        {"runId": RUN, "seq": 1, "type": "served_model", "model": "bad\nname"},
+        "doesn't match",
+    ),
+    (
+        "served model too long",
+        p.ServedModelEvent,
+        {"runId": RUN, "seq": 1, "type": "served_model", "model": "m" * 257},
+        "doesn't match",
+    ),
+    (
+        "served model empty",
+        p.ServedModelEvent,
+        {"runId": RUN, "seq": 1, "type": "served_model", "model": ""},
+        "doesn't match",
+    ),
+    (
         "no versions",
         p.InitializeParams,
         {"protocolVersions": [], "host": {"name": "t", "version": "1"}, "capabilities": []},
@@ -382,6 +409,7 @@ def test_from_data_refuses_what_the_schema_refuses(
         p.ToolCallEvent: "run-event.schema.json#/$defs/tool_call",
         p.ToolResultEvent: "run-event.schema.json#/$defs/tool_result",
         p.ResultEvent: "run-event.schema.json#/$defs/result",
+        p.ServedModelEvent: "run-event.schema.json#/$defs/served_model",
         p.TurnEvent: "run-event.schema.json#/$defs/turn",
         p.InitializeParams: "initialize.schema.json#/properties/params",
     }[cls]

@@ -50,6 +50,7 @@ def _registry() -> Registry[Any]:
     paths = [
         SCHEMAS / "error.schema.json",
         SCHEMAS / "effects.schema.json",
+        SCHEMAS / "runtime.schema.json",
         *sorted((SCHEMAS / "runner").glob("*.schema.json")),
         *sorted(RUNNER_SCHEMAS.glob("*.schema.json")),
     ]

@@ -17,6 +17,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any, TypeGuard
 
+from troupe_plugin_sdk.events import ServedModels
 from troupe_runner_claude_code import NAME
 from troupe_runner_claude_code.defaults import SUMMARY_MAX_BYTES
 
@@ -34,6 +35,10 @@ USAGE = {
     "cache_creation_input_tokens": "cacheWriteTokens",
 }
 """Claude Code's usage counters, by the names the result event gives them."""
+
+SYNTHETIC_MODEL = "<synthetic>"
+"""The model Claude Code names on an assistant message it made itself, such as an API error's
+text: no model answered it, so it's never a served model."""
 
 SUMMARY_FIELDS = {
     "turn": "text",
@@ -152,6 +157,9 @@ class Mapper:
         """Logs about records before the init record, sent once init is."""
         self._calls: set[str] = set()
         self._noted: set[str] = set()
+        self._served = ServedModels(None)
+        """The models that answered, against system/init's (spec: claude-code-runner, "An
+        assistant message's other model is a served_model event")."""
         self._result_sent = False
         self._silenced = False
 
@@ -309,6 +317,8 @@ class Mapper:
         for theirs, ours in (("claude_code_version", "version"), ("model", "model")):
             if isinstance(record.get(theirs), str) and record[theirs]:
                 engine[ours] = record[theirs]
+        if not self._init_sent:  # a late init is only a log, and init has gone without a model
+            self._served = ServedModels(engine.get("model"))
         return [
             {
                 "type": "init",
@@ -347,9 +357,9 @@ class Mapper:
     def _assistant(self, record: dict[str, Any]) -> list[dict[str, Any]]:
         message = record.get("message")
         content = message.get("content") if isinstance(message, dict) else None
-        if not isinstance(content, list):
+        if not isinstance(message, dict) or not isinstance(content, list):
             return [_missing("assistant", "message.content")]
-        events: list[dict[str, Any]] = []
+        events = self._served_by(message.get("model"))
         texts = [
             block["text"]
             for block in content
@@ -424,6 +434,14 @@ class Mapper:
             _log("warning", f"rate limit {status} ({kind if isinstance(kind, str) else 'unknown'})")
         ]
 
+    def _served_by(self, model: object) -> list[dict[str, Any]]:
+        """What to send for a model Claude Code says answered: nothing for one that isn't a
+        string, for <synthetic> (Claude Code's mark on a message it made itself), or for one
+        already sent or init's (served-model design D4)."""
+        if not isinstance(model, str) or model == SYNTHETIC_MODEL:
+            return []
+        return self._served.note(model)
+
     def _result(self, record: dict[str, Any]) -> list[dict[str, Any]]:
         is_error, subtype = record.get("is_error"), record.get("subtype")
         if not isinstance(is_error, bool) or not isinstance(subtype, str):
@@ -435,6 +453,10 @@ class Mapper:
                 )
             ]
         events: list[dict[str, Any]] = []
+        used = record.get("modelUsage")
+        if isinstance(used, dict):
+            for model in used:
+                events.extend(self._served_by(model))
         denials = record.get("permission_denials")
         if isinstance(denials, list):
             counts = Counter(

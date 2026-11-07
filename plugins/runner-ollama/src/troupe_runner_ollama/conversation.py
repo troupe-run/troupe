@@ -24,7 +24,7 @@ from troupe_plugin_sdk.defaults import (
     READ_MAX_BYTES,
     ToolLimits,
 )
-from troupe_plugin_sdk.events import EventNumbering, cut, fit, utf8_size
+from troupe_plugin_sdk.events import EventNumbering, ServedModels, cut, fit, utf8_size
 from troupe_plugin_sdk.tools import Tools
 from troupe_runner_ollama import NAME, __version__
 from troupe_runner_ollama.client import Client, EngineError, RetryableError, StoppedError
@@ -126,6 +126,8 @@ class _Answer:
     done_reason: str | None = None
     prompt_tokens: int | None = None
     output_tokens: int | None = None
+    model: str | None = None
+    """The model the answer's lines name: the first that names one."""
 
 
 def _clean(value: Any) -> Any:  # noqa: ANN401 - JSON
@@ -177,6 +179,7 @@ class Conversation:
         self._prompt_tokens: int | None = None
         self._output_tokens: int | None = None
         self._ended = False
+        self._served = ServedModels(options.model)
 
     # Building requests (design D5, D7)
 
@@ -347,6 +350,8 @@ class Conversation:
                 error = data["error"]
                 text = error if isinstance(error, str) else json.dumps(data)
                 raise _RunEnded(f"Ollama reported an error: {text}")
+            if answer.model is None and isinstance(data.get("model"), str) and data["model"]:
+                answer.model = data["model"]
             message = data.get("message")
             if isinstance(message, dict):
                 if isinstance(message.get("content"), str):
@@ -364,7 +369,10 @@ class Conversation:
         raise RetryableError("network", "the connection ended before Ollama finished its answer")
 
     def _after(self, answer: _Answer) -> None:
-        """Count the answer, note a cut one, and report its text."""
+        """Report another model that answered, count the answer, note a cut one, and report its
+        text."""
+        for served in self._served.note(answer.model):
+            self._event(served, "message" if served["type"] == "log" else None)
         if answer.prompt_tokens is not None:
             self._prompt_tokens = (self._prompt_tokens or 0) + answer.prompt_tokens
         if answer.output_tokens is not None:

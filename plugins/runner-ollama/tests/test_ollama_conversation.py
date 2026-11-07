@@ -252,6 +252,32 @@ def test_a_cut_answer_is_a_warning_and_the_run_goes_on(tmp_path: Path) -> None:
     assert sink.result.status == "ok"
 
 
+# Requirement: An answer's other model is a served_model event
+# Built, not recorded: every recording's answers echo the model asked for.
+
+
+def _named(model: str, answer: Answer) -> Answer:
+    return Answer(answer.lines, model=model)
+
+
+def test_an_answer_under_another_name_sends_served_model_before_its_turn(tmp_path: Path) -> None:
+    sink, _ = _run(tmp_path, [_named("qwen3:0.6b-q4", final("hi"))])
+    assert [e.TYPE for e in sink.events] == ["init", "served_model", "turn", "result"]
+    (served,) = sink.of(p.ServedModelEvent)
+    assert served.model == "qwen3:0.6b-q4"
+
+
+def test_two_answers_from_the_same_other_model_send_one_served_model(tmp_path: Path) -> None:
+    glob = calls(tool_call("Glob", {"pattern": "*"}))
+    sink, _ = _run(tmp_path, [_named("other", glob), _named("other", final("hi"))])
+    assert [s.model for s in sink.of(p.ServedModelEvent)] == ["other"]
+
+
+def test_answers_echoing_the_model_asked_for_send_no_served_model(tmp_path: Path) -> None:
+    sink, _ = _run(tmp_path, [final("hi")])
+    assert sink.of(p.ServedModelEvent) == []
+
+
 # Requirement: One tool result fits the context window
 
 
