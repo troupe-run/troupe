@@ -54,11 +54,11 @@
 
 ## 5. Docs (design Risks)
 
-- [ ] 5.1 Document how a path is written in `docs/prompt-book/cli.md`'s `troupe config set` section: brackets, the two
+- [x] 5.1 Document how a path is written in `docs/prompt-book/cli.md`'s `troupe config set` section: brackets, the two
   escapes, `=` inside brackets, and the example quoted for zsh, with one sentence on why brackets and quotes. Verify:
   `uv run pytest packages/troupe/tests/test_cli_docs.py` passes, and each documented command runs as written in a
   scratch theatre (output pasted in the commit message).
-- [ ] 5.2 Mention the bracket form in `config set`'s and `config unset`'s `--help` metavar text. Verify: `troupe config
+- [x] 5.2 Mention the bracket form in `config set`'s and `config unset`'s `--help` metavar text. Verify: `troupe config
   set --help` shows it, and the help tests pass.
 - [ ] 5.3 If #292 has merged, rewrite its dotted-path limit note in `docs/stagecraft/runtimes.md` to show
   `runtimes.<name>.prices[gpt-4.1]`, and add an end-to-end test that sets and unsets one model's price this way. If it
