@@ -359,6 +359,47 @@ def test_tokens_written_to_the_cache_are_counted_apart_too(tmp_path: Path) -> No
     }
 
 
+def test_cache_writes_reported_by_one_of_two_responses_give_no_cache_write_count(
+    tmp_path: Path,
+) -> None:
+    script = [_called(usage(100, 10, cached=40, cache_write=20)), _used("ok", usage(200, 20))]
+    result = _result(run(tmp_path, script))
+    assert result["usage"] == {"inputTokens": 260, "outputTokens": 30, "cacheReadTokens": 40}
+
+
+def test_cached_tokens_reported_by_one_of_two_responses_give_no_cache_read_count(
+    tmp_path: Path,
+) -> None:
+    script = [_called(usage(100, 10, cached=40)), _used("ok", usage(200, 20, cached=None))]
+    result = _result(run(tmp_path, script))
+    assert result["usage"] == {"inputTokens": 300, "outputTokens": 30}
+
+
+def test_cache_writes_are_counted_apart_when_cached_tokens_are_not_reported(
+    tmp_path: Path,
+) -> None:
+    result = _result(run(tmp_path, [_used("ok", usage(300, 10, cached=None, cache_write=50))]))
+    assert result["usage"] == {"inputTokens": 250, "outputTokens": 10, "cacheWriteTokens": 50}
+
+
+@pytest.mark.parametrize("cached", [-1, "40"])
+def test_a_cached_count_that_is_not_a_whole_number_gives_no_cache_read_count(
+    tmp_path: Path, cached: object
+) -> None:
+    used = usage(300, 10)
+    used["input_tokens_details"]["cached_tokens"] = cached
+    result = _result(run(tmp_path, [_used("ok", used)]))
+    assert result["usage"] == {"inputTokens": 300, "outputTokens": 10}
+
+
+def test_a_service_that_reports_no_input_token_details_gives_neither_cache_count(
+    tmp_path: Path,
+) -> None:
+    used = {"input_tokens": 420, "output_tokens": 10, "total_tokens": 430}
+    result = _result(run(tmp_path, [_used("ok", used)]))
+    assert result["usage"] == {"inputTokens": 420, "outputTokens": 10}
+
+
 def test_a_service_that_reports_no_usage_gets_a_warning_and_a_result_without_usage(
     tmp_path: Path,
 ) -> None:
