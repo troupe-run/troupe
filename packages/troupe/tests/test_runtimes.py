@@ -320,6 +320,7 @@ def test_a_placeholder_key_is_refused_naming_the_variable_but_not_the_value() ->
     [
         ({}, "runtime.credential-unset"),
         ({"K": "q7Zx"}, "runtime.credential-too-short"),
+        ({"K": KEY + "\r\n"}, "runtime.credential-malformed"),
         ({"K": KEY}, "runtime.insecure-endpoint"),
     ],
 )
@@ -328,7 +329,38 @@ def test_no_refusal_holds_any_part_of_the_value(env: dict[str, str], code: str) 
         for_run("myhost", "tester", None, _on("http://example.com"), env)
     assert raised.value.code == code
     for value in env.values():
-        assert value not in _error(raised)
+        for form in (value, value.strip(), json.dumps(value)[1:-1]):
+            assert form not in _error(raised)
+
+
+# Requirement: A credential holding whitespace or a control character is refused
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["sk-test-q7ZxW9pL4vR2\r\n", "sk-test q7ZxW9pL4vR2", "sk-test-q7ZxW9pL4vR2\x00"],
+    ids=["a line ending", "a space inside", "a control character"],
+)
+def test_a_malformed_key_is_refused_naming_the_variable_but_not_the_value(value: str) -> None:
+    with pytest.raises(TroupeError) as raised:
+        for_run("myhost", "tester", None, _on("https://x.example"), {"K": value})
+    assert raised.value.code == "runtime.credential-malformed"
+    assert raised.value.details == {"runtime": "myhost", "variable": "K"}
+    assert "The credential in K," in raised.value.problem
+    assert "q7ZxW9pL4vR2" not in _error(raised)
+
+
+def test_a_short_key_with_a_line_ending_is_refused_as_malformed_not_too_short() -> None:
+    with pytest.raises(TroupeError) as raised:
+        for_run("myhost", "tester", None, _on("https://x.example"), {"K": "abc\n"})
+    assert raised.value.code == "runtime.credential-malformed"
+
+
+def test_a_well_formed_key_starts_with_that_credential() -> None:
+    started = for_run(
+        "myhost", "tester", None, _on("https://x.example"), {"K": "sk-test-q7ZxW9pL4vR2"}
+    )
+    assert started.value == "sk-test-q7ZxW9pL4vR2"
 
 
 # The environment's values are checked as the schema checks config's (design D3)

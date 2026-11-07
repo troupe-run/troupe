@@ -75,8 +75,9 @@ Your environment overrides the theatre's config, for you alone, without a change
 | `TROUPE_RUNTIME_<NAME>_CREDENTIAL_ENV` | which variable the key is read from |
 
 `<NAME>` is the runtime's name in capitals, with `-` as `_`: `TROUPE_RUNTIME_LM_STUDIO_MODEL`. An empty variable
-counts as unset. One that's set but malformed, such as an endpoint that isn't a URL, stops the command and names it,
-rather than quietly using another value.
+counts as unset. One that's set but malformed, such as an endpoint that isn't a URL, stops the command, naming the
+variable and what it takes, rather than quietly using another value. The error never repeats what the variable holds,
+in case it's a key put there by mistake.
 
 ## Keys stay in your environment
 
@@ -87,6 +88,8 @@ value from your environment when a run starts and gives it to the runner, and no
   error, and not in an error. If a runner sends the key back, troupe records `[credential]` in its place.
 - **Not sent in the clear:** a key goes over `https`, or plain `http` only to this machine (`localhost`, `127.0.0.1`,
   `[::1]`).
+- **Just the key:** a key holding a space or a control character, such as a line ending left from the file it was
+  read from, is refused before any runner gets it.
 - **Not too short to hide:** a key under 8 bytes is refused, since troupe couldn't tell it apart from ordinary text.
   A service that needs no key, like a local model, needs no credential at all.
 

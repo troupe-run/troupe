@@ -28,6 +28,7 @@ from urllib.parse import urlsplit
 from troupe.core import defaults
 from troupe.core.errors import TroupeError
 from troupe.platform.processes import EnvironmentPolicy
+from troupe_plugin_sdk.credential import well_formed
 from troupe_plugin_sdk.runner import ENDPOINT_PATTERN, MODEL_PATTERN
 
 RUNTIMES = "runtimes"
@@ -240,8 +241,8 @@ def for_run(
 ) -> RunRuntime:
     """What a run of ``actor`` on the runtime ``name`` starts with, reading its credential's value
     from ``env``. Refused, before anything is recorded, with runtime.no-model,
-    runtime.credential-unset, runtime.credential-too-short or runtime.insecure-endpoint. No error
-    holds any part of the credential's value."""
+    runtime.credential-unset, runtime.credential-malformed, runtime.credential-too-short or
+    runtime.insecure-endpoint. No error holds any part of the credential's value."""
     resolved = resolve(name, config, env)
     model = run_model(resolved, actor_model)
     if model is None:
@@ -263,6 +264,14 @@ def for_run(
             problem=f"The runtime {name!r} reads its credential from {variable}, which isn't set.",
             fix=f"Set {variable} in your environment to the key for {name}, or point the runtime "
             f"at another variable with {env_name(name, 'credential_env')}.",
+            details={"runtime": name, "variable": variable},
+        )
+    if not well_formed(value):  # before too short: "abc\n" is likelier a file's line ending (D4)
+        raise TroupeError(
+            "runtime.credential-malformed",
+            problem=f"The credential in {variable}, for the runtime {name!r}, holds whitespace or "
+            "a control character, such as a line ending left from the file it was read from.",
+            fix=f"Set {variable} to the key alone, with no spaces or line endings.",
             details={"runtime": name, "variable": variable},
         )
     if len(value.encode("utf-8")) < defaults.CREDENTIAL_MIN_BYTES:
