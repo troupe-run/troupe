@@ -31,6 +31,18 @@ def _first_line(text: object, limit: int = 100) -> str:
     return line if len(line) <= limit else line[: limit - 1] + "…"
 
 
+def _amounts(event: Mapping[str, Any]) -> str:
+    """A context event's counts, as ``, tokens 41000 → 9000``, with ``?`` for a side it leaves out
+    and nothing for a count it carries neither side of."""
+    parts = []
+    for name in ("tokens", "messages"):
+        before, after = event.get(f"{name}Before"), event.get(f"{name}After")
+        if before is not None or after is not None:
+            shown = ["?" if value is None else str(value) for value in (before, after)]
+            parts.append(f"{name} {shown[0]} → {shown[1]}")
+    return "".join(f", {part}" for part in parts)
+
+
 def render_event(logged: Mapping[str, Any]) -> str:
     """One line for a recorded run event (run.schema.json#/$defs/loggedEvent data)."""
     event = logged["event"]
@@ -42,6 +54,8 @@ def render_event(logged: Mapping[str, Any]) -> str:
         "tool_result": f"{'error' if event.get('isError') else 'ok'} "
         f"{_first_line(event.get('outputSummary', ''))}",
         "retry": f"attempt {event.get('attempt')}, {event.get('reason')}",
+        "context": f"{event.get('kind')} by {event.get('by')}{_amounts(event)}: "
+        f"{_first_line(event.get('message', ''))}",
         "log": f"{event.get('level')}: {_first_line(event.get('message', ''))}",
         "served_model": f"{event.get('model')}",
         "result": f"{event.get('status')}"

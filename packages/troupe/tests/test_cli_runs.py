@@ -29,7 +29,7 @@ from test_run_notices import interrupted_with_a_notice
 from test_run_queries import Child
 from troupe.cli import COMMANDS, commands, main
 from troupe.cli.parser import parse
-from troupe.cli.render import render_run
+from troupe.cli.render import render_event, render_run
 from troupe.core.client import messages as m
 from troupe.core.config import aggregate
 from troupe.core.errors import TroupeError
@@ -372,6 +372,45 @@ def test_status_with_a_run_and_a_limit_is_a_usage_error(repo: Repo) -> None:
     assert code == 2
     assert out == ""
     assert "not both" in err
+
+
+def _logged(event: dict[str, Any]) -> dict[str, Any]:
+    return {"seq": 1, "at": "2026-10-13T00:00:00.000Z", "event": event}
+
+
+def test_a_context_line_names_kind_who_and_counts_with_a_question_mark_for_a_missing_side() -> None:
+    compacted = {"type": "context", "kind": "compacted", "by": "engine", "message": "squashed"}
+    assert render_event(_logged({**compacted, "tokensBefore": 41000})) == (
+        "     1 2026-10-13T00:00:00.000Z context: compacted by engine, tokens 41000 → ?: squashed"
+    )
+    truncated = {
+        "type": "context",
+        "kind": "truncated",
+        "by": "runner",
+        "message": "dropped old tool output\nand more",
+        "messagesBefore": 120,
+        "messagesAfter": 34,
+    }
+    assert render_event(_logged(truncated)) == (
+        "     1 2026-10-13T00:00:00.000Z context: truncated by runner, messages 120 → 34: "
+        "dropped old tool output"
+    )
+
+
+def test_logs_show_a_context_events_kind_who_and_tokens_before(repo: Repo) -> None:
+    context = {
+        "event": {
+            "type": "context",
+            "kind": "compacted",
+            "by": "engine",
+            "message": "compacted",
+            "tokensBefore": 41000,
+        }
+    }
+    run_id = performed(repo, script(INIT, context, OK))
+    code, out, _ = cli("logs", run_id)
+    assert code == 0
+    assert "context: compacted by engine, tokens 41000 → ?: compacted" in out
 
 
 def test_logs_json_is_the_logs_result_as_its_schema_shapes_it(repo: Repo) -> None:

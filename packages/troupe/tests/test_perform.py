@@ -82,6 +82,31 @@ def test_a_served_model_is_recorded_as_a_run_reported_event_in_its_place(tmp_pat
         "type": "served_model",
         "model": "m-2026",
     }
+
+
+CONTEXT = {
+    "event": {
+        "type": "context",
+        "kind": "compacted",
+        "by": "engine",
+        "message": "Claude Code compacted the conversation",
+        "tokensBefore": 41000,
+    }
+}
+
+
+def test_a_context_event_is_recorded_unchanged_with_lineage_and_the_run_still_succeeds(
+    tmp_path: Path,
+) -> None:
+    harness = Harness(theatre(tmp_path))
+    result = harness.perform(request(script(INIT, CONTEXT, OK)))
+    records = history(harness, result.run.run_id)
+    assert [r.topic for r in records] == [STARTED, REPORTED, REPORTED, REPORTED, ENDED]
+    reported = states(records)[2]
+    assert reported["seq"] == 1
+    assert reported["event"] == {"runId": result.run.run_id, "seq": 1, **CONTEXT["event"]}
+    assert reported["lineage"]["cause"] == states(records)[1]["lineage"]["cause"]
+    assert reported["lineage"]["change"] == states(records)[0]["lineage"]["change"]
     assert result.run.outcome == "succeeded"
 
 
