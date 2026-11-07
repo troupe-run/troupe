@@ -81,7 +81,7 @@ managing models beyond loading the run's model, starting LM Studio's server, and
 
 - **New:** `plugins/runner-lm-studio/` (source, schemas, published requirements, fixtures, capture tool, tests,
   README), and the `lm-studio-runner` spec. Its Purpose is recorded in troupe-run/infrastructure's
-  `oob/troupe-spec-purposes.json` in a pull request that merges first.
+  `oob/troupe-spec-purposes.json` in a pull request that merges right after this one.
 - **Dependencies:** `lmstudio` 1.5.0 and what it pulls in (httpx, httpx-ws, msgspec, anyio, typing-extensions), pinned
   in `uv.lock`, carried only by the `lm-studio` extra.
 - **Core:** `defaults.RUNTIMES["lm-studio"]`, the runner table in `core/interim.py` (`runtime="required"`, no

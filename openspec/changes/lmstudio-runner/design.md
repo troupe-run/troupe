@@ -306,8 +306,9 @@ The audition names its model in one place (`LM_STUDIO_AUDITION_MODEL`), a small 
 with `maxTurns` 10 and `maxTotalTokens` 100,000, as the OpenAI audition's. `init` prints the extra to install, that
 LM Studio's server must be running with "Require Authentication" off, and the `lms get` for the model.
 
-The spec `lm-studio-runner` is new, so its Purpose goes into troupe-run/infrastructure's `oob/troupe-spec-purposes.json`
-first, in a pull request that merges before this one. The `runtimes` spec changes a requirement, not its Purpose.
+The spec `lm-studio-runner` is new, so its Purpose goes into troupe-run/infrastructure's
+`oob/troupe-spec-purposes.json`, in a pull request that merges right after this one (troupe first, as for infrastructure#263, so neither waits on the
+other). The `runtimes` spec changes a requirement, not its Purpose.
 
 ## Risks / Trade-offs
 
