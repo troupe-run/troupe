@@ -39,6 +39,8 @@ from release_config import (
     MANIFEST,
     bare,
     bundle_member,
+    bundle_requirements,
+    distinct_requirements,
     listed,
     members,
     normalise,
@@ -85,7 +87,7 @@ def moves(root: Path) -> list[Move]:
     workspace = members(root)
     paths = {normalise(name): path for path, name in workspace.items()}
     found: list[Move] = []
-    for requirement in project.get("dependencies", []):
+    for _, requirement in distinct_requirements(project):
         path = paths.get(requirement_name(requirement))
         if path is None or path == bundle:
             continue
@@ -160,11 +162,16 @@ def apply(root: Path, moved: Sequence[Move]) -> None:
     bundle = _bundle(root)
     pyproject = root / bundle / "pyproject.toml"
     text = pyproject.read_bytes().decode("utf-8")
+    held = [r for _, r in bundle_requirements(tomllib.loads(text)["project"])]
     for move in moved:
         quoted = f'"{move.requirement}"'
-        if text.count(quoted) != 1:
+        # Once in the dependencies, or once in a runner's extra and once in 'all' (runner-extras
+        # design D3, D4): each copy moves, and any other count is a hand edit to look at.
+        expected = held.count(move.requirement)
+        if text.count(quoted) != expected:
             raise PinError(
-                f"{bundle}/pyproject.toml names {quoted} {text.count(quoted)} times: name it once."
+                f"{bundle}/pyproject.toml names {quoted} {text.count(quoted)} times, but its "
+                f"dependencies and extras hold it {expected}: name it once in each."
             )
         text = text.replace(quoted, f'"{pin(move.name, move.new, move.path)}"')
     config_text = None if left_bare(root, moved) else _unexcluded(root, bundle)

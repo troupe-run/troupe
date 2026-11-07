@@ -1334,6 +1334,7 @@ requires-dist = [
     { name = "troupe-vcs-files", editable = "packages/troupe-vcs-files" },
     { name = "troupe-vcs-git", editable = "packages/troupe-vcs-git" },
 ]
+provides-extras = ["all"]
 
 [[package]]
 name = "troupe-runner-claude-code"

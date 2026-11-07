@@ -25,6 +25,13 @@ dependencies = [
     "troupe-runner-scripted @ git+https://github.com/troupe-run/troupe@troupe-runner-scripted-v0.1.0#subdirectory=plugins/runner-scripted",
 ]
 
+# A runner plugin that depends on anything beyond the plugin SDK is an extra named exactly after its
+# runner, and in 'all'; one that depends only on the SDK stays in the dependencies above. Each entry
+# is bare or pinned like a dependency, and 'all' repeats each one exactly. scripts/bundle.py fails
+# the check otherwise (runner-extras design D2, D4; owner, #333). No runner has a library yet.
+[project.optional-dependencies]
+all = []
+
 [project.urls]
 Homepage = "https://troupe.run"
 Repository = "https://github.com/troupe-run/troupe"
