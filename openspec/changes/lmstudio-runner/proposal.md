@@ -86,8 +86,8 @@ managing models beyond loading the run's model, starting LM Studio's server, and
   in `uv.lock`, carried only by the `lm-studio` extra.
 - **Core:** `defaults.RUNTIMES["lm-studio"]`, the runner table in `core/interim.py` (`runtime="required"`, no
   environment, and the extra it's installed by), the audition in `core/audition.py`, and their tests.
-- **Workspace:** `pyproject.toml`, the import-linter contracts, `scripts/check.py`'s scopes, `release-please-config.json`
-  and its manifest, the `troupe-run` extras (#333's mechanism), and `uv.lock`.
+- **Workspace:** `pyproject.toml`, the import-linter contracts, `scripts/check.py`'s scopes,
+  `release-please-config.json` and its manifest, the `troupe-run` extras (#333's mechanism), and `uv.lock`.
 - **Docs:** `docs/stagecraft/runtimes.md` (the built-in's endpoint, and the OpenAI runner on LM Studio),
   `docs/stagecraft/bring-your-own-agent.md`, `plugins/README.md` and `contributing/runners.md` where they list runners.
 - **Depends on:** #333 for the extra and the error that names it. The runner itself can be built before #333 lands.

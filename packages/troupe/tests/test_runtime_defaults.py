@@ -15,7 +15,7 @@ def test_the_built_in_runtimes_are_openai_ollama_and_lm_studio() -> None:
         "credential": {"env": "OPENAI_API_KEY"},
     }
     assert defaults.RUNTIMES["ollama"] == {"endpoint": "http://127.0.0.1:11434"}
-    assert defaults.RUNTIMES["lm-studio"] == {"endpoint": "http://127.0.0.1:1234/v1"}
+    assert defaults.RUNTIMES["lm-studio"] == {"endpoint": "http://127.0.0.1:1234"}
 
 
 @pytest.mark.parametrize("name", sorted(defaults.RUNTIMES))

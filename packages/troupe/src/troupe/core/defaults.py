@@ -159,7 +159,9 @@ RUNTIMES: dict[str, dict[str, object]] = {
         "credential": {"env": "OPENAI_API_KEY"},
     },
     "ollama": {"endpoint": "http://127.0.0.1:11434"},
-    "lm-studio": {"endpoint": "http://127.0.0.1:1234/v1"},
+    # LM Studio's server root, which its own client library connects to; its OpenAI-compatible
+    # API under /v1 has no built-in (lmstudio-runner design D3).
+    "lm-studio": {"endpoint": "http://127.0.0.1:1234"},
 }
 """troupe's built-in runtimes, each as a runtime file would hold it. None names a model, since a
 built-in model would go stale. The theatre's config overrides them field by field, and the

@@ -4,8 +4,9 @@
 
 ### Requirement: The LM Studio audition can edit files with a small local model
 The LM Studio example actor SHALL have `runner: lm-studio`, `runtime: lm-studio`, a `model` naming a small
-tool-capable model, named in one place in core, options with `maxTurns` of 10 and `maxTotalTokens` of 100000, `effects` with `write: ["**"]`, an
-empty `expect`, and the same short character as the Claude Code audition. It SHALL leave `workspace` unset.
+tool-capable model, named in one place in core, options with `maxTurns` of 10 and `maxTotalTokens` of 100000,
+`effects` with `write: ["**"]`, an empty `expect`, and the same short character as the Claude Code audition. It SHALL
+leave `workspace` unset.
 
 #### Scenario: The LM Studio actor's file
 - **WHEN** a person runs `troupe init --audition --runner lm-studio`

@@ -292,11 +292,11 @@ contracts (and an I/O seam contract naming its one module that imports `lmstudio
 (`runner_lm_studio`) and `check-paths.toml`, release-please's config and manifest, and the changelog page.
 `interim.RUNNERS` gains `lm-studio` (D3).
 
-It ships as an optional extra of `troupe-run`, by #333's mechanism, not in the base install, so only people who want
-it carry `lmstudio` and its dependencies. The extra is named exactly after the runner,
-`troupe-run[lm-studio]`, the rule recorded on #333 for every runner's extra (owner, 2026-11-07: be consistent). An actor on the runner without it installed gets #333's error naming the
-extra. If #333 hasn't landed when the runner is ready, this pull request waits for it rather than adding `lmstudio`
-to the base install.
+It ships as an optional extra of `troupe-run`, by #333's mechanism, not in the base install, so only people who want it
+carry `lmstudio` and its dependencies. The extra is named exactly after the runner, `troupe-run[lm-studio]`, the rule
+recorded on #333 for every runner's extra (owner, 2026-11-07: be consistent). An actor on the runner without it
+installed gets #333's error naming the extra. If #333 hasn't landed when the runner is ready, this pull request waits
+for it rather than adding `lmstudio` to the base install.
 
 **Python versions.** troupe supports Python 3.12 to 3.15. `lmstudio` needs 3.10 or later, and msgspec, which it pulls
 in, is a compiled package. Whether msgspec has wheels, or builds, for every supported Python on all three platforms is
