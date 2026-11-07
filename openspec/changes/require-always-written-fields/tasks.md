@@ -80,8 +80,10 @@ edit, regenerate the packaged copy with `uv run scripts/package_schemas.py` and 
 
 - [x] 5.1 Run `uv run scripts/check.py`. Verify it passes, including the packaged-schema, docs-reference and
   protocol-guard checks, and `openspec validate require-always-written-fields --strict`.
-- [ ] 5.2 Once the pull request is ready, verify CI's legs pass on Linux, macOS and Windows on the last code commit,
+- [x] 5.2 Once the pull request is ready, verify CI's legs pass on Linux, macOS and Windows on the last code commit,
   and cite the run.
+  Passed: CI run 42378210814 on `fbfcfed`, the last code commit (all 12 legs, Linux, macOS and Windows on Python
+  3.12 to 3.15).
 
 ## Workflow follow-up
 
