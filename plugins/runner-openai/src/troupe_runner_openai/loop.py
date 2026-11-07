@@ -101,6 +101,7 @@ class _Spend:
     cache_write_tokens: int = 0
     cost_usd: float = 0.0
     usage_known: bool = True
+    reads_known: bool = True
     writes_known: bool = True
     cost_known: bool = True
     requests: int = 0
@@ -113,16 +114,19 @@ class _Spend:
         """Add one reply's usage. False when it reported none, or a shape that can't be read."""
         self.requests += 1
         if usage is None:
-            self.usage_known = self.writes_known = self.cost_known = False
+            self.usage_known = self.reads_known = self.writes_known = self.cost_known = False
             return False
         given, made = usage.get("input_tokens"), usage.get("output_tokens")
         if not _count(given) or not _count(made):
-            self.usage_known = self.writes_known = self.cost_known = False
+            self.usage_known = self.reads_known = self.writes_known = self.cost_known = False
             return False
         details = usage.get("input_tokens_details")
         details = details if isinstance(details, dict) else {}
         read, written = details.get("cached_tokens"), details.get("cache_write_tokens")
-        read = read if _count(read) else 0
+        if _count(read):
+            self.cache_read_tokens += min(read, given)
+        else:
+            self.reads_known = False
         if _count(written):
             self.cache_write_tokens += written
         else:
@@ -130,7 +134,6 @@ class _Spend:
             written = 0
         self.input_tokens += given
         self.output_tokens += made
-        self.cache_read_tokens += min(read, given)
         cost = usage.get("cost")
         if isinstance(cost, int | float) and not isinstance(cost, bool) and cost >= 0:
             self.cost_usd += float(cost)
@@ -139,15 +142,16 @@ class _Spend:
         return True
 
     def usage(self) -> Usage | None:
-        """The four counters (design D9): input less what was read from and written to the cache,
-        the cache's reads and, when every response reported them, its writes."""
+        """The four counters (design D9): the cache's reads and its writes, each only when every
+        response reported it, and the input less whichever of them is reported."""
         if not self.usage_known or self.requests == 0:
             return None
+        reads = self.cache_read_tokens if self.reads_known else 0
         writes = self.cache_write_tokens if self.writes_known else 0
         return Usage(
-            input_tokens=max(0, self.input_tokens - self.cache_read_tokens - writes),
+            input_tokens=max(0, self.input_tokens - reads - writes),
             output_tokens=self.output_tokens,
-            cache_read_tokens=self.cache_read_tokens,
+            cache_read_tokens=self.cache_read_tokens if self.reads_known else None,
             cache_write_tokens=self.cache_write_tokens if self.writes_known else None,
         )
 
