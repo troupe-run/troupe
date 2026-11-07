@@ -168,6 +168,7 @@ repeats.
 | `tool_call` | `callId`, `tool`, `inputSummary` | |
 | `tool_result` | `callId`, `isError`, `outputSummary`, `outputBytes` | `callId` matches an earlier `tool_call`. The full output belongs in the transcript. |
 | `retry` | `attempt`, `maxAttempts` (optional), `delayMs`, `reason`, `message` (optional) | `reason` is `authentication`, `rate-limit`, `network`, `server` or `other`. Send one each time the engine retries, or the runner retries a request to its engine itself. |
+| `context` | `kind`, `by`, `message`, `tokensBefore`, `tokensAfter`, `messagesBefore`, `messagesAfter` (the four counts optional) | `kind` is `compacted`, `truncated` or `other`, and `by` is `engine` or `runner`. Send one each time content of the conversation is lost and the run carries on (see [Lost content](#lost-content)). |
 | `log` | `level` (`debug`, `info`, `warning`, `error`), `message` | A diagnostic worth keeping with the run. |
 | `served_model` | `model` | A model other than the one `init` named answered part of the run, as the engine or service named it. Send it the first time each such model answers, before any event reporting that answer; never for `init`'s model, and never twice for one model (troupe treats either as a protocol violation). With no model on `init`, every model that answers is sent once. `model` has a model's shape (1 to 256 characters, no control character); a name outside it is a `log` warning instead. The plugin SDK's `ServedModels` decides. |
 | `result` | `status` (`ok` or `error`), `message`, `reason`, `turns`, `durationMs`, `usage {inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens}`, `costUsd` or `estimatedCostUsd` (all but `status` and `message` optional, and each `usage` counter too) | Exactly one, last, for a run that ends on its own. `reason` is present exactly when `status` is `error` (see [Why a run failed](#why-a-run-failed)). See [What usage counts](#what-usage-counts). At most one of the two costs (see [Cost: reported or estimated](#cost-reported-or-estimated)). |
@@ -231,6 +232,36 @@ what a runner sends, what troupe records, and what it reads back. A result that 
   both, so a run whose last retry was `rate-limit` ends `rate-limit`.
 - **The message still says what happened,** in the engine's or the runner's words: the reason is what to act on,
   the message is what to read.
+
+### Lost content
+
+An engine never loses content without the run saying so ([#279](https://github.com/troupe-run/troupe/issues/279)).
+When the loss ends the run, the `result` says so, with the reason `context-length` (see
+[Why a run failed](#why-a-run-failed)). When content of the conversation is lost and the run carries on, send a
+`context` event at that point, before any event that follows from the reduced conversation. A `context` event never
+ends the run, and troupe records it with the run's other events.
+
+- **`kind`** says what happened: `compacted` when earlier content was replaced by a summary of it, `truncated` when it
+  was dropped outright, or `other` for a loss neither names. A runner can't add kinds of its own. Use `other` and say
+  in `message` what was lost, and if you keep meeting the same loss, file an issue to add a kind for it.
+- **`by`** says who did it: `engine` when the engine reduced its conversation on its own (Claude Code compacting),
+  or `runner` when the runner reduced the conversation it holds and sends to its engine.
+- **The counts** are the conversation's tokens and messages before and after the loss. Send each one only when the
+  engine or runner knows it, and leave it out otherwise. Claude Code, for example, reports only the tokens before.
+- **`message`** says what happened, in words.
+- A cut answer at the engine's output limit isn't a `context` event. It ends the run with `output-limit`.
+
+The SDK builds the event with `context_event` from `troupe_plugin_sdk.events`. It numbers the event with the run's
+`EventNumbering`, cuts the message to the run's limits, and leaves out each count you pass as `None`:
+
+```python
+from troupe_plugin_sdk.events import EventNumbering, context_event
+
+numbering = EventNumbering(run_id, event_max_bytes)
+event = context_event(
+    numbering, "compacted", "engine", "Claude Code compacted", tokens_before=41000
+)
+```
 
 ### Oversized events
 

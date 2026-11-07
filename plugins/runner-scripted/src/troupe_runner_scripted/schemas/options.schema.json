@@ -443,6 +443,9 @@
           "$ref": "#/$defs/retry"
         },
         {
+          "$ref": "#/$defs/context"
+        },
+        {
           "$ref": "#/$defs/log"
         },
         {
@@ -622,6 +625,54 @@
         "message": {
           "description": "The retry's message. Absent: it sends none.",
           "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/retry/properties/message"
+        }
+      }
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "kind",
+        "by",
+        "message"
+      ],
+      "properties": {
+        "type": {
+          "const": "context"
+        },
+        "runId": {
+          "description": "The run id to send. Absent: the run's own id. A script sets one only to test how a wrong id is handled.",
+          "$ref": "https://troupe.run/protocol/runner/jsonrpc.schema.json#/$defs/runId"
+        },
+        "seq": {
+          "description": "The sequence number to send. Absent: the one after the last event sent.",
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/seq"
+        },
+        "kind": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/context/properties/kind"
+        },
+        "by": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/context/properties/by"
+        },
+        "message": {
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/context/properties/message"
+        },
+        "tokensBefore": {
+          "description": "The count of tokens before to report. Absent: the event leaves it out.",
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/context/properties/tokensBefore"
+        },
+        "tokensAfter": {
+          "description": "The count of tokens after to report. Absent: the event leaves it out.",
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/context/properties/tokensAfter"
+        },
+        "messagesBefore": {
+          "description": "The count of messages before to report. Absent: the event leaves it out.",
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/context/properties/messagesBefore"
+        },
+        "messagesAfter": {
+          "description": "The count of messages after to report. Absent: the event leaves it out.",
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/context/properties/messagesAfter"
         }
       }
     },
