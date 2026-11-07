@@ -99,18 +99,18 @@
 
 ## 7. Runners' dependencies are licensed compatibly (design D11; spec: runner-protocol)
 
-- [ ] 7.1 Write the tests first, in `scripts/tests/`, with a fixture `uv.lock`, fixture distribution metadata and a
+- [x] 7.1 Write the tests first, in `scripts/tests/`, with a fixture `uv.lock`, fixture distribution metadata and a
   fixture tree. They cover: MIT and BSD-3-Clause passing; `GPL-3.0-only` failing, naming the package, the runner, the
   licence and `scripts/licences.toml`; no licence failing; an `OR` expression with one branch on the list passing; a
   classifier mapped to SPDX; an unmapped classifier failing; workspace members skipped; today's plugins checking no
   package; and runner-protocol's weak-copyleft scenarios (`certifi` from PyPI passing, `certifi` from a git source or
   a `[tool.uv.sources]` override failing, and a tracked file carrying the MPL-2.0 notice failing). Verify: they fail
   before the script exists, run and shown.
-- [ ] 7.2 Add `scripts/runner_licences.py` and `scripts/licences.toml`, with the two tiers of D11 and D13: each
+- [x] 7.2 Add `scripts/runner_licences.py` and `scripts/licences.toml`, with the two tiers of D11 and D13: each
   licence with a one-line reason, and each weak-copyleft one with its notice text and a citation of the owner's
   comment. Run it from `scripts/check.py` with the bundle check, adding its paths to `scripts/check-paths.toml` as the
   bundle check's are. Verify: 7.1's tests pass, and `uv run scripts/check.py` passes and lists the licence check.
-- [ ] 7.3 Commit as `feat(scripts): ...`. Verify: `uv run scripts/check.py` passes before the commit.
+- [x] 7.3 Commit as `feat(scripts): ...`. Verify: `uv run scripts/check.py` passes before the commit.
 
 ## 8. The guarantees and how to add an extra, for runner authors (design D12; spec: runner-protocol)
 

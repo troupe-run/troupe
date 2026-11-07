@@ -239,12 +239,14 @@ paths = [
     "scripts/flake_hunt.Dockerfile",
     "scripts/flake_hunt.py",
     "scripts/install_check.py",
+    "scripts/licences.toml",
     "scripts/on.py",
     "scripts/pin_bundle.py",
     "scripts/plugin_imports.py",
     "scripts/python_versions.py",
     "scripts/queue_passed.py",
     "scripts/release_config.py",
+    "scripts/runner_licences.py",
     "scripts/tests/**",
 ]
 tests = ["scripts/tests/**", "scripts/tests/workspace/**"]
