@@ -38,6 +38,7 @@ from troupe.core.config.kinds import check_actor
 from troupe.core.config.merge import Merged
 from troupe.core.config.projection import merges, plan, refuse, render
 from troupe.core.config.stream import read, refuse_conflicts
+from troupe.core.config_paths import shown
 from troupe.core.errors import TroupeError
 from troupe.core.events import Command, EventStore
 from troupe.core.files import directory_lock
@@ -173,7 +174,7 @@ def _from_config(merged: Merged, name: str) -> _What:
             "config.unknown-actor",
             problem=f"Config has no actor named {name!r} (it has: {listed}).",
             fix=f"Perform one of the actors config has, or define {name} with troupe config set "
-            f"actors.{name}.runner=... actors.{name}.expect=...",
+            f"{shown(('actors', name, 'runner'))}=... {shown(('actors', name, 'expect'))}=...",
             details={"actor": name, "known": known},
         )
     paths = list(dict.fromkeys(actor["expect"]))

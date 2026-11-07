@@ -31,6 +31,7 @@ from typing import Any, Literal
 from urllib.parse import urlsplit
 
 from troupe.core import defaults
+from troupe.core.config_paths import shown
 from troupe.core.errors import TroupeError
 from troupe.platform.processes import EnvironmentPolicy
 from troupe_plugin_sdk.runner import ENDPOINT_PATTERN, MODEL_PATTERN
@@ -233,7 +234,7 @@ def resolve(name: str, config: Mapping[str, Any], env: Mapping[str, str]) -> Res
             "config.invalid",
             problem=f"There's no runtime named {name!r} (there are: {known}).",
             fix=f"Use one of: {known}, or define it with troupe config set "
-            f"{RUNTIMES}.{name}.endpoint=...",
+            f"{shown((RUNTIMES, name, 'endpoint'))}=...",
             details={"path": [RUNTIMES, name], "rule": "there's no such runtime"},
         )
     resolved: dict[str, Sourced | None] = {}
@@ -294,7 +295,11 @@ def for_run(
     resolved = resolve(name, config, env)
     model = run_model(resolved, actor_model)
     if model is None:
-        places = [f"actors.{actor}.model", f"{RUNTIMES}.{name}.model", env_name(name, "model")]
+        places = [
+            shown(("actors", actor, "model")),
+            shown((RUNTIMES, name, "model")),
+            env_name(name, "model"),
+        ]
         raise TroupeError(
             "runtime.no-model",
             problem=f"Nothing sets the model for {actor!r}'s runs on the runtime {name!r}.",

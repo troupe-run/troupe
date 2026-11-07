@@ -34,9 +34,11 @@
   (show the parsed path, not the typed text). Verify: rendering tests with result data for an entry and a conflict at
   `["runtimes", "openai", "prices", "gpt-4.1", "input"]` show `runtimes.openai.prices[gpt-4.1].input`, and
   `config set actors[tester].runner=scripted` prints `actors.tester.runner`.
-- [x] 3.3 Check that no `".".join` over config keys is left in `packages/troupe/src`. Verify: a grep for `".".join` and
-  `split(".")` in `core/config/` and `cli/` lists only uses that aren't config paths, each named in the commit
-  message.
+- [x] 3.3 Check that no config path is built by hand in `packages/troupe/src`, whether with `".".join`, `split(".")`
+  or an f-string (`actors.{name}...`, `{RUNTIMES}.{name}...`). The f-string form was missed at first and found by the
+  review of #324 (`runtimes.py`'s fix split `runtimes[my.rt]`). Verify: the grep lists only uses that aren't config
+  paths, and `test_no_source_builds_a_config_path_with_a_name_in_an_f_string` fails on the sources before the fix
+  (all 8 sites) and passes after.
 
 ## 4. Read every typed path with `parse` (design D4)
 

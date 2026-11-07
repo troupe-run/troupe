@@ -7,6 +7,9 @@ against ``troupe.cli.values.split_path`` and passed there before the reader chan
 the bracket reader can't quietly break a path that already worked.
 """
 
+import re
+from pathlib import Path
+
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
@@ -168,3 +171,22 @@ def test_a_dot_before_a_bracket_is_fixed_by_dropping_the_dot() -> None:
     with pytest.raises(TroupeError) as caught:
         paths.parse("a.[b]")
     assert "'a[b]'" in caught.value.fix
+
+
+# No message builds a config path by hand (review of #324: runtimes.py's fix did, and a key with a
+# dot came out split). Every one goes through shown.
+
+SOURCE = Path(__file__).resolve().parents[1] / "src" / "troupe"
+HAND_BUILT = re.compile(
+    r"""f"[^"]*\b(?:actors|runtimes)\.\{|f'[^']*\b(?:actors|runtimes)\.\{|\{RUNTIMES\}\."""
+)
+
+
+def test_no_source_builds_a_config_path_with_a_name_in_an_f_string() -> None:
+    found = [
+        f"{path.relative_to(SOURCE)}:{number}: {line.strip()}"
+        for path in sorted(SOURCE.rglob("*.py"))
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        if HAND_BUILT.search(line)
+    ]
+    assert found == []
