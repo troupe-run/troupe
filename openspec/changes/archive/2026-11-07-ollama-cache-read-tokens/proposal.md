@@ -15,20 +15,21 @@ doesn't, so a run on Ollama overstates the input it used next to one on either o
 
 ## What Changes
 
-- Each answer's `prompt_eval_cached_count` is summed over the run into `result.usage.cacheReadTokens`. It's left out
-  when no answer reported it, as the other counters are.
+- Each answer's `prompt_eval_cached_count` is summed over the run into `result.usage.cacheReadTokens`. Unless every
+  answer reported a cached count beside its prompt count, it's left out and nothing is subtracted, as #312's merged
+  contract requires (design D5, added on rebasing onto it).
 - `usage.inputTokens` becomes the sum of each answer's `prompt_eval_count` less its `prompt_eval_cached_count`,
   troupe#293's meaning. This changes the value a run reports whenever Ollama took tokens from its cache. Nothing in
   troupe reads `usage` to make a decision yet, so no reader breaks, but anyone comparing runs from before and after
   will see `inputTokens` fall by the cached amount, which now appears as `cacheReadTokens`.
 - The README's run-events section says the wrong thing today: it says the cached tokens "aren't in `inputTokens`".
-  It and `contributing/runners.md`'s Ollama table are corrected.
+  #312 carried that claim into `contributing/runners.md`'s Ollama row. Both are corrected.
 - The captured fixtures' expected `result` events are updated to the new usage. Their recorded exchanges already
   carry `prompt_eval_cached_count`, so no re-capture is needed.
 - `cacheWriteTokens` stays absent: Ollama reports nothing that maps to it.
 - Not in scope: the contract text itself (`run-event.schema.json`'s `usage` descriptions and the contract's section
-  of `contributing/runners.md`). That's troupe#293's own protocol change. This change follows the meaning #293 sets
-  and doesn't wait for it.
+  of `contributing/runners.md`). That's troupe#293's own protocol change, merged as #312 while this change was in
+  review. This change follows it.
 
 ## Capabilities
 
