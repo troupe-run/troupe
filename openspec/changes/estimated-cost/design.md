@@ -128,7 +128,10 @@ a successful run's outcome over a cost field, and that, unlike the other violati
 rest of the event stream untrustworthy. The owner chose drop-and-warn (2026-11-07). So the host removes the field
 before the result is recorded or passed on, which keeps the guess out of the store, keeps the run's own outcome, and
 raises the notice `run.estimate-dropped` (details: the runner's name, from its `init`). The notice is shown as
-`run.retrying` is, so the runner's bug is visible without costing the run.
+`run.retrying` is, so the runner's bug is visible without costing the run. A result that is also over the event
+size is stored in the artifact store without the estimate too, so an `oversized` event's `ref` holds the result as
+recorded, not the exact line the runner sent: storing that line would put the dropped guess in the store (raised by
+the review of #317).
 
 The notice is live only: troupe keeps no run notice in the run's history, so after an unattended run nothing records
 that an estimate was dropped (raised by a side agent). The owner chose to fix that for every run notice rather than

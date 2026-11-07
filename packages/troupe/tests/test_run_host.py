@@ -616,6 +616,29 @@ def test_an_oversized_event_is_kept_whole_out_of_line_and_the_run_carries_on(
     assert ran.outcome.outcome is Outcome.SUCCEEDED
 
 
+def test_an_oversized_result_with_an_unpriced_estimate_is_stored_without_it(
+    tmp_path: Path,
+) -> None:
+    big = {**ESTIMATE, "message": "z" * 3000}
+    ran = _run(
+        tmp_path,
+        {"steps": [{"event": INIT}, {"event": big}]},
+        limits=RunLimits(event_max_bytes=1024, cancel_grace=2.0),
+    )
+    assert ran.outcome.outcome is Outcome.SUCCEEDED
+    oversized = ran.events[1]
+    assert isinstance(oversized, p.OversizedEvent)
+    assert oversized.original_type == "result"
+    stored = json.loads(ran.store.read(oversized.ref))
+    assert stored["method"] == "run/event"
+    assert stored["params"]["message"] == "z" * 3000
+    assert "estimatedCostUsd" not in stored["params"]
+    assert "estimatedCostUsd" in ran.received[3]["params"]  # the runner did send it
+    assert [n.code for n in ran.notices if n.code == "run.estimate-dropped"] == [
+        "run.estimate-dropped"
+    ]
+
+
 def test_a_message_larger_than_64_kib_is_received_whole(tmp_path: Path) -> None:
     ran = _run(tmp_path, {"steps": [{"event": INIT}, {"transcript": "z" * 200_000}, {"event": OK}]})
     assert ran.outcome.outcome is Outcome.SUCCEEDED
