@@ -62,6 +62,7 @@ A segment's first line is its header; every later line is one event. Lines are s
   | `troupe.core.runs.aggregate:Run.Started` | [`events/run-started.schema.json`](../protocol/schemas/events/run-started.schema.json) |
   | `troupe.core.runs.aggregate:Run.WorktreeMade` | [`events/run-worktree-made.schema.json`](../protocol/schemas/events/run-worktree-made.schema.json) |
   | `troupe.core.runs.aggregate:Run.Reported` | [`events/run-reported.schema.json`](../protocol/schemas/events/run-reported.schema.json) |
+  | `troupe.core.runs.aggregate:Run.Noticed` | [`events/run-noticed.schema.json`](../protocol/schemas/events/run-noticed.schema.json) |
   | `troupe.core.runs.aggregate:Run.Ended` | [`events/run-ended.schema.json`](../protocol/schemas/events/run-ended.schema.json) |
   | `troupe.core.runs.aggregate:Run.ChangesAccepted` | [`events/run-changes-accepted.schema.json`](../protocol/schemas/events/run-changes-accepted.schema.json) |
   | `troupe.core.runs.aggregate:Run.ChangesDiscarded` | [`events/run-changes-discarded.schema.json`](../protocol/schemas/events/run-changes-discarded.schema.json) |

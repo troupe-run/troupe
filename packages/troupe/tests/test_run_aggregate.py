@@ -14,7 +14,7 @@ from storetesting import files_service, snapshot
 from troupe.core.errors import TroupeError
 from troupe.core.events import EventStore
 from troupe.core.runners.limits import RunLimits
-from troupe.core.runs.aggregate import ENDED, REPORTED, STARTED, WORKTREE_MADE, Run
+from troupe.core.runs.aggregate import ENDED, NOTICED, REPORTED, STARTED, WORKTREE_MADE, Run
 
 
 def outcome(name: str) -> dict[str, Any]:
@@ -112,6 +112,42 @@ def test_a_second_end_is_refused(tmp_path: Path) -> None:
     with pytest.raises(TroupeError) as caught:
         run.end(outcome("failed"), None)
     assert caught.value.code == "run.out-of-sequence"
+
+
+SILENT = {
+    "code": "run.silent",
+    "problem": "The run has sent no event for 30s.",
+    "fix": "Wait, or cancel the run if it seems stuck.",
+    "details": {"seconds": 30.0},
+}
+
+
+# Requirement: A run's notices are recorded only between its start and its end
+
+
+def test_a_notice_between_the_start_and_the_end_is_recorded_and_the_next_seq_is_unchanged(
+    tmp_path: Path,
+) -> None:
+    store, run = recorded(tmp_path)
+    run.notice(SILENT)
+    run.report(2, log(run, 2))
+    run.end(outcome("succeeded"), None)
+    store.command(via="runner").record(run.collect_events())
+    topics = [recording.topic for recording in store.history(UUID(run.run_id))]
+    assert topics == [STARTED, REPORTED, REPORTED, NOTICED, REPORTED, ENDED]
+
+
+def test_a_notice_after_the_end_is_refused_and_nothing_is_written(tmp_path: Path) -> None:
+    store, run = recorded(tmp_path)
+    run.end(outcome("succeeded"), None)
+    store.command(via="runner").record(run.collect_events())
+    before = snapshot(tmp_path)
+    with pytest.raises(TroupeError) as caught:
+        run.notice(SILENT)
+    assert caught.value.code == "run.out-of-sequence"
+    assert "run.silent arrived after the run ended" in caught.value.problem
+    assert run.collect_events() == []
+    assert snapshot(tmp_path) == before
 
 
 def test_a_second_start_for_a_recorded_run_is_refused_by_the_store_and_writes_nothing(

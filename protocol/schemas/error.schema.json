@@ -1863,9 +1863,13 @@
               "minLength": 1
             },
             "failedAt": {
-              "description": "The first run event's seq that wasn't recorded. Absent: every run event was recorded, and only the run's end failed.",
+              "description": "The first run event's seq that wasn't recorded. Absent: no run event failed to record, because a notice failed first or only the run's end failed.",
               "type": "integer",
               "minimum": 0
+            },
+            "notice": {
+              "description": "The code of the notice troupe raised for the run that wasn't recorded, before any run event failed to be. Absent: no notice failed to record.",
+              "$ref": "notice.schema.json#/$defs/fields/properties/code"
             },
             "error": {
               "$ref": "#"
@@ -1889,6 +1893,12 @@
             ],
             "transcriptFormat": [
               "transcript"
+            ]
+          },
+          "not": {
+            "required": [
+              "failedAt",
+              "notice"
             ]
           }
         }

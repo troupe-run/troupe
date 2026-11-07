@@ -10,6 +10,7 @@ from uuid import UUID
 import pytest
 
 from runtesting import INIT, OK, Harness, request, script, theatre
+from troupe.core.client import messages as m
 from troupe.core.runners import host
 from troupe_plugin_sdk import runner as p
 
@@ -40,7 +41,7 @@ def _perform(harness: Harness, steps: list[dict[str, Any]], effects: dict[str, l
 
 def _tool_results(harness: Harness, run_id: str) -> list[bool]:
     """Whether each tool call's result was an error, as troupe logs shows them."""
-    logged = harness.logs(run=run_id).events
+    logged = [e for e in harness.logs(run=run_id).log if isinstance(e, m.LoggedEvent)]
     return [e.event.is_error for e in logged if isinstance(e.event, p.ToolResultEvent)]
 
 

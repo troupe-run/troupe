@@ -25,9 +25,9 @@ Every command but `init` runs in a **theatre**: the nearest directory, from wher
   on success, standard output gets `run <id> succeeded`. It exits by the run's outcome: 0 succeeded, 130 cancelled
   with Ctrl-C, 1 otherwise.
 - **`troupe status`** lists the most recent runs, newest first, or shows one run, with what the audit of its
-  changes found beside its outcome.
-- **`troupe logs`** shows a run's events in order, then its outcome and its audit; `--follow` waits for more until
-  the run ends.
+  changes found beside its outcome, and the notices troupe raised while it went.
+- **`troupe logs`** shows a run's events and the notices troupe raised while it went, in order, then its outcome and
+  its audit; `--follow` waits for more until the run ends.
 - **`troupe diff`** shows what a run in its own worktree changed, as git's binary diff, byte for byte, so you can
   pipe it to `git apply`.
 - **`troupe accept`** applies a worktree run's changes to your files, unstaged, all or nothing, then removes its
@@ -136,7 +136,7 @@ troupe status [<run>] [--limit <limit>] [--json]
 
 ### `troupe logs`
 
-Show a run's events in order.
+Show a run's events and notices in order.
 
 ```text
 troupe logs <run> [--follow] [--json]
@@ -145,7 +145,7 @@ troupe logs <run> [--follow] [--json]
 | Argument | Required | What it is |
 |---|---|---|
 | `<run>` | Yes | A run's id, or at least its first 8 characters |
-| `--follow` | No | Wait for new events until the run ends |
+| `--follow` | No | Wait for new events and notices until the run ends |
 | `--json` | No | Print updates and the result as JSON |
 
 ### `troupe diff`

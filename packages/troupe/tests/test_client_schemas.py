@@ -62,6 +62,19 @@ NOTICE = {
         "details": {"seconds": 30},
     },
 }
+LOGGED_NOTICE: dict[str, Any] = {
+    "kind": "run-notice",
+    "runId": RUN_ID,
+    "at": AT,
+    "notice": NOTICE["notice"],
+}
+RUN_NOTICE: dict[str, Any] = {"at": AT, "notice": NOTICE["notice"]}
+RECORDING_ERROR = {
+    "code": "events.version-conflict",
+    "problem": "p",
+    "fix": "f",
+    "details": {"reason": "another writer recorded first"},
+}
 
 
 def changed(data: dict[str, Any], **changes: object) -> dict[str, Any]:
@@ -165,7 +178,46 @@ ACCEPTED = [
     ),
     ("logs-request.schema.json", {"run": RUN_ID, "follow": True}, "follow"),
     ("logs-update.schema.json", EVENT, "an event"),
-    ("logs-result.schema.json", {"run": SUMMARY, "events": [EVENT], "notices": []}, "a log"),
+    ("logs-result.schema.json", {"run": SUMMARY, "log": [EVENT], "notices": []}, "a log"),
+    # Requirement: The logs result holds the run's log
+    (
+        "logs-result.schema.json",
+        {
+            "run": changed(SUMMARY, notices=[RUN_NOTICE]),
+            "log": [EVENT, LOGGED_NOTICE],
+            "notices": [],
+        },
+        "a log with a recorded notice after an event",
+    ),
+    ("logs-update.schema.json", LOGGED_NOTICE, "a recorded notice while following"),
+    # Requirement: A run summary carries its run's recorded notices
+    (
+        "status-result.schema.json",
+        {"runs": [changed(SUMMARY, notices=[RUN_NOTICE])], "notices": []},
+        "a run that fell silent",
+    ),
+    (
+        "status-result.schema.json",
+        {
+            "runs": [
+                changed(
+                    SUMMARY,
+                    state="interrupted",
+                    drop_outcome=None,
+                    drop_error=None,
+                    drop_endedAt=None,
+                    notices=[RUN_NOTICE],
+                )
+            ],
+            "notices": [],
+        },
+        "an interrupted run's recorded notice",
+    ),
+    (
+        "perform-result.schema.json",
+        {"run": changed(SUMMARY, recording={"notice": "run.silent", "error": RECORDING_ERROR})},
+        "a run whose recording failed at a notice",
+    ),
     (
         "perform-result.schema.json",
         {
@@ -314,6 +366,7 @@ REFUSED = [
             "stderr",
             "recording",
             "audit",
+            "notices",
         )
     ],
     (
@@ -328,7 +381,47 @@ REFUSED = [
     ("status-request.schema.json", {"verbose": True}, "an unknown field at the top"),
     ("logs-request.schema.json", {}, "logs with no run"),
     ("logs-request.schema.json", {"run": RUN_ID, "follow": "yes"}, "follow that isn't a boolean"),
-    ("logs-result.schema.json", {"run": SUMMARY, "events": [{}], "notices": []}, "an empty event"),
+    ("logs-result.schema.json", {"run": SUMMARY, "log": [{}], "notices": []}, "an empty event"),
+    (
+        "logs-result.schema.json",
+        {"run": SUMMARY, "events": [EVENT], "notices": []},
+        "the log under its old name, events",
+    ),
+    (
+        "logs-result.schema.json",
+        {"run": SUMMARY, "log": [{**LOGGED_NOTICE, "seq": 0}], "notices": []},
+        "a logged notice with a seq",
+    ),
+    (
+        "logs-update.schema.json",
+        {**LOGGED_NOTICE, "kind": "notice"},
+        "a recorded notice as a notice",
+    ),
+    (
+        "status-result.schema.json",
+        {"runs": [changed(SUMMARY, notices=[])], "notices": []},
+        "a summary with an empty notices list",
+    ),
+    (
+        "status-result.schema.json",
+        {"runs": [changed(SUMMARY, notices=[NOTICE["notice"]])], "notices": []},
+        "a recorded notice without its time",
+    ),
+    (
+        "perform-result.schema.json",
+        {
+            "run": changed(
+                SUMMARY,
+                recording={"failedAt": 2, "notice": "run.silent", "error": RECORDING_ERROR},
+            )
+        },
+        "a recording that names both a seq and a notice",
+    ),
+    (
+        "perform-result.schema.json",
+        {"run": changed(SUMMARY, recording={"error": RECORDING_ERROR})},
+        "a recording that names neither",
+    ),
     (
         "status-result.schema.json",
         {

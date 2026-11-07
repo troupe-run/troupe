@@ -20,7 +20,16 @@ from runtesting import INIT, OK, Harness, failing_at, request, script, theatre, 
 from storetesting import git_service, segments
 from troupe.core.config import aggregate as config_aggregate
 from troupe.core.errors import TroupeError
-from troupe.core.runs.aggregate import ENDED, REPORTED, STARTED, TOPICS, WORKTREE_MADE, Run
+from troupe.core.runners.limits import RunLimits
+from troupe.core.runs.aggregate import (
+    ENDED,
+    NOTICED,
+    REPORTED,
+    STARTED,
+    TOPICS,
+    WORKTREE_MADE,
+    Run,
+)
 
 # troupe.core.runs re-exports perform the function, so the module is reached by name.
 perform_module = importlib.import_module("troupe.core.runs.perform")
@@ -93,6 +102,17 @@ def test_every_line_a_worktree_run_records_validates_by_topic_with_its_worktree_
     assert "runner_reported" not in started
     made = next(line for line in lines if line.get("topic") == WORKTREE_MADE)["state"]
     assert made["clones"] == sorted(made["clones"])
+    assert _problems(lines) == []
+
+
+def test_every_line_a_run_that_raised_notices_records_validates_by_topic(tmp_path: Path) -> None:
+    quick = RunLimits(start_timeout=10.0, cancel_grace=2.0, run_timeout=20.0, silence_announce=0.3)
+    harness = Harness(theatre(tmp_path), limits=quick)
+    retry = {"type": "retry", "attempt": 1, "delayMs": 10, "reason": "network"}
+    harness.perform(request(script(INIT, {"wait": {"ms": 800}}, {"event": retry}, OK)))
+    lines = _lines(harness)
+    noticed = [line["state"]["notice"]["code"] for line in lines if line.get("topic") == NOTICED]
+    assert noticed == ["run.silent", "run.retrying"]
     assert _problems(lines) == []
 
 
@@ -420,6 +440,70 @@ def test_a_never_started_end_with_a_format_and_no_transcript_does_not_validate()
 def test_an_end_recorded_before_audits_with_none_validates() -> None:
     ended = load(SCHEMAS / "events" / "run-ended.schema.json")
     assert validator_for(ended["$id"], SCRIPTED).is_valid(_ended({}))
+
+
+SILENT = {
+    "code": "run.silent",
+    "problem": "The run has sent no event for 30s.",
+    "fix": "Wait, or cancel the run if it seems stuck.",
+    "details": {"seconds": 30.0},
+}
+RECORDING_ERROR = {
+    "code": "internal.unexpected",
+    "problem": "troupe hit an unexpected error: OSError: disk full",
+    "fix": "This is a bug in troupe.",
+}
+
+
+def _noticed(**fields: object) -> dict[str, Any]:
+    """A Run.Noticed payload holding the run.silent notice, with ``fields`` replacing its own."""
+    state = _ended({})
+    del state["outcome"]
+    state["lineage"]["via"] = "cli"
+    return {**state, "notice": SILENT, **fields}
+
+
+@pytest.mark.parametrize(
+    ("change", "valid"),
+    [
+        ({}, True),
+        ({"notice": {**SILENT, "code": "run.no-such-notice"}}, False),
+        ({"notice": {"code": "run.silent", "problem": "Silent."}}, False),
+        ({"seq": 3}, False),
+    ],
+    ids=["a notice", "an undeclared code", "a notice with no fix", "a seq"],
+)
+def test_a_noticed_payload_validates_exactly_when_it_holds_one_declared_notice(
+    change: dict[str, Any], valid: bool
+) -> None:
+    noticed = load(SCHEMAS / "events" / "run-noticed.schema.json")
+    assert validator_for(noticed["$id"], SCRIPTED).is_valid(_noticed(**change)) is valid
+
+
+def test_a_noticed_payload_without_its_notice_does_not_validate() -> None:
+    noticed = load(SCHEMAS / "events" / "run-noticed.schema.json")
+    state = _noticed()
+    del state["notice"]
+    assert not validator_for(noticed["$id"], SCRIPTED).is_valid(state)
+
+
+@pytest.mark.parametrize(
+    ("recording", "valid"),
+    [
+        ({"failedAt": 2, "error": RECORDING_ERROR}, True),
+        ({"notice": "run.silent", "error": RECORDING_ERROR}, True),
+        ({"failedAt": 2, "notice": "run.silent", "error": RECORDING_ERROR}, False),
+        ({"error": RECORDING_ERROR}, False),
+        ({"notice": "not a code", "error": RECORDING_ERROR}, False),
+    ],
+    ids=["a run event", "a notice", "both", "neither", "a notice that isn't a code"],
+)
+def test_an_ends_recording_validates_exactly_when_it_names_an_event_or_a_notice(
+    recording: dict[str, Any], valid: bool
+) -> None:
+    ended = load(SCHEMAS / "events" / "run-ended.schema.json")
+    state = {**_ended({}), "recording": recording}
+    assert validator_for(ended["$id"], SCRIPTED).is_valid(state) is valid
 
 
 def test_a_recorded_payload_with_a_field_its_topic_does_not_define_is_refused(
