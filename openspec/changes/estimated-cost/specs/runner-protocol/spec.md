@@ -100,14 +100,16 @@ token at another kind's rate.
 - **WHEN** a run's usage has `cacheWriteTokens` 0 and its price has no `cacheWrite`
 - **THEN** the estimate is worked out from the other counters
 
-### Requirement: The host refuses an estimate it gave no price for
-The host SHALL treat a `result` carrying `estimatedCostUsd` as a protocol violation when the run's `run/start`
-carried no price.
+### Requirement: The host drops an estimate it gave no price for
+When the run's `run/start` carried no price, the host SHALL record a `result` carrying `estimatedCostUsd` without
+it, keep the run's own outcome, and raise the notice `run.estimate-dropped`, naming the runner and saying troupe
+gave it no price.
 
 #### Scenario: An estimate with no price given
-- **WHEN** a runner whose `run/start` had no `runtime.price` sends a `result` with `estimatedCostUsd`
-- **THEN** the host treats it as a protocol violation, and the run's outcome says so
+- **WHEN** a runner whose `run/start` had no `runtime.price` sends an ok `result` with `estimatedCostUsd`
+- **THEN** the recorded `result` has no `estimatedCostUsd`, the run succeeds, and a `run.estimate-dropped` notice
+  names the runner
 
 #### Scenario: An estimate with a price given
 - **WHEN** a runner whose `run/start` carried a price sends a `result` with `estimatedCostUsd`
-- **THEN** the host records the `result` as sent
+- **THEN** the host records the `result` as sent, and raises no notice

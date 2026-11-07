@@ -118,13 +118,20 @@ the contract's. The issue frames it as the runner's report. So the runner works 
 by one function in the SDK, `troupe_plugin_sdk.cost.estimate(usage, price) -> float | None`, standard library only.
 The OpenAI runner calls it when `_Spend.cost()` is `None` and the run has a price.
 
-### D9. The host refuses an estimate it gave no price for
+### D9. The host drops an estimate it gave no price for, and says so
 
 `troupe.core.runners.host` already checks a run's events beyond the schema (the first event is `init`, nothing comes
-after `result`). It gains one check: `estimatedCostUsd` with no `price` in the `run/start` it sent is a protocol
-violation, with a problem that says so. It's cheap, and it turns "a runner guessed" into an outcome rather than a
-number in the store. The host doesn't recompute the estimate to check its value. That would re-derive D7 in core, and
-a runner that gets the arithmetic wrong is a bug in that runner, caught by its own tests.
+after `result`). It gains one more: a `result` with `estimatedCostUsd` from a run whose `run/start` carried no price.
+
+First drafted as a protocol violation, which ends the run as crashed. A side agent pointed out that this throws away
+a successful run's outcome over a cost field, and that, unlike the other violations, a bad estimate doesn't make the
+rest of the event stream untrustworthy. The owner chose drop-and-warn (2026-11-07). So the host removes the field
+before the result is recorded or passed on, which keeps the guess out of the store, keeps the run's own outcome, and
+raises the notice `run.estimate-dropped` (details: the runner's name, from its `init`). The notice is shown as
+`run.retrying` is, so the runner's bug is visible without costing the run.
+
+The host doesn't recompute an estimate to check its value. That would re-derive D7 in core, and a runner that gets
+the arithmetic wrong is a bug in that runner, caught by its own tests.
 
 ### D10. Recording the price
 
@@ -160,7 +167,8 @@ the changelog. No spec Purpose changes, so there's no infrastructure pull reques
   the whole map as JSON, the exact-match and environment-model scenarios, and `config get --resolved`.
 - **End to end through perform** with the scripted runner: its runtime check gains `price`, which proves that
   `run/start` carried the price `Run.Started` recorded. A scripted result with `estimatedCostUsd` and no price
-  produces the protocol-violation outcome. With a price, the result is recorded as sent.
+  succeeds, is recorded with no estimate, and raises `run.estimate-dropped`. With a price, the result is recorded as
+  sent, and no notice is raised.
 - **OpenAI runner:** the fake endpoint's usage with and without a price, cache reads without a `cacheRead` rate, no
   usage, and a service that reports a cost (no estimate). The fixture replays get no estimate, since their runs have
   no price.

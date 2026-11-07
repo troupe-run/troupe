@@ -22,8 +22,8 @@ service reported. The contract is still a draft, so this is the cheap time to ad
   none of its own: a price troupe didn't give is a guess.
 - **A missing price leaves the cost absent, never guessed.** No price for the run's model, a usage counter the
   service didn't report, or a counter with tokens but no price for it: each leaves `estimatedCostUsd` out.
-- **troupe refuses an estimate it didn't ask for.** A `result` with `estimatedCostUsd` from a run whose `run/start`
-  carried no price is a protocol violation.
+- **troupe drops an estimate it didn't ask for.** A `result` with `estimatedCostUsd` from a run whose `run/start`
+  carried no price is recorded without it, and a `run.estimate-dropped` notice says so. The run keeps its outcome.
 - **The run's record says which price it used.** `Run.Started` already records the resolved runtime; it gains the
   price with its source, so an estimate can be checked against the tokens and the price that made it.
   `troupe config get --resolved` shows the runtime's prices.
@@ -31,7 +31,7 @@ service reported. The contract is still a draft, so this is the cheap time to ad
 - **The OpenAI runner estimates** when the service reports no cost and `run/start` carries a price. Its spec's "The
   runner SHALL NOT estimate a cost" is replaced.
 - **The scripted runner can script `estimatedCostUsd`**, so troupe's tests can drive both the valid case and the
-  violation.
+  dropped one.
 
 Not **BREAKING**: every new field is optional. A runner sends `estimatedCostUsd` only when `run/start` carried a
 price, which a troupe from before this change never sends. Released as a protocol change (a `feat(protocol)` commit;
@@ -65,7 +65,8 @@ None.
   runtime.schema.json` (a price, the resolved runtime), `protocol/schemas/config/runtime.schema.json` (`prices`), and
   their copies under `packages/troupe/src/troupe/protocol/`.
 - Core: `troupe.core.runtimes` (resolving the run's price), the run start that builds `run/start` and `Run.Started`,
-  `troupe.core.runners.host` (the violation check).
+  `troupe.core.runners.host` (dropping an estimate it gave no price for), and the notice catalogue
+  (`troupe.core.notices`, the protocol's notice schema) for `run.estimate-dropped`.
 - `packages/troupe-plugin-sdk` (`ResultEvent`, the runtime hand-off type, the estimator).
 - `plugins/runner-openai` (loop's cost), `plugins/runner-scripted` (options schema).
 - Docs: `contributing/runners.md`, `docs/stagecraft/runtimes.md`, `plugins/runner-openai/README.md`; the generated
