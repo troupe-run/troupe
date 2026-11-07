@@ -111,11 +111,14 @@ have been made (`error`), or when Ollama refuses (`error`).
 | `done_reason` `length` | `log` warning |
 | the run's end | one `result`, with `turns` (the requests made), the duration, and `usage` |
 
-`usage.inputTokens` is the sum of each answer's `prompt_eval_count`, and `outputTokens` the sum of its `eval_count`.
-Ollama reports the prompt tokens it took from its cache apart, as `prompt_eval_cached_count` (for example, 4 cached
-beside 258 evaluated): they aren't in `inputTokens`, which is what the runner contract means by it (the input not
-counted in a cache counter). Until #282 reports them as `cacheReadTokens`, a run's counters add up to less than its
-whole input. A run reports no cost: nothing tells the runner a price.
+Each answer's `prompt_eval_count` is its whole prompt, including the tokens Ollama took from its cache, which it
+reports as `prompt_eval_cached_count` (a second request sent the same 78-token prompt reports 78, with 77 cached).
+`usage.cacheReadTokens` is the sum of each answer's `prompt_eval_cached_count`, `inputTokens` the sum of its
+`prompt_eval_count` less that, and `outputTokens` the sum of its `eval_count`, so a run's whole input is
+`inputTokens + cacheReadTokens`, as the runner contract means them. When any answer leaves out its cached count,
+nothing is subtracted and `cacheReadTokens` is left out: the cached tokens stay in `inputTokens`. A counter no answer
+reported is left out too. There's no `cacheWriteTokens`: Ollama reports nothing that maps to it. A run reports no cost:
+nothing tells the runner a price.
 
 ## The transcript
 

@@ -125,6 +125,7 @@ class _Answer:
     tool_calls: list[Any] = field(default_factory=list)
     done_reason: str | None = None
     prompt_tokens: int | None = None
+    cached_tokens: int | None = None
     output_tokens: int | None = None
 
 
@@ -174,7 +175,8 @@ class Conversation:
         self._tools = Tools.for_declaration(Declaration.from_run_start(start), tool_limits(window))
         self._messages: list[bytes] = []
         self._requests = 0
-        self._prompt_tokens: int | None = None
+        self._input_tokens: int | None = None
+        self._cache_read_tokens: int | None = None
         self._output_tokens: int | None = None
         self._ended = False
 
@@ -359,6 +361,7 @@ class Conversation:
                 reason = data.get("done_reason")
                 answer.done_reason = reason if isinstance(reason, str) else None
                 answer.prompt_tokens = _count(data.get("prompt_eval_count"))
+                answer.cached_tokens = _count(data.get("prompt_eval_cached_count"))
                 answer.output_tokens = _count(data.get("eval_count"))
                 return answer
         raise RetryableError("network", "the connection ended before Ollama finished its answer")
@@ -366,7 +369,13 @@ class Conversation:
     def _after(self, answer: _Answer) -> None:
         """Count the answer, note a cut one, and report its text."""
         if answer.prompt_tokens is not None:
-            self._prompt_tokens = (self._prompt_tokens or 0) + answer.prompt_tokens
+            # Ollama's prompt count includes the tokens it took from its cache. They're counted
+            # apart, and only beside the prompt they're part of (design D1, D2).
+            cached = answer.cached_tokens
+            if cached is not None:
+                cached = min(cached, answer.prompt_tokens)
+                self._cache_read_tokens = (self._cache_read_tokens or 0) + cached
+            self._input_tokens = (self._input_tokens or 0) + answer.prompt_tokens - (cached or 0)
         if answer.output_tokens is not None:
             self._output_tokens = (self._output_tokens or 0) + answer.output_tokens
         if answer.done_reason == "length":
@@ -431,8 +440,9 @@ class Conversation:
         usage = {
             key: value
             for key, value in (
-                ("inputTokens", self._prompt_tokens),
+                ("inputTokens", self._input_tokens),
                 ("outputTokens", self._output_tokens),
+                ("cacheReadTokens", self._cache_read_tokens),
             )
             if value is not None
         }
