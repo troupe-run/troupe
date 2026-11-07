@@ -144,7 +144,7 @@ Its limit, in `troupe.core.defaults`:
 | Code | When |
 |---|---|
 | `config.invalid` | A change would make config break a rule: an unknown field, an option its runner doesn't define, a missing effect check, a bad name. Names the path and the rule |
-| `config.path-malformed` | A config path typed in a command can't be read: an unclosed `[`, an escape other than `\]` or `\\` inside brackets, a backslash outside them, an empty key, or text straight after a `]`. Names the text, the character where reading failed and the rule |
+| `config.path-malformed` | A config path typed in a command can't be read: an unclosed `[`, an escape other than `\]` or `\\` inside brackets, a backslash outside them, an empty key, text straight after a `]`, a dot before a `[` (`a.[b]`), a stray `]`, or an `=` outside brackets anywhere but `config set`'s `<path>=<value>` (`config unset a=b`). Names the text, the character where reading failed and the rule |
 | `config.conflict` | Branches' config changes conflict, so config can't be used until they're resolved |
 | `config.file-not-troupes` | A config file isn't one troupe wrote, so it won't be replaced. A conflicted file with a side troupe didn't write names that side and the side to take; a file git merged from troupe's versions, met by a command other than `troupe flush` or the `config set` that writes it, names `troupe flush` |
 | `config.unknown-file` | A file in a config directory matches no kind of config file |
