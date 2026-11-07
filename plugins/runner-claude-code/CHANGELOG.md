@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.0](https://github.com/troupe-run/troupe/compare/troupe-runner-claude-code-v0.1.0...troupe-runner-claude-code-v0.2.0) (2026-11-07)
+
+
+### Features
+
+* carry declared effects and a scratch directory to runners ([ce62005](https://github.com/troupe-run/troupe/commit/ce6200565f60b7a1b6661f2061aa7994cedb7d86))
+* **claude-code:** capture fixtures through the runner's own rules ([2e25dce](https://github.com/troupe-run/troupe/commit/2e25dce0494625c266e59da14c113fb9c888f60d))
+* **claude-code:** translate declared effects into permission rules ([7ed5cf1](https://github.com/troupe-run/troupe/commit/7ed5cf1e6ec9596af2fafde03e392a6084546b46))
+
 ## 0.1.0 (2026-11-01)
 
 
