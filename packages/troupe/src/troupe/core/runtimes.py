@@ -330,8 +330,14 @@ def for_run(
         raise TroupeError(
             "runtime.credential-unset",
             problem=f"The runtime {name!r} reads its credential from {where}, which isn't set.",
-            fix=f"Set {where} in your environment to the key for {name}, or point the runtime "
-            f"at another variable with {env_name(name, 'credential_env')}.",
+            fix=(
+                f"Set {env_name(name, 'credential_env')} to the name of the variable that holds "
+                f"the key for {name}, not the key itself, and set that variable, or unset "
+                f"{env_name(name, 'credential_env')} to use the runtime's own."
+                if "namedBy" in naming
+                else f"Set {where} in your environment to the key for {name}, or point the "
+                f"runtime at another variable with {env_name(name, 'credential_env')}."
+            ),
             details={"runtime": name, **naming},
         )
     if not well_formed(value):  # before too short: "abc\n" is likelier a file's line ending (D4)

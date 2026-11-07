@@ -465,6 +465,13 @@ def test_a_name_from_the_environment_is_never_repeated_in_a_refusal(
             assert form not in _error(raised)
 
 
+def test_an_unset_name_from_the_environment_says_it_must_be_a_name_not_the_key() -> None:
+    with pytest.raises(TroupeError) as raised:
+        for_run("myhost", "tester", None, _on("https://x.example"), {BY_ENV: HEX_NAME})
+    assert f"Set {BY_ENV} to the name of the variable that holds the key" in raised.value.fix
+    assert "not the key itself" in raised.value.fix
+
+
 @pytest.mark.parametrize(("value", "code"), CREDENTIAL_REFUSALS)
 def test_a_name_from_config_is_named_in_a_refusal(value: str | None, code: str) -> None:
     env = {"K": value} if value is not None else {}
