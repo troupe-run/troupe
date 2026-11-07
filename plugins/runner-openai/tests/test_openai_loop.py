@@ -369,6 +369,48 @@ def test_a_service_that_reports_no_usage_gets_a_warning_and_a_result_without_usa
     assert "usage" not in _result(ran)
 
 
+def _wrong_shape(used: dict[str, Any] | None) -> Reply:
+    """A completed response whose output isn't a list, with ``used`` as its usage."""
+    done = final([message("x")], used=used)
+    done["response"]["output"] = 3
+    return Reply(lines=sse([done]))
+
+
+def test_a_wrong_shaped_responses_readable_usage_and_cost_are_counted_into_the_error_result(
+    tmp_path: Path,
+) -> None:
+    script = [
+        _called(usage(100, 10, cost=0.001)),
+        _wrong_shape(usage(200, 20, cost=0.002)),
+    ]
+    ran = run(tmp_path, script)
+    result = _result(ran)
+    assert result["status"] == "error"
+    assert "output isn't a list" in result["message"]
+    assert result["usage"] == {"inputTokens": 300, "outputTokens": 30, "cacheReadTokens": 0}
+    assert result["costUsd"] == 0.003
+    assert result["turns"] == 2
+    assert len(ran.fake.requests) == 2
+
+
+def test_a_wrong_shaped_response_whose_usage_cant_be_read_leaves_the_result_without_usage(
+    tmp_path: Path,
+) -> None:
+    done = final([message("x")], used=usage(200, 20))
+    done["response"]["output"] = 3
+    done["response"]["usage"] = "lots"
+    result = _result(run(tmp_path, [_called(usage(100, 10)), Reply(lines=sse([done]))]))
+    assert result["status"] == "error"
+    assert "usage" not in result
+    assert result["turns"] == 2
+
+
+def test_a_failure_with_no_response_counts_no_turn_or_usage(tmp_path: Path) -> None:
+    result = _result(run(tmp_path, [_called(usage(100, 10)), error_reply(401, "no")]))
+    assert result["usage"] == {"inputTokens": 100, "outputTokens": 10, "cacheReadTokens": 0}
+    assert result["turns"] == 1
+
+
 def test_a_service_that_reports_no_cost_gives_a_result_without_cost(tmp_path: Path) -> None:
     assert "costUsd" not in _result(run(tmp_path, [text_reply("ok")]))
 

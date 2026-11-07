@@ -41,6 +41,26 @@ NOT be recorded, except the response headers the runner names in one place.
 - **WHEN** a request is answered 200 with `Content-Type: application/json`
 - **THEN** the transcript holds a record of that response's body
 
+### Requirement: Fixtures pair service output with protocol events
+Each fixture SHALL hold a service's responses for one run, its provenance, and the run events and outcome they map
+to. Responses SHALL be recorded from a real service where it can be made to give them, and otherwise derived from a
+recorded one or built from the service's documented shape, and the provenance SHALL say which. A test SHALL replay
+each fixture through the fake endpoint.
+
+#### Scenario: Replaying a fixture
+- **WHEN** a fixture's recorded responses are replayed through the fake endpoint
+- **THEN** the runner sends exactly the fixture's expected events, and the host derives its expected outcome
+
+#### Scenario: The fixtures there are
+- **WHEN** the fixtures are listed
+- **THEN** there is at least a run with tool calls that succeeds against OpenAI and one against local Ollama, a
+  rejected credential, a rate limit, a server error, a broken stream, an incomplete response, a refusal and a response
+  finished in the wrong shape, and each names its service and whether it was recorded, derived or built
+
+#### Scenario: A fixture built from documentation
+- **WHEN** a fixture's responses weren't recorded
+- **THEN** its provenance names what it was derived from, or the documentation page its shape was built from
+
 ## ADDED Requirements
 
 ### Requirement: A response finished in the wrong shape ends the run

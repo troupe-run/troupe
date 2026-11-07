@@ -16,11 +16,13 @@ from fake_endpoint import (
     error_event_reply,
     error_reply,
     event,
+    final,
     function_call,
     sse,
     status_reply,
     text_reply,
     tool_reply,
+    usage,
 )
 from troupe_runner_openai.exchange import ExchangeFailedError, Retry, exchange, retry_after
 from troupe_runner_openai.service import AbortedError, Call, Endpoint, parse_endpoint
@@ -163,6 +165,110 @@ def test_a_stream_cut_mid_tool_call_is_dropped_and_retried_as_network() -> None:
     assert [c.call_id for c in reply.tool_calls] == ["c2"]
     assert [r.reason for r in run.retries] == ["network"]
     assert any(r["kind"] == "dropped" for r in run.records)
+
+
+def _args_as_object() -> Reply:
+    """A reply whose final event's function_call has its arguments as a JSON object, not text."""
+    done = final([function_call("c1", "Write", "{}")], used=usage(100, 10))
+    done["response"]["output"][0]["arguments"] = {"file_path": "a.txt"}
+    return Reply(lines=sse([done]))
+
+
+@pytest.mark.parametrize(
+    ("reply", "words"),
+    [
+        (_args_as_object(), "tool call's arguments is an object, not text."),
+        (Reply(lines=["data: not json", ""]), "An event in the response's stream isn't JSON"),
+    ],
+    ids=["arguments as an object", "an event that isn't JSON"],
+)
+def test_a_response_finished_in_the_wrong_shape_ends_the_exchange_without_a_retry(
+    reply: Reply, words: str
+) -> None:
+    with FakeEndpoint([reply, text_reply("never sent")]) as fake:
+        run = Run(fake)
+        message = _failed(run)
+    assert len(fake.requests) == 1
+    assert run.retries == []
+    assert not any(r["kind"] == "dropped" for r in run.records)
+    assert message.startswith("The service's response can't be read: ")
+    assert words in message
+    assert "Retrying can't fix a response the service finished" in message
+
+
+def test_a_wrong_shaped_responses_readable_usage_comes_with_the_failure() -> None:
+    with FakeEndpoint([_args_as_object()]) as fake, pytest.raises(ExchangeFailedError) as raised:
+        Run(fake)()
+    assert raised.value.answered
+    assert raised.value.usage is not None
+    assert raised.value.usage["input_tokens"] == 100
+
+
+def test_a_failure_with_no_response_says_nothing_was_answered() -> None:
+    with (
+        FakeEndpoint([error_reply(401, "no")]) as fake,
+        pytest.raises(ExchangeFailedError) as raised,
+    ):
+        Run(fake)()
+    assert not raised.value.answered
+    assert raised.value.usage is None
+
+
+# A successful answer that isn't a stream
+
+
+def test_a_200_with_a_json_body_ends_the_exchange_naming_the_type_without_a_retry() -> None:
+    body = b'{"id": "resp_1", "object": "response", "status": "completed", "output": []}'
+    with FakeEndpoint([Reply(200, body=body), text_reply("never sent")]) as fake:
+        run = Run(fake)
+        message = _failed(run)
+    assert len(fake.requests) == 1
+    assert run.retries == []
+    assert message.startswith(
+        "The service answered HTTP 200 with application/json, not the stream "
+        "(text/event-stream) the runner asked for: "
+    )
+    assert '"id": "resp_1"' in message
+    assert {"kind": "body", "body": body.decode()} in run.records
+
+
+def test_a_200_in_openais_error_shape_quotes_the_services_message() -> None:
+    body = json.dumps({"error": {"message": "Streaming is off for this key", "code": "x"}})
+    with FakeEndpoint([Reply(200, body=body.encode())]) as fake:
+        message = _failed(Run(fake))
+    assert "asked for: Streaming is off for this key. Check" in message
+
+
+def test_a_200_whose_body_cant_be_read_whole_still_ends_the_exchange() -> None:
+    short = Reply(
+        200,
+        headers=[("Content-Type", "application/json"), ("Content-Length", "100")],
+        chunks=[b'{"id": "re'],
+    )
+    with FakeEndpoint([short, text_reply("never sent")]) as fake:
+        run = Run(fake)
+        message = _failed(run)
+    assert len(fake.requests) == 1
+    assert "with application/json" in message
+    assert "its body couldn't be read" in message
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        Reply(
+            headers=[("Content-Type", "text/event-stream; charset=utf-8")],
+            lines=text_reply("ok").lines,
+        ),
+        Reply(no_content_type=True, lines=text_reply("ok").lines),
+    ],
+    ids=["a stream type with a parameter, as OpenAI sends", "no content type"],
+)
+def test_a_stream_named_with_a_parameter_or_named_not_at_all_is_read(reply: Reply) -> None:
+    with FakeEndpoint([reply]) as fake:
+        run = Run(fake)
+        assert run().text == "ok"
+    assert run.retries == []
 
 
 def test_a_stream_silent_past_the_timeout_is_abandoned_and_retried_as_network() -> None:

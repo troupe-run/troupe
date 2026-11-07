@@ -23,6 +23,7 @@ REQUIRED = {
     "incomplete",
     "refusal",
     "failed-response",
+    "wrong-shape",
 }
 """The fixtures the spec names: a successful tool loop against OpenAI and one against local Ollama,
 and each way a hosted service fails that a fixture can show."""

@@ -170,6 +170,19 @@ def test_a_stream_cut_short_ends_or_breaks_without_the_rest() -> None:
     assert "data: [DONE]" not in received
 
 
+def test_a_body_read_whole_is_returned() -> None:
+    with FakeEndpoint([Reply(200, body=b'{"id": "resp_1"}')]) as fake:
+        assert _call(fake.endpoint).open().body() == b'{"id": "resp_1"}'
+
+
+def test_a_body_that_breaks_off_before_its_length_is_a_network_error() -> None:
+    short = Reply(200, headers=[("Content-Length", "100")], chunks=[b'{"id": "re'])
+    with FakeEndpoint([short]) as fake:
+        response = _call(fake.endpoint).open()
+        with pytest.raises(NetworkError, match="body broke off"):
+            response.body()
+
+
 def test_aborting_from_another_thread_wakes_a_blocked_read_within_a_second() -> None:
     with FakeEndpoint([Reply(lines=["data: {}", "", Hold()])]) as fake:
         call = _call(fake.endpoint)

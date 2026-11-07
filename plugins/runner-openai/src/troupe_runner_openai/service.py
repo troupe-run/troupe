@@ -226,6 +226,26 @@ class Response:
                 raise NetworkError("A line of the response's stream isn't UTF-8.") from None
             yield text.removesuffix("\n").removesuffix("\r")
 
+    def body(self) -> bytes:
+        """The body, up to ERROR_BODY_MAX_BYTES, for a 2xx that isn't a stream. Raises
+        NetworkError when it can't be read whole, and AbortedError when the call is aborted."""
+        length = self._response.length  # what Content-Length promised, when it was given
+        try:
+            # read() raises IncompleteRead when the body stops short of a Content-Length;
+            # read(n) would return the short body as if it were whole.
+            whole = length is not None and length <= ERROR_BODY_MAX_BYTES
+            data = self._response.read() if whole else self._response.read(ERROR_BODY_MAX_BYTES)
+        except TimeoutError:
+            self._call.raise_if_aborted()
+            raise NetworkError(
+                f"The service sent nothing for {self._call.stream_timeout:g} seconds."
+            ) from None
+        except (OSError, http.client.HTTPException, ValueError) as error:
+            self._call.raise_if_aborted()
+            raise NetworkError(f"The response's body broke off: {_words(error)}.") from None
+        self._call.raise_if_aborted()
+        return data
+
     def close(self) -> None:
         self._response.close()
 

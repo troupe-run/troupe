@@ -7,6 +7,7 @@ openai-style-runner design D6, D7, D9).
         reply = exchange(instructions, input)    # retries inside
         turn event for its text, if any
         a refusal, an incomplete or unknown status, a call without a call_id: error result
+        a response in the wrong shape: error result, its usage counted when it can be read
         no function call: ok result with the text
         carry out each call in order through the SDK
         input += the reply's output items, unchanged, then one function_call_output per call
@@ -212,6 +213,11 @@ class Loop:
                 spend,
             )
         except ExchangeFailedError as error:
+            if error.answered:
+                # A response the service finished in the wrong shape: it did the work, so its
+                # usage counts when it can be read, and the result has none when it can't
+                # (openai-wrong-shape-ends-run design D5).
+                spend.add(error.usage)
             return self._result("error", error.message, spend)
         except AbortedError:
             return None

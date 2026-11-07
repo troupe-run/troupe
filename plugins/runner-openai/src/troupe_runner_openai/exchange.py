@@ -2,11 +2,12 @@
 D8, D10).
 
 ``exchange`` sends a request, reads its streamed response into a reply, and retries what retrying
-can fix: a rate limit (429), a server error (5xx), a network error, a timeout and a broken stream.
-Each retry is reported through ``on_retry`` before its delay. What retrying can't fix (a refused
-credential, quota, a context-length error, any other client error, a redirect, a wait longer than
-the cap, or attempts running out) raises ExchangeFailedError, with the message the run's result
-carries.
+can fix: a rate limit (429), a server error (5xx), a network error, a timeout and a stream cut
+short. Each retry is reported through ``on_retry`` before its delay. What retrying can't fix (a
+refused credential, quota, a context-length error, any other client error, a redirect, a wait
+longer than the cap, a response the service finished in a shape that can't be read, a 2xx that
+isn't a stream, or attempts running out) raises ExchangeFailedError, with the message the run's
+result carries.
 
 Every request body, response status and kept header, stream line, error body and dropped stream
 is passed to ``record``, framed as design D10 says, for the transcript. Masking the credential is
@@ -35,19 +36,28 @@ from troupe_runner_openai.service import (
     Call,
     Endpoint,
     NetworkError,
+    Response,
     StatusError,
 )
-from troupe_runner_openai.stream import Reply, StreamError, StreamParser
+from troupe_runner_openai.stream import Reply, ShapeError, StreamError, StreamParser
 
 RetryReason = Literal["rate-limit", "server", "network"]
 
 
 class ExchangeFailedError(Exception):
-    """The exchange failed in a way retrying can't fix. ``message`` is the result's message."""
+    """The exchange failed in a way retrying can't fix. ``message`` is the result's message.
 
-    def __init__(self, message: str) -> None:
+    ``answered`` is true when the service finished a response the run must count, one in the wrong
+    shape (openai-wrong-shape-ends-run design D5), and ``usage`` is its usage when that could be
+    read. Every other failure got no response to count."""
+
+    def __init__(
+        self, message: str, answered: bool = False, usage: dict[str, Any] | None = None
+    ) -> None:
         super().__init__(message)
         self.message = message
+        self.answered = answered
+        self.usage = usage
 
 
 @dataclass(frozen=True)
@@ -183,6 +193,30 @@ def _kept(headers: dict[str, str]) -> dict[str, str]:
     }
 
 
+STREAM_TYPE = "text/event-stream"
+"""The media type a streamed response is sent as, which the runner asks for (design D4)."""
+
+
+def _not_a_stream(response: Response, record: Record) -> ExchangeFailedError | None:
+    """The failure for a 2xx whose Content-Type is present and isn't a stream, with its body
+    recorded; None for a stream, or a response that names no type and is read as one (design D4)."""
+    said = response.headers.get("content-type")
+    if said is None or said.partition(";")[0].strip().lower() == STREAM_TYPE:
+        return None
+    try:
+        body = response.body()
+    except NetworkError as error:
+        told = f"its body couldn't be read ({str(error).rstrip('.')})."
+    else:
+        record({"kind": "body", "body": body.decode("utf-8", "replace")})
+        told = _sentence(_service_error(body)[0])
+    return ExchangeFailedError(
+        f"The service answered HTTP {response.status} with {_cut(said.strip(), 200)}, not the "
+        f"stream ({STREAM_TYPE}) the runner asked for: {told} Check that the runtime's endpoint "
+        "serves OpenAI's Responses API with streaming."
+    )
+
+
 def _attempt(call: Call, record: Record) -> Reply:
     try:
         response = call.open()
@@ -193,6 +227,9 @@ def _attempt(call: Call, record: Record) -> Reply:
     record({"kind": "response", "status": response.status, "headers": _kept(response.headers)})
     parser = StreamParser()
     try:
+        failure = _not_a_stream(response, record)
+        if failure is not None:
+            raise failure
         for line in response.lines():
             record({"kind": "stream", "line": line})
             if parser.feed(line):
@@ -229,6 +266,14 @@ def exchange(
             retryable = _failed(reply)
         except StatusError as error:
             retryable = classify(error, endpoint.responses_url)
+        except ShapeError as error:
+            raise ExchangeFailedError(
+                f"The service's response can't be read: {_sentence(str(error))} Retrying can't "
+                "fix a response the service finished, so the run ends here. Check that the "
+                "runtime's endpoint serves OpenAI's Responses API.",
+                answered=True,
+                usage=error.usage,
+            ) from None
         except (NetworkError, StreamError) as error:
             retryable = _Retryable("network", str(error))
             record({"kind": "dropped", "reason": retryable.message})

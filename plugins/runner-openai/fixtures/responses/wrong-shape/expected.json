@@ -1,0 +1,41 @@
+{
+  "requests": 1,
+  "outcome": "failed",
+  "events": [
+    {
+      "type": "init",
+      "seq": 0,
+      "runner": {
+        "name": "openai",
+        "version": "<package version>"
+      },
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "Delete",
+        "Move"
+      ],
+      "engine": {
+        "name": "responses",
+        "model": "gpt-6-luna"
+      },
+      "effects": "checked"
+    },
+    {
+      "type": "result",
+      "seq": 1,
+      "status": "error",
+      "message": "The service's response can't be read: The response's tool call's arguments is an object, not text. Retrying can't fix a response the service finished, so the run ends here. Check that the runtime's endpoint serves OpenAI's Responses API.",
+      "turns": 1,
+      "usage": {
+        "inputTokens": 75,
+        "outputTokens": 21,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      }
+    }
+  ]
+}
