@@ -2,6 +2,7 @@
 
 import asyncio
 import base64
+import dataclasses
 import json
 import shutil
 import sys
@@ -82,6 +83,7 @@ def _run(
     direction: str = "test",
     effects: p.EffectsDeclaration = p.READ_ONLY_DECLARATION,
     scratch_root: Path | None = None,
+    runtime: p.RunStartRuntime | None = None,
 ) -> Ran:
     """Run the scripted runner (or ``argv``) and check every message troupe sent against the
     contract, with the scripted runner's schemas bound. ``valid_options=False`` marks options the
@@ -97,6 +99,7 @@ def _run(
         options if options is not None else {"script": script or {"steps": []}},
         character=character,
         effects=effects,
+        runtime=runtime,
     )
     ran: dict[str, Any] = {"events": [], "notices": [], "sent": [], "received": [], "times": []}
 
@@ -306,6 +309,42 @@ def test_each_protocol_violation_crashes_the_run_naming_it(
     assert expected in ran.outcome.error.problem
     assert "line" in ran.outcome.error.problem
     assert ran.outcome.ending is Ending.KILLED
+
+
+# Requirement: The host refuses an estimate it gave no price for (spec: runner-protocol)
+
+ESTIMATE = {**OK, "estimatedCostUsd": 0.5}
+UNPRICED = p.RunStartRuntime("lm-studio", "http://127.0.0.1:1234/v1", "m", credential=False)
+
+
+@pytest.mark.parametrize(
+    "runtime",
+    [pytest.param(None, id="no runtime"), pytest.param(UNPRICED, id="a runtime with no price")],
+)
+def test_an_estimate_troupe_gave_no_price_for_crashes_the_run_naming_it(
+    tmp_path: Path, runtime: p.RunStartRuntime | None
+) -> None:
+    ran = _run(tmp_path, {"steps": [{"event": INIT}, {"event": ESTIMATE}]}, runtime=runtime)
+    assert (ran.outcome.outcome, _code(ran)) == (Outcome.CRASHED, "runner.protocol")
+    assert ran.outcome.error is not None
+    assert "estimatedCostUsd" in ran.outcome.error.problem
+    assert "no price" in ran.outcome.error.problem
+    assert "result" not in ran.types
+
+
+def test_an_estimate_troupe_gave_a_price_for_is_recorded_as_sent(tmp_path: Path) -> None:
+    priced = dataclasses.replace(UNPRICED, price=p.Price(input=2, output=8))
+    ran = _run(tmp_path, {"steps": [{"event": INIT}, {"event": ESTIMATE}]}, runtime=priced)
+    assert ran.outcome.outcome is Outcome.SUCCEEDED
+    [result] = [e for e in ran.events if isinstance(e, p.ResultEvent)]
+    assert result.estimated_cost_usd == 0.5
+    assert result.cost_usd is None
+
+
+def test_a_reported_cost_needs_no_price(tmp_path: Path) -> None:
+    reported = {**OK, "costUsd": 0.5}
+    ran = _run(tmp_path, {"steps": [{"event": INIT}, {"event": reported}]})
+    assert ran.outcome.outcome is Outcome.SUCCEEDED
 
 
 KILL_STATUS = processes.KILLED_EXIT_CODE if sys.platform == "win32" else -9

@@ -277,6 +277,14 @@ class _Run:
         self.last_event = time.monotonic()
         self.silence_announced = False
         if isinstance(event, p.ResultEvent):
+            if event.estimated_cost_usd is not None and (
+                self.request.runtime is None or self.request.runtime.price is None
+            ):
+                raise _violation(
+                    "its result carried estimatedCostUsd, but troupe gave it no price in "
+                    "run/start: a runner estimates a cost only from troupe's price",
+                    self.line_number,
+                )
             self.result = event
         passed_on: p.RunEvent = event
         size = len(json.dumps(params, ensure_ascii=False, separators=(",", ":")).encode())
