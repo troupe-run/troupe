@@ -13,7 +13,7 @@
   test passes, `diff` of the two files is empty, and `git diff` shows only `description` values changed.
 - [x] 1.3 Say the same in the SDK's `Usage` docstring (`packages/troupe-plugin-sdk/src/troupe_plugin_sdk/runner.py`).
   Verify: `uv run pytest packages/troupe-plugin-sdk` passes.
-- [ ] 1.4 `contributing/runners.md`: the `result` row of the run events table points to a new "What usage counts" note
+- [x] 1.4 `contributing/runners.md`: the `result` row of the run events table points to a new "What usage counts" note
   under it, which states D1 and D2 with the two engine shapes (an input count that leaves the cache out, as
   Anthropic's; one that includes it, as OpenAI's) and the subtraction. Verify: the row's anchor link reaches the note
   in a rendered preview (`gh markdown-preview` or GitHub's file view on the pushed branch), and every counter name in
