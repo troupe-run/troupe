@@ -181,6 +181,51 @@ def test_an_event_that_cant_be_read_breaks_the_stream(data: str, words: str) -> 
         _parse([f"data: {data}", ""])
 
 
+# Wherever a stream is cut
+
+
+def _lines_as_received(text: str) -> list[str]:
+    """``text``'s lines as Response.lines yields them: split on newlines, each without its line
+    ending, and a last line the body ended inside yielded as it is."""
+    lines = text.split("\n")
+    if lines[-1] == "":
+        lines.pop()
+    return [line.removesuffix("\r") for line in lines]
+
+
+def _outcome(lines: list[str]) -> Parsed | Exception:
+    """The reply, or whatever exception reading it raised, so a caller can check its exact type."""
+    try:
+        return _parse(lines)
+    except Exception as error:
+        return error
+
+
+@pytest.mark.parametrize("which", [OPENAI, OLLAMA], ids=["openai", "ollama"])
+def test_a_recorded_stream_cut_anywhere_reads_whole_or_is_cut_short_never_anything_else(
+    which: Path,
+) -> None:
+    """The guard on openai-wrong-shape-ends-run's non-goal (design D6): a stream cut short is
+    still retried, however it's cut. Each cut, at every character, either reads the same reply as
+    the whole stream (cut after the final event's data) or raises StreamError, the retried error,
+    and never anything else."""
+    text = (which / "stream-1.txt").read_text(encoding="utf-8")
+    whole = _parse(_lines_as_received(text))
+    read_early, cut_short = 0, 0
+    for at in range(len(text) + 1):
+        outcome = _outcome(_lines_as_received(text[:at]))
+        if isinstance(outcome, Exception):
+            assert type(outcome) is StreamError, f"cut at {at}: {outcome!r}"
+            cut_short += 1
+        else:
+            assert outcome == whole, f"cut at {at}"
+            read_early += at < len(text)
+    # Both outcomes happen: a cut just after the final event's data, before its blank line, still
+    # reads the whole reply, and every cut before that is cut short.
+    assert read_early > 0
+    assert cut_short > 0
+
+
 # However the bytes arrive
 
 
