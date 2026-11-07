@@ -15,7 +15,7 @@ naming the path and the rule, and records nothing.
 
 import json
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -71,8 +71,11 @@ class Problem:
     count as changes to what broke it."""
 
 
-def problems(config: Mapping[str, Any]) -> list[Problem]:
-    """Every way ``config`` breaks a rule, in path order."""
+def problems(config: Mapping[str, Any], touched: Collection[str] = ()) -> list[Problem]:
+    """Every way ``config`` breaks a rule, in path order. ``touched`` names the actors the change
+    being checked sets or unsets anything under: one of them on a runner that isn't installed is
+    refused with runner.not-installed, and any other has its options left unchecked (spec: config;
+    runner-extras design D7)."""
     found: list[Problem] = []
     for key, node in sorted(config.items()):
         if key not in KINDS:
@@ -92,7 +95,7 @@ def problems(config: Mapping[str, Any]) -> list[Problem]:
     if isinstance(actors, Mapping):
         known = runtime_names(config)
         for name, actor in sorted(actors.items()):
-            found += actor_problems(name, actor, known)
+            found += actor_problems(name, actor, known, touched=name in touched)
     return sorted(found, key=lambda problem: problem.path)
 
 
@@ -138,10 +141,13 @@ def runtime_problems(name: str, runtime: object) -> list[Problem]:
 
 
 def actor_problems(
-    name: str, actor: object, runtimes: Sequence[str] | None = None
+    name: str, actor: object, runtimes: Sequence[str] | None = None, *, touched: bool = True
 ) -> list[Problem]:
     """Every way the actor ``name`` breaks a rule. ``runtimes`` are the runtimes it can name:
-    troupe's built-in ones when it's None."""
+    troupe's built-in ones when it's None. On a runner troupe knows but isn't installed, its
+    options can't be checked: when ``touched`` (the change sets or unsets something under it, or
+    it's about to be performed) that's refused with runner.not-installed; otherwise they're left
+    for when it's next changed or performed where its runner is installed (runner-extras D7)."""
     base = (ACTORS, name)
     if not ACTOR_NAME.match(name):
         return [
@@ -169,7 +175,19 @@ def actor_problems(
     if not schema_problems:
         found += _expect_problems(base, actor)
     runner = actor.get("runner")
-    if isinstance(runner, str) and runner in interim.RUNNERS:
+    if isinstance(runner, str) and runner in interim.RUNNERS and not interim.installed(runner):
+        if touched:
+            try:
+                interim.installed_runner(runner)
+            except TroupeError as error:
+                at = (*base, "runner")
+                raise TroupeError(
+                    error.code,
+                    problem=f"{dotted(at)}: {error.problem}",
+                    fix=error.fix,
+                    details={**error.details, "path": list(at)},
+                ) from None
+    elif isinstance(runner, str) and runner in interim.RUNNERS:
         options = actor.get("options", {})
         found += _schema_problems(
             (*base, "options"), options, interim.options_validator(runner), runner=runner
@@ -361,9 +379,10 @@ def _article(json_type: str) -> str:
     )
 
 
-def check(config: Mapping[str, Any]) -> None:
-    """Refuse ``config`` with ``config.invalid`` when it breaks any rule, naming the first."""
-    _refuse(problems(config))
+def check(config: Mapping[str, Any], touched: Collection[str] = ()) -> None:
+    """Refuse ``config`` with ``config.invalid`` when it breaks any rule, naming the first, and with
+    runner.not-installed when a ``touched`` actor's runner isn't installed (see ``problems``)."""
+    _refuse(problems(config, touched))
 
 
 def check_actor(name: str, config: Mapping[str, Any]) -> None:

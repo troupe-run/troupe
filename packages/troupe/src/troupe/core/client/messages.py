@@ -596,6 +596,8 @@ class PerformStep(Tagged):
     actor: str = json_field("actor", pattern=ACTOR_NAME)
     runner: str = json_field("runner", pattern=ACTOR_NAME)
     direction: str = json_field("direction", min_length=1)
+    extra: str | None = json_field("extra", min_length=1, default=None)
+    """The troupe-run extra the runner comes with. None: it's in the base install."""
 
 
 InitStep = CommitStep | AllowLocalStageStep | PerformStep

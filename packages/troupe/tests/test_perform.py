@@ -2,6 +2,7 @@
 design D5, D8, D9; account-for-every-worktree design D1, D2)."""
 
 import asyncio
+import dataclasses
 import hashlib
 import importlib
 import json
@@ -356,6 +357,46 @@ def test_a_runner_troupe_no_longer_knows_is_refused_and_leaves_nothing(
     with pytest.raises(TroupeError) as caught:
         harness.perform(request(script(INIT, OK)) | {"runner": "gone"})
     assert caught.value.code == "runner.unknown"
+    assert nothing_written(harness, before)
+
+
+@pytest.mark.parametrize("rehearse", [False, True], ids=["perform", "rehearse"])
+def test_a_runner_in_an_extra_that_isnt_installed_is_refused_naming_it_and_leaves_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, rehearse: bool
+) -> None:
+    """runs: "Perform refuses an actor whose runner isn't installed" (runner-extras design D6)."""
+    harness = Harness(theatre(tmp_path))
+    before = configured(harness, request(script(INIT, OK)))
+    absent = dataclasses.replace(
+        interim.RUNNERS["scripted"], package="troupe_runner_absent", in_extra=True
+    )
+    monkeypatch.setitem(interim.RUNNERS, "scripted", absent)
+    asked = request(script(INIT, OK)) | ({"rehearse": True} if rehearse else {})
+    with pytest.raises(TroupeError) as caught:
+        harness.perform(asked)
+    assert caught.value.code == "runner.not-installed"
+    assert caught.value.details == {
+        "runner": "scripted",
+        "package": "troupe_runner_absent",
+        "extra": "scripted",
+    }
+    assert "troupe-run[scripted]" in caught.value.fix
+    assert nothing_written(harness, before)
+    assert harness.updates == []
+
+
+def test_a_base_runner_missing_from_the_install_is_refused_naming_uv_sync(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    harness = Harness(theatre(tmp_path))
+    before = configured(harness, request(script(INIT, OK)))
+    absent = dataclasses.replace(interim.RUNNERS["scripted"], package="troupe_runner_absent")
+    monkeypatch.setitem(interim.RUNNERS, "scripted", absent)
+    with pytest.raises(TroupeError) as caught:
+        harness.perform(request(script(INIT, OK)))
+    assert caught.value.code == "runner.not-installed"
+    assert "extra" not in caught.value.details
+    assert "uv sync" in caught.value.fix
     assert nothing_written(harness, before)
 
 

@@ -117,6 +117,30 @@ def requirement_name(requirement: str) -> str:
     return normalise(match.group(1))
 
 
+def bundle_requirements(project: dict[str, Any]) -> list[tuple[str | None, str]]:
+    """Every requirement in the bundle's [project] table, with the extra it's in, or None for its
+    dependencies: the dependencies first, then each extra in file order (runner-extras design D3).
+    Every rule for the bundle's dependencies reads them through this, so its extras can't be left
+    out of one."""
+    found: list[tuple[str | None, str]] = [(None, r) for r in project.get("dependencies", [])]
+    for extra, requirements in project.get("optional-dependencies", {}).items():
+        found.extend((extra, requirement) for requirement in requirements)
+    return found
+
+
+def distinct_requirements(project: dict[str, Any]) -> list[tuple[str | None, str]]:
+    """bundle_requirements, each requirement once, where it first appears: 'all' repeats every
+    runner's extra (runner-extras design D4), so a problem with one is named once, in its own
+    extra."""
+    seen: set[str] = set()
+    found: list[tuple[str | None, str]] = []
+    for extra, requirement in bundle_requirements(project):
+        if requirement not in seen:
+            seen.add(requirement)
+            found.append((extra, requirement))
+    return found
+
+
 def members(root: Path) -> dict[str, str]:
     """Each workspace member's path, relative to root with '/' separators, and its project name."""
     pyproject = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
@@ -394,17 +418,23 @@ def _pin_problems(
     project = tomllib.loads((root / pyproject).read_text(encoding="utf-8"))["project"]
     paths = {normalise(name): path for path, name in workspace.items()}
     found: list[str] = []
-    for requirement in project.get("dependencies", []):
+    for extra, requirement in distinct_requirements(project):
         path = paths.get(requirement_name(requirement))
         if path is None:
             continue
         name = workspace[path]
         released = manifest.get(path, "0.0.0")
+        entry = (
+            f"{name}'s dependency in {pyproject}"
+            if extra is None
+            else f"{name}'s entry in the {extra!r} extra of {pyproject}"
+        )
+        pins = f"{pyproject} pins" if extra is None else f"{pyproject}'s {extra!r} extra pins"
         try:
             version = pinned_version(requirement, name, path)
         except ValueError:
             found.append(
-                f"{name}'s dependency in {pyproject} is {requirement!r}: pin it as "
+                f"{entry} is {requirement!r}: pin it as "
                 f'"{pin(name, released, path)}", or name it bare.'
             )
             continue
@@ -412,13 +442,13 @@ def _pin_problems(
             continue
         if released == "0.0.0":
             found.append(
-                f"{pyproject} pins {name} at {version}, but {MANIFEST} gives {path} 0.0.0: it "
+                f"{pins} {name} at {version}, but {MANIFEST} gives {path} 0.0.0: it "
                 f'hasn\'t released, so name it bare ("{name}") until the pinning pull request '
                 "pins it."
             )
         elif version_key(version) > version_key(released):
             found.append(
-                f"{pyproject} pins {name} at {version}, but {MANIFEST} gives {path} {released}: "
+                f"{pins} {name} at {version}, but {MANIFEST} gives {path} {released}: "
                 f"pin a version it has released, at most {released}."
             )
     return found
@@ -431,7 +461,7 @@ def bare(root: Path, bundle: str) -> list[str]:
     paths = {normalise(name): path for path, name in workspace.items()}
     project = tomllib.loads((root / bundle / "pyproject.toml").read_text(encoding="utf-8"))
     found: list[str] = []
-    for requirement in project["project"].get("dependencies", []):
+    for _, requirement in distinct_requirements(project["project"]):
         path = paths.get(requirement_name(requirement))
         if path is None or path == bundle:
             continue
@@ -440,7 +470,7 @@ def bare(root: Path, bundle: str) -> list[str]:
                 found.append(workspace[path])
         except ValueError:
             continue
-    return sorted(found)
+    return sorted(set(found))
 
 
 def listed(names: list[str]) -> str:

@@ -1,12 +1,15 @@
 """The interim runner table (perform-status-logs design D4): a name is the only way to a runner."""
 
 import asyncio
+import dataclasses
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 
+from troupe.core import interim, schemas
 from troupe.core.errors import TroupeError
-from troupe.core.interim import RUNNERS, runner_command
+from troupe.core.interim import RUNNERS, Runner, runner_command
 from troupe.core.runners.conformance import check_runner
 from troupe.core.runners.host import RunnerCommand
 from troupe.core.runners.limits import RunLimits
@@ -79,3 +82,61 @@ def test_what_each_runner_takes_as_a_runtime() -> None:
         "openai": "required",
         "scripted": "optional",
     }
+
+
+# A runner troupe knows whose package isn't installed is refused, naming the extra that installs
+# it (spec: runs, protocol; runner-extras design D5, D6).
+
+
+def absent(*, in_extra: bool) -> Runner:
+    """The scripted runner's entry, with a package that isn't installed anywhere."""
+    return dataclasses.replace(
+        RUNNERS["scripted"], package="troupe_runner_absent", in_extra=in_extra
+    )
+
+
+def test_every_shipped_runner_is_in_the_base_install() -> None:
+    """No shipped runner depends on more than the SDK yet (#291, #331 and #332 add the first)."""
+    assert {name: entry.in_extra for name, entry in RUNNERS.items()} == {
+        name: False for name in RUNNERS
+    }
+
+
+@pytest.mark.parametrize(
+    "use",
+    [runner_command, interim.options_schema, interim.options_validator, interim.installed_runner],
+    ids=["runner_command", "options_schema", "options_validator", "installed_runner"],
+)
+def test_a_runner_in_an_extra_that_isnt_installed_is_refused_naming_the_extra(
+    monkeypatch: pytest.MonkeyPatch, use: Callable[[str], object]
+) -> None:
+    monkeypatch.setitem(RUNNERS, "lm-studio", absent(in_extra=True))
+    with pytest.raises(TroupeError) as caught:
+        use("lm-studio")
+    assert caught.value.code == "runner.not-installed"
+    assert caught.value.details == {
+        "runner": "lm-studio",
+        "package": "troupe_runner_absent",
+        "extra": "lm-studio",
+    }
+    assert "'lm-studio'" in caught.value.problem
+    assert "troupe-run[lm-studio]" in caught.value.fix
+    assert schemas.INSTALL_PAGE in caught.value.fix
+
+
+def test_a_base_runner_that_isnt_installed_is_refused_with_no_extra() -> None:
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setitem(RUNNERS, "scripted", absent(in_extra=False))
+        with pytest.raises(TroupeError) as caught:
+            runner_command("scripted")
+    assert caught.value.code == "runner.not-installed"
+    assert caught.value.details == {"runner": "scripted", "package": "troupe_runner_absent"}
+    assert schemas.INSTALL_PAGE in caught.value.fix
+    assert "uv sync" in caught.value.fix
+    assert "troupe-run[" not in caught.value.fix
+    assert "brings every runner" not in caught.value.fix
+
+
+def test_an_installed_runner_is_found_without_importing_it() -> None:
+    entry = interim.installed_runner("scripted")
+    assert entry is RUNNERS["scripted"]

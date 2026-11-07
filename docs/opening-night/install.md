@@ -33,6 +33,24 @@ If your shell can't find `troupe`, run `uv tool update-shell` and open a new ter
 The command installs `troupe-run`, troupe with the adapters and runners it comes with, from its release tag on
 GitHub, and puts `troupe` on your path. [Your first theatre](first-theatre.md) sets up a theatre to run it in.
 
+## Runners that come as extras
+
+A runner that uses a client library for its engine comes as an extra of `troupe-run`, named after the runner, so an
+install only carries the libraries of the runners you use. The command above installs every runner that needs nothing
+more. To add a runner that comes as an extra, give its name in brackets, or `all` for every one:
+
+<!-- x-release-please-start-version -->
+```sh
+uv tool install --no-sources "troupe-run[all] @ git+https://github.com/troupe-run/troupe@troupe-run-v0.1.0#subdirectory=packages/troupe-run"
+```
+<!-- x-release-please-end -->
+
+| Extra | Installs |
+|---|---|
+| `all` | Every runner that comes as an extra. No runner does yet, so for now it installs what the command above does. |
+
+An actor on a runner you haven't installed is refused, and the message names the extra to install.
+
 ## Install another version
 
 Each release is tagged `troupe-run-v<version>`, on [troupe's releases

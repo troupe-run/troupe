@@ -165,9 +165,10 @@ AUDITIONS: Mapping[str, Callable[[], dict[str, Any]]] = {
 
 def audition(runner: str | None) -> Audition:
     """The example actor for ``runner`` (DEFAULT_RUNNER when None). A runner troupe doesn't know is
-    runner.unknown, naming the ones it does, never the default."""
+    runner.unknown, naming the ones it does, never the default; one that isn't installed is
+    runner.not-installed, naming its extra (runner-extras design D8)."""
     name = DEFAULT_RUNNER if runner is None else runner
-    interim.runner(name)
+    interim.installed_runner(name)
     build = AUDITIONS.get(name)
     if build is None:
         raise TroupeError(

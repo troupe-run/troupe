@@ -1,0 +1,24 @@
+# The licences a runner plugin's dependencies may have, in two tiers: the one list
+# scripts/runner_licences.py checks every package a runner pulls in against (spec: runner-protocol;
+# runner-extras design D11, D13). Adding a licence to either tier is a reviewed change, with its
+# reason here.
+
+# Licences that put no condition on troupe's own code beyond keeping their notices.
+[permissive]
+"Apache-2.0" = "troupe's own licence."
+"MIT" = "Permissive: keep the copyright and permission notice."
+"BSD-2-Clause" = "Permissive: keep the copyright notice and conditions."
+"BSD-3-Clause" = "Permissive: as BSD-2-Clause, and no endorsement by name."
+"ISC" = "Permissive: functionally MIT."
+"PSF-2.0" = "Permissive: the Python Software Foundation's licence, as for typing-extensions."
+
+# Licences whose copyleft binds only changes to their own files. Allowed only as unmodified
+# dependencies installed as their own packages from a package index, never vendored, copied or
+# patched into troupe's source. Each names the notice its files carry, which the check looks for in
+# troupe's tracked files.
+[weak-copyleft."MPL-2.0"]
+reason = """httpx and httpcore depend on certifi (MPL-2.0), so lmstudio (#291), openai (#331) and \
+ollama (#332) all pull it in. MPL-2.0 binds only changes to its own files, so using it unmodified \
+leaves troupe's Apache-2.0 licence unaffected, as the ASF's category B treats it."""
+decided = "https://github.com/troupe-run/troupe/issues/333#issuecomment-6707703235"
+notice = "This Source Code Form is subject to the terms of the Mozilla Public License"

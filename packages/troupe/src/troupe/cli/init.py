@@ -21,6 +21,7 @@ from troupe.core.defaults import RUNTIMES
 from troupe.core.errors import TroupeError
 from troupe.core.exit_codes import ExitCode
 from troupe.core.runtimes import VARIABLE_PATTERN, env_name
+from troupe.core.schemas import INSTALL_PAGE
 from troupe.core.theatre import THEATRE_DIR
 
 COMMAND = "troupe init"
@@ -167,6 +168,11 @@ def _step_notes(step: dict[str, Any], entries: list[dict[str, Any]]) -> list[str
                 if isinstance(tokens, int)
                 else "."
             )
+        )
+    if step.get("extra"):
+        notes.append(
+            f"The {step['runner']} runner comes with troupe-run[{step['extra']}]: whoever runs "
+            f"this theatre elsewhere installs it with the command at {INSTALL_PAGE}."
         )
     notes.append(
         "The run works in its own worktree: see what it did with troupe diff, and keep it with "

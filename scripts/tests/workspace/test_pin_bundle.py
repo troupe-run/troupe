@@ -371,3 +371,26 @@ def test_pinning_the_last_bare_member_removes_the_exclusion_and_says_nothing_of_
     assert text is not None
     assert "still bare" not in text
     assert release_config.problems(copy) == []
+
+
+def test_a_release_of_a_runner_in_an_extra_moves_its_pin_in_the_extra_and_in_all(
+    copy: Path,
+) -> None:
+    """releases: "A runner in an extra released" (runner-extras design D3)."""
+    bundle_state.copy_runner_table(REPO, copy)
+    name = bundle_state.add_runner(copy, "lm-studio", extra="lm-studio")
+    path = path_of(copy, name)
+    (copy / path / "CHANGELOG.md").write_bytes(changelog(name).encode())
+    release(copy, name, "0.1.0")
+    pin_all(copy)
+    before = bundle_pyproject(copy).read_bytes()
+    release(copy, name, "0.1.1", "Bug Fixes")
+    moved = pin_bundle.moves(copy)
+    assert [(m.name, m.old, m.new) for m in moved] == [(name, "0.1.0", "0.1.1")]
+    pin_bundle.apply(copy, moved)
+    after = bundle_pyproject(copy).read_bytes()
+    old = release_config.pin(name, "0.1.0", path)
+    new = release_config.pin(name, "0.1.1", path)
+    assert bundle_state.extras(copy)["lm-studio"] == [new]
+    assert bundle_state.extras(copy)["all"] == [new]
+    assert after == before.replace(old.encode(), new.encode())

@@ -149,7 +149,8 @@ Its limit, in `troupe.core.defaults`:
 | `config.unknown-file` | A file in a config directory matches no kind of config file |
 | `settings.invalid-value` | A setting variable is set to something other than `true` or `false` |
 | `config.local-malformed` | This clone's record of the files flush wrote has a malformed line before its last |
-| `schemas.plugin-missing` | A runner's package isn't installed, or ships no schemas |
+| `runner.not-installed` | A change sets or unsets something under an actor whose runner troupe knows but isn't installed here, so its options can't be checked. Names the actor's runner path and the `troupe-run[<runner>]` extra; other changes and merges leave that actor's options unchecked instead ([runs.md](runs.md#notices-and-errors) has the same code at perform) |
+| `schemas.plugin-missing` | A plugin's package is installed but ships no schemas, or a plugin outside troupe's runner table isn't installed |
 | `config.file-rewritten` | (notice) A config file troupe wrote was missing or older, and was written again |
 | `config.merge-rewritten` | (notice) A config file git merged from versions troupe wrote was written again from the merged config, its bytes kept first. Says whether troupe marked it resolved in git, and if not, why not and to `git add` it |
 | `runtime.invalid-value` | A `TROUPE_RUNTIME_` variable is set to something its field doesn't accept. Names the variable, the value and what's accepted |

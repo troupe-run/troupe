@@ -125,10 +125,12 @@ def test_a_missing_plugins_fix_names_the_install_page_and_uv_sync_in_a_checkout(
     with pytest.raises(TroupeError) as caught:
         schemas.plugin_schemas_directory("troupe_runner_nobody")
     assert caught.value.fix == (
-        f"Reinstall troupe with the install command at {schemas.INSTALL_PAGE}, which brings every "
-        "runner troupe knows. If you run troupe from a checkout of troupe, run uv sync there "
+        f"Reinstall troupe with the install command at {schemas.INSTALL_PAGE}, adding the runner's "
+        "extra if it has one. If you run troupe from a checkout of troupe, run uv sync there "
         "instead."
     )
+    # An install no longer brings every runner: some are extras (runner-extras design D6).
+    assert "brings every runner" not in caught.value.fix
 
 
 def test_the_install_page_the_fix_links_to_is_in_the_docs() -> None:

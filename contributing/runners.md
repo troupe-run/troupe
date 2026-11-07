@@ -429,6 +429,41 @@ Every limit has its default in `troupe.core.defaults`, and each can be overridde
 | `RUNNER_STDERR_MAX_BYTES` | 1048576 | The runner's standard error kept (1 MiB): its first and last halves, with a marker between |
 | `RUNNER_FAIL_FAST_ON_AUTH_RETRY` | true | Whether a `retry` with reason `authentication` cancels the run at once |
 
+## Runners with client libraries
+
+A runner may depend on a maintained client library for its engine, and should prefer one to rebuilding the engine's
+protocol by hand (decision [#319](https://github.com/troupe-run/troupe/issues/319)). The plugin SDK still depends on
+the standard library alone. The library decides none of what the contract or the runner's own spec decides, and
+the runner-protocol spec says what the runner keeps, once:
+
+- [Retries follow troupe's named limits, not the library's](../openspec/specs/runner-protocol/spec.md#requirement-retries-follow-troupes-named-limits-not-the-librarys)
+- [A runner that uses a library follows no redirect and keeps the credential in its header](../openspec/specs/runner-protocol/spec.md#requirement-a-runner-that-uses-a-library-follows-no-redirect-and-keeps-the-credential-in-its-header)
+- [A runner that uses a library stops its request on cancel and end of input](../openspec/specs/runner-protocol/spec.md#requirement-a-runner-that-uses-a-library-stops-its-request-on-cancel-and-end-of-input)
+- [A library-backed runner's transcript holds what the library exposes](../openspec/specs/runner-protocol/spec.md#requirement-a-library-backed-runners-transcript-holds-what-the-library-exposes)
+- [A runner's dependencies are pinned and licensed compatibly with Apache-2.0](../openspec/specs/runner-protocol/spec.md#requirement-a-runners-dependencies-are-pinned-and-licensed-compatibly-with-apache-20)
+- [A weak-copyleft dependency is used only unmodified, as its own package](../openspec/specs/runner-protocol/spec.md#requirement-a-weak-copyleft-dependency-is-used-only-unmodified-as-its-own-package)
+
+The design that adds a library says how the runner keeps each one (for example `max_retries=0` with troupe's own
+loop), and what its transcript leaves out compared with the bytes on the wire. The runner's tests show each one
+against a fake service.
+
+A runner with a library is an optional extra of `troupe-run`, so an install only carries the libraries of the runners
+it uses. Adding one takes these steps, and each has a check that fails when it's missed:
+
+| Step | The check that fails without it |
+|---|---|
+| Add the library to the plugin's `dependencies`, and run `uv lock` | `uv sync --locked` in `scripts/check.py` |
+| Move the plugin from `troupe-run`'s `dependencies` to an extra named exactly after its runner (`lm-studio`, not the library's `lmstudio`), and add the same entry to `all` | The bundle check (`scripts/bundle.py`) |
+| Set `in_extra=True` on the runner's entry in core's runner table (`troupe.core.interim.RUNNERS`) | The bundle check |
+| While the plugin hasn't released, so the bundle names it bare, keep the bundle's commits out of release pull requests | The release configuration check (`scripts/release_config.py`) |
+| Add a row for the extra to the list on the [install page](../docs/opening-night/install.md) | The docs check (`scripts/tests/workspace/test_install_docs.py`) |
+| Check every package the library pulls in has a licence on one of the two tiers of `scripts/licences.toml`. Add one only in a reviewed change, with its reason | The licence check (`scripts/runner_licences.py`) |
+
+An actor on a runner that isn't installed is refused, naming `troupe-run[<runner>]`, at `troupe config set` on that
+actor, at `troupe perform` and at `troupe init --audition` (its error is in [runs.md](runs.md#notices-and-errors)). Config's other commands and
+merges leave that actor's options unchecked instead, so one teammate's actor doesn't block everyone else. CI's
+install check installs `troupe-run[all]` on every platform and Python, and rehearses an audition on every runner.
+
 ## Checking a runner
 
 troupe's conformance suite checks a runner against this contract: the handshake, refusing a protocol version it
