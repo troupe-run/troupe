@@ -140,3 +140,12 @@ def test_a_merge_without_the_runner_still_checks_the_actors_effects(
     assert conflict.paths == (("actors", "lead"),)
     assert conflict.rule is not None
     assert "'docs/a.md' is expected" in conflict.rule
+
+
+@pytest.mark.parametrize("value", [5, True, "lead"], ids=["a number", "a boolean", "a string"])
+def test_actors_set_to_a_value_is_config_invalid_not_a_crash(repo: Repo, value: object) -> None:
+    """Working out the touched actors mustn't assume actors is a group (review of #338)."""
+    with pytest.raises(TroupeError) as caught:
+        set_config(repo, [(["actors"], value)])
+    assert caught.value.code == "config.invalid"
+    assert events(repo) == 0
