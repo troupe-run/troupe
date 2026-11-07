@@ -61,7 +61,7 @@
 - [x] 4.1 Run the live test against the local Ollama (`TROUPE_LIVE_OLLAMA=1 uv run pytest
   packages/troupe/tests/test_ollama_live.py`), and read the `result` it recorded. Verify: the test passes, and if the
   run made more than one request, its `usage` holds `cacheReadTokens`, with `inputTokens + cacheReadTokens` equal to
-  the sum of its answers' `prompt_eval_count` in the transcript. Note what was seen in the commit message. The test
+  the sum of its answers' `prompt_eval_count` in the transcript. Note what was seen under this task. The test
   runs one small model, so ask the owner before running it if anything else heavy is running.
   (Done on 2026-11-07, owner's go-ahead, with `TROUPE_LIVE_OLLAMA_MODEL=qwen3:0.6b` against Ollama 0.40.14:
   passed, wrote `out/hello.txt`. Two answers: prompt 1240 with 0 cached, then 1390 with 1241 cached. The result had
