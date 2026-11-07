@@ -9,7 +9,7 @@ schema, so the property covers exactly what the schema accepts that the strategi
 import copy
 import re
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, get_args
 
 import pytest
 from hypothesis import given, settings
@@ -18,6 +18,7 @@ from hypothesis import strategies as st
 from client_schemas import check
 from troupe.core.client import messages as m
 from troupe.core.events.lineage import timestamp
+from troupe_plugin_sdk import runner as p
 from troupe_plugin_sdk.messages import Message, ProtocolError
 from troupe_plugin_sdk.runner import FAILURE_REASONS
 
@@ -217,6 +218,7 @@ def logged_events(draw: st.DrawFn) -> dict[str, Any]:
             [
                 {"type": "turn", "role": "assistant", "text": "hi"},
                 {"type": "log", "level": "info", "message": "m"},
+                {"type": "served_model", "model": "m-2026"},
                 {"type": "result", "status": "ok", "message": "done"},
                 {"type": "result", "status": "error", "reason": "budget", "message": "spent"},
                 {
@@ -790,3 +792,8 @@ def test_a_logged_notice_reads_back_as_its_own_kind_not_a_notice_update() -> Non
     update = m.parse_update(m.LogsUpdate, data)
     assert isinstance(update, m.LoggedNotice)
     assert update.to_data() == data
+
+
+def test_a_logged_event_holds_every_event_type_a_runner_sends_and_the_oversized_one() -> None:
+    held = {cls.TYPE for cls in get_args(m.HostEvent)}
+    assert held == {*p.EVENT_TYPES, "oversized"}

@@ -5,12 +5,19 @@ A runner numbers every event it sends from 0, with no gaps. ``EventNumbering`` i
 the runner uses it for its own events too, so tool events slot into the same sequence. Summaries
 are cut at a UTF-8 boundary to the summary limit, then further until the whole event fits
 run/start's ``eventMaxBytes``, measured as troupe's host measures it: the event's compact JSON.
+
+``ServedModels`` decides when a runner reports the model that answered (spec: runner-protocol, "A
+model other than init's is reported as it answers"; served-model design D2 to D4).
 """
 
 import json
 from typing import Any
 
 from troupe_plugin_sdk.defaults import SUMMARY_MAX_BYTES
+from troupe_plugin_sdk.runner import MODEL_PATTERN
+
+SHOWN_MODEL_MAX_BYTES = 256
+"""How much of a model name that can't be recorded a ``log`` warning shows."""
 
 
 class EventNumbering:
@@ -75,3 +82,36 @@ def fit(data: dict[str, Any], field: str, limit: int, event_max_bytes: int) -> d
         limit = max(0, utf8_size(fitted[field]) - over)
         fitted = {**data, field: cut(full, limit)}
     return fitted
+
+
+class ServedModels:
+    """The models that answered a run, against the one its init named (None when init named
+    none). ``note`` takes each name an engine or service gives and returns the event bodies to
+    send for it, without ``runId`` or ``seq``, which the runner adds as it numbers its events:
+
+    - none for an empty name, init's model, or a model already noted;
+    - one ``served_model`` the first time another model answers;
+    - one ``log`` warning, once per name, when the name isn't a model's shape (1 to 256
+      characters, no control character), since a cut name would record a model that doesn't
+      exist.
+    """
+
+    def __init__(self, asked: str | None) -> None:
+        self.asked = asked
+        self._noted: set[str] = set()
+
+    def note(self, model: str | None) -> list[dict[str, Any]]:
+        if not model or model == self.asked or model in self._noted:
+            return []
+        self._noted.add(model)
+        if MODEL_PATTERN.match(model):
+            return [{"type": "served_model", "model": model}]
+        shown = cut(json.dumps(model, ensure_ascii=False), SHOWN_MODEL_MAX_BYTES)
+        return [
+            {
+                "type": "log",
+                "level": "warning",
+                "message": f"The engine named a model troupe can't record, since it isn't 1 to "
+                f"256 characters without a control character: {shown}.",
+            }
+        ]

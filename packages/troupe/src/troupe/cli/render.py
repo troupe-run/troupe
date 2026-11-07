@@ -43,6 +43,7 @@ def render_event(logged: Mapping[str, Any]) -> str:
         f"{_first_line(event.get('outputSummary', ''))}",
         "retry": f"attempt {event.get('attempt')}, {event.get('reason')}",
         "log": f"{event.get('level')}: {_first_line(event.get('message', ''))}",
+        "served_model": f"{event.get('model')}",
         "result": f"{event.get('status')}"
         + (f" ({event['reason']})" if "reason" in event else "")
         + f": {_first_line(event.get('message', ''))}",

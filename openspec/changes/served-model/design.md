@@ -15,7 +15,7 @@ What each engine says about the model that answered, from the code and recording
 | OpenAI (Responses API) | the runtime's model | each response's `model` (parsed into `Reply.model`); today a `log` at `info`, once (`loop.py`) |
 | Claude Code | `system/init`'s `model` (what Claude Code resolved) | each `assistant` record's `message.model`, and the `result` record's `modelUsage` keys. Every recorded fixture shows `claude-haiku-5-5` throughout; the error fixtures' assistant records are `<synthetic>` and their `modelUsage` is empty |
 | Ollama (`/api/chat`) | the options' model | each answer line's `model`; every recording echoes the name asked for |
-| scripted | none | whatever the script sends |
+| scripted | none | whatever the script sends, from event steps its options schema lists one by one |
 
 Version 0 of the contract is the draft and changes in place (spec: runner-protocol, "Version 0 is the draft
 contract"), so a new event type needs no version or capability negotiation.
@@ -113,8 +113,8 @@ field; it isn't a protocol matter, and the transcript keeps the record.
   name outside `init`'s at most once and only names that match `MODEL_PATTERN`.
 - Schema: the strictness test covers the new definition; an SDK-mirror test checks `ServedModelEvent` against the
   schema, as for the other events.
-- Host: violation tests for `init`'s model and a repeat, driven through the scripted runner (which can send any
-  valid event), and a run whose `served_model` is oversized is kept out of line like the others.
+- Host: violation tests for `init`'s model and a repeat, driven through the scripted runner (whose options schema
+  gains a `served_model` event step), and a run whose `served_model` is oversized is kept out of line like the others.
 - OpenAI: the existing `test_a_model_other_than_the_one_asked_for_is_noted_once` becomes a `served_model` test on the
   fake endpoint; a run whose responses name the runtime's model has none (the recorded `gpt-6-luna` and `qwen3.5:4b`
   fixtures already answer as asked, so their expected events don't change).

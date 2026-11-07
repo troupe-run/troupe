@@ -123,6 +123,7 @@ have been made (`error`), or when Ollama refuses (`error`).
 | From Ollama | Run event |
 |---|---|
 | the preflight's version, and the runtime's model | `init`: engine `ollama`, its version and the model; the seven tools; `effects` `checked` |
+| an answer's `model`, when it isn't the one asked for | `served_model`, the first time that model answers, before the answer's other events |
 | an answer's text, once its last line has come | one `turn` (`assistant`), when the text isn't empty |
 | an answer's thinking | none: the transcript keeps it |
 | each tool call | `tool_call` and `tool_result`, from the SDK |

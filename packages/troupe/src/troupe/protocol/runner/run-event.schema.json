@@ -22,6 +22,7 @@
         {"$ref": "#/$defs/tool_result"},
         {"$ref": "#/$defs/retry"},
         {"$ref": "#/$defs/log"},
+        {"$ref": "#/$defs/served_model"},
         {"$ref": "#/$defs/result"}
       ]
     },
@@ -35,6 +36,7 @@
         {"$ref": "#/$defs/tool_result"},
         {"$ref": "#/$defs/retry"},
         {"$ref": "#/$defs/log"},
+        {"$ref": "#/$defs/served_model"},
         {"$ref": "#/$defs/result"},
         {"$ref": "#/$defs/oversized"}
       ]
@@ -148,6 +150,19 @@
         "message": {"type": "string"}
       }
     },
+    "served_model": {
+      "title": "served_model",
+      "description": "A model other than the one init named answered part of the run. Sent the first time each such model answers, before any event reporting that answer; never for init's model, and never twice for one model.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId", "seq", "type", "model"],
+      "properties": {
+        "runId": {"$ref": "jsonrpc.schema.json#/$defs/runId"},
+        "seq": {"$ref": "#/$defs/seq"},
+        "type": {"const": "served_model"},
+        "model": {"description": "The model that answered, as the engine or service named it.", "$ref": "../runtime.schema.json#/$defs/model"}
+      }
+    },
     "result": {
       "title": "result",
       "description": "What the runner saw at the end. status is error whenever the engine reported an error, whatever else it reported alongside it. An error result says why in reason; an ok result has none. It carries a reported cost or an estimate, never both.",
@@ -197,7 +212,7 @@
         "runId": {"$ref": "jsonrpc.schema.json#/$defs/runId"},
         "seq": {"$ref": "#/$defs/seq"},
         "type": {"const": "oversized"},
-        "originalType": {"enum": ["init", "turn", "tool_call", "tool_result", "retry", "log", "result"]},
+        "originalType": {"enum": ["init", "turn", "tool_call", "tool_result", "retry", "log", "served_model", "result"]},
         "bytes": {"type": "integer", "minimum": 1},
         "ref": {"$ref": "jsonrpc.schema.json#/$defs/sha256Ref"}
       }

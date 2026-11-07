@@ -156,6 +156,7 @@ repeats.
 | `tool_result` | `callId`, `isError`, `outputSummary`, `outputBytes` | `callId` matches an earlier `tool_call`. The full output belongs in the transcript. |
 | `retry` | `attempt`, `maxAttempts` (optional), `delayMs`, `reason`, `message` (optional) | `reason` is `authentication`, `rate-limit`, `network`, `server` or `other`. Send one each time the engine retries, or the runner retries a request to its engine itself. |
 | `log` | `level` (`debug`, `info`, `warning`, `error`), `message` | A diagnostic worth keeping with the run. |
+| `served_model` | `model` | A model other than the one `init` named answered part of the run, as the engine or service named it. Send it the first time each such model answers, before any event reporting that answer; never for `init`'s model, and never twice for one model (troupe treats either as a protocol violation). With no model on `init`, every model that answers is sent once. `model` has a model's shape (1 to 256 characters, no control character); a name outside it is a `log` warning instead. The plugin SDK's `ServedModels` decides. |
 | `result` | `status` (`ok` or `error`), `message`, `reason`, `turns`, `durationMs`, `usage {inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens}`, `costUsd` or `estimatedCostUsd` (all but `status` and `message` optional, and each `usage` counter too) | Exactly one, last, for a run that ends on its own. `reason` is present exactly when `status` is `error` (see [Why a run failed](#why-a-run-failed)). See [What usage counts](#what-usage-counts). At most one of the two costs (see [Cost: reported or estimated](#cost-reported-or-estimated)). |
 | `oversized` | `originalType`, `bytes`, `ref` | Written by troupe, never by a runner (see [Oversized events](#oversized-events)). |
 
@@ -374,11 +375,11 @@ output, each line paired with the events it maps to.
 | stream-json record | Run event |
 |---|---|
 | `system/init` | `init`, with the engine's name, version and model; the whole record stays in the transcript |
-| `assistant` message | A `turn` for its text, if it has any, then one `tool_call` per `tool_use` block. An API failure arrives this way too, as an `assistant` message with `error` set and the error's text as its content |
+| `assistant` message | A `served_model` first when its `message.model` isn't `system/init`'s, hasn't been sent and isn't `<synthetic>` (Claude Code's mark on a message it made itself); then a `turn` for its text, if it has any, then one `tool_call` per `tool_use` block. A subagent's messages map the same way. An API failure arrives this way too, as an `assistant` message with `error` set and the error's text as its content |
 | `rate_limit_event` | None while its status is `allowed` (the transcript keeps it); otherwise a `log` warning naming the status |
 | `user` message with `tool_result` blocks | one `tool_result` per block. A block whose call was never reported is a `log` warning instead, since a `tool_result` needs its `tool_call` |
 | `system/api_retry` | `retry`: `authentication_failed` → `authentication`, HTTP 429 → `rate-limit`, 5xx → `server`, no HTTP status (a connection error, which Claude Code reports as `"error": "unknown"`) → `network`, anything else → `other` |
-| `result` | `result`, with `status` `error` whenever `is_error` is true, whatever `subtype` says. An `error` result's `reason` comes from Claude Code's fields, never its text: a failed `subtype` by name (`error_max_turns` → `turn-limit`, `error_max_budget_usd` → `budget`, `error_during_execution` → `engine`, any other → `other`); for an API error, the last `assistant` record's `error` code when it names its cause (`authentication_failed`, `billing_error` → `quota`, `rate_limit`, `max_output_tokens` → `output-limit`), else the last `retry`'s reason (Claude Code calls a refused connection `server_error`), else `api_error_status` as for a retry; else `other`. An `assistant` record without an error clears both the error code and the retry before it: that call succeeded, so neither explains a later failure. Its `usage` maps `input_tokens`, `output_tokens`, `cache_read_input_tokens` and `cache_creation_input_tokens` onto `inputTokens`, `outputTokens`, `cacheReadTokens` and `cacheWriteTokens`; Anthropic's `input_tokens` already leaves out cache reads and writes, so it maps unchanged (see [What usage counts](#what-usage-counts)). Each tool in `permission_denials` is a `log` warning just before it |
+| `result` | `result`, with `status` `error` whenever `is_error` is true, whatever `subtype` says. An `error` result's `reason` comes from Claude Code's fields, never its text: a failed `subtype` by name (`error_max_turns` → `turn-limit`, `error_max_budget_usd` → `budget`, `error_during_execution` → `engine`, any other → `other`); for an API error, the last `assistant` record's `error` code when it names its cause (`authentication_failed`, `billing_error` → `quota`, `rate_limit`, `max_output_tokens` → `output-limit`), else the last `retry`'s reason (Claude Code calls a refused connection `server_error`), else `api_error_status` as for a retry; else `other`. An `assistant` record without an error clears both the error code and the retry before it: that call succeeded, so neither explains a later failure. Its `usage` maps `input_tokens`, `output_tokens`, `cache_read_input_tokens` and `cache_creation_input_tokens` onto `inputTokens`, `outputTokens`, `cacheReadTokens` and `cacheWriteTokens`; Anthropic's `input_tokens` already leaves out cache reads and writes, so it maps unchanged (see [What usage counts](#what-usage-counts)). Each model in `modelUsage` not yet sent (and not `system/init`'s or `<synthetic>`) is a `served_model`, then each tool in `permission_denials` is a `log` warning, just before it |
 | a record type or `system` subtype not named here | a `log` at `debug` the first time it appears in the run, so a format change shows without failing the run |
 | a line that isn't a JSON object | a `log` warning |
 | every line | one `run/transcript` record, verbatim (`base64` if it isn't UTF-8), before any event it maps to |
@@ -399,6 +400,7 @@ each.
 | From Ollama | Run event |
 |---|---|
 | `/api/version`, and the runtime's model | `init`, with the engine's name, version and model |
+| an answer's `model`, when it isn't the one asked for | `served_model`, the first time that model answers, before the answer's other events |
 | an answer's text, once its `done` line has come | a `turn`, if it has any text |
 | an answer's `thinking` | none; the transcript keeps it |
 | each `tool_calls` entry | `tool_call` and `tool_result`, from the SDK. A call with no id gets `call-<request>-<position>` |
@@ -427,6 +429,7 @@ and from local Ollama's `/v1`.
 |---|---|
 | the runtime's model | `init`, with engine `responses` and the model |
 | the final event's response (`response.completed`, `.incomplete` or `.failed`, or an `error` event); deltas are read past | everything below |
+| its `model`, when it isn't the runtime's | `served_model`, the first time that model answers, before the response's other events |
 | its output text | a `turn` |
 | its reasoning items | none; the transcript keeps them, and the next request sends them back |
 | each `function_call` | `tool_call` and `tool_result`, from the SDK |
