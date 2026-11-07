@@ -354,7 +354,12 @@ class _Run:
             data = record.record.encode()
         data = self.mask.bytes(data)
         if record.kind is not None:
-            data = framed_record(record.kind, data, base64_=record.encoding == "base64")
+            framed = framed_record(record.kind, data, base64_=record.encoding == "base64")
+            if self.mask.bytes(framed) != framed:
+                # JSON escaping made a form of the credential (a newline before the rest of a
+                # credential that starts with n): store this record's masked bytes as base64.
+                framed = framed_record(record.kind, data, base64_=True)
+            data = framed
         if self.transcript is None:
             raise RuntimeError("the transcript writer isn't open")
         self.transcript.write(data + b"\n")

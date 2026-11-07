@@ -691,6 +691,7 @@ def test_a_transcript_step_of_a_kind_the_contract_doesnt_define_is_refused(
     error = session.play(script, valid=False)["error"]["data"]
     assert error["code"] == "scripted.invalid-script"
     assert "steps[0].transcript.kind" in error["problem"]
+    assert "not 'request'" in error["problem"]
     session.validate_all()
 
 

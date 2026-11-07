@@ -21,6 +21,11 @@ Each line SHALL validate against the protocol's stored transcript record schema.
 - **WHEN** a runner that accepted `transcript-kinds` sends a record holding the run's credential
 - **THEN** the stored line's record holds `[credential]` in its place, and the line is still valid JSON
 
+#### Scenario: An escape that would complete the credential
+- **WHEN** the run's credential starts with `n`, and a runner that accepted `transcript-kinds` sends a record holding a
+  newline (written `\u000a`) followed by the rest of the credential
+- **THEN** the stored line holds that record as base64 of its bytes, and no stored byte holds the credential
+
 ### Requirement: A run without kinds is stored as before
 When the runner didn't accept `transcript-kinds`, the host SHALL store each record's bytes, after masking, followed by
 `\n`, with nothing added.

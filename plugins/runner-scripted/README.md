@@ -26,7 +26,9 @@ only the `checkRuntime` and `echoCredential` steps use it.
 
 Started with `--transcript-kinds`, the runner accepts the contract's `transcript-kinds` capability when troupe
 offers it ([Record kinds](../../contributing/runners.md#record-kinds)); without it, it accepts no capability.
-Capabilities are chosen at the handshake, before a script arrives, so it's a flag rather than an option.
+Capabilities are chosen at the handshake, before a script arrives, so it's a flag rather than an option. Only
+transcript steps can carry a kind: the records an `echoCredential` step or a replayed recording sends have none, so
+in a run with `--transcript-kinds` they break the contract's rule, which troupe treats as a protocol violation.
 
 ## Schemas
 

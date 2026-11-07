@@ -426,6 +426,8 @@ def test_when_only_the_end_cannot_be_recorded_the_error_has_an_end_error_and_no_
     assert error.details["endError"]["code"] == "artifact.write-failed"
     assert "failedAt" not in error.details
     assert error.details["transcript"].startswith("sha256:")
+    # The end wasn't recorded, so the error is the only place that says how to read the lines.
+    assert error.details["transcriptFormat"] == "native"
     records = history(harness, error.details["run"])
     assert [r.topic for r in records] == [STARTED, REPORTED, REPORTED, REPORTED]
 

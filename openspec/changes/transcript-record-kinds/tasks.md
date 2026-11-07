@@ -28,9 +28,9 @@
   (`kind` and `record` required, `encoding` only `base64`, closed). Add its row to `protocol/README.md`'s table.
   Verify: `test_protocol_strict.py` passes and covers the new file, and an example line validates while one with
   `"encoding": "utf-8"` or an extra key doesn't.
-- [x] 2.4 `protocol/schemas/events/run-ended.schema.json`: add `transcriptFormat` (`native`, `kinds`), needing
-  `transcript` and requiring it in turn (`dependentRequired` both ways), forbidden with `never-started` as `transcript`
-  is. Verify: the runs spec's scenarios as schema tests (a transcript without its format doesn't validate,
+- [x] 2.4 `protocol/schemas/events/run-ended.schema.json`: add `transcriptFormat` (`native`, `kinds`), carried by the
+  existing `ending` rule: required with any ending but `never-started`, which forbids it as it forbids `transcript`
+  (design D4). Verify: the runs spec's scenarios as schema tests (a transcript without its format doesn't validate,
   `never-started` with a format doesn't, the format without a transcript doesn't).
 - [x] 2.5 `protocol/schemas/client/run.schema.json`: add `transcriptFormat` to the run summary, with `transcript` and
   `transcriptFormat` each requiring the other. Verify: a schema test shows a summary with one and not the other
