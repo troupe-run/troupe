@@ -252,3 +252,12 @@ def test_a_malformed_path_is_refused_before_anything_is_recorded(
     assert out == ""
     assert seen.requests == []
     assert _changes(repo) == before
+
+
+def test_resolved_for_an_unknown_bracketed_runtime_names_it_in_brackets_in_the_fix(
+    repo: Repo, seen: Seen
+) -> None:
+    code, _, _ = cli("config", "get", "--resolved", "runtimes[my.rt]")
+    assert code == 1
+    assert seen.error.details["path"] == ["runtimes", "my.rt"]
+    assert "troupe config set runtimes[my.rt].endpoint=" in seen.error.fix
