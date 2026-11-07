@@ -596,6 +596,12 @@ def test_the_built_in_openai_runtime_resolved(repo: Repo, monkeypatch: pytest.Mo
     assert "sk-test-canary" not in out + err
 
 
+def test_the_built_in_lm_studio_runtime_resolves_to_lm_studios_server_root(repo: Repo) -> None:
+    code, out, err = cli("config", "get", "--resolved", "runtimes.lm-studio")
+    assert code == 0, err
+    assert "  endpoint: http://127.0.0.1:1234 (from default)" in out.splitlines()
+
+
 def test_resolved_as_json_shows_each_value_and_its_source(
     repo: Repo, monkeypatch: pytest.MonkeyPatch
 ) -> None:

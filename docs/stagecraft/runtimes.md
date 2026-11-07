@@ -15,8 +15,9 @@ API, such as local Ollama's under `/v1` (`http://127.0.0.1:11434/v1`, not the bu
 Ollama runner needs one too: the built-in `ollama`, or one of your own for an Ollama elsewhere, whose endpoint is
 Ollama's own address with no path, such as `http://gpu-box.local:11434`. It refuses a runtime with a credential,
 since Ollama takes none. An Ollama actor still holding `model` or `endpoint` in its options, as early versions of
-`troupe init --audition` wrote it, is refused with the one `troupe config set` that moves them. The scripted runner
-takes one optionally, for troupe's own tests.
+`troupe init --audition` wrote it, is refused with the one `troupe config set` that moves them. The LM Studio runner
+needs one as well: the built-in `lm-studio`, LM Studio's server root, or one of your own. The scripted runner takes
+one optionally, for troupe's own tests.
 
 ## The runtimes troupe knows
 
@@ -26,7 +27,7 @@ troupe has three built in:
 |---|---|---|
 | `openai` | `https://api.openai.com/v1` | `OPENAI_API_KEY` |
 | `ollama` | `http://127.0.0.1:11434` | none |
-| `lm-studio` | `http://127.0.0.1:1234/v1` | none |
+| `lm-studio` | `http://127.0.0.1:1234` | none |
 
 Which runner each fits:
 
@@ -64,6 +65,13 @@ what you set, for review like any other config file:
 ```sh
 troupe config set runtimes.openai.model=gpt-4.1-mini
 troupe config set runtimes.openai.credential.env=MY_OPENAI_KEY
+```
+
+The built-in `lm-studio` is the address LM Studio's own API lives under. To run the OpenAI runner on LM Studio,
+through its OpenAI-compatible API, define a runtime of your own at its `/v1`:
+
+```sh
+troupe config set runtimes.lm-studio-openai.endpoint=http://127.0.0.1:1234/v1
 ```
 
 Define a service troupe doesn't know with its endpoint, and the rest as it needs:

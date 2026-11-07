@@ -27,22 +27,24 @@ has merged.
 
 ## 3. The built-in runtime (design D3)
 
-- [ ] 3.1 Change `defaults.RUNTIMES["lm-studio"]` to `{"endpoint": "http://127.0.0.1:1234"}`, and update
+- [x] 3.1 Change `defaults.RUNTIMES["lm-studio"]` to `{"endpoint": "http://127.0.0.1:1234"}`, and update
   `test_runtime_defaults.py` and any test that reads the old value. Verify: a test asserts the new endpoint, and
   `config get --resolved runtimes.lm-studio` shows it from `default` (the runtimes delta's new scenario), passing in
   core's suite.
-- [ ] 3.2 Update `docs/stagecraft/runtimes.md`: the built-in's endpoint, and how to put the OpenAI runner on LM Studio
+- [x] 3.2 Update `docs/stagecraft/runtimes.md`: the built-in's endpoint, and how to put the OpenAI runner on LM Studio
   with a runtime of your own at `/v1`. Verify: the docs page tests (user-docs contract) pass, and the page shows the
   `troupe config set` lines for that runtime.
 
 ## 4. Check the library's dependencies before locking them (design D15)
 
 - [ ] 4.1 Check that `lmstudio` 1.5.0 and every package it pulls in pass #333's licence check, which walks `uv.lock`
-  against an allowlist (Apache-2.0, MIT, BSD-2-Clause, BSD-3-Clause, ISC, PSF-2.0), and have wheels for, or build on,
-  Linux, macOS and Windows for Python 3.12 to 3.15 (msgspec is compiled). httpx pulls in `certifi`, which is MPL-2.0 and
-  isn't on that allowlist, and none of these packages is in `uv.lock` yet. If one fails either check, stop and raise it
-  with the owner. Verify: the list of packages, versions, licences and the wheels found is in the commit message that
-  adds the dependency, or the owner's answer is.
+  against an allowlist (Apache-2.0, MIT, BSD-2-Clause, BSD-3-Clause, ISC, PSF-2.0, and MPL-2.0 for unmodified
+  dependencies), and have wheels for, or build on, Linux, macOS and Windows for Python 3.12 to 3.15 (msgspec is
+  compiled). httpx pulls in `certifi`, which is MPL-2.0: the owner allowed MPL-2.0 for unmodified dependencies
+  (2026-11-07, recorded on #333, issuecomment-6707703235). msgspec 0.22.0 has wheels for cp312 to cp315 on all three
+  platforms (checked 2026-11-07). If any other package fails either check, stop and raise it with the owner. Verify:
+  the list of packages, versions, licences and the wheels found is in the commit message that adds the dependency, or
+  the owner's answer is.
 
 ## 5. Scaffold the plugin and wire it into the workspace (design D2, D15)
 
@@ -52,12 +54,12 @@ has merged.
   `uv lock` pins `lmstudio` and its dependencies, `uv sync` succeeds, and the package imports.
 - [ ] 5.2 Wire it into the root `pyproject.toml` (workspace source and dev group, ruff, mypy and pytest paths,
   import-linter root packages, `plugins import nothing from troupe`, `plugins are independent of each other`, the
-  OS-modules contract, and a seam contract that only the plugin's engine module imports `lmstudio`), `scripts/check.py`'s
-  scopes (`runner_lm_studio`), `scripts/check-paths.toml`, `release-please-config.json`, `.release-please-manifest.json`
-  and the changelog page. Leave it out of `troupe-run`'s base dependencies (group 11). Verify: `uv run pytest
-  scripts/tests` and `uv run lint-imports` pass, a scratch module that imports `troupe` makes `lint-imports` fail and is
-  then removed, and a test asserts that a change under `plugins/runner-lm-studio/src/` selects
-  `--scope runner_lm_studio` (quality-check delta).
+  OS-modules contract, and a seam contract that only the plugin's engine module imports `lmstudio`),
+  `scripts/check.py`'s scopes (`runner_lm_studio`), `scripts/check-paths.toml`, `release-please-config.json`,
+  `.release-please-manifest.json` and the changelog page. Leave it out of `troupe-run`'s base dependencies (group 11).
+  Verify: `uv run pytest scripts/tests` and `uv run lint-imports` pass, a scratch module that imports `troupe` makes
+  `lint-imports` fail and is then removed, and a test asserts that a change under `plugins/runner-lm-studio/src/`
+  selects `--scope runner_lm_studio` (quality-check delta).
 
 ## 6. Options, schemas and the runtime (design D3, D4, D5)
 

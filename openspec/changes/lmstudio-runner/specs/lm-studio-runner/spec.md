@@ -79,8 +79,9 @@ itself. An endpoint without an explicit port SHALL use port 80, as `http` does.
 - **THEN** `run/start` is refused with `lm-studio.unreachable`, and nothing connects to the default port
 
 ### Requirement: An endpoint the library can't use is refused
-A runtime endpoint that is `https`, or has a path other than `/`, SHALL be refused with `lm-studio.unsupported-endpoint`,
-naming the endpoint and why, before anything is sent. For a path, the fix SHALL give the endpoint without it.
+A runtime endpoint that is `https`, or has a path other than `/`, SHALL be refused with
+`lm-studio.unsupported-endpoint`, naming the endpoint and why, before anything is sent. For a path, the fix SHALL give
+the endpoint without it.
 
 #### Scenario: The OpenAI-compatible base
 - **WHEN** a run's runtime has the endpoint `http://127.0.0.1:1234/v1`
