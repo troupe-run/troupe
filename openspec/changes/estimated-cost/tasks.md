@@ -68,7 +68,7 @@ Each task's verification runs before it is ticked. `uv run scripts/check.py` pas
 
 ## 6. The host's check (design D9)
 
-- [ ] 6.1 In `troupe.core.runners.host`, when the `run/start` it sent had no price, drop `estimatedCostUsd` from a
+- [x] 6.1 In `troupe.core.runners.host`, when the `run/start` it sent had no price, drop `estimatedCostUsd` from a
   `result` before it's recorded or passed on, keep the run's outcome, and raise the notice `run.estimate-dropped`
   naming the runner. Add the code to the notice catalogue (`troupe.core.notices` and the protocol's notice schema),
   and change `contributing/runners.md`'s sentence about the protocol violation to say troupe drops the estimate and

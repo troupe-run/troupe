@@ -151,20 +151,30 @@ def test_a_run_on_a_model_config_doesnt_price_hands_over_and_records_no_price(
     assert "price" not in _start(harness, result.run.run_id)["runtime"]
 
 
-# Requirement: The host refuses an estimate it gave no price for (spec: runner-protocol)
+# Requirement: The host drops an estimate it gave no price for (spec: runner-protocol)
 
 ESTIMATE = {"event": {**OK["event"], "estimatedCostUsd": 0.5}}
 
 
-def test_an_estimate_with_no_price_given_ends_the_run_as_a_protocol_violation(
+def _dropped(harness: Harness) -> list[dict[str, Any]]:
+    return [
+        u["notice"]
+        for u in harness.updates
+        if u.get("kind") == "notice" and u["notice"]["code"] == "run.estimate-dropped"
+    ]
+
+
+def test_an_estimate_with_no_price_given_is_dropped_and_the_run_succeeds_with_a_notice(
     tmp_path: Path,
 ) -> None:
     harness = _harness(tmp_path, OPENAI_API_KEY=KEY)
     result = harness.perform(request(script(INIT, ESTIMATE), **OPENAI))
-    assert result.run.outcome == "crashed"
-    assert result.run.error is not None
-    assert result.run.error.code == "runner.protocol"
-    assert "estimatedCostUsd" in result.run.error.problem
+    assert result.run.outcome == "succeeded"
+    logged = harness.logs(run=result.run.run_id).events
+    [ended] = [e.event for e in logged if isinstance(e.event, p.ResultEvent)]
+    assert ended.estimated_cost_usd is None
+    [notice] = _dropped(harness)
+    assert notice["details"] == {"runner": "scripted"}
 
 
 def test_an_estimate_with_a_price_given_records_the_result_as_sent(tmp_path: Path) -> None:
@@ -175,6 +185,7 @@ def test_an_estimate_with_a_price_given_records_the_result_as_sent(tmp_path: Pat
     [ended] = [e.event for e in logged if isinstance(e.event, p.ResultEvent)]
     assert ended.estimated_cost_usd == 0.5
     assert ended.cost_usd is None
+    assert _dropped(harness) == []
 
 
 def test_a_run_with_no_runtime_records_none(tmp_path: Path) -> None:

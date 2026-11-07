@@ -131,8 +131,8 @@ and lineage records the local stage's effects as `unenforced`.
   it.
 - **`estimatedCostUsd` is an estimate,** and only from troupe's price: `run/start`'s `runtime.price`, in US dollars per
   million tokens (`input` and `output`, and optionally `cacheRead` and `cacheWrite`). Send it only when nothing
-  reported a cost and `run/start` carried a price. troupe treats an estimate from a run it gave no price as a protocol
-  violation, so never estimate from a price list of your own.
+  reported a cost and `run/start` carried a price, and never estimate from a price list of your own. troupe drops an
+  estimate from a run it gave no price, records the result without it, and warns with `run.estimate-dropped`.
 - **An estimate prices every token or is absent.** Leave it out when `usage` has no `inputTokens` or `outputTokens`,
   when the price has a rate for a counter your engine didn't report, or when a counter holds tokens the price has no
   rate for. Never price one kind of token at another's rate. `inputTokens` leaves out cache reads and writes (see
@@ -395,7 +395,9 @@ callback and a cancel signal.
   every process it started. The same happens after `shutdown`.
 - **Notices** tell the caller what is happening without waiting silently. They have the shape of
   [`notice.schema.json`](../protocol/schemas/notice.schema.json): `run.silent` when no event has arrived for
-  `RUN_SILENCE_ANNOUNCE_SECONDS`, and `run.retrying` for each `retry` event. A `retry` with reason
+  `RUN_SILENCE_ANNOUNCE_SECONDS`, `run.retrying` for each `retry` event, and `run.estimate-dropped` when a result
+  carries an estimate troupe gave no price for (see [Cost: reported or estimated](#cost-reported-or-estimated)). A
+  `retry` with reason
   `authentication` stops the run at once (`RUNNER_FAIL_FAST_ON_AUTH_RETRY`): a bad credential otherwise looks like
   a hang for minutes.
 - **Standard error** is kept in the artifact store too, up to `RUNNER_STDERR_MAX_BYTES`: its first and last halves,
