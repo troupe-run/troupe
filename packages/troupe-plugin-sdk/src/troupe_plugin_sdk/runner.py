@@ -44,6 +44,16 @@ ENDPOINT_PATTERN = re.compile(
 whitespace or control character (protocol/schemas/runtime.schema.json)."""
 MODEL_PATTERN = re.compile(r"\A[^\x00-\x1f\x7f]{1,256}\Z")
 
+Capability = Literal["transcript-kinds"]
+"""A capability of the contract (initialize.schema.json's ``capability``)."""
+TRANSCRIPT_KINDS_CAPABILITY: Capability = "transcript-kinds"
+"""Every transcript record of the run says what kind it is, and troupe stores each with its kind."""
+CAPABILITIES: tuple[Capability, ...] = (TRANSCRIPT_KINDS_CAPABILITY,)
+"""Every capability the contract defines; a name not listed here is refused."""
+TranscriptKind = Literal["sent", "received", "note"]
+"""What kind of record a transcript record is (run-transcript.schema.json's ``kind``)."""
+TRANSCRIPT_KINDS: tuple[TranscriptKind, ...] = ("sent", "received", "note")
+
 JSONRPC_PARSE_ERROR = -32700
 JSONRPC_INVALID_REQUEST = -32600
 JSONRPC_METHOD_NOT_FOUND = -32601
@@ -65,24 +75,18 @@ class Named(Message):
 class InitializeParams(Message):
     protocol_versions: list[int] = json_field("protocolVersions", min_items=1, unique=True)
     host: Named = json_field("host")
-    capabilities: list[str] = json_field("capabilities", unique=True)
+    capabilities: list[Capability] = json_field("capabilities", unique=True)
 
     def _check(self, where: str) -> None:
         if any(version < 0 for version in self.protocol_versions):
             raise fail(where, "protocol versions start at 0")
-        if any(not name for name in self.capabilities):
-            raise fail(where, "capability names must not be empty")
 
 
 @dataclass(frozen=True)
 class InitializeResult(Message):
     protocol_version: int = json_field("protocolVersion", minimum=0)
     runner: Named = json_field("runner")
-    capabilities: list[str] = json_field("capabilities", unique=True)
-
-    def _check(self, where: str) -> None:
-        if any(not name for name in self.capabilities):
-            raise fail(where, "capability names must not be empty")
+    capabilities: list[Capability] = json_field("capabilities", unique=True)
 
 
 # Starting, cancelling and shutting down
@@ -334,6 +338,7 @@ class TranscriptRecord(Message):
     run_id: str = json_field("runId", pattern=RUN_ID_PATTERN)
     record: str = json_field("record")
     encoding: Literal["utf-8", "base64"] | None = json_field("encoding", default=None)
+    kind: TranscriptKind | None = json_field("kind", default=None)
 
 
 # Errors and JSON-RPC envelopes

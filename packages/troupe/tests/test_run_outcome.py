@@ -23,6 +23,7 @@ from troupe.core.runners.outcome import (
     RunFacts,
     RunOutcome,
     StopReason,
+    TranscriptFormat,
     derive_outcome,
 )
 from troupe_plugin_sdk.runner import ResultEvent
@@ -256,6 +257,7 @@ def test_the_run_outcome_records_every_fact_as_data() -> None:
         exit_code=3,
         ending=Ending.EXITED,
         transcript="sha256:" + "0" * 64,
+        transcript_format=TranscriptFormat.NATIVE,
         stderr="sha256:" + "1" * 64,
         limits=LIMITS,
     ).to_data()
@@ -264,6 +266,51 @@ def test_the_run_outcome_records_every_fact_as_data() -> None:
     assert record["result"] == OK.to_data()
     assert record["limits"] == LIMITS.to_data()
     assert "audit" not in record
+
+
+@pytest.mark.parametrize("format_", list(TranscriptFormat))
+def test_the_run_outcome_records_its_transcripts_format_beside_it(
+    format_: TranscriptFormat,
+) -> None:
+    record = RunOutcome(
+        run_id=RUN,
+        outcome=Outcome.SUCCEEDED,
+        error=None,
+        result=OK,
+        exit_code=0,
+        ending=Ending.EXITED,
+        transcript="sha256:" + "0" * 64,
+        transcript_format=format_,
+        stderr="sha256:" + "1" * 64,
+        limits=LIMITS,
+    ).to_data()
+    assert (record["transcript"], record["transcriptFormat"]) == (
+        "sha256:" + "0" * 64,
+        str(format_),
+    )
+
+
+@pytest.mark.parametrize(
+    ("transcript", "format_"),
+    [("sha256:" + "0" * 64, None), (None, TranscriptFormat.NATIVE)],
+    ids=["a transcript without a format", "a format without a transcript"],
+)
+def test_a_run_outcome_with_one_of_transcript_and_format_is_refused(
+    transcript: str | None, format_: TranscriptFormat | None
+) -> None:
+    with pytest.raises(ValueError, match="transcript format exactly when"):
+        RunOutcome(
+            run_id=RUN,
+            outcome=Outcome.CANCELLED,
+            error=None,
+            result=None,
+            exit_code=0,
+            ending=Ending.EXITED,
+            transcript=transcript,
+            transcript_format=format_,
+            stderr="sha256:" + "1" * 64,
+            limits=LIMITS,
+        )
 
 
 def test_the_run_outcome_records_its_audit_after_the_runners_standard_error() -> None:
@@ -276,6 +323,7 @@ def test_the_run_outcome_records_its_audit_after_the_runners_standard_error() ->
         exit_code=0,
         ending=Ending.EXITED,
         transcript="sha256:" + "0" * 64,
+        transcript_format=TranscriptFormat.NATIVE,
         stderr="sha256:" + "1" * 64,
         limits=LIMITS,
         audit=findings,

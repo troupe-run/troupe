@@ -24,6 +24,7 @@ def outcome(name: str) -> dict[str, Any]:
         "exitCode": 0,
         "ending": "exited",
         "transcript": "sha256:" + "a" * 64,
+        "transcriptFormat": "native",
         "stderr": "sha256:" + "b" * 64,
         "limits": RunLimits().to_data(),
     }

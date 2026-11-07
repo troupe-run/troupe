@@ -7,6 +7,7 @@ The payloads are what troupe really records, not hand-written examples.
 
 import importlib
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -151,7 +152,9 @@ def test_a_run_whose_runner_never_started_records_no_null_and_validates_by_topic
     assert ended["outcome"]["outcome"] == "could-not-start"
     assert ended["outcome"]["ending"] == "never-started"
     assert ended["outcome"]["error"]["code"] == "runner.start-failed"
-    absent = {"exitCode", "transcript", "stderr", "result"} & set(ended["outcome"])
+    absent = {"exitCode", "transcript", "transcriptFormat", "stderr", "result"} & set(
+        ended["outcome"]
+    )
     assert absent == set()
     assert "recording" not in ended
     assert result.run.transcript is None
@@ -167,11 +170,31 @@ def test_a_succeeded_run_records_its_exit_code_transcript_stderr_and_result_and_
     ended = next(line for line in lines if line.get("topic") == ENDED)["state"]
     assert ended["outcome"]["exitCode"] == 0
     assert {"transcript", "stderr", "result"} <= set(ended["outcome"])
+    assert ended["outcome"]["transcriptFormat"] == "native"
     assert "error" not in ended["outcome"]
     assert "recording" not in ended
     assert _nulls(lines) == []
     assert _problems(lines) == []
     assert isinstance(git_service(harness.repo).load(Run.create_id(_run_id(lines))), Run)
+
+
+@pytest.mark.parametrize(
+    ("flag", "format_"),
+    [([], "native"), (["--transcript-kinds"], "kinds")],
+    ids=["native", "kinds"],
+)
+def test_a_runs_end_and_summary_name_its_transcripts_format(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, flag: list[str], format_: str
+) -> None:
+    command = [sys.executable, "-m", "troupe_runner_scripted", *flag]
+    monkeypatch.setattr(perform_module, "runner_command", lambda _: command)
+    harness = Harness(theatre(tmp_path))
+    result = harness.perform(request(script(INIT, OK)))
+    lines = _lines(harness)
+    ended = next(line for line in lines if line.get("topic") == ENDED)["state"]
+    assert ended["outcome"]["transcriptFormat"] == format_
+    assert _problems(lines) == []
+    assert result.run.transcript_format == format_
 
 
 def _run_id(lines: list[dict[str, Any]]) -> str:
@@ -195,6 +218,7 @@ def test_an_end_that_contradicts_its_ending_does_not_validate(
         "exitCode": 0,
         "ending": change["ending"],
         "transcript": "sha256:" + "a" * 64,
+        "transcriptFormat": "native",
         "stderr": "sha256:" + "b" * 64,
         "limits": {
             "start_timeout": 1,
@@ -226,10 +250,11 @@ def test_an_end_that_contradicts_its_ending_does_not_validate(
         "outcome": outcome,
     }
     assert not validator.is_valid(state), label
-    outcome.pop("transcript")
+    outcome.pop("transcript"), outcome.pop("transcriptFormat")
     if change["drop"]:
         outcome[change["drop"]] = 0
         outcome["transcript"] = "sha256:" + "a" * 64
+        outcome["transcriptFormat"] = "native"
     assert validator.is_valid(state), f"{label}, once consistent"
 
 
@@ -251,6 +276,7 @@ def _ended(outcome: dict[str, Any]) -> dict[str, Any]:
             "exitCode": 0,
             "ending": "exited",
             "transcript": "sha256:" + "a" * 64,
+            "transcriptFormat": "native",
             "stderr": "sha256:" + "b" * 64,
             "limits": {
                 "start_timeout": 1,
@@ -330,11 +356,50 @@ def test_an_end_whose_runner_never_started_validates_only_without_an_audit() -> 
     }
     never = {"outcome": "could-not-start", "ending": "never-started", "error": start_failed}
     state = _ended(never)
-    for field in ("exitCode", "transcript", "stderr"):
+    for field in ("exitCode", "transcript", "transcriptFormat", "stderr"):
         del state["outcome"][field]
     assert validator.is_valid(state)
     state["outcome"]["audit"] = {"outside": []}
     assert not validator.is_valid(state)
+
+
+# Requirement: A run's end says which form its transcript is
+
+
+@pytest.mark.parametrize("format_", ["native", "kinds"])
+def test_an_end_with_a_transcript_validates_with_either_format(format_: str) -> None:
+    ended = load(SCHEMAS / "events" / "run-ended.schema.json")
+    assert validator_for(ended["$id"], SCRIPTED).is_valid(_ended({"transcriptFormat": format_}))
+
+
+def test_an_end_with_a_transcript_and_no_format_does_not_validate() -> None:
+    ended = load(SCHEMAS / "events" / "run-ended.schema.json")
+    state = _ended({})
+    del state["outcome"]["transcriptFormat"]
+    assert not validator_for(ended["$id"], SCRIPTED).is_valid(state)
+
+
+def test_an_end_with_a_format_the_schema_doesnt_define_does_not_validate() -> None:
+    ended = load(SCHEMAS / "events" / "run-ended.schema.json")
+    assert not validator_for(ended["$id"], SCRIPTED).is_valid(
+        _ended({"transcriptFormat": "framed"})
+    )
+
+
+def test_a_never_started_end_with_a_format_and_no_transcript_does_not_validate() -> None:
+    ended = load(SCHEMAS / "events" / "run-ended.schema.json")
+    start_failed = {
+        "code": "runner.start-failed",
+        "problem": "Couldn't start the runner.",
+        "fix": "Check that the runner is installed.",
+        "details": {"command": "nothing"},
+    }
+    state = _ended({"outcome": "could-not-start", "ending": "never-started", "error": start_failed})
+    for field in ("exitCode", "transcript", "stderr"):
+        del state["outcome"][field]
+    assert not validator_for(ended["$id"], SCRIPTED).is_valid(state)
+    del state["outcome"]["transcriptFormat"]
+    assert validator_for(ended["$id"], SCRIPTED).is_valid(state)
 
 
 def test_an_end_recorded_before_audits_with_none_validates() -> None:

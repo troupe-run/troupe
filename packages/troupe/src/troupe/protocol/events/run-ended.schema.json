@@ -60,6 +60,10 @@
           "description": "The transcript's artifact reference. Present exactly when the runner started.",
           "$ref": "../lineage.schema.json#/$defs/hash"
         },
+        "transcriptFormat": {
+          "description": "How the transcript's lines are written. native: each line is a record as the runner sent it. kinds: the runner accepted transcript-kinds, and each line is a record with its kind (transcript-record.schema.json). Present exactly when the runner started.",
+          "$ref": "#/$defs/transcriptFormat"
+        },
         "stderr": {
           "description": "The artifact reference of the runner's standard error. Present exactly when the runner started.",
           "$ref": "../lineage.schema.json#/$defs/hash"
@@ -133,6 +137,7 @@
         "properties": {
           "exitCode": false,
           "transcript": false,
+          "transcriptFormat": false,
           "stderr": false,
           "result": false,
           "audit": false
@@ -142,6 +147,7 @@
         "required": [
           "exitCode",
           "transcript",
+          "transcriptFormat",
           "stderr"
         ]
       }
@@ -170,6 +176,14 @@
     }
   },
   "$defs": {
+    "transcriptFormat": {
+      "title": "Transcript format",
+      "description": "native: each line of the transcript is a record as the runner sent it. kinds: each line is a record with its kind (transcript-record.schema.json).",
+      "enum": [
+        "native",
+        "kinds"
+      ]
+    },
     "shared": {
       "title": "Shared changes",
       "description": "What changed during the run in the state the repository's worktrees share, which discarding doesn't undo. Each list is left out when nothing in it changed.",

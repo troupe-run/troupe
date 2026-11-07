@@ -138,7 +138,7 @@ kind, regenerated with `fixture_replay`'s writer, not by hand.
 Capabilities are chosen at `initialize`, before `run/start`'s options arrive, so a script can't choose them. A
 command-line flag, `--transcript-kinds`, makes the runner accept the capability when offered. Tests already choose
 the runner's argv. A transcript step's object form gains an optional `kind`, checked against the three kinds
-(`runner.invalid-params` otherwise) and sent as given whatever the run negotiated, so tests can break the rule on
+(`scripted.invalid-script` otherwise, as for any malformed step) and sent as given whatever the run negotiated, so tests can break the rule on
 purpose (the spec's "A deliberate violation still plays"). Recordings (`{"transcript": …}` lines) are Claude Code's
 and stay native.
 

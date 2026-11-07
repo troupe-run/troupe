@@ -52,7 +52,11 @@ class _Exit(Exception):  # noqa: N818 - control flow, not an error
 
 
 class Runner:
-    def __init__(self, stdin: BinaryIO, stdout: BinaryIO, stderr: BinaryIO) -> None:
+    def __init__(
+        self, stdin: BinaryIO, stdout: BinaryIO, stderr: BinaryIO, *, transcript_kinds: bool = False
+    ) -> None:
+        self._transcript_kinds = transcript_kinds
+        """Accept transcript-kinds when troupe offers it (--transcript-kinds; design D7)."""
         self._stdin = stdin
         self._stdout = stdout
         self._stderr = stderr
@@ -175,12 +179,20 @@ class Runner:
             return
         self._initialized = True
         chosen = max(v for v in offered if v in PROTOCOL_VERSIONS)
+        capabilities = params.get("capabilities")
+        accepted: list[p.Capability] = (
+            [p.TRANSCRIPT_KINDS_CAPABILITY]
+            if self._transcript_kinds
+            and isinstance(capabilities, list)
+            and p.TRANSCRIPT_KINDS_CAPABILITY in capabilities
+            else []
+        )
         self._result(
             id_,
             p.InitializeResult(
                 protocol_version=chosen,
                 runner=p.Named(name=NAME, version=__version__),
-                capabilities=[],
+                capabilities=accepted,
             ),
         )
 
@@ -244,8 +256,15 @@ class Runner:
         self._next_seq = int(sent["seq"]) + 1 if isinstance(sent["seq"], int) else self._next_seq
         self._send({"jsonrpc": "2.0", "method": "run/event", "params": sent})
 
-    def _transcript(self, record: str, encoding: Literal["utf-8", "base64"] | None = None) -> None:
-        params = p.TranscriptRecord(run_id=self._started_run(), record=record, encoding=encoding)
+    def _transcript(
+        self,
+        record: str,
+        encoding: Literal["utf-8", "base64"] | None = None,
+        kind: p.TranscriptKind | None = None,
+    ) -> None:
+        params = p.TranscriptRecord(
+            run_id=self._started_run(), record=record, encoding=encoding, kind=kind
+        )
         self._send(p.notification("run/transcript", params))
 
     def _started_run(self) -> str:
@@ -277,7 +296,7 @@ class Runner:
             self._event(event)
         elif kind == "transcript":
             if isinstance(value, dict):
-                self._transcript(value["record"], value.get("encoding"))
+                self._transcript(value["record"], value.get("encoding"), value.get("kind"))
             else:
                 self._transcript(value)
         elif kind == "stderr":
@@ -464,7 +483,21 @@ class Runner:
 
 
 def main() -> NoReturn:
-    code = Runner(sys.stdin.buffer, sys.stdout.buffer, sys.stderr.buffer).serve()
+    """Serve one run. ``--transcript-kinds`` makes the runner accept that capability when troupe
+    offers it; capabilities are chosen at the handshake, before a script's options arrive."""
+    arguments = sys.argv[1:]
+    if arguments not in ([], ["--transcript-kinds"]):
+        sys.stderr.write(
+            f"usage: troupe-runner-scripted [--transcript-kinds] (got {arguments!r})\n"
+        )
+        sys.stderr.flush()
+        os._exit(2)
+    code = Runner(
+        sys.stdin.buffer,
+        sys.stdout.buffer,
+        sys.stderr.buffer,
+        transcript_kinds=arguments == ["--transcript-kinds"],
+    ).serve()
     for stream in (sys.stdout, sys.stderr):
         with contextlib.suppress(OSError):
             stream.flush()

@@ -132,12 +132,20 @@ Besides a completed reply, each of these ends the run with an `error` result nam
 
 ## The transcript
 
-The runner conducts an HTTP exchange, so each transcript record is a JSON object of its own, in order:
-`{"kind": "request", "url", "body"}` with the body as sent, `{"kind": "response", "status", "headers"}` with only the
-headers in `TRANSCRIPT_HEADERS` and `TRANSCRIPT_HEADER_PREFIXES`, `{"kind": "stream", "line"}` for each line of the
-stream unchanged (its `event:` and blank lines too), `{"kind": "body", "body"}` for the body of an error or of a 2xx
-that isn't a stream, and `{"kind": "dropped", "reason"}` when a stream cut short is abandoned. No request header is
-ever recorded.
+The runner conducts an HTTP exchange, so it accepts the contract's `transcript-kinds` capability and gives each
+record a kind ([contributing/runners.md](../../contributing/runners.md#record-kinds)). In order:
+
+| Record | Kind | What it holds |
+|---|---|---|
+| each request body | `sent` | the body as sent |
+| each response's status | `note` | `{"status", "headers"}`, compact JSON, with only the headers in `TRANSCRIPT_HEADERS` and `TRANSCRIPT_HEADER_PREFIXES` |
+| each line of a response's stream | `received` | the line unchanged, its `event:` and blank lines too |
+| the body of an error, or of a 2xx that isn't a stream | `received` | the body's bytes, as base64 when they aren't UTF-8 |
+| a stream cut short that it abandons | `note` | `{"dropped": "<why>"}` |
+
+No request header is ever recorded, and neither is the request's URL: the run's start records the runtime's
+endpoint, and the URL is that plus `/responses`. Offered no capability (a troupe from before it), the runner sends
+the same records without a kind.
 
 ## Limits
 

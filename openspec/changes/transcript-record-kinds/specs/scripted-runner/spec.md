@@ -21,4 +21,4 @@ the run uses kinds, so a script can break the contract's rule on purpose.
 
 #### Scenario: A kind the contract doesn't define
 - **WHEN** a script's transcript step has kind `request`
-- **THEN** `run/start` is refused with `runner.invalid-params`, naming the step's kind
+- **THEN** `run/start` is refused with `scripted.invalid-script`, naming the step's kind

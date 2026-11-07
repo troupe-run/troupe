@@ -1,5 +1,5 @@
 """One exchange with the service: a request, its retries, and the reply (openai-style-runner design
-D8, D10).
+D8, D10; transcript-record-kinds design D5).
 
 ``exchange`` sends a request, reads its streamed response into a reply, and retries what retrying
 can fix: a rate limit (429), a server error (5xx), a network error, a timeout and a stream cut
@@ -10,8 +10,10 @@ isn't a stream, or attempts running out) raises ExchangeFailedError, with the me
 result carries.
 
 Every request body, response status and kept header, stream line, error body and dropped stream
-is passed to ``record``, framed as design D10 says, for the transcript. Masking the credential is
-the runner's: it masks everything it sends.
+is passed to ``record`` with its kind, for the transcript (transcript-record-kinds design D5): a
+request body is ``sent``, a stream line or error body ``received``, each as the bytes themselves,
+and a response's status with its kept headers, or a dropped stream, a ``note`` of the runner's own,
+compact JSON. Masking the credential is the runner's: it masks everything it sends.
 """
 
 import email.utils
@@ -22,6 +24,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from troupe_plugin_sdk import runner as p
 from troupe_runner_openai.defaults import (
     MAX_ATTEMPTS,
     RETRY_BASE_DELAY_SECONDS,
@@ -79,7 +82,8 @@ class _Retryable:
     """The delay the service asked for, in seconds, or None when it didn't ask."""
 
 
-Record = Callable[[dict[str, Any]], None]
+Record = Callable[[p.TranscriptKind, bytes], None]
+"""Takes each transcript record: its kind and its bytes."""
 Wait = Callable[[float], bool]
 """Wait up to the given seconds; true if the wait was cut short because the run is stopping."""
 
@@ -208,7 +212,7 @@ def _not_a_stream(response: Response, record: Record) -> ExchangeFailedError | N
     except NetworkError as error:
         told = f"its body couldn't be read ({str(error).rstrip('.')})."
     else:
-        record({"kind": "body", "body": body.decode("utf-8", "replace")})
+        record("received", body)
         told = _sentence(_service_error(body)[0])
     return ExchangeFailedError(
         f"The service answered HTTP {response.status} with {_cut(said.strip(), 200)}, not the "
@@ -217,21 +221,25 @@ def _not_a_stream(response: Response, record: Record) -> ExchangeFailedError | N
     )
 
 
+def _note(record: Record, note: dict[str, Any]) -> None:
+    record("note", json.dumps(note, ensure_ascii=False, separators=(",", ":")).encode())
+
+
 def _attempt(call: Call, record: Record) -> Reply:
     try:
         response = call.open()
     except StatusError as error:
-        record({"kind": "response", "status": error.status, "headers": _kept(error.headers)})
-        record({"kind": "body", "body": error.body.decode("utf-8", "replace")})
+        _note(record, {"status": error.status, "headers": _kept(error.headers)})
+        record("received", error.body)
         raise
-    record({"kind": "response", "status": response.status, "headers": _kept(response.headers)})
+    _note(record, {"status": response.status, "headers": _kept(response.headers)})
     parser = StreamParser()
     try:
         failure = _not_a_stream(response, record)
         if failure is not None:
             raise failure
         for line in response.lines():
-            record({"kind": "stream", "line": line})
+            record("received", line.encode())
             if parser.feed(line):
                 break
         return parser.reply()
@@ -255,7 +263,7 @@ def exchange(
     """Send ``body`` and return the reply, retrying as the module docstring says. ``on_call`` is
     given each call as it starts, and None when it's over, so another thread can abort it. Raises
     ExchangeFailedError, or AbortedError when the run is stopping."""
-    record({"kind": "request", "url": endpoint.responses_url, "body": body.decode("utf-8")})
+    record("sent", body)
     for attempt in range(1, max_attempts + 1):
         call = make_call(endpoint, body, credential)
         on_call(call)
@@ -276,7 +284,7 @@ def exchange(
             ) from None
         except (NetworkError, StreamError) as error:
             retryable = _Retryable("network", str(error))
-            record({"kind": "dropped", "reason": retryable.message})
+            _note(record, {"dropped": retryable.message})
         finally:
             on_call(None)
         if attempt == max_attempts:

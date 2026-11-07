@@ -253,6 +253,9 @@ class RunSummary(Message):
     started_at: str = json_field("startedAt", pattern=TIME)
     ended_at: str | None = json_field("endedAt", default=None, pattern=TIME)
     transcript: str | None = json_field("transcript", default=None, pattern=p.REF_PATTERN)
+    transcript_format: Literal["native", "kinds"] | None = json_field(
+        "transcriptFormat", default=None
+    )
     stderr: str | None = json_field("stderr", default=None, pattern=p.REF_PATTERN)
     recording: RecordingFailure | None = json_field("recording", default=None)
     changes: ChangesData | None = json_field("changes", default=None)
@@ -263,6 +266,8 @@ class RunSummary(Message):
             raise fail(where, "outcome and endedAt are present exactly when state is ended")
         if self.audit is not None and not ended:
             raise fail(where, "audit is present only when state is ended")
+        if (self.transcript is None) != (self.transcript_format is None):
+            raise fail(where, "transcriptFormat is present exactly when transcript is")
         if isinstance(self.workspace, WorktreeWorkspace) != (self.changes is not None):
             raise fail(where, "changes are present exactly when the workspace is a worktree")
 

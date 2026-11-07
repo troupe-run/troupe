@@ -24,6 +24,10 @@ only the `checkRuntime` and `echoCredential` steps use it.
 | `scriptPath` | The path of a JSON file holding the script |
 | `replayDelays` | `true` to keep a recording's delays between records; default `false` |
 
+Started with `--transcript-kinds`, the runner accepts the contract's `transcript-kinds` capability when troupe
+offers it ([Record kinds](../../contributing/runners.md#record-kinds)); without it, it accepts no capability.
+Capabilities are chosen at the handshake, before a script arrives, so it's a flag rather than an option.
+
 ## Schemas
 
 The runner publishes its schemas in its package's [`schemas/`](src/troupe_runner_scripted/schemas/), installed with it, as every runner does
@@ -54,7 +58,7 @@ before anything plays.
 | Step | What it does |
 |---|---|
 | `event` | Sends a run event. `runId` and `seq` are filled in, unless the step sets them (to break the contract on purpose), and so is an `init`'s `effects`, as `checked`. |
-| `transcript` | Sends a transcript record: a string, or `{"record": "...", "encoding": "base64"}`. |
+| `transcript` | Sends a transcript record: a string, or `{"record": "...", "encoding": "base64", "kind": "received"}`, with `encoding` and `kind` optional. A `kind` (`sent`, `received` or `note`) is sent as given, whether or not the run accepted `transcript-kinds`, so a test can break the contract's rule on purpose. |
 | `stderr` | Writes text to standard error. |
 | `wait` | `{"ms": n}`: waits, still answering troupe, so a cancel or end of input ends it early. |
 | `writeFile` | `{"path": "...", "content": "..."}`: writes a file under the workspace, raw: no effect checks it, so a test can show what troupe's audit catches. Absolute paths, drives, UNC paths and `..` are refused. |

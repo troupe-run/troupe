@@ -40,7 +40,8 @@ default RUNNER_CANCEL_GRACE_SECONDS (10), so the runner finishes its own stop fi
 
 TRANSCRIPT_HEADERS: tuple[str, ...] = ("retry-after", "x-request-id")
 """The response headers the transcript keeps, by lower-case name, besides those starting with one of
-TRANSCRIPT_HEADER_PREFIXES. Request headers are never kept (design D10)."""
+TRANSCRIPT_HEADER_PREFIXES, in each response's ``note`` record. Request headers are never kept
+(design D10; transcript-record-kinds design D5)."""
 
 TRANSCRIPT_HEADER_PREFIXES: tuple[str, ...] = ("x-ratelimit-",)
 """Response header name prefixes the transcript keeps."""
