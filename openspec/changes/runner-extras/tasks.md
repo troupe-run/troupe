@@ -84,7 +84,7 @@
   rehearsal naming `troupe-run[lm-studio]`, the `[all]` install into a second tool directory, a rehearsal for every
   runner). Verify: they fail on main, run and shown.
 - [x] 6.2 Extend `scripts/install_check.py` (`TEMPLATE`, `command()`, the tag pre-check, and steps (a) and (b) of D9,
-  reading the extras and the table from the commit under test) and `scripts/docs_reference.py`. Verify: 6.1's tests
+  reading the extras and the table from the commit under test) and the docs check in `scripts/tests/workspace/test_install_docs.py`. Verify: 6.1's tests
   pass, and `uv run scripts/install_check.py --ref HEAD` passes locally, its output showing both installs and the
   rehearsals.
 - [x] 6.3 Update `docs/opening-night/install.md`. Add a "Runners that come as extras" section with the extras form
