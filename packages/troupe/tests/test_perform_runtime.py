@@ -125,6 +125,31 @@ def test_a_run_on_a_theatre_chosen_endpoint_records_where_each_value_came_from(
     assert KEY not in json.dumps(started)
 
 
+PRICE = {"input": 2, "output": 8, "cacheRead": 0.5, "cacheWrite": 0}
+PRICED = {"openai": {"prices": {"gpt-test": PRICE, "gpt-other": {"input": 1, "output": 1}}}}
+
+
+def test_a_run_on_a_priced_model_hands_over_and_records_the_same_price(tmp_path: Path) -> None:
+    harness = _harness(tmp_path, OPENAI_API_KEY=KEY)
+    check = {"checkRuntime": {"model": "gpt-test", "price": PRICE}}
+    result = harness.perform(request(script(INIT, check, OK), runtimes=PRICED, **OPENAI))
+    assert result.run.outcome == "succeeded"
+    started = _start(harness, result.run.run_id)
+    assert started["runtime"]["price"] == {"value": PRICE, "source": "theatre"}
+
+
+def test_a_run_on_a_model_config_doesnt_price_hands_over_and_records_no_price(
+    tmp_path: Path,
+) -> None:
+    harness = _harness(tmp_path, OPENAI_API_KEY=KEY)
+    check = {"checkRuntime": {"model": "gpt-unpriced", "noPrice": True}}
+    result = harness.perform(
+        request(script(INIT, check, OK), runtimes=PRICED, runtime="openai", model="gpt-unpriced")
+    )
+    assert result.run.outcome == "succeeded"
+    assert "price" not in _start(harness, result.run.run_id)["runtime"]
+
+
 def test_a_run_with_no_runtime_records_none(tmp_path: Path) -> None:
     harness = _harness(tmp_path)
     result = harness.perform(request(script(INIT, OK)))
@@ -222,6 +247,17 @@ def test_a_rehearsal_on_openai_shows_the_runtime_and_no_part_of_the_key(tmp_path
         "credential": {"env": {"value": "OPENAI_API_KEY", "source": "default"}, "set": True},
     }
     assert KEY not in json.dumps(result.to_data())
+
+
+def test_a_rehearsal_on_a_priced_model_shows_the_price(tmp_path: Path) -> None:
+    harness = _harness(tmp_path, OPENAI_API_KEY=KEY)
+    result = harness.perform_result(
+        request(script(INIT, OK), rehearse=True, runtimes=PRICED, **OPENAI)
+    )
+    assert result.rehearsal is not None
+    assert result.rehearsal.runtime is not None
+    shown = result.rehearsal.runtime.to_data()
+    assert shown["price"] == {"value": PRICE, "source": "theatre"}
 
 
 def test_a_rehearsal_refuses_what_perform_would(tmp_path: Path) -> None:

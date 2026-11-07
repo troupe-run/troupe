@@ -353,15 +353,35 @@
                     "noCredential": {
                       "description": "The run has no credential: TROUPE_RUNTIME_CREDENTIAL isn't set. Absent: not checked, unless credentialHash is given.",
                       "const": true
+                    },
+                    "price": {
+                      "description": "The price run/start's runtime must carry, rate for rate. Absent: not checked, unless noPrice is given.",
+                      "$ref": "https://troupe.run/protocol/runtime.schema.json#/$defs/price"
+                    },
+                    "noPrice": {
+                      "description": "run/start's runtime carries no price. Absent: not checked, unless price is given.",
+                      "const": true
                     }
                   },
                   "minProperties": 1,
-                  "not": {
-                    "required": [
-                      "credentialHash",
-                      "noCredential"
-                    ]
-                  }
+                  "allOf": [
+                    {
+                      "not": {
+                        "required": [
+                          "credentialHash",
+                          "noCredential"
+                        ]
+                      }
+                    },
+                    {
+                      "not": {
+                        "required": [
+                          "price",
+                          "noPrice"
+                        ]
+                      }
+                    }
+                  ]
                 },
                 {
                   "type": "object",
@@ -663,6 +683,10 @@
         "costUsd": {
           "description": "The cost to report. Absent: the result reports none.",
           "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/result/properties/costUsd"
+        },
+        "estimatedCostUsd": {
+          "description": "The estimate to report, sent as given whether or not run/start carried a price, so a test can produce an estimate troupe gave no price for. Absent: the result reports none.",
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/result/properties/estimatedCostUsd"
         }
       }
     },

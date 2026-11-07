@@ -171,6 +171,10 @@ the changelog. No spec Purpose changes, so there's no infrastructure pull reques
   #303 tracks escaping or quoting in config paths (D5).
 - [The estimate relies on the input-token convention #293 will formalise] → the convention is what every runner here
   already does. If #293 changes it, D7's rule moves with it in that change.
+- [A price with only `input` and `output` gives most OpenAI runs no estimate, because nearly every run reads from or
+  writes to the prompt cache (the owner's live run: about 2,200 tokens read, 1,150 written)] → the runtimes docs and the
+  OpenAI runner's README say to set `cacheRead` and `cacheWrite` too, with 0 for a kind the service doesn't charge for.
+  (Raised by a side agent while building.)
 - [The strict rule leaves the cost out more often than a lenient one would] → chosen on purpose. An absent cost is
   visible, and a wrong one isn't. Each refusal is a config fix (add the missing rate).
 

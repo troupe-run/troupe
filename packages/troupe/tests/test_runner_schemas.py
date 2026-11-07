@@ -362,6 +362,77 @@ def test_a_run_start_whose_runtime_holds_anything_else_does_not_validate(
     )
 
 
+# Requirement: Run start carries the run's runtime (a price for the run's model)
+# Requirement: A price is in US dollars per million tokens
+
+PRICE = {"input": 2, "output": 8, "cacheRead": 0.5, "cacheWrite": 2.5}
+
+
+@pytest.mark.parametrize(
+    "price",
+    [
+        pytest.param({"input": 2, "output": 8}, id="input and output only"),
+        pytest.param(PRICE, id="every rate"),
+        pytest.param({"input": 0, "output": 0.0}, id="free"),
+    ],
+)
+def test_a_run_start_whose_runtime_carries_a_price_validates(price: dict[str, Any]) -> None:
+    validate(
+        _request("run/start", {**START, "runtime": {**RUNTIME, "price": price}}),
+        "run-start.schema.json",
+    )
+
+
+@pytest.mark.parametrize(
+    "price",
+    [
+        pytest.param({"input": 2}, id="no output rate"),
+        pytest.param({"output": 8}, id="no input rate"),
+        pytest.param({**PRICE, "cacheRead": -1}, id="a negative rate"),
+        pytest.param({**PRICE, "currency": "EUR"}, id="an unknown field"),
+        pytest.param({**PRICE, "input": "2"}, id="a rate as text"),
+        pytest.param({**PRICE, "output": True}, id="a rate as a boolean"),
+        pytest.param(None, id="a null for no price"),
+    ],
+)
+def test_a_run_start_whose_price_isnt_one_does_not_validate(price: object) -> None:
+    assert not is_valid(
+        _request("run/start", {**START, "runtime": {**RUNTIME, "price": price}}),
+        "run-start.schema.json",
+    )
+
+
+# Requirement: The result event states what the runner saw (a reported cost and an estimate)
+
+
+def _result(**costs: object) -> dict[str, Any]:
+    event = {"runId": RUN_ID, "seq": 3, "type": "result", **EVENTS["result"]}
+    del event["costUsd"]
+    return {**event, **costs}
+
+
+@pytest.mark.parametrize(
+    "costs",
+    [
+        pytest.param({"costUsd": 0.42}, id="a reported cost"),
+        pytest.param({"estimatedCostUsd": 0.42}, id="an estimate"),
+        pytest.param({}, id="neither"),
+    ],
+)
+def test_a_result_with_at_most_one_of_the_costs_validates(costs: dict[str, Any]) -> None:
+    validate(_result(**costs), "run-event.schema.json#/$defs/event")
+
+
+def test_a_result_with_a_reported_cost_and_an_estimate_together_does_not_validate() -> None:
+    assert not is_valid(
+        _result(costUsd=0.42, estimatedCostUsd=0.4), "run-event.schema.json#/$defs/event"
+    )
+
+
+def test_a_negative_estimate_does_not_validate() -> None:
+    assert not is_valid(_result(estimatedCostUsd=-0.1), "run-event.schema.json#/$defs/event")
+
+
 # Requirement: A success result matches its method's result schema
 
 SUCCESS = "jsonrpc.schema.json#/$defs/successResponse"
