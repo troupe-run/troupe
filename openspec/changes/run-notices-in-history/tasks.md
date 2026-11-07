@@ -84,15 +84,18 @@
 
 ## 5. Integration
 
-- [ ] 5.1 Run `uv run scripts/check.py`. Verify it passes: mypy --strict, ruff, every test, the protocol checks and
+- [x] 5.1 Run `uv run scripts/check.py`. Verify it passes: mypy --strict, ruff, every test, the protocol checks and
   the generated-docs checks.
-- [ ] 5.2 Perform a real run end to end in a scratch theatre with the scripted runner set to fall silent past a
+- [x] 5.2 Perform a real run end to end in a scratch theatre with the scripted runner set to fall silent past a
   lowered silence threshold and to retry once, without watching it, then run `troupe status <run>` and
   `troupe logs <run>` from another shell. Verify both show the `run.silent` and `run.retrying` notices, and paste the
   output in the PR.
-- [ ] 5.3 Search the org's other repositories for readers of the `logs` result's `events` field
+- [x] 5.3 Search the org's other repositories for readers of the `logs` result's `events` field
   (`gh search code` for `logs-result` and `"events"` with `troupe logs --json`). Verify none is found, or each is
-  listed in the PR with an issue raised for it.
+  listed in the PR with an issue raised for it. Found: none in troupe-run's repositories (`gh search code`
+  returned nothing even for troupe, so infrastructure and website were grepped locally; website's only hits are a
+  frozen docs fixture). The local `ui-prototype`, which has no remote and so no repository to raise an issue in,
+  reads `logsResult.events` in `gateway/server.ts`; it's listed in the PR and raised with the owner.
 - [ ] 5.4 Check PR #317 (`estimated-cost`): if it merged first, rebase and add a `test_perform.py` case where a
   runner sends an estimate with no price and the `run.estimate-dropped` notice is in the run's stream before the
   result event; if this merges first, comment on #317 asking for the same case on its rebase (D10). Verify the test
