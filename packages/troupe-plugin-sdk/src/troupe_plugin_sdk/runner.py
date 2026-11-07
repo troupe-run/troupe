@@ -170,7 +170,14 @@ class Engine(Message):
 
 @dataclass(frozen=True)
 class Usage(Message):
-    """Token counts, where the engine reports them."""
+    """Token counts, where the engine reports them.
+
+    ``input_tokens``, ``cache_read_tokens`` and ``cache_write_tokens`` add up to the run's whole
+    input: ``input_tokens`` leaves out what the two cache counters count, so subtract whatever the
+    engine's input count includes of the cache's reads and writes. Leave a cache counter out (None)
+    when you can't report it, never estimate one; input you can't separate into a cache counter
+    stays in ``input_tokens``.
+    """
 
     input_tokens: int | None = json_field("inputTokens", default=None, minimum=0)
     output_tokens: int | None = json_field("outputTokens", default=None, minimum=0)

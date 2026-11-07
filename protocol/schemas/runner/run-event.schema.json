@@ -163,14 +163,14 @@
         "turns": {"description": "How many turns the engine took. Absent: the engine doesn't count them.", "type": "integer", "minimum": 0},
         "durationMs": {"description": "How long the run took, by the engine's clock. Absent: the engine doesn't report it.", "type": "integer", "minimum": 0},
         "usage": {
-          "description": "Token counts, where the engine reports them.",
+          "description": "Token counts, where the engine reports them. inputTokens, cacheReadTokens and cacheWriteTokens add up to the run's whole input.",
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "inputTokens": {"description": "Input tokens the engine used. Absent: the engine doesn't report them.", "type": "integer", "minimum": 0},
+            "inputTokens": {"description": "Input tokens not counted in cacheReadTokens or cacheWriteTokens. A runner subtracts whatever its engine's input count includes of the cache's reads and writes; input it can't separate into a cache counter stays in inputTokens. Absent: the engine doesn't report them.", "type": "integer", "minimum": 0},
             "outputTokens": {"description": "Output tokens the engine used. Absent: the engine doesn't report them.", "type": "integer", "minimum": 0},
-            "cacheReadTokens": {"description": "Input tokens read from the engine's prompt cache.", "type": "integer", "minimum": 0},
-            "cacheWriteTokens": {"description": "Input tokens written to the engine's prompt cache.", "type": "integer", "minimum": 0}
+            "cacheReadTokens": {"description": "Input tokens read from the engine's prompt cache. Absent: the runner couldn't report them, and never estimates them.", "type": "integer", "minimum": 0},
+            "cacheWriteTokens": {"description": "Input tokens written to the engine's prompt cache. Absent: the runner couldn't report them, and never estimates them.", "type": "integer", "minimum": 0}
           }
         },
         "costUsd": {"description": "What the run cost in US dollars, as the engine reports it. Absent: the engine reports no cost.", "type": "number", "minimum": 0}

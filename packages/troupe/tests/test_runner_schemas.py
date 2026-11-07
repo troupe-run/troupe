@@ -230,6 +230,21 @@ def test_a_usage_counter_the_contract_doesnt_name_is_refused() -> None:
     assert not is_valid(event, "run-event.schema.json#/$defs/event")
 
 
+# Requirement: Usage's input counters add up to the whole input
+# Requirement: A cache counter left out was not reported
+
+
+def test_usage_says_input_counters_add_up_and_an_absent_cache_counter_wasnt_reported() -> None:
+    usage = _event_defs()["result"]["properties"]["usage"]
+    counters = usage["properties"]
+    assert "add up to the run's whole input" in usage["description"]
+    assert "cacheReadTokens" in counters["inputTokens"]["description"]
+    assert "cacheWriteTokens" in counters["inputTokens"]["description"]
+    assert "stays in inputTokens" in counters["inputTokens"]["description"]
+    for name in ("cacheReadTokens", "cacheWriteTokens"):
+        assert "Absent: the runner couldn't report them" in counters[name]["description"], name
+
+
 def _strategy(schema: dict[str, Any]) -> st.SearchStrategy[Any]:
     """Values for the small subset of JSON Schema the required event fields use."""
     if "$ref" in schema:

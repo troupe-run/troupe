@@ -2,16 +2,16 @@
 
 ## 1. The contract says what each counter counts (design D1, D2, D4, D5)
 
-- [ ] 1.1 Write the test first: in `packages/troupe/tests/test_runner_schemas.py`, a test that reads `result.usage`
+- [x] 1.1 Write the test first: in `packages/troupe/tests/test_runner_schemas.py`, a test that reads `result.usage`
   from `run-event.schema.json` and checks that `inputTokens`' description names `cacheReadTokens` and
   `cacheWriteTokens`, that `usage`'s description says the three add up to the whole input, and that each cache
   counter's description says what its absence means. Verify: it fails on main's schema, run and shown.
-- [ ] 1.2 Rewrite the descriptions of `usage`, `inputTokens`, `cacheReadTokens` and `cacheWriteTokens` in
+- [x] 1.2 Rewrite the descriptions of `usage`, `inputTokens`, `cacheReadTokens` and `cacheWriteTokens` in
   `protocol/schemas/runner/run-event.schema.json` to say D1 and D2 (input not in a cache counter; the three add up;
   a cache counter left out wasn't reported, and input the runner couldn't separate stays in `inputTokens`), and copy
   the file to `packages/troupe/src/troupe/protocol/runner/`. No property, type or `required` changes. Verify: 1.1's
   test passes, `diff` of the two files is empty, and `git diff` shows only `description` values changed.
-- [ ] 1.3 Say the same in the SDK's `Usage` docstring (`packages/troupe-plugin-sdk/src/troupe_plugin_sdk/runner.py`).
+- [x] 1.3 Say the same in the SDK's `Usage` docstring (`packages/troupe-plugin-sdk/src/troupe_plugin_sdk/runner.py`).
   Verify: `uv run pytest packages/troupe-plugin-sdk` passes.
 - [ ] 1.4 `contributing/runners.md`: the `result` row of the run events table points to a new "What usage counts" note
   under it, which states D1 and D2 with the two engine shapes (an input count that leaves the cache out, as
