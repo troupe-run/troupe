@@ -110,6 +110,7 @@ CODES: dict[str, ExitCode] = {
     # The protocol version troupe records (protocol-own-release design D4). protocol/README.md.
     "schemas.protocol-version-invalid": ExitCode.FAILURE,
     "config.invalid": ExitCode.FAILURE,
+    "config.path-malformed": ExitCode.FAILURE,
     "config.conflict": ExitCode.FAILURE,
     "config.unknown-file": ExitCode.FAILURE,
     "config.file-not-troupes": ExitCode.FAILURE,

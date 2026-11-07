@@ -2248,6 +2248,42 @@
     {
       "properties": {
         "code": {
+          "const": "config.path-malformed"
+        },
+        "details": {
+          "description": "A config path typed in a command that can't be read as keys.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "text",
+            "offset",
+            "rule"
+          ],
+          "properties": {
+            "text": {
+              "description": "The path as it was typed.",
+              "type": "string"
+            },
+            "offset": {
+              "description": "Where reading failed: the index of the character in text, counting from 0.",
+              "type": "integer",
+              "minimum": 0
+            },
+            "rule": {
+              "description": "The rule the path breaks, such as: the [ has no closing ].",
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
           "const": "config.conflict"
         },
         "details": {
