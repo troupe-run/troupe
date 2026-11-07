@@ -46,8 +46,10 @@
 
 ## 3. Whole change
 
-- [ ] 3.1 Validate and run everything. Verify: `openspec validate input-tokens-meaning --strict` passes and
+- [x] 3.1 Validate and run everything. Verify: `openspec validate input-tokens-meaning --strict` passes and
   `uv run scripts/check.py` passes on the branch's head; CI on Linux, macOS and Windows passes once the PR is ready.
+  Done: validate passes; the full check passed before 53bde02 (4751 passed) and the guard's scoped check before
+  c0e2aa5; CI run 42359514207 on 25873ff passed every job on Linux, macOS and Windows, Python 3.12 to 3.15.
 
 ## Workflow follow-up
 
