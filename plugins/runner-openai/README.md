@@ -46,6 +46,9 @@ and hands them over in `run/start`, and puts the key, when the runtime has one, 
 `TROUPE_RUNTIME_CREDENTIAL`, under no other name.
 
 - The key goes only in each request's `Authorization: Bearer` header, to the runtime's endpoint.
+- A key holding whitespace or a control character, such as a line ending from a `.env` file, is refused by troupe
+  before the runner starts (`runtime.credential-malformed`). The runner checks again
+  (`openai.malformed-credential`), since a runner can't assume its host did.
 - A runtime with a key and a plain `http` endpoint to another machine is refused (`openai.insecure-endpoint`). Plain
   `http` is for a server on this machine.
 - A redirect is never followed, so neither the key nor the conversation goes anywhere the runtime didn't name.

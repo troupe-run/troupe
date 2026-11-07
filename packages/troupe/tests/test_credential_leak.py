@@ -23,10 +23,13 @@ from troupe.cli import main
 from troupe.core import masking
 
 CANARY = "sk-canary/0123456789abcdefghijklmnopqrstuv"
+NAME_LIKE_CANARY = "skcanary0123456789abcdefghijklmnopqrstuv"
+"""A key made only of letters and digits, which passes for a variable's name (design D6)."""
 FORMS = {
     "the key": CANARY.encode(),
     "its JSON-escaped form": CANARY.replace("/", "\\/").encode(),
     "its base64 form": base64.b64encode(CANARY.encode()),
+    "the name-like key": NAME_LIKE_CANARY.encode(),
 }
 INIT = {"type": "init", "runner": {"name": "scripted", "version": "0.1.0"}, "tools": []}
 ECHO = [
@@ -92,6 +95,24 @@ def _drive(repo: Repo, monkeypatch: pytest.MonkeyPatch) -> list[bytes]:
     assert cli("perform", "echoer", "--direction", "go") != 0  # refused: insecure endpoint
     assert b"runtime.insecure-endpoint" in printed[-1] or b"plain HTTP" in printed[-1]
     monkeypatch.delenv("TROUPE_RUNTIME_CANARY_ENDPOINT")
+    monkeypatch.setenv("MY_CANARY_KEY", CANARY + "\r\n")  # a key read with its line ending
+    assert cli("perform", "echoer", "--direction", "go") != 0
+    assert b"runtime.credential-malformed" in printed[-1] or b"whitespace" in printed[-1]
+    monkeypatch.setenv("MY_CANARY_KEY", CANARY)
+    # The key in place of its variable's name: refused as runtime.invalid-value, since it holds
+    # "-" and "/", which a name can't.
+    monkeypatch.setenv("TROUPE_RUNTIME_CANARY_CREDENTIAL_ENV", CANARY)
+    assert cli("perform", "echoer", "--direction", "go") != 0
+    assert b"runtime.invalid-value" in printed[-1] or b"isn't an environment" in printed[-1]
+    assert cli("config", "get", "--resolved", "runtimes.canary") != 0
+    assert cli("config", "get", "--resolved", "--json", "runtimes.canary") != 0
+    # A key that passes for a name: refused as runtime.credential-unset, naming the variable that
+    # held it (namedBy), never the key. Not shown with config get --resolved, which still does
+    # (#306).
+    monkeypatch.setenv("TROUPE_RUNTIME_CANARY_CREDENTIAL_ENV", NAME_LIKE_CANARY)
+    assert cli("perform", "echoer", "--direction", "go") != 0
+    assert b"the variable TROUPE_RUNTIME_CANARY_CREDENTIAL_ENV names" in printed[-1]
+    monkeypatch.delenv("TROUPE_RUNTIME_CANARY_CREDENTIAL_ENV")
     assert cli("config", "get", "--resolved") == 0
     assert cli("config", "get", "--resolved", "--json") == 0
     assert cli("config", "get", "--json") == 0

@@ -137,6 +137,11 @@ def test_a_run_with_no_runtime_records_none(tmp_path: Path) -> None:
         pytest.param({}, "runtime.credential-unset", id="the key isn't set"),
         pytest.param({"OPENAI_API_KEY": "q7Zx"}, "runtime.credential-too-short", id="too short"),
         pytest.param(
+            {"OPENAI_API_KEY": KEY + "\r\n"},
+            "runtime.credential-malformed",
+            id="a key read with its line ending",
+        ),
+        pytest.param(
             {"OPENAI_API_KEY": KEY, "TROUPE_RUNTIME_OPENAI_ENDPOINT": "http://example.com/v1"},
             "runtime.insecure-endpoint",
             id="plain HTTP to another host",
@@ -146,9 +151,17 @@ def test_a_run_with_no_runtime_records_none(tmp_path: Path) -> None:
             "runtime.invalid-value",
             id="a malformed variable",
         ),
+        pytest.param(
+            {"OPENAI_API_KEY": KEY, "TROUPE_RUNTIME_OPENAI_CREDENTIAL_ENV": "sk-test q7ZxW9pL4vR2"},
+            "runtime.invalid-value",
+            id="a key where a variable's name should be",
+        ),
     ],
 )
-def test_a_refused_runtime_records_nothing(tmp_path: Path, env: dict[str, str], code: str) -> None:
+def test_a_refused_runtime_records_nothing_and_launches_no_runner(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, env: dict[str, str], code: str
+) -> None:
+    launched = _runner_commands(monkeypatch)
     harness = _harness(tmp_path, **env)
     asked = request(script(INIT, OK), **OPENAI)
     before = configured(harness, asked)
@@ -157,6 +170,34 @@ def test_a_refused_runtime_records_nothing(tmp_path: Path, env: dict[str, str], 
     assert raised.value.code == code
     assert nothing_written(harness, before)
     assert harness.updates == []
+    assert launched == []
+
+
+def test_a_key_where_a_variables_name_should_be_reaches_no_client_message(tmp_path: Path) -> None:
+    harness = _harness(
+        tmp_path, OPENAI_API_KEY=KEY, TROUPE_RUNTIME_OPENAI_CREDENTIAL_ENV="sk-test q7ZxW9pL4vR2"
+    )
+    with pytest.raises(TroupeError) as raised:
+        harness.perform(request(script(INIT, OK), **OPENAI))
+    assert raised.value.code == "runtime.invalid-value"
+    assert "q7ZxW9pL4vR2" not in json.dumps([raised.value.to_data(), *harness.updates])
+
+
+def test_a_name_from_the_environment_that_isnt_set_is_refused_without_repeating_it(
+    tmp_path: Path,
+) -> None:
+    harness = _harness(tmp_path, TROUPE_RUNTIME_OPENAI_CREDENTIAL_ENV="a3f9c2e17b4d8e05f6a1")
+    asked = request(script(INIT, OK), **OPENAI)
+    before = configured(harness, asked)
+    with pytest.raises(TroupeError) as raised:
+        harness.perform(asked)
+    assert raised.value.code == "runtime.credential-unset"
+    assert raised.value.details == {
+        "runtime": "openai",
+        "namedBy": "TROUPE_RUNTIME_OPENAI_CREDENTIAL_ENV",
+    }
+    assert nothing_written(harness, before)
+    assert "a3f9c2e1" not in json.dumps([raised.value.to_data(), *harness.updates])
 
 
 def test_no_model_anywhere_is_refused_before_anything_is_recorded(tmp_path: Path) -> None:
@@ -229,3 +270,11 @@ def test_a_rehearsal_refuses_what_perform_would(tmp_path: Path) -> None:
     with pytest.raises(TroupeError) as raised:
         harness.perform_result(request(script(INIT, OK), rehearse=True, **OPENAI))
     assert raised.value.code == "runtime.credential-unset"
+
+
+def test_a_rehearsal_refuses_a_malformed_key_as_perform_would(tmp_path: Path) -> None:
+    harness = _harness(tmp_path, OPENAI_API_KEY=KEY + "\r\n")
+    with pytest.raises(TroupeError) as raised:
+        harness.perform_result(request(script(INIT, OK), rehearse=True, **OPENAI))
+    assert raised.value.code == "runtime.credential-malformed"
+    assert KEY not in json.dumps(raised.value.to_data())

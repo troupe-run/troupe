@@ -108,9 +108,81 @@ def test_a_malformed_variable_is_an_error_naming_it(variable: str, value: str) -
     assert raised.value.code == "runtime.invalid-value"
     assert raised.value.details == {
         "variable": variable,
-        "value": value,
         "accepted": [runtimes.ACCEPTED[variable.removeprefix("TROUPE_RUNTIME_OLLAMA_").lower()]],
     }
+
+
+MALFORMED = [
+    ("TROUPE_RUNTIME_OLLAMA_ENDPOINT", "localhost:11434"),
+    ("TROUPE_RUNTIME_OLLAMA_ENDPOINT", "https://u:p@example.com"),
+    ("TROUPE_RUNTIME_OLLAMA_MODEL", "a\nb"),
+    ("TROUPE_RUNTIME_OLLAMA_CREDENTIAL_ENV", "MY KEY"),
+    ("TROUPE_RUNTIME_OLLAMA_CREDENTIAL_ENV", "TROUPE_RUNTIME_CREDENTIAL"),
+]
+
+
+@pytest.mark.parametrize(("variable", "value"), MALFORMED)
+def test_a_malformed_variable_names_it_and_whats_accepted_in_problem_fix_and_details(
+    variable: str, value: str
+) -> None:
+    accepted = runtimes.ACCEPTED[variable.removeprefix("TROUPE_RUNTIME_OLLAMA_").lower()]
+    with pytest.raises(TroupeError) as raised:
+        resolve("ollama", NO_CONFIG, {variable: value})
+    error = raised.value
+    assert variable in error.problem
+    assert accepted in error.problem
+    assert variable in error.fix
+    assert accepted in error.fix
+    assert error.details["variable"] == variable
+    assert error.details["accepted"] == [accepted]
+
+
+CANARY = st.text(alphabet="ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789", min_size=12)
+SHAPES = {
+    "ENDPOINT": [
+        "https://user:{}@example.com/v1",
+        "{}.example:11434",
+        "https://example.com/{}?q=1",
+        "https://example.com/#{}",
+    ],
+    "MODEL": ["{}\n", "\x00{}", "gpt-{}\r\n"],
+    "CREDENTIAL_ENV": ["sk-{}", "sk-test {}", "9{}", "TROUPE_{}", "{}\n"],
+}
+
+
+@given(
+    st.sampled_from([(field, shape) for field, shapes in SHAPES.items() for shape in shapes]),
+    CANARY,
+)
+def test_a_malformed_variables_refusal_holds_no_part_of_its_value(
+    field_and_shape: tuple[str, str], canary: str
+) -> None:
+    field, shape = field_and_shape
+    variable, value = f"TROUPE_RUNTIME_OLLAMA_{field}", shape.format(canary)
+    with pytest.raises(TroupeError) as raised:
+        resolve("ollama", NO_CONFIG, {variable: value})
+    assert raised.value.code == "runtime.invalid-value"
+    error = _error(raised)
+    assert canary not in error
+    assert json.dumps(value)[1:-1] not in error
+
+
+def test_a_key_where_a_variables_name_should_be_isnt_in_the_refusal() -> None:
+    variable = "TROUPE_RUNTIME_OPENAI_CREDENTIAL_ENV"
+    with pytest.raises(TroupeError) as raised:
+        resolve("openai", NO_CONFIG, {variable: "sk-test q7ZxW9pL"})
+    assert raised.value.code == "runtime.invalid-value"
+    assert variable in raised.value.problem
+    assert "q7ZxW9pL" not in _error(raised)
+
+
+def test_an_endpoint_carrying_a_password_isnt_in_the_refusal() -> None:
+    endpoint = "https://user:hunter2-secret@example.com/v1"
+    with pytest.raises(TroupeError) as raised:
+        resolve("ollama", NO_CONFIG, {"TROUPE_RUNTIME_OLLAMA_ENDPOINT": endpoint})
+    assert raised.value.code == "runtime.invalid-value"
+    assert "hunter2-secret" not in _error(raised)
+    assert "example.com" not in _error(raised)
 
 
 # Requirement: The run's model comes from the environment, the actor, then the runtime
@@ -248,6 +320,7 @@ def test_a_placeholder_key_is_refused_naming_the_variable_but_not_the_value() ->
     [
         ({}, "runtime.credential-unset"),
         ({"K": "q7Zx"}, "runtime.credential-too-short"),
+        ({"K": KEY + "\r\n"}, "runtime.credential-malformed"),
         ({"K": KEY}, "runtime.insecure-endpoint"),
     ],
 )
@@ -256,7 +329,111 @@ def test_no_refusal_holds_any_part_of_the_value(env: dict[str, str], code: str) 
         for_run("myhost", "tester", None, _on("http://example.com"), env)
     assert raised.value.code == code
     for value in env.values():
-        assert value not in _error(raised)
+        for form in (value, value.strip(), json.dumps(value)[1:-1]):
+            assert form not in _error(raised)
+
+
+# Requirement: A credential holding whitespace or a control character is refused
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["sk-test-q7ZxW9pL4vR2\r\n", "sk-test q7ZxW9pL4vR2", "sk-test-q7ZxW9pL4vR2\x00"],
+    ids=["a line ending", "a space inside", "a control character"],
+)
+def test_a_malformed_key_is_refused_naming_the_variable_but_not_the_value(value: str) -> None:
+    with pytest.raises(TroupeError) as raised:
+        for_run("myhost", "tester", None, _on("https://x.example"), {"K": value})
+    assert raised.value.code == "runtime.credential-malformed"
+    assert raised.value.details == {"runtime": "myhost", "variable": "K"}
+    assert "The credential in K," in raised.value.problem
+    assert "q7ZxW9pL4vR2" not in _error(raised)
+
+
+def test_a_short_key_with_a_line_ending_is_refused_as_malformed_not_too_short() -> None:
+    with pytest.raises(TroupeError) as raised:
+        for_run("myhost", "tester", None, _on("https://x.example"), {"K": "abc\n"})
+    assert raised.value.code == "runtime.credential-malformed"
+
+
+def test_a_well_formed_key_starts_with_that_credential() -> None:
+    started = for_run(
+        "myhost", "tester", None, _on("https://x.example"), {"K": "sk-test-q7ZxW9pL4vR2"}
+    )
+    assert started.value == "sk-test-q7ZxW9pL4vR2"
+
+
+# Requirement: A refusal never repeats a credential variable's name taken from the environment
+
+HEX_NAME = "a3f9c2e17b4d8e05f6a1"
+BY_ENV = "TROUPE_RUNTIME_MYHOST_CREDENTIAL_ENV"
+CREDENTIAL_REFUSALS = [
+    pytest.param(None, "runtime.credential-unset", id="unset"),
+    pytest.param(KEY + "\r\n", "runtime.credential-malformed", id="malformed"),
+    pytest.param("q7Zx", "runtime.credential-too-short", id="too short"),
+]
+
+
+@pytest.mark.parametrize(("value", "code"), CREDENTIAL_REFUSALS)
+def test_a_name_from_the_environment_is_never_repeated_in_a_refusal(
+    value: str | None, code: str
+) -> None:
+    env = {BY_ENV: HEX_NAME} | ({HEX_NAME: value} if value is not None else {})
+    with pytest.raises(TroupeError) as raised:
+        for_run("myhost", "tester", None, _on("https://x.example"), env)
+    assert raised.value.code == code
+    assert raised.value.details["namedBy"] == BY_ENV
+    assert "variable" not in raised.value.details
+    assert BY_ENV in raised.value.problem
+    assert HEX_NAME[:8] not in _error(raised)
+    if value is not None:
+        for form in (value, value.strip(), json.dumps(value)[1:-1]):
+            assert form not in _error(raised)
+
+
+def test_an_unset_name_from_the_environment_says_it_must_be_a_name_not_the_key() -> None:
+    with pytest.raises(TroupeError) as raised:
+        for_run("myhost", "tester", None, _on("https://x.example"), {BY_ENV: HEX_NAME})
+    assert f"Set {BY_ENV} to the name of the variable that holds the key" in raised.value.fix
+    assert "not the key itself" in raised.value.fix
+
+
+@pytest.mark.parametrize(("value", "code"), CREDENTIAL_REFUSALS)
+def test_a_name_from_config_is_named_in_a_refusal(value: str | None, code: str) -> None:
+    env = {"K": value} if value is not None else {}
+    with pytest.raises(TroupeError) as raised:
+        for_run("myhost", "tester", None, _on("https://x.example"), env)
+    assert raised.value.code == code
+    assert raised.value.details["variable"] == "K"
+    assert "namedBy" not in raised.value.details
+
+
+@pytest.mark.parametrize(("value", "code"), CREDENTIAL_REFUSALS)
+def test_a_built_in_name_is_named_in_a_refusal(value: str | None, code: str) -> None:
+    env = {"OPENAI_API_KEY": value} if value is not None else {}
+    with pytest.raises(TroupeError) as raised:
+        for_run("openai", "tester", "gpt-test", NO_CONFIG, env)
+    assert raised.value.code == code
+    assert raised.value.details["variable"] == "OPENAI_API_KEY"
+    assert "OPENAI_API_KEY" in raised.value.problem
+
+
+@pytest.mark.parametrize(("value", "code"), CREDENTIAL_REFUSALS)
+@pytest.mark.parametrize("keys", ["both", "neither"])
+def test_each_credential_refusals_schema_takes_exactly_one_of_variable_and_named_by(
+    value: str | None, code: str, keys: str
+) -> None:
+    env = {"K": value} if value is not None else {}
+    with pytest.raises(TroupeError) as raised:
+        for_run("myhost", "tester", None, _on("https://x.example"), env)
+    assert raised.value.code == code
+    emitted = raised.value.to_data()
+    details = {k: v for k, v in emitted["details"].items() if k != "variable"}
+    if keys == "both":
+        details |= {"variable": "K", "namedBy": BY_ENV}
+    schema = validator_for(PROTOCOL_BASE + "error.schema.json")
+    assert schema.is_valid(emitted)
+    assert not schema.is_valid(emitted | {"details": details})
 
 
 # The environment's values are checked as the schema checks config's (design D3)
