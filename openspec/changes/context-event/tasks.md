@@ -62,9 +62,12 @@
 
 - [ ] 5.1 Run `uv run scripts/check.py` and verify it passes, with the full test run on all three platforms in CI
   once the pull request is marked ready.
-- [ ] 5.2 Check that release-please will release this as a protocol and SDK `feat`: the commits touching
-  `protocol/` and `packages/troupe-plugin-sdk/` use `feat(runner-protocol):` and `feat(plugin-sdk):` with no `!`
-  (design D8). Verify with `git log --format=%s origin/main..`.
+- [x] 5.2 Check that release-please will release this as a protocol and SDK `feat` (design D8): every commit is a
+  `feat` or `docs` with no `!`, and release-please assigns a commit to each component whose path it touches. Verified
+  with `git log --format=%s origin/main..` and `git log origin/main.. -- <path>` against `release-please-config.json`:
+  `cd8b43b` (`feat(runner-protocol):`) touches `protocol`, `troupe-plugin-sdk`, `troupe` and `troupe-runner-scripted`,
+  so each gets a minor bump. The SDK's part shares that commit's `runner-protocol` scope rather than having a
+  `feat(plugin-sdk):` commit of its own, which changes only the scope shown in the SDK's changelog.
 
 ## Workflow follow-up
 
