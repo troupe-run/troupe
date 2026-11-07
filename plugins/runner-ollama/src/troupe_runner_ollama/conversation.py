@@ -175,8 +175,9 @@ class Conversation:
         self._tools = Tools.for_declaration(Declaration.from_run_start(start), tool_limits(window))
         self._messages: list[bytes] = []
         self._requests = 0
-        self._input_tokens: int | None = None
-        self._cache_read_tokens: int | None = None
+        self._prompt_tokens: int | None = None
+        self._cached_tokens = 0
+        self._every_cached = True
         self._output_tokens: int | None = None
         self._ended = False
 
@@ -368,14 +369,15 @@ class Conversation:
 
     def _after(self, answer: _Answer) -> None:
         """Count the answer, note a cut one, and report its text."""
+        # Ollama's prompt count includes the tokens it took from its cache. A cached count is
+        # taken only beside the prompt it's part of, and cut to it (design D1, D2); whether every
+        # answer had one decides the result's usage (D5).
         if answer.prompt_tokens is not None:
-            # Ollama's prompt count includes the tokens it took from its cache. They're counted
-            # apart, and only beside the prompt they're part of (design D1, D2).
-            cached = answer.cached_tokens
-            if cached is not None:
-                cached = min(cached, answer.prompt_tokens)
-                self._cache_read_tokens = (self._cache_read_tokens or 0) + cached
-            self._input_tokens = (self._input_tokens or 0) + answer.prompt_tokens - (cached or 0)
+            self._prompt_tokens = (self._prompt_tokens or 0) + answer.prompt_tokens
+        if answer.prompt_tokens is None or answer.cached_tokens is None:
+            self._every_cached = False
+        else:
+            self._cached_tokens += min(answer.cached_tokens, answer.prompt_tokens)
         if answer.output_tokens is not None:
             self._output_tokens = (self._output_tokens or 0) + answer.output_tokens
         if answer.done_reason == "length":
@@ -436,16 +438,26 @@ class Conversation:
         except _Stop:
             return
 
-    def _result(self, status: str, message: str) -> None:
-        usage = {
+    def _usage(self) -> dict[str, int]:
+        """The run's counters (design D5): the cache's reads apart from the input only when every
+        answer reported them; otherwise the whole prompts are input and no cache read is
+        reported."""
+        input_tokens, cache_read_tokens = self._prompt_tokens, None
+        if input_tokens is not None and self._every_cached:
+            input_tokens -= self._cached_tokens
+            cache_read_tokens = self._cached_tokens
+        return {
             key: value
             for key, value in (
-                ("inputTokens", self._input_tokens),
+                ("inputTokens", input_tokens),
                 ("outputTokens", self._output_tokens),
-                ("cacheReadTokens", self._cache_read_tokens),
+                ("cacheReadTokens", cache_read_tokens),
             )
             if value is not None
         }
+
+    def _result(self, status: str, message: str) -> None:
+        usage = self._usage()
         data: dict[str, Any] = {
             "type": "result",
             "status": status,
