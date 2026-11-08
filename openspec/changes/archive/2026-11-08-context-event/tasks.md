@@ -63,8 +63,10 @@
 
 ## 5. Integration
 
-- [ ] 5.1 Run `uv run scripts/check.py` and verify it passes, with the full test run on all three platforms in CI
-  once the pull request is marked ready.
+- [x] 5.1 Run `uv run scripts/check.py` and verify it passes, with the full test run on all three platforms in CI
+  once the pull request is marked ready. Verified: the check passed locally on the rebased head, and CI run
+  [42477300331](https://github.com/troupe-run/troupe/actions/runs/42477300331) passed every job (Linux, macOS and
+  Windows, Python 3.12 to 3.15) on `8968b53`, which holds the last code commit, `b9afa5d`.
 - [x] 5.2 Check that release-please will release this as a protocol and SDK `feat` (design D8): every commit is a
   `feat` or `docs` with no `!`, and release-please assigns a commit to each component whose path it touches. Verified
   with `git log --format=%s origin/main..` and `git log origin/main.. -- <path>` against `release-please-config.json`:

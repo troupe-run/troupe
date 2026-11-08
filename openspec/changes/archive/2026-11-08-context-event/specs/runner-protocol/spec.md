@@ -3,7 +3,7 @@
 ### Requirement: Run events are notifications with a sequence number
 The runner SHALL report the run as `run/event` notifications. Each event SHALL carry the run id, a `seq` that
 starts at 0 and increases by one with each event, and a `type`. The event types SHALL be `init`, `turn`,
-`tool_call`, `tool_result`, `retry`, `context`, `log` and `result`.
+`tool_call`, `tool_result`, `retry`, `context`, `log`, `served_model` and `result`.
 
 #### Scenario: Events are numbered without gaps
 - **WHEN** a runner sends events for a run
