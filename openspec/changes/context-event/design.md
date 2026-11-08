@@ -126,8 +126,9 @@ the issue asks the SDK to remove.
 
 ### D8. Released as an additive protocol and SDK change
 
-Commits touching `protocol/` are `feat(runner-protocol):` and the SDK's are `feat(plugin-sdk):`, with no `!`. A runner
-that never sends `context` still conforms, and the contract's version stays 0. release-please bumps each component's
+The commits are `feat`, with no `!`. The schema and the SDK change together in one `feat(runner-protocol):` commit,
+because the full check needs both at once. release-please assigns a commit to every component whose files it touches,
+so the scope only labels the changelog entry and doesn't decide which component is released. A runner that never sends `context` still conforms, and the contract's version stays 0. release-please bumps each component's
 minor version (`bump-minor-pre-major`). An older troupe would refuse a `context` event from a newer runner, but the
 contract is version 0, which promises no compatibility, and there are no third-party runners yet.
 
