@@ -404,7 +404,7 @@ and from local Ollama's `/v1`.
 | no cost, and a price in `run/start` | `result.estimatedCostUsd`, from the SDK's estimator |
 
 Its transcript records use the contract's [record kinds](#record-kinds): the request body as sent is `sent`; each
-stream line unchanged, and an error's body, are `received`; the status with only named headers, and a stream it drops,
+stream line unchanged, and the body of an error or of a 2xx that isn't a stream, are `received`; the status with only named headers, and a stream it drops,
 are `note`s. The request's URL isn't recorded, since the run's start records the runtime's endpoint. The key, and a
 masked echo of it, are masked in everything it sends.
 
