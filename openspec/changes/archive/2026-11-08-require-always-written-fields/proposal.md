@@ -57,8 +57,9 @@ None.
 
 - `runner-protocol`: "Init says how the runner applies the effects" says an init without `effects` doesn't validate
   wherever troupe reads one, as a runner sends it or as troupe recorded it.
-- `runs`: "What a run was asked to do is kept" says a start without its workspace, or with clone mechanisms in it,
-  doesn't validate. Two requirements are replaced under new names, because a MODIFIED block can't drop a scenario: "A
+- `runs`: a new requirement, "A run's start always records its workspace", says a start without its workspace, or
+  with clone mechanisms in it, doesn't validate. It's its own requirement because adding it to "What a run was asked
+  to do is kept" took that requirement past 500 characters. Two requirements are replaced under new names, because a MODIFIED block can't drop a scenario: "A
   run's summary leaves out a runner that never reported" becomes "The reported runner comes from the run's init",
   without the older-troupe scenario; "A run's end records its audit" becomes "A run's end records its audit whenever
   its runner started", without the before-audits scenario.

@@ -130,6 +130,19 @@ reference it by hash.
 - **THEN** `perform` fails with the artifact store's error
 - **AND** nothing is recorded, and no worktree is made
 
+### Requirement: A run's start always records its workspace
+A run's start SHALL always record its workspace, and SHALL NOT record a worktree's clone mechanisms, which are recorded
+once the worktree is made. A start without its workspace, or with clone mechanisms in it, SHALL NOT validate.
+
+#### Scenario: A start without its workspace
+- **WHEN** a run's start payload has no `workspace`
+- **THEN** it doesn't validate against the run's start schema
+
+#### Scenario: A start that holds clone mechanisms
+- **WHEN** a worktree run's start payload holds `clones` in its workspace
+- **THEN** it doesn't validate against the run's start schema, since a run's clone mechanisms are recorded only when
+  its worktree is made
+
 ### Requirement: Ctrl-C cancels the run, and the cancel is recorded
 An interrupt during `perform` SHALL cancel the run through the run host, and `perform` SHALL record the run's end.
 Further interrupts while it is cancelling SHALL be announced and SHALL NOT stop `perform` before the run's end is
@@ -289,7 +302,7 @@ default in troupe's one named place for defaults, and overridable. Following SHA
 - **WHEN** the runs documentation is checked against the defaults
 - **THEN** it lists `LOGS_LEASE_CHECK_SECONDS` with its value, and no `LOGS_FOLLOW_POLL_SECONDS`
 
-### Requirement: A run's summary leaves out a runner that never reported
+### Requirement: The reported runner comes from the run's init
 A run's summary SHALL report the runner's name and version from its `init` event when the runner sent one, and SHALL
 leave the reported runner out when it never did. The run's start SHALL NOT record the reported runner.
 
@@ -297,9 +310,9 @@ leave the reported runner out when it never did. The run's start SHALL NOT recor
 - **WHEN** a run ends before its runner sends an init
 - **THEN** its start has no `runner_reported`, and the run's summary has no `runner.reported`
 
-#### Scenario: A start recorded by an older troupe
-- **WHEN** a run's start holds `runner_reported`, as troupe recorded it before the start came before the runner
-- **THEN** the run reads back, and its summary reports that runner
+#### Scenario: A start that names the reported runner
+- **WHEN** a run's start payload holds `runner_reported`
+- **THEN** it doesn't validate against the run's start schema
 
 ### Requirement: A run's end records what happened and leaves out what didn't
 A run's end SHALL record the outcome's `exitCode`, `transcript`, `transcriptFormat` and `stderr` exactly when the
@@ -501,11 +514,11 @@ as structured data.
 - **THEN** `troupe perform` reports the outcome `failed`, naming `src/a.py`, `write`, and the `troupe config set` that
   would declare it
 
-### Requirement: A run's end records its audit
+### Requirement: A run's end records its audit whenever its runner started
 A run's end SHALL record `outcome.audit` exactly when its runner started. It SHALL hold either `outside`, every change
 outside the declaration in path order, each with `path`, `change`, `needs` and, for a move, `to`, and empty when every
-change was declared; or `error`, when the audit couldn't read the workspace. An end recorded before audits were
-recorded has no `audit`, and SHALL still be read.
+change was declared; or `error`, when the audit couldn't read the workspace. An end whose runner started and that has
+no `audit` SHALL NOT validate.
 
 #### Scenario: A cancelled worktree run's end
 - **WHEN** a worktree run whose actor declares no effects writes `src/a.py` and is cancelled
@@ -524,9 +537,9 @@ recorded has no `audit`, and SHALL still be read.
 - **WHEN** a run's end payload has an `outcome.audit` with both `outside` and `error`, or with neither
 - **THEN** it doesn't validate against the run's end schema
 
-#### Scenario: An end recorded before audits were
-- **WHEN** a run's end was recorded with no `outcome.audit`, and a person asks for its status
-- **THEN** status reports the run with its outcome and no audit
+#### Scenario: An end without its audit
+- **WHEN** a run's end payload has ending `exited` or `killed` and no `outcome.audit`
+- **THEN** it doesn't validate against the run's end schema
 
 ### Requirement: A run's start records its runtime and where each value came from
 When an actor names a runtime, the run's start SHALL record the runtime's name, its endpoint and model, each with its
