@@ -98,7 +98,7 @@ def _transcript(capabilities: list[str], workspace: Path) -> tuple[list[str], li
     session = Session(workspace, capabilities=capabilities)
     try:
         with serving([calls(tool_call("Glob", {"pattern": "*"})), final("done")]) as fake:
-            session.start(_options(fake))
+            session.start(**_run(fake))
             messages = session.until_result()
         accepted = next(m for m in session.received if "capabilities" in m.get("result", {}))
         session.validate_all()
