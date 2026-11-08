@@ -125,18 +125,18 @@ and `temperature` (a number from 0 to 1), each optional. An unknown option SHALL
 
 ### Requirement: The runner checks LM Studio before it acknowledges the run
 Before answering `run/start`, the runner SHALL connect to LM Studio and ask for its downloaded models within a named
-time limit, refusing the run with `lm-studio.unreachable` when LM Studio doesn't answer, and `runner.requirement-unmet`
-when it doesn't meet the published requirements.
+time limit, refusing the run with `lm-studio.unreachable` when LM Studio doesn't answer, and `lm-studio.incompatible`
+when it answers but the library can't list its models, naming the LM Studio version the runner was tested with.
 
 #### Scenario: LM Studio isn't running
 - **WHEN** nothing listens at the endpoint
 - **THEN** `run/start` is refused with `lm-studio.unreachable`, naming the endpoint, and the fix says to start
   LM Studio's server (`lms server start`) or set the runtime's endpoint
 
-#### Scenario: An LM Studio too old for the library
-- **WHEN** LM Studio doesn't meet the runner's published requirement
-- **THEN** `run/start` is refused with `runner.requirement-unmet`, naming LM Studio and the version wanted, and the
-  fix says to upgrade LM Studio
+#### Scenario: An LM Studio the library can't talk to
+- **WHEN** the endpoint answers LM Studio's greeting, but listing the models fails
+- **THEN** `run/start` is refused with `lm-studio.incompatible`, naming the library's error and the LM Studio version
+  from the runner's published requirements, and the fix says to upgrade LM Studio
 
 ### Requirement: The pre-run check finds a model that can call tools
 The pre-run check SHALL refuse the run with `lm-studio.model-not-found` when no downloaded LLM's key is the run's model,
@@ -153,10 +153,12 @@ and with `lm-studio.model-without-tools` when that model isn't trained for tool 
 ### Requirement: The runner publishes its platform requirements as data
 The runner SHALL publish what it requires of LM Studio as data in its package, beside its schemas, with the thing
 required, the least version and why, and its refusals SHALL name the version from that data, not from its code.
+LM Studio reports no version, so the least version is the one the runner was tested with.
 
 #### Scenario: The published requirement
 - **WHEN** the runner's published requirements are read
-- **THEN** they hold `lm-studio` with a least version and a reason naming the `lmstudio` package's version
+- **THEN** they hold `lm-studio` at least `0.4.28`, with a reason naming the `lmstudio` package's version and that
+  LM Studio reports no version to check
 
 ### Requirement: The model is loaded with the run's context length, and the length is reported
 When the run's model isn't loaded, the runner SHALL load it with the run's context length, reporting load progress as
@@ -190,7 +192,11 @@ and each parameter with its SDK name, type, description, whether it's required, 
 #### Scenario: The tools offered
 - **WHEN** the tools the library sends LM Studio are read from the run's transcript
 - **THEN** they are `Read`, `Write`, `Edit`, `Glob`, `Grep`, `Delete` and `Move`, in that order, and each one's
-  parameters match the SDK's definition field by field
+  parameters are the SDK's input schema without `additionalProperties`, which the library can't send
+
+#### Scenario: An optional parameter
+- **WHEN** the schema of `Read`'s `offset` is read
+- **THEN** it is an integer with the SDK's description and minimum 1, not nullable, and not required
 
 ### Requirement: Each tool call is carried out by the SDK and checked against the effects
 Each tool call the library makes SHALL be carried out by the plugin SDK, which checks it against the actor's declared
@@ -225,8 +231,9 @@ A run SHALL make at most `maxTurns` rounds and SHALL start no round once it has 
 of each round's prompt and predicted tokens. Reaching either SHALL end the run with an `error` result saying which.
 
 #### Scenario: The turn limit is reached
-- **WHEN** a run with `maxTurns` 3 gets a tool call in each of its first three rounds
-- **THEN** the run makes no fourth round, and ends with an `error` result saying the turn limit of 3 was reached
+- **WHEN** a run with `maxTurns` 3 gets a tool call in each of its first two rounds
+- **THEN** its third round is offered no tools, no fourth round starts, and the run ends with an `error` result
+  saying the turn limit of 3 was reached, whatever the third round's text says
 
 #### Scenario: The token budget is spent
 - **WHEN** a run with `maxTotalTokens` 1000 has used 1200 tokens after a round that asked for a tool call
@@ -234,17 +241,17 @@ of each round's prompt and predicted tokens. Reaching either SHALL end the run w
   the token budget of 1000 was spent, with the tokens used
 
 ### Requirement: Assistant text is reported as turns
-The text a round streams SHALL be reported as a `turn` when the round's first tool call starts, and any text after
+The answer text a round streams SHALL be reported as a `turn` when the round's first tool call starts, and any after
 that when the round ends, so each turn comes before the calls that follow it. Empty text SHALL report no turn, and
-reasoning SHALL NOT be reported as a turn.
+text the library marks as reasoning SHALL NOT be in a turn.
 
 #### Scenario: Text and a tool call
 - **WHEN** a round streams text and then asks for one tool call, and the next round streams only text
 - **THEN** the run reports a `turn`, the call's pair, and another `turn`, in that order
 
 #### Scenario: Reasoning
-- **WHEN** a round streams reasoning before its text
-- **THEN** no `turn` holds the reasoning
+- **WHEN** a round streams reasoning before its text, and the round's result holds both in its content
+- **THEN** no `turn` holds the reasoning or its start and end tags
 
 ### Requirement: A round without a tool call ends the run
 A round whose prediction asks for no tool call SHALL end the run with an `ok` result whose message is that round's

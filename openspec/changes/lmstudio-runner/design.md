@@ -115,14 +115,16 @@ The options are closed: `maxTurns` (default 20), `maxTotalTokens` (default 200,0
 and `temperature` (unset, so the model's own default applies). The defaults live in the runner's `defaults.py`, as do
 the pre-run check's time limit, the library's message timeout, the retry count and backoff, and the cancel grace.
 
-- **The turn limit** is `max_prediction_rounds`. The library sends the last round without tools, so a model still
-  working when it's reached gives a final answer, or asks for a tool anyway, which the library reports to
-  `handle_invalid_tool_request`. Either way the runner ends the run with an `error` result saying the turn limit was
-  reached, as the OpenAI runner's spec says, keeping the last text in the message.
-- **The token budget** is checked in `on_prediction_completed`, after each round, from its stats. When it's spent, the
-  runner stops the run (D9) before another round starts. Callbacks can't stop `act()` (their exceptions are
-  swallowed), so stopping means cancelling the prediction, as cancel does. The probe confirms that a round's tool
-  calls have all run by the time the next round would start, so a budget hit never cuts a call short.
+- **The turn limit** is `max_prediction_rounds`. The library sends the last round without tools. The probe found that a
+  model still working then may write a raw tool call into its text (`<|tool_call>call:Grep{…}<tool_call|>`), ending
+  `eosFound`, without `handle_invalid_tool_request` being called. So the runner detects the limit by count: when
+  `act()` used every round and the round before the last asked for tools, the run ends with an `error` result saying
+  the turn limit was reached, as the OpenAI runner's spec says, whatever the last round's text says.
+- **The token budget** is added up in `on_prediction_completed`, from each round's stats, and enforced in
+  `on_round_end`, which the library calls only after that round's tool calls have finished (calls can still be running
+  when the round's prediction completes). When it's spent, the runner stops the run (D9) before another round starts,
+  so a budget hit never cuts a call short. Callbacks can't stop `act()` (their exceptions are swallowed), so stopping
+  means closing the client, as cancel does.
 - **`contextLength`** is the load config's, used only when the model isn't loaded (Context). When it's already loaded
   with another length, the run uses it as it is and reports the length in a `log` event. Unloading a model someone
   else may be using, to reload it, isn't the runner's call.
@@ -135,10 +137,10 @@ the client with the runtime's host and port and lists the downloaded models:
 
 - no answer, or anything other than LM Studio's greeting, gives `lm-studio.unreachable`, whose fix names
   `lms server start`;
-- an LM Studio below the published requirement (`requirements.json`, as the Ollama runner publishes its own) gives
-  `runner.requirement-unmet`. The least version is the one `lmstudio` 1.5.0 needs, found in the probe. If LM Studio
-  reports no version over the library, the check is that the library's calls succeed, and the README names the version
-  tested;
+- LM Studio answering its greeting while listing the models fails gives `lm-studio.incompatible`, whose fix names the
+  version in the published requirements (`requirements.json`, as the Ollama runner publishes its own). The probe found
+  that nothing reports LM Studio's version (not the library, the greeting or the model listing), and lmstudio-python
+  states no minimum. So the published version is the one tested (0.4.28), and there's no version check before a run;
 - no downloaded LLM whose key is the run's model gives `lm-studio.model-not-found`, whose fix names `lms get <model>`;
 - a model not trained for tool use gives `lm-studio.model-without-tools`.
 
@@ -152,10 +154,12 @@ loop runners build theirs) and one user message holding the direction. The fixed
 work, from the SDK's tool definitions (runner-tools: "Tool definitions tell the model where it may work").
 
 Each SDK tool becomes a `ToolFunctionDef`: its name and description unchanged, and each `Field` a parameter of the
-matching Python type (`str`, `int`, `bool`), `Annotated` with its description and, for an integer, its minimum, and
-optional fields given a default of `None` that the implementation leaves out of the input. A test compares the JSON
-schema the library sends with the SDK's own schema field by field (the spec's "The model is offered the SDK's tools"),
-so a library change that alters what the model sees fails a test, not a run.
+matching Python type (`str`, `int`, `bool`), `Annotated` with its description and, for an integer, its minimum. An
+optional field gets a default of `msgspec.UNSET` (type `T | UnsetType`), which the implementation leaves out of the
+input. The probe showed a default of `None` makes the library send `anyOf: [T, null]`, while `UNSET` sends exactly the
+SDK's property and rejects `null`. The schema the library sends is then the SDK's input schema without
+`additionalProperties: false`, which the library can't express. A test compares the two field by field (the spec's
+"The model is offered the SDK's tools"), so a library change that alters what the model sees fails a test, not a run.
 
 The implementation for each tool calls `Tools.run` with the arguments the library converted, a call id the runner
 makes up (the library doesn't pass its own to the implementation), and the run's event numbering. It returns the
@@ -174,11 +178,13 @@ model's order.
 
 ### D8. Mapping rounds to events
 
-- **Text**: the library streams each round's fragments to `on_prediction_fragment`, each saying whether it's
-  reasoning. The library starts a round's tool calls as they stream, before the round's `on_prediction_completed`
-  (Context: calls are submitted to the pool inside the stream loop). So the runner reports the text streamed so far as
-  a `turn` when the round's first call starts, and any text after it when the round ends, which keeps each turn before
-  the calls that follow it. Reasoning fragments aren't turns. The probe confirms the order.
+- **Text**: the library streams each round's fragments to `on_prediction_fragment`, each with a `reasoningType`:
+  `none` for the answer, or `reasoningStartTag`, `reasoning` and `reasoningEndTag` for thinking. Turns are built from
+  the `none` fragments only. The probe found that a round's result content and its assistant message hold the thinking
+  too (`<|channel>thought … <channel|>`), so a round's content is never used as its text. The library starts a round's
+  tool calls as they stream, before the round's `on_prediction_completed`, as the probe confirmed. So the runner reports
+  the text streamed so far as a `turn` when the round's first call starts, and any after it when the round ends, which
+  keeps each turn before the calls that follow it.
 - **Round end** (`on_prediction_completed`): the round's stats are added to the run's token counts, and the budget is
   checked (D5).
 - **Tool calls**: each reported by its implementation (D7) as it runs.
@@ -197,11 +203,11 @@ implementation on a pool thread. Every line goes to standard output whole, under
 
 Stopping (on `run/cancel`, end of input, `shutdown`, the token budget, or a fatal error) sets a flag under that lock
 first, so no event can follow the acknowledgement, and every implementation checks the flag before calling
-`Tools.run`, so no call runs after it. Then the runner cancels the prediction in flight and closes the client, which
-closes the websocket. `act()` doesn't hand back its prediction stream, so cancelling goes through the session's open
-channels. The probe and the library's source settle which call does that cleanly, and if none does, closing the client
-is the cancel. The runner exits within its own named grace, below troupe's, whether or not the library's threads have
-finished. If they keep the process alive past the grace, the runner ends it from its own exit path.
+`Tools.run`, so no call runs after it. Then the runner closes the client, which closes the websocket: `act()` doesn't
+hand back its prediction stream, so closing the client is the cancel. The probe confirmed that closing it from another
+thread mid-prediction makes `act()` raise `LMStudioWebsocketError` at once, LM Studio goes back to idle, and the
+process exits within a second, with only the library's one daemon thread left. The runner exits within its own named
+grace, below troupe's, whether or not the library's threads have finished. If they keep the process alive past the grace, the runner ends it from its own exit path.
 
 ### D10. Retries, redirects and timeouts
 
@@ -241,23 +247,17 @@ output and passes only warnings and above to standard error, cut to fit.
 
 ### D12. A probe first, and fixtures from it
 
-The library's source leaves gaps this design leans on. The first implementation task is a probe through `lmstudio`
-1.5.0 against the owner's LM Studio (0.4.28 at #302's probe), with a small tool-capable model, run from the scratchpad
-and never committed. It records:
+The library's source left gaps this design leaned on, so the first task was a probe through `lmstudio` 1.5.0 against
+the owner's LM Studio 0.4.28 (build 2), with `google/gemma-4-e4b`, run from the scratchpad and never committed
+(2026-11-08; findings on troupe#291, issuecomment-6716206227). It settled the context length against a loaded model
+(D5), the order of calls, text and round completion (D8), reasoning inside a round's content (D8), the turn limit's
+last round (D5), optional parameters' schema (D7), the missing-argument path (D7), cancel by closing the client (D9),
+and that nothing reports LM Studio's version (D6). It didn't probe "Require Authentication" (the runner refuses a
+credential anyway, D4), and the model wouldn't call an unknown tool, so that path rests on the library's source and a
+unit test.
 
-- the least LM Studio version the library supports, and whether any call reports LM Studio's version;
-- what LM Studio does to an SDK client when "Require Authentication" is on (D4);
-- a two-round `act()` with tool calls: the order of tool calls, the round's text and `on_prediction_completed`
-  (D8), and each round's stats;
-- a call with an unknown argument, an unknown tool and a missing argument (D7);
-- the turn limit's last round, and a token budget spent mid-run (D5);
-- `contextLength` against a model already loaded with another (D5), and the load's progress callbacks;
-- cancelling mid-prediction, and what LM Studio does when the client closes (D9);
-- whether the library's threads let the process exit promptly after `close()`.
-
-Each finding goes in the fixtures (with provenance: LM Studio's version, the library's version, the model and the
-date) and, where it changes a decision here, in this design and the spec, through `/opsx:update`, before the code that
-depends on it. The capture tool (`tools/capture_lm_studio.py`) records a run's websocket exchange through a recording
+Recorded runs go in the fixtures (with provenance: LM Studio's version, the library's version, the model and the date).
+The capture tool (`tools/capture_lm_studio.py`) records a run's websocket exchange through a recording
 proxy between the library and LM Studio, and scrubs the client passkeys and the host's paths.
 
 ### D13. The contract and library gaps, found so far
@@ -306,12 +306,13 @@ installed gets #333's error naming the extra. If #333 hasn't landed when the run
 for it rather than adding `lmstudio` to the base install.
 
 **Python versions.** troupe supports Python 3.12 to 3.15. `lmstudio` needs 3.10 or later, and msgspec, which it pulls
-in, is a compiled package. Whether msgspec has wheels, or builds, for every supported Python on all three platforms is
-checked before the lock is updated (task 5.1). If one is missing, that's raised with the owner, not worked around.
+in, is a compiled package. msgspec 0.22.0 has wheels for cp312 to cp315 on Linux, macOS and Windows (checked
+2026-11-07), and the rest of the tree is pure Python.
 
-The audition names its model in one place (`LM_STUDIO_AUDITION_MODEL`), a small tool-capable model chosen in the probe,
-with `maxTurns` 10 and `maxTotalTokens` 100,000, as the OpenAI audition's. `init` prints the extra to install, that
-LM Studio's server must be running with "Require Authentication" off, and the `lms get` for the model.
+The audition names its model in one place (`LM_STUDIO_AUDITION_MODEL`): `google/gemma-4-e4b`, the 4B model the probe
+ran, which LM Studio marks as trained for tool use and which called tools in every probe round, with `maxTurns` 10
+and `maxTotalTokens` 100,000, as the OpenAI audition's. `init` prints the extra to install, that LM Studio's server
+must be running with "Require Authentication" off, and the `lms get` for the model.
 
 The spec `lm-studio-runner` is new, so its Purpose goes into troupe-run/infrastructure's
 `oob/troupe-spec-purposes.json`, in a pull request that merges right after this one (troupe first, as for
