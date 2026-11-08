@@ -249,21 +249,21 @@ def _move_fix(
         runtime = "<name>"
         # Never repeat an endpoint with user info (it may hold a password) or one that isn't
         # plain text: the person gives the URL again.
-        shown = (
+        url = (
             endpoint
             if isinstance(endpoint, str) and "@" not in endpoint and endpoint.isprintable()
             else "<url>"
         )
-        assignments.append(f"{RUNTIMES}.<name>.endpoint={shown}")
+        assignments.append(f"{shown((RUNTIMES, '<name>', 'endpoint'))}={url}")
         note = ", choosing a <name> for that Ollama, such as gpu-box"
-    assignments.append(f"{dotted((*base, 'runtime'))}={runtime}")
+    assignments.append(f"{shown((*base, 'runtime'))}={runtime}")
     # The actor's own model wins at run time; a model that isn't text is left for the person.
     model = actor.get("model") if isinstance(actor.get("model"), str) else options.get("model")
     if isinstance(model, str) and model and model.isprintable():
-        assignments.append(f"{dotted((*base, 'model'))}={model}")
+        assignments.append(f"{shown((*base, 'model'))}={model}")
     rest = {k: v for k, v in options.items() if k not in interim.MOVED_OPTIONS}
     assignments.append(
-        f"{dotted((*base, 'options'))}={json.dumps(rest, separators=(',', ':'), sort_keys=True)}"
+        f"{shown((*base, 'options'))}={json.dumps(rest, separators=(',', ':'), sort_keys=True)}"
     )
     command = " ".join(["troupe", "config", "set", *(shlex.quote(a) for a in assignments)])
     return f"Move it in one change{note}: {command}"
