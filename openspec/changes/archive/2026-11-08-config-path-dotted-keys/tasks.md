@@ -73,8 +73,9 @@
 
 - [x] 6.1 Run the whole check. Verify: `uv run scripts/check.py` passes locally, and CI passes on Linux, macOS and
   Windows on the PR's last code commit, with the run cited here. Done: the full check passed locally before each
-  commit, and [CI run 42378226828](https://github.com/troupe-run/troupe/actions/runs/42378226828) passed every job
-  (ubuntu, macos and windows; Python 3.12–3.15) on `4067731`, whose parent `e124d48` is the last code commit.
+  commit, and after the rebase onto main (#289's `_move_fix`), [CI run
+  42475188120](https://github.com/troupe-run/troupe/actions/runs/42475188120) passed every job (ubuntu, macos and
+  windows; Python 3.12–3.15) on `aee21aa`, the last code commit.
 
 ## Workflow follow-up
 
