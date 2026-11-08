@@ -207,7 +207,8 @@ first, so no event can follow the acknowledgement, and every implementation chec
 hand back its prediction stream, so closing the client is the cancel. The probe confirmed that closing it from another
 thread mid-prediction makes `act()` raise `LMStudioWebsocketError` at once, LM Studio goes back to idle, and the
 process exits within a second, with only the library's one daemon thread left. The runner exits within its own named
-grace, below troupe's, whether or not the library's threads have finished. If they keep the process alive past the grace, the runner ends it from its own exit path.
+grace, below troupe's, whether or not the library's threads have finished. If they keep the process alive past the
+grace, the runner ends it from its own exit path.
 
 ### D10. Retries, redirects and timeouts
 
