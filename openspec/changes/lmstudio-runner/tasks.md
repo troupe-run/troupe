@@ -7,14 +7,14 @@ has merged.
 
 ## 1. Probe LM Studio through the library before building on it (design D12)
 
-- [ ] 1.1 With the owner's LM Studio server running (the owner starts it with `lms server start`) and a small
+- [x] 1.1 With the owner's LM Studio server running (the owner starts it with `lms server start`) and a small
   tool-capable model, run a throwaway probe through `lmstudio` 1.5.0 from the scratchpad, never committed. Record each
   item D12 lists: the least LM Studio version and any version report, authentication on, a two-round `act()` with the
   order of calls, text and round completion, each round's stats, unknown, missing and extra arguments and an unknown
   tool, the turn limit's last round, a token budget spent mid-run, `contextLength` against a loaded model and load
   progress, cancel mid-prediction and client close, and whether the process exits promptly after `close()`. Verify:
   the findings are in a comment on troupe#291, each naming LM Studio's version, the library's version and the model.
-- [ ] 1.2 Compare the findings with design D4–D10 and the `lm-studio-runner` spec. Where one differs, update the
+- [x] 1.2 Compare the findings with design D4–D10 and the `lm-studio-runner` spec. Where one differs, update the
   artifacts with `/opsx:update` before any code depends on them, and pick the audition model (D15). Verify: the
   artifacts match the findings, and `openspec validate lmstudio-runner --strict` passes.
 
