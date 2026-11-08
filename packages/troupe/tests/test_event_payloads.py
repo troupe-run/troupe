@@ -136,9 +136,9 @@ def worktree_start(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     return started
 
 
-# Requirement: What a run was asked to do is kept, and The reported runner comes from the run's
-# init (spec: runs; require-always-written-fields design D2, D3): a start holds what troupe writes
-# now, and nothing troupe no longer writes.
+# Requirement: A run's start always records its workspace, and The reported runner comes from the
+# run's init (spec: runs; require-always-written-fields design D2, D3): a start holds what troupe
+# writes now, and nothing troupe no longer writes.
 
 
 def test_the_start_a_worktree_run_records_validates(worktree_start: dict[str, Any]) -> None:

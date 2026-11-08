@@ -1,40 +1,8 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
-### Requirement: What a run was asked to do is kept
-The run's start SHALL record the actor's name, the runner requested, the effect check, the config version it ran
-with (the sorted ids of the config stream's heads that the merged config was worked out from), and its workspace. For
-a worktree, the workspace SHALL hold the base commit, the worktree's theatre-relative path and whether the theatre was
-dirty. The direction SHALL be stored as an artifact before the start is recorded, and the run's start SHALL
-reference it by hash. A start without its workspace SHALL NOT validate.
-
-#### Scenario: The config a run used
-- **WHEN** a run is performed, and the actor's options are changed afterwards
-- **THEN** the run's start names the config version from before the change
-- **AND** working out config at that version gives the options the run used
-
-#### Scenario: Options are referenced, not inlined
-- **WHEN** a run is performed for an actor whose options hold an inline script
-- **THEN** no event in the run's stream holds the script itself
-- **AND** the run's start references the options through its config version, not as an artifact of their own
-
-#### Scenario: The direction is referenced, not inlined
-- **WHEN** a run is performed with a direction
-- **THEN** the run's start holds a `sha256:` reference whose artifact is that direction, byte for byte
-- **AND** no event in the run's stream holds the direction itself
-
-#### Scenario: A worktree run's workspace
-- **WHEN** a worktree run is performed on a clean theatre whose HEAD is commit `c0ffee…`
-- **THEN** its start records workspace `worktree`, base `c0ffee…`, the path `.troupe/local/worktrees/<run-id>` and
-  clean, and no clone mechanisms
-
-#### Scenario: A run in place
-- **WHEN** a run is performed for an actor whose workspace is `theatre`
-- **THEN** its start records workspace `theatre`, with no base, path or clone mechanisms
-
-#### Scenario: The direction can't be stored
-- **WHEN** storing a run's direction as an artifact fails
-- **THEN** `perform` fails with the artifact store's error
-- **AND** nothing is recorded, and no worktree is made
+### Requirement: A run's start always records its workspace
+A run's start SHALL always record its workspace, and SHALL NOT record a worktree's clone mechanisms, which are recorded
+once the worktree is made. A start without its workspace, or with clone mechanisms in it, SHALL NOT validate.
 
 #### Scenario: A start without its workspace
 - **WHEN** a run's start payload has no `workspace`
@@ -44,8 +12,6 @@ reference it by hash. A start without its workspace SHALL NOT validate.
 - **WHEN** a worktree run's start payload holds `clones` in its workspace
 - **THEN** it doesn't validate against the run's start schema, since a run's clone mechanisms are recorded only when
   its worktree is made
-
-## ADDED Requirements
 
 ### Requirement: The reported runner comes from the run's init
 A run's summary SHALL report the runner's name and version from its `init` event when the runner sent one, and SHALL
