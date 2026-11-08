@@ -93,8 +93,9 @@ Each task's verification runs before it is ticked. `uv run scripts/check.py` pas
   Verified after the last rebase onto main, whose last code commit here is d4ab62f: the full check passed (tests in
   181.4 s), and the change validated strictly before archive. No existing `costUsd` test was edited.
 - [x] 8.2 CI on Linux, macOS and Windows passes on the pull request's last code commit. Verify: cite the run.
-  Verified: run 42438663414 on 45083ff, every job passed. (Before the rebase, run 42379475148 on 8a79c00 had failed
-  only Windows, Python 3.14, on the known flake #335, and passed on its second attempt.)
+  Verified: run 42443948278 on f2e8373 (the head after the last rebase; its last code commit is d4ab62f), every job
+  passed. Before the rebases, an earlier run failed only Windows, Python 3.14, on the known flake #335, and passed on
+  its second attempt.
 
 ## Workflow follow-up
 
