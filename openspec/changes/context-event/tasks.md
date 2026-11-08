@@ -7,7 +7,10 @@
   `runner`) and `message`, and optional `tokensBefore`, `tokensAfter`, `messagesBefore` and `messagesAfter`
   (`integer`, `minimum: 0`), each with a description that says what absent means. Add it to `$defs/event`,
   `$defs/hostEvent` and `$defs/oversized.originalType`. Verify with `uv run scripts/package_schemas.py` (which
-  updates the packaged copy) and the protocol's strictness check passing on the schema.
+  updates the packaged copy) and the protocol's strictness check passing on the schema. Add a `context` event step to
+  the scripted runner's options schema (`plugins/runner-scripted/.../schemas/options.schema.json`), and verify
+  `test_the_event_steps_cover_every_event_type_a_runner_sends` passes (it failed when the contract had the event and
+  the step didn't).
 - [x] 1.2 Schema tests in `packages/troupe/tests/test_runner_schemas.py`, one per spec scenario that the schema
   decides (spec: runner-protocol): a `compacted` and a `truncated` event validate; a `pruned` kind, a missing
   `message`, a missing `by`, `"tokensAfter": null` and a `turnsBefore` field don't; an event with only `tokensBefore`

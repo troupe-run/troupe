@@ -64,8 +64,9 @@ None.
   `troupe_plugin_sdk.events` (the helper). Released at the SDK's own version, as a `feat`.
 - **Core:** `troupe.core.client.messages.HostEvent` and the CLI's `render_event`. The runner host needs no new rule:
   it already parses events through the SDK and records them in order.
-- **Scripted runner:** no code change. Its `event` step already sends any event the SDK parses. A test drives a
-  `context` event through it end to end.
+- **Scripted runner:** its options schema gains a `context` event step, so a script can send one. Its code is
+  unchanged: the `event` step already sends any event the SDK parses. A test drives a `context` event through it end
+  to end.
 - **Docs:** `contributing/runners.md` (the run events table, and a note on when to send `context`), the generated
   event reference (`docs/prompt-book/events.md`), and `protocol/README.md` if it lists event types.
 - **Parallel work:** #296 (`failure-reason`) also edits `run-event.schema.json` and the SDK's event types. Whichever
