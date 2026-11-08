@@ -90,9 +90,11 @@ Each task's verification runs before it is ticked. `uv run scripts/check.py` pas
 
 - [x] 8.1 Run the full check (`uv run scripts/check.py`) and `openspec validate estimated-cost --strict`. Verify: both
   pass, and the existing `costUsd` tests (Claude Code mapping, OpenAI loop) pass without edits.
+  Verified after the last rebase onto main, whose last code commit here is d4ab62f: the full check passed (tests in
+  181.4 s), and the change validated strictly before archive. No existing `costUsd` test was edited.
 - [x] 8.2 CI on Linux, macOS and Windows passes on the pull request's last code commit. Verify: cite the run.
-  Verified: run 42379475148 on 8a79c00, all 13 jobs passed on attempt 2. Attempt 1 failed only Windows, Python 3.14,
-  on the known flake #335 in the Claude Code runner's tests, which this change doesn't touch.
+  Verified: run 42438663414 on 45083ff, every job passed. (Before the rebase, run 42379475148 on 8a79c00 had failed
+  only Windows, Python 3.14, on the known flake #335, and passed on its second attempt.)
 
 ## Workflow follow-up
 
