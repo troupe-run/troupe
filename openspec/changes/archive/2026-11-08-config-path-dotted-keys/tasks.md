@@ -62,15 +62,19 @@
   scratch theatre (output pasted in the commit message).
 - [x] 5.2 Mention the bracket form in `config set`'s and `config unset`'s `--help` metavar text. Verify: `troupe config
   set --help` shows it, and the help tests pass.
-- [ ] 5.3 If #292 has merged, rewrite its dotted-path limit note in `docs/stagecraft/runtimes.md` to show
+- [x] 5.3 If #292 has merged, rewrite its dotted-path limit note in `docs/stagecraft/runtimes.md` to show
   `runtimes.<name>.prices[gpt-4.1]`, and add an end-to-end test that sets and unsets one model's price this way. If it
   hasn't merged, comment on #292's pull request with the bracket form, so whichever merges second makes that edit.
-  Verify: the doc edit and test are in this PR, or the comment's link is in the PR description.
+  Verify: the doc edit and test are in this PR, or the comment's link is in the PR description. Done: #292 hadn't merged.
+  Its PR, #317 (still a draft), has the note, with the bracket form for setting one model's price as a group
+  (`input` and `output` are required): https://github.com/troupe-run/troupe/pull/317#issuecomment-6716861478.
 
 ## 6. Integration
 
-- [ ] 6.1 Run the whole check. Verify: `uv run scripts/check.py` passes locally, and CI passes on Linux, macOS and
-  Windows on the PR's last code commit, with the run cited here.
+- [x] 6.1 Run the whole check. Verify: `uv run scripts/check.py` passes locally, and CI passes on Linux, macOS and
+  Windows on the PR's last code commit, with the run cited here. Done: the full check passed locally before each
+  commit, and [CI run 42378226828](https://github.com/troupe-run/troupe/actions/runs/42378226828) passed every job
+  (ubuntu, macos and windows; Python 3.12–3.15) on `4067731`, whose parent `e124d48` is the last code commit.
 
 ## Workflow follow-up
 
