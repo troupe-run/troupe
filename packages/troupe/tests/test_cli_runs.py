@@ -662,8 +662,9 @@ def test_an_audit_that_couldnt_run_is_shown_with_its_error() -> None:
 QUICK_SILENCE = RunLimits(
     start_timeout=10.0, cancel_grace=2.0, run_timeout=20.0, silence_announce=0.3
 )
-"""As in test_run_notices.py: a 0.8 s wait is a silence, and so is a runner slow to send its init
-(on a loaded CI machine), which these tests allow for rather than count on."""
+"""As in test_run_notices.py: a 0.8 s wait is a silence, and so, on a loaded CI machine, can be a
+runner slow to send its init or a slow write (apart_from_silences), which these tests allow for
+rather than count on."""
 WAIT = {"wait": {"ms": 800}}
 RETRY = {"event": {"type": "retry", "attempt": 1, "delayMs": 10, "reason": "network"}}
 
@@ -730,9 +731,8 @@ def test_following_a_run_shows_each_recorded_notice_update_on_stdout_among_the_e
     code, out, err = cli("logs", run_id, "--follow")
     assert code == 0
     kinds = log_kinds(out)
-    init = kinds.index("init")
-    assert set(kinds[:init]) <= {"notice"}  # a silence while the runner started, if it was slow
-    assert kinds[init:] == ["init", "notice", "result"]
+    assert "notice" in kinds[kinds.index("init") : kinds.index("result")]  # the wait's silence
+    assert [kind for kind in kinds if kind != "notice"] == ["init", "result"]
     assert "run.silent" not in err
 
 

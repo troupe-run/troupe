@@ -58,6 +58,7 @@ class Child:
         appends: Path | None = None,
         shown: Path | None = None,
         stop: str | None = None,
+        silence: float | None = None,
         **fields: Any,  # noqa: ANN401
     ) -> None:
         """``appends``: a file outside the theatre where the child notes when each segment
@@ -65,7 +66,8 @@ class Child:
         where the test lists each seq its follower has shown, and the child waits for each before
         recording the next (windows-follow-flake design D5). ``stop``: where the child announces the
         run instead of at its first event, and ``fields``: more of the request, such as its
-        workspace (perform_child.py)."""
+        workspace (perform_child.py). ``silence``: the seconds after which its run announces a
+        silence."""
         self.process = subprocess.Popen(
             [
                 sys.executable,
@@ -81,6 +83,7 @@ class Child:
                 **os.environ,
                 **({"TROUPE_TEST_STOP": stop} if stop is not None else {}),
                 **({"TROUPE_TEST_SHOWN": str(shown)} if shown is not None else {}),
+                **({"TROUPE_TEST_SILENCE_SECONDS": str(silence)} if silence is not None else {}),
             },
         )
         assert self.process.stdout is not None
