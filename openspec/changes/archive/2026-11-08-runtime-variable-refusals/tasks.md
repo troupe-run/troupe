@@ -81,8 +81,9 @@
   to its canary cases if it can take one, and the full `uv run scripts/check.py`. Verify: both pass, and the output is
   recorded in the commit or the PR.
 - [x] 5.2 `openspec validate runtime-variable-refusals --strict` passes, and CI passes on Linux, macOS and Windows on
-  the PR's last code commit. Verify: cite the run. Done: CI run 42379933030 passed every leg on 186cdd0, the last code
-  commit (macOS 3.15 on its third attempt, after the known flake #301 twice).
+  the PR's last code commit. Verify: cite the run. Done: after the rebase onto main, CI run 42539884982 passed every
+  leg first time on c967e1c7, whose last code commit is 52abbe3. (Before the rebase, run 42379933030 passed on
+  186cdd0, macOS 3.15 on its third attempt after the known flake #301 twice.)
 
 ## Workflow follow-up
 
