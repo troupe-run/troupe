@@ -43,7 +43,7 @@ dev = [
     "troupe-vcs-git",
     "ruff>=0.17.4",
     "mypy>=2.4.1",
-    "pytest>=9.1",
+    "pytest>=9.2.0",
     "hypothesis>=6.170.14",
     "import-linter>=2.15",
     "types-jsonschema>=4.26",
