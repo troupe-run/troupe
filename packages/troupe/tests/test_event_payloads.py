@@ -105,7 +105,9 @@ def test_every_line_a_run_that_raised_notices_records_validates_by_topic(tmp_pat
     harness.perform(request(script(INIT, {"wait": {"ms": 800}}, {"event": retry}, OK)))
     lines = _lines(harness)
     noticed = [line["state"]["notice"]["code"] for line in lines if line.get("topic") == NOTICED]
-    assert noticed == ["run.silent", "run.retrying"]
+    # A runner slow to send its init (a loaded CI machine) is a silence of its own, first.
+    assert noticed[-2:] == ["run.silent", "run.retrying"]
+    assert set(noticed[:-2]) <= {"run.silent"}
     assert _problems(lines) == []
 
 

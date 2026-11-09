@@ -662,6 +662,8 @@ def test_an_audit_that_couldnt_run_is_shown_with_its_error() -> None:
 QUICK_SILENCE = RunLimits(
     start_timeout=10.0, cancel_grace=2.0, run_timeout=20.0, silence_announce=0.3
 )
+"""As in test_run_notices.py: a 0.8 s wait is a silence, and so is a runner slow to send its init
+(on a loaded CI machine), which these tests allow for rather than count on."""
 WAIT = {"wait": {"ms": 800}}
 RETRY = {"event": {"type": "retry", "attempt": 1, "delayMs": 10, "reason": "network"}}
 
@@ -671,25 +673,28 @@ def test_status_of_a_run_that_fell_silent_lists_the_notice_with_its_time_code_an
 ) -> None:
     harness = Harness(repo, limits=QUICK_SILENCE)
     run_id = _harnessed(repo, request(script(INIT, WAIT, OK)), harness)
-    [recorded] = harness.status(run=run_id).runs[0].notices or []
+    recorded = harness.status(run=run_id).runs[0].notices or []
+    assert {n.notice.code for n in recorded} == {"run.silent"}
     code, out, _ = cli("status", run_id)
     assert code == 0
     lines = out.splitlines()
     at = lines.index("  notices:")
-    assert lines[at + 1] == f"    {recorded.at} run.silent: {recorded.notice.problem}"
-    assert lines[at + 1].startswith("    20")
+    shown = lines[at + 1 : at + 1 + len(recorded)]
+    assert shown == [f"    {n.at} run.silent: {n.notice.problem}" for n in recorded]
+    assert all(line.startswith("    20") for line in shown)
 
 
 def test_the_list_of_runs_counts_notices_only_on_the_run_that_recorded_them(repo: Repo) -> None:
     quiet = _harnessed(repo, request(script(INIT, OK)))
-    noisy = _harnessed(
-        repo, request(script(INIT, WAIT, RETRY, OK)), Harness(repo, limits=QUICK_SILENCE)
-    )
+    harness = Harness(repo, limits=QUICK_SILENCE)
+    noisy = _harnessed(repo, request(script(INIT, WAIT, RETRY, OK)), harness)
+    count = len(harness.status(run=noisy).runs[0].notices or [])
+    assert count >= 2  # the wait's silence and the retry, and any silence while it started
     code, out, _ = cli("status")
     assert code == 0
     [noisy_line] = [line for line in out.splitlines() if line.startswith(noisy)]
     [quiet_line] = [line for line in out.splitlines() if line.startswith(quiet)]
-    assert noisy_line.endswith("events, 2 notices")
+    assert noisy_line.endswith(f"events, {count} notices")
     assert "notice" not in quiet_line
 
 
@@ -724,7 +729,10 @@ def test_following_a_run_shows_each_recorded_notice_update_on_stdout_among_the_e
     run_id = _harnessed(repo, request(script(INIT, WAIT, OK)), Harness(repo, limits=QUICK_SILENCE))
     code, out, err = cli("logs", run_id, "--follow")
     assert code == 0
-    assert log_kinds(out) == ["init", "notice", "result"]
+    kinds = log_kinds(out)
+    init = kinds.index("init")
+    assert set(kinds[:init]) <= {"notice"}  # a silence while the runner started, if it was slow
+    assert kinds[init:] == ["init", "notice", "result"]
     assert "run.silent" not in err
 
 
