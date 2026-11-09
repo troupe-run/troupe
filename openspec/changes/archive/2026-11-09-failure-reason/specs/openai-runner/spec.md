@@ -47,8 +47,9 @@ error `context-length`, a refusal or content filter `refused`, the output limit 
 - **THEN** the `result` has `reason` `server`
 
 ### Requirement: An endpoint or service that can't serve the run is a configuration failure
-A request redirected, or answered 404 without OpenAI's error shape, or refused with the error code `model_not_found`,
-SHALL end the run with `reason` `configuration`: the runtime's endpoint or model is what needs changing.
+A request redirected, answered 404 without OpenAI's error shape, refused with the error code `model_not_found`, or
+answered 2xx with a `Content-Type` that isn't a stream, SHALL end the run with `reason` `configuration`: the runtime's
+endpoint or model is what needs changing.
 
 #### Scenario: Nothing at the endpoint's path
 - **WHEN** a request is answered 404 without OpenAI's error shape
@@ -62,13 +63,22 @@ SHALL end the run with `reason` `configuration`: the runtime's endpoint or model
 - **WHEN** a request is answered 404 with the error code `model_not_found`
 - **THEN** the `result` has `reason` `configuration`
 
+#### Scenario: An answer that isn't a stream
+- **WHEN** a request is answered 200 with `Content-Type` `application/json`
+- **THEN** the `result` has `reason` `configuration`
+
 ### Requirement: Failures without an entry are engine, runner or other
-A tool call the service sent without a `call_id` SHALL end with `reason` `engine`, the runner's own unexpected failure
+A tool call the service sent without a `call_id`, or a response it finished in a shape the runner can't read, SHALL
+end with `reason` `engine`, the runner's own unexpected failure
 with `runner`, and any other failure (another client error, a failed response whose code the runner doesn't name, an
 unknown or other incomplete status) with `other`.
 
 #### Scenario: A tool call without a call id
 - **WHEN** a response holds a tool call with no `call_id`
+- **THEN** the `result` has `reason` `engine`
+
+#### Scenario: A response finished in the wrong shape
+- **WHEN** a response's final event holds a tool call whose arguments are an object rather than JSON text
 - **THEN** the `result` has `reason` `engine`
 
 #### Scenario: The runner fails
