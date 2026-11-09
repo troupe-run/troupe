@@ -191,3 +191,52 @@ were.
 #### Scenario: A summary whose audit has both findings and an error
 - **WHEN** a run summary's `audit` has both `outside` and `error`
 - **THEN** it doesn't validate against the client protocol's run schema
+
+### Requirement: A run summary carries its run's recorded notices
+A run summary SHALL carry `notices`, each recorded notice of the run with the time it was recorded, in recorded
+order, whatever the run's state. It SHALL leave `notices` out when the run recorded none, never sending it empty.
+
+#### Scenario: A run that fell silent
+- **WHEN** `status` reports a run that recorded one `run.silent` notice
+- **THEN** its summary's `notices` holds one entry, with the time it was recorded and the notice's code, problem
+  and fix
+- **AND** the summary validates against the client protocol's run schema
+
+#### Scenario: A run with no notices
+- **WHEN** `status` reports a run that recorded no notice
+- **THEN** its summary has no `notices`
+
+#### Scenario: A summary with an empty notices list
+- **WHEN** a run summary has `notices` as an empty list
+- **THEN** it doesn't validate against the client protocol's run schema
+
+### Requirement: The logs result holds the run's log
+The `logs` result SHALL hold `log`, the run's events and recorded notices in recorded order. Each entry SHALL say
+its `kind`: `event` for a run event, with its `seq`, or `run-notice` for a recorded notice, with no `seq`. Both SHALL
+name the run and the time the entry was recorded. Following's updates SHALL carry the same entries.
+
+#### Scenario: A log with a notice
+- **WHEN** a client reads the `logs` result of a run that recorded a `run.retrying` notice after its `retry` event
+- **THEN** its `log` holds an entry of kind `event` for the `retry` event, then one of kind `run-notice` holding
+  the notice
+- **AND** the result validates against the `logs` result schema
+
+#### Scenario: A recorded notice while following
+- **WHEN** a client follows a run that records a notice
+- **THEN** it receives an update of kind `run-notice`, distinct from the `notice` updates `logs` itself sends
+
+#### Scenario: A logged notice with a seq
+- **WHEN** a `logs` result's entry has kind `run-notice` and a `seq`
+- **THEN** it doesn't validate against the `logs` result schema
+
+### Requirement: A run summary's recording names what wasn't recorded first
+A run summary's `recording` SHALL name exactly one of `failedAt`, the first run event's `seq` that wasn't recorded,
+and `notice`, the code of a notice raised for the run that wasn't recorded, whichever failed first, with the error.
+
+#### Scenario: A recording failure on a notice
+- **WHEN** `status` reports a run whose end recorded that recording failed at the notice `run.silent`
+- **THEN** its summary's `recording` has `notice` `run.silent` and the error, and no `failedAt`
+
+#### Scenario: A recording that names both
+- **WHEN** a run summary's `recording` has both `failedAt` and `notice`, or neither
+- **THEN** it doesn't validate against the client protocol's run schema

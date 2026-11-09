@@ -42,12 +42,12 @@
   runs delta's "A silence and a retry are kept" stream order and live updates; "A notice raised before the start" for
   a dirty theatre; "A notice raised after the runner ends" with a scratch directory that can't be removed; the
   lineage scenario; and that a `config.file-rewritten` raised before the run isn't recorded.
-- [ ] 2.3 Add a recorder test that raises notices from a timer thread and from the event loop while run events are
+- [x] 2.3 Add a recorder test that raises notices from a timer thread and from the event loop while run events are
   recorded, and checks every notice is recorded exactly once, in the order each reached the loop, before the end, with
   each run event still recorded before its `LoggedEvent` update is sent. Verify it passes on all three CI platforms
   (it runs in the normal suite). Written: `test_notices_from_a_thread_and_the_loop_are_each_recorded_once_in_arrival_order`
-  in `test_run_notices.py`, passing locally on macOS. Still missing: the CI matrix, which runs only once the pull
-  request is marked ready, after the review of its last push leaves nothing open.
+  in `test_run_notices.py`. It passed on all twelve jobs of the CI matrix (Linux, macOS and Windows, Python 3.12 to
+  3.15) on `c8a9a1ab`, run 42552378447.
 - [x] 2.4 Make a notice that can't be recorded a recording failure (D5): `failure` holds the notice's code or the
   event's `seq`, the run is cancelled, nothing later is recorded but every notice is still sent, the end's
   `recording` names `notice` or `failedAt`, and `_recording_failed` and `_recording_details` name whichever failed

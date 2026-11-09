@@ -39,6 +39,18 @@ name the run and the time the entry was recorded. Following's updates SHALL carr
 - **WHEN** a `logs` result's entry has kind `run-notice` and a `seq`
 - **THEN** it doesn't validate against the `logs` result schema
 
+### Requirement: A run summary's recording names what wasn't recorded first
+A run summary's `recording` SHALL name exactly one of `failedAt`, the first run event's `seq` that wasn't recorded,
+and `notice`, the code of a notice raised for the run that wasn't recorded, whichever failed first, with the error.
+
+#### Scenario: A recording failure on a notice
+- **WHEN** `status` reports a run whose end recorded that recording failed at the notice `run.silent`
+- **THEN** its summary's `recording` has `notice` `run.silent` and the error, and no `failedAt`
+
+#### Scenario: A recording that names both
+- **WHEN** a run summary's `recording` has both `failedAt` and `notice`, or neither
+- **THEN** it doesn't validate against the client protocol's run schema
+
 ## MODIFIED Requirements
 
 ### Requirement: A run summary carries what its state knows
@@ -46,7 +58,7 @@ A run summary SHALL carry `outcome` and `endedAt` exactly when its `state` is `e
 when the outcome has none, `transcript` and `stderr` when the runner never started, `recording` when recording didn't
 fail, `runner.reported` when the runner sent no init, and a worktree workspace's `clones` until its worktree is
 made. It SHALL carry `workspace` always, and `changes` exactly when the workspace is a worktree. No field of a summary
-SHALL be `null`. A `recording` SHALL name exactly one of `failedAt` and `notice`.
+SHALL be `null`.
 
 #### Scenario: A running run
 - **WHEN** `status` reports a run whose `perform` is still alive
@@ -72,11 +84,3 @@ SHALL be `null`. A `recording` SHALL name exactly one of `failedAt` and `notice`
 - **WHEN** `status` reports a worktree run whose start is recorded and whose worktree isn't made yet
 - **THEN** its summary's workspace has its path, base and whether the theatre was dirty, and no `clones`
 - **AND** the summary validates against the client protocol's run schema
-
-#### Scenario: A recording failure on a notice
-- **WHEN** `status` reports a run whose end recorded that recording failed at the notice `run.silent`
-- **THEN** its summary's `recording` has `notice` `run.silent` and the error, and no `failedAt`
-
-#### Scenario: A recording that names both
-- **WHEN** a run summary's `recording` has both `failedAt` and `notice`, or neither
-- **THEN** it doesn't validate against the client protocol's run schema
