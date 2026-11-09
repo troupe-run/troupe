@@ -84,8 +84,8 @@ edit, regenerate the packaged copy with `uv run scripts/package_schemas.py` and 
   protocol-guard checks, and `openspec validate require-always-written-fields --strict`.
 - [x] 5.2 Once the pull request is ready, verify CI's legs pass on Linux, macOS and Windows on the last code commit,
   and cite the run.
-  Passed: CI run 42378210814 on `fbfcfed`, the last code commit (all 12 legs, Linux, macOS and Windows on Python
-  3.12 to 3.15).
+  Passed: CI run 42545117898 on `94321023`, the rebased head, which holds the last code commit `0a5ab0e1` (all 12
+  legs, Linux, macOS and Windows on Python 3.12 to 3.15). Before the rebase: run 42378210814 on `fbfcfed`.
 
 ## Workflow follow-up
 
