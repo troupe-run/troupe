@@ -191,6 +191,10 @@ reported an error, whatever else the engine reported alongside it.
 - **WHEN** a `result` event carries both `costUsd` and `estimatedCostUsd`
 - **THEN** it does not validate against the contract's schema
 
+#### Scenario: An error result says why
+- **WHEN** a runner ends a run with status `error` because its engine refused the credential
+- **THEN** the `result` event carries `reason` `authentication` alongside its message
+
 ### Requirement: Usage's input counters add up to the whole input
 A `result` event's `inputTokens` SHALL count the input tokens not counted in `cacheReadTokens` or `cacheWriteTokens`,
 so that the three add up to the run's whole input as the engine reported it. A runner SHALL subtract from its engine's
@@ -546,3 +550,65 @@ the same records, in the same order, without a kind.
 #### Scenario: An older host
 - **WHEN** a runner that uses kinds is offered no capabilities
 - **THEN** it answers with no capabilities, and its transcript records are the same records without a kind
+
+### Requirement: An error result names one reason from a closed list
+A `result` with status `error` SHALL carry a `reason`, one of: `authentication`, `quota`, `rate-limit`, `network`,
+`server`, `configuration`, `context-length`, `output-limit`, `refused`, `turn-limit`, `budget`, `cancelled`, `engine`,
+`runner` or `other`. A `result` with status `ok` SHALL NOT carry one. A runner's `result` that breaks either rule SHALL
+NOT validate, and the host SHALL treat it as a protocol violation.
+
+#### Scenario: An error result without a reason
+- **WHEN** a runner sends a `result` with status `error` and no `reason`
+- **THEN** it does not validate against the contract's schema, and the host treats it as a protocol violation
+
+#### Scenario: A reason off the list
+- **WHEN** a runner sends a `result` with status `error` and `reason` `timeout`
+- **THEN** it does not validate against the contract's schema, and the host treats it as a protocol violation
+
+#### Scenario: An ok result with a reason
+- **WHEN** a runner sends a `result` with status `ok` and `reason` `budget`
+- **THEN** it does not validate against the contract's schema
+
+### Requirement: A failure the list doesn't name is other
+A runner whose run fails for a reason the list has no entry for SHALL report `other`, and its message SHALL say what
+happened. A runner SHALL NOT add reasons of its own: the list has no extension point.
+
+#### Scenario: A failure without an entry
+- **WHEN** a runner's engine ends a response with a status the runner doesn't know
+- **THEN** the `result` has status `error`, `reason` `other`, and a message naming that status
+
+#### Scenario: A runner's own reason
+- **WHEN** a runner's published schemas try to add a reason to the list
+- **THEN** a `result` carrying that reason still does not validate against the contract's schema
+
+### Requirement: Retries that run out end with the last retry's reason
+When a runner ends a run because its retries ran out, the `result`'s reason SHALL be the reason of the last `retry`
+event it sent, which is one of the four reasons the two lists share: `authentication`, `rate-limit`, `network` or
+`server`. A retry whose reason was `other` SHALL end with `other`.
+
+#### Scenario: Server errors until the attempts run out
+- **WHEN** a runner retries a request answered 503 until its attempts run out
+- **THEN** its last `retry` has reason `server`, and its `result` has status `error` and `reason` `server`
+
+#### Scenario: Retries that changed reason
+- **WHEN** a runner's first retry is for a dropped connection and its last for a 429
+- **THEN** its `result` has `reason` `rate-limit`
+
+### Requirement: A cancelled run's result says it was cancelled
+A runner that sends a final `result` after `run/cancel` SHALL give it status `error` and `reason` `cancelled`.
+
+#### Scenario: A result after cancel
+- **WHEN** the host cancels a run and the runner sends a final `result`
+- **THEN** the `result` has status `error` and `reason` `cancelled`
+
+### Requirement: A recorded result keeps the same rule
+troupe SHALL hold the results it records and reads back to the same rule as the ones a runner sends: an `error` result
+without a `reason`, a reason off the list, or a reason on an `ok` result SHALL be refused as a malformed record.
+
+#### Scenario: A recorded error result without a reason
+- **WHEN** troupe reads back a recorded `result` event with status `error` and no `reason`, as `logs` does
+- **THEN** it refuses the record as malformed, naming the result and `reason`
+
+#### Scenario: A run's end holding an error result without a reason
+- **WHEN** a `Run.Ended` payload's outcome holds an `error` result with no `reason`
+- **THEN** it does not validate against the topic's payload schema
