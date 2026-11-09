@@ -40,6 +40,11 @@ from troupe_runner_ollama.defaults import (
 )
 from troupe_runner_ollama.options import Options
 
+CONTEXT_REFUSAL = "exceeds the available context size"
+"""The words in Ollama's message when it refuses a request longer than the context window (status
+400, since every request asks it not to cut the conversation). Only a 400 holding them ends the
+run with the reason ``context-length``; any other 400 is ``other`` (failure-reason design D6)."""
+
 NO_TEXT = "(no text)"
 """The ok result's message when the model's last answer had no text."""
 
@@ -70,9 +75,22 @@ class _Stop(Exception):  # noqa: N818 - a signal to stop, not an error
 
 @dataclass
 class _RunEnded(Exception):  # noqa: N818 - an ending, not an error of the runner's
-    """The run ends with an error result holding ``message``."""
+    """The run ends with an error result holding ``message``, for ``reason``."""
 
     message: str
+    reason: p.FailureReason
+
+
+def engine_failure(error: EngineError) -> p.FailureReason:
+    """The reason a status Ollama refused a request with ends the run for (failure-reason design
+    D6): the context window only when Ollama's message says so, never from the status alone."""
+    if error.status == 400 and CONTEXT_REFUSAL in error.message:
+        return "context-length"
+    if error.status in (401, 403):
+        return "authentication"
+    if error.status == 404:
+        return "configuration"
+    return "other"
 
 
 def encode(value: object) -> bytes:
@@ -273,7 +291,7 @@ class Conversation:
         try:
             text = self._loop()
         except _RunEnded as end:
-            self._result("error", end.message)
+            self._result("error", end.message, end.reason)
             return
         self._result("ok", text or NO_TEXT)
 
@@ -283,7 +301,8 @@ class Conversation:
             if self._requests >= self._options.max_turns:
                 raise _RunEnded(
                     f"stopped after {self._requests} turns (maxTurns); the model was still "
-                    "calling tools"
+                    "calling tools",
+                    "turn-limit",
                 )
             body = self._body()
             if first:
@@ -306,19 +325,21 @@ class Conversation:
                 raise _Stop from error
             except EngineError as error:
                 self._record("received", error.body)
-                message = error.message
-                if error.status == 400:
+                message, reason = error.message, engine_failure(error)
+                if reason == "context-length":
                     message += (
                         f". The run's context window is {self._window} tokens; raise "
                         "contextLength, or give the actor a smaller task."
                     )
-                raise _RunEnded(message) from error
+                raise _RunEnded(message, reason) from error
             except RetryableError as error:
                 if error.body is not None:
                     self._record("received", error.body)
                 if attempt == RETRY_MAX_ATTEMPTS:
+                    # The run ends with its last retry's reason (spec: runner-protocol).
                     raise _RunEnded(
-                        f"gave up after {RETRY_MAX_ATTEMPTS} attempts: {error.message}"
+                        f"gave up after {RETRY_MAX_ATTEMPTS} attempts: {error.message}",
+                        error.reason,
                     ) from error
                 delay = RETRY_DELAY_SECONDS * 2 ** (attempt - 1)
                 self._event(
@@ -354,7 +375,7 @@ class Conversation:
             if "error" in data:
                 error = data["error"]
                 text = error if isinstance(error, str) else json.dumps(data)
-                raise _RunEnded(f"Ollama reported an error: {text}")
+                raise _RunEnded(f"Ollama reported an error: {text}", "engine")
             message = data.get("message")
             if isinstance(message, dict):
                 if isinstance(message.get("content"), str):
@@ -439,7 +460,7 @@ class Conversation:
         try:
             self._event({"type": "log", "level": "error", "message": message}, summary="message")
             if not self._ended:
-                self._result("error", message)
+                self._result("error", message, "runner")
         except _Stop:
             return
 
@@ -461,13 +482,14 @@ class Conversation:
             if value is not None
         }
 
-    def _result(self, status: str, message: str) -> None:
+    def _result(self, status: str, message: str, reason: p.FailureReason | None = None) -> None:
         usage = self._usage()
         data: dict[str, Any] = {
             "type": "result",
             "status": status,
             "message": message,
             "turns": self._requests,
+            **({"reason": reason} if reason is not None else {}),
             "durationMs": max(0, int((self._clock() - self._started) * 1000)),
         }
         if usage:

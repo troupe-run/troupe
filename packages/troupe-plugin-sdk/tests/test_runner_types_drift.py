@@ -138,3 +138,29 @@ def test_a_nested_types_missing_field_is_named_with_its_path() -> None:
         "result.usage: the schema has 'reasoningTokens', which Usage doesn't"
     ]
     assert usage_uri
+
+
+def _reasons_differences(reasons: tuple[str, ...], schema_enum: list[str]) -> list[str]:
+    found = [
+        f"FailureReason lacks {r!r}, which the schema lists"
+        for r in schema_enum
+        if r not in reasons
+    ]
+    found += [
+        f"FailureReason has {r!r}, which the schema doesn't"
+        for r in reasons
+        if r not in schema_enum
+    ]
+    return found
+
+
+def test_the_failure_reasons_are_exactly_the_schemas() -> None:
+    schema = _load(urljoin(BASE, "run-event.schema.json#/$defs/failureReason"))
+    assert _reasons_differences(p.FAILURE_REASONS, schema["enum"]) == []
+
+
+def test_a_reason_the_schema_gains_is_named_with_the_type() -> None:
+    schema = _load(urljoin(BASE, "run-event.schema.json#/$defs/failureReason"))
+    assert _reasons_differences(p.FAILURE_REASONS, [*schema["enum"], "timeout"]) == [
+        "FailureReason lacks 'timeout', which the schema lists"
+    ]

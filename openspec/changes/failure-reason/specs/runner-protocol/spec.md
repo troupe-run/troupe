@@ -19,6 +19,10 @@ reported an error, whatever else the engine reported alongside it.
   `cacheWriteTokens`
 - **THEN** it does not validate against the contract's schema
 
+#### Scenario: A reported cost and an estimate together
+- **WHEN** a `result` event carries both `costUsd` and `estimatedCostUsd`
+- **THEN** it does not validate against the contract's schema
+
 #### Scenario: An error result says why
 - **WHEN** a runner ends a run with status `error` because its engine refused the credential
 - **THEN** the `result` event carries `reason` `authentication` alongside its message
@@ -80,5 +84,9 @@ troupe SHALL hold the results it records and reads back to the same rule as the 
 without a `reason`, a reason off the list, or a reason on an `ok` result SHALL be refused as a malformed record.
 
 #### Scenario: A recorded error result without a reason
-- **WHEN** troupe reads a run's events and its `Run.Ended` outcome holds an `error` result with no `reason`
+- **WHEN** troupe reads back a recorded `result` event with status `error` and no `reason`, as `logs` does
 - **THEN** it refuses the record as malformed, naming the result and `reason`
+
+#### Scenario: A run's end holding an error result without a reason
+- **WHEN** a `Run.Ended` payload's outcome holds an `error` result with no `reason`
+- **THEN** it does not validate against the topic's payload schema

@@ -150,15 +150,19 @@
     },
     "result": {
       "title": "result",
-      "description": "What the runner saw at the end. status is error whenever the engine reported an error, whatever else it reported alongside it. It carries a reported cost or an estimate, never both.",
+      "description": "What the runner saw at the end. status is error whenever the engine reported an error, whatever else it reported alongside it. An error result says why in reason; an ok result has none. It carries a reported cost or an estimate, never both.",
       "type": "object",
       "additionalProperties": false,
       "required": ["runId", "seq", "type", "status", "message"],
+      "if": {"properties": {"status": {"const": "error"}}},
+      "then": {"required": ["reason"]},
+      "else": {"not": {"required": ["reason"]}},
       "properties": {
         "runId": {"$ref": "jsonrpc.schema.json#/$defs/runId"},
         "seq": {"$ref": "#/$defs/seq"},
         "type": {"const": "result"},
         "status": {"enum": ["ok", "error"]},
+        "reason": {"description": "Why the run failed. Present exactly when status is error. Absent: status is ok.", "$ref": "#/$defs/failureReason"},
         "message": {"type": "string"},
         "turns": {"description": "How many turns the engine took. Absent: the engine doesn't count them.", "type": "integer", "minimum": 0},
         "durationMs": {"description": "How long the run took, by the engine's clock. Absent: the engine doesn't report it.", "type": "integer", "minimum": 0},
@@ -177,6 +181,11 @@
         "estimatedCostUsd": {"description": "An estimate, not a reported cost: the run's usage at the price troupe gave in run/start's runtime.price, in US dollars. Sent only when nothing reported a cost and run/start carried a price. Absent: no price, or the usage has a kind of token the price has no rate for, or a rate for a counter that wasn't reported.", "type": "number", "minimum": 0}
       },
       "not": {"required": ["costUsd", "estimatedCostUsd"]}
+    },
+    "failureReason": {
+      "title": "Failure reason",
+      "description": "Why a run failed, from a closed list troupe can act on the same way for every runner. A failure the list has no entry for is other, and the result's message says what happened; a runner can't add reasons of its own. The four a retry can also name mean the same on both, so a run whose retries ran out ends with its last retry's reason. authentication: the engine or service refused the credential. quota: the account is out of quota, credit or billing. rate-limit: rate limited past what the runner will wait or retry. network: the engine couldn't be reached. server: the engine or service kept failing on its side. configuration: the endpoint or model can't serve the run (nothing there, a redirect, no such model). context-length: the conversation outgrew the model's context. output-limit: an answer was cut at the output limit and the runner ended the run for it. refused: the model refused, or the service's content filter stopped it. turn-limit: the runner's or engine's turn limit was reached. budget: the runner's or engine's token or cost budget was spent. cancelled: the run was cancelled and the runner still sent a result. engine: the engine failed in a way of its own, or sent what the runner can't act on. runner: the runner itself failed unexpectedly. other: none of these.",
+      "enum": ["authentication", "quota", "rate-limit", "network", "server", "configuration", "context-length", "output-limit", "refused", "turn-limit", "budget", "cancelled", "engine", "runner", "other"]
     },
     "oversized": {
       "title": "oversized",

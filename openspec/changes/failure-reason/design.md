@@ -19,7 +19,7 @@ See proposal.md for why. What's there today:
 ## Goals / Non-Goals
 
 **Goals:** a reason troupe can switch on, the same for every runner; each runner choosing it from its engine's
-structured fields, never from text; one rule for a result wherever it appears.
+structured fields (or, where it gives none, the fixed words it documents), never guessed from free text; one rule for a result wherever it appears.
 
 **Non-Goals:** acting on a reason (retry, escalate, gate); deciding #279 (whether a run fails, warns or compacts when
 content is lost or cut); a reason for runs that end with no `result` (crash, timeout, cancel without a result), whose
@@ -128,7 +128,8 @@ the new contract refuses), marked `!` in its commit.
   `terminal_reason` is `api_error`, else `other`. The last-retry step comes before the generic codes because the
   recorded `network-retries` fixture shows Claude Code calling a refused connection `server_error` with no status.
   The mapper already sees assistant records and retries in order, so it keeps the last `error` code and last retry
-  reason as state. `billing_error` and `max_output_tokens` are taken from Claude Code's documented assistant-message
+  reason as state, and clears both on an assistant record without an error: that call succeeded, so what came
+  before it recovered and can't explain a later failure (found by the review of #314). `billing_error` and `max_output_tokens` are taken from Claude Code's documented assistant-message
   error codes; no fixture has them yet, so their tests use hand-made records shaped like the recorded ones.
 - **Scripted:** a script's `result` step names `reason` (its options schema refers to the contract's enum and
   requires it for `error`, so a bad script is refused at `run/start`); `honour-with-result` cancel `cancelled`; the
@@ -143,7 +144,7 @@ There are no recorded theatres to migrate.
 ## Risks / Trade-offs
 
 - [A runner picks the wrong reason, and a later gate acts on it] → each mapping is one table with a test per row, and
-  is built from structured fields only; when unsure, `other`.
+  is built from structured fields, or documented fixed words where there are none; when unsure, `other`.
 - [`other` becomes a dumping ground] → the runners' tables name every failure the inventory found; `other` is left
   for genuinely unclassified ones, and D3 says how to add a reason.
 - [The list grows without bound] → adding is a contract change with its own issue; every reason must come with a fix

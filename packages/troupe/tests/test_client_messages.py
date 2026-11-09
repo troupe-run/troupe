@@ -19,6 +19,7 @@ from client_schemas import check
 from troupe.core.client import messages as m
 from troupe.core.events.lineage import timestamp
 from troupe_plugin_sdk.messages import Message, ProtocolError
+from troupe_plugin_sdk.runner import FAILURE_REASONS
 
 RUN_IDS = st.uuids().map(str)
 NAMES = st.from_regex(r"\A[a-z][a-z0-9-]{0,10}\Z")
@@ -36,7 +37,9 @@ ERRORS = st.fixed_dictionaries(
         "code": st.just("run.error-result"),
         "problem": TEXT,
         "fix": TEXT,
-        "details": st.fixed_dictionaries({"message": TEXT}),
+        "details": st.fixed_dictionaries(
+            {"reason": st.sampled_from(FAILURE_REASONS), "message": TEXT}
+        ),
     }
 ) | st.fixed_dictionaries(
     {
@@ -209,6 +212,7 @@ def logged_events(draw: st.DrawFn) -> dict[str, Any]:
                 {"type": "turn", "role": "assistant", "text": "hi"},
                 {"type": "log", "level": "info", "message": "m"},
                 {"type": "result", "status": "ok", "message": "done"},
+                {"type": "result", "status": "error", "reason": "budget", "message": "spent"},
                 {
                     "type": "oversized",
                     "originalType": "turn",
@@ -537,6 +541,21 @@ def test_a_logged_event_whose_event_belongs_to_another_seq_is_refused() -> None:
     assert "runId and seq" in _refused(m.LogsUpdate, data)
 
 
+# Requirement: A recorded result keeps the same rule
+
+
+def test_a_recorded_error_result_without_a_reason_is_refused_naming_reason() -> None:
+    run_id = "0f8fad5b-d9cb-469f-a165-70867728950e"
+    data = {
+        "kind": "event",
+        "runId": run_id,
+        "seq": 3,
+        "at": "2026-10-12T03:04:05.678Z",
+        "event": {"runId": run_id, "seq": 3, "type": "result", "status": "error", "message": "m"},
+    }
+    assert "reason" in _refused(m.LogsUpdate, data)
+
+
 def test_an_unknown_notice_code_is_refused_when_turned_into_a_notice() -> None:
     data = m.NoticeData.from_data({"code": "run.made-up", "problem": "p", "fix": "f"})
     with pytest.raises(ProtocolError, match=r"run\.made-up"):
@@ -555,7 +574,12 @@ ENDED_SUMMARY: dict[str, Any] = {
     "workspace": {"kind": "theatre"},
     "state": "ended",
     "outcome": "failed",
-    "error": {"code": "run.error-result", "problem": "p", "fix": "f", "details": {"message": "m"}},
+    "error": {
+        "code": "run.error-result",
+        "problem": "p",
+        "fix": "f",
+        "details": {"reason": "other", "message": "m"},
+    },
     "events": 1,
     "startedAt": "2026-10-13T00:00:00.000Z",
     "endedAt": "2026-10-13T00:00:01.000Z",
@@ -568,7 +592,7 @@ ENDED_SUMMARY: dict[str, Any] = {
             "code": "run.error-result",
             "problem": "p",
             "fix": "f",
-            "details": {"message": "m"},
+            "details": {"reason": "other", "message": "m"},
         },
     },
 }

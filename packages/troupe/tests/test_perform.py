@@ -217,7 +217,7 @@ def test_the_lease_is_released_when_perform_returns(tmp_path: Path) -> None:
 # 7.3: each outcome, recorded as the run host derived it.
 
 AUTH_RETRY = {"event": {"type": "retry", "attempt": 1, "delayMs": 10, "reason": "authentication"}}
-ERROR = {"event": {"type": "result", "status": "error", "message": "it broke"}}
+ERROR = {"event": {"type": "result", "status": "error", "reason": "other", "message": "it broke"}}
 
 OUTCOMES = [
     ("succeeded", None, script(INIT, OK), {}, None),

@@ -218,6 +218,7 @@ EVENTS: dict[str, dict[str, Any]] = {
     "log": {"level": "info", "message": "starting"},
     "result": {
         "status": "error",
+        "reason": "authentication",
         "message": "401",
         "turns": 1,
         "durationMs": 10,
@@ -271,6 +272,95 @@ def test_no_run_event_type_accepts_native_engine_detail(type_: str) -> None:
     seq = 0 if type_ == "init" else 3
     event = {"runId": RUN_ID, "seq": seq, "type": type_, **EVENTS[type_], "native": {"k": 1}}
     assert not is_valid(event, "run-event.schema.json#/$defs/event")
+
+
+# Requirement: An error result names one reason from a closed list
+# Requirement: A recorded result keeps the same rule
+
+FAILURE_REASONS = [
+    "authentication",
+    "quota",
+    "rate-limit",
+    "network",
+    "server",
+    "configuration",
+    "context-length",
+    "output-limit",
+    "refused",
+    "turn-limit",
+    "budget",
+    "cancelled",
+    "engine",
+    "runner",
+    "other",
+]
+
+RESULT_WHEREVER_IT_APPEARS = [
+    "run-event.schema.json#/$defs/event",
+    "run-event.schema.json#/$defs/hostEvent",
+    "../events/run-ended.schema.json#/properties/outcome/properties/result",
+]
+
+
+def _bare_result(**fields: object) -> dict[str, Any]:
+    return {"runId": RUN_ID, "seq": 3, "type": "result", "message": "m", **fields}
+
+
+def test_the_failure_reasons_are_the_fifteen_the_contract_names() -> None:
+    defs = load(RUNNER_SCHEMAS / "run-event.schema.json")["$defs"]
+    assert defs["failureReason"]["enum"] == FAILURE_REASONS
+
+
+@pytest.mark.parametrize("ref", RESULT_WHEREVER_IT_APPEARS)
+@pytest.mark.parametrize("reason", FAILURE_REASONS)
+def test_an_error_result_with_each_reason_validates_wherever_a_result_appears(
+    ref: str, reason: str
+) -> None:
+    validate(_bare_result(status="error", reason=reason), ref)
+
+
+@pytest.mark.parametrize("ref", RESULT_WHEREVER_IT_APPEARS)
+def test_an_ok_result_without_a_reason_validates_wherever_a_result_appears(ref: str) -> None:
+    validate(_bare_result(status="ok"), ref)
+
+
+@pytest.mark.parametrize("ref", RESULT_WHEREVER_IT_APPEARS)
+@pytest.mark.parametrize(
+    "result",
+    [
+        _bare_result(status="error"),
+        _bare_result(status="error", reason="timeout"),
+        _bare_result(status="ok", reason="budget"),
+    ],
+    ids=["error without a reason", "a reason off the list", "ok with a reason"],
+)
+def test_a_result_breaking_the_reason_rule_is_refused_wherever_it_appears(
+    ref: str, result: dict[str, Any]
+) -> None:
+    assert not is_valid(result, ref)
+
+
+def test_an_error_result_without_a_reason_is_refused_as_a_runner_message() -> None:
+    message = _notification("run/event", _bare_result(status="error"))
+    assert not is_valid(message, "message.schema.json#/$defs/fromRunner")
+
+
+def _dynamic_refs(node: object) -> Iterator[str]:
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key == "$dynamicRef" and isinstance(value, str):
+                yield value
+            else:
+                yield from _dynamic_refs(value)
+    elif isinstance(node, list):
+        for item in node:
+            yield from _dynamic_refs(item)
+
+
+def test_no_runner_can_extend_the_failure_reasons() -> None:
+    defs = load(RUNNER_SCHEMAS / "run-event.schema.json")["$defs"]
+    assert list(_dynamic_refs(defs["failureReason"])) == []
+    assert list(_dynamic_refs(defs["result"])) == []
 
 
 def test_a_usage_counter_the_contract_doesnt_name_is_refused() -> None:
@@ -331,10 +421,17 @@ def _minimal_events() -> st.SearchStrategy[dict[str, Any]]:
                 field: _strategy(schema["properties"][field])
                 for field in _sent_required(name, schema)
             }
-        )
+        ).flatmap(_with_reason_when_failed)
         for name, schema in _event_defs().items()
     ]
     return st.one_of(choices)
+
+
+def _with_reason_when_failed(event: dict[str, Any]) -> st.SearchStrategy[dict[str, Any]]:
+    """An error result's reason is required by its status, not by the def's required list."""
+    if event.get("type") != "result" or event["status"] != "error":
+        return st.just(event)
+    return st.sampled_from(FAILURE_REASONS).map(lambda reason: {**event, "reason": reason})
 
 
 def _sent_required(name: str, schema: dict[str, Any]) -> list[str]:

@@ -28,6 +28,7 @@
       "type": "result",
       "seq": 1,
       "status": "error",
+      "reason": "engine",
       "message": "The service's response can't be read: The response's tool call's arguments is an object, not text. Retrying can't fix a response the service finished, so the run ends here. Check that the runtime's endpoint serves OpenAI's Responses API.",
       "turns": 1,
       "usage": {

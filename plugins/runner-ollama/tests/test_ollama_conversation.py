@@ -244,7 +244,7 @@ def test_a_request_ollama_refuses_ends_the_run_naming_the_window_and_context_len
         window=512,
     )
     assert len(fake.chats()) == 2
-    assert sink.result.status == "error"
+    assert (sink.result.status, sink.result.reason) == ("error", "context-length")
     assert "exceeds the available context size" in sink.result.message
     assert "context window is 512 tokens" in sink.result.message
     assert "contextLength" in sink.result.message
@@ -257,7 +257,7 @@ def test_a_cut_answer_is_a_warning_and_the_run_goes_on(tmp_path: Path) -> None:
     (log,) = sink.of(p.LogEvent)
     assert log.level == "warning"
     assert "output limit" in log.message
-    assert sink.result.status == "ok"
+    assert (sink.result.status, sink.result.reason) == ("ok", None)
 
 
 # Requirement: One tool result fits the context window
@@ -414,7 +414,7 @@ def test_the_turn_limit_ends_the_run_with_an_error_and_no_further_request(tmp_pa
     sink, fake = _run(tmp_path, [glob, glob, glob], options=Options(max_turns=2))
     assert len(fake.chats()) == 2
     assert len(sink.of(p.ToolCallEvent)) == 2
-    assert sink.result.status == "error"
+    assert (sink.result.status, sink.result.reason) == ("error", "turn-limit")
     assert "stopped after 2 turns (maxTurns)" in sink.result.message
 
 
@@ -528,7 +528,7 @@ def test_a_server_error_that_lasts_ends_the_run_with_ollamas_message(tmp_path: P
     sink, fake = _run(tmp_path, [failed] * RETRY_MAX_ATTEMPTS)
     assert len(fake.chats()) == RETRY_MAX_ATTEMPTS
     assert [r.attempt for r in sink.of(p.RetryEvent)] == list(range(1, RETRY_MAX_ATTEMPTS))
-    assert sink.result.status == "error"
+    assert (sink.result.status, sink.result.reason) == ("error", "server")
     assert "model failed to load" in sink.result.message
 
 
@@ -537,7 +537,7 @@ def test_an_error_part_way_through_a_stream_ends_the_run_at_once(tmp_path: Path)
     sink, fake = _run(tmp_path, [answer])
     assert len(fake.chats()) == 1
     assert sink.of(p.RetryEvent) == []
-    assert sink.result.status == "error"
+    assert (sink.result.status, sink.result.reason) == ("error", "engine")
     assert "an error was encountered while running the model" in sink.result.message
 
 
@@ -546,6 +546,36 @@ def test_a_request_ollama_refuses_isnt_retried(tmp_path: Path) -> None:
     assert len(fake.chats()) == 1
     assert sink.of(p.RetryEvent) == []
     assert sink.result.status == "error"
+
+
+# Requirement: Each failure reports its reason
+
+
+def test_another_refused_request_is_other_and_doesnt_name_the_context_window(
+    tmp_path: Path,
+) -> None:
+    sink, _ = _run(tmp_path, [Answer(status=400, body=b'{"error": "invalid tool schema"}')])
+    assert (sink.result.status, sink.result.reason) == ("error", "other")
+    assert "invalid tool schema" in sink.result.message
+    assert "context window" not in sink.result.message
+
+
+@pytest.mark.parametrize(
+    ("status", "reason"),
+    [(401, "authentication"), (403, "authentication"), (404, "configuration"), (418, "other")],
+)
+def test_a_status_ollama_refuses_with_ends_the_run_with_its_reason(
+    tmp_path: Path, status: int, reason: str
+) -> None:
+    sink, fake = _run(tmp_path, [Answer(status=status, body=b'{"error": "no"}')])
+    assert len(fake.chats()) == 1
+    assert (sink.result.status, sink.result.reason) == ("error", reason)
+
+
+def test_a_dropped_connection_on_every_attempt_ends_with_reason_network(tmp_path: Path) -> None:
+    dropped = Answer([message("a"), message("b"), done()], close_after=1)
+    sink, _ = _run(tmp_path, [dropped] * RETRY_MAX_ATTEMPTS)
+    assert (sink.result.status, sink.result.reason) == ("error", "network")
 
 
 # Requirement: Connection failures and server errors are retried and reported
@@ -579,7 +609,7 @@ def test_retries_spent_end_the_run_naming_the_status(tmp_path: Path) -> None:
     sink, _ = _run(tmp_path, [busy] * RETRY_MAX_ATTEMPTS)
     assert len(sink.of(p.RetryEvent)) == RETRY_MAX_ATTEMPTS - 1
     assert "status 503: server busy" in sink.result.message
-    assert sink.result.status == "error"
+    assert (sink.result.status, sink.result.reason) == ("error", "server")
 
 
 def test_a_silent_stream_is_a_network_retry(tmp_path: Path) -> None:
@@ -736,7 +766,7 @@ def test_fail_before_the_result_sends_a_log_error_then_an_error_result(tmp_path:
         conversation.fail("The Ollama runner failed: KeyError: 'boom'")
     (log,) = sink.of(p.LogEvent)
     assert (log.level, log.message) == ("error", "The Ollama runner failed: KeyError: 'boom'")
-    assert sink.result.status == "error"
+    assert (sink.result.status, sink.result.reason) == ("error", "runner")
     assert [event.seq for event in sink.events] == [0, 1]
 
 

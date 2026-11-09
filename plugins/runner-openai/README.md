@@ -113,25 +113,32 @@ first as a `retry` event:
 
 ## How a run ends
 
-Besides a completed reply, each of these ends the run with an `error` result naming it, and nothing is retried:
+Besides a completed reply, each of these ends the run with an `error` result naming it and giving its `reason`, and
+nothing is retried:
 
-| What happened | Its message says |
-|---|---|
-| 401 or 403 | the service refused the credential, with its message |
-| 429 `insufficient_quota` | the account is out of quota |
-| 400 `context_length_exceeded` | the conversation is longer than the model's context |
-| 404 without OpenAI's error shape | the URL it tried, and that the endpoint must be the API's base, often ending in `/v1` |
-| any other 4xx | the status and the service's message |
-| a 3xx | the status and where it pointed; never followed |
-| a failed response, or an `error` event, with any other code | the code and the service's message |
-| `incomplete`, reason `max_output_tokens` or `content_filter` | the output limit, or the content filter |
-| a refusal in an output message | the model refused, with its words |
-| a function call with no `call_id` | it can't be answered |
-| a status the runner doesn't know | the status |
-| a response the service finished in a shape it can't read: an event (ended by its blank line, or whole JSON) that isn't JSON or has no type, or a final event with a field of the wrong type, such as a tool call's arguments as an object | what was wrong, and that retrying can't fix it; the response's usage is counted when it can be read |
-| a 2xx whose `Content-Type` is set and isn't `text/event-stream`, such as a plain JSON body | the status, the type, and the service's message or the start of the body |
-| `maxTurns` reached, or `maxTotalTokens` spent | which, and the option to raise |
-| retries run out | the last failure, and the attempts made |
+| What happened | Its message says | `reason` |
+|---|---|---|
+| 401 or 403 | the service refused the credential, with its message | `authentication` |
+| 429 `insufficient_quota` | the account is out of quota | `quota` |
+| 429 asking to wait longer than the runner waits | the wait asked for, and the cap | `rate-limit` |
+| 400 `context_length_exceeded` | the conversation is longer than the model's context | `context-length` |
+| 404 without OpenAI's error shape | the URL it tried, and that the endpoint must be the API's base, often ending in `/v1` | `configuration` |
+| 404 `model_not_found` | the service has no such model | `configuration` |
+| a 3xx | the status and where it pointed; never followed | `configuration` |
+| any other 4xx | the status and the service's message | `other` |
+| a failed response, or an `error` event, with any other code | the code and the service's message | `other` |
+| `incomplete`, reason `max_output_tokens` | the output limit | `output-limit` |
+| `incomplete`, reason `content_filter` | the content filter | `refused` |
+| `incomplete` for another reason | the reason | `other` |
+| a refusal in an output message | the model refused, with its words | `refused` |
+| a function call with no `call_id` | it can't be answered | `engine` |
+| a status the runner doesn't know | the status | `other` |
+| a response the service finished in a shape it can't read: an event (ended by its blank line, or whole JSON) that isn't JSON or has no type, or a final event with a field of the wrong type, such as a tool call's arguments as an object | what was wrong, and that retrying can't fix it; the response's usage is counted when it can be read | `engine` |
+| a 2xx whose `Content-Type` is set and isn't `text/event-stream`, such as a plain JSON body | the status, the type, and the service's message or the start of the body | `configuration` |
+| `maxTurns` reached | the limit, and the option to raise | `turn-limit` |
+| `maxTotalTokens` spent | the budget and the tokens used, and the option to raise | `budget` |
+| retries run out | the last failure, and the attempts made | the last retry's |
+| the runner fails itself | the error | `runner` |
 
 ## The transcript
 

@@ -31,7 +31,7 @@ SUMMARY: dict[str, Any] = {
         "code": "run.error-result",
         "problem": "It failed.",
         "fix": "Look.",
-        "details": {"message": "401"},
+        "details": {"reason": "authentication", "message": "401"},
     },
     "events": 2,
     "startedAt": AT,
