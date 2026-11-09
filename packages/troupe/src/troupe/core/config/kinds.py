@@ -185,7 +185,7 @@ def actor_problems(
                 at = (*base, "runner")
                 raise TroupeError(
                     error.code,
-                    problem=f"{dotted(at)}: {error.problem}",
+                    problem=f"{shown(at)}: {error.problem}",
                     fix=error.fix,
                     details={**error.details, "path": list(at)},
                 ) from None
