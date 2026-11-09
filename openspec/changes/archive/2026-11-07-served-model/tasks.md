@@ -54,8 +54,9 @@
   before the permission-denial logs and the `result`. Verify mapping tests from built records on the recorded shapes:
   a fallback model, `<synthetic>`, a subagent's message, a `modelUsage`-only model, and one already reported.
 - [x] 4.2 Verify the recorded fixtures' expected events are unchanged (`test_claude_code_fixtures.py`) and the
-  mapping property tests still pass; update the README's and `contributing/runners.md`'s Claude Code mapping rows,
-  verified by `test_claude_code_readme.py`.
+  mapping property tests still pass; update `contributing/runners.md`'s Claude Code mapping rows (the plugin's README
+  has no table of its own: it links to that one). No test reads those rows, so they were checked by reading them against
+  `mapping.py`; `test_runners_doc.py` checks only that the run events table lists `served_model`.
 
 ## 5. The Ollama runner
 
