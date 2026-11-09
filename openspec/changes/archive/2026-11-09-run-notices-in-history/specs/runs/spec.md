@@ -88,12 +88,14 @@ error and the transcript's reference.
 
 ### Requirement: A recording failure leaves out what it can't name
 `run.recording-failed` SHALL leave out `failedAt` when no run event failed to record, `notice` when no notice failed to
-record, `endError` when the end was recorded, and `transcript` when the runner never started. It SHALL NOT carry both
-`failedAt` and `notice`: it names whichever failed first.
+record, `endError` when the end was recorded, and `transcript` and `transcriptFormat` when the runner never started.
+It SHALL carry `transcriptFormat` exactly when it carries `transcript`, and SHALL NOT carry both `failedAt` and
+`notice`: it names whichever failed first.
 
 #### Scenario: Only the end fails to record
 - **WHEN** every run event is recorded and recording the run's end fails
 - **THEN** `perform` fails with `run.recording-failed`, whose details have `endError` and no `failedAt` or `notice`
+- **AND** its details carry the transcript's reference and its `transcriptFormat`
 
 #### Scenario: A run event fails to record and the end is recorded
 - **WHEN** recording the run event with `seq` 2 fails and the run's end is recorded
