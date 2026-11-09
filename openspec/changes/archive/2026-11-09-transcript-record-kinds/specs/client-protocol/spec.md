@@ -3,11 +3,11 @@
 ## MODIFIED Requirements
 
 ### Requirement: A run summary carries what its state knows
-A run summary SHALL carry `outcome` and `endedAt` exactly when its `state` is `ended`. It SHALL carry
-`transcriptFormat` exactly when it carries `transcript`. It SHALL leave out `error` when the outcome has none,
-`transcript` and `stderr` when the runner never started, `recording` when recording didn't fail, `runner.reported`
-when the runner sent no init, and a worktree workspace's `clones` until its worktree is made. It SHALL carry
-`workspace` always, and `changes` exactly when the workspace is a worktree. No field of a summary SHALL be `null`.
+A run summary SHALL carry `outcome` and `endedAt` exactly when its `state` is `ended`. It SHALL leave out `error`
+when the outcome has none, `transcript` and `stderr` when the runner never started, `recording` when recording didn't
+fail, `runner.reported` when the runner sent no init, and a worktree workspace's `clones` until its worktree is
+made. It SHALL carry `workspace` always, and `changes` exactly when the workspace is a worktree. No field of a summary
+SHALL be `null`.
 
 #### Scenario: A running run
 - **WHEN** `status` reports a run whose `perform` is still alive
@@ -33,6 +33,11 @@ when the runner sent no init, and a worktree workspace's `clones` until its work
 - **WHEN** `status` reports a worktree run whose start is recorded and whose worktree isn't made yet
 - **THEN** its summary's workspace has its path, base and whether the theatre was dirty, and no `clones`
 - **AND** the summary validates against the client protocol's run schema
+
+## ADDED Requirements
+
+### Requirement: A run summary names its transcript's format
+A run summary SHALL carry `transcriptFormat` exactly when it carries `transcript`, as the run's end recorded it.
 
 #### Scenario: A transcript and its format
 - **WHEN** `status` reports an ended run whose runner started

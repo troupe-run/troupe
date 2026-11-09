@@ -390,15 +390,15 @@ goes silent for the runner's named stream timeout.
 - **THEN** a `retry` with reason `network` follows, and the retried response is used instead
 
 ### Requirement: The transcript is the exchange with the service
-The runner SHALL send, as `run/transcript` records in the order they happen, each request body as sent, each line of
-each response's stream unchanged, its `event:` lines included, and the body of each error response and of each
-successful response that isn't a stream, each in a record that says which it is. Request and response headers SHALL
-NOT be recorded, except the response headers the runner names in one place.
+The runner SHALL send as `run/transcript` records, in order: each request body as sent (`sent`, when it uses kinds);
+each stream line unchanged, `event:` lines included, and the body of each error response or 2xx that isn't a stream
+(`received`); and each response's status with the response headers named in one place, and each stream it abandons
+(`note`). `sent` and `received` records SHALL be the bytes themselves. No other header SHALL be recorded.
 
 #### Scenario: A run's transcript
 - **WHEN** a run makes one request and gets one streamed response
-- **THEN** its transcript holds a record of the request body, then one record for each line of the response's
-  stream, in order
+- **THEN** its transcript holds a `sent` record that is the request body, then a `note` of the response's status,
+  then one `received` record for each line of the response's stream, in order
 
 #### Scenario: No request header
 - **WHEN** any transcript record is read
@@ -406,7 +406,16 @@ NOT be recorded, except the response headers the runner names in one place.
 
 #### Scenario: A successful answer that isn't a stream
 - **WHEN** a request is answered 200 with `Content-Type: application/json`
-- **THEN** the transcript holds a record of that response's body
+- **THEN** the transcript holds a `received` record that is that response's body
+
+#### Scenario: An error response
+- **WHEN** a request is answered 429 with a JSON body
+- **THEN** the transcript holds a `note` naming status 429 and the kept headers, then a `received` record that is the
+  body, byte for byte
+
+#### Scenario: A broken stream
+- **WHEN** a response's stream breaks off and the runner abandons it
+- **THEN** the transcript holds a `note` saying why, after the stream's last `received` line
 
 ### Requirement: Summaries fit below the event limit
 Each `turn` text, `inputSummary`, `outputSummary` and result or log message SHALL be cut, on a UTF-8 boundary, so that
@@ -568,3 +577,15 @@ gives none.
 #### Scenario: No usage reported
 - **WHEN** a response completes without usage, and `run/start` carries a price
 - **THEN** the result has no `estimatedCostUsd`
+
+### Requirement: The OpenAI runner uses transcript kinds
+The runner SHALL accept `transcript-kinds` when troupe offers it, and otherwise SHALL send the same records without a
+kind, as the contract says.
+
+#### Scenario: troupe offers kinds
+- **WHEN** troupe's `initialize` offers `transcript-kinds`
+- **THEN** the runner's answer names `transcript-kinds`, and every transcript record it sends has a kind
+
+#### Scenario: No capability offered
+- **WHEN** `initialize` offers no capabilities
+- **THEN** the runner answers with none, and sends the same transcript records with no kind
