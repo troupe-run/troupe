@@ -3,11 +3,10 @@
 ## MODIFIED Requirements
 
 ### Requirement: The native transcript is a separate stream
-The runner SHALL send its engine's native output, record by record and unchanged, as `run/transcript`
-notifications in the order produced. A runner that holds the conversation itself SHALL also send each message it adds
-to the conversation, verbatim as it sent it, before the engine's output that follows it, and SHALL NOT send re-sent
-history again. Transcript records SHALL NOT be interpreted by the host, apart from masking the
-run's credential (spec: runs).
+The runner SHALL send its transcript as `run/transcript` notifications in order: its engine's native output, unchanged,
+or with kinds, each record labelled. A runner that holds the conversation SHALL also send each message it adds to it,
+verbatim, before the engine's output that follows, and SHALL NOT send re-sent history again. The host SHALL NOT
+interpret records, apart from masking the run's credential (spec: runs).
 
 #### Scenario: Native records are kept verbatim
 - **WHEN** a runner that doesn't use kinds sends transcript records, in a run with no credential or whose records

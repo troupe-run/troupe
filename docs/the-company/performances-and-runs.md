@@ -42,10 +42,10 @@ A run is recorded as its own stream of [events](../prompt-book/events.md), all s
 - **`Run.WorktreeMade`:** for a run in its own worktree, that the worktree is made, and how its files were copied.
 - **`Run.Reported`:** one for each event the runner reports, in order. The first is the runner's `init`, which says
   which runner answered. The agent reported it, through its runner.
-- **`Run.Ended`:** the outcome, its error, the runner's result, references to the transcript and standard error, and
-  the limits the run ran under. For a run in its own worktree, it also holds the changes: a reference to the diff,
-  with how many files it adds, modifies and deletes, and any branches, tags, config or hooks that changed in git
-  while it ran.
+- **`Run.Ended`:** the outcome, its error, the runner's result, references to the transcript and standard error, how
+  the transcript's lines are written, and the limits the run ran under. For a run in its own worktree, it also holds
+  the changes: a reference to the diff, with how many files it adds, modifies and deletes, and any branches, tags,
+  config or hooks that changed in git while it ran.
 - **`Run.ChangesAccepted`:** you accepted the run's changes, and its diff was applied to your files.
 - **`Run.ChangesDiscarded`:** you discarded the run's changes, and its worktree was removed.
 
