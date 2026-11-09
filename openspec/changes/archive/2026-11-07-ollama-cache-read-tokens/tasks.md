@@ -70,9 +70,9 @@
   temporary prints in the test, reverted after the run.)
 - [x] 4.2 Run `uv run scripts/check.py` and `openspec validate ollama-cache-read-tokens --strict`. Verify: both pass,
   and CI passes on Linux, macOS and Windows on the pull request's last code commit.
-  (Done: both pass. After the rebase onto main on 2026-11-09, CI run 42539777989 passed every job, Linux, macOS and
-  Windows on Python 3.12 to 3.15, on 10627b3b, whose last code commit is 23deb914. Before it, run 42376532437 passed
-  on 84a8638.)
+  (Done: both pass. After the last rebase onto main on 2026-11-09, CI run 42571790033 passed every job, Linux, macOS
+  and Windows on Python 3.12 to 3.15, on 72aa5074, whose last code commit is e3e3b14e. Earlier heads passed too: run
+  42539777989 on 10627b3b and run 42376532437 on 84a8638.)
 
 ## 5. Follow the merged contract (troupe#293, PR #312; design D5)
 
