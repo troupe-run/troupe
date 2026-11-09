@@ -68,10 +68,12 @@ edit, regenerate the packaged copy with `uv run scripts/package_schemas.py` and 
 ## 4. Nothing else keeps a form for older records
 
 - [x] 4.1 Search again with
-  `grep -rn -i -E "recorded before|older troupe|before (runs|runners|audits|runtimes)" protocol/schemas packages/*/src plugins docs`
+  `grep -rn -i -E "recorded before|older troupe|before (runs|runners|audits|runtimes)" protocol/schemas packages/*/src plugins docs contributing`
   and check that each remaining hit is about order in time (such as "recorded before its runner starts") or the actor
-  re-check, not a form kept for old records. Verify `docs/prompt-book/events.md` no longer lists `runner_reported` and
-  says `workspace` is required, and `uv run scripts/docs_reference.py --check` is clean.
+  re-check, not a form kept for old records. (`contributing` was added after Claude's review found
+  `contributing/runners.md` and `contributing/runs.md` still describing the removed forms; both are fixed.) Verify
+  `docs/prompt-book/events.md` no longer lists `runner_reported` and says `workspace` is required, and
+  `uv run scripts/docs_reference.py --check` is clean.
 - [x] 4.2 Raise the issue design D5 names (a run summary's `transcript` and `stderr` aren't forbidden by the schema
   on a run that hasn't ended), with `--project "troupe roadmap"`, citing #305. Verify it's on the board with
   `gh issue view <n> -R troupe-run/troupe --json projectItems`.
