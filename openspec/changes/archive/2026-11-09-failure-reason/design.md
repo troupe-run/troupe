@@ -110,9 +110,10 @@ the new contract refuses), marked `!` in its commit.
 - **OpenAI** (`exchange.classify` and `loop.py` already sort failures; each branch names its reason):
   401/403 `authentication`; 429 `insufficient_quota` `quota`; 429 `Retry-After` over the cap `rate-limit`;
   400 `context_length_exceeded` `context-length`; redirect, 404 without OpenAI's shape, `model_not_found`
-  `configuration`; other 4xx `other`; a failed response with a code not named as the service's `other`; refusal and
+  `configuration`; a 2xx whose `Content-Type` isn't a stream `configuration`; other 4xx `other`; a failed response with a code not named as the service's `other`; refusal and
   `content_filter` `refused`; `max_output_tokens` `output-limit`; other incomplete reasons and unknown statuses
-  `other`; tool call without `call_id` `engine`; turn limit `turn-limit`; token budget `budget`; retries run out
+  `other`; tool call without `call_id`, or a response finished in a shape the runner can't read, `engine` (both added on the
+  rebase onto openai-wrong-shape-ends-run); turn limit `turn-limit`; token budget `budget`; retries run out
   the last retry's reason; the runner's own exception `runner`. `invalid_prompt` stays `other` (owner, 2026-11-07): OpenAI's docs
   describe it only as an invalid prompt, though its recorded message is a usage-policy flag, and refusing to guess
   beats a wrong `refused`. The message still says what OpenAI said.
