@@ -65,9 +65,12 @@
 - [x] 5.3 If #292 has merged, rewrite its dotted-path limit note in `docs/stagecraft/runtimes.md` to show
   `runtimes.<name>.prices[gpt-4.1]`, and add an end-to-end test that sets and unsets one model's price this way. If it
   hasn't merged, comment on #292's pull request with the bracket form, so whichever merges second makes that edit.
-  Verify: the doc edit and test are in this PR, or the comment's link is in the PR description. Done: #292 hadn't merged.
-  Its PR, #317 (still a draft), has the note, with the bracket form for setting one model's price as a group
-  (`input` and `output` are required): https://github.com/troupe-run/troupe/pull/317#issuecomment-6716861478.
+  Verify: the doc edit and test are in this PR, or the comment's link is in the PR description. Done: the note went to
+  #317 (https://github.com/troupe-run/troupe/pull/317#issuecomment-6716861478), and #317 then merged first, so the
+  edit is here, after the rebase. `docs/stagecraft/runtimes.md` sets `prices[gpt-4.1]` on its own, which its page test
+  runs as written. The `prices` description in `config/runtime.schema.json` (and the models and reference generated
+  from it) gives the bracket form. `test_a_model_whose_name_holds_a_dot_is_priced_changed_and_unpriced_on_its_own`
+  sets, changes and unsets that one price through the CLI.
 
 ## 6. Integration
 

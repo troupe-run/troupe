@@ -9,6 +9,7 @@ the command read.
 """
 
 import io
+import json
 from pathlib import Path
 from typing import Any
 
@@ -261,3 +262,33 @@ def test_resolved_for_an_unknown_bracketed_runtime_names_it_in_brackets_in_the_f
     assert code == 1
     assert seen.error.details["path"] == ["runtimes", "my.rt"]
     assert "troupe config set runtimes[my.rt].endpoint=" in seen.error.fix
+
+
+# A model whose name holds a dot, priced on its own (task 5.3: prices came with #292).
+
+GPT_41 = '{"input": 2, "cacheRead": 0.5, "cacheWrite": 0, "output": 8}'
+GPT_5_MINI = '{"input": 0.25, "cacheRead": 0.025, "cacheWrite": 0, "output": 2}'
+
+
+def test_a_model_whose_name_holds_a_dot_is_priced_changed_and_unpriced_on_its_own(
+    repo: Repo, seen: Seen
+) -> None:
+    assert cli("config", "set", f"runtimes.openai.prices.gpt-5-mini={GPT_5_MINI}")[0] == 0
+    code, out, err = cli("config", "set", f"runtimes.openai.prices[gpt-4.1]={GPT_41}")
+    assert code == 0, err
+    assert seen.requests[-1][1]["operations"][0]["path"] == PRICE[:4]
+    assert "set runtimes.openai.prices[gpt-4.1].input\n" in out
+    prices = json.loads(cli("config", "get", "runtimes.openai.prices", "--json")[1])["value"]
+    assert prices == {"gpt-5-mini": json.loads(GPT_5_MINI), "gpt-4.1": json.loads(GPT_41)}
+
+    code, out, err = cli("config", "set", "runtimes.openai.prices[gpt-4.1].output=9")
+    assert code == 0, err
+    assert out.startswith("changed runtimes.openai.prices[gpt-4.1].output\n")
+    got = cli("config", "get", "runtimes.openai.prices[gpt-4.1].output")
+    assert got[1] == "9.0\n"  # a rate is a number, so the CLI reads 9 as 9.0
+
+    code, out, err = cli("config", "unset", "runtimes.openai.prices[gpt-4.1]")
+    assert code == 0, err
+    assert out.startswith("unset runtimes.openai.prices[gpt-4.1]\n")
+    prices = json.loads(cli("config", "get", "runtimes.openai.prices", "--json")[1])["value"]
+    assert prices == {"gpt-5-mini": json.loads(GPT_5_MINI)}

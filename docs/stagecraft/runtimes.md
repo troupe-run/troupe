@@ -103,13 +103,15 @@ model priced in config but overridden by `TROUPE_RUNTIME_<NAME>_MODEL` gets the 
 No variable sets a price. `troupe config get --resolved` and `troupe perform --rehearse` show the price that applies,
 and every run records the price it used, so an estimate can always be checked against its tokens.
 
-A model whose name holds a dot, like `gpt-4.1`, can't be named in a `config set` path, since dots separate the keys
-([#303](https://github.com/troupe-run/troupe/issues/303)). Set the runtime's whole price list instead, which replaces
-it, so include every model:
+A model whose name holds a dot, like `gpt-4.1`, goes in square brackets in the path, so its dot isn't read as one
+between keys. Keep the argument quoted: zsh reads unquoted brackets as a pattern and stops. This sets the one price,
+beside the others:
 
 ```sh
-troupe config set 'runtimes.openai.prices={"gpt-4.1": {"input": 2, "cacheRead": 0.5, "cacheWrite": 0, "output": 8}, "gpt-5-mini": {"input": 0.25, "cacheRead": 0.025, "cacheWrite": 0, "output": 2}}'
+troupe config set 'runtimes.openai.prices[gpt-4.1]={"input": 2, "cacheRead": 0.5, "cacheWrite": 0, "output": 8}'
 ```
+
+[The CLI reference](../prompt-book/cli.md) says how a config path is written.
 
 ## Keys stay in your environment
 

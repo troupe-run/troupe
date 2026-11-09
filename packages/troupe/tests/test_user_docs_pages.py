@@ -547,7 +547,7 @@ def test_the_runtimes_pages_commands_run_as_written_and_show_what_it_says(
     assert "model: gpt-4.1-mini" in written
     assert "env: MY_OPENAI_KEY" in written
     prices = YAML(typ="safe", pure=True).load(written)["prices"]
-    assert sorted(prices) == ["gpt-4.1", "gpt-5-mini"]  # the whole list replaced the one price
+    assert sorted(prices) == ["gpt-4.1", "gpt-5-mini"]  # one set in brackets, beside the other
     assert prices["gpt-4.1"] == {"input": 2, "cacheRead": 0.5, "cacheWrite": 0, "output": 8}
 
 
