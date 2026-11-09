@@ -19,6 +19,9 @@ follower has shown this one (windows-follow-flake design D1, D5). A line ``stop`
 it plays the rest of its script at once. If WITHIN passes first, it prints ``UNSHOWN <seq>`` and
 waits no more. Its run's time limits are raised to cover the waits, so a slow follower fails in the
 test, never as a timed-out run.
+
+With TROUPE_TEST_SILENCE_SECONDS set, its run announces a silence after that many seconds, so a test
+can follow a run that records a run.silent notice without waiting the usual threshold.
 """
 
 import json
@@ -41,6 +44,7 @@ from troupe_plugin_sdk.messages import Message
 
 STOP = os.environ.get("TROUPE_TEST_STOP")
 SHOWN = os.environ.get("TROUPE_TEST_SHOWN")
+SILENCE = os.environ.get("TROUPE_TEST_SILENCE_SECONDS")
 BLOCK_SECONDS = 600  # far longer than any test waits: the test kills it first
 
 
@@ -161,6 +165,8 @@ def main() -> None:
             run_timeout=LIMITS.run_timeout + waits,
             silence_announce=LIMITS.silence_announce + waits,
         )
+    if SILENCE is not None:
+        limits = replace(limits, silence_announce=float(SILENCE))
     result = Announcing(Repo(Path(path), env), limits=limits).perform(request)
     print(f"ENDED {result.run.outcome}", flush=True)
 
