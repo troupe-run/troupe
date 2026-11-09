@@ -185,13 +185,19 @@ def test_a_config_file_rewritten_before_the_run_is_sent_but_not_recorded(tmp_pat
     assert NOTICED not in [record.topic for record in records(harness, run.run_id)]
 
 
-def test_reading_an_interrupted_run_records_nothing_in_its_stream(tmp_path: Path) -> None:
+def test_reading_an_interrupted_run_returns_run_interrupted_and_records_nothing(
+    tmp_path: Path,
+) -> None:
     harness = Harness(theatre(tmp_path))
-    run = harness.perform(request(script(INIT, OK))).run
-    before = [record.topic for record in records(harness, run.run_id)]
-    harness.status(run=run.run_id)
-    harness.logs(run=run.run_id)
-    assert [record.topic for record in records(harness, run.run_id)] == before
+    run_id = interrupted_with_a_notice(harness)
+    store = git_service(harness.repo)
+    before = [record.topic for record in store.history(UUID(run_id))]
+    status = harness.status(run=run_id)
+    assert status.runs[0].state == "interrupted"
+    assert [n.code for n in status.notices] == ["run.interrupted"]
+    logged = harness.logs(run=run_id)
+    assert [n.code for n in logged.notices] == ["run.interrupted"]
+    assert [record.topic for record in store.history(UUID(run_id))] == before
 
 
 # Requirement: A recording failure stops the run and is reported (a notice)
@@ -283,6 +289,24 @@ def test_a_notice_holding_the_credential_is_recorded_and_sent_masked(
 # Design D3: one writer records the run's events and notices, in the order they arrive
 
 
+def new_recorder(store: Any, run_id: str, send: Any) -> Any:  # noqa: ANN401
+    """perform's recorder for a run in the theatre, outside perform: called on the event loop."""
+    person = store.command(via="cli")
+    agent = person.acting_as(Identity(kind="agent", id="tester", source="troupe"), via="runner")
+    what = perform_module._What(
+        actor="tester",
+        runner="scripted",
+        options={},
+        effect_check=m.NoEffectCheck(),
+        character=None,
+        config=("sha256:" + "b" * 64,),
+        workspace="theatre",
+    )
+    return perform_module._Recorder(
+        run_id, what, store, person, agent, STAGE, "sha256:" + "a" * 64, send, asyncio.Event()
+    )
+
+
 def test_notices_from_a_thread_and_the_loop_are_each_recorded_once_in_arrival_order(
     tmp_path: Path,
 ) -> None:
@@ -304,28 +328,7 @@ def test_notices_from_a_thread_and_the_loop_are_each_recorded_once_in_arrival_or
         return Notice("run.silent", problem=label, fix="Wait.", details={"seconds": 1.0})
 
     async def scenario() -> None:
-        person = store.command(via="cli")
-        agent = person.acting_as(Identity(kind="agent", id="tester", source="troupe"), via="runner")
-        what = perform_module._What(
-            actor="tester",
-            runner="scripted",
-            options={},
-            effect_check=m.NoEffectCheck(),
-            character=None,
-            config=("sha256:" + "b" * 64,),
-            workspace="theatre",
-        )
-        recorder = perform_module._Recorder(
-            run_id,
-            what,
-            store,
-            person,
-            agent,
-            STAGE,
-            "sha256:" + "a" * 64,
-            send,
-            asyncio.Event(),
-        )
+        recorder = new_recorder(store, run_id, send)
         recorder.notice(silent("before the start"))
         order.append("before the start")
         await recorder.start({"kind": "theatre"})
@@ -357,6 +360,32 @@ def test_notices_from_a_thread_and_the_loop_are_each_recorded_once_in_arrival_or
     assert stream[1].topic == NOTICED  # straight after the start
     reported = [json.loads(r.state)["seq"] for r in stream if r.topic == REPORTED]
     assert reported == list(range(6))
+
+
+def test_a_run_events_waiter_cancelled_before_it_is_recorded_leaves_the_writer_recording(
+    tmp_path: Path,
+) -> None:
+    """A run event whose caller stops waiting (as the run host's start timeout cancels it) is
+    still recorded, and the writer goes on to record the notices after it and the end."""
+    store = files_service(tmp_path)
+    run_id = str(uuid4())
+
+    async def scenario() -> None:
+        recorder = new_recorder(store, run_id, lambda update: None)
+        await recorder.start({"kind": "theatre"})
+        event = p.LogEvent(run_id=run_id, seq=0, level="info", message="0")
+        waiting = asyncio.create_task(recorder.on_event(event))
+        await asyncio.sleep(0)  # the event is queued, and its caller waits for it
+        waiting.cancel()
+        recorder.notice(
+            Notice("run.silent", problem="after", fix="Wait.", details={"seconds": 1.0})
+        )
+        await recorder.end(outcome("succeeded"), None)
+        assert recorder.failure is None
+
+    asyncio.run(scenario())
+    topics = [record.topic for record in store.history(UUID(run_id))]
+    assert topics == [STARTED, REPORTED, NOTICED, ENDED]
 
 
 # Requirement: Status reads runs from a projection (a run's recorded notices)
