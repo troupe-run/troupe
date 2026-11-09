@@ -240,6 +240,18 @@ class _Entry:
     done: "asyncio.Future[str | None] | None" = None
 
 
+def _settle(entry: _Entry, at: str | None, error: BaseException | None = None) -> None:
+    """Tell ``entry``'s waiter how its recording went, unless nobody is waiting any more: a waiter
+    that was cancelled (say, by the run host's start timeout) cancels its future, and setting it
+    then would raise and end the writer, with every entry after it left unrecorded."""
+    if entry.done is None or entry.done.done():
+        return
+    if error is not None:
+        entry.done.set_exception(error)
+    else:
+        entry.done.set_result(at)
+
+
 _DRAIN = _Entry()
 """Tells the writer every entry before it is recorded, so the end can follow."""
 
@@ -401,23 +413,22 @@ class _Recorder:
                         notice=str(entry.notice["code"]) if entry.notice is not None else None,
                     )
                     self.cancel.set()
-            if entry.done is not None:
-                entry.done.set_result(at)
+            _settle(entry, at)
 
     async def _write_made(self, entry: _Entry) -> None:
         if entry.done is None or entry.clones is None:
             raise TypeError("a worktree's made entry has clones and a waiter")
         if self.failure is not None:
-            entry.done.set_result(None)
+            _settle(entry, None)
             return
         try:
             await asyncio.to_thread(self._made, entry.clones)
         except Exception as error:
             # The aggregate may have counted what wasn't recorded; the end reloads it (_end).
             self.stale = True
-            entry.done.set_exception(error)
+            _settle(entry, None, error)
             return
-        entry.done.set_result(None)
+        _settle(entry, None)
 
     async def _drain(self) -> None:
         """Wait until every entry queued so far is recorded, or dropped after a failure."""
