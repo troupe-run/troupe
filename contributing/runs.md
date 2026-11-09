@@ -32,7 +32,7 @@ A run is its own stream, keyed by its run id. Its events, in order:
 | `Run.Started` | Before the run's workspace is made and its runner starts, once every check that can refuse it has passed, and after its direction is stored. It holds the actor's name, the runner asked for, the stage's admission, the effect check, the direction's reference, the config version (the config stream's heads, sorted), and the workspace: the worktree's path, base commit and whether the theatre was dirty, or `theatre`. A start an older troupe recorded also holds the runner `init` reported and the clone mechanisms | You, through `cli` |
 | `Run.WorktreeMade` | For a worktree run, once its worktree is made and filled, before the runner starts. It holds the clone mechanisms | You, through `cli` |
 | `Run.Reported` | Once per run event, in `seq` order. It holds the event's `seq` and the event as received. The first is `init`, and a run's reported runner is read from it | The agent (`source: troupe`), through `runner` |
-| `Run.Ended` | Once, when the run host returns. It holds the outcome, its error, the result, the exit code, the transcript's and standard error's references and the limits; if recording failed part-way, where and why; and for a worktree run, the changes captured: the diff's reference and counts, or why capturing failed, and what changed in the repository's shared state | The agent, through `runner` |
+| `Run.Ended` | Once, when the run host returns. It holds the outcome, its error, the result, the exit code, the transcript's and standard error's references, the transcript's format (`native`, or `kinds` when its records carry a kind) and the limits; if recording failed part-way, where and why; and for a worktree run, the changes captured: the diff's reference and counts, or why capturing failed, and what changed in the repository's shared state | The agent, through `runner` |
 | `Run.ChangesAccepted` | When a person accepts a worktree run's changes, after the diff applied. It holds the diff's reference and the files it changed | You, through `cli`, with no `stage` |
 | `Run.ChangesDiscarded` | When a person discards a worktree run's changes, after its worktree was removed | You, through `cli`, with no `stage` |
 
@@ -69,7 +69,7 @@ show how far it got. Lease directories stay in `.troupe/local/runs/` (they're lo
 
 `troupe status` lists the most recent runs, newest first (`STATUS_RUNS_LIMIT` of them, or `--limit`). `troupe status
 <run>` shows one run: its actor, who started it, its runner, its stage, its state, its outcome and error, how many
-events it has, its times, and its transcript's and standard error's references.
+events it has, its times, and its transcript's and standard error's references, with the transcript's format.
 
 `troupe logs <run>` shows a run's events in order, each with the time troupe recorded it. `--follow` then waits for
 more, showing each event as it's recorded, and stops when the run's end is recorded, when it stops running, or at
