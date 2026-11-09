@@ -93,16 +93,16 @@ def test_another_runtimes_variable_is_not_read() -> None:
 # Requirement: A malformed runtime variable is an error
 
 
-@pytest.mark.parametrize(
-    ("variable", "value"),
-    [
-        ("TROUPE_RUNTIME_OLLAMA_ENDPOINT", "localhost:11434"),
-        ("TROUPE_RUNTIME_OLLAMA_ENDPOINT", "https://u:p@example.com"),
-        ("TROUPE_RUNTIME_OLLAMA_MODEL", "a\nb"),
-        ("TROUPE_RUNTIME_OLLAMA_CREDENTIAL_ENV", "MY KEY"),
-        ("TROUPE_RUNTIME_OLLAMA_CREDENTIAL_ENV", "TROUPE_RUNTIME_CREDENTIAL"),
-    ],
-)
+MALFORMED = [
+    ("TROUPE_RUNTIME_OLLAMA_ENDPOINT", "localhost:11434"),
+    ("TROUPE_RUNTIME_OLLAMA_ENDPOINT", "https://u:p@example.com"),
+    ("TROUPE_RUNTIME_OLLAMA_MODEL", "a\nb"),
+    ("TROUPE_RUNTIME_OLLAMA_CREDENTIAL_ENV", "MY KEY"),
+    ("TROUPE_RUNTIME_OLLAMA_CREDENTIAL_ENV", "TROUPE_RUNTIME_CREDENTIAL"),
+]
+
+
+@pytest.mark.parametrize(("variable", "value"), MALFORMED)
 def test_a_malformed_variable_is_an_error_naming_it(variable: str, value: str) -> None:
     with pytest.raises(TroupeError) as raised:
         resolve("ollama", NO_CONFIG, {variable: value})
@@ -111,15 +111,6 @@ def test_a_malformed_variable_is_an_error_naming_it(variable: str, value: str) -
         "variable": variable,
         "accepted": [runtimes.ACCEPTED[variable.removeprefix("TROUPE_RUNTIME_OLLAMA_").lower()]],
     }
-
-
-MALFORMED = [
-    ("TROUPE_RUNTIME_OLLAMA_ENDPOINT", "localhost:11434"),
-    ("TROUPE_RUNTIME_OLLAMA_ENDPOINT", "https://u:p@example.com"),
-    ("TROUPE_RUNTIME_OLLAMA_MODEL", "a\nb"),
-    ("TROUPE_RUNTIME_OLLAMA_CREDENTIAL_ENV", "MY KEY"),
-    ("TROUPE_RUNTIME_OLLAMA_CREDENTIAL_ENV", "TROUPE_RUNTIME_CREDENTIAL"),
-]
 
 
 @pytest.mark.parametrize(("variable", "value"), MALFORMED)
