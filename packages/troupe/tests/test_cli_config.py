@@ -510,3 +510,25 @@ def test_a_rehearsal_on_the_command_line_shows_the_runtime(
     assert "    endpoint: http://127.0.0.1:11434 (from default)" in out
     assert "    model: llama3.2 (from actor)" in out
     assert "    credential: none" in out
+
+
+def test_an_options_value_on_an_uninstalled_runner_is_refused_naming_the_actors_path(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The CLI's value typing doesn't refuse first: core's check does, naming the actor's runner
+    path and its extra (spec: config; review of #338)."""
+    monkeypatch.setitem(
+        interim.RUNNERS, "lm-studio", replace(interim.RUNNERS["scripted"], in_extra=True)
+    )
+    code, _, err = _tester()
+    assert code == 0, err
+    code, _, err = cli("config", "set", "actors.tester.runner=lm-studio")
+    assert code == 0, err
+    gone = replace(interim.RUNNERS["lm-studio"], package="troupe_runner_lm_studio")
+    monkeypatch.setitem(interim.RUNNERS, "lm-studio", gone)
+    before = len(git_service(repo).history(aggregate.STREAM))
+    code, _, err = cli("config", "set", "--json", 'actors.tester.options.script={"steps": []}')
+    assert code == ExitCode.FAILURE
+    assert "actors.tester.runner: " in err
+    assert "troupe-run[lm-studio]" in err
+    assert len(git_service(repo).history(aggregate.STREAM)) == before
