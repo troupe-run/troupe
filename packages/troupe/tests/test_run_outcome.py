@@ -18,6 +18,7 @@ from troupe.core.runners.effects import (
 )
 from troupe.core.runners.limits import RunLimits
 from troupe.core.runners.outcome import (
+    FAILURES,
     Ending,
     Outcome,
     RunFacts,
@@ -26,12 +27,12 @@ from troupe.core.runners.outcome import (
     TranscriptFormat,
     derive_outcome,
 )
-from troupe_plugin_sdk.runner import ResultEvent
+from troupe_plugin_sdk.runner import FAILURE_REASONS, FailureReason, ResultEvent
 
 RUN = "0f8fad5b-d9cb-469f-a165-70867728950e"
 LIMITS = RunLimits()
 OK = ResultEvent(RUN, 5, "ok", "done")
-ERROR = ResultEvent(RUN, 5, "error", "API Error: 401")
+ERROR = ResultEvent(RUN, 5, "error", "API Error: 401", reason="authentication")
 PASSED = EffectVerdict(passed=True)
 MISSING = EffectVerdict(
     passed=False, error=TroupeError("run.effect-missing", problem="p", fix="f", path="/w/out")
@@ -101,6 +102,46 @@ def test_a_run_stopped_at_its_transcript_limit_is_failed_naming_the_limit() -> N
 
 def test_an_error_result_with_exit_code_0_is_failed() -> None:
     assert _derive(result=ERROR, exit_code=0) == (Outcome.FAILED, "run.error-result")
+
+
+# Requirement: A failed result's reason reaches the outcome
+
+
+def _failed(reason: FailureReason, message: str = "the runner's words") -> TroupeError:
+    result = ResultEvent(RUN, 5, "error", message, reason=reason)
+    outcome, error = derive_outcome(_facts(result=result))
+    assert outcome is Outcome.FAILED
+    assert error is not None
+    return error
+
+
+def test_a_refused_credential_carries_its_reason_and_says_to_check_the_credential() -> None:
+    error = _failed("authentication", "Incorrect API key provided")
+    assert error.code == "run.error-result"
+    assert error.details == {"reason": "authentication", "message": "Incorrect API key provided"}
+    assert "refused the credential" in error.problem
+    assert "Incorrect API key provided" in error.problem
+    assert "credential the actor's runtime names" in error.fix
+
+
+def test_a_spent_budget_says_to_raise_the_budget_or_give_a_smaller_task() -> None:
+    error = _failed("budget")
+    assert error.details is not None
+    assert error.details["reason"] == "budget"
+    assert "Raise the budget in the actor's runner options" in error.fix
+    assert "smaller task" in error.fix
+
+
+@pytest.mark.parametrize("reason", FAILURE_REASONS)
+def test_every_reason_gives_a_valid_error_with_a_fix_written_for_it(reason: FailureReason) -> None:
+    error = _failed(reason)
+    check_error(error.to_data())
+    generic = FAILURES["other"][1]
+    assert reason == "other" or error.fix != generic
+
+
+def test_every_reason_on_the_list_has_an_entry_in_the_table() -> None:
+    assert sorted(FAILURES) == sorted(FAILURE_REASONS)
 
 
 def test_an_ok_result_whose_declared_output_is_missing_is_failed_naming_the_path() -> None:

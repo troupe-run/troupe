@@ -42,7 +42,14 @@ holds the script."""
 FAIL = [
     {"event": INIT},
     {"echoCredential": True},
-    {"event": {"type": "result", "status": "error", "message": "refused"}},
+    {
+        "event": {
+            "type": "result",
+            "status": "error",
+            "reason": "authentication",
+            "message": "refused",
+        }
+    },
 ]
 
 

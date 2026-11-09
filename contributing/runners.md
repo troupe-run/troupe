@@ -156,7 +156,7 @@ repeats.
 | `tool_result` | `callId`, `isError`, `outputSummary`, `outputBytes` | `callId` matches an earlier `tool_call`. The full output belongs in the transcript. |
 | `retry` | `attempt`, `maxAttempts` (optional), `delayMs`, `reason`, `message` (optional) | `reason` is `authentication`, `rate-limit`, `network`, `server` or `other`. Send one each time the engine retries, or the runner retries a request to its engine itself. |
 | `log` | `level` (`debug`, `info`, `warning`, `error`), `message` | A diagnostic worth keeping with the run. |
-| `result` | `status` (`ok` or `error`), `message`, `turns`, `durationMs`, `usage {inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens}`, `costUsd` or `estimatedCostUsd` (all but the first two optional, and each `usage` counter too) | Exactly one, last, for a run that ends on its own. See [What usage counts](#what-usage-counts). At most one of the two costs (see [Cost: reported or estimated](#cost-reported-or-estimated)). |
+| `result` | `status` (`ok` or `error`), `message`, `reason`, `turns`, `durationMs`, `usage {inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens}`, `costUsd` or `estimatedCostUsd` (all but `status` and `message` optional, and each `usage` counter too) | Exactly one, last, for a run that ends on its own. `reason` is present exactly when `status` is `error` (see [Why a run failed](#why-a-run-failed)). See [What usage counts](#what-usage-counts). At most one of the two costs (see [Cost: reported or estimated](#cost-reported-or-estimated)). |
 | `oversized` | `originalType`, `bytes`, `ref` | Written by troupe, never by a runner (see [Oversized events](#oversized-events)). |
 
 - **`result.status` is `error` whenever the engine reported an error,** whatever else it reported alongside it.
@@ -183,6 +183,40 @@ Leave a cache counter out when you can't report it, and never estimate one: an a
 reported, not that it was 0. Input your engine counted that you can't separate into a cache counter stays in
 `inputTokens`. When a run sums several requests, report a cache counter only if every request reported it; for
 example, if only some report cache writes, subtract none and leave `cacheWriteTokens` out.
+
+### Why a run failed
+
+A `result` with status `error` says why in `reason`, from this closed list, so troupe can act on a failure the same
+way whichever runner reported it. An `ok` result has no `reason`. The rule is the same wherever a result appears:
+what a runner sends, what troupe records, and what it reads back. A result that breaks it is a protocol violation.
+
+| Reason | When |
+|---|---|
+| `authentication` | the engine or service refused the credential |
+| `quota` | the account is out of quota, credit or billing |
+| `rate-limit` | rate limited past what the runner will wait or retry |
+| `network` | the engine couldn't be reached |
+| `server` | the engine or service kept failing on its side |
+| `configuration` | the endpoint or model can't serve the run: nothing there, a redirect, no such model |
+| `context-length` | the conversation outgrew the model's context |
+| `output-limit` | an answer was cut at the output limit, and the runner ended the run for it |
+| `refused` | the model refused, or the service's content filter stopped it |
+| `turn-limit` | the runner's or engine's turn limit was reached |
+| `budget` | the runner's or engine's token or cost budget was spent |
+| `cancelled` | the run was cancelled and the runner still sent a result |
+| `engine` | the engine failed in a way of its own, or sent what the runner can't act on |
+| `runner` | the runner itself failed unexpectedly |
+| `other` | none of these; the message says what happened |
+
+- **Choose the reason from the engine's structured fields** (a status, an error code, a subtype). Where the engine
+  gives none, match the fixed words it documents for that failure, as the Ollama runner does for a 400 over the
+  context window, and never guess from free text.
+- **A failure the list has no entry for is `other`.** A runner can't add reasons of its own: the list has no
+  extension point. A runner that keeps meeting such a failure asks for a reason to be added, as a contract change.
+- **Retries that run out end with the last retry's reason.** The four reasons a `retry` can name mean the same on
+  both, so a run whose last retry was `rate-limit` ends `rate-limit`.
+- **The message still says what happened,** in the engine's or the runner's words: the reason is what to act on,
+  the message is what to read.
 
 ### Oversized events
 
@@ -266,7 +300,7 @@ credential](#the-runtime-and-its-credential)).
 ### Cancel, end of input and shutdown
 
 - **`run/cancel`** may arrive at any time after `run/start`. Answer it, stop the actor and exit. You may send a
-  final `result` with status `error` first; troupe doesn't require one.
+  final `result` with status `error` and reason `cancelled` first; troupe doesn't require one.
 - **End of input:** when standard input closes, stop the actor and exit. That is how a runner avoids outliving a
   troupe that has gone away.
 - **`shutdown`** follows the `result`. Answer it and exit.
@@ -344,7 +378,7 @@ output, each line paired with the events it maps to.
 | `rate_limit_event` | None while its status is `allowed` (the transcript keeps it); otherwise a `log` warning naming the status |
 | `user` message with `tool_result` blocks | one `tool_result` per block. A block whose call was never reported is a `log` warning instead, since a `tool_result` needs its `tool_call` |
 | `system/api_retry` | `retry`: `authentication_failed` → `authentication`, HTTP 429 → `rate-limit`, 5xx → `server`, no HTTP status (a connection error, which Claude Code reports as `"error": "unknown"`) → `network`, anything else → `other` |
-| `result` | `result`, with `status` `error` whenever `is_error` is true, whatever `subtype` says. Its `usage` maps `input_tokens`, `output_tokens`, `cache_read_input_tokens` and `cache_creation_input_tokens` onto `inputTokens`, `outputTokens`, `cacheReadTokens` and `cacheWriteTokens`; Anthropic's `input_tokens` already leaves out cache reads and writes, so it maps unchanged (see [What usage counts](#what-usage-counts)). Each tool in `permission_denials` is a `log` warning just before it |
+| `result` | `result`, with `status` `error` whenever `is_error` is true, whatever `subtype` says. An `error` result's `reason` comes from Claude Code's fields, never its text: a failed `subtype` by name (`error_max_turns` → `turn-limit`, `error_max_budget_usd` → `budget`, `error_during_execution` → `engine`, any other → `other`); for an API error, the last `assistant` record's `error` code when it names its cause (`authentication_failed`, `billing_error` → `quota`, `rate_limit`, `max_output_tokens` → `output-limit`), else the last `retry`'s reason (Claude Code calls a refused connection `server_error`), else `api_error_status` as for a retry; else `other`. Its `usage` maps `input_tokens`, `output_tokens`, `cache_read_input_tokens` and `cache_creation_input_tokens` onto `inputTokens`, `outputTokens`, `cacheReadTokens` and `cacheWriteTokens`; Anthropic's `input_tokens` already leaves out cache reads and writes, so it maps unchanged (see [What usage counts](#what-usage-counts)). Each tool in `permission_denials` is a `log` warning just before it |
 | a record type or `system` subtype not named here | a `log` at `debug` the first time it appears in the run, so a format change shows without failing the run |
 | a line that isn't a JSON object | a `log` warning |
 | every line | one `run/transcript` record, verbatim (`base64` if it isn't UTF-8), before any event it maps to |
@@ -371,7 +405,7 @@ each.
 | a request made again: a connection that failed, dropped or went silent, or status 500, 502, 503 or 504 | `retry`: `network` for the connection, `server` for the status |
 | `done_reason` `length` | `log` warning |
 | an answer with no tool call | `result` `ok`, with its text |
-| any other status, an `error` line, `maxTurns` reached, or retries spent | `result` `error`, with Ollama's message |
+| any other status, an `error` line, `maxTurns` reached, or retries spent | `result` `error`, with Ollama's message. Its `reason`: a 400 saying the request exceeds the context size → `context-length`, 401 or 403 → `authentication`, 404 → `configuration`, an `error` line → `engine`, `maxTurns` → `turn-limit`, retries spent → the last retry's reason, any other status → `other` |
 | each answer's `prompt_eval_count`, `prompt_eval_cached_count` and `eval_count` | summed into `result.usage`. `prompt_eval_count` includes the prompt tokens Ollama took from its cache, which it reports as `prompt_eval_cached_count`: that is `cacheReadTokens`, `prompt_eval_count` less it is `inputTokens`, and `eval_count` is `outputTokens`. If any answer leaves out its cached count, nothing is subtracted and `cacheReadTokens` is left out (see [What usage counts](#what-usage-counts)) |
 
 Its transcript is the first request's body, then before each later request the messages the runner added (the
@@ -398,7 +432,7 @@ and from local Ollama's `/v1`.
 | each `function_call` | `tool_call` and `tool_result`, from the SDK |
 | 429, 5xx, a failure whose code is the service's own, or a connection that failed, dropped or went silent | `retry`: `rate-limit`, `server` or `network` |
 | completed, with no function call | `result` `ok`, with its text |
-| 401, 403, quota, context length, another 4xx, a redirect, a refusal, `incomplete`, another failure, `maxTurns` or `maxTotalTokens`, or retries spent | `result` `error`, saying which |
+| 401, 403, quota, context length, another 4xx, a redirect, a 2xx that isn't a stream, a response it can't read, a refusal, `incomplete`, another failure, `maxTurns` or `maxTotalTokens`, or retries spent | `result` `error`, saying which. Its `reason`: 401 or 403 → `authentication`, quota → `quota`, a `Retry-After` past the cap → `rate-limit`, context length → `context-length`, a redirect, a 404 without OpenAI's shape, `model_not_found` or a 2xx that isn't a stream → `configuration`, a response it can't read → `engine`, a refusal or `content_filter` → `refused`, `max_output_tokens` → `output-limit`, a call without a `call_id` → `engine`, `maxTurns` → `turn-limit`, `maxTotalTokens` → `budget`, retries spent → the last retry's reason, anything else → `other` |
 | its `usage` | summed into `result.usage`: cache reads and writes each counted apart from input where every response reports them |
 | a `cost` in every response's usage | summed into `result.costUsd` |
 | no cost, and a price in `run/start` | `result.estimatedCostUsd`, from the SDK's estimator |
@@ -447,7 +481,7 @@ for every outcome but `succeeded` and `cancelled`. The first row that matches wi
 | `crashed` | The runner broke the contract | `runner.protocol` |
 | `failed` | The run was stopped because authentication failed | `run.authentication` |
 | `failed` | The transcript passed `RUN_TRANSCRIPT_MAX_BYTES` | `run.transcript-too-large` |
-| `failed` | The `result` had status `error` | `run.error-result` |
+| `failed` | The `result` had status `error`. The error's details carry its `reason` and message, and its fix says what to do for that reason | `run.error-result` |
 | `failed` | The `result` was `ok`, but the effect check failed: an expected file wasn't made or changed, the run changed a file its actor's effects don't declare, or both | `run.effect-missing`, `effects.outside-declared`, `effects.check-failed` |
 | `failed` | The `result` was `ok` and the effect check passed, but the runner exited non-zero or had to be killed: the run's state is uncertain | `run.unclean-exit` |
 | `succeeded` | The `result` was `ok`, the effect check passed, and the runner exited with code 0 | — |

@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from troupe_plugin_sdk import runner as p
+from troupe_plugin_sdk.runner import FailureReason
 from troupe_runner_openai.defaults import (
     MAX_ATTEMPTS,
     RETRY_BASE_DELAY_SECONDS,
@@ -48,17 +49,23 @@ RetryReason = Literal["rate-limit", "server", "network"]
 
 
 class ExchangeFailedError(Exception):
-    """The exchange failed in a way retrying can't fix. ``message`` is the result's message.
+    """The exchange failed in a way retrying can't fix. ``message`` is the result's message, and
+    ``reason`` its reason (failure-reason design D6).
 
     ``answered`` is true when the service finished a response the run must count, one in the wrong
     shape (openai-wrong-shape-ends-run design D5), and ``usage`` is its usage when that could be
     read. Every other failure got no response to count."""
 
     def __init__(
-        self, message: str, answered: bool = False, usage: dict[str, Any] | None = None
+        self,
+        message: str,
+        reason: FailureReason,
+        answered: bool = False,
+        usage: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(message)
         self.message = message
+        self.reason: FailureReason = reason
         self.answered = answered
         self.usage = usage
 
@@ -150,31 +157,43 @@ def classify(error: StatusError, url: str = "") -> _Retryable:
         raise ExchangeFailedError(
             f"The service redirected the request (HTTP {status}) to {location}. troupe never "
             "follows a redirect, so the credential and the conversation go only where the "
-            "runtime names: point the runtime's endpoint at the service itself."
+            "runtime names: point the runtime's endpoint at the service itself.",
+            "configuration",
         )
     if status in (401, 403):
         raise ExchangeFailedError(
             f"The service refused the credential (HTTP {status}): {told} Check the key the "
-            "actor's runtime names, and that it's allowed to use this model."
+            "actor's runtime names, and that it's allowed to use this model.",
+            "authentication",
         )
     if status == 429 and code == "insufficient_quota":
-        raise ExchangeFailedError(f"The account is out of quota (HTTP 429): {message}")
+        raise ExchangeFailedError(f"The account is out of quota (HTTP 429): {message}", "quota")
     if status == 429:
         return _Retryable("rate-limit", said, retry_after(error.headers.get("retry-after")))
     if status == 400 and code == "context_length_exceeded":
         raise ExchangeFailedError(
             f"The conversation is longer than the model's context (HTTP 400): {told} Give the "
-            "actor a smaller task, or a runtime whose model has a longer context."
+            "actor a smaller task, or a runtime whose model has a longer context.",
+            "context-length",
         )
     if status == 404 and code is None:
         raise ExchangeFailedError(
             f"Nothing answered at {url or 'the endpoint'} (HTTP 404): {told} The runtime's "
             "endpoint must be the base URL its Responses API is served under, often ending "
-            "in /v1, such as http://127.0.0.1:11434/v1 for Ollama."
+            "in /v1, such as http://127.0.0.1:11434/v1 for Ollama.",
+            "configuration",
+        )
+    if status == 404 and code == "model_not_found":
+        raise ExchangeFailedError(
+            f"The service has no such model (HTTP 404): {told} Check the model the actor's "
+            "runtime names.",
+            "configuration",
         )
     if status >= 500:
         return _Retryable("server", said, retry_after(error.headers.get("retry-after")))
-    raise ExchangeFailedError(f"The service refused the request (HTTP {status}): {message}")
+    raise ExchangeFailedError(
+        f"The service refused the request (HTTP {status}): {message}", "other"
+    )
 
 
 def _failed(reply: Reply) -> _Retryable:
@@ -186,7 +205,7 @@ def _failed(reply: Reply) -> _Retryable:
     said = f"{code or 'no code'}: {message}"
     if code in SERVICE_FAILURE_CODES:
         return _Retryable("server", f"The service failed the response ({said})")
-    raise ExchangeFailedError(f"The service failed the response ({said}).")
+    raise ExchangeFailedError(f"The service failed the response ({said}).", "other")
 
 
 def _kept(headers: dict[str, str]) -> dict[str, str]:
@@ -217,7 +236,8 @@ def _not_a_stream(response: Response, record: Record) -> ExchangeFailedError | N
     return ExchangeFailedError(
         f"The service answered HTTP {response.status} with {_cut(said.strip(), 200)}, not the "
         f"stream ({STREAM_TYPE}) the runner asked for: {told} Check that the runtime's endpoint "
-        "serves OpenAI's Responses API with streaming."
+        "serves OpenAI's Responses API with streaming.",
+        "configuration",
     )
 
 
@@ -279,6 +299,7 @@ def exchange(
                 f"The service's response can't be read: {_sentence(str(error))} Retrying can't "
                 "fix a response the service finished, so the run ends here. Check that the "
                 "runtime's endpoint serves OpenAI's Responses API.",
+                "engine",
                 answered=True,
                 usage=error.usage,
             ) from None
@@ -288,15 +309,18 @@ def exchange(
         finally:
             on_call(None)
         if attempt == max_attempts:
+            # The run ends with its last retry's reason (spec: runner-protocol).
             raise ExchangeFailedError(
-                f"{_sentence(retryable.message)} Gave up after {max_attempts} attempts."
+                f"{_sentence(retryable.message)} Gave up after {max_attempts} attempts.",
+                retryable.reason,
             )
         delay = min(base_delay * 2 ** (attempt - 1), max_delay)
         asked = retryable.wait
         if asked is not None and asked > max_delay and retryable.reason == "rate-limit":
             raise ExchangeFailedError(
                 f"The service asked to wait {asked:g} seconds before retrying "
-                f"({retryable.message}), longer than the runner waits ({max_delay:g} seconds)."
+                f"({retryable.message}), longer than the runner waits ({max_delay:g} seconds).",
+                "rate-limit",
             )
         if asked is not None:
             # A server error's wait is capped rather than fatal: the cap is a rate limit's (D8).

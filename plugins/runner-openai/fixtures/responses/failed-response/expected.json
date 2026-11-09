@@ -28,6 +28,7 @@
       "type": "result",
       "seq": 1,
       "status": "error",
+      "reason": "other",
       "message": "The service failed the response (invalid_prompt: Invalid prompt: your prompt was flagged as potentially violating our usage policy).",
       "turns": 0
     }

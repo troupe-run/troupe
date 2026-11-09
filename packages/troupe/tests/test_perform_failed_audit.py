@@ -16,7 +16,9 @@ from troupe.core.runners.limits import RunLimits
 from troupe_plugin_sdk.messages import Message
 from troupe_vcs_git import GitAdapter
 
-ERROR = {"event": {"type": "result", "status": "error", "message": "it went wrong"}}
+ERROR = {
+    "event": {"type": "result", "status": "error", "reason": "other", "message": "it went wrong"}
+}
 
 
 def _write(path: str, content: str = "x\n") -> dict[str, Any]:

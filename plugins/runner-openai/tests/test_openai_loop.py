@@ -213,7 +213,7 @@ def test_reasoning_is_sent_back_unchanged_before_its_call(tmp_path: Path) -> Non
 def test_a_call_without_a_call_id_ends_the_run_naming_its_tool(tmp_path: Path) -> None:
     ran = run(tmp_path, [tool_reply([(None, "Glob", {"pattern": "*"})])])
     result = _result(ran)
-    assert result["status"] == "error"
+    assert (result["status"], result["reason"]) == ("error", "engine")
     assert "no call_id" in result["message"]
     assert "Glob" in result["message"]
     assert ran.of("tool_call") == []
@@ -249,26 +249,27 @@ def test_text_and_a_tool_call_send_the_turn_before_the_call(tmp_path: Path) -> N
 def test_a_refusal_ends_the_run_with_an_error_holding_it(tmp_path: Path) -> None:
     refused = Reply(lines=sse([final([refusal("I can't help with that.")], used=usage(1, 1))]))
     result = _result(run(tmp_path, [refused]))
-    assert (result["status"], result["message"]) == (
+    assert (result["status"], result["reason"], result["message"]) == (
         "error",
+        "refused",
         "The model refused: I can't help with that.",
     )
 
 
 @pytest.mark.parametrize(
-    ("reason", "words"),
+    ("reason", "words", "failure"),
     [
-        ("max_output_tokens", "reached the service's output limit"),
-        ("content_filter", "content filter stopped the response"),
-        ("something_new", "left incomplete (something_new)"),
+        ("max_output_tokens", "reached the service's output limit", "output-limit"),
+        ("content_filter", "content filter stopped the response", "refused"),
+        ("something_new", "left incomplete (something_new)", "other"),
     ],
 )
-def test_an_incomplete_response_ends_the_run_with_an_error_naming_why(
-    tmp_path: Path, reason: str, words: str
+def test_an_incomplete_response_ends_the_run_with_an_error_naming_why_and_its_reason(
+    tmp_path: Path, reason: str, words: str, failure: str
 ) -> None:
     ran = run(tmp_path, [status_reply("incomplete", [message("partial")], incomplete=reason)])
     result = _result(ran)
-    assert result["status"] == "error"
+    assert (result["status"], result["reason"]) == ("error", failure)
     assert words in result["message"]
     assert len(ran.fake.requests) == 1
 
@@ -277,13 +278,13 @@ def test_a_status_the_runner_doesnt_know_ends_the_run_naming_it(tmp_path: Path) 
     paused = final([message("hm")], used=usage(1, 1))
     paused["response"]["status"] = "paused"
     result = _result(run(tmp_path, [Reply(lines=sse([paused]))]))
-    assert result["status"] == "error"
+    assert (result["status"], result["reason"]) == ("error", "other")
     assert "'paused'" in result["message"]
 
 
 def test_a_failed_exchange_is_an_error_result(tmp_path: Path) -> None:
     result = _result(run(tmp_path, [error_reply(401, "Incorrect API key provided")]))
-    assert result["status"] == "error"
+    assert (result["status"], result["reason"]) == ("error", "authentication")
     assert result["message"].startswith("The service refused the credential (HTTP 401)")
 
 
@@ -299,6 +300,24 @@ def test_a_retry_is_sent_as_a_retry_event_before_the_next_request(tmp_path: Path
     }
 
 
+def test_the_runners_own_failure_is_an_error_result_with_reason_runner(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    with FakeEndpoint([]) as fake:
+        loop = Loop(
+            runtime=Runtime.checked(fake.endpoint, MODEL, "sk-canary-0123456789"),
+            options=parse_options(TEST_LIMITS),
+            tools=Tools(workspace, READ_ONLY),
+            numbering=EventNumbering(str(uuid.uuid4()), 65536, next_seq=1),
+            send=lambda _: None,
+            record=lambda _kind, _body: None,
+            wait=lambda _: False,
+        )
+        result = loop.failure("The OpenAI runner failed: RuntimeError: boom").to_data()
+    assert (result["status"], result["reason"]) == ("error", "runner")
+    assert result["message"] == "The OpenAI runner failed: RuntimeError: boom"
+
+
 # The limits (each test sets the limit it checks, and says so)
 
 
@@ -310,7 +329,7 @@ def test_the_turn_limit_carries_out_the_last_replys_calls_then_ends_with_an_erro
     assert len(ran.fake.requests) == 3
     assert len(ran.of("tool_result")) == 3
     result = _result(ran)
-    assert result["status"] == "error"
+    assert (result["status"], result["reason"]) == ("error", "turn-limit")
     assert "turn limit of 3 was reached" in result["message"]
 
 
@@ -322,7 +341,7 @@ def test_a_spent_token_budget_carries_out_the_calls_then_ends_naming_the_tokens(
     assert len(ran.fake.requests) == 1
     assert len(ran.of("tool_result")) == 1
     result = _result(ran)
-    assert result["status"] == "error"
+    assert (result["status"], result["reason"]) == ("error", "budget")
     assert "token budget of 1000 was spent" in result["message"]
     assert "1200 tokens" in result["message"]
 

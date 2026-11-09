@@ -162,6 +162,12 @@ answer's last line, or sends a line that isn't a JSON object (`network`), when t
 (`network`; Ollama sends nothing while it loads a model), or on status 500, 502, 503 or 504 (`server`). Each retry is a
 `retry` event. Any other status, and an `error` line in a stream, end the run with an `error` result at once.
 
+Every `error` result gives its `reason`: a 400 saying the request exceeds the available context size is
+`context-length` (only then does the message name the window), 401 or 403 `authentication`, 404 `configuration`,
+any other status `other`, an `error` line `engine`, `maxTurns` reached `turn-limit`, retries spent the last retry's
+reason (`network` or `server`), and the runner's own failure `runner`. A cut answer (`done_reason` `length`) is a
+`log` warning, not a failure.
+
 ## How a run ends
 
 `run/cancel`, end of input, and `shutdown` each stop the run at once: the request in flight is closed, no further tool

@@ -185,7 +185,9 @@ def test_a_success_prints_progress_on_stderr_and_only_the_result_on_stdout(repo:
 
 
 def test_a_failed_run_leaves_stdout_empty_and_shows_the_error_with_the_run_id(repo: Repo) -> None:
-    error = {"event": {"type": "result", "status": "error", "message": "it broke"}}
+    error = {
+        "event": {"type": "result", "status": "error", "reason": "other", "message": "it broke"}
+    }
     configure(repo, script(INIT, error))
     code, out, err = cli("perform", "tester")
     assert code == 1
@@ -194,6 +196,31 @@ def test_a_failed_run_leaves_stdout_empty_and_shows_the_error_with_the_run_id(re
     assert "  fix: " in err
     assert "(failed)" in err
     assert "  run: " in err
+
+
+# Requirement: A failed result's reason is shown on every surface
+
+
+def test_a_run_at_its_turn_limit_shows_why_and_how_to_raise_it_in_perform_and_logs(
+    repo: Repo,
+) -> None:
+    error = {
+        "event": {
+            "type": "result",
+            "status": "error",
+            "reason": "turn-limit",
+            "message": "stopped after 2 turns",
+        }
+    }
+    configure(repo, script(INIT, error))
+    code, out, err = cli("perform", "tester")
+    assert code == 1
+    assert "The run reached its turn limit: stopped after 2 turns" in err
+    assert "Raise the turn limit in the actor's runner options" in err
+    run_id = err.split("  run: ")[1].split()[0]
+    code, out, err = cli("logs", run_id)
+    assert code == 0, err
+    assert "result: error (turn-limit): stopped after 2 turns" in out
 
 
 def test_the_default_policy_refuses_the_local_stage_naming_the_variable(
@@ -597,7 +624,7 @@ def test_logs_of_a_cancelled_run_show_the_file_it_removed_after_its_outcome(repo
 
 def test_status_of_a_failed_run_whose_changes_were_all_declared_says_so(repo: Repo) -> None:
     write = {"writeFile": {"path": "out/a.txt", "content": "x\n"}}
-    error = {"event": {"type": "result", "status": "error", "message": "no"}}
+    error = {"event": {"type": "result", "status": "error", "reason": "other", "message": "no"}}
     run_id = _harnessed(repo, request(script(INIT, write, error), effects={"write": ["out/**"]}))
     code, out, _ = cli("status", run_id)
     assert code == 0
@@ -609,7 +636,7 @@ def test_status_of_a_theatre_run_says_its_audit_counts_every_change_made_there(
     repo: Repo,
 ) -> None:
     write = {"writeFile": {"path": "notes.md", "content": "x\n"}}
-    error = {"event": {"type": "result", "status": "error", "message": "no"}}
+    error = {"event": {"type": "result", "status": "error", "reason": "other", "message": "no"}}
     run_id = _harnessed(repo, request(script(INIT, write, error)))
     _, out, _ = cli("status", run_id)
     assert (

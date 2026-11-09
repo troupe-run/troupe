@@ -40,10 +40,10 @@ status.
 - **THEN** the `result` has status `error` and `reason` `other`
 
 ### Requirement: An API error maps by its error code, then the last retry, then its status
-For a result record with `is_error` true under subtype `success`, the reason SHALL be, in order: from the `error` code
-of the run's last assistant record, `authentication_failed` to `authentication`, `billing_error` to `quota`,
-`rate_limit` to `rate-limit`, `max_output_tokens` to `output-limit`; else the last `retry`'s reason; else, for
-`terminal_reason` `api_error`, the `api_error_status` as a retry maps it; else `other`.
+For an `is_error` result record under subtype `success`, the reason SHALL be, in order: the last assistant record's
+`error` code (`authentication_failed` to `authentication`, `billing_error` to `quota`, `rate_limit` to `rate-limit`,
+`max_output_tokens` to `output-limit`); else the last `retry` since an assistant record without an error; else, for
+`terminal_reason` `api_error`, its `api_error_status` as a retry maps it; else `other`.
 
 #### Scenario: A rejected key
 - **WHEN** the `is-error-success-subtype` fixture plays: its last assistant record has error `authentication_failed`
@@ -71,4 +71,9 @@ of the run's last assistant record, `authentication_failed` to `authentication`,
 #### Scenario: An error with nothing to go on
 - **WHEN** a result record has `is_error` true under subtype `success`, no retry came before it, no assistant record
   has an error, and its `terminal_reason` isn't `api_error`
+- **THEN** the `result` has `reason` `other`
+
+#### Scenario: An API error that recovered
+- **WHEN** a run retries a rate limit, gets an assistant record with error `rate_limit`, then an assistant record
+  without an error, and ends with a result record with `is_error` true and `terminal_reason` `completed`
 - **THEN** the `result` has `reason` `other`

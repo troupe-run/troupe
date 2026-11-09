@@ -28,6 +28,7 @@
       "type": "result",
       "seq": 1,
       "status": "error",
+      "reason": "authentication",
       "message": "The service refused the credential (HTTP 401): Incorrect API key provided: [credential]. You can find your API key at https://platform.openai.com/account/api-keys. Check the key the actor's runtime names, and that it's allowed to use this model.",
       "turns": 0
     }

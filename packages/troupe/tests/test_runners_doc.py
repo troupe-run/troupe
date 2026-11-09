@@ -77,3 +77,8 @@ def test_the_handshake_names_every_capability_the_schema_defines() -> None:
     for capability in capabilities:
         handshake = _section("Messages").split("\n1. ", 1)[1].split("\n2. ", 1)[0]
         assert f"`{capability}`" in handshake
+
+
+def test_the_failure_reasons_table_lists_exactly_the_reasons_in_the_schema() -> None:
+    reasons = load(RUNNER_SCHEMAS / "run-event.schema.json")["$defs"]["failureReason"]["enum"]
+    assert _first_column(_section("Why a run failed")) == set(reasons)

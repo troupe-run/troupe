@@ -27,6 +27,24 @@ EFFECTS_MODE = "translated"
 """How the runner applies the actor's declared effects, as init reports it: it translates them
 into Claude Code's permission rules (declared-effects design D8)."""
 
+SUBTYPE_REASONS = {
+    "error_max_turns": "turn-limit",
+    "error_max_budget_usd": "budget",
+    "error_during_execution": "engine",
+}
+"""The failure reason for each result subtype other than success; any other is other
+(failure-reason design D6)."""
+
+API_ERROR_REASONS = {
+    "authentication_failed": "authentication",
+    "billing_error": "quota",
+    "rate_limit": "rate-limit",
+    "max_output_tokens": "output-limit",
+}
+"""The failure reason for each of Claude Code's API error codes that names its cause outright. A
+generic one (server_error, unknown) is left to the last retry or the HTTP status: Claude Code calls
+a refused connection server_error (the network-retries fixture)."""
+
 USAGE = {
     "input_tokens": "inputTokens",
     "output_tokens": "outputTokens",
@@ -154,6 +172,11 @@ class Mapper:
         self._noted: set[str] = set()
         self._result_sent = False
         self._silenced = False
+        self._api_error: str | None = None
+        """The last assistant record's error code, Claude Code's own word for an API error; None
+        when that record had none."""
+        self._retry_reason: str | None = None
+        """The reason of the last retry sent since the last assistant record without an error."""
 
     def hold_warnings(self, messages: Iterable[str]) -> None:
         """Warnings to send as logs once init is, so they come before the result."""
@@ -326,16 +349,8 @@ class Mapper:
         error = record.get("error")
         status = record.get("error_status")
         error_text = error if isinstance(error, str) and error else "unknown"
-        if error == "authentication_failed":
-            reason = "authentication"
-        elif status == 429:
-            reason = "rate-limit"
-        elif _is_count(status) and 500 <= status <= 599:
-            reason = "server"
-        elif status is None:
-            reason = "network"
-        else:
-            reason = "other"
+        reason = "authentication" if error == "authentication_failed" else _status_reason(status)
+        self._retry_reason = reason
         how = "no HTTP response" if status is None else f"HTTP {status}"
         event: dict[str, Any] = {"type": "retry", "attempt": attempt}
         maximum = record.get("max_retries")
@@ -345,6 +360,14 @@ class Mapper:
         return [event]
 
     def _assistant(self, record: dict[str, Any]) -> list[dict[str, Any]]:
+        error = record.get("error")
+        if isinstance(error, str) and error:
+            self._api_error = error
+        else:
+            # An assistant record without an error is a call that succeeded: the errors and
+            # retries before it recovered, so neither can say why a later failure happened.
+            self._api_error = None
+            self._retry_reason = None
         message = record.get("message")
         content = message.get("content") if isinstance(message, dict) else None
         if not isinstance(content, list):
@@ -447,11 +470,14 @@ class Mapper:
                 for tool, n in counts.items()
             )
         text = record.get("result")
+        failed = is_error or subtype != "success"
         event: dict[str, Any] = {
             "type": "result",
-            "status": "error" if is_error or subtype != "success" else "ok",
+            "status": "error" if failed else "ok",
             "message": text if isinstance(text, str) and text else subtype,
         }
+        if failed:
+            event["reason"] = self._failure_reason(record, subtype)
         if _is_count(record.get("num_turns")):
             event["turns"] = record["num_turns"]
         if _is_count(record.get("duration_ms")):
@@ -470,6 +496,30 @@ class Mapper:
             event["costUsd"] = cost
         events.append(event)
         return events
+
+    def _failure_reason(self, record: dict[str, Any], subtype: str) -> str:
+        """Why a failed result record failed, from Claude Code's own fields, never its text
+        (failure-reason design D6)."""
+        if subtype != "success":
+            return SUBTYPE_REASONS.get(subtype, "other")
+        if self._api_error in API_ERROR_REASONS:
+            return API_ERROR_REASONS[self._api_error]
+        if self._retry_reason is not None:
+            return self._retry_reason  # the run ends with its last retry's reason
+        if record.get("terminal_reason") == "api_error":
+            return _status_reason(record.get("api_error_status"))
+        return "other"
+
+
+def _status_reason(status: object) -> str:
+    """The reason an API error's HTTP status gives, for a retry or a result: None is no response."""
+    if status == 429:
+        return "rate-limit"
+    if _is_count(status) and 500 <= status <= 599:
+        return "server"
+    if status is None:
+        return "network"
+    return "other"
 
 
 def _transcript(line: bytes) -> Transcript:

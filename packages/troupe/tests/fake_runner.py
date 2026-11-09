@@ -4,7 +4,8 @@ Usage: python fake_runner.py <mode>. Not collected by pytest. Every mode ignores
 options; ``ignore-options`` does nothing else unusual, for checks that a runner refuses an unknown
 option. ``write-then-silent`` writes ``stray.txt`` in its working directory and then never answers.
 ``refuse-character`` refuses a run/start that carries a character, as a runner that
-treats the contract's own field as unknown would.
+treats the contract's own field as unknown would. ``error-without-reason`` sends an error result
+with no reason, which the contract refuses.
 """
 
 import json
@@ -154,12 +155,12 @@ def main(mode: str) -> None:
                 with open(os.path.join(scratch, "left.txt"), "w", encoding="utf-8") as left:
                     left.write("a temporary file the run leaves behind")
                 event(1, type="log", level="info", message=json.dumps(found))
-                event(
-                    2,
-                    type="result",
-                    status=message["params"].get("direction") or "ok",
-                    message="done",
-                )
+                status = message["params"].get("direction") or "ok"
+                reason = {"reason": "other"} if status == "error" else {}
+                event(2, type="result", status=status, message="done", **reason)
+            elif mode == "error-without-reason":
+                # breaks the contract: an error result says why (failure-reason)
+                event(1, type="result", status="error", message="API Error: 401")
             elif mode == "ignore-shutdown":
                 event(1, type="result", status="ok", message="done")
             elif mode == "unsent-id":

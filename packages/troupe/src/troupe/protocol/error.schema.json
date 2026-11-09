@@ -541,9 +541,14 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
+            "reason",
             "message"
           ],
           "properties": {
+            "reason": {
+              "description": "Why the run failed, from its result.",
+              "$ref": "runner/run-event.schema.json#/$defs/failureReason"
+            },
             "message": {
               "type": "string"
             }

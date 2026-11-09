@@ -25,7 +25,14 @@ from troupe.core.runs.aggregate import ENDED, REPORTED, STARTED, TOPICS, WORKTRE
 # troupe.core.runs re-exports perform the function, so the module is reached by name.
 perform_module = importlib.import_module("troupe.core.runs.perform")
 RECORD = validator_for(PROTOCOL_BASE + "event-record.schema.json", SCRIPTED)
-ERROR = {"event": {"type": "result", "status": "error", "message": "401 Unauthorized"}}
+ERROR = {
+    "event": {
+        "type": "result",
+        "status": "error",
+        "reason": "authentication",
+        "message": "401 Unauthorized",
+    }
+}
 TOOLS: list[dict[str, Any]] = [
     {"event": {"type": "tool_call", "callId": "c1", "tool": "Write", "inputSummary": "a.txt"}},
     {
