@@ -11,11 +11,11 @@ under `runtimes.<name>.prices.<model>`. Until this is fixed, one model's price c
 ## What Changes
 
 - A config path can put any key in square brackets, and nothing inside the brackets splits:
-  `runtimes.openai.prices[gpt-4.1].input`. Inside brackets, `\]` is a `]` and `\\` is a `\`. Plain keys keep working
-  as they do now (`actors.tester.runner`). Brackets were chosen over double quotes or backslash escapes (owner,
-  2026-11-07, on troupe#303) because no shell quietly strips them. Unquoted quotes and backslashes are removed by
-  bash and zsh, and Windows PowerShell 5.1 drops embedded quotes. Either leaves a valid but different path, with no
-  error.
+  `runtimes.openai.prices[gpt-4.1].input`. Inside brackets, `\]` is a `]` and `\\` is a `\`. A plain key that holds
+  none of `[`, `]`, `\` or `=` reads as it did before (`actors.tester.runner`). Brackets were chosen over double
+  quotes or backslash escapes (owner, 2026-11-07, on troupe#303) because no shell quietly strips them. Unquoted
+  quotes and backslashes are removed by bash and zsh, and Windows PowerShell 5.1 drops embedded quotes. Either leaves
+  a valid but different path, with no error.
 - The same syntax is used everywhere a config path is typed: `config set` (including `<path>=@<file>`), `config
   unset`, `config get` and `config get --resolved`. In `config set`, the path ends at the first `=` outside brackets,
   so a key may hold `=`.
@@ -26,7 +26,9 @@ under `runtimes.<name>.prices.<model>`. Until this is fixed, one model's price c
   rule. That covers an unclosed `[`, a trailing or unknown escape, an empty key, text straight after a `]`, `.[`, a
   stray `]`, and a backslash outside brackets (the Helm habit `gpt-4\.1`, which would otherwise split quietly).
   **BREAKING** (pre-1.0, nothing outside this repository reads it): a path with an empty key, such as `a..b`, is now
-  refused with `config.path-malformed` instead of `config.invalid`.
+  refused with `config.path-malformed` instead of `config.invalid`. And a key that holds `[`, `]`, `\` or `=` must now
+  be written in brackets: the old reader took any text between dots as a key, so `config unset a=b` or `x]y` is now
+  refused, and `prices.foo[1]` now reads as the keys `prices`, `foo` and `1`.
 - Parsing and showing paths live in one place in the core, which the CLI uses. The core's requests still carry a path
   as an array of keys, so the client protocol's messages don't change. Only the error catalogue gains a code.
 
