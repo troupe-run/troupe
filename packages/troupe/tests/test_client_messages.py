@@ -769,7 +769,9 @@ def test_an_ended_summary_with_a_transcript_and_no_audit_is_refused_naming_it() 
 
 def test_an_ended_summary_with_an_audit_and_no_transcript_is_refused() -> None:
     data = {
-        key: value for key, value in ENDED_SUMMARY.items() if key not in ("transcript", "stderr")
+        key: value
+        for key, value in ENDED_SUMMARY.items()
+        if key not in ("transcript", "transcriptFormat", "stderr")
     }
     data["audit"] = {"outside": []}
     assert "audit" in _refused(m.RunSummary, data)

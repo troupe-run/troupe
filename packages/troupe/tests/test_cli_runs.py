@@ -346,6 +346,7 @@ def test_an_ended_runs_transcript_line_names_kinds_only_when_its_records_have_th
             "transcript": "sha256:" + "a" * 64,
             "transcriptFormat": format_,
             "stderr": "sha256:" + "b" * 64,
+            "audit": {"outside": []},
         }
     )
     assert f"  transcript: sha256:{'a' * 64}{shown}" in render_run(summary.to_data())
@@ -721,6 +722,7 @@ def test_an_audit_that_couldnt_run_is_shown_with_its_error() -> None:
         "startedAt": "2026-10-13T00:00:00.000Z",
         "endedAt": "2026-10-13T00:00:01.000Z",
         "transcript": "sha256:" + "a" * 64,
+        "transcriptFormat": "native",
         "stderr": "sha256:" + "b" * 64,
         "audit": {"error": {"code": "vcs.failed", "problem": "git failed.", "fix": "Look."}},
     }
