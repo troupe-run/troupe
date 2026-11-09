@@ -113,9 +113,12 @@
   naming it), the message table's `run/transcript` and `initialize` rows, and "A run goes like this" step 1, which says
   version 0 defines no capabilities. Verify: each changed statement matches the specs, and the doc build or link check
   `scripts/check.py` runs passes.
-- [ ] 9.2 Run the conformance check (`test_runner_conformance.py`) for every runner, and `uv run scripts/check.py`.
+- [x] 9.2 Run the conformance check (`test_runner_conformance.py`) for every runner, and `uv run scripts/check.py`.
   Verify: both pass locally. CI on Linux, macOS and Windows passes on the pull request's last code commit, cited
-  here by run id.
+  here by run id. Done 2026-11-09: conformance 10 passed (1 opt-in skip); `scripts/check.py` passed on the rebased
+  branch. CI run 42546733027 on `725b7ed2`, the last code commit, passed on all twelve legs (Linux, macOS and
+  Windows, Python 3.12 to 3.15); its one failure on the first attempt, `check (ubuntu-latest, Python 3.14)`, was the
+  known flake #301 and passed on re-run (attempt 2).
 
 ## Workflow follow-up
 
