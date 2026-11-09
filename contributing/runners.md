@@ -163,7 +163,7 @@ repeats.
 
 | Type | Fields | Rules |
 |---|---|---|
-| `init` | `runner {name, version}`, `effects` (`checked` or `translated`), `tools`, `engine {name, version, model}` (optional) | Always the first event, `seq` 0. `effects` says how the runner applies the actor's effects (see [Applying the effects](#applying-the-effects)); troupe accepts an `init` without it only when it reads a run recorded before it existed. |
+| `init` | `runner {name, version}`, `effects` (`checked` or `translated`), `tools`, `engine {name, version, model}` (optional) | Always the first event, `seq` 0. `effects` says how the runner applies the actor's effects (see [Applying the effects](#applying-the-effects)). An `init` without it is a protocol violation. |
 | `turn` | `role` (`assistant` or `user`), `text` | One message turn, summarised. |
 | `tool_call` | `callId`, `tool`, `inputSummary` | |
 | `tool_result` | `callId`, `isError`, `outputSummary`, `outputBytes` | `callId` matches an earlier `tool_call`. The full output belongs in the transcript. |
