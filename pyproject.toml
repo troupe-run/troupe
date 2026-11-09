@@ -48,7 +48,7 @@ dev = [
     "import-linter>=2.15",
     "types-jsonschema>=4.26",
     # Generates troupe.core.config.models from the config schemas (scripts/generate_models.py).
-    "datamodel-code-generator>=0.86,<0.87",
+    "datamodel-code-generator>=0.87.0,<0.88",
     # The eventsourcing recorder test suite imports AESCipher at module scope (design: prior art).
     "pycryptodome>=3.23",
     "pytest-xdist>=3.8",
