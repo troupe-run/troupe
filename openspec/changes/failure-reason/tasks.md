@@ -76,8 +76,11 @@ group's own tests pass when it's done.
 
 ## 7. Integration
 
-- [ ] 7.1 Run `uv run scripts/check.py`. Verify: it passes locally, and CI passes on Linux, macOS and Windows once the
+- [x] 7.1 Run `uv run scripts/check.py`. Verify: it passes locally, and CI passes on Linux, macOS and Windows once the
   PR is marked ready, cited on the last code change.
+  Done: passed locally (f4e1f097's own check, all gates), and CI run
+  [42545201544](https://github.com/troupe-run/troupe/actions/runs/42545201544) passed all twelve jobs on 5ed6ceb8,
+  whose tree holds the last code change.
 
 ## Workflow follow-up
 
