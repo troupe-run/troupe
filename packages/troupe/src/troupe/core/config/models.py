@@ -270,7 +270,7 @@ class Runtime(StrictModel):
         Field(title="Prices"),
     ] = None
     """
-    What each model costs at this service, by the model's name exactly as a run names it, in US dollars per million tokens. A runner whose service reports no cost estimates one from the run's model's price, marked as an estimate; a model with no price gets none. Set a rate for every kind of token the service's runs use, cacheRead and cacheWrite included (0 for a kind it doesn't charge for), or runs that use it get no estimate. A model's name with a dot can't be part of a config set path: set the whole map as JSON.
+    What each model costs at this service, by the model's name exactly as a run names it, in US dollars per million tokens. A runner whose service reports no cost estimates one from the run's model's price, marked as an estimate; a model with no price gets none. Set a rate for every kind of token the service's runs use, cacheRead and cacheWrite included (0 for a kind it doesn't charge for), or runs that use it get no estimate. In a config set path, a model's name that holds a dot goes in brackets: runtimes.openai.prices[gpt-4.1].
     """
 
 
