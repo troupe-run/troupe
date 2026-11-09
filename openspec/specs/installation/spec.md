@@ -177,9 +177,9 @@ the markers SHALL fail the docs check, naming the page and the line.
 
 ### Requirement: The install check can install from GitHub by a ref
 The install check SHALL, when asked, install from troupe's GitHub repository with the ref exactly as given, in the
-documented form for that ref, both without extras and with `all`. For a `troupe-run-v<version>` tag, `troupe-run`
-SHALL declare that version at the tag, every component in its dependencies and its extras SHALL be pinned, and
-`troupe --version` SHALL print the version `troupe` is pinned at; otherwise the check fails, naming the tag and what
+documented form for that ref, and then with `all` if that ref's bundle has it. For a `troupe-run-v<version>` tag,
+`troupe-run` SHALL declare that version at the tag, every component in its dependencies and its extras SHALL be pinned,
+and `troupe --version` SHALL print the version `troupe` is pinned at; otherwise the check fails, naming the tag and what
 differed.
 
 #### Scenario: A release tag from GitHub
@@ -208,6 +208,10 @@ differed.
 - **WHEN** the install check runs with a `troupe-run-v<version>` tag whose `lm-studio` extra names
   `troupe-runner-lm-studio` bare
 - **THEN** it fails before installing, naming the tag, the extra and `troupe-runner-lm-studio`
+
+#### Scenario: A tag from before the all extra
+- **WHEN** the install check runs from GitHub with `troupe-run-v0.1.0` as the ref, whose bundle has no `all` extra
+- **THEN** it installs and checks the base install, says it doesn't install `troupe-run[all]` for that ref, and passes
 
 ### Requirement: Every published bundle tag is checked on every platform
 When a GitHub release is published for a `troupe-run-v<version>` tag, a workflow SHALL run the install check from

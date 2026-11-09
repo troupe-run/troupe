@@ -126,7 +126,9 @@ def kinds_at(path: Sequence[str], runner: str | None) -> set[str]:
     if field == "character":
         return {"string"} if len(path) == 3 else set()
     if field == "options":
-        if runner is None or runner not in interim.RUNNERS:
+        # A runner that isn't installed has no options schema to read here: core's check of the
+        # change refuses it, naming the actor's path and the extra (runner-extras design D7).
+        if runner is None or runner not in interim.RUNNERS or not interim.installed(runner):
             return set() if len(path) > 3 else {"object"}
         options = interim.options_schema(runner)
         registry: Registry[Any] = schemas.registry(interim.runner(runner).package)
