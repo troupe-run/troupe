@@ -65,12 +65,13 @@
 
 - [x] 5.1 Run `uv run scripts/check.py` and verify it passes, with the full test run on all three platforms in CI
   once the pull request is marked ready. Verified: the check passed locally on the rebased head, and CI run
-  [42477300331](https://github.com/troupe-run/troupe/actions/runs/42477300331) passed every job (Linux, macOS and
-  Windows, Python 3.12 to 3.15) on `8968b53`, which holds the last code commit, `b9afa5d`.
+  [42540454443](https://github.com/troupe-run/troupe/actions/runs/42540454443) passed every job (Linux, macOS and
+  Windows, Python 3.12 to 3.15) on `2975903`, the head after the rebase onto main, which holds the last code commit,
+  `f5201b8`.
 - [x] 5.2 Check that release-please will release this as a protocol and SDK `feat` (design D8): every commit is a
   `feat` or `docs` with no `!`, and release-please assigns a commit to each component whose path it touches. Verified
   with `git log --format=%s origin/main..` and `git log origin/main.. -- <path>` against `release-please-config.json`:
-  `9da8886` (`feat(runner-protocol):`) touches `protocol`, `troupe-plugin-sdk`, `troupe` and `troupe-runner-scripted`,
+  `c94ec44` (`feat(runner-protocol):`) touches `protocol`, `troupe-plugin-sdk`, `troupe` and `troupe-runner-scripted`,
   so each gets a minor bump. The SDK's part shares that commit's `runner-protocol` scope, as D8 says.
 
 ## Workflow follow-up
