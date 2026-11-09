@@ -47,7 +47,8 @@ host_module = importlib.import_module("troupe.core.runners.host")
 QUICK_SILENCE = RunLimits(
     start_timeout=10.0, cancel_grace=2.0, run_timeout=20.0, silence_announce=0.3
 )
-"""Limits under which a 0.8 s wait is announced as a silence."""
+"""Limits under which a 0.8 s wait is announced as a silence. So is a runner that takes longer than
+0.3 s to send its init, as one can on a loaded CI machine: see without_startup_silences."""
 WAIT = {"wait": {"ms": 800}}
 RETRY = {
     "event": {
@@ -78,6 +79,17 @@ def shape(harness: Harness, run_id: str) -> list[str]:
         else:
             named.append(record.topic.rsplit(".", 1)[-1])
     return named
+
+
+def without_startup_silences(named: list[str]) -> list[str]:
+    """``named`` (a shape) without the run.silent notices before the runner's init. Under
+    QUICK_SILENCE a runner that is slow to start (Windows CI, under load) is silent for longer than
+    the threshold before its init: a real silence, rightly recorded, that a test timing a later one
+    leaves out. Nothing else may come before the init."""
+    init = named.index("event init")
+    before = [name for name in named[:init] if name != "notice run.silent"]
+    assert before == ["Started"], named
+    return [*before, *named[init:]]
 
 
 def live(harness: Harness, code: str) -> list[dict[str, Any]]:
@@ -113,7 +125,8 @@ def test_a_silence_and_a_retry_are_recorded_in_order_among_the_runs_events_and_s
 ) -> None:
     harness = Harness(theatre(tmp_path), limits=QUICK_SILENCE)
     run = harness.perform(request(script(INIT, WAIT, RETRY, OK))).run
-    assert shape(harness, run.run_id) == [
+    named = shape(harness, run.run_id)
+    assert without_startup_silences(named) == [
         "Started",
         "event init",
         "notice run.silent",
@@ -122,7 +135,7 @@ def test_a_silence_and_a_retry_are_recorded_in_order_among_the_runs_events_and_s
         "event result",
         "Ended",
     ]
-    assert len(live(harness, "run.silent")) == 1
+    assert len(live(harness, "run.silent")) == named.count("notice run.silent")
     assert len(live(harness, "run.retrying")) == 1
 
 
@@ -164,12 +177,14 @@ def test_a_recorded_notice_is_the_persons_under_the_runs_change(tmp_path: Path) 
     harness = Harness(theatre(tmp_path), limits=QUICK_SILENCE)
     run = harness.perform(request(script(INIT, WAIT, OK))).run
     stream = records(harness, run.run_id)
-    [noticed] = [r for r in stream if r.topic == NOTICED]
-    assert noticed.lineage["actor"] == ADA_ACTOR
-    assert noticed.lineage["via"] == "cli"
+    noticed = [r for r in stream if r.topic == NOTICED]
+    assert noticed  # the wait's silence, and any while the runner started
     change = stream[0].lineage["change"]
-    assert noticed.lineage["change"] == change
-    assert noticed.lineage["cause"] == {"kind": "command", "id": change}
+    for record in noticed:
+        assert record.lineage["actor"] == ADA_ACTOR
+        assert record.lineage["via"] == "cli"
+        assert record.lineage["change"] == change
+        assert record.lineage["cause"] == {"kind": "command", "id": change}
 
 
 # Requirement: Only a run's own notices are recorded in it
@@ -242,7 +257,9 @@ def test_a_notice_that_cant_be_recorded_cancels_the_run_and_its_end_names_the_no
     assert "endError" not in error.details
     assert "from the notice run.silent on" in error.problem
     run_id = error.details["run"]
-    assert shape(harness, run_id) == ["Started", "event init", "Ended"]
+    # The first silence fails to record: the wait's, or one while the runner started (see
+    # without_startup_silences), so init may or may not be recorded before it.
+    assert shape(harness, run_id) in (["Started", "event init", "Ended"], ["Started", "Ended"])
     end = json.loads(records(harness, run_id)[-1].state)
     assert end["outcome"]["outcome"] == "cancelled"
     assert end["recording"] == {
@@ -250,7 +267,7 @@ def test_a_notice_that_cant_be_recorded_cancels_the_run_and_its_end_names_the_no
         "error": error.details["error"],
     }
     # Every notice is still sent live, one raised after the failure too, but isn't recorded.
-    assert len(live(harness, "run.silent")) == 1
+    assert len(live(harness, "run.silent")) >= 1
     assert len(live(harness, "run.scratch-not-removed")) == 1
 
 
@@ -429,7 +446,18 @@ def test_status_of_a_run_that_raised_notices_holds_them_in_order_with_their_time
     run_id = harness.perform(request(script(INIT, WAIT, RETRY, OK))).run.run_id
     [summary] = harness.status(run=run_id).runs
     assert summary.notices is not None
-    assert [n.notice.code for n in summary.notices] == ["run.silent", "run.retrying"]
+    named = shape(harness, run_id)
+    assert without_startup_silences(named) == [
+        "Started",
+        "event init",
+        "notice run.silent",
+        "event retry",
+        "notice run.retrying",
+        "event result",
+        "Ended",
+    ]
+    recorded = [name.removeprefix("notice ") for name in named if name.startswith("notice ")]
+    assert [n.notice.code for n in summary.notices] == recorded
     times = [r.lineage["at"] for r in records(harness, run_id) if r.topic == NOTICED]
     assert [n.at for n in summary.notices] == times
     check(summary.to_data(), "run.schema.json#/$defs/summary")
@@ -499,7 +527,9 @@ def test_following_sends_a_recorded_notice_among_the_events_as_it_is_recorded(
         for u in follower.updates
         if u["kind"] in ("event", "run-notice")
     ]
-    assert followed == [("event", "init"), ("run-notice", "run.silent"), ("event", "result")]
+    init = followed.index(("event", "init"))
+    assert set(followed[:init]) <= {("run-notice", "run.silent")}  # see without_startup_silences
+    assert followed[init:] == [("event", "init"), ("run-notice", "run.silent"), ("event", "result")]
     for update in follower.updates:
         check(update, "logs-update.schema.json")
     assert result.run.state == "ended"
