@@ -68,9 +68,9 @@
 ## 6. Integration
 
 - [x] 6.1 Run `uv run scripts/check.py` and show it passing; then mark the pull request ready and cite the CI run on
-  Linux, macOS and Windows for the last code change. After the rebase onto main (with #293, #300 and #289), `scripts/check.py`
-  passed locally on `be2dfb4`, whose last code change is `c858fb4` (all gates, tests in 176s), and CI on `be2dfb4`
-  passed every leg on Linux, macOS and Windows: https://github.com/troupe-run/troupe/actions/runs/42475496809. (Before
+  Linux, macOS and Windows for the last code change. After rebasing onto main (with #293, #300, #289 and #292), `scripts/check.py`
+  passed locally on the same tree (all gates, tests in 206s), and CI on `94ffd6f`, whose last code change is
+  `0fb1434`, passed every leg on Linux, macOS and Windows: https://github.com/troupe-run/troupe/actions/runs/42539831982. (Before
   the rebase, a windows-latest Python 3.15 failure was the unrelated flaky test filed as #335.)
 - [x] 6.2 Run `openspec validate served-model --strict` and show it passing.
 
