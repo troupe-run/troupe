@@ -8,6 +8,7 @@ bound.
 import io
 import json
 import socket
+import sys
 import time
 from collections.abc import Iterator
 from pathlib import Path
@@ -108,6 +109,12 @@ def _transcript(capabilities: list[str], workspace: Path) -> tuple[list[str], li
     return accepted["result"]["capabilities"], records
 
 
+def _scrubbed(record: str, workspace: Path) -> str:
+    """``record`` with ``<workspace>`` for the run's workspace path. A record is JSON text, so the
+    path is there JSON-escaped: on Windows its backslashes are doubled."""
+    return record.replace(json.dumps(str(workspace))[1:-1], "<workspace>")
+
+
 def test_offered_transcript_kinds_it_accepts_and_every_record_has_a_kind(workspace: Path) -> None:
     accepted, records = _transcript(["transcript-kinds"], workspace)
     assert accepted == ["transcript-kinds"]
@@ -119,13 +126,15 @@ def test_offered_no_capability_it_sends_the_same_records_without_a_kind(
     workspace: Path, tmp_path: Path
 ) -> None:
     _, with_kinds = _transcript(["transcript-kinds"], workspace)
-    other = tmp_path / "other"
+    # A backslash in the name makes the path need escaping on every OS, as a Windows path does.
+    other = tmp_path / ("other" if sys.platform == "win32" else "oth\\er")
     other.mkdir()
     accepted, without = _transcript([], other)
     assert accepted == []
     assert all("kind" not in r for r in without)
-    scrubbed = [r["record"].replace(str(other), "<workspace>") for r in without]
-    assert scrubbed == [r["record"].replace(str(workspace), "<workspace>") for r in with_kinds]
+    assert [_scrubbed(r["record"], other) for r in without] == [
+        _scrubbed(r["record"], workspace) for r in with_kinds
+    ]
 
 
 def test_an_unsupported_protocol_version_is_refused_naming_the_supported_ones(
