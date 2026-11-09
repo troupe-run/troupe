@@ -94,7 +94,8 @@
 - [x] 6.4 Confirm `ci.yml`'s and `release-install-check.yml`'s install-check steps need no new arguments (the `[all]`
   install is part of the check), and that their timeouts cover two installs. Verify: on the PR's CI, every platform
   and Python leg's log shows both installs and the rehearsals. Record each platform's added time from the job logs
-  (`gh run view --job <id> --log`) in the PR description. Done: CI run 42546348090 on 965c93ff, all 12 legs passed,
+  (`gh run view --job <id> --log`) in the PR description. Done: CI run 42626498115 on 8ef03688, the last code commit,
+  all 12 legs passed. The timings were measured on the earlier run 42546348090 on 965c93ff, where all 12 legs passed,
   each showing the `[all]` install and four rehearsals. Added time: Linux 1.2–1.7 s, macOS 2.6–3.2 s, Windows
   6.2–7.3 s. No new arguments, and the 20-minute timeouts are unchanged (PR #338's description).
 - [x] 6.5 Commit as `feat(installation): ...`. Verify: `uv run scripts/check.py` passes before the commit.
