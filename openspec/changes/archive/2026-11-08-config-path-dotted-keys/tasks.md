@@ -76,9 +76,11 @@
 
 - [x] 6.1 Run the whole check. Verify: `uv run scripts/check.py` passes locally, and CI passes on Linux, macOS and
   Windows on the PR's last code commit, with the run cited here. Done: the full check passed locally before each
-  commit, and after the rebase onto main (#289's `_move_fix`), [CI run
-  42475188120](https://github.com/troupe-run/troupe/actions/runs/42475188120) passed every job (ubuntu, macos and
-  windows; Python 3.12–3.15) on `aee21aa`, the last code commit.
+  commit, and after the rebases onto main (#289's `_move_fix`, #292's prices), [CI run
+  42538200875](https://github.com/troupe-run/troupe/actions/runs/42538200875) passed every job (ubuntu, macos and
+  windows; Python 3.12–3.15) on `fb031f77`, the last code commit. Its first attempt failed three jobs on three tests
+  this change doesn't touch (the Claude Code runner's flags and a CRLF worktree test on Windows, and Ollama's
+  cancel-while-streaming, which also failed on main at `4bbd57c7`); re-running them passed.
 
 ## Workflow follow-up
 
