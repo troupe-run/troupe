@@ -291,8 +291,9 @@ status.
 
 ### Requirement: Every exchange with Ollama is a transcript record
 The runner SHALL send as transcript records, before any event they lead to: the first request's body, then before each
-later request each message it added to the conversation, each verbatim as sent, and every line of every streamed
-answer and every error body, verbatim. It SHALL NOT send a request's re-sent history again.
+later request each message it added to the conversation, each verbatim as sent (kind `sent` when it uses kinds); and
+every line of every streamed answer and every error body, verbatim (kind `received`). It SHALL NOT send a request's
+re-sent history again.
 
 #### Scenario: A run with one tool call
 - **WHEN** a run's first answer calls `Read` once and its second answer ends the run
@@ -302,6 +303,15 @@ answer and every error body, verbatim. It SHALL NOT send a request's re-sent his
 #### Scenario: Re-sent history
 - **WHEN** a run makes three requests
 - **THEN** the system and user messages appear in the transcript once, in the first request's body
+
+#### Scenario: Each record's kind
+- **WHEN** a run's first answer calls `Read` once and its second answer ends the run
+- **THEN** the first request's body, the assistant message and the `tool` message are `sent` records, and every
+  answer line is a `received` record
+
+#### Scenario: An error body
+- **WHEN** Ollama answers a request with status 400 and a body
+- **THEN** the body is a `received` record
 
 ### Requirement: Summaries fit below the event limit
 Every event's text SHALL be cut on a character boundary so the event fits `limits.eventMaxBytes`, saying how many bytes
@@ -409,3 +419,15 @@ The runner SHALL send no credential. A `run/start` whose `runtime.credential` is
 - **WHEN** a run's runtime has `credential` `true`, and `TROUPE_RUNTIME_CREDENTIAL` holds a canary
 - **THEN** `run/start` is refused with `ollama.credential-unsupported`, naming the runtime, no request is sent, and
   the error holds no part of the canary
+
+### Requirement: The Ollama runner uses transcript kinds
+The runner SHALL accept `transcript-kinds` when troupe offers it, and otherwise SHALL send the same records without a
+kind, as the contract says.
+
+#### Scenario: troupe offers kinds
+- **WHEN** troupe's `initialize` offers `transcript-kinds`
+- **THEN** the runner's answer names `transcript-kinds`, and every transcript record it sends has a kind
+
+#### Scenario: No capability offered
+- **WHEN** `initialize` offers no capabilities
+- **THEN** the runner answers with none, and sends the same transcript records with no kind

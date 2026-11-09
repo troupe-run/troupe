@@ -271,19 +271,20 @@ leave the reported runner out when it never did. The run's start SHALL NOT recor
 - **THEN** the run reads back, and its summary reports that runner
 
 ### Requirement: A run's end records what happened and leaves out what didn't
-A run's end SHALL record the outcome's `exitCode`, `transcript` and `stderr` exactly when the runner started, that
-is when `ending` isn't `never-started`. It SHALL leave out `error` when the outcome has none, `result` when the runner
-sent none, and `recording` when recording didn't fail. It SHALL record `changes` exactly when the run's workspace was
-a worktree that was made.
+A run's end SHALL record the outcome's `exitCode`, `transcript`, `transcriptFormat` and `stderr` exactly when the
+runner started, that is when `ending` isn't `never-started`. It SHALL leave out `error` when the outcome has none,
+`result` when the runner sent none, and `recording` when recording didn't fail. It SHALL record `changes` exactly when
+the run's workspace was a worktree that was made.
 
 #### Scenario: A run whose runner never started
 - **WHEN** a run's runner can't be started
 - **THEN** its end records outcome `could-not-start` and ending `never-started`, with an `error` and no `exitCode`,
-  `transcript`, `stderr`, `result` or `recording`
+  `transcript`, `transcriptFormat`, `stderr`, `result` or `recording`
 
 #### Scenario: A run that succeeded
 - **WHEN** a run's runner sends an `ok` result and exits with code 0
-- **THEN** its end records `exitCode` 0, the `transcript`, `stderr` and `result`, and no `error` or `recording`
+- **THEN** its end records `exitCode` 0, the `transcript`, its `transcriptFormat`, `stderr` and `result`, and no
+  `error` or `recording`
 
 #### Scenario: An end that contradicts its ending
 - **WHEN** a run's end payload has ending `exited` and no `exitCode`, or ending `never-started` and a `transcript`
@@ -299,11 +300,13 @@ a worktree that was made.
 
 ### Requirement: A recording failure leaves out what it can't name
 `run.recording-failed` SHALL leave out `failedAt` when only the run's end failed to record, `endError` when the end
-was recorded, and `transcript` when the runner never started.
+was recorded, and `transcript` and `transcriptFormat` when the runner never started. It SHALL carry
+`transcriptFormat` exactly when it carries `transcript`.
 
 #### Scenario: Only the end fails to record
 - **WHEN** every run event is recorded and recording the run's end fails
 - **THEN** `perform` fails with `run.recording-failed`, whose details have `endError` and no `failedAt`
+- **AND** its details carry the transcript's reference and its `transcriptFormat`
 
 #### Scenario: A run event fails to record and the end is recorded
 - **WHEN** recording the run event with `seq` 2 fails and the run's end is recorded
@@ -527,3 +530,23 @@ runtime.
 #### Scenario: A rehearsal on a priced model
 - **WHEN** a person rehearses an actor on `openai` whose model config prices
 - **THEN** the rehearsal shows that price with source `theatre`
+
+### Requirement: A run's end says which form its transcript is
+`transcriptFormat` SHALL be `kinds` when the runner accepted `transcript-kinds`, and `native` otherwise. A run's end
+with a `transcript` and no `transcriptFormat`, or the reverse, SHALL NOT validate.
+
+#### Scenario: A run that used kinds
+- **WHEN** a run's runner accepted `transcript-kinds` and the run ends
+- **THEN** its end records `transcriptFormat` `kinds`
+
+#### Scenario: A Claude Code run
+- **WHEN** a Claude Code run ends
+- **THEN** its end records `transcriptFormat` `native`
+
+#### Scenario: A transcript without its format
+- **WHEN** a run's end payload has ending `exited`, a `transcript` and no `transcriptFormat`
+- **THEN** it doesn't validate against the run's end schema
+
+#### Scenario: A format without a transcript
+- **WHEN** a run's end payload has ending `never-started` and a `transcriptFormat`
+- **THEN** it doesn't validate against the run's end schema

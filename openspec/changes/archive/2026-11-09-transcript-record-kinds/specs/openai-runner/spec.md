@@ -3,11 +3,10 @@
 ## MODIFIED Requirements
 
 ### Requirement: The transcript is the exchange with the service
-The runner SHALL send, as `run/transcript` records in the order they happen, each request body as sent (kind `sent`
-when it uses kinds); each line of each response's stream unchanged, its `event:` lines included, and the body of
-each error response and of each successful response that isn't a stream (kind `received`); and each response's status with the response headers the runner names in one
-place, and each stream it abandons (kind `note`). A `sent` or `received` record SHALL be the bytes themselves. Request
-headers, and response headers other than those named, SHALL NOT be recorded.
+The runner SHALL send as `run/transcript` records, in order: each request body as sent (`sent`, when it uses kinds);
+each stream line unchanged, `event:` lines included, and the body of each error response or 2xx that isn't a stream
+(`received`); and each response's status with the response headers named in one place, and each stream it abandons
+(`note`). `sent` and `received` records SHALL be the bytes themselves. No other header SHALL be recorded.
 
 #### Scenario: A run's transcript
 - **WHEN** a run makes one request and gets one streamed response

@@ -113,6 +113,15 @@ SHALL be `null`.
 - **THEN** its summary's workspace has its path, base and whether the theatre was dirty, and no `clones`
 - **AND** the summary validates against the client protocol's run schema
 
+
+### Requirement: A run summary names its transcript's format
+A run summary SHALL carry `transcriptFormat` exactly when it carries `transcript`, as the run's end recorded it.
+
+#### Scenario: A transcript and its format
+- **WHEN** `status` reports an ended run whose runner started
+- **THEN** its summary carries `transcript` and `transcriptFormat`, and a summary with one and not the other doesn't
+  validate against the client protocol's run schema
+
 ### Requirement: Perform's request names an actor and a direction
 A `perform` request SHALL hold the actor's name, an optional direction and an optional `rehearse`, and no runner,
 options or effect check.
