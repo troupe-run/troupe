@@ -13,6 +13,7 @@ import pytest
 
 from runtesting import INIT, OK, Harness, request, script, theatre
 from test_perform import configured, nothing_written
+from troupe.core.client import messages as m
 from troupe.core.errors import TroupeError
 from troupe.core.masking import MARKER
 from troupe.core.runs.aggregate import STARTED
@@ -170,7 +171,7 @@ def test_an_estimate_with_no_price_given_is_dropped_and_the_run_succeeds_with_a_
     harness = _harness(tmp_path, OPENAI_API_KEY=KEY)
     result = harness.perform(request(script(INIT, ESTIMATE), **OPENAI))
     assert result.run.outcome == "succeeded"
-    logged = harness.logs(run=result.run.run_id).events
+    logged = [e for e in harness.logs(run=result.run.run_id).log if isinstance(e, m.LoggedEvent)]
     [ended] = [e.event for e in logged if isinstance(e.event, p.ResultEvent)]
     assert ended.estimated_cost_usd is None
     [notice] = _dropped(harness)
@@ -181,7 +182,7 @@ def test_an_estimate_with_a_price_given_records_the_result_as_sent(tmp_path: Pat
     harness = _harness(tmp_path, OPENAI_API_KEY=KEY)
     result = harness.perform(request(script(INIT, ESTIMATE), runtimes=PRICED, **OPENAI))
     assert result.run.outcome == "succeeded"
-    logged = harness.logs(run=result.run.run_id).events
+    logged = [e for e in harness.logs(run=result.run.run_id).log if isinstance(e, m.LoggedEvent)]
     [ended] = [e.event for e in logged if isinstance(e.event, p.ResultEvent)]
     assert ended.estimated_cost_usd == 0.5
     assert ended.cost_usd is None

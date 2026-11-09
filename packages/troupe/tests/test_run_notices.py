@@ -474,3 +474,28 @@ def test_following_sends_a_recorded_notice_among_the_events_as_it_is_recorded(
     for update in follower.updates:
         check(update, "logs-update.schema.json")
     assert result.run.state == "ended"
+
+
+# Design D10: run.estimate-dropped, which estimated-cost raises through the run host, is a run's
+# notice like any other
+
+
+def test_a_dropped_estimate_is_recorded_as_a_notice_before_the_result_it_concerns(
+    tmp_path: Path,
+) -> None:
+    harness = Harness(theatre(tmp_path))
+    harness.env = {**harness.env, "OPENAI_API_KEY": KEY}
+    estimate = {
+        "event": {"type": "result", "status": "ok", "message": "done", "estimatedCostUsd": 0.5}
+    }
+    run = harness.perform(request(script(INIT, estimate), runtime="openai", model="gpt-test")).run
+    assert run.outcome == "succeeded"
+    assert shape(harness, run.run_id) == [
+        "Started",
+        "event init",
+        "notice run.estimate-dropped",
+        "event result",
+        "Ended",
+    ]
+    [summary] = harness.status(run=run.run_id).runs
+    assert [n.notice.code for n in summary.notices or []] == ["run.estimate-dropped"]

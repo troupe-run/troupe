@@ -96,7 +96,7 @@
   returned nothing even for troupe, so infrastructure and website were grepped locally; website's only hits are a
   frozen docs fixture). The local `ui-prototype`, which has no remote and so no repository to raise an issue in,
   reads `logsResult.events` in `gateway/server.ts`; it's listed in the PR and raised with the owner.
-- [ ] 5.4 Check PR #317 (`estimated-cost`): if it merged first, rebase and add a `test_perform.py` case where a
+- [x] 5.4 Check PR #317 (`estimated-cost`): if it merged first, rebase and add a `test_perform.py` case where a
   runner sends an estimate with no price and the `run.estimate-dropped` notice is in the run's stream before the
   result event; if this merges first, comment on #317 asking for the same case on its rebase (D10). Verify the test
   or the comment exists.
