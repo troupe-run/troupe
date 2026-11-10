@@ -267,11 +267,53 @@ text, unless the prediction stopped for a reason other than its natural end.
 
 ### Requirement: The result carries the run's counts
 The result SHALL report the sum of each round's prompt tokens as input tokens and predicted tokens as output tokens,
-and the number of turns and tool calls the run reported. It SHALL report no cost.
+no cache counters, and the number of turns and tool calls the run reported. It SHALL report no `costUsd`, since
+LM Studio reports no cost.
 
 #### Scenario: Counts from two rounds
 - **WHEN** a run's two rounds report 1000 and 1300 prompt tokens and 100 and 200 predicted tokens, with one call
-- **THEN** the result reports 2300 input tokens, 300 output tokens, the turns reported, one tool call and no cost
+- **THEN** the result reports 2300 input tokens, 300 output tokens, the turns reported, one tool call and no `costUsd`
+
+### Requirement: A cost is estimated only from run start's price
+When `run/start`'s runtime carries a price, the result SHALL carry `estimatedCostUsd`, the run's input and output
+tokens at that price, unless the price has a rate for a counter LM Studio doesn't report. Without a price, the result
+SHALL carry no estimate.
+
+#### Scenario: A price
+- **WHEN** a run with the price `{"input": 2, "output": 8}` uses 1,000,000 input and 500,000 output tokens
+- **THEN** its result carries `estimatedCostUsd` 6
+
+#### Scenario: A price with a cache rate
+- **WHEN** a run's price has a `cacheRead` rate
+- **THEN** its result carries no `estimatedCostUsd`, since LM Studio reports no cache reads
+
+#### Scenario: No price
+- **WHEN** a run's `run/start` carries no price
+- **THEN** its result carries no `estimatedCostUsd`
+
+### Requirement: Every error result names its reason
+Every `error` result SHALL carry the contract's `reason`: `turn-limit` for the turn limit, `budget` for the token
+budget, `context-length` when the context was reached, `output-limit` when the predicted-token limit was, `network`
+for a lost connection, `cancelled` after `run/cancel`, `engine` when the model was unloaded or the prediction failed,
+and `other` for anything else, its message saying what happened.
+
+#### Scenario: Each ending's reason
+- **WHEN** runs end at the turn limit, at the token budget, at the context length, after a connection retried until
+  its attempts ran out, after `run/cancel`, and after the model was unloaded
+- **THEN** their results' reasons are `turn-limit`, `budget`, `context-length`, `network`, `cancelled` and `engine`
+
+#### Scenario: A stop reason the runner doesn't know
+- **WHEN** a round's prediction stops with a reason the runner doesn't map
+- **THEN** the run ends with an `error` result, `reason` `other`, whose message names that stop reason
+
+### Requirement: A model other than the run's is reported
+When a round's result names a model key other than the run's model, the runner SHALL send `served_model` with that key
+the first time it answers, before that round's events, and a key outside the contract's shape as a `log` warning
+instead.
+
+#### Scenario: The model asked for answers
+- **WHEN** every round's result names the run's model
+- **THEN** the run has no `served_model` event
 
 ### Requirement: LM Studio's failures end the run as error results
 A failure the library raises during a run, other than a retried one, SHALL end the run with an `error` result naming
@@ -313,14 +355,18 @@ it pointed, and SHALL NOT be followed.
 - **THEN** `run/start` is refused naming 307 and the address, and nothing connects to that address
 
 ### Requirement: The transcript is what the library exposes
-The runner SHALL send as transcript records, before any event they lead to: the downloaded model's info, the chat and
-the tools the run offers, each round's result with its stats, and each tool request and tool result message, each
-serialised as the library gives it.
+The runner SHALL accept `transcript-kinds`, and send as transcript records, before any event they lead to and each
+serialised as the library gives it: the downloaded model's info (`received`), the chat and tools the run passes the
+library (`sent`), each round's result with its stats (`received`), and each tool result message (`sent`).
 
 #### Scenario: A run with one tool call
 - **WHEN** a run's first round asks for one tool call and its second round ends the run
-- **THEN** its transcript holds the model's info, the chat and tools, the first round's result, the tool request and
-  result messages, and the second round's result, in that order
+- **THEN** its transcript holds the model's info (`received`), the chat and tools (`sent`), the first round's result
+  (`received`), the tool result message (`sent`) and the second round's result (`received`), in that order
+
+#### Scenario: A host that offers no kinds
+- **WHEN** `initialize` offers no `transcript-kinds`
+- **THEN** the runner sends the same records with no kind
 
 ### Requirement: The library's own logging stays out of the run's output
 The library's log output SHALL NOT reach standard output, and SHALL reach standard error only at warning level or

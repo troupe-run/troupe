@@ -234,8 +234,10 @@ grace, the runner ends it from its own exit path.
 
 Following #319, the transcript holds the exchange as the library exposes it, serialised, before any event it leads to:
 the model's downloaded info, the chat and the tools' JSON schemas as sent, each round's result (content, reasoning,
-stats, model info), and each tool request and tool result message from `on_message`. Until #294 gives records kinds,
-each record is framed as the OpenAI runner frames its own, and moves to #294's kinds when that lands.
+stats, model info), and each tool result message from `on_message`. The runner accepts #294's `transcript-kinds`:
+what it passes the library (the chat, the tools, each tool result) is `sent`, and what the library gives back (the
+model's info, each round's result, which holds the assistant message and its tool requests) is `received`. A host that
+offers no kinds gets the same records without them, as the contract requires.
 
 **What that loses compared with wire bytes:** the websocket frames themselves (the handshake, channel framing and
 message ids), the prediction's fragments as they streamed (the round's result has the whole text), the prompt as
@@ -263,8 +265,9 @@ proxy between the library and LM Studio, and scrubs the client passkeys and the 
 
 ### D13. The contract and library gaps, found so far
 
-Already filed, and this runner meets them too: a failed result has no reason troupe can act on (#296), there's no
-estimated cost (#292), `inputTokens` doesn't say what it counts (#293), and transcript records have no kind (#294).
+The gaps the OpenAI runner filed have all landed in the contract since this change was proposed, and the runner
+keeps each (D16): an error result's `reason` (#296), an estimated cost from troupe's price (#292), what `inputTokens`
+counts (#293), transcript record kinds (#294), and the model that served a run (#295).
 
 New candidates. Each is filed as its own issue on the board once building confirms it (#239, #291), checking #56's,
 #162's and #319's issues first so nothing is filed twice:
@@ -273,8 +276,8 @@ New candidates. Each is filed as its own issue on the board once building confir
 2. **`lmstudio` drops unknown tool arguments without error** (D7). Filed upstream as a request for a strict option.
 3. **Retry safety.** The contract's `retry` event has no notion that retrying after side effects isn't safe. This
    runner refuses to (spec), but nothing tells troupe why a run that could have been retried wasn't.
-4. **A transcript that isn't wire bytes.** #319 allows it. Whether a record says it's a library's view rather than the
-   wire is a question for #294.
+4. **A transcript that isn't wire bytes.** #319 allows it, and #333 settled it: a library-backed runner's `sent` and
+   `received` records hold what the library exposes (runner-protocol). No longer a gap.
 
 ### D14. Testing
 
@@ -318,6 +321,25 @@ must be running with "Require Authentication" off, and the `lms get` for the mod
 The spec `lm-studio-runner` is new, so its Purpose goes into troupe-run/infrastructure's
 `oob/troupe-spec-purposes.json`, in a pull request that merges right after this one (troupe first, as for
 infrastructure#263, so neither waits on the other). The `runtimes` spec changes a requirement, not its Purpose.
+
+### D16. The contract as it now stands
+
+Five contract changes landed on main while this one waited for #333, and the runner keeps each:
+
+- **`reason`** (#296): every `error` result names one reason from the contract's closed list. `turn-limit` and
+  `budget` (D5), `context-length` for `contextLengthReached`, `output-limit` for `maxPredictedTokensReached`, `engine`
+  for `modelUnloaded` and `failed`, `network` for a lost connection, whether retries ran out or a call had already run
+  (D10), `cancelled` after `run/cancel` (D9), and `other`, its message naming what happened, for anything else.
+- **`estimatedCostUsd`** (#292): LM Studio reports no cost, so `costUsd` is always absent. When `run/start`'s runtime
+  carries a price, the result estimates the run's input and output tokens at it. A price with a cache rate gets no
+  estimate, since LM Studio reports no cache counters and the contract forbids pricing one kind of token at another's
+  rate.
+- **`inputTokens`** (#293): each round's `promptTokensCount` summed. LM Studio reports no cache reads or writes, so
+  neither cache counter is sent.
+- **Transcript kinds** (#294): `sent` and `received`, as D11 says.
+- **`served_model`** (#295): each round's result names the model key that answered (`model_info.modelKey`). When it
+  isn't the run's model, the runner reports it once, before that round's events. In the probe it was always the model
+  asked for.
 
 ## Risks / Trade-offs
 
