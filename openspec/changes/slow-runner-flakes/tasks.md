@@ -96,7 +96,7 @@ before it starts and run one at a time. Every reproduction records its assertion
 
 ## 6. Claude Code: the direction marker and the perform test (#335, #355)
 
-- [ ] 6.1 In `test_claude_runs_in_the_workspace_with_the_fixed_flags_and_the_direction_on_stdin`, use a direction
+- [x] 6.1 In `test_claude_runs_in_the_workspace_with_the_fixed_flags_and_the_direction_on_stdin`, use a direction
   holding a fresh `direction-<uuid4 hex>` marker, and check that no argument holds it (D11). Verify it passes, and
   that a local change appending the direction to argv fails it, then revert.
 - [ ] 6.2 Reproduce #355 under load (announced) and record the failing assertion on #355.
@@ -106,10 +106,13 @@ before it starts and run one at a time. Every reproduction records its assertion
 
 ## 7. Git: compare the CRLF file's content every time (#351)
 
-- [ ] 7.1 In `test_a_file_committed_in_a_form_git_would_normalise_neither_stops_the_fill_nor_is_in_the_diff`, set
-  `crlf.txt`'s mtime 2 s earlier after the checkout, with a comment on why (D12). Verify the precondition holds over
-  a 200-round local hunt of the test. Also verify the test still fails when the fill copies the file in its
-  normalised form: patch it locally, check, then revert.
+- [x] 7.1 In `test_a_file_committed_in_a_form_git_would_normalise_neither_stops_the_fill_nor_is_in_the_diff`, set
+  `crlf.txt`'s mtime 2 s earlier after the checkout, with a comment on why (D12). Verified by forcing the racy case
+  rather than with a 200-round hunt: with `.git/index` made newer than the file after the checkout (the later tick),
+  main's test fails every time with #351's `assert () == ('crlf.txt',)`, and the fixed test passes. Then the force
+  was removed. The test still fails when the capture diffs against HEAD instead of the fill's baseline (a local patch,
+  then reverted). Cloning the file instead of checking it out doesn't fail it, rightly: the capture diffs against the
+  fill's own baseline.
 
 ## 8. Integration
 

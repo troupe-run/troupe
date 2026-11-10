@@ -492,16 +492,26 @@ def test_a_bracketed_endpoint_that_isnt_an_address_is_unreachable_not_a_crash(
     assert "isn't an address" in data["problem"]
 
 
+AFTER_DEADLINE = 6.0
+"""Seconds past the preflight deadline for the runner to refuse and the test to read it. Timed from
+the first preflight request, not from starting the runner, so a slow start doesn't count (#354).
+It must stay under the 8 s a second deadline would add (the version's delay), or the test could no
+longer tell one shared deadline from two."""
+
+
 def test_both_preflight_requests_share_one_deadline(session: Session) -> None:
     # The version comes late, then the model never: with a limit for each request the refusal
     # would take nearly twice the limit; with one deadline for both it takes the limit.
-    slow = Settings(version_delay=PREFLIGHT_TIMEOUT_SECONDS * 0.8, silent_show=True)
+    late = PREFLIGHT_TIMEOUT_SECONDS * 0.8
+    assert late > AFTER_DEADLINE  # else two deadlines would pass too
+    slow = Settings(version_delay=late, silent_show=True)
     with serving(settings=slow) as fake:
-        started = time.monotonic()
         data = _error(session.start(**_run(fake)))
-        took = time.monotonic() - started
+        refused = time.monotonic()
+        first = min(request.at for request in fake.requests)
     assert data["code"] == "ollama.unreachable"
-    assert took < PREFLIGHT_TIMEOUT_SECONDS + MARGIN
+    took = refused - first
+    assert took < PREFLIGHT_TIMEOUT_SECONDS + AFTER_DEADLINE, f"refused {took:.1f}s after preflight"
 
 
 def test_a_protocol_version_of_false_isnt_version_0(session: Session) -> None:
