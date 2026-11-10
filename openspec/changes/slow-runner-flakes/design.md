@@ -76,8 +76,10 @@ The OpenAI fake's `Pause` slept with `time.sleep`, which uses a precise timer, w
 `time.monotonic()`. On Windows with Python 3.12 that clock ticks every 15.625 ms (`GetTickCount64`), so a 0.3 s sleep
 read as 19 ticks: 0.296875 s, the "0.297" #352 saw. The pause now waits until a `time.monotonic()` deadline, as the
 Ollama fake's hold already does. Then it lasts at least its length on that clock, however coarse the clock is. A test
-replaces `time.monotonic` with a 15.625 ms clock and times the fake's pause alone. main's pause fails it in most
-runs, and the new one can't fail it. That gives the evidence on every OS, not only on the Windows 3.12 leg.
+replaces `time.monotonic` with a 15.625 ms clock and times the fake's `pause()` alone, since the HTTP around it
+hides a short pause. main's pause fails it in most runs, and the new one can't fail it. A second test sends a
+`Pause` through a real `FakeEndpoint` and checks the stream calls `pause()` with its length, so a stream that goes
+back to a bare sleep fails it. That gives the evidence on every OS, not only on the Windows 3.12 leg.
 
 The other lower-bound asserts (`test_ollama_fake.py:52`, `test_platform_watching.py:132, 292`,
 `test_run_queries.py:382`, `test_claude_code_processes.py:72`) are left as they are. Each times a wait that ends at a
