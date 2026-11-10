@@ -533,6 +533,14 @@ def test_a_malformed_runtime_is_refused_naming_it_with_an_actor_in_config(
         assert error.details["path"] == path
 
 
+def test_a_runtime_with_problems_of_its_own_is_never_offered_as_one_that_fits() -> None:
+    config = _with({"gpu-box": {"model": "m"}}, runner="ollama", options={})
+    found = problems(config)
+    [actor] = [p for p in found if p.path == ("actors", "tester", "runtime")]
+    assert "gpu-box" not in actor.rule + actor.fix
+    assert "(these fit it: ollama)" in actor.rule
+
+
 @pytest.mark.parametrize("runtime", ["lm-studio", "ollama", "openai"])
 def test_every_runtime_fits_a_runner_that_takes_any(runtime: str) -> None:
     # Spec: runtimes, "Every runtime fits a runner that takes any".

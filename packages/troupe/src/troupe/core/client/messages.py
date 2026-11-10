@@ -421,6 +421,12 @@ class CredentialName(Message):
     value: str | None = json_field("value", default=None, min_length=1)
     named_by: str | None = json_field("namedBy", default=None, min_length=1)
 
+    def _check(self, where: str) -> None:
+        if (self.value is None) == (self.named_by is None):
+            raise fail(where, "holds exactly one of value and namedBy")
+        if self.named_by is not None and self.source != "env":
+            raise fail(where, "namedBy comes from the environment: its source is env")
+
 
 @dataclass(frozen=True)
 class ResolvedCredential(Message):
