@@ -27,10 +27,12 @@ before it starts and run one at a time. Every reproduction records its assertion
 
 ## 2. Hunt and campaign stop bounds, and the stall test (#358, #364, #350)
 
-- [ ] 2.1 Run `test_an_interrupted_campaign_stops_its_hunt_runs_no_more_and_reports` under load (announced), keeping
-  the campaign's and the hunt's output, to see why its stop can take over 60 s. Record the finding on #358. If the
-  hunt's stop is slow in a way it shouldn't be, fix that in `flake_hunt.py` or `flake_campaign.py`, with a test that
-  fails before the fix.
+- [x] 2.1 Find why the campaign test's stop took over 60 s on CI. The failing job's log shows the hunt stopped at
+  once and printed its summary, and the *campaign* then didn't exit within 60 s. Under load (`--workers 2 --load 4`,
+  16 rounds) it didn't reproduce, and the cause isn't known: say so on #358. Make the next failure show it. The test
+  sends the campaign's group `SIGABRT` with `PYTHONFAULTHANDLER=1` before giving up, so every thread's stack is
+  dumped (checked with a campaign made to hang after its hunt: the dump names the line). The campaign flushes its
+  closing lines. Whether the PR closes #358 is the owner's call.
 - [x] 2.2 In the campaign test, wait `flake_campaign.STOP_WAIT_SECONDS + STOP_MARGIN` after the interrupt, and name
   the 300 s start wait (D9). Verify it passes, and that it still fails when the hunt ignores the interrupt: patch the
   hunt's interrupt handler locally to do nothing, check `summary is not None` fails, then revert.
@@ -41,12 +43,12 @@ before it starts and run one at a time. Every reproduction records its assertion
   on its last assert, because the round's grandchild is still running. Then reverted. Patching out only the interrupt
   path's `stop_all()`, as first planned, doesn't fail it: the interrupted `join` leaves the worker looking finished, so
   the hunt doesn't wait, and `finally`'s `stop_all()` stops the round. The test's comment says what each check covers.
-- [ ] 2.4 Reproduce #350 with `flake_hunt.py --load` on
-  `test_a_test_stuck_past_the_stall_limit_has_its_stack_in_the_hung_rounds_output` (announced), and record the
-  failing assertion on #350. If it's the round's start that runs out the timeout, set `--round-timeout` to
-  `STALL + ROUND_START_ALLOWANCE`, with the reason in its docstring, and make the assertions print the record's
-  status and output tail (D10). Otherwise revisit D10 from what the run showed. Verify the same load run then passes
-  every round.
+- [x] 2.4 Reproduce #350 and record the failing assertion on #350. Under load (`--workers 2 --load 4`, 30 rounds,
+  load average 16–50) it didn't fail. #350 failed at about 224, so it was reproduced deterministically instead: a
+  stuck test whose module sleeps 7 s while collected makes main's test fail every time with
+  `assert 'Timeout (0:00:02)!' in ''`. The round's 8 s ran out before the stuck test ran. Set `--round-timeout` to
+  `STALL + ROUND_START_ALLOWANCE` (2 + 20 s), with the reason in its docstring, and make the assertions print the
+  record's status and output tail (D10). Verify it passes with the 7 s start and without it.
 
 ## 3. Run topics allow timing notices (#357)
 
@@ -79,12 +81,13 @@ before it starts and run one at a time. Every reproduction records its assertion
 
 ## 5. Ollama: the preflight deadline and the close (#354, #301, #353)
 
-- [ ] 5.1 Reproduce #354 under load (announced) and record the failing assertion on #354.
-- [ ] 5.2 Stamp `fake_ollama.Request` with its arrival time. In
+- [x] 5.1 Reproduce #354 and record the failing assertion on #354. With the runner's start delayed 6 s, main's
+  test fails every time with `assert 16.13 < (10.0 + 5.0)`, the timing check.
+- [x] 5.2 Stamp `fake_ollama.Request` with its arrival time. In
   `test_both_preflight_requests_share_one_deadline`, measure from the first preflight request to the refusal, with
-  `AFTER_DEADLINE` (6 s, its docstring saying why it must stay under 8 s) (D5). Verify the same load run passes. Then
-  check locally that two separate deadlines fail it: make the runner restart the deadline for the second request,
-  check the test fails, then revert.
+  `AFTER_DEADLINE` (6 s, its docstring saying why it must stay under 8 s) (D5). Verify the fixed test passes with the
+  same 6 s slow start, and under `--workers 2 --load 4` (12 rounds). Then check that two separate deadlines fail it:
+  with the runner giving the model request its own deadline, it fails with `refused 18.0s after preflight`. Reverted.
 - [x] 5.3 Instrument the fake's `_hold` and `_stream` (D6), and loop
   `test_cancel_while_an_answer_streams_closes_it_and_nothing_follows_the_answer` under load on macOS. 540 rounds
   (Python 3.12 and 3.15, `--workers 2 --load 4`) passed, and every close was seen within 14 ms. The traces showed
@@ -107,10 +110,13 @@ before it starts and run one at a time. Every reproduction records its assertion
 - [x] 6.1 In `test_claude_runs_in_the_workspace_with_the_fixed_flags_and_the_direction_on_stdin`, use a direction
   holding a fresh `direction-<uuid4 hex>` marker, and check that no argument holds it (D11). Verify it passes, and
   that a local change appending the direction to argv fails it, then revert.
-- [ ] 6.2 Reproduce #355 under load (announced) and record the failing assertion on #355.
-- [ ] 6.3 If 6.2 shows a run limit firing, add `REAL_RUNNER_LIMITS` to `packages/troupe/tests/runtesting.py`, with a
-  docstring saying it bounds a hang, not speed. Use it in the perform tests that start a real runner process and
-  aren't testing limits (D13). Otherwise fix the cause 6.2 showed. Verify the same load run passes.
+- [x] 6.2 Reproduce #355. Under load (`--workers 2 --load 4`, 20 rounds) it didn't fail. With the runner's start
+  delayed 11 s, main's test fails every time with `assert 'could-not-start' == 'succeeded'`: the harness's 10 s start
+  limit. #355's own assertion wasn't kept, so record on #355 that this is the mechanism shown, not certainly the
+  one that fired.
+- [x] 6.3 Add `REAL_RUNNER_LIMITS` to `packages/troupe/tests/runtesting.py`, with a docstring saying it bounds a
+  hang, not speed, and use it in `test_perform_claude_code.py`, that file's only test (D13). Verify it passes with
+  the 11 s slow start and without it.
 
 ## 7. Git: compare the CRLF file's content every time (#351)
 

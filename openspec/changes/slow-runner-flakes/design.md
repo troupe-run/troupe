@@ -7,7 +7,7 @@ See proposal.md for why. What reading the twelve tests showed:
 | Issue | Test | What bounds it today | Cause |
 |---|---|---|---|
 | #357 | `test_run_workspaces.py::test_a_worktree_made_that_cant_be_recorded_…` | topics `== ["Run.Started", "Run.Ended"]`, versions `== [1, 2]` | Confirmed by reading: `WORKSPACE_ANNOUNCE_AFTER_SECONDS` is 2.0, so a worktree step over 2 s raises `workspace.waiting`, which #336 records as `Run.Noticed`. Lines 258 and 311 of the same file have the same shape. |
-| #358 | `test_flake_campaign.py::test_an_interrupted_campaign_…` | `process.wait(60)` after the interrupt | Partly confirmed. The 60 s is the wait *after* the interrupt, not the setup, which is allowed 300 s. It equals the campaign's own `STOP_WAIT_SECONDS` (60.0), so whenever the hunt took longer than 60 s to stop, the test gave up at the moment the campaign itself would have. Why the hunt took that long on that runner isn't known. |
+| #358 | `test_flake_campaign.py::test_an_interrupted_campaign_…` | `process.wait(60)` after the interrupt | Partly known. The 60 s equals the campaign's own `STOP_WAIT_SECONDS`. The failing log shows the hunt stopped at once and the *campaign* then didn't exit. Why isn't known, and it didn't reproduce under load. D9 bounds the test by the campaign's limit and makes an overrun dump every thread's stack. |
 | #364 | `test_flake_hunt.py::test_an_interrupt_stops_…` | `hunt.wait(10)` and `stopped_in < 5` after the interrupt | Confirmed: on giving up, `finally: hunt.kill()` kills only the hunt. Load runs as `Tree`s in their own sessions on POSIX, so a killed hunt leaves `while True: pass` running. The hunt's own stop bound is `STOP_TIMEOUT_SECONDS` (30.0). |
 | #350 | `test_flake_hunt.py::test_a_test_stuck_past_the_stall_limit_…` | `--stall 2 --round-timeout 8` | Not reproduced. The likely cause is the child pytest's start eating the 8 s. |
 | #359 | `test_openai_runner.py`, the two stop tests | `time.sleep(0.3)` then `len(fake.requests) == 1` | Confirmed by reading: a fixed sleep. |
@@ -167,9 +167,11 @@ would also cover rounds, but it adds a process layer and exit-code pass-through 
   stops its rounds still passes however slow the machine is. One that doesn't still fails.
 - **Startup waits** (`w0r0 passed`, the pid file) get a named `HUNT_START_WITHIN`, at their current size.
 
-Before choosing the margin, the campaign test is run under load with the hunt's output kept, to see why its stop
-took over 60 s on CI. If the hunt's own stop is slow in a way it shouldn't be, that's a hunt defect, and it's fixed
-in this change rather than hidden by the margin.
+The failing CI log showed the hunt stopping at once and the campaign then not exiting. Run under load, it didn't
+reproduce, and the cause isn't known. So if the campaign still overruns, the test sends its process group `SIGABRT`
+with `PYTHONFAULTHANDLER=1` before giving up, and every thread's stack, the campaign's and its hunt's, lands in the
+captured output. The campaign also flushes its closing lines. The next failure then names its cause, not just its
+timeout.
 
 ### D10. The stall test's round timeout allows for a round starting under load (#350)
 

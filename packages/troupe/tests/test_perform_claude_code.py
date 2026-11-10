@@ -6,7 +6,7 @@ from pathlib import Path
 from uuid import UUID
 
 import claude_stand_in
-from runtesting import Harness, request, theatre
+from runtesting import REAL_RUNNER_LIMITS, Harness, request, theatre
 from troupe.core.runs.aggregate import REPORTED
 
 FAKE_SECRET = "s3cret"  # noqa: S105 - a stand-in value, checked for where it never arrives
@@ -20,7 +20,7 @@ def test_a_claude_code_actor_succeeds_and_records_the_runner_and_the_engine(
     claude_stand_in.install(
         bin_dir, fixture=claude_stand_in.fixture("success-with-tools"), record=str(record)
     )
-    harness = Harness(theatre(tmp_path / "theatre"))
+    harness = Harness(theatre(tmp_path / "theatre"), limits=REAL_RUNNER_LIMITS)
     harness.env = {**harness.env, "PATH": str(bin_dir), "AWS_SECRET_ACCESS_KEY": FAKE_SECRET}
     run = harness.perform(request({}, runner="claude-code")).run
     assert run.outcome == "succeeded"
