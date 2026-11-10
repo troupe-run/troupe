@@ -60,6 +60,11 @@ class Endpoint:
         return self.url.rstrip("/") + RESPONSES_PATH
 
     @property
+    def has_path(self) -> bool:
+        """Whether the URL has a path below its host and port: a lone / isn't one."""
+        return urllib.parse.urlsplit(self.url).path.strip("/") != ""
+
+    @property
     def is_loopback(self) -> bool:
         """Whether the host is this machine: localhost, or a loopback address."""
         return is_loopback(self.host)

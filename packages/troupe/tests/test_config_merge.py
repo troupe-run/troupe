@@ -294,6 +294,30 @@ def test_an_expected_file_one_branch_adds_and_another_branch_undeclares_is_a_con
     assert len(conflict.changes) == 2
 
 
+# Requirement: An actor's runtime fits its runner (spec: runtimes): a merge that makes it unfit
+
+
+def test_a_merge_that_gives_an_ollama_actors_runtime_a_credential_is_a_conflict(repo: Repo) -> None:
+    on(repo, "main", [(["runtimes", "gpu-box"], {"endpoint": "http://10.0.0.5:11434"})])
+    repo.git("switch", "-q", "feature")
+    repo.git("merge", "-q", "--no-edit", "main")
+    on(repo, "main", [(["runtimes", "gpu-box", "credential", "env"], "MY_KEY")])
+    on(
+        repo,
+        "feature",
+        [
+            (["actors", "tester", "runner"], "ollama"),
+            (["actors", "tester", "options"], {}),
+            (["actors", "tester", "runtime"], "gpu-box"),
+        ],
+    )
+    merged = merged_feature(repo)
+    [conflict] = merged.conflicts
+    assert conflict.paths == (tuple(TESTER_PATH),)
+    assert conflict.rule is not None
+    assert "sends no credential" in conflict.rule
+
+
 # Requirement: Config's kinds are actors and runtimes: a merge that removes a runtime an actor uses
 
 

@@ -22,7 +22,7 @@ from typing import Any
 
 import jsonschema
 
-from troupe.core import defaults, interim, schemas
+from troupe.core import defaults, interim, runtimes, schemas
 from troupe.core.config_paths import shown
 from troupe.core.errors import TroupeError
 from troupe_plugin_sdk.effects import Effects, PatternError, pattern_regex
@@ -94,17 +94,27 @@ def problems(config: Mapping[str, Any], touched: Collection[str] = ()) -> list[P
                 found += runtime_problems(name, runtime)
     actors = config.get(ACTORS)
     if isinstance(actors, Mapping):
-        known = runtime_names(config)
+        known = runtime_shapes(config)
         for name, actor in sorted(actors.items()):
             found += actor_problems(name, actor, known, touched=name in touched)
     return sorted(found, key=lambda problem: problem.path)
 
 
-def runtime_names(config: Mapping[str, Any]) -> list[str]:
-    """Every runtime an actor can name: troupe's built-in ones and those in config, sorted."""
+Shapes = Mapping[str, "runtimes.Resolved | None"]
+"""Every runtime an actor can name, each as config makes it, or None when it has problems of its
+own and so isn't judged for fit (runtime-checks design D3)."""
+
+
+def runtime_shapes(config: Mapping[str, Any]) -> dict[str, "runtimes.Resolved | None"]:
+    """Every runtime an actor can name, built-in or in config, each from its built-in and theatre
+    values with no environment, or None when it breaks a rule of its own (runtime-checks design
+    D3)."""
+    shapes = runtimes.as_configured(config)
     node = config.get(RUNTIMES)
-    configured = set(node) if isinstance(node, Mapping) else set()
-    return sorted(set(defaults.RUNTIMES) | configured)
+    for name, runtime in node.items() if isinstance(node, Mapping) else []:
+        if runtime_problems(name, runtime):
+            shapes[name] = None
+    return shapes
 
 
 def runtime_problems(name: str, runtime: object) -> list[Problem]:
@@ -142,13 +152,14 @@ def runtime_problems(name: str, runtime: object) -> list[Problem]:
 
 
 def actor_problems(
-    name: str, actor: object, runtimes: Sequence[str] | None = None, *, touched: bool = True
+    name: str, actor: object, shapes: Shapes | None = None, *, touched: bool = True
 ) -> list[Problem]:
-    """Every way the actor ``name`` breaks a rule. ``runtimes`` are the runtimes it can name:
-    troupe's built-in ones when it's None. On a runner troupe knows but isn't installed, its
-    options can't be checked: when ``touched`` (the change sets or unsets something under it, or
-    it's about to be performed) that's refused with runner.not-installed; otherwise they're left
-    for when it's next changed or performed where its runner is installed (runner-extras D7)."""
+    """Every way the actor ``name`` breaks a rule. ``shapes`` are the runtimes it can name, as
+    ``runtime_shapes`` gives them: troupe's built-in ones when it's None. On a runner troupe knows
+    but isn't installed, its options can't be checked: when ``touched`` (the change sets or unsets
+    something under it, or it's about to be performed) that's refused with runner.not-installed;
+    otherwise they're left for when it's next changed or performed where its runner is installed
+    (runner-extras D7). Its runtime's fit is checked either way: it needs only the runner table."""
     base = (ACTORS, name)
     if not ACTOR_NAME.match(name):
         return [
@@ -161,6 +172,7 @@ def actor_problems(
         ]
     if not isinstance(actor, Mapping):
         return [Problem(base, "an actor is a group of values, not a value", "Unset it.")]
+    known = shapes if shapes is not None else runtime_shapes({})
     found: list[Problem] = []
     for key in WRITTEN_BY_TROUPE:
         if key in actor:
@@ -191,8 +203,7 @@ def actor_problems(
                 ) from None
     elif isinstance(runner, str) and runner in interim.RUNNERS:
         options = actor.get("options", {})
-        known_runtimes = list(runtimes) if runtimes is not None else sorted(defaults.RUNTIMES)
-        moved = _moved_problems(base, actor, runner, known_runtimes)
+        moved = _moved_problems(base, actor, runner, sorted(known))
         moved_paths = {problem.path for problem in moved}
         found += moved
         found += [
@@ -203,18 +214,17 @@ def actor_problems(
             if problem.path not in moved_paths
         ]
     elif isinstance(runner, str) and ACTOR_NAME.match(runner):
-        known = ", ".join(sorted(interim.RUNNERS))
+        runners = ", ".join(sorted(interim.RUNNERS))
         found.append(
             Problem(
                 (*base, "runner"),
-                f"troupe doesn't know a runner named {runner!r} (it knows: {known})",
-                f"Set it to one of: {known}.",
+                f"troupe doesn't know a runner named {runner!r} (it knows: {runners})",
+                f"Set it to one of: {runners}.",
             )
         )
     if not schema_problems and not moved:
         # A moved option's fix names the runtime too, so the actor gets one rule with one fix.
-        known_runtimes = list(runtimes) if runtimes is not None else sorted(defaults.RUNTIMES)
-        found += _runtime_problems(base, actor, known_runtimes)
+        found += _runtime_problems(base, actor, known)
     return sorted(found, key=lambda problem: problem.path)
 
 
@@ -288,21 +298,43 @@ def _move_fix(
 
 
 def _runtime_problems(
-    base: tuple[str, ...], actor: Mapping[str, Any], known: list[str]
+    base: tuple[str, ...], actor: Mapping[str, Any], known: Shapes
 ) -> list[Problem]:
     """Whether the actor's runtime exists and fits its runner, and its model has a runtime (spec:
-    runtimes, "An actor names its runtime and may set its model")."""
+    runtimes, "An actor names its runtime and may set its model", "An actor's runtime fits its
+    runner"). A runtime it could name is listed only when it fits its runner."""
     at = (*base, "runtime")
     runtime = actor.get("runtime")
     runner = actor.get("runner")
-    takes = interim.RUNNERS[runner].runtime if runner in interim.RUNNERS else None
+    entry = interim.RUNNERS.get(runner) if isinstance(runner, str) else None
+    takes = entry.runtime if entry is not None else None
+    fit = entry.fit if entry is not None else interim.RuntimeFit()
+    fits = [
+        name
+        for name, shape in sorted(known.items())
+        if shape is None
+        or not runtimes.unfit(fit, shape.endpoint.value, shape.credential is not None)
+    ]
+    define = (
+        f"troupe config set {shown((RUNTIMES, '<name>', 'endpoint'))}=<url>, with "
+        f"{runtimes.fitting(fit)}"
+    )
     if runtime is None:
         if takes == "required":
+            if not fits:
+                return [
+                    Problem(
+                        at,
+                        f"the {runner} runner needs a runtime, and no runtime there is fits the "
+                        f"{runner} runner",
+                        f"Define one that fits with {define}, then set {shown(at)} to it.",
+                    )
+                ]
             return [
                 Problem(
                     at,
-                    f"the {runner} runner needs a runtime (there are: {', '.join(known)})",
-                    f"Set {shown(at)} to one of: {', '.join(known)}.",
+                    f"the {runner} runner needs a runtime (these fit it: {', '.join(fits)})",
+                    f"Set {shown(at)} to one of: {', '.join(fits)}.",
                 )
             ]
         if "model" in actor:
@@ -317,16 +349,38 @@ def _runtime_problems(
     if takes == "none":
         return [Problem(at, f"the {runner} runner takes no runtime", f"Unset {shown(at)}.")]
     if runtime not in known:
+        there_are = (
+            "there are"
+            if fit == interim.RuntimeFit()
+            else f"there are, that fit the {runner} runner"
+        )
+        listed = ", ".join(fits) or "none"
         return [
             Problem(
                 at,
-                f"there's no runtime named {runtime!r} (there are: {', '.join(known)})",
-                f"Set it to one of: {', '.join(known)}, or define it with troupe config set "
-                f"{shown((RUNTIMES, str(runtime), 'endpoint'))}=<url>.",
+                f"there's no runtime named {runtime!r} ({there_are}: {listed})",
+                (
+                    f"Set it to one of: {', '.join(fits)}, or define it with "
+                    if fits
+                    else "Define it with "
+                )
+                + f"troupe config set {shown((RUNTIMES, str(runtime), 'endpoint'))}=<url>.",
                 related=((RUNTIMES, str(runtime)),),
             )
         ]
-    return []
+    shape = known[runtime]
+    if shape is None:
+        return []  # the runtime's own problems are reported
+    reasons = runtimes.unfit(fit, shape.endpoint.value, shape.credential is not None)
+    if not reasons:
+        return []
+    why = "; and ".join(runtimes.unfit_words(str(runner), runtime, reason) for reason in reasons)
+    fix = (
+        f"Set {shown(at)} to one that fits: {', '.join(fits)}, or define one with {define}."
+        if fits
+        else f"Define one that fits with {define}, then set {shown(at)} to it."
+    )
+    return [Problem(at, why, fix, related=((RUNTIMES, runtime),))]
 
 
 def _schema_problems(
@@ -469,7 +523,7 @@ def check_actor(name: str, config: Mapping[str, Any]) -> None:
     """Refuse the actor ``name`` in ``config`` with ``config.invalid`` when it breaks any rule,
     naming the first: what perform checks, so an actor recorded before a rule was tightened can't
     run (spec: effects, "Every expected file is covered by the declaration")."""
-    _refuse(actor_problems(name, config[ACTORS][name], runtime_names(config)))
+    _refuse(actor_problems(name, config[ACTORS][name], runtime_shapes(config)))
 
 
 def _refuse(found: list[Problem]) -> None:

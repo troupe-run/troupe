@@ -55,28 +55,35 @@ fail (the count goes in the task), and `uv run scripts/check.py` passes before e
 
 ## 4. Runtime fit in config (#334, design D1–D3, D9)
 
-- [ ] 4.1 Add the config tests from the runtimes spec's "An actor's runtime fits its runner" and the modified "An
+- [x] 4.1 Add the config tests from the runtimes spec's "An actor's runtime fits its runner" and the modified "An
   actor names its runtime" scenarios (each built-in pair, a config-defined runtime, a runtime change making its actor
-  unfit, a merge doing the same, "no runtime fits"); see them fail.
-- [ ] 4.2 Add `RuntimeFit` and `Runner.fit` to `core/interim.py` (`ollama`: no credential, no path; `openai`: path
+  unfit, a merge doing the same, "no runtime fits"); see them fail. (`test_config_kinds.py` and `test_config_merge.py`: 8
+  failed on main.)
+- [x] 4.2 Add `RuntimeFit` and `Runner.fit` to `core/interim.py` (`ollama`: no credential, no path; `openai`: path
   required), following #338's field style, and `runtimes.unfit()` in `core/runtimes.py`, with unit tests of `unfit`
-  over each reason, a trailing `/`, a port and an IPv6 host.
-- [ ] 4.3 Pass `actor_problems` each runtime's built-in and theatre fields, judge fit in `_runtime_problems` with the
+  over each reason, a trailing `/`, a port and an IPv6 host. (`test_runtimes.py`: 8 passed.)
+- [x] 4.3 Pass `actor_problems` each runtime's built-in and theatre fields, judge fit in `_runtime_problems` with the
   runtime's path in `related`, skip a runtime with problems of its own, and list only fitting runtimes in the "needs
-  a runtime" and "no such runtime" problems; verify 4.1 passes and mypy --strict is clean.
-- [ ] 4.4 Add the differential test (D9): over the built-ins and generated runtimes, config's verdict equals
+  a runtime" and "no such runtime" problems; verify 4.1 passes and mypy --strict is clean. (237 passed across the
+  config and runtimes suites. `runtime_names` lost its last caller and was removed.)
+- [x] 4.4 Add the differential test (D9): over the built-ins and generated runtimes, config's verdict equals
   `troupe_runner_ollama`'s and `troupe_runner_openai`'s own `checked`; place it where `scripts/check-paths.toml`
   reaches core and both plugins, and confirm with `scripts/check_paths_reach.py`. It fails for `openai` until 5.2.
-- [ ] 4.5 Document a runner's runtime fit in `contributing/runners.md` (a short section of its own: the guide has no
+  (`packages/troupe/tests/test_runtime_fit.py`; core tests already reach both plugins. It failed for `openai` on
+  `http://127.0.0.1` until 5.2, then passed.)
+- [x] 4.5 Document a runner's runtime fit in `contributing/runners.md` (a short section of its own: the guide has no
   list of the table's fields, and #338's `in_extra` appears only in its extras steps), and in
-  `docs/stagecraft/runtimes.md` which built-in runtimes fit which runner; verify the docs check passes.
+  `docs/stagecraft/runtimes.md` which built-in runtimes fit which runner; verify the docs check passes. (184
+  passed.)
 
 ## 5. The OpenAI runner needs an endpoint with a path (#334, design D5)
 
-- [ ] 5.1 Add OpenAI runner tests from the openai-runner spec's "The runtime's endpoint has a path" (root, lone `/`,
-  `/v1` reaching `/v1/responses`); see the first two fail.
-- [ ] 5.2 Refuse a pathless endpoint in `Runtime.checked` with `openai.no-runtime`, `where: runtime.endpoint`; verify
-  5.1 and 4.4 pass, and update the runner's README and fixtures that use a pathless endpoint.
+- [x] 5.1 Add OpenAI runner tests from the openai-runner spec's "The runtime's endpoint has a path" (root, lone `/`,
+  `/v1` reaching `/v1/responses`); see the first two fail. (3 cases failed, plus a published-code check given
+  a pathless endpoint.)
+- [x] 5.2 Refuse a pathless endpoint in `Runtime.checked` with `openai.no-runtime`, `where: runtime.endpoint`; verify
+  5.1 and 4.4 pass, and update the runner's README and fixtures that use a pathless endpoint. (343 passed;
+  no fixture used one; the README says so and its error table names it.)
 
 ## 6. Runtime fit at perform (#334, design D4)
 

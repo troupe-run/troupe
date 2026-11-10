@@ -53,10 +53,31 @@ def test_an_unusable_endpoint_or_no_model_is_refused_naming_where(
     assert raised.value.details == {"where": where}
 
 
+# Requirement: The runtime's endpoint has a path (runtime-checks design D5)
+
+
+@pytest.mark.parametrize(
+    "endpoint", ["http://127.0.0.1:11434", "https://example.com/", "http://[::1]:8000"]
+)
+def test_an_endpoint_with_no_path_is_refused_saying_it_needs_one(endpoint: str) -> None:
+    with pytest.raises(RuntimeRefusedError) as raised:
+        Runtime.checked(endpoint, "m", None)
+    assert raised.value.code == "openai.no-runtime"
+    assert raised.value.details == {"where": "runtime.endpoint"}
+    assert "path" in raised.value.problem
+    assert "/v1" in raised.value.problem + raised.value.fix
+
+
+def test_an_endpoint_with_a_path_has_its_requests_go_below_it() -> None:
+    runtime = Runtime.checked("http://127.0.0.1:11434/v1", "m", None)
+    assert runtime.endpoint.responses_url == "http://127.0.0.1:11434/v1/responses"
+
+
 @pytest.mark.parametrize(
     "runtime",
     [
         ("http://models.example.com/v1", "m", KEY),
+        ("http://127.0.0.1:11434", "m", None),
         ("ftp://x/v1", "m", None),
         ("https://x/v1", "m", KEY + "\r"),
     ],

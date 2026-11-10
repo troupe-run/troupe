@@ -47,8 +47,8 @@ class Runtime:
     def checked(
         cls, endpoint: str, model: str, credential: str | None, price: Price | None = None
     ) -> "Runtime":
-        """A Runtime from its parts, refused when the endpoint isn't a base http or https URL, the
-        model is empty, or a credential would go in the clear to another machine."""
+        """A Runtime from its parts, refused when the endpoint isn't a base http or https URL with a
+        path, the model is empty, or a credential would go in the clear to another machine."""
         try:
             parsed = parse_endpoint(endpoint)
         except EndpointError as error:
@@ -58,6 +58,19 @@ class Runtime:
                 "Give the runtime an endpoint such as https://api.openai.com/v1.",
                 {"where": "runtime.endpoint"},
             ) from None
+        if not parsed.has_path:
+            # An OpenAI-style service serves its API under a path, such as /v1; at a server's root
+            # is often another API, such as Ollama's own (runtime-checks design D5).
+            raise RuntimeRefusedError(
+                "openai.no-runtime",
+                f"The runtime's endpoint, {endpoint}, has no path, but an OpenAI-style service "
+                "serves its API under one, such as /v1: the runner's requests go to "
+                "<endpoint>/responses.",
+                "Give the runtime the endpoint with its API's path, such as "
+                "http://127.0.0.1:11434/v1 for Ollama's OpenAI-style API, or "
+                "https://api.openai.com/v1.",
+                {"where": "runtime.endpoint"},
+            )
         if not model:
             raise RuntimeRefusedError(
                 "openai.no-runtime",

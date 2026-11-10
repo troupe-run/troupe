@@ -10,7 +10,7 @@ from hypothesis import example, given
 from hypothesis import strategies as st
 
 from protocol_schemas import PROTOCOL_BASE, validator_for
-from troupe.core import defaults, runtimes
+from troupe.core import defaults, interim, runtimes
 from troupe.core.errors import TroupeError
 from troupe.core.runtimes import Sourced, for_run, resolve
 from troupe_runner_ollama import runtime as ollama_runtime
@@ -555,3 +555,42 @@ def test_the_ollama_runners_variable_names_are_cores(name: str, field: str) -> N
 @given(st.from_regex(r"\A[a-z][a-z0-9-]{0,63}\Z"))
 def test_the_ollama_runners_endpoint_variable_is_cores_for_any_runtime_name(name: str) -> None:
     assert ollama_runtime.env_name(name, "endpoint") == runtimes.env_name(name, "endpoint")
+
+
+# Requirement: An actor's runtime fits its runner (runtime-checks design D1, D2)
+
+ROOT_ONLY = interim.RuntimeFit(credential=False, path="none")
+PATHED = interim.RuntimeFit(path="required")
+
+
+@pytest.mark.parametrize(
+    ("endpoint", "path"),
+    [
+        ("http://127.0.0.1:11434", False),
+        ("http://127.0.0.1:11434/", False),
+        ("http://[::1]:11434", False),
+        ("http://[::1]:11434/v1", True),
+        ("https://example.com:8443/v1/", True),
+        ("https://example.com/api/v1", True),
+    ],
+)
+def test_a_lone_slash_isnt_a_path_and_anything_after_the_port_is(endpoint: str, path: bool) -> None:
+    assert runtimes.has_path(endpoint) is path
+
+
+def test_each_reason_a_runtime_doesnt_fit() -> None:
+    assert runtimes.unfit(ROOT_ONLY, "http://h:1", has_credential=True) == ["credential"]
+    assert runtimes.unfit(ROOT_ONLY, "http://h:1/v1", has_credential=False) == ["endpoint-path"]
+    assert runtimes.unfit(ROOT_ONLY, "http://h:1/v1", has_credential=True) == [
+        "credential",
+        "endpoint-path",
+    ]
+    assert runtimes.unfit(PATHED, "http://h:1", has_credential=True) == ["endpoint-no-path"]
+    assert runtimes.unfit(PATHED, "http://h:1/v1", has_credential=True) == []
+    assert runtimes.unfit(interim.RuntimeFit(), "http://h:1", has_credential=True) == []
+
+
+def test_what_runtime_each_runner_fits() -> None:
+    assert interim.RUNNERS["ollama"].fit == ROOT_ONLY
+    assert interim.RUNNERS["openai"].fit == PATHED
+    assert interim.RUNNERS["scripted"].fit == interim.RuntimeFit()

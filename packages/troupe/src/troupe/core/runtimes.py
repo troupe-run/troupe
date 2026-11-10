@@ -30,7 +30,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
-from troupe.core import defaults
+from troupe.core import defaults, interim
 from troupe.core.config_paths import shown
 from troupe.core.errors import TroupeError
 from troupe.platform.processes import EnvironmentPolicy
@@ -260,6 +260,71 @@ def resolve(name: str, config: Mapping[str, Any], env: Mapping[str, str]) -> Res
         credential=resolved["credential_env"],
         prices=prices if isinstance(prices, Mapping) else {},
     )
+
+
+Reason = Literal["credential", "endpoint-path", "endpoint-no-path"]
+"""Why a runtime doesn't fit a runner: it has a credential the runner never sends, its endpoint has
+a path the runner can't use, or it has none where the runner needs one (runtime-checks design
+D2)."""
+
+
+def has_path(endpoint: str) -> bool:
+    """Whether ``endpoint`` has a path: anything after the host and port but a lone ``/``."""
+    return urlsplit(endpoint).path.strip("/") != ""
+
+
+def unfit(fit: interim.RuntimeFit, endpoint: str, has_credential: bool) -> list[Reason]:
+    """Why a runtime whose endpoint is ``endpoint``, with a credential or not, doesn't fit a runner
+    whose fit is ``fit``: empty when it fits. The one rule config and perform judge fit by
+    (runtime-checks design D2)."""
+    reasons: list[Reason] = []
+    if has_credential and not fit.credential:
+        reasons.append("credential")
+    if fit.path == "none" and has_path(endpoint):
+        reasons.append("endpoint-path")
+    if fit.path == "required" and not has_path(endpoint):
+        reasons.append("endpoint-no-path")
+    return reasons
+
+
+def unfit_words(runner: str, runtime: str, reason: Reason) -> str:
+    """``reason`` in words, naming the runner and the runtime."""
+    if reason == "credential":
+        return f"the {runner} runner sends no credential, and the runtime {runtime!r} has one"
+    if reason == "endpoint-path":
+        return (
+            f"the {runner} runner needs an endpoint with no path, and the runtime {runtime!r}'s "
+            "has one"
+        )
+    return (
+        f"the {runner} runner needs an endpoint with a path, such as /v1, and the runtime "
+        f"{runtime!r}'s has none"
+    )
+
+
+def fitting(fit: interim.RuntimeFit) -> str:
+    """What a runtime that fits looks like, in words, for a fix that defines one."""
+    parts = {
+        "none": "an endpoint with no path, such as http://127.0.0.1:11434",
+        "required": "an endpoint with a path, such as https://host/v1",
+        "any": "an endpoint",
+    }
+    words = parts[fit.path]
+    return words + ("" if fit.credential else " and no credential")
+
+
+def as_configured(config: Mapping[str, Any]) -> dict[str, "Resolved | None"]:
+    """Every runtime there is, each as its built-in and theatre values make it, with no
+    environment: how config judges fit, since config is shared and the environment is one
+    person's (runtime-checks design D3). None for a runtime config can't resolve, whose own
+    problems config reports."""
+    shapes: dict[str, Resolved | None] = {}
+    for name in names(config):
+        try:
+            shapes[name] = resolve(name, config, {})
+        except (RuntimeError, TroupeError):
+            shapes[name] = None
+    return shapes
 
 
 def run_model(resolved: Resolved, actor_model: str | None) -> Sourced | None:
