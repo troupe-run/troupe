@@ -82,6 +82,7 @@ def test_a_served_model_is_recorded_as_a_run_reported_event_in_its_place(tmp_pat
         "type": "served_model",
         "model": "m-2026",
     }
+    assert result.run.outcome == "succeeded"
 
 
 CONTEXT = {
