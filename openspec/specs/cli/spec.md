@@ -470,7 +470,9 @@ the profile for the platform, so that it applies to every theatre the person run
 ### Requirement: Init's audition runner is named with --runner
 `troupe init --audition --runner <runner>` SHALL define the example actor for that runner. Claude Code SHALL be the
 runner when `--runner` is absent. A runner troupe doesn't know SHALL be refused with `runner.unknown`, naming the
-runners troupe has, before anything is made. `--runner` without `--audition` SHALL be refused as a usage error.
+runners troupe has, before anything is made. A runner troupe knows but isn't installed SHALL be refused with
+`runner.not-installed`, naming its extra, before anything is made. `--runner` without `--audition` SHALL be refused as
+a usage error.
 
 #### Scenario: The scripted runner
 - **WHEN** a person runs `troupe init --audition --runner scripted`
@@ -488,6 +490,11 @@ runners troupe has, before anything is made. `--runner` without `--audition` SHA
 - **WHEN** a person runs `troupe init --audition --runner gemini`
 - **THEN** it fails with `runner.unknown`, naming `gemini`, `claude-code`, `ollama`, `openai` and `scripted`
 - **AND** no `.troupe/` is made
+
+#### Scenario: A runner that isn't installed
+- **WHEN** a person runs `troupe init --audition --runner lm-studio`, whose extra is `lm-studio`, without it installed
+- **THEN** it fails with `runner.not-installed`, naming `lm-studio` and `troupe-run[lm-studio]`
+- **AND** no `.troupe/` is made, and `--rehearse` refuses the same way
 
 #### Scenario: A runner without an audition
 - **WHEN** a person runs `troupe init --runner scripted`
@@ -564,3 +571,16 @@ notice. A run that recorded no notice SHALL show no notice line.
 #### Scenario: A run with no notices
 - **WHEN** a person runs `troupe status <run>` for a run that recorded no notice
 - **THEN** the output has no notice line
+
+### Requirement: An audition on a runner in an extra names the extra
+After an audition whose runner is installed through an extra of `troupe-run`, the perform step's notes SHALL say that
+the runner comes with `troupe-run[<extra>]`, so whoever runs the theatre elsewhere installs it. An audition on a runner
+in the base install SHALL NOT mention an extra.
+
+#### Scenario: A library-backed runner
+- **WHEN** a person with `troupe-run[lm-studio]` installed runs `troupe init --audition --runner lm-studio`
+- **THEN** the perform step's notes name `troupe-run[lm-studio]` and the install page
+
+#### Scenario: A base runner
+- **WHEN** a person runs `troupe init --audition --runner scripted`
+- **THEN** no step's notes mention an extra

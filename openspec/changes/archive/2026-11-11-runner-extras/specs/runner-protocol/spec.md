@@ -52,13 +52,14 @@ request in flight and exit within troupe's cancel grace period, whatever the lib
 
 ### Requirement: A library-backed runner's transcript holds what the library exposes
 A runner that uses a client library SHALL send, as transcript records in order, each request and each response as the
-library exposes them, serialised, rather than necessarily the bytes on the wire. Its design SHALL say what that leaves
-out compared with the wire. The record kinds are this contract's (#294) once it defines them.
+library exposes them, serialised, rather than necessarily the bytes on the wire: when offered `transcript-kinds`, a
+request with kind `sent` and a response with kind `received`. Its design SHALL say what that leaves out compared with
+the wire (decision #319).
 
 #### Scenario: A request and its response
-- **WHEN** a run makes one request through the library and gets one response
-- **THEN** its transcript holds a record of the request as the runner passed it to the library, then the response as
-  the library returned it, in order
+- **WHEN** a run offered `transcript-kinds` makes one request through the library and gets one response
+- **THEN** its transcript holds a `sent` record of the request as the runner passed it to the library, then a
+  `received` record of the response as the library returned it, in order
 
 ### Requirement: A runner's dependencies are pinned and licensed compatibly with Apache-2.0
 Every package a runner plugin depends on, directly or not, other than troupe's own, SHALL be pinned in the lock file,

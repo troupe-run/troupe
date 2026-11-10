@@ -1,12 +1,10 @@
 ## MODIFIED Requirements
 
 ### Requirement: A missing plugin's refusal fits any install
-When a plugin troupe needs isn't installed, or ships no schemas, troupe SHALL refuse, naming the plugin's package. A
-runner in troupe's table whose package isn't installed SHALL be refused with `runner.not-installed`, naming its extra
-when it has one (spec: runs); any other missing plugin, or one that ships no schemas, with `schemas.plugin-missing`.
-The fix SHALL be right however troupe was installed: install the runner's extra, or reinstall troupe, with the command
-on the install page, or, from a checkout of this repository, run `uv sync` there. It SHALL NOT say that an install
-brings every runner.
+When a plugin troupe needs isn't installed, or ships no schemas, troupe SHALL refuse, naming the plugin's package: a
+runner in troupe's table with `runner.not-installed`, naming its extra when it has one (spec: runs), and any other
+plugin with `schemas.plugin-missing`. The fix SHALL suit any install: the runner's extra or a reinstall with the install
+page's command, or `uv sync` in a checkout. It SHALL NOT say that an install brings every runner.
 
 #### Scenario: A runner that isn't installed
 - **WHEN** troupe needs the schemas of a runner in its table whose package isn't installed

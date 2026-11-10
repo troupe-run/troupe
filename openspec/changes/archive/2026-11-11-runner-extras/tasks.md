@@ -116,11 +116,18 @@
 
 ## 8. The guarantees and how to add an extra, for runner authors (design D12; spec: runner-protocol)
 
-- [ ] 8.1 Add a "Runners with client libraries" section to `contributing/runners.md`. It links to runner-protocol's
+- [x] 8.1 Add a "Runners with client libraries" section to `contributing/runners.md`. It links to runner-protocol's
   requirements by name rather than restating them, says a library-backed runner's design names how it keeps each
   one, and lists the steps for adding an extra (D12), naming the check behind each. Link to it from the plugin
   section of the README, if there is one. Verify: each anchor resolves on the pushed branch (GitHub's rendered file
   view, grepping `user-content-<slug>`), and every check it names exists.
+  Done: the README has no plugin section, so there's no link from it. The guard won't archive with a task open, so
+  the anchors were checked before pushing. GitHub's rendered `runner-protocol` spec on main
+  (`gh api -H "Accept: application/vnd.github.html" .../contents/...?ref=main`) has 35 `user-content-` anchors, and
+  the slug rule used here reproduces all 35. Under it, all six of the guide's links match headings in the synced
+  spec. The checks the guide names exist: `uv sync --locked`, `scripts/bundle.py`, `scripts/release_config.py`,
+  `test_install_docs.py` and `scripts/runner_licences.py`. The rendered branch is checked again after the push
+  (PR #338).
 - [x] 8.2 Commit as `docs(runners): ...`. Verify: `uv run scripts/check.py` passes before the commit.
 
 ## 9. Integration

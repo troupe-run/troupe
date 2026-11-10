@@ -113,7 +113,6 @@ SHALL be `null`.
 - **THEN** its summary's workspace has its path, base and whether the theatre was dirty, and no `clones`
 - **AND** the summary validates against the client protocol's run schema
 
-
 ### Requirement: A run summary names its transcript's format
 A run summary SHALL carry `transcriptFormat` exactly when it carries `transcript`, as the run's end recorded it.
 
@@ -164,7 +163,8 @@ theatre is made. The CLI SHALL reach `init` only through these messages, in proc
 ### Requirement: Init's result carries its next steps as data
 An `init` result for an audition SHALL list its next steps as data, in order: committing the theatre's directory,
 allowing the local stage when the session's policy doesn't already, and performing the actor with an example
-direction. Each surface SHALL phrase the steps for its own users.
+direction. The perform step SHALL name the `troupe-run` extra its runner comes with, when it has one. Each surface SHALL
+phrase the steps for its own users.
 
 #### Scenario: The steps as data
 - **WHEN** an `init` request with an audition succeeds in a session whose policy doesn't allow the local stage
@@ -174,6 +174,14 @@ direction. Each surface SHALL phrase the steps for its own users.
 #### Scenario: Plain init has no steps to perform
 - **WHEN** an `init` request with no audition succeeds
 - **THEN** its result lists no perform step
+
+#### Scenario: A runner in an extra
+- **WHEN** an `init` request with an audition on the `lm-studio` runner, installed through its extra, succeeds
+- **THEN** its perform step's `extra` is `lm-studio`
+
+#### Scenario: A runner in the base install
+- **WHEN** an `init` request with an audition on the `scripted` runner succeeds
+- **THEN** its perform step has no `extra`
 
 ### Requirement: A run summary carries its run's audit
 A run summary SHALL carry `audit`, exactly as the run's end recorded it, when the end recorded one. It SHALL leave
