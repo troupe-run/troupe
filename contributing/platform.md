@@ -156,7 +156,12 @@ The adapter caches the branch and HEAD, and asks git again only when one of the 
 changed: `HEAD`, the index, `logs/HEAD`, `packed-refs`, the branch's own ref and the reftable table lists. An answer
 read within `GIT_RACY_WINDOW_SECONDS` of such a change is used only once, because two git operations in one
 timestamp tick can leave a file looking unchanged. Git treats its own index the same way. When every watched file's
-timestamp is a whole second, as on FAT or HFS+, the window is `GIT_COARSE_RACY_WINDOW_SECONDS` instead.
+timestamp is a whole second, as on FAT or HFS+, the window is `GIT_COARSE_RACY_WINDOW_SECONDS` instead. Reading
+them again runs one command, `rev-parse HEAD --symbolic-full-name HEAD --abbrev-ref=loose HEAD`, once HEAD has a
+commit. `=loose` gives exactly `symbolic-ref --short`'s name: `heads/main` when a tag `main` exists, but `main` when
+only a remote ref `refs/remotes/main` does, which plain `--abbrev-ref` would shorten to `heads/main`. Before the first
+commit, the adapter reads with `symbolic-ref` and `rev-parse --verify`, as it always has: straight away when the files
+it already stats say HEAD names a loose ref that doesn't exist yet, and otherwise once that command has failed.
 
 ## Paths
 

@@ -3,6 +3,7 @@
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -238,17 +239,73 @@ def test_narrowing_the_git_policy_wider_is_environment_policy_invalid() -> None:
 # The branch token (design D4).
 
 
-def test_the_first_branch_token_runs_four_git_commands_and_none_after_while_nothing_moves(
+def test_the_first_branch_token_runs_two_git_commands_and_none_after_while_nothing_moves(
     repo: Repo,
 ) -> None:
     repo.commit_all()
     git = GitAdapter(repo.path, source=repo.env, now=past_the_racy_window)
     first = git.branch_token()
-    # One finds the watched files; three read the branch's full and short names and HEAD.
-    assert git.commands_run == 4
+    # One finds the watched files; one reads HEAD and the branch's full and short names.
+    assert git.commands_run == 2
     for _ in range(20):
         assert git.branch_token() == first
-    assert git.commands_run == 4
+    assert git.commands_run == 2
+
+
+def _reread_cost(repo: Repo, move: Callable[[], object]) -> tuple[GitAdapter, int]:
+    """How many git commands reading the branch and HEAD again costs after ``move``."""
+    git = GitAdapter(repo.path, source=repo.env, now=past_the_racy_window)
+    git.branch_token()
+    time.sleep(0.02)  # a timestamp tick, so a rewritten file can't keep its old mtime
+    move()
+    before = git.commands_run
+    git.branch_token()
+    return git, git.commands_run - before
+
+
+def test_a_reread_after_a_commit_on_a_branch_runs_one_git_command(repo: Repo) -> None:
+    repo.commit_all()
+    git, cost = _reread_cost(repo, lambda: repo.git("commit", "-q", "--allow-empty", "-m", "b"))
+    assert cost == 1
+    assert (git.branch(), git.head()) == ("main", repo.git("rev-parse", "HEAD").strip())
+
+
+def test_a_reread_after_detaching_runs_one_git_command(repo: Repo) -> None:
+    commit = repo.commit_all()
+    git, cost = _reread_cost(repo, lambda: repo.git("switch", "-q", "--detach"))
+    assert cost == 1
+    assert (git.branch(), git.head()) == (None, commit)
+
+
+def test_an_orphan_branch_reports_its_name_and_no_commit(repo: Repo) -> None:
+    repo.commit_all()
+    git, _ = _reread_cost(repo, lambda: repo.git("switch", "-q", "--orphan", "fresh"))
+    assert (git.branch(), git.head()) == ("fresh", None)
+
+
+def test_a_reread_before_the_first_commit_runs_three_git_commands_as_it_always_has(
+    repo: Repo,
+) -> None:
+    git, cost = _reread_cost(repo, lambda: (repo.write("a.txt", "a"), repo.git("add", "a.txt")))
+    assert cost == 3
+    assert (git.branch(), git.head()) == ("main", None)
+
+
+def test_an_unborn_head_in_a_repository_with_packed_refs_is_still_read_right(repo: Repo) -> None:
+    repo.commit_all()
+    repo.git("pack-refs", "--all")
+    git, _ = _reread_cost(repo, lambda: repo.git("switch", "-q", "--orphan", "fresh"))
+    assert (git.branch(), git.head()) == ("fresh", None)
+
+
+def test_a_head_git_refuses_to_read_is_vcs_failed_naming_the_command(repo: Repo) -> None:
+    repo.commit_all()
+    (repo.path / ".git" / "HEAD").write_text("ref: refs/heads/a..b\n")
+    git = GitAdapter(repo.path, source=repo.env)
+    with pytest.raises(TroupeError) as caught:
+        git.branch()
+    assert caught.value.code == "vcs.failed"
+    assert "git symbolic-ref --quiet HEAD" in caught.value.problem
 
 
 def test_reading_the_branch_and_head_again_runs_no_command_while_nothing_moves(
