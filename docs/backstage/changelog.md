@@ -41,15 +41,15 @@ changes. `troupe --version` names the protocol version that troupe carries.
 The runners are released on their own, like the other parts, and `troupe-run` ships each release.
 
 - [troupe-runner-claude-code](https://github.com/troupe-run/troupe/blob/main/plugins/runner-claude-code/CHANGELOG.md)
-- [troupe-runner-ollama](https://github.com/troupe-run/troupe/blob/main/plugins/runner-ollama/CHANGELOG.md)
-- [troupe-runner-openai](https://github.com/troupe-run/troupe/blob/main/plugins/runner-openai/CHANGELOG.md)
+- `troupe-runner-ollama`
+- `troupe-runner-openai`
 - [troupe-runner-scripted](https://github.com/troupe-run/troupe/blob/main/plugins/runner-scripted/CHANGELOG.md)
 
-The Ollama and OpenAI runners' changelogs start with their first releases.
+The Ollama and OpenAI runners' changelogs start with their first releases, and are linked here once they exist.
 
 The plugin SDK, the library the runners and the core share for the runner contract, is released on its own too. Its
-changelog starts with its first release.
+changelog starts with its first release, and is linked here once it exists.
 
-- [troupe-plugin-sdk](https://github.com/troupe-run/troupe/blob/main/packages/troupe-plugin-sdk/CHANGELOG.md)
+- `troupe-plugin-sdk`
 
 Every release is also on [GitHub's releases page](https://github.com/troupe-run/troupe/releases).
