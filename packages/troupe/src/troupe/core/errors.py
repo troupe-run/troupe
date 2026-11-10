@@ -92,6 +92,7 @@ CODES: dict[str, ExitCode] = {
     "runtime.credential-malformed": ExitCode.FAILURE,
     "runtime.credential-too-short": ExitCode.FAILURE,
     "runtime.insecure-endpoint": ExitCode.FAILURE,
+    "runtime.unfit": ExitCode.FAILURE,
     "config.not-resolvable": ExitCode.USAGE,
     "run.out-of-sequence": ExitCode.FAILURE,
     "run.recording-failed": ExitCode.FAILURE,

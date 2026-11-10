@@ -2736,6 +2736,82 @@
     {
       "properties": {
         "code": {
+          "const": "runtime.unfit"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "actor",
+            "runner",
+            "runtime",
+            "reasons",
+            "from",
+            "fits"
+          ],
+          "properties": {
+            "actor": {
+              "type": "string",
+              "minLength": 1
+            },
+            "runner": {
+              "type": "string",
+              "minLength": 1
+            },
+            "runtime": {
+              "type": "string",
+              "minLength": 1
+            },
+            "reasons": {
+              "description": "Why the runtime doesn't fit: it has a credential the runner never sends, its endpoint has a path the runner can't use, or it has none where the runner needs one.",
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "credential",
+                  "endpoint-path",
+                  "endpoint-no-path"
+                ]
+              }
+            },
+            "from": {
+              "description": "Where each value that doesn't fit came from: the TROUPE_RUNTIME_ variable, the config path, or default. Never the value.",
+              "type": "object",
+              "additionalProperties": false,
+              "minProperties": 1,
+              "properties": {
+                "credential": {
+                  "description": "Where the runtime's credential variable came from. Absent: the runtime fits on its credential.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "endpoint": {
+                  "description": "Where the runtime's endpoint came from. Absent: the runtime fits on its endpoint.",
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "fits": {
+              "description": "The runtimes that fit the runner, judged the same way, the environment applied; empty when none does.",
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
           "const": "config.not-resolvable"
         },
         "details": {

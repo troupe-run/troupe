@@ -442,8 +442,8 @@ def test_when_no_runtime_fits_the_error_says_so_and_how_to_define_one() -> None:
         pytest.param(
             "ollama",
             "lm-studio",
-            "the ollama runner needs an endpoint with no path, and the runtime 'lm-studio''s "
-            "has one",
+            "the ollama runner needs an endpoint with no path, and the runtime 'lm-studio' has "
+            "one with a path",
             "ollama",
             id="ollama on an endpoint with a path",
         ),
@@ -451,7 +451,7 @@ def test_when_no_runtime_fits_the_error_says_so_and_how_to_define_one() -> None:
             "openai",
             "ollama",
             "the openai runner needs an endpoint with a path, such as /v1, and the runtime "
-            "'ollama''s has none",
+            "'ollama' has one without",
             "lm-studio, openai",
             id="openai on an endpoint with no path",
         ),

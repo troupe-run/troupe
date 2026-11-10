@@ -161,5 +161,6 @@ Its limit, in `troupe.core.defaults`:
 | `runtime.credential-malformed` | A run's credential holds a character a request header can't carry (anything but visible ASCII), such as a line ending from a file or a letter outside ASCII. Names the runtime and the variable (or `namedBy`, as for `runtime.credential-unset`), never the value |
 | `runtime.credential-too-short` | A run's credential is shorter than `CREDENTIAL_MIN_BYTES`. Names the variable (or `namedBy`, as for `runtime.credential-unset`), never the value |
 | `runtime.insecure-endpoint` | A run would send its credential over plain HTTP to a host that isn't a loopback address |
+| `runtime.unfit` | The run's runtime, as it resolves with the person's environment, doesn't fit the actor's runner (`troupe.core.interim.RuntimeFit`). Names the reasons, where each value came from (never the value), and the runtimes that fit. Judged before the model and the credential |
 | `config.not-resolvable` | `config get --resolved` was given a path that isn't `runtimes` or `runtimes.<name>` |
 | `config.waiting` | (notice) Another troupe command is writing config files, and this one is waiting |

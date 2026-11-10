@@ -87,14 +87,17 @@ fail (the count goes in the task), and `uv run scripts/check.py` passes before e
 
 ## 6. Runtime fit at perform (#334, design D4)
 
-- [ ] 6.1 Add `runtime.unfit` to both copies of `error.schema.json` (details `actor`, `runner`, `runtime`, `reasons`,
+- [x] 6.1 Add `runtime.unfit` to both copies of `error.schema.json` (details `actor`, `runner`, `runtime`, `reasons`,
   `from`, `fits`), with the perform tests from "Perform refuses a runtime that doesn't fit its runner" (endpoint
   variable with a path, credential variable set or unset, a rehearsal), each checking no runner started and nothing
-  recorded, and that the error holds no endpoint and no name from `_CREDENTIAL_ENV`; see them fail.
-- [ ] 6.2 Pass the runner to `for_run` and judge fit after `resolve`, before the model and the credential; build
+  recorded, and that the error holds no endpoint and no name from `_CREDENTIAL_ENV`; see them fail. (5
+  failed on main.)
+- [x] 6.2 Pass the runner to `for_run` and judge fit after `resolve`, before the model and the credential; build
   `from` and `fits` (leaving out runtimes whose variables are malformed); verify 6.1 passes and the protocol guard
-  (every catalogued code raised) passes in the full check.
-- [ ] 6.3 Add `runtime.unfit` to the errors `docs/stagecraft/runtimes.md` explains; verify the docs check passes.
+  (every catalogued code raised) passes in the full check. (`for_run` takes `runner` as a keyword;
+  perform passes it. 579 passed across perform-runtime, runtimes, schemas and strictness; the full check at commit.)
+- [x] 6.3 Add `runtime.unfit` to the errors `docs/stagecraft/runtimes.md` explains; verify the docs check passes.
+  (The runtimes page names it in its fit table; the code table is `contributing/config.md`'s. 184 passed.)
 
 ## 7. `config get --resolved` names the setter (#306, design D6)
 
