@@ -324,8 +324,9 @@ def fitting(fit: interim.RuntimeFit) -> str:
 def as_configured(config: Mapping[str, Any]) -> dict[str, "Resolved | None"]:
     """Every runtime there is, each as its built-in and theatre values make it, with no
     environment: how config judges fit, since config is shared and the environment is one
-    person's (runtime-checks design D3). None for a runtime config can't resolve, whose own
-    problems config reports."""
+    person's (runtime-checks design D3). ``config``'s runtimes have been checked for their own
+    shape (config.kinds.runtime_shapes passes only those that pass). None for a runtime config
+    can't resolve, such as one in config with no endpoint that isn't built in."""
     shapes: dict[str, Resolved | None] = {}
     for name in names(config):
         try:

@@ -109,11 +109,15 @@ def runtime_shapes(config: Mapping[str, Any]) -> dict[str, "runtimes.Resolved | 
     """Every runtime an actor can name, built-in or in config, each from its built-in and theatre
     values with no environment, or None when it breaks a rule of its own (runtime-checks design
     D3)."""
-    shapes = runtimes.as_configured(config)
     node = config.get(RUNTIMES)
-    for name, runtime in node.items() if isinstance(node, Mapping) else []:
-        if runtime_problems(name, runtime):
-            shapes[name] = None
+    given = node if isinstance(node, Mapping) else {}
+    # Only a runtime with no problems of its own is resolved: resolving assumes the shapes the
+    # runtime schema allows, and this is the check that finds the others.
+    broken = {name for name, runtime in given.items() if runtime_problems(name, runtime)}
+    clean = {name: runtime for name, runtime in given.items() if name not in broken}
+    shapes = runtimes.as_configured({RUNTIMES: clean})
+    for name in broken:
+        shapes[name] = None
     return shapes
 
 
