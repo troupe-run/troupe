@@ -313,11 +313,12 @@ def _runtime_problems(
     entry = interim.RUNNERS.get(runner) if isinstance(runner, str) else None
     takes = entry.runtime if entry is not None else None
     fit = entry.fit if entry is not None else interim.RuntimeFit()
+    # A runtime with problems of its own (no shape) is never offered: config would refuse it.
     fits = [
         name
         for name, shape in sorted(known.items())
-        if shape is None
-        or not runtimes.unfit(fit, shape.endpoint.value, shape.credential is not None)
+        if shape is not None
+        and not runtimes.unfit(fit, shape.endpoint.value, shape.credential is not None)
     ]
     define = (
         f"troupe config set {shown((RUNTIMES, '<name>', 'endpoint'))}=<url>, with "

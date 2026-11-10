@@ -11,6 +11,7 @@ import re
 from datetime import UTC, datetime
 from typing import Any, get_args
 
+import jsonschema
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
@@ -797,3 +798,49 @@ def test_a_logged_notice_reads_back_as_its_own_kind_not_a_notice_update() -> Non
 def test_a_logged_event_holds_every_event_type_a_runner_sends_and_the_oversized_one() -> None:
     held = {cls.TYPE for cls in get_args(m.HostEvent)}
     assert held == {*p.EVENT_TYPES, "oversized"}
+
+
+# A credential's name or the variable that named it: exactly one (runtime-checks design D6)
+
+RESOLVED_OPENAI: dict[str, Any] = {
+    "name": "openai",
+    "endpoint": {"value": "https://api.openai.com/v1", "source": "default"},
+}
+NAMED_BY = "TROUPE_RUNTIME_OPENAI_CREDENTIAL_ENV"
+
+
+def _get_result(runtime: dict[str, Any]) -> dict[str, Any]:
+    return {"conflicts": [], "heads": [], "notices": [], "runtimes": {"openai": runtime}}
+
+
+@pytest.mark.parametrize(
+    "env",
+    [
+        pytest.param({"value": "K", "namedBy": NAMED_BY, "source": "env"}, id="both"),
+        pytest.param({"source": "env"}, id="neither"),
+        pytest.param({"namedBy": NAMED_BY, "source": "theatre"}, id="namedBy from config"),
+    ],
+)
+def test_a_credential_name_with_both_neither_or_a_namedby_not_from_env_is_refused(
+    env: dict[str, Any],
+) -> None:
+    data = {**RESOLVED_OPENAI, "credential": {"env": env, "set": False}}
+    with pytest.raises(jsonschema.ValidationError):
+        check(_get_result(data), "config-get-result.schema.json")
+    with pytest.raises(ProtocolError, match=r"credential\.env"):
+        m.ResolvedRuntime.from_data(data)
+
+
+@pytest.mark.parametrize(
+    "env",
+    [
+        pytest.param({"value": "K", "source": "theatre"}, id="a name"),
+        pytest.param({"namedBy": NAMED_BY, "source": "env"}, id="the variable that named it"),
+    ],
+)
+def test_a_credential_name_or_the_variable_that_named_it_round_trips(
+    env: dict[str, Any],
+) -> None:
+    data = {**RESOLVED_OPENAI, "credential": {"env": env, "set": True}}
+    check(_get_result(data), "config-get-result.schema.json")
+    assert m.ResolvedRuntime.from_data(data).to_data() == data
