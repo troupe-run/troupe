@@ -51,7 +51,9 @@ troupe calls it and sees one behaviour on Linux, macOS and Windows. An import co
   from anywhere; wrap it in `asyncio.to_thread` to keep a loop free. It never waits silently or without limit: it
   announces a long wait once through `on_wait`, and past `timeout` (`ProcessTimeoutError`, with the output so far)
   or past `max_output_bytes` of output (`OutputTooLargeError`) it kills the whole tree. A command that exits while a
-  child still holds its output open counts as still running.
+  child still holds its output open counts as still running. It returns as soon as the command has ended: it doesn't
+  poll, but waits on an event that its output threads set, so it wakes only when the output ends or passes its limit,
+  and at the announce time and the timeout.
 - **Stopping:** `kill_tree()` kills the child and everything it started. Asking a child to stop gracefully is a
   protocol matter (for runners, `run/cancel`), not a signal, because Windows has no `SIGTERM`.
 - **Whether the kill ended it:** once `wait()` has returned the exit code, `ended_by_kill(exit_code)` says whether
