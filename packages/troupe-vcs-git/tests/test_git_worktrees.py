@@ -1,6 +1,7 @@
 """The git adapter's worktree operations, against real repositories (spec: vcs, run-workspaces;
 worktree-stage design D2, D4, D5, D6, D10)."""
 
+import os
 import shutil
 import subprocess
 import sys
@@ -229,6 +230,11 @@ def test_a_file_committed_in_a_form_git_would_normalise_neither_stops_the_fill_n
     repo.git("commit", "-q", "-m", "attributes")
     (repo.path / "crlf.txt").unlink()
     repo.git("checkout", "--", "crlf.txt")  # a fresh checkout, as a clone or a teammate has
+    # Whether git re-reads the file then depended on whether the index was written in a later
+    # timestamp tick than the file ("racily clean"), so the check below sometimes saw nothing
+    # (#351). A file whose stat no longer matches its index entry is always compared by content.
+    checked_out = (repo.path / "crlf.txt").stat().st_mtime
+    os.utime(repo.path / "crlf.txt", (checked_out - 2, checked_out - 2))
     git = adapter(repo)
     assert git.differing_from_head() == ("crlf.txt",)
     path = repo.path / ".troupe" / "local" / "worktrees" / "wt"

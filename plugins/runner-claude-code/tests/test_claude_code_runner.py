@@ -6,6 +6,7 @@ import os
 import subprocess
 import sys
 import time
+import uuid
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -245,7 +246,10 @@ def test_claude_runs_in_the_workspace_with_the_fixed_flags_and_the_direction_on_
     session = _session(
         sessions, workspace, _env(tmp_path, record, fixture=_fixture("success-with-tools"))
     )
-    direction = 'say "hi"\nthen stop'
+    # A marker no path can hold by chance: the argv also holds host paths with random names, and
+    # "hi" turned up in one (#335).
+    marker = f"direction-{uuid.uuid4().hex}"
+    direction = f'say "{marker}"\nthen stop'
     session.start(direction=direction)
     seen = wait_for_record(record, "argv")
     assert seen["argv"][: len(FIXED)] == FIXED
@@ -264,7 +268,7 @@ def test_claude_runs_in_the_workspace_with_the_fixed_flags_and_the_direction_on_
     assert rest[-2] == "--settings"
     assert seen["stdin"] == direction
     assert Path(seen["cwd"]).resolve() == workspace.resolve()
-    assert not any("hi" in arg for arg in seen["argv"])
+    assert not any(marker in arg for arg in seen["argv"])
     assert seen["env"]["DISABLE_AUTOUPDATER"] == "1"
     assert seen["env"]["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] == "1"
 

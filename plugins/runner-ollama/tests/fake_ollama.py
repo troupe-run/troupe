@@ -142,6 +142,8 @@ class Settings:
 class Request:
     path: str
     body: bytes
+    at: float = field(default_factory=time.monotonic)
+    """When the fake received it, by time.monotonic: a test can time what follows from here."""
 
     def json(self) -> Any:  # noqa: ANN401 - JSON
         return json.loads(self.body)
