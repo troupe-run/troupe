@@ -10,7 +10,7 @@ import shutil
 import subprocess
 import tempfile
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -20,6 +20,7 @@ from hypothesis import strategies as st
 from hypothesis.stateful import RuleBasedStateMachine, invariant, rule
 
 from gitrepo import AUTHOR, Repo, make_repo, past_the_racy_window
+from troupe.platform.processes import Completed
 from troupe_vcs_git import GitAdapter
 
 
@@ -464,3 +465,47 @@ def test_a_ref_sharing_the_branchs_name_leaves_gits_short_name(
     run_git(repo.path, repo, "update-ref", shape.format("main"), "HEAD")
     fresh = GitAdapter(repo.path, source=repo.env)
     assert (fresh.branch(), fresh.head()) == gits_answers(repo)
+
+
+# Stat, then read (git-call-latency design D4): the branch's ref is stat'd before the one command
+# that names it, so a move landing between that command and any later stat is still seen. The clock
+# is past the racy window, so only the stat can catch it; reflogs are off and refs are files, so the
+# move changes the ref's own file and nothing else.
+
+
+class MovesDuringTheRead(GitAdapter):
+    """An adapter that, once, moves ``branch`` to ``to`` just after the command that reads HEAD."""
+
+    def __init__(self, repo: Repo, branch: str, to: str) -> None:
+        super().__init__(repo.path, source=repo.env, now=past_the_racy_window)
+        self.repo = repo
+        self.move: tuple[str, str] | None = (branch, to)
+
+    def git(self, *args: str, allow: Sequence[int] = (0,)) -> Completed:
+        completed = super().git(*args, allow=allow)
+        if self.move is not None and args[:2] == ("rev-parse", "HEAD"):
+            branch, to = self.move
+            self.move = None
+            settle()
+            run_git(self.repo.path, self.repo, "update-ref", f"refs/heads/{branch}", to)
+        return completed
+
+
+@pytest.mark.parametrize("when", ["a new adapter's first read", "the read after a switch"])
+def test_a_move_between_reading_head_and_statting_the_ref_is_seen(
+    tmp_path: Path, when: str
+) -> None:
+    repo = make_layout_repo(tmp_path, Layout("files", reflogs=False))
+    feature = repo.git("rev-parse", "feature").strip()
+    if when == "a new adapter's first read":
+        git = MovesDuringTheRead(repo, "main", feature)
+    else:
+        git = MovesDuringTheRead(repo, "other", feature)
+        move, git.move = git.move, None
+        git.branch_token()
+        settle()
+        repo.git("switch", "-q", "other")
+        git.move = move
+    git.branch_token()  # the read, during which the branch moves
+    assert git.move is None, "the read ran no command for the move to follow"
+    assert (git.branch(), git.head()) == gits_answers(repo)

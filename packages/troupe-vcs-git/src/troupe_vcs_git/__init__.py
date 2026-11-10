@@ -219,17 +219,18 @@ class GitAdapter:
             return state
         # Stat before reading: a move during the read leaves the stats older than the answers, so
         # the next call reads again. It never leaves the answers older than the stats. The branch's
-        # ref is stat'd before the read when it's the one read last time; a ref the read names for
-        # the first time can only be stat'd after it, and a move in between leaves that ref's mtime
-        # past read_at, within the racy window, so the answer isn't reused (git-call-latency D4).
-        guess = None if state is None else state.ref
-        guess_stat = None if guess is None else _stat_token(guess)
-        if _looks_unborn(common, paths[0], watched):
+        # ref is named by the HEAD file, as git reads it, and stat'd before the command too
+        # (git-call-latency design D4).
+        named = _ref_named_by(paths[0], common)
+        named_stat = None if named is None else _stat_token(named)
+        if _looks_unborn(watched, named, named_stat):
             branch, head, ref = self._read_unborn(common)
         else:
             branch, head, ref = self._read(common)
-        ref_stat = guess_stat if ref == guess else None if ref is None else _stat_token(ref)
-        racy = self._racy(read_at, (*watched, ref_stat))
+        reftable = watched[-1] is not None
+        moved = ref != named and not reftable  # HEAD moved between its file and the command
+        ref_stat = named_stat if ref == named else None if ref is None else _stat_token(ref)
+        racy = moved or self._racy(read_at, (*watched, ref_stat))
         state = _State(watched, ref, ref_stat, branch, head, racy)
         self._state = state
         return state
@@ -364,7 +365,19 @@ class GitAdapter:
         return self._states.file_states(directory, at)
 
 
-def _looks_unborn(common: Path, head_file: Path, watched: tuple[_Stat, ...]) -> bool:
+def _ref_named_by(head_file: Path, common: Path) -> Path | None:
+    """The ref file the HEAD file names, as git reads it: ``ref: <full name>`` on a branch. None
+    when HEAD is detached, or the file can't be read (git will say why)."""
+    try:
+        text = head_file.read_text("utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+    if not text.startswith("ref: "):
+        return None
+    return common / text.removeprefix("ref: ").strip()
+
+
+def _looks_unborn(watched: tuple[_Stat, ...], named: Path | None, named_stat: _Stat) -> bool:
     """Whether HEAD looks unborn, from files alone: a files-backend repository with no
     ``packed-refs``, whose HEAD names a loose ref that doesn't exist. Only which commands read the
     answers depends on this, never the answers: an unborn HEAD is read in three commands rather
@@ -372,13 +385,7 @@ def _looks_unborn(common: Path, head_file: Path, watched: tuple[_Stat, ...]) -> 
     packed_refs, common_tables = watched[_WATCHED.index("packed-refs")], watched[-1]
     if packed_refs is not None or common_tables is not None:
         return False  # refs may be packed, or kept in reftable: only git can tell
-    try:
-        text = head_file.read_text("utf-8")
-    except (OSError, UnicodeDecodeError):
-        return False
-    if not text.startswith("ref: "):
-        return False  # detached
-    return _stat_token(common / text.removeprefix("ref: ").strip()) is None
+    return named is not None and named_stat is None
 
 
 def _nul_separated(data: bytes) -> list[str]:
