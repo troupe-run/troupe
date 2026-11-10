@@ -1,18 +1,25 @@
 """The fake Ollama plays what it's scripted to, so the runner's tests can trust it
 (local-model-runner design D12). Driven with plain http.client, not the runner's client."""
 
+import contextlib
 import http.client
 import json
 import os
 import socket
+import struct
 import sys
+import threading
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
+from typing import Any
 
 import pytest
 
-from fake_ollama import Answer, Line, Settings, done, final, message, serving
+from fake_ollama import Answer, FakeOllama, Line, Settings, done, final, message, serving
+
+HANDLER_DONE_WITHIN = 10.0
+"""Seconds for the fake's handler to reach its error handling after a client's request."""
 
 CLOSE_SEEN_WITHIN = 5.0
 """Seconds for the fake to see a client close a connection it's holding: it looks every
@@ -153,3 +160,41 @@ def test_a_held_answer_sees_the_client_close_on_a_descriptor_past_fd_setsize() -
             received += chunk
         client.close()
         assert fake.closed_by_client.wait(CLOSE_SEEN_WITHIN)
+
+
+def test_a_handler_error_that_isnt_a_reset_fails_the_test_when_the_fake_stops() -> None:
+    # A handler that died used to pass for one that saw nothing (#301): stop() now names it.
+    broken = Line("not bytes")  # type: ignore[arg-type]  # writing it raises TypeError
+    fake = FakeOllama([Answer([broken])]).start()
+    try:
+        # Read to the end: the fake closes the connection only after its error handling has run.
+        with contextlib.suppress(http.client.HTTPException, OSError):
+            _post(fake.url, "/api/chat", {}).read()
+    finally:
+        with pytest.raises(AssertionError, match="handler failed: TypeError"):
+            fake.stop()
+
+
+def test_a_client_resetting_its_connection_leaves_the_fakes_stop_quiet() -> None:
+    fake = FakeOllama().start()
+    handled: list[BaseException | None] = []
+    seen = threading.Event()
+    original = fake._server.handle_error
+
+    def noting(request: Any, client_address: Any) -> None:  # noqa: ANN401
+        handled.append(sys.exc_info()[1])
+        original(request, client_address)
+        seen.set()
+
+    fake._server.handle_error = noting  # type: ignore[method-assign]
+    try:
+        host, port = fake.url.removeprefix("http://").split(":")
+        client = socket.create_connection((host, int(port)), timeout=10)
+        client.sendall(b"POST /api/chat HTTP/1.1\r\nHost: fake\r\nContent-Length: 100\r\n\r\n{")
+        # Closing with a zero linger resets the connection while the fake reads the body.
+        client.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
+        client.close()
+        assert seen.wait(HANDLER_DONE_WITHIN), "the fake's handler never saw the reset"
+        assert all(isinstance(error, ConnectionError) for error in handled), handled
+    finally:
+        fake.stop()  # quiet: a reset is a client the fake was told to expect

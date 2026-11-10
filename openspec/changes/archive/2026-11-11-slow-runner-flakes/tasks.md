@@ -101,8 +101,10 @@ before it starts and run one at a time. Every reproduction records its assertion
   before it cancels (D6). No runner change, so no spec delta. Name `CLOSE_SEEN_WITHIN` at both close waits. Verify
   the fixed test passes with the 0.5 s window, and the runner suite passes. Also fix what the diagnosis found in the
   fakes: `selectors` instead of `select.select` in both, and the Ollama fake's `handle_error` stops hiding
-  non-connection errors. Each gets a regression test with descriptors past 1024, which fails with main's
-  `select.select`. Verify both plugins' suites pass (602).
+  non-connection errors. Each fake gets a regression test with descriptors past 1024, which fails with main's
+  `select.select`. The error handling gets two tests. A handler failing with something other than a reset makes
+  `stop()` raise, naming it, and fails when `handle_error` swallows everything again. A client resetting its
+  connection leaves `stop()` quiet, and fails when resets are kept too. Verify both plugins' suites pass (605).
 - [x] 5.5 #353 is the same test, assertion and cause. Comment on #353 that it's a duplicate of #301, fixed by this
   change, for the PR to close.
 
