@@ -184,8 +184,9 @@ has merged.
 
 ## 13. Verify the whole change
 
-- [ ] 13.1 Run `uv run scripts/check.py` (the full check). Verify: it passes, and its summary line is quoted in the
+- [x] 13.1 Run `uv run scripts/check.py` (the full check). Verify: it passes, and its summary line is quoted in the
   last commit's message or the pull request.
+  Done: the commit guard's full check on f1fb82cb, "check: all gates passed" (tests passed in 433.9s).
 - [ ] 13.2 Mark the pull request ready once #333 has merged, the infrastructure Purpose pull request is open with its
   checks passing, and the review of its last push is clean, and confirm CI passes on Linux, macOS and Windows.
   Verify: `gh pr checks` shows every job passing on the head commit.
