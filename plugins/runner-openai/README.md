@@ -46,7 +46,8 @@ and hands them over in `run/start`, and puts the key, when the runtime has one, 
 `TROUPE_RUNTIME_CREDENTIAL`, under no other name.
 
 - The key goes only in each request's `Authorization: Bearer` header, to the runtime's endpoint.
-- A key holding whitespace or a control character, such as a line ending from a `.env` file, is refused by troupe
+- A key holding a character a request header can't carry (anything but visible ASCII), such as a line ending from a
+  `.env` file or a letter outside ASCII, is refused by troupe
   before the runner starts (`runtime.credential-malformed`). The runner checks again
   (`openai.malformed-credential`), since a runner can't assume its host did.
 - A runtime with a key and a plain `http` endpoint to another machine is refused (`openai.insecure-endpoint`). Plain
@@ -192,7 +193,7 @@ no request is sent:
 | `openai.no-runtime` | `run/start` names no runtime, or one whose endpoint or model can't be used |
 | `openai.insecure-endpoint` | a key, and plain `http` to another machine |
 | `openai.credential-mismatch` | `run/start` and `TROUPE_RUNTIME_CREDENTIAL` disagree about whether there's a key |
-| `openai.malformed-credential` | the key holds whitespace or a control character, such as a line ending from a file |
+| `openai.malformed-credential` | the key holds a character a request header can't carry, such as a line ending from a file or a letter outside ASCII |
 
 ## Fixtures
 

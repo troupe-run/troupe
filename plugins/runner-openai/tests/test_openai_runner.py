@@ -171,6 +171,17 @@ def test_a_key_read_with_its_line_ending_is_refused_without_any_part_of_it(
     assert CANARY[:8] not in json.dumps(answer)
 
 
+def test_a_key_holding_a_character_outside_ascii_is_refused_before_any_request(
+    sessions: list[Session], workspace: Path
+) -> None:
+    with FakeEndpoint() as fake:
+        session = _session(sessions, workspace, credential="sk-test-€" + CANARY)
+        answer = session.start(fake.endpoint)
+        assert fake.requests == []
+    assert answer["error"]["data"]["code"] == "openai.malformed-credential"
+    assert CANARY[:8] not in json.dumps(answer)
+
+
 def test_a_second_run_start_is_refused_and_the_first_run_goes_on(
     sessions: list[Session], workspace: Path
 ) -> None:

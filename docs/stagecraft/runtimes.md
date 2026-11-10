@@ -123,8 +123,9 @@ value from your environment when a run starts and gives it to the runner, and no
   error, and not in an error. If a runner sends the key back, troupe records `[credential]` in its place.
 - **Not sent in the clear:** a key goes over `https`, or plain `http` only to this machine (`localhost`, `127.0.0.1`,
   `[::1]`).
-- **Just the key:** a key holding a space or a control character, such as a line ending left from the file it was
-  read from, is refused before any runner gets it.
+- **Just the key:** a key may hold only visible ASCII characters. One holding a space, a line ending left from the
+  file it was read from, or a letter outside ASCII is refused before any runner gets it, since a request header can't
+  carry it.
 - **Not too short to hide:** a key under 8 bytes is refused, since troupe couldn't tell it apart from ordinary text.
   A service that needs no key, like a local model, needs no credential at all.
 
