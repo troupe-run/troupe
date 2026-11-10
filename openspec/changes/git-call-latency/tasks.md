@@ -27,7 +27,7 @@
 - [x] 4.1 With load under 20, run the suite on the change and on the baseline, interleaved (baseline, change, baseline, change at least), each with `-n 3`, a fresh `--basetemp` and `--durations=0`, and with the spawn counter on for one run of each. Verify every run passes, and save wall time, worker time and git process counts.
 - [x] 4.2 Measure one call's cost: `git rev-parse HEAD` 200 times through `subprocess.run`, the baseline's `run_to_completion` and the change's. Re-run 1.4's `troupe perform` on the change and count its git processes. Verify the numbers are saved.
 - [x] 4.3 Write a "Measured" section in design.md with 4.1 and 4.2's numbers, the before and after counts of the three branch and HEAD commands, and perform's counts. Verify `openspec validate git-call-latency --strict` passes, and commit.
-- [ ] 4.4 Remove the `.pth` loggers from both `.venv`s and the baseline worktree (it isn't in use by any session: check with `lsof +D` first). Verify `git worktree list` no longer shows it.
+- [x] 4.4 Remove the `.pth` loggers from both `.venv`s and the baseline worktree (it isn't in use by any session: check with `lsof +D` first). Verify `git worktree list` no longer shows it.
 
 ## 5. Pull request and CI
 
