@@ -129,8 +129,10 @@ fail (the count goes in the task), and `uv run scripts/check.py` passes before e
   synced spec before archiving). (Strict validation passes. There's no dry run, so the archive was trialled
   on a copy of `openspec/`: the runtimes spec took 3 added, 3 modified and 1 renamed requirement, the renamed one
   carries its new text and scenarios, and all 33 specs then validate strictly.)
-- [ ] 8.4 Open one draft PR whose body closes #323, #334, #329, #306 and #288, and see CI pass on Linux, macOS and
-  Windows once it's marked ready.
+- [x] 8.4 Open one draft PR whose body closes #323, #334, #329, #306 and #288, and see CI pass on Linux, macOS and
+  Windows once it's marked ready. (PR #373, closing all five. After three rounds of review fixes on `3291a7ef`, the
+  last review left no open thread; CI run 42920538411 on that head passed all 12 legs, Linux, macOS and Windows on
+  Python 3.12 to 3.15.)
 
 ## Workflow follow-up
 
