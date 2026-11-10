@@ -6,7 +6,7 @@
 When the git adapter has to read the branch and HEAD again, it SHALL run one git command when HEAD points at a commit,
 whether on a branch or detached. The answers SHALL be exactly what `git symbolic-ref --quiet --short HEAD` and
 `git rev-parse --verify --quiet HEAD` report, so the branch keeps git's short name, disambiguation included. An unborn
-HEAD MAY take more commands, but no more than three.
+HEAD MAY take more commands: no more than three when its files show it is unborn, and no more than four otherwise.
 
 #### Scenario: A re-read on a branch runs one command
 - **WHEN** the branch and HEAD are read again after a commit on a branch
@@ -27,7 +27,16 @@ HEAD MAY take more commands, but no more than three.
 
 #### Scenario: An unborn HEAD reports its branch and no commit
 - **WHEN** the branch and HEAD are read in a repository with no commit yet, on its initial branch or an orphan branch
-- **THEN** the branch is the unborn branch's short name and there is no HEAD, read in no more than three git commands
+- **THEN** the branch is the unborn branch's short name and there is no HEAD
+
+#### Scenario: An unborn HEAD the files show is read in three commands
+- **WHEN** the branch and HEAD are read again while HEAD names a loose ref that doesn't exist, in a repository that
+  keeps its refs as files and has no `packed-refs`
+- **THEN** no more than three git commands run
+
+#### Scenario: Any other unborn HEAD is read in four commands
+- **WHEN** the branch and HEAD are read again while HEAD is unborn in a repository with `packed-refs` or reftable
+- **THEN** no more than four git commands run
 
 #### Scenario: A failure is still reported as a git failure
 - **WHEN** reading the branch and HEAD fails for a reason other than an unborn HEAD, such as a repository git refuses

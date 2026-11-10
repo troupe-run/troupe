@@ -277,10 +277,11 @@ def test_a_reread_after_detaching_runs_one_git_command(repo: Repo) -> None:
     assert (git.branch(), git.head()) == (None, commit)
 
 
-def test_an_orphan_branch_reports_its_name_and_no_commit(repo: Repo) -> None:
+def test_an_orphan_branch_reports_its_name_and_no_commit_in_three_git_commands(repo: Repo) -> None:
     repo.commit_all()
-    git, _ = _reread_cost(repo, lambda: repo.git("switch", "-q", "--orphan", "fresh"))
+    git, cost = _reread_cost(repo, lambda: repo.git("switch", "-q", "--orphan", "fresh"))
     assert (git.branch(), git.head()) == ("fresh", None)
+    assert cost == 3
 
 
 def test_a_reread_before_the_first_commit_runs_three_git_commands_as_it_always_has(
@@ -291,11 +292,19 @@ def test_a_reread_before_the_first_commit_runs_three_git_commands_as_it_always_h
     assert (git.branch(), git.head()) == ("main", None)
 
 
-def test_an_unborn_head_in_a_repository_with_packed_refs_is_still_read_right(repo: Repo) -> None:
+def test_an_unborn_head_with_packed_refs_is_read_right_in_four_git_commands(repo: Repo) -> None:
     repo.commit_all()
     repo.git("pack-refs", "--all")
-    git, _ = _reread_cost(repo, lambda: repo.git("switch", "-q", "--orphan", "fresh"))
+    git, cost = _reread_cost(repo, lambda: repo.git("switch", "-q", "--orphan", "fresh"))
     assert (git.branch(), git.head()) == ("fresh", None)
+    assert cost == 4
+
+
+def test_an_unborn_head_under_reftable_is_read_right_in_four_git_commands(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path, refs="reftable")
+    git, cost = _reread_cost(repo, lambda: (repo.write("a.txt", "a"), repo.git("add", "a.txt")))
+    assert (git.branch(), git.head()) == ("main", None)
+    assert cost == 4
 
 
 def test_a_head_git_refuses_to_read_is_vcs_failed_naming_the_command(repo: Repo) -> None:
