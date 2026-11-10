@@ -579,7 +579,13 @@ def test_a_killed_hunts_load_ends_with_it(tmp_path: Path) -> None:
         hunt_pid = int(first.split()[2].rstrip(","))  # the interpreter, not a venv's launcher
         deadline = time.monotonic() + HUNT_START_WITHIN
         while not (round_pid.exists() and round_pid.read_text()):
-            assert time.monotonic() < deadline, "the hunt's round never started its test"
+            # A round's record means it ended, here without starting its test (the hunt makes the
+            # file empty when it starts).
+            done = out / "results.jsonl"
+            ended = done.exists() and bool(done.read_text(encoding="utf-8").strip())
+            if ended or time.monotonic() >= deadline:
+                why = "ended" if ended else f"hadn't started it within {HUNT_START_WITHIN:g}s"
+                pytest.fail(f"the hunt's round {why}; the hunt wrote:\n{lines.rest(1)}")
             time.sleep(0.05)
         load = json.loads((out / "load.json").read_text(encoding="utf-8"))["pids"]
         assert len(load) == 2

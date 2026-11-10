@@ -130,11 +130,17 @@ before it starts and run one at a time. Every reproduction records its assertion
 
 ## 8. Integration
 
-- [ ] 8.1 Run the twelve tests together under `flake_hunt.py --load` (announced), at least 20 rounds, and record the
-  summary in the PR. Verify no round fails.
+- [x] 8.1 Run the twelve tests together under `flake_hunt.py --workers 2 --load 4`, 20 rounds. Every round
+  reported failed, but from the repo's scope-reach guard, which flags every test at teardown when tests from several
+  scopes share one pytest process (`check.py` never runs them that way). Under it, every test call passed in all 20
+  rounds, except the new `test_a_killed_hunts_load_ends_with_it`. That one failed in the slowest round (137 s) on
+  both workers: the inner hunt's round hadn't started its test within 60 s, and the test couldn't say why. It now
+  fails at once with the hunt's output when the round ends early (checked with a round that crashes at
+  collection), and with the output on timeout. The `scripts`-scope tests were then hunted on their own, so the
+  guard has no cross-scope reads to flag: 10 rounds, load averages up to 82, none failed, nothing left running.
 - [ ] 8.2 Run `uv run scripts/check.py` locally, then CI on all twelve legs once the PR is ready. Verify every job
   passes, and cite the Windows 3.12 leg's run for #352.
-- [ ] 8.3 `openspec validate slow-runner-flakes --strict` passes.
+- [x] 8.3 `openspec validate slow-runner-flakes --strict` passes.
 
 ## Workflow follow-up
 
