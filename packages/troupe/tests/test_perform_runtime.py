@@ -358,3 +358,81 @@ def test_a_rehearsal_refuses_a_malformed_key_as_perform_would(tmp_path: Path) ->
         harness.perform_result(request(script(INIT, OK), rehearse=True, **OPENAI))
     assert raised.value.code == "runtime.credential-malformed"
     assert KEY not in json.dumps(raised.value.to_data())
+
+
+# Requirement: Perform refuses a runtime that doesn't fit its runner (runtime-checks design D4)
+
+OLLAMA_ACTOR: dict[str, Any] = {"runner": "ollama", "runtime": "ollama", "model": "llama3.2"}
+NAMED_KEY = "a3f9c2e17b4d8e05f6a1"
+
+
+@pytest.mark.parametrize(
+    ("env", "reasons", "came_from"),
+    [
+        pytest.param(
+            {"TROUPE_RUNTIME_OLLAMA_ENDPOINT": "http://127.0.0.1:11434/v1"},
+            ["endpoint-path"],
+            {"endpoint": "TROUPE_RUNTIME_OLLAMA_ENDPOINT"},
+            id="an endpoint variable gives it a path",
+        ),
+        pytest.param(
+            {"TROUPE_RUNTIME_OLLAMA_CREDENTIAL_ENV": NAMED_KEY},
+            ["credential"],
+            {"credential": "TROUPE_RUNTIME_OLLAMA_CREDENTIAL_ENV"},
+            id="a credential variable whose variable isn't set",
+        ),
+        pytest.param(
+            {"TROUPE_RUNTIME_OLLAMA_CREDENTIAL_ENV": "MY_KEY", "MY_KEY": KEY},
+            ["credential"],
+            {"credential": "TROUPE_RUNTIME_OLLAMA_CREDENTIAL_ENV"},
+            id="a credential variable whose variable is set",
+        ),
+    ],
+)
+def test_a_runtime_the_environment_makes_unfit_is_refused_and_nothing_is_recorded(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    env: dict[str, str],
+    reasons: list[str],
+    came_from: dict[str, str],
+) -> None:
+    launched = _runner_commands(monkeypatch)
+    harness = _harness(tmp_path, **env)
+    asked = request({}, **OLLAMA_ACTOR)
+    before = configured(harness, asked)
+    with pytest.raises(TroupeError) as raised:
+        harness.perform(asked)
+    error = raised.value
+    assert error.code == "runtime.unfit"
+    assert error.details["actor"] == "tester"
+    assert error.details["runner"] == "ollama"
+    assert error.details["runtime"] == "ollama"
+    assert error.details["reasons"] == reasons
+    assert error.details["from"] == came_from
+    assert error.details["fits"] == []
+    data = json.dumps(error.to_data())
+    assert NAMED_KEY not in data
+    assert KEY not in data
+    assert "11434/v1" not in data  # the endpoint as resolved isn't repeated
+    assert nothing_written(harness, before)
+    assert harness.updates == []
+    assert launched == []
+
+
+def test_a_runtime_that_fits_lists_with_the_environment_applied(tmp_path: Path) -> None:
+    harness = _harness(
+        tmp_path,
+        TROUPE_RUNTIME_OLLAMA_ENDPOINT="http://127.0.0.1:11434/v1",
+        TROUPE_RUNTIME_LM_STUDIO_ENDPOINT="http://127.0.0.1:1234",
+    )
+    with pytest.raises(TroupeError) as raised:
+        harness.perform(request({}, **OLLAMA_ACTOR))
+    assert raised.value.details["fits"] == ["lm-studio"]
+    assert "lm-studio" in raised.value.fix
+
+
+def test_a_rehearsal_refuses_an_unfit_runtime_as_perform_would(tmp_path: Path) -> None:
+    harness = _harness(tmp_path, TROUPE_RUNTIME_OLLAMA_ENDPOINT="http://127.0.0.1:11434/v1")
+    with pytest.raises(TroupeError) as raised:
+        harness.perform_result(request({}, rehearse=True, **OLLAMA_ACTOR))
+    assert raised.value.code == "runtime.unfit"

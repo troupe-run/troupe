@@ -293,20 +293,20 @@ def unfit_words(runner: str, runtime: str, reason: Reason) -> str:
         return f"the {runner} runner sends no credential, and the runtime {runtime!r} has one"
     if reason == "endpoint-path":
         return (
-            f"the {runner} runner needs an endpoint with no path, and the runtime {runtime!r}'s "
-            "has one"
+            f"the {runner} runner needs an endpoint with no path, and the runtime {runtime!r} has "
+            "one with a path"
         )
     return (
         f"the {runner} runner needs an endpoint with a path, such as /v1, and the runtime "
-        f"{runtime!r}'s has none"
+        f"{runtime!r} has one without"
     )
 
 
 def fitting(fit: interim.RuntimeFit) -> str:
     """What a runtime that fits looks like, in words, for a fix that defines one."""
     parts = {
-        "none": "an endpoint with no path, such as http://127.0.0.1:11434",
-        "required": "an endpoint with a path, such as https://host/v1",
+        "none": "an endpoint with no path (such as http://127.0.0.1:11434)",
+        "required": "an endpoint with a path (such as https://host/v1)",
         "any": "an endpoint",
     }
     words = parts[fit.path]
@@ -360,18 +360,86 @@ def _naming(runtime: str, credential: Sourced) -> tuple[str, dict[str, str]]:
     return credential.value, {"variable": credential.value}
 
 
+def _came_from(runtime: str, field: str, value: Sourced) -> str:
+    """Where a value that made a runtime unfit came from: the variable, the config path, or
+    ``default``. Never the value, which for a credential's variable may be a key (#298 D6)."""
+    if value.source == "env":
+        return env_name(runtime, field)
+    if value.source == "theatre":
+        return shown((RUNTIMES, runtime, *field.split("_")))
+    return "default"
+
+
+def refuse_unfit(
+    resolved: Resolved, runner: str, actor: str, config: Mapping[str, Any], env: Mapping[str, str]
+) -> None:
+    """Refuse with runtime.unfit when ``resolved``, the environment applied, doesn't fit
+    ``runner``: the rule config judges by, applied to what the run would really use
+    (runtime-checks design D4). Names where each value came from and the runtimes that fit, judged
+    the same way, leaving out any whose variables are malformed."""
+    fit = interim.runner(runner).fit
+    reasons = unfit(fit, resolved.endpoint.value, resolved.credential is not None)
+    if not reasons:
+        return
+    came_from: dict[str, str] = {}
+    if "credential" in reasons and resolved.credential is not None:
+        came_from["credential"] = _came_from(resolved.name, "credential_env", resolved.credential)
+    if "endpoint-path" in reasons or "endpoint-no-path" in reasons:
+        came_from["endpoint"] = _came_from(resolved.name, "endpoint", resolved.endpoint)
+    fits: list[str] = []
+    for other in names(config):
+        try:
+            candidate = resolve(other, config, env)
+        except (RuntimeError, TroupeError):
+            continue
+        if not unfit(fit, candidate.endpoint.value, candidate.credential is not None):
+            fits.append(other)
+    why = "; and ".join(unfit_words(runner, resolved.name, reason) for reason in reasons)
+    where = ", ".join(f"its {key} from {place}" for key, place in came_from.items())
+    change = " or ".join(
+        f"unset {place}" if place.startswith(ENV_PREFIX) else f"change {place}"
+        for place in came_from.values()
+        if place != "default"
+    )
+    fix = (
+        (f"{change[0].upper()}{change[1:]}, or set " if change else "Set ")
+        + f"{shown(('actors', actor, 'runtime'))} to "
+        + (f"one that fits: {', '.join(fits)}." if fits else f"a runtime with {fitting(fit)}.")
+    )
+    raise TroupeError(
+        "runtime.unfit",
+        problem=f"{actor!r} can't run on the runtime {resolved.name!r} as it resolves here "
+        f"({where}): {why}.",
+        fix=fix,
+        details={
+            "actor": actor,
+            "runner": runner,
+            "runtime": resolved.name,
+            "reasons": list(reasons),
+            "from": came_from,
+            "fits": fits,
+        },
+    )
+
+
 def for_run(
     name: str,
     actor: str,
     actor_model: str | None,
     config: Mapping[str, Any],
     env: Mapping[str, str],
+    *,
+    runner: str | None = None,
 ) -> RunRuntime:
     """What a run of ``actor`` on the runtime ``name`` starts with, reading its credential's value
-    from ``env``. Refused, before anything is recorded, with runtime.no-model,
+    from ``env``. With ``runner``, the runtime as resolved must fit it, judged before its model
+    and credential (runtime.unfit). Refused, before anything is recorded, with runtime.unfit,
+    runtime.no-model,
     runtime.credential-unset, runtime.credential-malformed, runtime.credential-too-short or
     runtime.insecure-endpoint. No error holds any part of the credential's value."""
     resolved = resolve(name, config, env)
+    if runner is not None:
+        refuse_unfit(resolved, runner, actor, config, env)
     model = run_model(resolved, actor_model)
     if model is None:
         places = [

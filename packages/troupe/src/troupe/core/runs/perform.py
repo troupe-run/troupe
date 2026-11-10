@@ -480,7 +480,9 @@ async def perform(
     argv = runner_command(what.runner)
     check_actor(what.actor, merged.config)
     runtime = (
-        runtimes.for_run(what.runtime, what.actor, what.model, merged.config, session.env)
+        runtimes.for_run(
+            what.runtime, what.actor, what.model, merged.config, session.env, runner=what.runner
+        )
         if what.runtime is not None
         else None
     )
