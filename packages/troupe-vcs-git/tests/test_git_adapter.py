@@ -307,14 +307,28 @@ def test_an_unborn_head_under_reftable_is_read_right_in_four_git_commands(tmp_pa
     assert cost == 4
 
 
-def test_a_head_git_refuses_to_read_is_vcs_failed_naming_the_command(repo: Repo) -> None:
+@pytest.mark.parametrize(
+    "packed",
+    [
+        pytest.param(False, id="read as unborn first"),
+        pytest.param(True, id="after rev-parse fails"),
+    ],
+)
+def test_a_head_git_refuses_to_read_is_vcs_failed_naming_the_command(
+    repo: Repo, packed: bool
+) -> None:
     repo.commit_all()
+    if packed:
+        # With packed-refs, the files can't show HEAD is unborn, so the one rev-parse runs first,
+        # fails, and the fallback's symbolic-ref then fails too.
+        repo.git("pack-refs", "--all")
     (repo.path / ".git" / "HEAD").write_text("ref: refs/heads/a..b\n")
     git = GitAdapter(repo.path, source=repo.env)
     with pytest.raises(TroupeError) as caught:
         git.branch()
     assert caught.value.code == "vcs.failed"
     assert "git symbolic-ref --quiet HEAD" in caught.value.problem
+    assert git.commands_run == (3 if packed else 2)  # finding the watched files, then the reads
 
 
 def test_reading_the_branch_and_head_again_runs_no_command_while_nothing_moves(
