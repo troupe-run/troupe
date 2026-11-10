@@ -47,7 +47,8 @@ pipe closes, in a `finally`. The overflow check sets `changed` too. The loop:
 4. If both streams' ended flags are set: `process.wait(timeout=<time to the next deadline>)`, and return on success.
 5. Past the timeout: kill the tree, raise ProcessTimeoutError with the output so far. Past the announce time: announce
    once.
-6. `changed.wait(<time to the next deadline>)`, then go round again.
+6. If both streams have ended, go round again, so the wait is in `process.wait`: nothing will set `changed` again.
+   Otherwise `changed.wait(<time to the next deadline>)`, then go round again.
 
 **The ended flags, not `Thread.is_alive()`.** The spike checked `is_alive()` after clearing the event. A drain
 thread sets the event in its `finally` and is still alive for a moment afterwards. If the loop clears and checks in
@@ -129,7 +130,8 @@ Probed on git 2.56 (2026-11-11):
 - Unborn HEAD (no commit yet, or an orphan branch): `rev-parse` exits 128 with "bad revision". Then the adapter runs
   today's three commands unchanged. That path tells an unborn HEAD from a real failure without parsing git's message,
   because `symbolic-ref` and `rev-parse --verify --quiet` already do (exit 1 means no answer, anything else is
-  vcs.failed). An unborn re-read costs four commands instead of three. D5's counts say how often that happens.
+  vcs.failed). That costs four commands instead of three, so D5 reads an unborn HEAD straight away with the three
+  when files show it's unborn, and four remain only where they can't (reftable, or `packed-refs` present).
 
 **Stat, then read (cache-vcs-state D1).** The watched files are stat'd before the command, as before. The branch's
 own ref file is the one exception, because one command now names the ref and reads HEAD together:
@@ -201,7 +203,9 @@ three re-reads: `new`, `watched:index` (the run's worktree capture ran `git add`
   make each four commands. Before reading, the adapter now guesses from files it already stats: a files-backend
   repository (no common `reftable/tables.list`) with no `packed-refs`, whose HEAD names a loose ref that doesn't
   exist, looks unborn, and is read with today's three commands at once. Only which commands run depends on the
-  guess, never the answers: a wrong guess costs one command and reads git's answers either way.
+  guess, never the answers: a wrong guess costs one command and reads git's answers either way. An unborn HEAD the
+  files can't show (reftable, or `packed-refs` present) still costs four: getting that to three would mean taking a
+  failed `rev-parse` as meaning unborn, instead of `rev-parse --verify`'s own answer.
 - **Racy and index-only re-reads that find nothing moved: no change, raised with the owner.** They're 1007 of the
   suite's 2850 re-reads, and two of perform's three. Each now costs one process instead of three. Removing them
   would change #75's rule (narrowing the racy window, or not re-reading for an index-only change), so the rule
