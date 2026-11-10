@@ -360,6 +360,22 @@ def test_a_rehearsal_refuses_a_malformed_key_as_perform_would(tmp_path: Path) ->
     assert KEY not in json.dumps(raised.value.to_data())
 
 
+# Requirement: Config get shows a runtime's resolved values: a run's start record keeps the name
+# (runtime-checks design D6)
+
+
+def test_a_runs_start_keeps_a_credential_variables_name_from_the_environment(
+    tmp_path: Path,
+) -> None:
+    harness = _harness(
+        tmp_path, TROUPE_RUNTIME_OPENAI_CREDENTIAL_ENV="MY_OPENAI_KEY", MY_OPENAI_KEY=KEY
+    )
+    result = harness.perform(request(script(INIT, OK), **OPENAI))
+    assert result.run is not None
+    started = _start(harness, result.run.run_id)
+    assert started["runtime"]["credential"]["env"] == {"value": "MY_OPENAI_KEY", "source": "env"}
+
+
 # Requirement: Perform refuses a runtime that doesn't fit its runner (runtime-checks design D4)
 
 OLLAMA_ACTOR: dict[str, Any] = {"runner": "ollama", "runtime": "ollama", "model": "llama3.2"}

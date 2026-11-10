@@ -101,15 +101,18 @@ fail (the count goes in the task), and `uv run scripts/check.py` passes before e
 
 ## 7. `config get --resolved` names the setter (#306, design D6)
 
-- [ ] 7.1 Add tests: `config get --resolved runtimes.openai` with `TROUPE_RUNTIME_OPENAI_CREDENTIAL_ENV=
+- [x] 7.1 Add tests: `config get --resolved runtimes.openai` with `TROUPE_RUNTIME_OPENAI_CREDENTIAL_ENV=
   a3f9c2e17b4d8e05f6a1` shows `namedBy` from `env` and `set: false`, and neither the CLI output nor the client
   message holds any part of the name; a name from config or a built-in still shows as it is; a perform's run-started
-  record still holds the name; see the first fail.
-- [ ] 7.2 Make `runtime.schema.json#/$defs/resolved`'s `credential.env` a `oneOf` of `{value, source}` and `{namedBy,
+  record still holds the name; see the first fail. (2 failed on main; the run-start test passed on main
+  and now guards that the record keeps the name.)
+- [x] 7.2 Make `runtime.schema.json#/$defs/resolved`'s `credential.env` a `oneOf` of `{value, source}` and `{namedBy,
   source: "env"}` (both copies, and every schema that copies it), update `Resolved.to_data`, the client message type
-  and `cli/runtimes.py`; verify 7.1 passes and the schema tests pass.
-- [ ] 7.3 Update `docs/stagecraft/runtimes.md` and `docs/prompt-book/cli.md` where they show `--resolved`'s credential
-  line; verify the docs check passes.
+  and `cli/runtimes.py`; verify 7.1 passes and the schema tests pass. (The client type is `CredentialName`,
+  with `value` or `namedBy`. 568 passed across config, perform-runtime, runtimes and schema suites.)
+- [x] 7.3 Update `docs/stagecraft/runtimes.md` and `docs/prompt-book/cli.md` where they show `--resolved`'s credential
+  line; verify the docs check passes. (`cli.md` shows no credential line, so only the runtimes page
+  changed. 184 passed.)
 
 ## 8. Integration
 

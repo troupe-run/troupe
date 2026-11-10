@@ -29,9 +29,8 @@ def runtime_lines(runtime: dict[str, Any], indent: str = "") -> list[str]:
     else:
         env = credential["env"]
         state = "set" if credential["set"] else "not set"
-        lines.append(
-            f"{indent}  credential: from {env['value']} (named by {env['source']}), {state}"
-        )
+        where = env["value"] if "value" in env else f"the variable {env['namedBy']} names"
+        lines.append(f"{indent}  credential: from {where} (named by {env['source']}), {state}")
     price = runtime.get("price")
     if price is not None:
         lines.append(f"{indent}  price: {price_text(price['value'])} (from {price['source']})")
