@@ -588,6 +588,8 @@ ProcessWaitCallback = Callable[[str, float], None]
 
 _READ_CHUNK = 64 * 1024
 _POLL_SECONDS = 0.02
+"""How often ``ChildProcess.wait`` checks whether a child has exited. Its wait returns as soon as
+the child does, so this adds no delay; ``run_to_completion`` doesn't poll at all."""
 
 
 @dataclass(frozen=True)
@@ -600,7 +602,13 @@ class Completed:
 
 
 class _Output:
-    """Both output streams of one command, drained by threads, with a shared size limit."""
+    """Both output streams of one command, drained by threads, with a shared size limit.
+
+    ``changed`` is set whenever there is something for the waiting loop to look at: a stream has
+    ended, or the output has passed the limit. A stream is marked ended before ``changed`` is set,
+    so a loop that clears ``changed`` and then finds a stream not yet ended is woken by the set
+    that follows (git-call-latency design D1).
+    """
 
     def __init__(self, limit: int) -> None:
         self.limit = limit
@@ -608,16 +616,31 @@ class _Output:
         self.stderr = bytearray()
         self.total = 0
         self.overflowed = threading.Event()
+        self.changed = threading.Event()
+        self._ended = 0
         self._lock = threading.Lock()
 
+    @property
+    def ended(self) -> bool:
+        """Whether both streams have ended: the command closed them, or exited."""
+        with self._lock:
+            return self._ended == 2
+
     def drain(self, stream: "typing.IO[bytes]", into: bytearray) -> None:
-        with contextlib.suppress(OSError, ValueError):
-            while chunk := stream.read1(_READ_CHUNK):  # type: ignore[attr-defined]
-                with self._lock:
-                    into.extend(chunk)
-                    self.total += len(chunk)
-                    if self.total > self.limit:
+        try:
+            with contextlib.suppress(OSError, ValueError):
+                while chunk := stream.read1(_READ_CHUNK):  # type: ignore[attr-defined]
+                    with self._lock:
+                        into.extend(chunk)
+                        self.total += len(chunk)
+                        overflowed = self.total > self.limit
+                    if overflowed:
                         self.overflowed.set()
+                        self.changed.set()
+        finally:
+            with self._lock:
+                self._ended += 1
+            self.changed.set()
 
 
 def run_to_completion(
@@ -691,12 +714,17 @@ def run_to_completion(
     announced = False
     try:
         while True:
-            finished = process.poll() is not None and not any(t.is_alive() for t in threads[:2])
+            output.changed.clear()
             if output.overflowed.is_set():
                 kill()
                 raise OutputTooLargeError(argv[0], max_output_bytes)
-            if finished:
-                break
+            deadline = timeout if announced else min(timeout, announce_after)
+            if output.ended:
+                # Both streams have closed, so the command has exited or is about to: wait for
+                # it, but no further than the next deadline.
+                with contextlib.suppress(subprocess.TimeoutExpired):
+                    process.wait(timeout=max(0.0, deadline - (time.monotonic() - started)))
+                    break
             waited = time.monotonic() - started
             if waited >= timeout:
                 kill()
@@ -707,7 +735,8 @@ def run_to_completion(
                 announced = True
                 if on_wait is not None:
                     on_wait(argv[0], waited)
-            time.sleep(_POLL_SECONDS)
+            deadline = timeout if announced else min(timeout, announce_after)
+            output.changed.wait(max(0.0, deadline - (time.monotonic() - started)))
     finally:
         if job is not None:
             _close_job(job)

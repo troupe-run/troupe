@@ -7,9 +7,12 @@ import json
 import os
 import re
 import shutil
+import statistics
 import subprocess
 import sys
+import threading
 import time
+import types
 import typing
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -661,6 +664,162 @@ def test_a_command_that_exits_while_its_child_holds_its_output_open_still_times_
     )
     with pytest.raises(ProcessTimeoutError):
         _run(code, timeout=2.0)
+
+
+# Requirement: A command run to completion returns as soon as it has ended
+
+
+class _Waits:
+    """Every bounded wait run_to_completion makes, with when it was made (git-call-latency D2)."""
+
+    def __init__(self) -> None:
+        self.started = 0.0
+        self.announced_at: float | None = None
+        self.bounded: list[tuple[float, float]] = []
+        """(seconds asked for, monotonic time of the call), for each wait with a timeout."""
+
+    def record(self, timeout: float | None) -> None:
+        if timeout is not None:
+            self.bounded.append((timeout, time.monotonic()))
+
+    def announced(self, command: str, waited: float) -> None:
+        self.announced_at = time.monotonic()
+
+
+def _record_the_waits(monkeypatch: pytest.MonkeyPatch, *, hold_after_set: float = 0.0) -> _Waits:
+    """Stand in for the threading, subprocess and time modules processes uses, so that every
+    bounded wait is recorded and a sleep in processes fails the test. With ``hold_after_set``, a
+    thread other than the caller's stays alive that long after setting an event, as a drain thread
+    is for a moment after its last set."""
+    waits = _Waits()
+
+    class RecordingEvent(threading.Event):
+        def wait(self, timeout: float | None = None) -> bool:
+            waits.record(timeout)
+            return super().wait(timeout)
+
+        def set(self) -> None:
+            super().set()
+            if hold_after_set and threading.current_thread() is not threading.main_thread():
+                time.sleep(hold_after_set)
+
+    class RecordingPopen(subprocess.Popen):  # type: ignore[type-arg]
+        def wait(self, timeout: float | None = None) -> int:
+            waits.record(timeout)
+            return super().wait(timeout)
+
+    def no_sleep(seconds: float) -> None:
+        raise AssertionError(f"run_to_completion slept for a fixed {seconds} s")
+
+    fake_threading = types.SimpleNamespace(**vars(threading))
+    fake_threading.Event = RecordingEvent
+    fake_subprocess = types.SimpleNamespace(**vars(subprocess))
+    fake_subprocess.Popen = RecordingPopen
+    fake_time = types.SimpleNamespace(**vars(time))
+    fake_time.sleep = no_sleep
+    monkeypatch.setattr(processes, "threading", fake_threading)
+    monkeypatch.setattr(processes, "subprocess", fake_subprocess)
+    monkeypatch.setattr(processes, "time", fake_time)
+    return waits
+
+
+_SLACK = 0.05
+"""How far a recorded wait may fall short of the time left to its deadline: the time between
+reading the clock and making the call, on a loaded machine."""
+
+_ENDS_AT_ONCE = "pass"
+_RUNS_ON = "import time; time.sleep(60)"
+_OVERFLOWS = "import sys, time\nsys.stdout.write('x' * 200_000)\nsys.stdout.flush()\ntime.sleep(60)"
+
+
+@pytest.mark.parametrize(
+    ("code", "timeout", "announce_after", "raises"),
+    [
+        pytest.param(_ENDS_AT_ONCE, 30.0, 30.0, None, id="ends at once"),
+        pytest.param("import time; time.sleep(0.6)", 30.0, 0.3, None, id="announced then ends"),
+        pytest.param(_RUNS_ON, 0.8, 0.3, ProcessTimeoutError, id="passes its timeout"),
+        pytest.param(_OVERFLOWS, 30.0, 30.0, OutputTooLargeError, id="passes its output limit"),
+    ],
+)
+def test_every_wait_runs_to_the_next_deadline_and_none_is_a_fixed_tick(
+    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
+    code: str,
+    timeout: float,
+    announce_after: float,
+    raises: type[Exception] | None,
+) -> None:
+    case = request.node.callspec.id
+    waits = _record_the_waits(monkeypatch)
+    waits.started = time.monotonic()
+    with pytest.raises(raises) if raises is not None else contextlib.nullcontext():
+        _run(
+            code,
+            timeout=timeout,
+            announce_after=announce_after,
+            max_output_bytes=100_000,
+            on_wait=waits.announced,
+        )
+    ended = time.monotonic()
+
+    assert waits.bounded, f"{case}: no bounded wait was made"
+    for asked, at in waits.bounded:
+        announcing = waits.announced_at is None or at < waits.announced_at
+        deadline = min(announce_after, timeout) if announcing else timeout
+        left = deadline - (at - waits.started)
+        assert asked >= left - _SLACK, (
+            f"{case}: waited {asked:.3f} s when {left:.3f} s were left to the next deadline"
+        )
+        assert asked <= deadline, f"{case}: waited {asked:.3f} s, past the {deadline} s deadline"
+    if code in (_ENDS_AT_ONCE, _OVERFLOWS):
+        assert waits.announced_at is None, f"{case}: announced a wait that never got long"
+        assert ended - waits.started < 10, f"{case}: took {ended - waits.started:.1f} s"
+
+
+def test_a_drain_thread_still_alive_after_its_last_signal_does_not_delay_the_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The spike's loop asked whether the drain threads were alive after clearing its event; one
+    # still alive for a moment after its set made it wait to the announce time (design D1).
+    waits = _record_the_waits(monkeypatch, hold_after_set=0.3)
+    waits.started = time.monotonic()
+    _run(_ENDS_AT_ONCE, timeout=30.0, announce_after=5.0, on_wait=waits.announced)
+    took = time.monotonic() - waits.started
+    assert waits.announced_at is None, "a finished command's wait was announced"
+    assert took < 3.0, f"returned {took:.1f} s after it started"
+
+
+_GIT_RUNS = 20
+_HALF_THE_OLD_TICK = 0.010
+
+
+def test_a_command_that_exits_at_once_costs_about_what_starting_it_directly_costs() -> None:
+    git = shutil.which("git")
+    assert git is not None, "these tests need git on PATH"
+    # The same environment for both: git starts several ms slower with an empty one, on macOS.
+    env = dict(os.environ)
+    direct: list[float] = []
+    bounded: list[float] = []
+    for _ in range(_GIT_RUNS):  # interleaved, so load on the machine falls on both alike
+        before = time.perf_counter()
+        subprocess.run([git, "--version"], env=env, capture_output=True, check=True)
+        direct.append(time.perf_counter() - before)
+        before = time.perf_counter()
+        processes.run_to_completion(
+            [git, "--version"],
+            cwd=Path.cwd(),
+            env=env,
+            timeout=30.0,
+            max_output_bytes=LIMIT,
+            announce_after=30.0,
+        )
+        bounded.append(time.perf_counter() - before)
+    extra = statistics.median(bounded) - statistics.median(direct)
+    assert extra < _HALF_THE_OLD_TICK, (
+        f"run_to_completion took {extra * 1000:.1f} ms longer than starting git directly "
+        f"(medians of {_GIT_RUNS}: {statistics.median(bounded) * 1000:.1f} ms against "
+        f"{statistics.median(direct) * 1000:.1f} ms)"
+    )
 
 
 def test_running_a_missing_command_names_it() -> None:
