@@ -9,10 +9,12 @@ from pathlib import Path
 
 import jsonschema
 import pytest
+from ruamel import yaml
 
 from client_schemas import check
 from configtesting import on
 from gitrepo import Repo
+from protocol_schemas import PROTOCOL_BASE, SCHEMAS, SCRIPTED, validator_for
 from runtesting import ADA, theatre
 from storetesting import git_service
 from troupe.cli import COMMANDS, main
@@ -25,6 +27,7 @@ from troupe.core.errors import CODES, TroupeError
 from troupe.core.exit_codes import ExitCode
 
 STEPS = '[{"exit": 0}]'
+ACTOR_FILE = validator_for(PROTOCOL_BASE + "config/actor.schema.json", SCRIPTED)
 
 
 def cli(*argv: str) -> tuple[int, str, str]:
@@ -71,6 +74,26 @@ def test_config_set_records_one_change_writes_the_files_and_says_so(repo: Repo) 
     assert "recorded change " in out
     assert len(git_service(repo).history(aggregate.STREAM)) == 1
     assert (repo.path / ".troupe" / "actors" / "tester.yaml").is_file()
+
+
+def test_an_actors_file_holds_every_field_config_sets_in_the_schemas_order(repo: Repo) -> None:
+    # Every field of the actor schema: a field added to the schema and not to the file fails here
+    # (spec: config-files, "Each actor is projected to its own files").
+    code, _, err = _tester(
+        "actors.tester.workspace=theatre",
+        "actors.tester.runtime=ollama",
+        "actors.tester.model=llama3.2",
+    )
+    assert code == 0, err
+    text = (repo.path / ".troupe" / "actors" / "tester.yaml").read_text(encoding="utf-8")
+    data = yaml.YAML(typ="safe", pure=True).load(text)
+    schema = json.loads((SCHEMAS / "config" / "actor.schema.json").read_text(encoding="utf-8"))
+    assert list(data) == list(schema["properties"])
+    assert data["effects"] == {"write": ["out/**"]}
+    assert data["workspace"] == "theatre"
+    assert data["runtime"] == "ollama"
+    assert data["model"] == "llama3.2"
+    ACTOR_FILE.validate(data)
 
 
 def test_a_character_from_a_file_is_the_files_text_exactly(repo: Repo) -> None:

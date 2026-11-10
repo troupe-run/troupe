@@ -62,8 +62,19 @@ from troupe.core.theatre import THEATRE_DIR, ensure_git_files
 from troupe.core.vcs import Marked, MergeSides, Resolve, Unmarked
 from troupe.platform.files import WaitCallback, append_bytes
 
-FIELD_ORDER = ("$schema", "runner", "options", "expect")
-"""The actor file's keys, in its schema's order."""
+FIELD_ORDER = (
+    "$schema",
+    "runner",
+    "options",
+    "expect",
+    "effects",
+    "workspace",
+    "runtime",
+    "model",
+)
+"""The actor file's keys: every field of its schema, in its order. The character is the actor's .md
+file. A test checks it against the schema, so a field added there can't be left out of the file
+(#288)."""
 RUNTIME_FIELD_ORDER = ("$schema", "endpoint", "model", "credential", "prices")
 """The runtime file's keys, in its schema's order. A test checks it against the schema, so a field
 added there can't be left out of the file."""

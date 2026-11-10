@@ -30,6 +30,7 @@ from protocol_schemas import (
 from troupe.core import schemas
 from troupe.core.config.kinds import file_kind, staged_name, staged_target
 from troupe.core.config.projection import (
+    FIELD_ORDER,
     RUNTIME_FIELD_ORDER,
     WRITTEN,
     Action,
@@ -151,7 +152,12 @@ def test_the_keys_are_in_the_schemas_order() -> None:
         for line in render_actor(TESTER)["yaml"].decode("utf-8").splitlines()
         if line and not line.startswith((" ", "#", "-"))
     ]
-    assert keys == ["$schema", "runner", "options", "expect"]
+    assert keys == ["$schema", "runner", "options", "expect", "effects"]
+
+
+def test_the_actor_files_fields_are_every_field_its_schema_defines_in_its_order() -> None:
+    schema = load(SCHEMAS / "config" / "actor.schema.json")
+    assert list(FIELD_ORDER) == list(schema["properties"])
 
 
 def test_a_written_actor_file_validates_against_the_actor_schema() -> None:
@@ -220,6 +226,25 @@ def test_an_older_version_troupe_recorded_is_written_again_with_a_notice(tmp_pat
     assert notice.code == "config.file-rewritten"
     assert "an older version troupe wrote" in notice.problem
     check_notice(notice.to_data())
+
+
+def test_an_actor_file_written_before_it_held_every_field_is_replaced_on_the_next_flush(
+    tmp_path: Path,
+) -> None:
+    theatre = _theatre(tmp_path)
+    actors = theatre / ".troupe" / "actors"
+    actors.mkdir()
+    # The file as troupe wrote it before #288: runner, options and expect, nothing else.
+    old = render_actor({k: v for k, v in TESTER.items() if k != "effects"})["yaml"]
+    (actors / "tester.yaml").write_bytes(old)
+    (actors / "tester.md").write_bytes(TESTER["character"].encode("utf-8"))
+    recorded = {
+        "actors/tester.yaml": frozenset({file_hash(old)}),
+        "actors/tester.md": frozenset({file_hash(TESTER["character"].encode("utf-8"))}),
+    }
+    flush(theatre, CONFIG, recorded)
+    assert _actor_file(theatre).read_bytes() == render(CONFIG)["actors/tester.yaml"]
+    assert "effects:" in _actor_file(theatre).read_text(encoding="utf-8")
 
 
 def test_a_version_flush_wrote_itself_counts_as_troupes(tmp_path: Path) -> None:
