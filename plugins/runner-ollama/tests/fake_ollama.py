@@ -10,8 +10,9 @@ so core's tests can copy it.
 """
 
 import json
-import select
+import selectors
 import socket
+import sys
 import threading
 import time
 from collections import deque
@@ -149,10 +150,27 @@ class Request:
         return json.loads(self.body)
 
 
+def _readable(sock: socket.socket, timeout: float) -> bool:
+    """Whether ``sock`` has something to read (or has been closed), waiting up to ``timeout``.
+    Not select.select: it refuses a descriptor of 1024 or more, which a long-lived test worker can
+    hand the fake, and the handler then died without seeing the client's close (#301)."""
+    with selectors.DefaultSelector() as selector:
+        selector.register(sock, selectors.EVENT_READ)
+        return bool(selector.select(timeout))
+
+
 class _Server(ThreadingHTTPServer):
+    def __init__(self, *args: Any) -> None:  # noqa: ANN401
+        super().__init__(*args)
+        self.unexpected: list[BaseException] = []
+
     def handle_error(self, request: Any, client_address: Any) -> None:  # noqa: ANN401
         """A client that resets its connection is a client the fake was told to expect: say
-        nothing, rather than print a traceback."""
+        nothing, rather than print a traceback. Any other error is kept, and fails the test when
+        the fake stops: one swallowed here once hid why a close was never seen (#301)."""
+        error = sys.exc_info()[1]
+        if error is not None and not isinstance(error, ConnectionError):
+            self.unexpected.append(error)
 
 
 class FakeOllama:
@@ -198,9 +216,14 @@ class FakeOllama:
         return self
 
     def stop(self) -> None:
+        """Stop serving. Raises the first error a handler hit that wasn't a client resetting its
+        connection, so a fake that broke can't pass for one that saw nothing."""
         self.stopping.set()
         self._server.shutdown()
         self._server.server_close()
+        if self._server.unexpected:
+            first = self._server.unexpected[0]
+            raise AssertionError(f"the fake Ollama's handler failed: {first!r}") from first
 
     def chats(self) -> list[dict[str, Any]]:
         """The bodies of every /api/chat request, in order."""
@@ -231,8 +254,7 @@ class FakeOllama:
         while deadline is None or time.monotonic() < deadline:
             if self.stopping.is_set():
                 return False
-            readable, _, _ = select.select([sock], [], [], POLL_SECONDS)
-            if readable:
+            if _readable(sock, POLL_SECONDS):
                 try:
                     peeked = sock.recv(1, socket.MSG_PEEK)
                 except OSError:

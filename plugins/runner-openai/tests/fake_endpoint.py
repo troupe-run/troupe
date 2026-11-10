@@ -14,7 +14,7 @@ Self-contained: the standard library only.
 """
 
 import json
-import select
+import selectors
 import socket
 import threading
 import time
@@ -98,9 +98,12 @@ def pause(seconds: float) -> None:
 
 
 def _client_gone(connection: socket.socket) -> bool:
-    readable, _, _ = select.select([connection], [], [], 0)
-    if not readable:
-        return False
+    # Not select.select: it refuses a descriptor of 1024 or more, which a long-lived test worker
+    # can hand the fake, and the handler then dies without seeing the close (#301).
+    with selectors.DefaultSelector() as selector:
+        selector.register(connection, selectors.EVENT_READ)
+        if not selector.select(0):
+            return False
     try:
         return connection.recv(1, socket.MSG_PEEK) == b""
     except OSError:

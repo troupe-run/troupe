@@ -29,10 +29,11 @@ when the thing it checks doesn't happen**, at that limit, with a message naming 
   exact (design D4).
 - **The Ollama preflight deadline is measured from the first preflight request** (#354), which the fake timestamps,
   not from before the runner starts. One shared deadline (about 10 s) is still told apart from two (about 18 s).
-- **The Ollama cancel-while-streaming close is diagnosed, then fixed at its cause** (#301, #353). Both issues are the
-  same test and assertion. The fake is instrumented and the test looped under load to show why the close isn't seen
-  within 5 s. The fix goes in the fake if it misses the close, or in the runner if the runner leaves the connection
-  open. The wait becomes a named limit. #353 is closed as a duplicate of #301 if the cause is the same.
+- **The Ollama cancel test waits until the answer is streaming before it cancels** (#301, #353). It cancelled on
+  the runner's `sent` record of its request, which comes before the request is made. A cancel landing in between
+  left the fake no connection to see closed. Both issues are this one test and assertion, so #353 is closed as a
+  duplicate. Found on the way: both fakes waited with `select.select`, which can't take a descriptor past 1024, and
+  the Ollama fake swallowed every handler error. Both are fixed, with regression tests (design D6).
 - **The flake-hunt and flake-campaign tests bound the stop by the tool's own stop limit** (#358, #364). They don't use
   a shorter fixed one. The campaign test waits for `flake_campaign.STOP_WAIT_SECONDS` plus a named margin, where it
   used to wait exactly the same 60 s. The hunt interrupt test waits for `flake_hunt.STOP_TIMEOUT_SECONDS` plus a
@@ -69,11 +70,11 @@ None.
 
 ## Impact
 
-- **Tests only, apart from two tools.** `scripts/flake_hunt.py` changes its load program on POSIX. The Ollama runner
-  changes only if #301's diagnosis shows the runner leaves the connection open; if it does, the change adds an
-  `ollama-runner` spec delta for it.
+- **Tests only, apart from one tool.** `scripts/flake_hunt.py` changes its load program on POSIX. No runner
+  changes: #301's diagnosis showed the runner behaves rightly.
 - **Test helpers:** `plugins/runner-openai/tests/fake_endpoint.py` gains a request wait.
-  `plugins/runner-ollama/tests/fake_ollama.py` gains request timestamps, and possibly a fix for missing a close.
+  `plugins/runner-ollama/tests/fake_ollama.py` gains request timestamps, waits with `selectors`, and stops hiding
+  handler errors. The OpenAI fake also waits with `selectors`.
   `scripts/tests` gains a process-tree stop. `packages/troupe/tests` gains a topics-allowing-notices helper.
 - **Suite time:** the stall-limit hunt test runs longer, by its start allowance. The other changes remove fixed
   sleeps or keep the same bounds.
