@@ -131,8 +131,16 @@ Probed on git 2.56 (2026-11-11):
   because `symbolic-ref` and `rev-parse --verify --quiet` already do (exit 1 means no answer, anything else is
   vcs.failed). An unborn re-read costs four commands instead of three. D5's counts say how often that happens.
 
-The order "stat, then read" (cache-vcs-state D1) is kept: stats are taken before the command, and the ref's stat
-after the command has named it.
+**Stat, then read (cache-vcs-state D1).** The watched files are stat'd before the command, as before. The branch's
+own ref file is the one exception, because one command now names the ref and reads HEAD together:
+
+- When the read names the same ref as the snapshot it replaces (commits on one branch, the steady case), the ref is
+  stat'd before the command, so the rule holds exactly.
+- When it names a ref for the first time (a new adapter, or after a switch), the ref can only be stat'd after the
+  command. A move landing between the command and that stat writes the ref after `read_at`, so its mtime falls
+  inside the racy window and the snapshot is marked racy and not reused. That relies on file timestamps and the
+  wall clock agreeing, which the racy rule (D4) already assumes. The old order stat'd the ref between
+  `symbolic-ref` and `rev-parse`, so it didn't need that assumption. This is raised with the owner alongside D5.
 
 *Alternatives:* `for-each-ref --include-root-refs` with `%(symref)`, `%(symref:short)` and `%(objectname)` gives all
 three in one process for a born HEAD, but needs git 2.46 and also skips an unborn HEAD. Stripping `refs/heads/` in
@@ -159,6 +167,45 @@ Anything beyond it depends on the counts, and it's decided against them:
   it. The default is to keep the rule.
 
 The counts, the choice and its reason are written here before the code that depends on them.
+
+**The counts (2026-11-11, macOS, base commit 3678f411).** The full suite, 3 workers, both loggers on (5346 passed;
+2 flake-hunt interrupt tests timed out at load 47, on unchanged code): 23,683 processes, 22,609 of them git. The
+three branch and HEAD commands ran 2850 (`symbolic-ref --quiet HEAD`), 3098 (`--short`; 248 of them from elsewhere)
+and 2851 (`rev-parse --verify`) times: 8799, against the spike's 8716. Every call to the read path, by reason:
+
+| Reason | Re-reads | Found | Of them unborn |
+|---|---|---|---|
+| hit (no command) | 14,333 | | |
+| `new` | 1635 | | 732 |
+| `racy` | 914 | all `same` | 318 |
+| `watched:index` | 197 | 104 moved, 93 same | |
+| `watched:reftable/tables.list` | 54 | 46 moved, 8 same | |
+| `watched:HEAD` | 28 | all moved | |
+| `watched:packed-refs` | 10 | 1 moved, 9 same | |
+| `watched:logs/HEAD` | 6 | all moved | |
+| `ref` | 6 | all moved | |
+
+`new` is spread across tests one per in-process command (175 tests make one adapter, 176 make two, 108 three; the
+most is 119, in the text store's ordering state machine).
+
+A real `troupe perform lead` with the scripted runner, in a fresh theatre as in first-performance.md: 42 processes,
+41 of them git, 9 of those the branch and HEAD reads. One adapter served the whole command. 37 reads: 34 hits, and
+three re-reads: `new`, `watched:index` (the run's worktree capture ran `git add`) found `same`, `racy` found `same`.
+
+**The decisions:**
+
+- **New adapters: no change.** A real command already uses one adapter. The suite's `new` reads are one per
+  command, which is real use. Sharing a cache across commands would need it to outlive the command, which no count
+  justifies.
+- **Unborn re-reads: cut to three.** 1050 of the 2850 re-reads (37%) found an unborn HEAD, and D4's order would
+  make each four commands. Before reading, the adapter now guesses from files it already stats: a files-backend
+  repository (no common `reftable/tables.list`) with no `packed-refs`, whose HEAD names a loose ref that doesn't
+  exist, looks unborn, and is read with today's three commands at once. Only which commands run depends on the
+  guess, never the answers: a wrong guess costs one command and reads git's answers either way.
+- **Racy and index-only re-reads that find nothing moved: no change, raised with the owner.** They're 1007 of the
+  suite's 2850 re-reads, and two of perform's three. Each now costs one process instead of three. Removing them
+  would change #75's rule (narrowing the racy window, or not re-reading for an index-only change), so the rule
+  stays unless the owner decides otherwise.
 
 ### D6: How the suite is measured
 
