@@ -12,7 +12,7 @@
 
 - [x] 2.1 Write the tests first (design D2), in `packages/troupe/tests/test_platform_processes.py`: the deterministic test (no `time.sleep`, every wait bounded by the next deadline), the measured test (`git --version`, 20 interleaved runs, median difference under 10 ms), overflow acted on long before the announce time, and a drain thread held between setting the event and returning still not delaying the result. Verify each new test fails on today's loop, and that the existing run-to-completion tests pass.
 - [x] 2.2 Rewrite `run_to_completion`'s wait as design D1 (per-stream ended flags set before a shared event, `process.wait` bounded by the next deadline, no `time.sleep`). Verify the whole of `test_platform_processes.py`, `test_commands` and `test_git_adapter.py` pass locally, and `mypy --strict` and `ruff` are clean.
-- [ ] 2.3 Update `contributing/platform.md`'s "Short commands" paragraph to say it returns as soon as the command ends and wakes only for the output ending, overflow, the announcement and the timeout. Verify the paragraph matches the platform delta spec, and commit with `uv run scripts/check.py` passing.
+- [x] 2.3 Update `contributing/platform.md`'s "Short commands" paragraph to say it returns as soon as the command ends and wakes only for the output ending, overflow, the announcement and the timeout. Verify the paragraph matches the platform delta spec, and commit with `uv run scripts/check.py` passing.
 
 ## 3. One git process per re-read of the branch and HEAD (#361)
 
@@ -20,7 +20,7 @@
 - [x] 3.2 Write the command-count tests from the vcs delta spec: a re-read on a branch and on a detached HEAD runs one command; an unborn HEAD reports its branch and no commit; a repository git refuses to read raises vcs.failed naming the command. Verify the one-command tests fail on today's read and the others pass.
 - [x] 3.3 Change `GitAdapter._current()` to read with `git rev-parse HEAD --symbolic-full-name HEAD --abbrev-ref=loose HEAD --`, falling back to today's three commands when it fails (design D4), keeping stat-then-read. Verify 3.1, 3.2 and every existing test in `packages/troupe-vcs-git/tests` pass, including all four `TestMoves…` layouts.
 - [x] 3.4 Make the cuts recorded in 1.5, if any, each with a test that fails without it and passes with it. Verify the test results, or, when 1.5 recorded no further cut, that design.md says why.
-- [ ] 3.5 Update the module docstring and `contributing/platform.md`'s cache paragraph to say a re-read runs one command once HEAD has a commit, and update the vcs spec citation in the docstring if it changes. Verify the docs match the vcs delta spec, and commit with `uv run scripts/check.py` passing.
+- [x] 3.5 Update the module docstring and `contributing/platform.md`'s cache paragraph to say a re-read runs one command once HEAD has a commit, and update the vcs spec citation in the docstring if it changes. Verify the docs match the vcs delta spec, and commit with `uv run scripts/check.py` passing.
 
 ## 4. Measure after and record
 

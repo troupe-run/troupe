@@ -318,7 +318,7 @@ def reads_twice(repo: Repo, now: int) -> int:
 
 
 def test_a_read_within_the_racy_window_is_read_again(repo: Repo) -> None:
-    assert reads_twice(repo, newest_git_file(repo) + SECOND // 20) == 3
+    assert reads_twice(repo, newest_git_file(repo) + SECOND // 20) == 1
 
 
 def test_a_read_past_the_racy_window_is_reused(repo: Repo) -> None:
@@ -331,5 +331,136 @@ def test_whole_second_timestamps_get_the_coarse_window(repo: Repo) -> None:
         for name in names:
             os.utime(Path(directory) / name, ns=(whole, whole))
     # Past the 0.1 s window, but within the 2 s one that coarse timestamps get.
-    assert reads_twice(repo, whole + SECOND) == 3
+    assert reads_twice(repo, whole + SECOND) == 1
     assert reads_twice(repo, whole + 3 * SECOND) == 0
+
+
+# The read itself (git-call-latency design D4): whatever refs share the checked-out branch's name,
+# whether HEAD is born, unborn or detached, and whatever the work tree holds, a read reports exactly
+# what git's own symbolic-ref --short and rev-parse report. Each check uses a fresh adapter, so it
+# reads rather than answering from a cache.
+
+NAME_REFS = (
+    "refs/tags/{}",
+    "refs/{}",
+    "refs/remotes/{}",
+    "refs/remotes/{}/HEAD",
+    "refs/heads/heads/{}",
+)
+"""Refs whose existence changes, or could change, git's short name for ``refs/heads/<name>``."""
+
+
+class Names(RuleBasedStateMachine):
+    """Random names, births and detaches, with each read checked against git's own answers."""
+
+    layout = LAYOUTS[0]
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.root = Path(tempfile.mkdtemp())
+        self.repo = make_repo(self.root, refs=self.layout.refs)
+        self.orphans = 0
+
+    def teardown(self) -> None:
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    def current(self) -> str:
+        return self.repo.git("branch", "--show-current").strip()
+
+    def has(self, ref: str) -> bool:
+        found = subprocess.run(
+            ["git", "show-ref", "--verify", "-q", ref],  # noqa: S607 - git from PATH
+            cwd=self.repo.path,
+            env=self.repo.env,
+            check=False,
+        )
+        return found.returncode == 0
+
+    def born(self) -> bool:
+        head = subprocess.run(
+            ["git", "rev-parse", "--verify", "-q", "HEAD"],  # noqa: S607 - git from PATH
+            cwd=self.repo.path,
+            env=self.repo.env,
+            capture_output=True,
+            check=False,
+        )
+        return head.returncode == 0
+
+    @rule()
+    def commit(self) -> None:
+        empty_commit(self.repo)
+
+    @rule(name=st.sampled_from(["main", "heads/main", "tags/main", "heads/x", "tags/x", "x"]))
+    def switch_to_a_new_branch(self, name: str) -> None:
+        if not self.born() or self.has(f"refs/heads/{name}"):
+            return
+        self.repo.git("switch", "-q", "-c", name)
+
+    @rule()
+    def start_an_orphan_branch(self) -> None:
+        self.orphans += 1
+        self.repo.git("switch", "-q", "--orphan", f"orphan-{self.orphans}")
+
+    @rule()
+    def detach(self) -> None:
+        if self.born():
+            self.repo.git("switch", "-q", "--detach")
+
+    @rule(shape=st.sampled_from(NAME_REFS), add=st.booleans())
+    def a_ref_named_after_the_branch(self, shape: str, add: bool) -> None:
+        current = self.current()
+        if not current or not self.born():
+            return
+        ref = shape.format(current)
+        if ref == f"refs/heads/{current}":
+            return
+        exists = self.has(ref)
+        if add and not exists:
+            run_git(self.repo.path, self.repo, "update-ref", ref, "HEAD")
+        elif not add and exists:
+            run_git(self.repo.path, self.repo, "update-ref", "-d", ref)
+
+    @rule(kind=st.sampled_from(["file", "directory", "none"]))
+    def something_named_head_in_the_work_tree(self, kind: str) -> None:
+        target = self.repo.path / "HEAD"
+        if target.is_dir():
+            shutil.rmtree(target)
+        elif target.exists():
+            target.unlink()
+        if kind == "file":
+            target.write_text("not a ref\n")
+        elif kind == "directory":
+            target.mkdir()
+            (target / "inside").write_text("not a ref\n")
+
+    @invariant()
+    def a_read_reports_gits_answers(self) -> None:
+        fresh = GitAdapter(self.repo.path, source=self.repo.env)
+        assert (fresh.branch(), fresh.head()) == gits_answers(self.repo)
+
+
+def _names(layout: Layout) -> type[Names]:
+    machine: type[Names] = type(f"Names_{layout.id}", (Names,), {"layout": layout})
+    machine.TestCase.settings = settings(
+        max_examples=10,
+        stateful_step_count=12,
+        deadline=None,
+        suppress_health_check=[HealthCheck.too_slow],
+    )
+    return machine
+
+
+TestNamesFiles = _names(LAYOUTS[0]).TestCase
+TestNamesReftable = _names(LAYOUTS[2]).TestCase
+
+
+@pytest.mark.parametrize("refs", ["files", "reftable"])
+@pytest.mark.parametrize("shape", NAME_REFS)
+def test_a_ref_sharing_the_branchs_name_leaves_gits_short_name(
+    tmp_path: Path, refs: str, shape: str
+) -> None:
+    repo = make_repo(tmp_path, refs=refs)
+    empty_commit(repo)
+    run_git(repo.path, repo, "update-ref", shape.format("main"), "HEAD")
+    fresh = GitAdapter(repo.path, source=repo.env)
+    assert (fresh.branch(), fresh.head()) == gits_answers(repo)

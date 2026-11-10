@@ -12,6 +12,7 @@ merge sides in troupe_vcs_git.merges.
 The branch and HEAD are cached behind the branch token: the stats of every file git changes when
 either moves. They are read through git again only when one of those files has changed, so
 recording event after event runs no command while nothing moves (cache-vcs-state design D1, D3).
+A read again is one rev-parse once HEAD has a commit (git-call-latency design D4).
 
 A directory is in a repository only when git reports it inside a work tree, so neither a git
 directory nor a bare repository can hold a theatre (init-and-audition design D7).
@@ -217,22 +218,56 @@ class GitAdapter:
         ):
             return state
         # Stat before reading: a move during the read leaves the stats older than the answers, so
-        # the next call reads again. It never leaves the answers older than the stats.
+        # the next call reads again. It never leaves the answers older than the stats. The branch's
+        # ref is stat'd before the read when it's the one read last time; a ref the read names for
+        # the first time can only be stat'd after it, and a move in between leaves that ref's mtime
+        # past read_at, within the racy window, so the answer isn't reused (git-call-latency D4).
+        guess = None if state is None else state.ref
+        guess_stat = None if guess is None else _stat_token(guess)
+        if _looks_unborn(common, paths[0], watched):
+            branch, head, ref = self._read_unborn(common)
+        else:
+            branch, head, ref = self._read(common)
+        ref_stat = guess_stat if ref == guess else None if ref is None else _stat_token(ref)
+        racy = self._racy(read_at, (*watched, ref_stat))
+        state = _State(watched, ref, ref_stat, branch, head, racy)
+        self._state = state
+        return state
+
+    def _read(self, common: Path) -> tuple[str | None, str | None, Path | None]:
+        """The branch, HEAD and the branch's ref file, read in one command once HEAD has a commit
+        (git-call-latency design D4). ``--abbrev-ref=loose`` gives the short name exactly as
+        ``symbolic-ref --short`` does, as lineage has always recorded it (cache-vcs-state D2);
+        both say ``HEAD`` when it is detached."""
+        completed = self.git(
+            "rev-parse",
+            "HEAD",
+            "--symbolic-full-name",
+            "HEAD",
+            "--abbrev-ref=loose",
+            "HEAD",
+            "--",
+            allow=(0, _NOT_A_REPOSITORY),
+        )
+        if completed.returncode == 0:
+            head, full, short, _ = completed.stdout.decode("utf-8").splitlines()
+            if full == "HEAD":
+                return None, head, None  # detached
+            return short, head, common / full
+        # No commit yet, or a failure: the commands that tell those apart without reading git's
+        # message, where exit status 1 means no answer and anything else is vcs.failed.
+        return self._read_unborn(common)
+
+    def _read_unborn(self, common: Path) -> tuple[str | None, str | None, Path | None]:
         full = self.git("symbolic-ref", "--quiet", "HEAD", allow=(0, _NO_ANSWER))
         ref: Path | None = None
-        ref_stat: _Stat = None
         branch: str | None = None
         if full.returncode != _NO_ANSWER:  # detached, otherwise
             ref = common / full.stdout.decode("utf-8").strip()
-            ref_stat = _stat_token(ref)
-            # The short name, as lineage has always recorded it (design D2).
             short = self.git("symbolic-ref", "--quiet", "--short", "HEAD", allow=(0, _NO_ANSWER))
             if short.returncode != _NO_ANSWER:
                 branch = short.stdout.decode("utf-8").strip()
-        racy = self._racy(read_at, (*watched, ref_stat))
-        state = _State(watched, ref, ref_stat, branch, self._read_head(), racy)
-        self._state = state
-        return state
+        return branch, self._read_head(), ref
 
     def _racy(self, read_at: int, stats: tuple[_Stat, ...]) -> bool:
         """Git's own "racily clean" rule: an answer read within the window of a watched file's last
@@ -327,6 +362,23 @@ class GitAdapter:
 
     def file_states(self, directory: Path, at: str | None = None) -> Mapping[str, str]:
         return self._states.file_states(directory, at)
+
+
+def _looks_unborn(common: Path, head_file: Path, watched: tuple[_Stat, ...]) -> bool:
+    """Whether HEAD looks unborn, from files alone: a files-backend repository with no
+    ``packed-refs``, whose HEAD names a loose ref that doesn't exist. Only which commands read the
+    answers depends on this, never the answers: an unborn HEAD is read in three commands rather
+    than a failed rev-parse and those three (git-call-latency design D5)."""
+    packed_refs, common_tables = watched[_WATCHED.index("packed-refs")], watched[-1]
+    if packed_refs is not None or common_tables is not None:
+        return False  # refs may be packed, or kept in reftable: only git can tell
+    try:
+        text = head_file.read_text("utf-8")
+    except (OSError, UnicodeDecodeError):
+        return False
+    if not text.startswith("ref: "):
+        return False  # detached
+    return _stat_token(common / text.removeprefix("ref: ").strip()) is None
 
 
 def _nul_separated(data: bytes) -> list[str]:
