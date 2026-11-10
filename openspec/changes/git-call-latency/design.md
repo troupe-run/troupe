@@ -298,3 +298,18 @@ three, which is why the processes still fell. What's left of the branch and HEAD
 The faster perform made five of its reads racy, against one before, so the one-process read saved two processes
 rather than six. Both remaining costs, racy re-reads and three-command unborn reads, can only be cut by changing how
 #75's rule reads git's state, so they're the owner's call (D5).
+
+**CI**, pytest's time per leg ("tests passed in"), the merge queue's run of the base commit 3678f411 (42814612832)
+against this pull request's run on 6aea9ace (42861623723, Python 3.12 / 3.13 / 3.14 / 3.15):
+
+| Leg | Base | Change |
+|---|---|---|
+| macOS | 794 / 791 / 769 / 777 s | 443 / 357 / 353 / 432 s |
+| Linux | 227 / 252 / 248 / 235 s | 174 / 178 / 156 / 159 s |
+| Windows | 486 / 581 / 514 / 456 s | 690 / 505 / 702 / 700 s |
+
+macOS roughly halves and Linux falls by about 30%. Windows shows no clear change. The base's Windows times were
+unusually fast: five other recent runs without this change took 487–772 s on Windows, mostly 670–770 s. On the
+first attempt, Ubuntu 3.14 and Windows 3.12 each failed one runner test that's already tracked as flaky (#301 and
+#353 for Ollama, #359 for OpenAI on Windows). Neither runner calls `run_to_completion`, and both legs passed on
+re-run.

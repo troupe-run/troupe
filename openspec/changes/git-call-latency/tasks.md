@@ -32,7 +32,7 @@
 ## 5. Pull request and CI
 
 - [x] 5.1 Open a draft pull request that closes #360 and #361 (`Closes #360`, `Closes #361`), with the Measured numbers in its body. Verify `gh pr view` shows both closing references.
-- [ ] 5.2 Act on Claude's review of the last push per CLAUDE.md, then mark the PR ready. Verify the Linux, macOS and Windows legs all pass on the head, including `test_platform_processes.py` on Windows, and record each leg's pytest time from the job logs against the last `main` run in the PR and in design.md's Measured section.
+- [x] 5.2 Act on Claude's review of the last push per CLAUDE.md, then mark the PR ready. Verify the Linux, macOS and Windows legs all pass on the head, including `test_platform_processes.py` on Windows, and record each leg's pytest time from the job logs against the last `main` run in the PR and in design.md's Measured section.
 
 ## Workflow follow-up
 
