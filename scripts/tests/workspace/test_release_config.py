@@ -671,44 +671,52 @@ def test_every_workspace_member_is_configured_for_release() -> None:
 # pinned like its dependencies"; runner-extras design D3).
 
 LM_STUDIO = "troupe-runner-lm-studio"
-LM_STUDIO_PATH = "plugins/runner-lm-studio"
+EXAMPLE = "troupe-runner-example"
+EXAMPLE_PATH = "plugins/runner-example"
+LIBRARY = "example-client>=1"
+"""lm-studio is the first runner in an extra (#291): each case keeps it, and adds a fixture runner,
+example, for the next one."""
 
 
 def test_a_pin_in_an_extra_to_another_subdirectory_names_the_extra(copy: Path) -> None:
-    bundle_state.add_runner(copy, "lm-studio", extra="lm-studio")
-    set_version(copy, LM_STUDIO_PATH, "0.1.0")
-    wrong = release_config.pin(LM_STUDIO, "0.1.0", "plugins/runner-ollama")
-    bundle_state.set_extras(copy, {"lm-studio": [wrong], "all": [wrong]})
+    bundle_state.add_runner(copy, "example", library=LIBRARY, extra="example")
+    set_version(copy, EXAMPLE_PATH, "0.1.0")
+    wrong = release_config.pin(EXAMPLE, "0.1.0", "plugins/runner-ollama")
+    bundle_state.set_extras(
+        copy, {"lm-studio": [LM_STUDIO], "example": [wrong], "all": [LM_STUDIO, wrong]}
+    )
     pyproject = f"{bundle_member(copy)}/pyproject.toml"
-    expected = release_config.pin(LM_STUDIO, "0.1.0", LM_STUDIO_PATH)
+    expected = release_config.pin(EXAMPLE, "0.1.0", EXAMPLE_PATH)
     assert release_config.problems(copy) == [
-        f"{LM_STUDIO}'s entry in the 'lm-studio' extra of {pyproject} is {wrong!r}: pin it as "
+        f"{EXAMPLE}'s entry in the 'example' extra of {pyproject} is {wrong!r}: pin it as "
         f'"{expected}", or name it bare.'
     ]
 
 
 def test_a_pin_in_an_extra_ahead_of_the_release_names_the_extra(copy: Path) -> None:
-    bundle_state.add_runner(copy, "lm-studio", extra="lm-studio")
-    set_version(copy, LM_STUDIO_PATH, "0.1.0")
-    ahead = release_config.pin(LM_STUDIO, "0.2.0", LM_STUDIO_PATH)
-    bundle_state.set_extras(copy, {"lm-studio": [ahead], "all": [ahead]})
+    bundle_state.add_runner(copy, "example", library=LIBRARY, extra="example")
+    set_version(copy, EXAMPLE_PATH, "0.1.0")
+    ahead = release_config.pin(EXAMPLE, "0.2.0", EXAMPLE_PATH)
+    bundle_state.set_extras(
+        copy, {"lm-studio": [LM_STUDIO], "example": [ahead], "all": [LM_STUDIO, ahead]}
+    )
     pyproject = f"{bundle_member(copy)}/pyproject.toml"
     assert release_config.problems(copy) == [
-        f"{pyproject}'s 'lm-studio' extra pins {LM_STUDIO} at 0.2.0, but {MANIFEST} gives "
-        f"{LM_STUDIO_PATH} 0.1.0: pin a version it has released, at most 0.1.0."
+        f"{pyproject}'s 'example' extra pins {EXAMPLE} at 0.2.0, but {MANIFEST} gives "
+        f"{EXAMPLE_PATH} 0.1.0: pin a version it has released, at most 0.1.0."
     ]
 
 
 def test_a_member_bare_in_an_extra_counts_as_bare(everything_pinned: Path) -> None:
-    bundle_state.add_runner(everything_pinned, "lm-studio", extra="lm-studio")
-    assert bare(everything_pinned) == [LM_STUDIO]
-    assert release_config.problems(everything_pinned) == [missing(everything_pinned, [LM_STUDIO])]
+    bundle_state.add_runner(everything_pinned, "example", library=LIBRARY, extra="example")
+    assert bare(everything_pinned) == [EXAMPLE]
+    assert release_config.problems(everything_pinned) == [missing(everything_pinned, [EXAMPLE])]
 
 
 def test_a_member_bare_in_an_extra_with_the_exclusion_has_no_problems(
     everything_pinned: Path,
 ) -> None:
-    bundle_state.add_runner(everything_pinned, "lm-studio", extra="lm-studio")
+    bundle_state.add_runner(everything_pinned, "example", library=LIBRARY, extra="example")
     bundle_state.exclude(everything_pinned)
     assert release_config.problems(everything_pinned) == []
     assert bundle_check.problems(everything_pinned) == []

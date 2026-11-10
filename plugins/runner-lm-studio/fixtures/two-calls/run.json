@@ -1,0 +1,15 @@
+{
+ "direction": "Read notes.txt, then write its first line into out/first.txt.",
+ "options": {
+  "maxTurns": 6,
+  "maxTotalTokens": 50000
+ },
+ "effects": {
+  "write": [
+   "out/**"
+  ],
+  "delete": [],
+  "move": []
+ },
+ "model": "google/gemma-4-e4b"
+}

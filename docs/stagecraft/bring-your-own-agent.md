@@ -11,7 +11,7 @@ swap the agent by swapping its runner, and your process stays the same.
 
 ## Runners today
 
-troupe ships four runners:
+troupe ships five runners:
 
 - **The scripted runner** plays a script instead of running an agent, so you can try troupe offline.
 - **The Claude Code runner** runs [Claude Code](https://code.claude.com) with your existing login. It leaves out your
@@ -33,8 +33,13 @@ troupe ships four runners:
   the limits its options set (`maxTurns`, `maxTotalTokens`)
   ([Try it on OpenAI](../opening-night/first-performance.md#try-it-on-openai)).
 
-A runner for LM Studio, through its own API, is planned next
-([#291](https://github.com/troupe-run/troupe/issues/291)).
+- **The LM Studio runner** runs a model in [LM Studio](https://lmstudio.ai) on your own computer, through LM Studio's
+  own client library: the library runs the model's rounds, and troupe carries out each tool call it asks for, checked
+  against the actor's effects. It needs no credential and costs nothing per run. It comes with
+  `troupe-run[lm-studio]` ([Install](../opening-night/install.md#runners-that-come-as-extras)), and LM Studio's server
+  must be running with Require Authentication off. Where LM Studio listens comes from a [runtime](runtimes.md), the
+  built-in `lm-studio` for the LM Studio on your machine. The actor names the model, and its options the limits
+  (`maxTurns`, `maxTotalTokens`) and the context length (`contextLength`).
 
 You can write a runner for any agent today, and check it against the contract, but you can't run it with
 `troupe perform` yet: until config names runners ([#60](https://github.com/troupe-run/troupe/issues/60)),

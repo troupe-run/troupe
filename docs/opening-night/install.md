@@ -47,7 +47,8 @@ uv tool install --no-sources "troupe-run[all] @ git+https://github.com/troupe-ru
 
 | Extra | Installs |
 |---|---|
-| `all` | Every runner that comes as an extra. No runner does yet, so for now it installs what the command above does. |
+| `all` | Every runner that comes as an extra. |
+| `lm-studio` | The LM Studio runner, which drives a model in [LM Studio](https://lmstudio.ai) through LM Studio's own client library, `lmstudio`. |
 
 An actor on a runner you haven't installed is refused, and the message names the extra to install.
 

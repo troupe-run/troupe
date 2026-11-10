@@ -743,7 +743,7 @@ def test_an_options_value_on_an_uninstalled_runner_is_refused_naming_the_actors_
     assert code == 0, err
     code, _, err = cli("config", "set", "actors.tester.runner=lm-studio")
     assert code == 0, err
-    gone = replace(interim.RUNNERS["lm-studio"], package="troupe_runner_lm_studio")
+    gone = replace(interim.RUNNERS["lm-studio"], package="troupe_runner_not_installed")
     monkeypatch.setitem(interim.RUNNERS, "lm-studio", gone)
     before = len(git_service(repo).history(aggregate.STREAM))
     code, _, err = cli("config", "set", "--json", 'actors.tester.options.script={"steps": []}')

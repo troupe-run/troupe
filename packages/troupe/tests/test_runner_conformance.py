@@ -14,6 +14,7 @@ from typing import Any
 import pytest
 
 import claude_stand_in
+import lm_studio_stand_in
 import ollama_stand_in
 import openai_stand_in
 from troupe.core.runners.conformance import CheckResult, check_runner
@@ -201,6 +202,27 @@ def test_the_openai_style_runner_passes_every_check_given_a_runtime_naming_a_sta
         assert fake.requests
         assert {r.headers["authorization"] for r in fake.requests} == {f"Bearer {key}"}
     assert {r.name: r.problem for r in results if not r.passed} == {}
+    assert len(results) == 8
+
+
+def test_the_lm_studio_runner_passes_every_check_given_a_runtime_naming_a_stand_in(
+    tmp_path: Path,
+) -> None:
+    # Spec: lm-studio-runner, "The runner conforms to the contract" (lmstudio-runner task 10.2).
+    # Each check starts its own run, so the stand-in serves more runs than the suite starts, each
+    # slow enough for the checks that cancel one mid-run.
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    with lm_studio_stand_in.serving(runs=20, text=" ".join(["word"] * 40), pause=0.05) as fake:
+        results = _check(
+            [sys.executable, "-m", "troupe_runner_lm_studio"],
+            dict(lm_studio_stand_in.TEST_LIMITS),
+            workspace,
+            RunLimits(start_timeout=10.0, cancel_grace=10.0, run_timeout=30.0),
+            {},
+            RunStartRuntime("test", fake.endpoint, lm_studio_stand_in.MODEL, credential=False),
+        )
+    assert {name: r.problem for name, r in results.items() if not r.passed} == {}
     assert len(results) == 8
 
 

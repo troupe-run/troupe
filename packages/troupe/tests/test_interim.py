@@ -55,9 +55,9 @@ def test_an_unknown_runner_is_refused_naming_every_runner_troupe_ships() -> None
         runner_command("codex")
     assert caught.value.details == {
         "runner": "codex",
-        "known": ["claude-code", "ollama", "openai", "scripted"],
+        "known": ["claude-code", "lm-studio", "ollama", "openai", "scripted"],
     }
-    assert "claude-code, ollama, openai, scripted" in caught.value.fix
+    assert "claude-code, lm-studio, ollama, openai, scripted" in caught.value.fix
 
 
 def test_openai_resolves_to_its_module_requiring_a_runtime_and_naming_no_credential() -> None:
@@ -78,6 +78,7 @@ def test_openai_resolves_to_its_module_requiring_a_runtime_and_naming_no_credent
 def test_what_each_runner_takes_as_a_runtime() -> None:
     assert {name: runner.runtime for name, runner in RUNNERS.items()} == {
         "claude-code": "none",
+        "lm-studio": "required",
         "ollama": "required",
         "openai": "required",
         "scripted": "optional",
@@ -95,11 +96,18 @@ def absent(*, in_extra: bool) -> Runner:
     )
 
 
-def test_every_shipped_runner_is_in_the_base_install() -> None:
-    """No shipped runner depends on more than the SDK yet (#291, #331 and #332 add the first)."""
+def test_only_the_lm_studio_runner_comes_as_an_extra() -> None:
+    """lm-studio depends on LM Studio's client library, so it's troupe-run's lm-studio extra;
+    every other shipped runner depends only on the SDK (#291; #331 and #332 add more)."""
     assert {name: entry.in_extra for name, entry in RUNNERS.items()} == {
-        name: False for name in RUNNERS
+        name: name == "lm-studio" for name in RUNNERS
     }
+
+
+def test_lm_studio_resolves_to_its_module_requiring_a_runtime_given_no_variables() -> None:
+    assert list(runner_command("lm-studio"))[1:] == ["-m", "troupe_runner_lm_studio"]
+    assert RUNNERS["lm-studio"].runtime == "required"
+    assert RUNNERS["lm-studio"].environment == ()
 
 
 @pytest.mark.parametrize(

@@ -267,12 +267,12 @@ text, unless the prediction stopped for a reason other than its natural end.
 
 ### Requirement: The result carries the run's counts
 The result SHALL report the sum of each round's prompt tokens as input tokens and predicted tokens as output tokens,
-no cache counters, and the number of turns and tool calls the run reported. It SHALL report no `costUsd`, since
-LM Studio reports no cost.
+no cache counters, and the number of rounds the run made as its `turns`. It SHALL report no `costUsd`, since LM Studio
+reports no cost.
 
 #### Scenario: Counts from two rounds
-- **WHEN** a run's two rounds report 1000 and 1300 prompt tokens and 100 and 200 predicted tokens, with one call
-- **THEN** the result reports 2300 input tokens, 300 output tokens, the turns reported, one tool call and no `costUsd`
+- **WHEN** a run's two rounds report 1000 and 1300 prompt tokens and 100 and 200 predicted tokens
+- **THEN** the result reports 2300 input tokens, 300 output tokens, `turns` 2 and no `costUsd`
 
 ### Requirement: A cost is estimated only from run start's price
 When `run/start`'s runtime carries a price, the result SHALL carry `estimatedCostUsd`, the run's input and output
@@ -294,22 +294,22 @@ SHALL carry no estimate.
 ### Requirement: Every error result names its reason
 Every `error` result SHALL carry the contract's `reason`: `turn-limit` for the turn limit, `budget` for the token
 budget, `context-length` when the context was reached, `output-limit` when the predicted-token limit was, `network`
-for a lost connection, `cancelled` after `run/cancel`, `engine` when the model was unloaded or the prediction failed,
-and `other` for anything else, its message saying what happened.
+for a lost connection or a timeout, `engine` when the model was unloaded or the prediction failed, and `other` for
+anything else, its message saying what happened. After `run/cancel` the runner sends no result.
 
 #### Scenario: Each ending's reason
 - **WHEN** runs end at the turn limit, at the token budget, at the context length, after a connection retried until
-  its attempts ran out, after `run/cancel`, and after the model was unloaded
-- **THEN** their results' reasons are `turn-limit`, `budget`, `context-length`, `network`, `cancelled` and `engine`
+  its attempts ran out, and after the model was unloaded
+- **THEN** their results' reasons are `turn-limit`, `budget`, `context-length`, `network` and `engine`
 
 #### Scenario: A stop reason the runner doesn't know
-- **WHEN** a round's prediction stops with a reason the runner doesn't map
+- **WHEN** a round's prediction stops with a reason the runner doesn't map, or one LM Studio's library refuses
 - **THEN** the run ends with an `error` result, `reason` `other`, whose message names that stop reason
 
 ### Requirement: A model other than the run's is reported
-When a round's result names a model key other than the run's model, the runner SHALL send `served_model` with that key
-the first time it answers, before that round's events, and a key outside the contract's shape as a `log` warning
-instead.
+When the loaded model, or a round's result, names a model key other than the run's model, the runner SHALL send
+`served_model` with that key the first time it's named, before any turn it answers, and a key outside the contract's
+shape as a `log` warning instead.
 
 #### Scenario: The model asked for answers
 - **WHEN** every round's result names the run's model

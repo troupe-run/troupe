@@ -37,7 +37,7 @@ def lm_studio(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def uninstall(monkeypatch: pytest.MonkeyPatch) -> None:
-    gone = dataclasses.replace(interim.RUNNERS["lm-studio"], package="troupe_runner_lm_studio")
+    gone = dataclasses.replace(interim.RUNNERS["lm-studio"], package="troupe_runner_not_installed")
     monkeypatch.setitem(interim.RUNNERS, "lm-studio", gone)
 
 

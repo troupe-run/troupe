@@ -238,6 +238,28 @@ def test_the_openai_actor_names_its_runtime_and_model_with_small_limits_and_writ
     assert (repo.path / ".troupe" / "actors" / "lead.md").read_text(encoding="utf-8").strip()
 
 
+# Requirement: The LM Studio audition can edit files with a small local model (spec: config;
+# lmstudio-runner design D15)
+
+
+def test_the_lm_studio_actor_names_its_runtime_and_model_with_small_limits_and_write_effects(
+    repo: Repo,
+) -> None:
+    _init(repo.path, _env(repo), audition={"runner": "lm-studio"})
+    lead = read(git_service(repo)).config["actors"]["lead"]
+    assert lead == {
+        "runner": "lm-studio",
+        "runtime": "lm-studio",
+        "model": auditions.LM_STUDIO_AUDITION_MODEL,
+        "options": {"maxTurns": 10, "maxTotalTokens": 100_000},
+        "effects": {"write": ["**"]},
+        "expect": [],
+        "character": auditions.CHARACTER,
+    }
+    assert "workspace" not in lead
+    assert (repo.path / ".troupe" / "actors" / "lead.md").read_text(encoding="utf-8").strip()
+
+
 # Requirement: The Claude Code audition can edit files on a small budget (spec: config)
 
 
@@ -308,7 +330,7 @@ def test_an_unknown_runner_is_refused_naming_the_known_ones_and_nothing_is_made(
     error = _refused(repo.path, _env(repo), audition={"runner": "gemini"})
     assert error.code == "runner.unknown"
     assert "gemini" in error.problem
-    assert error.details["known"] == ["claude-code", "ollama", "openai", "scripted"]
+    assert error.details["known"] == ["claude-code", "lm-studio", "ollama", "openai", "scripted"]
     assert not (repo.path / ".troupe").exists()
 
 
@@ -318,7 +340,7 @@ def test_a_runner_that_isnt_installed_is_refused_naming_its_extra_and_nothing_is
 ) -> None:
     """cli: "A runner that isn't installed" (runner-extras design D8)."""
     absent = dataclasses.replace(
-        interim.RUNNERS["scripted"], package="troupe_runner_lm_studio", in_extra=True
+        interim.RUNNERS["scripted"], package="troupe_runner_not_installed", in_extra=True
     )
     monkeypatch.setitem(interim.RUNNERS, "lm-studio", absent)
     asked = {"audition": {"runner": "lm-studio"}} | ({"rehearse": True} if rehearse else {})

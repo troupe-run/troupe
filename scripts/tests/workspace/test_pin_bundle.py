@@ -131,9 +131,8 @@ def test_the_first_pin_pins_every_member_and_changes_nothing_else(copy: Path) ->
     expected = before
     for path, name in release_config.members(copy).items():
         if name != "troupe-run":
-            expected = expected.replace(
-                f'"{name}"', f'"{release_config.pin(name, "0.1.0", path)}"', 1
-            )
+            # A runner in an extra is named twice, in its extra and in 'all': both are pinned.
+            expected = expected.replace(f'"{name}"', f'"{release_config.pin(name, "0.1.0", path)}"')
     assert expected != before
     assert pyproject.read_bytes().decode() == expected
 
@@ -378,7 +377,7 @@ def test_a_release_of_a_runner_in_an_extra_moves_its_pin_in_the_extra_and_in_all
 ) -> None:
     """releases: "A runner in an extra released" (runner-extras design D3)."""
     bundle_state.copy_runner_table(REPO, copy)
-    name = bundle_state.add_runner(copy, "lm-studio", extra="lm-studio")
+    name = bundle_state.add_runner(copy, "example", library="example-client>=1", extra="example")
     path = path_of(copy, name)
     (copy / path / "CHANGELOG.md").write_bytes(changelog(name).encode())
     release(copy, name, "0.1.0")
@@ -391,6 +390,7 @@ def test_a_release_of_a_runner_in_an_extra_moves_its_pin_in_the_extra_and_in_all
     after = bundle_pyproject(copy).read_bytes()
     old = release_config.pin(name, "0.1.0", path)
     new = release_config.pin(name, "0.1.1", path)
-    assert bundle_state.extras(copy)["lm-studio"] == [new]
-    assert bundle_state.extras(copy)["all"] == [new]
+    assert bundle_state.extras(copy)["example"] == [new]
+    assert new in bundle_state.extras(copy)["all"]
+    assert old not in bundle_state.extras(copy)["all"]
     assert after == before.replace(old.encode(), new.encode())

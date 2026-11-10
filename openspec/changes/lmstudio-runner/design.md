@@ -329,7 +329,8 @@ Five contract changes landed on main while this one waited for #333, and the run
 - **`reason`** (#296): every `error` result names one reason from the contract's closed list. `turn-limit` and
   `budget` (D5), `context-length` for `contextLengthReached`, `output-limit` for `maxPredictedTokensReached`, `engine`
   for `modelUnloaded` and `failed`, `network` for a lost connection, whether retries ran out or a call had already run
-  (D10), `cancelled` after `run/cancel` (D9), and `other`, its message naming what happened, for anything else.
+  (D10), and `other`, its message naming what happened, for anything else. After `run/cancel` the runner sends no
+  result, as the OpenAI runner does, so `cancelled` is never needed.
 - **`estimatedCostUsd`** (#292): LM Studio reports no cost, so `costUsd` is always absent. When `run/start`'s runtime
   carries a price, the result estimates the run's input and output tokens at it. A price with a cache rate gets no
   estimate, since LM Studio reports no cache counters and the contract forbids pricing one kind of token at another's
