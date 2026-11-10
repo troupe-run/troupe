@@ -2,10 +2,11 @@
 
 ## Context
 
-See proposal.md for why. The code this touches, as it is on main (`3678f411`):
+See proposal.md for why. The code this touches, as it was on main when this was written (`3678f411`, before #338
+merged; the branch was then rebased onto `71c76ced`, D11):
 
 - **Runner table.** `troupe.core.interim.RUNNERS` maps a runner's name to a frozen `Runner`: `command`, `package`,
-  `environment`, and `runtime` (`"required"`, `"optional"` or `"none"`). PR #338 (#333, not yet merged) adds
+  `environment`, and `runtime` (`"required"`, `"optional"` or `"none"`). PR #338 (#333), since merged, adds
   `in_extra: bool = False` after `runtime`, a docstring citing its design, and `installed_runner()`. The table is
   interim: when plugins are named in config (#38) it is deleted, and what it says moves to each plugin's declaration.
 - **Actor rules.** `core/config/kinds.py`: `problems(config)` checks runtimes, then each actor with
@@ -180,9 +181,10 @@ migration step.
 
 ### D11. Built on main, rebased past #338
 
-This change touches `interim.py` and `error.schema.json`, which #338 also changes. It is built on main and follows
-#338's shape (D1); once #338 merges, the branch is rebased onto main and `fit` goes after `in_extra`. The
-`track-b-26-333` session is told what this adds to the table, so neither surprises the other.
+This change touches `interim.py` and `error.schema.json`, which #338 also changes. It was started on main and
+follows #338's shape (D1). #338 merged as `71c76ced` while groups 1 and 2 were in progress; the branch was rebased
+onto it cleanly, `fit` sits after `in_extra`, and both new codes are catalogued. The `track-b-26-333` session was
+told what this adds to the table, and confirmed #338 needed no further change to `Runner` or `actor_problems`.
 
 ## Risks / Trade-offs
 
