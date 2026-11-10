@@ -75,7 +75,8 @@ before it starts and run one at a time. Every reproduction records its assertion
   pass, and that a local run with the first request delayed past `REQUEST_WITHIN` fails with the message.
 - [x] 4.3 Make the OpenAI fake's `Pause` wait until a `time.monotonic()` deadline (D4). Verify with a test that
   replaces `time.monotonic` with a 15.625 ms clock and times the fake's pause alone: main's `time.sleep` pause fails it
-  (3 of 3 local runs, 0.296875 s each time), and the new pause passes. Check the other lower-bound asserts each time a
+  (3 of 3 local runs, 0.296875 s each time), and the new pause passes. A second test checks that a `Pause` sent
+  through `FakeEndpoint` calls `pause()`: with the stream back on `time.sleep`, it fails. Check the other lower-bound asserts each time a
   monotonic-deadline wait with that same clock, and leave them unchanged. Found with
   `grep -rnE "monotonic\(\) - \w+ >=" packages plugins scripts` and a search for `elapsed >=`.
 

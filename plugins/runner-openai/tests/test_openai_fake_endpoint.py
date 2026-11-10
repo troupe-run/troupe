@@ -139,8 +139,18 @@ def test_a_pause_lasts_its_length_by_a_monotonic_clock_as_coarse_as_windows_on_3
     )
     for _ in range(5):  # different start times within a tick
         started = time.monotonic()
-        fake_endpoint.pause(0.3)  # what the fake does for Pause(0.3), without the HTTP around it
+        fake_endpoint.pause(0.3)  # timed alone: the HTTP around it would hide a short pause
         assert time.monotonic() - started >= 0.3
+
+
+def test_a_pause_in_a_stream_is_the_pause_timed_above(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The test above times pause() on its own; this one checks the fake's stream uses it for a
+    # Pause, so a stream can't go back to a bare sleep unnoticed (#352).
+    paused: list[float] = []
+    monkeypatch.setattr(fake_endpoint, "pause", paused.append)
+    with FakeEndpoint([Reply(lines=sse([Pause(0.3)]))]) as fake:
+        _post(fake.endpoint)
+    assert paused == [0.3]
 
 
 def test_a_cut_ends_the_stream_without_done() -> None:
