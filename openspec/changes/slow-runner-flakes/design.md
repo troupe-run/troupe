@@ -11,7 +11,7 @@ See proposal.md for why. What reading the twelve tests showed:
 | #364 | `test_flake_hunt.py::test_an_interrupt_stops_…` | `hunt.wait(10)` and `stopped_in < 5` after the interrupt | Confirmed: on giving up, `finally: hunt.kill()` kills only the hunt. Load runs as `Tree`s in their own sessions on POSIX, so a killed hunt leaves `while True: pass` running. The hunt's own stop bound is `STOP_TIMEOUT_SECONDS` (30.0). |
 | #350 | `test_flake_hunt.py::test_a_test_stuck_past_the_stall_limit_…` | `--stall 2 --round-timeout 8` | Not reproduced. The likely cause is the child pytest's start eating the 8 s. |
 | #359 | `test_openai_runner.py`, the two stop tests | `time.sleep(0.3)` then `len(fake.requests) == 1` | Confirmed by reading: a fixed sleep. |
-| #352 | `test_openai_fake_endpoint.py::test_a_pause_delays_…` | `monotonic() - started >= 0.3` | Likely: `time.monotonic()` on Windows with Python 3.12 ticks about every 15.6 ms. The same shape is in `test_ollama_fake.py:52`, `test_platform_watching.py:132, 292` and `test_run_queries.py:382`. |
+| #352 | `test_openai_fake_endpoint.py::test_a_pause_delays_…` | `monotonic() - started >= 0.3` | Confirmed: the fake's `Pause` is a `time.sleep`, measured with `time.monotonic()`, which ticks every 15.625 ms on Windows with Python 3.12. A 0.3 s sleep reads as 0.296875 s (D4). |
 | #354 | `test_ollama_runner.py::test_both_preflight_requests_share_one_deadline` | `took < PREFLIGHT_TIMEOUT_SECONDS + MARGIN`, timed from before `session.start` | Likely: the 5 s margin covers starting the runner too. |
 | #301, #353 | `test_ollama_runner.py::test_cancel_while_an_answer_streams_…` | `fake.closed_by_client.wait(5)` | Unknown. The runner has exited when the wait starts, so the OS has closed its socket, yet the fake's `_hold` (a `select` then a `recv(1, MSG_PEEK)` every 0.05 s) didn't report it within 5 s. A local run took 22.5 s. |
 | #335 | `test_claude_code_runner.py::test_claude_runs_in_the_workspace_…` | `not any("hi" in arg …)` | Confirmed by reading: the `mkdtemp` suffix and temp roots can hold `hi`. |
@@ -70,16 +70,24 @@ it records each request. The two stop tests call it with a named `REQUEST_WITHIN
 then check that exactly one request arrived, as they do now. A runner that never sends the request still fails, at
 that limit.
 
-### D4. A lower-bound timing assert allows one tick of the clock the waiter used (#352)
+### D4. A fake's pause lasts its length on the clock the test measures with (#352)
 
-`elapsed >= pause` becomes `elapsed >= pause - CLOCK_TICK`, where
-`CLOCK_TICK = time.get_clock_info("monotonic").resolution`, named in each test tree that needs it. That's 15.6 ms
-on Windows with Python 3.12 and about 1 ns elsewhere, so the check is no weaker where the clock is fine.
+The OpenAI fake's `Pause` slept with `time.sleep`, which uses a precise timer, while the test measured it with
+`time.monotonic()`. On Windows with Python 3.12 that clock ticks every 15.625 ms (`GetTickCount64`), so a 0.3 s sleep
+read as 19 ticks: 0.296875 s, the "0.297" #352 saw. The pause now waits until a `time.monotonic()` deadline, as the
+Ollama fake's hold already does. Then it lasts at least its length on that clock, however coarse the clock is. A test
+replaces `time.monotonic` with a 15.625 ms clock and times the fake's pause alone. main's pause fails it in most
+runs, and the new one can't fail it. That gives the evidence on every OS, not only on the Windows 3.12 leg.
 
-*Alternative:* measure with `time.perf_counter()`, as the issue suggests. Rejected as the whole fix. The code being
-timed (the Ollama fake's `_hold`, the platform watchers, the run queries) waits until a *monotonic* deadline. With a
-coarse monotonic clock it can wake up to a tick early in real time, so a perf_counter measurement would still come
-out short. The slack has to match the clock the waiter used.
+The other lower-bound asserts (`test_ollama_fake.py:52`, `test_platform_watching.py:132, 292`,
+`test_run_queries.py:382`, `test_claude_code_processes.py:72`) are left as they are. Each times a wait that ends at a
+`time.monotonic()` deadline (the Ollama fake's `_hold`, `DirectoryWatch.wait`, `Popen.wait`) and measures it with that
+same clock, so it can't come out short. `DirectoryWatch` promises to return after its timeout on every platform, and
+slack would weaken the test of that promise.
+
+*Alternatives:* allow one tick of `time.monotonic()`'s resolution in every lower-bound assert, as first planned.
+Rejected, because it weakens the asserts that are exact. Measuring with `time.perf_counter()`, as the issue suggests,
+leaves the fake's sleep and the measurement on different clocks.
 
 ### D5. The preflight deadline is timed from the first preflight request (#354)
 

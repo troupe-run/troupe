@@ -2,6 +2,7 @@
 (openai-style-runner design D13). The runner's own tests rely on each behaviour here."""
 
 import json
+import math
 import socket
 import threading
 import time
@@ -10,6 +11,7 @@ import urllib.request
 
 import pytest
 
+import fake_endpoint
 from fake_endpoint import (
     Cut,
     FakeEndpoint,
@@ -39,6 +41,17 @@ def test_each_request_is_recorded_with_its_headers_and_body() -> None:
     assert (request.method, request.path) == ("POST", "/v1/responses")
     assert request.headers["authorization"] == "Bearer k"
     assert request.json() == {"model": "m"}
+
+
+def test_waiting_for_requests_ends_when_the_nth_arrives_and_is_false_when_none_does() -> None:
+    with FakeEndpoint([Reply(), Reply()]) as fake:
+        assert not fake.wait_for_requests(1, 0.1), "no request was made"
+        poster = threading.Thread(target=lambda: [_post(fake.endpoint) for _ in range(2)])
+        poster.start()
+        assert fake.wait_for_requests(2, 30)
+        poster.join(30)
+        assert len(fake.requests) == 2
+        assert not fake.wait_for_requests(3, 0.1)
 
 
 def test_a_streamed_reply_is_responses_events_ending_in_the_final_one_with_no_done() -> None:
@@ -77,6 +90,25 @@ def test_a_pause_delays_the_rest_of_the_stream() -> None:
         started = time.monotonic()
         _post(fake.endpoint)
     assert time.monotonic() - started >= 0.3
+
+
+WINDOWS_312_TICK = 0.015625
+"""time.monotonic's resolution on Windows with Python 3.12 (GetTickCount64), where #352 failed."""
+
+
+def test_a_pause_lasts_its_length_by_a_monotonic_clock_as_coarse_as_windows_on_3_12(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A 0.3 s sleep read by a clock that ticks every 15.625 ms comes out as 19 ticks (0.297 s) for
+    # most start times: the failure #352 saw. The fake's pause must last its length by that clock.
+    real = time.monotonic
+    monkeypatch.setattr(
+        time, "monotonic", lambda: math.floor(real() / WINDOWS_312_TICK) * WINDOWS_312_TICK
+    )
+    for _ in range(5):  # different start times within a tick
+        started = time.monotonic()
+        fake_endpoint.pause(0.3)  # what the fake does for Pause(0.3), without the HTTP around it
+        assert time.monotonic() - started >= 0.3
 
 
 def test_a_cut_ends_the_stream_without_done() -> None:

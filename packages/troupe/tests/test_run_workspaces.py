@@ -242,6 +242,21 @@ def topics(made: Harness, run_id: str) -> list[str]:
     return [event.topic.rsplit(":", 1)[1] for event in made.stores[-1].history(UUID(run_id))]
 
 
+def topics_besides_notices(made: Harness, run_id: str) -> list[str]:
+    """The run's recorded topics, less any Run.Noticed. A worktree step slower than
+    WORKSPACE_ANNOUNCE_AFTER_SECONDS, as on a loaded machine, raises workspace.waiting, which the
+    run keeps in its history (#336, #357). Every other topic stays, so an exact comparison still
+    fails on one that shouldn't be there."""
+    return [topic for topic in topics(made, run_id) if topic != "Run.Noticed"]
+
+
+def assert_no_gap(made: Harness, run_id: str) -> None:
+    """The run's versions run 1, 2, ... with none missing: each event was built on the run as
+    recorded, not on a version that counted an event that was never recorded."""
+    versions = [event.version for event in made.stores[-1].history(UUID(run_id))]
+    assert versions == list(range(1, len(versions) + 1))
+
+
 def test_a_worktree_that_fails_to_fill_ends_the_run_could_not_start_and_leaves_no_worktree(
     repo: Repo,
 ) -> None:
@@ -255,7 +270,7 @@ def test_a_worktree_that_fails_to_fill_ends_the_run_could_not_start_and_leaves_n
     assert list((repo.path / ".troupe" / "local" / "worktrees").iterdir()) == []
     [started] = [u for u in made.updates if u.get("kind") == "started"]
     run_id = started["runId"]
-    assert topics(made, run_id) == ["Run.Started", "Run.Ended"]
+    assert topics_besides_notices(made, run_id) == ["Run.Started", "Run.Ended"]
     outcome = history(made, run_id)[-1]["outcome"]
     assert (outcome["outcome"], outcome["ending"]) == ("could-not-start", "never-started")
     assert outcome["error"]["code"] == "vcs.failed"
@@ -276,20 +291,48 @@ def failing_worktree_made(store: EventStore) -> EventStore:
     return store
 
 
+def _slow_to_add(store: EventStore) -> EventStore:
+    """A store whose VCS takes long enough adding a worktree for troupe to announce the wait."""
+    import time
+
+    real = store.vcs.add_worktree
+
+    def slow(*args: object) -> Any:  # noqa: ANN401
+        time.sleep(0.5)
+        return real(*args)  # type: ignore[arg-type]
+
+    store.vcs = _Wrapped(store.vcs, "add_worktree", slow)
+    return store
+
+
+@pytest.mark.parametrize("slow", [False, True], ids=["prompt", "announced-as-slow"])
 def test_a_worktree_made_that_cant_be_recorded_ends_the_run_could_not_start_with_that_error(
-    repo: Repo,
+    repo: Repo, monkeypatch: pytest.MonkeyPatch, slow: bool
 ) -> None:
-    made = harness(repo, store_wrapper=failing_worktree_made)
+    from troupe.core import defaults
+
+    if slow:  # as a loaded machine makes it (#357): the wait is announced, and kept in history
+        monkeypatch.setattr(defaults, "WORKSPACE_ANNOUNCE_AFTER_SECONDS", 0.05)
+    made = harness(
+        repo,
+        store_wrapper=(
+            (lambda store: failing_worktree_made(_slow_to_add(store)))
+            if slow
+            else failing_worktree_made
+        ),
+    )
     asked = configured(made, INIT, OK)
     with pytest.raises(TroupeError) as caught:
         made.perform(asked)
     assert caught.value.code == "artifact.write-failed"
     [started] = [u for u in made.updates if u.get("kind") == "started"]
     run_id = started["runId"]
-    assert topics(made, run_id) == ["Run.Started", "Run.Ended"]
-    # The end follows the start with no gap: the run was reloaded, not built on the version that
-    # counted the unrecorded event.
-    assert [e.version for e in made.stores[-1].history(UUID(run_id))] == [1, 2]
+    if slow:
+        assert "Run.Noticed" in topics(made, run_id)
+    assert topics_besides_notices(made, run_id) == ["Run.Started", "Run.Ended"]
+    # The end follows the start, and any notice, with no gap: the run was reloaded, not built on
+    # the version that counted the unrecorded event.
+    assert_no_gap(made, run_id)
     outcome = history(made, run_id)[-1]["outcome"]
     assert (outcome["outcome"], outcome["error"]["code"]) == (
         "could-not-start",
@@ -308,7 +351,7 @@ def test_a_shared_state_that_cant_be_read_ends_the_run_and_keeps_its_worktree(
     assert caught.value.code == "vcs.failed"
     [started] = [u for u in made.updates if u.get("kind") == "started"]
     run_id = started["runId"]
-    assert topics(made, run_id) == ["Run.Started", "Run.WorktreeMade", "Run.Ended"]
+    assert topics_besides_notices(made, run_id) == ["Run.Started", "Run.WorktreeMade", "Run.Ended"]
     assert history(made, run_id)[-1]["outcome"]["outcome"] == "could-not-start"
     assert (repo.path / started["worktree"]).is_dir()
     [run] = made.status(run=run_id).runs

@@ -25,6 +25,13 @@ HUNT_RUN_WITHIN = 120.0
 hunt's whole tree is stopped and the test fails with its output so far."""
 CAMPAIGN_RUN_WITHIN = 600.0
 """Seconds for a one-hunt direct campaign to run to its end, syncing its environment included."""
+CAMPAIGN_START_WITHIN = 300.0
+"""Seconds for a campaign to sync its environment and get its first hunt's test running."""
+STOP_MARGIN = 30.0
+"""Seconds past the campaign's own stop limit (flake_campaign.STOP_WAIT_SECONDS) for it to report
+and exit. The test waits for the campaign's limit, not a shorter one of its own: a hunt that never
+stops is killed by the campaign at that limit and leaves no summary, which still fails the test
+(#358)."""
 
 
 def options(*argv: str) -> flake_campaign.Options:
@@ -300,7 +307,7 @@ def test_an_interrupted_campaign_stops_its_hunt_runs_no_more_and_reports(
     else:
         process = subprocess.Popen(command, cwd=SCRIPT.parent.parent, start_new_session=True)
     try:
-        deadline = time.monotonic() + 300
+        deadline = time.monotonic() + CAMPAIGN_START_WITHIN
         while not started.exists():
             assert process.poll() is None, "the campaign ended before its hunt's test started"
             assert time.monotonic() < deadline, "the first hunt's test never started"
@@ -309,7 +316,11 @@ def test_an_interrupted_campaign_stops_its_hunt_runs_no_more_and_reports(
             os.kill(process.pid, signal.CTRL_BREAK_EVENT)
         else:
             os.killpg(process.pid, signal.SIGINT)  # as a terminal's Ctrl-C reaches the group
-        code = process.wait(60)
+        limit = flake_campaign.STOP_WAIT_SECONDS + STOP_MARGIN
+        try:
+            code = process.wait(limit)
+        except subprocess.TimeoutExpired:
+            pytest.fail(f"the interrupted campaign didn't exit within {limit:g}s")
     finally:
         stop_tree(process)
     assert code == 130
