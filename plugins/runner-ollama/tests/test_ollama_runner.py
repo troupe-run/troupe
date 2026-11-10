@@ -42,6 +42,11 @@ TOOLS: dict[str, Any] = {"capabilities": ["completion", "tools"]}
 MARGIN = 5.0
 """Time allowed beyond the runner's own stop grace, for a loaded machine."""
 
+CLOSE_SEEN_WITHIN = 5.0
+"""Seconds from the runner's exit (its socket closed with it) to the fake seeing that close. The
+fake looks every POLL_SECONDS; this is room for a loaded machine. When it ran out on CI (#301,
+#353), there had been no connection to close: the test cancelled before the request was made."""
+
 
 @pytest.fixture
 def workspace(tmp_path: Path) -> Path:
@@ -74,6 +79,11 @@ def _run(fake: FakeOllama, model: str = "fake", **options: Any) -> dict[str, Any
 
 def _events(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [m["params"] for m in messages if m.get("method") == "run/event"]
+
+
+def _received(message: dict[str, Any]) -> bool:
+    """Whether ``message`` is a transcript record of something the runner received from Ollama."""
+    return message.get("method") == "run/transcript" and message["params"].get("kind") == "received"
 
 
 def _error(response: dict[str, Any]) -> dict[str, Any]:
@@ -371,14 +381,18 @@ def test_cancel_while_an_answer_streams_closes_it_and_nothing_follows_the_answer
 ) -> None:
     with serving([Answer([message("a"), Line(b"{}", delay=60)])]) as fake:
         session.start(**_run(fake))
-        while not any(m.get("method") == "run/transcript" for m in session.received[2:]):
+        # Until the answer's first line has come back, not just any transcript record: the runner
+        # records its request as "sent" before making it, and a cancel landing between the two
+        # rightly sends no request, which left the fake no connection to see closed (#301, #353).
+        while not any(_received(m) for m in session.received[2:]):
             session.message()
+        assert fake.chats(), "the answer streamed with no request"
         cancel = session.send("run/cancel", {"runId": session.run_id})
         started = time.monotonic()
         after = session.rest()
         assert session.wait() == 0
         assert time.monotonic() - started < STOP_GRACE_SECONDS + MARGIN
-        assert fake.closed_by_client.wait(5)
+        assert fake.closed_by_client.wait(CLOSE_SEEN_WITHIN)
     answered = next(i for i, m in enumerate(after) if m.get("id") == cancel)
     assert after[answered + 1 :] == []
 
@@ -393,7 +407,7 @@ def test_end_of_input_while_a_request_waits_closes_it_and_the_runner_exits(
         session.close_stdin()
         session.rest()
         assert session.wait() == 0
-        assert fake.closed_by_client.wait(5)
+        assert fake.closed_by_client.wait(CLOSE_SEEN_WITHIN)
 
 
 def test_the_runner_takes_nothing_from_its_environment(workspace: Path) -> None:

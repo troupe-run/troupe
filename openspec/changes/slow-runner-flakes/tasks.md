@@ -85,14 +85,22 @@ before it starts and run one at a time. Every reproduction records its assertion
   `AFTER_DEADLINE` (6 s, its docstring saying why it must stay under 8 s) (D5). Verify the same load run passes. Then
   check locally that two separate deadlines fail it: make the runner restart the deadline for the second request,
   check the test fails, then revert.
-- [ ] 5.3 Instrument the fake's `_hold` and `_stream` (D6, step 1). Loop
-  `test_cancel_while_an_answer_streams_closes_it_and_nothing_follows_the_answer` under load on macOS (announced)
-  until it fails, and record on #301 which of D6's cases happened, with the log. Remove the instrumentation.
-- [ ] 5.4 Fix the cause 5.3 showed, in the fake or in the runner. A runner fix comes with an `ollama-runner` spec
-  delta scenario and a test that fails before it. Name `CLOSE_SEEN_WITHIN` and use it at both
-  `closed_by_client.wait(5)` sites (lines 381 and 396). Verify the 5.3 loop passes every round.
-- [ ] 5.5 Decide #353 from 5.3. If it's the same cause, comment on #353 that it's a duplicate of #301 fixed by this
-  change, for the PR to close. If it isn't, it stays in scope with its own fix and verification.
+- [x] 5.3 Instrument the fake's `_hold` and `_stream` (D6), and loop
+  `test_cancel_while_an_answer_streams_closes_it_and_nothing_follows_the_answer` under load on macOS. 540 rounds
+  (Python 3.12 and 3.15, `--workers 2 --load 4`) passed, and every close was seen within 14 ms. The traces showed
+  the test cancelling before the fake sent line 0, which led to the cause: the runner's `sent` record comes before
+  its request (`conversation.py:311`). Shown by sleeping 0.5 s there: main's test then fails every time with #301's
+  assertion. A first hypothesis, `select.select` dying on a descriptor past 1024, reproduced the same assertion
+  with 1100 descriptors held. A probe of a full local run then refuted it as CI's cause: no worker went above
+  descriptor 18. Record both on #301. The instrumentation is removed.
+- [x] 5.4 Fix the cause: the test waits for a `received` transcript record and checks the fake has the chat request
+  before it cancels (D6). No runner change, so no spec delta. Name `CLOSE_SEEN_WITHIN` at both close waits. Verify
+  the fixed test passes with the 0.5 s window, and the runner suite passes. Also fix what the diagnosis found in the
+  fakes: `selectors` instead of `select.select` in both, and the Ollama fake's `handle_error` stops hiding
+  non-connection errors. Each gets a regression test with descriptors past 1024, which fails with main's
+  `select.select`. Verify both plugins' suites pass (602).
+- [x] 5.5 #353 is the same test, assertion and cause. Comment on #353 that it's a duplicate of #301, fixed by this
+  change, for the PR to close.
 
 ## 6. Claude Code: the direction marker and the perform test (#335, #355)
 

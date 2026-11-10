@@ -3,10 +3,46 @@
 
 import http.client
 import json
+import os
 import socket
+import sys
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
+
+import pytest
 
 from fake_ollama import Answer, Line, Settings, done, final, message, serving
+
+CLOSE_SEEN_WITHIN = 5.0
+"""Seconds for the fake to see a client close a connection it's holding: it looks every
+POLL_SECONDS, so this is room for a loaded machine, not the time it takes."""
+
+
+FD_SETSIZE = 1024
+"""select.select refuses a descriptor numbered this or higher on Linux and macOS."""
+
+
+@contextmanager
+def descriptors_past_fd_setsize() -> Iterator[None]:
+    """Hold enough descriptors open that every new one is numbered past FD_SETSIZE, as in a test
+    worker that has run a thousand tests (#301)."""
+    if sys.platform == "win32":  # Windows numbers its sockets otherwise, and select takes them
+        raise NotImplementedError("descriptor numbers are a POSIX limit")
+    else:
+        import resource
+
+        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        wanted = FD_SETSIZE + 200
+        if soft < wanted:
+            resource.setrlimit(resource.RLIMIT_NOFILE, (wanted, hard))
+        held = [os.open(os.devnull, os.O_RDONLY) for _ in range(FD_SETSIZE + 50)]
+        try:
+            yield
+        finally:
+            for descriptor in held:
+                os.close(descriptor)
+            resource.setrlimit(resource.RLIMIT_NOFILE, (soft, hard))
 
 
 def _post(url: str, path: str, body: object) -> http.client.HTTPResponse:
@@ -98,3 +134,22 @@ def test_preflight_can_be_made_silent() -> None:
 def test_a_done_line_holds_a_cached_count_only_when_given_one() -> None:
     assert done(cached=4)["prompt_eval_cached_count"] == 4
     assert "prompt_eval_cached_count" not in done()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows has no descriptor-number limit")
+def test_a_held_answer_sees_the_client_close_on_a_descriptor_past_fd_setsize() -> None:
+    with (
+        descriptors_past_fd_setsize(),
+        serving([Answer([message("a"), Line(b"{}", delay=60)])]) as fake,
+    ):
+        host, port = fake.url.removeprefix("http://").split(":")
+        client = socket.create_connection((host, int(port)), timeout=10)
+        assert client.fileno() >= FD_SETSIZE
+        client.sendall(b"POST /api/chat HTTP/1.1\r\nHost: fake\r\nContent-Length: 2\r\n\r\n{}")
+        received = b""
+        while b'"a"' not in received:  # the first line is in: the fake now holds the next one
+            chunk = client.recv(4096)
+            assert chunk, "the fake closed the connection"
+            received += chunk
+        client.close()
+        assert fake.closed_by_client.wait(CLOSE_SEEN_WITHIN)

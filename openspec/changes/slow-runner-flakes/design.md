@@ -13,7 +13,7 @@ See proposal.md for why. What reading the twelve tests showed:
 | #359 | `test_openai_runner.py`, the two stop tests | `time.sleep(0.3)` then `len(fake.requests) == 1` | Confirmed by reading: a fixed sleep. |
 | #352 | `test_openai_fake_endpoint.py::test_a_pause_delays_…` | `monotonic() - started >= 0.3` | Confirmed: the fake's `Pause` is a `time.sleep`, measured with `time.monotonic()`, which ticks every 15.625 ms on Windows with Python 3.12. A 0.3 s sleep reads as 0.296875 s (D4). |
 | #354 | `test_ollama_runner.py::test_both_preflight_requests_share_one_deadline` | `took < PREFLIGHT_TIMEOUT_SECONDS + MARGIN`, timed from before `session.start` | Likely: the 5 s margin covers starting the runner too. |
-| #301, #353 | `test_ollama_runner.py::test_cancel_while_an_answer_streams_…` | `fake.closed_by_client.wait(5)` | Unknown. The runner has exited when the wait starts, so the OS has closed its socket, yet the fake's `_hold` (a `select` then a `recv(1, MSG_PEEK)` every 0.05 s) didn't report it within 5 s. A local run took 22.5 s. |
+| #301, #353 | `test_ollama_runner.py::test_cancel_while_an_answer_streams_…` | `fake.closed_by_client.wait(5)` | Confirmed (D6): the test cancelled on the runner's `sent` record of its request, which comes before the request is made. A cancel landing in between leaves no connection to close. |
 | #335 | `test_claude_code_runner.py::test_claude_runs_in_the_workspace_…` | `not any("hi" in arg …)` | Confirmed by reading: the `mkdtemp` suffix and temp roots can hold `hi`. |
 | #351 | `test_git_worktrees.py::test_a_file_committed_in_a_form_git_would_normalise_…` | precondition `differing_from_head() == ("crlf.txt",)` | Likely: racy git. Whether git re-hashes the file depends on the index's timestamp tick. |
 | #355 | `test_perform_claude_code.py::test_a_claude_code_actor_succeeds_…` | the harness's `LIMITS`: `start_timeout=10.0`, `run_timeout=20.0` | Not reproduced. A start or run limit firing under load is the likely cause. |
@@ -97,20 +97,34 @@ runner to notice the deadline and the test to read the error. One shared deadlin
 would refuse at about 18 s, so the margin must stay under 8 s to tell them apart. It's set to 6 s, with that reason
 in its docstring. Starting the runner no longer counts.
 
-### D6. The Ollama close is diagnosed before it's fixed (#301, #353)
+### D6. The cancel test waits until the answer streams (#301, #353)
 
-The cause isn't known, so the fix isn't chosen yet. The approach is fixed, though:
+**The cause.** The runner records its first request's body as a `sent` transcript record before it makes the
+request (`conversation.py:311–313`). The test cancelled on the first `run/transcript` it saw, which is that record,
+not a line of the streamed answer. When the cancel landed between the two, the runner rightly made no request, so the
+fake had no connection to see closed. That's #301's failure exactly: the runner answers the cancel and exits at once,
+then `closed_by_client.wait(5)` runs out (the CI call took 5.10 s). Shown by widening that window with a 0.5 s sleep
+after the record: main's test then fails every time with the same assertion, and the fixed test passes. Tracing the
+fake under load matched it too: in all 540 rounds the test cancelled before the fake had sent line 0. On a fast
+machine the request had simply gone out first.
 
-1. Temporarily instrument `FakeOllama._hold` and `_stream` to log, with timestamps, when the hold starts, each
-   `select` result, each peek's bytes or error, and when it returns. Loop the test with `scripts/flake_hunt.py` under
-   load on macOS. That's where it failed twice running; Linux runs in the Docker image if needed.
-2. Read which happened: the fake wasn't in `_hold` yet, the peek returned data (a live connection), the close came
-   late, or something held the socket open.
-3. Fix it at the cause. If the fake misses or is late seeing a close, fix the fake. If the runner leaves the
-   connection open, fix the runner, and add an `ollama-runner` spec scenario that its cancel closes the request.
-   Either way, the 5 s waits on `closed_by_client`, here and in the end-of-input test at line 396, become a named
-   `CLOSE_SEEN_WITHIN`.
-4. Record the finding on #301. If #353 has the same cause, close it as a duplicate of #301, and the PR says so.
+**The fix, in the test:** wait for a transcript record of kind `received` (the answer's first line), then check the
+fake has the chat request, then cancel. The runner is right, so it doesn't change, and no `ollama-runner` spec delta
+is needed. The 5 s close waits, here and in the end-of-input test, become `CLOSE_SEEN_WITHIN`, at the same size.
+
+**Found on the way, and fixed though it wasn't the cause:**
+
+- Both fakes waited on a socket with `select.select`, which raises `ValueError` for a descriptor numbered 1024
+  (`FD_SETSIZE`) or higher on Linux and macOS. They now use `selectors.DefaultSelector`. With 1100 descriptors held
+  open, main's fake died on the first hold. A probe of a full local run found no worker above descriptor 18, so
+  that's not what failed on CI. The fakes just don't depend on it any more.
+- The Ollama fake's `handle_error` swallowed every exception, so a handler that died looked like a fake that saw
+  nothing. It still swallows a `ConnectionError`, as its docstring says it should. Any other error is kept, and
+  `stop()` raises the first one. No test in either plugin's suite was hiding such an error.
+- Each fake's tests gain a POSIX-only regression test: a held reply still sees the client's close on a descriptor
+  past 1024. With main's `select.select` both fail, and the Ollama one names the error.
+
+#353 is the same test and the same assertion, so it's closed as a duplicate of #301.
 
 ### D7. A test that gives up on a hunt or campaign stops the whole tree (#364)
 
