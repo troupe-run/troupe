@@ -621,10 +621,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     except CampaignError as error:
         print(f"flake_campaign: {error}", file=sys.stderr)
         return 2
-    print()
+    print(flush=True)  # flushed as it goes, so a campaign that's killed shows how far it got
     for each in outcomes:
-        print(f"flake_campaign: {each.hunt.name}: {each.status} {each.reason}".rstrip())
-    print(f"flake_campaign: report in {options.out / 'report.md'}")
+        print(f"flake_campaign: {each.hunt.name}: {each.status} {each.reason}".rstrip(), flush=True)
+    print(f"flake_campaign: report in {options.out / 'report.md'}", flush=True)
     if stopped:
         return 130
     return 0 if outcomes and all(each.status == "clean" for each in outcomes) else 1

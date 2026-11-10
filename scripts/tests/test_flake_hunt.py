@@ -487,6 +487,15 @@ def test_a_round_past_its_timeout_is_stopped_reported_hung_and_the_next_still_ru
     assert gone_within(pids_in(pids), 5) == []
 
 
+STALL = 2.0
+"""The stall test's limit: its stuck test's stack is dumped this long after the test starts."""
+ROUND_START_ALLOWANCE = 20.0
+"""Seconds, beyond STALL, for the stall test's round to start its pytest and reach the stuck test.
+The round has to time out to be reported hung, so its timeout is STALL plus this, and the test
+takes that long. With 8 s in all, a round slow to start on a loaded machine timed out before the
+stuck test ran, leaving no stack to find (#350)."""
+
+
 def test_a_test_stuck_past_the_stall_limit_has_its_stack_in_the_hung_rounds_output(
     tmp_path: Path,
 ) -> None:
@@ -495,12 +504,15 @@ def test_a_test_stuck_past_the_stall_limit_has_its_stack_in_the_hung_rounds_outp
         {"test_stuck.py": "import time\n\ndef test_stuck_here():\n    time.sleep(120)\n"},
     )
     out = tmp_path / "out"
-    completed = run_hunt(root, out, "--stall", "2", "--round-timeout", "8")
-    assert completed.returncode == 1
+    round_timeout = STALL + ROUND_START_ALLOWANCE
+    limits = ["--stall", f"{STALL:g}", "--round-timeout", f"{round_timeout:g}"]
+    completed = run_hunt(root, out, *limits)
+    assert completed.returncode == 1, text(completed)
     [record] = results(out)
-    assert record["status"] == "hung"
-    assert "Timeout (0:00:02)!" in record["outputTail"]
-    assert "in test_stuck_here" in record["outputTail"]
+    shown = f"status {record['status']}, output:\n{record['outputTail']}"
+    assert record["status"] == "hung", shown
+    assert "Timeout (0:00:02)!" in record["outputTail"], shown
+    assert "in test_stuck_here" in record["outputTail"], shown
 
 
 # Requirement: The hunt can load the machine

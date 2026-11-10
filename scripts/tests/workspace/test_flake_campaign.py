@@ -1,5 +1,6 @@
 """scripts/flake_campaign.py (spec: flake-hunt, the campaign requirements; design D11)."""
 
+import contextlib
 import json
 import os
 import signal
@@ -27,6 +28,8 @@ CAMPAIGN_RUN_WITHIN = 600.0
 """Seconds for a one-hunt direct campaign to run to its end, syncing its environment included."""
 CAMPAIGN_START_WITHIN = 300.0
 """Seconds for a campaign to sync its environment and get its first hunt's test running."""
+STACKS_WITHIN = 5.0
+"""Seconds for an overrunning campaign and its hunt to write their stacks after SIGABRT."""
 STOP_MARGIN = 30.0
 """Seconds past the campaign's own stop limit (flake_campaign.STOP_WAIT_SECONDS) for it to report
 and exit. The test waits for the campaign's limit, not a shorter one of its own: a hunt that never
@@ -298,14 +301,20 @@ def test_an_interrupted_campaign_stops_its_hunt_runs_no_more_and_reports(
     )
     out = tmp_path / "out"
     command = campaign_command(environments, out, root, "--loads", "0,2", "test_it.py")
+    # A campaign that still overruns its stop shows where it was: SIGABRT makes Python's fault
+    # handler dump every thread's stack, the campaign's and its hunt's (#358's cause isn't known).
+    env = {**os.environ, "PYTHONFAULTHANDLER": "1"}
     if WINDOWS:
         process = subprocess.Popen(
             command,
             cwd=SCRIPT.parent.parent,
+            env=env,
             creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,  # type: ignore[attr-defined,unused-ignore]
         )
     else:
-        process = subprocess.Popen(command, cwd=SCRIPT.parent.parent, start_new_session=True)
+        process = subprocess.Popen(
+            command, cwd=SCRIPT.parent.parent, env=env, start_new_session=True
+        )
     try:
         deadline = time.monotonic() + CAMPAIGN_START_WITHIN
         while not started.exists():
@@ -320,6 +329,11 @@ def test_an_interrupted_campaign_stops_its_hunt_runs_no_more_and_reports(
         try:
             code = process.wait(limit)
         except subprocess.TimeoutExpired:
+            if sys.platform != "win32":
+                with contextlib.suppress(OSError):
+                    os.killpg(process.pid, signal.SIGABRT)  # stacks to the captured stderr
+                with contextlib.suppress(subprocess.TimeoutExpired):
+                    process.wait(STACKS_WITHIN)
             pytest.fail(f"the interrupted campaign didn't exit within {limit:g}s")
     finally:
         stop_tree(process)

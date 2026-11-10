@@ -25,6 +25,13 @@ from troupe_plugin_sdk.messages import Message
 ALLOW = {"TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE": "true"}
 ADA = {"TROUPE_ACTOR": "human:ada@example.com"}
 LIMITS = RunLimits(start_timeout=10.0, cancel_grace=2.0, run_timeout=20.0, silence_announce=10.0)
+REAL_RUNNER_LIMITS = RunLimits(
+    start_timeout=60.0, cancel_grace=2.0, run_timeout=120.0, silence_announce=10.0
+)
+"""For a test that starts a real runner process (an interpreter, the runner, its stand-in engine)
+and checks what's recorded, not how fast: limits that catch a hang without asking for speed. On a
+loaded machine, LIMITS' 10 s start ran out before the Claude Code runner had started, and the run
+ended could-not-start (#355). Tests of the limits themselves set their own."""
 INIT = {"event": {"type": "init", "runner": {"name": "scripted", "version": "0.1.0"}, "tools": []}}
 OK = {"event": {"type": "result", "status": "ok", "message": "done"}}
 
