@@ -22,10 +22,11 @@ when the thing it checks doesn't happen**, at that limit, with a message naming 
   `workspace.waiting`, which #336 now keeps in the run's history. Version checks become "no gap" rather than `[1, 2]`.
 - **A fixed sleep becomes a wait for the request** (#359). The OpenAI fake endpoint gets a bounded wait for its *n*th
   request. The two stop tests wait for the first request instead of sleeping 0.3 s.
-- **Lower-bound timing asserts allow one tick of the clock the waiter used** (#352). `elapsed >= pause` allows
-  `time.monotonic()`'s resolution as slack: about 15.6 ms on Windows with Python 3.12, about 1 ns elsewhere. This
-  covers the OpenAI and Ollama fakes' pause tests, the platform watching tests and the run query test.
-  `perf_counter` alone wouldn't fix it, because the code being timed waits on monotonic deadlines (design D4).
+- **The OpenAI fake's pause lasts its length on the clock the test measures with** (#352). It waits until a
+  `time.monotonic()` deadline rather than sleeping, as the Ollama fake already does. On Windows with Python 3.12 that
+  clock ticks every 15.6 ms, so a 0.3 s sleep read as 0.297 s. A test with a clock that coarse shows it on every OS.
+  The other lower-bound timing asserts already measure a monotonic-deadline wait with the same clock, so they stay
+  exact (design D4).
 - **The Ollama preflight deadline is measured from the first preflight request** (#354), which the fake timestamps,
   not from before the runner starts. One shared deadline (about 10 s) is still told apart from two (about 18 s).
 - **The Ollama cancel-while-streaming close is diagnosed, then fixed at its cause** (#301, #353). Both issues are the

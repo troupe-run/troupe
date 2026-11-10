@@ -31,14 +31,16 @@ before it starts and run one at a time. Every reproduction records its assertion
   the campaign's and the hunt's output, to see why its stop can take over 60 s. Record the finding on #358. If the
   hunt's stop is slow in a way it shouldn't be, fix that in `flake_hunt.py` or `flake_campaign.py`, with a test that
   fails before the fix.
-- [ ] 2.2 In the campaign test, wait `flake_campaign.STOP_WAIT_SECONDS + STOP_MARGIN` after the interrupt, and name
+- [x] 2.2 In the campaign test, wait `flake_campaign.STOP_WAIT_SECONDS + STOP_MARGIN` after the interrupt, and name
   the 300 s start wait (D9). Verify it passes, and that it still fails when the hunt ignores the interrupt: patch the
   hunt's interrupt handler locally to do nothing, check `summary is not None` fails, then revert.
-- [ ] 2.3 In the hunt interrupt test, wait `flake_hunt.STOP_TIMEOUT_SECONDS + STOP_MARGIN` for the exit and the rest
+- [x] 2.3 In the hunt interrupt test, wait `flake_hunt.STOP_TIMEOUT_SECONDS + STOP_MARGIN` for the exit and the rest
   of the output. Replace `stopped_in < 5` with a check that the output doesn't hold `workers still running after`.
-  Name the 60 s start waits `HUNT_START_WITHIN` (D9). Verify it passes, and that it fails when the hunt stops waiting
-  for rounds without killing them: patch `running.stop_all()` out of the interrupt path locally, check the test
-  fails, then revert.
+  Name the 60 s start waits `HUNT_START_WITHIN` (D9). Verify it passes, and that it fails when the hunt doesn't stop
+  its rounds. Done with every `running.stop_all()` and the round's own stop check patched out locally: the test fails
+  on its last assert, because the round's grandchild is still running. Then reverted. Patching out only the interrupt
+  path's `stop_all()`, as first planned, doesn't fail it: the interrupted `join` leaves the worker looking finished, so
+  the hunt doesn't wait, and `finally`'s `stop_all()` stops the round. The test's comment says what each check covers.
 - [ ] 2.4 Reproduce #350 with `flake_hunt.py --load` on
   `test_a_test_stuck_past_the_stall_limit_has_its_stack_in_the_hung_rounds_output` (announced), and record the
   failing assertion on #350. If it's the round's start that runs out the timeout, set `--round-timeout` to
@@ -48,32 +50,32 @@ before it starts and run one at a time. Every reproduction records its assertion
 
 ## 3. Run topics allow timing notices (#357)
 
-- [ ] 3.1 Add `topics_besides_notices` and `assert_no_gap` to `packages/troupe/tests/test_run_workspaces.py` (D2).
+- [x] 3.1 Add `topics_besides_notices` and `assert_no_gap` to `packages/troupe/tests/test_run_workspaces.py` (D2).
   Use them at lines 258, 289 and 311. Verify with a test there that wraps the VCS, as
   `test_a_slow_worktree_operation_is_announced_naming_it` does, so a worktree step raises `workspace.waiting` in the
   #357 test's scenario. It passes, and the recorded history holds a `Run.Noticed`, so the test can't pass
   without one being there.
-- [ ] 3.2 Check that the helpers still fail on a non-notice topic: record an extra non-notice event between the start
-  and the end through a store wrapper in a local run. The comparison fails. Revert the local change.
-- [ ] 3.3 Check whether `test_cli_runs.py:256`'s run can record a notice: its actor's workspace, and the CLI's default
+- [x] 3.2 Check that the helpers still fail on a non-notice topic. Done with the shared-state test, whose run
+  records `Run.WorktreeMade`, compared locally against `["Run.Started", "Run.Ended"]`: it fails. Also checked that
+  main's exact assertion fails the slow variant from 3.1, which reproduces #357. Both local changes were reverted.
+- [x] 3.3 Check whether `test_cli_runs.py:256`'s run can record a notice: its actor's workspace, and the CLI's default
   silence limit against a slow start. If it can, give it the same allowance. If it can't, say why in a comment on
   #357. Verify `uv run pytest packages/troupe/tests/test_cli_runs.py packages/troupe/tests/test_run_workspaces.py`
   passes.
 
 ## 4. OpenAI fake: wait for the request; clock-tick slack (#359, #352)
 
-- [ ] 4.1 Add `FakeEndpoint.wait_for_requests(count, timeout)` to `plugins/runner-openai/tests/fake_endpoint.py`,
+- [x] 4.1 Add `FakeEndpoint.wait_for_requests(count, timeout)` to `plugins/runner-openai/tests/fake_endpoint.py`,
   signalled as each request is recorded (D3). Test it in `test_openai_fake_endpoint.py`: it returns true once the
   *n*th request arrives, and false at its timeout when none does.
-- [ ] 4.2 In the two stop tests in `test_openai_runner.py`, replace `time.sleep(0.3)` with
+- [x] 4.2 In the two stop tests in `test_openai_runner.py`, replace `time.sleep(0.3)` with
   `assert fake.wait_for_requests(1, REQUEST_WITHIN)`, with a message, keeping `len(fake.requests) == 1`. Verify they
   pass, and that a local run with the first request delayed past `REQUEST_WITHIN` fails with the message.
-- [ ] 4.3 Apply D4's `CLOCK_TICK` slack to every lower-bound clock assert that times a monotonic-deadline wait:
-  `test_openai_fake_endpoint.py:79`, `test_ollama_fake.py:52`, `test_platform_watching.py:132, 292` and
-  `test_run_queries.py:382`. Find any others with
-  `grep -rnE "monotonic\(\) - \w+ >=" packages/*/tests plugins/*/tests scripts/tests`. Each module names
-  `CLOCK_TICK` once. Verify the grep finds no lower-bound assert without the slack, and the tests pass. The Windows
-  3.12 CI leg is the platform evidence (task 8.2).
+- [x] 4.3 Make the OpenAI fake's `Pause` wait until a `time.monotonic()` deadline (D4). Verify with a test that
+  replaces `time.monotonic` with a 15.625 ms clock and times the fake's pause alone: main's `time.sleep` pause fails it
+  (3 of 3 local runs, 0.296875 s each time), and the new pause passes. Check the other lower-bound asserts each time a
+  monotonic-deadline wait with that same clock, and leave them unchanged. Found with
+  `grep -rnE "monotonic\(\) - \w+ >=" packages plugins scripts` and a search for `elapsed >=`.
 
 ## 5. Ollama: the preflight deadline and the close (#354, #301, #353)
 

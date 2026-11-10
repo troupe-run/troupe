@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import run_within, stop_tree
+from conftest import STOP_TREE_WITHIN, run_within, stop_tree
 
 import flake_hunt
 from troupe.platform.processes import is_running
@@ -27,6 +27,10 @@ WINDOWS = sys.platform == "win32"
 HUNT_RUN_WITHIN = 120.0
 """Seconds for one of these tests' small hunts to run to its end on a slow machine. Past it, the
 hunt's whole tree is stopped and the test fails with its output so far."""
+
+STOP_MARGIN = 15.0
+"""Seconds past the hunt's own stop limit (flake_hunt.STOP_TIMEOUT_SECONDS) for an interrupted hunt
+to write its summary and exit on a slow machine (#364)."""
 
 HUNT_START_WITHIN = 60.0
 """Seconds for a hunt to start and get as far as a test waits for (its first line, a round's
@@ -711,20 +715,25 @@ def test_an_interrupt_stops_the_rounds_and_the_load_and_summarises_what_finished
     out = tmp_path / "out"
     hunt = start_hunt(root, out, "--rounds", "3", "--load", "1")
     lines = Lines(hunt)
+    limit = flake_hunt.STOP_TIMEOUT_SECONDS + STOP_MARGIN
     try:
-        lines.wait_for(lambda line: line.startswith("w0r0 passed"), 60)
-        grandchildren = wait_for_pid_file(pids, 60)
-        interrupted = time.monotonic()
+        lines.wait_for(lambda line: line.startswith("w0r0 passed"), HUNT_START_WITHIN)
+        grandchildren = wait_for_pid_file(pids, HUNT_START_WITHIN)
         if WINDOWS:
             os.kill(hunt.pid, signal.CTRL_BREAK_EVENT)  # type: ignore[attr-defined,unused-ignore]
         else:
             os.kill(hunt.pid, signal.SIGINT)
-        output = lines.rest(10)
-        hunt.wait(10)
-        stopped_in = time.monotonic() - interrupted
+        output = lines.rest(limit)  # to the end of its output, as it exits
+        try:
+            hunt.wait(limit)
+        except subprocess.TimeoutExpired:
+            pytest.fail(f"the interrupted hunt didn't exit within {limit:g}s; it wrote:\n{output}")
     finally:
         stop_tree(hunt)
-    assert stopped_in < 5, f"the hunt took {stopped_in:.1f}s to stop"
+    # Bounded by the hunt's own stop limit, not by how fast a loaded machine stops a hunt (#364).
+    # What tells a stop that works from one that doesn't: it never had to give up on its workers,
+    # and nothing it started is left running (the last assert).
+    assert "workers still running after" not in output, output
     assert hunt.returncode == 130, output
     assert "flake_hunt: stopping" in output
     assert "1 round ran (stopped part-way), 0 failed." in output
@@ -753,12 +762,12 @@ def test_on_windows_killing_the_hunt_itself_ends_its_rounds_trees(tmp_path: Path
     hunt = start_hunt(root, tmp_path / "out", "--rounds", "3")
     lines = Lines(hunt)
     try:
-        first = lines.wait_for(lambda line: line.startswith("flake_hunt: pid "), 60)
+        first = lines.wait_for(lambda line: line.startswith("flake_hunt: pid "), HUNT_START_WITHIN)
         hunt_pid = int(first.split()[2].rstrip(","))  # the interpreter, not the venv's launcher
-        lines.wait_for(lambda line: line.startswith("w0r0 passed"), 60)
-        grandchildren = wait_for_pid_file(pids, 60)
+        lines.wait_for(lambda line: line.startswith("w0r0 passed"), HUNT_START_WITHIN)
+        grandchildren = wait_for_pid_file(pids, HUNT_START_WITHIN)
         os.kill(hunt_pid, signal.SIGTERM)  # TerminateProcess: no finally runs in the hunt
-        hunt.wait(30)
+        hunt.wait(STOP_TREE_WITHIN)
     finally:
         stop_tree(hunt)
     assert gone_within(grandchildren, 10) == []

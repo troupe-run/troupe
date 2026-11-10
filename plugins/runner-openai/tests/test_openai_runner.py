@@ -293,6 +293,11 @@ so the runner is still reading it when it's stopped."""
 STOPPED_WITHIN = 3.0
 """Seconds from a stop to the held request's connection closing."""
 
+REQUEST_WITHIN = 30.0
+"""Seconds from the runner's init to its first request reaching the fake, on a slow machine. The
+stop tests wait for the request rather than sleeping, so they stop a request that's really in
+flight however long it took to send (#359)."""
+
 
 def test_cancel_during_a_held_response_closes_it_and_exits_without_a_result(
     sessions: list[Session], workspace: Path
@@ -301,7 +306,7 @@ def test_cancel_during_a_held_response_closes_it_and_exits_without_a_result(
         session = _session(sessions, workspace)
         session.start(fake.endpoint)
         assert session.message()["params"]["type"] == "init"
-        time.sleep(0.3)
+        assert fake.wait_for_requests(1, REQUEST_WITHIN), "the runner never sent its request"
         assert len(fake.requests) == 1
         assert not fake.wait_for_client_to_close(0), "the request ended before the cancel"
         started = time.monotonic()
@@ -324,7 +329,7 @@ def test_end_of_input_mid_run_stops_the_request_and_exits(
         session = _session(sessions, workspace)
         session.start(fake.endpoint)
         session.message()
-        time.sleep(0.3)
+        assert fake.wait_for_requests(1, REQUEST_WITHIN), "the runner never sent its request"
         assert len(fake.requests) == 1
         assert not fake.wait_for_client_to_close(0), "the request ended before end of input"
         session.close_stdin()

@@ -81,6 +81,20 @@ class _State:
     closed_by_client: threading.Event = field(default_factory=threading.Event)
     stopping: threading.Event = field(default_factory=threading.Event)
     lock: threading.Lock = field(default_factory=threading.Lock)
+    arrived: threading.Condition = field(init=False)
+    """Notified, under ``lock``, as each request is recorded."""
+
+    def __post_init__(self) -> None:
+        self.arrived = threading.Condition(self.lock)
+
+
+def pause(seconds: float) -> None:
+    """Wait until ``seconds`` have passed on time.monotonic, the clock the tests measure with. A
+    bare sleep can end up to one of its ticks early by that clock: about 15.6 ms on Windows with
+    Python 3.12 (#352)."""
+    deadline = time.monotonic() + seconds
+    while (left := deadline - time.monotonic()) > 0:
+        time.sleep(left)
 
 
 def _client_gone(connection: socket.socket) -> bool:
@@ -106,6 +120,7 @@ class _Handler(BaseHTTPRequestHandler):
         headers = {name.lower(): value for name, value in self.headers.items()}
         with self.state.lock:
             self.state.requests.append(Request(self.command, self.path, headers, body))
+            self.state.arrived.notify_all()
             if not self.state.script:
                 return Reply(500, body=b'{"error": {"message": "the fake has no reply left"}}')
             return self.state.script.pop(0)
@@ -147,7 +162,7 @@ class _Handler(BaseHTTPRequestHandler):
         self.close_connection = True
         for item in reply.lines:
             if isinstance(item, Pause):
-                time.sleep(item.seconds)
+                pause(item.seconds)
             elif isinstance(item, Cut):
                 self.wfile.flush()
                 self.connection.shutdown(socket.SHUT_RDWR)
@@ -196,6 +211,11 @@ class FakeEndpoint:
         """Add replies to the end of the script."""
         with self._state.lock:
             self._state.script.extend(replies)
+
+    def wait_for_requests(self, count: int, timeout: float) -> bool:
+        """Whether ``count`` requests have arrived, waiting up to ``timeout`` seconds for them."""
+        with self._state.arrived:
+            return self._state.arrived.wait_for(lambda: len(self._state.requests) >= count, timeout)
 
     def wait_for_client_to_close(self, timeout: float) -> bool:
         """Whether a held or streaming response saw the client close within ``timeout``."""
