@@ -21,6 +21,20 @@ from troupe.platform.processes import EnvironmentPolicy
 
 
 @dataclass(frozen=True)
+class RuntimeFit:
+    """What runtime a runner can use, judged from the runtime's fields alone, so config can refuse
+    a pair the runner would refuse at run time (spec: runtimes, "An actor's runtime fits its
+    runner"; runtime-checks design D1). A test holds each to the runner's own check."""
+
+    credential: bool = True
+    """Whether it sends a runtime's credential. One that doesn't can't use a runtime with one."""
+
+    path: Literal["any", "none", "required"] = "any"
+    """What the runtime's endpoint's path must be: none (the runner adds its own API's path),
+    one (such as /v1, which the runner's requests go below), or either. A lone / is no path."""
+
+
+@dataclass(frozen=True)
 class Runner:
     """A runner troupe knows by name."""
 
@@ -43,6 +57,9 @@ class Runner:
     base install: true for a runner whose plugin depends on more than the plugin SDK (spec: runs,
     installation; runner-extras design D1, D5). scripts/bundle.py checks it against troupe-run's
     pyproject.toml."""
+
+    fit: RuntimeFit = RuntimeFit()
+    """What runtime it can use, for a runner that takes one (runtime-checks design D1)."""
 
 
 CLAUDE_CODE_ENVIRONMENT: tuple[str, ...] = (
@@ -117,12 +134,17 @@ RUNNERS: dict[str, Runner] = {
         # No variables: the runner reads none, not even OLLAMA_HOST. Its endpoint and model are
         # its runtime's, which reach it in run/start (ollama-uses-runtime design D1).
         runtime="required",
+        # It sends no credential, and adds /api/... to an endpoint at the root (its design D3, D4).
+        fit=RuntimeFit(credential=False, path="none"),
     ),
     "openai": Runner(
         command=(sys.executable, "-m", "troupe_runner_openai"),
         package="troupe_runner_openai",
         environment=OPENAI_ENVIRONMENT,
         runtime="required",
+        # Its requests go below the endpoint, which an OpenAI-style service serves under a path
+        # such as /v1 (runtime-checks design D5).
+        fit=RuntimeFit(path="required"),
     ),
     "scripted": Runner(
         command=(sys.executable, "-m", "troupe_runner_scripted"),

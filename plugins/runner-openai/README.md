@@ -41,7 +41,9 @@ conversation, so a long run's input grows with the square of its turns.
 ## The runtime and its credential
 
 An actor on this runner names a [runtime](../../docs/stagecraft/runtimes.md): troupe's built-in `openai`
-(`https://api.openai.com/v1`, its key in `OPENAI_API_KEY`), or one of your own. troupe resolves its endpoint and model
+(`https://api.openai.com/v1`, its key in `OPENAI_API_KEY`), or one of your own whose endpoint has a path, such as
+`/v1`: requests go to `<endpoint>/responses`, and an endpoint with no path is refused (`openai.no-runtime`), since a
+server's root usually serves another API. troupe resolves its endpoint and model
 and hands them over in `run/start`, and puts the key, when the runtime has one, in the runner's environment as
 `TROUPE_RUNTIME_CREDENTIAL`, under no other name.
 
@@ -190,7 +192,7 @@ no request is sent:
 |---|---|
 | `openai.unknown-option` | an option the runner doesn't define, such as `endpoint` or `model` |
 | `openai.invalid-options` | an option's value has the wrong shape |
-| `openai.no-runtime` | `run/start` names no runtime, or one whose endpoint or model can't be used |
+| `openai.no-runtime` | `run/start` names no runtime, or one whose endpoint (one with no path, say) or model can't be used |
 | `openai.insecure-endpoint` | a key, and plain `http` to another machine |
 | `openai.credential-mismatch` | `run/start` and `TROUPE_RUNTIME_CREDENTIAL` disagree about whether there's a key |
 | `openai.malformed-credential` | the key holds a character a request header can't carry, such as a line ending from a file or a letter outside ASCII |

@@ -28,6 +28,18 @@ troupe has three built in:
 | `ollama` | `http://127.0.0.1:11434` | none |
 | `lm-studio` | `http://127.0.0.1:1234/v1` | none |
 
+Which runner each fits:
+
+| Runtime | `openai` runner | `ollama` runner | `scripted` runner |
+|---|---|---|---|
+| `openai` | yes | no: it has a credential, and Ollama takes none | yes |
+| `ollama` | no: its endpoint has no path, so it isn't the Responses API | yes | yes |
+| `lm-studio` | yes | no: its endpoint has a path, `/v1` | yes |
+
+A runtime of your own fits by the same rules: the OpenAI runner needs an endpoint with a path, and the Ollama runner
+one with no path and no credential. Config refuses an actor on a runtime that doesn't fit, naming the runtimes that
+do, and so does `troupe perform` (`runtime.unfit`) when a `TROUPE_RUNTIME_` variable makes one stop fitting.
+
 None names a model: model names change too often for a default to stay right. `troupe config get --resolved` shows
 what every runtime resolves to, and where each value came from. For one of them:
 

@@ -73,6 +73,19 @@ a service defined once in config (`runtimes.<name>`) and resolved by troupe from
 theatre's config and the person's environment. troupe's runner table says whether a runner takes one (`required`,
 `optional` or `none`), and config refuses an actor whose runtime doesn't fit its runner.
 
+**What runtime fits**, in the table's `fit` (`troupe.core.interim.RuntimeFit`), is judged from the runtime's fields
+alone, so troupe refuses a pair your runner would refuse before anything is recorded: in config, and at perform with
+`runtime.unfit` once the person's environment is applied.
+
+- `credential`: whether you send a runtime's credential. `False` refuses a runtime that has one.
+- `path`: what the endpoint's path must be: `"none"` (you add your own API's path, as the Ollama runner does),
+  `"required"` (your requests go below it, such as `/v1`, as the OpenAI runner's do) or `"any"`. A lone `/` is no
+  path.
+
+Your runner should refuse the same runtimes itself, since a host other than troupe may start it.
+`packages/troupe/tests/test_runtime_fit.py` holds the table to each runner that needs a runtime: add yours to its
+`ORACLES`.
+
 `run/start`'s `runtime` holds what troupe resolved: `name`, `endpoint` (the base URL your API lives under; add your
 own paths), `model`, `credential`, a boolean, and `price` when the theatre prices the run's model. It's absent when
 the actor names no runtime.
