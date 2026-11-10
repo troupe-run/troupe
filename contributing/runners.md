@@ -79,8 +79,8 @@ alone, so troupe refuses a pair your runner would refuse before anything is reco
 
 - `credential`: whether you send a runtime's credential. `False` refuses a runtime that has one.
 - `path`: what the endpoint's path must be: `"none"` (you add your own API's path, as the Ollama runner does),
-  `"required"` (your requests go below it, such as `/v1`, as the OpenAI runner's do) or `"any"`. A lone `/` is no
-  path.
+  `"required"` (your requests go below it, such as `/v1`, as the OpenAI runner's do) or `"any"`. A single trailing
+  `/` is no path; `//` is one.
 
 Your runner should refuse the same runtimes itself, since a host other than troupe may start it.
 `packages/troupe/tests/test_runtime_fit.py` holds the table to each runner that needs a runtime: add yours to its

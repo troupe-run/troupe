@@ -61,8 +61,9 @@ class Endpoint:
 
     @property
     def has_path(self) -> bool:
-        """Whether the URL has a path below its host and port: a lone / isn't one."""
-        return urllib.parse.urlsplit(self.url).path.strip("/") != ""
+        """Whether the URL has a path below its host and port: anything but a single trailing /,
+        as troupe's runtime fit reads it (runtime-checks design D1)."""
+        return urllib.parse.urlsplit(self.url).path not in ("", "/")
 
     @property
     def is_loopback(self) -> bool:

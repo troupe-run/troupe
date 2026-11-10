@@ -20,7 +20,7 @@ KEY = "sk-test-q7ZxW9pL4vR2"
 
 HOSTS = st.sampled_from(["127.0.0.1", "localhost", "[::1]", "models.example.com", "gpu-box"])
 PORTS = st.sampled_from(["", ":1", ":11434", ":65535"])
-PATHS = st.sampled_from(["", "/", "/v1", "/v1/", "/api/v1", "/openai/deployments/x"])
+PATHS = st.sampled_from(["", "/", "//", "///", "/v1", "/v1/", "/api/v1", "/openai/deployments/x"])
 
 
 @st.composite
