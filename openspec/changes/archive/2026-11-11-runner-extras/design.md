@@ -39,7 +39,8 @@ See proposal.md, "Why". The current state that shapes the approach:
 - No runner moves into an extra. That's #291, #331 and #332.
 - No per-extra CI legs (see D9).
 - No change to the plugin SDK's dependencies, or to the runner contract's wire format. The transcript record kinds
-  are #294's.
+  are #294's (transcript-record-kinds, archived on main): a library-backed runner labels a request `sent` and a
+  response `received`, holding what the library exposes rather than wire bytes, as decision #319 accepts.
 
 ## Decisions
 

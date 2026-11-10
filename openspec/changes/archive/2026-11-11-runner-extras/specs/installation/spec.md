@@ -2,11 +2,10 @@
 
 ### Requirement: One package installs troupe with everything it bundles
 The `troupe-run` package SHALL depend on `troupe`, on every other package under `packages/` and on every plugin under
-`plugins/` whose only dependency is the plugin SDK, each bare or pinned at a release tag. Every other plugin SHALL be
-in its runner's extra instead (see "A runner with dependencies beyond the SDK is an extra named after it"). A
-workspace member missing from both SHALL fail the repository's check, naming the member and the file to add it to.
-Installing `troupe-run` from a commit SHALL install every one of them that the install asks for from that commit;
-installing a bundle tag the documented way SHALL install each from its pin.
+`plugins/` whose only dependency is the plugin SDK, each bare or pinned at a release tag; every other plugin is in its
+runner's extra. A workspace member in neither SHALL fail the repository's check, naming it and the file to add it to. An
+install from a commit SHALL take each one asked for from that commit, and a bundle tag installed the documented way,
+each from its pin.
 
 #### Scenario: A new adapter that the bundle leaves out
 - **WHEN** a package is added under `packages/` and not to `troupe-run`'s dependencies
@@ -26,11 +25,10 @@ installing a bundle tag the documented way SHALL install each from its pin.
 - **THEN** the bundle check passes only when `troupe-runner-scripted` is in `troupe-run`'s dependencies
 
 ### Requirement: The install command is documented in one form
-The README and the user docs' install page SHALL give the install command, with the ref to install named, and the
-Python versions troupe needs. Every copy SHALL match the form the install check runs for its ref: with `main` or a
-commit placeholder, the plain form; with the bundle's release tag, the form with `--no-sources`. A copy that names
-extras SHALL match the same form with `troupe-run[<extras>] @ ` before the URL. A copy that differs SHALL fail the
-docs check, naming the page, the line and the expected command.
+The README and the user docs' install page SHALL give the install command, with the ref named, and the Python versions
+troupe needs. Every copy SHALL match the form the install check runs for its ref: the plain form for `main` or a commit
+placeholder, the `--no-sources` form for the bundle's release tag, and with extras, `troupe-run[<extras>] @ ` before the
+URL. A copy that differs SHALL fail the docs check, naming the page, the line and the expected command.
 
 #### Scenario: The page and the check agree
 - **WHEN** the manifest gives `packages/troupe-run` 0.1.0 and the install page's command is the form the install
@@ -65,10 +63,9 @@ docs check, naming the page, the line and the expected command.
 
 ### Requirement: The documented install is checked on every platform
 The install check SHALL run the documented command against a given commit, into a tool directory of its own, on a given
-Python, then run the installed `troupe`: `--version`, and a scripted performance in a new theatre outside the checkout.
-It SHALL then install `troupe-run[all]` the same way, into a tool directory of its own, and rehearse an audition on
-every runner troupe knows there, each of which SHALL succeed. CI SHALL run it against the commit under test on Linux, macOS and Windows, on every
-supported Python.
+Python, then the installed `troupe --version` and a scripted performance in a new theatre outside the checkout. It SHALL
+then install `troupe-run[all]` into another tool directory and rehearse an audition on every runner troupe knows, each
+succeeding. CI SHALL run it against the commit under test on Linux, macOS and Windows, on every supported Python.
 
 #### Scenario: The commit under test
 - **WHEN** CI runs the full check on a pull request

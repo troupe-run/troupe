@@ -34,8 +34,8 @@ library-backed runners.
   named limits, with the library's own retries off. Redirects aren't followed. The credential goes only in its
   header and is never logged. Cancel and end of input stop the request in flight within the grace period. Every
   limit is a named setting. The transcript keeps each request and response as the library exposes them, serialised,
-  not necessarily as wire bytes, and the runner's design says what that loses. The record kinds themselves are
-  #294's to add, and that issue is still open. And each of a
+  not necessarily as wire bytes, as `sent` and `received` records (#294's kinds), and the runner's design says what
+  that loses. And each of a
   runner's dependencies is pinned in the lock file and has a licence compatible with Apache-2.0. A new check
   enforces the licence part in two tiers: permissive, and weak-copyleft (MPL-2.0, for `certifi`). The
   weak-copyleft tier is allowed only as unmodified separate packages (owner, #333 comment 6707703235).
