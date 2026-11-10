@@ -1,6 +1,7 @@
 """scripts/flake_hunt.py (spec: flake-hunt). Each test writes a few test files into a fresh root and
 runs the real script over them, so every report the hunt reads is one pytest actually wrote."""
 
+import contextlib
 import json
 import os
 import queue
@@ -15,12 +16,21 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from conftest import run_within, stop_tree
 
 import flake_hunt
 from troupe.platform.processes import is_running
 
 SCRIPT = Path(flake_hunt.__file__)
 WINDOWS = sys.platform == "win32"
+
+HUNT_RUN_WITHIN = 120.0
+"""Seconds for one of these tests' small hunts to run to its end on a slow machine. Past it, the
+hunt's whole tree is stopped and the test fails with its output so far."""
+
+HUNT_START_WITHIN = 60.0
+"""Seconds for a hunt to start and get as far as a test waits for (its first line, a round's
+test, a round's result). A slow machine takes longer, and nothing a test checks is timed by it."""
 
 GRANDCHILD = """
 import subprocess, sys, time
@@ -61,14 +71,7 @@ def hunt_command(root: Path, out: Path, *args: str) -> list[str]:
 def run_hunt(
     root: Path, out: Path, *args: str, env: dict[str, str] | None = None
 ) -> subprocess.CompletedProcess[bytes]:
-    return subprocess.run(
-        hunt_command(root, out, *args),
-        capture_output=True,
-        timeout=120,
-        check=False,
-        env=env,
-        cwd=root,
-    )
+    return run_within(hunt_command(root, out, *args), HUNT_RUN_WITHIN, env=env, cwd=root)
 
 
 def summary(out: Path) -> dict[str, Any]:
@@ -525,6 +528,60 @@ def test_the_load_runs_during_the_rounds_and_is_gone_when_the_hunt_returns(
     assert gone_within(load, 5) == []
 
 
+LOAD_GONE_WITHIN = 10.0
+"""Seconds for a killed hunt's load to notice and exit: each load process checks for its parent
+every flake_hunt.LOAD_CHECK_SECONDS, with room for a loaded machine to schedule it."""
+
+STUCK_REPORTING_ITS_PID = """
+import os, time
+from pathlib import Path
+
+def test_stuck():
+    Path({pid_file!r}).write_text(str(os.getpid()))
+    time.sleep(120)
+"""
+
+
+def kill_outright(pid: int) -> None:
+    """Kill ``pid`` so none of its own clean-up runs: SIGKILL, or TerminateProcess on Windows."""
+    if sys.platform == "win32":
+        os.kill(pid, signal.SIGTERM)
+    else:
+        os.kill(pid, signal.SIGKILL)
+
+
+def test_a_killed_hunts_load_ends_with_it(tmp_path: Path) -> None:
+    round_pid = tmp_path / "round.pid"
+    stuck = STUCK_REPORTING_ITS_PID.format(pid_file=str(round_pid))
+    root = make_root(tmp_path, {"test_stuck.py": stuck})
+    out = tmp_path / "out"
+    hunt = start_hunt(root, out, "--rounds", "1", "--load", "2")
+    lines = Lines(hunt)
+    load: list[int] = []
+    try:
+        first = lines.wait_for(lambda line: line.startswith("flake_hunt: pid "), HUNT_START_WITHIN)
+        hunt_pid = int(first.split()[2].rstrip(","))  # the interpreter, not a venv's launcher
+        deadline = time.monotonic() + HUNT_START_WITHIN
+        while not (round_pid.exists() and round_pid.read_text()):
+            assert time.monotonic() < deadline, "the hunt's round never started its test"
+            time.sleep(0.05)
+        load = json.loads((out / "load.json").read_text(encoding="utf-8"))["pids"]
+        assert len(load) == 2
+        assert all(is_running(pid) for pid in load)
+        kill_outright(hunt_pid)
+        hunt.wait(HUNT_START_WITHIN)
+        left = gone_within(load, LOAD_GONE_WITHIN)
+    finally:
+        stop_tree(hunt)
+        if sys.platform != "win32":  # the round's own session, which a killed hunt can't stop
+            with contextlib.suppress(OSError, ValueError):
+                os.killpg(int(round_pid.read_text()), signal.SIGKILL)
+        for pid in load:  # so a failure here leaves nothing spinning
+            with contextlib.suppress(OSError):
+                kill_outright(pid)
+    assert left == [], f"load processes {left} outlived the killed hunt"
+
+
 # Stopping part-way (Ctrl-C, or Ctrl-Break on Windows)
 
 
@@ -666,7 +723,7 @@ def test_an_interrupt_stops_the_rounds_and_the_load_and_summarises_what_finished
         hunt.wait(10)
         stopped_in = time.monotonic() - interrupted
     finally:
-        hunt.kill()
+        stop_tree(hunt)
     assert stopped_in < 5, f"the hunt took {stopped_in:.1f}s to stop"
     assert hunt.returncode == 130, output
     assert "flake_hunt: stopping" in output
@@ -685,12 +742,7 @@ def test_on_windows_a_rounds_tests_still_get_a_real_ctrl_c(tmp_path: Path) -> No
         "::test_a_real_ctrl_c_on_windows_calls_back_too"
     )
     out = tmp_path / "out"
-    completed = subprocess.run(
-        [sys.executable, str(SCRIPT), "--out", str(out), real],
-        capture_output=True,
-        timeout=120,
-        check=False,
-    )
+    completed = run_within([sys.executable, str(SCRIPT), "--out", str(out), real], HUNT_RUN_WITHIN)
     assert completed.returncode == 0, text(completed)
     assert [each["tests"] for each in results(out)] == [1]
 
@@ -708,5 +760,5 @@ def test_on_windows_killing_the_hunt_itself_ends_its_rounds_trees(tmp_path: Path
         os.kill(hunt_pid, signal.SIGTERM)  # TerminateProcess: no finally runs in the hunt
         hunt.wait(30)
     finally:
-        hunt.kill()
+        stop_tree(hunt)
     assert gone_within(grandchildren, 10) == []
