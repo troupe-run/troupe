@@ -16,11 +16,12 @@ CREDENTIAL_VARIABLE = "TROUPE_RUNTIME_CREDENTIAL"
 
 
 def well_formed(value: str) -> bool:
-    """Whether a credential's value can be sent as it is: no character in it is whitespace or
-    unprintable (a control character, a separator, a line ending left from the file it was read
-    from). The one definition troupe and its runners refuse a credential by (runtimes design D5);
-    each says so in its own words, and never shows the value."""
-    return not any(c.isspace() or not c.isprintable() for c in value)
+    """Whether a credential's value can be sent in a request header as it is: every character in it
+    is visible ASCII, ``!`` to ``~``. That leaves out whitespace, control characters (a line ending
+    left from the file it was read from) and anything outside ASCII, which a header can't carry
+    (runtime-checks design D7). The one definition troupe and its runners refuse a credential by
+    (runtimes design D5); each says so in its own words, and never shows the value."""
+    return all("!" <= c <= "~" for c in value)
 
 
 class CredentialError(Exception):

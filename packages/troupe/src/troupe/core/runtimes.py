@@ -343,9 +343,11 @@ def for_run(
     if not well_formed(value):  # before too short: "abc\n" is likelier a file's line ending (D4)
         raise TroupeError(
             "runtime.credential-malformed",
-            problem=f"The credential in {where}, for the runtime {name!r}, holds whitespace or "
-            "a control character, such as a line ending left from the file it was read from.",
-            fix=f"Set {where} to the key alone, with no spaces or line endings.",
+            problem=f"The credential in {where}, for the runtime {name!r}, holds a character a "
+            "request header can't carry, such as a space, a line ending left from the file it was "
+            "read from, or a letter outside ASCII.",
+            fix=f"Set {where} to the key alone: only visible ASCII characters, with no spaces or "
+            "line endings.",
             details={"runtime": name, **naming},
         )
     if len(value.encode("utf-8")) < defaults.CREDENTIAL_MIN_BYTES:

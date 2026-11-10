@@ -104,7 +104,7 @@ def _drive(repo: Repo, monkeypatch: pytest.MonkeyPatch) -> list[bytes]:
     monkeypatch.delenv("TROUPE_RUNTIME_CANARY_ENDPOINT")
     monkeypatch.setenv("MY_CANARY_KEY", CANARY + "\r\n")  # a key read with its line ending
     assert cli("perform", "echoer", "--direction", "go") != 0
-    assert b"runtime.credential-malformed" in printed[-1] or b"whitespace" in printed[-1]
+    assert b"runtime.credential-malformed" in printed[-1] or b"header can't carry" in printed[-1]
     monkeypatch.setenv("MY_CANARY_KEY", CANARY)
     # The key in place of its variable's name: refused as runtime.invalid-value, since it holds
     # "-" and "/", which a name can't.

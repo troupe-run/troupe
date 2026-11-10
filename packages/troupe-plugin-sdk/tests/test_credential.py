@@ -101,6 +101,17 @@ def test_a_typical_key_is_well_formed() -> None:
     assert well_formed("sk-test-q7ZxW9pL4vR2")
 
 
+@pytest.mark.parametrize(
+    "value",
+    ["sk-test-€abcdefgh", "sk-tést-abcdefgh", "sk-test-abcdefgh\u200b", "клю-0123456789"],
+    ids=["euro sign", "Latin-1 letter", "zero-width space", "Cyrillic"],
+)
+def test_a_character_outside_ascii_isnt_well_formed(value: str) -> None:
+    # A request header carries only ASCII: httpx encodes a header value as ASCII, and
+    # http.client's Latin-1 refuses the rest late, after the run is recorded (#329).
+    assert not well_formed(value)
+
+
 @given(st.text(max_size=40))
-def test_well_formed_means_no_character_is_whitespace_or_unprintable(value: str) -> None:
-    assert well_formed(value) == all(not c.isspace() and c.isprintable() for c in value)
+def test_well_formed_means_every_character_is_visible_ascii(value: str) -> None:
+    assert well_formed(value) == all("!" <= c <= "~" for c in value)

@@ -20,16 +20,18 @@ fail (the count goes in the task), and `uv run scripts/check.py` passes before e
 
 ## 2. A sendable credential is visible ASCII (#329, design D7)
 
-- [ ] 2.1 Add SDK tests for `well_formed` (the plugin-sdk scenarios, plus a hypothesis test over all of Unicode that
-  `well_formed(v)` is exactly "every character in `!`..`~`"); see the non-ASCII cases fail.
-- [ ] 2.2 Narrow `troupe_plugin_sdk.credential.well_formed` to visible ASCII, and its docstring; verify 2.1 passes.
-- [ ] 2.3 Add core and OpenAI runner tests for `sk-test-€abcdefgh` (`runtime.credential-malformed` before anything is
+- [x] 2.1 Add SDK tests for `well_formed` (the plugin-sdk scenarios, plus a hypothesis test over all of Unicode that
+  `well_formed(v)` is exactly "every character in `!`..`~`"); see the non-ASCII cases fail. (4 failed on main; a
+  zero-width space was already refused.)
+- [x] 2.2 Narrow `troupe_plugin_sdk.credential.well_formed` to visible ASCII, and its docstring; verify 2.1 passes.
+- [x] 2.3 Add core and OpenAI runner tests for `sk-test-€abcdefgh` (`runtime.credential-malformed` before anything is
   recorded, holding no part of the value; `openai.malformed-credential` with no request sent); reword both errors'
   problem and fix to "a character a request header can't carry, such as a space, a line ending or a letter outside
-  ASCII"; verify the tests pass.
-- [ ] 2.4 Update `docs/stagecraft/runtimes.md` ("Just the key") and the OpenAI runner's README where they say
+  ASCII"; verify the tests pass. (5 new cases failed with the SDK change set aside; with it, 475 passed across the
+  SDK, runtimes, perform-runtime and OpenAI runner suites.)
+- [x] 2.4 Update `docs/stagecraft/runtimes.md` ("Just the key") and the OpenAI runner's README where they say
   "whitespace or a control character"; verify `grep -rn "whitespace or a control" docs contributing plugins` finds
-  nothing stale.
+  nothing stale. (Also `contributing/config.md`'s code table and the runner's `errors.schema.json` description.)
 
 ## 3. The SDK and runners never repeat a refused endpoint (#323, design D8)
 

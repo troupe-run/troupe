@@ -398,13 +398,18 @@ def test_no_refusal_holds_any_part_of_the_value(env: dict[str, str], code: str) 
             assert form not in _error(raised)
 
 
-# Requirement: A credential holding whitespace or a control character is refused
+# Requirement: A credential holding a character a request header can't carry is refused
 
 
 @pytest.mark.parametrize(
     "value",
-    ["sk-test-q7ZxW9pL4vR2\r\n", "sk-test q7ZxW9pL4vR2", "sk-test-q7ZxW9pL4vR2\x00"],
-    ids=["a line ending", "a space inside", "a control character"],
+    [
+        "sk-test-q7ZxW9pL4vR2\r\n",
+        "sk-test q7ZxW9pL4vR2",
+        "sk-test-q7ZxW9pL4vR2\x00",
+        "sk-test-€q7ZxW9pL4vR2",
+    ],
+    ids=["a line ending", "a space inside", "a control character", "a character outside ASCII"],
 )
 def test_a_malformed_key_is_refused_naming_the_variable_but_not_the_value(value: str) -> None:
     with pytest.raises(TroupeError) as raised:

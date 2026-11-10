@@ -158,7 +158,7 @@ Its limit, in `troupe.core.defaults`:
 | `runtime.invalid-value` | A `TROUPE_RUNTIME_` variable is set to something its field doesn't accept. Names the variable and what's accepted, never the value |
 | `runtime.no-model` | Nothing sets the model for a run on a runtime. Names the actor's, the runtime's and the variable's places to set one |
 | `runtime.credential-unset` | A run's runtime reads its credential from a variable that isn't set. Names the runtime and the variable, or `namedBy`, the `TROUPE_RUNTIME_` variable that named it, never the name it holds |
-| `runtime.credential-malformed` | A run's credential holds whitespace or a control character, such as a line ending from a file. Names the runtime and the variable (or `namedBy`, as for `runtime.credential-unset`), never the value |
+| `runtime.credential-malformed` | A run's credential holds a character a request header can't carry (anything but visible ASCII), such as a line ending from a file or a letter outside ASCII. Names the runtime and the variable (or `namedBy`, as for `runtime.credential-unset`), never the value |
 | `runtime.credential-too-short` | A run's credential is shorter than `CREDENTIAL_MIN_BYTES`. Names the variable (or `namedBy`, as for `runtime.credential-unset`), never the value |
 | `runtime.insecure-endpoint` | A run would send its credential over plain HTTP to a host that isn't a loopback address |
 | `config.not-resolvable` | `config get --resolved` was given a path that isn't `runtimes` or `runtimes.<name>` |

@@ -162,8 +162,8 @@ def test_a_run_start_and_an_environment_that_disagree_are_refused_without_the_va
     assert own_validator("errors.schema.json").is_valid(data)
 
 
-@pytest.mark.parametrize("ending", ["\n", "\r", "\r\n", " ", "\t", "\x00"], ids=repr)
-def test_a_key_with_a_line_ending_or_control_character_is_refused_without_its_value(
+@pytest.mark.parametrize("ending", ["\n", "\r", "\r\n", " ", "\t", "\x00", "€", "é"], ids=repr)
+def test_a_key_holding_a_character_a_header_cant_carry_is_refused_without_its_value(
     ending: str,
 ) -> None:
     with pytest.raises(RuntimeRefusedError) as raised:

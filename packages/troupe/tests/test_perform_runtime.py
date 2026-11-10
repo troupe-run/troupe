@@ -206,6 +206,11 @@ def test_a_run_with_no_runtime_records_none(tmp_path: Path) -> None:
             id="a key read with its line ending",
         ),
         pytest.param(
+            {"OPENAI_API_KEY": "sk-test-€abcdefgh"},
+            "runtime.credential-malformed",
+            id="a character a header can't carry",
+        ),
+        pytest.param(
             {"OPENAI_API_KEY": KEY, "TROUPE_RUNTIME_OPENAI_ENDPOINT": "http://example.com/v1"},
             "runtime.insecure-endpoint",
             id="plain HTTP to another host",
