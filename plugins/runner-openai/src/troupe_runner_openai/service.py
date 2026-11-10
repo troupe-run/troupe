@@ -70,21 +70,26 @@ class Endpoint:
 
 
 def parse_endpoint(text: str) -> Endpoint:
-    """``text`` as an Endpoint. Raises EndpointError naming what's wrong."""
+    """``text`` as an Endpoint. Raises EndpointError naming what's wrong, never repeating an
+    endpoint that may hold user info, such as a password (runtime-checks design D8, #323)."""
+    shown = "The endpoint (not shown: it may hold user info)" if "@" in text else repr(text)
     try:
         parts = urllib.parse.urlsplit(text)
         host = parts.hostname or ""
         parts.port  # noqa: B018 - raises ValueError for a port that isn't a number in range
-    except ValueError as error:
-        raise EndpointError(f"{text!r} isn't a URL: {error}.") from None
-    if parts.scheme not in ("http", "https"):
-        raise EndpointError(f"{text!r} isn't an http or https URL.")
-    if not host:
-        raise EndpointError(f"{text!r} names no host.")
-    if parts.query or parts.fragment or parts.username or parts.password:
+    except ValueError:
+        raise EndpointError(f"{shown} isn't a URL with a host and a port in range.") from None
+    if parts.username or parts.password:
         raise EndpointError(
-            f"{text!r} has a query, fragment or user name; an endpoint is a base URL only."
+            "The endpoint has a user name or password, which an endpoint never holds; it isn't "
+            "shown."
         )
+    if parts.scheme not in ("http", "https"):
+        raise EndpointError(f"{shown} isn't an http or https URL.")
+    if not host:
+        raise EndpointError(f"{shown} names no host.")
+    if parts.query or parts.fragment:
+        raise EndpointError(f"{shown} has a query or fragment; an endpoint is a base URL only.")
     return Endpoint(text, parts.scheme, host)
 
 

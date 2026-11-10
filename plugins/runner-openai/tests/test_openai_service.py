@@ -77,6 +77,23 @@ def test_an_endpoint_that_isnt_a_base_http_url_is_refused(endpoint: str) -> None
         parse_endpoint(endpoint)
 
 
+@pytest.mark.parametrize(
+    "shape",
+    [
+        "https://user:{}@example.com/v1",
+        "https://{}@example.com/v1",
+        "ftp://user:{}@example.com/v1",
+        "https://user:{}@example.com:99999/v1",
+    ],
+)
+def test_an_endpoint_refused_with_user_info_isnt_repeated(shape: str) -> None:
+    # The SDK refuses these first; the runner's own check never repeats one either (#323).
+    canary = "q7ZxW9pL4vR2canary"
+    with pytest.raises(EndpointError) as raised:
+        parse_endpoint(shape.format(canary))
+    assert canary not in str(raised.value)
+
+
 def test_requests_go_below_the_endpoint() -> None:
     assert parse_endpoint("https://api.openai.com/v1/").responses_url == (
         "https://api.openai.com/v1/responses"
