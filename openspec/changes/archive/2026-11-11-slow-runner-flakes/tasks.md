@@ -143,7 +143,8 @@ before it starts and run one at a time. Every reproduction records its assertion
   guard has no cross-scope reads to flag: 10 rounds, load averages up to 82, none failed, nothing left running.
 - [x] 8.2 Run `uv run scripts/check.py` locally, then CI on all twelve legs once the PR is ready. Verify every job
   passes, and cite the Windows 3.12 leg's run for #352. The local check passed on every commit and after the rebase
-  onto `71c76ced`. CI on `a6455dde`, run 42915078824: all twelve legs passed. Windows 3.12 is job 130175444244.
+  onto `71c76ced`. CI on the last code commit, `2f2a5a71`, run 42919100829: all twelve legs passed. Windows 3.12
+  is job 130189193958.
 - [x] 8.3 `openspec validate slow-runner-flakes --strict` passes.
 
 ## Workflow follow-up
