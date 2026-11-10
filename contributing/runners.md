@@ -9,12 +9,14 @@ and output. A runner can be written in any language. This page and the schemas i
 In Python, the [plugin SDK](../packages/troupe-plugin-sdk/README.md) (`troupe_plugin_sdk.runner`) has the contract's
 types, checked against those schemas, and core uses the same ones. A runner in another language reads the schemas.
 
-troupe ships four runners: the [scripted runner](../plugins/runner-scripted/README.md), which tests use to produce
+troupe ships five runners: the [scripted runner](../plugins/runner-scripted/README.md), which tests use to produce
 every outcome on demand, the [Claude Code runner](../plugins/runner-claude-code/README.md), the
 [Ollama runner](../plugins/runner-ollama/README.md), which drives a local model through Ollama's own API with troupe's
-own tool loop (decision [#16](https://github.com/troupe-run/troupe/issues/16)), and the
+own tool loop (decision [#16](https://github.com/troupe-run/troupe/issues/16)), the
 [OpenAI runner](../plugins/runner-openai/README.md), which drives OpenAI's Responses API with the same kind of loop
-([#162](https://github.com/troupe-run/troupe/issues/162)).
+([#162](https://github.com/troupe-run/troupe/issues/162)), and the
+[LM Studio runner](../plugins/runner-lm-studio/README.md), which drives LM Studio through its own client library,
+whose tool loop calls troupe's tools ([#291](https://github.com/troupe-run/troupe/issues/291)).
 
 ## The contract
 
@@ -511,6 +513,30 @@ Its transcript records use the contract's [record kinds](#record-kinds): the req
 stream line unchanged, and the body of an error or of a 2xx that isn't a stream, are `received`; the status with only named headers, and a stream it drops,
 are `note`s. The request's URL isn't recorded, since the run's start records the runtime's endpoint. The key, and a
 masked echo of it, are masked in everything it sends.
+
+### Mapping an engine: a client library's tool loop
+
+The [LM Studio runner](../plugins/runner-lm-studio/README.md) is a third shape: a [client
+library](#runners-with-client-libraries), LM Studio's `lmstudio`, runs the rounds, and calls a Python function for
+each tool the model asks for. Each function is the plugin SDK's `Tools`, so troupe still carries out and checks every
+call, and `init`'s `effects` is `checked`. The runner can't stop between rounds except by closing the library's client,
+which is also how it cancels. Its fixtures pin it: websocket exchanges recorded from LM Studio, replayed by a fake.
+
+| From the library | Run event |
+|---|---|
+| the runtime's model, loaded (a load that starts reported) | `init`, with engine `lm-studio`; `log` events for the load, and for a loaded context length other than the run's |
+| a model key other than the runtime's model | `served_model`, the first time, before any turn it answers |
+| answer fragments (reasoning fragments are read past) | a `turn` when the round's first tool call starts, and one for the rest when the round ends |
+| each tool call, made through the SDK's `Tools` | `tool_call` and `tool_result`, from the SDK |
+| a call the library rejects (an unknown tool, arguments that don't fit) | `tool_call` and an error `tool_result`, with the SDK's own message for that input |
+| a lost connection, while no tool call has run | `retry` with reason `network` |
+| a round with no tool call, stopped at `eosFound` or `stopStringFound` | `result` `ok`, with its text |
+| every round used while the model still called tools, the budget spent once a round's calls finish, the context or predicted-token limit, the model unloaded or a failed prediction, a lost connection after a tool call or a timeout, or a message the library can't read | `result` `error`. Its `reason`: `turn-limit`, `budget`, `context-length`, `output-limit`, `engine`, `network` and `other` |
+| each round's `promptTokensCount` and `predictedTokensCount` | summed into `result.usage` as `inputTokens` and `outputTokens`; LM Studio reports no cache counters and no cost |
+| no cost, and a price in `run/start` | `result.estimatedCostUsd`, from the SDK's estimator |
+
+Its transcript is what the library exposes, with the contract's record kinds: the model's listing and each round's
+result are `received`, the chat and tools it passes the library and each tool result message are `sent`.
 
 ## How troupe runs a runner
 

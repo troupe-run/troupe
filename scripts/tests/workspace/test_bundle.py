@@ -210,22 +210,33 @@ def test_troupe_run_installs_troupe_with_every_workspace_member() -> None:
 
 
 # Runners with client libraries are optional extras of troupe-run, named after their runner, and
-# 'all' names every one (spec: installation; runner-extras design D2, D4, D5). No shipped runner has
-# a library yet, so each case adds a fixture runner, lm-studio, as #291 will.
+# 'all' names every one (spec: installation; runner-extras design D2, D4, D5). lm-studio is the
+# first (#291), so each case keeps it as it is and adds a fixture runner, example, whose library is
+# example-client, to stand for the next one.
 
 RUNNER_TABLE = bundle_state.RUNNER_TABLE
 LM_STUDIO = "troupe-runner-lm-studio"
-LM_STUDIO_PATH = "plugins/runner-lm-studio"
+EXAMPLE = "troupe-runner-example"
+EXAMPLE_PATH = "plugins/runner-example"
+LIBRARY = "example-client>=1"
 
 
-def test_the_bundle_has_an_all_extra_with_no_runner_in_it_yet(copy: Path) -> None:
-    """Every shipped runner depends only on the SDK, so 'all' adds nothing to the base yet."""
-    assert bundle_state.extras(copy) == {"all": []}
+def with_lm_studio(wanted: dict[str, list[str]]) -> dict[str, list[str]]:
+    """``wanted``, with the real lm-studio extra kept, and kept in 'all' when 'all' is given."""
+    kept = {"lm-studio": [LM_STUDIO], **wanted}
+    if "all" in wanted and LM_STUDIO not in wanted["all"]:
+        kept["all"] = [*wanted["all"], LM_STUDIO]
+    return kept
+
+
+def test_the_bundle_has_the_lm_studio_extra_and_all_naming_it(copy: Path) -> None:
+    """lm-studio is the one runner with a library, so 'all' adds exactly it to the base."""
+    assert bundle_state.extras(copy) == {"all": [LM_STUDIO], "lm-studio": [LM_STUDIO]}
     assert bundle.problems(copy) == []
 
 
 def test_a_bundle_without_an_all_extra_is_named(copy: Path) -> None:
-    bundle_state.set_extras(copy, {})
+    bundle_state.set_extras(copy, {"lm-studio": [LM_STUDIO]})
     assert bundle.problems(copy) == [
         f"troupe-run has no 'all' extra: add all = [...] under [project.optional-dependencies] "
         f"in {BUNDLE_PYPROJECT}, naming every runner in an extra, so troupe-run[all] installs "
@@ -234,44 +245,48 @@ def test_a_bundle_without_an_all_extra_is_named(copy: Path) -> None:
 
 
 def test_a_library_backed_runner_in_its_extra_and_in_all_has_no_problems(copy: Path) -> None:
-    bundle_state.add_runner(copy, "lm-studio", extra="lm-studio")
-    assert bundle_state.extras(copy) == {"lm-studio": [LM_STUDIO], "all": [LM_STUDIO]}
+    bundle_state.add_runner(copy, "example", library=LIBRARY, extra="example")
+    assert bundle_state.extras(copy) == {
+        "lm-studio": [LM_STUDIO],
+        "example": [EXAMPLE],
+        "all": [LM_STUDIO, EXAMPLE],
+    }
     assert bundle.problems(copy) == []
 
 
 def test_a_library_backed_runner_in_the_base_dependencies_is_named_with_its_extra(
     copy: Path,
 ) -> None:
-    bundle_state.add_runner(copy, "lm-studio", in_extra=True)
+    bundle_state.add_runner(copy, "example", library=LIBRARY, in_extra=True)
     assert bundle.problems(copy) == [
-        f"{LM_STUDIO} ({LM_STUDIO_PATH}) depends on lmstudio, beyond troupe-plugin-sdk, so it's "
+        f"{EXAMPLE} ({EXAMPLE_PATH}) depends on example-client, beyond troupe-plugin-sdk, so it's "
         f"an optional extra of troupe-run: move it from the dependencies in {BUNDLE_PYPROJECT} to "
-        "its runner's extra, 'lm-studio', and to 'all'."
+        "its runner's extra, 'example', and to 'all'."
     ]
 
 
 def test_a_library_backed_runner_in_no_extra_is_named_with_its_extra(copy: Path) -> None:
-    bundle_state.add_runner(copy, "lm-studio", extra="lm-studio")
-    bundle_state.set_extras(copy, {"all": []})
+    bundle_state.add_runner(copy, "example", library=LIBRARY, extra="example")
+    bundle_state.set_extras(copy, with_lm_studio({"all": []}))
     assert bundle.problems(copy) == [
-        f"{LM_STUDIO} ({LM_STUDIO_PATH}) depends on lmstudio, beyond troupe-plugin-sdk, so "
-        f"troupe-run has it in an extra named after its runner: add it to the 'lm-studio' extra, "
+        f"{EXAMPLE} ({EXAMPLE_PATH}) depends on example-client, beyond troupe-plugin-sdk, so "
+        f"troupe-run has it in an extra named after its runner: add it to the 'example' extra, "
         f"and to 'all', in {BUNDLE_PYPROJECT}."
     ]
 
 
 def test_an_extra_named_after_the_library_names_the_extra_and_the_runner(copy: Path) -> None:
-    bundle_state.add_runner(copy, "lm-studio", extra="lmstudio")
+    bundle_state.add_runner(copy, "example", library=LIBRARY, extra="example-client")
     assert bundle.problems(copy) == [
-        f"troupe-run's extra 'lmstudio' isn't named after a runner core knows ({RUNNER_TABLE}): "
-        "troupe-run's extras are its runners', each named exactly as core's runner table names "
-        f"it, and 'all'. It holds {LM_STUDIO}, whose runner is 'lm-studio': rename the extra to "
-        f"'lm-studio' in {BUNDLE_PYPROJECT}."
+        f"troupe-run's extra 'example-client' isn't named after a runner core knows "
+        f"({RUNNER_TABLE}): troupe-run's extras are its runners', each named exactly as core's "
+        f"runner table names it, and 'all'. It holds {EXAMPLE}, whose runner is 'example': rename "
+        f"the extra to 'example' in {BUNDLE_PYPROJECT}."
     ]
 
 
 def test_an_extra_that_isnt_a_runners_is_named(copy: Path) -> None:
-    bundle_state.set_extras(copy, {"dev": [], "all": []})
+    bundle_state.set_extras(copy, with_lm_studio({"dev": [], "all": []}))
     assert bundle.problems(copy) == [
         f"troupe-run's extra 'dev' isn't named after a runner core knows ({RUNNER_TABLE}): "
         "troupe-run's extras are its runners', each named exactly as core's runner table names "
@@ -288,7 +303,7 @@ def test_an_sdk_only_runner_given_an_extra_is_named_with_the_base_dependencies(c
         if release_config.requirement_name(r) == "troupe-runner-scripted"
     )
     bundle_state.set_dependency(copy, "troupe-runner-scripted", None)
-    bundle_state.set_extras(copy, {"scripted": [held], "all": [held]})
+    bundle_state.set_extras(copy, with_lm_studio({"scripted": [held], "all": [held]}))
     assert bundle.problems(copy) == [
         "troupe-run has troupe-runner-scripted in its 'scripted' extra, but "
         "plugins/runner-scripted depends only on troupe-plugin-sdk, so it's in the base install: "
@@ -297,11 +312,11 @@ def test_an_sdk_only_runner_given_an_extra_is_named_with_the_base_dependencies(c
 
 
 def test_a_runner_left_out_of_all_is_named(copy: Path) -> None:
-    bundle_state.add_runner(copy, "lm-studio", extra="lm-studio")
-    bundle_state.set_extras(copy, {"lm-studio": [LM_STUDIO], "all": []})
+    bundle_state.add_runner(copy, "example", library=LIBRARY, extra="example")
+    bundle_state.set_extras(copy, with_lm_studio({"example": [EXAMPLE], "all": []}))
     assert bundle.problems(copy) == [
-        f"troupe-run's 'all' extra doesn't name {LM_STUDIO}, which its 'lm-studio' extra holds: "
-        f"add {LM_STUDIO!r} to 'all' in {BUNDLE_PYPROJECT}."
+        f"troupe-run's 'all' extra doesn't name {EXAMPLE}, which its 'example' extra holds: "
+        f"add {EXAMPLE!r} to 'all' in {BUNDLE_PYPROJECT}."
     ]
 
 
@@ -313,7 +328,7 @@ def test_all_naming_a_runner_no_extra_holds_is_named(copy: Path) -> None:
         )
         if release_config.requirement_name(r) == "troupe-runner-scripted"
     )
-    bundle_state.set_extras(copy, {"all": [held]})
+    bundle_state.set_extras(copy, with_lm_studio({"all": [held]}))
     assert bundle.problems(copy) == [
         "troupe-run's 'all' extra names troupe-runner-scripted, which no runner's extra holds: "
         f"remove it from 'all' in {BUNDLE_PYPROJECT}."
@@ -321,21 +336,21 @@ def test_all_naming_a_runner_no_extra_holds_is_named(copy: Path) -> None:
 
 
 def test_all_pinning_another_version_names_both_references(copy: Path) -> None:
-    bundle_state.add_runner(copy, "lm-studio", extra="lm-studio")
-    new = release_config.pin(LM_STUDIO, "0.1.1", LM_STUDIO_PATH)
-    old = release_config.pin(LM_STUDIO, "0.1.0", LM_STUDIO_PATH)
-    bundle_state.set_extras(copy, {"lm-studio": [new], "all": [old]})
+    bundle_state.add_runner(copy, "example", library=LIBRARY, extra="example")
+    new = release_config.pin(EXAMPLE, "0.1.1", EXAMPLE_PATH)
+    old = release_config.pin(EXAMPLE, "0.1.0", EXAMPLE_PATH)
+    bundle_state.set_extras(copy, with_lm_studio({"example": [new], "all": [old]}))
     assert bundle.problems(copy) == [
-        f"troupe-run's 'all' extra names {old!r}, but its 'lm-studio' extra names {new!r}: make "
+        f"troupe-run's 'all' extra names {old!r}, but its 'example' extra names {new!r}: make "
         f"them the same in {BUNDLE_PYPROJECT}."
     ]
 
 
 def test_a_table_saying_base_for_a_runner_in_an_extra_is_named(copy: Path) -> None:
-    bundle_state.add_runner(copy, "lm-studio", extra="lm-studio", in_extra=False)
+    bundle_state.add_runner(copy, "example", library=LIBRARY, extra="example", in_extra=False)
     assert bundle.problems(copy) == [
-        f"core's runner table ({RUNNER_TABLE}) says the 'lm-studio' runner is in the base "
-        f"install, but {LM_STUDIO} depends on more than troupe-plugin-sdk, so troupe-run has it in "
+        f"core's runner table ({RUNNER_TABLE}) says the 'example' runner is in the base "
+        f"install, but {EXAMPLE} depends on more than troupe-plugin-sdk, so troupe-run has it in "
         "an extra: set in_extra=True on its entry."
     ]
 
@@ -350,16 +365,16 @@ def test_a_table_saying_extra_for_a_base_runner_is_named(copy: Path) -> None:
 
 
 def test_a_library_backed_plugin_core_has_no_runner_for_is_named(copy: Path) -> None:
-    bundle_state.add_runner(copy, "lm-studio", extra="lm-studio")
+    bundle_state.add_runner(copy, "example", library=LIBRARY, extra="example")
     table = copy / RUNNER_TABLE
     text = table.read_text(encoding="utf-8")
-    start = text.index('    "lm-studio": Runner(')
+    start = text.index('    "example": Runner(')
     end = text.index("    ),\n", start) + len("    ),\n")
     table.write_text(text[:start] + text[end:], encoding="utf-8")
     assert (
-        f"{LM_STUDIO} ({LM_STUDIO_PATH}) depends on lmstudio, beyond troupe-plugin-sdk, but "
+        f"{EXAMPLE} ({EXAMPLE_PATH}) depends on example-client, beyond troupe-plugin-sdk, but "
         f"core's runner table ({RUNNER_TABLE}) has no runner whose package is "
-        "troupe_runner_lm_studio: add its entry there, so its extra can be named after it."
+        "troupe_runner_example: add its entry there, so its extra can be named after it."
     ) in bundle.problems(copy)
 
 
@@ -373,14 +388,14 @@ def test_a_missing_runner_table_is_named(copy: Path) -> None:
 
 def test_a_pinned_extra_runner_with_the_released_sdk_bare_names_both(copy: Path) -> None:
     """releases: "An extra's runner pins the released SDK bare"."""
-    bundle_state.add_runner(copy, "lm-studio", extra="lm-studio")
-    _release(copy, LM_STUDIO_PATH, "0.1.0")
+    bundle_state.add_runner(copy, "example", library=LIBRARY, extra="example")
+    _release(copy, EXAMPLE_PATH, "0.1.0")
     _release(copy, "packages/troupe-plugin-sdk", "0.1.0")
-    pinned = release_config.pin(LM_STUDIO, "0.1.0", LM_STUDIO_PATH)
-    bundle_state.set_extras(copy, {"lm-studio": [pinned], "all": [pinned]})
+    pinned = release_config.pin(EXAMPLE, "0.1.0", EXAMPLE_PATH)
+    bundle_state.set_extras(copy, with_lm_studio({"example": [pinned], "all": [pinned]}))
     bundle_state.set_dependency(copy, "troupe-plugin-sdk", "troupe-plugin-sdk")
     assert (
-        f"troupe-run pins {LM_STUDIO}, which depends on troupe-plugin-sdk, but names "
+        f"troupe-run pins {EXAMPLE}, which depends on troupe-plugin-sdk, but names "
         f"troupe-plugin-sdk bare in {BUNDLE_PYPROJECT}: pin it at its latest release too, so an "
         "install of the bundle's tag never looks it up on a package index."
     ) in bundle.problems(copy)

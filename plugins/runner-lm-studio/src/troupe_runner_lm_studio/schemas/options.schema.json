@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/plugins/runner-lm-studio/options.schema.json",
+  "title": "LM Studio runner options",
+  "description": "The run/start options the LM Studio runner takes, each optional. They fill the runner contract's runnerOptions extension point. The service (its endpoint and model) comes from the run's runtime, never from these options.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "maxTurns": {
+      "description": "The most prediction rounds a run may make. The last is sent without tools, so the model answers. Absent: the runner's default, 20.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "maxTotalTokens": {
+      "description": "The most prompt plus predicted tokens a run may use, summed over its rounds as LM Studio reports them. Checked after each round's tool calls have finished, so a run can pass it by one round. Absent: the runner's default, 200,000.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "contextLength": {
+      "description": "The context length the model is loaded with, when the run loads it. A model already loaded keeps its own, and the run reports it. Absent: the runner's default, 16,384.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "temperature": {
+      "description": "The model's sampling temperature, from 0 to 1. Absent: the model's own default.",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    }
+  }
+}

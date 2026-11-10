@@ -1,0 +1,54 @@
+{
+ "events": [
+  {
+   "type": "init",
+   "seq": 0,
+   "runner": {
+    "name": "lm-studio",
+    "version": "<package version>"
+   },
+   "tools": [
+    "Read",
+    "Write",
+    "Edit",
+    "Glob",
+    "Grep",
+    "Delete",
+    "Move"
+   ],
+   "engine": {
+    "name": "lm-studio",
+    "model": "google/gemma-4-e4b"
+   },
+   "effects": "checked"
+  },
+  {
+   "type": "log",
+   "seq": 1,
+   "level": "info",
+   "message": "google/gemma-4-e4b was already loaded with a context length of 8192 tokens, not the run's 16384, and the run uses it as it is."
+  },
+  {
+   "type": "turn",
+   "seq": 2,
+   "role": "assistant",
+   "text": "hello"
+  },
+  {
+   "type": "result",
+   "seq": 3,
+   "status": "ok",
+   "message": "hello",
+   "turns": 1,
+   "usage": {
+    "inputTokens": 1370,
+    "outputTokens": 2
+   }
+  }
+ ],
+ "transcriptKinds": [
+  "received",
+  "sent",
+  "received"
+ ]
+}

@@ -1,0 +1,9 @@
+{
+  "requires": [
+    {
+      "name": "lm-studio",
+      "minimum": "0.4.28",
+      "why": "The version the runner was tested with, through lmstudio 1.5.0 (lmstudio-runner design D12). LM Studio reports no version to check, through its library, its greeting or its model listing, and lmstudio states no minimum, so this is the version a failed pre-run check names."
+    }
+  ]
+}

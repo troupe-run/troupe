@@ -17,6 +17,7 @@ from troupe.cli import init as init_cli
 from troupe.cli import main
 from troupe.core import audition as auditions
 from troupe.core import interim
+from troupe.core.audition import LM_STUDIO_AUDITION_MODEL
 from troupe.core.audition import OLLAMA_AUDITION_MODEL as OLLAMA_MODEL
 from troupe.core.exit_codes import ExitCode
 from troupe.core.policy import ALLOW_UNENFORCED_LOCAL_STAGE, env_name
@@ -241,6 +242,26 @@ def test_the_ollama_actor_names_the_ollama_runtime_and_its_model_with_no_options
     assert not (repo.path / ".troupe" / "runtimes").exists()
 
 
+def test_the_lm_studio_audition_says_to_start_lm_studio_and_get_the_model_and_names_the_extra(
+    repo: Repo,
+) -> None:
+    # Spec: config, "What init prints for it"; cli, "The LM Studio runner".
+    code, out, err = cli("init", "--audition", "--runner", "lm-studio")
+    assert code == ExitCode.OK, err
+    assert "Defined the actor lead, with the lm-studio runner." in out
+    lines = _next(out)
+    assert (
+        "   # LM Studio's server must be running (lms server start), with Require Authentication "
+        f"off, and its model downloaded: lms get {LM_STUDIO_AUDITION_MODEL}" in lines
+    )
+    assert any("troupe-run[lm-studio]" in line for line in lines)
+    lead = (repo.path / ".troupe" / "actors" / "lead.yaml").read_text(encoding="utf-8")
+    assert "runner: lm-studio" in lead
+    code, out, err = cli("config", "get", "actors.lead.runtime", "--json")
+    assert code == ExitCode.OK, err
+    assert json.loads(out)["value"] == "lm-studio"
+
+
 def test_the_openai_audition_says_which_key_to_set_and_that_a_run_costs_money(
     repo: Repo,
 ) -> None:
@@ -297,7 +318,7 @@ def test_an_unknown_runner_names_the_runners_troupe_has_and_makes_nothing(repo: 
     code, _, err = cli("init", "--audition", "--runner", "gemini")
     assert code == ExitCode.FAILURE
     assert "gemini" in err
-    assert "claude-code, ollama, openai, scripted" in err
+    assert "claude-code, lm-studio, ollama, openai, scripted" in err
     assert not (repo.path / ".troupe").exists()
 
 

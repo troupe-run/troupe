@@ -1,0 +1,25 @@
+[project]
+name = "troupe-runner-lm-studio"
+version = "0.0.0"
+description = "An actor runner for troupe that drives a model in LM Studio through LM Studio's own client library, with troupe's own tools."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.12,<3.16"
+# The plugin SDK, for the runner contract's types and the file tools (spec: plugin-sdk), and LM Studio's own client
+# library, pinned, which runs the model's rounds and calls troupe's tools on troupe's side (decision #319;
+# lmstudio-runner design D1). A plugin imports nothing else of troupe's. The SDK is bare, like an adapter's dependency
+# on troupe: the bundle pins it (runner-sdk D12). With a library, this runner is troupe-run's lm-studio extra, not
+# part of the base install (runner-extras design D1, D2).
+dependencies = ["troupe-plugin-sdk", "lmstudio==1.5.0"]
+
+[project.urls]
+Homepage = "https://troupe.run"
+Repository = "https://github.com/troupe-run/troupe"
+
+[project.scripts]
+troupe-runner-lm-studio = "troupe_runner_lm_studio.runner:main"
+
+[build-system]
+requires = ["uv_build>=0.13.5,<0.14"]
+build-backend = "uv_build"

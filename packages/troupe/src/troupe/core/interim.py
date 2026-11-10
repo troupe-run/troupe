@@ -129,6 +129,16 @@ RUNNERS: dict[str, Runner] = {
         package="troupe_runner_claude_code",
         environment=CLAUDE_CODE_ENVIRONMENT,
     ),
+    "lm-studio": Runner(
+        command=(sys.executable, "-m", "troupe_runner_lm_studio"),
+        package="troupe_runner_lm_studio",
+        # No variables: its endpoint and model are its runtime's, in run/start, and it takes no
+        # credential, since LM Studio's library can't send one (lmstudio-runner design D3, D4).
+        runtime="required",
+        # LM Studio's own client library, lmstudio, comes with troupe-run[lm-studio], not the
+        # base install (runner-extras design D1, D5).
+        in_extra=True,
+    ),
     "ollama": Runner(
         command=(sys.executable, "-m", "troupe_runner_ollama"),
         package="troupe_runner_ollama",
