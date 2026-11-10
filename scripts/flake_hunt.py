@@ -45,7 +45,19 @@ STOP_TIMEOUT_SECONDS = 30.0
 """How long a stop waits for the workers before giving up on them, announcing the wait first."""
 TAIL_CHARACTERS = 4000
 """How much of a crashed round's output the summary shows."""
-LOAD_PROGRAM = "while True: pass"
+LOAD_CHECK_SECONDS = 0.2
+"""How often a load process checks that the hunt that started it is still its parent."""
+LOAD_PROGRAM = (
+    "import os, time\n"
+    "parent = os.getppid()\n"
+    "while os.getppid() == parent:\n"
+    f"    until = time.monotonic() + {LOAD_CHECK_SECONDS}\n"
+    "    while time.monotonic() < until:\n"
+    "        pass\n"
+)
+"""Keeps one CPU busy until its parent, the hunt, is gone. On POSIX a killed hunt's load runs in
+sessions of its own, so it is re-parented rather than killed, and this notices; on Windows the
+round's job ends it, and the parent id never changes (#364)."""
 
 
 class HuntError(Exception):

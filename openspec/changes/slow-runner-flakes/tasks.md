@@ -5,23 +5,23 @@ before it starts and run one at a time. Every reproduction records its assertion
 
 ## 1. Hunt load ends with the hunt, and a test stops a whole tree (#364)
 
-- [ ] 1.1 Write the spec scenario's test first: in `scripts/tests/test_flake_hunt.py`, start a hunt with `--load 2`
+- [x] 1.1 Write the spec scenario's test first: in `scripts/tests/test_flake_hunt.py`, start a hunt with `--load 2`
   over a hanging root, wait for `load.json`, kill only the hunt's own process (`SIGKILL`; `TerminateProcess` on
   Windows), and check both load pids are gone within a named `LOAD_GONE_WITHIN`. Verify it **fails on main on macOS**
   (the load keeps spinning). Clean up the leaked load by hand when it does.
-- [ ] 1.2 In `scripts/flake_hunt.py`, make `LOAD_PROGRAM` exit when its parent changes, checked at least every named
+- [x] 1.2 In `scripts/flake_hunt.py`, make `LOAD_PROGRAM` exit when its parent changes, checked at least every named
   `LOAD_CHECK_SECONDS` between pure-Python bursts (D8). Verify that 1.1 passes, and that
   `test_the_load_runs_during_the_rounds_and_is_gone_when_the_hunt_returns` and the interrupt test still pass.
-- [ ] 1.3 Add `stop_tree(process)` to `scripts/tests/conftest.py`: take a snapshot of the descendants, then kill each
+- [x] 1.3 Add `stop_tree(process)` to `scripts/tests/conftest.py`: take a snapshot of the descendants, then kill each
   process group and pid on POSIX (`ps -A -o pid=,ppid=,pgid=`), or run `taskkill /F /T` on Windows (D7). Verify with a
   test in `scripts/tests` that starts a child, which starts a grandchild in a new session and then a spinning load
   process, calls `stop_tree` on the child, and finds none of the three running within a named limit.
-- [ ] 1.4 Use `stop_tree` wherever a test in `scripts/tests` gives up on a hunt or campaign: `run_hunt` becomes a
+- [x] 1.4 Use `stop_tree` wherever a test in `scripts/tests` gives up on a hunt or campaign: `run_hunt` becomes a
   `Popen` with a bounded wait that stops the tree on timeout and fails with the output so far, and every
   `finally: process.kill()` / `hunt.kill()` becomes `stop_tree`. Verify with `grep -n "\.kill()"` in
   `scripts/tests/test_flake_hunt.py` and `scripts/tests/workspace/test_flake_campaign.py`, which should find none left
   for a hunt or campaign process, and with `uv run pytest scripts/tests -k "flake"`, which should pass.
-- [ ] 1.5 Update `contributing/flake-hunt.md`: a killed hunt's load ends with it on every platform. Add a short
+- [x] 1.5 Update `contributing/flake-hunt.md`: a killed hunt's load ends with it on every platform. Add a short
   section, "Tests that tolerate a slow runner", stating the rule this change applies (proposal "What Changes"),
   including stopping a whole tree on giving up. Verify the docs tests pass.
 

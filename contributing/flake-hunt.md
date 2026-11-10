@@ -107,7 +107,9 @@ The output directory holds the evidence:
 
 **Stopping:** Ctrl-C (or Ctrl-Break on Windows) stops the running rounds and the load, then prints the summary of the
 rounds that finished. Stopping a round stops everything it started, including a process whose parent has already
-exited. On Windows that holds even if the hunt itself is killed.
+exited. On Windows that holds even if the hunt itself is killed. The load ends with the hunt on every platform, even
+when the hunt is killed outright: on macOS and Linux each load process checks for its parent every
+`LOAD_CHECK_SECONDS` and exits once it's gone.
 
 ## macOS and Linux
 
@@ -171,6 +173,25 @@ uv run scripts/on.py 3.13 scripts/flake_hunt.py --workers auto --rounds 10 <sele
 - Ctrl-C or Ctrl-Break stops the hunt.
 - A traceback the console's code page can't show still prints, with those characters escaped. The JSON files hold
   them unchanged.
+
+## Tests that tolerate a slow runner
+
+Most flakes a hunt finds are tests that fail on a slow or loaded machine for timing alone. Fix them to this rule
+(troupe-run/troupe#357 and the eleven fixed with it):
+
+- **Wait for the thing you check** (an event, a request, a process, a line of output) **with a bounded wait whose
+  limit is a named setting.** Don't use a fixed sleep, or a wall-clock margin measured from before the work starts.
+  The setting's docstring says what it bounds and why it's that size.
+- **Where the code under test has a limit of its own, bound the test by that limit plus a margin**, read from the
+  code rather than copied (`flake_campaign.STOP_WAIT_SECONDS`). A test that gives up first fails exactly when the
+  code would have coped.
+- **Don't check an exact list of events that timing can add to.** A slow step raises a notice (`Run.Noticed`):
+  allow those, and nothing else.
+- **A lower bound on elapsed time allows one tick of the clock the waiter used**:
+  `time.get_clock_info("monotonic").resolution`, which is about 15.6 ms on Windows with Python 3.12.
+- **The test still fails when the thing never happens**, at its limit, with a message that names what it waited for.
+- **A test that gives up on a process stops its whole tree.** In `scripts/tests`, use `stop_tree` and `run_within`
+  from `conftest.py`, so a hunt's rounds and load don't outlive it.
 
 ## Putting a finding on #100
 

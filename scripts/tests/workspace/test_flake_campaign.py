@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 
 import pytest
-from conftest import git
+from conftest import git, run_within, stop_tree
 
 import flake_campaign
 from flake_campaign import CampaignError, Hunt
@@ -19,6 +19,12 @@ ROOT = flake_campaign.ROOT
 SCRIPT = Path(flake_campaign.__file__)
 WINDOWS = sys.platform == "win32"
 RUNNING = f"{sys.version_info.major}.{sys.version_info.minor}"
+
+HUNT_RUN_WITHIN = 120.0
+"""Seconds for one of these tests' small hunts to run to its end on a slow machine. Past it, the
+hunt's whole tree is stopped and the test fails with its output so far."""
+CAMPAIGN_RUN_WITHIN = 600.0
+"""Seconds for a one-hunt direct campaign to run to its end, syncing its environment included."""
 
 
 def options(*argv: str) -> flake_campaign.Options:
@@ -175,15 +181,13 @@ def run_a_hunt(tmp_path: Path, files: dict[str, str], rounds: int) -> Path:
     for name, text in files.items():
         (root / name).write_text(textwrap.dedent(text), encoding="utf-8")
     out = tmp_path / "hunt"
-    subprocess.run(
+    run_within(
         [
             sys.executable,
             str(SCRIPT.parent / "flake_hunt.py"),
             *["--root", str(root), "--out", str(out), "--rounds", str(rounds)],
         ],
-        capture_output=True,
-        timeout=120,
-        check=False,
+        HUNT_RUN_WITHIN,
     )
     return out
 
@@ -253,12 +257,10 @@ def test_a_direct_campaign_runs_end_to_end_into_a_report(
     )
     root = make_tests_root(tmp_path, "def test_passes():\n    pass\n")
     out = tmp_path / "out"
-    completed = subprocess.run(
+    completed = run_within(
         campaign_command(environments, out, root, "--loads", "0", "test_it.py"),
+        CAMPAIGN_RUN_WITHIN,
         cwd=SCRIPT.parent.parent,
-        capture_output=True,
-        timeout=600,
-        check=False,
     )
     output = completed.stdout.decode("utf-8", errors="backslashreplace")
     assert completed.returncode == 0, output + completed.stderr.decode(errors="backslashreplace")
@@ -309,7 +311,7 @@ def test_an_interrupted_campaign_stops_its_hunt_runs_no_more_and_reports(
             os.killpg(process.pid, signal.SIGINT)  # as a terminal's Ctrl-C reaches the group
         code = process.wait(60)
     finally:
-        process.kill()
+        stop_tree(process)
     assert code == 130
     data = json.loads((out / "campaign.json").read_text(encoding="utf-8"))
     assert data["stopped"] is True
