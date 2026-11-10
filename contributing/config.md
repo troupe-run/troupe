@@ -45,7 +45,8 @@ value resolves it (`troupe.core.config.stream`). Reads record nothing.
 ## Files
 
 `troupe.core.config.projection` renders each actor to `actors/<name>.yaml` (its schema named twice, at troupe.run
-by major version; keys in the schema's order, groups' keys sorted, strings quoted so YAML 1.1 and 1.2 read them
+by major version; every field of the actor schema that config sets, the character excepted, in the schema's order
+(`FIELD_ORDER`, which a test holds to the schema); groups' keys sorted; strings quoted so YAML 1.1 and 1.2 read them
 the same) and `actors/<name>.md` (the character's text exactly). Before replacing or removing a file it checks the
 file is troupe's:
 

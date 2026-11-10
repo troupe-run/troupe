@@ -5,16 +5,18 @@ fail (the count goes in the task), and `uv run scripts/check.py` passes before e
 
 ## 1. Actor files hold every schema field (#288, design D10)
 
-- [ ] 1.1 Add a test in `packages/troupe/tests/test_config_files.py` that `FIELD_ORDER` equals the actor schema's
-  `properties` in order, beside the `RUNTIME_FIELD_ORDER` one; see it fail on main.
-- [ ] 1.2 Add a test that sets every actor schema field through the config commands (the #288 command, extended to
+- [x] 1.1 Add a test in `packages/troupe/tests/test_config_files.py` that `FIELD_ORDER` equals the actor schema's
+  `properties` in order, beside the `RUNTIME_FIELD_ORDER` one; see it fail on main. (Failed on main: the schema has
+  4 more fields, `effects` first.)
+- [x] 1.2 Add a test that sets every actor schema field through the config commands (the #288 command, extended to
   `options`) and checks `.troupe/actors/tester.yaml` holds each, in schema order, and validates against the actor
-  schema; see it fail.
-- [ ] 1.3 Extend `FIELD_ORDER` in `core/config/projection.py` to the schema's fields, character excepted; verify 1.1
+  schema; see it fail. (In `test_cli_config.py`; failed on main.)
+- [x] 1.3 Extend `FIELD_ORDER` in `core/config/projection.py` to the schema's fields, character excepted; verify 1.1
   and 1.2 pass, and that an actor file troupe wrote before is replaced on the next flush (a test that writes the old
-  form, records its hash as troupe's, and flushes).
-- [ ] 1.4 Update the actor file's description in `contributing/config.md` and `docs/prompt-book/config-schema.md`
-  where they list what the file holds; verify the docs check passes.
+  form, records its hash as troupe's, and flushes). (`test_config_files.py` and `test_cli_config.py`: 108 passed.)
+- [x] 1.4 Update the actor file's description in `contributing/config.md` and `docs/prompt-book/config-schema.md`
+  where they list what the file holds; verify the docs check passes. (`config-schema.md` is generated from the schema
+  and needed no change; `docs/the-company/roles-and-actors.md` now says what the file holds. `-m docs`: 179 passed.)
 
 ## 2. A sendable credential is visible ASCII (#329, design D7)
 

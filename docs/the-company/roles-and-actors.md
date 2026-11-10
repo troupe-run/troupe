@@ -29,7 +29,9 @@ This is decided, and not yet built ([#61](https://github.com/troupe-run/troupe/i
 - **troupe can act by itself,** recorded as an actor of kind `system`: that's how lineage will show a change troupe
   observed, such as a merge.
 - **An actor's config lives in its own file,** named for it: `actors/tester.yaml`, with `actors/tester.md` for its
-  prompt, is the actor `tester` ([#60](https://github.com/troupe-run/troupe/issues/60)).
+  prompt, is the actor `tester` ([#60](https://github.com/troupe-run/troupe/issues/60)). The file holds everything
+  config sets for it: its runner and options, its effect check and effects, its workspace, and its runtime and model,
+  so a change to any of them shows in its diff.
 - **An actor whose runner talks to a service names a runtime:** the service, defined once in config, with its
   endpoint, its model and the variable its key is in, never the key ([Point actors at a
   service](../stagecraft/runtimes.md)).
