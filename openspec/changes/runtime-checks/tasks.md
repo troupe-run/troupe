@@ -116,14 +116,19 @@ fail (the count goes in the task), and `uv run scripts/check.py` passes before e
 
 ## 8. Integration
 
-- [ ] 8.1 Rebase onto main once #338 merges, keeping both `in_extra` and `fit` and both new error codes; run the full
-  check and record the test count.
-- [ ] 8.2 Run the #288 command and the #334 examples by hand in a scratch theatre (`troupe config set` for each pair
+- [x] 8.1 Rebase onto main once #338 merges, keeping both `in_extra` and `fit` and both new error codes; run the full
+  check and record the test count. (#338 merged as `71c76ced` while groups 1–2 were in
+  progress; the branch was rebased onto it cleanly, `fit` sits after `in_extra`, and both codes are catalogued. Main
+  hasn't moved since. The full check passed on every commit after the rebase; the last, `5366f120`, under low load.)
+- [x] 8.2 Run the #288 command and the #334 examples by hand in a scratch theatre (`troupe config set` for each pair
   in the issue, `troupe config get --resolved runtimes.openai` with a name in `_CREDENTIAL_ENV`) and record the
-  output in the PR.
-- [ ] 8.3 `openspec validate runtime-checks --strict` passes, and the runtimes delta's RENAMED-then-MODIFIED
+  output in the PR. (Run in a scratch theatre; the output is in the PR. #288's command now also needs
+  `options` for the scripted runner, a rule that came in since the issue was written.)
+- [x] 8.3 `openspec validate runtime-checks --strict` passes, and the runtimes delta's RENAMED-then-MODIFIED
   requirement applies as intended (checked with `openspec archive --dry-run` if available, else by reading the
-  synced spec before archiving).
+  synced spec before archiving). (Strict validation passes. There's no dry run, so the archive was trialled
+  on a copy of `openspec/`: the runtimes spec took 3 added, 3 modified and 1 renamed requirement, the renamed one
+  carries its new text and scenarios, and all 33 specs then validate strictly.)
 - [ ] 8.4 Open one draft PR whose body closes #323, #334, #329, #306 and #288, and see CI pass on Linux, macOS and
   Windows once it's marked ready.
 
