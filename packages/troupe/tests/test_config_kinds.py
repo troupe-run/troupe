@@ -509,6 +509,30 @@ def test_a_runtime_with_problems_of_its_own_is_not_judged_for_fit() -> None:
     assert [p.path for p in found] == [("runtimes", "gpu-box", "endpoint")]
 
 
+@pytest.mark.parametrize(
+    ("runtimes", "path"),
+    [
+        pytest.param({"myhost": "https://x.example"}, ["runtimes", "myhost"], id="a value"),
+        pytest.param(
+            {"openai": {"credential": "MY_KEY"}},
+            ["runtimes", "openai", "credential"],
+            id="a credential that isn't a group",
+        ),
+        pytest.param(
+            {"myhost": {"endpoint": 7}}, ["runtimes", "myhost", "endpoint"], id="an endpoint number"
+        ),
+    ],
+)
+def test_a_malformed_runtime_is_refused_naming_it_with_an_actor_in_config(
+    runtimes: dict[str, Any], path: list[str]
+) -> None:
+    # Fit is judged only for runtimes with no problems of their own, so a shape the schema refuses
+    # is config.invalid naming it, never a crash.
+    for actor in ({}, {"runner": "ollama", "options": {}, "runtime": "ollama"}):
+        error = _refused(_with(runtimes, **actor))
+        assert error.details["path"] == path
+
+
 @pytest.mark.parametrize("runtime", ["lm-studio", "ollama", "openai"])
 def test_every_runtime_fits_a_runner_that_takes_any(runtime: str) -> None:
     # Spec: runtimes, "Every runtime fits a runner that takes any".

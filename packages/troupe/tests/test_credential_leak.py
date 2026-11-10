@@ -114,11 +114,14 @@ def _drive(repo: Repo, monkeypatch: pytest.MonkeyPatch) -> list[bytes]:
     assert cli("config", "get", "--resolved", "runtimes.canary") != 0
     assert cli("config", "get", "--resolved", "--json", "runtimes.canary") != 0
     # A key that passes for a name: refused as runtime.credential-unset, naming the variable that
-    # held it (namedBy), never the key. Not shown with config get --resolved, which still does
-    # (#306).
+    # held it (namedBy), never the key, and shown the same way by config get --resolved (#306).
     monkeypatch.setenv("TROUPE_RUNTIME_CANARY_CREDENTIAL_ENV", NAME_LIKE_CANARY)
     assert cli("perform", "echoer", "--direction", "go") != 0
     assert b"the variable TROUPE_RUNTIME_CANARY_CREDENTIAL_ENV names" in printed[-1]
+    assert cli("config", "get", "--resolved", "runtimes.canary") == 0
+    assert b"the variable TROUPE_RUNTIME_CANARY_CREDENTIAL_ENV names" in printed[-1]
+    assert cli("config", "get", "--resolved", "--json", "runtimes.canary") == 0
+    assert b'"namedBy": "TROUPE_RUNTIME_CANARY_CREDENTIAL_ENV"' in printed[-1]
     monkeypatch.delenv("TROUPE_RUNTIME_CANARY_CREDENTIAL_ENV")
     assert cli("config", "get", "--resolved") == 0
     assert cli("config", "get", "--resolved", "--json") == 0
