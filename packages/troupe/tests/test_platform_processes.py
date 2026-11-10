@@ -789,6 +789,33 @@ def test_a_drain_thread_still_alive_after_its_last_signal_does_not_delay_the_res
     assert took < 3.0, f"returned {took:.1f} s after it started"
 
 
+CLOSES_ITS_OUTPUT_THEN_RUNS_ON = """
+import os, time
+os.close(1)
+os.close(2)
+time.sleep(1.5)
+"""
+
+
+def test_a_command_that_closes_its_output_and_exits_after_the_announcement_returns_at_once() -> (
+    None
+):
+    waits = _Waits()
+    waits.started = time.monotonic()
+    done = _run(
+        CLOSES_ITS_OUTPUT_THEN_RUNS_ON,
+        timeout=30.0,
+        announce_after=0.5,
+        on_wait=waits.announced,
+    )
+    took = time.monotonic() - waits.started
+    assert done.returncode == 0
+    assert waits.announced_at is not None, (
+        "a 1.5 s wait past a 0.5 s announce time wasn't announced"
+    )
+    assert took < 10.0, f"returned {took:.1f} s after it started, for a command that ran 1.5 s"
+
+
 _GIT_RUNS = 20
 _HALF_THE_OLD_TICK = 0.010
 
