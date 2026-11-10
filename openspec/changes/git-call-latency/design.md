@@ -133,16 +133,25 @@ Probed on git 2.56 (2026-11-11):
   vcs.failed). That costs four commands instead of three, so D5 reads an unborn HEAD straight away with the three
   when files show it's unborn, and four remain only where they can't (reftable, or `packed-refs` present).
 
-**Stat, then read (cache-vcs-state D1).** The watched files are stat'd before the command, as before. The branch's
-own ref file is the one exception, because one command now names the ref and reads HEAD together:
+**Stat, then read (cache-vcs-state D1), kept exactly.** Every watched file is stat'd before the command, as before.
+The branch's own ref file needs its name first, and the one command gives that name only with the answers. So the
+adapter takes the name from where git does, before the command: the HEAD file itself (`--git-path HEAD`, already
+watched). It holds `ref: <full name>` on a branch, an object name when detached, and the ref is stat'd at
+`<common dir>/<full name>` before the command runs. Then:
 
-- When the read names the same ref as the snapshot it replaces (commits on one branch, the steady case), the ref is
-  stat'd before the command, so the rule holds exactly.
-- When it names a ref for the first time (a new adapter, or after a switch), the ref can only be stat'd after the
-  command. A move landing between the command and that stat writes the ref after `read_at`, so its mtime falls
-  inside the racy window and the snapshot is marked racy and not reused. That relies on file timestamps and the
-  wall clock agreeing, which the racy rule (D4) already assumes. The old order stat'd the ref between
-  `symbolic-ref` and `rev-parse`, so it didn't need that assumption. This is raised with the owner alongside D5.
+- **The command names the same ref** (or, detached, none): the stat taken before is kept, and the rule holds as it
+  did with three commands.
+- **It names a different one:** HEAD moved between the HEAD file's read and the command. The snapshot is kept but
+  marked not reusable, as a racy one is, so the next call reads again whatever the clock says.
+- **Reftable:** the HEAD file holds `ref: refs/heads/.invalid`, so it never names the ref, and a path under
+  `refs/heads` can't exist (`refs/heads` is a file), so a stat of it is "missing" whenever it's taken. Branch moves
+  under reftable are caught by the table lists, which are stat'd before. The snapshot is reusable as before.
+
+That costs one read of a file of a few dozen bytes per miss, and no command. An earlier version of this design stat'd
+the ref after the command when it named a ref for the first time, and relied on the racy rule's clock assumption to
+catch a move in between. The owner chose this instead (2026-11-11), so the rule doesn't depend on file timestamps and
+the clock agreeing. A test moves the branch between the command and the stat, with the clock past the racy window,
+and checks the next read sees the move.
 
 *Alternatives:* `for-each-ref --include-root-refs` with `%(symref)`, `%(symref:short)` and `%(objectname)` gives all
 three in one process for a born HEAD, but needs git 2.46 and also skips an unborn HEAD. Stripping `refs/heads/` in

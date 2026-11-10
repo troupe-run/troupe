@@ -161,7 +161,9 @@ them again runs one command, `rev-parse HEAD --symbolic-full-name HEAD --abbrev-
 commit. `=loose` gives exactly `symbolic-ref --short`'s name: `heads/main` when a tag `main` exists, but `main` when
 only a remote ref `refs/remotes/main` does, which plain `--abbrev-ref` would shorten to `heads/main`. Before the first
 commit, the adapter reads with `symbolic-ref` and `rev-parse --verify`, as it always has: straight away when the files
-it already stats say HEAD names a loose ref that doesn't exist yet, and otherwise once that command has failed.
+it already stats say HEAD names a loose ref that doesn't exist yet, and otherwise once that command has failed. The
+branch's own ref is found from the `HEAD` file, as git finds it, and stat'd before the command, so a move landing
+during the read is always seen by the next one, whatever the clock says.
 
 ## Paths
 
