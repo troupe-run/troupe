@@ -237,3 +237,60 @@ The numbers go in a "Measured" section here and on the pull request.
 ## Migration Plan
 
 None. No settings, events or stored formats change. Rolling back is reverting the commits.
+
+## Measured
+
+2026-11-11, macOS (Apple silicon), git 2.56, against the base commit 3678f411 in a detached worktree. Each suite run
+used 3 xdist workers, a fresh `--basetemp` and `--durations=0`, and started only once the 1-minute load average was
+under 20. The timed runs had the loggers off. Worker time is the sum of every test's setup, call and teardown.
+
+**The suite**, interleaved:
+
+| Run | Wall | Worker time | Tests |
+|---|---|---|---|
+| baseline 1 | 424 s | 1251 s | 5348 passed |
+| change 1 | 351 s | 1032 s | 5372 passed |
+| baseline 2 | 472 s | 1263 s | 5348 passed |
+| change 2 | 354 s | 1040 s | 5372 passed |
+
+That's 448 s to 353 s of wall time on average (−95 s, −21%), and 1257 s to 1036 s of worker time (−221 s, −18%),
+with 24 more tests on the change. The spike measured ~49 s of wall time from the event wait alone. The two halves
+weren't timed separately here.
+
+**One call**, `git rev-parse HEAD` 200 times, interleaved with `subprocess.run` (load ~5):
+
+| | `subprocess.run` | `run_to_completion` |
+|---|---|---|
+| baseline | 11.4 ms | 32.4 ms |
+| change | 11.1 ms | 11.7 ms |
+
+The new test's first version compared `run_to_completion` with an empty environment against `subprocess.run` with the
+parent's. Homebrew's git starts ~9 ms slower with an empty environment, and that, not the wait, made it fail in the
+commit check. Both sides now get the same environment. Real git calls get `GIT_ENVIRONMENT`, never an empty one.
+
+**Git processes across the suite**, by the spawn counter, leaving out the tests this change adds (it adds 24, and its
+property tests make a fresh adapter on every step):
+
+| | Baseline | Change |
+|---|---|---|
+| git processes | 22,609 | 19,854 (−12%) |
+| branch and HEAD read processes | 8799 | 6118 (−30%) |
+| re-reads of the branch and HEAD | 2850 | 3513 |
+| of them `racy` | 914 | 1582 |
+| of them unborn (three commands each) | 1050 | 1162 |
+
+The re-reads grew, and all of the growth is racy: git calls now finish sooner, so more reads land within
+`GIT_RACY_WINDOW_SECONDS` of a git operation and #75's rule reads them again. Each costs one process instead of
+three, which is why the processes still fell. What's left of the branch and HEAD reads is now mostly unborn reads
+(~3490 of 6118 processes) and racy re-reads.
+
+**A real `troupe perform lead`** (scripted runner, fresh theatre):
+
+| | Baseline | Change |
+|---|---|---|
+| git processes | 41 | 39 |
+| branch and HEAD read processes | 9 (3 reads × 3) | 7 (7 reads × 1: new, 5 racy, 1 index) |
+
+The faster perform made five of its reads racy, against one before, so the one-process read saved two processes
+rather than six. Both remaining costs, racy re-reads and three-command unborn reads, can only be cut by changing how
+#75's rule reads git's state, so they're the owner's call (D5).
