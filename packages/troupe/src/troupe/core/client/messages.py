@@ -412,10 +412,21 @@ class SourcedValue(Message):
 
 
 @dataclass(frozen=True)
-class ResolvedCredential(Message):
-    """A credential by its variable's name and whether that's set: never its value."""
+class CredentialName(Message):
+    """Where a credential is read from: its variable's name (``value``) when config or a built-in
+    named it, or the variable that named it (``named_by``) when the environment did, never that
+    name (runtime-checks design D6). Exactly one is present; the schema says so."""
 
-    env: SourcedValue = json_field("env")
+    source: RuntimeSource = json_field("source")
+    value: str | None = json_field("value", default=None, min_length=1)
+    named_by: str | None = json_field("namedBy", default=None, min_length=1)
+
+
+@dataclass(frozen=True)
+class ResolvedCredential(Message):
+    """A credential by where it's read from and whether that's set: never its value."""
+
+    env: CredentialName = json_field("env")
     set: bool = json_field("set")
 
 

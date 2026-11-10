@@ -509,6 +509,51 @@ def test_resolved_with_a_key_where_a_variables_name_should_be_never_shows_the_ke
     assert "q7ZxW9pL4vR2" not in out + err
 
 
+NAMED = "a3f9c2e17b4d8e05f6a1"
+
+
+def test_resolved_names_the_variable_that_named_the_credential_not_the_name(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Spec: runtimes, "A credential variable's name from the environment": a key put there by
+    # mistake passes for a name, so the name is never shown (#306).
+    monkeypatch.setenv("TROUPE_RUNTIME_OPENAI_CREDENTIAL_ENV", NAMED)
+    code, out, err = cli("config", "get", "--resolved", "runtimes.openai")
+    assert code == 0, err
+    assert out.splitlines()[-1] == (
+        "  credential: from the variable TROUPE_RUNTIME_OPENAI_CREDENTIAL_ENV names "
+        "(named by env), not set"
+    )
+    assert NAMED not in out + err
+    code, out, err = cli("config", "get", "--resolved", "--json", "runtimes.openai")
+    assert code == 0, err
+    result = json.loads(out)
+    check(result, "config-get-result.schema.json")
+    assert result["runtimes"]["openai"]["credential"] == {
+        "env": {"namedBy": "TROUPE_RUNTIME_OPENAI_CREDENTIAL_ENV", "source": "env"},
+        "set": False,
+    }
+    assert NAMED not in out + err
+
+
+def test_resolved_says_whether_the_variable_an_environment_name_names_is_set(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("TROUPE_RUNTIME_OPENAI_CREDENTIAL_ENV", "MY_OPENAI_KEY")
+    monkeypatch.setenv("MY_OPENAI_KEY", "sk-test-canary-0123456789")
+    code, out, err = cli("config", "get", "--resolved", "runtimes.openai")
+    assert code == 0, err
+    assert out.splitlines()[-1].endswith("(named by env), set")
+    assert "MY_OPENAI_KEY" not in out
+
+
+def test_resolved_shows_a_name_from_config_as_it_is(repo: Repo) -> None:
+    cli("config", "set", "runtimes.openai.credential.env=MY_OPENAI_KEY")
+    code, out, err = cli("config", "get", "--resolved", "runtimes.openai")
+    assert code == 0, err
+    assert "  credential: from MY_OPENAI_KEY (named by theatre), not set" in out.splitlines()
+
+
 def test_resolved_for_a_runtime_that_doesnt_exist_is_refused(repo: Repo) -> None:
     code, _, err = cli("config", "get", "--resolved", "runtimes.nowhere")
     assert code == 1

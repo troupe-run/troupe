@@ -143,7 +143,12 @@ value from your environment when a run starts and gives it to the runner, and no
 
 A run whose key isn't set stops before it starts, naming the variable to set. When
 `TROUPE_RUNTIME_<NAME>_CREDENTIAL_ENV` chose that variable, the error names `TROUPE_RUNTIME_<NAME>_CREDENTIAL_ENV`
-instead, and never repeats what it holds, in case it's a key put there by mistake.
+instead, and never repeats what it holds, in case it's a key put there by mistake. `troupe config get --resolved`
+does the same:
+
+```text
+  credential: from the variable TROUPE_RUNTIME_OPENAI_CREDENTIAL_ENV names (named by env), not set
+```
 
 ## What a theatre's config can still choose
 

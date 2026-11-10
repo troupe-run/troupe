@@ -120,8 +120,15 @@ class Resolved:
         if self.model is not None:
             data["model"] = self.model.to_data()
         if self.credential is not None:
+            # A name from the environment is shown by the variable that set it, never as it is: a
+            # key put there by mistake passes for a name (#306; runtime-checks design D6).
+            named = (
+                {"namedBy": env_name(self.name, "credential_env"), "source": "env"}
+                if self.credential.source == "env"
+                else self.credential.to_data()
+            )
             data["credential"] = {
-                "env": self.credential.to_data(),
+                "env": named,
                 "set": bool(read_variable(env, self.credential.value)),
             }
         price = self.price(self.model)

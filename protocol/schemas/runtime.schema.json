@@ -131,21 +131,43 @@
           ],
           "properties": {
             "env": {
-              "description": "The variable's name, and where the name came from.",
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "value",
-                "source"
-              ],
-              "properties": {
-                "value": {
-                  "$ref": "#/$defs/variable"
+              "description": "Where the credential is read from: the variable's name, when config or a built-in runtime named it, or, when the person's environment named it, the TROUPE_RUNTIME_ variable that did, since a key put there by mistake passes for a name.",
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "value",
+                    "source"
+                  ],
+                  "properties": {
+                    "value": {
+                      "$ref": "#/$defs/variable"
+                    },
+                    "source": {
+                      "$ref": "#/$defs/source"
+                    }
+                  }
                 },
-                "source": {
-                  "$ref": "#/$defs/source"
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "namedBy",
+                    "source"
+                  ],
+                  "properties": {
+                    "namedBy": {
+                      "description": "The TROUPE_RUNTIME_<NAME>_CREDENTIAL_ENV variable that holds the name, which is never shown.",
+                      "type": "string",
+                      "pattern": "^TROUPE_RUNTIME_[A-Z0-9_]+_CREDENTIAL_ENV$"
+                    },
+                    "source": {
+                      "const": "env"
+                    }
+                  }
                 }
-              }
+              ]
             },
             "set": {
               "description": "Whether the variable is set, and not empty, in the person's environment. Its value is never shown.",
