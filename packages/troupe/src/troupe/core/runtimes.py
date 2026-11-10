@@ -276,8 +276,9 @@ D2)."""
 
 
 def has_path(endpoint: str) -> bool:
-    """Whether ``endpoint`` has a path: anything after the host and port but a lone ``/``."""
-    return urlsplit(endpoint).path.strip("/") != ""
+    """Whether ``endpoint`` has a path: anything after the host and port but a single trailing
+    ``/``, as the Ollama runner reads it, so ``//`` is a path (runtime-checks design D1)."""
+    return urlsplit(endpoint).path not in ("", "/")
 
 
 def unfit(fit: interim.RuntimeFit, endpoint: str, has_credential: bool) -> list[Reason]:

@@ -568,6 +568,8 @@ PATHED = interim.RuntimeFit(path="required")
     [
         ("http://127.0.0.1:11434", False),
         ("http://127.0.0.1:11434/", False),
+        ("http://127.0.0.1:11434//", True),
+        ("http://127.0.0.1:11434///", True),
         ("http://[::1]:11434", False),
         ("http://[::1]:11434/v1", True),
         ("https://example.com:8443/v1/", True),

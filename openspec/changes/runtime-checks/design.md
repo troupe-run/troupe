@@ -59,8 +59,9 @@ class RuntimeFit:
 
 Table: `ollama` → `RuntimeFit(credential=False, path="none")`; `openai` → `RuntimeFit(path="required")`; `scripted`
 and `claude-code` take the default (scripted takes any runtime; claude-code takes none, which `runtime="none"` already
-refuses). An endpoint "has a path" when its path, with leading and trailing `/` removed, isn't empty: the Ollama
-runner's own reading.
+refuses). An endpoint "has a path" when its path is anything but empty or a single `/`, so `//` is a path: the Ollama
+runner's own reading. (Changed in review: the first version stripped every `/`, which called `//` no path while the
+Ollama runner refuses it.)
 
 *Alternatives:* a list of built-in runtimes each runner fits (rejected: says nothing about a runtime defined in
 config, which #334 puts in scope); a fit declared by the plugin (the eventual home under #38, but there's no plugin
