@@ -42,6 +42,12 @@ ENDPOINT_PATTERN = re.compile(
 )
 """An endpoint: http or https, a host, an optional port and path, and no user info, query, fragment,
 whitespace or control character (protocol/schemas/runtime.schema.json)."""
+ENDPOINT_ACCEPTED = (
+    "an endpoint: an http or https URL with a host, and no user info, query, fragment, whitespace "
+    "or control character"
+)
+"""What an endpoint must be, in words: a refusal says this, never the value (runtime-checks design
+D8)."""
 MODEL_PATTERN = re.compile(r"\A[^\x00-\x1f\x7f]{1,256}\Z")
 
 Capability = Literal["transcript-kinds"]
@@ -141,7 +147,7 @@ class RunStartRuntime(Message):
     (read it with ``troupe_plugin_sdk.credential.runtime_credential``)."""
 
     name: str = json_field("name", pattern=RUNTIME_NAME_PATTERN)
-    endpoint: str = json_field("endpoint", pattern=ENDPOINT_PATTERN)
+    endpoint: str = json_field("endpoint", pattern=ENDPOINT_PATTERN, unquoted=ENDPOINT_ACCEPTED)
     model: str = json_field("model", pattern=MODEL_PATTERN)
     credential: bool = json_field("credential")
     price: Price | None = json_field("price", default=None)

@@ -139,9 +139,11 @@ same, so nothing changes there.
 
 ### D8. The SDK never quotes a refused endpoint
 
-`json_field` gains `quoted: bool = True`; `RunStartRuntime.endpoint` sets it to False. A pattern mismatch on such a
-field raises `"isn't an endpoint: an http or https URL with a host, and no user info, query, fragment, whitespace or
-control character"`, naming the field and no part of the value. Other pattern-checked fields (run ids, refs, model
+`json_field` gains `unquoted: str | None`, the words for what the value must be; `RunStartRuntime.endpoint` sets it
+to `ENDPOINT_ACCEPTED`. A pattern mismatch on such a field raises `"<field>: isn't an endpoint: an http or https URL
+with a host, and no user info, query, fragment, whitespace or control character (its value isn't shown)"`, naming the
+field and no part of the value. (Changed while building: the plan had `quoted: bool`, but the refusal needs the
+words, so the one field carries both.) Other pattern-checked fields (run ids, refs, model
 names) keep quoting, since their values are troupe's own and quoting them helps.
 
 *Alternative:* strip user info from the quoted value. Rejected: a value that fails the pattern isn't a well-formed
@@ -156,7 +158,7 @@ The other places an endpoint is quoted on refusal, checked for #323:
 | SDK `run/start` (`runner.invalid-params`) | yes, today | D8 |
 | `runtime.insecure-endpoint` (core) | no: the endpoint passed the pattern | none |
 | Ollama runner `ollama.invalid-runtime` | no: the SDK refuses first | none; the D8 test shows the SDK refuses first |
-| OpenAI runner `parse_endpoint` | no, after the SDK, but its message quotes a user name | stop quoting when it has user info |
+| OpenAI runner `parse_endpoint` | no, after the SDK, but its message quotes a user name | never quotes a value holding `@` |
 | `config get --resolved` | no: every source is pattern-checked | none |
 
 ### D9. A differential test holds config's fit to each runner's own

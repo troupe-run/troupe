@@ -35,18 +35,23 @@ fail (the count goes in the task), and `uv run scripts/check.py` passes before e
 
 ## 3. The SDK and runners never repeat a refused endpoint (#323, design D8)
 
-- [ ] 3.1 Add an SDK test that parsing a `run/start` whose `runtime.endpoint` is `https://user:<canary>@example.com/v1`
+- [x] 3.1 Add an SDK test that parsing a `run/start` whose `runtime.endpoint` is `https://user:<canary>@example.com/v1`
   raises a protocol error naming `runtime.endpoint` and holding neither the canary nor `example.com`, and one that a
-  bad `runId` is still quoted; see the first fail.
-- [ ] 3.2 Add `quoted` to `json_field`'s metadata and set it off for `RunStartRuntime.endpoint`, refusing with what an
-  endpoint must be; verify 3.1 passes and the SDK's schema-agreement tests still pass.
-- [ ] 3.3 Add a runner-level test, for each runner on the SDK, that such a `run/start` is refused with
+  bad `runId` is still quoted; see the first fail. (Failed on main: the message quoted the whole endpoint.)
+- [x] 3.2 Add `quoted` to `json_field`'s metadata and set it off for `RunStartRuntime.endpoint`, refusing with what an
+  endpoint must be; verify 3.1 passes and the SDK's schema-agreement tests still pass. (As `unquoted`, design D8;
+  SDK suite: 364 passed.)
+- [x] 3.3 Add a runner-level test, for each runner on the SDK, that such a `run/start` is refused with
   `runner.invalid-params` and neither the JSON-RPC error nor the runner's standard error holds the canary.
-- [ ] 3.4 Stop the OpenAI runner's `parse_endpoint` quoting an endpoint with user info, with a unit test calling it
-  directly.
-- [ ] 3.5 Add CLI tests with a canary password: `troupe config set runtimes.box.endpoint=...` and
+  (`packages/troupe/tests/test_endpoint_user_info.py`: with the SDK fix set aside, claude-code, ollama and openai
+  failed; scripted reads its script first and never repeats it either way.)
+- [x] 3.4 Stop the OpenAI runner's `parse_endpoint` quoting an endpoint with user info, with a unit test calling it
+  directly. (4 cases failed before; OpenAI runner suite: 335 passed.)
+- [x] 3.5 Add CLI tests with a canary password: `troupe config set runtimes.box.endpoint=...` and
   `TROUPE_RUNTIME_OLLAMA_ENDPOINT` set to it, each checking the exit code, standard error and the client message hold
-  no part of it; verify they pass (the environment path is already fixed by #298, so these guard it).
+  no part of it; verify they pass (the environment path is already fixed by #298, so these guard it). (Both pass.
+  Found on the way: `config set --json` quotes a value that isn't JSON in full, password included
+  (`cli/values.py`); raised with the owner rather than folded in.)
 
 ## 4. Runtime fit in config (#334, design D1–D3, D9)
 

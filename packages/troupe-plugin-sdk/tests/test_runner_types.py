@@ -672,3 +672,53 @@ def test_an_error_result_with_a_reason_round_trips() -> None:
     event = p.ResultEvent(run_id=RUN, seq=1, status="error", message="401", reason="authentication")
     assert event.to_data()["reason"] == "authentication"
     assert p.parse_event(event.to_data()) == event
+
+
+# Requirement: The SDK never repeats a refused endpoint (runtime-checks design D8, #323)
+
+ENDPOINT_CANARY = st.text(
+    alphabet="ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789", min_size=12
+)
+REFUSED_ENDPOINTS = [
+    "https://user:{}@example.com/v1",
+    "https://{}@example.com/v1",
+    "https://example.com/v1?key={}",
+    "https://example.com/v1#{}",
+    "http://example.com/{} x",
+]
+
+
+def _run_start(endpoint: str) -> dict[str, Any]:
+    data = p.RunStartParams(
+        run_id=RUN,
+        direction="",
+        workspace="/w",
+        options={},
+        limits=p.StartLimits(event_max_bytes=1000),
+        effects=p.READ_ONLY_DECLARATION,
+        scratch="/s",
+        runtime=p.RunStartRuntime(
+            name="box", endpoint="https://example.com/v1", model="m", credential=False
+        ),
+    ).to_data()
+    data["runtime"]["endpoint"] = endpoint
+    return data
+
+
+@given(st.sampled_from(REFUSED_ENDPOINTS), ENDPOINT_CANARY)
+def test_a_refused_endpoint_is_named_but_none_of_its_value_is_repeated(
+    shape: str, canary: str
+) -> None:
+    endpoint = shape.format(canary)
+    with pytest.raises(p.ProtocolError) as raised:
+        p.RunStartParams.from_data(_run_start(endpoint))
+    message = str(raised.value)
+    assert "runtime.endpoint" in message
+    assert "user info" in message
+    assert canary not in message
+    assert "example.com" not in message
+
+
+def test_another_pattern_checked_field_still_shows_its_value() -> None:
+    with pytest.raises(p.ProtocolError, match="'has space'"):
+        p.RunStartParams.from_data({**_run_start("https://example.com/v1"), "runId": "has space"})

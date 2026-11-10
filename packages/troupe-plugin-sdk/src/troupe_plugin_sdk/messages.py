@@ -33,9 +33,14 @@ def json_field(
     pattern: re.Pattern[str] | None = None,
     min_items: int | None = None,
     unique: bool = False,
+    unquoted: str | None = None,
 ) -> Any:  # noqa: ANN401 - dataclasses.field returns Any
     """A field's JSON name and constraints. A field whose default is None is optional: it is left
-    out when it has nothing to say, and never sent or accepted as null (omit-nulls)."""
+    out when it has nothing to say, and never sent or accepted as null (omit-nulls).
+
+    ``unquoted``, for a field whose value may hold a secret (an endpoint's user info), says what
+    its value must be. A value that doesn't match ``pattern`` is then refused in those words and
+    never repeated (runtime-checks design D8)."""
     metadata = {
         "json": name,
         "min_length": min_length,
@@ -43,6 +48,7 @@ def json_field(
         "pattern": pattern,
         "min_items": min_items,
         "unique": unique,
+        "unquoted": unquoted,
     }
     if default is MISSING:
         return field(metadata=metadata)
@@ -76,6 +82,9 @@ def _decode(value: object, hint: object, where: str, meta: Mapping[str, Any]) ->
         if meta.get("min_length") is not None and len(value) < meta["min_length"]:
             raise fail(where, "must not be empty")
         if meta.get("pattern") is not None and not meta["pattern"].match(value):
+            if meta.get("unquoted") is not None:
+                # Never the value: it may hold a password (#323).
+                raise fail(where, f"isn't {meta['unquoted']} (its value isn't shown)")
             raise fail(where, f"{value!r} doesn't match {meta['pattern'].pattern}")
         return value
     if hint is bool:
