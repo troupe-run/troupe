@@ -735,6 +735,8 @@ def run_to_completion(
                 announced = True
                 if on_wait is not None:
                     on_wait(argv[0], waited)
+            if output.ended:
+                continue  # nothing will set changed again: wait for the exit, to the next deadline
             deadline = timeout if announced else min(timeout, announce_after)
             output.changed.wait(max(0.0, deadline - (time.monotonic() - started)))
     finally:
