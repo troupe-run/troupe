@@ -257,7 +257,7 @@ The SDK builds the event with `context_event` from `troupe_plugin_sdk.events`. I
 ```python
 from troupe_plugin_sdk.events import EventNumbering, context_event
 
-numbering = EventNumbering(run_id, event_max_bytes)
+numbering = EventNumbering(run_id, event_max_bytes, next_seq=1)  # after init, seq 0
 event = context_event(
     numbering, "compacted", "engine", "Claude Code compacted", tokens_before=41000
 )
