@@ -122,7 +122,9 @@ is needed. The 5 s close waits, here and in the end-of-input test, become `CLOSE
   that's not what failed on CI. The fakes just don't depend on it any more.
 - The Ollama fake's `handle_error` swallowed every exception, so a handler that died looked like a fake that saw
   nothing. It still swallows a `ConnectionError`, as its docstring says it should. Any other error is kept, and
-  `stop()` raises the first one. No test in either plugin's suite was hiding such an error.
+  `stop()` raises the first one. No test in either plugin's suite was hiding such an error. Two tests hold that
+  policy: a handler that fails with a `TypeError` makes `stop()` raise naming it, and a client resetting its
+  connection leaves `stop()` quiet.
 - Each fake's tests gain a POSIX-only regression test: a held reply still sees the client's close on a descriptor
   past 1024. With main's `select.select` both fail, and the Ollama one names the error.
 
