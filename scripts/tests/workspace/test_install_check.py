@@ -1,14 +1,18 @@
 """The install check builds the documented command and keeps to its own directories.
 
-Spec: installation. Design: install-with-uv D3 and D4. What needs an install (the install itself,
-and performing with it) is run by CI's install step on every platform and Python, not here: each
-test here checks what the check does without installing anything."""
+Spec: installation. Design: install-with-uv D3 and D4. What needs troupe installed (the install
+itself, and performing with it) is run by CI's install step on every platform and Python, not here.
+The network tests install a one-file probe package from an index on 127.0.0.1 instead, through the
+check's own steps and environment (install-check-network-retries design D5)."""
 
 import json
 import os
+import shutil
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 
+import local_index
 import pytest
 from conftest import REPO
 
@@ -84,8 +88,31 @@ def test_the_tool_directories_are_the_checks_own_and_override_the_persons() -> N
     assert env == {
         "UV_TOOL_DIR": str(Path("/scratch/tools")),
         "UV_TOOL_BIN_DIR": str(Path("/scratch/bin")),
+        "UV_HTTP_RETRIES": str(install_check.HTTP_RETRIES),
         "PATH": "/usr/bin",
     }
+
+
+def test_without_a_retry_count_of_the_callers_uv_gets_the_checks() -> None:
+    tools = Tools(directory=Path("/scratch/tools"), bin=Path("/scratch/bin"))
+    assert tools.environment({})["UV_HTTP_RETRIES"] == str(install_check.HTTP_RETRIES)
+
+
+@pytest.mark.parametrize("value", ["1", "0", "abc", " 7"])
+def test_a_retry_count_the_caller_set_reaches_uv_unchanged(value: str) -> None:
+    """Even one uv can't read: uv refuses it, naming it, rather than the check replacing it."""
+    tools = Tools(directory=Path("/scratch/tools"), bin=Path("/scratch/bin"))
+    env = tools.environment({"UV_HTTP_RETRIES": value})
+    assert env["UV_HTTP_RETRIES"] == value
+    assert env["UV_TOOL_DIR"] == str(Path("/scratch/tools"))
+
+
+def test_an_empty_retry_count_counts_as_unset_as_uv_reads_it() -> None:
+    """uv reads an empty UV_HTTP_RETRIES as unset and uses its default, so the check's applies."""
+    tools = Tools(directory=Path("/scratch/tools"), bin=Path("/scratch/bin"))
+    assert tools.environment({"UV_HTTP_RETRIES": ""})["UV_HTTP_RETRIES"] == str(
+        install_check.HTTP_RETRIES
+    )
 
 
 def test_the_scratch_directory_is_removed_afterwards_even_when_a_step_fails() -> None:
@@ -345,3 +372,87 @@ def test_the_would_change_code_is_troupes() -> None:
     from troupe.core.exit_codes import ExitCode
 
     assert install_check.WOULD_CHANGE == ExitCode.WOULD_CHANGE
+
+
+def _caller(**variables: str) -> dict[str, str]:
+    """The environment the check is run with: this one, without a retry count of its own and
+    without the developer's uv configuration, plus the given variables."""
+    base = {name: value for name, value in os.environ.items() if name != "UV_HTTP_RETRIES"}
+    return {**base, "UV_NO_CONFIG": "1", "UV_PYTHON_DOWNLOADS": "never", **variables}
+
+
+def _install_probe(index: local_index.Index, place: Path, base: Mapping[str, str]) -> Path:
+    """Install the probe from the index through the check's install step and environment, into a
+    tool directory of the check's own. Returns its bin directory."""
+    tools = Tools(directory=place / "tools", bin=place / "bin")
+    uv = shutil.which("uv")
+    assert uv is not None, "uv isn't on PATH"
+    argv = [uv, "--no-cache", "tool", "install", "--index-url", index.url]
+    argv += ["--python", sys.executable, local_index.PROJECT]
+    env = tools.environment(base)
+    install_check.run("install", argv, place, env, install_check.INSTALL_TIMEOUT)
+    return tools.bin
+
+
+def test_the_probe_installs_from_the_local_index_and_its_script_runs(tmp_path: Path) -> None:
+    with local_index.serving() as index:
+        bin_directory = _install_probe(index, tmp_path, _caller())
+    probe = shutil.which(local_index.PROJECT, path=str(bin_directory))
+    assert probe is not None
+    shown = install_check.run("probe", [probe], tmp_path, os.environ, install_check.COMMAND_TIMEOUT)
+    assert shown.strip() == local_index.PRINTED
+    assert index.requests[local_index.PAGE] == 1
+
+
+def test_an_index_that_fails_four_times_is_outlasted_with_the_checks_retries(
+    tmp_path: Path,
+) -> None:
+    """Four failures need a fifth attempt, more than uv's default of three retries makes."""
+    with local_index.serving(failures=[503] * 4) as index:
+        _install_probe(index, tmp_path, _caller())
+    assert index.requests[local_index.PAGE] == 5
+    assert shutil.which(local_index.PROJECT, path=str(tmp_path / "bin")) is not None
+
+
+def test_four_failures_are_more_than_uvs_default_of_three_retries_outlasts(tmp_path: Path) -> None:
+    with (
+        local_index.serving(failures=[503] * 4) as index,
+        pytest.raises(InstallCheckError, match=r"^install: `"),
+    ):
+        _install_probe(index, tmp_path, _caller(UV_HTTP_RETRIES="3"))
+    assert index.requests[local_index.PAGE] == 4
+
+
+def test_a_package_the_index_doesnt_have_fails_the_install_step_after_one_request(
+    tmp_path: Path,
+) -> None:
+    with local_index.serving(always=404) as index, pytest.raises(InstallCheckError) as caught:
+        _install_probe(index, tmp_path, _caller())
+    message = str(caught.value)
+    assert message.startswith("install: `")
+    assert "standard error:\n" in message
+    assert local_index.PROJECT in message.split("standard error:", 1)[1]
+    assert index.requests[local_index.PAGE] == 1
+
+
+def test_an_index_that_keeps_failing_fails_the_install_step_after_the_callers_retries(
+    tmp_path: Path,
+) -> None:
+    """The caller's UV_HTTP_RETRIES=1 is what uv used: two requests, not the check's seven."""
+    with local_index.serving(always=503) as index, pytest.raises(InstallCheckError) as caught:
+        _install_probe(index, tmp_path, _caller(UV_HTTP_RETRIES="1"))
+    assert str(caught.value).startswith("install: `")
+    assert "503" in str(caught.value)
+    assert index.requests[local_index.PAGE] == 2
+
+
+def test_a_malformed_retry_count_fails_the_install_step_naming_the_variable_and_value(
+    tmp_path: Path,
+) -> None:
+    with local_index.serving() as index, pytest.raises(InstallCheckError) as caught:
+        _install_probe(index, tmp_path, _caller(UV_HTTP_RETRIES="abc"))
+    message = str(caught.value)
+    assert message.startswith("install: `")
+    assert "UV_HTTP_RETRIES" in message
+    assert "`abc`" in message
+    assert sum(index.requests.values()) == 0

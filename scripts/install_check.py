@@ -22,7 +22,9 @@ a second tool directory, unless the ref's bundle has no 'all' extra; and rehears
 every runner troupe knows with it, so every runner's dependencies are shown to install on each
 platform and Python (runner-extras design D9). Nothing is installed into your own uv tool directory
 or onto your path, and everything is removed afterwards. CI runs it against the commit under test
-on every platform and Python (design D5).
+on every platform and Python (design D5). Each install retries a failing package index HTTP_RETRIES
+times, unless UV_HTTP_RETRIES is already set, so a short outage on one runner doesn't fail it
+(install-check-network-retries design D2).
 
 The header above makes `uv run` treat this as a standalone script, so it starts without syncing
 the default .venv. Standard library only, like check.py.
@@ -71,6 +73,14 @@ INSTALL_TIMEOUT = 600.0
 """Seconds the install may take: the first one resolves and builds every package."""
 COMMAND_TIMEOUT = 120.0
 """Seconds each other command may take, the scripted performance included."""
+HTTP_RETRIES = 6
+"""How many times uv retries a request to a package index that fails with a network fault, given to
+each install as UV_HTTP_RETRIES unless whoever runs the check set it (install-check-network-retries
+design D1-D3). uv's default of 3 gave up on PyPI after 48.6 s on one CI runner (#375). Six, with
+uv's exponential backoff (about 51 s in all) and its 10 s connect timeout, outlast about two minutes
+of an unreachable index, while a CI leg that fails anyway still ends inside its 20-minute job
+timeout. A failure that isn't a network fault, such as a package the index doesn't have, isn't
+retried."""
 
 SCRIPT = {
     "script": {
@@ -234,7 +244,16 @@ class Tools:
     bin: Path
 
     def environment(self, base: Mapping[str, str]) -> dict[str, str]:
-        return {**base, "UV_TOOL_DIR": str(self.directory), "UV_TOOL_BIN_DIR": str(self.bin)}
+        """base, with the tool directories and uv's retry count. A retry count already in base is
+        kept, even one uv can't read, so uv refuses it by name (design D3); an empty one is unset,
+        as uv reads it."""
+        retries = base.get("UV_HTTP_RETRIES") or str(HTTP_RETRIES)
+        return {
+            **base,
+            "UV_TOOL_DIR": str(self.directory),
+            "UV_TOOL_BIN_DIR": str(self.bin),
+            "UV_HTTP_RETRIES": retries,
+        }
 
 
 @contextmanager
