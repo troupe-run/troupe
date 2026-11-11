@@ -94,10 +94,18 @@ def test_an_endpoint_refused_with_user_info_isnt_repeated(shape: str) -> None:
     assert canary not in str(raised.value)
 
 
-def test_requests_go_below_the_endpoint() -> None:
-    assert parse_endpoint("https://api.openai.com/v1/").responses_url == (
-        "https://api.openai.com/v1/responses"
-    )
+@pytest.mark.parametrize(
+    ("endpoint", "responses"),
+    [
+        ("https://api.openai.com/v1", "https://api.openai.com/v1/responses"),
+        ("https://api.openai.com/v1/", "https://api.openai.com/v1/responses"),
+        # // is a path (runtime-checks design D1), so requests stay below it, never at the root.
+        ("http://127.0.0.1:8000//", "http://127.0.0.1:8000//responses"),
+        ("http://127.0.0.1:8000///", "http://127.0.0.1:8000///responses"),
+    ],
+)
+def test_requests_go_below_the_endpoint(endpoint: str, responses: str) -> None:
+    assert parse_endpoint(endpoint).responses_url == responses
 
 
 # The credential
