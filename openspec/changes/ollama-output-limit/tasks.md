@@ -49,7 +49,7 @@
 
 ## 5. Land it
 
-- [ ] 5.1 Run `uv run scripts/check.py` in full and keep its log. Verify: it passes; then commit (signed, with a
+- [x] 5.1 Run `uv run scripts/check.py` in full and keep its log. Verify: it passes; then commit (signed, with a
   Signed-off-by trailer) and open a draft PR that `Closes #309`.
 - [ ] 5.2 Act on Claude's review of the last push, then mark the PR ready once the review leaves nothing open.
   Verify: CI passes on Linux, macOS and Windows on the head; cite the run.
