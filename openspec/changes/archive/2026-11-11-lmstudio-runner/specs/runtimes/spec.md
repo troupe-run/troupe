@@ -47,11 +47,9 @@ SHALL name a runtime when its runner requires one, SHALL NOT name one when its r
 
 ### Requirement: An actor's runtime fits its runner
 Config SHALL refuse an actor whose runtime doesn't fit its runner, judged from the runtime's built-in and theatre
-values: a runtime with a credential, for a runner that sends none, an endpoint whose path the runner can't use, an
-`https` endpoint, for a runner that can only reach plain `http`, or another runner's built-in runtime, whatever its
-shape.
-The error SHALL name the actor's `runtime` path, the runner, the runtime, why it doesn't fit, and the runtimes that
-fit. A change to a runtime that makes an actor on it unfit SHALL be refused the same way.
+values: a credential the runner never sends, an endpoint path it can't use, `https` where it needs plain `http`, or
+another runner's built-in, whatever its shape. The error SHALL name the actor's `runtime` path, the runner, the runtime,
+why, and the runtimes that fit. A change to a runtime that makes an actor on it unfit SHALL be refused the same way.
 
 #### Scenario: An Ollama actor on a runtime with a credential
 - **WHEN** a person sets `actors.tester.runner=ollama` and `actors.tester.runtime=openai`

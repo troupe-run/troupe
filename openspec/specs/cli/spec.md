@@ -486,9 +486,14 @@ a usage error.
 - **WHEN** a person runs `troupe init --audition --runner openai`
 - **THEN** `.troupe/actors/lead.yaml` names the runner `openai`, and config's `actors.lead.runtime` is `openai`
 
+#### Scenario: The LM Studio runner
+- **WHEN** a person runs `troupe init --audition --runner lm-studio` with its extra installed
+- **THEN** `.troupe/actors/lead.yaml` names the runner `lm-studio`, and config's `actors.lead.runtime` is `lm-studio`
+
 #### Scenario: A runner troupe doesn't know
 - **WHEN** a person runs `troupe init --audition --runner gemini`
-- **THEN** it fails with `runner.unknown`, naming `gemini`, `claude-code`, `ollama`, `openai` and `scripted`
+- **THEN** it fails with `runner.unknown`, naming `gemini`, `claude-code`, `lm-studio`, `ollama`, `openai` and
+  `scripted`
 - **AND** no `.troupe/` is made
 
 #### Scenario: A runner that isn't installed
