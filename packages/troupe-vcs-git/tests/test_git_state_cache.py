@@ -442,9 +442,12 @@ class Names(RuleBasedStateMachine):
 
 def _names(layout: Layout) -> type[Names]:
     machine: type[Names] = type(f"Names_{layout.id}", (Names,), {"layout": layout})
+    # As small as the Moves machines: each step is several git commands, which on a slow Windows
+    # runner took this machine to ~40 s at 10 x 12 (#380). The per-shape test below pins each
+    # name that changes the short name; the machine is for their combinations.
     machine.TestCase.settings = settings(
-        max_examples=10,
-        stateful_step_count=12,
+        max_examples=4,
+        stateful_step_count=10,
         deadline=None,
         suppress_health_check=[HealthCheck.too_slow],
     )
