@@ -252,12 +252,82 @@ def test_a_request_ollama_refuses_ends_the_run_naming_the_window_and_context_len
     assert refusal in sink.records
 
 
-def test_a_cut_answer_is_a_warning_and_the_run_goes_on(tmp_path: Path) -> None:
-    sink, _ = _run(tmp_path, [Answer([message("partial"), done(reason="length")])])
-    (log,) = sink.of(p.LogEvent)
-    assert log.level == "warning"
-    assert "output limit" in log.message
-    assert (sink.result.status, sink.result.reason) == ("ok", None)
+# Requirement: A cut answer ends the run
+
+
+def test_a_cut_text_answer_is_a_turn_then_an_output_limit_error_naming_the_window(
+    tmp_path: Path,
+) -> None:
+    sink, fake = _run(
+        tmp_path,
+        [Answer([message("The first part"), done(reason="length")]), final("never asked for")],
+        window=1300,
+    )
+    (turn,) = sink.of(p.TurnEvent)
+    assert turn.text == "The first part"
+    assert sink.events[-1] is sink.result
+    assert (sink.result.status, sink.result.reason) == ("error", "output-limit")
+    assert "done_reason length" in sink.result.message
+    assert "context window of 1300 tokens" in sink.result.message
+    assert "contextLength" in sink.result.message
+    assert sink.of(p.LogEvent) == []
+    assert len(fake.chats()) == 1
+
+
+def test_a_cut_answer_holding_a_write_runs_no_call_and_makes_no_further_request(
+    tmp_path: Path,
+) -> None:
+    cut = Answer(
+        [
+            message(
+                "", tool_calls=[tool_call("Write", {"file_path": "out/a.txt", "content": "h"})]
+            ),
+            done(reason="length"),
+        ]
+    )
+    sink, fake = _run(tmp_path, [cut, final("never asked for")], effects={"write": ["out/**"]})
+    assert sink.of(p.ToolCallEvent) == []
+    assert sink.of(p.ToolResultEvent) == []
+    assert not (tmp_path / "workspace" / "out").exists()
+    assert len(fake.chats()) == 1
+    assert (sink.result.status, sink.result.reason) == ("error", "output-limit")
+
+
+def test_a_cut_answer_isnt_retried(tmp_path: Path) -> None:
+    sink, fake = _run(
+        tmp_path, [Answer([message("partial"), done(reason="length")]), final("never asked for")]
+    )
+    assert sink.of(p.RetryEvent) == []
+    assert len(fake.chats()) == 1
+
+
+def test_a_cut_answers_message_says_how_many_tokens_ollama_produced(tmp_path: Path) -> None:
+    sink, _ = _run(tmp_path, [Answer([message("partial"), done(generated=81, reason="length")])])
+    assert "after 81 tokens" in sink.result.message
+
+
+@pytest.mark.parametrize("generated", [None, -1])
+def test_a_cut_answer_without_a_usable_count_leaves_the_count_out_of_its_message(
+    tmp_path: Path, generated: int | None
+) -> None:
+    sink, _ = _run(
+        tmp_path, [Answer([message("partial"), done(generated=generated, reason="length")])]
+    )
+    assert sink.result.reason == "output-limit"
+    assert "(done_reason length). " in sink.result.message
+    assert "tokens. " not in sink.result.message
+
+
+def test_a_cut_answers_tokens_are_in_the_results_usage(tmp_path: Path) -> None:
+    sink, _ = _run(
+        tmp_path,
+        [
+            calls(tool_call("Glob", {"pattern": "*"}), generated=7),
+            Answer([message("partial"), done(generated=81, reason="length")]),
+        ],
+    )
+    assert sink.result.usage is not None
+    assert sink.result.usage.output_tokens == 88
 
 
 # Requirement: An answer's other model is a served_model event
@@ -574,7 +644,7 @@ def test_a_request_ollama_refuses_isnt_retried(tmp_path: Path) -> None:
     assert sink.result.status == "error"
 
 
-# Requirement: Each failure reports its reason
+# Requirement: Each failed run reports its reason
 
 
 def test_another_refused_request_is_other_and_doesnt_name_the_context_window(

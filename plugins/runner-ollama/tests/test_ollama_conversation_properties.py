@@ -5,7 +5,8 @@ Random answers (random bytes, random JSON objects, mutated real-shaped lines, an
 random names and arguments) are fed to the conversation through a stand-in client. Every event must
 validate against run-event.schema.json, fit eventMaxBytes, have each tool_result after its
 tool_call, and never follow the result. The result's usage never holds a negative counter, nor
-cache reads without input ("The result carries the run's counts").
+cache reads without input ("The result carries the run's counts"). Whatever an answer Ollama cut
+holds, the run ends there with output-limit and none of its calls run ("A cut answer ends the run").
 """
 
 import json
@@ -112,11 +113,7 @@ class _ScriptedClient:
         yield from answer
 
 
-@settings(max_examples=150, suppress_health_check=[HealthCheck.function_scoped_fixture])
-@given(answers=st.lists(_STATUS.flatmap(lambda s: st.just(s) if s else _ANSWER), max_size=5))
-def test_any_answers_give_events_that_keep_the_contract(
-    tmp_path: Path, answers: list[list[bytes] | int]
-) -> None:
+def _converse(tmp_path: Path, answers: list[list[bytes] | int]) -> Recorder:
     workspace = tmp_path / str(uuid.uuid4())
     workspace.mkdir()
     scratch = tmp_path / f"{workspace.name}-scratch"
@@ -140,6 +137,56 @@ def test_any_answers_give_events_that_keep_the_contract(
         client=_ScriptedClient(list(answers)),  # type: ignore[arg-type]
         sink=sink,
     ).run()
+    return sink
+
+
+_CUT = st.fixed_dictionaries(
+    {"done": st.just(True), "done_reason": st.just("length")},
+    optional={"message": _MESSAGE, "eval_count": st.integers(-5, 10**6) | _JSON},
+).map(lambda line: json.dumps(line).encode())
+"""A cut answer's last line: it can hold content and tool calls of its own."""
+_TOOL_LINE = st.fixed_dictionaries(
+    {"message": st.fixed_dictionaries({"tool_calls": st.lists(_CALL, min_size=1, max_size=3)})},
+    optional={"done": st.just(False)},
+).map(lambda line: json.dumps(line).encode())
+
+
+@settings(max_examples=100, suppress_health_check=[HealthCheck.function_scoped_fixture])
+@given(
+    before=st.lists(_TOOL_LINE.map(lambda line: [line, _DONE]), max_size=2),
+    lines=st.lists(
+        _LINE.filter(lambda line: "error" not in line and line.get("done") is not True).map(
+            lambda line: json.dumps(line).encode()
+        ),
+        max_size=4,
+    ),
+    tool_lines=st.lists(_TOOL_LINE, max_size=2),
+    last=_CUT,
+)
+def test_an_answer_ollama_cut_ends_the_run_with_output_limit_whatever_it_holds(
+    tmp_path: Path,
+    before: list[list[bytes]],
+    lines: list[bytes],
+    tool_lines: list[bytes],
+    last: bytes,
+) -> None:
+    sink = _converse(tmp_path, [*before, [*lines, *tool_lines, last], [_DONE]])
+    requests = len(before) + 1
+    assert (sink.result.status, sink.result.reason) == ("error", "output-limit")
+    assert sink.result.turns == requests
+    calls_before = sum(
+        len(json.loads(line)["message"]["tool_calls"]) for answer in before for line in answer[:1]
+    )
+    assert len(sink.of(p.ToolCallEvent)) == calls_before
+    assert sink.of(p.LogEvent) == []
+
+
+@settings(max_examples=150, suppress_health_check=[HealthCheck.function_scoped_fixture])
+@given(answers=st.lists(_STATUS.flatmap(lambda s: st.just(s) if s else _ANSWER), max_size=5))
+def test_any_answers_give_events_that_keep_the_contract(
+    tmp_path: Path, answers: list[list[bytes] | int]
+) -> None:
+    sink = _converse(tmp_path, answers)
     events: list[dict[str, Any]] = [event.to_data() for event in sink.events]
     assert [event["seq"] for event in events] == list(range(len(events)))
     assert events[-1]["type"] == "result"

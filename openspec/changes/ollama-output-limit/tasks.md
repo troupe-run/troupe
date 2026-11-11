@@ -2,27 +2,27 @@
 
 ## 1. Before building
 
-- [ ] 1.1 Re-read `conversation.py`'s `_loop`, `_after` and `_call_tools`, and check D1 still holds: the cut check
+- [x] 1.1 Re-read `conversation.py`'s `_loop`, `_after` and `_call_tools`, and check D1 still holds: the cut check
   can sit in `_after` after the `turn` and before `_call_tools`, outside `_request`'s retry loop. If it can't, update
   this change (`/opsx:update`). Verify: the first apply commit's message says D1 holds, or the artifacts are updated
   and `openspec validate ollama-output-limit --strict` passes.
-- [ ] 1.2 Find every reference to the requirement "Each failure reports its reason" of `ollama-runner` (test
+- [x] 1.2 Find every reference to the requirement "Each failure reports its reason" of `ollama-runner` (test
   comments, docs) and point it at "Each failed run reports its reason" (design D5); leave the OpenAI runner's own
   requirement of that name alone. Verify: `grep -rn "Each failure reports its reason" plugins/runner-ollama` finds
   nothing.
 
 ## 2. The runner (design D1, D2, D3)
 
-- [ ] 2.1 Write the tests first, in `tests/test_ollama_conversation.py`, replacing
+- [x] 2.1 Write the tests first, in `tests/test_ollama_conversation.py`, replacing
   `test_a_cut_answer_is_a_warning_and_the_run_goes_on`: a cut text answer sends its `turn`, then an `error` result
   with `output-limit` naming the window and `contextLength`, and no `log` warning; a cut answer holding a `Write`
   call sends no `tool_call`/`tool_result`, writes no file and makes one request; no `retry` event; `eval_count` 81
   puts "after 81 tokens" in the message, and a missing or malformed `eval_count` leaves the count out; the result's
   `usage.outputTokens` includes the cut answer's `eval_count`. Verify: each fails on main's code for the stated
   reason (run them before 2.2).
-- [ ] 2.2 In `_after`, replace the `log` warning with `_RunEnded(message, "output-limit")`, the message as D2, built
+- [x] 2.2 In `_after`, replace the `log` warning with `_RunEnded(message, "output-limit")`, the message as D2, built
   beside the context-length message. Verify: 2.1's tests pass.
-- [ ] 2.3 Update `tests/test_ollama_conversation_properties.py` for the cut case: wherever an invariant expects a
+- [x] 2.3 Update `tests/test_ollama_conversation_properties.py` for the cut case: wherever an invariant expects a
   text-only answer to end `ok`, or a tool call to run, an answer whose last line says `done_reason` `length` ends
   `error` with `output-limit` and runs none of its calls. Verify: the property tests pass, and fail with 2.2 reverted.
 
