@@ -10,9 +10,10 @@ starts a credential helper or ssh. The worktree operations live in troupe_vcs_gi
 merge sides in troupe_vcs_git.merges.
 
 The branch and HEAD are cached behind the branch token: the stats of every file git changes when
-either moves. They are read through git again only when one of those files has changed, so
-recording event after event runs no command while nothing moves (cache-vcs-state design D1, D3).
-A read again is one rev-parse once HEAD has a commit (git-call-latency design D4).
+either moves, and of every ref git weighs in shortening the branch's name, such as a tag with that
+name. They are read through git again only when one of those files has changed, so recording event
+after event runs no command while nothing moves (cache-vcs-state design D1, D3; git-branch-cache
+design D1, D2). A read again is one rev-parse once HEAD has a commit (git-call-latency design D4).
 
 A directory is in a repository only when git reports it inside a work tree, so neither a git
 directory nor a bare repository can hold a theatre (init-and-audition design D7).
@@ -58,8 +59,21 @@ _INIT_FIX = (
 # The files git changes when the branch or HEAD moves (cache-vcs-state design D3), as --git-path
 # names them. Per worktree: HEAD, the index, HEAD's reflog and, under reftable, the table list that
 # holds HEAD. Common: packed-refs. The common reftable list and the branch's own loose ref are found
-# through --git-common-dir.
+# through --git-common-dir, and the refs sharing the branch's name below.
 _WATCHED = ("HEAD", "index", "logs/HEAD", "packed-refs", "reftable/tables.list")
+
+_BRANCHES = "refs/heads/"
+
+# Where git looks for a ref sharing the branch's name when it shortens refs/heads/<n> (#370;
+# git-branch-cache design D1). Any of these existing makes <n> ambiguous, and then heads/<n> at the
+# root decides between heads/<n> and refs/heads/<n>. Which directory git reads each from depends on
+# the name, so every one is watched in both the worktree's git directory and the common one.
+_SHORT_NAME_REFS = ("{}", "heads/{}", "refs/{}", "refs/tags/{}")
+
+# Under reftable every other ref is in the tables, whose lists are watched. git still keeps its
+# special refs as files in the worktree's git directory, and reads them for a branch of that name
+# (git-branch-cache design D2).
+_SPECIAL_REFS = ("FETCH_HEAD", "MERGE_HEAD")
 
 _Stat = tuple[int, int, int] | None
 
@@ -73,14 +87,18 @@ class _State:
     watched: tuple[_Stat, ...]
     ref: Path | None
     ref_stat: _Stat
+    sharing: tuple[Path, ...]
+    """The refs that would share the branch's name, which git weighs in shortening it."""
+    sharing_stats: tuple[_Stat, ...]
     branch: str | None
     head: str | None
     racy: bool
-    """Whether a watched file changed within the racy window of the read: if so, it isn't reused."""
+    """Whether a watched file changed within the racy window of the read, or the read can't be
+    trusted for another reason: if so, it isn't reused."""
 
     @property
     def token(self) -> Hashable:
-        return (self.watched, self.ref_stat, self.branch, self.head)
+        return (self.watched, self.ref_stat, self.sharing_stats, self.branch, self.head)
 
 
 class GitAdapter:
@@ -215,23 +233,32 @@ class GitAdapter:
             and not state.racy
             and state.watched == watched
             and (state.ref is None or _stat_token(state.ref) == state.ref_stat)
+            and tuple(_stat_token(path) for path in state.sharing) == state.sharing_stats
         ):
             return state
         # Stat before reading: a move during the read leaves the stats older than the answers, so
         # the next call reads again. It never leaves the answers older than the stats. The branch's
         # ref is named by the HEAD file, as git reads it, and stat'd before the command too
-        # (git-call-latency design D4).
+        # (git-call-latency design D4), with the refs that would share its name (git-branch-cache
+        # design D1, D2).
+        reftable = watched[-1] is not None
         named = _ref_named_by(paths[0], common)
         named_stat = None if named is None else _stat_token(named)
+        sharing, unknown_name = _sharing(named, common, paths[0].parent, reftable=reftable)
+        sharing_stats = tuple(_stat_token(path) for path in sharing)
         if _looks_unborn(watched, named, named_stat):
             branch, head, ref = self._read_unborn(common)
         else:
             branch, head, ref = self._read(common)
-        reftable = watched[-1] is not None
         moved = ref != named and not reftable  # HEAD moved between its file and the command
         ref_stat = named_stat if ref == named else None if ref is None else _stat_token(ref)
-        racy = moved or self._racy(read_at, (*watched, ref_stat))
-        state = _State(watched, ref, ref_stat, branch, head, racy)
+        racy = (
+            moved
+            or unknown_name
+            or _any_symbolic(sharing, sharing_stats)
+            or self._racy(read_at, (*watched, ref_stat, *sharing_stats))
+        )
+        state = _State(watched, ref, ref_stat, sharing, sharing_stats, branch, head, racy)
         self._state = state
         return state
 
@@ -375,6 +402,43 @@ def _ref_named_by(head_file: Path, common: Path) -> Path | None:
     if not text.startswith("ref: "):
         return None
     return common / text.removeprefix("ref: ").strip()
+
+
+def _sharing(
+    named: Path | None, common: Path, git_dir: Path, *, reftable: bool
+) -> tuple[tuple[Path, ...], bool]:
+    """The files git may read to decide the branch's short name, besides the branch's own ref, and
+    whether the name is one these can't cover (git-branch-cache design D1, D2)."""
+    if reftable:
+        return tuple(git_dir / name for name in _SPECIAL_REFS), False
+    if named is None:
+        return (), False  # detached, or a HEAD file git will say is broken: no short name
+    full = named.relative_to(common).as_posix()
+    if not full.startswith(_BRANCHES):
+        return (), True  # HEAD names a ref outside refs/heads/, whose shortening isn't watched
+    name = full.removeprefix(_BRANCHES)
+    directories = dict.fromkeys((git_dir, common))  # one, in the main worktree
+    paths = tuple(
+        directory / shape.format(name) for shape in _SHORT_NAME_REFS for directory in directories
+    )
+    return paths, False
+
+
+def _any_symbolic(paths: tuple[Path, ...], stats: tuple[_Stat, ...]) -> bool:
+    """Whether any of ``paths`` that existed when stat'd holds a symbolic ref. git's short name then
+    depends on whether its target exists, which nothing watched shows, so the read isn't reused
+    (git-branch-cache design D3). One that can't be read counts as symbolic: refuse rather than
+    guess."""
+    for path, stat in zip(paths, stats, strict=True):
+        if stat is None or path.is_dir():
+            continue  # a directory of refs (refs/tags/<n>/...) isn't a ref named <n>
+        try:
+            with path.open("rb") as file:
+                if file.read(5) == b"ref: ":
+                    return True
+        except OSError:
+            return True
+    return False
 
 
 def _looks_unborn(watched: tuple[_Stat, ...], named: Path | None, named_stat: _Stat) -> bool:
