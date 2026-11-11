@@ -97,6 +97,10 @@
   instead of an `=` is read as a path (review of #384, after archive). Verify with two canary tests in
   `test_config_value_echo.py`, which fail on `b8c822bb`, a scenario in the config spec, and the updated
   no-`=` tests. (All pass.)
+- [x] 7.5 Refuse a rule broken under a map key from inside a value (`prices`, free-form options) at the map's path,
+  never naming the key (design D7, review of #384, after archive). Verify with canary tests in `test_config_kinds.py`
+  (a type, a missing and an extra field) and `test_config_value_echo.py`, which fail on `292bc734`, and a scenario in
+  the config spec. (All pass; a map key typed as a path is still named.)
 
 ## Workflow follow-up
 

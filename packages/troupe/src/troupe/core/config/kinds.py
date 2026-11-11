@@ -449,6 +449,10 @@ def _schema_problems(
     found: list[Problem] = []
     for error in sorted(validator.iter_errors(value), key=lambda e: list(e.absolute_path)):
         path = (*base, *(str(part) for part in error.absolute_path))
+        inside = _in_a_map(base, error, typed)
+        if inside is not None:
+            found.append(_in_entry(inside, error, against))
+            continue
         if error.validator == "additionalProperties" and isinstance(error.instance, Mapping):
             allowed = set(error.schema.get("properties", {}))
             extras = sorted(set(error.instance) - allowed)
@@ -495,6 +499,75 @@ def _schema_problems(
             Problem(path, _rule(error, against), f"Set {shown(path)} to a value {against} allows.")
         )
     return found
+
+
+MAP_KEY = "<key>"
+"""How a key the person chose inside a value is shown: never itself."""
+
+
+def _free_keys(error: jsonschema.ValidationError) -> set[int]:
+    """The positions in ``error``'s instance path that are keys of a map (``additionalProperties``
+    or ``patternProperties``) rather than fields a schema names: keys the person chose."""
+    free: set[int] = set()
+    keywords = list(error.absolute_schema_path)
+    at, depth = 0, len(error.absolute_path)
+    while at < len(keywords) and depth > 0:
+        keyword = keywords[at]
+        if keyword == "properties" or keyword == "prefixItems":
+            at += 2
+        elif keyword == "patternProperties":
+            free.add(len(error.absolute_path) - depth)
+            at += 2
+        elif keyword == "additionalProperties":
+            free.add(len(error.absolute_path) - depth)
+            at += 1
+        elif keyword in ("items", "contains"):
+            at += 1
+        elif keyword in ("allOf", "oneOf", "anyOf"):
+            at += 2
+            continue
+        else:  # $ref, if, then, else, not and the like stay at the same instance
+            at += 1
+            continue
+        depth -= 1
+    return free
+
+
+Inside = tuple[tuple[str, ...], tuple[str, ...]]
+"""Where a rule broke inside a map key taken from a value: the map's path, and the rest of the
+path from that key on, each such key shown as ``MAP_KEY``."""
+
+
+def _in_a_map(
+    base: tuple[str, ...], error: jsonschema.ValidationError, typed: Typed
+) -> Inside | None:
+    """Where ``error`` broke, when its path passes a map key from inside a value the person set:
+    such a key may be anything a map's key check lets through, a URL with a password included, so
+    it's never shown (spec: config, "A refused config value is repeated nowhere";
+    config-set-json-redacts design D7, review of #384). None when no such key is on the path."""
+    parts = [str(part) for part in error.absolute_path]
+    free = _free_keys(error)
+    hidden = next(
+        (index for index in sorted(free) if _in_value((*base, *parts[: index + 1]), typed)), None
+    )
+    if hidden is None:
+        return None
+    rest = tuple(MAP_KEY if index in free else part for index, part in enumerate(parts))
+    return (*base, *parts[:hidden]), rest[hidden:]
+
+
+def _in_entry(inside: Inside, error: jsonschema.ValidationError, against: str) -> Problem:
+    """The problem for a rule broken inside a map entry whose key isn't shown."""
+    at, rest = inside
+    if error.validator == "additionalProperties":
+        rule = f"it holds a field {against} doesn't define"
+    elif error.validator == "required" and isinstance(error.validator_value, list):
+        rule = f"it needs {', '.join(str(field) for field in error.validator_value)}"
+    else:
+        rule = _rule(error, against)
+    # rest[0] is the hidden key itself; a deeper one is shown as MAP_KEY.
+    where = "one of its entries" if len(rest) == 1 else f"{shown(rest[1:])} in one of its entries"
+    return Problem(at, f"{where}: {rule}", f"Set {shown(at)} to a value {against} allows.")
 
 
 EFFECTS = "effects"
