@@ -8,7 +8,7 @@
 
 ## 2. Pull request
 
-- [ ] 2.1 Open a draft pull request that closes #380, act on Claude's review of the last push, and mark it ready once it's clean. Verify every CI leg passes, Windows included.
+- [x] 2.1 Open a draft pull request that closes #380, act on Claude's review of the last push, and mark it ready once it's clean. Verify every CI leg passes, Windows included.
 
 ## Workflow follow-up
 
