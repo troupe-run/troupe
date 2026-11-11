@@ -241,3 +241,23 @@ def test_an_uncovered_expect_path_holding_a_password_is_never_repeated(
     )
     assert "actors.tester.expect: expect's item 2 isn't covered" in err
     assert message["details"]["path"] == ["actors", "tester", "expect"]
+
+
+def test_a_value_typed_after_a_space_instead_of_an_equals_is_never_repeated(
+    repo: Repo, errors: list[TroupeError]
+) -> None:
+    # The value runs into a second argument with no =, read as a path (review of #384).
+    err, message = _refused(
+        errors, "config.invalid", "config", "set", "runtimes.box.endpoint", WITH_PASSWORD
+    )
+    assert "path=value 1 doesn't set anything" in err
+    assert message["details"]["path"] == []
+
+
+def test_the_position_names_which_argument_has_no_equals(
+    repo: Repo, errors: list[TroupeError]
+) -> None:
+    err, _ = _refused(
+        errors, "config.invalid", "config", "set", "actors.tester.runner=scripted", WITH_PASSWORD
+    )
+    assert "path=value 2 doesn't set anything" in err

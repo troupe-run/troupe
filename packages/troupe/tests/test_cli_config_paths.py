@@ -166,10 +166,7 @@ def test_text_with_no_equals_outside_brackets_sets_nothing(repo: Repo, seen: See
     code, _, _ = cli("config", "set", "actors[a=b]")
     assert code == 1
     assert seen.error.code == "config.invalid"
-    assert seen.error.details == {
-        "path": ["actors", "a=b"],
-        "rule": "a value is written <path>=<value>",
-    }
+    assert seen.error.details == {"path": [], "rule": "a value is written <path>=<value>"}
     assert seen.requests == []
 
 

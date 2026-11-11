@@ -361,7 +361,8 @@ def test_a_text_file_that_isnt_utf8_says_which_byte_never_its_text(repo: Repo) -
 def test_an_assignment_without_a_value_is_refused_saying_how_to_write_one(repo: Repo) -> None:
     code, _, err = cli("config", "set", "actors.tester.runner")
     assert code == 1
-    assert "troupe config unset actors.tester.runner" in err
+    assert "path=value 1 doesn't set anything: a value is written <path>=<value>" in err
+    assert "troupe config unset <path>" in err
 
 
 # The config group on the command line

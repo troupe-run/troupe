@@ -630,6 +630,11 @@ runtime config doesn't define.
 - **THEN** it is refused with `config.path-malformed`, and neither the standard error nor the client message holds
   the canary
 
+#### Scenario: A value typed after a space instead of an =
+- **WHEN** a person runs `troupe config set runtimes.box.endpoint https://user:<canary>@example.com/v1`
+- **THEN** it is refused with `config.invalid`, saying which `path=value` has no `=` by its position, and neither the
+  standard error nor the client message holds the canary
+
 #### Scenario: A key inside a JSON group
 - **WHEN** a person runs `troupe config set --json 'runtimes.box={"https://user:<canary>@example.com": 1}'`
 - **THEN** it is refused with `config.invalid`, naming `runtimes.box` and the fields a runtime defines, and neither

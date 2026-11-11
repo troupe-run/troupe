@@ -167,6 +167,13 @@ without the key, and a key that passes is a name, as in D3.
 *Alternative:* always name the parent path. Rejected: a misspelt field typed as a path (`actors.tester.runnr`)
 would lose the name the person typed, which the config spec's "A misspelt field" scenario requires.
 
+### D8. An argument with no `=` is named by its position
+
+Found by the review of #384, after archive. A `config set` argument with no `=` sets nothing, and was quoted whole
+in the problem and the fix. A value typed after a space instead of an `=` arrives as its own argument, read as a
+path, so it was repeated. It's now "path=value 2 doesn't set anything", with a fix that says how to write one
+without quoting it, and `details.path` empty.
+
 ## Risks / Trade-offs
 
 - [A person loses the echo they'd use to spot a typo] → The path, what it takes, and for JSON the column, stay; the

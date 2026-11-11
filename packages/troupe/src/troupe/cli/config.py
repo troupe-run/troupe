@@ -98,19 +98,22 @@ def _runner_of(actor: str, assignments: list[Assignment]) -> str | None:
 
 
 def _assignments(raw: list[str]) -> list[Assignment]:
-    """Each ``<path>=<value>``: the path ends at the first ``=`` outside brackets (design D4)."""
+    """Each ``<path>=<value>``: the path ends at the first ``=`` outside brackets (design D4).
+
+    One with no ``=`` is named by its position, never quoted: a value typed after a space instead
+    of an ``=`` is read as part of a path, so the argument can be a password (spec: config, "A
+    refused config value is repeated nowhere"; config-set-json-redacts, review of #384)."""
     found: list[Assignment] = []
-    for each in raw:
+    for position, each in enumerate(raw, start=1):
         path, end = parse_prefix(each)
         if end == len(each):
             raise TroupeError(
                 "config.invalid",
-                problem=f"{each!r} doesn't set anything: a value is written <path>=<value>.",
-                fix=f"Write it as {each}=<value>, or use troupe config unset {each} to remove it.",
-                details={
-                    "path": list(path),
-                    "rule": "a value is written <path>=<value>",
-                },
+                problem=f"path=value {position} doesn't set anything: a value is written "
+                "<path>=<value>.",
+                fix="Write it as <path>=<value>, with no space around the =, or use troupe "
+                "config unset <path> to remove a value.",
+                details={"path": [], "rule": "a value is written <path>=<value>"},
             )
         found.append((path, each[end + 1 :]))
     return found
