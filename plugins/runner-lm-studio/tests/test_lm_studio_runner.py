@@ -349,24 +349,47 @@ def test_a_required_argument_missing_gets_the_sdks_message(workspace: Path) -> N
 # Requirement: Every run has a turn limit and a token budget
 
 
-def test_the_turn_limit_ends_the_run_whatever_the_last_round_says(workspace: Path) -> None:
+def _offered_tools(predict: dict[str, Any]) -> list[str]:
+    """The tool names one predict request offered the model."""
+    fields = predict["creationParameter"]["predictionConfigStack"]["layers"][0]["config"]["fields"]
+    tools = next((f["value"] for f in fields if f["key"] == "llm.prediction.tools"), None)
+    if not isinstance(tools, dict):
+        return []
+    return [t["function"]["name"] for t in tools.get("tools", [])]
+
+
+def test_the_turn_limit_ends_the_run_once_the_last_rounds_calls_are_carried_out(
+    workspace: Path,
+) -> None:
     read = Call("Read", {"file_path": "notes.txt"})
     script = run_script(
-        predict_step("", [read]), predict_step("", [read]), predict_step("<|tool_call>call:Read{}")
+        predict_step("", [read]),
+        predict_step("", [read]),
+        predict_step("", [read]),
+        predict_step("never reached"),
     )
     with FakeLMStudio(script) as fake:
         _, messages = _run(workspace, fake, options={"maxTurns": 3, "maxTotalTokens": 20000})
         rounds = fake.sent_on("/llm", "predict")
     assert len(rounds) == 3
-    last_fields = json.dumps(rounds[2]["creationParameter"]["predictionConfigStack"])
-    assert (
-        "llm.prediction.tools" not in last_fields
-        or '"tools": []' in last_fields
-        or "toolArray" not in last_fields
-    )
+    assert all("Read" in _offered_tools(r) for r in rounds)
+    calls = [e for e in events(messages) if e["type"] == "tool_result"]
+    assert len(calls) == 3
     end = result(messages)
     assert (end["status"], end["reason"]) == ("error", "turn-limit")
     assert "turn limit of 3" in end["message"]
+
+
+def test_a_run_that_finishes_on_its_last_allowed_round_ends_ok(workspace: Path) -> None:
+    read = Call("Read", {"file_path": "notes.txt"})
+    script = run_script(predict_step("", [read]), predict_step("", [read]), predict_step("Done."))
+    with FakeLMStudio(script) as fake:
+        _, messages = _run(workspace, fake, options={"maxTurns": 3, "maxTotalTokens": 20000})
+        rounds = fake.sent_on("/llm", "predict")
+    assert len(rounds) == 3
+    assert "Read" in _offered_tools(rounds[2])
+    end = result(messages)
+    assert (end["status"], end["message"]) == ("ok", "Done.")
 
 
 def test_the_token_budget_spent_after_a_call_ends_the_run_once_the_call_is_done(

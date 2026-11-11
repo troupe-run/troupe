@@ -7,7 +7,7 @@
   "additionalProperties": false,
   "properties": {
     "maxTurns": {
-      "description": "The most prediction rounds a run may make. The last is sent without tools, so the model answers. Absent: the runner's default, 20.",
+      "description": "The most prediction rounds a run may make, each offered the tools. A run whose last round still asks for a tool ends at the turn limit once that round's calls are carried out. Absent: the runner's default, 20.",
       "type": "integer",
       "minimum": 1
     },

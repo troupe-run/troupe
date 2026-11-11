@@ -8,8 +8,8 @@ sized for real work; tests set low ones through the options.
 """
 
 DEFAULT_MAX_TURNS = 20
-"""Prediction rounds in a run, when the options don't set maxTurns. The library sends the last one
-without tools."""
+"""Prediction rounds in a run, when the options don't set maxTurns. Every round is offered the
+tools; a run whose last round still asks for one ends at the turn limit once its calls are done."""
 
 DEFAULT_MAX_TOTAL_TOKENS = 200_000
 """Prompt plus predicted tokens over a run, as LM Studio reports them for each round, when the

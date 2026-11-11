@@ -41,7 +41,6 @@ class StandIn:
         history: dict[str, Any],
         definitions: Sequence[Any],
         *,
-        max_rounds: int,
         temperature: float | None,
         fragment: Fragment,
         round_done: Callable[[Round], None],

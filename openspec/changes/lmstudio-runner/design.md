@@ -115,11 +115,13 @@ The options are closed: `maxTurns` (default 20), `maxTotalTokens` (default 200,0
 and `temperature` (unset, so the model's own default applies). The defaults live in the runner's `defaults.py`, as do
 the pre-run check's time limit, the library's message timeout, the retry count and backoff, and the cancel grace.
 
-- **The turn limit** is `max_prediction_rounds`. The library sends the last round without tools. The probe found that a
-  model still working then may write a raw tool call into its text (`<|tool_call>call:Grep{…}<tool_call|>`), ending
-  `eosFound`, without `handle_invalid_tool_request` being called. So the runner detects the limit by count: when
-  `act()` used every round and the round before the last asked for tools, the run ends with an `error` result saying
-  the turn limit was reached, as the OpenAI runner's spec says, whatever the last round's text says.
+- **The turn limit is the runner's, not the library's `max_prediction_rounds`.** The library sends its last round
+  without tools, so `maxTurns` 10 would leave only nine rounds that can use them, and the probe found that a model
+  still working then may write a raw tool call into its text (`<|tool_call>call:Grep{…}<tool_call|>`), ending
+  `eosFound`, which can't be told from a finished answer. So every round is offered the tools, and `on_round_end`
+  stops the run (D9) after round `maxTurns`, once its calls are carried out, when it asked for any. The run then ends
+  with an `error` result, `turn-limit`, as the OpenAI runner's does; a run that answers without a tool call on its
+  last allowed round ends `ok`, as there too (a side agent's finding, 2026-11-11).
 - **The token budget** is added up in `on_prediction_completed`, from each round's stats, and enforced in
   `on_round_end`, which the library calls only after that round's tool calls have finished (calls can still be running
   when the round's prediction completes). When it's spent, the runner stops the run (D9) before another round starts,

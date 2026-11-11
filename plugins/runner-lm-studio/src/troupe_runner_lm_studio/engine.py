@@ -271,7 +271,6 @@ class Engine:
         history: dict[str, Any],
         definitions: Sequence[lmstudio.ToolFunctionDef],
         *,
-        max_rounds: int,
         temperature: float | None,
         fragment: Fragment,
         round_done: Callable[[Round], None],
@@ -279,9 +278,10 @@ class Engine:
         message: Callable[[dict[str, Any]], None],
         invalid: Callable[[str, str | None, object], str],
     ) -> int:
-        """Run the library's tool loop; how many rounds it made. ``invalid`` answers a call the
-        library rejected, with its error, the tool's name and its raw arguments (no name when the
-        library refused a call on the last round, which is sent without tools)."""
+        """Run the library's tool loop; how many rounds it made. Every round is offered the
+        tools: the library's own round limit, which sends its last round without them, isn't used,
+        and the run's caller stops it after its last round instead (design D5). ``invalid`` answers
+        a call the library rejected, with its error, the tool's name and its raw arguments."""
         self._require()
 
         def on_fragment(piece: Any, _round: int) -> None:  # noqa: ANN401 - library type
@@ -320,7 +320,6 @@ class Engine:
             result = handle.act(
                 history,
                 list(definitions),
-                max_prediction_rounds=max_rounds,
                 max_parallel_tool_calls=1,
                 config=config or None,
                 on_message=lambda m: message(_serialised(m)),
