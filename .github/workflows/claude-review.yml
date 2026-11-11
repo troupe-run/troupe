@@ -534,7 +534,7 @@ jobs:
                   file.write(text)
           print(f"{len(threads)} review conversation(s) read.")
       - id: review
-        uses: anthropics/claude-code-action@8041f1d17e0e7d2f2cfe35002962e9f26237c0bb # v1.0.263
+        uses: anthropics/claude-code-action@d535f5172dec02b204866b393d6b20b9b2aaf98d # v1.0.266
         with:
           github_token: ${{ steps.app-token.outputs.token }}
           # An org secret visible to troupe, infrastructure and website, set by hand (oob/README.md).
@@ -599,7 +599,12 @@ jobs:
                `openspec/changes/<branch>/` (or `openspec/changes/archive/*-<branch>/` once
                archived). A task in its `tasks.md` is ticked only if its code and its verification
                are in the pull request; code for an unticked task, or a ticked task with nothing
-               behind it, is a finding. Its delta specs under `specs/` match what the diff does.
+               behind it, is a finding. A commit SHA cited in the pull request that names no
+               commit on its branch isn't a finding, at any tier, and don't ask for it to be
+               re-cited: pull requests merge by rebase, which rewrites every SHA, so no cited SHA
+               survives the merge. A ticked task is still judged by its code and verification,
+               and a CI run id it cites is still evidence. Its delta specs under `specs/` match
+               what the diff does.
             3. The issue the pull request closes (`Closes #n` in its body; read it with
                `gh issue view`): does the pull request do what its "Done when" asks?
             4. Each commit message is a Conventional Commit with a `Signed-off-by:` line.
