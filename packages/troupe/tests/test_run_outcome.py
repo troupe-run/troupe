@@ -19,6 +19,7 @@ from troupe.core.runners.effects import (
 from troupe.core.runners.limits import RunLimits
 from troupe.core.runners.outcome import (
     FAILURES,
+    NOT_RETRIED_FIXES,
     Ending,
     Outcome,
     RunFacts,
@@ -27,7 +28,15 @@ from troupe.core.runners.outcome import (
     TranscriptFormat,
     derive_outcome,
 )
-from troupe_plugin_sdk.runner import FAILURE_REASONS, FailureReason, ResultEvent
+from troupe_plugin_sdk.runner import (
+    FAILURE_REASONS,
+    NOT_RETRIED,
+    RETRY_REASONS,
+    FailureReason,
+    NotRetried,
+    ResultEvent,
+    RetryReason,
+)
 
 RUN = "0f8fad5b-d9cb-469f-a165-70867728950e"
 LIMITS = RunLimits()
@@ -142,6 +151,47 @@ def test_every_reason_gives_a_valid_error_with_a_fix_written_for_it(reason: Fail
 
 def test_every_reason_on_the_list_has_an_entry_in_the_table() -> None:
     assert sorted(FAILURES) == sorted(FAILURE_REASONS)
+
+
+# Requirement: A failure that wasn't retried reaches the outcome
+
+
+def _not_retried(reason: RetryReason, not_retried: NotRetried) -> TroupeError:
+    result = ResultEvent(RUN, 5, "error", "lost", reason=reason, not_retried=not_retried)
+    outcome, error = derive_outcome(_facts(result=result))
+    assert outcome is Outcome.FAILED
+    assert error is not None
+    return error
+
+
+def test_a_lost_connection_after_a_call_says_review_the_changes_then_check_the_connection() -> None:
+    error = _not_retried("network", "side-effect")
+    assert error.code == "run.error-result"
+    assert error.details == {"reason": "network", "notRetried": "side-effect", "message": "lost"}
+    assert "a tool call had already run" in error.fix
+    assert f"troupe diff {RUN}" in error.fix
+    assert error.fix.endswith(FAILURES["network"][1])
+    assert error.problem.startswith(FAILURES["network"][0])
+
+
+def test_a_failure_whose_retries_ran_out_has_no_not_retried_and_the_reasons_own_fix() -> None:
+    error = _failed("network")
+    assert error.details == {"reason": "network", "message": "the runner's words"}
+    assert error.fix == FAILURES["network"][1]
+
+
+@pytest.mark.parametrize("reason", RETRY_REASONS)
+@pytest.mark.parametrize("not_retried", NOT_RETRIED)
+def test_every_not_retried_value_gives_a_valid_error_with_its_own_fix(
+    reason: RetryReason, not_retried: NotRetried
+) -> None:
+    error = _not_retried(reason, not_retried)
+    check_error(error.to_data())
+    assert error.fix.startswith(NOT_RETRIED_FIXES[not_retried].format(run=RUN))
+
+
+def test_every_not_retried_value_has_an_entry_in_the_table() -> None:
+    assert sorted(NOT_RETRIED_FIXES) == sorted(NOT_RETRIED)
 
 
 def test_an_ok_result_whose_declared_output_is_missing_is_failed_naming_the_path() -> None:

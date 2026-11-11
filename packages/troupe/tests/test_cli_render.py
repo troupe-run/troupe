@@ -19,6 +19,31 @@ def test_a_served_model_line_names_the_model() -> None:
     assert line == f"     1 {AT} served_model: gpt-6-luna-2026-03-05"
 
 
+def test_a_result_line_names_its_reason_and_why_it_wasnt_retried() -> None:
+    event: dict[str, object] = {
+        "type": "result",
+        "status": "error",
+        "reason": "network",
+        "notRetried": "side-effect",
+        "message": "the connection dropped",
+    }
+    line = render_event(_logged(event))
+    assert (
+        line
+        == f"     1 {AT} result: error (network, not retried: side-effect): the connection dropped"
+    )
+
+
+def test_a_result_line_without_not_retried_names_only_its_reason() -> None:
+    event: dict[str, object] = {
+        "type": "result",
+        "status": "error",
+        "reason": "network",
+        "message": "gave up",
+    }
+    assert render_event(_logged(event)) == f"     1 {AT} result: error (network): gave up"
+
+
 def _host_event_types() -> list[str]:
     defs = load(RUNNER_SCHEMAS / "run-event.schema.json")["$defs"]
     return [ref["$ref"].rsplit("/", 1)[1] for ref in defs["hostEvent"]["oneOf"]]

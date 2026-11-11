@@ -171,7 +171,7 @@ repeats.
 | `context` | `kind`, `by`, `message`, `tokensBefore`, `tokensAfter`, `messagesBefore`, `messagesAfter` (the four counts optional) | `kind` is `compacted`, `truncated` or `other`, and `by` is `engine` or `runner`. Send one each time content of the conversation is lost and the run carries on (see [Lost content](#lost-content)). |
 | `log` | `level` (`debug`, `info`, `warning`, `error`), `message` | A diagnostic worth keeping with the run. |
 | `served_model` | `model` | A model other than the one `init` named answered part of the run, as the engine or service named it. Send it the first time each such model answers, before any event reporting that answer; never for `init`'s model, and never twice for one model (troupe treats either as a protocol violation). With no model on `init`, every model that answers is sent once. `model` has a model's shape (1 to 256 characters, no control character); a name outside it is a `log` warning instead. The plugin SDK's `ServedModels` decides. |
-| `result` | `status` (`ok` or `error`), `message`, `reason`, `turns`, `durationMs`, `usage {inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens}`, `costUsd` or `estimatedCostUsd` (all but `status` and `message` optional, and each `usage` counter too) | Exactly one, last, for a run that ends on its own. `reason` is present exactly when `status` is `error` (see [Why a run failed](#why-a-run-failed)). See [What usage counts](#what-usage-counts). At most one of the two costs (see [Cost: reported or estimated](#cost-reported-or-estimated)). |
+| `result` | `status` (`ok` or `error`), `message`, `reason`, `notRetried`, `turns`, `durationMs`, `usage {inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens}`, `costUsd` or `estimatedCostUsd` (all but `status` and `message` optional, and each `usage` counter too) | Exactly one, last, for a run that ends on its own. `reason` is present exactly when `status` is `error` (see [Why a run failed](#why-a-run-failed)), and `notRetried` only beside a reason a `retry` can name (see [When a retry isn't safe](#when-a-retry-isnt-safe)). See [What usage counts](#what-usage-counts). At most one of the two costs (see [Cost: reported or estimated](#cost-reported-or-estimated)). |
 | `oversized` | `originalType`, `bytes`, `ref` | Written by troupe, never by a runner (see [Oversized events](#oversized-events)). |
 
 - **`result.status` is `error` whenever the engine reported an error,** whatever else it reported alongside it.
@@ -232,6 +232,29 @@ what a runner sends, what troupe records, and what it reads back. A result that 
   both, so a run whose last retry was `rate-limit` ends `rate-limit`.
 - **The message still says what happened,** in the engine's or the runner's words: the reason is what to act on,
   the message is what to read.
+
+### When a retry isn't safe
+
+A runner that ends a run on a failure it would otherwise have retried, because retrying could repeat something the
+run already did, says so in the `result`'s `notRetried`, so troupe can tell it from retries that ran out. The list is
+closed, with one value:
+
+| `notRetried` | When |
+|---|---|
+| `side-effect` | a tool call had already been carried out or answered, and a retry could carry it out again |
+
+- **Only on an `error` result whose `reason` a `retry` can name:** `authentication`, `rate-limit`, `network`,
+  `server` or `other`. On an `ok` result, or beside any other reason, it's a protocol violation, wherever the result
+  appears.
+- **Absent means the runner retried until its attempts ran out, or doesn't retry that failure.** Send it only when
+  you held back.
+- **Which runners need it:** one whose retry starts the run's conversation again from the direction, so the tool
+  calls already carried out would be asked for and carried out again. The LM Studio runner is one: the library's
+  `act()` starts again from the direction. A runner whose retry sends one request again, and carries out a reply's
+  calls only once the whole reply has arrived, never needs it: the Ollama, Responses API and Claude Code runners all
+  work that way, since the conversation each retry sends already holds every tool result.
+- **troupe's outcome carries it,** and its fix says to review the run's changes before performing the actor again
+  (see [Outcomes](#outcomes)).
 
 ### Lost content
 
@@ -533,7 +556,7 @@ for every outcome but `succeeded` and `cancelled`. The first row that matches wi
 | `crashed` | The runner broke the contract | `runner.protocol` |
 | `failed` | The run was stopped because authentication failed | `run.authentication` |
 | `failed` | The transcript passed `RUN_TRANSCRIPT_MAX_BYTES` | `run.transcript-too-large` |
-| `failed` | The `result` had status `error`. The error's details carry its `reason` and message, and its fix says what to do for that reason | `run.error-result` |
+| `failed` | The `result` had status `error`. The error's details carry its `reason`, its `notRetried` when it had one, and its message, and its fix says what to do for that reason, after saying to review the run's changes when a retry wasn't safe | `run.error-result` |
 | `failed` | The `result` was `ok`, but the effect check failed: an expected file wasn't made or changed, the run changed a file its actor's effects don't declare, or both | `run.effect-missing`, `effects.outside-declared`, `effects.check-failed` |
 | `failed` | The `result` was `ok` and the effect check passed, but the runner exited non-zero or had to be killed: the run's state is uncertain | `run.unclean-exit` |
 | `succeeded` | The `result` was `ok`, the effect check passed, and the runner exited with code 0 | — |

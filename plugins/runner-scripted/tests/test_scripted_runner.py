@@ -176,6 +176,25 @@ def test_a_script_is_read_from_the_file_the_options_name(session: Session, tmp_p
             {"steps": [{"event": {**OK, "status": "error", "reason": "timeout"}}]},
             "ResultEvent.reason",
         ),
+        (
+            {
+                "steps": [
+                    {
+                        "event": {
+                            **OK,
+                            "status": "error",
+                            "reason": "quota",
+                            "notRetried": "side-effect",
+                        }
+                    }
+                ]
+            },
+            "notRetried is only on an error result whose reason a retry can name",
+        ),
+        (
+            {"steps": [{"event": {**OK, "notRetried": "side-effect"}}]},
+            "an ok result has no notRetried",
+        ),
         ({"steps": [{"event": {"type": "dance"}}]}, "unknown event type 'dance'"),
         ({"steps": [{"event": {"type": "oversized"}}]}, "unknown event type 'oversized'"),
     ],
@@ -262,6 +281,23 @@ def test_a_scripted_error_result_is_sent_with_its_reason(session: Session) -> No
     session.play({"steps": [{"event": INIT}, {"event": quota}]})
     _, result = _events(session.notifications(2))
     assert (result["status"], result["reason"]) == ("error", "quota")
+    session.validate_all()
+
+
+# Requirement: A script's error result can say it wasn't retried
+
+
+def test_a_scripted_error_result_is_sent_saying_it_wasnt_retried(session: Session) -> None:
+    lost = {
+        "type": "result",
+        "status": "error",
+        "reason": "network",
+        "notRetried": "side-effect",
+        "message": "the connection dropped after a tool call",
+    }
+    session.play({"steps": [{"event": INIT}, {"event": lost}]})
+    _, result = _events(session.notifications(2))
+    assert (result["reason"], result["notRetried"]) == ("network", "side-effect")
     session.validate_all()
 
 

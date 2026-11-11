@@ -136,3 +136,23 @@ def _step_kinds(options_schema: dict[str, Any]) -> set[str]:
 
 def test_the_options_schema_defines_a_step_for_each_kind_the_requirement_lists() -> None:
     assert LISTED_STEPS - _step_kinds(OPTIONS) == set()
+
+
+# Requirement: A script's error result can say it wasn't retried
+
+
+@pytest.mark.parametrize(
+    ("result", "valid"),
+    [
+        ({"status": "error", "reason": "network", "notRetried": "side-effect"}, True),
+        ({"status": "error", "reason": "quota", "notRetried": "side-effect"}, False),
+        ({"status": "ok", "notRetried": "side-effect"}, False),
+        ({"status": "error", "reason": "network", "notRetried": "unsafe"}, False),
+    ],
+    ids=["beside network", "beside quota", "on ok", "off the list"],
+)
+def test_the_options_schema_holds_a_result_steps_not_retried_to_the_contracts_rule(
+    result: dict[str, Any], valid: bool
+) -> None:
+    step = {"type": "result", "message": "m", **result}
+    assert _validator("options.schema.json#/$defs/result").is_valid(step) is valid

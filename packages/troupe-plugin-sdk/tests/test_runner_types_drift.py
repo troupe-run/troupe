@@ -177,3 +177,26 @@ def test_a_reason_the_schema_gains_is_named_with_the_type() -> None:
     assert _reasons_differences(p.FAILURE_REASONS, [*schema["enum"], "timeout"]) == [
         "FailureReason lacks 'timeout', which the schema lists"
     ]
+
+
+def _values_differences(name: str, values: tuple[str, ...], schema_enum: list[str]) -> list[str]:
+    found = [f"{name} lacks {v!r}, which the schema lists" for v in schema_enum if v not in values]
+    found += [f"{name} has {v!r}, which the schema doesn't" for v in values if v not in schema_enum]
+    return found
+
+
+def test_the_retry_reasons_are_exactly_the_schemas() -> None:
+    schema = _load(urljoin(BASE, "run-event.schema.json#/$defs/retryReason"))
+    assert _values_differences("RetryReason", p.RETRY_REASONS, schema["enum"]) == []
+
+
+def test_the_not_retried_values_are_exactly_the_schemas() -> None:
+    schema = _load(urljoin(BASE, "run-event.schema.json#/$defs/notRetried"))
+    assert _values_differences("NotRetried", p.NOT_RETRIED, schema["enum"]) == []
+
+
+def test_a_not_retried_value_the_schema_gains_is_named_with_the_type() -> None:
+    schema = _load(urljoin(BASE, "run-event.schema.json#/$defs/notRetried"))
+    assert _values_differences("NotRetried", p.NOT_RETRIED, [*schema["enum"], "idempotency"]) == [
+        "NotRetried lacks 'idempotency', which the schema lists"
+    ]

@@ -426,6 +426,76 @@ def test_an_error_result_without_a_reason_is_refused_as_a_runner_message() -> No
     assert not is_valid(message, "message.schema.json#/$defs/fromRunner")
 
 
+RETRY_REASONS = ["authentication", "rate-limit", "network", "server", "other"]
+
+
+@pytest.mark.parametrize("reason", RETRY_REASONS)
+def test_a_retry_with_each_of_its_reasons_validates(reason: str) -> None:
+    retry = {"runId": RUN_ID, "seq": 2, "type": "retry", "attempt": 1, "delayMs": 0}
+    validate({**retry, "reason": reason}, "run-event.schema.json#/$defs/event")
+
+
+# Requirement: A result says when a retry wasn't safe
+# Requirement: Only a failure a retry can name carries notRetried
+
+
+def test_the_retry_reasons_are_one_named_list_both_events_use() -> None:
+    defs = load(RUNNER_SCHEMAS / "run-event.schema.json")["$defs"]
+    assert defs["retryReason"]["enum"] == RETRY_REASONS
+    assert defs["retry"]["properties"]["reason"] == {"$ref": "#/$defs/retryReason"}
+
+
+def test_the_not_retried_values_are_the_one_the_contract_names() -> None:
+    defs = load(RUNNER_SCHEMAS / "run-event.schema.json")["$defs"]
+    assert defs["notRetried"]["enum"] == ["side-effect"]
+
+
+@pytest.mark.parametrize("ref", RESULT_WHEREVER_IT_APPEARS)
+@pytest.mark.parametrize("reason", RETRY_REASONS)
+def test_an_error_result_not_retried_for_a_side_effect_validates_wherever_a_result_appears(
+    ref: str, reason: str
+) -> None:
+    validate(_bare_result(status="error", reason=reason, notRetried="side-effect"), ref)
+
+
+@pytest.mark.parametrize("ref", RESULT_WHEREVER_IT_APPEARS)
+@pytest.mark.parametrize(
+    "result",
+    [
+        _bare_result(status="ok", notRetried="side-effect"),
+        *(
+            _bare_result(status="error", reason=reason, notRetried="side-effect")
+            for reason in FAILURE_REASONS
+            if reason not in RETRY_REASONS
+        ),
+        _bare_result(status="error", reason="network", notRetried="unsafe"),
+        _bare_result(status="error", reason="network", notRetried=None),
+    ],
+    ids=[
+        "ok",
+        *(f"reason {r}" for r in FAILURE_REASONS if r not in RETRY_REASONS),
+        "a value off the list",
+        "null",
+    ],
+)
+def test_a_result_breaking_the_not_retried_rule_is_refused_wherever_it_appears(
+    ref: str, result: dict[str, Any]
+) -> None:
+    assert not is_valid(result, ref)
+
+
+def test_a_result_not_retried_beside_a_reason_no_retry_names_is_refused_as_a_runner_message() -> (
+    None
+):
+    result = _bare_result(status="error", reason="budget", notRetried="side-effect")
+    assert not is_valid(_notification("run/event", result), "message.schema.json#/$defs/fromRunner")
+
+
+def test_no_runner_can_extend_the_not_retried_values() -> None:
+    defs = load(RUNNER_SCHEMAS / "run-event.schema.json")["$defs"]
+    assert list(_dynamic_refs(defs["notRetried"])) == []
+
+
 def _dynamic_refs(node: object) -> Iterator[str]:
     if isinstance(node, dict):
         for key, value in node.items():
@@ -511,6 +581,8 @@ def _strategy(schema: dict[str, Any]) -> st.SearchStrategy[Any]:
             )
         if ref.endswith("/seq"):
             return st.integers(min_value=1)
+        if ref.endswith("/retryReason"):
+            return st.sampled_from(RETRY_REASONS)
         if ref.endswith("/model"):
             return st.text(
                 st.characters(blacklist_categories=["Cs"], blacklist_characters=_CONTROL),

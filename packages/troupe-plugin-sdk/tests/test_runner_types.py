@@ -54,10 +54,22 @@ RESULT_FIELDS: dict[str, st.SearchStrategy[Any]] = {
 
 
 def _with_reason_when_failed(data: dict[str, Any]) -> st.SearchStrategy[Any]:
-    """An error result always has a reason, and an ok result never does."""
+    """An error result always has a reason, and an ok result never does. An error result whose
+    reason a retry can name may say it wasn't retried."""
     if data["status"] == "ok":
         return st.just(data)
-    return st.sampled_from(p.FAILURE_REASONS).map(lambda reason: {**data, "reason": reason})
+    return st.sampled_from(p.FAILURE_REASONS).flatmap(
+        lambda reason: (
+            st.just({**data, "reason": reason})
+            | (
+                st.sampled_from(p.NOT_RETRIED).map(
+                    lambda value: {**data, "reason": reason, "notRetried": value}
+                )
+                if reason in p.RETRY_REASONS
+                else st.nothing()
+            )
+        )
+    )
 
 
 # (type, schema reference, strategy for valid JSON data of that type)
@@ -724,6 +736,52 @@ def test_an_error_result_with_a_reason_round_trips() -> None:
     event = p.ResultEvent(run_id=RUN, seq=1, status="error", message="401", reason="authentication")
     assert event.to_data()["reason"] == "authentication"
     assert p.parse_event(event.to_data()) == event
+
+
+# Requirement: The SDK's result type carries notRetried
+
+
+def test_a_runner_cant_build_an_ok_result_that_wasnt_retried() -> None:
+    with pytest.raises(p.ProtocolError, match=r"ResultEvent: an ok result has no notRetried"):
+        p.ResultEvent(run_id=RUN, seq=1, status="ok", message="done", not_retried="side-effect")
+
+
+@pytest.mark.parametrize("reason", [r for r in p.FAILURE_REASONS if r not in p.RETRY_REASONS])
+def test_a_runner_cant_build_a_result_not_retried_beside_a_reason_no_retry_names(
+    reason: p.FailureReason,
+) -> None:
+    with pytest.raises(p.ProtocolError, match=r"ResultEvent: notRetried is only on .*" + reason):
+        p.ResultEvent(
+            run_id=RUN, seq=1, status="error", message="m", reason=reason, not_retried="side-effect"
+        )
+
+
+def test_the_host_parsing_not_retried_beside_a_reason_no_retry_names_refuses_it() -> None:
+    data = {
+        "runId": RUN,
+        "seq": 1,
+        "type": "result",
+        "status": "error",
+        "message": "spent",
+        "reason": "budget",
+        "notRetried": "side-effect",
+    }
+    with pytest.raises(p.ProtocolError, match=r"ResultEvent: .*notRetried"):
+        p.parse_event(data)
+
+
+@pytest.mark.parametrize("reason", p.RETRY_REASONS)
+def test_an_error_result_not_retried_round_trips(reason: p.RetryReason) -> None:
+    event = p.ResultEvent(
+        run_id=RUN, seq=1, status="error", message="lost", reason=reason, not_retried="side-effect"
+    )
+    assert event.to_data()["notRetried"] == "side-effect"
+    assert p.parse_event(event.to_data()) == event
+
+
+def test_an_error_result_without_not_retried_leaves_it_out() -> None:
+    event = p.ResultEvent(run_id=RUN, seq=1, status="error", message="lost", reason="network")
+    assert "notRetried" not in event.to_data()
 
 
 # Requirement: The SDK never repeats a refused endpoint (runtime-checks design D8, #323)

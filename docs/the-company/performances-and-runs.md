@@ -73,6 +73,11 @@ account out of quota, a rate limit, the turn limit, the budget, a conversation t
 troupe tells you what to do for that reason, such as checking the runtime's credential or raising the budget in the
 actor's options, and `troupe logs` shows it on the result's line, as in `error (turn-limit): …`.
 
+**When the runner held back from retrying,** it says so too. A runner that would have retried a lost connection, but
+had already carried out a tool call that a retry could carry out again, ends the run instead, and the result's line
+says `error (network, not retried: side-effect): …`. troupe's fix then starts with reviewing what the run changed
+before you perform the actor again, since that tool call's changes are already in the run's workspace.
+
 **The effect check** is what the run was for, and what it was allowed to do. The actor's `expect` names each file the
 run must create or change, and troupe checks them afterwards; `expect: []` says no file has to change. Then troupe
 audits every change the run made against the actor's [effects](#effects), whatever its `expect`.
