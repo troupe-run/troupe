@@ -67,8 +67,8 @@
   check passes. (Rechecked at apply: no page or help text shows one; the SDK README now mentions `PatternError.rule`.
   The docs check runs in 6.2.)
 - [x] 6.2 Run `uv run scripts/check.py` and record the test count; `openspec validate config-set-json-redacts --strict`
-  passes. (On `0aa4ed21`, the last commit outside `openspec/`, after the review fixes in 7.1 to 7.4: all gates
-  passed, 5695 passed and 16 skipped. Strict validation passes.)
+  passes. (On `8a2b7345`, the last commit outside `openspec/`, after the review fixes in 7.1 to 7.6: all gates
+  passed, 5705 passed and 16 skipped. Strict validation passes.)
 - [x] 6.3 Run issue #374's command by hand in a scratch theatre and record the before and after output in the PR.
   (Run, with the malformed-path, unset and effect-pattern cases too; none shows the password. The before is the
   issue's own output. Both go in the PR body.)
