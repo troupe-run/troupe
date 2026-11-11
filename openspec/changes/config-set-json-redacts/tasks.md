@@ -2,7 +2,7 @@
 
 ## 1. Unreadable JSON names where and why, not the text (design D2)
 
-- [ ] 1.1 Give `StrictJSONError` a content-free `rule` and `line` / `column` (none when unknown): `JSONDecodeError`'s
+- [x] 1.1 Give `StrictJSONError` a content-free `rule` and `line` / `column` (none when unknown): `JSONDecodeError`'s
   `msg` and position, "a key appears more than once in one object" without the key, the NaN / Infinity words, and
   "it isn't UTF-8" with the byte offset. Keep `str(error)` unchanged. Verify with unit tests in
   `test_strict_json_and_ulid.py` that `rule` never holds a canary placed in a string, a key or a
@@ -10,15 +10,16 @@
 
 ## 2. The CLI never repeats a value it can't type (design D1, D2)
 
-- [ ] 2.1 Rewrite every refusal in `cli/values.py` so its `problem`, `fix` and `details` name the path and what the
+- [x] 2.1 Rewrite every refusal in `cli/values.py` so its `problem`, `fix` and `details` name the path and what the
   path takes, never the text: `--json`, boolean, number, list or group, and no single type. `--json` and list or
-  group errors give D2's rule, line and column, in `details` too. Verify with `test_cli_config.py`: update the
+  group errors give D2's rule, and `line` and `column` in `details`, which the protocol's error schema gains for
+  `config.invalid` (both copies, regenerated with `scripts/package_schemas.py`). Verify with `test_cli_config.py`: update the
   assertions at the boolean (line 207) and no-single-type tests, and add one per refusal that a canary in the value
   appears in neither standard error nor the raised error's fields.
-- [ ] 2.2 `@file` refusals: a file that isn't JSON or YAML names the file, the line and the column (ruamel's
+- [x] 2.2 `@file` refusals: a file that isn't JSON or YAML names the file, the line and the column (ruamel's
   `problem_mark`, D2's position for JSON), never ruamel's message or excerpt; a file that isn't UTF-8 says so with the
   byte offset. Verify with tests where the broken line of a `.yaml` and a `.json` file holds a canary.
-- [ ] 2.3 Add a hypothesis property test: for each kind `value_of` reads (boolean, integer, number, list, group, no
+- [x] 2.3 Add a hypothesis property test: for each kind `value_of` reads (boolean, integer, number, list, group, no
   single type, `--json`), generated text holding a canary that the kind refuses gives an error whose `problem`,
   `fix` and JSON-dumped `details` hold no part of the canary. Verify it fails on main's `values.py` first, then passes.
 
@@ -26,7 +27,7 @@
 
 - [ ] 3.1 In `config_paths._malformed`, show `text[: offset + 1]` (the whole text only when reading failed at its
   end) in `problem` and `details.text`; the dot-before-bracket fix shows the corrected text up to the end of that
-  bracket. Verify: `test_config_paths.py`'s property test asserts `details.text` is a prefix of the text ending at
+  bracket, and correct the error schema's description of `details.text` (both copies). Verify: `test_config_paths.py`'s property test asserts `details.text` is a prefix of the text ending at
   `offset`; add cases for `config set 'a]b=<canary>'`, `runtimes.box.endpoint.=<canary URL>`, and `config unset` /
   `config get` given `path=<canary URL>`, checking standard error and the error's fields; every spec scenario of "A
   malformed config path is refused" still passes, `a.[b]`'s fix still says `a[b]`.

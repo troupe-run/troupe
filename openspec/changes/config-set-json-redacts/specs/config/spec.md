@@ -59,7 +59,7 @@ given as JSON with `--json`, naming the path. A refusal SHALL NOT repeat the val
 #### Scenario: JSON that isn't JSON
 - **WHEN** a person runs `troupe config set --json` with a value that isn't JSON
 - **THEN** it is refused, naming the path, the line and column where the JSON stopped making sense and why, without
-  repeating any of the value
+  repeating any of the value, and its details hold the path, the rule, the line and the column
 
 ### Requirement: A malformed config path is refused
 A config path that can't be read SHALL be refused with `config.path-malformed`, before anything is recorded. The

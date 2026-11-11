@@ -9,6 +9,11 @@ the value must be given as JSON with ``--json``, and is refused otherwise, namin
 
 ``<path>=@<file>`` reads the value from a file: a string field is the file's text exactly, and
 anything else is the file parsed as JSON, or as YAML for ``.yaml`` and ``.yml``.
+
+A refusal never repeats the value, or any of a file's text: it names the path, what the path takes,
+and for JSON or YAML that can't be read, where and why in words that hold none of it. The value may
+hold a password, and the person has it on their own command line (spec: config, "A refused config
+value is repeated nowhere"; config-set-json-redacts design D1, D2).
 """
 
 import io
@@ -18,7 +23,7 @@ from typing import Any
 
 from referencing import Registry
 from ruamel.yaml import YAML
-from ruamel.yaml.error import YAMLError
+from ruamel.yaml.error import MarkedYAMLError, YAMLError
 
 from troupe.core import interim, schemas, strict_json
 from troupe.core.config_paths import shown
@@ -29,13 +34,32 @@ RUNTIME_SCHEMA = "https://troupe.run/protocol/config/runtime.schema.json"
 RUNNER_OPTIONS = "#runnerOptions"
 
 
-def _usage(path: Sequence[str], problem: str, fix: str | None = None) -> TroupeError:
+def _usage(
+    path: Sequence[str],
+    problem: str,
+    fix: str | None = None,
+    *,
+    line: int | None = None,
+    column: int | None = None,
+) -> TroupeError:
+    """A refusal of the value at ``path``. ``problem`` must hold none of the value; ``line`` and
+    ``column`` say where JSON or YAML stopped making sense."""
+    details: dict[str, Any] = {"path": list(path), "rule": problem}
+    where = ""
+    if line is not None and column is not None:
+        details |= {"line": line, "column": column}
+        where = f" (line {line}, column {column})"
     return TroupeError(
         "config.invalid",
-        problem=f"{problem}.",
+        problem=f"{problem}{where}.",
         fix=fix or "Run `troupe config set --help` for how values are written.",
-        details={"path": list(path), "rule": problem},
+        details=details,
     )
+
+
+def _not_json(path: Sequence[str], what: str, error: strict_json.StrictJSONError) -> TroupeError:
+    """``what`` isn't JSON: the reason and position, which hold none of the text (design D2)."""
+    return _usage(path, f"{what} isn't JSON: {error.rule}", line=error.line, column=error.column)
 
 
 # What the schema says a path holds.
@@ -160,18 +184,32 @@ def _kinds_in(schema: str, keys: Sequence[str], runner: str | None) -> set[str]:
 
 
 def _from_file(path: Sequence[str], typed: str, want_text: bool) -> object:
+    """The value in the file ``typed``. A refusal names the file and where it broke, never any of
+    its text: ruamel's messages quote the file, a repeated key's value included (design D2)."""
     try:
         data = Path(typed).read_bytes()
     except OSError as error:
         raise _usage(path, f"{typed} couldn't be read: {error.strerror or error}") from error
     if want_text:
-        return data.decode("utf-8")
-    try:
-        if Path(typed).suffix in (".yaml", ".yml"):
+        try:
+            return data.decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise _usage(path, f"{typed} isn't UTF-8 text (at byte {error.start + 1})") from error
+    if Path(typed).suffix in (".yaml", ".yml"):
+        try:
             return YAML(typ="safe", pure=True).load(io.BytesIO(data))
+        except YAMLError as error:
+            mark = error.problem_mark if isinstance(error, MarkedYAMLError) else None
+            raise _usage(
+                path,
+                f"{typed} isn't YAML troupe can read",
+                line=None if mark is None else mark.line + 1,
+                column=None if mark is None else mark.column + 1,
+            ) from error
+    try:
         return strict_json.loads(data)
-    except (strict_json.StrictJSONError, YAMLError, UnicodeDecodeError) as error:
-        raise _usage(path, f"{typed} isn't JSON or YAML: {error}") from error
+    except strict_json.StrictJSONError as error:
+        raise _not_json(path, typed, error) from error
 
 
 def value_of(path: Sequence[str], text: str, *, runner: str | None, as_json: bool) -> object:
@@ -184,32 +222,36 @@ def value_of(path: Sequence[str], text: str, *, runner: str | None, as_json: boo
         try:
             return strict_json.loads(text)
         except strict_json.StrictJSONError as error:
-            raise _usage(path, f"{text!r} isn't JSON ({error})") from error
+            raise _not_json(path, f"the value for {dotted}", error) from error
     if kinds == {"string"}:
         return text
     if kinds == {"boolean"}:
         if text not in ("true", "false"):
-            raise _usage(path, f"{dotted} is true or false, not {text!r}", "Write true or false.")
+            raise _usage(
+                path,
+                f"{dotted} is true or false, and the value given isn't",
+                "Write true or false.",
+            )
         return text == "true"
     if kinds <= {"integer", "number"} and kinds:
         try:
             return int(text) if kinds == {"integer"} else float(text)
         except ValueError as error:
-            raise _usage(path, f"{dotted} is a number, not {text!r}") from error
+            number = "a whole number" if kinds == {"integer"} else "a number"
+            raise _usage(path, f"{dotted} is {number}, and the value given isn't one") from error
     if kinds in ({"array"}, {"object"}):
         try:
             value = strict_json.loads(text)
         except strict_json.StrictJSONError as error:
-            raise _usage(
-                path,
-                f"{dotted} is a JSON {'list' if 'array' in kinds else 'group'}"
-                f", and {text!r} isn't JSON ({error})",
+            kind = "list" if "array" in kinds else "group"
+            raise _not_json(
+                path, f"{dotted} is a JSON {kind}, and the value given", error
             ) from error
         if _json_type(value) not in kinds:
             raise _usage(path, f"{dotted} is a {'list' if 'array' in kinds else 'group'}")
         return value
     raise _usage(
         path,
-        f"the schema doesn't give {dotted} one type, so troupe can't tell how to read {text!r}",
+        f"the schema doesn't give {dotted} one type, so troupe can't tell how to read the value",
         "Give the value as JSON, with --json.",
     )

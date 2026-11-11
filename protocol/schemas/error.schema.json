@@ -2306,7 +2306,25 @@
             "rule": {
               "type": "string",
               "minLength": 1
+            },
+            "line": {
+              "description": "For a value given as JSON or YAML that can't be read: the line where reading failed, counting from 1. The value itself is never in the error.",
+              "type": "integer",
+              "minimum": 1
+            },
+            "column": {
+              "description": "For a value given as JSON or YAML that can't be read: the column where reading failed, counting from 1.",
+              "type": "integer",
+              "minimum": 1
             }
+          },
+          "dependentRequired": {
+            "line": [
+              "column"
+            ],
+            "column": [
+              "line"
+            ]
           }
         }
       },
@@ -2330,7 +2348,7 @@
           ],
           "properties": {
             "text": {
-              "description": "The path as it was typed.",
+              "description": "The path as it was typed, up to and including the character where reading failed: nothing after it, which in config set can be the value.",
               "type": "string"
             },
             "offset": {

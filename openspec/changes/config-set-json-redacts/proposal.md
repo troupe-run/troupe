@@ -20,7 +20,8 @@ malformed path in `config set` (whose error quotes the whole `path=value` argume
 ## What Changes
 
 - A value the CLI can't type is refused naming the path and what the path takes, never the value. Under `--json`,
-  the error says where the JSON stopped making sense (line and column) and why, in words that hold none of the value.
+  the error says where the JSON stopped making sense (line and column, also in the error's details) and why, in
+  words that hold none of the value.
 - A value read from a file (`path=@file`) that isn't JSON or YAML is refused naming the file and the line and
   column, never the parser's quoted excerpt of the file.
 - A malformed config path names only the text read up to where reading failed, so the value after `=` in
@@ -60,4 +61,6 @@ None.
   unchanged.
 - Tests: `test_cli_config.py`, `test_config_paths.py`, `test_config_kinds.py`, and a new canary test module.
 - User docs that show these errors, if any quote a value (checked in tasks).
-- No protocol, schema, event or runner change.
+- `protocol/schemas/error.schema.json` and the package's copy: `config.invalid`'s details gain optional `line` and
+  `column`, and `config.path-malformed`'s `details.text` description says it stops where reading failed. Additive;
+  it releases the protocol at its next version. No event or runner change.

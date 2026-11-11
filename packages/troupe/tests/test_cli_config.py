@@ -204,8 +204,9 @@ def test_a_boolean_that_isnt_one_is_refused_naming_the_path(repo: Repo) -> None:
     _tester()
     code, _, err = cli("config", "set", "actors.tester.options.replayDelays=yes")
     assert code == 1
-    assert "actors.tester.options.replayDelays is true or false, not 'yes'" in err
+    assert "actors.tester.options.replayDelays is true or false, and the value given isn't" in err
     assert "Write true or false" in err
+    assert "yes" not in err
 
 
 def test_a_boolean_option_is_read_by_the_runners_options_schema(repo: Repo) -> None:
@@ -216,10 +217,11 @@ def test_a_boolean_option_is_read_by_the_runners_options_schema(repo: Repo) -> N
 
 def test_a_value_with_no_single_type_needs_json(repo: Repo) -> None:
     _tester()
-    code, _, err = cli("config", "set", "actors.tester.options.nope=x")
+    code, _, err = cli("config", "set", "actors.tester.options.nope=xylophone")
     assert code == 1
     assert "doesn't give actors.tester.options.nope one type" in err
     assert "--json" in err
+    assert "xylophone" not in err
 
 
 def test_json_reads_a_value_whatever_the_schema_says(repo: Repo) -> None:
@@ -227,6 +229,133 @@ def test_json_reads_a_value_whatever_the_schema_says(repo: Repo) -> None:
     code, _, _ = cli("config", "set", "--json", 'actors.tester.character="quoted"')
     assert code == 0
     assert _get("actors.tester.character") == "quoted"
+
+
+CANARY = "q7ZxW9pL4vR2canary"
+WITH_PASSWORD = f"https://user:{CANARY}@example.com/v1"
+
+
+def _refused_value(*argv: str) -> TroupeError:
+    """The error ``config set`` refused ``argv`` with, through the CLI's own reading of values."""
+    from troupe.cli.config import _assignments
+    from troupe.cli.values import value_of
+
+    as_json = "--json" in argv
+    [(path, text)] = _assignments([a for a in argv if a != "--json"])
+    runner = "scripted" if path[:1] == ("actors",) else None
+    with pytest.raises(TroupeError) as caught:
+        value_of(path, text, runner=runner, as_json=as_json)
+    return caught.value
+
+
+@pytest.mark.parametrize(
+    ("argv", "says"),
+    [
+        pytest.param(
+            ("--json", f"runtimes.box.endpoint={WITH_PASSWORD}"),
+            "the value for runtimes.box.endpoint isn't JSON: Expecting value (line 1, column 1)",
+            id="--json",
+        ),
+        pytest.param(
+            (f"actors.tester.options.replayDelays={CANARY}",),
+            "actors.tester.options.replayDelays is true or false",
+            id="boolean",
+        ),
+        pytest.param(
+            (f"runtimes.box.prices[m].input={CANARY}",),
+            "runtimes.box.prices.m.input is a number, and the value given isn't one",
+            id="number",
+        ),
+        pytest.param(
+            (f'actors.tester.expect=["{CANARY}"',),
+            "actors.tester.expect is a JSON list, and the value given isn't JSON",
+            id="list",
+        ),
+        pytest.param(
+            (f"actors.tester.options.script={WITH_PASSWORD}",),
+            "actors.tester.options.script is a JSON group, and the value given isn't JSON",
+            id="group",
+        ),
+        pytest.param(
+            (f"actors.tester.options.nope={WITH_PASSWORD}",),
+            "doesn't give actors.tester.options.nope one type",
+            id="no single type",
+        ),
+    ],
+)
+def test_a_value_the_cli_cant_type_is_refused_naming_the_path_never_the_value(
+    repo: Repo, argv: tuple[str, ...], says: str
+) -> None:
+    _tester()
+    code, out, err = cli("config", "set", *argv)
+    assert code == 1
+    assert says in err
+    assert CANARY not in out + err
+    assert "example.com" not in out + err
+    refused = _refused_value(*argv)
+    message = json.dumps([refused.problem, refused.fix, refused.details])
+    assert CANARY not in message
+    assert "example.com" not in message
+
+
+def test_json_that_isnt_json_gives_the_line_and_column_in_its_details(repo: Repo) -> None:
+    refused = _refused_value("--json", 'actors.tester.options.script={\n "a": 1,\n "b" 2}')
+    assert refused.details == {
+        "path": ["actors", "tester", "options", "script"],
+        "rule": "the value for actors.tester.options.script isn't JSON: Expecting ':' delimiter",
+        "line": 3,
+        "column": 6,
+    }
+    # Each error is checked against its code's details schema as it's made (protocol_guard); this
+    # names the schema the line and column must fit.
+    validator_for(PROTOCOL_BASE + "error.schema.json").validate(refused.to_data())
+
+
+@pytest.mark.parametrize(
+    ("name", "content", "says"),
+    [
+        pytest.param(
+            "options.yaml",
+            f"script:\n  steps: [1, 2\n  key: {CANARY}\n".encode(),
+            "options.yaml isn't YAML troupe can read (line 3, column ",
+            id="yaml",
+        ),
+        pytest.param(
+            "options.yaml",
+            f"script: 1\nscript: {CANARY}\n".encode(),
+            "options.yaml isn't YAML troupe can read (line 2, column 1)",
+            id="yaml repeated key",
+        ),
+        pytest.param(
+            "options.json",
+            f'{{"script": {{"steps": ["{CANARY}",]}}}}'.encode(),
+            # The decoder's words for a trailing comma differ between Python versions.
+            "options.json isn't JSON: ",
+            id="json",
+        ),
+    ],
+)
+def test_a_value_file_that_cant_be_read_names_the_file_and_where_never_its_text(
+    repo: Repo, name: str, content: bytes, says: str
+) -> None:
+    _tester()
+    (repo.path / name).write_bytes(content)
+    code, out, err = cli("config", "set", f"actors.tester.options=@{name}")
+    assert code == 1
+    assert says in err
+    assert ", column " in err
+    assert CANARY not in out + err
+    refused = _refused_value(f"actors.tester.options=@{name}")
+    assert CANARY not in json.dumps([refused.problem, refused.fix, refused.details])
+
+
+def test_a_text_file_that_isnt_utf8_says_which_byte_never_its_text(repo: Repo) -> None:
+    _tester()
+    (repo.path / "character.md").write_bytes(CANARY.encode() + b"\xff")
+    code, out, err = cli("config", "set", "actors.tester.character=@character.md")
+    assert code == 1
+    assert f"character.md isn't UTF-8 text (at byte {len(CANARY) + 1})" in err
+    assert CANARY not in out + err
 
 
 def test_an_assignment_without_a_value_is_refused_saying_how_to_write_one(repo: Repo) -> None:
