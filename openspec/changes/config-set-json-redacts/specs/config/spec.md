@@ -37,6 +37,15 @@ config doesn't define, or an `expect` path no effect covers.
 - **THEN** it is refused with `config.path-malformed`, and neither the standard error nor the client message holds
   the canary
 
+#### Scenario: A key inside a JSON group
+- **WHEN** a person runs `troupe config set --json 'runtimes.box={"https://user:<canary>@example.com": 1}'`
+- **THEN** it is refused with `config.invalid`, naming `runtimes.box` and the fields a runtime defines, and neither
+  the standard error nor the client message holds the canary
+
+#### Scenario: A key typed as a path is still named
+- **WHEN** a person sets `actors.tester.runnr`
+- **THEN** it is refused, naming `actors.tester.runnr` and saying there's no such field
+
 #### Scenario: A name is still named
 - **WHEN** a person sets `actors.tester.runtime=nowhere` and config defines no runtime `nowhere`
 - **THEN** it is refused, naming `nowhere` and the command that defines it

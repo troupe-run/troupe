@@ -72,11 +72,27 @@ class Problem:
     count as changes to what broke it."""
 
 
-def problems(config: Mapping[str, Any], touched: Collection[str] = ()) -> list[Problem]:
+Typed = Collection[tuple[str, ...]] | None
+"""The paths a person typed in the change being checked, or None when nothing was typed (a merge, a
+perform). A key under one of them that isn't on any of them came from inside a value: it's part of
+the value, so a rule that refuses it never repeats it (spec: config, "A refused config value is
+repeated nowhere"; config-set-json-redacts design D7)."""
+
+
+def _in_value(path: tuple[str, ...], typed: Typed) -> bool:
+    """Whether the last key of ``path`` came from inside a value rather than a typed path."""
+    if typed is None:
+        return False
+    return not any(tuple(each[: len(path)]) == path for each in typed)
+
+
+def problems(
+    config: Mapping[str, Any], touched: Collection[str] = (), typed: Typed = None
+) -> list[Problem]:
     """Every way ``config`` breaks a rule, in path order. ``touched`` names the actors the change
     being checked sets or unsets anything under: one of them on a runner that isn't installed is
     refused with runner.not-installed, and any other has its options left unchecked (spec: config;
-    runner-extras design D7)."""
+    runner-extras design D7). ``typed`` are the paths the change's person typed (see ``Typed``)."""
     found: list[Problem] = []
     for key, node in sorted(config.items()):
         if key not in KINDS:
@@ -91,12 +107,12 @@ def problems(config: Mapping[str, Any], touched: Collection[str] = ()) -> list[P
             found.append(Problem((key,), f"it must be a group of {key}, not a value", "Unset it."))
         elif key == RUNTIMES:
             for name, runtime in sorted(node.items()):
-                found += runtime_problems(name, runtime)
+                found += runtime_problems(name, runtime, typed)
     actors = config.get(ACTORS)
     if isinstance(actors, Mapping):
         known = runtime_shapes(config)
         for name, actor in sorted(actors.items()):
-            found += actor_problems(name, actor, known, touched=name in touched)
+            found += actor_problems(name, actor, known, touched=name in touched, typed=typed)
     return sorted(found, key=lambda problem: problem.path)
 
 
@@ -121,9 +137,26 @@ def runtime_shapes(config: Mapping[str, Any]) -> dict[str, "runtimes.Resolved | 
     return shapes
 
 
-def runtime_problems(name: str, runtime: object) -> list[Problem]:
+def _bad_name(kind: str, base: tuple[str, ...]) -> Problem:
+    """A name from inside a value that isn't one: named by the group it's in, never itself."""
+    return Problem(
+        base[:1],
+        f"it holds {_article_for(kind)} {kind} whose name isn't one: lowercase letters, digits and "
+        "-, starting with a letter, at most 64",
+        f"Set {shown(base[:1])} with names that fit; troupe config get {shown(base[:1])} shows "
+        "what it holds.",
+    )
+
+
+def _article_for(word: str) -> str:
+    return "an" if word[:1] in "aeiou" else "a"
+
+
+def runtime_problems(name: str, runtime: object, typed: Typed = None) -> list[Problem]:
     """Every way the runtime ``name`` breaks a rule (spec: runtimes)."""
     base = (RUNTIMES, name)
+    if not ACTOR_NAME.match(name) and _in_value(base, typed):
+        return [_bad_name("runtime", base)]
     if not ACTOR_NAME.match(name):
         return [
             Problem(
@@ -142,7 +175,9 @@ def runtime_problems(name: str, runtime: object) -> list[Problem]:
                 Problem((*base, key), f"{key} is written by troupe, never set", "Unset it.")
             )
     fields = {k: v for k, v in runtime.items() if k not in WRITTEN_BY_TROUPE}
-    found += _schema_problems(base, fields, schemas.validator(RUNTIME_SCHEMA), against="runtime")
+    found += _schema_problems(
+        base, fields, schemas.validator(RUNTIME_SCHEMA), against="runtime", typed=typed
+    )
     if name not in defaults.RUNTIMES and "endpoint" not in runtime:
         found.append(
             Problem(
@@ -156,7 +191,12 @@ def runtime_problems(name: str, runtime: object) -> list[Problem]:
 
 
 def actor_problems(
-    name: str, actor: object, shapes: Shapes | None = None, *, touched: bool = True
+    name: str,
+    actor: object,
+    shapes: Shapes | None = None,
+    *,
+    touched: bool = True,
+    typed: Typed = None,
 ) -> list[Problem]:
     """Every way the actor ``name`` breaks a rule. ``shapes`` are the runtimes it can name, as
     ``runtime_shapes`` gives them: troupe's built-in ones when it's None. On a runner troupe knows
@@ -165,6 +205,8 @@ def actor_problems(
     otherwise they're left for when it's next changed or performed where its runner is installed
     (runner-extras D7). Its runtime's fit is checked either way: it needs only the runner table."""
     base = (ACTORS, name)
+    if not ACTOR_NAME.match(name) and _in_value(base, typed):
+        return [_bad_name("actor", base)]
     if not ACTOR_NAME.match(name):
         return [
             Problem(
@@ -187,7 +229,7 @@ def actor_problems(
     if character is not None and not isinstance(character, str):
         found.append(Problem((*base, CHARACTER), "the character is text", "Set it to text."))
     fields = {k: v for k, v in actor.items() if k not in (CHARACTER, "options", *WRITTEN_BY_TROUPE)}
-    schema_problems = _schema_problems(base, fields, schemas.validator(ACTOR_SCHEMA))
+    schema_problems = _schema_problems(base, fields, schemas.validator(ACTOR_SCHEMA), typed=typed)
     found += schema_problems
     if not schema_problems:
         found += _expect_problems(base, actor)
@@ -213,7 +255,12 @@ def actor_problems(
         found += [
             problem
             for problem in _schema_problems(
-                (*base, "options"), options, interim.options_validator(runner), runner=runner
+                (*base, "options"),
+                options,
+                interim.options_validator(runner),
+                runner=runner,
+                typed=typed,
+                known=interim.MOVED_OPTIONS,
             )
             if problem.path not in moved_paths
         ]
@@ -395,6 +442,8 @@ def _schema_problems(
     *,
     runner: str | None = None,
     against: str = "actor",
+    typed: Typed = None,
+    known: Collection[str] = (),
 ) -> list[Problem]:
     against = f"the {runner} runner's options schema" if runner else f"the {against} schema"
     found: list[Problem] = []
@@ -402,7 +451,23 @@ def _schema_problems(
         path = (*base, *(str(part) for part in error.absolute_path))
         if error.validator == "additionalProperties" and isinstance(error.instance, Mapping):
             allowed = set(error.schema.get("properties", {}))
-            for extra in sorted(set(error.instance) - allowed):
+            extras = sorted(set(error.instance) - allowed)
+            # A key troupe itself names (an option a runner moved) is its words, not the person's.
+            hidden = [
+                extra for extra in extras if extra not in known and _in_value((*path, extra), typed)
+            ]
+            if hidden:
+                # Keys from inside the value: named by where the value was set, never themselves.
+                fields = ", ".join(sorted(allowed)) or "none"
+                found.append(
+                    Problem(
+                        path,
+                        f"it holds {len(hidden)} field{'' if len(hidden) == 1 else 's'} {against} "
+                        f"doesn't define (it defines: {fields})",
+                        f"Set {shown(path)} with only the fields {against} defines.",
+                    )
+                )
+            for extra in (extra for extra in extras if extra not in hidden):
                 found.append(
                     Problem(
                         (*path, extra),
@@ -595,10 +660,11 @@ def _article(json_type: str) -> str:
     )
 
 
-def check(config: Mapping[str, Any], touched: Collection[str] = ()) -> None:
+def check(config: Mapping[str, Any], touched: Collection[str] = (), typed: Typed = None) -> None:
     """Refuse ``config`` with ``config.invalid`` when it breaks any rule, naming the first, and with
-    runner.not-installed when a ``touched`` actor's runner isn't installed (see ``problems``)."""
-    _refuse(problems(config, touched))
+    runner.not-installed when a ``touched`` actor's runner isn't installed (see ``problems``).
+    ``typed`` are the paths the change's person typed: a key from inside a value isn't repeated."""
+    _refuse(problems(config, touched, typed))
 
 
 def check_actor(name: str, config: Mapping[str, Any]) -> None:

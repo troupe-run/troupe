@@ -541,15 +541,27 @@ def test_one_rate_of_a_models_price(repo: Repo) -> None:
     assert _get("runtimes.openai.prices.gpt-test") == {"input": 2, "output": 8, "cacheRead": 0.5}
 
 
-def test_a_price_with_an_unknown_field_is_refused_naming_the_path(repo: Repo) -> None:
+def test_a_price_with_an_unknown_field_is_refused_naming_the_path_and_the_fields_it_takes(
+    repo: Repo,
+) -> None:
+    # The unknown key is inside the value, so it's part of the value and isn't repeated (design D7).
     code, _, err = cli(
         "config",
         "set",
         'runtimes.openai.prices.gpt-test={"input": 2, "output": 8, "currency": "EUR"}',
     )
     assert code == 1
-    assert "runtimes.openai.prices.gpt-test" in err
-    assert "currency" in err
+    assert (
+        "runtimes.openai.prices.gpt-test: it holds 1 field the runtime schema doesn't define "
+        "(it defines: cacheRead, cacheWrite, input, output)"
+    ) in err
+    assert "currency" not in err
+
+
+def test_an_unknown_field_typed_as_a_path_is_named(repo: Repo) -> None:
+    code, _, err = cli("config", "set", "--json", 'runtimes.openai.prices.gpt-test.currency="EUR"')
+    assert code == 1
+    assert "runtimes.openai.prices.gpt-test.currency: there's no such field" in err
 
 
 def test_a_price_without_an_output_rate_is_refused_naming_the_path(repo: Repo) -> None:

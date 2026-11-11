@@ -73,6 +73,16 @@
   issue's own output. Both go in the PR body.)
 - [ ] 6.4 Open a draft PR that closes #374, and see CI pass on Linux, macOS and Windows once it's marked ready.
 
+## 7. A key from inside a value (design D7, review of #384)
+
+- [x] 7.1 Pass config-set's operation paths to core's check, and never name a key no operation path reaches: an
+  unknown field is refused at the value's path listing the fields the schema defines; a runtime or actor name that
+  isn't one at `runtimes` or `actors`. Keep moved options' refusal, and naming for merges and perform. Verify with
+  `test_config_kinds.py` (typed, value, nothing typed, names) and `test_config_value_echo.py` (a runtime's field, an
+  option, a runtime's name, an actor's name, a typed misspelt field), each with a canary; update
+  `test_cli_config.py`'s unknown price field test. (All pass; the price test now checks `currency` isn't named, and
+  a new test names a field typed as a path.)
+
 ## Workflow follow-up
 
 - Act on Claude's review of the last push, archive the change on the branch, and ask the owner to merge.
