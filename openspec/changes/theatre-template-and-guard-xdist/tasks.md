@@ -16,22 +16,22 @@
 
 ## 2. Theatre templates (#362)
 
-- [ ] 2.1 In `gitrepo.py`, add the per-process template (D1, D2): a session-scoped autouse fixture that sets the
+- [x] 2.1 In `gitrepo.py`, add the per-process template (D1, D2): a session-scoped autouse fixture that sets the
   template directory under `tmp_path_factory.getbasetemp()`, `make_repo` copying a template keyed by `(branch, refs)`
   with `shutil.copy` file times (D3), and building from scratch when no template directory is set. Load it with
   `-p gitrepo` in `pyproject.toml`'s `addopts`. Verify the 1.3 tests still pass, plus a test that a child process
   importing `gitrepo` without pytest builds from scratch
-- [ ] 2.2 Add `make_repo(..., fresh=True)` (D4), and pass it from `test_git_state_cache.py`'s `make_layout_repo` with a
+- [x] 2.2 Add `make_repo(..., fresh=True)` (D4), and pass it from `test_git_state_cache.py`'s `make_layout_repo` with a
   comment naming what it depends on. Verify with a test that `fresh=True` builds rather than copies (the build/copy
   counter from 2.5), and that `test_git_state_cache.py` passes in full
-- [ ] 2.3 Give `committed()` its own template, copied and then `git update-index -q --refresh`ed (D3). Verify the 1.3
+- [x] 2.3 Give `committed()` its own template, copied and then `git update-index -q --refresh`ed (D3). Verify the 1.3
   `diff-files` test and all of `test_run_workspaces.py` pass
-- [ ] 2.4 Give `scripts/tests/conftest.py`'s `make_repo` a per-session template through `tmp_path_factory`, refreshed
+- [x] 2.4 Give `scripts/tests/conftest.py`'s `make_repo` a per-session template through `tmp_path_factory`, refreshed
   the same way. Verify the 1.3 scripts test and the scripts suite pass (`uv run scripts/check.py --scope scripts`)
-- [ ] 2.5 Add the build/copy counter (D5): printed at session end only when its environment variable is set, and a
+- [x] 2.5 Add the build/copy counter (D5): printed at session end only when its environment variable is set, and a
   value other than the one documented is refused with an error naming the variable and the valid value. Verify with a
   pytester test of each: unset (no output), set (counts printed), malformed (the error)
-- [ ] 2.6 Run the D4 audit over every caller of the four helpers, against the written list (racy window on the real
+- [x] 2.6 Run the D4 audit over every caller of the four helpers, against the written list (racy window on the real
   clock, `st_mtime`/`st_ctime`/`.git` stats, commit and reflog times, SHAs compared across theatres), starting with
   `test_store_git.py`, `test_event_service.py`, `record_child.py`, `test_git_worktrees.py` and `test_config_files.py`.
   Each finding gets `fresh=True` and a comment naming its dependency; record the checked-and-not-dependent ones in a
@@ -43,7 +43,7 @@
 
 ## 3. Guard collection reads (#365, via troupe-run/infrastructure)
 
-- [ ] 3.1 Open an infrastructure issue on the troupe roadmap board (`--project "troupe roadmap"`) describing D6 and
+- [x] 3.1 Open an infrastructure issue on the troupe roadmap board (`--project "troupe roadmap"`) describing D6 and
   the reproduction, citing troupe#365 without a closing keyword. Verify it's on the board with `projectItems`
 - [ ] 3.2 Make the change in troupe-run/infrastructure through its own workflow (its own branch, change and pull
   request), with its tests showing a selection by node id across two scopes passes, and a real untagged read in it

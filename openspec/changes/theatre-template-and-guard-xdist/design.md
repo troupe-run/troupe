@@ -125,8 +125,10 @@ Baseline is the merge base with `main`, checked out as a detached worktree in th
 removed by this session. Variant is this branch. Each run is
 `uv run pytest -n 3 -q --basetemp=<new empty dir> --durations=0`, and the pairs alternate (baseline, variant,
 baseline, …), three pairs, because other sessions' load moves a single run's time by 20% or more. Each run records:
-wall time, total setup time from `--durations=0`, and the count of fresh builds and copies (a counter `gitrepo` prints
-at session end, only when asked for by an environment variable, so a normal run's output doesn't change). Runs start
+wall time, total setup time from `--durations=0`, and the count of templates built, copies and fresh builds. `gitrepo`
+writes those per process, as `theatres-<pid>.json`, into the directory `TROUPE_TEST_THEATRE_COUNTS` names, and only
+when it's set. A file rather than output, because xdist doesn't show a worker's output; a value that isn't an
+existing directory is refused, so a typo can't quietly measure nothing. Runs start
 only when the load average is below 20, and the owner is told before the loop starts.
 
 The numbers go into this design's "Measured" section and the pull request. If a shape's copy is not faster than its
