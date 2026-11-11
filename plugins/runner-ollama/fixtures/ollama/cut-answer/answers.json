@@ -1,0 +1,33 @@
+[
+  {
+    "status": 200,
+    "lines": [
+      "{\"model\":\"qwen3:0.6b\",\"created_at\":\"2026-11-11T12:51:50.677594Z\",\"message\":{\"role\":\"assistant\",\"content\":\"In\"},\"done\":false}",
+      "{\"model\":\"qwen3:0.6b\",\"created_at\":\"2026-11-11T12:51:50.685554Z\",\"message\":{\"role\":\"assistant\",\"content\":\" the\"},\"done\":false}",
+      "{\"model\":\"qwen3:0.6b\",\"created_at\":\"2026-11-11T12:51:50.69179Z\",\"message\":{\"role\":\"assistant\",\"content\":\" heart\"},\"done\":false}",
+      "{\"model\":\"qwen3:0.6b\",\"created_at\":\"2026-11-11T12:51:50.69756Z\",\"message\":{\"role\":\"assistant\",\"content\":\" of\"},\"done\":false}",
+      "{\"model\":\"qwen3:0.6b\",\"created_at\":\"2026-11-11T12:51:50.703338Z\",\"message\":{\"role\":\"assistant\",\"content\":\" the\"},\"done\":false}",
+      "{\"model\":\"qwen3:0.6b\",\"created_at\":\"2026-11-11T12:51:50.709094Z\",\"message\":{\"role\":\"assistant\",\"content\":\" coastal\"},\"done\":false}",
+      "{\"model\":\"qwen3:0.6b\",\"created_at\":\"2026-11-11T12:51:50.715817Z\",\"message\":{\"role\":\"assistant\",\"content\":\" town\"},\"done\":false}",
+      "{\"model\":\"qwen3:0.6b\",\"created_at\":\"2026-11-11T12:51:50.72142Z\",\"message\":{\"role\":\"assistant\",\"content\":\",\"},\"done\":false}",
+      "{\"model\":\"qwen3:0.6b\",\"created_at\":\"2026-11-11T12:51:50.72896Z\",\"message\":{\"role\":\"assistant\",\"content\":\" nestled\"},\"done\":false}",
+      "{\"model\":\"qwen3:0.6b\",\"created_at\":\"2026-11-11T12:51:50.734727Z\",\"message\":{\"role\":\"assistant\",\"content\":\" between\"},\"done\":false}",
+      "{\"model\":\"qwen3:0.6b\",\"created_at\":\"2026-11-11T12:51:50.740791Z\",\"message\":{\"role\":\"assistant\",\"content\":\" the\"},\"done\":false}",
+      "{\"model\":\"qwen3:0.6b\",\"created_at\":\"2026-11-11T12:51:50.746515Z\",\"message\":{\"role\":\"assistant\",\"content\":\" crashing\"},\"done\":false}",
+      "{\"model\":\"qwen3:0.6b\",\"created_at\":\"2026-11-11T12:51:50.753045Z\",\"message\":{\"role\":\"assistant\",\"content\":\" waves\"},\"done\":false}",
+      "{\"model\":\"qwen3:0.6b\",\"created_at\":\"2026-11-11T12:51:50.758781Z\",\"message\":{\"role\":\"assistant\",\"content\":\" and\"},\"done\":false}",
+      "{\"model\":\"qwen3:0.6b\",\"created_at\":\"2026-11-11T12:51:50.765688Z\",\"message\":{\"role\":\"assistant\",\"content\":\" the\"},\"done\":false}",
+      "{\"model\":\"qwen3:0.6b\",\"created_at\":\"2026-11-11T12:51:50.771179Z\",\"message\":{\"role\":\"assistant\",\"content\":\" golden\"},\"done\":false}",
+      "{\"model\":\"qwen3:0.6b\",\"created_at\":\"2026-11-11T12:51:50.777773Z\",\"message\":{\"role\":\"assistant\",\"content\":\" sun\"},\"done\":false}",
+      "{\"model\":\"qwen3:0.6b\",\"created_at\":\"2026-11-11T12:51:50.783888Z\",\"message\":{\"role\":\"assistant\",\"content\":\",\"},\"done\":false}",
+      "{\"model\":\"qwen3:0.6b\",\"created_at\":\"2026-11-11T12:51:50.791312Z\",\"message\":{\"role\":\"assistant\",\"content\":\" there\"},\"done\":false}",
+      "{\"model\":\"qwen3:0.6b\",\"created_at\":\"2026-11-11T12:51:50.797335Z\",\"message\":{\"role\":\"assistant\",\"content\":\" lived\"},\"done\":false}",
+      "{\"model\":\"qwen3:0.6b\",\"created_at\":\"2026-11-11T12:51:50.804421Z\",\"message\":{\"role\":\"assistant\",\"content\":\" a\"},\"done\":false}",
+      "{\"model\":\"qwen3:0.6b\",\"created_at\":\"2026-11-11T12:51:50.810815Z\",\"message\":{\"role\":\"assistant\",\"content\":\" l\"},\"done\":false}",
+      "{\"model\":\"qwen3:0.6b\",\"created_at\":\"2026-11-11T12:51:50.81815Z\",\"message\":{\"role\":\"assistant\",\"content\":\"ighthouse\"},\"done\":false}",
+      "{\"model\":\"qwen3:0.6b\",\"created_at\":\"2026-11-11T12:51:50.825378Z\",\"message\":{\"role\":\"assistant\",\"content\":\" keeper\"},\"done\":false}",
+      "{\"model\":\"qwen3:0.6b\",\"created_at\":\"2026-11-11T12:51:50.834023Z\",\"message\":{\"role\":\"assistant\",\"content\":\" named\"},\"done\":false}",
+      "{\"model\":\"qwen3:0.6b\",\"created_at\":\"2026-11-11T12:51:50.834558Z\",\"message\":{\"role\":\"assistant\",\"content\":\"\"},\"done\":true,\"done_reason\":\"length\",\"total_duration\":1054406333,\"load_duration\":560332791,\"prompt_eval_count\":1255,\"prompt_eval_cached_count\":0,\"prompt_eval_duration\":327592000,\"eval_count\":25,\"eval_duration\":156079000}"
+    ]
+  }
+]

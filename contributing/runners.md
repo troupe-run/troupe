@@ -449,9 +449,9 @@ each.
 | an answer's `thinking` | none; the transcript keeps it |
 | each `tool_calls` entry | `tool_call` and `tool_result`, from the SDK. A call with no id gets `call-<request>-<position>` |
 | a request made again: a connection that failed, dropped or went silent, or status 500, 502, 503 or 504 | `retry`: `network` for the connection, `server` for the status |
-| `done_reason` `length` | `log` warning |
+| `done_reason` `length` | `result` `error`, reason `output-limit`, naming the window; none of that answer's calls run, and it isn't retried |
 | an answer with no tool call | `result` `ok`, with its text |
-| any other status, an `error` line, `maxTurns` reached, or retries spent | `result` `error`, with Ollama's message. Its `reason`: a 400 saying the request exceeds the context size → `context-length`, 401 or 403 → `authentication`, 404 → `configuration`, an `error` line → `engine`, `maxTurns` → `turn-limit`, retries spent → the last retry's reason, any other status → `other` |
+| any other status, an `error` line, `maxTurns` reached, or retries spent | `result` `error`, with Ollama's message. Its `reason`: a 400 saying the request exceeds the context size → `context-length`, 401 or 403 → `authentication`, 404 → `configuration`, an `error` line → `engine`, `done_reason` `length` → `output-limit`, `maxTurns` → `turn-limit`, retries spent → the last retry's reason, any other status → `other` |
 | each answer's `prompt_eval_count`, `prompt_eval_cached_count` and `eval_count` | summed into `result.usage`. `prompt_eval_count` includes the prompt tokens Ollama took from its cache, which it reports as `prompt_eval_cached_count`: that is `cacheReadTokens`, `prompt_eval_count` less it is `inputTokens`, and `eval_count` is `outputTokens`. If any answer leaves out its cached count, nothing is subtracted and `cacheReadTokens` is left out (see [What usage counts](#what-usage-counts)) |
 
 Its transcript is the first request's body, then before each later request the messages the runner added (the

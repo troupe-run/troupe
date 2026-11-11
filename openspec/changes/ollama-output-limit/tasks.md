@@ -28,23 +28,23 @@
 
 ## 3. Fixtures (design D4)
 
-- [ ] 3.1 Add the `cut-answer` and `cut-tool-call` scenarios to `tools/capture_ollama.py`, and capture both from the
+- [x] 3.1 Add the `cut-answer` and `cut-tool-call` scenarios to `tools/capture_ollama.py`, and capture both from the
   local Ollama (0.40.14, `qwen3:0.6b`), setting `contextLength` from the first request's prompt so the answer fills
   the window. Verify: each fixture's `answers.json` has a last line with `done_reason` `length`; its `events.json`,
   reviewed by hand, ends with an `error` `result` with `output-limit` and holds no `tool_call` from the cut answer;
   `provenance.json` records the version, model, date, window and direction used.
-- [ ] 3.2 Add both to the fixture tests (`test_there_are_fixtures_for_each_shape` if it lists shapes, the replay, and a
+- [x] 3.2 Add both to the fixture tests (`test_there_are_fixtures_for_each_shape` if it lists shapes, the replay, and a
   test that `cut-tool-call`'s recorded answer is what D4 says it is: a partial call, raw text, or nothing). Verify:
   `uv run pytest plugins/runner-ollama/tests/test_ollama_fixtures.py` passes, and the replay fails with 2.2 reverted.
 
 ## 4. Docs
 
-- [ ] 4.1 `plugins/runner-ollama/README.md`: the window section (a cut answer ends the run, and what Ollama sends for
+- [x] 4.1 `plugins/runner-ollama/README.md`: the window section (a cut answer ends the run, and what Ollama sends for
   a cut tool call, from 3.1), the run-event table's `done_reason` `length` row (`result` `error`, `output-limit`), the
   reasons paragraph, how a run ends, and the line that says what to do instead is Decision #279 (now decided, with
   #307 and #310 for what follows). Verify: `test_ollama_readme.py` passes, and `grep -n "log. warning" README.md`
   finds no cut-answer row.
-- [ ] 4.2 `contributing/runners.md`: the Ollama mapping's `done_reason` `length` row. Verify: `uv run scripts/check.py`
+- [x] 4.2 `contributing/runners.md`: the Ollama mapping's `done_reason` `length` row. Verify: `uv run scripts/check.py`
   passes, including its docs checks.
 
 ## 5. Land it
