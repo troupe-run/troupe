@@ -36,13 +36,14 @@ def fake() -> ModuleType:
 
 
 @contextmanager
-def serving(runs: int, text: str = "Done.", pause: float = 0.0) -> Iterator[Any]:
-    """A stand-in LM Studio that serves ``runs`` runs in turn, each one round that says ``text``
-    (a word every ``pause`` seconds) and asks for no tool; its ``endpoint`` is a runtime's."""
+def serving(text: str = "Done.", pause: float = 0.0) -> Iterator[Any]:
+    """A stand-in LM Studio that serves any number of runs, each one round that says ``text`` (a
+    word every ``pause`` seconds) and asks for no tool, however each run ends: every request is
+    answered by its kind, not from a queue a cancelled run could leave out of step. Its
+    ``endpoint`` is a runtime's."""
     module = fake()
-    script = module.Script()
-    for _ in range(runs):
-        script.add("/system", [module.models_step()])
-        script.add("/llm", [*module.load_steps(), module.predict_step(text, pause=pause)])
+    script = module.Script(repeat=True)
+    script.add("/system", [module.models_step()])
+    script.add("/llm", [*module.load_steps(), module.predict_step(text, pause=pause)])
     with module.FakeLMStudio(script) as stand_in:
         yield stand_in

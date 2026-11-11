@@ -62,6 +62,10 @@ class Script:
     steps: dict[str, deque[Step]] = field(default_factory=dict)
     greeting: str = "ok"
     """ok, redirect, not-lm-studio, or silent."""
+    repeat: bool = False
+    """Answer each request from the first step of its path with the same type and endpoint, and
+    keep the step: for a stand-in that serves any number of runs, however each one ends (the
+    conformance suite cancels some part-way), rather than a queue one run can leave out of step."""
 
     def add(self, path: str, steps: Iterable[Step]) -> "Script":
         self.steps.setdefault(path, deque()).extend(steps)
@@ -320,7 +324,11 @@ class FakeLMStudio:
                 continue
             with self._lock:
                 queue = self.script.steps.get(path, deque())
-                step = queue.popleft() if queue else None
+                if self.script.repeat:
+                    kind = (message["type"], message.get("endpoint"))
+                    step = next((s for s in queue if (s.type, s.endpoint) == kind), None)
+                else:
+                    step = queue.popleft() if queue else None
             if step is None or (step.type, step.endpoint) != (
                 message["type"],
                 message.get("endpoint"),

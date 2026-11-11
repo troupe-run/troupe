@@ -209,11 +209,11 @@ def test_the_lm_studio_runner_passes_every_check_given_a_runtime_naming_a_stand_
     tmp_path: Path,
 ) -> None:
     # Spec: lm-studio-runner, "The runner conforms to the contract" (lmstudio-runner task 10.2).
-    # Each check starts its own run, so the stand-in serves more runs than the suite starts, each
-    # slow enough for the checks that cancel one mid-run.
+    # Each check starts its own run, and some cancel theirs part-way, so the stand-in answers every
+    # request by its kind; each run is slow enough for the checks that cancel one mid-run.
     workspace = tmp_path / "workspace"
     workspace.mkdir()
-    with lm_studio_stand_in.serving(runs=20, text=" ".join(["word"] * 40), pause=0.05) as fake:
+    with lm_studio_stand_in.serving(text=" ".join(["word"] * 40), pause=0.05) as fake:
         results = _check(
             [sys.executable, "-m", "troupe_runner_lm_studio"],
             dict(lm_studio_stand_in.TEST_LIMITS),
