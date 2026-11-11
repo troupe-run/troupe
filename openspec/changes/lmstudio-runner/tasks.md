@@ -177,7 +177,7 @@ has merged.
 
 ## 12. File the gaps (design D13)
 
-- [ ] 12.1 For each D13 candidate that building confirmed, check #56's, #162's, #292–#296's and #319's issues, and file
+- [x] 12.1 For each D13 candidate that building confirmed, check #56's, #162's, #292–#296's and #319's issues, and file
   it: troupe issues on the troupe roadmap board, citing this change, and library requests on lmstudio-python, linked
   from a troupe issue. Verify: each troupe issue shows the board in `gh issue view <n> --json projectItems`, and D13
   lists its number, or says why a candidate wasn't filed.
