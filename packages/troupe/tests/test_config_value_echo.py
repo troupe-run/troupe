@@ -278,3 +278,18 @@ def test_a_price_under_a_model_name_holding_a_password_is_never_repeated(
     )
     assert "runtimes.box.prices: input in one of its entries: it must be a number" in err
     assert message["details"]["path"] == ["runtimes", "box", "prices"]
+
+
+def test_a_null_under_a_key_holding_a_password_is_never_repeated(
+    repo: Repo, errors: list[TroupeError]
+) -> None:
+    # The request layer refuses it first, before core reads the value.
+    err, _ = _refused(
+        errors,
+        "client.invalid-request",
+        "config",
+        "set",
+        "--json",
+        f'runtimes.box={{"{WITH_PASSWORD}": null}}',
+    )
+    assert "operations[0].value: holds a null under one of its keys" in err

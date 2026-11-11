@@ -167,6 +167,11 @@ from inside a value (an `additionalProperties` or `patternProperties` level of t
 refused at the map's path, as "input in one of its entries: …", the key never shown, and a deeper such key shown as
 `<key>` (review of #384, after archive).
 
+A null inside a value is refused by name too, twice: the request decoder (the SDK's `_no_null`) named it by the keys
+leading to it, and so did core's `_refuse_null`. The decoder now stops at an object, saying it "holds a null under
+one of its keys", and keeps list positions, which are only numbers; core names the operation's typed path. Found by
+the sweep after the map-key review finding.
+
 *Alternative:* always name the parent path. Rejected: a misspelt field typed as a path (`actors.tester.runnr`)
 would lose the name the person typed, which the config spec's "A misspelt field" scenario requires.
 

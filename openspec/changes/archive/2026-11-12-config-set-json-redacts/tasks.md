@@ -101,6 +101,9 @@
   never naming the key (design D7, review of #384, after archive). Verify with canary tests in `test_config_kinds.py`
   (a type, a missing and an extra field) and `test_config_value_echo.py`, which fail on `292bc734`, and a scenario in
   the config spec. (All pass; a map key typed as a path is still named.)
+- [x] 7.6 Name a null inside a value by the value's place, never the keys leading to it, in the request decoder and in
+  core (design D7). Verify with canary tests in `test_client_messages.py`, `test_config_changes.py` and
+  `test_config_value_echo.py`, which fail on `292bc734`. (All pass; a list position is still named.)
 
 ## Workflow follow-up
 

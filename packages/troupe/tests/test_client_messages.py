@@ -844,3 +844,33 @@ def test_a_credential_name_or_the_variable_that_named_it_round_trips(
     data = {**RESOLVED_OPENAI, "credential": {"env": env, "set": True}}
     check(_get_result(data), "config-get-result.schema.json")
     assert m.ResolvedRuntime.from_data(data).to_data() == data
+
+
+# A null in a free-form value is named by the value's place, never by the keys leading to it: they
+# are the sender's data (config-set-json-redacts design D7; review of #384).
+
+CANARY = "q7ZxW9pL4vR2canary"
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        {f"https://user:{CANARY}@example.com": None},
+        {f"https://user:{CANARY}@example.com": [None]},
+        [{f"{CANARY}": {"deeper": None}}],
+    ],
+)
+def test_a_null_inside_a_config_value_never_names_the_keys_leading_to_it(value: object) -> None:
+    data = {"operations": [{"path": ["runtimes", "box"], "value": value}]}
+    with pytest.raises(ProtocolError) as caught:
+        m.ConfigSetRequest.from_data(data)
+    message = str(caught.value)
+    assert "operations[0].value" in message
+    assert "holds a null under one of its keys" in message
+    assert CANARY not in message
+
+
+def test_a_null_in_a_list_inside_a_config_value_is_named_by_position() -> None:
+    data = {"operations": [{"path": ["actors", "a", "expect"], "value": ["x", None]}]}
+    with pytest.raises(ProtocolError, match=r"operations\[0\]\.value\[1\]: must not be null"):
+        m.ConfigSetRequest.from_data(data)

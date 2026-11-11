@@ -152,16 +152,24 @@ def _sorted(entries: Sequence[Entry | None]) -> list[Entry]:
 
 
 def _refuse_null(path: Path, value: object) -> None:
-    for leaf, node in (
-        {path: value} if not isinstance(value, Mapping) else leaves(value, path)
-    ).items():
-        if node is None or _holds_null(node):
-            raise TroupeError(
-                "config.invalid",
-                problem=f"{shown(leaf)} is null: config has no null values.",
-                fix=f"To remove {shown(leaf)}, unset it (troupe config unset {shown(leaf)}).",
-                details={"path": list(leaf), "rule": "config has no null values"},
-            )
+    """Refuse a null at ``path`` or anywhere inside its value. One inside a group is named by
+    ``path``, the path the person typed, never by the keys inside the value that lead to it: they're
+    part of the value, which may hold a password (spec: config, "A refused config value is repeated
+    nowhere"; config-set-json-redacts design D7, review of #384)."""
+    if value is None or (not isinstance(value, Mapping) and _holds_null(value)):
+        raise TroupeError(
+            "config.invalid",
+            problem=f"{shown(path)} is null: config has no null values.",
+            fix=f"To remove {shown(path)}, unset it (troupe config unset {shown(path)}).",
+            details={"path": list(path), "rule": "config has no null values"},
+        )
+    if isinstance(value, Mapping) and _holds_null(value):
+        raise TroupeError(
+            "config.invalid",
+            problem=f"{shown(path)}: a value inside it is null, and config has no null values.",
+            fix=f"Leave that field out of the value for {shown(path)}, or unset the field.",
+            details={"path": list(path), "rule": "config has no null values"},
+        )
 
 
 def _holds_null(value: object) -> bool:
