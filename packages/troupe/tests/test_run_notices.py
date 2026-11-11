@@ -435,10 +435,11 @@ def interrupted_with_a_notice(harness: Harness) -> str:
         effect_check={"kind": "none"},
         direction="sha256:" + "a" * 64,
         config=["sha256:" + "b" * 64],
+        workspace={"kind": "theatre"},
     )
     person = store.command(via="cli")
     person.record(run.collect_events())
-    run.report(0, {**INIT["event"], "runId": run_id, "seq": 0})
+    run.report(0, {**INIT["event"], "effects": "checked", "runId": run_id, "seq": 0})
     store.command(via="runner").record(run.collect_events())
     run.notice(SILENT)
     person.record(run.collect_events())

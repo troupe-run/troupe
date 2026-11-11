@@ -563,7 +563,7 @@ def test_an_ends_recording_validates_exactly_when_it_names_an_event_or_a_notice(
     recording: dict[str, Any], valid: bool
 ) -> None:
     ended = load(SCHEMAS / "events" / "run-ended.schema.json")
-    state = {**_ended({}), "recording": recording}
+    state = {**_ended({"audit": {"outside": []}}), "recording": recording}
     assert validator_for(ended["$id"], SCRIPTED).is_valid(state) is valid
 
 

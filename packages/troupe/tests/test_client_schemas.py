@@ -217,6 +217,10 @@ ACCEPTED = [
                     drop_outcome=None,
                     drop_error=None,
                     drop_endedAt=None,
+                    drop_transcript=None,
+                    drop_transcriptFormat=None,
+                    drop_stderr=None,
+                    drop_audit=None,
                     notices=[RUN_NOTICE],
                 )
             ],
