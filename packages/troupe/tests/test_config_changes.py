@@ -137,10 +137,21 @@ def test_a_before_is_the_hash_of_the_earlier_after_for_every_kind_of_value(
 
 def test_a_null_value_is_refused_naming_the_path_and_the_fix() -> None:
     with pytest.raises(TroupeError) as caught:
-        set_value(CONFIG, ["actors", "tester", "options", "script"], {"steps": [None]})
+        set_value(CONFIG, ["actors", "tester", "options", "script", "steps"], [None])
     assert caught.value.code == "config.invalid"
     assert caught.value.details["path"] == ["actors", "tester", "options", "script", "steps"]
     assert "troupe config unset" in caught.value.fix
+
+
+def test_a_null_inside_a_group_is_refused_naming_the_typed_path_not_the_keys_inside() -> None:
+    # The keys inside the value are part of it (design D7; review of #384).
+    canary = "q7ZxW9pL4vR2canary"
+    with pytest.raises(TroupeError) as caught:
+        set_value(CONFIG, ["runtimes", "box"], {f"https://user:{canary}@example.com": None})
+    error = caught.value
+    assert error.details["path"] == ["runtimes", "box"]
+    assert "a value inside it is null" in error.problem
+    assert canary not in json.dumps([error.problem, error.fix, error.details])
 
 
 # Requirement: Objects are groups, and every other value is whole

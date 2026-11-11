@@ -52,6 +52,11 @@ runtime config doesn't define.
 - **THEN** it is refused with `config.invalid`, naming `runtimes.box.prices` and the rule broken in one of its
   entries, and neither the standard error nor the client message holds the canary
 
+#### Scenario: A null under a key inside a value
+- **WHEN** a person runs `troupe config set --json 'runtimes.box={"https://user:<canary>@example.com": null}'`
+- **THEN** it is refused, naming the value's place and saying it holds a null under one of its keys, and neither the
+  standard error nor the client message holds the canary
+
 #### Scenario: A key typed as a path is still named
 - **WHEN** a person sets `actors.tester.runnr`
 - **THEN** it is refused, naming `actors.tester.runnr` and saying there's no such field

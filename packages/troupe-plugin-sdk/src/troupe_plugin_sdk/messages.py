@@ -129,14 +129,29 @@ def _decode(value: object, hint: object, where: str, meta: Mapping[str, Any]) ->
 
 
 def _no_null(value: object, where: str) -> None:
+    """Refuse a null anywhere in a free-form ``value``, named by its place in the message. Inside
+    an object it's named by that object, never by the keys leading to it: a free-form value's keys
+    are the sender's own data, which may hold a password (config-set-json-redacts design D7, review
+    of #384). A position in a list is only a number, so it's named."""
     if value is None:
         raise fail(where, "must not be null: leave out a field with nothing to say")
     if isinstance(value, list):
         for index, item in enumerate(value):
             _no_null(item, f"{where}[{index}]")
-    elif isinstance(value, dict):
-        for key, item in value.items():
-            _no_null(item, f"{where}.{key}")
+    elif isinstance(value, dict) and _holds_null(value):
+        raise fail(
+            where, "holds a null under one of its keys: leave out a field with nothing to say"
+        )
+
+
+def _holds_null(value: object) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, list):
+        return any(_holds_null(item) for item in value)
+    if isinstance(value, dict):
+        return any(_holds_null(item) for item in value.values())
+    return False
 
 
 def decode_one_of(choices: Sequence[object], value: object, where: str) -> "Message":
