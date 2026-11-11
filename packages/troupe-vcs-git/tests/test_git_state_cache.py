@@ -421,7 +421,7 @@ class Names(RuleBasedStateMachine):
     def __init__(self) -> None:
         super().__init__()
         self.root = Path(tempfile.mkdtemp())
-        self.repo = make_repo(self.root, refs=self.layout.refs)
+        self.repo = make_repo(self.root, refs=self.layout.refs, fresh=True)  # as make_layout_repo
         self.orphans = 0
 
     def teardown(self) -> None:
@@ -558,7 +558,7 @@ TestNamesReftable = _names(LAYOUTS[2]).TestCase
 def test_a_ref_sharing_the_branchs_name_leaves_gits_short_name(
     tmp_path: Path, refs: str, shape: str
 ) -> None:
-    repo = make_repo(tmp_path, refs=refs)
+    repo = make_repo(tmp_path, refs=refs, fresh=True)  # as make_layout_repo
     empty_commit(repo)
     run_git(repo.path, repo, "update-ref", shape.format("main"), "HEAD")
     fresh = GitAdapter(repo.path, source=repo.env)
