@@ -327,19 +327,33 @@ def test_a_pattern_into_troupes_own_directory_is_refused_saying_no_effect_allows
 # Requirement: Every expected file is covered by the declaration (spec: effects)
 
 
-def test_expecting_a_file_the_actor_cant_write_is_refused_naming_it_and_the_fix() -> None:
+def test_expecting_a_file_the_actor_cant_write_is_refused_naming_its_position_and_the_fix() -> None:
     error = _refused(_actor(effects=...))
-    assert error.details["path"] == ["actors", "tester", "expect", "0"]
-    assert "'out/hello.txt' is expected" in error.problem
-    assert (
-        error.fix
-        == "Declare it: troupe config set actors.tester.effects.write='[\"out/hello.txt\"]'"
+    assert error.details["path"] == ["actors", "tester", "expect"]
+    assert "actors.tester.expect: expect's item 1 isn't covered by a write or move effect" in (
+        error.problem
+    )
+    assert error.fix == (
+        "Declare a pattern that covers it, in place of the placeholder: troupe config set "
+        "actors.tester.effects.write='[\"<a pattern covering item 1 of actors.tester.expect>\"]'"
+    )
+    assert "hello" not in json.dumps([error.problem, error.fix, error.details])
+
+
+def test_the_fix_keeps_what_write_already_declares_and_adds_a_placeholder() -> None:
+    error = _refused(_actor(effects={"write": ["src/**"]}))
+    assert error.fix.endswith(
+        'actors.tester.effects.write=\'["src/**", '
+        '"<a pattern covering item 1 of actors.tester.expect>"]\''
     )
 
 
-def test_the_fix_adds_the_expected_file_to_what_write_already_declares() -> None:
-    error = _refused(_actor(effects={"write": ["src/**"]}))
-    assert error.fix.endswith('actors.tester.effects.write=\'["src/**", "out/hello.txt"]\'')
+def test_an_uncovered_expect_path_holding_a_password_is_never_repeated() -> None:
+    # A theatre path's shape check lets a URL through, so the path is never named (review of #384).
+    url = f"https://user:{CANARY}@example.com/x"
+    error = _refused(_actor(expect=["out/hello.txt", url], effects={"write": ["out/**"]}))
+    assert "expect's item 2 isn't covered" in error.problem
+    assert CANARY not in json.dumps([error.problem, error.fix, error.details])
 
 
 def test_expecting_a_file_inside_a_declared_pattern_is_valid() -> None:
@@ -352,7 +366,7 @@ def test_expecting_a_file_a_move_creates_is_valid() -> None:
 
 def test_expecting_a_file_only_delete_covers_is_refused() -> None:
     error = _refused(_actor(expect=["docs/a.md"], effects={"delete": ["docs/**"]}))
-    assert "'docs/a.md' is expected" in error.problem
+    assert "expect's item 1 isn't covered" in error.problem
 
 
 def test_expecting_nothing_needs_no_effect() -> None:

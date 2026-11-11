@@ -28,9 +28,10 @@ malformed path in `config set` (whose error quotes the whole `path=value` argume
   `config set` is never shown. This applies to `config set`, `config unset` and `config get` alike.
 - Core's config check never repeats a value it refuses for its shape: an enum lists what's allowed without "not X",
   and a schema rule with no description is put in words that hold no value.
-- Values that are names or theatre paths keep being named when the rule is about that name: an unknown runner, a
-  runtime no config defines, and an `expect` path no effect covers. Each has already passed a check of its shape,
-  and its fix is a command built from it.
+- Values that are names keep being named when the rule is about that name: an unknown runner and a runtime no
+  config defines. Each has already passed a narrow check of its shape, and its fix is a command built from it.
+- An `expect` path no effect covers is named by its position too: its shape check lets a URL through (review of
+  #384).
 - An effect pattern refused by the effects rules is refused for its shape, so it's no longer repeated: the error
   names the list, the pattern's position and the rule (owner, 2026-11-11).
 - Tests with a canary password cover each `config set`, `config unset` and `config get` refusal, checking the CLI's
@@ -47,7 +48,8 @@ None.
 - `config`: "Command-line values are typed by the schema" refuses without repeating the value; "A malformed config
   path is refused" names the text only up to where reading failed; a new requirement says a refused config value
   is repeated nowhere, and which named values are exceptions.
-- `effects`: "A pattern that can't be meant is refused" names the pattern's position instead of the pattern.
+- `effects`: "A pattern that can't be meant is refused" names the pattern's position instead of the pattern, and
+  "Every expected file is covered by the declaration" names an uncovered path's position and how to cover it.
 
 ## Impact
 

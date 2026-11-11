@@ -735,6 +735,9 @@ def test_an_actor_whose_expect_isnt_declared_is_refused_at_perform_naming_the_fi
             )
         )
     assert caught.value.code == "config.invalid"
-    assert "'a.txt' is expected" in caught.value.problem
-    assert "troupe config set actors.tester.effects.write='[\"a.txt\"]'" in caught.value.fix
+    assert "actors.tester.expect: expect's item 1 isn't covered" in caught.value.problem
+    assert (
+        "troupe config set actors.tester.effects.write="
+        "'[\"<a pattern covering item 1 of actors.tester.expect>\"]'"
+    ) in caught.value.fix
     assert nothing_written(harness, before)

@@ -525,7 +525,11 @@ def _effect_pattern_problem(
 
 def _expect_problems(base: tuple[str, ...], actor: Mapping[str, Any]) -> list[Problem]:
     """Each ``expect`` path no ``write`` or ``move`` pattern covers (spec: effects, "Every
-    expected file is covered by the declaration"; declared-effects design D2)."""
+    expected file is covered by the declaration"; declared-effects design D2), named by its
+    position: its shape check (a theatre path) lets a URL with a password through, so it's never
+    repeated. The fix is the config set that declares it, with the write patterns the actor holds
+    and a placeholder for the one that covers it (config-set-json-redacts design D3, review of
+    #384)."""
     expect = actor.get("expect")
     if not isinstance(expect, list) or not expect:
         return []
@@ -533,18 +537,22 @@ def _expect_problems(base: tuple[str, ...], actor: Mapping[str, Any]) -> list[Pr
     write = list(declared.get("write") or [])
     move = list(declared.get("move") or [])
     effects = Effects(write=tuple(write), move=tuple(move))
+    at = (*base, "expect")
+    target = shown((*base, EFFECTS, "write"))
     found: list[Problem] = []
     for index, path in enumerate(expect):
         if effects.allows("write", path) or effects.allows("move", path):
             continue
-        target = (*base, EFFECTS, "write")
-        fix = json.dumps([*write, path])
+        item = f"item {index + 1}"
+        fix = json.dumps([*write, f"<a pattern covering {item} of {shown(at)}>"])
         found.append(
             Problem(
-                (*base, "expect", str(index)),
-                f"{path!r} is expected, but no write or move effect covers it, so the run "
-                "couldn't make it",
-                f"Declare it: troupe config set {shown(target)}='{fix}'",
+                at,
+                # A merge conflict shows the rule under the actor, so it says which list.
+                f"expect's {item} isn't covered by a write or move effect, so the run couldn't "
+                "make it",
+                f"Declare a pattern that covers it, in place of the placeholder: troupe config set "
+                f"{target}='{fix}'",
             )
         )
     return found

@@ -3,8 +3,8 @@
 ### Requirement: A refused config value is repeated nowhere
 When `config set`, `config unset` or `config get` refuses a value for its shape, no error, notice, client message or
 standard error SHALL hold any part of the value. The error SHALL name the path and what the path takes. A value
-SHALL be named only when it has passed its shape check and the rule is about that name: an unknown runner, a runtime
-config doesn't define, or an `expect` path no effect covers.
+SHALL be named only when it has passed its shape check and the rule is about that name: an unknown runner or a
+runtime config doesn't define.
 
 #### Scenario: JSON that isn't JSON
 - **WHEN** a person runs `troupe config set --json runtimes.box.endpoint=https://user:<canary>@example.com/v1`
