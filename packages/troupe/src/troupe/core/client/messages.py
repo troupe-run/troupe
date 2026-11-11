@@ -272,7 +272,8 @@ class RunNotice(Message):
 @dataclass(frozen=True, kw_only=True)
 class RunSummary(Message):
     """A run as status, logs and perform report it. A field with nothing to say is left out; an
-    ended run, and only an ended one, has an outcome and an end time."""
+    ended run, and only an ended one, has an outcome and an end time, and what troupe takes from
+    the run's end (error, audit, transcript, stderr, recording)."""
 
     run_id: str = json_field("runId", pattern=p.RUN_ID_PATTERN)
     actor: str = json_field("actor", pattern=ACTOR_NAME)
@@ -301,8 +302,19 @@ class RunSummary(Message):
         ended = self.state == "ended"
         if ended != (self.outcome is not None) or ended != (self.ended_at is not None):
             raise fail(where, "outcome and endedAt are present exactly when state is ended")
-        if self.audit is not None and not ended:
-            raise fail(where, "audit is present only when state is ended")
+        if not ended:
+            # troupe takes each of these from the run's end (client-protocol, #313).
+            from_the_end = {
+                "audit": self.audit,
+                "error": self.error,
+                "transcript": self.transcript,
+                "transcriptFormat": self.transcript_format,
+                "stderr": self.stderr,
+                "recording": self.recording,
+            }
+            for name, value in from_the_end.items():
+                if value is not None:
+                    raise fail(where, f"{name} is present only when state is ended")
         if (self.transcript is None) != (self.transcript_format is None):
             raise fail(where, "transcriptFormat is present exactly when transcript is")
         if ended and (self.audit is None) != (self.transcript is None):

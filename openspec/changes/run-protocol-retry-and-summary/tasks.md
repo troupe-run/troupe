@@ -43,17 +43,17 @@ Every commit is signed and signed off (`git commit -S -s`), and `uv run scripts/
 
 ## 5. A summary that hasn't ended (#313, design D7)
 
-- [ ] 5.1 Fix `test_client_messages.py`'s generator to draw `transcript`, `transcriptFormat`, `stderr`, `error` and
+- [x] 5.1 Fix `test_client_messages.py`'s generator to draw `transcript`, `transcriptFormat`, `stderr`, `error` and
   `recording` only for an ended summary, and check `test_client_schemas.py`'s fixtures for a summary that hasn't ended
   carrying any of them. Verify: the property tests pass on `main`'s schema with the fixed generator.
-- [ ] 5.2 Forbid `transcript`, `transcriptFormat` and `stderr` in `protocol/schemas/client/run.schema.json`'s
+- [x] 5.2 Forbid `transcript`, `transcriptFormat` and `stderr` in `protocol/schemas/client/run.schema.json`'s
   not-ended branch (and the packaged copy) and in `RunSummary._check`, naming the field, and say so in each field's
   description. Verify: the client-protocol delta's transcript and stderr scenarios are tests, failing before and
   passing after; a property test adds one of them to a drawn summary that hasn't ended and checks that the schema and
   `RunSummary` both refuse it.
-- [ ] 5.3 The same for `error` and `recording` (owner, 2026-11-11). Verify: the delta's error and recording scenario is a
+- [x] 5.3 The same for `error` and `recording` (owner, 2026-11-11). Verify: the delta's error and recording scenario is a
   test, and 5.2's property test draws these two as well.
-- [ ] 5.4 Update the client protocol's docs where they describe a summary's fields (`contributing/` and
+- [x] 5.4 Update the client protocol's docs where they describe a summary's fields (`contributing/` and
   `protocol/README.md`, whichever describe it). Verify: the docs check passes, and a search for "hasn't ended" in the
   docs finds no description that the schema doesn't enforce.
 

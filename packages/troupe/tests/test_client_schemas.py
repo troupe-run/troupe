@@ -338,7 +338,21 @@ REFUSED = [
     ),
     (
         "status-result.schema.json",
-        {"runs": [changed(SUMMARY, state="interrupted", drop_endedAt=None)], "notices": []},
+        {
+            "runs": [
+                changed(
+                    SUMMARY,
+                    state="interrupted",
+                    drop_endedAt=None,
+                    drop_error=None,
+                    drop_transcript=None,
+                    drop_transcriptFormat=None,
+                    drop_stderr=None,
+                    drop_audit=None,
+                )
+            ],
+            "notices": [],
+        },
         "an interrupted run with an outcome",
     ),
     (
@@ -463,6 +477,9 @@ REFUSED = [
                     drop_outcome=None,
                     drop_error=None,
                     drop_endedAt=None,
+                    drop_transcript=None,
+                    drop_transcriptFormat=None,
+                    drop_stderr=None,
                     audit={"outside": []},
                 )
             ],
