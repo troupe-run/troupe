@@ -206,11 +206,70 @@ Not counted: Python started with `-S` or `-I` (the tests have none) and Python f
 `test_package.py`, and the environments `flake_campaign.py`'s tests sync. git and other programs aren't counted
 (out of scope).
 
-The troupe CLI is 6 of 314 processes. At ~0.4 s each, the suite spends about 2.4 s of CPU importing it, against
-735 s × 3 workers: under 0.2%. **So this change makes troupe's commands start faster for the people who run them, and
-leaves the suite's time where it was.** The suite's spawned Python is mostly the scripted runner and the test
-children, which this change doesn't touch (non-goals). Calling troupe in-process from tests would save at most those
-2.4 s, so it isn't worth an issue. Per-kind import costs, to size what the runner and the children cost, follow.
+Each kind's import cost, measured on a quiet machine (load 16–17) in the baseline tree: the median of 10
+`python -X importtime` runs of its entry imports, summing the top-level imports' cumulative times:
+
+| Kind | Import (median, range) | Modules | Count | Count × cost |
+|---|---|---|---|---|
+| pytest worker (`pytest`, `xdist`, `hypothesis`) | 282 ms (264–542) | 391 | 69 | 19.5 s |
+| `perform_child.py` | 393 ms (329–547) | 479 | 14 | 5.5 s |
+| the scripted runner | 41 ms (39–63) | 123 | 94 | 3.9 s |
+| store children (`-c`, `storetesting`) | 308 ms (227–375) | 411 | 11 | 3.4 s |
+| **the troupe CLI** (`import troupe.cli`) | **226 ms (205–242)** | **332** | **6** | **1.4 s** |
+| Claude Code runner pieces | 36–42 ms | 114–137 | 16 | 0.6 s |
+| `python -c pass` | 1 ms | 33 | | |
+
+(Under load, as when proposing, the same `import troupe.cli` read 411 ms.) Not costed: the 44 runs of scripts and
+the 46 short `-c` programs. Their exit records show 58 to 152 modules each, against 332 for the CLI, so they add a few
+seconds at most. The costed kinds spend about 34 s
+importing, against about 1,470 worker-seconds of suite (490 s × 3 workers on a quiet machine): about 2%. The troupe
+CLI's share is 1.4 s, under 0.1%. **So this change makes troupe's commands start faster for the people who run them,
+and can't move the suite's time measurably.** The largest import cost the suite pays is pytest's own, in its workers
+and the pytest runs tests start, then the test children, none of which this change touches (non-goals). Calling troupe
+in-process from tests would save at most the CLI's 1.4 s, so it isn't worth an issue.
+
+### Before and after: startup (task 6.1)
+
+20 rounds, each running baseline (4ddce25) then change (e24ab4b), load 14–16 throughout:
+
+| Measure (median, range) | Baseline | Change |
+|---|---|---|
+| `import troupe.cli`, `-X importtime` | 220 ms (183–284) | 45 ms (28–59) |
+| modules loaded by `import troupe.cli` | 332 | 99 |
+| `troupe --version`, wall time | 271 ms (171–391) | 93 ms (65–109) |
+| `troupe status` in an empty theatre, wall time | 524 ms (355–567) | 360 ms (320–412) |
+| `python -c pass`, wall time | 32 ms (19–44) | 33 ms (19–39) |
+
+### Before and after: the suite (task 6.1)
+
+`pytest -n 3 --basetemp <fresh dir> -p no:cacheprovider -q` in each tree, waiting for the 5-minute load average to
+fall below 20 before each run. Both trees passed every run: 5563 passed and 16 skipped in the baseline (the same as
+the counted run in task 1.4), 5578 passed and 16 skipped in the change (its 15 new startup tests).
+
+| Pair | Order | Baseline | Change |
+|---|---|---|---|
+| 1 | baseline first | 465 s | 502 s |
+| 2 | baseline first | 508 s | 553 s |
+| 3 | baseline first | 487 s | 500 s |
+| 4 | change first, `--durations=40` | 463 s | 511 s |
+| 5 | baseline first, `--durations=0` | 450 s | 625 s |
+
+The change tree was slower in all five pairs, and running it first (pair 4) didn't change that, so this isn't order.
+It also isn't traceable to the change:
+
+- The 15 new tests take about 2 s in all (each runs a fresh interpreter for 0.05 to 0.44 s).
+- The 40 slowest tests took the same total in pair 4: 298 s in the change, 296 s in the baseline.
+- In pair 5, the files that lost most time touch nothing this change edits: `test_release_config.py` (+79 s),
+  `test_git_state_cache.py` (+77 s, which works only in temporary repositories), the flake hunt (+26 s) and the bundle
+  tests. Run alone and alternated, two rounds each, the change tree was a little faster on both: 125 s against 128 s,
+  and 68 s against 75 s. The config tests (all `test_config_*.py`, where the deferred YAML imports run hottest) took
+  112 s against 110 s.
+
+So the suite's time on this Mac moves by more than this change could save or cost (the baseline alone ranged 450 to
+508 s), and its pattern points at the machine and at how xdist hands out tests, not at the code. Five losses out of five
+is still unlikely to be chance alone, so it is left open rather than dismissed. CI's own job timings decide it: the
+test gate's time on the pull request's macOS and Windows legs against main's recent runs
+(`gh run view --job --log`, `tests passed in`), recorded in the pull request.
 
 ### What each command loads (task 5.1)
 
