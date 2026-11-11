@@ -2352,7 +2352,7 @@
               "type": "string"
             },
             "offset": {
-              "description": "Where reading failed: the index of the character in text, counting from 0.",
+              "description": "Where reading failed: the index of the character in the path as it was typed, counting from 0. It can be past the end of text, which stops at the [ of a bracket reading failed inside.",
               "type": "integer",
               "minimum": 0
             },
