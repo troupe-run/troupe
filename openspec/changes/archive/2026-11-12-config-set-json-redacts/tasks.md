@@ -93,6 +93,10 @@
   end the path (design D6, review of #384). Verify with canary cases in `test_config_paths.py` for an escape at the
   end and an unknown escape inside an open bracket, which fail on `899314ab`, and the property test's prefix check.
   (All pass.)
+- [x] 7.4 Refuse a `config set` argument with no `=` by its position, never quoting it: a value typed after a space
+  instead of an `=` is read as a path (review of #384, after archive). Verify with two canary tests in
+  `test_config_value_echo.py`, which fail on `b8c822bb`, a scenario in the config spec, and the updated
+  no-`=` tests. (All pass.)
 
 ## Workflow follow-up
 
