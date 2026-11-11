@@ -67,8 +67,19 @@ appears more than once in one object", without the key, which is part of the val
 names (fixed words). Bytes that aren't UTF-8 give "it isn't UTF-8" and the byte offset. `str(error)` stays as it is,
 so troupe's own files' messages don't change.
 
-The CLI's error: `runtimes.box.endpoint isn't JSON: Expecting value (line 1, column 1).` `details` holds `path`,
-`rule`, `line` and `column`.
+The CLI's error: `the value for runtimes.box.endpoint isn't JSON: Expecting value (line 1, column 1).` `details`
+holds `path`, `rule` (the words, no position) and `line` and `column`. The protocol's error schema closed
+`config.invalid`'s details to `path` and `rule`, so it gains `line` and `column`: optional integers from 1, each
+present only with the other, for a value given as JSON or YAML that couldn't be read (owner, 2026-11-11, found at
+apply). They're additive, so every other `config.invalid` still validates; pre-1.0, no reader has to be kept
+working anyway. Touching `protocol/` releases the protocol at its next version, which D6's description fix does
+too.
+
+*Alternative:* put the position only in the rule's words, leaving the protocol alone. Rejected: a later surface
+would have to parse the rule to point at the column.
+
+A value file in YAML is refused the same way, with ruamel's `problem_mark` for the position and none of its
+message: its duplicate-key message quotes the repeated key's value.
 
 *Alternative:* drop the reason and say only "isn't JSON". Rejected: the reason and column are what help with a typo
 in a long JSON value, and they hold none of it.
@@ -120,7 +131,8 @@ the item doesn't fit the actor schema's pattern, without the pattern.
 `_malformed` shows `text[: offset + 1]` in `problem` and `details.text`, and the whole text only when reading failed
 at its end. Reading never passes an `=` outside brackets, so in `config set` nothing after the path's `=` is shown,
 and a path given `=value` in `config unset` or `config get` is cut at the `=`. The dot-before-bracket fix shows the
-corrected text up to the end of that bracket (`a[b]`), not the rest. `details.offset` is unchanged.
+corrected text up to the end of that bracket (`a[b]`), not the rest. `details.offset` is unchanged. The error schema's description of `details.text` ("The
+path as it was typed") is corrected to say it stops at the failing character.
 
 *Alternative:* split `config set`'s argument at the first `=` before reading it. Rejected: a key in brackets may hold
 `=` (`prices[a=b]`), which is why the reader decides where the path ends.

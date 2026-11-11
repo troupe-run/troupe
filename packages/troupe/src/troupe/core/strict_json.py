@@ -11,7 +11,28 @@ import json
 
 
 class StrictJSONError(ValueError):
-    """Text that isn't strict JSON."""
+    """Text that isn't strict JSON.
+
+    ``str(error)`` is for troupe's own files, and may name a key from the text. ``rule`` says what's
+    wrong in words that hold none of the text, and ``line`` and ``column`` say where, when known, so
+    a value a person typed can be refused without repeating it (config-set-json-redacts design D2).
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        rule: str | None = None,
+        line: int | None = None,
+        column: int | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.rule = message if rule is None else rule
+        self.line = line
+        self.column = column
+
+
+DUPLICATE_KEY = "a key appears more than once in one object"
 
 
 def _no_duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
@@ -19,7 +40,7 @@ def _no_duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
     for key, value in pairs:
         if key in data:
             msg = f"the key {key!r} appears more than once in one object"
-            raise StrictJSONError(msg)
+            raise StrictJSONError(msg, rule=DUPLICATE_KEY)
         data[key] = value
     return data
 
@@ -35,8 +56,17 @@ def loads(text: str | bytes) -> object:
         return json.loads(text, object_pairs_hook=_no_duplicate_keys, parse_constant=_no_non_finite)
     except StrictJSONError:
         raise
-    except (UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise StrictJSONError(str(error)) from error
+    except UnicodeDecodeError as error:
+        raise StrictJSONError(
+            str(error), rule=f"its bytes can't be read as text (at byte {error.start + 1})"
+        ) from error
+    except json.JSONDecodeError as error:
+        # The decoder's messages are fixed words, except the pure-Python one for a bad escape,
+        # which adds ": '<character>'" from the text: the words before ": " hold none of it.
+        rule = error.msg.split(": ", 1)[0]
+        raise StrictJSONError(
+            str(error), rule=rule, line=error.lineno, column=error.colno
+        ) from error
 
 
 def dumps(value: object) -> str:
