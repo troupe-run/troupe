@@ -269,10 +269,10 @@ def resolve(name: str, config: Mapping[str, Any], env: Mapping[str, str]) -> Res
     )
 
 
-Reason = Literal["credential", "endpoint-path", "endpoint-no-path"]
+Reason = Literal["credential", "endpoint-path", "endpoint-no-path", "endpoint-scheme"]
 """Why a runtime doesn't fit a runner: it has a credential the runner never sends, its endpoint has
-a path the runner can't use, or it has none where the runner needs one (runtime-checks design
-D2)."""
+a path the runner can't use, it has none where the runner needs one (runtime-checks design D2), or
+it's https for a runner that can only use plain http (lmstudio-runner design D3)."""
 
 
 def has_path(endpoint: str) -> bool:
@@ -292,6 +292,8 @@ def unfit(fit: interim.RuntimeFit, endpoint: str, has_credential: bool) -> list[
         reasons.append("endpoint-path")
     if fit.path == "required" and not has_path(endpoint):
         reasons.append("endpoint-no-path")
+    if fit.scheme == "http" and urlsplit(endpoint).scheme != "http":
+        reasons.append("endpoint-scheme")
     return reasons
 
 
@@ -303,6 +305,11 @@ def unfit_words(runner: str, runtime: str, reason: Reason) -> str:
         return (
             f"the {runner} runner needs an endpoint with no path, and the runtime {runtime!r} has "
             "one with a path"
+        )
+    if reason == "endpoint-scheme":
+        return (
+            f"the {runner} runner can only reach a plain http endpoint, and the runtime "
+            f"{runtime!r} has an https one"
         )
     return (
         f"the {runner} runner needs an endpoint with a path, such as /v1, and the runtime "
@@ -318,6 +325,8 @@ def fitting(fit: interim.RuntimeFit) -> str:
         "any": "an endpoint",
     }
     words = parts[fit.path]
+    if fit.scheme == "http":
+        words = "a plain http " + words.removeprefix("an ")
     return words + ("" if fit.credential else " and no credential")
 
 
@@ -393,7 +402,7 @@ def refuse_unfit(
     came_from: dict[str, str] = {}
     if "credential" in reasons and resolved.credential is not None:
         came_from["credential"] = _came_from(resolved.name, "credential_env", resolved.credential)
-    if "endpoint-path" in reasons or "endpoint-no-path" in reasons:
+    if {"endpoint-path", "endpoint-no-path", "endpoint-scheme"} & set(reasons):
         came_from["endpoint"] = _came_from(resolved.name, "endpoint", resolved.endpoint)
     fits: list[str] = []
     for other in names(config):

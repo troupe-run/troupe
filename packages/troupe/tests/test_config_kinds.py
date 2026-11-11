@@ -442,22 +442,22 @@ def test_an_ollama_actor_without_a_runtime_is_refused_naming_only_the_runtimes_t
     error = _refused(_actor(runner="ollama", options={}))
     assert error.details["path"] == ["actors", "tester", "runtime"]
     assert "the ollama runner needs a runtime" in error.problem
-    assert "(these fit it: ollama)" in error.problem
-    assert "Set actors.tester.runtime to one of: ollama." in error.fix
-    for unfit in ("lm-studio", "openai"):
-        assert unfit not in error.problem + error.fix
+    assert "(these fit it: lm-studio, ollama)" in error.problem
+    assert "Set actors.tester.runtime to one of: lm-studio, ollama." in error.fix
+    assert "openai" not in error.problem + error.fix
 
 
 def test_an_actor_naming_a_runtime_that_doesnt_exist_is_told_only_those_that_fit() -> None:
     error = _refused(_actor(runner="ollama", options={}, runtime="nowhere"))
     assert "no runtime named 'nowhere'" in error.problem
-    assert "(there are, that fit the ollama runner: ollama)" in error.problem
-    assert "lm-studio" not in error.problem + error.fix
+    assert "(there are, that fit the ollama runner: lm-studio, ollama)" in error.problem
+    assert "openai" not in error.problem + error.fix
 
 
 def test_when_no_runtime_fits_the_error_says_so_and_how_to_define_one() -> None:
     # Spec: runtimes, "No runtime fits".
-    config = _with({"ollama": {"credential": {"env": "MY_KEY"}}}, runner="ollama", options={})
+    credential = {"credential": {"env": "MY_KEY"}}
+    config = _with({"ollama": credential, "lm-studio": credential}, runner="ollama", options={})
     error = _refused(config)
     assert error.details["path"] == ["actors", "tester", "runtime"]
     assert "no runtime there is fits the ollama runner" in error.problem
@@ -469,6 +469,14 @@ def test_when_no_runtime_fits_the_error_says_so_and_how_to_define_one() -> None:
 # Requirement: An actor's runtime fits its runner
 
 
+DEFINED = {
+    "lm-studio-openai": {"endpoint": "http://127.0.0.1:1234/v1"},
+    "remote-lm": {"endpoint": "https://lm.example.com"},
+}
+"""Runtimes defined in config for the fit cases no built-in shows: LM Studio's OpenAI-compatible
+base, with a path, and an https endpoint with none."""
+
+
 @pytest.mark.parametrize(
     ("runner", "runtime", "says", "fits"),
     [
@@ -476,15 +484,15 @@ def test_when_no_runtime_fits_the_error_says_so_and_how_to_define_one() -> None:
             "ollama",
             "openai",
             "the ollama runner sends no credential, and the runtime 'openai' has one",
-            "ollama",
+            "lm-studio, ollama, remote-lm",
             id="ollama on a runtime with a credential",
         ),
         pytest.param(
             "ollama",
-            "lm-studio",
-            "the ollama runner needs an endpoint with no path, and the runtime 'lm-studio' has "
-            "one with a path",
-            "ollama",
+            "lm-studio-openai",
+            "the ollama runner needs an endpoint with no path, and the runtime 'lm-studio-openai' "
+            "has one with a path",
+            "lm-studio, ollama, remote-lm",
             id="ollama on an endpoint with a path",
         ),
         pytest.param(
@@ -492,15 +500,30 @@ def test_when_no_runtime_fits_the_error_says_so_and_how_to_define_one() -> None:
             "ollama",
             "the openai runner needs an endpoint with a path, such as /v1, and the runtime "
             "'ollama' has one without",
-            "lm-studio, openai",
+            "lm-studio-openai, openai",
             id="openai on an endpoint with no path",
+        ),
+        pytest.param(
+            "lm-studio",
+            "remote-lm",
+            "the lm-studio runner can only reach a plain http endpoint, and the runtime "
+            "'remote-lm' has an https one",
+            "lm-studio, ollama",
+            id="lm-studio on an https endpoint",
+        ),
+        pytest.param(
+            "lm-studio",
+            "openai",
+            "the lm-studio runner sends no credential, and the runtime 'openai' has one",
+            "lm-studio, ollama",
+            id="lm-studio on a runtime with a credential",
         ),
     ],
 )
 def test_a_runtime_that_doesnt_fit_its_actors_runner_is_refused_naming_both_and_what_fits(
     runner: str, runtime: str, says: str, fits: str
 ) -> None:
-    error = _refused(_actor(runner=runner, options={}, runtime=runtime))
+    error = _refused(_with(DEFINED, runner=runner, options={}, runtime=runtime))
     assert error.details["path"] == ["actors", "tester", "runtime"]
     assert says in error.problem
     assert f"Set actors.tester.runtime to one that fits: {fits}" in error.fix
@@ -578,7 +601,7 @@ def test_a_runtime_with_problems_of_its_own_is_never_offered_as_one_that_fits() 
     found = problems(config)
     [actor] = [p for p in found if p.path == ("actors", "tester", "runtime")]
     assert "gpu-box" not in actor.rule + actor.fix
-    assert "(these fit it: ollama)" in actor.rule
+    assert "(these fit it: lm-studio, ollama)" in actor.rule
 
 
 @pytest.mark.parametrize("runtime", ["lm-studio", "ollama", "openai"])

@@ -94,6 +94,13 @@ scheme would be guessing.
 The runner table gives `lm-studio` `runtime="required"`, no environment (httpx reads proxy variables, so passing none
 keeps a proxy from routing LM Studio's traffic), and the extra it's installed by (D15).
 
+Config and perform judge a runtime's fit by the table's `RuntimeFit` (#334, landed on main while this change waited):
+`lm-studio` sends no credential, needs an endpoint with no path, and can only reach plain `http`. That last needed a
+field the rule didn't have, `scheme`, with its reason `endpoint-scheme` in `runtime.unfit`, so config refuses an
+`lm-studio` actor on an `https` runtime when it's set, and perform before anything is recorded, rather than the
+runner refusing it once the run's start is recorded (owner, 2026-11-11). `test_runtime_fit.py` holds the rule to the
+runner's own check.
+
 ### D4. No API token until the library can send one
 
 `lmstudio` 1.5.0 can't send an LM Studio API token (Context). A runtime with a credential is refused
