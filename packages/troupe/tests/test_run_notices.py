@@ -6,9 +6,11 @@ notices it recorded, where among its events, with whose lineage, and what status
 """
 
 import asyncio
+import contextlib
 import importlib
 import json
 import threading
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
@@ -33,16 +35,17 @@ from troupe.core.runs.aggregate import (
     NOTICED,
     REPORTED,
     STARTED,
-    WORKTREE_MADE,
     Run,
 )
 from troupe.core.runs.perform import lease_dir
+from troupe.core.workspaces import Announce
 from troupe_plugin_sdk import runner as p
 from troupe_plugin_sdk.messages import Message
 
 # troupe.core.runs re-exports perform the function, so the modules are reached by name.
 perform_module = importlib.import_module("troupe.core.runs.perform")
 host_module = importlib.import_module("troupe.core.runners.host")
+workspaces_module = importlib.import_module("troupe.core.workspaces")
 
 QUICK_SILENCE = RunLimits(
     start_timeout=10.0, cancel_grace=2.0, run_timeout=20.0, silence_announce=0.3
@@ -100,6 +103,14 @@ def apart_from_silences(named: list[str], after: str) -> list[str]:
     return [name for name in named if name != "notice run.silent"]
 
 
+def apart_from_waits(named: list[str]) -> list[str]:
+    """``named`` (a shape) without its workspace.waiting notices. Looking for uncommitted changes,
+    or making, filling, capturing or removing a run's worktree, is announced once it outlasts
+    WORKSPACE_ANNOUNCE_AFTER_SECONDS, as it can on a loaded Windows runner (#380): a real notice,
+    rightly recorded wherever it falls. Every other entry keeps its exact place."""
+    return [name for name in named if name != "notice workspace.waiting"]
+
+
 def live(harness: Harness, code: str) -> list[dict[str, Any]]:
     """The notices with ``code`` that perform sent live, as updates."""
     return [
@@ -146,7 +157,27 @@ def test_a_silence_and_a_retry_are_recorded_in_order_among_the_runs_events_and_s
     assert len(live(harness, "run.retrying")) == 1
 
 
-def test_a_notice_raised_before_the_start_is_recorded_straight_after_it(tmp_path: Path) -> None:
+@contextlib.contextmanager
+def announced_at_once(what: str, announce: Announce, after: float) -> Iterator[None]:
+    """workspaces.announced on a runner slow enough to announce every operation: workspace.waiting
+    is raised as the operation starts, as a loaded Windows runner raised it after 2 s (#380)."""
+    announce(
+        Notice(
+            "workspace.waiting",
+            problem=f"troupe is still {what}, after {after:g}s.",
+            fix="Nothing to do: a large repository takes longer.",
+            details={"operation": what, "waitedSeconds": after},
+        )
+    )
+    yield
+
+
+@pytest.mark.parametrize("worktree", ["quick", "slow"])
+def test_a_notice_raised_before_the_start_is_recorded_straight_after_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, worktree: str
+) -> None:
+    if worktree == "slow":
+        monkeypatch.setattr(workspaces_module, "announced", announced_at_once)
     repo = committed(tmp_path)
     harness = Harness(repo)
     asked = request(script(INIT, OK), workspace="worktree")
@@ -154,9 +185,14 @@ def test_a_notice_raised_before_the_start_is_recorded_straight_after_it(tmp_path
     repo.commit_all("config")
     repo.write("src/a.txt", "edited, not committed\n")
     run = harness.perform(asked).run
-    topics = [record.topic for record in records(harness, run.run_id)]
-    assert topics[:3] == [STARTED, NOTICED, WORKTREE_MADE]
-    assert shape(harness, run.run_id)[1] == "notice workspace.uncommitted-unseen"
+    named = shape(harness, run.run_id)
+    if worktree == "slow":
+        assert "notice workspace.waiting" in named[: named.index("WorktreeMade")], named
+    assert apart_from_waits(named)[:3] == [
+        "Started",
+        "notice workspace.uncommitted-unseen",
+        "WorktreeMade",
+    ], named
     assert len(live(harness, "workspace.uncommitted-unseen")) == 1
 
 
