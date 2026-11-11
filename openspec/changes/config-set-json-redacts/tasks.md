@@ -66,8 +66,8 @@
   `true or false, not`, `must be one of`, `isn't a config path`, a quoted effect pattern) and update each to the new wording; verify the docs
   check passes. (Rechecked at apply: no page or help text shows one; the SDK README now mentions `PatternError.rule`.
   The docs check runs in 6.2.)
-- [ ] 6.2 Run `uv run scripts/check.py` and record the test count; `openspec validate config-set-json-redacts --strict`
-  passes.
+- [x] 6.2 Run `uv run scripts/check.py` and record the test count; `openspec validate config-set-json-redacts --strict`
+  passes. (On `6c8415bf`: all gates passed, 5677 passed and 16 skipped. Strict validation passes.)
 - [x] 6.3 Run issue #374's command by hand in a scratch theatre and record the before and after output in the PR.
   (Run, with the malformed-path, unset and effect-pattern cases too; none shows the password. The before is the
   issue's own output. Both go in the PR body.)
