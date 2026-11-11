@@ -124,8 +124,10 @@ In `packages/troupe-vcs-git/tests/test_git_state_cache.py`, against real reposit
 3. **The property test**: `Moves` gains `a_ref_named_after_the_branch(shape, add)`, creating or deleting a ref of a
    shape from `NAME_REFS` (plus root `<n>`) named after the current branch. The five machines keep their sizes
    (4 × 10), since the rule replaces nothing and each step costs the same.
-4. **The symbolic ref**: with `refs/tags/<n>` a symbolic ref, two reads run git twice, and creating its target is
-   seen on the next read. The test compares with a fresh adapter, not with `symbolic-ref --short` (#388).
+4. **The symbolic ref**: with `refs/tags/<n>` a symbolic ref, two more reads run git twice on the files storage and
+   not at all under reftable (the tables hold it, and their lists are watched), and on both, creating and deleting
+   its target is seen on the next read. That's compared with a fresh adapter, not with `symbolic-ref --short`
+   (#388).
 5. **Cost unchanged**: the existing "repeated reads cost nothing" and racy-window tests keep passing.
 
 ## Risks / Trade-offs

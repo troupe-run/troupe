@@ -617,31 +617,58 @@ def test_under_reftable_a_fetch_onto_a_branch_named_fetch_head_changes_the_cache
     assert (git.branch(), git.head()) == gits_answers(repo)
 
 
-@pytest.mark.parametrize("refs", ["files", "reftable"])
-def test_a_symbolic_ref_sharing_the_branchs_name_is_read_on_every_call_and_followed(
-    tmp_path: Path, refs: str
-) -> None:
-    # The short name depends on whether the symbolic ref's target exists, which nothing watched
-    # shows (git-branch-cache design D3). Compared with a fresh adapter, not symbolic-ref --short,
-    # which names the missing target instead of the branch here (#388).
+def with_a_dangling_symbolic_ref_named_main(tmp_path: Path, refs: str) -> Repo:
+    """A repository on ``main`` with ``refs/tags/main`` a symbolic ref to a missing branch."""
     repo = make_repo(tmp_path, refs=refs)
     empty_commit(repo)
     run_git(repo.path, repo, "symbolic-ref", "refs/tags/main", "refs/heads/gone")
-    git = adapter(repo)
+    return repo
+
+
+def test_under_the_files_storage_a_symbolic_ref_sharing_the_branchs_name_is_read_on_every_call(
+    tmp_path: Path,
+) -> None:
+    # The short name depends on whether the symbolic ref's target exists, which nothing watched
+    # shows (git-branch-cache design D3).
+    git = adapter(with_a_dangling_symbolic_ref_named_main(tmp_path, "files"))
     git.branch_token()
     before = git.commands_run
     git.branch_token()
     git.branch_token()
-    # Under reftable the symbolic ref and its target are in the tables, whose lists are watched.
-    assert git.commands_run - before == (2 if refs == "files" else 0)
-    for args in (
-        ("update-ref", "refs/heads/gone", "HEAD"),
-        ("update-ref", "-d", "refs/heads/gone"),
-    ):
+    assert git.commands_run - before == 2
+
+
+def test_under_reftable_a_symbolic_ref_sharing_the_branchs_name_is_reused_while_nothing_moves(
+    tmp_path: Path,
+) -> None:
+    # The symbolic ref and its target are in the tables, whose watched lists change with either.
+    git = adapter(with_a_dangling_symbolic_ref_named_main(tmp_path, "reftable"))
+    git.branch_token()
+    before = git.commands_run
+    git.branch_token()
+    git.branch_token()
+    assert git.commands_run == before
+
+
+@pytest.mark.parametrize("refs", ["files", "reftable"])
+def test_the_cached_branch_follows_a_symbolic_ref_sharing_its_name_as_its_target_comes_and_goes(
+    tmp_path: Path, refs: str
+) -> None:
+    # Compared with a fresh adapter, not symbolic-ref --short, which names the missing target
+    # instead of the branch here (#388).
+    repo = with_a_dangling_symbolic_ref_named_main(tmp_path, refs)
+    git = adapter(repo)
+    git.branch_token()
+    steps: list[tuple[tuple[str, ...], str]] = [
+        (("update-ref", "refs/heads/gone", "HEAD"), "heads/main"),
+        (("update-ref", "-d", "refs/heads/gone"), "main"),
+    ]
+    for args, short in steps:
         settle()
         run_git(repo.path, repo, *args)
         fresh = GitAdapter(repo.path, source=repo.env)
         assert (git.branch(), git.head()) == (fresh.branch(), fresh.head())
+        assert git.branch() == short
 
 
 # Stat, then read (git-call-latency design D4): the branch's ref is stat'd before the one command

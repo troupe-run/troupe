@@ -32,8 +32,10 @@ worktree. Reading the token SHALL run no command while nothing has moved.
 
 #### Scenario: A symbolic ref shares the branch's name
 - **WHEN** a ref sharing the checked-out branch's name is a symbolic ref, so the short name depends on whether its
-  target exists
-- **THEN** the branch is read through git again on every call while that ref exists
+  target exists, and its target is then created or deleted
+- **THEN** the branch reported follows git's short name; with the files ref storage, the branch is read through git
+  again on every call while that ref exists, and with reftable, whose tables hold the ref and its target, it's read
+  again only when they change
 
 #### Scenario: Nothing moved
 - **WHEN** the token is read twice with no git operation in between
