@@ -439,21 +439,23 @@ def _effect_pattern_problem(
     path: tuple[str, ...], error: jsonschema.ValidationError
 ) -> Problem | None:
     """A malformed effect pattern, in the SDK's own words (spec: effects, "A pattern that can't
-    be meant is refused"): the list it's in, the pattern and the rule."""
+    be meant is refused"): the list it's in, its position and the rule, never the pattern, which is
+    refused for its shape and may hold a password (config-set-json-redacts design D5)."""
     if error.validator not in ("pattern", "minLength") or not isinstance(error.instance, str):
         return None
     if len(path) < 5 or path[2] != EFFECTS:
         return None
     where = shown(path[:4])
+    item = f"item {int(path[4]) + 1}" if path[4].isdigit() else "a pattern"
     try:
         pattern_regex(error.instance, where)
     except PatternError as refused:
-        rule = str(refused)
+        rule = f"{item} {refused.rule}"
     else:  # the schema refused what the SDK accepts: a bug, but say what's known
-        rule = f"{where}: {error.instance!r} isn't a pattern the actor schema accepts"
+        rule = f"{item} isn't a pattern the actor schema accepts"
     if error.instance.startswith("/"):
         rule += ". Runs get a scratch directory for temporary files without declaring it"
-    return Problem(path[:4], rule, f"Set {where} without {error.instance!r}.")
+    return Problem(path[:4], rule, f"Change or remove {item} of {where}.")
 
 
 def _expect_problems(base: tuple[str, ...], actor: Mapping[str, Any]) -> list[Problem]:
@@ -494,7 +496,9 @@ JSON_TYPES = {
 
 
 def _rule(error: jsonschema.ValidationError, against: str) -> str:
-    """What ``error`` says, in words: the schema's own description where it has one."""
+    """What ``error`` says, in words: the schema's own description where it has one. Never the
+    value refused: jsonschema's own messages start with it, and it may hold a password (spec:
+    config, "A refused config value is repeated nowhere"; config-set-json-redacts design D4)."""
     if error.validator == "type":
         wanted: object = error.validator_value
         if isinstance(wanted, str):
@@ -503,13 +507,86 @@ def _rule(error: jsonschema.ValidationError, against: str) -> str:
             names = [str(n) for n in wanted] if isinstance(wanted, list) else []
         actual = JSON_TYPES.get(type(error.instance), "a value")
         return f"it must be {' or '.join(_article(n) for n in names)}, not {actual} ({against})"
-    if error.validator == "enum" and isinstance(error.validator_value, list):
-        accepted = ", ".join(repr(value) for value in error.validator_value)
-        return f"it must be one of {accepted}, not {error.instance!r} ({against})"
     description = error.schema.get("description") if isinstance(error.schema, Mapping) else None
-    if error.validator in ("pattern", "oneOf", "anyOf", "const") and description:
+    if error.validator in ("pattern", "oneOf", "anyOf", "const", "not") and description:
         return f"it doesn't fit {against}: {description}"
-    return f"{error.message} ({against})"
+    return f"{_words(str(error.validator), error.validator_value)} ({against})"
+
+
+WORDED = frozenset(
+    {
+        "type",
+        "enum",
+        "const",
+        "minLength",
+        "maxLength",
+        "minimum",
+        "exclusiveMinimum",
+        "maximum",
+        "exclusiveMaximum",
+        "minItems",
+        "maxItems",
+        "minProperties",
+        "maxProperties",
+        "uniqueItems",
+        "pattern",
+        "not",
+        "oneOf",
+        "anyOf",
+        "dependentRequired",
+    }
+)
+"""The validators ``_rule`` has words of its own for. Any other gives "it breaks the schema's
+<validator> rule", which says less; a test fails when a config or options schema uses one that
+isn't here, or isn't handled before ``_rule`` (additionalProperties, required)."""
+
+
+def _words(validator: str, value: object) -> str:
+    """``validator``'s rule, from the schema's value for it: never the instance."""
+    number = value if isinstance(value, int | float) and not isinstance(value, bool) else None
+    match validator:
+        case "enum" if isinstance(value, list):
+            return f"it must be one of {', '.join(repr(v) for v in value)}"
+        case "const":
+            return f"it must be {value!r}"
+        case "minLength" if number == 1:
+            return "it can't be empty"
+        case "minLength" if number is not None:
+            return f"it must be at least {number} characters"
+        case "maxLength" if number is not None:
+            return f"it must be at most {number} characters"
+        case "minimum" if number is not None:
+            return f"it must be at least {number}"
+        case "exclusiveMinimum" if number is not None:
+            return f"it must be more than {number}"
+        case "maximum" if number is not None:
+            return f"it must be at most {number}"
+        case "exclusiveMaximum" if number is not None:
+            return f"it must be less than {number}"
+        case "minItems" if number is not None:
+            return f"it must hold at least {number} item{'' if number == 1 else 's'}"
+        case "maxItems" if number is not None:
+            return f"it must hold at most {number} item{'' if number == 1 else 's'}"
+        case "minProperties" if number is not None:
+            return f"it must hold at least {number} field{'' if number == 1 else 's'}"
+        case "maxProperties" if number is not None:
+            return f"it must hold at most {number} field{'' if number == 1 else 's'}"
+        case "uniqueItems":
+            return "its items must all differ"
+        case "pattern":
+            return f"it must match the pattern {value}"
+        case "not" if isinstance(value, Mapping) and isinstance(value.get("required"), list):
+            return f"it can't have {' and '.join(str(k) for k in value['required'])} together"
+        case "dependentRequired" if isinstance(value, Mapping):
+            needs = "; ".join(
+                f"{key} needs {', '.join(str(n) for n in needed)}"
+                for key, needed in value.items()
+                if isinstance(needed, list)
+            )
+            return f"some fields need others with them: {needs}"
+        case "not" | "oneOf" | "anyOf":
+            return "it doesn't fit any shape the schema allows"
+    return f"it breaks the schema's {validator} rule"
 
 
 def _article(json_type: str) -> str:

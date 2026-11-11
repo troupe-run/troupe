@@ -25,7 +25,7 @@
 
 ## 3. A malformed path shows only what was read (design D6)
 
-- [ ] 3.1 In `config_paths._malformed`, show `text[: offset + 1]` (the whole text only when reading failed at its
+- [x] 3.1 In `config_paths._malformed`, show `text[: offset + 1]` (the whole text only when reading failed at its
   end) in `problem` and `details.text`; the dot-before-bracket fix shows the corrected text up to the end of that
   bracket, and correct the error schema's description of `details.text` (both copies). Verify: `test_config_paths.py`'s property test asserts `details.text` is a prefix of the text ending at
   `offset`; add cases for `config set 'a]b=<canary>'`, `runtimes.box.endpoint.=<canary URL>`, and `config unset` /
@@ -34,40 +34,43 @@
 
 ## 4. Core's config check never repeats a value it refuses for its shape (design D3, D4, D5)
 
-- [ ] 4.1 `_rule`'s `enum` lists the values the schema takes, without "not X"; its fallback builds words from the
+- [x] 4.1 `_rule`'s `enum` lists the values the schema takes, without "not X"; its fallback builds words from the
   validator and its value per D4, never `error.message`. Verify with `test_config_kinds.py` cases for each
   validator the config and options schemas use (each with a canary instance), and update `test_cli_config.py` line
   332's assertion.
-- [ ] 4.2 Add a test that walks the config schemas and every bundled runner's options schema and fails when one uses
+- [x] 4.2 Add a test that walks the config schemas and every bundled runner's options schema and fails when one uses
   a validator `_rule` has no words for. Verify it fails when a validator is removed from `_rule`'s table.
-- [ ] 4.3 Give the SDK's `PatternError` a `rule` attribute (message unchanged), and build core's effect-pattern
+- [x] 4.3 Give the SDK's `PatternError` a `rule` attribute (message unchanged), and build core's effect-pattern
   problem, fix and details from the list, the pattern's position and `rule`, never the pattern (D5, spec: effects).
   Verify: the SDK's pattern tests pass unchanged, and a new SDK test checks `rule` holds no part of the pattern;
   `test_config_kinds.py` line 290 asserts the position and rule and that `/tmp/**` is absent; a test per
   `PatternError` rule with a canary in the pattern finds it in none of `problem`, `fix` or `details`.
-- [ ] 4.4 Verify the D3 exceptions still name their value: the existing tests for an unknown runner, an undefined
+- [x] 4.4 Verify the D3 exceptions still name their value: the existing tests for an unknown runner, an undefined
   runtime and an uncovered `expect` path pass unchanged.
 
 ## 5. Canary tests through the CLI (spec: config, "A refused config value is repeated nowhere")
 
-- [ ] 5.1 Add `packages/troupe/tests/test_config_value_echo.py` with one test per scenario of the new requirement,
+- [x] 5.1 Add `packages/troupe/tests/test_config_value_echo.py` with one test per scenario of the new requirement,
   driven through `troupe.cli.main` with the canary `https://user:<canary>@example.com/v1` (or the canary alone where
   the field takes no URL): `--json` set, each untyped kind, a value file, an enum, a malformed path before a value,
   `unset` / `get` given a value, and the effects scenario "A pattern holding a password". Each asserts the exit code, that the path is named, and that the canary and
   `example.com` appear in neither standard output, standard error, nor the client message (the core refusals called
   through the dispatcher, checking the error's `problem`, `fix` and `details`). Verify the module fails on main and
   passes on the branch.
-- [ ] 5.2 Add the scenario "A name is still named" as a test (`actors.tester.runtime=nowhere` names `nowhere` and the
+- [x] 5.2 Add the scenario "A name is still named" as a test (`actors.tester.runtime=nowhere` names `nowhere` and the
   command that defines it). Verify it passes.
 
 ## 6. Docs and check
 
-- [ ] 6.1 Search `docs/` and the CLI's help text for any shown error that quotes a refused value (`isn't JSON`,
+- [x] 6.1 Search `docs/` and the CLI's help text for any shown error that quotes a refused value (`isn't JSON`,
   `true or false, not`, `must be one of`, `isn't a config path`, a quoted effect pattern) and update each to the new wording; verify the docs
-  check passes. (None found at propose time; recheck.)
+  check passes. (Rechecked at apply: no page or help text shows one; the SDK README now mentions `PatternError.rule`.
+  The docs check runs in 6.2.)
 - [ ] 6.2 Run `uv run scripts/check.py` and record the test count; `openspec validate config-set-json-redacts --strict`
   passes.
-- [ ] 6.3 Run issue #374's command by hand in a scratch theatre and record the before and after output in the PR.
+- [x] 6.3 Run issue #374's command by hand in a scratch theatre and record the before and after output in the PR.
+  (Run, with the malformed-path, unset and effect-pattern cases too; none shows the password. The before is the
+  issue's own output. Both go in the PR body.)
 - [ ] 6.4 Open a draft PR that closes #374, and see CI pass on Linux, macOS and Windows once it's marked ready.
 
 ## Workflow follow-up
