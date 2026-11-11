@@ -12,6 +12,7 @@ from fake_lm_studio import (
     Call,
     FakeLMStudio,
     Script,
+    Step,
     listing_fails,
     load_steps,
     model_info,
@@ -21,6 +22,7 @@ from fake_lm_studio import (
     script_of,
 )
 from lm_studio_harness import MODEL, TEST_LIMITS, Session, events, result, transcript
+from troupe_runner_lm_studio.defaults import CHECK_TIMEOUT_SECONDS
 
 CANARY = "lm-canary-0123456789"
 """A value no output may hold: what a runtime's credential variable holds in these tests."""
@@ -215,6 +217,19 @@ def test_lm_studio_whose_library_cant_list_models_is_incompatible_naming_the_tes
         _, error = _refused(workspace, fake.endpoint)
     assert error["code"] == "lm-studio.incompatible"
     assert "0.4.28" in error["fix"]
+
+
+def test_lm_studio_that_stalls_listing_its_models_is_unreachable_within_the_checks_limit(
+    workspace: Path,
+) -> None:
+    stalled = Step("rpcCall", "listDownloadedModels", [])  # answered with nothing
+    with FakeLMStudio(Script().add("/system", [stalled])) as fake:
+        started = time.monotonic()
+        _, error = _refused(workspace, fake.endpoint)
+        took = time.monotonic() - started
+    assert error["code"] == "lm-studio.unreachable"
+    assert f"{CHECK_TIMEOUT_SECONDS:g}s" in error["problem"]
+    assert took < CHECK_TIMEOUT_SECONDS + 10
 
 
 def test_a_redirected_greeting_is_refused_and_not_followed(workspace: Path) -> None:
@@ -550,6 +565,19 @@ def test_a_lost_connection_before_any_call_is_retried_once_then_goes_on(workspac
     assert len(retries) == 1
     assert retries[0]["reason"] == "network"
     assert result(messages)["status"] == "ok"
+
+
+def test_a_reconnect_that_fails_too_is_retried_until_the_attempts_run_out_then_ends_network(
+    workspace: Path,
+) -> None:
+    lost = predict_step("Partial answer", drop=2, greeting_after_drop="not-lm-studio")
+    with FakeLMStudio(run_script(lost)) as fake:
+        _, messages = _run(workspace, fake)
+    retries = [e for e in events(messages) if e["type"] == "retry"]
+    assert [r["attempt"] for r in retries] == [1, 2]
+    assert {r["reason"] for r in retries} == {"network"}
+    end = result(messages)
+    assert (end["status"], end["reason"]) == ("error", "network")
 
 
 def test_a_lost_connection_after_a_call_isnt_retried(workspace: Path) -> None:

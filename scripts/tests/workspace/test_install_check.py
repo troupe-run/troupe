@@ -253,8 +253,8 @@ def test_an_install_that_prints_the_expected_version_passes() -> None:
     )
 
 
-# The extras (spec: installation; runner-extras design D9, D10). No runner is in an extra yet, so
-# each case uses a fixture lm-studio runner, as #291 will add it.
+# The extras (spec: installation; runner-extras design D9, D10). Each case gives a runner table of
+# its own, naming lm-studio, the runner in troupe-run's lm-studio extra (#291).
 
 
 def test_the_extras_form_names_the_extras_before_the_url_in_both_ref_forms() -> None:

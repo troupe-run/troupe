@@ -444,7 +444,8 @@ def test_the_printed_steps_of_an_ollama_audition_give_a_successful_run_with_a_st
 def test_an_audition_on_a_runner_in_an_extra_names_the_extra_in_the_perform_step(
     repo: Repo, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # lm-studio as #291 will add it: installed, in an extra. Its audition is the scripted one's.
+    # lm-studio, in an extra (#291), stood in for by the scripted runner, so the audition runs
+    # offline. Its audition is the scripted one's.
     entry = dataclasses.replace(interim.RUNNERS["scripted"], in_extra=True)
     monkeypatch.setitem(interim.RUNNERS, "lm-studio", entry)
     monkeypatch.setitem(

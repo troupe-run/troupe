@@ -20,9 +20,10 @@ DEFAULT_CONTEXT_LENGTH = 16_384
 contextLength. A model already loaded keeps its own (design D5)."""
 
 CHECK_TIMEOUT_SECONDS = 10.0
-"""The pre-run check: reaching LM Studio and listing its downloaded models, before run/start is
-answered. The library's own greeting check has a fixed one-second timeout of its own, inside
-this."""
+"""Each step of the pre-run check, before run/start is answered: LM Studio's greeting, and the
+library listing its downloaded models (set as the library's timeout for that call). The two together
+stay well inside troupe's RUNNER_START_TIMEOUT_SECONDS (30). The library's own greeting check has a
+fixed one-second timeout of its own, inside the first."""
 
 MESSAGE_TIMEOUT_SECONDS = 120.0
 """Waiting for LM Studio's next message on the websocket. Load progress, prompt-processing progress

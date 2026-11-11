@@ -63,7 +63,7 @@ library applies is set from one of them, never left to the library's default.
 | `DEFAULT_MAX_TURNS` | `maxTurns` when the options don't set it: 20. |
 | `DEFAULT_MAX_TOTAL_TOKENS` | `maxTotalTokens` when the options don't set it: 200,000. |
 | `DEFAULT_CONTEXT_LENGTH` | `contextLength` when the options don't set it: 16,384. |
-| `CHECK_TIMEOUT_SECONDS` | The pre-run check: reaching LM Studio and listing its models, before `run/start` is answered. |
+| `CHECK_TIMEOUT_SECONDS` | Each step of the pre-run check, before `run/start` is answered: LM Studio's greeting, and listing its models. |
 | `MESSAGE_TIMEOUT_SECONDS` | Waiting for LM Studio's next message. Load and prompt-processing progress and each fragment count, so only real silence reaches it. |
 | `WEBSOCKET_CLOSE_TIMEOUT_SECONDS` | Closing the websocket, so a stop isn't held up by the library's own 10 seconds. |
 | `MAX_ATTEMPTS` | Attempts at a connection that fails or drops, while no tool call has run. |

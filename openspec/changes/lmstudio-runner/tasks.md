@@ -20,13 +20,16 @@ has merged.
 
 ## 2. Record the new spec's Purpose in infrastructure (design D15)
 
-- [ ] 2.1 Once the spec's Purpose is final (after 1.2), raise an infrastructure issue on the board and open its pull
+- [x] 2.1 Once the spec's Purpose is final (after 1.2), raise an infrastructure issue on the board and open its pull
   request adding `lm-studio-runner`'s Purpose (without its `Capability:` line, whitespace collapsed) to
   `oob/troupe-spec-purposes.json`, following its `oob/README.md`, and check `cap:actor-runners`' description still
   covers it. This change's pull request merges first and the infrastructure one right after, so neither waits on the
   other (infrastructure#263's order; a short red drift window is accepted, owner, 2026-10-30). Verify: the recorded
   Purpose matches this branch's spec verbatim, the infrastructure pull request's checks pass, and this change's pull
   request says it merges first and links it.
+  Done: infrastructure#296 raised on the board, and infrastructure#297 (change `lm-studio-runner-spec-purpose`) adds
+  the record, read through `oob.py`'s `purpose()` from this branch; every one of its checks passed, its review raised
+  nothing, and troupe#379 says it merges first and links it.
 
 ## 3. The built-in runtime (design D3)
 

@@ -50,6 +50,9 @@ class Step:
     endpoint: str | None
     answers: list[Answer] = field(default_factory=list)
     drop: int | None = None
+    greeting_after_drop: str | None = None
+    """When set, the fake's greeting becomes this once the connection is dropped: "silent" or
+    "not-lm-studio" for an LM Studio that stays gone, so a reconnect fails too."""
 
 
 @dataclass
@@ -163,6 +166,7 @@ def predict_step(
     model_key: str = MODEL,
     pause: float = 0.0,
     drop: int | None = None,
+    greeting_after_drop: str | None = None,
 ) -> Step:
     """One prediction round, built from the recorded shapes: reasoning (marked as such), then the
     answer ``text`` a word at a time, then each call's generation events, then ``after`` (text
@@ -211,7 +215,7 @@ def predict_step(
     done["message"]["modelInfo"]["modelKey"] = model_key
     done["message"]["content"] = reasoning + text + after
     answers += [Answer(done), Answer({"type": "channelClose", "channelId": 0})]
-    return Step("channelCreate", "predict", answers, drop)
+    return Step("channelCreate", "predict", answers, drop, greeting_after_drop)
 
 
 def _words(text: str) -> list[str]:
@@ -329,6 +333,8 @@ class FakeLMStudio:
             ident = {"channelId": message.get("channelId"), "callId": message.get("callId")}
             for sent, answer in enumerate(step.answers):
                 if step.drop is not None and sent >= step.drop:
+                    if step.greeting_after_drop is not None:
+                        self.script.greeting = step.greeting_after_drop
                     sock.shutdown(socket.SHUT_RDWR)
                     return
                 if answer.pause:
