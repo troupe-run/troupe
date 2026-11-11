@@ -290,7 +290,7 @@ def test_an_expected_file_one_branch_adds_and_another_branch_undeclares_is_a_con
     [conflict] = merged.conflicts
     assert conflict.paths == (tuple(TESTER_PATH),)
     assert conflict.rule is not None
-    assert "'out/more.txt' is expected" in conflict.rule
+    assert "expect's item 2 isn't covered by a write or move effect" in conflict.rule
     assert len(conflict.changes) == 2
 
 

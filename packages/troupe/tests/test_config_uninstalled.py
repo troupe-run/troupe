@@ -139,7 +139,7 @@ def test_a_merge_without_the_runner_still_checks_the_actors_effects(
     [conflict] = merged.conflicts
     assert conflict.paths == (("actors", "lead"),)
     assert conflict.rule is not None
-    assert "'docs/a.md' is expected" in conflict.rule
+    assert "expect's item 2 isn't covered by a write or move effect" in conflict.rule
 
 
 @pytest.mark.parametrize("value", [5, True, "lead"], ids=["a number", "a boolean", "a string"])

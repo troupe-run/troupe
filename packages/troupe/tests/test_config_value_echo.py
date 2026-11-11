@@ -225,3 +225,19 @@ def test_an_unknown_field_typed_as_a_path_is_still_named(
     code, _, err = cli("config", "set", "--json", 'actors.tester.runnr="scripted"')
     assert code != 0
     assert "actors.tester.runnr: there's no such field" in err
+
+
+def test_an_uncovered_expect_path_holding_a_password_is_never_repeated(
+    repo: Repo, errors: list[TroupeError]
+) -> None:
+    # A theatre path's shape check lets a URL through (review of #384).
+    _tester()
+    err, message = _refused(
+        errors,
+        "config.invalid",
+        "config",
+        "set",
+        f'actors.tester.expect=["out/hello.txt", "https://user:{CANARY}@example.com/x"]',
+    )
+    assert "actors.tester.expect: expect's item 2 isn't covered" in err
+    assert message["details"]["path"] == ["actors", "tester", "expect"]

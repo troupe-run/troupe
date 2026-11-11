@@ -82,6 +82,10 @@
   option, a runtime's name, an actor's name, a typed misspelt field), each with a canary; update
   `test_cli_config.py`'s unknown price field test. (All pass; the price test now checks `currency` isn't named, and
   a new test names a field typed as a path.)
+- [x] 7.2 Name an uncovered `expect` path by its position, never the path, with a fix that is the covering
+  `troupe config set` with a placeholder for the new pattern (design D3, review of #384; owner chose the placeholder). Verify with a canary test in `test_config_kinds.py` and
+  `test_config_value_echo.py`, and update the expect tests in `test_config_kinds.py`, `test_perform.py` and
+  `test_config_merge.py`. (All pass.)
 
 ## Workflow follow-up
 

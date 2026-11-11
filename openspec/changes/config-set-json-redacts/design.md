@@ -86,14 +86,21 @@ in a long JSON value, and they hold none of it.
 
 ### D3. Name a value only after it has passed its shape check, and only when the rule is about that name
 
-Three refusals are about a name or a theatre path that has already passed its shape check, and their fix is a
-command built from it: a runner troupe doesn't know (it already matches the actor-name pattern), a runtime config
-doesn't define (it already matches the runtime name pattern, and the fix defines `runtimes.<name>`), and an
-`expect` path no effect covers (the fix declares it). These keep naming the value.
+Two refusals are about a name that has already passed a narrow shape check, and their fix is a command built from
+it: a runner troupe doesn't know (it already matches the actor-name pattern), and a runtime config doesn't define
+(it already matches the runtime name pattern, and the fix defines `runtimes.<name>`). These keep naming the value.
+
+An `expect` path no effect covers was a third, until the review of #384 found its shape check (a theatre path) lets
+`https://user:pw@example.com/x` through: only a narrow pattern makes naming safe. It's named by its position, like
+an effect pattern (D5): "expect's item 2 isn't covered by a write or move effect", saying which list because a merge
+conflict shows the rule under the actor. Its fix is the `troupe config set` that declares a covering pattern, holding
+the write patterns the actor already has and a placeholder, `<a pattern covering item 2 of actors.tester.expect>`,
+for the one to add (owner, 2026-11-11). The patterns it holds aren't being refused, and their own check refuses `:`,
+so none carries a URL's user info. The person edits one placeholder instead of pasting a ready command.
 
 Every other refusal of a value, which is a refusal of its shape, names none of it: the CLI's (D1), the `enum` rule
 ("it must be one of 'worktree', 'theatre' (the actor schema)"), the fallback for a rule with no description (D4),
-and an effect pattern the effects rules refuse (D5).
+an effect pattern the effects rules refuse (D5), and an `expect` path no effect covers.
 
 The move fix (`_move_fix`) is a refusal of where options are, not of their shape, and its command rebuilds the
 person's options so they lose nothing. It keeps doing so; its endpoint with user info is already `<url>` (#323).
