@@ -9,7 +9,7 @@ from uuid import UUID
 
 import pytest
 
-from gitrepo import Repo
+from gitrepo import Repo, from_template, make_repo
 from runtesting import ADA, ALLOW, INIT, OK, Harness, failing_at, request, script, theatre
 from troupe.core.errors import TroupeError
 from troupe.core.events import EventStore
@@ -45,11 +45,17 @@ class Recording(Harness):
 
 
 def committed(tmp_path: Path) -> Repo:
-    """A theatre whose HEAD has src/a.txt (one) and src/b.txt (bee), and ignores build/."""
-    repo = theatre(tmp_path)
-    for name, text in (("src/a.txt", "one\n"), ("src/b.txt", "bee\n"), (".gitignore", "build/\n")):
-        (repo.path / name).parent.mkdir(parents=True, exist_ok=True)
-        (repo.path / name).write_bytes(text.encode("utf-8"))  # LF on every OS, as committed
+    """A theatre whose HEAD has src/a.txt (one) and src/b.txt (bee), and ignores build/: a copy of
+    the one this test process built (theatre-template-and-guard-xdist design D1)."""
+    return from_template(tmp_path, "theatre", ("committed",), _build_committed)
+
+
+def _build_committed(root: Path, name: str) -> Repo:
+    repo = make_repo(root, name)
+    (repo.path / ".troupe").mkdir()  # as runtesting.theatre makes it
+    for file, text in (("src/a.txt", "one\n"), ("src/b.txt", "bee\n"), (".gitignore", "build/\n")):
+        (repo.path / file).parent.mkdir(parents=True, exist_ok=True)
+        (repo.path / file).write_bytes(text.encode("utf-8"))  # LF on every OS, as committed
     repo.commit_all("base")
     return repo
 

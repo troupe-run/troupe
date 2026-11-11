@@ -4,6 +4,7 @@ maintained."""
 
 import contextlib
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -62,22 +63,32 @@ class Repo:
         return target
 
 
+@pytest.fixture(scope="session")
+def repo_template(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """The repository make_repo copies, built once per test process (each xdist worker builds its
+    own): one commit on main (theatre-template-and-guard-xdist design D1, D2)."""
+    path = tmp_path_factory.mktemp("repo-template")
+    git(path, "init", "-q", "-b", "main")
+    git(path, "config", "user.email", "tester@example.com")
+    git(path, "config", "user.name", "Tester")
+    git(path, "config", "commit.gpgsign", "false")
+    Repo(path).write("README.md", "test\n")
+    git(path, "add", "-A")
+    git(path, "commit", "-q", "-m", "chore: initial")
+    return path
+
+
 @pytest.fixture
-def make_repo(tmp_path: Path) -> Callable[[], Repo]:
+def make_repo(tmp_path: Path, repo_template: Path) -> Callable[[], Repo]:
     counter = iter(range(1000))
 
     def make() -> Repo:
+        """A copy of the template, with new file times and its index refreshed to match them, as
+        a fresh build has (design D3)."""
         path = tmp_path / f"repo{next(counter)}"
-        path.mkdir()
-        git(path, "init", "-q", "-b", "main")
-        git(path, "config", "user.email", "tester@example.com")
-        git(path, "config", "user.name", "Tester")
-        git(path, "config", "commit.gpgsign", "false")
-        repo = Repo(path)
-        repo.write("README.md", "test\n")
-        git(path, "add", "-A")
-        git(path, "commit", "-q", "-m", "chore: initial")
-        return repo
+        shutil.copytree(repo_template, path, symlinks=True, copy_function=shutil.copy)
+        git(path, "update-index", "-q", "--refresh")
+        return Repo(path)
 
     return make
 

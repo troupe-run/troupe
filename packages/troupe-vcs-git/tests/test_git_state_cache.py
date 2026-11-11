@@ -43,7 +43,9 @@ LAYOUTS = [Layout(refs, reflogs) for refs in ("files", "reftable") for reflogs i
 def make_layout_repo(root: Path, layout: Layout) -> Repo:
     """A repository with two commits on ``main``, a branch ``other`` at the same commit (same
     tree), and a branch ``feature`` one commit ahead with a different tree."""
-    repo = make_repo(root, refs=layout.refs)
+    # Built from scratch, not copied: these tests are about the token's stats, the racy window and
+    # the reflogs a fresh init writes, which a copy could change (theatre-template design D4).
+    repo = make_repo(root, refs=layout.refs, fresh=True)
     repo.git("config", "core.logAllRefUpdates", "true" if layout.reflogs else "false")
     repo.write("a.txt", "a")
     repo.commit_all("one")

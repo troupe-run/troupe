@@ -2,13 +2,21 @@
 
 Each repository gets its own HOME, so the user's global config, hooks and credentials never leak
 into a test, and a test can set a global config of its own. Commits use a fixed author.
+
+Loaded as a pytest plugin too (``-p gitrepo`` in pyproject.toml's addopts). Under pytest, each
+test process builds a repository shape once, as a template, and every test that asks for that shape
+gets a copy of it, made to look to git like a fresh build (theatre-template-and-guard-xdist design
+D1-D3). Outside pytest (a child process a test starts), every repository is built from scratch.
 """
 
+import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
 import time
+from collections.abc import Callable, Iterator
 from functools import cache
 from pathlib import Path
 
@@ -99,11 +107,111 @@ def require_reftable() -> None:
     pytest.skip(REFTABLE_NEEDS)
 
 
-def make_repo(root: Path, name: str = "theatre", branch: str = "main", refs: str = "files") -> Repo:
+COUNTS_VARIABLE = "TROUPE_TEST_THEATRE_COUNTS"
+"""Names an existing directory to write each test process's build and copy counts into, as
+``theatres-<pid>.json``, for measuring the templates (design D5). Unset, nothing is written."""
+
+_templates: Path | None = None
+"""Where this test process keeps its templates while a pytest session runs; None otherwise."""
+_built: dict[tuple[object, ...], Path] = {}
+"""Each template this process has built, by the key of the shape it holds."""
+_counts = {"templates": 0, "copies": 0, "fresh": 0}
+
+
+def _counts_directory() -> Path | None:
+    """The directory ``COUNTS_VARIABLE`` names, or None when it's unset. Set to anything but an
+    existing directory, it's refused: a typo would otherwise measure nothing, silently."""
+    value = os.environ.get(COUNTS_VARIABLE)
+    if value is None:
+        return None
+    if not value or not Path(value).is_dir():
+        raise pytest.UsageError(
+            f"{COUNTS_VARIABLE} is {value!r}, which isn't an existing directory. Set it to the "
+            "directory to write each test process's theatre counts into, or unset it."
+        )
+    return Path(value)
+
+
+def counts() -> dict[str, int]:
+    """How many templates this process has built, copies it has made, and fresh builds."""
+    return dict(_counts)
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    _counts_directory()
+
+
+def pytest_sessionfinish(session: pytest.Session) -> None:
+    directory = _counts_directory()
+    if directory is None or not any(_counts.values()):
+        return  # a process that built and copied nothing (xdist's controller) writes nothing
+    target = directory / f"theatres-{os.getpid()}.json"
+    target.write_text(json.dumps(_counts, sort_keys=True) + "\n", encoding="utf-8")
+
+
+@pytest.fixture(scope="session", autouse=True)
+def theatre_templates(tmp_path_factory: pytest.TempPathFactory) -> Iterator[None]:
+    """Keep this process's templates under pytest's base temp (design D2): each xdist worker has its
+    own session and base temp, so it builds its own, and a fresh ``--basetemp`` means fresh ones."""
+    global _templates
+    _templates = tmp_path_factory.mktemp("theatre-templates")
+    try:
+        yield
+    finally:
+        _templates = None
+        _built.clear()
+
+
+def from_template(
+    root: Path, name: str, key: tuple[object, ...], build: Callable[[Path, str], Repo]
+) -> Repo:
+    """A repository at ``root / name`` with its own empty HOME at ``root / (name + '-home')``,
+    copied from the template this process built for ``key`` with ``build(root, name)``, which is
+    built first if this is its first use. Outside a pytest session, ``build`` makes it directly.
+
+    The copy gets new file times, as a fresh build's files have, and its index, if it has one, is
+    refreshed so its stat data matches the copied files, as after a fresh ``add`` (design D3)."""
+    if _templates is None:
+        _counts["fresh"] += 1
+        return build(root, name)
+    template = _built.get(key)
+    if template is None:
+        built = build(Path(tempfile.mkdtemp(dir=_templates)), "theatre")
+        template = _built[key] = built.path
+        _counts["templates"] += 1
+    path = root / name
+    shutil.copytree(template, path, symlinks=True, copy_function=shutil.copy)
+    repo = Repo(path, isolated_environment(root / f"{name}-home"))
+    if (path / ".git" / "index").exists():
+        repo.git("update-index", "-q", "--refresh")
+    _counts["copies"] += 1
+    return repo
+
+
+def make_repo(
+    root: Path,
+    name: str = "theatre",
+    branch: str = "main",
+    refs: str = "files",
+    *,
+    fresh: bool = False,
+) -> Repo:
     """A new repository at ``root / name``, with its own HOME at ``root / (name + '-home')``,
-    storing its refs as ``refs`` (``files`` or ``reftable``)."""
+    storing its refs as ``refs`` (``files`` or ``reftable``). It's a copy of this process's
+    template for the branch and ref format, unless ``fresh``: a test that depends on a fresh
+    ``git init`` (object and file times, the index's stat data, the racy window) asks for one, and
+    says which (design D4)."""
     if refs == "reftable":
         require_reftable()
+    if fresh:
+        _counts["fresh"] += 1
+        return _init(root, name, branch, refs)
+    return from_template(
+        root, name, ("make_repo", branch, refs), lambda at, as_: _init(at, as_, branch, refs)
+    )
+
+
+def _init(root: Path, name: str, branch: str, refs: str) -> Repo:
     path = root / name
     path.mkdir(parents=True)
     repo = Repo(path, isolated_environment(root / f"{name}-home"))

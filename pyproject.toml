@@ -211,6 +211,10 @@ addopts = [
     "guard_pytest",
     "-p",
     "hypothesis_profiles",
+    # Each test process builds a git theatre's shape once and copies it per test
+    # (theatre-template-and-guard-xdist design D2).
+    "-p",
+    "gitrepo",
 ]
 xfail_strict = true
 # A single test running this long has every thread's stack written to the output, so a stuck test
