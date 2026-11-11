@@ -333,7 +333,7 @@ In a run that uses kinds, troupe stores each line as compact JSON: `{"kind": ...
 ([`transcript-record.schema.json`](../protocol/schemas/transcript-record.schema.json)). It masks the credential in
 the record's bytes before it frames them. The transcript limit counts the stored bytes, framing included. The run's
 end records `transcriptFormat`, `native` or `kinds`, beside the transcript's reference, so a reader always knows
-which form its lines are. The OpenAI and Ollama runners use kinds.
+which form its lines are. The OpenAI, Ollama and LM Studio runners use kinds.
 
 ### Where transcripts are kept
 

@@ -227,13 +227,23 @@ class Engine:
         return self._client
 
     def models(self) -> list[Model]:
-        """LM Studio's downloaded models. LM Studio there but its library unable to list them is
-        ``incompatible``."""
+        """LM Studio's downloaded models, within the pre-run check's limit rather than the
+        library's message timeout, so run/start is answered well inside troupe's start limit
+        (design D6). No answer in time is ``unreachable``; LM Studio there but its library unable
+        to list them is ``incompatible``."""
         client = self._require()
+        lmstudio.set_sync_api_timeout(CHECK_TIMEOUT_SECONDS)
         try:
             listed = client.list_downloaded_models()
+        except lmstudio.LMStudioTimeoutError as error:
+            raise EngineError(
+                "unreachable",
+                f"LM Studio didn't list its models within {CHECK_TIMEOUT_SECONDS:g}s ({error}).",
+            ) from None
         except Exception as error:
             raise EngineError("incompatible", f"{type(error).__name__}: {error}") from None
+        finally:
+            lmstudio.set_sync_api_timeout(MESSAGE_TIMEOUT_SECONDS)
         models = []
         for entry in listed:
             info = _serialised(entry.info)

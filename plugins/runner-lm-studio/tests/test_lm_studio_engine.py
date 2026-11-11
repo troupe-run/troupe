@@ -165,19 +165,20 @@ def test_the_librarys_timeouts_come_from_the_runners_named_settings() -> None:
     )
 
 
-def test_a_server_that_never_answers_is_a_timeout_within_the_setting(
+def test_a_listing_that_never_answers_is_unreachable_within_the_checks_limit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(engine, "MESSAGE_TIMEOUT_SECONDS", 1.0)
+    monkeypatch.setattr(engine, "CHECK_TIMEOUT_SECONDS", 1.0)
     engine.configure()
     stalled = Step("rpcCall", "listDownloadedModels", [])  # answered with nothing
     with FakeLMStudio(Script().add("/system", [stalled])) as fake:
         connection = Engine(fake.endpoint, fake.endpoint.removeprefix("http://"))
         connection.open()
         started = time.monotonic()
-        with pytest.raises(EngineError):
+        with pytest.raises(EngineError) as caught:
             connection.models()
-        assert time.monotonic() - started < 10
+        assert time.monotonic() - started < 5
+        assert caught.value.failure == "unreachable"
         connection.close()
     engine.configure()
 

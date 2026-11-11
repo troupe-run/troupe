@@ -231,8 +231,15 @@ class Run:
         definitions = self.make_definitions(tool_specs(self.tools), self._carry_out)
         self.record("sent", _json({"history": chat, "tools": self.sent_tools(definitions)}))
         attempt = 1
+        reconnect = False
         while True:
             try:
+                if reconnect:
+                    # Inside the try, so a reconnect that fails is one more failed attempt: its
+                    # own retry event and backoff, and the network result once they run out.
+                    self.engine = self.engine.reopen()
+                    self.on_engine(self.engine)
+                    self.engine.open()
                 handle = self._load()
                 rounds = self.engine.act(
                     handle,
@@ -267,16 +274,8 @@ class Run:
                     attempt += 1
                     self._state.text.clear()
                     self._state.round_text.clear()
-                    self.engine = self.engine.reopen()
-                    self.on_engine(self.engine)
-                    try:
-                        self.engine.open()
-                    except EngineError as reopened:
-                        error = reopened
-                        if attempt < MAX_ATTEMPTS:
-                            continue
-                    else:
-                        continue
+                    reconnect = True
+                    continue
                 return self._from_error(error)
 
     def failure(self, message: str) -> ResultEvent:

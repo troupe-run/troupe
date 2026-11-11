@@ -2,9 +2,10 @@
 to an actor on a runner that isn't installed is refused" and "Another actor's uninstalled runner
 doesn't block config"; runner-extras design D7).
 
-The runner is ``lm-studio``, an extra's runner as #291 will add. While it's "installed" its entry
-starts the scripted runner, so its options are the scripted runner's; ``uninstall`` points it at a
-package that doesn't exist, as an install without ``troupe-run[lm-studio]`` would be."""
+The runner is ``lm-studio``, the runner in troupe-run's lm-studio extra (#291), stood in for by the
+scripted runner's entry while it's "installed", so its options are the scripted runner's;
+``uninstall`` points it at a package that doesn't exist, as an install without
+``troupe-run[lm-studio]`` would be."""
 
 import dataclasses
 from pathlib import Path
