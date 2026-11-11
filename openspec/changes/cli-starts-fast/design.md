@@ -178,6 +178,54 @@ None. No output, exit code, error, setting or file format changes. Rollback is a
 
 ## Measurements
 
-Before (this Mac, 4ddce25, measured while proposing): `import troupe.cli` 411 ms cumulative, 332 modules.
-`python -c pass`: 33 modules. The full before/after tables (count by kind, cost by kind, suite estimate, import time
-and suite times interleaved) are filled in by tasks 1 and 6.
+All on the owner's Mac, under Microsoft Defender's real-time scanning: compare rows with each other, never with CI.
+
+Before (4ddce25, measured while proposing): `import troupe.cli` 411 ms cumulative, 332 modules. `python -c pass`:
+33 modules.
+
+### The suite's processes (tasks 1.2 to 1.5)
+
+Counted with the opt-in `.pth` hook (D1) in the baseline tree, one full run: `pytest -n 3`, fresh `--basetemp`,
+5563 passed and 16 skipped in 735 s (load 15 at the start, 76 at the end, from other sessions). The hook wrote a start
+record when each process began and an exit record at exit; 314 processes started, 182 wrote an exit record (runners
+and children that are killed, or that leave with `os._exit`, write none).
+
+| Kind | Processes |
+|---|---|
+| the scripted runner (`-m troupe_runner_scripted`) | 94 |
+| pytest: the xdist workers, and the pytest runs tests start (flake hunt, campaign) | 69 |
+| scripts the tests run (`flake_hunt.py` 27, `check_range.py` 8, `check_result.py` 5, `flake_campaign.py` 2, `release_check_report.py` 2) | 44 |
+| test children (`perform_child.py` 14, store children `-c` 11, `watch_child.py` 5, lock holders 4, `interrupt_child.py` 2, `record_child.py` 1) | 37 |
+| Claude Code runner pieces (`fake_claude.py`, the effects server, the runner) | 16 |
+| the Ollama and OpenAI runners | 2 |
+| **the troupe CLI** (`-c "...from troupe.cli import main..."` running `perform` 4 and `logs` 1; the `troupe` script's `--version` 1) | **6** |
+| other short `-c` programs (sleepers, exits, process-tree and file tests, one runner-schema probe) | 46 |
+| **all** | **314** |
+
+Not counted: Python started with `-S` or `-I` (the tests have none) and Python from other environments: `uv build` in
+`test_package.py`, and the environments `flake_campaign.py`'s tests sync. git and other programs aren't counted
+(out of scope).
+
+The troupe CLI is 6 of 314 processes. At ~0.4 s each, the suite spends about 2.4 s of CPU importing it, against
+735 s × 3 workers: under 0.2%. **So this change makes troupe's commands start faster for the people who run them, and
+leaves the suite's time where it was.** The suite's spawned Python is mostly the scripted runner and the test
+children, which this change doesn't touch (non-goals). Calling troupe in-process from tests would save at most those
+2.4 s, so it isn't worth an issue. Per-kind import costs, to size what the runner and the children cost, follow.
+
+### What each command loads (task 5.1)
+
+Measured with `python -X importtime` and `sys.modules` in a scratch theatre, after groups 3 and 4:
+
+| Command | Modules | Heavy modules loaded | Used there? |
+|---|---|---|---|
+| `status` | 381 | metadata, `jsonschema`, `referencing`, `ruamel.yaml`, `asyncio` | metadata yes (event store entry points); the rest no: `runs.queries` imported `runs.perform` for `Backends` and `lease_dir` |
+| `config get`, `flush` | 370 | the same | metadata yes; YAML and schemas no: `cli.values` (only `config set` types values), `core.interim`, `config.projection` and `config.kinds` imported them at the top for annotations or for rendering |
+| `perform`, `init` | 384, 358 | the same | yes, on the paths that check options or render files |
+
+Changed (task 5.2): `Backends` and `lease_dir` move to `core.runs.backends`, which `perform` re-exports; `cli.config`
+imports `cli.values` in `run_set`; `core.interim` and `core.config.kinds` import `jsonschema` only for type checking;
+`core.config.projection` imports `ruamel.yaml` where it renders. After: `status` 287 modules, `config get` and `flush`
+293, `logs` (a run that isn't there) 203, each loading only package metadata and `asyncio` of the heavy ones.
+`importlib.metadata` stays wherever an entry point is read (`core.events.port`, `core.identity`, `core.vcs`,
+`core.stages`, `core.artifacts`), since every command that opens a theatre reads one.
+

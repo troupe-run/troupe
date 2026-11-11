@@ -10,14 +10,15 @@ import importlib.util
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal
-
-import jsonschema
+from typing import TYPE_CHECKING, Any, Literal
 
 from troupe.core import schemas
 from troupe.core.errors import TroupeError
 from troupe.core.schemas import INSTALL_PAGE
 from troupe.platform.processes import EnvironmentPolicy
+
+if TYPE_CHECKING:  # loaded where a schema is checked: it's slow to load (cli-starts-fast)
+    import jsonschema
 
 
 @dataclass(frozen=True)
@@ -235,7 +236,7 @@ def options_schema(name: str) -> dict[str, Any]:
     return schemas.plugin_schema(installed_runner(name).package, "options.schema.json")
 
 
-def options_validator(name: str) -> jsonschema.Draft202012Validator:
+def options_validator(name: str) -> "jsonschema.Draft202012Validator":
     """A validator for the runner named ``name``'s options, against its published options schema,
     which may refer to the runner contract's schemas by their ``$id``s."""
     runner_ = installed_runner(name)

@@ -30,13 +30,14 @@ import re
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from functools import cache
 from pathlib import Path
-from typing import Any, Literal, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol
 
-from ruamel.yaml import YAML
-from ruamel.yaml.nodes import ScalarNode
-from ruamel.yaml.representer import RoundTripRepresenter
-from ruamel.yaml.resolver import VersionedResolver
+if TYPE_CHECKING:  # loaded where a file is rendered: it's slow to load (cli-starts-fast)
+    from ruamel.yaml import YAML
+    from ruamel.yaml.representer import RoundTripRepresenter
+    from ruamel.yaml.resolver import VersionedResolver
 
 from troupe.core import defaults, policy, settings, strict_json
 from troupe.core.artifacts import load_store
@@ -83,7 +84,13 @@ WRITTEN = "local/config/written.jsonl"
 LOCK = "local/config"
 
 _STRING = "tag:yaml.org,2002:str"
-_YAML_1_1 = VersionedResolver(version=(1, 1))
+
+
+@cache
+def _yaml_1_1() -> "VersionedResolver":
+    from ruamel.yaml.resolver import VersionedResolver
+
+    return VersionedResolver(version=(1, 1))
 
 
 def file_hash(data: bytes) -> str:
@@ -94,7 +101,9 @@ def file_hash(data: bytes) -> str:
 # Rendering.
 
 
-def _represent_string(representer: RoundTripRepresenter, value: str) -> Any:  # noqa: ANN401
+def _represent_string(representer: "RoundTripRepresenter", value: str) -> Any:  # noqa: ANN401
+    from ruamel.yaml.nodes import ScalarNode
+
     # Every string reads back the same in every editor, not only under YAML 1.2: one holding a
     # character that isn't printable (a control character, or NEL, which YAML 1.1 reads as a line
     # break) is double-quoted, so it's escaped; one a YAML 1.1 reader would take as something else
@@ -102,12 +111,12 @@ def _represent_string(representer: RoundTripRepresenter, value: str) -> Any:  # 
     style: str | None = None
     if not value.isprintable():
         style = '"'
-    elif _YAML_1_1.resolve(ScalarNode, value, (True, False)) != _STRING:
+    elif _yaml_1_1().resolve(ScalarNode, value, (True, False)) != _STRING:
         style = "'"
     return representer.represent_scalar(_STRING, value, style=style)
 
 
-def _represent_float(representer: RoundTripRepresenter, value: float) -> Any:  # noqa: ANN401
+def _represent_float(representer: "RoundTripRepresenter", value: float) -> Any:  # noqa: ANN401
     # Python's shortest round-trip form, with a dot in the mantissa, since a YAML 1.1 float needs
     # one (1e-05 would read back as a string there). Config never holds NaN or Infinity.
     text = repr(value)
@@ -117,7 +126,9 @@ def _represent_float(representer: RoundTripRepresenter, value: float) -> Any:  #
     return representer.represent_scalar("tag:yaml.org,2002:float", mantissa + exponent + power)
 
 
-def _yaml() -> YAML:
+def _yaml() -> "YAML":
+    from ruamel.yaml import YAML
+
     yaml = YAML(typ="rt")
     yaml.default_flow_style = False
     yaml.width = 4096

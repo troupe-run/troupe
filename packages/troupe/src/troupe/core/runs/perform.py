@@ -59,10 +59,11 @@ from troupe.core.runners.host import RunnerCommand, RunRequest, not_started, run
 from troupe.core.runners.limits import RunLimits
 from troupe.core.runners.outcome import RunOutcome
 from troupe.core.runs.aggregate import Run
+from troupe.core.runs.backends import Backends as Backends
+from troupe.core.runs.backends import lease_dir as lease_dir
 from troupe.core.runs.projections import fold_runs
 from troupe.core.runtimes import RunRuntime
 from troupe.core.stages import load_stage
-from troupe.core.stores import local_dir, open_artifact_store, open_event_store
 from troupe.core.vcs import SharedState, Vcs
 from troupe.core.workspaces import (
     Kind,
@@ -78,20 +79,6 @@ from troupe.core.workspaces import (
 from troupe_plugin_sdk import runner as p
 from troupe_plugin_sdk.credential import CREDENTIAL_VARIABLE
 from troupe_plugin_sdk.effects import Effects
-
-
-def lease_dir(theatre: Path, run_id: str) -> Path:
-    """Where a run's lease is held while its perform is alive (design D11)."""
-    return local_dir(theatre) / "runs" / run_id
-
-
-@dataclass(frozen=True)
-class Backends:
-    """Where runs are recorded and kept, and the limits they run under. Tests replace these."""
-
-    event_store: Callable[[Session], EventStore] = open_event_store
-    artifact_store: Callable[[Session], ArtifactStore] = open_artifact_store
-    limits: RunLimits | None = None
 
 
 def expected_files_for(what: "_What", workspace: Path) -> EffectCheck:
