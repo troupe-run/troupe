@@ -11,17 +11,17 @@
 - [x] 1.3 Add the opt-in counting `.pth` to this worktree's `.venv` only (not committed: `git status` shows nothing
   new); verify a `python -c pass` with `TROUPE_COUNT_DIR` set writes one line, and without it writes nothing and
   prints nothing.
-- [ ] 1.4 With the load average under 20, run the full suite once with `TROUPE_COUNT_DIR` set
+- [x] 1.4 With the load average under 20, run the full suite once with `TROUPE_COUNT_DIR` set
   (`uv run pytest -n 3 --basetemp <fresh dir> -p no:cacheprovider -q`, output kept in a scratch file); verify its
   pass/fail counts match an uninstrumented run, then sort the records into kinds (troupe CLI, each runner plugin,
   each test child script, other Python) and record the count by kind.
-- [ ] 1.5 Measure each kind's import cost (median of 10 `python -X importtime` runs of its entry module) and record
+- [x] 1.5 Measure each kind's import cost (median of 10 `python -X importtime` runs of its entry module) and record
   the estimate (count × cost, summed) against the suite's wall time × 3 workers in the design's Measurements; verify
   the table adds up from the raw records kept in the scratchpad.
-- [ ] 1.6 Remove the counting `.pth`; verify it's gone and `git status` is clean. If the count shows calling troupe
+- [x] 1.6 Remove the counting `.pth`; verify it's gone and `git status` is clean. If the count shows calling troupe
   in-process from tests would win more than this change, raise that as a new issue on the roadmap board
   (`--project "troupe roadmap"`, citing #383) and link it from the design; otherwise say in the design why not.
-- [ ] 1.7 Record the before import numbers interleaved with the baseline (D7: 20 alternating runs of
+- [x] 1.7 Record the before import numbers interleaved with the baseline (D7: 20 alternating runs of
   `-X importtime -c "import troupe.cli"`, module count, median wall time of `troupe --version` and `troupe status`);
   commit the design's Measurements update (signed, signed off); verify `openspec validate cli-starts-fast --strict`.
 
@@ -81,11 +81,11 @@
 
 ## 6. After numbers and integration
 
-- [ ] 6.1 With the load under 20, record the after numbers interleaved with the baseline (D7): 20 alternating import
+- [x] 6.1 With the load under 20, record the after numbers interleaved with the baseline (D7): 20 alternating import
   runs, module counts, `troupe --version` and `troupe status` wall times, and 3 pairs of suite runs (B A B A B A,
   each with a fresh `--basetemp`); verify both trees' pass/fail counts match, and fill in the design's Measurements
   with the medians and ranges, noting they're this Mac's numbers under Defender.
-- [ ] 6.2 Remove the baseline worktree once its numbers are recorded (it's not in use by a session: check `lsof +D`
+- [x] 6.2 Remove the baseline worktree once its numbers are recorded (it's not in use by a session: check `lsof +D`
   first); verify `git worktree list` no longer shows it.
 - [ ] 6.3 `openspec validate cli-starts-fast --strict` passes; open a draft pull request whose body closes #383 and
   carries the before/after tables; verify CI passes on Linux, macOS and Windows once it's marked ready.
