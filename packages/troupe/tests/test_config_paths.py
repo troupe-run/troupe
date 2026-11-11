@@ -71,8 +71,11 @@ def test_any_text_reads_as_non_empty_keys_or_is_refused_as_a_malformed_path(text
         assert refused.code == "config.path-malformed"
         offset = refused.details["offset"]
         assert 0 <= offset <= len(text)
-        # Only what was read, up to and including where reading failed (design D6).
-        assert refused.details["text"] == text[: offset + 1]
+        # Only what was read, up to and including where reading failed, or the [ of a bracket it
+        # failed inside (design D6).
+        shown = refused.details["text"]
+        assert text.startswith(shown)
+        assert shown == text[: offset + 1] or (shown.endswith("[") and len(shown) <= offset + 1)
 
 
 # What the spec's examples read as, and how keys are shown.
@@ -149,7 +152,8 @@ def test_a_malformed_path_is_refused_naming_the_text_read_where_and_the_rule(
     with pytest.raises(TroupeError) as caught:
         paths.parse(text)
     error = caught.value
-    read = text[: offset + 1]
+    inside = rule in (paths.ESCAPES_NOTHING, paths.UNKNOWN_ESCAPE)  # shown up to the bracket's [
+    read = text[: text.index("[") + 1] if inside else text[: offset + 1]
     assert error.code == "config.path-malformed"
     assert error.details == {"text": read, "offset": offset, "rule": rule}
     assert f'"{read}"' in error.problem
@@ -189,6 +193,9 @@ CANARY = "q7ZxW9pL4vR2canary"
         f"a.[b]c={CANARY}",
         f"a[b]c={CANARY}",
         f"a\\b={CANARY}",
+        f"a[b=https://user:{CANARY}@h\\x",
+        f"a[b=https://user:{CANARY}@h\\",
+        f"a.[b=https://user:{CANARY}@h\\q]",
     ],
 )
 def test_a_malformed_path_in_config_set_shows_none_of_the_value(text: str) -> None:

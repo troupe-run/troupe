@@ -137,7 +137,9 @@ the item doesn't fit the actor schema's pattern, without the pattern.
 
 `_malformed` shows `text[: offset + 1]` in `problem` and `details.text`, and the whole text only when reading failed
 at its end. Reading never passes an `=` outside brackets, so in `config set` nothing after the path's `=` is shown,
-and a path given `=value` in `config unset` or `config get` is cut at the `=`. The dot-before-bracket fix shows the
+and a path given `=value` in `config unset` or `config get` is cut at the `=`. Inside a bracket it does pass one,
+so a failure there (an escape at the end or an unknown escape) shows the text only up to that bracket's `[`, as an
+unclosed bracket's error already did: `a[b=https://user:pw@h\x` shows `a[` (review of #384). The dot-before-bracket fix shows the
 corrected text up to the end of that bracket (`a[b]`), not the rest. `details.offset` is unchanged. The error schema's description of `details.text` ("The
 path as it was typed") is corrected to say it stops at the failing character.
 

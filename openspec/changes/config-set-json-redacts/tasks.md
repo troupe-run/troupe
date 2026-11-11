@@ -87,6 +87,10 @@
   `troupe config set` with a placeholder for the new pattern (design D3, review of #384; owner chose the placeholder). Verify with a canary test in `test_config_kinds.py` and
   `test_config_value_echo.py`, and update the expect tests in `test_config_kinds.py`, `test_perform.py` and
   `test_config_merge.py`. (All pass.)
+- [x] 7.3 Show a malformed path's text only up to the `[` of a bracket it failed inside, since an `=` there doesn't
+  end the path (design D6, review of #384). Verify with canary cases in `test_config_paths.py` for an escape at the
+  end and an unknown escape inside an open bracket, which fail on `899314ab`, and the property test's prefix check.
+  (All pass.)
 
 ## Workflow follow-up
 
