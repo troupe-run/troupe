@@ -105,6 +105,20 @@ def run_git(cwd: Path, repo: Repo, *args: str) -> None:
     )
 
 
+def make_ref(repo: Repo, ref: str) -> None:
+    run_git(repo.path, repo, "update-ref", ref, "HEAD")
+
+
+def drop_ref(repo: Repo, ref: str) -> None:
+    """Delete ``ref``. git makes a root ref with a lower-case name but refuses to delete it ("bad
+    name"), so one outside refs/ is deleted as its file, from whichever git directory holds it."""
+    if ref.startswith("refs/"):
+        run_git(repo.path, repo, "update-ref", "-d", ref)
+        return
+    for directory in repo.git("rev-parse", "--git-dir", "--git-common-dir").splitlines():
+        (repo.path / directory / ref).unlink(missing_ok=True)
+
+
 # The operations, each a move of the branch or HEAD made by another process (git).
 
 
@@ -264,6 +278,22 @@ class Moves(RuleBasedStateMachine):
         renamed = f"renamed-{self.renames}"
         self.repo.git("branch", "-m", renamed)
         self.branches[self.branches.index(current)] = renamed
+
+    @rule(shape=st.sampled_from(("refs/tags/{}", "refs/{}", "{}")), add=st.booleans())
+    def a_ref_named_after_the_branch(self, shape: str, add: bool) -> None:
+        """A tag, a ref directly under refs/ or a root ref with the current branch's name: each
+        changes git's short name for it (#370)."""
+        current = self.repo.git("branch", "--show-current").strip()
+        if not current or (shape == "{}" and self.layout.refs == "reftable"):
+            return  # detached; or a root ref reftable can't delete again (see SHORT_NAME_SHAPES)
+        ref = shape.format(current)
+        exists = (self.repo.path / ".git" / ref).is_file() or bool(
+            self.repo.git("for-each-ref", "--format=%(refname)", ref).strip()
+        )
+        if add and not exists:
+            make_ref(self.repo, ref)
+        elif not add and exists:
+            drop_ref(self.repo, ref)
 
     @invariant()
     def the_cached_answers_are_gits(self) -> None:
@@ -468,6 +498,150 @@ def test_a_ref_sharing_the_branchs_name_leaves_gits_short_name(
     run_git(repo.path, repo, "update-ref", shape.format("main"), "HEAD")
     fresh = GitAdapter(repo.path, source=repo.env)
     assert (fresh.branch(), fresh.head()) == gits_answers(repo)
+
+
+# A cached adapter follows git's short name as refs sharing the branch's name come and go (#370;
+# git-branch-cache design D1). The clock is past the racy window, so only the token can notice.
+
+SHORT_NAME_SHAPES = ("refs/tags/{}", "refs/{}", "{}")
+"""Refs whose existence makes git shorten ``refs/heads/<name>`` to ``heads/<name>``: a tag, a ref
+directly under ``refs/``, and a root ref (git-branch-cache design, the probe table)."""
+
+
+def create_then_delete(short: str, unchanged: str) -> list[tuple[Callable[[Repo, str], None], str]]:
+    """Making then deleting a ref, each with git's short name for the branch after it."""
+    return [(make_ref, short), (drop_ref, unchanged)]
+
+
+@pytest.mark.parametrize(
+    ("refs", "shape"),
+    [
+        (refs, shape)
+        for refs in ("files", "reftable")
+        for shape in SHORT_NAME_SHAPES
+        # Under reftable, git 2.56 makes a lower-case root ref in the tables but refuses to
+        # delete it ("bad name"), and there's no file to delete instead (see drop_ref).
+        if not (refs == "reftable" and shape == "{}")
+    ],
+)
+def test_a_ref_sharing_the_branchs_name_changes_the_cached_short_name(
+    tmp_path: Path, refs: str, shape: str
+) -> None:
+    repo = make_repo(tmp_path, refs=refs)
+    empty_commit(repo)
+    git = adapter(repo)
+    assert git.branch() == "main"
+    ref = shape.format("main")
+    for operation, short in create_then_delete("heads/main", "main"):
+        before = git.branch_token()
+        settle()
+        operation(repo, ref)
+        assert gits_answers(repo)[0] == short, "the operation didn't change git's short name"
+        assert git.branch_token() != before
+        assert (git.branch(), git.head()) == gits_answers(repo)
+
+
+@dataclass(frozen=True)
+class SharedName:
+    """A ref sharing the branch's name, made in a theatre that's a linked worktree or the main
+    one, and git's short name for the branch once it exists."""
+
+    refs: str
+    linked: bool
+    branch: str
+    ref: str
+    short: str
+    before: tuple[str, ...] = ()
+    """A ref made first, with the adapter's clock past the racy window too."""
+
+
+# Where git reads each from (git-branch-cache design, the probe table): a lower-case root ref and
+# refs/<n> from the common directory; an upper-case root ref and refs/bisect/... from the
+# worktree's own.
+SHARED_NAMES = {
+    "linked-worktree-tag": SharedName("files", True, "wt", "refs/tags/wt", "heads/wt"),
+    "linked-worktree-lower-case-root": SharedName("files", True, "wt", "wt", "heads/wt"),
+    "linked-worktree-upper-case-root": SharedName("files", True, "WT", "WT", "heads/WT"),
+    "linked-worktree-bisect": SharedName(
+        "files", True, "bisect/x", "refs/bisect/x", "heads/bisect/x"
+    ),
+    "heads-at-the-root-behind-a-tag": SharedName(
+        "files", False, "main", "heads/main", "refs/heads/main", before=("refs/tags/main",)
+    ),
+    "reftable-linked-worktree-tag": SharedName("reftable", True, "wt", "refs/tags/wt", "heads/wt"),
+}
+
+
+def theatre_for(tmp_path: Path, case: SharedName) -> Repo:
+    """The main worktree on ``main``, or a linked worktree on a new branch, as the theatre."""
+    repo = make_repo(tmp_path, refs=case.refs)
+    empty_commit(repo)
+    if not case.linked:
+        return repo
+    linked = tmp_path / "linked"
+    repo.git("worktree", "add", "-q", "-b", case.branch, str(linked))
+    return Repo(linked, repo.env)
+
+
+@pytest.mark.parametrize("case", SHARED_NAMES.values(), ids=SHARED_NAMES.keys())
+def test_a_ref_sharing_the_branchs_name_where_git_reads_it_changes_the_cached_short_name(
+    tmp_path: Path, case: SharedName
+) -> None:
+    theatre = theatre_for(tmp_path, case)
+    for ref in case.before:
+        make_ref(theatre, ref)
+    git = adapter(theatre)
+    unchanged = git.branch()
+    assert unchanged is not None
+    assert unchanged != case.short
+    for operation, short in create_then_delete(case.short, unchanged):
+        settle()
+        operation(theatre, case.ref)
+        assert gits_answers(theatre)[0] == short, "the operation didn't change git's short name"
+        assert (git.branch(), git.head()) == gits_answers(theatre)
+
+
+def test_under_reftable_a_fetch_onto_a_branch_named_fetch_head_changes_the_cached_short_name(
+    tmp_path: Path,
+) -> None:
+    # git keeps FETCH_HEAD as a file even under reftable, and refuses to delete it with update-ref,
+    # so only its arrival is checked (git-branch-cache design D2).
+    repo = make_repo(tmp_path, refs="reftable")
+    empty_commit(repo)
+    repo.git("switch", "-q", "-c", "FETCH_HEAD")
+    git = adapter(repo)
+    assert git.branch() == "FETCH_HEAD"
+    settle()
+    run_git(repo.path, repo, "fetch", "-q", ".", "HEAD")
+    assert gits_answers(repo)[0] == "heads/FETCH_HEAD", "the fetch didn't change git's short name"
+    assert (git.branch(), git.head()) == gits_answers(repo)
+
+
+@pytest.mark.parametrize("refs", ["files", "reftable"])
+def test_a_symbolic_ref_sharing_the_branchs_name_is_read_on_every_call_and_followed(
+    tmp_path: Path, refs: str
+) -> None:
+    # The short name depends on whether the symbolic ref's target exists, which nothing watched
+    # shows (git-branch-cache design D3). Compared with a fresh adapter, not symbolic-ref --short,
+    # which names the missing target instead of the branch here (#388).
+    repo = make_repo(tmp_path, refs=refs)
+    empty_commit(repo)
+    run_git(repo.path, repo, "symbolic-ref", "refs/tags/main", "refs/heads/gone")
+    git = adapter(repo)
+    git.branch_token()
+    before = git.commands_run
+    git.branch_token()
+    git.branch_token()
+    # Under reftable the symbolic ref and its target are in the tables, whose lists are watched.
+    assert git.commands_run - before == (2 if refs == "files" else 0)
+    for args in (
+        ("update-ref", "refs/heads/gone", "HEAD"),
+        ("update-ref", "-d", "refs/heads/gone"),
+    ):
+        settle()
+        run_git(repo.path, repo, *args)
+        fresh = GitAdapter(repo.path, source=repo.env)
+        assert (git.branch(), git.head()) == (fresh.branch(), fresh.head())
 
 
 # Stat, then read (git-call-latency design D4): the branch's ref is stat'd before the one command

@@ -68,6 +68,10 @@ and eight in a linked one, on every call.
 before git is asked, and the paths are stat'd then. If git's answer names a different ref, HEAD moved during the read,
 and the snapshot is already marked not reusable. On a hit, the paths come from the snapshot's ref.
 
+**HEAD naming a ref outside `refs/heads/`.** git allows it (`git symbolic-ref HEAD refs/tags/x` succeeds), and its
+short name follows other rules. Rather than watch those too, a snapshot read while HEAD names such a ref isn't
+reused, as a racy one isn't: exact, and it costs a read per call only in that unusual state.
+
 *Alternatives:*
 - **Watch the `refs/tags` and `refs` directories' mtimes.** Misses nested names (`refs/tags/a/b` changes
   `refs/tags/a`), and every tag anywhere would cost a re-read.
@@ -111,7 +115,9 @@ In `packages/troupe-vcs-git/tests/test_git_state_cache.py`, against real reposit
    `test_a_ref_sharing_the_branchs_name_changes_the_cached_short_name`, parametrised over ref storage and the shapes
    that change the short name (`refs/tags/<n>`, `refs/<n>`, root `<n>`). A cached adapter whose clock is past the
    racy window reads, the ref is created with `git update-ref`, and the adapter's branch must equal git's
-   `symbolic-ref --short`, and its token must have changed; then the ref is deleted and the same holds.
+   `symbolic-ref --short`, and its token must have changed; then the ref is deleted and the same holds. git 2.56
+   makes a lower-case root ref but refuses to delete it (`update-ref -d main`: "bad name"), so the tests delete that
+   one as its file; under reftable there's no file, so that shape runs on the files storage only.
 2. **The per-worktree and root shapes**: the same in a linked worktree, for a root name in upper case, `bisect/…`'s
    `refs/<n>`, `heads/<n>` behind a tag, and under reftable a branch `FETCH_HEAD` with the file written as git fetch
    writes it.
