@@ -739,6 +739,9 @@
       "if": {"properties": {"status": {"const": "error"}}},
       "then": {"required": ["reason"]},
       "else": {"not": {"required": ["reason"]}},
+      "dependentSchemas": {
+        "notRetried": {"required": ["reason"], "properties": {"status": {"const": "error"}, "reason": {"$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/retryReason"}}}
+      },
       "properties": {
         "type": {
           "const": "result"
@@ -757,6 +760,10 @@
         "reason": {
           "description": "Why the run failed. Present exactly when status is error. Absent: status is ok.",
           "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/failureReason"
+        },
+        "notRetried": {
+          "description": "Why the runner didn't retry the failure. Only on an error result whose reason a retry can name. Absent: the result doesn't say.",
+          "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/notRetried"
         },
         "message": {
           "$ref": "https://troupe.run/protocol/runner/run-event.schema.json#/$defs/result/properties/message"

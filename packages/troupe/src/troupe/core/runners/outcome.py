@@ -13,7 +13,7 @@ from typing import Any
 from troupe.core.errors import TroupeError
 from troupe.core.runners.effects import AuditFindings, EffectVerdict
 from troupe.core.runners.limits import RunLimits
-from troupe_plugin_sdk.runner import FailureReason, ResultEvent
+from troupe_plugin_sdk.runner import FailureReason, NotRetried, ResultEvent
 
 FAILURES: dict[FailureReason, tuple[str, str]] = {
     "authentication": (
@@ -89,16 +89,33 @@ FAILURES: dict[FailureReason, tuple[str, str]] = {
 in the contract's list has an entry."""
 
 
+NOT_RETRIED_FIXES: dict[NotRetried, str] = {
+    "side-effect": (
+        "The runner didn't retry, because a tool call had already run and a retry could run it "
+        "again. Review what the run changed before performing the actor again (`troupe diff {run}` "
+        "shows it for a run in its own worktree)."
+    ),
+}
+"""For each reason a runner can give for not retrying: what to do first, before the failure
+reason's own fix. ``{run}`` is the run's id. Every value in the contract's list has an entry."""
+
+
 def error_result(result: ResultEvent) -> TroupeError:
-    """The error for a run whose result had status error, saying why from its reason."""
+    """The error for a run whose result had status error, saying why from its reason, and that the
+    runner held back from retrying when it did."""
     if result.reason is None:
         raise ValueError("an error result always has a reason")
     problem, fix = FAILURES[result.reason]
+    details: dict[str, Any] = {"reason": result.reason}
+    if result.not_retried is not None:
+        details["notRetried"] = result.not_retried
+        fix = f"{NOT_RETRIED_FIXES[result.not_retried].format(run=result.run_id)} {fix}"
+    details["message"] = result.message
     return TroupeError(
         "run.error-result",
         problem=f"{problem}: {result.message or '(no message)'}",
         fix=fix,
-        details={"reason": result.reason, "message": result.message},
+        details=details,
     )
 
 

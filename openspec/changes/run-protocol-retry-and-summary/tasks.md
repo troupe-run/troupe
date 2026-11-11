@@ -3,23 +3,23 @@
 Every commit is signed and signed off (`git commit -S -s`), and `uv run scripts/check.py` passes before it (design D8).
 ## 1. The runner contract: `notRetried` (design D1, D2)
 
-- [ ] 1.1 Before changing anything, add tests to `test_runner_schemas.py` that pass on `main` today and must keep
+- [x] 1.1 Before changing anything, add tests to `test_runner_schemas.py` that pass on `main` today and must keep
   passing: an `error` result with each reason and no `notRetried` validates as `event`, `hostEvent` and in
   `run-ended`'s `outcome.result`; a `retry` with each of its five reasons validates. Verify: they pass on the
   unchanged schema.
-- [ ] 1.2 In `protocol/schemas/runner/run-event.schema.json`, name `$defs/retry`'s reason list `$defs/retryReason`,
+- [x] 1.2 In `protocol/schemas/runner/run-event.schema.json`, name `$defs/retry`'s reason list `$defs/retryReason`,
   add `$defs/notRetried` (`side-effect`, with its description) and `$defs/result.notRetried`, with the rule that it's
   present only on an `error` result whose reason is a `retryReason`; copy the schema to
   `packages/troupe/src/troupe/protocol/`. Verify: each runner-protocol delta scenario is a test in
   `test_runner_schemas.py` (an `ok` result, reason `budget`, a value off the list, and the recorded `Run.Ended`
   case), they fail before the change and pass after, and 1.1's tests still pass.
-- [ ] 1.3 Document it in `contributing/runners.md` (the `result` row, a short "When a retry isn't safe" section after
+- [x] 1.3 Document it in `contributing/runners.md` (the `result` row, a short "When a retry isn't safe" section after
   the reasons, and why Ollama, OpenAI and Claude Code never send it, design D6) and regenerate the event reference.
   Verify: `test_runners_doc.py` passes, and the docs check in `scripts/check.py` passes.
 
 ## 2. The SDK (design D4)
 
-- [ ] 2.1 Add `RetryReason` and `NotRetried` to `troupe_plugin_sdk.runner`, use `RetryReason` for
+- [x] 2.1 Add `RetryReason` and `NotRetried` to `troupe_plugin_sdk.runner`, use `RetryReason` for
   `RetryEvent.reason`, add `ResultEvent.not_retried`, and refuse it in `__post_init__` on an `ok` result and beside a
   reason outside `RetryReason`, naming `notRetried`. Extend `test_runner_types_drift.py` to compare both literals with
   the schema. Verify: each plugin-sdk delta scenario is a test, mypy `--strict` passes, and the drift test fails when
@@ -27,16 +27,16 @@ Every commit is signed and signed off (`git commit -S -s`), and `uv run scripts/
 
 ## 3. The outcome and the CLI (design D3)
 
-- [ ] 3.1 Add `notRetried` to `run.error-result`'s details in `protocol/schemas/error.schema.json` (and the packaged
+- [x] 3.1 Add `notRetried` to `run.error-result`'s details in `protocol/schemas/error.schema.json` (and the packaged
   copy); in `troupe.core.runners.outcome`, pass it through and prepend its fix from one table keyed by value, with a
   test that every `NotRetried` value has an entry. Verify: each actor-runners delta scenario is a test in
   `test_run_outcome.py`, and every derived error validates against the error schema.
-- [ ] 3.2 Show it on the result's line in `troupe.cli.render`: `error (network, not retried: side-effect)`. Verify: a
+- [x] 3.2 Show it on the result's line in `troupe.cli.render`: `error (network, not retried: side-effect)`. Verify: a
   test in `test_cli_render.py`, and the existing result-line tests still pass.
 
 ## 4. The scripted runner
 
-- [ ] 4.1 Let a script's `result` step name `notRetried`, with the contract's rule in its options schema
+- [x] 4.1 Let a script's `result` step name `notRetried`, with the contract's rule in its options schema
   (`plugins/runner-scripted/.../options.schema.json`), and pass it through. Verify: each scripted-runner delta
   scenario is a test; a script with `notRetried` beside `quota` is refused with `scripted.invalid-script` naming
   `notRetried`.

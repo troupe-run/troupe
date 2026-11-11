@@ -259,6 +259,11 @@ class ToolResultEvent(RunEvent):
 
 
 RetryReason = Literal["authentication", "rate-limit", "network", "server", "other"]
+"""Why the engine or runner is retrying, or would have retried: the contract's closed list
+(run-event.schema.json ``$defs/retryReason``). Each means the same as the failure reason of the same
+name."""
+
+RETRY_REASONS: tuple[RetryReason, ...] = get_args(RetryReason)
 
 
 @dataclass(frozen=True)
@@ -324,6 +329,13 @@ which says what each means). A failure the list has no entry for is ``other``.""
 
 FAILURE_REASONS: tuple[FailureReason, ...] = get_args(FailureReason)
 
+NotRetried = Literal["side-effect"]
+"""Why a runner didn't retry a failure it would otherwise have retried: the contract's closed list
+(run-event.schema.json ``$defs/notRetried``). ``side-effect``: a tool call had already been carried
+out or answered, and a retry could carry it out again."""
+
+NOT_RETRIED: tuple[NotRetried, ...] = get_args(NotRetried)
+
 
 @dataclass(frozen=True)
 class ServedModelEvent(RunEvent):
@@ -342,6 +354,9 @@ class ResultEvent(RunEvent):
     message: str = json_field("message")
     reason: FailureReason | None = json_field("reason", default=None)
     """Why the run failed: present exactly when status is error, wherever a result appears."""
+    not_retried: NotRetried | None = json_field("notRetried", default=None)
+    """Why the runner held back from retrying this failure: only on an error result whose reason is
+    a retry reason. None: it retried until its attempts ran out, or doesn't retry this failure."""
     turns: int | None = json_field("turns", default=None, minimum=0)
     duration_ms: int | None = json_field("durationMs", default=None, minimum=0)
     usage: Usage | None = json_field("usage", default=None)
@@ -359,6 +374,14 @@ class ResultEvent(RunEvent):
             raise fail("ResultEvent", "an error result needs a reason")
         if self.status == "ok" and self.reason is not None:
             raise fail("ResultEvent", f"an ok result has no reason, not {self.reason!r}")
+        if self.status == "ok" and self.not_retried is not None:
+            raise fail("ResultEvent", f"an ok result has no notRetried, not {self.not_retried!r}")
+        if self.not_retried is not None and self.reason not in RETRY_REASONS:
+            raise fail(
+                "ResultEvent",
+                "notRetried is only on an error result whose reason a retry can name, not "
+                f"beside {self.reason!r}",
+            )
 
 
 EventType = Literal[

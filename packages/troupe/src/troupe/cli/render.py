@@ -59,7 +59,9 @@ def render_event(logged: Mapping[str, Any]) -> str:
         "log": f"{event.get('level')}: {_first_line(event.get('message', ''))}",
         "served_model": f"{event.get('model')}",
         "result": f"{event.get('status')}"
-        + (f" ({event['reason']})" if "reason" in event else "")
+        + (f" ({event['reason']}" if "reason" in event else "")
+        + (f", not retried: {event['notRetried']}" if "notRetried" in event else "")
+        + (")" if "reason" in event else "")
         + f": {_first_line(event.get('message', ''))}",
         "oversized": f"{event.get('originalType')}, {event.get('bytes')} bytes, {event.get('ref')}",
     }

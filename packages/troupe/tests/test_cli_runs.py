@@ -225,6 +225,30 @@ def test_a_run_at_its_turn_limit_shows_why_and_how_to_raise_it_in_perform_and_lo
     assert "result: error (turn-limit): stopped after 2 turns" in out
 
 
+# Requirement: A failure that wasn't retried reaches the outcome
+
+
+def test_a_run_not_retried_after_a_tool_call_says_so_in_perform_and_logs(repo: Repo) -> None:
+    error = {
+        "event": {
+            "type": "result",
+            "status": "error",
+            "reason": "network",
+            "notRetried": "side-effect",
+            "message": "the connection dropped",
+        }
+    }
+    configure(repo, script(INIT, error))
+    code, out, err = cli("perform", "tester")
+    assert code == 1
+    assert "a tool call had already run" in err
+    run_id = err.split("  run: ")[1].split()[0]
+    assert f"troupe diff {run_id}" in err
+    code, out, err = cli("logs", run_id)
+    assert code == 0, err
+    assert "result: error (network, not retried: side-effect): the connection dropped" in out
+
+
 def test_the_default_policy_refuses_the_local_stage_naming_the_variable(
     repo: Repo, monkeypatch: pytest.MonkeyPatch
 ) -> None:

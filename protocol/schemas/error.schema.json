@@ -549,6 +549,10 @@
               "description": "Why the run failed, from its result.",
               "$ref": "runner/run-event.schema.json#/$defs/failureReason"
             },
+            "notRetried": {
+              "description": "Why the runner didn't retry the failure, from its result. Absent: the result didn't say, because the runner retried until its attempts ran out or doesn't retry that failure.",
+              "$ref": "runner/run-event.schema.json#/$defs/notRetried"
+            },
             "message": {
               "type": "string"
             }
