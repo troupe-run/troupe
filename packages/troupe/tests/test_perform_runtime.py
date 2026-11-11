@@ -425,7 +425,7 @@ def test_a_runtime_the_environment_makes_unfit_is_refused_and_nothing_is_recorde
     assert error.details["runtime"] == "ollama"
     assert error.details["reasons"] == reasons
     assert error.details["from"] == came_from
-    assert error.details["fits"] == []
+    assert error.details["fits"] == ["lm-studio"]  # the built-in, LM Studio's server root
     data = json.dumps(error.to_data())
     assert NAMED_KEY not in data
     assert KEY not in data

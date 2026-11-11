@@ -34,6 +34,10 @@ class RuntimeFit:
     """What the runtime's endpoint's path must be: none (the runner adds its own API's path),
     one (such as /v1, which the runner's requests go below), or either. A lone / is no path."""
 
+    scheme: Literal["any", "http"] = "any"
+    """Which of the endpoint's schemes the runner can use: either, or plain http alone, for a
+    runner whose engine can't be reached over TLS (lmstudio-runner design D3)."""
+
 
 @dataclass(frozen=True)
 class Runner:
@@ -138,6 +142,9 @@ RUNNERS: dict[str, Runner] = {
         # LM Studio's own client library, lmstudio, comes with troupe-run[lm-studio], not the
         # base install (runner-extras design D1, D5).
         in_extra=True,
+        # It sends no credential, connects to LM Studio's server root, and only over plain ws://,
+        # since the library has no TLS (lmstudio-runner design D3, D4).
+        fit=RuntimeFit(credential=False, path="none", scheme="http"),
     ),
     "ollama": Runner(
         command=(sys.executable, "-m", "troupe_runner_ollama"),

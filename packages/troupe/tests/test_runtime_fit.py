@@ -12,7 +12,8 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from troupe.core import defaults, interim, runtimes
-from troupe_plugin_sdk.runner import RunStartRuntime
+from troupe_plugin_sdk.runner import RunStartParams, RunStartRuntime
+from troupe_runner_lm_studio import runtime as lm_studio_runtime
 from troupe_runner_ollama import runtime as ollama_runtime
 from troupe_runner_openai import runtime as openai_runtime
 
@@ -50,7 +51,37 @@ def _openai_accepts(endpoint: str, credential: bool) -> bool:
     return True
 
 
-ORACLES = {"ollama": _ollama_accepts, "openai": _openai_accepts}
+def _lm_studio_accepts(endpoint: str, credential: bool) -> bool:
+    start = RunStartParams.from_data(
+        {
+            "runId": "11111111-1111-4111-8111-111111111111",
+            "direction": "d",
+            "workspace": "w",
+            "options": {},
+            "limits": {"eventMaxBytes": 65536},
+            "effects": {"write": [], "delete": [], "move": []},
+            "scratch": "s",
+            "runtime": {
+                "name": "box",
+                "endpoint": endpoint,
+                "model": "m",
+                "credential": credential,
+            },
+        }
+    )
+    environ = {"TROUPE_RUNTIME_CREDENTIAL": KEY} if credential else {}
+    try:
+        lm_studio_runtime.from_run_start(start, environ)
+    except lm_studio_runtime.RuntimeRefusedError:
+        return False
+    return True
+
+
+ORACLES = {
+    "lm-studio": _lm_studio_accepts,
+    "ollama": _ollama_accepts,
+    "openai": _openai_accepts,
+}
 
 
 def _config_accepts(runner: str, endpoint: str, credential: bool) -> bool:
