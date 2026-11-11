@@ -194,8 +194,36 @@ None. Test helpers only; nothing ships.
 
 ## Measured
 
-To be filled in by task 4 (D5): wall time and total setup time per run, baseline and variant, three interleaved
-pairs, and fresh builds against copies.
+macOS, 2026-11-11, after rebasing on troupe#367. Baseline is `main` at 6fc34a82, and variant is this branch, which
+has 14 more tests (5606 against 5592: the theatre and counts tests, some of them pytester runs). Each run was
+`uv run pytest -n 3 -q --basetemp=<new empty dir> --durations=0`, alternating baseline and variant, with the load
+average between 7 and 16 at each start. All six passed.
+
+| Pair | Baseline wall | Variant wall | Saved | Baseline setup | Variant setup |
+|---|---|---|---|---|---|
+| 1 | 412.8 s | 399.7 s | 13.1 s | 131.9 s | 119.5 s |
+| 2 | 385.7 s | 380.2 s | 5.5 s | 130.1 s | 118.1 s |
+| 3 | 389.0 s | 384.6 s | 4.4 s | 121.7 s | 119.7 s |
+| Mean | 395.8 s | 388.2 s | 7.7 s (1.9%) | 127.9 s | 119.1 s |
+
+Setup is the total across the 3 workers, from `--durations=0`. It understates the change, because many tests call
+`make_repo` in their own body, which pytest counts as the call.
+
+Each variant run built 9 templates and made 680 copies and 97 fresh builds (the `fresh=True` tests in
+`test_git_state_cache.py`). Repositories built in child processes aren't counted.
+
+Build against copy for each shape, median of 20, two rounds:
+
+| Shape | Build | Copy |
+|---|---|---|
+| `make_repo` (an empty `init`) | 42–46 ms | 15–17 ms |
+| `committed()` | 141–145 ms | 56–57 ms |
+| scripts' `make_repo` | 145–146 ms | 39–45 ms |
+
+Every shape's copy is faster than its build, so all three stay templated (D1). The saving is about a third of the
+issue's estimate of ~23 s. That estimate applied `committed()`'s 131 ms build to all of the suite's inits, but most
+copies are of `make_repo`'s empty `init`, which saves about 30 ms each, not 100. 680 copies at that rate is about 20 s
+of worker time, or about 7 s of wall time on 3 workers, which matches the mean.
 
 ## Open Questions
 
