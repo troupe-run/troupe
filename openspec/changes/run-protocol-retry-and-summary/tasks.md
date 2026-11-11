@@ -62,6 +62,8 @@ Every commit is signed and signed off (`git commit -S -s`), and `uv run scripts/
 - [ ] 6.1 Once PR #379 has merged, rebase onto `main` and re-run the full check. Verify: `scripts/check.py` passes on
   the rebased branch, and `lm-studio-runner`'s spec is on `main`. If #379 hasn't merged when groups 1 to 5 are ready,
   ask the owner whether to wait or move group 6 to a follow-up issue (on the board), and record the answer here.
+  Asked 2026-11-11 with groups 1 to 5 done and #379 still open: the owner chose to open the draft PR now and wait
+  for #379, then rebase and add group 6 to this PR before marking it ready.
 - [ ] 6.2 Add the `lm-studio-runner` delta to this change: a connection lost or unreachable after a tool call has been
   carried out or answered ends `network` with `notRetried` `side-effect`; a message timeout and the turn limit and
   budget carry none. Verify: `openspec validate run-protocol-retry-and-summary --strict` passes.
