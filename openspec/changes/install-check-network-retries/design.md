@@ -57,9 +57,11 @@ fails the install step well inside it.
 ### D3. The caller's value wins; uv judges it
 
 The check adds `UV_HTTP_RETRIES` to the environment it gives uv only when the variable isn't already in the
-environment it was run with. Present means present: an empty or malformed value is passed through, and uv refuses it,
-naming the variable and value, which the check reports as the install step's failure with uv's output. That follows
-"only an absent input may fall through": the check never replaces a value it was given with its own.
+environment it was run with. A malformed value is passed through, and uv refuses it, naming the variable and value,
+which the check reports as the install step's failure with uv's output. That follows "only an absent input may fall
+through": the check never replaces a value it was given with its own. An empty value is the exception, because uv
+itself reads `UV_HTTP_RETRIES=` as unset and uses its default of 3 (found while building this): the check reads it
+the same way and sets its own, rather than pass through an empty value that would quietly mean 3.
 
 It goes in the same place the tool directories are added (`Tools.environment`, or a small function it calls), so
 both `uv tool install` runs, and anything later added to them, get it. The `troupe` commands the check runs see the
