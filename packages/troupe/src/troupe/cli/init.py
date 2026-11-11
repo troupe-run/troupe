@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Any, TextIO
 
 from troupe.cli.commands import _call, _ignore_cancel, _notices
-from troupe.cli.parser import Command
 from troupe.cli.render import render_notice
 from troupe.core.client.session import CancelSignal, Session
 from troupe.core.config_paths import shown
@@ -28,22 +27,6 @@ from troupe.core.theatre import THEATRE_DIR
 COMMAND = "troupe init"
 COMMIT_MESSAGE = "Add a troupe theatre"
 """The message the printed commit step suggests."""
-
-
-def _configure(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
-        "--audition",
-        action="store_true",
-        help="also define a working example actor, lead (Claude Code unless --runner says)",
-    )
-    parser.add_argument(
-        "--runner", help="the example actor's runner, such as scripted (only with --audition)"
-    )
-    parser.add_argument(
-        "--rehearse",
-        action="store_true",
-        help="run every check and make nothing: show what would be made",
-    )
 
 
 def _missing_audition() -> TroupeError:
@@ -226,7 +209,7 @@ def render_init(result: dict[str, Any], directory: Path, stdout: TextIO) -> None
             print(f"   # {note}", file=stdout)
 
 
-def _run(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
+def run(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
     if arguments.runner is not None and not arguments.audition:
         raise _missing_audition()
     params: dict[str, Any] = {}
@@ -240,13 +223,3 @@ def _run(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitC
     _notices(result, stderr)
     render_init(result, directory, stdout)
     return ExitCode.WOULD_CHANGE if arguments.rehearse else ExitCode.OK
-
-
-COMMANDS: tuple[Command, ...] = (
-    Command(
-        "init",
-        "Make a theatre here, and with --audition, a working example actor.",
-        _configure,
-        _run,
-    ),
-)

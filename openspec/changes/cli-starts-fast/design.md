@@ -73,25 +73,31 @@ Limits, recorded with the counts: a process started with `-S` or `-I` skips `.pt
 environment (uv's own) isn't seen. The apply step greps the tests for `-S`/`-I` launches and lists any as uncounted.
 git and other non-Python processes aren't counted (out of scope).
 
-### D2. Command declarations stay cheap; each family's body loads when one of its commands runs
+### D2. One cheap command table; each family's work loads when one of its commands runs
 
-`cli.commands`, `cli.config` and `cli.init` keep their `COMMANDS` tables, argument declarations and help text, and
-import only argparse, `cli.parser` and cheap core constants. Each command's `run` stays a typed function in the
-declaration module, but its body is a one-line deferred import of the family's body module, which holds what is
-there today: the rendering of results, the calling helpers and everything they import. Concretely, the shared calling
-helpers (`_session`, `_call`, `_notices`, `_ignore_cancel`, with `asyncio`, `dispatch`, `theatre`, `interrupts`)
-move to their own body module, which the run, config and init bodies import.
+A new module, `troupe.cli.table`, holds every command's declaration: its name, help, `configure` (argparse
+arguments only) and a typed `run` whose body is a one-line deferred import of the family's module, which it then
+calls. `troupe.cli` takes `COMMANDS` from the table. The family modules (`cli.commands`, `cli.config`, `cli.init`)
+keep their command bodies, now public (`run_perform`, `run_set`, `init.run` and so on), their rendering and the shared
+calling helpers, with every import they had. They no longer define `COMMANDS` or `configure` functions.
+
+Changed while building (the proposal had the declarations stay in the family modules and the bodies move out): the
+tests patch the bodies' internals where they are today (`troupe.cli.config._call`, `troupe.cli.commands._call`,
+`init_cli.SHELL`), so moving the declarations instead leaves those tests and the bodies' history untouched, and puts
+the whole boundary in one module a reader can see. `configure` needed nothing heavy (the `init --runner` choices aren't
+declared to argparse).
 
 Alternatives: a `run` given as a `"module:function"` string resolved at call time loses mypy's check of the
 signature. Deferred imports scattered through today's modules inline, without the split, work but make it easy for a
-new top-level import to slip back in. The check (D6) would catch that, but the split makes the boundary something a
-reader can see. Constants that `configure` needs (like `core.defaults.RUNTIMES` for `init --runner` choices) stay
-top-level imports only if they're cheap. Otherwise they move behind the same deferral, or into a cheap module.
+new top-level import to slip back in. The check (D6) would catch that, but the table makes the boundary visible.
 
 ### D3. `--version` reads the version where it's printed
 
-`importlib.metadata.version` is imported inside the `--version` branch of `run`. The installed metadata stays the one
-source of the version.
+`importlib.metadata.version`, and `core.schemas.protocol_version` for the protocol version on the same line, are
+imported inside the `--version` branch of `run`. The installed metadata stays the one source of the version.
+`core.schemas` imported `jsonschema` and `referencing` at the top, though `protocol_version` only reads a JSON file, so
+those imports move into `registry()` and `validator()`, the two functions that use them, with the annotations under
+`TYPE_CHECKING`. `--version` then loads package metadata and nothing else heavy.
 
 Alternative: a generated `troupe.__version__` constant would be a second copy of the version that release-please
 would have to keep in step. Rejected: one decision in one place.
@@ -102,12 +108,19 @@ would have to keep in step. Rejected: one decision in one place.
 under `TYPE_CHECKING`, or the change rendering moves to the body that renders a run, whichever keeps the type checks.
 `troupe.platform.paths.friendly` stays (cheap).
 
-### D5. The dispatcher imports only the called method's family
+### D5. The dispatcher imports only the called method's family, and a family only the called handler
 
-`dispatch` gets one table from method name to the module that defines its family's `methods()`. `call` imports that
-one module. `handlers()` (all methods) stays for the unknown-method listing and for tests, and the listing comes from
-the table's names, so it doesn't import any family. A test checks the table's names equal the union of every family's
-`methods()`, so a method added to a family without a table entry fails the suite rather than becoming "unknown".
+`dispatch.FAMILIES` maps each method name to a function that imports its family's `methods()` (typed, rather than a
+module name string). `call` imports only that family. The unknown-method listing comes from the table's names, so it
+imports no family. `handlers()` (all methods) loads every family, for tests. A test checks the table's names equal the
+union of every family's `methods()`, so a method a family adds without a table entry fails the suite rather than
+becoming "unknown" (checked by deleting an entry: the test failed).
+
+Found while building: a family isn't enough on its own. `core.runs` imported its three handler modules at the top,
+and `runs.perform` imports `sync_files` from config's handlers, so `troupe status` loaded config's handlers through
+`perform`. `core.runs`' handler wrappers (which already existed) now import their handler module when called, and
+`perform` imports `sync_files` where it syncs, since `runs.queries` and `runs.changes` import `Backends` and
+`lease_dir` from `perform`.
 
 Alternative: keep importing all three families. Every command then pays for config's YAML and schema checking and
 init's runtimes. Since the table is the one place a method is routed, it is also the place a missing entry is caught.

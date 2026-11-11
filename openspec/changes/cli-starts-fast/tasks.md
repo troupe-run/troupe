@@ -2,13 +2,13 @@
 
 ## 1. Count and size, before any code changes (design D1, D7)
 
-- [ ] 1.1 Make the baseline: a detached worktree of this change's base commit outside the repository directory, with
+- [x] 1.1 Make the baseline: a detached worktree of this change's base commit outside the repository directory, with
   its own `uv sync`; verify `uv run python -c "import troupe.cli"` runs there and `git -C <it> rev-parse HEAD` is the
   base commit.
 - [ ] 1.2 Grep the tests, plugins' tests and scripts for Python launched with `-S` or `-I`, or from an interpreter
   other than `sys.executable`, and list them as processes the count can't see; verify the list is recorded in the
   design's Measurements.
-- [ ] 1.3 Add the opt-in counting `.pth` to this worktree's `.venv` only (not committed: `git status` shows nothing
+- [x] 1.3 Add the opt-in counting `.pth` to this worktree's `.venv` only (not committed: `git status` shows nothing
   new); verify a `python -c pass` with `TROUPE_COUNT_DIR` set writes one line, and without it writes nothing and
   prints nothing.
 - [ ] 1.4 With the load average under 20, run the full suite once with `TROUPE_COUNT_DIR` set
@@ -27,43 +27,47 @@
 
 ## 2. The check, written first (spec: cli, both requirements; design D6)
 
-- [ ] 2.1 Add a test helper that runs a fresh `sys.executable` doing one thing (import `troupe.cli`, or run
+- [x] 2.1 Add a test helper that runs a fresh `sys.executable` doing one thing (import `troupe.cli`, or run
   `troupe.cli.main` with given arguments in a given directory) and returns the names in its `sys.modules`, written to
-  a file rather than stdout; verify a helper test that `python -c pass`'s set excludes `jsonschema` and that importing
-  `jsonschema` puts it in.
-- [ ] 2.2 Name the heavy modules in one place, and add the tests for "Starting troupe loads only what parsing needs":
+  a file rather than stdout; verify a helper test that the probe reports `troupe.cli` when it imported it, and that a
+  name counts as loaded when a submodule is, but not when only a longer name is.
+- [x] 2.2 Name the heavy modules in one place, and add the tests for "Starting troupe loads only what parsing needs":
   importing the command line, `--help`, `troupe` alone, an unknown command, a refused argument, and `--version`
   (which allows only package metadata); each asserts the output and exit code are unchanged too. Verify they fail on
   the base commit, naming the modules (these are the tests group 3 makes pass; mark nothing xfail, and commit them
   with group 3's first passing step so every commit passes the check).
-- [ ] 2.3 Add the tests for "A command loads only its own handlers": `troupe status` in a theatre loads neither the
+- [x] 2.3 Add the tests for "A command loads only its own handlers": `troupe status` in a theatre loads neither the
   config nor init handlers, `troupe config get` loads neither the runs nor init handlers; verify they fail on the
   base commit for the reason the scenario names.
-- [ ] 2.4 Add a test that the dispatcher's unknown-method listing equals every method the families offer, before and
+- [x] 2.4 Add a test that the dispatcher's unknown-method listing equals every method the families offer, before and
   after; verify it passes on the base commit (it's the non-goal check: the listing must not change).
 
 ## 3. The parsing path loads nothing heavy (design D2, D3, D4)
 
-- [ ] 3.1 Move the shared calling helpers (`_session`, `_call`, `_notices`, `_ignore_cancel` and their imports) out of
-  `cli.commands` into their own body module, and update `cli.config`, `cli.init` and any test that patches them;
-  verify the CLI tests pass.
-- [ ] 3.2 Split `cli.commands` into declarations (`COMMANDS`, `configure` functions, help) and a body module that a
-  thin typed `run` per command imports when it runs; verify the run CLI tests (`test_cli_runs.py`, `test_cli.py`,
-  `test_cli_changes.py`) pass unchanged apart from patch targets.
-- [ ] 3.3 Do the same for `cli.config` (moving `cli.values`' YAML and schema imports off the declaration path) and
-  `cli.init` (keeping `--runner`'s choices cheap); verify the config and init CLI tests pass.
-- [ ] 3.4 Import `importlib.metadata.version` inside the `--version` branch (D3), and stop `cli.render` importing
-  `core.runners.effects` at the top (D4); verify `test_cli_render.py` and the version tests pass.
-- [ ] 3.5 Verify group 2.2's tests now pass, run mypy --strict, ruff and import-linter, and commit groups 2.1–2.2 with
-  this group (signed, signed off, `uv run scripts/check.py` passing, its full output kept in a scratch file).
+- [x] 3.1 Add `troupe.cli.table` with every command's name, help, `configure` and a typed `run` that imports its family's
+  module when it runs (design D2), and take `troupe.cli.COMMANDS` from it; verify `test_cli.py`'s help and parser
+  tests pass.
+- [x] 3.2 Remove the declarations from `cli.commands`, `cli.config` and `cli.init`, making their command bodies public,
+  and leave their helpers and imports where they are; verify the CLI tests (`test_cli*.py`, `test_user_docs_*.py`,
+  `test_credential_leak.py`, `test_config_paths.py`) pass with no test changed.
+- [x] 3.3 Run the startup tests and follow each module still loaded to its importer with `python -X importtime`;
+  verify every parsing-path test of group 2.2 names nothing it shouldn't.
+- [x] 3.4 Import `importlib.metadata.version` and `protocol_version` inside the `--version` branch, move
+  `core.schemas`' `jsonschema` and `referencing` imports into the functions that use them (D3), and stop `cli.render`
+  importing `core.runners.effects` at the top (D4); verify `test_cli_render.py`, `test_schemas.py` and the version
+  tests pass.
+- [x] 3.5 Verify group 2.2's tests now pass, and run mypy --strict, ruff and import-linter. (Committed with group 4,
+  in one commit: group 4's edits are in tracked files, and the guard refuses a commit while any is unstaged.)
 
 ## 4. A command loads only its own handlers (design D5)
 
-- [ ] 4.1 Give the dispatcher one table from method name to the module of its family's `methods()`, have `call` import
-  only that module, and build the unknown-method listing from the table's names; verify group 2.3's and 2.4's tests
+- [x] 4.1 Give the dispatcher one table from method name to its family's `methods()`, have `call` import only that
+  family, and build the unknown-method listing from the table's names; have `core.runs`' wrappers import their handler
+  module when called, and `perform` import `sync_files` where it syncs (design D5); verify group 2.3's and 2.4's tests
   pass, plus `test_client_dispatch.py`.
 - [ ] 4.2 Add the drift test: the table's names equal the union of every family's `methods()`; verify it fails when a
-  method is removed from the table in a scratch edit, then restore it. Commit (signed, signed off, full check).
+  method is removed from the table in a scratch edit, then restore it. Commit groups 2 to 4 (signed, signed off, the
+  full check passing, its output kept in a scratch file).
 
 ## 5. Heavy core imports on the paths that don't use them (proposal, "Heavy imports in the core")
 

@@ -6,20 +6,13 @@ results and errors into text. No behaviour lives only here.
 
 import sys
 from collections.abc import Sequence
-from importlib.metadata import version
 from typing import TextIO
 
-from troupe.cli.commands import COMMANDS as RUN_COMMANDS
-from troupe.cli.config import COMMANDS as CONFIG_COMMANDS
-from troupe.cli.init import COMMANDS as INIT_COMMANDS
 from troupe.cli.parser import Command, parse
 from troupe.cli.render import render_error
+from troupe.cli.table import COMMANDS as COMMANDS  # the subcommands troupe offers
 from troupe.core.errors import BUG_REPORT_URL, TroupeError
 from troupe.core.exit_codes import ExitCode
-from troupe.core.schemas import protocol_version
-
-COMMANDS: tuple[Command, ...] = (*INIT_COMMANDS, *RUN_COMMANDS, *CONFIG_COMMANDS)
-"""The subcommands troupe offers."""
 
 
 def run(
@@ -32,6 +25,12 @@ def run(
     """Run one command line. Raises TroupeError for any failure the user should see."""
     parsed = parse(argv, commands)
     if parsed.show_version:
+        # Read only here: package metadata and the schema registry are slow to load
+        # (cli-starts-fast design D3).
+        from importlib.metadata import version
+
+        from troupe.core.schemas import protocol_version
+
         print(f"troupe {version('troupe')} (protocol {protocol_version()})", file=stdout)
         return ExitCode.OK
     if parsed.command is None:

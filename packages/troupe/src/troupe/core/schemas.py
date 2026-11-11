@@ -17,14 +17,14 @@ import json
 import re
 from functools import cache
 from pathlib import Path
-from typing import Any
-
-import jsonschema
-from referencing import Registry, Resource
-from referencing.jsonschema import DRAFT202012
+from typing import TYPE_CHECKING, Any
 
 from troupe.core import strict_json
 from troupe.core.errors import TroupeError
+
+if TYPE_CHECKING:  # loaded where a schema is checked: they're slow to load (cli-starts-fast)
+    import jsonschema
+    from referencing import Registry
 
 PROTOCOL = Path(__file__).resolve().parents[1] / "protocol"
 """The schemas this troupe was built with."""
@@ -93,8 +93,11 @@ def plugin_schema(package: str, name: str) -> dict[str, Any]:
     return _load(path)
 
 
-def registry(*plugins: str) -> Registry[Any]:
+def registry(*plugins: str) -> "Registry[Any]":
     """Every schema troupe carries, and each named plugin's, by ``$id``."""
+    from referencing import Registry, Resource
+    from referencing.jsonschema import DRAFT202012
+
     schemas = [*_protocol(), *(schema for package in plugins for schema in _plugin(package))]
     return Registry().with_resources(
         (schema["$id"], Resource.from_contents(schema, default_specification=DRAFT202012))
@@ -102,9 +105,11 @@ def registry(*plugins: str) -> Registry[Any]:
     )
 
 
-def validator(uri: str, *plugins: str) -> jsonschema.Draft202012Validator:
+def validator(uri: str, *plugins: str) -> "jsonschema.Draft202012Validator":
     """A validator for the schema at ``uri`` (an ``$id``, optionally with a fragment), which may
     refer to any schema troupe carries or the named plugins publish."""
+    import jsonschema
+
     return jsonschema.Draft202012Validator({"$ref": uri}, registry=registry(*plugins))
 
 

@@ -4,7 +4,6 @@ from collections.abc import Mapping
 from typing import Any
 
 from troupe.core.errors import TroupeError
-from troupe.core.runners.effects import Change
 from troupe.platform.paths import friendly
 
 
@@ -131,6 +130,9 @@ def render_run(run: Mapping[str, Any]) -> list[str]:
 def render_audit(run: Mapping[str, Any]) -> list[str]:
     """What the audit of a run's changes found, for its summary and its logs (spec: cli, "Status
     and logs show a run's audit"). A run with no audit recorded shows nothing."""
+    # Loaded only to show an audit: the effects module is slow to load (cli-starts-fast D4).
+    from troupe.core.runners.effects import Change
+
     audit = run.get("audit")
     if audit is None:
         return []

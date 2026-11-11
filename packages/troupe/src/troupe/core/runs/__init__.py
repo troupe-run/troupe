@@ -7,33 +7,45 @@ from typing import Any
 from troupe.core.client import messages as m
 from troupe.core.client.dispatch import Method, Send
 from troupe.core.client.session import Session
-from troupe.core.runs.changes import accept, diff, discard
-from troupe.core.runs.perform import perform
-from troupe.core.runs.queries import logs, status
 from troupe_plugin_sdk.messages import Message
+
+# Each handler's module is imported when it's called, so a query doesn't load perform, and with it
+# config's handlers, which it syncs files with (cli-starts-fast design D5).
 
 
 async def _perform(request: Any, session: Session, send: Send) -> Message:  # noqa: ANN401
+    from troupe.core.runs.perform import perform
+
     return await perform(request, session, send)
 
 
 async def _status(request: Any, session: Session, send: Send) -> Message:  # noqa: ANN401
+    from troupe.core.runs.queries import status
+
     return await status(request, session, send)
 
 
 async def _logs(request: Any, session: Session, send: Send) -> Message:  # noqa: ANN401
+    from troupe.core.runs.queries import logs
+
     return await logs(request, session, send)
 
 
 async def _diff(request: Any, session: Session, send: Send) -> Message:  # noqa: ANN401
+    from troupe.core.runs.changes import diff
+
     return await diff(request, session, send)
 
 
 async def _accept(request: Any, session: Session, send: Send) -> Message:  # noqa: ANN401
+    from troupe.core.runs.changes import accept
+
     return await accept(request, session, send)
 
 
 async def _discard(request: Any, session: Session, send: Send) -> Message:  # noqa: ANN401
+    from troupe.core.runs.changes import discard
+
     return await discard(request, session, send)
 
 
