@@ -3,6 +3,7 @@ D7)."""
 
 import json
 import re
+from dataclasses import replace
 from typing import Any
 
 import pytest
@@ -593,6 +594,24 @@ def test_each_reason_a_runtime_doesnt_fit() -> None:
 
 
 def test_what_runtime_each_runner_fits() -> None:
-    assert interim.RUNNERS["ollama"].fit == ROOT_ONLY
-    assert interim.RUNNERS["openai"].fit == PATHED
+    assert interim.RUNNERS["ollama"].fit == replace(ROOT_ONLY, built_in="ollama")
+    assert interim.RUNNERS["openai"].fit == replace(PATHED, built_in="openai")
+    assert interim.RUNNERS["lm-studio"].fit == replace(
+        ROOT_ONLY, scheme="http", built_in="lm-studio"
+    )
     assert interim.RUNNERS["scripted"].fit == interim.RuntimeFit()
+
+
+def test_an_https_endpoint_doesnt_fit_a_runner_that_needs_plain_http() -> None:
+    plain = interim.RuntimeFit(scheme="http")
+    assert runtimes.unfit(plain, "https://h:1", has_credential=False) == ["endpoint-scheme"]
+    assert runtimes.unfit(plain, "http://h:1", has_credential=False) == []
+
+
+def test_another_runners_built_in_doesnt_fit_whatever_its_shape() -> None:
+    # Spec: runtimes, "An actor's runtime fits its runner". ollama and lm-studio share a shape.
+    ollama = interim.RUNNERS["ollama"].fit
+    assert runtimes.unfit(ollama, "http://127.0.0.1:1234", False, "lm-studio") == ["built-in"]
+    assert runtimes.unfit(ollama, "http://127.0.0.1:11434", False, "ollama") == []
+    assert runtimes.unfit(ollama, "http://10.0.0.5:11434", False, "gpu-box") == []
+    assert runtimes.unfit(interim.RuntimeFit(), "http://127.0.0.1:1234", False, "lm-studio") == []

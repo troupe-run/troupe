@@ -425,7 +425,7 @@ def test_a_runtime_the_environment_makes_unfit_is_refused_and_nothing_is_recorde
     assert error.details["runtime"] == "ollama"
     assert error.details["reasons"] == reasons
     assert error.details["from"] == came_from
-    assert error.details["fits"] == ["lm-studio"]  # the built-in, LM Studio's server root
+    assert error.details["fits"] == []
     data = json.dumps(error.to_data())
     assert NAMED_KEY not in data
     assert KEY not in data
@@ -436,15 +436,21 @@ def test_a_runtime_the_environment_makes_unfit_is_refused_and_nothing_is_recorde
 
 
 def test_a_runtime_that_fits_lists_with_the_environment_applied(tmp_path: Path) -> None:
+    # gpu-box has a path in config, which the environment takes away; lm-studio, LM Studio's
+    # built-in, has Ollama's shape but isn't listed, since it's another runner's built-in.
     harness = _harness(
         tmp_path,
         TROUPE_RUNTIME_OLLAMA_ENDPOINT="http://127.0.0.1:11434/v1",
-        TROUPE_RUNTIME_LM_STUDIO_ENDPOINT="http://127.0.0.1:1234",
+        TROUPE_RUNTIME_GPU_BOX_ENDPOINT="http://10.0.0.5:11434",
+    )
+    asked = request(
+        {}, **OLLAMA_ACTOR, runtimes={"gpu-box": {"endpoint": "http://10.0.0.5:11434/v1"}}
     )
     with pytest.raises(TroupeError) as raised:
-        harness.perform(request({}, **OLLAMA_ACTOR))
-    assert raised.value.details["fits"] == ["lm-studio"]
-    assert "lm-studio" in raised.value.fix
+        harness.perform(asked)
+    assert raised.value.details["fits"] == ["gpu-box"]
+    assert "gpu-box" in raised.value.fix
+    assert "lm-studio" not in raised.value.fix
 
 
 def test_a_rehearsal_refuses_an_unfit_runtime_as_perform_would(tmp_path: Path) -> None:

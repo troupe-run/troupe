@@ -85,6 +85,8 @@ alone, so troupe refuses a pair your runner would refuse before anything is reco
   `/` is no path; `//` is one.
 - `scheme`: `"http"` when you can only reach plain `http`, as the LM Studio runner, whose library has no TLS; `"any"`
   otherwise.
+- `built_in`: the built-in runtime made for your runner, if troupe has one. Your runner then fits no other runner's
+  built-in, whatever its shape, since built-ins of the same shape serve different engines.
 
 Your runner should refuse the same runtimes itself, since a host other than troupe may start it.
 `packages/troupe/tests/test_runtime_fit.py` holds the table to each runner that needs a runtime: add yours to its

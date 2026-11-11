@@ -366,7 +366,7 @@ def _runtime_problems(
         name
         for name, shape in sorted(known.items())
         if shape is not None
-        and not runtimes.unfit(fit, shape.endpoint.value, shape.credential is not None)
+        and not runtimes.unfit(fit, shape.endpoint.value, shape.credential is not None, name)
     ]
     define = (
         f"troupe config set {shown((RUNTIMES, '<name>', 'endpoint'))}=<url>, with "
@@ -424,7 +424,7 @@ def _runtime_problems(
     shape = known[runtime]
     if shape is None:
         return []  # the runtime's own problems are reported
-    reasons = runtimes.unfit(fit, shape.endpoint.value, shape.credential is not None)
+    reasons = runtimes.unfit(fit, shape.endpoint.value, shape.credential is not None, runtime)
     if not reasons:
         return []
     why = "; and ".join(runtimes.unfit_words(str(runner), runtime, reason) for reason in reasons)

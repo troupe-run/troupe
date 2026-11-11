@@ -38,6 +38,11 @@ class RuntimeFit:
     """Which of the endpoint's schemes the runner can use: either, or plain http alone, for a
     runner whose engine can't be reached over TLS (lmstudio-runner design D3)."""
 
+    built_in: str | None = None
+    """The built-in runtime made for this runner, when there is one. A runner with one fits no
+    other runner's built-in, whatever its shape: built-ins of the same shape (ollama and lm-studio)
+    serve different engines (lmstudio-runner design D3). None: any built-in fits by its shape."""
+
 
 @dataclass(frozen=True)
 class Runner:
@@ -144,7 +149,7 @@ RUNNERS: dict[str, Runner] = {
         in_extra=True,
         # It sends no credential, connects to LM Studio's server root, and only over plain ws://,
         # since the library has no TLS (lmstudio-runner design D3, D4).
-        fit=RuntimeFit(credential=False, path="none", scheme="http"),
+        fit=RuntimeFit(credential=False, path="none", scheme="http", built_in="lm-studio"),
     ),
     "ollama": Runner(
         command=(sys.executable, "-m", "troupe_runner_ollama"),
@@ -153,7 +158,7 @@ RUNNERS: dict[str, Runner] = {
         # its runtime's, which reach it in run/start (ollama-uses-runtime design D1).
         runtime="required",
         # It sends no credential, and adds /api/... to an endpoint at the root (its design D3, D4).
-        fit=RuntimeFit(credential=False, path="none"),
+        fit=RuntimeFit(credential=False, path="none", built_in="ollama"),
     ),
     "openai": Runner(
         command=(sys.executable, "-m", "troupe_runner_openai"),
@@ -162,7 +167,7 @@ RUNNERS: dict[str, Runner] = {
         runtime="required",
         # Its requests go below the endpoint, which an OpenAI-style service serves under a path
         # such as /v1 (runtime-checks design D5).
-        fit=RuntimeFit(path="required"),
+        fit=RuntimeFit(path="required", built_in="openai"),
     ),
     "scripted": Runner(
         command=(sys.executable, "-m", "troupe_runner_scripted"),
