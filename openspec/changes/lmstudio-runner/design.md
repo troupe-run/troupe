@@ -272,10 +272,12 @@ counts (#293), transcript record kinds (#294), and the model that served a run (
 New candidates. Each is filed as its own issue on the board once building confirms it (#239, #291), checking #56's,
 #162's and #319's issues first so nothing is filed twice:
 
-1. **`lmstudio` can't send an API token** (D4). Filed upstream on lmstudio-python, and as a troupe issue to adopt it.
-2. **`lmstudio` drops unknown tool arguments without error** (D7). Filed upstream as a request for a strict option.
+1. **`lmstudio` can't send an API token** (D4). Filed upstream as lmstudio-ai/lmstudio-python#188, and as #376 to
+   adopt it.
+2. **`lmstudio` drops unknown tool arguments without error** (D7). Filed upstream as lmstudio-ai/lmstudio-python#189,
+   and as #377 to adopt it.
 3. **Retry safety.** The contract's `retry` event has no notion that retrying after side effects isn't safe. This
-   runner refuses to (spec), but nothing tells troupe why a run that could have been retried wasn't.
+   runner refuses to (spec), but nothing tells troupe why a run that could have been retried wasn't. Filed as #378.
 4. **A transcript that isn't wire bytes.** #319 allows it, and #333 settled it: a library-backed runner's `sent` and
    `received` records hold what the library exposes (runner-protocol). No longer a gap.
 
