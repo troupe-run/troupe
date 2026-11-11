@@ -261,3 +261,20 @@ def test_the_position_names_which_argument_has_no_equals(
         errors, "config.invalid", "config", "set", "actors.tester.runner=scripted", WITH_PASSWORD
     )
     assert "path=value 2 doesn't set anything" in err
+
+
+def test_a_price_under_a_model_name_holding_a_password_is_never_repeated(
+    repo: Repo, errors: list[TroupeError]
+) -> None:
+    # A prices map's keys pass a loose check, so a URL gets through (review of #384).
+    cli("config", "set", "runtimes.box.endpoint=https://llm.example/v1")
+    err, message = _refused(
+        errors,
+        "config.invalid",
+        "config",
+        "set",
+        "--json",
+        f'runtimes.box.prices={{"{WITH_PASSWORD}": {{"input": "x", "output": 1}}}}',
+    )
+    assert "runtimes.box.prices: input in one of its entries: it must be a number" in err
+    assert message["details"]["path"] == ["runtimes", "box", "prices"]

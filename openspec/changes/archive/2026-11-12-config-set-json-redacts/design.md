@@ -161,8 +161,11 @@ at `runtimes` or `actors`. The options a runner moved to its runtime (`endpoint`
 and keep their move refusal.
 
 A merge or a perform checks config no one just typed, and passes nothing: what config holds is named as before.
-Keys a schema checks with `propertyNames` (model names under `prices`) are already refused at the map's path
-without the key, and a key that passes is a name, as in D3.
+A key that fails a map's `propertyNames` check is refused at the map's path without the key. A key that passes
+isn't a name in D3's sense, since `prices`' check lets any non-empty text through: a rule broken under a map key
+from inside a value (an `additionalProperties` or `patternProperties` level of the error's schema path) is
+refused at the map's path, as "input in one of its entries: …", the key never shown, and a deeper such key shown as
+`<key>` (review of #384, after archive).
 
 *Alternative:* always name the parent path. Rejected: a misspelt field typed as a path (`actors.tester.runnr`)
 would lose the name the person typed, which the config spec's "A misspelt field" scenario requires.

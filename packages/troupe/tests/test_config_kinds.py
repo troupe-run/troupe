@@ -865,3 +865,47 @@ def test_a_name_set_inside_a_value_that_isnt_one_is_never_named(
     assert error.details["path"] == [kind]
     assert "whose name isn't one" in error.problem
     assert CANARY not in json.dumps([error.problem, error.fix, error.details])
+
+
+# A key of a map from inside a value is part of the value (design D7; review of #384).
+
+
+def test_a_rule_broken_under_a_map_key_from_a_value_never_names_the_key() -> None:
+    url = f"https://user:{CANARY}@example.com"
+    config = {
+        "runtimes": {
+            "box": {
+                "endpoint": "https://llm.example/v1",
+                "prices": {url: {"input": "x", "output": 1}},
+            }
+        }
+    }
+    error = _refused_typed(config, {("runtimes", "box", "prices")})
+    assert error.details["path"] == ["runtimes", "box", "prices"]
+    assert "input in one of its entries: it must be a number" in error.problem
+    assert CANARY not in json.dumps([error.problem, error.fix, error.details])
+
+
+def test_a_field_missing_or_extra_under_a_map_key_from_a_value_never_names_the_key() -> None:
+    url = f"https://user:{CANARY}@example.com"
+    for entry, says in (({"input": 1}, "it needs"), ({"input": 1, "output": 1, "x": 1}, "a field")):
+        config = {
+            "runtimes": {"box": {"endpoint": "https://llm.example/v1", "prices": {url: entry}}}
+        }
+        error = _refused_typed(config, {("runtimes", "box", "prices")})
+        assert error.details["path"] == ["runtimes", "box", "prices"]
+        assert says in error.problem
+        assert CANARY not in json.dumps([error.problem, error.fix, error.details])
+
+
+def test_a_map_key_typed_as_a_path_is_named() -> None:
+    config = {
+        "runtimes": {
+            "box": {
+                "endpoint": "https://llm.example/v1",
+                "prices": {"m": {"input": "x", "output": 1}},
+            }
+        }
+    }
+    error = _refused_typed(config, {("runtimes", "box", "prices", "m", "input")})
+    assert error.details["path"] == ["runtimes", "box", "prices", "m", "input"]
