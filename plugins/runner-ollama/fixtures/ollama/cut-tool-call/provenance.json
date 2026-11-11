@@ -1,0 +1,27 @@
+{
+  "what": "An answer Ollama cuts while the model writes a Write call's arguments: the run ends with output-limit, and the call isn't carried out.",
+  "ollamaVersion": "0.40.14",
+  "model": "qwen3:0.6b",
+  "date": "2026-11-11",
+  "command": [
+    "capture_ollama.py",
+    "cut-tool-call"
+  ],
+  "options": {
+    "think": false,
+    "temperature": 0,
+    "seed": 1,
+    "contextLength": 2048
+  },
+  "direction": "Use the Write tool to create log.txt containing exactly this text:\n\nEntry 1: the lamp was lit at dusk and trimmed at midnight.\nEntry 2: the lamp was lit at dusk and trimmed at midnight.\nEntry 3: the lamp was lit at dusk and trimmed at midnight.\nEntry 4: the lamp was lit at dusk and trimmed at midnight.\nEntry 5: the lamp was lit at dusk and trimmed at midnight.\nEntry 6: the lamp was lit at dusk and trimmed at midnight.\nEntry 7: the lamp was lit at dusk and trimmed at midnight.\nEntry 8: the lamp was lit at dusk and trimmed at midnight.\nEntry 9: the lamp was lit at dusk and trimmed at midnight.\nEntry 10: the lamp was lit at dusk and trimmed at midnight.\nEntry 11: the lamp was lit at dusk and trimmed at midnight.\nEntry 12: the lamp was lit at dusk and trimmed at midnight.\nEntry 13: the lamp was lit at dusk and trimmed at midnight.\nEntry 14: the lamp was lit at dusk and trimmed at midnight.\nEntry 15: the lamp was lit at dusk and trimmed at midnight.\nEntry 16: the lamp was lit at dusk and trimmed at midnight.\nEntry 17: the lamp was lit at dusk and trimmed at midnight.\nEntry 18: the lamp was lit at dusk and trimmed at midnight.\nEntry 19: the lamp was lit at dusk and trimmed at midnight.\nEntry 20: the lamp was lit at dusk and trimmed at midnight.\nEntry 21: the lamp was lit at dusk and trimmed at midnight.\nEntry 22: the lamp was lit at dusk and trimmed at midnight.\nEntry 23: the lamp was lit at dusk and trimmed at midnight.\nEntry 24: the lamp was lit at dusk and trimmed at midnight.\nEntry 25: the lamp was lit at dusk and trimmed at midnight.\nEntry 26: the lamp was lit at dusk and trimmed at midnight.\nEntry 27: the lamp was lit at dusk and trimmed at midnight.\nEntry 28: the lamp was lit at dusk and trimmed at midnight.\nEntry 29: the lamp was lit at dusk and trimmed at midnight.\nEntry 30: the lamp was lit at dusk and trimmed at midnight.\n",
+  "effects": {
+    "write": [
+      "log.txt"
+    ]
+  },
+  "credential": "none: Ollama needs none",
+  "scrubbing": "the workspace's and scratch directory's paths are <workspace> and <scratch>; /api/show's license, modelfile and template text are left out",
+  "events": "recorded at capture, then reviewed by hand",
+  "note": "The direction holds the text to write, so the prompt (about 1690 tokens) fits the window and the call's arguments, as long again, don't.",
+  "window": 2048
+}

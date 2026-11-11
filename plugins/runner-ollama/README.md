@@ -97,14 +97,23 @@ So the runner:
 - **asks Ollama to refuse rather than cut**: every request sends `truncate` and `shift` as `false`. A conversation
   that outgrows the window is then refused with status 400 (`request (1226 tokens) exceeds the available context size
   (512 tokens), try increasing it`, in the [`context-overflow`](fixtures/ollama/context-overflow/answers.json)
-  fixture), and the run ends with an `error` result holding Ollama's message, the window, and how to raise it. An
-  answer that reaches the window stops with `done_reason` `length`, which is a `log` warning.
+  fixture), and the run ends with an `error` result holding Ollama's message, the window, and how to raise it.
+- **ends the run when Ollama cuts an answer**: the runner sets no output limit (`num_predict`), so an answer that
+  fills the window stops with `done_reason` `length`. The run ends with an `error` result, reason `output-limit`,
+  naming the window and how to raise it, and isn't retried: the same request would be cut the same way. None of the
+  cut answer's tool calls run; its text is still a `turn`. For a tool call it cut, Ollama 0.40.14 sends nothing of
+  the call: the answer is one `done` line with no text and no `tool_calls`
+  ([`cut-tool-call`](fixtures/ollama/cut-tool-call/answers.json); a cut text answer is
+  [`cut-answer`](fixtures/ollama/cut-answer/answers.json)). A `num_predict` the model's Modelfile sets cuts answers
+  the same way. Ollama 0.40.14 seemed to round the window up to a multiple of 256 tokens: windows of 1300 and 1400
+  both cut at 1536.
 - **keeps each tool result to a quarter of the window**, counted at 3 bytes per token: about 12 KB at 16384 tokens.
   It lowers the SDK's limits to fit (`Read`'s bytes, `Glob`'s paths, `Grep`'s matches), whose capped results say where
   they stopped and how to read on, and cuts anything still over, with a note saying it was cut to fit the window and
   how to narrow the call. One large file can't end a run.
 
-What a run should do instead of failing when it outgrows its window is Decision #279.
+Decision #279 settled this: an engine never loses or cuts content without the run saying so, and by default the run
+ends. Letting an actor opt in to compaction is #310.
 
 ## What it sends Ollama
 
@@ -116,7 +125,7 @@ and its calls, as Ollama gave them) and one `tool` message per call, naming the 
 or not. A call Ollama gives no id gets `call-<request>-<position>`.
 
 The run ends when an answer has no tool call (`ok`, with the answer's text, or `(no text)`), when `maxTurns` requests
-have been made (`error`), or when Ollama refuses (`error`).
+have been made (`error`), when Ollama cuts an answer (`error`, `output-limit`), or when Ollama refuses (`error`).
 
 ## Run events
 
@@ -128,7 +137,7 @@ have been made (`error`), or when Ollama refuses (`error`).
 | an answer's thinking | none: the transcript keeps it |
 | each tool call | `tool_call` and `tool_result`, from the SDK |
 | a request made again | `retry` (see [Retries](#retries)) |
-| `done_reason` `length` | `log` warning |
+| `done_reason` `length` | `result` `error`, reason `output-limit`; none of that answer's calls run |
 | the run's end | one `result`, with `turns` (the requests made), the duration, and `usage` |
 
 Each answer's `prompt_eval_count` is its whole prompt, including the tokens Ollama took from its cache, which it
@@ -166,8 +175,8 @@ answer's last line, or sends a line that isn't a JSON object (`network`), when t
 Every `error` result gives its `reason`: a 400 saying the request exceeds the available context size is
 `context-length` (only then does the message name the window), 401 or 403 `authentication`, 404 `configuration`,
 any other status `other`, an `error` line `engine`, `maxTurns` reached `turn-limit`, retries spent the last retry's
-reason (`network` or `server`), and the runner's own failure `runner`. A cut answer (`done_reason` `length`) is a
-`log` warning, not a failure.
+reason (`network` or `server`), and the runner's own failure `runner`. A cut answer (`done_reason` `length`) is
+`output-limit`.
 
 ## How a run ends
 

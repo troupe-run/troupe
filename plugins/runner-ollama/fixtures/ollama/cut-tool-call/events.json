@@ -1,0 +1,38 @@
+[
+  {
+    "type": "init",
+    "seq": 0,
+    "runner": {
+      "name": "ollama",
+      "version": "0.0.0"
+    },
+    "tools": [
+      "Read",
+      "Write",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Delete",
+      "Move"
+    ],
+    "effects": "checked",
+    "engine": {
+      "name": "ollama",
+      "version": "0.40.14",
+      "model": "qwen3:0.6b"
+    }
+  },
+  {
+    "type": "result",
+    "seq": 1,
+    "status": "error",
+    "message": "Ollama cut the model's answer at its output limit (done_reason length) after 346 tokens. The runner sets no output limit, so Ollama stops an answer when the conversation fills the run's context window of 2048 tokens: raise contextLength, or give the actor a smaller task. A num_predict the model sets also cuts its answers.",
+    "reason": "output-limit",
+    "turns": 1,
+    "usage": {
+      "inputTokens": 1702,
+      "outputTokens": 346,
+      "cacheReadTokens": 0
+    }
+  }
+]

@@ -96,6 +96,31 @@ SCENARIOS: dict[str, Scenario] = {
         "Read notes.txt and summarise it.",
         files={"notes.txt": "A line of notes.\n" * 200},
     ),
+    "cut-answer": Scenario(
+        "A text answer Ollama cuts at the window (done_reason length): the run ends with "
+        "output-limit.",
+        "qwen3:0.6b",
+        {"think": False, "temperature": 0, "seed": 1, "contextLength": 1280},
+        "Without using any tools, write a 400-word story about a lighthouse keeper, as your "
+        "answer.",
+        note="The window is just over the first request's prompt (about 1240 tokens, which "
+        "varies a little with the scratch directory's path in the tools' descriptions), so the "
+        "answer fills it. Ollama 0.40.14 seemed to round a window up to a multiple of 256 (1300 "
+        "and 1400 both cut at 1536 tokens), so the window here is one.",
+    ),
+    "cut-tool-call": Scenario(
+        "An answer Ollama cuts while the model writes a Write call's arguments: the run ends "
+        "with output-limit, and the call isn't carried out.",
+        "qwen3:0.6b",
+        {"think": False, "temperature": 0, "seed": 1, "contextLength": 2048},
+        "Use the Write tool to create log.txt containing exactly this text:\n\n"
+        + "".join(
+            f"Entry {n}: the lamp was lit at dusk and trimmed at midnight.\n" for n in range(1, 31)
+        ),
+        {"write": ["log.txt"]},
+        note="The direction holds the text to write, so the prompt (about 1690 tokens) fits the "
+        "window and the call's arguments, as long again, don't.",
+    ),
     "model-not-found": Scenario(
         "/api/show's answer for a model that isn't pulled.",
         "troupe-capture-no-such-model",

@@ -50,6 +50,8 @@ def test_there_are_fixtures_for_each_shape() -> None:
         "refused-by-effects",
         "thinking",
         "context-overflow",
+        "cut-answer",
+        "cut-tool-call",
         "model-not-found",
         "no-tools-capability",
         "server-retries",
@@ -82,6 +84,32 @@ def test_the_context_overflow_fixture_is_ollamas_refusal_naming_the_window() -> 
     result = load("context-overflow", "events.json")[-1]
     assert result["status"] == "error"
     assert "context window is 512 tokens" in result["message"]
+
+
+@pytest.mark.parametrize("name", ["cut-answer", "cut-tool-call"])
+def test_a_cut_fixture_is_ollama_ending_its_answer_with_length_and_the_run_with_output_limit(
+    name: str,
+) -> None:
+    (answer,) = load(name, "answers.json")
+    assert json.loads(answer["lines"][-1])["done_reason"] == "length"
+    events = load(name, "events.json")
+    assert [event["type"] for event in events if event["type"] == "tool_call"] == []
+    assert (events[-1]["status"], events[-1]["reason"]) == ("error", "output-limit")
+    assert (
+        f"context window of {load(name, 'provenance.json')['window']} tokens"
+        in (events[-1]["message"])
+    )
+
+
+def test_ollama_sends_nothing_of_a_tool_call_it_cut() -> None:
+    """What Ollama 0.40.14 sends for a cut call (ollama-output-limit design D4): it holds the
+    call back. The answer is one done line, with no text and no tool_calls, though the model
+    produced tokens."""
+    (answer,) = load("cut-tool-call", "answers.json")
+    (line,) = [json.loads(line) for line in answer["lines"]]
+    assert line["message"]["content"] == ""
+    assert "tool_calls" not in line["message"]
+    assert line["eval_count"] > 0
 
 
 def test_the_thinking_fixtures_thinking_is_in_its_transcript_only() -> None:

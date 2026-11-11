@@ -1,0 +1,23 @@
+{
+  "what": "A text answer Ollama cuts at the window (done_reason length): the run ends with output-limit.",
+  "ollamaVersion": "0.40.14",
+  "model": "qwen3:0.6b",
+  "date": "2026-11-11",
+  "command": [
+    "capture_ollama.py",
+    "cut-answer"
+  ],
+  "options": {
+    "think": false,
+    "temperature": 0,
+    "seed": 1,
+    "contextLength": 1280
+  },
+  "direction": "Without using any tools, write a 400-word story about a lighthouse keeper, as your answer.",
+  "effects": {},
+  "credential": "none: Ollama needs none",
+  "scrubbing": "the workspace's and scratch directory's paths are <workspace> and <scratch>; /api/show's license, modelfile and template text are left out",
+  "events": "recorded at capture, then reviewed by hand",
+  "note": "The window is just over the first request's prompt (about 1240 tokens, which varies a little with the scratch directory's path in the tools' descriptions), so the answer fills it. Ollama 0.40.14 seemed to round a window up to a multiple of 256 (1300 and 1400 both cut at 1536 tokens), so the window here is one.",
+  "window": 1280
+}
