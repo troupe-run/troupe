@@ -6,7 +6,7 @@ would leave config invalid, or leave any conflict unresolved; and when the strea
 same batch first settles the fork, with the merged config as the settled state.
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from typing import Any
 
 from eventsourcing.utils import get_topic
@@ -49,10 +49,15 @@ def refuse_conflicts(merged: Merged) -> None:
 
 
 def refuse_unrecordable(
-    store: EventStore, merged: Merged, entries: Sequence[dict[str, Any]]
+    store: EventStore,
+    merged: Merged,
+    entries: Sequence[dict[str, Any]],
+    typed: Collection[tuple[str, ...]] | None = None,
 ) -> None:
     """Refuse, recording nothing, a change whose config breaks a rule, or that leaves a conflict
-    unresolved: it's merged as though recorded after every head, and must leave none."""
+    unresolved: it's merged as though recorded after every head, and must leave none. ``typed`` are
+    the paths the person typed, so a key from inside a value they set isn't repeated
+    (kinds.Typed)."""
     after = apply(merged.config, entries)
     # The actors this change sets or unsets anything under and leaves in config: one on a runner
     # that isn't installed is refused, since its options can't be checked (runner-extras D7).
@@ -63,7 +68,7 @@ def refuse_unrecordable(
     }
     # actors may not be a group at all, which check refuses with config.invalid: nothing to touch.
     actors = after.get(ACTORS)
-    check(after, touched & set(actors) if isinstance(actors, Mapping) else set())
+    check(after, touched & set(actors) if isinstance(actors, Mapping) else set(), typed)
     if merged.conflicts:
         proposed = Change("proposed", "", {}, "", tuple(entries), ())
         refuse_conflicts(merge(store.history(aggregate.STREAM), extra=proposed))

@@ -141,7 +141,7 @@ async def config_set(request: m.ConfigSetRequest, session: Session, send: Send) 
         merged = read(store)
         entries = change(merged.config, operations)
         if entries:
-            refuse_unrecordable(store, merged, entries)
+            refuse_unrecordable(store, merged, entries, _typed(operations))
         rendered_after = render(apply(merged.config, entries))
         found = merges(store.vcs)
         resolve = _resolvable(merged, render(merged.config), rendered_after, found)
@@ -152,6 +152,11 @@ async def config_set(request: m.ConfigSetRequest, session: Session, send: Send) 
             entries=entries, files=_files(would.changes, {}, resolved), notices=[]
         )
     return record_change(session, store, operations, reason=request.reason, send=send)
+
+
+def _typed(operations: Sequence[tuple[Sequence[str], object]]) -> set[tuple[str, ...]]:
+    """The paths the change's operations name: a key below them came from inside a value."""
+    return {tuple(path) for path, _ in operations}
 
 
 def record_change(
@@ -189,7 +194,7 @@ def record_change(
             before = Flushed(first.changes, first_kept, first_resolved).notices()
         if not entries:
             return m.ConfigSetResult(entries=[], files=[], notices=_notices(before))
-        refuse_unrecordable(store, merged, entries)
+        refuse_unrecordable(store, merged, entries, _typed(operations))
         files: list[dict[str, Any]] = []
         for path in sorted(rendered_before.keys() | rendered_after.keys()):
             new = rendered_after.get(path)

@@ -182,3 +182,46 @@ def test_a_name_is_still_named(repo: Repo, errors: list[TroupeError]) -> None:
     assert code != 0
     assert "there's no runtime named 'nowhere'" in err
     assert "troupe config set runtimes.nowhere.endpoint=<url>" in err
+
+
+@pytest.mark.parametrize(
+    ("assignment", "says"),
+    [
+        pytest.param(
+            f'runtimes.box={{"endpoint": "https://example.org/v1", "{WITH_PASSWORD}": 1}}',
+            "runtimes.box: it holds 1 field the runtime schema doesn't define",
+            id="a runtime's field",
+        ),
+        pytest.param(
+            f'actors.tester.options={{"script": {{"steps": {STEPS}}}, "{WITH_PASSWORD}": 1}}',
+            "actors.tester.options: it holds 1 field the scripted runner's options schema",
+            id="an option",
+        ),
+        pytest.param(
+            f'runtimes={{"{WITH_PASSWORD}": {{"endpoint": "https://example.org/v1"}}}}',
+            "runtimes: it holds a runtime whose name isn't one",
+            id="a runtime's name",
+        ),
+        pytest.param(
+            f'actors={{"{WITH_PASSWORD}": {{"runner": "scripted"}}}}',
+            "actors: it holds an actor whose name isn't one",
+            id="an actor's name",
+        ),
+    ],
+)
+def test_a_key_inside_a_json_group_is_never_repeated(
+    repo: Repo, errors: list[TroupeError], assignment: str, says: str
+) -> None:
+    # A key inside the value is part of it (design D7; review of #384).
+    _tester()
+    err, _ = _refused(errors, "config.invalid", "config", "set", "--json", assignment)
+    assert says in err
+
+
+def test_an_unknown_field_typed_as_a_path_is_still_named(
+    repo: Repo, errors: list[TroupeError]
+) -> None:
+    _tester()
+    code, _, err = cli("config", "set", "--json", 'actors.tester.runnr="scripted"')
+    assert code != 0
+    assert "actors.tester.runnr: there's no such field" in err

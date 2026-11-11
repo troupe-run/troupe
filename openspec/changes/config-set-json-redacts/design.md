@@ -137,6 +137,27 @@ path as it was typed") is corrected to say it stops at the failing character.
 *Alternative:* split `config set`'s argument at the first `=` before reading it. Rejected: a key in brackets may hold
 `=` (`prices[a=b]`), which is why the reader decides where the path ends.
 
+### D7. A key from inside a value is part of the value
+
+Found by the review of #384. A group set with `--json` brings its own keys, and core named a key it refused: an
+unknown field (`runtimes.box[https://user:pw@host]: there's no such field`), or a runtime or actor name that isn't
+one. A key the person typed as part of the path is theirs to see named ("name the key"); a key inside the value is
+part of the value.
+
+Core can't tell them apart from the change's entries, since a group is flattened into one entry per leaf. So
+config-set passes the request's operation paths to the check (`typed`). A key at a path no operation path reaches
+came from inside a value. Such a key is never named: an unknown field is refused at the path the value was set at,
+saying how many fields the schema doesn't define and listing those it does; a bad runtime or actor name is refused
+at `runtimes` or `actors`. The options a runner moved to its runtime (`endpoint`, `model`) are troupe's own words,
+and keep their move refusal.
+
+A merge or a perform checks config no one just typed, and passes nothing: what config holds is named as before.
+Keys a schema checks with `propertyNames` (model names under `prices`) are already refused at the map's path
+without the key, and a key that passes is a name, as in D3.
+
+*Alternative:* always name the parent path. Rejected: a misspelt field typed as a path (`actors.tester.runnr`)
+would lose the name the person typed, which the config spec's "A misspelt field" scenario requires.
+
 ## Risks / Trade-offs
 
 - [A person loses the echo they'd use to spot a typo] → The path, what it takes, and for JSON the column, stay; the

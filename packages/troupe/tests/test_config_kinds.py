@@ -807,3 +807,47 @@ def test_a_rule_with_no_words_would_fail_that_check() -> None:
 
     assert "pattern" in _keywords_used()
     assert _unworded(WORDED - {"pattern"}) == {"pattern"}
+
+
+# A key from inside a value is part of the value (design D7; review of #384).
+
+
+def _refused_typed(config: dict[str, Any], typed: set[tuple[str, ...]] | None) -> TroupeError:
+    with pytest.raises(TroupeError) as caught:
+        check(config, typed=typed)
+    check_error(caught.value.to_data())
+    return caught.value
+
+
+def test_a_key_set_inside_a_value_is_never_named() -> None:
+    config = {"actors": {"tester": {**TESTER, CANARY: 1}}}
+    error = _refused_typed(config, {("actors", "tester")})
+    assert error.details["path"] == ["actors", "tester"]
+    assert "it holds 1 field the actor schema doesn't define" in error.problem
+    assert CANARY not in json.dumps([error.problem, error.fix, error.details])
+
+
+def test_a_key_typed_as_a_path_is_named() -> None:
+    config = {"actors": {"tester": {**TESTER, "runnr": "scripted"}}}
+    error = _refused_typed(config, {("actors", "tester", "runnr")})
+    assert error.details["path"] == ["actors", "tester", "runnr"]
+    assert "there's no such field" in error.problem
+
+
+def test_with_nothing_typed_a_key_is_named_as_before() -> None:
+    # A merge or a perform checks config no one just typed: what it holds is named.
+    error = _refused_typed({"actors": {"tester": {**TESTER, "runnr": "scripted"}}}, None)
+    assert error.details["path"] == ["actors", "tester", "runnr"]
+
+
+@pytest.mark.parametrize(
+    ("kind", "body"), [("runtimes", {"endpoint": "https://e.org"}), ("actors", TESTER)]
+)
+def test_a_name_set_inside_a_value_that_isnt_one_is_never_named(
+    kind: str, body: dict[str, Any]
+) -> None:
+    name = f"https://user:{CANARY}@example.com"
+    error = _refused_typed({kind: {name: body}}, {(kind,)})
+    assert error.details["path"] == [kind]
+    assert "whose name isn't one" in error.problem
+    assert CANARY not in json.dumps([error.problem, error.fix, error.details])
