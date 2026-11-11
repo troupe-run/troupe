@@ -53,6 +53,10 @@ FAMILIES = {
 }
 """Each family of the core's commands, by the module its handlers live in."""
 
+UNUSED_BY_READING = ("jsonschema", "referencing", "ruamel.yaml")
+"""Schema checking and YAML, which reading runs or config never needs: a schema is checked, and a
+config file rendered, only where something is set, performed or written (design D5)."""
+
 PROBE = """\
 import json, sys
 out, mode = sys.argv[1], sys.argv[2]
@@ -189,12 +193,13 @@ def theatre_env(repo: Repo) -> dict[str, str]:
     return {**os.environ, **repo.env, **ADA, **ALLOW}
 
 
-def test_status_shows_the_runs_and_loads_neither_configs_nor_inits_handlers(
+def test_status_shows_the_runs_and_loads_neither_configs_nor_inits_handlers_nor_perform(
     tmp_path: Path, repo: Repo
 ) -> None:
     probed = probe(tmp_path, ["status"], cwd=repo.path, env=theatre_env(repo))
     assert (probed.code, probed.stdout) == (0, "No runs yet.\n"), probed.stderr
-    assert_none_loaded(probed.modules, [FAMILIES["config"], FAMILIES["init"]])
+    others = [FAMILIES["config"], FAMILIES["init"], "troupe.core.runs.perform"]
+    assert_none_loaded(probed.modules, [*others, *UNUSED_BY_READING])
 
 
 def test_config_get_shows_config_and_loads_neither_runs_nor_inits_handlers(
@@ -203,7 +208,7 @@ def test_config_get_shows_config_and_loads_neither_runs_nor_inits_handlers(
     probed = probe(tmp_path, ["config", "get", "--json"], cwd=repo.path, env=theatre_env(repo))
     assert probed.code == 0, probed.stderr
     json.loads(probed.stdout)
-    assert_none_loaded(probed.modules, [FAMILIES["runs"], FAMILIES["init"]])
+    assert_none_loaded(probed.modules, [FAMILIES["runs"], FAMILIES["init"], *UNUSED_BY_READING])
 
 
 def test_the_dispatchers_table_names_every_method_the_families_offer() -> None:

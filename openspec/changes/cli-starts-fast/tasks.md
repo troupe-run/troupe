@@ -5,7 +5,7 @@
 - [x] 1.1 Make the baseline: a detached worktree of this change's base commit outside the repository directory, with
   its own `uv sync`; verify `uv run python -c "import troupe.cli"` runs there and `git -C <it> rev-parse HEAD` is the
   base commit.
-- [ ] 1.2 Grep the tests, plugins' tests and scripts for Python launched with `-S` or `-I`, or from an interpreter
+- [x] 1.2 Grep the tests, plugins' tests and scripts for Python launched with `-S` or `-I`, or from an interpreter
   other than `sys.executable`, and list them as processes the count can't see; verify the list is recorded in the
   design's Measurements.
 - [x] 1.3 Add the opt-in counting `.pth` to this worktree's `.venv` only (not committed: `git status` shows nothing
@@ -65,16 +65,16 @@
   family, and build the unknown-method listing from the table's names; have `core.runs`' wrappers import their handler
   module when called, and `perform` import `sync_files` where it syncs (design D5); verify group 2.3's and 2.4's tests
   pass, plus `test_client_dispatch.py`.
-- [ ] 4.2 Add the drift test: the table's names equal the union of every family's `methods()`; verify it fails when a
+- [x] 4.2 Add the drift test: the table's names equal the union of every family's `methods()`; verify it fails when a
   method is removed from the table in a scratch edit, then restore it. Commit groups 2 to 4 (signed, signed off, the
   full check passing, its output kept in a scratch file).
 
 ## 5. Heavy core imports on the paths that don't use them (proposal, "Heavy imports in the core")
 
-- [ ] 5.1 With `python -X importtime` on `troupe status`, `troupe logs`, `troupe config get` and `troupe perform` (a
+- [x] 5.1 With `python -X importtime` on `troupe status`, `troupe logs`, `troupe config get` and `troupe perform` (a
   scripted actor) in a scratch theatre, list which of `importlib.metadata`, `jsonschema`, `referencing` and
   `ruamel.yaml` each loads without using; record the list in the design.
-- [ ] 5.2 For each module on that list, move the import to where it's used (`entry_points()` in `core.stages`,
+- [x] 5.2 For each module on that list, move the import to where it's used (`entry_points()` in `core.stages`,
   `core.vcs`, `core.artifacts`; `version` in `core.audition`; `jsonschema` in `core.interim`), keeping type-only uses
   under `TYPE_CHECKING`; extend group 2.3's tests to assert the module isn't loaded on that command's path; verify
   mypy --strict and the suite pass. Commit (signed, signed off, full check).

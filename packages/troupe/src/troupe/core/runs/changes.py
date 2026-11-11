@@ -29,7 +29,7 @@ from troupe.core.events import EventStore
 from troupe.core.files import directory_lock
 from troupe.core.notices import Notice
 from troupe.core.runs.aggregate import Run
-from troupe.core.runs.perform import Backends, lease_dir
+from troupe.core.runs.backends import Backends, lease_dir
 from troupe.core.runs.projections import RunView
 from troupe.core.runs.queries import read_runs, resolve, run_state
 from troupe.core.workspaces import remove_worktree, worktree_path

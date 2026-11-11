@@ -27,7 +27,7 @@ from troupe.core.errors import TroupeError
 from troupe.core.events import EventStore
 from troupe.core.notices import Notice
 from troupe.core.runs.aggregate import TOPICS
-from troupe.core.runs.perform import Backends, lease_dir
+from troupe.core.runs.backends import Backends, lease_dir
 from troupe.core.runs.projections import Recording, RunView, fold_runs
 from troupe.platform import locks
 from troupe.platform.errors import LockAlreadyHeldError, LockTimeoutError

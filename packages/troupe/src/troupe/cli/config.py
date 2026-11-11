@@ -13,7 +13,6 @@ from typing import Any, TextIO
 from troupe.cli.commands import _call, _ignore_cancel, _notices, _session
 from troupe.cli.render import render_notice
 from troupe.cli.runtimes import runtime_lines
-from troupe.cli.values import value_of
 from troupe.core.config_paths import parse, parse_prefix, shown
 from troupe.core.errors import TroupeError
 from troupe.core.exit_codes import ExitCode
@@ -117,6 +116,10 @@ def _render_change(result: dict[str, Any], stdout: TextIO, *, rehearse: bool) ->
 
 
 def run_set(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
+    # Only set types values by their schema: get and flush don't load YAML or schema checking
+    # (cli-starts-fast design D5).
+    from troupe.cli.values import value_of
+
     assignments = _assignments(arguments.assignments)
     operations: list[dict[str, Any]] = []
     for path, text in assignments:

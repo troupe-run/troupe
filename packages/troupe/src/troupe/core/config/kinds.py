@@ -18,14 +18,15 @@ import re
 import shlex
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any
-
-import jsonschema
+from typing import TYPE_CHECKING, Any
 
 from troupe.core import defaults, interim, runtimes, schemas
 from troupe.core.config_paths import shown
 from troupe.core.errors import TroupeError
 from troupe_plugin_sdk.effects import Effects, PatternError, pattern_regex
+
+if TYPE_CHECKING:  # loaded where a schema is checked: it's slow to load (cli-starts-fast)
+    import jsonschema
 
 ACTORS = "actors"
 RUNTIMES = "runtimes"
@@ -438,7 +439,7 @@ def _runtime_problems(
 def _schema_problems(
     base: tuple[str, ...],
     value: object,
-    validator: jsonschema.Draft202012Validator,
+    validator: "jsonschema.Draft202012Validator",
     *,
     runner: str | None = None,
     against: str = "actor",
@@ -505,7 +506,7 @@ MAP_KEY = "<key>"
 """How a key the person chose inside a value is shown: never itself."""
 
 
-def _free_keys(error: jsonschema.ValidationError) -> set[int]:
+def _free_keys(error: "jsonschema.ValidationError") -> set[int]:
     """The positions in ``error``'s instance path that are keys of a map (``additionalProperties``
     or ``patternProperties``) rather than fields a schema names: keys the person chose."""
     free: set[int] = set()
@@ -539,7 +540,7 @@ path from that key on, each such key shown as ``MAP_KEY``."""
 
 
 def _in_a_map(
-    base: tuple[str, ...], error: jsonschema.ValidationError, typed: Typed
+    base: tuple[str, ...], error: "jsonschema.ValidationError", typed: Typed
 ) -> Inside | None:
     """Where ``error`` broke, when its path passes a map key from inside a value the person set:
     such a key may be anything a map's key check lets through, a URL with a password included, so
@@ -556,7 +557,7 @@ def _in_a_map(
     return (*base, *parts[:hidden]), rest[hidden:]
 
 
-def _in_entry(inside: Inside, error: jsonschema.ValidationError, against: str) -> Problem:
+def _in_entry(inside: Inside, error: "jsonschema.ValidationError", against: str) -> Problem:
     """The problem for a rule broken inside a map entry whose key isn't shown."""
     at, rest = inside
     if error.validator == "additionalProperties":
@@ -574,7 +575,7 @@ EFFECTS = "effects"
 
 
 def _effect_pattern_problem(
-    path: tuple[str, ...], error: jsonschema.ValidationError
+    path: tuple[str, ...], error: "jsonschema.ValidationError"
 ) -> Problem | None:
     """A malformed effect pattern, in the SDK's own words (spec: effects, "A pattern that can't
     be meant is refused"): the list it's in, its position and the rule, never the pattern, which is
@@ -641,7 +642,7 @@ JSON_TYPES = {
 }
 
 
-def _rule(error: jsonschema.ValidationError, against: str) -> str:
+def _rule(error: "jsonschema.ValidationError", against: str) -> str:
     """What ``error`` says, in words: the schema's own description where it has one. Never the
     value refused: jsonschema's own messages start with it, and it may hold a password (spec:
     config, "A refused config value is repeated nowhere"; config-set-json-redacts design D4)."""
