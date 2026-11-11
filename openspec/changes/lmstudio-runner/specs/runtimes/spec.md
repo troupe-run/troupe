@@ -39,24 +39,24 @@ SHALL name a runtime when its runner requires one, SHALL NOT name one when its r
 #### Scenario: An Ollama actor without a runtime
 - **WHEN** a person sets `actors.tester.runner=ollama` and `tester` names no runtime
 - **THEN** it is refused, naming `actors.tester.runtime` and saying the `ollama` runner needs one, listing only the
-  runtimes that fit it: `lm-studio` and `ollama`, and not `openai`
+  runtimes that fit it: `ollama`, and not `lm-studio` or `openai`
 
 #### Scenario: No runtime fits
-- **WHEN** an `ollama` actor names no runtime, and config overrides the built-ins `ollama` and `lm-studio` with a
-  credential
+- **WHEN** an `ollama` actor names no runtime, and config overrides the built-in `ollama` with a credential
 - **THEN** it is refused, saying no runtime there is fits the `ollama` runner, and how to define one
 
 ### Requirement: An actor's runtime fits its runner
 Config SHALL refuse an actor whose runtime doesn't fit its runner, judged from the runtime's built-in and theatre
-values: a runtime with a credential, for a runner that sends none, an endpoint whose path the runner can't use, or an
-`https` endpoint, for a runner that can only reach plain `http`.
+values: a runtime with a credential, for a runner that sends none, an endpoint whose path the runner can't use, an
+`https` endpoint, for a runner that can only reach plain `http`, or another runner's built-in runtime, whatever its
+shape.
 The error SHALL name the actor's `runtime` path, the runner, the runtime, why it doesn't fit, and the runtimes that
 fit. A change to a runtime that makes an actor on it unfit SHALL be refused the same way.
 
 #### Scenario: An Ollama actor on a runtime with a credential
 - **WHEN** a person sets `actors.tester.runner=ollama` and `actors.tester.runtime=openai`
 - **THEN** it is refused, naming `actors.tester.runtime`, the `ollama` runner and the runtime `openai`, saying the
-  runner sends no credential and `openai` has one, and listing `lm-studio` and `ollama` as runtimes that fit
+  runner sends no credential and `openai` has one, and listing `ollama` as a runtime that fits
 
 #### Scenario: An Ollama actor on an endpoint with a path
 - **WHEN** config defines `runtimes.lm-studio-openai.endpoint=http://127.0.0.1:1234/v1`, and a person sets
@@ -81,7 +81,17 @@ fit. A change to a runtime that makes an actor on it unfit SHALL be refused the 
 - **WHEN** config defines `runtimes.remote-lm.endpoint=https://lm.example.com`, and a person sets
   `actors.tester.runner=lm-studio` and `actors.tester.runtime=remote-lm`
 - **THEN** it is refused, saying the `lm-studio` runner can only reach a plain `http` endpoint and `remote-lm` has an
-  `https` one, and listing `lm-studio` and `ollama` as runtimes that fit
+  `https` one, and listing `lm-studio` as a runtime that fits
+
+#### Scenario: Another runner's built-in of the same shape
+- **WHEN** a person sets `actors.tester.runner=ollama` and `actors.tester.runtime=lm-studio`
+- **THEN** it is refused, saying `lm-studio` is troupe's built-in for the `lm-studio` runner, though its endpoint has
+  the shape the `ollama` runner needs, and listing `ollama` as a runtime that fits
+
+#### Scenario: A runtime of your own of the same shape
+- **WHEN** config defines `runtimes.gpu-box.endpoint=http://10.0.0.5:1234`, and an `ollama` actor or an `lm-studio`
+  actor names `gpu-box`
+- **THEN** it is accepted, since troupe can't tell which engine a runtime of your own serves
 
 #### Scenario: Every runtime fits a runner that takes any
 - **WHEN** a `scripted` actor names any runtime there is

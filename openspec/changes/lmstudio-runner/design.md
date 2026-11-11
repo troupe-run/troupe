@@ -101,6 +101,14 @@ field the rule didn't have, `scheme`, with its reason `endpoint-scheme` in `runt
 runner refusing it once the run's start is recorded (owner, 2026-11-11). `test_runtime_fit.py` holds the rule to the
 runner's own check.
 
+With `lm-studio` at the server root, its shape is `ollama`'s, so shape alone would offer each to the other's runner,
+and following that advice sends one engine's requests to the other (a side agent's finding). So a built-in runtime
+fits only the runner it's made for (the fit's `built_in`), and a runner that takes any runtime; another runner's
+built-in is refused with the reason `built-in`, whatever its shape (owner, 2026-11-11). A runtime defined in config
+is still judged by shape, since troupe can't know which engine it serves. An `api` field on runtimes, naming what
+each serves, would catch that too, but the runtimes design turned it down as unneeded, and the owner chose the
+smaller rule.
+
 ### D4. No API token until the library can send one
 
 `lmstudio` 1.5.0 can't send an LM Studio API token (Context). A runtime with a credential is refused

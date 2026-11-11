@@ -269,10 +269,11 @@ def resolve(name: str, config: Mapping[str, Any], env: Mapping[str, str]) -> Res
     )
 
 
-Reason = Literal["credential", "endpoint-path", "endpoint-no-path", "endpoint-scheme"]
+Reason = Literal["credential", "endpoint-path", "endpoint-no-path", "endpoint-scheme", "built-in"]
 """Why a runtime doesn't fit a runner: it has a credential the runner never sends, its endpoint has
-a path the runner can't use, it has none where the runner needs one (runtime-checks design D2), or
-it's https for a runner that can only use plain http (lmstudio-runner design D3)."""
+a path the runner can't use, it has none where the runner needs one (runtime-checks design D2),
+it's https for a runner that can only use plain http, or it's another runner's built-in
+(lmstudio-runner design D3)."""
 
 
 def has_path(endpoint: str) -> bool:
@@ -281,11 +282,21 @@ def has_path(endpoint: str) -> bool:
     return urlsplit(endpoint).path not in ("", "/")
 
 
-def unfit(fit: interim.RuntimeFit, endpoint: str, has_credential: bool) -> list[Reason]:
-    """Why a runtime whose endpoint is ``endpoint``, with a credential or not, doesn't fit a runner
-    whose fit is ``fit``: empty when it fits. The one rule config and perform judge fit by
-    (runtime-checks design D2)."""
+def unfit(
+    fit: interim.RuntimeFit, endpoint: str, has_credential: bool, runtime: str | None = None
+) -> list[Reason]:
+    """Why the runtime ``runtime``, whose endpoint is ``endpoint``, with a credential or not,
+    doesn't fit a runner whose fit is ``fit``: empty when it fits. The one rule config and perform
+    judge fit by (runtime-checks design D2). A built-in runtime made for another runner doesn't fit
+    one that has a built-in of its own (lmstudio-runner design D3)."""
     reasons: list[Reason] = []
+    if (
+        runtime is not None
+        and fit.built_in is not None
+        and runtime != fit.built_in
+        and runtime in defaults.RUNTIMES
+    ):
+        reasons.append("built-in")
     if has_credential and not fit.credential:
         reasons.append("credential")
     if fit.path == "none" and has_path(endpoint):
@@ -305,6 +316,16 @@ def unfit_words(runner: str, runtime: str, reason: Reason) -> str:
         return (
             f"the {runner} runner needs an endpoint with no path, and the runtime {runtime!r} has "
             "one with a path"
+        )
+    if reason == "built-in":
+        made_for = next(
+            (name for name, entry in interim.RUNNERS.items() if entry.fit.built_in == runtime),
+            None,
+        )
+        made = f"the {made_for} runner" if made_for is not None else "another runner"
+        return (
+            f"the runtime {runtime!r} is troupe's built-in for {made}, and the {runner} runner "
+            "can't use it"
         )
     if reason == "endpoint-scheme":
         return (
@@ -396,7 +417,7 @@ def refuse_unfit(
     (runtime-checks design D4). Names where each value came from and the runtimes that fit, judged
     the same way, leaving out any whose variables are malformed."""
     fit = interim.runner(runner).fit
-    reasons = unfit(fit, resolved.endpoint.value, resolved.credential is not None)
+    reasons = unfit(fit, resolved.endpoint.value, resolved.credential is not None, resolved.name)
     if not reasons:
         return
     came_from: dict[str, str] = {}
@@ -410,7 +431,7 @@ def refuse_unfit(
             candidate = resolve(other, config, env)
         except (RuntimeError, TroupeError):
             continue
-        if not unfit(fit, candidate.endpoint.value, candidate.credential is not None):
+        if not unfit(fit, candidate.endpoint.value, candidate.credential is not None, other):
             fits.append(other)
     why = "; and ".join(unfit_words(runner, resolved.name, reason) for reason in reasons)
     where = ", ".join(f"its {key} from {place}" for key, place in came_from.items())
