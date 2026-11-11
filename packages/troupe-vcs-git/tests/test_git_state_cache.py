@@ -671,6 +671,52 @@ def test_the_cached_branch_follows_a_symbolic_ref_sharing_its_name_as_its_target
         assert git.branch() == short
 
 
+def reads_again(git: GitAdapter) -> int:
+    """How many git commands two more reads of the branch and HEAD run, after a first."""
+    git.branch_token()
+    before = git.commands_run
+    git.branch_token()
+    git.branch_token()
+    return git.commands_run - before
+
+
+def test_head_naming_a_ref_outside_refs_heads_is_read_on_every_call_and_reports_gits_answers(
+    tmp_path: Path,
+) -> None:
+    # git allows it, and its short name follows rules the token doesn't watch, so a read isn't
+    # reused (git-branch-cache design D1).
+    repo = make_repo(tmp_path)
+    empty_commit(repo)
+    make_ref(repo, "refs/tags/x")
+    repo.git("symbolic-ref", "HEAD", "refs/tags/x")
+    git = adapter(repo)
+    assert reads_again(git) == 2
+    assert (git.branch(), git.head()) == gits_answers(repo)
+
+
+def test_a_ref_sharing_the_branchs_name_that_cant_be_read_is_read_on_every_call(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Whether it's a symbolic ref can't be told, so the read isn't trusted: refuse rather than
+    # guess (git-branch-cache design D3). A permission error stands in for any read failure, as
+    # file modes can't make one on every platform.
+    repo = make_repo(tmp_path)
+    empty_commit(repo)
+    make_ref(repo, "refs/tags/main")
+    unreadable = repo.path / ".git" / "refs" / "tags" / "main"
+    real_open = Path.open
+
+    def failing_open(self: Path, *args: object, **kwargs: object) -> object:
+        if self == unreadable:
+            raise PermissionError(13, "Permission denied", str(self))
+        return real_open(self, *args, **kwargs)  # type: ignore[call-overload]
+
+    monkeypatch.setattr(Path, "open", failing_open)
+    git = adapter(repo)
+    assert reads_again(git) == 2
+    assert (git.branch(), git.head()) == gits_answers(repo)
+
+
 # Stat, then read (git-call-latency design D4): the branch's ref is stat'd before the one command
 # that names it, so a move landing between that command and any later stat is still seen. The clock
 # is past the racy window, so only the stat can catch it; reflogs are off and refs are files, so the
