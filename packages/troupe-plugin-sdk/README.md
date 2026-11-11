@@ -65,7 +65,8 @@ effects = Effects(write=("src/**", "docs/*.md"), delete=("build/**",), move=("dr
 
 In a pattern, `*` matches within one part of a path, `?` matches one character, and `**`, as a whole part, matches
 any number of parts: `src/**` matches `src/a.py` and `src/pkg/b.py`, but not `src` itself. `Glob` uses the same
-patterns. A malformed pattern raises a `PatternError` naming the effect and the pattern.
+patterns. A malformed pattern raises a `PatternError` naming the effect and the pattern. Its `rule` says what's
+wrong without the pattern, for a message that mustn't repeat it.
 
 A pattern can't start with `.git` or `.troupe`, or hold a control character. With nothing declared (`Effects()`), an
 actor is read-only. Deleting and moving are declared apart from writing,

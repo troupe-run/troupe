@@ -1,9 +1,11 @@
 """Config is checked before a change is recorded, naming the path and the rule (spec: config;
 config-model design D6)."""
 
+import json
 from dataclasses import replace
 from typing import Any
 
+import jsonschema
 import pytest
 
 from protocol_schemas import check_error
@@ -11,6 +13,7 @@ from troupe.core import interim
 from troupe.core.config.kinds import check, problems
 from troupe.core.errors import TroupeError
 
+CANARY = "q7ZxW9pL4vR2canary"
 SCRIPT = {"script": {"steps": [{"exit": 0}]}}
 TESTER: dict[str, Any] = {
     "runner": "scripted",
@@ -284,12 +287,35 @@ def test_an_effect_the_schema_doesnt_define_is_refused_naming_it() -> None:
 # Requirement: A pattern that can't be meant is refused (spec: effects)
 
 
-def test_an_absolute_pattern_is_refused_naming_the_list_the_pattern_and_scratch() -> None:
-    error = _refused(_actor(expect=[], effects={"write": ["/tmp/**"]}))  # noqa: S108
+def test_an_absolute_pattern_is_refused_naming_the_list_its_position_and_scratch() -> None:
+    error = _refused(_actor(expect=[], effects={"write": ["out/**", "/tmp/**"]}))  # noqa: S108
     assert error.details["path"] == ["actors", "tester", "effects", "write"]
-    assert "actors.tester.effects.write: '/tmp/**' is absolute" in error.problem
+    assert "actors.tester.effects.write: item 2 is absolute" in error.problem
     assert "relative to the workspace" in error.problem
     assert "scratch directory" in error.problem
+    assert error.fix == "Change or remove item 2 of actors.tester.effects.write."
+    assert "/tmp" not in json.dumps([error.problem, error.fix, error.details])  # noqa: S108
+
+
+@pytest.mark.parametrize(
+    "pattern",
+    [
+        f"https://user:{CANARY}@example.com/v1",  # a ':'
+        f"/{CANARY}",  # absolute
+        f"{CANARY}/../x",  # '..'
+        f"{CANARY}//x",  # an empty part
+        f"a{CANARY}**",  # '**' inside a part
+        f"{CANARY}\x01",  # a control character
+        f".git/{CANARY}",  # git's own
+    ],
+)
+def test_a_refused_effect_pattern_is_never_repeated(pattern: str) -> None:
+    error = _refused(_actor(expect=[], effects={"write": [pattern]}))
+    assert error.details["path"] == ["actors", "tester", "effects", "write"]
+    assert "item 1 " in error.problem
+    message = json.dumps([error.problem, error.fix, error.details])
+    assert CANARY not in message
+    assert "example.com" not in message
 
 
 def test_a_pattern_into_troupes_own_directory_is_refused_saying_no_effect_allows_it() -> None:
@@ -616,3 +642,168 @@ def test_a_credentials_value_is_refused_saying_it_holds_only_env() -> None:
     assert "there's no such field" in by_path[("runtimes", "openai", "credential", "value")]
     assert "required" in by_path[("runtimes", "openai", "credential", "env")]
     _refused({"runtimes": {"openai": {"credential": {"value": "sk-x"}}}})
+
+
+# A rule refused for its shape never repeats the value (spec: config, "A refused config value is
+# repeated nowhere"; config-set-json-redacts design D4).
+LONG_CANARY = CANARY * 4
+"""Long enough to break any length rule, and a string the canary is a part of."""
+
+
+@pytest.mark.parametrize(
+    ("schema", "instance", "words"),
+    [
+        ({"enum": ["worktree", "theatre"]}, CANARY, "it must be one of 'worktree', 'theatre'"),
+        ({"const": "result"}, CANARY, "it must be 'result'"),
+        ({"minLength": 100}, CANARY, "it must be at least 100 characters"),
+        ({"maxLength": 4}, CANARY, "it must be at most 4 characters"),
+        ({"pattern": "^[a-z]+$"}, CANARY, "it must match the pattern ^[a-z]+$"),
+        (
+            {"not": {"required": ["a", "b"]}},
+            {"a": CANARY, "b": 1},
+            "it can't have a and b together",
+        ),
+        ({"oneOf": [{"type": "integer"}, {"type": "boolean"}]}, CANARY, "it doesn't fit any shape"),
+        ({"anyOf": [{"type": "integer"}, {"type": "boolean"}]}, CANARY, "it doesn't fit any shape"),
+        ({"uniqueItems": True}, [CANARY, CANARY], "its items must all differ"),
+        ({"minItems": 3}, [CANARY], "it must hold at least 3 items"),
+        ({"maxItems": 1}, [CANARY, CANARY + "2"], "it must hold at most 1 item"),
+        ({"minProperties": 2}, {"a": CANARY}, "it must hold at least 2 fields"),
+        ({"maxProperties": 1}, {"a": CANARY, "b": CANARY}, "it must hold at most 1 field"),
+        ({"minimum": 10**30}, 10**20 + 7, "it must be at least"),
+        ({"exclusiveMinimum": 10**30}, 10**20 + 7, "it must be more than"),
+        ({"maximum": 1}, 10**20 + 7, "it must be at most 1"),
+        ({"exclusiveMaximum": 1}, 10**20 + 7, "it must be less than 1"),
+        (
+            {"dependentRequired": {"price": ["model"]}},
+            {"price": CANARY},
+            "some fields need others with them: price needs model",
+        ),
+        ({"type": "integer"}, CANARY, "it must be a whole number, not a string"),
+    ],
+    ids=lambda value: next(iter(value)) if isinstance(value, dict) else None,
+)
+def test_each_rule_is_put_in_words_that_never_hold_the_value(
+    schema: dict[str, Any], instance: object, words: str
+) -> None:
+    from troupe.core.config.kinds import WORDED, _rule
+
+    [error] = jsonschema.Draft202012Validator(schema).iter_errors(instance)
+    assert error.validator in WORDED
+    rule = _rule(error, "the actor schema")
+    assert rule.startswith(words)
+    assert rule.endswith("(the actor schema)")
+    assert CANARY not in rule
+    assert "100000000000000000007" not in rule  # a number given is a value too
+
+
+def test_a_rule_with_a_description_gives_the_description_not_the_value() -> None:
+    from troupe.core.config.kinds import _rule
+
+    schema = {"pattern": "^[a-z]+$", "description": "lowercase letters"}
+    [error] = jsonschema.Draft202012Validator(schema).iter_errors(CANARY)
+    assert _rule(error, "the actor schema") == "it doesn't fit the actor schema: lowercase letters"
+
+
+def test_a_rule_with_no_words_says_which_rule_and_never_the_value() -> None:
+    from troupe.core.config.kinds import _rule
+
+    [error] = jsonschema.Draft202012Validator({"multipleOf": 7}).iter_errors(10**20 + 3)
+    assert _rule(error, "the actor schema") == (
+        "it breaks the schema's multipleOf rule (the actor schema)"
+    )
+
+
+def test_an_option_refused_by_its_runners_schema_never_repeats_the_value() -> None:
+    error = _refused(
+        {
+            "actors": {
+                "tester": {
+                    **TESTER,
+                    "options": {"script": {"steps": [{"exit": CANARY}]}},
+                }
+            }
+        }
+    )
+    assert error.details["path"][:3] == ["actors", "tester", "options"]
+    assert CANARY not in json.dumps([error.problem, error.fix, error.details])
+
+
+# Every rule the config and options schemas use has words (design D4).
+
+HANDLED_BEFORE = frozenset({"additionalProperties", "required"})
+"""Refused by _schema_problems before _rule, naming fields, never values."""
+APPLICATORS = frozenset(
+    {
+        "$ref",
+        "$dynamicRef",
+        "properties",
+        "patternProperties",
+        "items",
+        "prefixItems",
+        "allOf",
+        "if",
+        "then",
+        "else",
+        "propertyNames",
+        "dependentSchemas",
+        "contains",
+    }
+)
+"""Keywords whose errors are their subschemas', each with a validator of its own."""
+NOT_KEYWORDS = frozenset({"const", "enum", "default", "examples", "description", "title"})
+
+
+def _keywords(contents: object, resolver: Any, seen: set[int], found: set[str]) -> None:  # noqa: ANN401
+    if isinstance(contents, list):
+        for item in contents:
+            _keywords(item, resolver, seen, found)
+        return
+    if not isinstance(contents, dict) or id(contents) in seen:
+        return
+    seen.add(id(contents))
+    for key, value in contents.items():
+        if key in jsonschema.Draft202012Validator.VALIDATORS:
+            found.add(key)
+        if key == "$ref":
+            resolved = resolver.lookup(value)
+            _keywords(resolved.contents, resolved.resolver, seen, found)
+        elif key in ("properties", "patternProperties", "$defs", "dependentSchemas"):
+            for sub in value.values() if isinstance(value, dict) else ():
+                _keywords(sub, resolver, seen, found)
+        elif key not in NOT_KEYWORDS:
+            _keywords(value, resolver, seen, found)
+
+
+def _keywords_used() -> set[str]:
+    from troupe.cli.values import ACTOR_SCHEMA, RUNTIME_SCHEMA
+    from troupe.core import schemas
+
+    found: set[str] = set()
+    registry = schemas.registry()
+    for uri in (ACTOR_SCHEMA, RUNTIME_SCHEMA):
+        _keywords(registry.contents(uri), registry.resolver(uri), set(), found)
+    for runner in sorted(interim.RUNNERS):
+        if not interim.installed(runner):
+            continue
+        options = interim.options_schema(runner)
+        own = schemas.registry(interim.runner(runner).package)
+        _keywords(options, own.resolver(options["$id"]), set(), found)
+    return found
+
+
+def _unworded(worded: frozenset[str]) -> set[str]:
+    return _keywords_used() - worded - HANDLED_BEFORE - APPLICATORS
+
+
+def test_every_rule_the_config_and_options_schemas_use_has_words() -> None:
+    from troupe.core.config.kinds import WORDED
+
+    assert _unworded(WORDED) == set()
+
+
+def test_a_rule_with_no_words_would_fail_that_check() -> None:
+    from troupe.core.config.kinds import WORDED
+
+    assert "pattern" in _keywords_used()
+    assert _unworded(WORDED - {"pattern"}) == {"pattern"}

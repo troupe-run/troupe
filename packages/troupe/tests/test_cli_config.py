@@ -452,13 +452,16 @@ def test_an_actors_workspace_can_be_set_to_theatre(repo: Repo) -> None:
     assert _get("actors.tester.workspace") == "theatre"
 
 
-def test_a_workspace_that_doesnt_exist_is_refused_naming_the_path_and_both_values(
+def test_a_workspace_that_doesnt_exist_is_refused_naming_the_path_and_both_values_not_its_own(
     repo: Repo,
 ) -> None:
     _tester()
     code, _, err = cli("config", "set", "actors.tester.workspace=sandbox")
     assert code == 1
-    assert "actors.tester.workspace: it must be one of 'worktree', 'theatre', not 'sandbox'" in err
+    assert (
+        "actors.tester.workspace: it must be one of 'worktree', 'theatre' (the actor schema)" in err
+    )
+    assert "sandbox" not in err
 
 
 # Requirement: A runtime is a named service... (spec: runtimes), set on the command line

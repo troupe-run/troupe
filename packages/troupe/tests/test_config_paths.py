@@ -7,6 +7,7 @@ against ``troupe.cli.values.split_path`` and passed there before the reader chan
 the bracket reader can't quietly break a path that already worked.
 """
 
+import json
 import re
 from pathlib import Path
 
@@ -68,8 +69,10 @@ def test_any_text_reads_as_non_empty_keys_or_is_refused_as_a_malformed_path(text
         assert all(keys)
     else:
         assert refused.code == "config.path-malformed"
-        assert refused.details["text"] == text
-        assert 0 <= refused.details["offset"] <= len(text)
+        offset = refused.details["offset"]
+        assert 0 <= offset <= len(text)
+        # Only what was read, up to and including where reading failed (design D6).
+        assert refused.details["text"] == text[: offset + 1]
 
 
 # What the spec's examples read as, and how keys are shown.
@@ -140,15 +143,16 @@ def test_set_text_with_no_equals_outside_brackets_ends_at_its_end() -> None:
         ("a.=b", 2, paths.EQUALS_OUTSIDE),
     ],
 )
-def test_a_malformed_path_is_refused_naming_the_text_where_and_the_rule(
+def test_a_malformed_path_is_refused_naming_the_text_read_where_and_the_rule(
     text: str, offset: int, rule: str
 ) -> None:
     with pytest.raises(TroupeError) as caught:
         paths.parse(text)
     error = caught.value
+    read = text[: offset + 1]
     assert error.code == "config.path-malformed"
-    assert error.details == {"text": text, "offset": offset, "rule": rule}
-    assert f'"{text}"' in error.problem
+    assert error.details == {"text": read, "offset": offset, "rule": rule}
+    assert f'"{read}"' in error.problem
     assert rule in error.problem
     assert f"at character {offset + 1}" in error.problem
     check_error(error.to_data())
@@ -171,6 +175,46 @@ def test_a_dot_before_a_bracket_is_fixed_by_dropping_the_dot() -> None:
     with pytest.raises(TroupeError) as caught:
         paths.parse("a.[b]")
     assert "'a[b]'" in caught.value.fix
+
+
+CANARY = "q7ZxW9pL4vR2canary"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        f"a]b={CANARY}",
+        f"runtimes.box.endpoint.=https://user:{CANARY}@example.com/v1",
+        f"a.[b]=https://user:{CANARY}@example.com/v1",
+        f"a.[b]c={CANARY}",
+        f"a[b]c={CANARY}",
+        f"a\\b={CANARY}",
+    ],
+)
+def test_a_malformed_path_in_config_set_shows_none_of_the_value(text: str) -> None:
+    with pytest.raises(TroupeError) as caught:
+        paths.parse_prefix(text)
+    error = caught.value
+    assert error.code == "config.path-malformed"
+    assert CANARY not in json.dumps([error.problem, error.fix, error.details])
+
+
+@pytest.mark.parametrize("text", [f"runtimes.box.endpoint=https://user:{CANARY}@example.com/v1"])
+def test_a_path_given_a_value_where_none_is_taken_shows_none_of_it(text: str) -> None:
+    with pytest.raises(TroupeError) as caught:
+        paths.parse(text)
+    error = caught.value
+    assert error.details["rule"] == paths.EQUALS_OUTSIDE
+    assert error.details["text"] == "runtimes.box.endpoint="
+    assert CANARY not in json.dumps([error.problem, error.fix, error.details])
+
+
+def test_a_dot_before_an_unclosed_bracket_is_fixed_without_the_rest() -> None:
+    with pytest.raises(TroupeError) as caught:
+        paths.parse_prefix(f"a.[b={CANARY}")
+    assert caught.value.details["rule"] == paths.DOT_BEFORE_BRACKET
+    assert "such as a[b]" in caught.value.fix
+    assert CANARY not in caught.value.fix
 
 
 # No message builds a config path by hand (review of #324: runtimes.py's fix did, and a key with a

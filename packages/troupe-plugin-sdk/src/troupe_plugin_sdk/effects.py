@@ -28,7 +28,20 @@ _CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 
 
 class PatternError(ValueError):
-    """A malformed pattern: where it is, the pattern, and what's wrong."""
+    """A malformed pattern: where it is, the pattern, and what's wrong.
+
+    ``rule`` is what's wrong in words that hold none of the pattern, so a caller can refuse it
+    without repeating it: troupe's config never repeats a value refused for its shape, which may
+    hold a password (config-set-json-redacts design D5).
+    """
+
+    def __init__(self, message: str, *, rule: str) -> None:
+        super().__init__(message)
+        self.rule = rule
+
+
+def _malformed(shown: str, rule: str) -> PatternError:
+    return PatternError(f"{shown} {rule}", rule=rule)
 
 
 def _segment(part: str) -> str:
@@ -43,26 +56,28 @@ def pattern_regex(pattern: str, where: str = "pattern") -> re.Pattern[str]:
     inside a part."""
     shown = f"{where}: {pattern!r}"
     if not pattern:
-        raise PatternError(f"{shown} is empty")
+        raise _malformed(shown, "is empty")
     if pattern.startswith("/"):
-        raise PatternError(f"{shown} is absolute; patterns are relative to the workspace")
+        raise _malformed(shown, "is absolute; patterns are relative to the workspace")
     if "\\" in pattern or ":" in pattern:
-        raise PatternError(f"{shown} has a '\\' or ':'; use '/' between the parts of a path")
+        raise _malformed(shown, "has a '\\' or ':'; use '/' between the parts of a path")
     if _CONTROL.search(pattern):
-        raise PatternError(f"{shown} has a control character in it")
+        raise _malformed(shown, "has a control character in it")
     parts = pattern.split("/")
     if parts[0] in RESERVED:
-        raise PatternError(
-            f"{shown} starts with {parts[0]!r}, which is troupe's or git's own; no effect can "
-            "allow changing it"
+        # parts[0] is one of RESERVED, troupe's own words, not the person's.
+        raise _malformed(
+            shown,
+            f"starts with {parts[0]!r}, which is troupe's or git's own; no effect can allow "
+            "changing it",
         )
     for part in parts:
         if part in ("", "."):
-            raise PatternError(f"{shown} has an empty part; write each part once, with one '/'")
+            raise _malformed(shown, "has an empty part; write each part once, with one '/'")
         if part == "..":
-            raise PatternError(f"{shown} uses '..'; patterns stay inside the workspace")
+            raise _malformed(shown, "uses '..'; patterns stay inside the workspace")
         if "**" in part and part != "**":
-            raise PatternError(f"{shown} has '**' inside a part; '**' is a whole part of its own")
+            raise _malformed(shown, "has '**' inside a part; '**' is a whole part of its own")
     regex = ""
     for index, part in enumerate(parts):
         last = index == len(parts) - 1
@@ -90,7 +105,8 @@ class PathPattern:
 
 def _patterns(effect: Effect, texts: tuple[str, ...]) -> tuple[PathPattern, ...]:
     if isinstance(texts, str):
-        raise PatternError(f"{effect}: a list of patterns, not one string")
+        rule = "a list of patterns, not one string"
+        raise PatternError(f"{effect}: {rule}", rule=rule)
     for text in texts:
         pattern_regex(text, effect)  # names the effect when the pattern is malformed
     return tuple(PathPattern(text) for text in texts)

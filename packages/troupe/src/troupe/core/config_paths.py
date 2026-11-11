@@ -34,11 +34,16 @@ FIX = (
 
 
 def _malformed(text: str, offset: int, rule: str, fix: str = FIX) -> TroupeError:
+    """A refusal naming the text only up to and including the character at ``offset``: in
+    ``config set``, what follows can be the value, which may hold a password (spec: config, "A
+    malformed config path is refused"; config-set-json-redacts design D6). Reading never passes an
+    ``=`` outside brackets, so the value after the path's ``=`` is never shown."""
+    read = text[: offset + 1]
     return TroupeError(
         "config.path-malformed",
-        problem=f'"{text}" isn\'t a config path: {rule} (at character {offset + 1}).',
+        problem=f'"{read}" isn\'t a config path: {rule} (at character {offset + 1}).',
         fix=fix,
-        details={"text": text, "offset": offset, "rule": rule},
+        details={"text": read, "offset": offset, "rule": rule},
     )
 
 
@@ -65,6 +70,16 @@ def _bracket(text: str, start: int) -> tuple[str, int]:
     raise _malformed(text, start, UNCLOSED)
 
 
+def _without_dot(text: str, at: int) -> str:
+    """The fix for a dot before the ``[`` at ``at``: the path up to the end of that bracket with the
+    dot taken out, and nothing after it, which can be the value (design D6)."""
+    try:
+        _, end = _bracket(text, at)
+    except TroupeError:
+        return "Write the key in brackets with no dot before the [, such as a[b]."
+    return f"Write {text[: at - 1] + text[at:end]!r}, with no dot before the [."
+
+
 def _plain(text: str, start: int) -> tuple[str, int]:
     at = start
     while at < len(text) and text[at] not in NEEDS_BRACKETS:
@@ -79,12 +94,7 @@ def _read(text: str, *, stop_at_equals: bool) -> tuple[tuple[str, ...], int]:
     while True:
         if at < len(text) and text[at] == "[":
             if after_dot:
-                raise _malformed(
-                    text,
-                    at - 1,
-                    DOT_BEFORE_BRACKET,
-                    f"Write {text[: at - 1] + text[at:]!r}, with no dot before the [.",
-                )
+                raise _malformed(text, at - 1, DOT_BEFORE_BRACKET, _without_dot(text, at))
             key, at = _bracket(text, at)
         else:
             key, at = _plain(text, at)

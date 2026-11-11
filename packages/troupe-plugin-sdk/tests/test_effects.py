@@ -7,7 +7,14 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from troupe_plugin_sdk.effects import EFFECTS, READ_ONLY, Effects, PathPattern, PatternError
+from troupe_plugin_sdk.effects import (
+    EFFECTS,
+    READ_ONLY,
+    Effects,
+    PathPattern,
+    PatternError,
+    pattern_regex,
+)
 
 MATCHES = [
     ("src/**", "src/a.py", True),
@@ -119,3 +126,29 @@ def test_the_matcher_agrees_with_a_part_by_part_matcher(
     pattern: list[str], path: list[str]
 ) -> None:
     assert PathPattern("/".join(pattern)).matches("/".join(path)) is _reference(pattern, path)
+
+
+CANARY = "q7ZxW9pL4vR2canary"
+
+
+@pytest.mark.parametrize(
+    "pattern",
+    [
+        "",
+        f"https://user:{CANARY}@example.com/v1",
+        f"/{CANARY}",
+        f"{CANARY}\x01",
+        f".troupe/{CANARY}",
+        f"{CANARY}//x",
+        f"{CANARY}/../x",
+        f"a{CANARY}**",
+    ],
+)
+def test_a_pattern_errors_rule_holds_none_of_the_pattern(pattern: str) -> None:
+    # Its message names the pattern; its rule is for a caller that mustn't (config-set-json-redacts
+    # design D5).
+    with pytest.raises(PatternError) as refused:
+        pattern_regex(pattern, "write")
+    assert str(refused.value) == f"write: {pattern!r} {refused.value.rule}"
+    assert CANARY not in refused.value.rule
+    assert "example.com" not in refused.value.rule
