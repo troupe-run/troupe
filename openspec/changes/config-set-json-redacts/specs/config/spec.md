@@ -72,9 +72,9 @@ given as JSON with `--json`, naming the path. A refusal SHALL NOT repeat the val
 
 ### Requirement: A malformed config path is refused
 A config path that can't be read SHALL be refused with `config.path-malformed`, before anything is recorded. The
-error SHALL name the text up to where reading failed, the character position where reading failed, and the rule
-broken. It SHALL NOT show the text after that point, which in `config set` can hold the value. Nothing about it SHALL
-be guessed or skipped.
+error SHALL name the text up to where reading failed, or up to the `[` of a bracket it failed inside, the character
+position where reading failed, and the rule broken. It SHALL NOT show the text after that, which in `config set` can
+hold the value. Nothing about it SHALL be guessed or skipped.
 
 #### Scenario: An unclosed bracket
 - **WHEN** a person runs `troupe config unset runtimes.openai.prices[gpt-4.1`
@@ -114,6 +114,11 @@ be guessed or skipped.
 - **WHEN** a malformed path is refused
 - **THEN** the error validates against the protocol's error schema, its details holding the text up to where reading
   failed, the position and the rule
+
+#### Scenario: A value inside a bracket left open
+- **WHEN** a person runs `troupe config set 'a[b=https://user:<canary>@example.com\x'`
+- **THEN** it is refused with `config.path-malformed`, saying inside brackets only `\]` and `\\` are escapes, and the
+  error shows the text only up to the `[`
 
 #### Scenario: The value after a malformed path
 - **WHEN** a person runs `troupe config set 'a]b=<canary>'`

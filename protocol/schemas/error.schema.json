@@ -2348,7 +2348,7 @@
           ],
           "properties": {
             "text": {
-              "description": "The path as it was typed, up to and including the character where reading failed: nothing after it, which in config set can be the value.",
+              "description": "The path as it was typed, up to and including the character where reading failed, or the [ of a bracket it failed inside: nothing after it, which in config set can be the value.",
               "type": "string"
             },
             "offset": {

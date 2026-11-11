@@ -33,12 +33,15 @@ FIX = (
 )
 
 
-def _malformed(text: str, offset: int, rule: str, fix: str = FIX) -> TroupeError:
+def _malformed(
+    text: str, offset: int, rule: str, fix: str = FIX, *, bracket: int | None = None
+) -> TroupeError:
     """A refusal naming the text only up to and including the character at ``offset``: in
     ``config set``, what follows can be the value, which may hold a password (spec: config, "A
     malformed config path is refused"; config-set-json-redacts design D6). Reading never passes an
-    ``=`` outside brackets, so the value after the path's ``=`` is never shown."""
-    read = text[: offset + 1]
+    ``=`` outside brackets. Inside a bracket it does, so a failure there (``bracket``, where the
+    bracket opens) shows the text only up to that ``[``: an unclosed one can hold the value."""
+    read = text[: (offset if bracket is None else bracket) + 1]
     return TroupeError(
         "config.path-malformed",
         problem=f'"{read}" isn\'t a config path: {rule} (at character {offset + 1}).',
@@ -59,9 +62,9 @@ def _bracket(text: str, start: int) -> tuple[str, int]:
             return "".join(key), at + 1
         if char == "\\":
             if at + 1 == len(text):
-                raise _malformed(text, at, ESCAPES_NOTHING)
+                raise _malformed(text, at, ESCAPES_NOTHING, bracket=start)
             if text[at + 1] not in "]\\":
-                raise _malformed(text, at, UNKNOWN_ESCAPE)
+                raise _malformed(text, at, UNKNOWN_ESCAPE, bracket=start)
             key.append(text[at + 1])
             at += 2
             continue
