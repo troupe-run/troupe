@@ -218,7 +218,7 @@ checks).
 [`fixtures/ollama/`](fixtures/ollama/) holds real exchanges with Ollama 0.40.14, each with its provenance:
 
 - captured by [`tools/capture_ollama.py`](tools/capture_ollama.py): `success-with-tools`, `refused-by-effects`,
-  `thinking`, `context-overflow`, `model-not-found` and `no-tools-capability`;
+  `thinking`, `context-overflow`, `cut-answer`, `cut-tool-call`, `model-not-found` and `no-tools-capability`;
 - hand-written from `success-with-tools`, with a failure put in front: `server-retries`, `network-retries` and
   `stream-error`.
 
