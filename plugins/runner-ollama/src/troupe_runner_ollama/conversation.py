@@ -399,8 +399,8 @@ class Conversation:
         raise RetryableError("network", "the connection ended before Ollama finished its answer")
 
     def _after(self, answer: _Answer) -> None:
-        """Report another model that answered, count the answer, note a cut one, and report its
-        text."""
+        """Report another model that answered, count the answer, report its text, and end the
+        run if Ollama cut it."""
         for served in self._served.note(answer.model):
             self._event(served, "message" if served["type"] == "log" else None)
         # Ollama's prompt count includes the tokens it took from its cache. A cached count is
@@ -414,18 +414,22 @@ class Conversation:
             self._cached_tokens += min(answer.cached_tokens, answer.prompt_tokens)
         if answer.output_tokens is not None:
             self._output_tokens = (self._output_tokens or 0) + answer.output_tokens
-        if answer.done_reason == "length":
-            self._event(
-                {
-                    "type": "log",
-                    "level": "warning",
-                    "message": "The model's answer hit its output limit (done_reason length), so "
-                    "it may be cut short.",
-                },
-                summary="message",
-            )
         if answer.content:
             self._event({"type": "turn", "role": "assistant", "text": answer.content}, "text")
+        if answer.done_reason == "length":
+            # Cut output ends the run, unretried, and none of the answer's calls run (Decision
+            # #279 point 4; ollama-output-limit design D1 to D3).
+            raise _RunEnded(self._cut_message(answer), "output-limit")
+
+    def _cut_message(self, answer: _Answer) -> str:
+        """Why a cut answer ended the run (ollama-output-limit design D2)."""
+        after = f" after {answer.output_tokens} tokens" if answer.output_tokens is not None else ""
+        return (
+            f"Ollama cut the model's answer at its output limit (done_reason length){after}. "
+            "The runner sets no output limit, so Ollama stops an answer when the conversation "
+            f"fills the run's context window of {self._window} tokens: raise contextLength, or "
+            "give the actor a smaller task. A num_predict the model sets also cuts its answers."
+        )
 
     def _call_tools(self, answer: _Answer) -> None:
         message: dict[str, Any] = {"role": "assistant", "content": answer.content}
