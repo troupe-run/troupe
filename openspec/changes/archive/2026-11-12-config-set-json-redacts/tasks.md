@@ -73,8 +73,9 @@
   (Run, with the malformed-path, unset and effect-pattern cases too; none shows the password. The before is the
   issue's own output. Both go in the PR body.)
 - [x] 6.4 Open a draft PR that closes #374, and see CI pass on Linux, macOS and Windows once it's marked ready.
-  (PR #384. After review fixes up to `9dee63d2`, the last commit outside `openspec/`, CI run 43029843741 on
-  `6f5c927a` passed all 12 legs, Linux, macOS and Windows on Python 3.12 to 3.15.)
+  (PR #384. After review fixes up to `8a2b7345`, the last commit outside `openspec/`, CI run 43037972885 on
+  `a9e71f49` passed all 12 legs, Linux, macOS and Windows on Python 3.12 to 3.15, on its second attempt: the first
+  failed one macOS leg on an openai runner test this PR doesn't reach, filed as #392.)
 
 ## 7. A key from inside a value (design D7, review of #384)
 
