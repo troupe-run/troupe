@@ -66,7 +66,8 @@ A field with nothing to say is left out, never sent as `null` (issue
   example "Absent: the file didn't exist".
 - **A meaningful value beats absence.** Where a real value has its own meaning, it is used. Where one field decides
   whether another exists, the schema says so: a run's end has an `exitCode`, `transcript`,
-  `transcriptFormat` and `stderr` exactly when the runner started, and a run summary has an `outcome` and `endedAt` exactly when the run has ended.
+  `transcriptFormat` and `stderr` exactly when the runner started, and a run summary has an `outcome` and `endedAt` exactly when the run has ended, and carries what troupe takes
+  from the run's end (`error`, `audit`, `transcript`, `transcriptFormat`, `stderr`, `recording`) only then.
 - **No sentinels.** `""`, `-1` and the like never stand in for absence.
 - **`null` only where it says what absence can't.** The node then carries a marker:
   `"x-troupe-null": {"kind": "clear" | "external", "means": "..."}`. `clear` is "clear this" in an update, where

@@ -139,16 +139,16 @@
         },
         "state": {"$ref": "#/$defs/state"},
         "outcome": {"description": "How the run ended. Present exactly when state is ended.", "$ref": "#/$defs/outcome"},
-        "error": {"description": "Why the run didn't succeed. Absent: the outcome has no error, or the run hasn't ended.", "$ref": "../error.schema.json"},
+        "error": {"description": "Why the run didn't succeed, from the run's end. Only when state is ended. Absent: the outcome has no error, or the run hasn't ended.", "$ref": "../error.schema.json"},
         "audit": {"description": "What the audit of the run's changes against its actor's declared effects found, as its end recorded it. Present exactly when the run has ended and its runner started, that is when an ended run's summary has a transcript.", "$ref": "../events/run-ended.schema.json#/$defs/audit"},
         "events": {"description": "How many run events are recorded.", "type": "integer", "minimum": 0},
         "startedAt": {"$ref": "#/$defs/timestamp"},
         "endedAt": {"description": "When the run's end was recorded. Present exactly when state is ended.", "$ref": "#/$defs/timestamp"},
-        "transcript": {"description": "The transcript's artifact reference. Absent: the run hasn't ended, or its runner never started.", "$ref": "#/$defs/hash"},
+        "transcript": {"description": "The transcript's artifact reference, from the run's end. Only when state is ended. Absent: the run hasn't ended, or its runner never started.", "$ref": "#/$defs/hash"},
         "transcriptFormat": {"description": "How the transcript's lines are written, as the run's end recorded it: native (each line a record as the runner sent it) or kinds (each line a record with its kind, transcript-record.schema.json). Present exactly when transcript is.", "$ref": "../events/run-ended.schema.json#/$defs/transcriptFormat"},
-        "stderr": {"description": "The artifact reference of the runner's standard error. Absent: the run hasn't ended, or its runner never started.", "$ref": "#/$defs/hash"},
+        "stderr": {"description": "The artifact reference of the runner's standard error, from the run's end. Only when state is ended. Absent: the run hasn't ended, or its runner never started.", "$ref": "#/$defs/hash"},
         "recording": {
-          "description": "What wasn't recorded first, and why: the first run event, by its seq, or a notice troupe raised for the run, by its code. Absent: recording didn't fail.",
+          "description": "What wasn't recorded first, and why: the first run event, by its seq, or a notice troupe raised for the run, by its code, as the run's end recorded it. Only when state is ended. Absent: recording didn't fail, or the run hasn't ended.",
           "$ref": "../events/run-ended.schema.json#/$defs/recording"
         },
         "notices": {
@@ -172,7 +172,7 @@
             "then": {"required": ["audit"]},
             "else": {"properties": {"audit": false}}
           },
-          "else": {"properties": {"outcome": false, "endedAt": false, "audit": false}}
+          "else": {"properties": {"outcome": false, "endedAt": false, "audit": false, "error": false, "transcript": false, "transcriptFormat": false, "stderr": false, "recording": false}}
         },
         {
           "if": {"properties": {"workspace": {"$ref": "#/$defs/worktreeWorkspace"}}},

@@ -157,6 +157,19 @@ OUTCOMES = st.sampled_from(
 )
 
 
+RECORDINGS = st.fixed_dictionaries({"failedAt": st.integers(0, 99), "error": ERRORS}) | (
+    st.fixed_dictionaries(
+        {"notice": st.sampled_from(["run.silent", "run.retrying"]), "error": ERRORS}
+    )
+)
+
+FROM_THE_END = st.fixed_dictionaries(
+    {},
+    optional={"error": ERRORS, "transcript": HASHES, "stderr": HASHES, "recording": RECORDINGS},
+)
+"""The fields troupe takes from a run's end, so only an ended summary carries them."""
+
+
 @st.composite
 def summaries(draw: st.DrawFn) -> dict[str, Any]:
     """A run summary: an ended run has an outcome and an end time, and only an ended one does;
@@ -181,15 +194,6 @@ def summaries(draw: st.DrawFn) -> dict[str, Any]:
                 "startedAt": TIMES,
             },
             optional={
-                "error": ERRORS,
-                "transcript": HASHES,
-                "stderr": HASHES,
-                "recording": st.fixed_dictionaries(
-                    {"failedAt": st.integers(0, 99), "error": ERRORS}
-                )
-                | st.fixed_dictionaries(
-                    {"notice": st.sampled_from(["run.silent", "run.retrying"]), "error": ERRORS}
-                ),
                 "notices": st.lists(
                     st.fixed_dictionaries({"at": TIMES, "notice": NOTICES}), min_size=1, max_size=2
                 ),
@@ -199,10 +203,11 @@ def summaries(draw: st.DrawFn) -> dict[str, Any]:
     if summary["state"] == "ended":
         summary["outcome"] = draw(OUTCOMES)
         summary["endedAt"] = draw(TIMES)
+        # Only an ended run has what troupe takes from its end (client-protocol, #313).
+        summary.update(draw(FROM_THE_END))
         if "transcript" in summary:
             summary["audit"] = draw(AUDITS)
-    if "transcript" in summary:
-        summary["transcriptFormat"] = draw(st.sampled_from(["native", "kinds"]))
+            summary["transcriptFormat"] = draw(st.sampled_from(["native", "kinds"]))
     if summary["workspace"] != {"kind": "theatre"}:
         summary["changes"] = draw(RUN_CHANGES)
     return summary
@@ -753,6 +758,67 @@ def test_a_running_runs_summary_has_no_outcome_or_end_and_round_trips() -> None:
     assert summary.ended_at is None
     assert summary.to_data() == data
     check({"run": data}, "perform-result.schema.json")
+
+
+# Requirement: A run summary that hasn't ended carries nothing from the run's end (#313)
+
+FROM_THE_END_VALUES: dict[str, Any] = {
+    field: ENDED_SUMMARY[field] for field in ("transcript", "stderr", "error", "recording")
+}
+"""What troupe takes from a run's end, as an ended summary carries it."""
+
+
+def _not_ended(state: str) -> dict[str, Any]:
+    data = {
+        key: value
+        for key, value in ENDED_SUMMARY.items()
+        if key not in ("outcome", "endedAt", *FROM_THE_END_VALUES, "transcriptFormat", "audit")
+    }
+    return {**data, "state": state}
+
+
+def _with(data: dict[str, Any], field: str) -> dict[str, Any]:
+    added = {**data, field: FROM_THE_END_VALUES[field]}
+    if field == "transcript":
+        added["transcriptFormat"] = "native"
+    return added
+
+
+NOT_ENDED = ["running", "interrupted", "unfinished-elsewhere"]
+
+
+@pytest.mark.parametrize("state", NOT_ENDED)
+@pytest.mark.parametrize("field", list(FROM_THE_END_VALUES))
+def test_a_summary_that_hasnt_ended_with_a_field_from_the_end_is_refused_naming_it(
+    state: str, field: str
+) -> None:
+    data = _with(_not_ended(state), field)
+    with pytest.raises(ProtocolError, match=rf"RunSummary: {field} is present only when"):
+        m.RunSummary.from_data(data)
+    assert not is_valid({"run": data}, "perform-result.schema.json")
+
+
+@pytest.mark.parametrize("state", NOT_ENDED)
+def test_a_summary_that_hasnt_ended_without_them_is_read_and_validates(state: str) -> None:
+    data = _not_ended(state)
+    assert m.RunSummary.from_data(data).to_data() == data
+    check({"run": data}, "perform-result.schema.json")
+
+
+@settings(max_examples=100)
+@given(SUMMARIES, st.sampled_from(NOT_ENDED), st.sampled_from(list(FROM_THE_END_VALUES)))
+def test_the_schema_and_run_summary_both_refuse_a_field_from_the_end_on_a_run_that_hasnt_ended(
+    summary: dict[str, Any], state: str, field: str
+) -> None:
+    data = {
+        key: value
+        for key, value in summary.items()
+        if key not in ("outcome", "endedAt", *FROM_THE_END_VALUES, "transcriptFormat", "audit")
+    }
+    data = _with({**data, "state": state}, field)
+    assert not is_valid({"run": data}, "perform-result.schema.json")
+    with pytest.raises(ProtocolError, match=field):
+        m.RunSummary.from_data(data)
 
 
 # A run summary carries its run's audit (spec: client-protocol; failed-run-audit design D4).
