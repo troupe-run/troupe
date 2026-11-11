@@ -36,9 +36,9 @@
   `test_store_git.py`, `test_event_service.py`, `record_child.py`, `test_git_worktrees.py` and `test_config_files.py`.
   Each finding gets `fresh=True` and a comment naming its dependency; record the checked-and-not-dependent ones in a
   scratchpad note for the PR. Verify each changed file's tests pass
-- [ ] 2.7 Run the full suite three times with `-n 3 --dist worksteal` and once in one process (after telling the owner,
+- [x] 2.7 Run the full suite three times with `-n 3 --dist worksteal` and once in one process (after telling the owner,
   load average below 20), and verify every run passes. Any failure is traced to its dependency and fixed by 2.6's rule
-- [ ] 2.8 Commit the theatre work in small steps (Conventional Commits, signed, `uv run scripts/check.py` passing
+- [x] 2.8 Commit the theatre work in small steps (Conventional Commits, signed, `uv run scripts/check.py` passing
   before each), and verify `git log` shows each commit
 
 ## 3. Guard collection reads (#365, via troupe-run/infrastructure)
@@ -55,14 +55,14 @@
 
 ## 4. Measure (D5)
 
-- [ ] 4.1 Create a detached worktree of the merge base with `main` in the scratchpad for the baseline. Tell the owner
+- [x] 4.1 Create a detached worktree of the merge base with `main` in the scratchpad for the baseline. Tell the owner
   before starting, and wait for a load average below 20. Run three interleaved pairs (baseline, variant) of
   `uv run pytest -n 3 -q --basetemp=<new empty dir> --durations=0`, writing each run's full output to a scratchpad
   file, and verify all six runs passed
-- [ ] 4.2 Record wall time, total setup time and build/copy counts for each run in design.md's "Measured" section. If
+- [x] 4.2 Record wall time, total setup time and build/copy counts for each run in design.md's "Measured" section. If
   any shape's copy wasn't faster than its build, revert that shape to building from scratch (and say so in D1), and
   verify the full check passes after
-- [ ] 4.3 Remove the baseline worktree this session created (after `lsof +D <path>` shows nothing using it), and
+- [x] 4.3 Remove the baseline worktree this session created (after `lsof +D <path>` shows nothing using it), and
   verify `git worktree list` no longer lists it
 
 ## 5. Pull request
