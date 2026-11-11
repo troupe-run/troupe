@@ -16,7 +16,6 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, TextIO
 
-from troupe.cli.parser import Command
 from troupe.cli.render import (
     render_audit,
     render_error,
@@ -73,16 +72,6 @@ def _call(
 
 
 # perform
-
-
-def _configure_perform(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("actor", help="the actor's name, as config defines it")
-    parser.add_argument("--direction", help="what the actor is asked to do in this run")
-    parser.add_argument(
-        "--rehearse",
-        action="store_true",
-        help="run every check and start nothing: show what would run",
-    )
 
 
 def _text(summary: dict[str, Any] | None) -> str:
@@ -151,7 +140,7 @@ def _settle_hint(run: dict[str, Any]) -> str | None:
     )
 
 
-def _run_perform(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
+def run_perform(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
     session = _session()
     params: dict[str, Any] = {"actor": arguments.actor}
     if arguments.direction is not None:
@@ -214,12 +203,6 @@ def _run_perform(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) 
 # status and logs
 
 
-def _configure_status(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("run", nargs="?", help="a run's id, or at least its first 8 characters")
-    parser.add_argument("--limit", type=int, help="how many runs to list, newest first")
-    parser.add_argument("--json", action="store_true", help="print the result as JSON")
-
-
 def _notices(result: dict[str, Any], stderr: TextIO) -> None:
     for notice in result["notices"]:
         print(render_notice(notice), file=stderr)
@@ -229,7 +212,7 @@ def _ignore_cancel(presses: int) -> None:
     del presses
 
 
-def _run_status(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
+def run_status(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
     params: dict[str, Any] = {}
     if arguments.run is not None:
         params["run"] = arguments.run
@@ -248,15 +231,7 @@ def _run_status(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -
     return ExitCode.OK
 
 
-def _configure_logs(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("run", help="a run's id, or at least its first 8 characters")
-    parser.add_argument(
-        "--follow", action="store_true", help="wait for new events and notices until the run ends"
-    )
-    parser.add_argument("--json", action="store_true", help="print updates and the result as JSON")
-
-
-def _run_logs(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
+def run_logs(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
     params: dict[str, Any] = {"run": arguments.run}
     if arguments.follow:
         params["follow"] = True
@@ -291,11 +266,6 @@ def _run_logs(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> 
 # diff, accept and discard
 
 
-def _configure_diff(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("run", help="a run's id, or at least its first 8 characters")
-    parser.add_argument("--json", action="store_true", help="print the result as JSON")
-
-
 def _write_exactly(data: bytes, stdout: TextIO) -> None:
     """``data`` on standard output byte for byte: no newline added, none translated."""
     stdout.flush()
@@ -307,7 +277,7 @@ def _write_exactly(data: bytes, stdout: TextIO) -> None:
         stdout.write(data.decode("utf-8", "surrogateescape"))
 
 
-def _run_diff(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
+def run_diff(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
     result = _call("diff", {"run": arguments.run}, _session(), lambda update: None, _ignore_cancel)
     if arguments.json:
         print(json.dumps(result, ensure_ascii=False), file=stdout)
@@ -319,22 +289,6 @@ def _run_diff(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> 
     data = base64.b64decode(patch) if result["encoding"] == "base64" else patch.encode("utf-8")
     _write_exactly(data, stdout)
     return ExitCode.OK
-
-
-def _configure_settle(parser: argparse.ArgumentParser, rehearse: str) -> None:
-    parser.add_argument("run", help="a run's id, or at least its first 8 characters")
-    parser.add_argument("--reason", help="why, recorded in the lineage")
-    parser.add_argument("--rehearse", action="store_true", help=rehearse)
-
-
-def _configure_accept(parser: argparse.ArgumentParser) -> None:
-    _configure_settle(
-        parser, "check that the changes apply cleanly and name the files, changing nothing"
-    )
-
-
-def _configure_discard(parser: argparse.ArgumentParser) -> None:
-    _configure_settle(parser, "name the worktree that would be removed, removing nothing")
 
 
 def _settle_params(arguments: argparse.Namespace) -> dict[str, Any]:
@@ -353,7 +307,7 @@ def _on_notice(stderr: TextIO) -> Update:
     return show
 
 
-def _run_accept(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
+def run_accept(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
     params = _settle_params(arguments)
     result = _call("accept", params, _session(), _on_notice(stderr), _ignore_cancel)
     files = "\n".join(f"  {name}" for name in result["files"])
@@ -364,13 +318,7 @@ def _run_accept(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -
     return ExitCode.OK
 
 
-DISCARD_HELP = (
-    "Remove a worktree run's worktree, keeping nothing it wrote. It removes files, not git state: "
-    "branches, tags, stashes, config, hooks or pushes the run made in git stay."
-)
-
-
-def _run_discard(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
+def run_discard(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
     params = _settle_params(arguments)
     result = _call("discard", params, _session(), _on_notice(stderr), _ignore_cancel)
     if result["rehearsed"]:
@@ -383,18 +331,3 @@ def _run_discard(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) 
         file=stderr,
     )
     return ExitCode.OK
-
-
-COMMANDS: tuple[Command, ...] = (
-    Command("perform", "Run one actor and record the run.", _configure_perform, _run_perform),
-    Command("status", "Show the most recent runs, or one run.", _configure_status, _run_status),
-    Command("logs", "Show a run's events and notices in order.", _configure_logs, _run_logs),
-    Command("diff", "Show the changes a worktree run captured.", _configure_diff, _run_diff),
-    Command(
-        "accept",
-        "Apply a worktree run's changes to your files, unstaged, all or nothing.",
-        _configure_accept,
-        _run_accept,
-    ),
-    Command("discard", DISCARD_HELP, _configure_discard, _run_discard),
-)

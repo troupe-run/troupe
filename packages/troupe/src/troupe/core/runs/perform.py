@@ -36,7 +36,6 @@ from troupe.core.artifacts import ArtifactStore
 from troupe.core.client import messages as m
 from troupe.core.client.dispatch import Send
 from troupe.core.client.session import Session
-from troupe.core.config.commands import sync_files
 from troupe.core.config.kinds import check_actor
 from troupe.core.config.merge import Merged
 from troupe.core.config.projection import merges, plan, refuse, render
@@ -513,6 +512,10 @@ async def perform(
                 ),
             )
         )
+    # Imported here, so the queries and changes that share this module don't load config's
+    # handlers (cli-starts-fast design D5).
+    from troupe.core.config.commands import sync_files
+
     for notice in await asyncio.to_thread(sync_files, session, store, merged, send):
         send(_notice(notice))
 

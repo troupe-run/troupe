@@ -11,7 +11,6 @@ import json
 from typing import Any, TextIO
 
 from troupe.cli.commands import _call, _ignore_cancel, _notices, _session
-from troupe.cli.parser import Command
 from troupe.cli.render import render_notice
 from troupe.cli.runtimes import runtime_lines
 from troupe.cli.values import value_of
@@ -56,25 +55,6 @@ def _file_line(file: dict[str, Any], *, rehearse: bool = False) -> str:
 
 
 # config set and config unset
-
-
-def _configure_set(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
-        "assignments",
-        nargs="+",
-        metavar="path=value",
-        help="a value to set, such as actors.tester.runner=scripted; path=@file reads it "
-        "from a file. A key that holds a dot goes in brackets: prices[gpt-4.1]",
-    )
-    parser.add_argument("--reason", help="why, recorded with the change")
-    parser.add_argument(
-        "--json", action="store_true", help="read every value as JSON, whatever its schema says"
-    )
-    parser.add_argument(
-        "--rehearse",
-        action="store_true",
-        help="change nothing: show what would be recorded and written",
-    )
 
 
 Assignment = tuple[tuple[str, ...], str]
@@ -136,7 +116,7 @@ def _render_change(result: dict[str, Any], stdout: TextIO, *, rehearse: bool) ->
     return ExitCode.OK
 
 
-def _run_set(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
+def run_set(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
     assignments = _assignments(arguments.assignments)
     operations: list[dict[str, Any]] = []
     for path, text in assignments:
@@ -157,23 +137,7 @@ def _run_set(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> E
     return _render_change(result, stdout, rehearse=arguments.rehearse)
 
 
-def _configure_unset(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
-        "paths",
-        nargs="+",
-        metavar="path",
-        help="a value or a group to remove, such as actors.tester. A key that holds a dot goes "
-        "in brackets: prices[gpt-4.1]",
-    )
-    parser.add_argument("--reason", help="why, recorded with the change")
-    parser.add_argument(
-        "--rehearse",
-        action="store_true",
-        help="change nothing: show what would be recorded and written",
-    )
-
-
-def _run_unset(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
+def run_unset(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
     params: dict[str, Any] = {
         "operations": [{"path": list(parse(p)), "unset": True} for p in arguments.paths]
     }
@@ -191,23 +155,6 @@ def _run_unset(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) ->
 # config get
 
 
-def _configure_get(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
-        "path",
-        nargs="?",
-        metavar="path",
-        help="a value or group, such as actors.tester. A key that holds a dot goes in brackets: "
-        "prices[gpt-4.1]",
-    )
-    parser.add_argument("--json", action="store_true", help="print the result as JSON")
-    parser.add_argument(
-        "--resolved",
-        action="store_true",
-        help="show runtimes as troupe resolves them, from its built-in ones, config and your "
-        "environment, each value with where it came from",
-    )
-
-
 def _conflict_lines(conflict: dict[str, Any]) -> list[str]:
     where = ", ".join(shown(path) for path in conflict["paths"])
     head = (
@@ -223,7 +170,7 @@ def _conflict_lines(conflict: dict[str, Any]) -> list[str]:
     return lines
 
 
-def _run_get(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
+def run_get(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
     params: dict[str, Any] = {}
     path = None if arguments.path is None else parse(arguments.path)
     if path is not None:
@@ -255,18 +202,7 @@ def _run_get(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> E
 # flush
 
 
-def _configure_flush(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
-        "--force",
-        action="store_true",
-        help="replace files troupe didn't write too, keeping a copy of each",
-    )
-    parser.add_argument(
-        "--rehearse", action="store_true", help="change nothing: show what would be written"
-    )
-
-
-def _run_flush(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
+def run_flush(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
     params: dict[str, Any] = {"force": True} if arguments.force else {}
     if arguments.rehearse:
         params["rehearse"] = True
@@ -282,20 +218,3 @@ def _run_flush(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) ->
         print("Rehearsal: nothing was written.", file=stdout)
         return ExitCode.WOULD_CHANGE
     return ExitCode.OK
-
-
-COMMANDS: tuple[Command, ...] = (
-    Command("config set", "Set config values, as one change.", _configure_set, _run_set),
-    Command(
-        "config unset",
-        "Remove config values or groups, as one change.",
-        _configure_unset,
-        _run_unset,
-    ),
-    Command(
-        "config get", "Show config, or the value or group at a path.", _configure_get, _run_get
-    ),
-    Command(
-        "flush", "Make the config files exactly what config says.", _configure_flush, _run_flush
-    ),
-)

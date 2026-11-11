@@ -33,15 +33,51 @@ class Method:
     handler: Handler
 
 
-def handlers() -> Mapping[str, Method]:
-    """Every method the core offers, by name."""
-    # Imported here: troupe.core.runs builds its Methods from this module, so a top-level import
-    # would be circular.
-    from troupe.core.config.commands import methods as config_methods
-    from troupe.core.init import methods as init_methods
-    from troupe.core.runs import methods as run_methods
+# Each family's handlers are imported only when one of its methods is called, so a command loads
+# its own family's code and not the others' (cli-starts-fast design D5). They're imported in the
+# function, too, because troupe.core.runs builds its Methods from this module.
 
-    return {**run_methods(), **config_methods(), **init_methods()}
+
+def _runs() -> Mapping[str, Method]:
+    from troupe.core.runs import methods
+
+    return methods()
+
+
+def _config() -> Mapping[str, Method]:
+    from troupe.core.config.commands import methods
+
+    return methods()
+
+
+def _init() -> Mapping[str, Method]:
+    from troupe.core.init import methods
+
+    return methods()
+
+
+FAMILIES: Mapping[str, Callable[[], Mapping[str, Method]]] = {
+    "perform": _runs,
+    "status": _runs,
+    "logs": _runs,
+    "diff": _runs,
+    "accept": _runs,
+    "discard": _runs,
+    "config-set": _config,
+    "config-get": _config,
+    "flush": _config,
+    "init": _init,
+}
+"""Every method the core offers, by name: how to load its family's handlers. A method its
+family defines but this table doesn't name fails tests/test_cli_startup.py."""
+
+
+def handlers() -> Mapping[str, Method]:
+    """Every method the core offers, by name. Loads every family."""
+    every: dict[str, Method] = {}
+    for family in dict.fromkeys(FAMILIES.values()):
+        every.update(family())
+    return every
 
 
 async def call(
@@ -53,14 +89,20 @@ async def call(
     methods: Mapping[str, Method] | None = None,
 ) -> dict[str, Any]:
     """Run ``method`` with the request ``params`` in ``session``; return its result as data."""
-    table = handlers() if methods is None else methods
+    if methods is None:
+        family = FAMILIES.get(method)
+        table = {} if family is None else family()
+        known = sorted(FAMILIES)
+    else:
+        table = methods
+        known = sorted(table)
     if method not in table:
-        known = ", ".join(sorted(table))
+        listed = ", ".join(known)
         raise TroupeError(
             "client.unknown-method",
-            problem=f"{method!r} isn't a command or query troupe offers (it offers: {known}).",
-            fix=f"Call one of: {known}.",
-            details={"method": method, "known": sorted(table)},
+            problem=f"{method!r} isn't a command or query troupe offers (it offers: {listed}).",
+            fix=f"Call one of: {listed}.",
+            details={"method": method, "known": known},
         )
     entry = table[method]
     try:
