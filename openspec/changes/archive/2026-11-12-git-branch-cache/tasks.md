@@ -31,7 +31,7 @@ Every commit is signed and signed off (`git commit -S -s`), and `uv run scripts/
 
 ## 3. Integration
 
-- [ ] 3.1 Push, open the draft pull request (`Closes #370`), and act on Claude's review of the last push. Verify: the
+- [x] 3.1 Push, open the draft pull request (`Closes #370`), and act on Claude's review of the last push. Verify: the
   review leaves no must-fix or decision open, then all three CI legs pass once it's marked ready.
 
 ## Workflow follow-up
