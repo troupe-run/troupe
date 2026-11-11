@@ -231,9 +231,14 @@ A run SHALL make at most `maxTurns` rounds and SHALL start no round once it has 
 of each round's prompt and predicted tokens. Reaching either SHALL end the run with an `error` result saying which.
 
 #### Scenario: The turn limit is reached
-- **WHEN** a run with `maxTurns` 3 gets a tool call in each of its first two rounds
-- **THEN** its third round is offered no tools, no fourth round starts, and the run ends with an `error` result
-  saying the turn limit of 3 was reached, whatever the third round's text says
+- **WHEN** a run with `maxTurns` 3 gets a tool call in each of its three rounds
+- **THEN** each round is offered the tools, the third round's calls are carried out, no fourth round starts, and the
+  run ends with an `error` result saying the turn limit of 3 was reached
+
+#### Scenario: A run that finishes on its last allowed round
+- **WHEN** a run with `maxTurns` 3 gets a tool call in each of its first two rounds, and a reply without one in its
+  third
+- **THEN** the run ends with an `ok` result whose message is the third round's text
 
 #### Scenario: The token budget is spent
 - **WHEN** a run with `maxTotalTokens` 1000 has used 1200 tokens after a round that asked for a tool call

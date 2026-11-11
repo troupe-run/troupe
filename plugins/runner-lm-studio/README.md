@@ -48,7 +48,7 @@ runtime.
 
 | Option | What it sets |
 |---|---|
-| `maxTurns` | The most prediction rounds a run makes. The library sends the last one without tools, so the model answers; a run that was still calling tools ends `turn-limit`. |
+| `maxTurns` | The most prediction rounds a run makes, each offered the tools. A run whose last round still asks for a tool ends `turn-limit` once that round's calls are carried out; one that answers on its last round ends `ok`. |
 | `maxTotalTokens` | The most prompt plus predicted tokens a run may use, as LM Studio reports them each round. Checked once a round's tool calls have finished, so a run can pass it by one round; one that would go on ends `budget`. |
 | `contextLength` | The context length the model is loaded with, when the run loads it. |
 | `temperature` | The model's sampling temperature, from 0 to 1. Absent: the model's own default. |

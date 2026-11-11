@@ -67,12 +67,8 @@ says (design D16). eosFound and stopStringFound end it ok; any other is ``other`
 FINISHED = ("eosFound", "stopStringFound")
 """The stop reasons of a model that finished its answer."""
 
-FINAL_ROUND_ANSWER = (
-    "This was the last round the run allows, so no more tool calls can be carried out. Reply "
-    "with what you have done so far."
-)
-"""What the model is told when it asks for a tool on the last round, which is sent without
-tools."""
+NO_TOOL_NAMED = "The call named no tool, so it wasn't carried out."
+"""What the model is told of a call the library rejected without a tool's name."""
 
 
 class RefusedError(Exception):
@@ -101,7 +97,6 @@ class EngineLike(Protocol):
         history: dict[str, Any],
         definitions: Sequence[Any],
         *,
-        max_rounds: int,
         temperature: float | None,
         fragment: Fragment,
         round_done: Callable[[Round], None],
@@ -199,7 +194,7 @@ class _State:
     predicted_tokens: int = 0
     usage_known: bool = True
     budget_spent: bool = False
-    final_round_call: bool = False
+    turn_limit_reached: bool = False
     next_call: int = 0
 
 
@@ -243,7 +238,6 @@ class Run:
                     handle,
                     chat,
                     definitions,
-                    max_rounds=self.options.max_turns,
                     temperature=self.options.temperature,
                     fragment=self._fragment,
                     round_done=self._round_done,
@@ -255,6 +249,8 @@ class Run:
             except EngineError as error:
                 if self._state.budget_spent:
                     return self._budget()
+                if self._state.turn_limit_reached:
+                    return self._turn_limit()
                 if self.stopping() or error.failure == "stopped":
                     return None
                 if (
@@ -354,11 +350,9 @@ class Run:
 
     def _invalid(self, error: str, name: str | None, arguments: object) -> str:
         """A call the library rejected before carrying it out: answered with the SDK's own error
-        for that input (design D7). With no name, a call on the last round, which is sent without
-        tools: the run has reached its turn limit."""
+        for that input (design D7)."""
         if name is None:
-            self._state.final_round_call = True
-            return FINAL_ROUND_ANSWER
+            return NO_TOOL_NAMED
         if self.stopping():
             return "The run was stopped, so the call wasn't carried out."
         return self._step(name, arguments)
@@ -381,13 +375,20 @@ class Run:
             state.round_text.clear()
 
     def _round_end(self, index: int) -> None:
-        """After a round's tool calls have finished: the budget checked, and the run stopped when
-        it's spent and the round asked for tools, so another would follow (design D5)."""
+        """After a round's tool calls have finished, when it asked for any, so another round would
+        follow: the run stopped when the budget is spent, or when this was the last round the turn
+        limit allows (design D5). A round that asked for no tool ends the run anyway, whatever its
+        number, so a run that finishes on its last allowed round ends ok."""
         state = self._state
         had_calls = index in state.rounds_with_calls
         state.calls_this_round = 0
-        if had_calls and state.usage_known and self._tokens() >= self.options.max_total_tokens:
+        if not had_calls:
+            return
+        if state.usage_known and self._tokens() >= self.options.max_total_tokens:
             state.budget_spent = True
+            self.engine.close()
+        elif index + 1 >= self.options.max_turns:
+            state.turn_limit_reached = True
             self.engine.close()
 
     def _message(self, message: dict[str, Any]) -> None:
@@ -407,16 +408,8 @@ class Run:
             return None
         if state.budget_spent:
             return self._budget()
-        limit = self.options.max_turns
-        if state.final_round_call or (
-            rounds >= limit and limit > 1 and (rounds - 2) in state.rounds_with_calls
-        ):
-            return self._result(
-                "error",
-                f"The turn limit of {limit} was reached while the model was still calling tools. "
-                "Raise maxTurns in the actor's options to let it go further.",
-                "turn-limit",
-            )
+        if state.turn_limit_reached:
+            return self._turn_limit()
         last = state.rounds[-1] if state.rounds else None
         stop = last.stop_reason if last is not None else "none"
         if stop in FINISHED:
@@ -429,6 +422,14 @@ class Run:
             "error",
             f"LM Studio's prediction stopped for a reason the runner doesn't know: {stop}.",
             "other",
+        )
+
+    def _turn_limit(self) -> ResultEvent:
+        return self._result(
+            "error",
+            f"The turn limit of {self.options.max_turns} was reached while the model was still "
+            "calling tools. Raise maxTurns in the actor's options to let it go further.",
+            "turn-limit",
         )
 
     def _budget(self) -> ResultEvent:
@@ -541,8 +542,8 @@ class Run:
 
 
 __all__ = [
-    "FINAL_ROUND_ANSWER",
     "FINISHED",
+    "NO_TOOL_NAMED",
     "STOP_REASONS",
     "EngineLike",
     "RefusedError",

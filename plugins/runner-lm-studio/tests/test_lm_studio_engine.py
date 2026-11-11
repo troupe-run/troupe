@@ -204,7 +204,6 @@ def test_closing_the_engine_from_another_thread_stops_a_prediction_in_flight(
                     handle,
                     {"messages": [{"role": "user", "content": [{"type": "text", "text": "hi"}]}]},
                     tool_definitions(tool_specs(Tools(tmp_path)), lambda n, a: ""),
-                    max_rounds=2,
                     temperature=None,
                     fragment=lambda text, reasoning: None,
                     round_done=lambda r: None,
