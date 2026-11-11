@@ -57,7 +57,9 @@ class Endpoint:
 
     @property
     def responses_url(self) -> str:
-        return self.url.rstrip("/") + RESPONSES_PATH
+        """Where requests go: below the endpoint, with only a single trailing / dropped, so an
+        endpoint whose path is // keeps it, as has_path counts it (runtime-checks design D1)."""
+        return self.url.removesuffix("/") + RESPONSES_PATH
 
     @property
     def has_path(self) -> bool:
