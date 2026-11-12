@@ -10,7 +10,8 @@ told `fail`, whatever its options.
 ### Requirement: Claude Code compacts only when the run says compact
 The runner SHALL set `autoCompactEnabled` in the settings file it gives Claude Code with `--settings`: `true` when the
 run's `onContextFull` is `compact`, and `false` otherwise, whatever its options. When it's `compact`, the runner SHALL
-leave `DISABLE_AUTO_COMPACT` out of Claude Code's environment.
+leave `DISABLE_AUTO_COMPACT` out of Claude Code's environment, and when it was set, send a `log` event at level
+`warning` naming it.
 
 #### Scenario: A run told fail
 - **WHEN** a run starts with `onContextFull` `fail` and no options
@@ -27,6 +28,12 @@ leave `DISABLE_AUTO_COMPACT` out of Claude Code's environment.
 #### Scenario: A person's variable that would turn it off
 - **WHEN** a run told `compact` starts in an environment with `DISABLE_AUTO_COMPACT` `1`
 - **THEN** Claude Code's environment has no `DISABLE_AUTO_COMPACT`
+- **AND** the run sends a `log` event at level `warning`, after `init`, naming `DISABLE_AUTO_COMPACT` and saying the
+  actor's `onContextFull` overrides it
+
+#### Scenario: A run told compact with no such variable
+- **WHEN** a run told `compact` starts in an environment without `DISABLE_AUTO_COMPACT`
+- **THEN** no `log` event names `DISABLE_AUTO_COMPACT`
 
 ### Requirement: Claude Code's compaction is a context event
 A `system` record with subtype `compact_boundary` SHALL map to a `context` event with `kind` `compacted` and `by`
