@@ -93,8 +93,10 @@
   with the medians and ranges, noting they're this Mac's numbers under Defender.
 - [x] 6.2 Remove the baseline worktree once its numbers are recorded (it's not in use by a session: check `lsof +D`
   first); verify `git worktree list` no longer shows it.
-- [ ] 6.3 `openspec validate cli-starts-fast --strict` passes; open a draft pull request whose body closes #383 and
-  carries the before/after tables; verify CI passes on Linux, macOS and Windows once it's marked ready.
+- [x] 6.3 `openspec validate cli-starts-fast --strict` passes; open a draft pull request whose body closes #383 and
+  carries the before/after tables; verify CI passes on Linux, macOS and Windows once it's marked ready. (PR #386. CI
+  run 43200846522 on dacd993d, the last commit before this record, passed all 12 legs, Linux, macOS and Windows on
+  Python 3.12 to 3.15; the last code commit is d82d5227, and the commits since touch only `openspec/`.)
 
 ## Workflow follow-up
 

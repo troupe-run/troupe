@@ -267,9 +267,26 @@ It also isn't traceable to the change:
 
 So the suite's time on this Mac moves by more than this change could save or cost (the baseline alone ranged 450 to
 508 s), and its pattern points at the machine and at how xdist hands out tests, not at the code. Five losses out of five
-is still unlikely to be chance alone, so it is left open rather than dismissed. CI's own job timings decide it: the
-test gate's time on the pull request's macOS and Windows legs against main's recent runs
-(`gh run view --job --log`, `tests passed in`), recorded in the pull request.
+is still unlikely to be chance alone, so it was left open, and CI's own job timings were agreed as the deciding measure.
+
+Later local runs, on 2026-11-12, didn't repeat the pattern. Three more pairs, alternating which tree went first, came
+out at +27, +38 and +23 s, but the load rose to 38–53 during two of them. Then a comparison of three trees
+(baseline, a fresh worktree at the change's code with no caches, and this worktree) had one clean pair: change 551 s,
+baseline 557 s. Every other run in it was swamped by load (5-minute averages of 28 to 67), and the fresh tree's
+second run failed one flake-hunt test on its fixed 120 s limit under that load (filed as #397, untouched by this
+change).
+
+**CI decides it: no slowdown.** The test gate's time (`tests passed in`, from each check job's log) on the pull
+request's run against three recent merge-queue runs of main (each main plus one other pull request):
+
+| OS | main: 12 legs, 3 runs | this change: 4 legs (run 43200846522, dacd993d) |
+|---|---|---|
+| Linux | median 185 s (156 to 214) | median 191 s (187 to 199) |
+| macOS | median 481 s (237 to 520) | median 411 s (343 to 459) |
+| Windows | median 715 s (480 to 781) | median 703 s (556 to 796) |
+
+Every leg of the change falls inside main's range, as the process count predicts: the suite starts too few troupe
+CLI processes for this change to move its time either way.
 
 ### What each command loads (task 5.1)
 
