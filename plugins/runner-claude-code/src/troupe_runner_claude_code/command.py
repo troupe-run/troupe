@@ -112,7 +112,8 @@ def build(
         "sandbox": {"autoAllowBashIfSandboxed": False},
         # Compaction loses content (Decision #279, point 3): a run whose context fills ends with an
         # error instead. A setting, not DISABLE_AUTO_COMPACT, which a loaded setting source's env
-        # can replace; --settings ranks above every source (compaction-off design D1).
+        # can replace; --settings ranks above every source the actor can load (compaction-off
+        # design D1).
         "autoCompactEnabled": False,
     }
     path = private / "settings.json"

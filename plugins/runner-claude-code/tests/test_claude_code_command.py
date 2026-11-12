@@ -159,7 +159,7 @@ def test_a_write_effect_becomes_an_edit_rule_rooted_at_the_workspace(tmp_path: P
 @pytest.mark.parametrize(
     "raw", [{}, {"settingSources": ["project"]}], ids=["no-options", "project-settings"]
 )
-def test_the_settings_file_turns_off_automatic_compaction(
+def test_the_settings_file_holds_auto_compact_enabled_false(
     tmp_path: Path, raw: dict[str, object]
 ) -> None:
     settings = _settings(_build(parse_options(raw), "d", None, tmp_path, {}).argv)

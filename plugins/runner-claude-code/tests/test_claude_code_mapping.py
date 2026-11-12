@@ -430,6 +430,17 @@ def test_a_context_limit_wins_over_the_last_api_error_code_naming_another_cause(
     assert events[-1]["reason"] == "context-length"
 
 
+def test_a_failed_subtype_still_maps_by_its_subtype_whatever_its_terminal_reason() -> None:
+    record = {
+        "type": "result",
+        "subtype": "error_during_execution",
+        "is_error": True,
+        "terminal_reason": "prompt_too_long",
+    }
+    (result,) = [e for e in _feed(INIT, record) if e["type"] == "result"]
+    assert result["reason"] == "engine"
+
+
 def test_an_ok_result_with_a_context_limit_terminal_reason_stays_ok() -> None:
     (result,) = [
         e for e in _feed(INIT, _result(terminal_reason="prompt_too_long")) if e["type"] == "result"

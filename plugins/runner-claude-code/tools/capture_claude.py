@@ -128,8 +128,11 @@ class _ContextLimit(http.server.BaseHTTPRequestHandler):
     requests: list[str]
 
     def do_POST(self) -> None:
-        body = json.loads(self.rfile.read(int(self.headers.get("content-length") or 0)) or b"{}")
-        self.requests.append(self.path)
+        self.requests.append(self.path)  # first: the count is the compaction check
+        body = (
+            _json_object(self.rfile.read(int(self.headers.get("content-length") or 0)).decode())
+            or {}
+        )
         if len(self.requests) > 1:
             refusal = {
                 "type": "error",
@@ -235,6 +238,32 @@ def compaction_seen(lines: list[str]) -> list[str]:
         ):
             seen.append(line)
     return seen
+
+
+def context_limit_refusal(fixture: str, lines: list[str], requests: int) -> str | None:
+    """Why a context-limit capture mustn't be written, or None when it may: its run has to end at
+    the context limit, with no compaction reported and exactly the requests compaction being off
+    allows (compaction-off design D3)."""
+    _, expected, terminal_reason = CONTEXT_LIMITS[fixture]
+    ended = [
+        record.get("terminal_reason")
+        for line in lines
+        if (record := _json_object(line)) is not None and record.get("type") == "result"
+    ]
+    if ended != [terminal_reason]:
+        return (
+            f"capture: refusing to write {fixture}: its run didn't end at the context limit. "
+            f"The results' terminal_reason was {ended}, not [{terminal_reason!r}]."
+        )
+    compacted = compaction_seen(lines)
+    if compacted or requests != expected:
+        return (
+            f"capture: refusing to write {fixture}: compaction wasn't off. Claude Code sent "
+            f"{requests} requests (expected {expected}) and reported compacting in "
+            f"{len(compacted)} lines. Fix: check the runner's settings file still turns "
+            "compaction off for this Claude Code version (compaction-off design D1)."
+        )
+    return None
 
 
 def _unused_port() -> int:
@@ -525,27 +554,10 @@ def capture(fixture: str, out: Path) -> None:
     if server is not None:
         server.shutdown()
     if context_limit:
-        compacted = compaction_seen([line for _, line in lines])
-        _, expected, terminal_reason = CONTEXT_LIMITS[fixture]
-        ended = [
-            record.get("terminal_reason")
-            for _, line in lines
-            if (record := _json_object(line)) is not None and record.get("type") == "result"
-        ]
-        if ended != [terminal_reason]:
+        refusal = context_limit_refusal(fixture, [line for _, line in lines], len(requests))
+        if refusal is not None:
             shutil.rmtree(scratch, ignore_errors=True)
-            sys.exit(
-                f"capture: refusing to write {fixture}: its run didn't end at the context limit. "
-                f"The results' terminal_reason was {ended}, not [{terminal_reason!r}]."
-            )
-        if compacted or len(requests) != expected:
-            shutil.rmtree(scratch, ignore_errors=True)
-            sys.exit(
-                f"capture: refusing to write {fixture}: compaction wasn't off. Claude Code sent "
-                f"{len(requests)} requests (expected {expected}) and reported compacting in "
-                f"{len(compacted)} lines. Fix: check the runner's settings file still turns "
-                "compaction off for this Claude Code version (compaction-off design D1)."
-            )
+            sys.exit(refusal)
 
     user_home = str(Path.home())
     replacements = {
