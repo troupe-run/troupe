@@ -48,11 +48,11 @@
 
 - [x] 3.1 Open an infrastructure issue on the troupe roadmap board (`--project "troupe roadmap"`) describing D6 and
   the reproduction, citing troupe#365 without a closing keyword. Verify it's on the board with `projectItems`
-- [ ] 3.2 Make the change in troupe-run/infrastructure through its own workflow (its own branch, change and pull
+- [x] 3.2 Make the change in troupe-run/infrastructure through its own workflow (its own branch, change and pull
   request), with its tests showing a selection by node id across two scopes passes, and a real untagged read in it
   still fails. Hand the pull request to the owner to merge, and verify its delivery commit
   (`chore(guard): deliver scripts/guard_pytest.py …`) is on troupe's `main`
-- [ ] 3.3 Rebase this branch on `main` (and on #367 if it has merged), run the full check, and commit 1.2's test.
+- [x] 3.3 Rebase this branch on `main` (and on #367 if it has merged), run the full check, and commit 1.2's test.
   Verify it now passes in one process and with `-n 2`, and that the #365 reproduction command (three tests across the
   troupe, vcs-git and runner-ollama suites) reports 3 passed and no errors
 
