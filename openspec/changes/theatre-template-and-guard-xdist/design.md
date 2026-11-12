@@ -11,7 +11,7 @@ the tests run (troupe-run/troupe#362, #365).
 |---|---|---|---|
 | `make_repo(root, name, branch, refs)` | `packages/troupe/tests/gitrepo.py` | `git init -b <branch>` (reftable when asked), with an empty HOME beside it | 22 files directly, and every user of `theatre()` |
 | `theatre(root)` | `packages/troupe/tests/runtesting.py` | `make_repo` plus an empty `.troupe/` | the runs, perform and CLI tests (the per-file `repo` fixtures) |
-| `committed(tmp_path)` | `packages/troupe/tests/test_run_workspaces.py` | `theatre` plus `src/a.txt`, `src/b.txt` and `.gitignore`, committed | that file's `repo` fixture |
+| `committed(tmp_path)` | `packages/troupe/tests/runtesting.py` (was `test_run_workspaces.py`; moved beside `theatre()`) | `theatre` plus `src/a.txt`, `src/b.txt` and `.gitignore`, committed | the `repo` fixtures of `test_run_workspaces.py`, `test_run_changes.py` and `test_run_notices.py` |
 | `make_repo` fixture | `scripts/tests/conftest.py` | `git init`, three `config` calls, `README.md`, `add`, `commit` | the check's tests |
 
 The spike measured only `committed()`: 131 ms to build, 27 ms to `copytree`. `make_repo` alone is one `git init`, so
@@ -57,7 +57,7 @@ in troupe, and its fix is "change the file in troupe-run/infrastructure, and del
 
 `make_repo` and the scripts' `make_repo` fixture copy from a template instead of building. `theatre()` gets the
 saving through `make_repo`, since its only addition is a directory. `committed()` gets a template of its own, because
-its commit is where most of the 131 ms goes.
+its commit is where most of the 131 ms goes, and moves into `runtesting.py` beside `theatre()`, which it builds on.
 
 A template is keyed by everything that changes what's built: `(branch, refs)` for `make_repo`, nothing more for
 `committed()` and the scripts' fixture. The copy goes to `root / name` exactly as now, and HOME is still a new, empty
@@ -110,8 +110,9 @@ build's by construction, and no test checks them: the audit (D4) is what covers 
 
 ### D4. A test that needs a fresh build says so: `make_repo(..., fresh=True)`
 
-`make_repo` gains a keyword-only `fresh: bool = False`. `test_git_state_cache.py`'s `make_layout_repo` passes it,
-because it tests object timestamps, the index's stat data and the racy window deliberately.
+`make_repo` gains a keyword-only `fresh: bool = False`. `test_git_state_cache.py` tests object timestamps, the index's
+stat data and the racy window deliberately, so every repository in it is fresh: the file wraps `make_repo` once with
+`fresh=True`, so a call added to it later can't copy by mistake (two later merges, #367 and #370, added eight).
 
 The rest are found by an audit of every caller of the four helpers, against a written list of what can differ (D3):
 the racy window (a test that uses the real clock, not `past_the_racy_window`, and expects a read to be racy or not),

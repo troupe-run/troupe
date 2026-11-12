@@ -24,10 +24,10 @@ Two pieces of test tooling cost time and trust, from the timing spike of 2026-11
 ## What Changes
 
 - **A theatre built once, copied per test (#362).** The shared builders (`gitrepo.make_repo`, `runtesting.theatre`,
-  `test_run_workspaces.committed` and `scripts/tests/conftest.py`'s `make_repo`) copy a template that each test
-  process builds the first time a shape is asked for. Each test still gets its own repository and its own HOME, as
-  now. A copy is made to look like a fresh build where git looks: new file times, and an index whose stat data matches
-  the copied files.
+  `committed()`, which moves from `test_run_workspaces.py` into `runtesting.py`, and `scripts/tests/conftest.py`'s
+  `make_repo`) copy a template that each test process builds the first time a shape is asked for. Each test still
+  gets its own repository and its own HOME, as now. A copy is made to look like a fresh build where git looks: new
+  file times, and an index whose stat data matches the copied files.
 - **Tests that depend on a fresh `init` keep building their own.** `test_git_state_cache.py` tests object timestamps,
   the index's stat data and the racy-git window on purpose, and keeps its own fixture. An audit of the other users of
   the builders finds any more, and each one asks for a fresh build by name.

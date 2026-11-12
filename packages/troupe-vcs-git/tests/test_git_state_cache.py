@@ -19,10 +19,18 @@ from hypothesis import HealthCheck, settings
 from hypothesis import strategies as st
 from hypothesis.stateful import RuleBasedStateMachine, invariant, rule
 
-from gitrepo import AUTHOR, Repo, make_repo, past_the_racy_window
+import gitrepo
+from gitrepo import AUTHOR, Repo, past_the_racy_window
 from troupe.core.errors import TroupeError
 from troupe.platform.processes import Completed
 from troupe_vcs_git import GitAdapter
+
+
+def make_repo(root: Path, name: str = "theatre", branch: str = "main", refs: str = "files") -> Repo:
+    """Every repository in this file is built from scratch, never copied from a template: these
+    tests are about the token's stats, the racy window and the reflogs a fresh init writes, which a
+    copy could change (theatre-template-and-guard-xdist design D4)."""
+    return gitrepo.make_repo(root, name, branch, refs, fresh=True)
 
 
 @dataclass(frozen=True)
@@ -43,9 +51,7 @@ LAYOUTS = [Layout(refs, reflogs) for refs in ("files", "reftable") for reflogs i
 def make_layout_repo(root: Path, layout: Layout) -> Repo:
     """A repository with two commits on ``main``, a branch ``other`` at the same commit (same
     tree), and a branch ``feature`` one commit ahead with a different tree."""
-    # Built from scratch, not copied: these tests are about the token's stats, the racy window and
-    # the reflogs a fresh init writes, which a copy could change (theatre-template design D4).
-    repo = make_repo(root, refs=layout.refs, fresh=True)
+    repo = make_repo(root, refs=layout.refs)
     repo.git("config", "core.logAllRefUpdates", "true" if layout.reflogs else "false")
     repo.write("a.txt", "a")
     repo.commit_all("one")
@@ -421,7 +427,7 @@ class Names(RuleBasedStateMachine):
     def __init__(self) -> None:
         super().__init__()
         self.root = Path(tempfile.mkdtemp())
-        self.repo = make_repo(self.root, refs=self.layout.refs, fresh=True)  # as make_layout_repo
+        self.repo = make_repo(self.root, refs=self.layout.refs)
         self.orphans = 0
 
     def teardown(self) -> None:
@@ -558,7 +564,7 @@ TestNamesReftable = _names(LAYOUTS[2]).TestCase
 def test_a_ref_sharing_the_branchs_name_leaves_gits_short_name(
     tmp_path: Path, refs: str, shape: str
 ) -> None:
-    repo = make_repo(tmp_path, refs=refs, fresh=True)  # as make_layout_repo
+    repo = make_repo(tmp_path, refs=refs)
     empty_commit(repo)
     run_git(repo.path, repo, "update-ref", shape.format("main"), "HEAD")
     fresh = GitAdapter(repo.path, source=repo.env)
