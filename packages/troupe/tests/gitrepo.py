@@ -119,6 +119,11 @@ _built: dict[tuple[object, ...], Path] = {}
 """Each template this process has built, by the key of the shape it holds."""
 _counts = {"templates": 0, "copies": 0, "fresh": 0}
 
+LEAVE_OUT_OF_COPIES = shutil.ignore_patterns("*.lock")
+"""A git lock file is never part of a repository at rest. The template's own commit can start
+git's automatic maintenance in the background, which holds ``.git/objects/maintenance.lock`` for a
+moment; a copy that listed it, then found it gone, failed (macOS CI, 2026-11-13)."""
+
 
 def _counts_directory() -> Path | None:
     """The directory ``COUNTS_VARIABLE`` names, or None when it's unset. Set to anything but an
@@ -195,7 +200,9 @@ def from_template(
         template = _built[key] = built.path
         _counts["templates"] += 1
     path = root / name
-    shutil.copytree(template, path, symlinks=True, copy_function=shutil.copy)
+    shutil.copytree(
+        template, path, symlinks=True, copy_function=shutil.copy, ignore=LEAVE_OUT_OF_COPIES
+    )
     repo = Repo(path, isolated_environment(root / f"{name}-home"))
     if (path / ".git" / "index").exists():
         # Not -q: a file whose content no longer matches the index (a template changed by mistake)

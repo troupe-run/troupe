@@ -93,7 +93,15 @@ def make_repo(tmp_path: Path, _repo_template: Path) -> Callable[[], Repo]:
         """A copy of the template, with new file times and its index refreshed to match them, as
         a fresh build has (design D3)."""
         path = tmp_path / f"repo{next(counter)}"
-        shutil.copytree(_repo_template, path, symlinks=True, copy_function=shutil.copy)
+        # A git lock file is never part of a repository at rest, and the template's commit can
+        # start git's background maintenance, whose lock comes and goes while it's copied.
+        shutil.copytree(
+            _repo_template,
+            path,
+            symlinks=True,
+            copy_function=shutil.copy,
+            ignore=shutil.ignore_patterns("*.lock"),
+        )
         # Not -q: a template changed by mistake makes --refresh exit 1, failing every copy.
         git(path, "update-index", "--refresh")
         return Repo(path)
