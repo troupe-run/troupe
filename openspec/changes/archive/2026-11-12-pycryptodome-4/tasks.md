@@ -8,7 +8,7 @@
 
 ## 2. Pull request
 
-- [ ] 2.1 Open a draft pull request that closes #250 (`gh pr create --draft --body-file <literal path>`), linking Dependabot's #343 and this change's design D1. Act on Claude's review of the last push, and mark it ready once the review is clean. Verify every CI leg passes, on Linux, macOS and Windows, Python 3.12 to 3.15.
+- [x] 2.1 Open a draft pull request that closes #250 (`gh pr create --draft --body-file <literal path>`), linking Dependabot's #343 and this change's design D1. Act on Claude's review of the last push, and mark it ready once the review is clean. Verify every CI leg passes, on Linux, macOS and Windows, Python 3.12 to 3.15.
 
 ## Workflow follow-up
 
