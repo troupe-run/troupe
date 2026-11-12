@@ -256,7 +256,8 @@ closed, with one value:
   you held back.
 - **Which runners need it:** one whose retry starts the run's conversation again from the direction, so the tool
   calls already carried out would be asked for and carried out again. The LM Studio runner is one: the library's
-  `act()` starts again from the direction. A runner whose retry sends one request again, and carries out a reply's
+  `act()` starts again from the direction. It sends `notRetried` for a connection lost or unreachable after a call,
+  and not for a message timeout, which it never retries. A runner whose retry sends one request again, and carries out a reply's
   calls only once the whole reply has arrived, never needs it: the Ollama, Responses API and Claude Code runners all
   work that way, since the conversation each retry sends already holds every tool result.
 - **troupe's outcome carries it,** and its fix says to review the run's changes before performing the actor again
@@ -523,8 +524,8 @@ masked echo of it, are masked in everything it sends.
 The [LM Studio runner](../plugins/runner-lm-studio/README.md) is a third shape: a [client
 library](#runners-with-client-libraries), LM Studio's `lmstudio`, runs the rounds, and calls a Python function for
 each tool the model asks for. Each function is the plugin SDK's `Tools`, so troupe still carries out and checks every
-call, and `init`'s `effects` is `checked`. The runner can't stop between rounds except by closing the library's client,
-which is also how it cancels. Its fixtures pin it: websocket exchanges recorded from LM Studio, replayed by a fake.
+call, and `init`'s `effects` is `checked`. The runner stops between rounds by raising from the library's round-end
+callback (closing the client isn't enough, since the next round reconnects it), and cancels by closing the client. Its fixtures pin it: websocket exchanges recorded from LM Studio, replayed by a fake.
 
 | From the library | Run event |
 |---|---|
@@ -535,7 +536,7 @@ which is also how it cancels. Its fixtures pin it: websocket exchanges recorded 
 | a call the library rejects (an unknown tool, arguments that don't fit) | `tool_call` and an error `tool_result`, with the SDK's own message for that input |
 | a lost connection, while no tool call has run | `retry` with reason `network` |
 | a round with no tool call, stopped at `eosFound` or `stopStringFound` | `result` `ok`, with its text |
-| every round used while the model still called tools, the budget spent once a round's calls finish, the context or predicted-token limit, the model unloaded or a failed prediction, a lost connection after a tool call or a timeout, or a message the library can't read | `result` `error`. Its `reason`: `turn-limit`, `budget`, `context-length`, `output-limit`, `engine`, `network` and `other` |
+| every round used while the model still called tools, the budget spent once a round's calls finish, the context or predicted-token limit, the model unloaded or a failed prediction, a lost connection after a tool call or a timeout, or a message the library can't read | `result` `error`. Its `reason`: `turn-limit`, `budget`, `context-length`, `output-limit`, `engine`, `network` and `other`; a lost or unreachable connection after a tool call also has `notRetried: side-effect` |
 | each round's `promptTokensCount` and `predictedTokensCount` | summed into `result.usage` as `inputTokens` and `outputTokens`; LM Studio reports no cache counters and no cost |
 | no cost, and a price in `run/start` | `result.estimatedCostUsd`, from the SDK's estimator |
 

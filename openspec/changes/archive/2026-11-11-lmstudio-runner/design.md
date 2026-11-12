@@ -232,7 +232,11 @@ grace, the runner ends it from its own exit path.
 - **Retries** are the runner's: a connection that fails, or drops, before any tool call has run is retried with a
   `retry` event, within a named number of attempts and backoff. After a call has run, the runner doesn't retry,
   because `act()` would start the chat again from the direction and could run a tool twice. The library makes none of
-  its own, and a test pins that one dropped connection gives exactly one `retry` event.
+  its own, and a test pins that one dropped connection gives exactly one `retry` event. A connection lost or
+  unreachable after a call ends `network` with `notRetried: side-effect` (#378, added to the contract by #390), and
+  the message's "a retry could run a tool twice" follows the same condition. A message timeout isn't retried
+  whatever the calls, so it carries neither, and the turn limit and budget carry none (#390's group 6, moved here by
+  the owner, 2026-11-12).
 - **Redirects** aren't followed. httpx doesn't follow them unless asked, and the library doesn't ask. The greeting
   check treats any 3xx as "not LM Studio here" (`lm-studio.unreachable`, naming the status and the location). A test
   pins that nothing connects to the location.

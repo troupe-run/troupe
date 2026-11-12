@@ -392,6 +392,7 @@ def test_the_turn_limit_ends_the_run_once_the_last_rounds_calls_are_carried_out(
     assert len(calls) == 3
     end = result(messages)
     assert (end["status"], end["reason"]) == ("error", "turn-limit")
+    assert "notRetried" not in end
     assert "turn limit of 3" in end["message"]
 
 
@@ -426,6 +427,7 @@ def test_the_token_budget_spent_after_a_call_ends_the_run_once_the_call_is_done(
     assert [e["type"] for e in run if e["type"].startswith("tool")] == ["tool_call", "tool_result"]
     end = result(messages)
     assert (end["status"], end["reason"]) == ("error", "budget")
+    assert "notRetried" not in end
     assert "1000" in end["message"]
     assert "1200" in end["message"]
 
@@ -578,6 +580,8 @@ def test_a_reconnect_that_fails_too_is_retried_until_the_attempts_run_out_then_e
     assert {r["reason"] for r in retries} == {"network"}
     end = result(messages)
     assert (end["status"], end["reason"]) == ("error", "network")
+    assert "notRetried" not in end
+    assert "run a tool twice" not in end["message"]
 
 
 def test_a_lost_connection_after_a_call_isnt_retried(workspace: Path) -> None:
@@ -591,6 +595,7 @@ def test_a_lost_connection_after_a_call_isnt_retried(workspace: Path) -> None:
     assert not [e for e in events(messages) if e["type"] == "retry"]
     end = result(messages)
     assert (end["status"], end["reason"]) == ("error", "network")
+    assert end["notRetried"] == "side-effect"
     assert "run a tool twice" in end["message"]
 
 
