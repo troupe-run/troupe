@@ -86,6 +86,7 @@ def test_a_line_that_isnt_json_is_neither_compaction_nor_a_refusal() -> None:
 # (compaction-opt-in design D10)
 
 INIT = '{"type":"system","subtype":"init"}'
+REFUSALS = {"compaction-proactive": 0, "compaction-reactive": 1}
 FINISHED = '{"type":"result","subtype":"success","is_error":false,"result":"done"}'
 
 
@@ -94,7 +95,7 @@ def test_a_compaction_capture_with_a_boundary_one_compaction_request_and_a_finis
     fixture: str,
 ) -> None:
     lines = [INIT, COMPACTING, COMPACT_BOUNDARY, FINISHED]
-    assert _tool().compaction_refusal(fixture, lines, 1) is None
+    assert _tool().compaction_refusal(fixture, lines, 1, REFUSALS[fixture]) is None
 
 
 @pytest.mark.parametrize("compactions", [0, 2])
@@ -102,14 +103,14 @@ def test_a_compaction_capture_without_exactly_one_compaction_request_is_refused(
     compactions: int,
 ) -> None:
     lines = [INIT, COMPACTING, COMPACT_BOUNDARY, FINISHED]
-    refusal = _tool().compaction_refusal("compaction-proactive", lines, compactions)
+    refusal = _tool().compaction_refusal("compaction-proactive", lines, compactions, 0)
     assert refusal is not None
     assert "compaction wasn't seen" in refusal
 
 
 def test_a_compaction_capture_without_a_boundary_is_refused_and_says_so() -> None:
     refusal = _tool().compaction_refusal(
-        "compaction-reactive", [INIT, COMPACTING, COMPACT_FAILED, FINISHED], 1
+        "compaction-reactive", [INIT, COMPACTING, COMPACT_FAILED, FINISHED], 1, 1
     )
     assert refusal is not None
     assert "wrote 0 compact_boundary records" in refusal
@@ -118,7 +119,7 @@ def test_a_compaction_capture_without_a_boundary_is_refused_and_says_so() -> Non
 def test_a_compaction_capture_whose_run_didnt_finish_is_refused() -> None:
     failed = FINISHED.replace('"is_error":false', '"is_error":true')
     refusal = _tool().compaction_refusal(
-        "compaction-proactive", [INIT, COMPACT_BOUNDARY, failed], 1
+        "compaction-proactive", [INIT, COMPACT_BOUNDARY, failed], 1, 0
     )
     assert refusal is not None
     assert "didn't finish" in refusal
@@ -164,7 +165,9 @@ def test_the_compaction_stand_in_answers_read_then_summary_then_done(tmp_path: P
     import http.client
 
     tool = _tool()
-    server, requests, compactions = tool._compaction_api(990_000, tmp_path / "notes.txt", False)
+    server, requests, compactions, refusals = tool._compaction_api(
+        990_000, tmp_path / "notes.txt", False
+    )
     port = server.server_address[1]
 
     def post(text: str) -> bytes:
@@ -188,3 +191,38 @@ def test_the_compaction_stand_in_answers_read_then_summary_then_done(tmp_path: P
     assert b'"text": "done"' in last
     assert len(requests) == 3
     assert len(compactions) == 1
+    assert refusals == []
+
+
+@pytest.mark.parametrize(
+    ("fixture", "refusals"), [("compaction-reactive", 0), ("compaction-proactive", 1)]
+)
+def test_a_compaction_capture_whose_refusals_dont_match_its_fixture_is_refused(
+    fixture: str, refusals: int
+) -> None:
+    lines = [INIT, COMPACTING, COMPACT_BOUNDARY, FINISHED]
+    refusal = _tool().compaction_refusal(fixture, lines, 1, refusals)
+    assert refusal is not None
+    assert f"refused {refusals} requests as too long" in refusal
+
+
+def test_the_reactive_stand_in_refuses_the_second_ordinary_request_and_counts_it(
+    tmp_path: Path,
+) -> None:
+    import http.client
+
+    tool = _tool()
+    server, _, _, refusals = tool._compaction_api(185_000, tmp_path / "notes.txt", True)
+    port = server.server_address[1]
+    statuses = []
+    try:
+        for text in ("Read notes.txt", "Continue."):
+            connection = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+            body = {"model": "m", "messages": [{"role": "user", "content": text}]}
+            connection.request("POST", "/v1/messages", json.dumps(body).encode())
+            statuses.append(connection.getresponse().status)
+            connection.close()
+    finally:
+        server.shutdown()
+    assert statuses == [200, 400]
+    assert len(refusals) == 1
