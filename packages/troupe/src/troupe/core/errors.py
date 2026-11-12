@@ -69,6 +69,9 @@ CODES: dict[str, ExitCode] = {
     # Run worktrees (worktree-stage design D9). contributing/event-store.md lists the vcs one,
     # contributing/runs.md the others.
     "vcs.worktrees-unsupported": ExitCode.FAILURE,
+    # An unborn branch's short name git's answers can't settle (unborn-branch-short-name design D2).
+    # contributing/event-store.md lists it.
+    "vcs.short-name-undecided": ExitCode.FAILURE,
     "workspace.no-head": ExitCode.FAILURE,
     "workspace.diff-too-large": ExitCode.FAILURE,
     "command.timeout": ExitCode.FAILURE,

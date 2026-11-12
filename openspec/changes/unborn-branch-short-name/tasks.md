@@ -2,29 +2,38 @@
 
 ## 1. Tests that reproduce it first
 
-- [ ] 1.1 Add a test in `packages/troupe-vcs-git/tests/test_git_state_cache.py`: the issue's repository (a tag
+- [x] 1.1 Add a test in `packages/troupe-vcs-git/tests/test_git_state_cache.py`: the issue's repository (a tag
   `feature` symbolic to a missing `refs/heads/gone`, HEAD on an orphan `feature`). A fresh adapter reports `feature`
   before the first commit and after it. Parametrize it over files and reftable storage, and over the other shapes in
   the proposal's table (`refs/feature` dangling, a tag pointing at `main`, one at a missing `refs/tags/gone2`).
   Verify: it fails on main (`gone`, `heads/main`, `one2`) before any code change.
-- [ ] 1.2 Change `gits_answers` and the `Names` invariant to D3's reference (born: `rev-parse --abbrev-ref=loose`;
+- [x] 1.2 Change `gits_answers` and the `Names` invariant to D3's reference (born: `rev-parse --abbrev-ref=loose`;
   unborn: commit, read, `update-ref -d`), and add D3's symbolic-ref rule to `Names`. Verify: `TestNamesFiles` and
   `TestNamesReftable` fail on main with a symbolic-ref example before the code change.
 
-- [ ] 1.3 Add a test that pins the git behaviours D2 relies on, against a real repository, on both storages: with
-  `core.warnAmbiguousRefs` off, a name matching a root ref, `refs/<n>` and `refs/tags/<n>` prints the root one, and
-  with only the later two, prints `refs/<n>`; with the warning on, the same ambiguous name prints nothing and exits 0
-  (why D2 turns it off); and in one command, a resolving name after one that doesn't resolve prints nothing. Name the
-  git version in the failure message. Verify: it passes locally (git 2.56) and on every CI leg (3.2).
+- [x] 1.3 Add tests that pin the git behaviours D2 relies on, against a real repository, on both storages, with the
+  git version in each failure: `rev-parse --symbolic-full-name` follows a symbolic ref (why the first D2 failed);
+  `for-each-ref` lists a symbolic ref by its own name and leaves out a dangling one; with ambiguity warnings on, one
+  match prints a name and two print nothing and exit 0, with an upper-case root ref and a symbolic ref among them.
+  Verify: they pass locally (git 2.56) and on every CI leg (3.2).
+- [x] 1.4 Add unborn cases with root refs (upper-case on both storages, with a remote, lower-case, `heads/<n>` at the
+  root behind a tag, a lone remote, nothing shared). Verify: each reports the name git gives the branch once born.
 
-## 2. The unborn read (D1, D2)
+## 2. The unborn read (D1, D2 as revised with the owner, 2026-11-12)
 
-- [ ] 2.1 Replace `symbolic-ref --short` in `_read_unborn` with D1's walk and D2's command. Update the comments that
-  name `symbolic-ref --short` as git's answer. Verify: 1.1 and 1.2 pass, on both storages.
-- [ ] 2.2 Check the command counts: the existing unborn three- and four-command tests still pass unchanged.
-- [ ] 2.3 Check git-branch-cache and #75 are intact: the token, watched-ref and symbolic-ref cache tests in
+- [x] 2.1 Replace `symbolic-ref --short` in `_read_unborn` with D1's walk: `for-each-ref` for candidates under
+  `refs/`, and every root candidate that may exist asked in one `rev-parse`, split by `--git-dir`. Update the comments
+  that name `symbolic-ref --short` as git's answer. Verify: 1.1, 1.2 and 1.4 pass, on both storages.
+- [x] 2.2 Command counts as the revised spec says: three when the files show the unborn HEAD, one more for the root
+  candidates together, five at most otherwise. Verify: the unborn count tests pass, including a root ref on each
+  storage (4, 5), reftable (5), and packed refs with two root candidates (5, which would have been 6).
+- [x] 2.3 Check git-branch-cache and #75 are intact: the token, watched-ref and symbolic-ref cache tests in
   `test_git_state_cache.py` pass unchanged (only their reference, per D3, may change), and the whole
-  `packages/troupe-vcs-git` suite passes.
+  `packages/troupe-vcs-git` suite passes. Verify: 228 passed.
+- [x] 2.4 Add `vcs.short-name-undecided` to `troupe.core.errors`, both copies of `error.schema.json` and
+  `contributing/event-store.md`, and a test that raises it with its details. Verify: the test passes.
+- [x] 2.5 Replace the spec's requirement with one under a new name (a scenario name became false), and keep its
+  requirement text under 500 characters. Verify: `openspec validate --strict` passes.
 
 ## 3. Verification
 

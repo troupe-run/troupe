@@ -20,6 +20,7 @@ from hypothesis import strategies as st
 from hypothesis.stateful import RuleBasedStateMachine, invariant, rule
 
 from gitrepo import AUTHOR, Repo, make_repo, past_the_racy_window
+from troupe.core.errors import TroupeError
 from troupe.platform.processes import Completed
 from troupe_vcs_git import GitAdapter
 
@@ -73,26 +74,55 @@ def adapter(repo: Repo) -> GitAdapter:
     return GitAdapter(repo.path, source=repo.env, now=past_the_racy_window)
 
 
+def git_answer(repo: Repo, *args: str, stdin: bytes = b"") -> str | None:
+    """What git prints for ``args`` when it answers, or None when it has no answer (exit 1)."""
+    completed = subprocess.run(
+        ["git", *args],  # noqa: S607 - git from the test environment's PATH
+        cwd=repo.path,
+        env={**repo.env, **AUTHOR},
+        input=stdin,
+        capture_output=True,
+        check=False,
+    )
+    assert completed.returncode in (0, 1), completed.stderr
+    return completed.stdout.decode("utf-8").strip() if completed.returncode == 0 else None
+
+
 def gits_answers(repo: Repo) -> tuple[str | None, str | None]:
-    """The branch and HEAD as git reports them now, by the two commands the adapter ran before it
-    cached anything."""
-    answers: list[str | None] = []
-    for args in (
-        ["symbolic-ref", "--quiet", "--short", "HEAD"],
-        ["rev-parse", "--verify", "-q", "HEAD"],
-    ):
-        completed = subprocess.run(
-            ["git", *args],  # noqa: S607 - git from the test environment's PATH
-            cwd=repo.path,
-            env=repo.env,
-            capture_output=True,
-            check=False,
-        )
-        assert completed.returncode in (0, 1), completed.stderr
-        answers.append(
-            completed.stdout.decode("utf-8").strip() if completed.returncode == 0 else None
-        )
-    return answers[0], answers[1]
+    """The branch and HEAD as git reports them now. The branch is git's short name as
+    ``rev-parse --abbrev-ref=loose`` gives it, which is what lineage records once the branch has a
+    commit (unborn-branch-short-name design D3). Not ``symbolic-ref --short``: it names a symbolic
+    ref's target when one shares the branch's name (#388)."""
+    head = git_answer(repo, "rev-parse", "--verify", "-q", "HEAD")
+    full = git_answer(repo, "symbolic-ref", "--quiet", "HEAD")
+    if full is None:
+        return None, head  # detached
+    if head is not None:
+        return loose_short_name(repo), head
+    return born_name(repo, full), None
+
+
+def loose_short_name(repo: Repo) -> str:
+    """``rev-parse --abbrev-ref=loose HEAD``, with ``--`` so a file named HEAD in the work tree
+    can't make it ambiguous; rev-parse echoes the ``--`` on a line of its own."""
+    answer = git_answer(repo, "rev-parse", "--abbrev-ref=loose", "HEAD", "--")
+    assert answer is not None
+    return answer.splitlines()[0]
+
+
+def born_name(repo: Repo, full: str) -> str | None:
+    """git's short name for the unborn branch ``full`` once it has a commit: an empty commit is
+    given to it, the name read, and the branch's ref deleted again, which leaves HEAD unborn on
+    the same branch with the same refs (design D3)."""
+    tree = git_answer(repo, "mktree", stdin=b"")
+    assert tree is not None
+    commit = git_answer(repo, "commit-tree", "-m", "born for a moment", tree)
+    assert commit is not None
+    repo.git("update-ref", full, commit)
+    try:
+        return loose_short_name(repo)
+    finally:
+        repo.git("update-ref", "-d", full)
 
 
 def run_git(cwd: Path, repo: Repo, *args: str) -> None:
@@ -368,8 +398,8 @@ def test_whole_second_timestamps_get_the_coarse_window(repo: Repo) -> None:
 
 # The read itself (git-call-latency design D4): whatever refs share the checked-out branch's name,
 # whether HEAD is born, unborn or detached, and whatever the work tree holds, a read reports exactly
-# what git's own symbolic-ref --short and rev-parse report. Each check uses a fresh adapter, so it
-# reads rather than answering from a cache.
+# what git's own rev-parse reports, for an unborn branch once it's born (gits_answers). Each check
+# uses a fresh adapter, so it reads rather than answering from a cache.
 
 NAME_REFS = (
     "refs/tags/{}",
@@ -443,13 +473,46 @@ class Names(RuleBasedStateMachine):
         if not current or not self.born():
             return
         ref = shape.format(current)
-        if ref == f"refs/heads/{current}":
-            return
+        if ref == f"refs/heads/{current}" or self.symbolic(ref):
+            return  # the branch itself; or a symbolic ref, which the rule below makes and drops
         exists = self.has(ref)
         if add and not exists:
             run_git(self.repo.path, self.repo, "update-ref", ref, "HEAD")
         elif not add and exists:
             run_git(self.repo.path, self.repo, "update-ref", "-d", ref)
+
+    def symbolic(self, ref: str) -> bool:
+        """Whether ``ref`` is a symbolic ref, its target there or not."""
+        return git_answer(self.repo, "symbolic-ref", "--quiet", ref) is not None
+
+    @rule(
+        shape=st.sampled_from(["refs/tags/{}", "refs/{}"]),
+        pointing_at=st.sampled_from(["missing", "existing"]),
+        add=st.booleans(),
+    )
+    def a_symbolic_ref_named_after_the_branch(
+        self, shape: str, pointing_at: str, add: bool
+    ) -> None:
+        """A symbolic ref with the current branch's name, to a missing ref or an existing branch,
+        born or unborn (#388). git refuses one at the root, so only these two shapes."""
+        current = self.current()
+        if not current:
+            return  # detached
+        ref = shape.format(current)
+        if ref.startswith("refs/heads/") or (self.has(ref) and not self.symbolic(ref)):
+            return  # a branch; or a plain ref the rule above made and drops
+        if not add:
+            if self.symbolic(ref):
+                run_git(self.repo.path, self.repo, "symbolic-ref", "--delete", ref)
+            return
+        if pointing_at == "missing":
+            to = "refs/heads/gone"
+        else:
+            to = self.repo.git("for-each-ref", "--count=1", "--format=%(refname)", "refs/heads")
+            to = to.strip()
+            if not to:
+                return  # no branch has a commit yet
+        run_git(self.repo.path, self.repo, "symbolic-ref", ref, to)
 
     @rule(kind=st.sampled_from(["file", "directory", "none"]))
     def something_named_head_in_the_work_tree(self, kind: str) -> None:
@@ -759,3 +822,188 @@ def test_a_move_between_reading_head_and_statting_the_ref_is_seen(
     git.branch_token()  # the read, during which the branch moves
     assert git.move is None, "the read ran no command for the move to follow"
     assert (git.branch(), git.head()) == gits_answers(repo)
+
+
+# A symbolic ref sharing the branch's name (#388; unborn-branch-short-name). git's symbolic-ref
+# --short shortens a name its own ambiguity check overwrites when that check follows a symbolic
+# ref, so before the branch's first commit it named the target (gone, heads/main, one2). The
+# adapter reports the name rev-parse --abbrev-ref=loose gives once the branch has a commit.
+
+
+@dataclass(frozen=True)
+class SymbolicName:
+    """A symbolic ref ``ref`` to ``target``, made while ``main`` has a commit, and the short name
+    git gives ``feature`` once it's born."""
+
+    ref: str
+    target: str
+    short: str
+
+
+SYMBOLIC_NAMES = {
+    "tag-to-a-missing-branch": SymbolicName("refs/tags/feature", "refs/heads/gone", "feature"),
+    "ref-to-a-missing-branch": SymbolicName("refs/feature", "refs/heads/gone", "feature"),
+    "tag-to-an-existing-branch": SymbolicName(
+        "refs/tags/feature", "refs/heads/main", "heads/feature"
+    ),
+    "tag-to-a-missing-tag": SymbolicName("refs/tags/feature", "refs/tags/gone2", "feature"),
+}
+
+
+@pytest.mark.parametrize("refs", ["files", "reftable"])
+@pytest.mark.parametrize("case", SYMBOLIC_NAMES.values(), ids=SYMBOLIC_NAMES.keys())
+def test_a_symbolic_ref_sharing_the_branchs_name_leaves_its_name_the_same_before_and_after_birth(
+    tmp_path: Path, refs: str, case: SymbolicName
+) -> None:
+    repo = make_repo(tmp_path, refs=refs)
+    empty_commit(repo)
+    run_git(repo.path, repo, "symbolic-ref", case.ref, case.target)
+    repo.git("switch", "-q", "--orphan", "feature")
+    unborn = GitAdapter(repo.path, source=repo.env)
+    assert (unborn.branch(), unborn.head()) == (case.short, None)
+    empty_commit(repo)
+    born = GitAdapter(repo.path, source=repo.env)
+    assert born.branch() == case.short
+    assert repo.git("rev-parse", "--abbrev-ref=loose", "HEAD").strip() == case.short
+
+
+# What the unborn read relies on git for (unborn-branch-short-name design D2). git's documentation
+# doesn't state these behaviours, so each is pinned here against the git this runs on: a change
+# fails by name, before the differential tests.
+
+
+def first_matches(repo: Repo, *names: str, warn: bool = False) -> tuple[int, list[str]]:
+    """``rev-parse --symbolic-full-name --revs-only`` on ``names``, with ambiguity warnings on or
+    off: its exit status and lines."""
+    completed = subprocess.run(
+        [  # noqa: S607 - git from the test environment's PATH
+            "git",
+            "-c",
+            f"core.warnAmbiguousRefs={'true' if warn else 'false'}",
+            "rev-parse",
+            "--symbolic-full-name",
+            "--revs-only",
+            "--end-of-options",
+            *names,
+        ],
+        cwd=repo.path,
+        env=repo.env,
+        capture_output=True,
+        check=False,
+    )
+    return completed.returncode, completed.stdout.decode("utf-8").splitlines()
+
+
+def git_version(repo: Repo) -> str:
+    return repo.git("--version").strip()
+
+
+@pytest.mark.parametrize("refs", ["files", "reftable"])
+def test_git_names_a_symbolic_refs_target_not_the_ref_a_short_name_matched(
+    tmp_path: Path, refs: str
+) -> None:
+    # Why the first match can't be read from --symbolic-full-name: it follows a symbolic ref.
+    repo = make_repo(tmp_path, refs=refs)
+    empty_commit(repo)
+    run_git(repo.path, repo, "symbolic-ref", "refs/tags/pointer", "refs/heads/main")
+    assert first_matches(repo, "pointer") == (0, ["refs/heads/main"]), git_version(repo)
+
+
+@pytest.mark.parametrize("refs", ["files", "reftable"])
+def test_git_lists_a_symbolic_ref_by_its_own_name_and_leaves_out_a_dangling_one(
+    tmp_path: Path, refs: str
+) -> None:
+    repo = make_repo(tmp_path, refs=refs)
+    empty_commit(repo)
+    make_ref(repo, "refs/tags/plain")
+    run_git(repo.path, repo, "symbolic-ref", "refs/tags/pointer", "refs/heads/main")
+    run_git(repo.path, repo, "symbolic-ref", "refs/tags/dangling", "refs/heads/gone")
+    make_ref(repo, "refs/tags/plain-and-more/below")
+    listed = repo.git(
+        "for-each-ref",
+        "--format=%(refname)",
+        "refs/tags/plain",
+        "refs/tags/pointer",
+        "refs/tags/dangling",
+        "refs/tags/missing",
+    ).splitlines()
+    assert sorted(listed) == ["refs/tags/plain", "refs/tags/pointer"], git_version(repo)
+
+
+@pytest.mark.parametrize("refs", ["files", "reftable"])
+def test_git_counts_refs_a_name_matches_root_ones_included_with_ambiguity_warnings_on(
+    tmp_path: Path, refs: str
+) -> None:
+    # How the unborn read tells whether a ref at the top of the git directory exists (design D2):
+    # with warnings on, one match prints a name and two print nothing. A symbolic ref counts by
+    # its own name, so it counts once, and a dangling one doesn't count.
+    repo = make_repo(tmp_path, refs=refs)
+    empty_commit(repo)
+    version = git_version(repo)
+    assert first_matches(repo, "ROOT", warn=True) == (0, []), version
+    make_ref(repo, "ROOT")
+    assert first_matches(repo, "ROOT", warn=True) == (0, ["ROOT"]), version
+    make_ref(repo, "refs/remotes/ROOT")
+    assert first_matches(repo, "ROOT", warn=True) == (0, []), version
+    run_git(repo.path, repo, "symbolic-ref", "SYM", "refs/heads/main")
+    assert first_matches(repo, "SYM", warn=True) == (0, ["refs/heads/main"]), version
+    run_git(repo.path, repo, "symbolic-ref", "refs/tags/DANGLING", "refs/heads/gone")
+    assert first_matches(repo, "DANGLING", warn=True) == (0, []), version
+
+
+@dataclass(frozen=True)
+class UnbornName:
+    """Refs made while ``main`` has a commit, then an orphan ``branch``, and the short name git
+    gives it once it's born."""
+
+    refs: str
+    branch: str
+    made: tuple[str, ...]
+    short: str
+
+
+UNBORN_NAMES = {
+    "upper-case-root-files": UnbornName("files", "ROOT", ("ROOT",), "heads/ROOT"),
+    "upper-case-root-reftable": UnbornName("reftable", "ROOT", ("ROOT",), "heads/ROOT"),
+    "upper-case-root-and-a-remote": UnbornName(
+        "reftable", "ROOT", ("ROOT", "refs/remotes/ROOT"), "heads/ROOT"
+    ),
+    "only-a-remote": UnbornName("files", "origin", ("refs/remotes/origin",), "origin"),
+    "lower-case-root-files": UnbornName("files", "low", ("low",), "heads/low"),
+    "heads-at-the-root-behind-a-tag": UnbornName(
+        "files", "x", ("refs/tags/x", "heads/x"), "refs/heads/x"
+    ),
+    "nothing-shares-the-name": UnbornName("reftable", "plain", (), "plain"),
+}
+
+
+@pytest.mark.parametrize("case", UNBORN_NAMES.values(), ids=UNBORN_NAMES.keys())
+def test_an_unborn_branch_has_the_short_name_git_gives_it_once_born(
+    tmp_path: Path, case: UnbornName
+) -> None:
+    repo = make_repo(tmp_path, refs=case.refs)
+    empty_commit(repo)
+    for ref in case.made:
+        make_ref(repo, ref)
+    repo.git("switch", "-q", "--orphan", case.branch)
+    unborn = GitAdapter(repo.path, source=repo.env)
+    assert (unborn.branch(), unborn.head()) == (case.short, None)
+    assert gits_answers(repo) == (case.short, None)
+
+
+def test_an_unborn_branch_name_gits_answers_cant_settle_is_refused(tmp_path: Path) -> None:
+    # heads/x at the top of the git directory, with two refs under refs/ sharing heads/x: git
+    # prints nothing for two matches or three, so whether heads/x exists can't be told (D2).
+    repo = make_repo(tmp_path, refs="files")
+    empty_commit(repo)
+    for ref in ("refs/tags/x", "heads/x", "refs/tags/heads/x", "refs/remotes/heads/x"):
+        make_ref(repo, ref)
+    repo.git("switch", "-q", "--orphan", "x")
+    with pytest.raises(TroupeError) as caught:
+        GitAdapter(repo.path, source=repo.env).branch()
+    assert caught.value.code == "vcs.short-name-undecided"
+    assert caught.value.details == {
+        "branch": "refs/heads/x",
+        "name": "heads/x",
+        "refs": ["refs/tags/heads/x", "refs/remotes/heads/x"],
+    }

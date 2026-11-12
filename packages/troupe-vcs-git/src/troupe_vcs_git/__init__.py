@@ -25,6 +25,7 @@ import time
 from collections.abc import Callable, Hashable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import NoReturn
 
 from troupe.core.commands import run_command
 from troupe.core.errors import TroupeError
@@ -63,6 +64,22 @@ _INIT_FIX = (
 _WATCHED = ("HEAD", "index", "logs/HEAD", "packed-refs", "reftable/tables.list")
 
 _BRANCHES = "refs/heads/"
+
+# How git expands a short name to a full one, in the order it tries them (gitrevisions(7),
+# "<refname>").
+# git shortens a full name by the same rules: the short name of the last rule it matches whose
+# short name no earlier rule's expansion would resolve to (unborn-branch-short-name design D1).
+_REV_PARSE_RULES = (
+    "{}",
+    "refs/{}",
+    "refs/tags/{}",
+    "refs/heads/{}",
+    "refs/remotes/{}",
+    "refs/remotes/{}/HEAD",
+)
+_UNDER_REFS = range(1, len(_REV_PARSE_RULES))
+"""The rules whose expansions are under refs/: every one but the first, the top of the git
+directory."""
 
 # Where git looks for a ref sharing the branch's name when it shortens refs/heads/<n> (#370;
 # git-branch-cache design D1). Any of these existing makes <n> ambiguous, and then heads/<n> at the
@@ -246,10 +263,11 @@ class GitAdapter:
         named_stat = None if named is None else _stat_token(named)
         sharing, unknown_name = _sharing(named, common, paths[0].parent, reftable=reftable)
         sharing_stats = tuple(_stat_token(path) for path in sharing)
+        roots = None if reftable else tuple(dict.fromkeys((paths[0].parent, common)))
         if _looks_unborn(watched, named, named_stat):
-            branch, head, ref = self._read_unborn(common)
+            branch, head, ref = self._read_unborn(common, roots)
         else:
-            branch, head, ref = self._read(common)
+            branch, head, ref = self._read(common, roots)
         moved = ref != named and not reftable  # HEAD moved between its file and the command
         ref_stat = named_stat if ref == named else None if ref is None else _stat_token(ref)
         racy = (
@@ -262,11 +280,12 @@ class GitAdapter:
         self._state = state
         return state
 
-    def _read(self, common: Path) -> tuple[str | None, str | None, Path | None]:
+    def _read(
+        self, common: Path, roots: tuple[Path, ...] | None
+    ) -> tuple[str | None, str | None, Path | None]:
         """The branch, HEAD and the branch's ref file, read in one command once HEAD has a commit
-        (git-call-latency design D4). ``--abbrev-ref=loose`` gives the short name exactly as
-        ``symbolic-ref --short`` does, as lineage has always recorded it (cache-vcs-state D2);
-        both say ``HEAD`` when it is detached."""
+        (git-call-latency design D4). ``--abbrev-ref=loose`` gives git's short name, as lineage
+        has always recorded it (cache-vcs-state D2), and says ``HEAD`` when it is detached."""
         completed = self.git(
             "rev-parse",
             "HEAD",
@@ -284,18 +303,129 @@ class GitAdapter:
             return short, head, common / full
         # No commit yet, or a failure: the commands that tell those apart without reading git's
         # message, where exit status 1 means no answer and anything else is vcs.failed.
-        return self._read_unborn(common)
+        return self._read_unborn(common, roots)
 
-    def _read_unborn(self, common: Path) -> tuple[str | None, str | None, Path | None]:
+    def _read_unborn(
+        self, common: Path, roots: tuple[Path, ...] | None
+    ) -> tuple[str | None, str | None, Path | None]:
         full = self.git("symbolic-ref", "--quiet", "HEAD", allow=(0, _NO_ANSWER))
         ref: Path | None = None
         branch: str | None = None
         if full.returncode != _NO_ANSWER:  # detached, otherwise
-            ref = common / full.stdout.decode("utf-8").strip()
-            short = self.git("symbolic-ref", "--quiet", "--short", "HEAD", allow=(0, _NO_ANSWER))
-            if short.returncode != _NO_ANSWER:
-                branch = short.stdout.decode("utf-8").strip()
+            name = full.stdout.decode("utf-8").strip()
+            ref = common / name
+            branch = self._shorten_unborn(name, roots)
         return branch, self._read_head(), ref
+
+    def _shorten_unborn(self, full: str, roots: tuple[Path, ...] | None) -> str:
+        """git's short name for the unborn ref ``full``: what ``rev-parse --abbrev-ref=loose``
+        will say once it has a commit (unborn-branch-short-name design D1, D2). git won't shorten
+        an unborn ref itself, and ``symbolic-ref --short`` shortens a name its ambiguity check has
+        overwritten when a symbolic ref shares the branch's name (#388).
+
+        Each rule ``full`` matches, from the last, gives a short name, which is ambiguous when an
+        earlier rule's expansion of it is a ref. Those under refs/ come from one for-each-ref,
+        which lists a symbolic ref by its own name and leaves out a dangling one, as git's rule
+        does. Those at the top of the git directory are asked about together, in one more
+        command, and only when one may exist (``_roots_found``). ``roots`` are the directories
+        that hold such refs as files, or None under reftable."""
+        levels = _shortenings(full)
+        if not levels:
+            return full
+        under_refs = sorted(
+            {_REV_PARSE_RULES[rule].format(short) for _, short in levels for rule in _UNDER_REFS}
+            - {full}
+        )
+        listing = self.git("for-each-ref", "--format=%(refname)", *under_refs)
+        listed = set(listing.stdout.decode("utf-8").splitlines()) & set(under_refs)
+        asked: list[str] = []
+        for rule, short in levels:
+            if _ambiguous_under_refs(rule, short, listed):
+                continue
+            if not _may_be_a_root_ref(short, roots):
+                break  # this level settles it, so no later one is needed
+            asked.append(short)
+        found = self._roots_found(asked, full, listed)
+        for rule, short in levels:
+            if _ambiguous_under_refs(rule, short, listed):
+                continue
+            if short in asked and found[short]:
+                continue
+            return short
+        return full
+
+    def _roots_found(self, names: list[str], full: str, listed: set[str]) -> dict[str, bool]:
+        """Whether each of ``names`` is a ref at the top of the git directory, asked of git in one
+        command (design D2). With ambiguity warnings on, ``rev-parse --symbolic-full-name`` prints
+        a line for a name that one ref matches and none for two or more; a ``--git-dir`` before
+        each name prints a line no ref name can be, so each name's answer stands apart.
+        ``listed`` says how many of a name's other expansions are refs, which settles it, except
+        when two or more are: then git gives no answer that tells, and the read is refused rather
+        than guessed (vcs.short-name-undecided).
+
+        A name that resolves to nothing makes the names after it paths, printed by nothing. Such
+        a name isn't ambiguous, so the walk never needs a later answer. A name that begins with
+        ``-`` can't go among options, so then each is asked on its own, after --end-of-options."""
+        if not names:
+            return {}
+        if any(name.startswith("-") for name in names):
+            answers: list[bool | None] = [self._root_answer_alone(name) for name in names]
+        else:
+            separated = [arg for name in names for arg in ("--git-dir", name)]
+            answer = self.git(
+                "-c",
+                "core.warnAmbiguousRefs=true",
+                "rev-parse",
+                "--revs-only",
+                "--symbolic-full-name",
+                *separated,
+            )
+            lines = answer.stdout.decode("utf-8").splitlines()
+            separator = lines[0] if lines else None
+            groups: list[list[str]] = []
+            for line in lines:
+                if line == separator:
+                    groups.append([])
+                else:
+                    groups[-1].append(line)
+            answers = [
+                bool(groups[index]) if index < len(groups) else None for index in range(len(names))
+            ]
+        found: dict[str, bool] = {}
+        for name, printed in zip(names, answers, strict=True):
+            others = [
+                ref
+                for rule in _UNDER_REFS
+                if (ref := _REV_PARSE_RULES[rule].format(name)) in listed
+            ]
+            if len(others) >= 2 or printed is None:
+                self._undecided(full, name, others)
+            found[name] = printed if not others else not printed
+        return found
+
+    def _root_answer_alone(self, name: str) -> bool:
+        answer = self.git(
+            "-c",
+            "core.warnAmbiguousRefs=true",
+            "rev-parse",
+            "--revs-only",
+            "--symbolic-full-name",
+            "--end-of-options",
+            name,
+        )
+        return bool(answer.stdout.strip())
+
+    def _undecided(self, full: str, name: str, others: list[str]) -> NoReturn:
+        raise TroupeError(
+            "vcs.short-name-undecided",
+            problem=f"git's short name for the unborn branch {full} can't be told: {name} may be a "
+            f"ref at the top of the git directory, and {', '.join(others) or 'no other ref'} "
+            "share its name, so git gives no answer that tells.",
+            fix="Make a commit on the branch, after which git names it itself, or delete one of "
+            "those refs.",
+            path=str(self.theatre.absolute()),
+            details={"branch": full, "name": name, "refs": others},
+        )
 
     def _racy(self, read_at: int, stats: tuple[_Stat, ...]) -> bool:
         """Git's own "racily clean" rule: an answer read within the window of a watched file's last
@@ -450,6 +580,35 @@ def _looks_unborn(watched: tuple[_Stat, ...], named: Path | None, named_stat: _S
     if packed_refs is not None or common_tables is not None:
         return False  # refs may be packed, or kept in reftable: only git can tell
     return named is not None and named_stat is None
+
+
+def _ambiguous_under_refs(rule: int, short: str, listed: set[str]) -> bool:
+    """Whether an expansion of ``short`` under refs/ by a rule before ``rule`` is a ref."""
+    return any(_REV_PARSE_RULES[earlier].format(short) in listed for earlier in range(1, rule))
+
+
+def _may_be_a_root_ref(name: str, roots: tuple[Path, ...] | None) -> bool:
+    """Whether ``name`` may be a ref at the top of the git directory (design D2). With the files
+    storage such a ref is a file, so it can't be when no directory in ``roots`` holds one. Under
+    reftable (``roots`` None) one is a single level, so it can't have a ``/``."""
+    if roots is None:
+        return "/" not in name
+    return any(_stat_token(directory / name) is not None for directory in roots)
+
+
+def _shortenings(full: str) -> list[tuple[int, str]]:
+    """Each rule ``full`` matches with the short name it gives, from the last rule back to the
+    second, as git tries them when it shortens a name: the first rule never shortens."""
+    levels = []
+    for rule in range(len(_REV_PARSE_RULES) - 1, 0, -1):
+        before, after = _REV_PARSE_RULES[rule].split("{}")
+        if (
+            len(full) > len(before) + len(after)
+            and full.startswith(before)
+            and full.endswith(after)
+        ):
+            levels.append((rule, full[len(before) : len(full) - len(after)]))
+    return levels
 
 
 def _nul_separated(data: bytes) -> list[str]:

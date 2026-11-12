@@ -240,6 +240,7 @@ path ([`notice.schema.json`](../protocol/schemas/notice.schema.json)).
 | `vcs.failed` | A git command failed |
 | `vcs.not-a-repository` | `troupe init` was run in a directory that isn't in a repository of the theatre's version control |
 | `vcs.worktrees-unsupported` | The version-control adapter can't make a run's worktree (the plain filesystem adapter) |
+| `vcs.short-name-undecided` | git's answers can't settle an unborn branch's short name: a name may be a ref at the top of the git directory while two other refs share it |
 
 ## File count
 
