@@ -111,7 +111,7 @@ loaded either: the live test showed it on Claude Code 2.1.302, and reports it on
   says.
 - **A run whose context fills fails.** With compaction off, Claude Code ends with an error result when the API
   refuses a request as too long (`terminal_reason` `prompt_too_long`) or before sending one that wouldn't fit
-  (`blocking_limit`). A long run that got through by
+  (`blocking_limit`), and the runner reports it with the reason `context-length`. A long run that got through by
   compacting before this runner turned compaction off now fails: split its task, or, once
   [#310](https://github.com/troupe-run/troupe/issues/310) lands, let its actor opt in to compaction.
 - **The runner never invents a result.** When Claude Code ends without one, the runner sends none and troupe derives

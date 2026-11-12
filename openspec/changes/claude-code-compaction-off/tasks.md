@@ -12,17 +12,17 @@ Every commit is signed and signed off (`git commit -S -s`), and `uv run scripts/
   Claude Code's automatic compaction, and why a loaded setting source can't turn it back on. Under "How a run ends",
   say a run whose context fills ends `error` with `context-length`, that a long run which compacted before now fails,
   and the way out (split the task; opt in once #310 lands). Verify `test_claude_code_readme.py` passes.
-- [ ] 1.3 Commit as `feat(claude-code)!: turn off Claude Code's automatic compaction` with a `BREAKING CHANGE:`
+- [x] 1.3 Commit as `feat(claude-code)!: turn off Claude Code's automatic compaction` with a `BREAKING CHANGE:`
   footer naming the behaviour change, after `uv run scripts/check.py` passes.
 
 ## 2. The context limit maps to context-length
 
-- [ ] 2.1 In `mapping.py`, add a `TERMINAL_REASONS` table (`prompt_too_long` and `blocking_limit` to
+- [x] 2.1 In `mapping.py`, add a `TERMINAL_REASONS` table (`prompt_too_long` and `blocking_limit` to
   `context-length`) and check it first in `_failure_reason` for an `is_error` result under subtype `success`
   (design D2). Add tests in `test_claude_code_mapping.py` for each value, for a context limit after a rate-limit retry
   (the spec's scenario), and that a successful result with `terminal_reason` `prompt_too_long` stays `ok`. Verify the
   existing reason tests still pass unchanged.
-- [ ] 2.2 Update the `result` row of the Claude Code mapping in `contributing/runners.md`: `terminal_reason`
+- [x] 2.2 Update the `result` row of the Claude Code mapping in `contributing/runners.md`: `terminal_reason`
   `prompt_too_long` or `blocking_limit` gives `context-length`, before the error code, the retry and the status.
   Verify the docs link checks in `scripts/check.py` pass.
 

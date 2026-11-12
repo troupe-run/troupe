@@ -385,6 +385,59 @@ def test_an_error_with_nothing_to_go_on_is_other() -> None:
     assert events[-1]["reason"] == "other"
 
 
+# Requirement: Claude Code's context limit maps to context-length
+
+
+def _context_limit(terminal_reason: str, status: int | None) -> list[dict[str, Any]]:
+    """The records a context limit ends with when compaction is off, shaped like 2.1.319's: an
+    invalid_request API error from the synthetic model, then the result naming the limit."""
+    fields: dict[str, object] = {} if status is None else {"api_error_status": status}
+    return [
+        _assistant(
+            {"type": "text", "text": "Prompt is too long"},
+            error="invalid_request",
+            is_api_error_message=True,
+            **fields,
+        ),
+        _result(
+            is_error=True, result="Prompt is too long", terminal_reason=terminal_reason, **fields
+        ),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("terminal_reason", "status"), [("prompt_too_long", 400), ("blocking_limit", None)]
+)
+def test_a_context_limit_terminal_reason_gives_context_length(
+    terminal_reason: str, status: int | None
+) -> None:
+    result = _feed(INIT, *_context_limit(terminal_reason, status))[-1]
+    assert (result["type"], result["status"], result["reason"]) == (
+        "result",
+        "error",
+        "context-length",
+    )
+
+
+def test_a_context_limit_after_a_rate_limit_retry_gives_context_length() -> None:
+    events = _feed(INIT, _retry("rate_limit", 429), *_context_limit("prompt_too_long", 400))
+    assert events[-1]["reason"] == "context-length"
+
+
+def test_a_context_limit_wins_over_the_last_api_error_code_naming_another_cause() -> None:
+    _, result = _context_limit("prompt_too_long", 400)
+    events = _feed(INIT, _api_error("rate_limit"), result)
+    assert events[-1]["reason"] == "context-length"
+
+
+def test_an_ok_result_with_a_context_limit_terminal_reason_stays_ok() -> None:
+    (result,) = [
+        e for e in _feed(INIT, _result(terminal_reason="prompt_too_long")) if e["type"] == "result"
+    ]
+    assert result["status"] == "ok"
+    assert "reason" not in result
+
+
 @pytest.mark.parametrize(
     ("name", "reason"),
     [
