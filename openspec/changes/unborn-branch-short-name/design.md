@@ -92,6 +92,13 @@ missing ref or an existing one, and works while the branch is unborn as well as 
 - [The adapter copies git's rule, so a git that changes the rule would disagree] → The differential tests compare
   against git's own `--abbrev-ref=loose` on every run, on each CI OS's git, so a change shows up as a failing test,
   not as wrong lineage.
+- [D2 rests on two behaviours git's documentation doesn't state: with `core.warnAmbiguousRefs` off,
+  `--symbolic-full-name` prints a name's first match in rule order (with it on, a name matching two refs prints
+  nothing and still exits 0); and the first name that resolves to nothing makes every later name a path, printed by
+  nothing] → A test pins both against a real repository on every CI OS (task 1.3): a name matching a root ref,
+  `refs/<n>` and `refs/tags/<n>` prints the root one; with the warning on, the same name prints nothing; and a
+  resolving name after one that doesn't resolve prints nothing. If a git changes either, that test fails by name,
+  ahead of the differential tests.
 - [`--end-of-options` (new to the adapter) or `core.warnAmbiguousRefs` behaving differently on the git a CI OS ships]
   → The same tests run on Linux, macOS and Windows, and task 3.2 records the git version each leg ran.
 - [`update-ref -d` in the test oracle removes the branch's reflog] → Only in the test repository, and the property

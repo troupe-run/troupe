@@ -11,6 +11,12 @@
   unborn: commit, read, `update-ref -d`), and add D3's symbolic-ref rule to `Names`. Verify: `TestNamesFiles` and
   `TestNamesReftable` fail on main with a symbolic-ref example before the code change.
 
+- [ ] 1.3 Add a test that pins the git behaviours D2 relies on, against a real repository, on both storages: with
+  `core.warnAmbiguousRefs` off, a name matching a root ref, `refs/<n>` and `refs/tags/<n>` prints the root one, and
+  with only the later two, prints `refs/<n>`; with the warning on, the same ambiguous name prints nothing and exits 0
+  (why D2 turns it off); and in one command, a resolving name after one that doesn't resolve prints nothing. Name the
+  git version in the failure message. Verify: it passes locally (git 2.56) and on every CI leg (3.2).
+
 ## 2. The unborn read (D1, D2)
 
 - [ ] 2.1 Replace `symbolic-ref --short` in `_read_unborn` with D1's walk and D2's command. Update the comments that
@@ -25,7 +31,7 @@
 - [ ] 3.1 Run `Names` with many more examples than CI (a local hypothesis profile, both storages, a linked worktree
   layout as well). Verify: no failure, recorded in the PR.
 - [ ] 3.2 Record the git version each CI leg runs (from the job logs) in the PR, with the legs' results for
-  1.1 and `Names`. Verify: every leg passes.
+  1.1, 1.3 and `Names`. Verify: every leg passes.
 - [ ] 3.3 `uv run scripts/check.py` passes.
 
 ## Workflow follow-up
