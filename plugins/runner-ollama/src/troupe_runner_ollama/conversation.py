@@ -415,7 +415,8 @@ class Conversation:
                 self._numbering,
                 "truncated",
                 "runner",
-                f"Removed {len(chosen)} old tool results ({removed} bytes) to fit the "
+                f"Removed {len(chosen)} old tool result{'' if len(chosen) == 1 else 's'} "
+                f"({removed} bytes) to fit the "
                 f"{self._window}-token context window; the model can call each tool again.",
                 messages_before=count,
                 messages_after=count,

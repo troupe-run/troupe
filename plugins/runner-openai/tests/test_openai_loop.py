@@ -25,6 +25,7 @@ from fake_endpoint import (
     usage,
 )
 from openai_harness import TEST_LIMITS, check_limits, validator
+from troupe_plugin_sdk.compaction import stub
 from troupe_plugin_sdk.effects import READ_ONLY, Effects
 from troupe_plugin_sdk.events import EventNumbering, encoded_size
 from troupe_plugin_sdk.runner import Price, ResultEvent, RunEvent
@@ -70,11 +71,15 @@ def run(
     direction: str = "Do the task.",
     event_max_bytes: int = 65536,
     price: Price | None = None,
+    compact: bool = False,
+    files: dict[str, str] | None = None,
 ) -> Ran:
     options = TEST_LIMITS if options is None else options
     check_limits(options, None)
     workspace = tmp_path / "workspace"
     workspace.mkdir(exist_ok=True)
+    for name, text in (files or {}).items():
+        (workspace / name).write_text(text, encoding="utf-8")
     events: list[RunEvent] = []
     records: list[tuple[str, bytes]] = []
     with FakeEndpoint(script) as fake:
@@ -87,6 +92,7 @@ def run(
             record=lambda kind, data: records.append((kind, data)),
             wait=lambda _: False,
             exchange_limits={"base_delay": 0.0},
+            compact=compact,
         )
         result = loop.run(direction, character)
     return Ran(fake, result, events, records)
@@ -606,3 +612,75 @@ def test_a_last_reply_past_the_budget_ends_the_run_ok_reporting_what_it_used(
     result = _result(ran)
     assert result["status"] == "ok"
     assert result["usage"]["inputTokens"] + result["usage"]["outputTokens"] == 1200
+
+
+# Requirement: A run told compact compacts after a context-length refusal and asks again
+# (compaction-opt-in)
+
+TOO_LONG = error_reply(
+    400, "This model's maximum context length is 8192 tokens.", code="context_length_exceeded"
+)
+FILES = {name: f"{name} line\n" * 200 for name in ("a.txt", "b.txt")}
+READ_A = ("c1", "Read", {"file_path": "a.txt"})
+READ_B = ("c2", "Read", {"file_path": "b.txt"})
+
+
+def _outputs(body: dict[str, Any]) -> dict[str, str]:
+    return {
+        i["call_id"]: i["output"] for i in body["input"] if i.get("type") == "function_call_output"
+    }
+
+
+def test_a_refusal_in_a_run_told_compact_stubs_the_oldest_output_and_asks_again(
+    tmp_path: Path,
+) -> None:
+    ran = run(
+        tmp_path,
+        [
+            tool_reply([READ_A], prompt=1000),
+            tool_reply([READ_B], prompt=2000, before=[reasoning("Now b.")]),
+            TOO_LONG,
+            text_reply("Done.", prompt=1200),
+        ],
+        compact=True,
+        files=FILES,
+    )
+    refused, asked_again = ran.bodies[2], ran.bodies[3]
+    assert len(ran.bodies) == 4
+    assert _outputs(asked_again) == {"c1": stub("Read"), "c2": _outputs(refused)["c2"]}
+    assert _outputs(refused)["c1"] != stub("Read")
+    # Everything else, the replies' items included, is sent unchanged.
+    others = [i for i in refused["input"] if i.get("type") != "function_call_output"]
+    assert [i for i in asked_again["input"] if i.get("type") != "function_call_output"] == others
+    assert asked_again["instructions"] == refused["instructions"]
+    assert asked_again["input"][0] == {"role": "user", "content": "Do the task."}
+    (context,) = ran.of("context")
+    assert (context["kind"], context["by"]) == ("truncated", "runner")
+    assert context["messagesBefore"] == context["messagesAfter"] == len(asked_again["input"])
+    assert "tokensBefore" not in context
+    result = _result(ran)
+    assert result["status"] == "ok"
+    assert result["turns"] == 3
+    assert result["usage"]["inputTokens"] == 1000 + 2000 + 1200
+
+
+def test_a_refusal_with_only_the_latest_turns_outputs_left_ends_with_context_length(
+    tmp_path: Path,
+) -> None:
+    ran = run(tmp_path, [tool_reply([GLOB]), TOO_LONG], compact=True)
+    assert len(ran.bodies) == 2
+    assert ran.of("context") == []
+    result = _result(ran)
+    assert (result["status"], result["reason"]) == ("error", "context-length")
+    assert "compaction found nothing more to remove" in result["message"]
+
+
+def test_a_refusal_in_a_run_told_fail_ends_with_context_length_and_isnt_asked_again(
+    tmp_path: Path,
+) -> None:
+    ran = run(tmp_path, [tool_reply([READ_A]), tool_reply([READ_B]), TOO_LONG], files=FILES)
+    assert len(ran.bodies) == 3
+    assert ran.of("context") == []
+    result = _result(ran)
+    assert (result["status"], result["reason"]) == ("error", "context-length")
+    assert "compaction" not in result["message"]

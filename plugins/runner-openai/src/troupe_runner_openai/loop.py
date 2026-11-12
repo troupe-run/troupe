@@ -14,6 +14,10 @@ openai-style-runner design D6, D7, D9).
         the token budget spent: error result
     the turn limit reached: error result
 
+A run told to compact (run/start's onContextFull) that the service refuses as too long
+(``context_length_exceeded``) replaces its oldest function_call_outputs with the SDK's stub and
+asks again, as the same turn (compaction-opt-in design D4, D6).
+
 Every request is ``store: false`` and names no previous response, so the service keeps nothing of
 the run and each request carries the whole conversation. The loop sends nothing itself: it hands
 each event and transcript record to the runner, which masks and sends them. It returns the result
@@ -25,8 +29,10 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, TypeGuard
 
+from troupe_plugin_sdk.compaction import Candidate, Estimate, choose, stub
 from troupe_plugin_sdk.cost import estimate
-from troupe_plugin_sdk.events import EventNumbering, ServedModels, fit
+from troupe_plugin_sdk.defaults import COMPACT_TO_SHARE
+from troupe_plugin_sdk.events import EventNumbering, ServedModels, context_event, fit, utf8_size
 from troupe_plugin_sdk.runner import (
     FailureReason,
     LogEvent,
@@ -93,6 +99,18 @@ def request_body(
         "include": ["reasoning.encrypted_content"],
     }
     return json.dumps(body, ensure_ascii=False).encode("utf-8")
+
+
+@dataclass
+class _Output:
+    """A function_call_output in the conversation, for compaction (compaction-opt-in D4)."""
+
+    index: int
+    """Its position in the conversation's input."""
+    tool: str
+    size: int
+    turn: int
+    stubbed: bool = False
 
 
 @dataclass
@@ -184,7 +202,15 @@ class Loop:
     stopping: Callable[[], bool] = lambda: False
     make_call: Callable[..., Call] = Call
     exchange_limits: dict[str, Any] = field(default_factory=dict)
+    compact: bool = False
+    """Whether run/start's onContextFull is compact: a refusal as too long then compacts the
+    conversation and asks again, instead of ending the run."""
     _warned_usage: bool = False
+    _outputs: list["_Output"] = field(default_factory=list)
+    _turn: int = 0
+    _estimate: Estimate = field(default_factory=Estimate)
+    _accepted_tokens: int | None = None
+    """The input tokens of the last request the service accepted: the best known size that fits."""
     _served: ServedModels | None = None
     _spend: _Spend = field(default_factory=_Spend)
 
@@ -197,14 +223,14 @@ class Loop:
             for turn in range(1, self.options.max_turns + 1):
                 if self.stopping():
                     return None
-                reply = self._exchange(told, conversation)
+                reply = self._reply(told, conversation)
                 self._count(spend, reply)
                 if reply.text:
                     self._send_turn(reply.text)
                 ended = self._ended(reply, spend)
                 if ended is not None:
                     return ended
-                conversation += self._carry_out(reply)
+                conversation += self._carry_out(reply, len(conversation))
                 if self.stopping():
                     return None
                 if spend.usage_known and spend.tokens >= self.options.max_total_tokens:
@@ -237,10 +263,70 @@ class Loop:
 
     # One reply
 
-    def _exchange(self, told: str, conversation: list[dict[str, Any]]) -> Reply:
+    def _reply(self, told: str, conversation: list[dict[str, Any]]) -> Reply:
+        """The reply to the next request. In a run told to compact, a refusal as too long
+        compacts the conversation and asks again, as the same turn; with nothing left to remove,
+        the refusal ends the run as it would have."""
+        while True:
+            body = request_body(self.runtime, told, conversation, self.tools)
+            try:
+                reply = self._exchange(body)
+            except ExchangeFailedError as error:
+                if not (self.compact and error.reason == "context-length" and not error.answered):
+                    raise
+                if not self._compact(conversation, len(body)):
+                    raise ExchangeFailedError(
+                        f"{error.message} onContextFull is compact, and compaction found nothing "
+                        "more to remove: the function outputs left are the latest turn's.",
+                        "context-length",
+                    ) from error
+                continue
+            given = (reply.usage or {}).get("input_tokens")
+            if _count(given) and given > 0:
+                self._estimate.calibrate(len(body), given)
+                self._accepted_tokens = given
+            return reply
+
+    def _compact(self, conversation: list[dict[str, Any]], size: int) -> bool:
+        """Replace the oldest function_call_outputs with the SDK's stub, down to a share of the
+        last accepted request, and say so with a context event. False when nothing could be
+        removed."""
+        target = int(size * COMPACT_TO_SHARE)
+        if self._accepted_tokens is not None:
+            fits = self._estimate.bytes(int(self._accepted_tokens * COMPACT_TO_SHARE))
+            target = min(target, fits)
+        candidates = [
+            Candidate(n, output.tool, output.size, output.turn == self._turn, output.stubbed)
+            for n, output in enumerate(self._outputs)
+        ]
+        chosen = choose(candidates, size, target)
+        if not chosen:
+            return False
+        removed = 0
+        for n in chosen:
+            output = self._outputs[n]
+            text = stub(output.tool)
+            conversation[output.index] = {**conversation[output.index], "output": text}
+            removed += output.size - utf8_size(text)
+            output.stubbed = True
+        self.send(
+            context_event(
+                self.numbering,
+                "truncated",
+                "runner",
+                f"Removed {len(chosen)} old tool output{'' if len(chosen) == 1 else 's'} "
+                f"({removed} bytes) after the service "
+                "refused the request as too long; the model can call each tool again.",
+                messages_before=len(conversation),
+                messages_after=len(conversation),
+            )
+        )
+        return True
+
+    def _exchange(self, body: bytes) -> Reply:
         return exchange(
             self.runtime.endpoint,
-            request_body(self.runtime, told, conversation, self.tools),
+            body,
             self.runtime.credential,
             self._send_retry,
             self.record,
@@ -297,10 +383,12 @@ class Loop:
             return self._result("ok", reply.text or "The model finished without a reply.", spend)
         return None
 
-    def _carry_out(self, reply: Reply) -> list[dict[str, Any]]:
-        """Carry out the reply's calls in order; what the next request adds to its input: the
-        reply's output items unchanged, then each call's output."""
+    def _carry_out(self, reply: Reply, at: int) -> list[dict[str, Any]]:
+        """Carry out the reply's calls in order; what the next request adds to its input, from
+        position ``at``: the reply's output items unchanged, then each call's output."""
+        self._turn += 1
         outputs: list[dict[str, Any]] = []
+        first = at + len(reply.output)
         for call in reply.tool_calls:
             if self.stopping():
                 break  # the run is stopping: carry out no more of its calls
@@ -308,6 +396,9 @@ class Loop:
             step = self.tools.run(call_id, call.name, call.arguments, self.numbering)
             for event in step.events:
                 self.send(event)
+            self._outputs.append(
+                _Output(first + len(outputs), call.name, utf8_size(step.output), self._turn)
+            )
             outputs.append(
                 {"type": "function_call_output", "call_id": call_id, "output": step.output}
             )

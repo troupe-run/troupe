@@ -352,6 +352,7 @@ class Runner:
             wait=self._stop.wait,
             on_call=self._in_flight,
             stopping=self._stop.is_set,
+            compact=start.on_context_full == "compact",
         )
         self._run_id = start.run_id
         self._result(id_, {"runId": start.run_id})

@@ -1,0 +1,57 @@
+{
+  "requests": 2,
+  "outcome": "failed",
+  "events": [
+    {
+      "type": "init",
+      "seq": 0,
+      "runner": {
+        "name": "openai",
+        "version": "<package version>"
+      },
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "Delete",
+        "Move"
+      ],
+      "effects": "checked",
+      "engine": {
+        "name": "responses",
+        "model": "gpt-6-luna"
+      }
+    },
+    {
+      "type": "tool_call",
+      "seq": 1,
+      "callId": "call_NPKm1VnAslnyZfbP0a5BAqMq",
+      "tool": "Read",
+      "inputSummary": "{\"file_path\":\"notes/todo.txt\"}"
+    },
+    {
+      "type": "tool_result",
+      "seq": 2,
+      "callId": "call_NPKm1VnAslnyZfbP0a5BAqMq",
+      "isError": false,
+      "outputSummary": "1\tbuy milk\n2\twrite the troupe docs",
+      "outputBytes": 34
+    },
+    {
+      "type": "result",
+      "seq": 3,
+      "status": "error",
+      "message": "The conversation is longer than the model's context (HTTP 400): Your input exceeds the context window of this model. Please adjust your input and try again. Give the actor a smaller task, or a runtime whose model has a longer context. onContextFull is compact, and compaction found nothing more to remove: the function outputs left are the latest turn's.",
+      "reason": "context-length",
+      "turns": 1,
+      "usage": {
+        "inputTokens": 75,
+        "outputTokens": 21,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      }
+    }
+  ]
+}

@@ -21,8 +21,8 @@
 
 ## 4. OpenAI runner
 
-- [ ] 4.1 On `context_length_exceeded` in a run told `compact`, stub the chosen `function_call_output`s down to `COMPACT_TO_SHARE` of the last accepted request's input tokens, send the `context` event and the request again, with the turn count and usage unchanged. End with `context-length` when nothing is chosen. Verify: unit tests for the openai-runner scenarios, including reasoning items and `function_call`s sent unchanged.
-- [ ] 4.2 Add stand-in fixtures for a refusal followed by success, and a refusal with nothing left to remove, captured without a real credential. Verify: the fixture tests pass.
+- [x] 4.1 On `context_length_exceeded` in a run told `compact`, stub the chosen `function_call_output`s down to `COMPACT_TO_SHARE` of the last accepted request's input tokens, send the `context` event and the request again, with the turn count and usage unchanged. End with `context-length` when nothing is chosen. Verify: unit tests for the openai-runner scenarios, including reasoning items and `function_call`s sent unchanged.
+- [x] 4.2 Add stand-in fixtures for a refusal followed by success, and a refusal with nothing left to remove, captured without a real credential. Verify: the fixture tests pass.
 
 ## 5. Claude Code runner
 
