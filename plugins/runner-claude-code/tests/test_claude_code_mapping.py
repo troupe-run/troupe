@@ -445,6 +445,8 @@ def test_an_ok_result_with_a_context_limit_terminal_reason_stays_ok() -> None:
         ("rate-limit-retries", "rate-limit"),
         ("server-retries", "server"),
         ("network-retries", "network"),
+        ("context-limit-refused", "context-length"),
+        ("context-limit-blocked", "context-length"),
     ],
 )
 def test_a_recorded_failure_maps_to_its_reason(name: str, reason: str) -> None:

@@ -1,0 +1,10 @@
+{
+  "description": "Compaction off, as the runner launches Claude Code: a Read tool call reporting 185,000 input tokens, then the API refuses the next request as too long. Claude Code ends with is_error under \"success\", terminal_reason prompt_too_long, and exits 1.",
+  "exitCode": 1,
+  "outcome": "failed",
+  "errorCode": "run.error-result",
+  "withoutFailFast": {
+    "outcome": "failed",
+    "errorCode": "run.error-result"
+  }
+}
