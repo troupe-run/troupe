@@ -53,7 +53,7 @@ See proposal.md, Why. What this builds on, as main has it on 2026-11-12:
 
 ### D1. A runner-agnostic actor field, `onContextFull`: `fail` | `compact`
 
-**Owner's call, raised as "#310 question" Q1; this is the recommendation.** The choice is about the run, not about
+**Owner's decision (2026-11-12, Q1).** The choice is about the run, not about
 one runner: every runner has to honour it, policy has to see it, and lineage should record it the same way. That's
 what `effects` and `workspace` already are, so it's a top-level actor field, not a runner option. An option would
 need each runner's schema to repeat it, policy couldn't see it without knowing every runner's options, and nothing
@@ -69,7 +69,7 @@ happens when the context is full", and leaves no room for a later value such as 
 
 ### D2. Policy `compaction`: `actors` | `all` | `none`
 
-**Owner's call (Q1).** Decision #279 says "per actor or by policy". The policy setting is the first one that isn't a
+**Owner's decision (2026-11-12, Q1).** Decision #279 says "per actor or by policy". The policy setting is the first one that isn't a
 boolean, read through the same seam (`TROUPE_POLICY_COMPACTION`, value and source):
 
 | Policy | Actor absent | Actor `fail` | Actor `compact` |
@@ -110,7 +110,7 @@ like any other required `run/start` field.
 
 ### D4. Own-loop runners stub old tool results, oldest first
 
-**Owner's call (Q2); this is the recommendation.** When the conversation won't fit, the runner replaces the content
+**Owner's decision (2026-11-12, Q2).** When the conversation won't fit, the runner replaces the content
 of old tool results with a stub, and keeps the message and the call:
 
 > `[troupe removed this Read result to make room in the context window. Call Read again if you still need it.]`
@@ -138,7 +138,7 @@ If nothing is left to stub and the conversation still won't fit, the run ends as
 
 ### D5. No model call to summarise, in this change
 
-**Owner's call (Q2).** Summarising old turns with the run's own model would keep more than a stub, but:
+**Owner's decision (2026-11-12, Q2).** Summarising old turns with the run's own model would keep more than a stub, but:
 
 - it is a model call that counts towards the budget (`maxTotalTokens`; for Ollama, a turn against `maxTurns`) and
   can itself overflow, fail or be cut;
@@ -194,9 +194,12 @@ the two runners' messages differ and the SDK takes no position on an engine's AP
 
 - `build()` writes `autoCompactEnabled` as `on_context_full == "compact"`, in the same `--settings` file, which
   ranks above every loaded setting source (#308 D1).
-- **Q3, owner's call; recommendation:** when it's `compact`, `build()` removes `DISABLE_AUTO_COMPACT` from Claude
-  Code's environment. Otherwise a person's own variable would silently override the actor's choice. With `fail`, the
-  variable is left alone: it can only turn compaction off, which the setting already does. A project settings file
+- **Owner's decision (2026-11-12, Q3), by D9's rule:** when it's `compact`, `build()` removes
+  `DISABLE_AUTO_COMPACT` from Claude Code's environment, so a person's own variable can't silently override the
+  actor's choice. It's never silent: when the variable was set, the runner sends a `log` event at level `warning`
+  just after `init`, naming `DISABLE_AUTO_COMPACT` and saying the actor's `onContextFull` `compact` overrides it for
+  this run. With `fail`, the variable is left alone: it can only turn compaction off, which the setting already
+  does. A project settings file
   whose `env` block sets the variable can still turn compaction off. That direction is safe (the run fails with
   `context-length`), and the docs say so.
 - `mapping.py` maps `system`/`compact_boundary` to `context_event("compacted", "engine", ...)` with `tokensBefore`
@@ -211,7 +214,21 @@ the two runners' messages differ and the SDK takes no position on an engine's AP
   despite the setting (say, a project's settings file). Hiding it would be worse. The event then shows the mismatch
   in the run's history.
 
-### D9. Fixtures
+### D9. Precedence: the run's own value beats the environment, which beats a built-in default
+
+**Owner's decision (2026-11-12, Q3)**, a general rule, like application config: a value given for this run beats
+one from the environment, which beats a default built into troupe or the engine. `onContextFull` is sent with each
+run in `run/start`, so it is the run's own value. An engine's environment variable for the same choice
+(`DISABLE_AUTO_COMPACT`) yields to it, and Claude Code's built-in default (compaction on) yields to both.
+
+Where troupe has to override a value from the environment to apply the rule, it says so in the run's events (D8's
+`log`), so the override is never silent. A setting troupe can't control, such as an `env` block in a project's
+Claude Code settings file, isn't overridden. When it turns compaction off, the run fails with `context-length`,
+which is the safe direction. The docs say so.
+
+Policy sits outside this order. It bounds what an actor may ask for (D2) before a run's value is worked out.
+
+### D10. Fixtures
 
 - **Claude Code:** `capture_claude.py` gets a `--compaction` mode, the opposite of the context-limit fixtures. Its
   stand-in API answers Claude Code's compaction request (recognised by its summary prompt, as captured in the probe
@@ -252,5 +269,5 @@ theatres to migrate (pre-1.0: no compat leniency). Rollback is reverting the PR.
 
 ## Open Questions
 
-Q1 (D1/D2), Q2 (D4/D5) and Q3 (D8) were sent to the owner as "#310 question" on 2026-11-12. This design follows the
-recommendations, and is updated when the answers arrive.
+None. The owner decided Q1 (D1, D2), Q2 (D4, D5) and Q3 (D8, D9) on 2026-11-12, and left the SDK's ownership of
+the shared compaction code (D7) to this design.
