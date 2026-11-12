@@ -65,12 +65,16 @@ def read_policy(env: Mapping[str, str]) -> Policy:
     """The policy in effect for a command run with ``env``. Raises policy.invalid-value for a
     malformed value."""
     return Policy(
-        allow_unenforced_local_stage=_flag(
-            ALLOW_UNENFORCED_LOCAL_STAGE, defaults.ALLOW_UNENFORCED_LOCAL_STAGE, env
-        ),
+        allow_unenforced_local_stage=read_unenforced_local_stage(env),
         allow_mark_merges_resolved=read_mark_merges_resolved(env),
         compaction=_compaction(env),
     )
+
+
+def read_unenforced_local_stage(env: Mapping[str, str]) -> PolicyFlag:
+    """Only ``allow_unenforced_local_stage``: what init reads to say whether a perform needs it,
+    so a malformed policy init doesn't need, such as compaction, never fails it."""
+    return _flag(ALLOW_UNENFORCED_LOCAL_STAGE, defaults.ALLOW_UNENFORCED_LOCAL_STAGE, env)
 
 
 def read_mark_merges_resolved(env: Mapping[str, str]) -> PolicyFlag:
