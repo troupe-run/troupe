@@ -6,7 +6,8 @@ A run is its own stream, keyed by its run id (a UUID minted by perform). Its eve
 - ``Run.Started``: recorded before the run's workspace is made and its runner starts, once every
   check that can refuse the run has passed. It holds the actor's name, the runner requested, the
   stage's admission, the effect check, the direction as an artifact reference, the config version
-  the run used (config-model design D14), and its workspace (worktree-stage design D7). For a
+  the run used (config-model design D14), its workspace (worktree-stage design D7), and what the
+  run does when its context fills, with where that came from (compaction-opt-in design D3). For a
   worktree, that's where the worktree will be, so an event names it before any part of it exists.
 - ``Run.WorktreeMade``: a worktree run's clone mechanisms, once its worktree is made and before its
   runner starts.
