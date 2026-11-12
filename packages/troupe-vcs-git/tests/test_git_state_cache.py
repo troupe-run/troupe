@@ -1007,3 +1007,18 @@ def test_an_unborn_branch_name_gits_answers_cant_settle_is_refused(tmp_path: Pat
         "name": "heads/x",
         "refs": ["refs/tags/heads/x", "refs/remotes/heads/x"],
     }
+
+
+def test_a_root_candidate_after_one_that_isnt_a_ref_is_neither_needed_nor_refused(
+    tmp_path: Path,
+) -> None:
+    # Claude's review on #399: .git/config is a file named after a branch "config" but not a ref,
+    # so git resolves "config" to nothing and reads heads/config after it as a path. The walk
+    # stops at "config", so heads/config's missing answer must not refuse the read.
+    repo = make_repo(tmp_path, refs="files")
+    empty_commit(repo)
+    make_ref(repo, "heads/config")
+    repo.git("switch", "-q", "--orphan", "config")
+    unborn = GitAdapter(repo.path, source=repo.env)
+    assert (unborn.branch(), unborn.head()) == ("config", None)
+    assert gits_answers(repo) == ("config", None)
