@@ -42,9 +42,13 @@ fail where it should (the count goes in the task), and `uv run scripts/check.py`
   `uv run scripts/check.py` and see it pass. (Passed in 16 s, both installs and every runner. With `abc`, `uv run`
   itself refuses first, naming `UV_HTTP_RETRIES` and `abc`; run with `python3`, the check fails at `install:`, naming
   the command and uv's refusal of the same. Full check: 5575 passed, 16 skipped, every gate passed.)
-- [ ] 3.2 Once the pull request is marked ready, verify CI's install check passes on all twelve legs on its head, and
-  record each leg's install check step time against #372's run 42919100829 to confirm the change adds nothing when the
-  index answers.
+- [x] 3.2 Once the pull request is marked ready, verify the install check passes on all twelve legs on its head, and
+  record each leg's install check step time against #372's run to confirm the change adds nothing when the index
+  answers. (CI on the ready PR, run 43172321396, passed all twelve legs on `a6d7687f`, but ran a scoped check, which
+  skips the install check. So the release install check was dispatched against the branch, as its workflow documents:
+  run 43173226789 passed all twelve legs on `a6d7687f`, the install check taking 6–8 s on Ubuntu, 12–15 s on macOS and
+  23–29 s on Windows, against 4–22 s in #372's merge-group run 42942338213, which installed from the checkout rather
+  than GitHub. The merge queue runs the full check, install check included.)
 
 ## Workflow follow-up
 
