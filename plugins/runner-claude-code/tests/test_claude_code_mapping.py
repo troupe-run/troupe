@@ -661,3 +661,67 @@ def test_an_api_error_that_recovered_doesnt_name_a_later_failure() -> None:
         _result(is_error=True, result="?", terminal_reason="completed"),
     )
     assert events[-1]["reason"] == "other"
+
+
+# Requirement: Claude Code's compaction is a context event (compaction-opt-in)
+
+COMPACTING = {"type": "system", "subtype": "status", "status": "compacting"}
+
+
+def _boundary(**metadata: object) -> dict[str, Any]:
+    return {"type": "system", "subtype": "compact_boundary", "compact_metadata": metadata}
+
+
+def _ended(result: object) -> dict[str, Any]:
+    return {"type": "system", "subtype": "status", "status": None, "compact_result": result}
+
+
+def test_a_compact_boundary_is_a_context_event_with_the_tokens_before_and_after() -> None:
+    boundary = _boundary(trigger="auto", pre_tokens=185000, post_tokens=2628)
+    events = _feed(INIT, COMPACTING, boundary)
+    contexts = [e for e in events if e["type"] == "context"]
+    assert contexts == [
+        {
+            "type": "context",
+            "kind": "compacted",
+            "by": "engine",
+            "message": "Claude Code compacted its conversation (auto), replacing the earlier "
+            "turns with a summary of them.",
+            "tokensBefore": 185000,
+            "tokensAfter": 2628,
+        }
+    ]
+
+
+@pytest.mark.parametrize("pre_tokens", [-1, True, "185000", 1.5, None])
+def test_a_boundary_whose_token_counts_arent_whole_counts_leaves_them_out(
+    pre_tokens: object,
+) -> None:
+    boundary = _boundary(pre_tokens=pre_tokens, post_tokens=pre_tokens)
+    (context,) = [e for e in _feed(INIT, boundary) if e["type"] == "context"]
+    assert "tokensBefore" not in context
+    assert "tokensAfter" not in context
+    assert context["message"].startswith("Claude Code compacted its conversation, ")
+
+
+def test_the_compacting_status_and_its_result_are_debug_logs_not_context_events() -> None:
+    events = _feed(INIT, COMPACTING, _ended("failed"))
+    assert [e for e in events if e["type"] == "context"] == []
+    logs = [(e["level"], e["message"]) for e in events if e["type"] == "log"]
+    assert logs == [
+        ("debug", "Claude Code is compacting its conversation"),
+        ("debug", "Claude Code's compaction ended: failed"),
+    ]
+
+
+def test_a_compaction_that_fails_ends_with_context_length_and_no_context_event() -> None:
+    events = _feed(INIT, COMPACTING, _ended("exhausted"), *_context_limit("blocking_limit", None))
+    assert [e for e in events if e["type"] == "context"] == []
+    assert (events[-1]["status"], events[-1]["reason"]) == ("error", "context-length")
+
+
+def test_another_status_isnt_mapped() -> None:
+    events = _feed(INIT, {"type": "system", "subtype": "status", "status": "thinking"})
+    assert [e["message"] for e in events if e["type"] == "log"] == [
+        "Claude Code record type system/status isn't mapped"
+    ]

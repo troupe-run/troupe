@@ -24,6 +24,8 @@ ENGINE_ENVIRONMENT = {
 the login."""
 
 PRIVATE_PREFIX = "troupe-claude-code-"
+COMPACTION_OFF = "DISABLE_AUTO_COMPACT"
+"""Claude Code's variable that turns automatic compaction off, overriding the settings file."""
 
 
 @dataclass(frozen=True)
@@ -33,6 +35,9 @@ class Launch:
     argv: list[str]
     stdin: bytes
     env: dict[str, str]
+    overridden: tuple[str, ...] = ()
+    """Variables of the runner's environment that the run's own onContextFull overrode, so Claude
+    Code doesn't get them: the runner says so in a warning (compaction-opt-in D8, D9)."""
 
 
 class PrivateDirectoryError(Exception):
@@ -78,10 +83,13 @@ def build(
     env: Mapping[str, str],
     rules: Rules,
     mcp_server: Sequence[str] | None = None,
+    *,
+    compact: bool = False,
 ) -> Launch:
     """The launch for one run, writing its private files into ``private``: the rules translated
     from the actor's effects, and, when ``rules`` offers troupe's tools, the MCP config that
-    starts ``mcp_server`` (its command line) for them."""
+    starts ``mcp_server`` (its command line) for them. ``compact`` is run/start's onContextFull
+    being compact: Claude Code may then compact its conversation."""
     argv = [
         str(claude),
         "-p",
@@ -110,11 +118,11 @@ def build(
         "permissions": {"allow": list(rules.allow), "deny": list(rules.deny)},
         # A sandbox turned on by a loaded setting source must not allow shell commands by itself.
         "sandbox": {"autoAllowBashIfSandboxed": False},
-        # Compaction loses content (Decision #279, point 3): a run whose context fills ends with an
-        # error instead. A setting, not DISABLE_AUTO_COMPACT, which a loaded setting source's env
-        # can replace; --settings ranks above every source the actor can load (compaction-off
-        # design D1).
-        "autoCompactEnabled": False,
+        # Compaction loses content (Decision #279, point 3): unless the run says compact, a run
+        # whose context fills ends with an error instead. A setting, not DISABLE_AUTO_COMPACT,
+        # which a loaded setting source's env can replace; --settings ranks above every source the
+        # actor can load (compaction-off design D1; compaction-opt-in D8).
+        "autoCompactEnabled": compact,
     }
     path = private / "settings.json"
     path.write_bytes(json.dumps(settings, ensure_ascii=False).encode())
@@ -125,14 +133,18 @@ def build(
         mcp = private / "mcp.json"
         mcp.write_bytes(json.dumps(config, ensure_ascii=False).encode())
         argv += ["--mcp-config", str(mcp)]
-    return Launch(
-        argv=argv,
-        stdin=direction.encode("utf-8"),
-        env={**env, **rules.env, **ENGINE_ENVIRONMENT},
-    )
+    launched = {**env, **rules.env, **ENGINE_ENVIRONMENT}
+    overridden: tuple[str, ...] = ()
+    if compact and COMPACTION_OFF in launched:
+        # The run's own value beats the environment (compaction-opt-in D9): the person's
+        # variable would turn compaction off despite the actor's choice, and silently.
+        del launched[COMPACTION_OFF]
+        overridden = (COMPACTION_OFF,)
+    return Launch(argv=argv, stdin=direction.encode("utf-8"), env=launched, overridden=overridden)
 
 
 __all__ = [
+    "COMPACTION_OFF",
     "ENGINE_ENVIRONMENT",
     "Launch",
     "PrivateDirectoryError",

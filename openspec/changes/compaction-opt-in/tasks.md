@@ -26,10 +26,10 @@
 
 ## 5. Claude Code runner
 
-- [ ] 5.1 In `command.build()`, write `autoCompactEnabled` from `onContextFull`, and leave `DISABLE_AUTO_COMPACT` out of the environment when it's `compact`, sending a `warning` `log` after `init` naming it when it was set (design D8, D9). Verify: command and runner tests for the claude-code-runner scenarios of "Claude Code compacts only when the run says compact".
-- [ ] 5.2 In `mapping.py`, map `system`/`compact_boundary` to a `context` event (`compacted`, `engine`, `tokensBefore` from `pre_tokens` when valid), and `status` `compacting` / `compact_result` records to named debug logs. Verify: mapping tests, including a boundary in a run told `fail` and a `pre_tokens` that isn't a whole number.
-- [ ] 5.3 Add a `--compaction` mode to `tools/capture_claude.py`: a stand-in that answers the compaction request with a summary, capture through `build()` with `compact`, and refuse to write without a `compact_boundary`. Verify: capture-tool tests for the refusal, and its existing context-limit refusal tests still pass.
-- [ ] 5.4 Capture `compaction-proactive` and `compaction-reactive` with real Claude Code against the stand-in, and play them in the fixture tests. If the boundary record differs from design D8 or D10, follow the captured record and update the design in the same commit. Verify: the fixture tests pass, each with one `context` event before the next turn's events, ending `ok`.
+- [x] 5.1 In `command.build()`, write `autoCompactEnabled` from `onContextFull`, and leave `DISABLE_AUTO_COMPACT` out of the environment when it's `compact`, sending a `warning` `log` after `init` naming it when it was set (design D8, D9). Verify: command and runner tests for the claude-code-runner scenarios of "Claude Code compacts only when the run says compact".
+- [x] 5.2 In `mapping.py`, map `system`/`compact_boundary` to a `context` event (`compacted`, `engine`, `tokensBefore` from `pre_tokens` when valid), and `status` `compacting` / `compact_result` records to named debug logs. Verify: mapping tests, including a boundary in a run told `fail` and a `pre_tokens` that isn't a whole number.
+- [x] 5.3 Add a `--compaction` mode to `tools/capture_claude.py`: a stand-in that answers the compaction request with a summary, capture through `build()` with `compact`, and refuse to write without a `compact_boundary`. Verify: capture-tool tests for the refusal, and its existing context-limit refusal tests still pass.
+- [x] 5.4 Capture `compaction-proactive` and `compaction-reactive` with real Claude Code against the stand-in, and play them in the fixture tests. If the boundary record differs from design D8 or D10, follow the captured record and update the design in the same commit. Verify: the fixture tests pass, each with one `context` event before the next turn's events, ending `ok`.
 
 ## 6. Docs and the whole check
 

@@ -204,8 +204,9 @@ the two runners' messages differ and the SDK takes no position on an engine's AP
   whose `env` block sets the variable can still turn compaction off. That direction is safe (the run fails with
   `context-length`), and the docs say so.
 - `mapping.py` maps `system`/`compact_boundary` to `context_event("compacted", "engine", ...)` with `tokensBefore`
-  from `compact_metadata.pre_tokens` when it's a non-negative integer, and the trigger (`auto` or `manual`) in the
-  message. That record is when content was lost. It comes before the next turn's records, so the event precedes the
+  from `compact_metadata.pre_tokens` and `tokensAfter` from `post_tokens`, each when it's a non-negative integer, and
+  the trigger (`auto` or `manual`) in the message. #307's design expected only the size before; the captured records
+  (Claude Code 2.1.319, D10) carry both, so both are sent. That record is when content was lost. It comes before the next turn's records, so the event precedes the
   turn's events, as #307 requires.
 - `system`/`status` records with `compacting`, or with a `compact_result`, map to a debug `log` each, by name, rather
   than "isn't mapped". No content is lost until the boundary. A failed compaction (`compact_result` `failed` or

@@ -1,0 +1,10 @@
+{
+  "description": "Compaction on, as the runner launches a run told onContextFull compact: a Read tool call reporting 990,000 input tokens, so Claude Code compacts before its next request (status compacting, compact_result success, a compact_boundary with pre_tokens and post_tokens), then answers 'done'. One context event, compacted by engine, before the final turn; an ok result.",
+  "exitCode": 0,
+  "outcome": "succeeded",
+  "errorCode": null,
+  "withoutFailFast": {
+    "outcome": "succeeded",
+    "errorCode": null
+  }
+}

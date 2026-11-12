@@ -1,5 +1,6 @@
 """The capture tool refuses a context-limit fixture whose run compacted (spec: claude-code-runner,
-"A context-limit fixture is captured with compaction off"; compaction-off design D3)."""
+"A context-limit fixture is captured with compaction off"; compaction-off design D3), and a
+compaction fixture whose run didn't (compaction-opt-in design D10)."""
 
 import importlib.util
 import json
@@ -79,3 +80,111 @@ def test_a_line_that_isnt_json_is_neither_compaction_nor_a_refusal() -> None:
     lines = ["Update available", *_native_lines("context-limit-refused")]
     assert _tool().compaction_seen(lines) == []
     assert _tool().context_limit_refusal("context-limit-refused", lines, 2) is None
+
+
+# Requirement: The capture tool records compaction fixtures only when Claude Code compacted
+# (compaction-opt-in design D10)
+
+INIT = '{"type":"system","subtype":"init"}'
+FINISHED = '{"type":"result","subtype":"success","is_error":false,"result":"done"}'
+
+
+@pytest.mark.parametrize("fixture", ["compaction-proactive", "compaction-reactive"])
+def test_a_compaction_capture_with_a_boundary_one_compaction_request_and_a_finish_may_be_written(
+    fixture: str,
+) -> None:
+    lines = [INIT, COMPACTING, COMPACT_BOUNDARY, FINISHED]
+    assert _tool().compaction_refusal(fixture, lines, 1) is None
+
+
+@pytest.mark.parametrize("compactions", [0, 2])
+def test_a_compaction_capture_without_exactly_one_compaction_request_is_refused(
+    compactions: int,
+) -> None:
+    lines = [INIT, COMPACTING, COMPACT_BOUNDARY, FINISHED]
+    refusal = _tool().compaction_refusal("compaction-proactive", lines, compactions)
+    assert refusal is not None
+    assert "compaction wasn't seen" in refusal
+
+
+def test_a_compaction_capture_without_a_boundary_is_refused_and_says_so() -> None:
+    refusal = _tool().compaction_refusal(
+        "compaction-reactive", [INIT, COMPACTING, COMPACT_FAILED, FINISHED], 1
+    )
+    assert refusal is not None
+    assert "wrote 0 compact_boundary records" in refusal
+
+
+def test_a_compaction_capture_whose_run_didnt_finish_is_refused() -> None:
+    failed = FINISHED.replace('"is_error":false', '"is_error":true')
+    refusal = _tool().compaction_refusal(
+        "compaction-proactive", [INIT, COMPACT_BOUNDARY, failed], 1
+    )
+    assert refusal is not None
+    assert "didn't finish" in refusal
+
+
+@pytest.mark.parametrize(
+    ("content", "recognised"),
+    [
+        (
+            [
+                {"type": "tool_result", "tool_use_id": "t", "content": "1\thi"},
+                {
+                    "type": "text",
+                    "text": "Your task is to create a detailed summary of the "
+                    "conversation so far, paying close attention to the user's explicit requests.",
+                },
+            ],
+            True,
+        ),
+        ("Read notes.txt, then reply with one word: done.", False),
+        (
+            "This session is being continued from a previous conversation. The summary below "
+            "covers the earlier portion of the conversation.",
+            False,
+        ),
+        ([{"type": "tool_result", "tool_use_id": "t", "content": "hi"}], False),
+    ],
+)
+def test_a_compaction_request_is_one_whose_last_user_message_asks_for_a_summary(
+    content: object, recognised: bool
+) -> None:
+    # Claude Code 2.1.319 puts a system message after the last user message.
+    body = {
+        "messages": [
+            {"role": "user", "content": content},
+            {"role": "system", "content": "<total_tokens>1 tokens left</total_tokens>"},
+        ]
+    }
+    assert _tool().is_compaction_request(body) is recognised
+
+
+def test_the_compaction_stand_in_answers_read_then_summary_then_done(tmp_path: Path) -> None:
+    import http.client
+
+    tool = _tool()
+    server, requests, compactions = tool._compaction_api(990_000, tmp_path / "notes.txt", False)
+    port = server.server_address[1]
+
+    def post(text: str) -> bytes:
+        body = {"model": "m", "messages": [{"role": "user", "content": text}]}
+        connection = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+        try:
+            connection.request("POST", "/v1/messages", json.dumps(body).encode())
+            return connection.getresponse().read()
+        finally:
+            connection.close()
+
+    try:
+        first = post("Read notes.txt")
+        summary = post("Your task is to create a detailed summary of the conversation so far.")
+        last = post("Continue.")
+    finally:
+        server.shutdown()
+    assert b'"name": "Read"' in first
+    assert b'"input_tokens": 990000' in first
+    assert json.dumps(tool.SUMMARY)[1:-1].encode() in summary
+    assert b'"text": "done"' in last
+    assert len(requests) == 3
+    assert len(compactions) == 1

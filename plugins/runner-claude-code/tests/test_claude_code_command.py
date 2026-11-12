@@ -50,11 +50,13 @@ def _build(
     private: Path,
     env: dict[str, str],
     effects: Effects | None = None,
+    *,
+    compact: bool = False,
 ) -> Launch:
     """build, with the rules a read-only actor's declaration (or ``effects``) translates to."""
     declaration = Declaration(effects or Effects(), WORKSPACE, SCRATCH)
     rules = ClaudeCodePermissions(options).translate(declaration)
-    return build(CLAUDE, options, direction, character, private, env, rules)
+    return build(CLAUDE, options, direction, character, private, env, rules, compact=compact)
 
 
 def _settings(argv: list[str]) -> object:
@@ -165,6 +167,38 @@ def test_the_settings_file_holds_auto_compact_enabled_false(
     settings = _settings(_build(parse_options(raw), "d", None, tmp_path, {}).argv)
     assert isinstance(settings, dict)
     assert settings["autoCompactEnabled"] is False
+
+
+# Requirement: Claude Code compacts only when the run says compact (compaction-opt-in)
+
+
+def test_a_run_told_compact_has_auto_compact_enabled_true(tmp_path: Path) -> None:
+    settings = _settings(_build(parse_options({}), "d", None, tmp_path, {}, compact=True).argv)
+    assert isinstance(settings, dict)
+    assert settings["autoCompactEnabled"] is True
+
+
+def test_a_run_told_compact_leaves_out_disable_auto_compact_and_says_it_overrode_it(
+    tmp_path: Path,
+) -> None:
+    env = {"DISABLE_AUTO_COMPACT": "1", "HOME": "/h"}
+    launch = _build(parse_options({}), "d", None, tmp_path, env, compact=True)
+    assert "DISABLE_AUTO_COMPACT" not in launch.env
+    assert launch.env["HOME"] == "/h"
+    assert launch.overridden == ("DISABLE_AUTO_COMPACT",)
+
+
+def test_a_run_told_compact_without_the_variable_overrides_nothing(tmp_path: Path) -> None:
+    launch = _build(parse_options({}), "d", None, tmp_path, {"HOME": "/h"}, compact=True)
+    assert launch.overridden == ()
+
+
+def test_a_run_told_fail_keeps_disable_auto_compact_which_only_turns_compaction_off(
+    tmp_path: Path,
+) -> None:
+    launch = _build(parse_options({}), "d", None, tmp_path, {"DISABLE_AUTO_COMPACT": "1"})
+    assert launch.env["DISABLE_AUTO_COMPACT"] == "1"
+    assert launch.overridden == ()
 
 
 def test_the_direction_is_standard_input_and_in_no_argument(tmp_path: Path) -> None:
