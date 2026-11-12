@@ -87,9 +87,11 @@ bound.
 ### D3: How the fixes are checked
 
 - **Tick put back:** an uncommitted patch replaces `output.changed.wait(...)` in `run_to_completion` with
-  `time.sleep(0.02)`. Both tests must fail, the bounded-wait case on the recorded sleep. Then a second patch makes the
-  event's wait `output.changed.wait(0.02)`. The output-limit case must fail on the 20 ms asked for and the latency
-  test on its bound.
+  `time.sleep(0.02)`, #360's regression. Both tests must fail, the output-limit case on the sleep and the latency
+  test on its bound. Then a second patch makes the event's wait `output.changed.wait(0.02)`. The output-limit case
+  must fail on the 20 ms asked for. The latency test passes with this one, and should: the wait still returns as soon
+  as the output ends, so it costs no time after the command ends. It only wakes the waiting thread every 20 ms, which
+  is what the bounded-wait test is for.
 - **The old race, forced:** an uncommitted stand-in for `processes.time.monotonic` sleeps 0.5 s on the call that
   starts the loop's clock. The old output-limit case fails with "no bounded wait was made". The new one passes,
   because the child can't write before the first wait.

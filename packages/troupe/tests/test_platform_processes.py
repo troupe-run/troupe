@@ -672,26 +672,36 @@ def test_a_command_that_exits_while_its_child_holds_its_output_open_still_times_
 class _Waits:
     """Every bounded wait run_to_completion makes, with when it was made (git-call-latency D2)."""
 
-    def __init__(self) -> None:
+    def __init__(self, on_first_wait: Callable[[], None] | None = None) -> None:
         self.started = 0.0
         self.announced_at: float | None = None
         self.bounded: list[tuple[float, float]] = []
         """(seconds asked for, monotonic time of the call), for each wait with a timeout."""
+        self._on_first_wait = on_first_wait
 
     def record(self, timeout: float | None) -> None:
         if timeout is not None:
             self.bounded.append((timeout, time.monotonic()))
+        if self._on_first_wait is not None:
+            on_first_wait, self._on_first_wait = self._on_first_wait, None
+            on_first_wait()
 
     def announced(self, command: str, waited: float) -> None:
         self.announced_at = time.monotonic()
 
 
-def _record_the_waits(monkeypatch: pytest.MonkeyPatch, *, hold_after_set: float = 0.0) -> _Waits:
+def _record_the_waits(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    hold_after_set: float = 0.0,
+    on_first_wait: Callable[[], None] | None = None,
+) -> _Waits:
     """Stand in for the threading, subprocess and time modules processes uses, so that every
     bounded wait is recorded and a sleep in processes fails the test. With ``hold_after_set``, a
     thread other than the caller's stays alive that long after setting an event, as a drain thread
-    is for a moment after its last set."""
-    waits = _Waits()
+    is for a moment after its last set. ``on_first_wait`` runs once, when the first wait of either
+    kind, bounded or not, is recorded and before it waits."""
+    waits = _Waits(on_first_wait)
 
     class RecordingEvent(threading.Event):
         def wait(self, timeout: float | None = None) -> bool:
@@ -729,7 +739,22 @@ reading the clock and making the call, on a loaded machine."""
 
 _ENDS_AT_ONCE = "pass"
 _RUNS_ON = "import time; time.sleep(60)"
-_OVERFLOWS = "import sys, time\nsys.stdout.write('x' * 200_000)\nsys.stdout.flush()\ntime.sleep(60)"
+_OVERFLOWS = """
+import os, sys, time
+gate = {gate!r}
+given_up = time.monotonic() + 20
+while not os.path.exists(gate):
+    if time.monotonic() > given_up:
+        sys.exit(0)
+    time.sleep(0.005)
+sys.stdout.write('x' * 200_000)
+sys.stdout.flush()
+time.sleep(60)
+"""
+"""Writes past the limit only once the gate file exists, which the test makes when run_to_completion
+makes its first wait: written at once, the output could pass the limit before the loop's first
+check, and the case would end without a wait to check (troupe-run/troupe#395). Without the gate in
+20 s it ends without writing, so a loop that never waits fails the case rather than hanging it."""
 
 
 @pytest.mark.parametrize(
@@ -744,17 +769,19 @@ _OVERFLOWS = "import sys, time\nsys.stdout.write('x' * 200_000)\nsys.stdout.flus
 def test_every_wait_runs_to_the_next_deadline_and_none_is_a_fixed_tick(
     monkeypatch: pytest.MonkeyPatch,
     request: pytest.FixtureRequest,
+    tmp_path: Path,
     code: str,
     timeout: float,
     announce_after: float,
     raises: type[Exception] | None,
 ) -> None:
     case = request.node.callspec.id
-    waits = _record_the_waits(monkeypatch)
+    gate = tmp_path / "gate"
+    waits = _record_the_waits(monkeypatch, on_first_wait=gate.touch)
     waits.started = time.monotonic()
     with pytest.raises(raises) if raises is not None else contextlib.nullcontext():
         _run(
-            code,
+            code.format(gate=str(gate)) if code == _OVERFLOWS else code,
             timeout=timeout,
             announce_after=announce_after,
             max_output_bytes=100_000,
@@ -816,36 +843,51 @@ def test_a_command_that_closes_its_output_and_exits_after_the_announcement_retur
     assert took < 10.0, f"returned {took:.1f} s after it started, for a command that ran 1.5 s"
 
 
-_GIT_RUNS = 20
-_HALF_THE_OLD_TICK = 0.010
+_END_RUNS = 30
+_OLD_TICK = 0.020
+_A_QUARTER_OF_THE_OLD_TICK = _OLD_TICK / 4
+
+_ENDS_AND_STAMPS = """
+import os, sys, time
+time.sleep({sleep})
+sys.stdout.write(repr(time.perf_counter()))
+sys.stdout.flush()
+os._exit(0)
+"""
+"""Stamps the time as it ends. time.perf_counter reads a system-wide clock on Linux, macOS and
+Windows, so the stamp can be compared with the test's own clock."""
 
 
-def test_a_command_that_exits_at_once_costs_about_what_starting_it_directly_costs() -> None:
-    git = shutil.which("git")
-    assert git is not None, "these tests need git on PATH"
-    # The same environment for both: git starts several ms slower with an empty one, on macOS.
+def test_a_command_returns_as_soon_after_it_ends_as_one_started_directly() -> None:
+    # Timed from the command's end, not its start: start-up is what load moves, and a tick costs
+    # time only after the command ends. The ends are spread across one old tick, so a tick that
+    # came back would cost about half of it in the median, whatever start-up takes
+    # (troupe-run/troupe#398).
     env = dict(os.environ)
     direct: list[float] = []
     bounded: list[float] = []
-    for _ in range(_GIT_RUNS):  # interleaved, so load on the machine falls on both alike
-        before = time.perf_counter()
-        subprocess.run([git, "--version"], env=env, capture_output=True, check=True)
-        direct.append(time.perf_counter() - before)
-        before = time.perf_counter()
-        processes.run_to_completion(
-            [git, "--version"],
+    for run in range(_END_RUNS):  # interleaved, so load on the machine falls on both alike
+        argv = _python(_ENDS_AND_STAMPS.format(sleep=_OLD_TICK * run / _END_RUNS))
+        done = subprocess.run(argv, env=env, capture_output=True, check=True)
+        direct.append(time.perf_counter() - float(done.stdout))
+        completed = processes.run_to_completion(
+            argv,
             cwd=Path.cwd(),
             env=env,
             timeout=30.0,
             max_output_bytes=LIMIT,
             announce_after=30.0,
         )
-        bounded.append(time.perf_counter() - before)
+        bounded.append(time.perf_counter() - float(completed.stdout))
+    assert min(direct) >= 0, (
+        f"a command's stamp is {-min(direct) * 1000:.1f} ms after the test read the clock: "
+        "the child's time.perf_counter isn't the test's clock on this platform"
+    )
     extra = statistics.median(bounded) - statistics.median(direct)
-    assert extra < _HALF_THE_OLD_TICK, (
-        f"run_to_completion took {extra * 1000:.1f} ms longer than starting git directly "
-        f"(medians of {_GIT_RUNS}: {statistics.median(bounded) * 1000:.1f} ms against "
-        f"{statistics.median(direct) * 1000:.1f} ms)"
+    assert extra < _A_QUARTER_OF_THE_OLD_TICK, (
+        f"run_to_completion returned {extra * 1000:.1f} ms later after the command ended than "
+        f"subprocess.run did (medians of {_END_RUNS}: {statistics.median(bounded) * 1000:.1f} ms "
+        f"against {statistics.median(direct) * 1000:.1f} ms)"
     )
 
 
