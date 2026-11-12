@@ -28,18 +28,24 @@ command shortens an unborn branch's name correctly when a symbolic ref shares it
 - **An unborn branch's short name is shortened by git's own rule, using what git finds.** The adapter still reads the
   unborn branch's full name with `symbolic-ref --quiet HEAD`, which is right. It then shortens it with git's loose
   rule (`<n>` unless a root `<n>`, `refs/<n>` or `refs/tags/<n>` exists, then `heads/<n>` unless a root `heads/<n>`
-  exists). Which of those refs exist comes from git itself, in one command, as git resolves them: a dangling symbolic
-  ref doesn't count, on either ref storage, in any worktree (design D1, D2).
-- **The command counts don't change**: three commands for an unborn HEAD whose files show it, four otherwise.
+  exists). Which of those refs exist comes from git itself, as git resolves them: a dangling symbolic ref doesn't
+  count, on either ref storage, in any worktree. Refs under `refs/` come from one `for-each-ref`. A ref at the top of
+  the git directory is asked about only when it may exist (design D1, D2).
+- **Where git's answers can't decide, the read is refused** with a new error, `vcs.short-name-undecided`. That's a
+  hand-made `heads/<n>` at the top of the git directory while two refs under `refs/` are also named `heads/<n>`. The
+  fix it names is a commit on the branch, after which git names it itself.
+- **Command limits for an unborn HEAD**: still three when its files show it's unborn and nothing at the top of the
+  git directory is named after the branch, the usual case. One more for each such root ref git has to be asked about,
+  and four plus the same otherwise (so five at most under reftable). A born read stays one command.
 - **A test that reproduces it first**: the issue's repository, checked before and after the branch's first commit,
   fails on main. The names property test (`Names` in `test_git_state_cache.py`) adds symbolic refs, dangling and not,
   and checks an unborn read against the name the branch has once it's born.
 - **Unchanged**: #75's rule (a cached value only while the token says nothing moved), and the git-branch-cache
   change's watched refs and its re-read on every call while a symbolic ref shares the name under the files storage.
 
-An earlier option, raised with the owner on 2026-11-12, was to refuse when a root ref named after the branch exists,
-because no existence check then known agreed with git for a root ref. The probe then found one that does
-(design D2), so nothing is left to refuse, and there's no new error.
+The owner chose on 2026-11-12 to refuse where no check agrees exactly with git for a root ref. A later probe seemed to
+remove that gap, but applying showed its command follows symbolic refs (design D2). The revised D2, approved by the
+owner the same day, keeps the refusal, narrowed to the one case git's answers can't settle.
 
 ## Capabilities
 
@@ -49,13 +55,18 @@ None.
 
 ### Modified Capabilities
 
-- `vcs`: "The git adapter re-reads the branch and HEAD with one command once HEAD has a commit" names
+- `vcs`: "The git adapter re-reads the branch and HEAD with one command once HEAD has a commit" is removed and added
+  again as "The git adapter reads the branch and HEAD in one command once HEAD has a commit" (a scenario's name
+  becomes false, design D2). It names
   `rev-parse --abbrev-ref=loose` as git's short name, and says an unborn branch reports the short name it will have
-  once it has a commit, with a scenario for a symbolic ref sharing its name.
+  once it has a commit, with a scenario for a symbolic ref sharing its name. Its command limits for an unborn HEAD
+  change as above, and an unborn branch whose name git can't settle is refused.
 
 ## Impact
 
 - `packages/troupe-vcs-git/src/troupe_vcs_git/__init__.py`: the unborn read (`_read_unborn`) and comments.
+- A new error code, `vcs.short-name-undecided`: `troupe.core.errors`, both copies of `error.schema.json`, and
+  `contributing/event-store.md`'s table. That's a protocol schema change, so the commit is `fix`, not `docs`.
 - `packages/troupe-vcs-git/tests/`: `test_git_state_cache.py` (`Names`, `gits_answers`, the symbolic-ref tests) and the
   git-call-latency differential test, whose reference changes.
 - No Purpose changes, so no `oob/troupe-spec-purposes.json` update in infrastructure.

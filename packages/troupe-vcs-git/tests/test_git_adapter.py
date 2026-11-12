@@ -300,11 +300,40 @@ def test_an_unborn_head_with_packed_refs_is_read_right_in_four_git_commands(repo
     assert cost == 4
 
 
-def test_an_unborn_head_under_reftable_is_read_right_in_four_git_commands(tmp_path: Path) -> None:
+def test_an_unborn_head_under_reftable_is_read_right_in_five_git_commands(tmp_path: Path) -> None:
+    # Five: no file shows whether a root ref named main is in the tables, so git is asked
+    # (unborn-branch-short-name design D2).
     repo = make_repo(tmp_path, refs="reftable")
     git, cost = _reread_cost(repo, lambda: (repo.write("a.txt", "a"), repo.git("add", "a.txt")))
     assert (git.branch(), git.head()) == ("main", None)
-    assert cost == 4
+    assert cost == 5
+
+
+def test_two_root_refs_named_after_an_unborn_branch_cost_one_git_command_together(
+    repo: Repo,
+) -> None:
+    # Packed refs, so the files can't show HEAD is unborn: four, and one for both root names.
+    repo.commit_all()
+    repo.git("pack-refs", "--all")
+    repo.git("update-ref", "FRESH", "HEAD")
+    repo.git("update-ref", "heads/FRESH", "HEAD")
+    git, cost = _reread_cost(repo, lambda: repo.git("switch", "-q", "--orphan", "FRESH"))
+    assert (git.branch(), git.head()) == ("refs/heads/FRESH", None)
+    assert cost == 5
+
+
+@pytest.mark.parametrize(("refs", "cost"), [("files", 4), ("reftable", 5)])
+def test_a_root_ref_named_after_an_unborn_branch_costs_one_git_command_more(
+    tmp_path: Path, refs: str, cost: int
+) -> None:
+    # git is asked whether the root ref is one only when it may be (unborn-branch-short-name
+    # design D2): three or four commands, and one more for it.
+    repo = make_repo(tmp_path, refs=refs)
+    repo.commit_all()
+    repo.git("update-ref", "FRESH", "HEAD")
+    git, spent = _reread_cost(repo, lambda: repo.git("switch", "-q", "--orphan", "FRESH"))
+    assert (git.branch(), git.head()) == ("heads/FRESH", None)
+    assert spent == cost
 
 
 @pytest.mark.parametrize(

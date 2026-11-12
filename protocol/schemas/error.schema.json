@@ -1450,6 +1450,46 @@
     {
       "properties": {
         "code": {
+          "const": "vcs.short-name-undecided"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "branch",
+            "name",
+            "refs"
+          ],
+          "properties": {
+            "branch": {
+              "description": "The unborn branch's full ref name.",
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "description": "The name that may be a ref at the top of the git directory.",
+              "type": "string",
+              "minLength": 1
+            },
+            "refs": {
+              "description": "The refs under refs/ that share the name.",
+              "type": "array",
+              "minItems": 2,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
           "const": "workspace.no-head"
         },
         "details": {
