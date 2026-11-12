@@ -138,6 +138,7 @@ def test_tool_rules_go_in_a_settings_file_and_never_on_the_command_line(tmp_path
             "deny": ["WebFetch", *TRANSLATED_DENY],
         },
         "sandbox": {"autoAllowBashIfSandboxed": False},
+        "autoCompactEnabled": False,
     }
     assert not any(rule in arg for arg in argv for rule in ("Bash(git status)", "WebFetch"))
 
@@ -150,8 +151,20 @@ def test_a_write_effect_becomes_an_edit_rule_rooted_at_the_workspace(tmp_path: P
             "deny": TRANSLATED_DENY,
         },
         "sandbox": {"autoAllowBashIfSandboxed": False},
+        "autoCompactEnabled": False,
     }
     assert "--mcp-config" not in argv
+
+
+@pytest.mark.parametrize(
+    "raw", [{}, {"settingSources": ["project"]}], ids=["no-options", "project-settings"]
+)
+def test_the_settings_file_turns_off_automatic_compaction(
+    tmp_path: Path, raw: dict[str, object]
+) -> None:
+    settings = _settings(_build(parse_options(raw), "d", None, tmp_path, {}).argv)
+    assert isinstance(settings, dict)
+    assert settings["autoCompactEnabled"] is False
 
 
 def test_the_direction_is_standard_input_and_in_no_argument(tmp_path: Path) -> None:

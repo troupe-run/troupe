@@ -110,6 +110,10 @@ def build(
         "permissions": {"allow": list(rules.allow), "deny": list(rules.deny)},
         # A sandbox turned on by a loaded setting source must not allow shell commands by itself.
         "sandbox": {"autoAllowBashIfSandboxed": False},
+        # Compaction loses content (Decision #279, point 3): a run whose context fills ends with an
+        # error instead. A setting, not DISABLE_AUTO_COMPACT, which a loaded setting source's env
+        # can replace; --settings ranks above every source (compaction-off design D1).
+        "autoCompactEnabled": False,
     }
     path = private / "settings.json"
     path.write_bytes(json.dumps(settings, ensure_ascii=False).encode())

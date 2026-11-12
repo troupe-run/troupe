@@ -79,6 +79,12 @@ claude -p --output-format stream-json --verbose --no-session-persistence \
 - **The character is appended to Claude Code's system prompt** from a file, so its own tool instructions stay.
 - **`allowedTools` and `disallowedTools` go in a settings file** as `permissions.allow` and `permissions.deny`,
   with the rules translated from the actor's [effects](#effects).
+- **Claude Code's automatic compaction is off,** with `autoCompactEnabled: false` in the same settings file, so a
+  run never carries on from a summary of its earlier turns
+  ([#279](https://github.com/troupe-run/troupe/issues/279)). It's a setting rather than `DISABLE_AUTO_COMPACT`,
+  because a setting source the actor loads can replace that variable through its `env`, while the file passed with
+  `--settings` ranks above every source. A run whose context fills ends with an error
+  ([How a run ends](#how-a-run-ends)).
 - **The private files** live in a directory of the runner's own, outside the workspace (0700 on POSIX), removed when
   the runner exits. If the temporary directory is inside the workspace, the run is refused.
 - **Claude Code's environment is the runner's,** with its temporary directory pointed at the run's scratch
@@ -103,6 +109,11 @@ loaded either: the live test showed it on Claude Code 2.1.302, and reports it on
 - **Each line Claude Code writes** is sent as a `run/transcript` record, unchanged (`base64` if it isn't UTF-8),
   then mapped onto run events as [the contract's table](../../contributing/runners.md#mapping-an-engine-claude-code)
   says.
+- **A run whose context fills fails.** With compaction off, Claude Code ends with an error result when the API
+  refuses a request as too long (`terminal_reason` `prompt_too_long`) or before sending one that wouldn't fit
+  (`blocking_limit`). A long run that got through by
+  compacting before this runner turned compaction off now fails: split its task, or, once
+  [#310](https://github.com/troupe-run/troupe/issues/310) lands, let its actor opt in to compaction.
 - **The runner never invents a result.** When Claude Code ends without one, the runner sends none and troupe derives
   the outcome. When it ends before its init record, the runner sends an `init` of its own and a `log` error naming the
   exit code.

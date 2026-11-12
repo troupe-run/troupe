@@ -4,11 +4,11 @@ Every commit is signed and signed off (`git commit -S -s`), and `uv run scripts/
 
 ## 1. Compaction off in the runner's settings file
 
-- [ ] 1.1 In `command.py`'s `build()`, add `"autoCompactEnabled": False` to the settings file, with a comment citing
+- [x] 1.1 In `command.py`'s `build()`, add `"autoCompactEnabled": False` to the settings file, with a comment citing
   #279 point 3 and design D1. Add tests in `test_claude_code_command.py`: one whose name says the settings file holds
   `autoCompactEnabled` false for a run with no options, and one for `settingSources` `["project"]`. Verify both fail
   before the change and pass after it.
-- [ ] 1.2 README (`plugins/runner-claude-code/README.md`): under "What it runs", say the settings file turns off
+- [x] 1.2 README (`plugins/runner-claude-code/README.md`): under "What it runs", say the settings file turns off
   Claude Code's automatic compaction, and why a loaded setting source can't turn it back on. Under "How a run ends",
   say a run whose context fills ends `error` with `context-length`, that a long run which compacted before now fails,
   and the way out (split the task; opt in once #310 lands). Verify `test_claude_code_readme.py` passes.
