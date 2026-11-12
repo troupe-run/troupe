@@ -30,8 +30,10 @@ The context-limit fixtures check that compaction stayed off (compaction-off desi
 refuses to write either one when Claude Code reported compacting or sent the fake API more requests
 than the case expects, so a recapture on a newer Claude Code checks the runner's setting again. The
 compaction fixtures check the opposite (compaction-opt-in design D10): the tool refuses to write one
-unless Claude Code wrote a compact_boundary record and the fake API answered exactly one compaction
-request.
+unless Claude Code wrote a compact_boundary record, the fake API answered exactly one compaction
+request and refused exactly as many requests as too long as the fixture says (one for the reactive
+fixture, none for the proactive one, so a proactive compaction can't be written as a reactive one),
+and the run ended with is_error false.
 
 The fixtures that need a real credential are captured by the owner, never in an agent session. Each
 needs CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY, and is one short run on a pinned model,
