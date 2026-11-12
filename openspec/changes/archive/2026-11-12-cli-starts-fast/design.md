@@ -269,8 +269,8 @@ So the suite's time on this Mac moves by more than this change could save or cos
 508 s), and its pattern points at the machine and at how xdist hands out tests, not at the code. Five losses out of five
 is still unlikely to be chance alone, so it was left open, and CI's own job timings were agreed as the deciding measure.
 
-Later local runs, on 2026-11-12, didn't repeat the pattern. Three more pairs, alternating which tree went first, came
-out at +27, +38 and +23 s, but the load rose to 38–53 during two of them. Then a comparison of three trees
+Later local runs, on 2026-11-12, didn't settle it either. Three more pairs, alternating which tree went first, again
+had the change slower, by 27, 38 and 23 s, though the load rose to 38–53 during two of them. Then a comparison of three trees
 (baseline, a fresh worktree at the change's code with no caches, and this worktree) had one clean pair: change 551 s,
 baseline 557 s. Every other run in it was swamped by load (5-minute averages of 28 to 67), and the fresh tree's
 second run failed one flake-hunt test on its fixed 120 s limit under that load (filed as #397, untouched by this
