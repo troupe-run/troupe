@@ -37,13 +37,14 @@ leave `DISABLE_AUTO_COMPACT` out of Claude Code's environment, and when it was s
 
 ### Requirement: Claude Code's compaction is a context event
 A `system` record with subtype `compact_boundary` SHALL map to a `context` event with `kind` `compacted` and `by`
-`engine`, carrying `tokensBefore` from its `compact_metadata.pre_tokens` when that is a whole number of zero or more.
+`engine`, carrying `tokensBefore` from its `compact_metadata.pre_tokens` and `tokensAfter` from `post_tokens`, each
+when it is a whole number of zero or more.
 `system` records with status `compacting` or a `compact_result` SHALL map to debug `log` events, not `context` events.
 
 #### Scenario: A compaction that succeeds
 - **WHEN** the `compaction-proactive` fixture plays
-- **THEN** the runner sends one `context` event with `kind` `compacted`, `by` `engine` and `tokensBefore` from the
-  boundary record, before the events of the turn that follows it, and the run ends `ok`
+- **THEN** the runner sends one `context` event with `kind` `compacted`, `by` `engine`, and `tokensBefore` and
+  `tokensAfter` from the boundary record, before the events of the turn that follows it, and the run ends `ok`
 
 #### Scenario: A compaction after a refusal
 - **WHEN** the `compaction-reactive` fixture plays: the API refuses a request as too long, and Claude Code compacts

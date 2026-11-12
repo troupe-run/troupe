@@ -73,6 +73,7 @@ SUMMARY_FIELDS = {
     "tool_result": "outputSummary",
     "retry": "message",
     "log": "message",
+    "context": "message",
     "result": "message",
 }
 """The one free-text field of each event type that may be cut to fit. An init has none: its tool
@@ -330,6 +331,10 @@ class Mapper:
                 return self._init(record)
             if subtype == "api_retry":
                 return self._retry(record)
+            if subtype == "compact_boundary":
+                return [_compacted(record)]
+            if subtype == "status":
+                return self._status(record)
             return self._note(f"system/{subtype}")
         if kind == "assistant":
             return self._assistant(record)
@@ -340,6 +345,18 @@ class Mapper:
         if kind == "result":
             return self._result(record)
         return self._note(str(kind))
+
+    def _status(self, record: dict[str, Any]) -> list[dict[str, Any]]:
+        """Claude Code's status records around a compaction, as debug logs: nothing is lost until
+        its compact_boundary record (compaction-opt-in design D8). Any other status isn't
+        mapped."""
+        if record.get("status") == "compacting":
+            return [_log("debug", "Claude Code is compacting its conversation")]
+        if "compact_result" in record:
+            result = record["compact_result"]
+            said = result if isinstance(result, str) and result else repr(result)
+            return [_log("debug", f"Claude Code's compaction ended: {said}")]
+        return self._note("system/status")
 
     def _init(self, record: dict[str, Any]) -> list[dict[str, Any]]:
         tools = record.get("tools", [])
@@ -565,6 +582,28 @@ def _transcript(line: bytes) -> Transcript:
 
 def _log(level: str, message: str) -> dict[str, Any]:
     return {"type": "log", "level": level, "message": message}
+
+
+def _compacted(record: dict[str, Any]) -> dict[str, Any]:
+    """Claude Code's compact_boundary record as a context event: the engine replaced its earlier
+    conversation with a summary (compaction-opt-in design D8). Claude Code 2.1.319 reports the
+    tokens before (pre_tokens) and after (post_tokens); each is sent only when it's a count."""
+    metadata = record.get("compact_metadata")
+    metadata = metadata if isinstance(metadata, dict) else {}
+    trigger = metadata.get("trigger")
+    how = f" ({trigger})" if isinstance(trigger, str) and trigger else ""
+    event: dict[str, Any] = {
+        "type": "context",
+        "kind": "compacted",
+        "by": "engine",
+        "message": f"Claude Code compacted its conversation{how}, replacing the earlier turns "
+        "with a summary of them.",
+    }
+    for field, name in (("pre_tokens", "tokensBefore"), ("post_tokens", "tokensAfter")):
+        count = metadata.get(field)
+        if isinstance(count, int) and not isinstance(count, bool) and count >= 0:
+            event[name] = count
+    return event
 
 
 def _missing(kind: str, field: str) -> dict[str, Any]:

@@ -85,6 +85,12 @@ claude -p --output-format stream-json --verbose --no-session-persistence \
   because a setting source the actor loads can replace that variable through its `env`, while the file passed with
   `--settings` ranks above every source the actor can load. A run whose context fills ends with an error
   ([How a run ends](#how-a-run-ends)).
+- **unless the run says `compact`.** When `run/start`'s `onContextFull` is `compact` (the actor opted in, or the
+  `compaction` policy is `all`, [#310](https://github.com/troupe-run/troupe/issues/310)), the settings file holds
+  `autoCompactEnabled: true`, and Claude Code compacts when its context fills. The run's own value beats the
+  environment, so the runner leaves `DISABLE_AUTO_COMPACT` out of Claude Code's environment, and when the person had
+  it set, says so with a `log` warning. An `env` block in a setting source the actor loads can still turn compaction
+  off, and the run then fails with `context-length`, the safe way round.
 - **The private files** live in a directory of the runner's own, outside the workspace (0700 on POSIX), removed when
   the runner exits. If the temporary directory is inside the workspace, the run is refused.
 - **Claude Code's environment is the runner's,** with its temporary directory pointed at the run's scratch
@@ -112,8 +118,12 @@ loaded either: the live test showed it on Claude Code 2.1.302, and reports it on
 - **A run whose context fills fails.** With compaction off, Claude Code ends with an error result when the API
   refuses a request as too long (`terminal_reason` `prompt_too_long`) or before sending one that wouldn't fit
   (`blocking_limit`), and the runner reports it with the reason `context-length`. A long run that got through by
-  compacting before this runner turned compaction off now fails: split its task, or, once
-  [#310](https://github.com/troupe-run/troupe/issues/310) lands, let its actor opt in to compaction.
+  compacting before this runner turned compaction off now fails: split its task, or let its actor opt in to
+  compaction (`onContextFull: compact`).
+- **A run told `compact` carries on past a compaction.** Claude Code writes `system/status` records (`compacting`,
+  then a `compact_result`), which become `debug` logs, then a `compact_boundary`, which becomes a `context` event
+  (`compacted`, by `engine`, with the tokens before and after) before the next turn's events. A compaction that fails
+  ends the run with `context-length`, as above.
 - **The runner never invents a result.** When Claude Code ends without one, the runner sends none and troupe derives
   the outcome. When it ends before its init record, the runner sends an `init` of its own and a `log` error naming the
   exit code.
@@ -164,6 +174,12 @@ captures it.
 off, against a stand-in that reports a context near the window. The tool refuses to write either one when Claude Code
 reported compacting, sent more requests than compaction being off allows, or ended for another reason. A recapture on
 a newer Claude Code therefore checks again that the runner's setting still turns compaction off.
+
+`compaction-proactive` and `compaction-reactive` are the opposite: captured through the runner's launch for a run told
+`compact`, against a stand-in that reports a context near the window (and, for the reactive one, refuses the next
+request as too long), answers Claude Code's compaction request with a summary, then answers `done`. The tool refuses to
+write either one unless Claude Code wrote a `compact_boundary`, the stand-in answered exactly one request it took for a
+compaction request, and the run finished.
 
 ## Tests
 

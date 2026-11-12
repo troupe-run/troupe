@@ -19,9 +19,19 @@ Anthropic):
     context-limit-blocked     the same, reporting 990,000 tokens of a 1,000,000 window: Claude
                               Code stops without sending the next request (blocking_limit)
 
+    compaction-proactive      launched as the runner launches a run told onContextFull compact:
+                              the fake API answers a Read tool call reporting 990,000 tokens,
+                              answers Claude Code's compaction request with a summary, then
+                              answers the next request with a final text answer
+    compaction-reactive       the same, reporting 185,000 tokens, and refusing the next request as
+                              too long: Claude Code compacts after the refusal, then finishes
+
 The context-limit fixtures check that compaction stayed off (compaction-off design D3): the tool
 refuses to write either one when Claude Code reported compacting or sent the fake API more requests
-than the case expects, so a recapture on a newer Claude Code checks the runner's setting again.
+than the case expects, so a recapture on a newer Claude Code checks the runner's setting again. The
+compaction fixtures check the opposite (compaction-opt-in design D10): the tool refuses to write one
+unless Claude Code wrote a compact_boundary record and the fake API answered exactly one compaction
+request.
 
 The fixtures that need a real credential are captured by the owner, never in an agent session. Each
 needs CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY, and is one short run on a pinned model,
@@ -199,6 +209,210 @@ class _ContextLimit(http.server.BaseHTTPRequestHandler):
 
     def log_message(self, *args: Any) -> None:  # noqa: ANN401
         pass
+
+
+COMPACTIONS = {
+    "compaction-proactive": (990_000, False),
+    "compaction-reactive": (185_000, True),
+}
+"""Each compaction fixture: the input tokens the fake API reports for its first answer, and whether
+it refuses the request after it as too long (so Claude Code compacts after a refusal, not before a
+request)."""
+
+SUMMARY = (
+    "<analysis>The user asked to read notes.txt and reply with one word.</analysis>\n"
+    "<summary>The user asked to read notes.txt, then reply with one word: done. notes.txt was "
+    "read; it holds one line, hi. Next: reply with the word done.</summary>"
+)
+"""What the fake API answers Claude Code's compaction request with, in the analysis-then-summary
+form the request asks for."""
+
+COMPACTION_ASK = "create a detailed summary of the conversation"
+"""The words of Claude Code's compaction request (2.1.319), which an ordinary request doesn't hold:
+a request after a compaction mentions the summary, but doesn't ask for one."""
+
+
+def is_compaction_request(body: dict[str, Any]) -> bool:
+    """Whether a Messages API request is Claude Code asking for a summary of the conversation: its
+    last user message (Claude Code may put system messages after it) holds ``COMPACTION_ASK``. The
+    tool counts these, and refuses a capture that answered other than exactly one, so a Claude Code
+    whose request this doesn't recognise can't produce a fixture."""
+    messages = body.get("messages")
+    if not isinstance(messages, list):
+        return False
+    users = [m for m in messages if isinstance(m, dict) and m.get("role") == "user"]
+    if not users:
+        return False
+    content = users[-1].get("content")
+    if isinstance(content, str):
+        text = content
+    elif isinstance(content, list):
+        text = " ".join(str(block.get("text", "")) for block in content if isinstance(block, dict))
+    else:
+        return False
+    return COMPACTION_ASK in text.lower()
+
+
+class _Compaction(_ContextLimit):
+    """A stand-in for api.anthropic.com for a run that may compact: the first ordinary request gets
+    a Read tool call reporting ``input_tokens``; with ``refuse``, the second is refused as too
+    long; a compaction request gets ``SUMMARY``; every other request gets a final text answer."""
+
+    refuse = False
+    compactions: list[str]
+    ordinary: list[str]
+
+    def do_POST(self) -> None:
+        self.requests.append(self.path)
+        body = (
+            _json_object(self.rfile.read(int(self.headers.get("content-length") or 0)).decode())
+            or {}
+        )
+        model = str(body.get("model", MODEL))
+        if is_compaction_request(body):
+            self.compactions.append(self.path)
+            self._answer(model, SUMMARY, body.get("stream") is not False)
+            return
+        self.ordinary.append(self.path)
+        if len(self.ordinary) == 1:
+            self.send_response(200)
+            self.send_header("content-type", "text/event-stream")
+            self.end_headers()
+            for name, payload in self._read_call(model):
+                self.wfile.write(f"event: {name}\ndata: {json.dumps(payload)}\n\n".encode())
+            self.wfile.flush()
+            return
+        if self.refuse and len(self.ordinary) == 2 and not self.compactions:
+            refusal = {
+                "type": "error",
+                "error": {"type": "invalid_request_error", "message": TOO_LONG},
+            }
+            data = json.dumps(refusal).encode()
+            self.send_response(400)
+            self.send_header("content-type", "application/json")
+            self.send_header("content-length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
+        self._answer(model, "done", body.get("stream") is not False)
+
+    def _answer(self, model: str, text: str, stream: bool) -> None:
+        """A text answer, ending the turn, with a small usage: streamed, or one JSON message."""
+        usage = {
+            "input_tokens": 2000,
+            "output_tokens": 20,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+        }
+        message: dict[str, Any] = {
+            "id": "msg_capture",
+            "type": "message",
+            "role": "assistant",
+            "model": model,
+            "content": [],
+            "stop_reason": None,
+            "stop_sequence": None,
+            "usage": usage,
+        }
+        if not stream:
+            data = json.dumps(
+                {**message, "content": [{"type": "text", "text": text}], "stop_reason": "end_turn"}
+            ).encode()
+            self.send_response(200)
+            self.send_header("content-type", "application/json")
+            self.send_header("content-length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
+        events: list[tuple[str, dict[str, Any]]] = [
+            ("message_start", {"type": "message_start", "message": message}),
+            (
+                "content_block_start",
+                {
+                    "type": "content_block_start",
+                    "index": 0,
+                    "content_block": {"type": "text", "text": ""},
+                },
+            ),
+            (
+                "content_block_delta",
+                {
+                    "type": "content_block_delta",
+                    "index": 0,
+                    "delta": {"type": "text_delta", "text": text},
+                },
+            ),
+            ("content_block_stop", {"type": "content_block_stop", "index": 0}),
+            (
+                "message_delta",
+                {
+                    "type": "message_delta",
+                    "delta": {"stop_reason": "end_turn", "stop_sequence": None},
+                    "usage": {"output_tokens": 20},
+                },
+            ),
+            ("message_stop", {"type": "message_stop"}),
+        ]
+        self.send_response(200)
+        self.send_header("content-type", "text/event-stream")
+        self.end_headers()
+        for name, payload in events:
+            self.wfile.write(f"event: {name}\ndata: {json.dumps(payload)}\n\n".encode())
+        self.wfile.flush()
+
+
+def _compaction_api(
+    input_tokens: int, read_path: Path, refuse: bool
+) -> tuple[http.server.ThreadingHTTPServer, list[str], list[str]]:
+    requests: list[str] = []
+    compactions: list[str] = []
+    handler = type(
+        "_Compacting",
+        (_Compaction,),
+        {
+            "input_tokens": input_tokens,
+            "read_path": str(read_path),
+            "refuse": refuse,
+            "requests": requests,
+            "compactions": compactions,
+            "ordinary": [],
+        },
+    )
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server, requests, compactions
+
+
+def compaction_refusal(fixture: str, lines: list[str], compactions: int) -> str | None:
+    """Why a compaction capture mustn't be written, or None when it may: Claude Code has to have
+    written a compact_boundary record, after the fake API answered exactly one request it took for
+    a compaction request, and the run has to have finished (compaction-opt-in design D10)."""
+    boundaries = [
+        line
+        for line in lines
+        if (record := _json_object(line)) is not None
+        and record.get("type") == "system"
+        and record.get("subtype") == "compact_boundary"
+    ]
+    if not boundaries or compactions != 1:
+        return (
+            f"capture: refusing to write {fixture}: compaction wasn't seen. Claude Code wrote "
+            f"{len(boundaries)} compact_boundary records, and the fake API answered {compactions} "
+            "compaction requests (expected 1 of each). Fix: check the runner's settings file "
+            "turns compaction on for a run told compact, and that is_compaction_request still "
+            "recognises this Claude Code's compaction request."
+        )
+    ended = [
+        record.get("is_error")
+        for line in lines
+        if (record := _json_object(line)) is not None and record.get("type") == "result"
+    ]
+    if ended != [False]:
+        return (
+            f"capture: refusing to write {fixture}: its run didn't finish after compacting. Its "
+            f"results' is_error was {ended}, not [False]."
+        )
+    return None
 
 
 def _context_limit_api(
@@ -384,7 +598,7 @@ THROUGH_RUNNER: dict[str, tuple[dict[str, list[str]], dict[str, bytes], str]] = 
     ),
     **{
         name: ({}, {"notes.txt": b"hi\n"}, "Read notes.txt, then reply with one word: done.")
-        for name in CONTEXT_LIMITS
+        for name in (*CONTEXT_LIMITS, *COMPACTIONS)
     },
 }
 """Each fixture captured through the runner: the actor's effects, the workspace's files, and the
@@ -409,7 +623,7 @@ def _through_runner(
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
     raw: dict[str, object] = {"model": MODEL}
-    if fixture not in CONTEXT_LIMITS:
+    if fixture not in CONTEXT_LIMITS and fixture not in COMPACTIONS:
         raw["maxBudgetUsd"] = float(BUDGET_USD)
     options = parse_options(raw)
     effects = Effects(
@@ -433,14 +647,27 @@ def _through_runner(
     claude = shutil.which("claude")
     if claude is None:
         sys.exit("capture: claude isn't on PATH. Fix: install Claude Code.")
-    launch = build(Path(claude), options, direction, None, private, {}, rules, server)
+    launch = build(
+        Path(claude),
+        options,
+        direction,
+        None,
+        private,
+        {},
+        rules,
+        server,
+        compact=fixture in COMPACTIONS,
+    )
     return launch.argv, launch.stdin, launch.env
 
 
 def capture(fixture: str, out: Path) -> None:
     through_runner = fixture in THROUGH_RUNNER
     context_limit = fixture in CONTEXT_LIMITS
-    owner_run = fixture == "success-with-tools" or (through_runner and not context_limit)
+    compaction = fixture in COMPACTIONS
+    owner_run = fixture == "success-with-tools" or (
+        through_runner and not context_limit and not compaction
+    )
     if fixture not in {
         "is-error-success-subtype",
         "auth-retries",
@@ -475,6 +702,7 @@ def capture(fixture: str, out: Path) -> None:
     server = None
     port: int | None = None
     requests: list[str] = []
+    compactions: list[str] = []
     if owner_run:
         for name in ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY"):
             if name in os.environ:
@@ -504,6 +732,10 @@ def capture(fixture: str, out: Path) -> None:
                 CONTEXT_LIMITS[fixture][0], workspace / "notes.txt"
             )
             port = server.server_address[1]
+        elif compaction:
+            tokens, refuse = COMPACTIONS[fixture]
+            server, requests, compactions = _compaction_api(tokens, workspace / "notes.txt", refuse)
+            port = server.server_address[1]
         else:
             status = {"server-retries": 529, "rate-limit-retries": 429}.get(fixture, 401)
             server, _ = _fake_api(status)
@@ -519,6 +751,8 @@ def capture(fixture: str, out: Path) -> None:
             "network-retries": "2",
             "context-limit-refused": "0",
             "context-limit-blocked": "0",
+            "compaction-proactive": "0",
+            "compaction-reactive": "0",
         }[fixture]
         prompt = OFFLINE_PROMPT
         flags += ["--bare", "--model", MODEL]
@@ -555,6 +789,11 @@ def capture(fixture: str, out: Path) -> None:
         server.shutdown()
     if context_limit:
         refusal = context_limit_refusal(fixture, [line for _, line in lines], len(requests))
+        if refusal is not None:
+            shutil.rmtree(scratch, ignore_errors=True)
+            sys.exit(refusal)
+    if compaction:
+        refusal = compaction_refusal(fixture, [line for _, line in lines], len(compactions))
         if refusal is not None:
             shutil.rmtree(scratch, ignore_errors=True)
             sys.exit(refusal)
@@ -602,6 +841,13 @@ def capture(fixture: str, out: Path) -> None:
         f"the window ({CONTEXT_LIMITS[fixture][0]} input tokens, its cost included) and refused "
         "any later request as too long"
         if context_limit
+        else "none: a local fake API, which ignored the invalid key, answered with a context "
+        f"near the window ({COMPACTIONS[fixture][0]} input tokens, its cost included)"
+        + (", refused the next request as too long" if COMPACTIONS[fixture][1] else "")
+        + ", answered Claude Code's compaction request with a fixed summary, and then answered "
+        f"with a final text; it took {len(requests)} requests, {len(compactions)} of them for "
+        "compaction"
+        if compaction
         else "none: a local fake API refused an invalid key",
         "exitCode": exit_code,
         "terminatedWith": "SIGTERM during the retry backoff" if terminated else None,

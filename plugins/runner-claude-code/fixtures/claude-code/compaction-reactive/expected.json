@@ -1,0 +1,10 @@
+{
+  "description": "Compaction on, as the runner launches a run told onContextFull compact: a Read tool call reporting 185,000 input tokens, then the API refuses the next request as too long, so Claude Code compacts after the refusal (no record shows the refusal), then answers 'done'. One context event, compacted by engine, before the final turn; an ok result.",
+  "exitCode": 0,
+  "outcome": "succeeded",
+  "errorCode": null,
+  "withoutFailFast": {
+    "outcome": "succeeded",
+    "errorCode": null
+  }
+}

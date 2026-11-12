@@ -289,7 +289,9 @@ class Runner:
             return
         try:
             options = parse_options(params.get("options", {}))
-            declaration = Declaration.from_run_start(p.RunStartParams.from_data(params))
+            asked = p.RunStartParams.from_data(params)
+            declaration = Declaration.from_run_start(asked)
+            on_context_full = asked.on_context_full
             rules = ClaudeCodePermissions(options).translate(declaration)
         except (OptionsError, EffectsRefusedError) as error:
             self._error(
@@ -358,7 +360,21 @@ class Runner:
             )
             server = [sys.executable, "-m", "troupe_runner_claude_code.effects_server", str(config)]
         launch = build(
-            claude, options, direction, character, private, dict(os.environ), rules, server
+            claude,
+            options,
+            direction,
+            character,
+            private,
+            dict(os.environ),
+            rules,
+            server,
+            compact=on_context_full == "compact",
+        )
+        self._mapper.hold_warnings(
+            f"{name} was set in the runner's environment, and would have turned Claude Code's "
+            "compaction off. The actor's onContextFull is compact, which this run follows, so "
+            f"Claude Code doesn't get {name}."
+            for name in launch.overridden
         )
         self._diagnose(f"running {claude}")
         try:

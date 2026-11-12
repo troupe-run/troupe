@@ -49,6 +49,8 @@ def test_there_are_fixtures_for_each_failure_shape() -> None:
         "success-with-tools",
         "context-limit-refused",
         "context-limit-blocked",
+        "compaction-proactive",
+        "compaction-reactive",
     } <= set(NAMES)
 
 
@@ -137,3 +139,21 @@ def test_each_result_events_usage_has_every_counter_its_native_result_record_has
             if isinstance(record.get("usage", {}).get(theirs), int)
         }
         assert event.get("usage", {}) == expected
+
+
+# Requirement: Claude Code's compaction is a context event (compaction-opt-in)
+
+
+@pytest.mark.parametrize("name", ["compaction-proactive", "compaction-reactive"])
+def test_a_compaction_fixture_has_one_context_event_before_the_turn_after_it(name: str) -> None:
+    events = [
+        json.loads(line)["event"]
+        for line in (FIXTURES / name / "recording.jsonl").read_text(encoding="utf-8").splitlines()
+        if "event" in json.loads(line)
+    ]
+    (context,) = [e for e in events if e["type"] == "context"]
+    assert (context["kind"], context["by"]) == ("compacted", "engine")
+    assert context["tokensBefore"] > context["tokensAfter"] > 0
+    after = events[events.index(context) + 1 :]
+    assert [e["type"] for e in after] == ["turn", "result"]
+    assert after[-1]["status"] == "ok"

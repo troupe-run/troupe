@@ -555,6 +555,46 @@ def test_an_allowed_shell_rule_and_loaded_settings_are_warned_about_before_the_r
     assert events[-1]["type"] == "result"
 
 
+# Requirement: Claude Code compacts only when the run says compact (compaction-opt-in)
+
+
+def test_a_run_told_compact_drops_disable_auto_compact_and_warns_naming_it(
+    tmp_path: Path, workspace: Path, record: Path, sessions: list[Session]
+) -> None:
+    env = {
+        **_env(tmp_path, record, fixture=_fixture("success-with-tools")),
+        **{"DISABLE_AUTO_COMPACT": "1"},
+    }
+    session = _session(sessions, workspace, env)
+    session.start(on_context_full="compact")
+    messages = session.until_result()
+    events = [m["params"] for m in messages if m.get("method") == "run/event"]
+    warnings = [
+        (n, e["message"])
+        for n, e in enumerate(events)
+        if e["type"] == "log" and e["level"] == "warning"
+    ]
+    (named,) = [(n, w) for n, w in warnings if "DISABLE_AUTO_COMPACT" in w]
+    assert named[0] > 0  # after init
+    assert "onContextFull is compact" in named[1]
+    seen = wait_for_record(record, "files")
+    assert "DISABLE_AUTO_COMPACT" not in seen["env"]
+    assert json.loads(seen["files"]["--settings"])["autoCompactEnabled"] is True
+    assert events[-1]["type"] == "result"
+
+
+def test_a_run_told_compact_without_the_variable_warns_about_nothing_of_it(
+    tmp_path: Path, workspace: Path, record: Path, sessions: list[Session]
+) -> None:
+    env = _env(tmp_path, record, fixture=_fixture("success-with-tools"))
+    env.pop("DISABLE_AUTO_COMPACT", None)
+    session = _session(sessions, workspace, env)
+    session.start(on_context_full="compact")
+    messages = session.until_result()
+    events = [m["params"] for m in messages if m.get("method") == "run/event"]
+    assert not any("DISABLE_AUTO_COMPACT" in e.get("message", "") for e in events)
+
+
 # Requirement: Delete and move effects are troupe's own tools
 
 
