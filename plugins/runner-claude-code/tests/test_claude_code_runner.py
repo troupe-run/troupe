@@ -15,6 +15,7 @@ import pytest
 
 from claude_harness import (
     FIXTURES,
+    TIMEOUT,
     Session,
     alive,
     recording,
@@ -179,6 +180,38 @@ def test_a_workspace_that_doesnt_exist_is_refused(
     answer = session.start()
     assert answer["error"]["data"]["code"] == "claude-code.start-failed"
     session.validate_all()
+
+
+LINE_POLL_SECONDS = 0.01
+"""How often a test looks at what the runner has written so far."""
+
+
+def _result_written(session: Session, within: float) -> bool:
+    """Whether the runner has written its result event, waiting up to ``within`` seconds. It reads
+    ``raw``, which the reader fills as lines arrive, so nothing is taken off the stream the test
+    then reads."""
+    deadline = time.monotonic() + within
+    while time.monotonic() < deadline:
+        for line in list(session.raw):
+            message = json.loads(line)
+            if message.get("method") == "run/event" and message["params"]["type"] == "result":
+                return True
+        time.sleep(LINE_POLL_SECONDS)
+    return False
+
+
+def test_a_result_written_before_a_requests_answer_is_still_read_by_until_result(
+    tmp_path: Path, workspace: Path, record: Path, sessions: list[Session]
+) -> None:
+    # The harness, not the runner (request-keeps-notifications design D1, #392).
+    env = _env(tmp_path, record, fixture=_fixture("success-with-tools"))
+    session = _session(sessions, workspace, env)
+    session.start()
+    assert _result_written(session, TIMEOUT), "the run never wrote its result"
+    second = session.request("run/start", session.sent[-1]["params"])
+    messages = session.until_result()
+    assert second["error"]["data"]["code"] == "runner.already-started"
+    assert messages[-1]["params"]["type"] == "result"
 
 
 def test_a_second_run_start_is_refused(
