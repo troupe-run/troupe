@@ -111,8 +111,10 @@ COUNTS_VARIABLE = "TROUPE_TEST_THEATRE_COUNTS"
 """Names an existing directory to write each test process's build and copy counts into, as
 ``theatres-<pid>.json``, for measuring the templates (design D5). Unset, nothing is written."""
 
+_factory: pytest.TempPathFactory | None = None
+"""This process's pytest temp factory while a session runs; None otherwise (outside pytest)."""
 _templates: Path | None = None
-"""Where this test process keeps its templates while a pytest session runs; None otherwise."""
+"""Where this process keeps its templates: made under the base temp when the first is built."""
 _built: dict[tuple[object, ...], Path] = {}
 """Each template this process has built, by the key of the shape it holds."""
 _counts = {"templates": 0, "copies": 0, "fresh": 0}
@@ -153,13 +155,25 @@ def pytest_sessionfinish(session: pytest.Session) -> None:
 def theatre_templates(tmp_path_factory: pytest.TempPathFactory) -> Iterator[None]:
     """Keep this process's templates under pytest's base temp (design D2): each xdist worker has its
     own session and base temp, so it builds its own, and a fresh ``--basetemp`` means fresh ones."""
-    global _templates
-    _templates = tmp_path_factory.mktemp("theatre-templates")
+    global _factory, _templates
+    _factory = tmp_path_factory
     try:
         yield
     finally:
-        _templates = None
+        _factory = _templates = None
         _built.clear()
+
+
+def _template_directory() -> Path:
+    """The directory for this process's templates, made the first time a template is built. Not
+    before: making pytest's base temp registers a cleanup that, at exit, deletes older runs'
+    directories, and a session that builds no repository (a child pytest a test starts) mustn't
+    pay for that. Old full runs' directories can hold gigabytes of repositories."""
+    global _templates
+    if _templates is None:
+        assert _factory is not None, "only called while a pytest session runs"
+        _templates = _factory.mktemp("theatre-templates")
+    return _templates
 
 
 def from_template(
@@ -172,12 +186,12 @@ def from_template(
     The copy's files get new times, as a fresh build's files have, and its index, if it has one, is
     refreshed so its stat data matches the copied files, as after a fresh ``add`` (design D3). A
     copy is never given the template's path, so no test can change the template."""
-    if _templates is None:
+    if _factory is None:
         _counts["fresh"] += 1
         return build(root, name)
     template = _built.get(key)
     if template is None:
-        built = build(Path(tempfile.mkdtemp(dir=_templates)), "theatre")
+        built = build(Path(tempfile.mkdtemp(dir=_template_directory())), "theatre")
         template = _built[key] = built.path
         _counts["templates"] += 1
     path = root / name

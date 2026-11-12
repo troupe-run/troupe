@@ -176,6 +176,25 @@ def test_a_fresh_repository_is_built_not_copied(tmp_path: Path) -> None:
     assert repo.git("symbolic-ref", "HEAD") == "refs/heads/main\n"
 
 
+def test_a_session_that_makes_no_repository_makes_no_base_temp(
+    pytester: pytest.Pytester, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # Making pytest's base temp registers a cleanup of older runs' directories at exit, which a
+    # child pytest run that builds no repository shouldn't pay for (design D2).
+    temproot = tmp_path / "temproot"
+    temproot.mkdir()
+    monkeypatch.setenv("PYTEST_DEBUG_TEMPROOT", str(temproot))
+    monkeypatch.setenv(
+        "PYTHONPATH", os.pathsep.join([str(TESTS), os.environ.get("PYTHONPATH", "")])
+    )
+    pytester.makepyfile(test_nothing="def test_nothing():\n    pass\n")
+
+    result = pytester.runpytest_subprocess("-p", "gitrepo", "-p", "no:cacheprovider")
+
+    result.assert_outcomes(passed=1)
+    assert list(temproot.iterdir()) == []
+
+
 def test_outside_pytest_a_repository_is_built_from_scratch(tmp_path: Path) -> None:
     child = (
         "import json, sys\n"
