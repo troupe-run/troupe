@@ -27,7 +27,7 @@ from troupe.core.config.commands import record_change
 from troupe.core.config.kinds import check
 from troupe.core.config.projection import render
 from troupe.core.events.lineage import Actor
-from troupe.core.policy import ALLOW_UNENFORCED_LOCAL_STAGE, env_name, read_policy
+from troupe.core.policy import ALLOW_UNENFORCED_LOCAL_STAGE, env_name, read_unenforced_local_stage
 from troupe.core.stores import open_event_store
 from troupe.core.theatre import GIT_FILES, THEATRE_DIR, ensure_git_files, refuse_existing
 from troupe.core.vcs import load_vcs
@@ -52,7 +52,7 @@ def _steps(session: Session, chosen: Audition) -> list[m.InitStep]:
     """What to do next, as data (design D8): commit, allow the local stage when the session's policy
     doesn't (a malformed policy value fails here, as it would fail perform), then perform."""
     steps: list[m.InitStep] = [m.CommitStep(paths=[THEATRE_DIR])]
-    if not read_policy(session.env).allow_unenforced_local_stage.value:
+    if not read_unenforced_local_stage(session.env).value:
         steps.append(
             m.AllowLocalStageStep(variable=env_name(ALLOW_UNENFORCED_LOCAL_STAGE), value="true")
         )

@@ -419,6 +419,11 @@ def test_a_malformed_policy_value_refuses_the_audition_and_makes_nothing(repo: R
     assert not (repo.path / ".troupe").exists()
 
 
+def test_a_malformed_compaction_policy_which_init_doesnt_read_doesnt_refuse_it(repo: Repo) -> None:
+    result = _init(repo.path, _env(repo, TROUPE_POLICY_COMPACTION="sometimes"), audition={})
+    assert [step["kind"] for step in result["steps"]] == ["commit", "allow-local-stage", "perform"]
+
+
 def test_plain_init_has_no_perform_step(repo: Repo) -> None:
     result = _init(repo.path, _env(repo))
     assert all(step["kind"] != "perform" for step in result["steps"])
