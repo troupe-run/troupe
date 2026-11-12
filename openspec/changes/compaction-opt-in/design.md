@@ -198,8 +198,8 @@ the two runners' messages differ and the SDK takes no position on an engine's AP
 - **Owner's decision (2026-11-12, Q3), by D9's rule:** when it's `compact`, `build()` removes
   `DISABLE_AUTO_COMPACT` from Claude Code's environment, so a person's own variable can't silently override the
   actor's choice. It's never silent: when the variable was set, the runner sends a `log` event at level `warning`
-  just after `init`, naming `DISABLE_AUTO_COMPACT` and saying the actor's `onContextFull` `compact` overrides it for
-  this run. With `fail`, the variable is left alone: it can only turn compaction off, which the setting already
+  just after `init`, naming `DISABLE_AUTO_COMPACT` and saying the run's `onContextFull` `compact` (from the actor
+  or the policy) overrides it for this run. With `fail`, the variable is left alone: it can only turn compaction off, which the setting already
   does. A project settings file
   whose `env` block sets the variable can still turn compaction off. That direction is safe (the run fails with
   `context-length`), and the docs say so.
@@ -245,6 +245,23 @@ Policy sits outside this order. It bounds what an actor may ask for (D2) before 
   exhausted`: one turn's results alone don't fit, so it ends with `context-length`.
 - **OpenAI:** a stand-in reply sequence with a `context_length_exceeded` 400, then success after the resend. Failure
   fixtures are captured without a real credential (openai-runner spec), as the others are.
+
+### D11. LM Studio: stop at the limit, and say it doesn't compact
+
+**Owner's decision (2026-11-12)**, after the LM Studio runner (#333) merged while this change was in review. It runs
+the lmstudio library's own tool loop, `act()`, so compacting means editing the chat between rounds, which needs its
+own probe. For now:
+
+- Every prediction sets `contextOverflowPolicy` to `stopAtLimit` (#394, closed by this change). LM Studio's other
+  policies, `truncateMiddle` and `rollingWindow`, drop content while the run carries on, and LM Studio's prediction
+  result doesn't say they did, so no `context` event could report it. With `stopAtLimit`, a full context stops the
+  prediction with `contextLengthReached`, which the runner already ends with `context-length`. It's a fixed constant,
+  not a setting, because the alternatives lose content silently.
+- A run told `compact` gets a `log` warning just after `init`, saying the runner doesn't compact and a full context
+  ends the run with `context-length`. Nothing is lost silently, and the actor's opt-in isn't quietly ignored. Refusing
+  the run was rejected: an actor that opted in, or every actor under `TROUPE_POLICY_COMPACTION=all`, could then never
+  run on LM Studio.
+- Compacting between `act()` rounds is the follow-up Feature #404, linked to #310 and #394.
 
 ## Risks / Trade-offs
 

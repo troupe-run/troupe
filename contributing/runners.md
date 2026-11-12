@@ -279,7 +279,8 @@ ends the run, and troupe records it with the run's other events.
 - **`by`** says who did it: `engine` when the engine reduced its conversation on its own (Claude Code compacting),
   or `runner` when the runner reduced the conversation it holds and sends to its engine.
 - **The counts** are the conversation's tokens and messages before and after the loss. Send each one only when the
-  engine or runner knows it, and leave it out otherwise. Claude Code, for example, reports only the tokens before.
+  engine or runner knows it, and leave it out otherwise. Claude Code, for example, reports the tokens before and
+  after, and no message counts.
 - **`message`** says what happened, in words.
 - A cut answer at the engine's output limit isn't a `context` event. It ends the run with `output-limit`.
 
@@ -289,7 +290,8 @@ With `compact`, you may, or let your engine, and send a `context` event each tim
 end the run with `context-length` and say compaction was on. A runner that holds its own conversation compacts it
 with the SDK's `troupe_plugin_sdk.compaction`, which replaces old tool results with a stub, oldest first, and never
 touches the character, the direction, the model's own messages or the latest turn's results (see the SDK's
-[README](../packages/troupe-plugin-sdk/README.md#compaction)).
+[README](../packages/troupe-plugin-sdk/README.md#compaction)). A runner that can't compact yet, such as the LM Studio
+runner, says so with a `log` warning after `init` when told `compact`, and ends with `context-length` as with `fail`.
 
 The SDK builds the event with `context_event` from `troupe_plugin_sdk.events`. It numbers the event with the run's
 `EventNumbering`, cuts the message to the run's limits, and leaves out each count you pass as `None`:

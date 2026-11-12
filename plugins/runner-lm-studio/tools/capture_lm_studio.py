@@ -144,6 +144,7 @@ def main() -> int:
         "limits": {"eventMaxBytes": 65536},
         "effects": json.loads(args.effects),
         "scratch": str(scratch),
+        "onContextFull": "fail",
         "runtime": {
             "name": "lm-studio",
             "endpoint": f"http://127.0.0.1:{recorder.server.port}",

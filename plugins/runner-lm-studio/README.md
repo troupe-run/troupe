@@ -91,6 +91,10 @@ library applies is set from one of them, never left to the library's default.
 5. **A round with no tool call** ends the run `ok` with its text, unless the prediction stopped short: the context
    length (`context-length`), the predicted-token limit (`output-limit`), the model unloaded or the prediction failed
    (`engine`), or a stop reason the runner or its library doesn't know (`other`).
+   Every prediction sets LM Studio's `contextOverflowPolicy` to `stopAtLimit`, whatever the server or model would
+   use, because its other policies drop content while the run carries on and don't say so
+   ([#394](https://github.com/troupe-run/troupe/issues/394)). A full context therefore always ends the run with
+   `context-length`.
 6. **A connection that fails or drops** is retried, with a `retry` event, only while no tool call has run: after one
    has, starting again could run a tool twice, so the run ends `network` saying so, with `notRetried: side-effect`. A
    message that doesn't arrive in time ends it `network` too, with neither, since a timeout is never retried.
@@ -156,3 +160,10 @@ shapes, rewriting the ids the library picks. The live test runs a real LM Studio
 ```console
 TROUPE_LIVE_LM_STUDIO=1 uv run pytest packages/troupe/tests/test_lm_studio_live.py -s
 ```
+
+## Compaction
+
+The runner doesn't compact a conversation yet. When `run/start`'s `onContextFull` is `compact` (the actor opted in, or
+the `compaction` policy is `all`, [#310](https://github.com/troupe-run/troupe/issues/310)), it sends a `log` warning
+just after `init` saying so, and a full context still ends the run with `context-length`. It never sends a `context`
+event. Compacting between the library's `act()` rounds is [#404](https://github.com/troupe-run/troupe/issues/404).

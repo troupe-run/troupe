@@ -27,7 +27,7 @@
 ## 5. Claude Code runner
 
 - [x] 5.1 In `command.build()`, write `autoCompactEnabled` from `onContextFull`, and leave `DISABLE_AUTO_COMPACT` out of the environment when it's `compact`, sending a `warning` `log` after `init` naming it when it was set (design D8, D9). Verify: command and runner tests for the claude-code-runner scenarios of "Claude Code compacts only when the run says compact".
-- [x] 5.2 In `mapping.py`, map `system`/`compact_boundary` to a `context` event (`compacted`, `engine`, `tokensBefore` from `pre_tokens` when valid), and `status` `compacting` / `compact_result` records to named debug logs. Verify: mapping tests, including a boundary in a run told `fail` and a `pre_tokens` that isn't a whole number.
+- [x] 5.2 In `mapping.py`, map `system`/`compact_boundary` to a `context` event (`compacted`, `engine`, `tokensBefore` from `pre_tokens` and `tokensAfter` from `post_tokens`, each when valid), and `status` `compacting` / `compact_result` records to named debug logs. Verify: mapping tests, including a boundary in a run told `fail` and a `pre_tokens` that isn't a whole number.
 - [x] 5.3 Add a `--compaction` mode to `tools/capture_claude.py`: a stand-in that answers the compaction request with a summary, capture through `build()` with `compact`, and refuse to write without a `compact_boundary`. Verify: capture-tool tests for the refusal, and its existing context-limit refusal tests still pass.
 - [x] 5.4 Capture `compaction-proactive` and `compaction-reactive` with real Claude Code against the stand-in, and play them in the fixture tests. If the boundary record differs from design D8 or D10, follow the captured record and update the design in the same commit. Verify: the fixture tests pass, each with one `context` event before the next turn's events, ending `ok`.
 
@@ -35,6 +35,13 @@
 
 - [x] 6.1 Document `onContextFull` on the actor reference page, `TROUPE_POLICY_COMPACTION` beside the other policy settings, and each runner's compaction behaviour on its runner page under `docs/`. Say that compaction changes what the model sees, and that a project's settings `env` can still turn Claude Code's off. Verify: the docs checks in `scripts/check.py` pass, and the generated reference is current.
 - [x] 6.2 Run `uv run scripts/check.py` in full, keeping the log in a scratch file. Verify: every gate passes.
+
+## 7. LM Studio runner (owner, 2026-11-12: it merged while this was in review)
+
+- [x] 7.1 Send `onContextFull` from the LM Studio runner's harness, tests and capture tool, and core's runtime-fit test. Verify: its tests and `test_runtime_fit.py` pass.
+- [x] 7.2 Set `contextOverflowPolicy` `stopAtLimit` on every prediction (#394, design D11). Verify: an engine test against the stand-in finds it in the predict request, with and without a temperature, and the stop-reason test still ends a full context with `context-length`.
+- [x] 7.3 When told `compact`, send a `log` warning after `init` saying the runner doesn't compact. Verify: runner tests for `compact` (warning, no `context` event, a full context ends with `context-length`) and `fail` (no warning).
+- [x] 7.4 Say so in the LM Studio README, the contract guide and the user page, and file the follow-up Feature for compacting between `act()` rounds, linked to #310 and #394. Verify: the docs tests pass, and the issue is on the board.
 
 ## Workflow follow-up
 

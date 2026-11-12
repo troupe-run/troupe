@@ -38,7 +38,7 @@ A run is recorded as its own stream of [events](../prompt-book/events.md), all s
 
 - **`Run.Started`:** the actor, the runner you asked for, the stage and what allowed it, the effect check, a
   reference to the direction, the config version the run used, so what the actor was then can always be worked out,
-  and where it works. It's recorded before anything else happens, so a run that stops early is still there. You
+  where it works, and whether it may compact when its context fills, and why. It's recorded before anything else happens, so a run that stops early is still there. You
   started it, through the command line.
 - **`Run.WorktreeMade`:** for a run in its own worktree, that the worktree is made, and how its files were copied.
 - **`Run.Reported`:** one for each event the runner reports, in order. The first is the runner's `init`, which says
@@ -104,10 +104,14 @@ troupe config set actors.reviewer.onContextFull=compact
 
 The run then makes room and carries on, which changes what the model sees:
 
-- **The Claude Code runner** lets Claude Code compact, which replaces the earlier turns with a summary of them.
+- **The Claude Code runner** lets Claude Code compact, which replaces the earlier turns with a summary of them. If
+  the actor loads Claude Code settings (`settingSources`) whose `env` turns compaction off, that still wins: the run
+  then fails with `context-length`.
 - **The Ollama and OpenAI runners** replace old tool results, oldest first, with a short note saying what was removed
   and to call the tool again if it's still needed. They never touch the actor's character, its direction, what the
   model said, or the results it hasn't read yet, and they make no extra model call, so compaction costs no tokens.
+- **The LM Studio runner** doesn't compact yet. A run told to compact says so with a warning, and a full context ends
+  it with `context-length`. It always asks LM Studio to stop at the context length rather than drop content.
 
 Each compaction is recorded with the run's events, as a `context` event saying what happened and how much. When
 compaction can't make room, the run fails with `context-length` as it would have. The run's start records whether

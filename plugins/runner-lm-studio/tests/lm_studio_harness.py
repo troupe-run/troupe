@@ -206,6 +206,7 @@ class Session:
         character: str | None = None,
         event_max_bytes: int = EVENT_MAX_BYTES,
         effects: dict[str, list[str]] | None = None,
+        on_context_full: str = "fail",
     ) -> dict[str, Any]:
         """Initialize, then send run/start with a runtime naming ``endpoint`` (None: no runtime).
         ``options`` default to TEST_LIMITS. ``valid=False`` marks a run/start the runner must
@@ -222,6 +223,7 @@ class Session:
             "limits": {"eventMaxBytes": event_max_bytes},
             "effects": {"write": [], "delete": [], "move": [], **(effects or {})},
             "scratch": str(self.scratch()),
+            "onContextFull": on_context_full,
         }
         if endpoint is not None:
             params["runtime"] = {

@@ -29,7 +29,7 @@ leave `DISABLE_AUTO_COMPACT` out of Claude Code's environment, and when it was s
 - **WHEN** a run told `compact` starts in an environment with `DISABLE_AUTO_COMPACT` `1`
 - **THEN** Claude Code's environment has no `DISABLE_AUTO_COMPACT`
 - **AND** the run sends a `log` event at level `warning`, after `init`, naming `DISABLE_AUTO_COMPACT` and saying the
-  actor's `onContextFull` overrides it
+  run's `onContextFull` overrides it
 
 #### Scenario: A run told compact with no such variable
 - **WHEN** a run told `compact` starts in an environment without `DISABLE_AUTO_COMPACT`

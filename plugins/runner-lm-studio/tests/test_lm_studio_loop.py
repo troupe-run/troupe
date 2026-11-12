@@ -83,6 +83,7 @@ def _run(tmp_path: Path, engine: StandIn, stop: list[bool]) -> tuple[Run, list[R
             "limits": {"eventMaxBytes": 65536},
             "effects": {"write": ["out/**"], "delete": [], "move": []},
             "scratch": str(scratch),
+            "onContextFull": "fail",
         }
     )
     sent: list[RunEvent] = []

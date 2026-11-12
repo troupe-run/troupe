@@ -504,6 +504,10 @@ class Run:
         }
         self.send(RetryEvent.from_data(self._fit(data, "message")))
 
+    def warn(self, message: str) -> None:
+        """Send a log warning, numbered after the events sent so far."""
+        self._log("warning", message)
+
     def _log(self, level: str, message: str) -> None:
         data = {
             "runId": self.numbering.run_id,

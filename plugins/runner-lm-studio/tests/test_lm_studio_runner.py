@@ -496,6 +496,35 @@ def test_a_prediction_stopped_short_ends_with_its_reason(
         assert stop in end["message"]
 
 
+# Requirement: A run told compact says it won't, and stops at the context length (compaction-opt-in)
+
+
+def test_a_run_told_compact_warns_after_init_that_it_wont_compact(workspace: Path) -> None:
+    with FakeLMStudio(run_script(predict_step("Done."))) as fake:
+        _, messages = _run(workspace, fake, on_context_full="compact")
+    sent = events(messages)
+    assert sent[0]["type"] == "init"
+    assert sent[1]["type"] == "log"
+    assert sent[1]["level"] == "warning"
+    assert "onContextFull is compact" in sent[1]["message"]
+    assert "context-length" in sent[1]["message"]
+    assert sent[-1]["status"] == "ok"
+    assert [e for e in sent if e["type"] == "context"] == []
+
+
+def test_a_run_told_fail_sends_no_compaction_warning(workspace: Path) -> None:
+    with FakeLMStudio(run_script(predict_step("Done."))) as fake:
+        _, messages = _run(workspace, fake)
+    assert not any("onContextFull" in e.get("message", "") for e in events(messages))
+
+
+def test_a_run_told_compact_whose_context_fills_ends_with_context_length(workspace: Path) -> None:
+    with FakeLMStudio(run_script(predict_step("Partial", stop="contextLengthReached"))) as fake:
+        _, messages = _run(workspace, fake, on_context_full="compact")
+    end = result(messages)
+    assert (end["status"], end["reason"]) == ("error", "context-length")
+
+
 # Requirement: The result carries the run's counts
 # Requirement: A cost is estimated only from run start's price
 

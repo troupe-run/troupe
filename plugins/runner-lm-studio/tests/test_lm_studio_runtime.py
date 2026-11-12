@@ -28,6 +28,7 @@ def _start(
         "limits": {"eventMaxBytes": 65536},
         "effects": {"write": [], "delete": [], "move": []},
         "scratch": "scratch",
+        "onContextFull": "fail",
     }
     if runtime:
         data["runtime"] = {
