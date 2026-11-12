@@ -103,16 +103,6 @@ def _notifications(messages: list[dict[str, Any]]) -> list[tuple[str, dict[str, 
     ]
 
 
-def _until_result(session: Session) -> list[dict[str, Any]]:
-    """Every message up to and including the result event."""
-    messages = []
-    while True:
-        message = session.message()
-        messages.append(message)
-        if message.get("method") == "run/event" and message["params"]["type"] == "result":
-            return messages
-
-
 def test_the_handshake_names_claude_code_its_version_and_no_capabilities(
     tmp_path: Path, workspace: Path, record: Path, sessions: list[Session]
 ) -> None:
@@ -281,7 +271,7 @@ def test_the_character_and_tool_rules_reach_claude_in_private_files_removed_afte
     )
     options = {"allowedTools": ["Bash(git status)", "Read"], "settingSources": ["project"]}
     session.start(options, character="You test carefully.")
-    _until_result(session)
+    session.until_result()
     session.request("shutdown", {})
     assert session.wait() == 0
     seen = wait_for_record(record, "files")
@@ -313,7 +303,7 @@ def test_each_fixture_through_the_runner_gives_its_transcript_and_events_in_orde
     session.start()
     has_result = any(line.get("event", {}).get("type") == "result" for line in recording(name))
     if has_result:
-        messages = _until_result(session)
+        messages = session.until_result()
         session.request("shutdown", {})
     else:
         messages = session.rest()
@@ -359,7 +349,7 @@ def test_an_ok_result_then_exit_1_makes_the_runner_exit_non_zero(
     env = _env(tmp_path, record, fixture=_fixture("success-with-tools"), exit="1")
     session = _session(sessions, workspace, env)
     session.start()
-    _until_result(session)
+    session.until_result()
     assert session.request("shutdown", {})["result"] == {}
     assert session.wait() == 1
     assert b"Claude Code exited with code 1" in session.stderr()
@@ -371,7 +361,7 @@ def test_claudes_standard_error_reaches_the_runners(
     env = _env(tmp_path, record, fixture=_fixture("success-with-tools"), stderr="node warning: x\n")
     session = _session(sessions, workspace, env)
     session.start()
-    _until_result(session)
+    session.until_result()
     session.request("shutdown", {})
     assert b"node warning: x\n" in session.stderr()
 
@@ -504,7 +494,7 @@ def test_write_effects_reach_claude_as_edit_rules_and_init_says_translated(
         sessions, workspace, _env(tmp_path, record, fixture=_fixture("success-with-tools"))
     )
     session.start(effects={"write": ["out/**"]})
-    messages = _until_result(session)
+    messages = session.until_result()
     events = [m["params"] for m in messages if m.get("method") == "run/event"]
     assert events[0]["type"] == "init"
     assert events[0]["effects"] == "translated"
@@ -522,7 +512,7 @@ def test_an_allowed_shell_rule_and_loaded_settings_are_warned_about_before_the_r
         sessions, workspace, _env(tmp_path, record, fixture=_fixture("success-with-tools"))
     )
     session.start({"allowedTools": ["Bash(uv run pytest *)"], "settingSources": ["project"]})
-    messages = _until_result(session)
+    messages = session.until_result()
     events = [m["params"] for m in messages if m.get("method") == "run/event"]
     warnings = [e["message"] for e in events if e["type"] == "log" and e["level"] == "warning"]
     assert any("'Bash(uv run pytest *)'" in w and "audit" in w for w in warnings)
@@ -540,7 +530,7 @@ def test_declaring_delete_starts_claude_with_troupes_mcp_server(
         sessions, workspace, _env(tmp_path, record, fixture=_fixture("success-with-tools"))
     )
     session.start(effects={"delete": ["drafts/**"]})
-    _until_result(session)
+    session.until_result()
     seen = wait_for_record(record, "argv")
     argv = seen["argv"]
     config = Path(argv[argv.index("--mcp-config") + 1])

@@ -146,6 +146,9 @@ class Session:
         self.raw: list[bytes] = []
         """Every line the runner wrote, as it wrote it."""
         self._lines: queue.Queue[bytes] = queue.Queue()
+        self._passed: list[dict[str, Any]] = []
+        """Messages request() read past while waiting for its answer, which until_result() takes
+        first (request-keeps-notifications design D1)."""
         self._next_id = 1
         self.run_id = str(uuid.uuid4())
         self._stderr = b""
@@ -187,10 +190,12 @@ class Session:
         return messages
 
     def until_result(self, timeout: float = TIMEOUT) -> list[dict[str, Any]]:
-        """Every message up to and including the run's result event."""
+        """Every message up to and including the run's result event: first those a request()
+        read past, then the stream. A result that came before a request's answer is found, not
+        waited for (#392). Raises queue.Empty if no result comes within ``timeout``."""
         messages = []
         while True:
-            message = self.message(timeout)
+            message = self._passed.pop(0) if self._passed else self.message(timeout)
             messages.append(message)
             params = message.get("params", {})
             if message.get("method") == "run/event" and params.get("type") == "result":
@@ -207,12 +212,15 @@ class Session:
         return id_
 
     def request(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
-        """Send a request and return its response, keeping notifications that arrive first."""
+        """Send a request and return its response. Messages that arrive first are kept in
+        ``received``, and set aside for until_result(); message() and rest() read only what
+        follows the response."""
         id_ = self.send(method, params)
         while True:
             message = self.message()
             if message.get("id") == id_:
                 return message
+            self._passed.append(message)
 
     def initialize(self, versions: list[int] | None = None) -> dict[str, Any]:
         return self.request(

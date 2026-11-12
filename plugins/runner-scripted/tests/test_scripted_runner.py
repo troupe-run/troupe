@@ -5,13 +5,14 @@ import io
 import json
 import os
 import threading
+import time
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from scripted_harness import Session, validate
+from scripted_harness import TIMEOUT, Session, validate
 
 INIT = {
     "type": "init",
@@ -20,6 +21,7 @@ INIT = {
     "tools": ["Write"],
 }
 OK = {"type": "result", "status": "ok", "message": "done"}
+POLL_SECONDS = 0.01
 
 
 @pytest.fixture
@@ -65,7 +67,11 @@ def test_a_request_before_initialize_is_refused(session: Session) -> None:
     assert answer["error"]["data"]["code"] == "runner.not-initialized"
 
 
-def test_a_second_run_start_is_refused_and_the_first_run_carries_on(session: Session) -> None:
+def test_a_second_run_start_is_refused_and_the_run_still_ends_with_its_result(
+    session: Session,
+) -> None:
+    # The wait makes it likely the refusal lands mid-run, not certain: the scripted runner has no
+    # step that waits for the test, so the name claims only what every run checks (#392; D3).
     session.play({"steps": [{"event": INIT}, {"wait": {"ms": 300}}, {"event": OK}]})
     second = session.request(
         "run/start",
@@ -80,9 +86,10 @@ def test_a_second_run_start_is_refused_and_the_first_run_carries_on(session: Ses
         },
     )
     assert second["error"]["data"]["code"] == "runner.already-started"
-    session.notifications(1)
+    session.until_result()
     events = _events(session.received)
     assert [e["type"] for e in events] == ["init", "result"]
+    assert events[-1]["status"] == "ok"
     session.validate_all()
 
 
@@ -725,3 +732,28 @@ def test_an_unknown_command_line_argument_stops_the_runner_with_a_usage_message(
         )
     finally:
         session.kill()
+
+
+# The harness itself (request-keeps-notifications design D1, #392)
+
+
+def _written(session: Session, marker: bytes, within: float) -> bool:
+    """Whether the runner has written a line holding ``marker``, waiting up to ``within``
+    seconds, without taking anything off the stream the test then reads."""
+    deadline = time.monotonic() + within
+    while time.monotonic() < deadline:
+        if any(marker in line for line in list(session.raw_lines)):
+            return True
+        time.sleep(POLL_SECONDS)
+    return False
+
+
+def test_a_result_written_before_a_requests_answer_is_still_read_by_until_result(
+    session: Session,
+) -> None:
+    session.play({"steps": [{"event": INIT}, {"event": OK}]})
+    assert _written(session, b'"type":"result"', TIMEOUT), "the run never wrote its result"
+    second = session.request("run/start", session.sent[-1]["params"])
+    messages = session.until_result()
+    assert second["error"]["data"]["code"] == "runner.already-started"
+    assert messages[-1]["params"]["type"] == "result"

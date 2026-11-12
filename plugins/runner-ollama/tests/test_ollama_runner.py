@@ -28,7 +28,7 @@ from fake_ollama import (
     serving,
     tool_call,
 )
-from ollama_harness import Session, runtime
+from ollama_harness import TIMEOUT, Session, runtime
 from troupe_runner_ollama.defaults import (
     DEFAULT_CONTEXT_LENGTH,
     PREFLIGHT_TIMEOUT_SECONDS,
@@ -46,6 +46,9 @@ CLOSE_SEEN_WITHIN = 5.0
 """Seconds from the runner's exit (its socket closed with it) to the fake seeing that close. The
 fake looks every POLL_SECONDS; this is room for a loaded machine. When it ran out on CI (#301,
 #353), there had been no connection to close: the test cancelled before the request was made."""
+
+LINE_POLL_SECONDS = 0.01
+"""How often a test looks at what the runner has written so far."""
 
 
 @pytest.fixture
@@ -175,6 +178,30 @@ def test_a_second_run_start_is_refused(session: Session) -> None:
         params = session.sent[-1]["params"]
         data = _error(session.request("run/start", params))
         assert data["code"] == "runner.already-started"
+
+
+def _written(session: Session, marker: bytes, within: float) -> bool:
+    """Whether the runner has written a line holding ``marker``, waiting up to ``within``
+    seconds, without taking anything off the stream the test then reads."""
+    deadline = time.monotonic() + within
+    while time.monotonic() < deadline:
+        if any(marker in line for line in list(session.raw)):
+            return True
+        time.sleep(LINE_POLL_SECONDS)
+    return False
+
+
+def test_a_result_written_before_a_requests_answer_is_still_read_by_until_result(
+    session: Session,
+) -> None:
+    # The harness, not the runner (request-keeps-notifications design D1, #392).
+    with serving([final("hi")]) as fake:
+        session.start(**_run(fake))
+        assert _written(session, b'"type":"result"', TIMEOUT), "the run never wrote its result"
+        data = _error(session.request("run/start", session.sent[-1]["params"]))
+        messages = session.until_result()
+    assert data["code"] == "runner.already-started"
+    assert messages[-1]["params"]["type"] == "result"
 
 
 # Requirement: The runner's options are closed

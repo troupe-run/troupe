@@ -3,8 +3,8 @@ D13).
 
 It listens on 127.0.0.1, answers each request with the next reply from its script, and records
 every request it got, headers included, so a test can check what the runner sent. A reply is a
-status, headers and a body, or a stream of server-sent event lines that can pause, stop short or be
-held open until the client goes away.
+status, headers and a body, or a stream of server-sent event lines that can pause, stop short, wait
+at a gate the test opens, or be held open until the client goes away.
 
     with FakeEndpoint([text_reply("Done."), Reply(500)]) as fake:
         fake.endpoint      # http://127.0.0.1:<port>/v1
@@ -41,7 +41,19 @@ class Hold:
     """Keep the connection open, sending nothing, until the client closes it or the fake stops."""
 
 
-StreamItem = str | Pause | Cut | Hold
+@dataclass(frozen=True)
+class Gate:
+    """Send nothing more until ``opened`` is set, then the rest of the stream; or end the
+    connection if the fake stops first. A test opens it once it has done what must happen while
+    the request is in flight (request-keeps-notifications design D2)."""
+
+    opened: threading.Event
+
+
+GATE_POLL_SECONDS = 0.01
+"""How often a closed gate looks whether the fake is stopping."""
+
+StreamItem = str | Pause | Cut | Hold | Gate
 
 
 @dataclass(frozen=True)
@@ -170,6 +182,11 @@ class _Handler(BaseHTTPRequestHandler):
                 self.wfile.flush()
                 self.connection.shutdown(socket.SHUT_RDWR)
                 return
+            elif isinstance(item, Gate):
+                self.wfile.flush()
+                while not item.opened.wait(GATE_POLL_SECONDS):
+                    if self.state.stopping.is_set():
+                        return
             elif isinstance(item, Hold):
                 self.wfile.flush()
                 while not self.state.stopping.is_set():
@@ -363,12 +380,14 @@ def final(
     return event(f"response.{status}", response=response(output, status, used, **fields))
 
 
-def text_reply(text: str, prompt: int = 10, completion: int = 5) -> Reply:
-    """A streamed reply that says ``text`` and completes, with usage."""
+def text_reply(text: str, prompt: int = 10, completion: int = 5, gate: Gate | None = None) -> Reply:
+    """A streamed reply that says ``text`` and completes, with usage. With ``gate``, the reply
+    waits there after its first event until the test opens it."""
     return Reply(
         lines=sse(
             [
                 _created(),
+                *([] if gate is None else [gate]),
                 event("response.output_text.delta", delta=text, output_index=0),
                 final([message(text)], used=usage(prompt, completion)),
             ]

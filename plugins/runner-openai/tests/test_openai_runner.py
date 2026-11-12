@@ -4,6 +4,8 @@ test says why not (design D7)."""
 
 import base64
 import json
+import queue
+import threading
 import time
 from collections.abc import Iterator
 from importlib.metadata import version
@@ -14,6 +16,7 @@ import pytest
 
 from fake_endpoint import (
     FakeEndpoint,
+    Gate,
     Hold,
     Reply,
     error_reply,
@@ -26,6 +29,7 @@ from fake_endpoint import (
 from openai_harness import (
     CANARY,
     TEST_LIMITS,
+    TIMEOUT,
     LimitsNotSetError,
     Session,
     check_limits,
@@ -185,11 +189,19 @@ def test_a_key_holding_a_character_outside_ascii_is_refused_before_any_request(
 def test_a_second_run_start_is_refused_and_the_first_run_goes_on(
     sessions: list[Session], workspace: Path
 ) -> None:
-    with FakeEndpoint([text_reply("Done.")]) as fake:
+    # The first run's reply waits at a gate until the second run/start has been refused, so the
+    # refusal lands while the first run's request is in flight on every run (#392; design D2).
+    opened = threading.Event()
+    with FakeEndpoint([text_reply("Done.", gate=Gate(opened))]) as fake:
         session = _session(sessions, workspace)
         session.start(fake.endpoint)
+        assert fake.wait_for_requests(1, REQUEST_WITHIN), "the runner never sent its request"
         second = session.request("run/start", session.sent[-1]["params"])
-        result = _events(session.until_result())[-1]
+        opened.set()
+        try:
+            result = _events(session.until_result())[-1]
+        except queue.Empty:
+            pytest.fail(f"the first run sent no result within {TIMEOUT:g} s")
     assert second["error"]["data"]["code"] == "runner.already-started"
     assert result["status"] == "ok"
 
