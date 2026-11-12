@@ -175,7 +175,7 @@ its start to make room (`truncate` and `shift` both `false`). When Ollama refuse
 
 #### Scenario: A cut answer
 - **WHEN** an answer ends with `done_reason` `length`
-- **THEN** the runner sends a `log` warning saying the answer hit its output limit, and the run goes on
+- **THEN** the run ends with an `error` result, as a cut answer does
 
 ### Requirement: Each tool call is carried out by the SDK and its result sent back
 Each tool call in an answer SHALL be carried out with the SDK's tools for the run's declaration, in the order the
@@ -199,12 +199,16 @@ A call Ollama gives no id SHALL get one the runner makes, unique in the run.
 
 ### Requirement: The loop ends when the model stops calling tools
 The runner SHALL keep making requests while answers hold tool calls. An answer with no tool call SHALL end the run
-with an `ok` result whose message is the answer's text. Reaching `maxTurns` requests, by default a named setting of
-50, SHALL end it with an `error` result saying the limit was reached.
+with an `ok` result whose message is the answer's text, unless Ollama cut it. Reaching `maxTurns` requests, by default
+a named setting of 50, SHALL end it with an `error` result saying the limit was reached.
 
 #### Scenario: A final answer
 - **WHEN** the model's answer holds text and no tool call
 - **THEN** the runner sends an `ok` `result` whose message is that text, and makes no further request
+
+#### Scenario: A cut final answer
+- **WHEN** the model's answer holds text and no tool call, and ends with `done_reason` `length`
+- **THEN** the runner sends an `error` `result`, not an `ok` one
 
 #### Scenario: The turn limit
 - **WHEN** `maxTurns` is 2 and both answers hold tool calls
@@ -432,11 +436,54 @@ kind, as the contract says.
 - **WHEN** `initialize` offers no capabilities
 - **THEN** the runner answers with none, and sends the same transcript records with no kind
 
-### Requirement: Each failure reports its reason
+### Requirement: An answer's other model is a served_model event
+When an answer's `model` isn't empty and isn't the model the runner asked for, the runner SHALL send `served_model`
+naming it, the first time that model answers in the run, before the answer's `turn` and tool calls, or the `result`
+it ends the run with.
+
+#### Scenario: Ollama answers under another name
+- **WHEN** the runner asked for `qwen3:0.6b` and an answer's lines say `model` `qwen3:0.6b-q4`
+- **THEN** the runner sends `served_model` with `model` `qwen3:0.6b-q4` before that answer's `turn`
+
+#### Scenario: Ollama echoes the name asked for
+- **WHEN** every answer says the `model` the runner asked for
+- **THEN** the run has no `served_model`
+
+### Requirement: A cut answer ends the run
+An answer that ends with `done_reason` `length` SHALL end the run with an `error` result whose message says Ollama cut
+the answer at its output limit and names the run's context window and `contextLength`. The runner SHALL make no
+further request, carry out none of that answer's tool calls, and not retry it. The answer's text SHALL still be a
+`turn`, and its lines transcript records.
+
+#### Scenario: A cut text answer
+- **WHEN** an answer streams the text `The first part` with no tool call, and ends with `done_reason` `length`
+- **THEN** the runner sends a `turn` holding `The first part`, then an `error` `result` naming the window and
+  `contextLength`, and sends no `log` warning
+
+#### Scenario: A cut tool call
+- **WHEN** an answer holds a `Write` call and ends with `done_reason` `length`
+- **THEN** the runner sends no `tool_call` or `tool_result`, writes no file, makes no further request, and sends an
+  `error` `result`
+
+#### Scenario: Not retried
+- **WHEN** an answer ends with `done_reason` `length`
+- **THEN** the runner sends no `retry` event, and the run made exactly the requests up to that answer
+
+#### Scenario: The tokens Ollama produced
+- **WHEN** a cut answer's last line has `eval_count` 81
+- **THEN** the `result`'s message says the answer was cut after 81 tokens
+
+#### Scenario: A cut answer captured from Ollama
+- **WHEN** the `cut-answer` or `cut-tool-call` fixture is replayed
+- **THEN** the runner sends exactly the fixture's events, ending with an `error` `result` whose reason is
+  `output-limit`
+
+### Requirement: Each failed run reports its reason
 Every `error` result the Ollama runner sends SHALL carry a reason from one table in the runner: Ollama refusing a
-request over the context window `context-length`, the turn limit `turn-limit`, 401 or 403 `authentication`, 404
-`configuration`, retries run out the last retry's reason, an `error` record in a stream `engine`, the runner's own
-unexpected failure `runner`, and any other refused request `other`.
+request over the context window `context-length`, an answer Ollama cut (`done_reason` `length`) `output-limit`, the
+turn limit `turn-limit`, 401 or 403 `authentication`, 404 `configuration`, retries run out the last retry's reason, an
+`error` record in a stream `engine`, the runner's own unexpected failure `runner`, and any other refused request
+`other`.
 
 #### Scenario: A conversation that outgrows the window
 - **WHEN** Ollama answers a request with status 400 and a message saying the request exceeds the available context
@@ -475,19 +522,6 @@ unexpected failure `runner`, and any other refused request `other`.
 - **WHEN** the runner raises an exception it didn't expect during a run
 - **THEN** the `result` has `reason` `runner`
 
-#### Scenario: A cut answer is still not a failure
-- **WHEN** an answer ends with `done_reason` `length` and the next answer holds no tool call
-- **THEN** the runner sends a `log` warning, and the run ends with an `ok` result carrying no reason
-
-### Requirement: An answer's other model is a served_model event
-When an answer's `model` isn't empty and isn't the model the runner asked for, the runner SHALL send `served_model`
-naming it, the first time that model answers in the run, before the answer's `turn` and tool calls, or the `result`
-it ends the run with.
-
-#### Scenario: Ollama answers under another name
-- **WHEN** the runner asked for `qwen3:0.6b` and an answer's lines say `model` `qwen3:0.6b-q4`
-- **THEN** the runner sends `served_model` with `model` `qwen3:0.6b-q4` before that answer's `turn`
-
-#### Scenario: Ollama echoes the name asked for
-- **WHEN** every answer says the `model` the runner asked for
-- **THEN** the run has no `served_model`
+#### Scenario: A cut answer
+- **WHEN** an answer ends with `done_reason` `length` and holds no tool call
+- **THEN** the run ends with an `error` result whose `reason` is `output-limit`, and sends no `log` warning
