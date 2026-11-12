@@ -45,7 +45,7 @@ Every commit is signed and signed off (`git commit -S -s`), and `uv run scripts/
 
 ## 4. User docs
 
-- [ ] 4.1 In `docs/opening-night/first-performance.md` (the list of what a Claude Code run does) and
+- [x] 4.1 In `docs/opening-night/first-performance.md` (the list of what a Claude Code run does) and
   `docs/stagecraft/bring-your-own-agent.md` (the Claude Code runner's line), say that Claude Code doesn't compact a
   run's conversation: a run that fills its context fails with a conversation too long for the model, and a long task
   is split, until actors can opt in (#310). Verify the user-docs checks (front matter, links, glossary) pass, and

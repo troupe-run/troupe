@@ -245,6 +245,11 @@ succeed. `effects` is what a run may change: here, only `REVIEW.md`.
   The run reports each tool it was denied, rather than doing nothing silently, and troupe checks afterwards that
   nothing changed outside what's declared ([Effects](../the-company/performances-and-runs.md#effects)).
 - **Every run has a budget:** `maxBudgetUsd`, or USD 5 when it isn't set. Claude Code stops when it's spent.
+- **Claude Code doesn't compact the conversation.** Left to itself, Claude Code replaces earlier turns with a
+  summary when the conversation fills the model's context, and carries on from it. troupe turns that off, so a run
+  never works from a summary without saying so. A run whose conversation grows too long for the model fails instead,
+  and `troupe logs` shows `error (context-length)`. Split a long task into smaller directions. Letting an actor opt in
+  to compaction is coming ([#310](https://github.com/troupe-run/troupe/issues/310)).
 - **Claude Code uses your existing login,** or `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` when one is set. It
   doesn't load your Claude Code settings, hooks or MCP servers, or the theatre's, or its `CLAUDE.md`: a run doesn't
   depend on whose machine it's on. The option `settingSources` loads them again.

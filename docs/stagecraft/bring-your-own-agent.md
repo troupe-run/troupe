@@ -15,8 +15,9 @@ troupe ships four runners:
 
 - **The scripted runner** plays a script instead of running an agent, so you can try troupe offline.
 - **The Claude Code runner** runs [Claude Code](https://code.claude.com) with your existing login. It leaves out your
-  Claude Code settings, hooks and MCP servers by default, so a run doesn't depend on whose machine it's on. Its
-  options choose the model, the budget and what the agent may do
+  Claude Code settings, hooks and MCP servers by default, so a run doesn't depend on whose machine it's on. It turns
+  off Claude Code's automatic compaction, so a run whose conversation grows too long for the model fails rather than
+  carrying on from a summary. Its options choose the model, the budget and what the agent may do
   ([Define your own actor](../opening-night/first-performance.md#define-your-own-actor)).
 
 - **The Ollama runner** runs a model on your own computer through [Ollama](https://ollama.com)'s own API, with
