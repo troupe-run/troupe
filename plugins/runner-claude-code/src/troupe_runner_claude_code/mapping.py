@@ -36,6 +36,15 @@ SUBTYPE_REASONS = {
 """The failure reason for each result subtype other than success; any other is other
 (failure-reason design D6)."""
 
+TERMINAL_REASONS = {
+    "prompt_too_long": "context-length",
+    "blocking_limit": "context-length",
+}
+"""The failure reason for each terminal_reason that names why a failed run ended, checked before
+the error code, the retry and the status: with compaction off, the API refusing a request as too
+long is prompt_too_long, and Claude Code stopping before one that wouldn't fit is blocking_limit
+(compaction-off design D2)."""
+
 API_ERROR_REASONS = {
     "authentication_failed": "authentication",
     "billing_error": "quota",
@@ -524,6 +533,9 @@ class Mapper:
         (failure-reason design D6)."""
         if subtype != "success":
             return SUBTYPE_REASONS.get(subtype, "other")
+        terminal = record.get("terminal_reason")
+        if isinstance(terminal, str) and terminal in TERMINAL_REASONS:
+            return TERMINAL_REASONS[terminal]
         if self._api_error in API_ERROR_REASONS:
             return API_ERROR_REASONS[self._api_error]
         if self._retry_reason is not None:
