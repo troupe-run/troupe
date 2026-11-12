@@ -37,3 +37,18 @@ ran out, or doesn't retry that failure.
 - **WHEN** a `Run.Ended` payload's outcome holds a `result` with status `error`, `reason` `turn-limit` and
   `notRetried` `side-effect`
 - **THEN** it does not validate against the topic's payload schema
+
+## MODIFIED Requirements
+
+### Requirement: Retries that run out end with the last retry's reason
+When a runner ends a run because its retries ran out, the `result`'s reason SHALL be the reason of the last `retry`
+event it sent, which is one of the five reasons the two lists share: `authentication`, `rate-limit`, `network`,
+`server` or `other`.
+
+#### Scenario: Server errors until the attempts run out
+- **WHEN** a runner retries a request answered 503 until its attempts run out
+- **THEN** its last `retry` has reason `server`, and its `result` has status `error` and `reason` `server`
+
+#### Scenario: Retries that changed reason
+- **WHEN** a runner's first retry is for a dropped connection and its last for a 429
+- **THEN** its `result` has `reason` `rate-limit`
