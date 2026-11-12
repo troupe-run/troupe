@@ -47,6 +47,8 @@ def test_there_are_fixtures_for_each_failure_shape() -> None:
         "rate-limit-retries",
         "network-retries",
         "success-with-tools",
+        "context-limit-refused",
+        "context-limit-blocked",
     } <= set(NAMES)
 
 
