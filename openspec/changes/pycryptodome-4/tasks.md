@@ -4,7 +4,7 @@
 
 - [x] 1.1 In the root `pyproject.toml`'s `dev` group, change `"pycryptodome>=3.23"` to `"pycryptodome>=4.2.0"`, keeping the comment above it (design D2). Run `uv lock --upgrade-package pycryptodome==4.2.0` (a bare upgrade picks 4.4.0, design D2), then `uv sync --locked`. Verify `uv run python -c "import Crypto; print(Crypto.__version__)"` prints `4.2.0`, and that `git diff -- pyproject.toml uv.lock` matches `gh pr diff 343 -R troupe-run/troupe`: the same specifier line, the same pycryptodome entry (4.2.0, its sdist and its 17 wheels), and the same dev-group specifier, with nothing else changed.
 - [x] 1.2 Run eventsourcing's suite against 4.2.0: `uv run pytest packages/troupe-store-text/tests/test_library_suite.py -k cipher -v`. Verify the cipher cases (`test_mapper_with_cipher`, `test_mapper_with_cipher_and_compressor`, `test_mapper_with_wrong_cipher_key`) are collected and pass, and are not skipped. Then run the whole file and verify it passes (design D1).
-- [ ] 1.3 Commit as `chore(deps-dev): update pycryptodome to 4.2.0`, signed and signed off (`git commit -S -s`), with `uv run scripts/check.py` passing. Write the check's full output to a scratch file and verify it ends in a pass, with mypy and the troupe-store-text suite in it.
+- [x] 1.3 Commit as `chore(deps-dev): update pycryptodome to 4.2.0`, signed and signed off (`git commit -S -s`), with `uv run scripts/check.py` passing. Write the check's full output to a scratch file and verify it ends in a pass, with mypy and the troupe-store-text suite in it.
 
 ## 2. Pull request
 
