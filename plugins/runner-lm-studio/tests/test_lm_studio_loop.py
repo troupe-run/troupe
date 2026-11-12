@@ -138,3 +138,47 @@ def test_the_run_offers_the_library_the_sdks_seven_tools_in_order(tmp_path: Path
     run.make_definitions = capture
     run.run(None, "Write it.")
     assert [spec.name for spec in seen[0]] == list(Tools.names())
+
+
+class CallsAfterPrediction(StandIn):
+    """An engine in the library's order: each round's prediction is reported done before its
+    Read call is carried out (the call waits in the library's pool), then the round ends. It
+    asks for rounds until round_end says stop, or ten have gone."""
+
+    def __init__(self) -> None:
+        super().__init__(lambda: None)
+        self.stopped_after: int | None = None
+
+    def act(
+        self,
+        handle: Any,  # noqa: ANN401
+        history: dict[str, Any],
+        definitions: Sequence[Any],
+        *,
+        temperature: float | None,
+        fragment: Fragment,
+        round_done: Callable[[Round], None],
+        round_end: Callable[[int], bool],
+        message: Callable[[dict[str, Any]], None],
+        invalid: Callable[[str, str | None, object], str],
+    ) -> int:
+        carry_out = definitions[0]
+        for index in range(10):
+            round_done(Round(index, "toolCalls", 10, 1, "m", {}))
+            carry_out("Read", {"file_path": "notes.txt"})
+            if round_end(index):
+                self.stopped_after = index
+                return index + 1
+        return 10
+
+
+def test_a_round_whose_calls_run_after_its_prediction_is_reported_still_counts_toward_the_limit(
+    tmp_path: Path,
+) -> None:
+    engine = CallsAfterPrediction()
+    run, _ = _run(tmp_path, engine, [False])
+    (tmp_path / "ws" / "notes.txt").write_text("n", encoding="utf-8")
+    result = run.run(None, "Read it.")
+    assert engine.stopped_after == 2
+    assert result is not None
+    assert result.to_data()["reason"] == "turn-limit"
