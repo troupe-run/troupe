@@ -196,6 +196,17 @@ has merged.
   Done: marked ready once the review of 23e36938 was clean (all its conversations resolved, `claude review
   completed` passed); CI run 43019559445 passed every job on Linux, macOS and Windows, Python 3.12 to 3.15.
 
+## 14. Say when a retry wasn't safe (#378, design D10)
+
+Added after #390 merged the contract's `notRetried`; the owner moved #390's group 6 here (2026-11-12).
+
+- [x] 14.1 `_from_error` sets `notRetried: side-effect` for a connection lost or unreachable after a tool call has
+  run, and the "a retry could run a tool twice" sentence follows the same condition. Verify: the runner and loop tests
+  assert the field after a call, and its absence for a timeout after a call, for retries that ran out, the turn limit
+  and the budget.
+- [x] 14.2 The `lm-studio-runner` spec, the runner's README and `contributing/runners.md` say so. Verify:
+  `openspec validate --specs --strict` passes.
+
 ## Workflow follow-up
 
 - Archive on the branch (`/opsx:archive`) after the review is acted on, before the owner merges.

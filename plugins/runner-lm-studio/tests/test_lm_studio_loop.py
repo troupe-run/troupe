@@ -9,7 +9,14 @@ from troupe_plugin_sdk.declaration import Declaration
 from troupe_plugin_sdk.events import EventNumbering
 from troupe_plugin_sdk.runner import RunEvent, RunStartParams, TranscriptKind
 from troupe_plugin_sdk.tools import Tools
-from troupe_runner_lm_studio.engine import EngineError, Fragment, Model, Round, ToolSpec
+from troupe_runner_lm_studio.engine import (
+    EngineError,
+    Failure,
+    Fragment,
+    Model,
+    Round,
+    ToolSpec,
+)
 from troupe_runner_lm_studio.loop import EngineLike, Run
 from troupe_runner_lm_studio.options import Options
 from troupe_runner_lm_studio.runtime import Runtime
@@ -185,8 +192,10 @@ def test_a_round_whose_calls_run_after_its_prediction_is_reported_still_counts_t
 
 
 class LostAfterACall(StandIn):
-    """An engine whose connection drops after a round's Write call is carried out, before the
-    round ends."""
+    """An engine whose connection fails (lost by default) after a round's Write call is carried
+    out, before the round ends."""
+
+    failure: Failure = "lost"
 
     def act(
         self,
@@ -203,7 +212,7 @@ class LostAfterACall(StandIn):
     ) -> int:
         round_done(Round(0, "toolCalls", 10, 1, "m", {}))
         definitions[0]("Write", {"file_path": "out/a.txt", "content": "a"})
-        raise EngineError("lost", "The connection was lost.")
+        raise EngineError(self.failure, "The connection failed.")
 
 
 def test_a_connection_lost_after_a_call_before_its_round_ends_isnt_retried(
@@ -213,5 +222,20 @@ def test_a_connection_lost_after_a_call_before_its_round_ends_isnt_retried(
     result = run.run(None, "Write it.")
     assert not [e for e in sent if e.to_data()["type"] == "retry"]
     assert result is not None
-    assert (result.to_data()["status"], result.to_data()["reason"]) == ("error", "network")
+    end = result.to_data()
+    assert (end["status"], end["reason"], end["notRetried"]) == ("error", "network", "side-effect")
+    assert "run a tool twice" in end["message"]
     assert (tmp_path / "ws" / "out" / "a.txt").read_text(encoding="utf-8") == "a"
+
+
+def test_a_timeout_after_a_call_says_nothing_of_a_retry(tmp_path: Path) -> None:
+    engine = LostAfterACall(lambda: None)
+    engine.failure = "timeout"
+    run, sent = _run(tmp_path, engine, [False])
+    result = run.run(None, "Write it.")
+    assert not [e for e in sent if e.to_data()["type"] == "retry"]
+    assert result is not None
+    end = result.to_data()
+    assert (end["status"], end["reason"]) == ("error", "network")
+    assert "notRetried" not in end
+    assert "run a tool twice" not in end["message"]

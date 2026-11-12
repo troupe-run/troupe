@@ -331,7 +331,8 @@ what failed and the library's message, cut to fit the event limit.
 ### Requirement: A connection is retried only before any tool call has run
 A connection failure or a lost connection SHALL be retried, with a `retry` event each time, within a named number of
 attempts, only while no tool call has run, and the library SHALL retry nothing itself. After a call has run, it SHALL
-end the run with an `error` result saying a retry could run a tool twice.
+end the run with a `network` result whose `notRetried` is `side-effect`, saying a retry could run a tool twice. A
+message timeout, the turn limit and the token budget SHALL carry neither.
 
 #### Scenario: A lost connection before any tool call
 - **WHEN** the first round's connection drops, and the second attempt succeeds
@@ -339,7 +340,16 @@ end the run with an `error` result saying a retry could run a tool twice.
 
 #### Scenario: A lost connection after a tool call
 - **WHEN** the connection drops after a `Write` call was carried out
-- **THEN** nothing is retried, and the run ends with an `error` result saying a retry could run a tool twice
+- **THEN** nothing is retried, and the run ends with an `error` result, reason `network`, with `notRetried`
+  `side-effect`, saying a retry could run a tool twice
+
+#### Scenario: A timeout after a tool call
+- **WHEN** a server message doesn't arrive within the message timeout after a `Write` call was carried out
+- **THEN** the run ends with an `error` result, reason `network`, with no `notRetried` and nothing said of a retry
+
+#### Scenario: Retries that run out
+- **WHEN** the connection drops before any tool call, and every attempt to reconnect fails
+- **THEN** the run ends with a `network` result with no `notRetried`, since it was retried
 
 ### Requirement: Every limit the library applies is one of the runner's named settings
 Each timeout the library applies (the greeting check, waiting for a server message, closing the websocket) SHALL be

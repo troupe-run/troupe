@@ -29,6 +29,7 @@ from troupe_plugin_sdk.events import EventNumbering, ServedModels, fit
 from troupe_plugin_sdk.runner import (
     FailureReason,
     LogEvent,
+    NotRetried,
     ResultEvent,
     RetryEvent,
     RunEvent,
@@ -443,13 +444,18 @@ class Run:
 
     def _from_error(self, error: EngineError) -> ResultEvent:
         if error.failure in ("lost", "unreachable", "timeout"):
+            # A connection lost or never made after a call isn't retried, since act() starts
+            # again from the direction and could run that call twice; the result says so
+            # (design D10). A timeout isn't retried whatever the calls, so it carries neither.
+            side_effect = error.failure != "timeout" and self._state.tool_calls > 0
             why = (
-                " A retry could run a tool twice, so the run wasn't retried."
-                if self._state.tool_calls
-                else ""
+                " A retry could run a tool twice, so the run wasn't retried." if side_effect else ""
             )
             return self._result(
-                "error", f"The connection to LM Studio failed: {error.message}{why}", "network"
+                "error",
+                f"The connection to LM Studio failed: {error.message}{why}",
+                "network",
+                not_retried="side-effect" if side_effect else None,
             )
         if error.failure == "unreadable":
             return self._result(
@@ -515,7 +521,12 @@ class Run:
         return Usage(input_tokens=state.prompt_tokens, output_tokens=state.predicted_tokens)
 
     def _result(
-        self, status: str, message: str, reason: FailureReason | None = None
+        self,
+        status: str,
+        message: str,
+        reason: FailureReason | None = None,
+        *,
+        not_retried: NotRetried | None = None,
     ) -> ResultEvent:
         data: dict[str, Any] = {
             "runId": self.numbering.run_id,
@@ -527,6 +538,8 @@ class Run:
         }
         if reason is not None:
             data["reason"] = reason
+        if not_retried is not None:
+            data["notRetried"] = not_retried
         usage = self._usage()
         if usage is not None:
             data["usage"] = usage.to_data()

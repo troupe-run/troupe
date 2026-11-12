@@ -92,8 +92,8 @@ library applies is set from one of them, never left to the library's default.
    length (`context-length`), the predicted-token limit (`output-limit`), the model unloaded or the prediction failed
    (`engine`), or a stop reason the runner or its library doesn't know (`other`).
 6. **A connection that fails or drops** is retried, with a `retry` event, only while no tool call has run: after one
-   has, starting again could run a tool twice, so the run ends `network` saying so. A message that doesn't arrive in
-   time ends it `network` too.
+   has, starting again could run a tool twice, so the run ends `network` saying so, with `notRetried: side-effect`. A
+   message that doesn't arrive in time ends it `network` too, with neither, since a timeout is never retried.
 7. **Cancel, end of input or shutdown** close the library's client, which ends the prediction at once. No call the
    library asks for after that is carried out, and no result is sent.
 
@@ -141,7 +141,8 @@ Filed rather than worked around (lmstudio-runner design D13):
 
 - `lmstudio` can't send an LM Studio API token, so LM Studio with authentication on can't be used.
 - `lmstudio` drops a tool argument a tool doesn't define without error, where troupe's own tools refuse it.
-- The contract's `retry` event can't say that a run wasn't retried because a retry could run a tool twice.
+- The contract's `retry` event couldn't say that a run wasn't retried because a retry could run a tool twice: #378
+  added `notRetried` to the result, which the runner now sends.
 
 ## Fixtures and tests
 

@@ -1,6 +1,7 @@
 # Proposal: the LM Studio runner
 
-Issue: [troupe#291](https://github.com/troupe-run/troupe/issues/291), the rest of
+Issue: [troupe#291](https://github.com/troupe-run/troupe/issues/291), and the LM Studio part of
+[troupe#378](https://github.com/troupe-run/troupe/issues/378) (D10), the rest of
 [troupe#56](https://github.com/troupe-run/troupe/issues/56). Built on
 [troupe#278](https://github.com/troupe-run/troupe/issues/278) (runtimes), decided by
 [troupe#319](https://github.com/troupe-run/troupe/issues/319) (runners may depend on maintained client libraries), and
