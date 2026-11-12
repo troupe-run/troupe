@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from gitrepo import Repo, make_repo
+from gitrepo import Repo, from_template, make_repo
 from storetesting import git_service
 from troupe.core.artifacts import load_store
 from troupe.core.client import messages as m
@@ -44,9 +44,25 @@ def script(*steps: dict[str, Any], on_cancel: str = "honour") -> dict[str, Any]:
     return {"script": {"onCancel": on_cancel, "steps": list(steps)}}
 
 
-def theatre(root: Path) -> Repo:
-    repo = make_repo(root)
+def theatre(root: Path, name: str = "theatre") -> Repo:
+    repo = make_repo(root, name)
     (repo.path / ".troupe").mkdir()
+    return repo
+
+
+def committed(root: Path) -> Repo:
+    """A theatre whose HEAD has src/a.txt (one) and src/b.txt (bee), and ignores build/: a copy of
+    the one this test process built (theatre-template-and-guard-xdist design D1)."""
+    return from_template(root, "theatre", ("committed",), build_committed)
+
+
+def build_committed(root: Path, name: str) -> Repo:
+    """``committed()``'s theatre, built from scratch at ``root / name``."""
+    repo = theatre(root, name)
+    for file, text in (("src/a.txt", "one\n"), ("src/b.txt", "bee\n"), (".gitignore", "build/\n")):
+        (repo.path / file).parent.mkdir(parents=True, exist_ok=True)
+        (repo.path / file).write_bytes(text.encode("utf-8"))  # LF on every OS, as committed
+    repo.commit_all("base")
     return repo
 
 

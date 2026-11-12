@@ -18,12 +18,11 @@ from uuid import UUID, uuid4
 import pytest
 
 from client_schemas import check
-from runtesting import INIT, OK, Harness, request, script, theatre
+from runtesting import INIT, OK, Harness, committed, request, script, theatre
 from storetesting import files_service, git_service
 from test_perform import configured
 from test_run_aggregate import STAGE, outcome
 from test_run_queries import Child
-from test_run_workspaces import committed
 from troupe.core.client import messages as m
 from troupe.core.errors import TroupeError
 from troupe.core.identity import Identity

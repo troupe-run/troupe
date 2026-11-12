@@ -88,19 +88,25 @@ parent. Rejected: callers pass other roots.
 
 - **File times.** The copy uses `shutil.copy`, not `copy2`, so every copied file has a new modification time, as a
   fresh build's files do. A copy that kept the template's times would put the files outside the racy window that a
-  fresh build is inside.
+  fresh build is inside. Directories keep the template's times (`copytree` copies their stats), which nothing reads:
+  git and the adapter's cache stat files (HEAD, refs, the index, `reftable/tables.list`), not directories.
 - **The index's stat data.** A copied index records the template's files' times, inodes and ctimes, so git sees every
   entry as stat-dirty. The next `git status` would re-hash them, and could rewrite the index, during what the test
   thinks is a read. For a shape with an index (`committed()`, the scripts' fixture), the copy runs
-  `git update-index -q --refresh`, one git process, after which the index matches the copied files as it does after a
-  fresh `add` and `commit`. `make_repo`'s shape has no index, and needs no refresh.
+  `git update-index --refresh`, one git process, after which the index matches the copied files as it does after a
+  fresh `add` and `commit`. `make_repo`'s shape has no index, and needs no refresh. Without `-q`, a file whose content
+  no longer matches the index makes the refresh fail, so a template changed by mistake fails every copy, naming the
+  file.
 - **Object timestamps.** A templated commit carries the time the template was built, which can be minutes before the
   test. The commit's SHA is then the same in every copy within a worker. Two fresh builds within the same second
   already share it, so this is not a new kind of sameness, but a test that reads commit or reflog times against a clock
   it took itself would see the difference. The audit (D4) looks for exactly that.
 
-Each of these is checked by a test (tasks 2.x): a copied `committed()` theatre has `git diff-files --name-only`
-empty, as a fresh build does; two copies in one test are independent repositories; and HOME is empty and separate.
+The first two are checked by tests: for each shape (`make_repo` with files and with reftable refs, and `committed()`),
+a copy and a fresh build show git the same thing: the `.git` layout and modes, local config, HEAD, refs and their
+trees, the index (`ls-files -s`), status, and `diff-files`. Two copies in one test are independent repositories, HOME
+is empty and separate, and a changed template fails the next copy. Object and reflog times can't be the same as a
+build's by construction, and no test checks them: the audit (D4) is what covers them.
 
 ### D4. A test that needs a fresh build says so: `make_repo(..., fresh=True)`
 
@@ -178,8 +184,9 @@ Order:
 - **A test silently depends on a fresh build, and the audit misses it** → it fails, sometimes, depending on timing.
   Mitigation: D4's written list, the repeated full runs, and `fresh=True` as a one-word fix when one turns up later.
 - **Template contents go stale within a run** (a test writes into the template by mistake) → every later copy is
-  wrong. Mitigation: the template lives in a directory no test is given, and copies never link to it (a full copy,
-  not hard links, and git's alternates aren't used).
+  wrong. Mitigation: the template lives in a directory no test is given (the scripts' fixture for it is private,
+  `_repo_template`), copies never link to it (a full copy, not hard links, and git's alternates aren't used), and a
+  changed tracked file fails the next copy's index refresh.
 - **The saving is smaller than estimated** for `make_repo`'s plain `init` → D5 measures each shape and drops any that
   doesn't pay.
 - **#367 changes the git adapter at the same time** → this change touches no adapter code. If #367 merges first, this
