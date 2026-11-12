@@ -47,4 +47,5 @@
 
 - Draft PR closing #388; act on Claude's review; mark ready; archive on the branch; the owner merges.
 - After the merge: comment on #388 with the PR and the archived change; check the issue is closed and its card Done.
-- Raise with the owner whether to report the `symbolic-ref --short` buffer bug to the git project.
+- Raised with the owner whether to report the `symbolic-ref --short` buffer bug to the git project: not to (owner,
+  2026-11-12).

@@ -158,10 +158,14 @@ read within `GIT_RACY_WINDOW_SECONDS` of such a change is used only once, becaus
 timestamp tick can leave a file looking unchanged. Git treats its own index the same way. When every watched file's
 timestamp is a whole second, as on FAT or HFS+, the window is `GIT_COARSE_RACY_WINDOW_SECONDS` instead. Reading
 them again runs one command, `rev-parse HEAD --symbolic-full-name HEAD --abbrev-ref=loose HEAD`, once HEAD has a
-commit. `=loose` gives exactly `symbolic-ref --short`'s name: `heads/main` when a tag `main` exists, but `main` when
-only a remote ref `refs/remotes/main` does, which plain `--abbrev-ref` would shorten to `heads/main`. Before the first
-commit, the adapter reads with `symbolic-ref` and `rev-parse --verify`, as it always has: straight away when the files
-it already stats say HEAD names a loose ref that doesn't exist yet, and otherwise once that command has failed. The
+commit. `=loose` gives git's short name, the one lineage records: `heads/main` when a tag `main` exists, but `main`
+when only a remote ref `refs/remotes/main` does, which plain `--abbrev-ref` would shorten to `heads/main`. Before the
+first commit git won't shorten the branch's name, and `symbolic-ref --short` gets it wrong when a symbolic ref shares
+it (#388). So the adapter reads the full name with `symbolic-ref` and HEAD with `rev-parse --verify`, and shortens the
+name by git's own rule: one `for-each-ref` finds the refs under `refs/` that would make it ambiguous, and, only where a
+ref at the top of the git directory may share the name, one more `rev-parse` asks about those. It reads that way
+straight away when the files it already stats say HEAD names a loose ref that doesn't exist yet, and otherwise once
+the one command has failed. The
 branch's own ref is found from the `HEAD` file, as git finds it, and stat'd before the command, so a move landing
 during the read is always seen by the next one, whatever the clock says.
 

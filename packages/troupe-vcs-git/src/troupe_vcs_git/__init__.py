@@ -349,7 +349,7 @@ class GitAdapter:
         for rule, short in levels:
             if _ambiguous_under_refs(rule, short, listed):
                 continue
-            if short in asked and found[short]:
+            if found.get(short, False):
                 continue
             return short
         return full
@@ -391,16 +391,23 @@ class GitAdapter:
             answers = [
                 bool(groups[index]) if index < len(groups) else None for index in range(len(names))
             ]
+        # In walk order, up to the first name that isn't a ref: the walk stops there, so a later
+        # name's answer is never used. git gave none for it if that name resolved to nothing, and
+        # one it can't settle mustn't refuse a read that doesn't need it (#399's review).
         found: dict[str, bool] = {}
         for name, printed in zip(names, answers, strict=True):
+            if printed is None:
+                break  # after a name that resolved to nothing, which isn't a ref
             others = [
                 ref
                 for rule in _UNDER_REFS
                 if (ref := _REV_PARSE_RULES[rule].format(name)) in listed
             ]
-            if len(others) >= 2 or printed is None:
+            if len(others) >= 2:
                 self._undecided(full, name, others)
             found[name] = printed if not others else not printed
+            if not found[name]:
+                break
         return found
 
     def _root_answer_alone(self, name: str) -> bool:
@@ -574,8 +581,9 @@ def _any_symbolic(paths: tuple[Path, ...], stats: tuple[_Stat, ...]) -> bool:
 def _looks_unborn(watched: tuple[_Stat, ...], named: Path | None, named_stat: _Stat) -> bool:
     """Whether HEAD looks unborn, from files alone: a files-backend repository with no
     ``packed-refs``, whose HEAD names a loose ref that doesn't exist. Only which commands read the
-    answers depends on this, never the answers: an unborn HEAD is read in three commands rather
-    than a failed rev-parse and those three (git-call-latency design D5)."""
+    answers depends on this, never the answers: an unborn HEAD is read in three commands, or four
+    with root refs to ask about, rather than a failed rev-parse and those (git-call-latency design
+    D5; unborn-branch-short-name design D2)."""
     packed_refs, common_tables = watched[_WATCHED.index("packed-refs")], watched[-1]
     if packed_refs is not None or common_tables is not None:
         return False  # refs may be packed, or kept in reftable: only git can tell
