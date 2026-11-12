@@ -9,7 +9,7 @@ from troupe_plugin_sdk.declaration import Declaration
 from troupe_plugin_sdk.events import EventNumbering
 from troupe_plugin_sdk.runner import RunEvent, RunStartParams, TranscriptKind
 from troupe_plugin_sdk.tools import Tools
-from troupe_runner_lm_studio.engine import Fragment, Model, Round, ToolSpec
+from troupe_runner_lm_studio.engine import EngineError, Fragment, Model, Round, ToolSpec
 from troupe_runner_lm_studio.loop import EngineLike, Run
 from troupe_runner_lm_studio.options import Options
 from troupe_runner_lm_studio.runtime import Runtime
@@ -182,3 +182,36 @@ def test_a_round_whose_calls_run_after_its_prediction_is_reported_still_counts_t
     assert engine.stopped_after == 2
     assert result is not None
     assert result.to_data()["reason"] == "turn-limit"
+
+
+class LostAfterACall(StandIn):
+    """An engine whose connection drops after a round's Write call is carried out, before the
+    round ends."""
+
+    def act(
+        self,
+        handle: Any,  # noqa: ANN401
+        history: dict[str, Any],
+        definitions: Sequence[Any],
+        *,
+        temperature: float | None,
+        fragment: Fragment,
+        round_done: Callable[[Round], None],
+        round_end: Callable[[int], bool],
+        message: Callable[[dict[str, Any]], None],
+        invalid: Callable[[str, str | None, object], str],
+    ) -> int:
+        round_done(Round(0, "toolCalls", 10, 1, "m", {}))
+        definitions[0]("Write", {"file_path": "out/a.txt", "content": "a"})
+        raise EngineError("lost", "The connection was lost.")
+
+
+def test_a_connection_lost_after_a_call_before_its_round_ends_isnt_retried(
+    tmp_path: Path,
+) -> None:
+    run, sent = _run(tmp_path, LostAfterACall(lambda: None), [False])
+    result = run.run(None, "Write it.")
+    assert not [e for e in sent if e.to_data()["type"] == "retry"]
+    assert result is not None
+    assert (result.to_data()["status"], result.to_data()["reason"]) == ("error", "network")
+    assert (tmp_path / "ws" / "out" / "a.txt").read_text(encoding="utf-8") == "a"
