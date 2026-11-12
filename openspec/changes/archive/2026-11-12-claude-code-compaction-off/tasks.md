@@ -53,11 +53,12 @@ Every commit is signed and signed off (`git commit -S -s`), and `uv run scripts/
 
 ## 5. Optional: a real-API confirmation, by the owner
 
-- [ ] 5.1 Owner only, never in an agent session, not blocking the PR (design D4): run Claude Code as the runner
+- [x] 5.1 Owner only, never in an agent session, not blocking the PR (design D4): run Claude Code as the runner
   launches it with a real credential, `claude-haiku-5-5` and `--max-budget-usd 2`, with a direction that reads enough
   workspace files to pass the window, and check its result record has `terminal_reason` `prompt_too_long` or
   `blocking_limit`, no `system/status` `compacting`, and that the runner maps it to `context-length`. Record the
-  outcome on #308. If the owner skips it, leave this unticked and say so in the PR.
+  outcome on #308. If the owner skips it, leave this unticked and say so in the PR. Done by the owner on
+  2026-11-12: `prompt_too_long`, no compaction record, and the runner's `context-length`, recorded on #308.
 
 ## Workflow follow-up
 
