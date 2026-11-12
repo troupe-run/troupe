@@ -193,6 +193,8 @@ class Session:
         self.refused: set[int] = set()
         """Ids of requests the test sent invalid on purpose: the schema must refuse them too."""
         self.received: list[dict[str, Any]] = []
+        self.raw: list[bytes] = []
+        """Every line the runner wrote, as it wrote it, whether or not a test has read it yet."""
         self._lines: queue.Queue[bytes] = queue.Queue()
         self._passed: list[dict[str, Any]] = []
         """Messages request() read past while waiting for its answer, which until_result() takes
@@ -207,6 +209,7 @@ class Session:
     def _read(self) -> None:
         assert self.process.stdout is not None
         for line in iter(self.process.stdout.readline, b""):
+            self.raw.append(line)
             self._lines.put(line)
         self._lines.put(b"")
 
