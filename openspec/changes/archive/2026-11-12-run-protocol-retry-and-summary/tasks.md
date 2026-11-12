@@ -73,9 +73,15 @@ What it adopts, as agreed with that session:
 
 ## 7. Integration
 
-- [ ] 7.1 Run `uv run scripts/check.py`, writing its output to a scratch file. Verify: it passes locally, and CI passes
+- [x] 7.1 Run `uv run scripts/check.py`, writing its output to a scratch file. Verify: it passes locally, and CI passes
   on Linux, macOS and Windows once the PR is marked ready, cited on the last code change.
-- [ ] 7.2 `openspec validate run-protocol-retry-and-summary --strict`. Verify: it reports the change valid.
+  Done: passed locally at each code commit before the rebase (the guard's full check). On the rebased tree, three
+  local runs each failed different timing tests under a load average of 60 to 87, and every one passed alone; the
+  owner had CI decide (2026-11-12). CI run
+  [43195762192](https://github.com/troupe-run/troupe/actions/runs/43195762192) passed all twelve jobs on 18b99f3c,
+  whose tree holds the last code change, 7b52d438.
+- [x] 7.2 `openspec validate run-protocol-retry-and-summary --strict`. Verify: it reports the change valid.
+  Done: valid on 18b99f3c.
 
 ## Workflow follow-up
 
