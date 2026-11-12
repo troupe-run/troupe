@@ -13,8 +13,8 @@ from uuid import UUID
 import pytest
 
 from gitrepo import Repo
-from runtesting import ADA, ALLOW, INIT, OK, Harness, request, script, theatre
-from test_run_workspaces import Recording, committed, configured, write
+from runtesting import ADA, ALLOW, INIT, OK, Harness, committed, request, script, theatre
+from test_run_workspaces import Recording, configured, write
 from troupe.core.client import messages as m
 from troupe.core.errors import TroupeError
 from troupe.core.runs.changes import accept, diff, discard

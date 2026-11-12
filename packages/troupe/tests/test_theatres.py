@@ -6,13 +6,16 @@ import json
 import os
 import subprocess
 import sys
+from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 
-from gitrepo import COUNTS_VARIABLE, counts, make_repo
-from runtesting import theatre
-from test_run_workspaces import committed
+import gitrepo
+from gitrepo import COUNTS_VARIABLE, Repo, counts, from_template, make_repo
+from runtesting import build_committed, committed, theatre
 
 pytest_plugins = ["pytester"]
 
@@ -66,19 +69,91 @@ def test_each_repository_has_its_own_empty_home(tmp_path: Path) -> None:
         assert list(home.iterdir()) == []
 
 
+@pytest.mark.parametrize("refs", ["files", "reftable"])
 def test_a_repository_starts_on_the_branch_and_ref_format_it_was_asked_for(
-    tmp_path: Path,
+    tmp_path: Path, refs: str
 ) -> None:
-    repo = make_repo(tmp_path, branch="trunk")
+    repo = make_repo(tmp_path, branch="trunk", refs=refs)
 
     assert repo.git("symbolic-ref", "HEAD") == "refs/heads/trunk\n"
-    assert not (repo.path / ".git" / "reftable").exists()  # files refs, not reftable
+    assert (repo.path / ".git" / "reftable").is_dir() == (refs == "reftable")
+
+
+# A copy against a fresh build of the same shape (design D3)
+
+
+def _observed(repo: Repo) -> dict[str, Any]:
+    """What a test can see of a repository through git, and its .git directory's layout and modes,
+    less what differs between any two builds of it: the commit's time (so its SHA and its object's
+    name) and reftable's table names. Files' contents are seen only through git's own answers."""
+    git_dir = repo.path / ".git"
+    layout: Counter[str] = Counter()
+    for path in git_dir.rglob("*"):
+        parts = path.relative_to(git_dir).parts
+        if parts[0] == "objects" and len(parts) in (2, 3) and len(parts[1]) == 2:
+            name = "objects/<fan-out>" + ("/<loose object>" if len(parts) == 3 else "")
+        elif parts[0] == "reftable" and path.suffix == ".ref":
+            name = "reftable/<table>"
+        else:
+            name = "/".join(parts)
+        kind = "dir" if path.is_dir() else oct(path.stat().st_mode & 0o777)
+        layout[f"{name} {kind}"] += 1
+    return {
+        "layout": layout,
+        "worktree": sorted(
+            p.relative_to(repo.path).as_posix()
+            for p in repo.path.rglob("*")
+            if ".git" not in p.relative_to(repo.path).parts
+        ),
+        "config": sorted(repo.git("config", "--local", "--list").splitlines()),
+        "head": repo.git("symbolic-ref", "HEAD"),
+        "refs": repo.git("for-each-ref", "--format=%(refname) %(objecttype) %(tree)"),
+        "index": repo.git("ls-files", "-s"),
+        "status": repo.git("status", "--porcelain", "--ignored"),
+        "stat-dirty": repo.git("diff-files", "--name-only"),
+    }
+
+
+SHAPES: dict[str, tuple[Callable[[Path], Repo], Callable[[Path], Repo]]] = {
+    "make_repo-files": (
+        lambda root: make_repo(root, refs="files"),
+        lambda root: make_repo(root, refs="files", fresh=True),
+    ),
+    "make_repo-reftable": (
+        lambda root: make_repo(root, refs="reftable"),
+        lambda root: make_repo(root, refs="reftable", fresh=True),
+    ),
+    "committed": (committed, lambda root: build_committed(root, "theatre")),
+}
+
+
+@pytest.mark.parametrize("shape", SHAPES)
+def test_a_copy_shows_git_what_a_fresh_build_of_its_shape_shows(tmp_path: Path, shape: str) -> None:
+    copy_of, build = SHAPES[shape]
+    copy_of(tmp_path / "warm")  # the template exists now, so the copy below makes nothing else
+    before = counts()
+
+    copied = copy_of(tmp_path / "copied")
+    assert counts()["copies"] - before["copies"] == 1  # really a copy, not a second build
+    built = build(tmp_path / "built")
+
+    assert _observed(copied) == _observed(built)
+
+
+def test_a_template_changed_by_mistake_fails_every_copy_naming_the_file(tmp_path: Path) -> None:
+    key = ("changed-template",)
+    from_template(tmp_path, "first", key, build_committed)
+    # Only this test reaches the template, to show what a stray write into it would do.
+    (gitrepo._built[key] / "src" / "a.txt").write_text("changed by mistake\n", encoding="utf-8")
+
+    with pytest.raises(AssertionError, match=r"git update-index --refresh failed"):
+        from_template(tmp_path, "second", key, build_committed)
 
 
 # How the repositories are made (design D1, D2, D4)
 
 
-def test_repositories_of_one_shape_are_copies_of_one_template(tmp_path: Path) -> None:
+def test_repositories_of_one_shape_are_counted_as_copies_of_one_template(tmp_path: Path) -> None:
     before = counts()
 
     make_repo(tmp_path, "first", branch="copied-shape")
@@ -150,7 +225,7 @@ def test_without_the_counts_variable_no_counts_are_written(counted: pytest.Pytes
     assert not list(counted.path.rglob("theatres-*.json"))
 
 
-def test_with_the_counts_variable_each_process_writes_its_counts(
+def test_with_the_counts_variable_the_process_writes_its_counts(
     counted: pytest.Pytester,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path_factory: pytest.TempPathFactory,
@@ -181,3 +256,36 @@ def test_a_counts_variable_that_isnt_a_directory_is_refused(
     result.stderr.fnmatch_lines(
         [f"*{COUNTS_VARIABLE} is {value!r}, which isn't an existing directory.*unset it.*"]
     )
+
+
+COUNTED_ACROSS_WORKERS = """
+from gitrepo import make_repo
+
+
+def test_one(tmp_path):
+    make_repo(tmp_path)
+
+
+def test_two(tmp_path):
+    make_repo(tmp_path)
+"""
+
+
+def test_across_workers_each_worker_that_made_a_repository_writes_its_own_counts(
+    counted: pytest.Pytester,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path_factory: pytest.TempPathFactory,
+) -> None:
+    directory = tmp_path_factory.mktemp("counts")
+    monkeypatch.setenv(COUNTS_VARIABLE, str(directory))
+    counted.makepyfile(test_counted=COUNTED_ACROSS_WORKERS)
+
+    result = counted.runpytest_subprocess("-p", "gitrepo", "-p", "no:cacheprovider", "-n", "2")
+
+    result.assert_outcomes(passed=2)
+    written = [json.loads(f.read_text(encoding="utf-8")) for f in directory.glob("theatres-*.json")]
+    # One file per worker that ran a test (the controller makes none, so writes none), and each
+    # of those workers built its own template.
+    assert 1 <= len(written) <= 2
+    assert sum(counts["copies"] for counts in written) == 2
+    assert all(counts["templates"] == 1 for counts in written)

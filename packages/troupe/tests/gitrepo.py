@@ -169,8 +169,9 @@ def from_template(
     copied from the template this process built for ``key`` with ``build(root, name)``, which is
     built first if this is its first use. Outside a pytest session, ``build`` makes it directly.
 
-    The copy gets new file times, as a fresh build's files have, and its index, if it has one, is
-    refreshed so its stat data matches the copied files, as after a fresh ``add`` (design D3)."""
+    The copy's files get new times, as a fresh build's files have, and its index, if it has one, is
+    refreshed so its stat data matches the copied files, as after a fresh ``add`` (design D3). A
+    copy is never given the template's path, so no test can change the template."""
     if _templates is None:
         _counts["fresh"] += 1
         return build(root, name)
@@ -183,7 +184,9 @@ def from_template(
     shutil.copytree(template, path, symlinks=True, copy_function=shutil.copy)
     repo = Repo(path, isolated_environment(root / f"{name}-home"))
     if (path / ".git" / "index").exists():
-        repo.git("update-index", "-q", "--refresh")
+        # Not -q: a file whose content no longer matches the index (a template changed by mistake)
+        # makes --refresh exit 1, so every copy of it fails here, naming the file.
+        repo.git("update-index", "--refresh")
     _counts["copies"] += 1
     return repo
 

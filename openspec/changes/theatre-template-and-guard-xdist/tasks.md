@@ -28,9 +28,10 @@
   `diff-files` test and all of `test_run_workspaces.py` pass
 - [x] 2.4 Give `scripts/tests/conftest.py`'s `make_repo` a per-session template through `tmp_path_factory`, refreshed
   the same way. Verify the 1.3 scripts test and the scripts suite pass (`uv run scripts/check.py --scope scripts`)
-- [x] 2.5 Add the build/copy counter (D5): printed at session end only when its environment variable is set, and a
-  value other than the one documented is refused with an error naming the variable and the valid value. Verify with a
-  pytester test of each: unset (no output), set (counts printed), malformed (the error)
+- [x] 2.5 Add the build/copy counter (D5): each process writes `theatres-<pid>.json` into the directory
+  `TROUPE_TEST_THEATRE_COUNTS` names, only when it's set, and a value that isn't an existing directory is refused with
+  an error naming the variable and the fix. Verify with a pytester test of each: unset (nothing written), set (the
+  process's counts), across two workers (a file per worker that made a repository), malformed (the error)
 - [x] 2.6 Run the D4 audit over every caller of the four helpers, against the written list (racy window on the real
   clock, `st_mtime`/`st_ctime`/`.git` stats, commit and reflog times, SHAs compared across theatres), starting with
   `test_store_git.py`, `test_event_service.py`, `record_child.py`, `test_git_worktrees.py` and `test_config_files.py`.
