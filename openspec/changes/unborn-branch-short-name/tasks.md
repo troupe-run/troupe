@@ -37,11 +37,11 @@
 
 ## 3. Verification
 
-- [ ] 3.1 Run `Names` with many more examples than CI (a local hypothesis profile, both storages, a linked worktree
+- [x] 3.1 Run `Names` with many more examples than CI (a local hypothesis profile, both storages, a linked worktree
   layout as well). Verify: no failure, recorded in the PR.
 - [ ] 3.2 Record the git version each CI leg runs (from the job logs) in the PR, with the legs' results for
   1.1, 1.3 and `Names`. Verify: every leg passes.
-- [ ] 3.3 `uv run scripts/check.py` passes.
+- [x] 3.3 `uv run scripts/check.py` passes.
 
 ## Workflow follow-up
 
