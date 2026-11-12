@@ -14,10 +14,12 @@ records every file inside the repository opened for a test, through Python's `op
 test's reads are what it opens during its own setup, call and teardown, what its module and the
 collectors above it open while being collected (a module-level `TEXT = DOC.read_text()`, or
 parameters built from a file), and what each fixture it uses opens while being set up, even when an
-earlier test set that fixture up. A test that reads a skipped path, or a scope's path without that
-scope's marker, then fails at teardown with the guard's message. The rule itself is
-guard.tag_violations, which takes plain data so another runner's adapter can use it too
-(commit-check-paths design D9).
+earlier test set that fixture up. A read made while collecting counts for the innermost collector
+being collected only: given node ids, pytest collects each module inside the Session's own report,
+and the Session is above every test (guard-pytest-selection design D1). A test that reads a
+skipped path, or a scope's path without that scope's marker, then fails at teardown with the
+guard's message. The rule itself is guard.tag_violations, which takes plain data so another
+runner's adapter can use it too (commit-check-paths design D9).
 
 A file Hypothesis opens to collect constants isn't the test's read. Before a draw, it reads the
 source of every first-party module imported since its last draw, whichever test imported it
@@ -44,8 +46,11 @@ import guard
 _ROOT: str | None = None
 _DECLARATION: guard.CheckPaths | None = None
 _RECORDING: list[set[str]] = []
-"""The reads being recorded now: one set per open window (a collector, a fixture, a test). A
-read joins every open window, so an outer window also holds what an inner one read."""
+"""The reads being recorded now: one set per open fixture or test window. A read joins every open
+window, so an outer window also holds what an inner one read."""
+_COLLECTING: list[set[str]] = []
+"""The open collector windows, innermost last. A read joins only the innermost, so a module
+collected inside another collector's report isn't charged to that collector's tests too."""
 _COLLECTED: dict[str, frozenset[str]] = {}
 """Reads made while each collector (by node id) collected its children."""
 _FIXTURES: dict[int, set[str]] = {}
@@ -58,7 +63,7 @@ An open made while it's on the stack is Hypothesis's own, not the test's."""
 
 def _record(event: str, args: tuple[object, ...]) -> None:
     """The audit hook. It must never raise: an exception here would fail the open itself."""
-    if event != "open" or not _RECORDING or _ROOT is None:
+    if event != "open" or not (_RECORDING or _COLLECTING) or _ROOT is None:
         return
     with contextlib.suppress(Exception):
         path = args[0]
@@ -71,6 +76,8 @@ def _record(event: str, args: tuple[object, ...]) -> None:
             return
         for reads in _RECORDING:
             reads.add(relative)
+        if _COLLECTING:
+            _COLLECTING[-1].add(relative)
 
 
 def _hypothesis_reading() -> bool:
@@ -84,14 +91,14 @@ def _hypothesis_reading() -> bool:
 
 
 @contextlib.contextmanager
-def _window() -> Generator[set[str]]:
+def _window(stack: list[set[str]] = _RECORDING) -> Generator[set[str]]:
     reads: set[str] = set()
-    _RECORDING.append(reads)
+    stack.append(reads)
     try:
         yield reads
     finally:
         # By identity: two windows can hold equal sets (both empty, say), and remove() compares.
-        del _RECORDING[next(i for i, open_ in enumerate(_RECORDING) if open_ is reads)]
+        del stack[next(i for i, open_ in enumerate(stack) if open_ is reads)]
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -111,7 +118,7 @@ def pytest_configure(config: pytest.Config) -> None:
             "markers", f"{name}: reads {', '.join(entries)}{runs} ({guard.CHECK_PATHS})"
         )
     _ROOT = os.path.realpath(root)
-    sys.addaudithook(_record)  # one per process; it can't be removed, so it checks _RECORDING
+    sys.addaudithook(_record)  # one per process; it can't be removed, so it checks the stacks
 
 
 def _relative(path: str | os.PathLike[str]) -> str | None:
@@ -193,7 +200,7 @@ def pytest_collection_modifyitems(
 def pytest_make_collect_report(collector: pytest.Collector) -> Generator[None, object, object]:
     if _DECLARATION is None:
         return (yield)
-    with _window() as reads:
+    with _window(_COLLECTING) as reads:
         report = yield
     _COLLECTED[collector.nodeid] = frozenset(reads)
     return report
