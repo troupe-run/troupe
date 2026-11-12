@@ -21,11 +21,13 @@
   with `shutil.copy` file times (D3), and building from scratch when no template directory is set. Load it with
   `-p gitrepo` in `pyproject.toml`'s `addopts`. Verify the 1.3 tests still pass, plus a test that a child process
   importing `gitrepo` without pytest builds from scratch
-- [x] 2.2 Add `make_repo(..., fresh=True)` (D4), and pass it from `test_git_state_cache.py`'s `make_layout_repo` with a
-  comment naming what it depends on. Verify with a test that `fresh=True` builds rather than copies (the build/copy
-  counter from 2.5), and that `test_git_state_cache.py` passes in full
-- [x] 2.3 Give `committed()` its own template, copied and then `git update-index -q --refresh`ed (D3). Verify the 1.3
-  `diff-files` test and all of `test_run_workspaces.py` pass
+- [x] 2.2 Add `make_repo(..., fresh=True)` (D4), and make every repository in `test_git_state_cache.py` fresh by
+  wrapping `make_repo` once at module level with `fresh=True`, its docstring naming what the file depends on. Verify
+  with a test that `fresh=True` builds rather than copies (the build/copy counter from 2.5), and that
+  `test_git_state_cache.py` passes in full
+- [x] 2.3 Give `committed()` its own template, in `runtesting.py` beside `theatre()`, copied and then
+  `git update-index --refresh`ed without `-q`, so a changed template fails the copy (D3). Verify the 1.3 `diff-files`
+  test and all of `test_run_workspaces.py` pass
 - [x] 2.4 Give `scripts/tests/conftest.py`'s `make_repo` a per-session template through `tmp_path_factory`, refreshed
   the same way. Verify the 1.3 scripts test and the scripts suite pass (`uv run scripts/check.py --scope scripts`)
 - [x] 2.5 Add the build/copy counter (D5): each process writes `theatres-<pid>.json` into the directory
