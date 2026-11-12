@@ -90,6 +90,29 @@ every change was declared. So before you accept or discard a failed run's change
 changed files it wasn't allowed to. A run whose runner never started has no audit, and if troupe can't read the
 workspace to audit it, it says so, and a run that would otherwise have succeeded fails.
 
+## When the context fills
+
+A model can only hold so much of a conversation at once: its context window. A long task, or a few large file reads
+on a small local model, can fill it. By default the run then **fails**, with `error (context-length)` in `troupe logs`.
+Nothing the actor was told is lost, and you can split the task or give the actor a larger window.
+
+An actor can opt in to **compaction** instead, with `onContextFull: compact`:
+
+```sh
+troupe config set actors.reviewer.onContextFull=compact
+```
+
+The run then makes room and carries on, which changes what the model sees:
+
+- **The Claude Code runner** lets Claude Code compact, which replaces the earlier turns with a summary of them.
+- **The Ollama and OpenAI runners** replace old tool results, oldest first, with a short note saying what was removed
+  and to call the tool again if it's still needed. They never touch the actor's character, its direction, what the
+  model said, or the results it hasn't read yet, and they make no extra model call, so compaction costs no tokens.
+
+Each compaction is recorded with the run's events, as a `context` event saying what happened and how much. When
+compaction can't make room, the run fails with `context-length` as it would have. The run's start records whether
+the run was allowed to compact, and why: the actor's own setting, the `compaction` [policy](#policy), or the default.
+
 ## Effects
 
 An actor's **effects** say what its runs may change. Each is a list of patterns, relative to the theatre:
