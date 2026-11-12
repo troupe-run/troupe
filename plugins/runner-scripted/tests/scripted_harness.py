@@ -106,7 +106,11 @@ class Session:
         """Ids of requests the test sent invalid on purpose: the schema must refuse them too."""
         self.received: list[dict[str, Any]] = []
         self.raw_lines: list[bytes] = []
+        """Every line the runner wrote, as it wrote it, whether or not a test has read it yet."""
         self._lines: queue.Queue[bytes] = queue.Queue()
+        self._passed: list[dict[str, Any]] = []
+        """Messages request() read past while waiting for its answer, which until_result() takes
+        first (request-keeps-notifications design D1)."""
         self._next_id = 1
         self.run_id = new_run_id()
         threading.Thread(target=self._read, daemon=True).start()
@@ -114,15 +118,13 @@ class Session:
     def _read(self) -> None:
         assert self.process.stdout is not None
         for line in iter(self.process.stdout.readline, b""):
+            self.raw_lines.append(line)
             self._lines.put(line)
         self._lines.put(b"")
 
     def line(self, timeout: float = TIMEOUT) -> bytes:
         """The next raw line from the runner, or b"" at end of output."""
-        line = self._lines.get(timeout=timeout)
-        if line:
-            self.raw_lines.append(line)
-        return line
+        return self._lines.get(timeout=timeout)
 
     def message(self, timeout: float = TIMEOUT) -> dict[str, Any]:
         line = self.line(timeout)
@@ -147,12 +149,15 @@ class Session:
         self.process.stdin.flush()
 
     def request(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
-        """Send a request and return its response, keeping notifications that arrive first."""
+        """Send a request and return its response. Messages that arrive first are kept in
+        ``received``, and set aside for until_result(); message() and notifications() read only
+        what follows the response."""
         id_ = self.send(method, params)
         while True:
             message = self.message()
             if message.get("id") == id_:
                 return message
+            self._passed.append(message)
 
     def scratch(self) -> Path:
         """The run's scratch directory: beside the workspace, made when first asked for."""
@@ -213,6 +218,18 @@ class Session:
 
     def notifications(self, count: int) -> list[dict[str, Any]]:
         return [self.message() for _ in range(count)]
+
+    def until_result(self, timeout: float = TIMEOUT) -> list[dict[str, Any]]:
+        """Every message up to and including the run's result event: first those a request()
+        read past, then the stream. A result that came before a request's answer is found, not
+        waited for (#392). Raises queue.Empty if no result comes within ``timeout``."""
+        messages = []
+        while True:
+            message = self._passed.pop(0) if self._passed else self.message(timeout)
+            messages.append(message)
+            params = message.get("params", {})
+            if message.get("method") == "run/event" and params.get("type") == "result":
+                return messages
 
     def close_stdin(self) -> None:
         assert self.process.stdin is not None

@@ -19,9 +19,11 @@ import fake_endpoint
 from fake_endpoint import (
     Cut,
     FakeEndpoint,
+    Gate,
     Hold,
     Pause,
     Reply,
+    StreamItem,
     error_reply,
     sse,
     text_reply,
@@ -191,6 +193,46 @@ def _a_held_reply_sees_the_client_close() -> None:
 
         threading.Thread(target=close).start()
         assert fake.wait_for_client_to_close(CLOSE_SEEN_WITHIN)
+
+
+GATE_HELD_FOR = 0.3
+"""How long the gate test checks that nothing passes a closed gate. Load can only make the stream
+slower, so a short check can't fail a working gate."""
+
+GATE_PASSED_WITHIN = 10.0
+"""Seconds from opening a gate, or stopping the fake, to the client seeing what follows."""
+
+
+def _gated_stream(fake: FakeEndpoint) -> tuple[threading.Thread, list[bytes]]:
+    """Post to ``fake``, read the first line, then read the rest in a thread; what it read."""
+    request = urllib.request.Request(fake.endpoint + "/responses", data=b"{}")  # noqa: S310
+    response = urllib.request.urlopen(request, timeout=30)  # noqa: S310
+    assert response.readline() == b"data: before\n"
+    rest: list[bytes] = []
+    reader = threading.Thread(target=lambda: rest.append(response.read()), daemon=True)
+    reader.start()
+    return reader, rest
+
+
+def test_a_stream_waits_at_a_gate_until_it_is_opened() -> None:
+    opened = threading.Event()
+    lines: list[StreamItem] = ["data: before", Gate(opened), "data: after", ""]
+    with FakeEndpoint([Reply(lines=lines)]) as fake:
+        reader, rest = _gated_stream(fake)
+        reader.join(GATE_HELD_FOR)
+        assert reader.is_alive(), "the stream went past a closed gate"
+        opened.set()
+        reader.join(GATE_PASSED_WITHIN)
+    assert rest == [b"data: after\n\n"]
+
+
+def test_a_gate_never_opened_ends_the_connection_when_the_fake_stops() -> None:
+    lines: list[StreamItem] = ["data: before", Gate(threading.Event()), "data: after", ""]
+    with FakeEndpoint([Reply(lines=lines)]) as fake:
+        reader, rest = _gated_stream(fake)
+    reader.join(GATE_PASSED_WITHIN)
+    assert not reader.is_alive(), "the connection outlived the fake"
+    assert rest == [b""]
 
 
 def test_a_fake_with_no_reply_left_answers_500() -> None:
