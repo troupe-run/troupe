@@ -90,6 +90,8 @@ def _observed(repo: Repo) -> dict[str, Any]:
     layout: Counter[str] = Counter()
     for path in git_dir.rglob("*"):
         parts = path.relative_to(git_dir).parts
+        if path.suffix == ".lock":
+            continue  # git's background maintenance holds one for a moment after a commit
         if parts[0] == "objects" and len(parts) in (2, 3) and len(parts[1]) == 2:
             name = "objects/<fan-out>" + ("/<loose object>" if len(parts) == 3 else "")
         elif parts[0] == "reftable" and path.suffix == ".ref":
@@ -138,6 +140,20 @@ def test_a_copy_shows_git_what_a_fresh_build_of_its_shape_shows(tmp_path: Path, 
     built = build(tmp_path / "built")
 
     assert _observed(copied) == _observed(built)
+
+
+def test_a_lock_file_in_the_template_is_left_out_of_the_copy(tmp_path: Path) -> None:
+    def build_with_a_lock(root: Path, name: str) -> Repo:
+        repo = build_committed(root, name)
+        # As git's background maintenance leaves for a moment after the template's commit.
+        (repo.path / ".git" / "objects" / "maintenance.lock").write_text("", encoding="utf-8")
+        return repo
+
+    copied = from_template(tmp_path, "theatre", ("with-a-lock",), build_with_a_lock)
+
+    assert not (copied.path / ".git" / "objects" / "maintenance.lock").exists()
+    assert (copied.path / ".git" / "objects").is_dir()
+    assert copied.git("status", "--porcelain") == ""
 
 
 def test_a_template_changed_by_mistake_fails_every_copy_naming_the_file(tmp_path: Path) -> None:
