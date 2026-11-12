@@ -445,6 +445,15 @@ class Names(RuleBasedStateMachine):
         )
         return found.returncode == 0
 
+    def clashes(self, ref: str) -> bool:
+        """Whether ``ref`` and a ref that exists would need the same name as a file and as a
+        directory (refs/remotes/<name> beside refs/remotes/<name>/HEAD), which git refuses."""
+        listed = self.repo.git("for-each-ref", "--format=%(refname)")
+        return any(
+            other.startswith(ref + "/") or ref.startswith(other + "/")
+            for other in listed.splitlines()
+        )
+
     def born(self) -> bool:
         head = subprocess.run(
             ["git", "rev-parse", "--verify", "-q", "HEAD"],  # noqa: S607 - git from PATH
@@ -484,7 +493,7 @@ class Names(RuleBasedStateMachine):
         if ref == f"refs/heads/{current}" or self.symbolic(ref):
             return  # the branch itself; or a symbolic ref, which the rule below makes and drops
         exists = self.has(ref)
-        if add and not exists:
+        if add and not exists and not self.clashes(ref):
             run_git(self.repo.path, self.repo, "update-ref", ref, "HEAD")
         elif not add and exists:
             run_git(self.repo.path, self.repo, "update-ref", "-d", ref)
