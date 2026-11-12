@@ -44,7 +44,7 @@ class StandIn:
         temperature: float | None,
         fragment: Fragment,
         round_done: Callable[[Round], None],
-        round_end: Callable[[int], None],
+        round_end: Callable[[int], bool],
         message: Callable[[dict[str, Any]], None],
         invalid: Callable[[str, str | None, object], str],
     ) -> int:

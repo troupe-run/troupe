@@ -13,7 +13,7 @@ import msgspec
 import pytest
 from lmstudio.json_api import ChatResponseEndpoint
 
-from fake_lm_studio import FakeLMStudio, Script, Step, run_script
+from fake_lm_studio import Call, FakeLMStudio, Script, Step, load_steps, predict_step, run_script
 from troupe_plugin_sdk.tools import Tools
 from troupe_runner_lm_studio import defaults, engine
 from troupe_runner_lm_studio.engine import Engine, EngineError, greet, sent_tools, tool_definitions
@@ -208,7 +208,7 @@ def test_closing_the_engine_from_another_thread_stops_a_prediction_in_flight(
                     temperature=None,
                     fragment=lambda text, reasoning: None,
                     round_done=lambda r: None,
-                    round_end=lambda i: None,
+                    round_end=lambda i: False,
                     message=lambda m: None,
                     invalid=lambda e, n, a: "",
                 )
@@ -225,3 +225,55 @@ def test_closing_the_engine_from_another_thread_stops_a_prediction_in_flight(
         assert not worker.is_alive()
         assert time.monotonic() - started < 5
     assert outcome == ["stopped"]
+
+
+# Requirement: Every run has a turn limit and a token budget (the stop between rounds, design D9)
+
+
+def _acting(fake: FakeLMStudio, tmp_path: Path) -> tuple[Engine, Any]:
+    connection = Engine(fake.endpoint, fake.endpoint.removeprefix("http://"))
+    connection.open()
+    connection.models()
+    handle, _, _ = connection.load("google/gemma-4-e4b", 8192, lambda _: None)
+    return connection, handle
+
+
+def test_closing_the_client_doesnt_stop_the_library_it_reconnects_for_the_next_call(
+    tmp_path: Path,
+) -> None:
+    # Why the turn limit and budget can't stop act() by closing the client: the library's
+    # sessions connect lazily, so the next round's channel opens a new websocket.
+    script = run_script()
+    script.add("/llm", load_steps())
+    with FakeLMStudio(script) as fake:
+        connection, handle = _acting(fake, tmp_path)
+        before = fake.connections.get("/llm", 0)
+        handle._session.close()
+        handle._session._client.llm.model("google/gemma-4-e4b")
+        assert fake.connections["/llm"] == before + 1
+        connection.close()
+
+
+def test_a_round_end_that_says_stop_ends_act_before_another_round_is_asked_for(
+    tmp_path: Path,
+) -> None:
+    read = Call("Read", {"file_path": "notes.txt"})
+    script = run_script(predict_step("", [read]), predict_step("never asked for"))
+    with FakeLMStudio(script) as fake:
+        connection, handle = _acting(fake, tmp_path)
+        (tmp_path / "notes.txt").write_text("hello\n", encoding="utf-8")
+        rounds = connection.act(
+            handle,
+            {"messages": [{"role": "user", "content": [{"type": "text", "text": "hi"}]}]},
+            tool_definitions(tool_specs(Tools(tmp_path)), lambda name, args: "ok"),
+            temperature=None,
+            fragment=lambda text, reasoning: None,
+            round_done=lambda r: None,
+            round_end=lambda index: True,
+            message=lambda m: None,
+            invalid=lambda e, n, a: "",
+        )
+        assert rounds == 1
+        assert len(fake.sent_on("/llm", "predict")) == 1
+        assert fake.mismatches == []
+        connection.close()
