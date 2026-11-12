@@ -33,11 +33,11 @@
 
 ## 5. Verification
 
-- [ ] 5.1 Flake hunt on macOS under load, the OpenAI test alone: `uv run scripts/flake_hunt.py --workers 8 --rounds 15
+- [x] 5.1 Flake hunt on macOS under load, the OpenAI test alone: `uv run scripts/flake_hunt.py --workers 8 --rounds 15
   --load 8 -k test_a_second_run_start plugins/runner-openai/tests/test_openai_runner.py` (the run that found 8 of 120
   failing). Verify: 0 failures in 120 runs, recorded on #392.
-- [ ] 5.2 The same hunt for the scripted test. Verify: 0 failures.
-- [ ] 5.3 `uv run scripts/check.py` passes.
+- [x] 5.2 The same hunt for the scripted test. Verify: 0 failures.
+- [x] 5.3 `uv run scripts/check.py` passes.
 
 ## Workflow follow-up
 
