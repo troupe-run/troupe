@@ -228,7 +228,7 @@ what a runner sends, what troupe records, and what it reads back. A result that 
   context window, and never guess from free text.
 - **A failure the list has no entry for is `other`.** A runner can't add reasons of its own: the list has no
   extension point. A runner that keeps meeting such a failure asks for a reason to be added, as a contract change.
-- **Retries that run out end with the last retry's reason.** The four reasons a `retry` can name mean the same on
+- **Retries that run out end with the last retry's reason.** The five reasons a `retry` can name mean the same on
   both, so a run whose last retry was `rate-limit` ends `rate-limit`.
 - **The message still says what happened,** in the engine's or the runner's words: the reason is what to act on,
   the message is what to read.
