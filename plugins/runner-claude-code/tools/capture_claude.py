@@ -261,6 +261,7 @@ class _Compaction(_ContextLimit):
     refuse = False
     compactions: list[str]
     ordinary: list[str]
+    refusals: list[str]
 
     def do_POST(self) -> None:
         self.requests.append(self.path)
@@ -283,6 +284,7 @@ class _Compaction(_ContextLimit):
             self.wfile.flush()
             return
         if self.refuse and len(self.ordinary) == 2 and not self.compactions:
+            self.refusals.append(self.path)
             refusal = {
                 "type": "error",
                 "error": {"type": "invalid_request_error", "message": TOO_LONG},
@@ -363,9 +365,10 @@ class _Compaction(_ContextLimit):
 
 def _compaction_api(
     input_tokens: int, read_path: Path, refuse: bool
-) -> tuple[http.server.ThreadingHTTPServer, list[str], list[str]]:
+) -> tuple[http.server.ThreadingHTTPServer, list[str], list[str], list[str]]:
     requests: list[str] = []
     compactions: list[str] = []
+    refusals: list[str] = []
     handler = type(
         "_Compacting",
         (_Compaction,),
@@ -376,17 +379,22 @@ def _compaction_api(
             "requests": requests,
             "compactions": compactions,
             "ordinary": [],
+            "refusals": refusals,
         },
     )
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    return server, requests, compactions
+    return server, requests, compactions, refusals
 
 
-def compaction_refusal(fixture: str, lines: list[str], compactions: int) -> str | None:
+def compaction_refusal(
+    fixture: str, lines: list[str], compactions: int, refusals: int
+) -> str | None:
     """Why a compaction capture mustn't be written, or None when it may: Claude Code has to have
     written a compact_boundary record, after the fake API answered exactly one request it took for
-    a compaction request, and the run has to have finished (compaction-opt-in design D10)."""
+    a compaction request; the fake API has to have refused a request as too long exactly when the
+    fixture is the reactive one, so a proactive compaction can't be written as a reactive one; and
+    the run has to have finished (compaction-opt-in design D10)."""
     boundaries = [
         line
         for line in lines
@@ -401,6 +409,14 @@ def compaction_refusal(fixture: str, lines: list[str], compactions: int) -> str 
             "compaction requests (expected 1 of each). Fix: check the runner's settings file "
             "turns compaction on for a run told compact, and that is_compaction_request still "
             "recognises this Claude Code's compaction request."
+        )
+    expected = 1 if COMPACTIONS[fixture][1] else 0
+    if refusals != expected:
+        return (
+            f"capture: refusing to write {fixture}: the fake API refused {refusals} requests as "
+            f"too long (expected {expected}), so Claude Code didn't compact the way the fixture "
+            "says. Fix: check when this Claude Code version compacts, and set the fixture's input "
+            "tokens to match."
         )
     ended = [
         record.get("is_error")
@@ -703,6 +719,7 @@ def capture(fixture: str, out: Path) -> None:
     port: int | None = None
     requests: list[str] = []
     compactions: list[str] = []
+    refusals: list[str] = []
     if owner_run:
         for name in ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY"):
             if name in os.environ:
@@ -734,7 +751,9 @@ def capture(fixture: str, out: Path) -> None:
             port = server.server_address[1]
         elif compaction:
             tokens, refuse = COMPACTIONS[fixture]
-            server, requests, compactions = _compaction_api(tokens, workspace / "notes.txt", refuse)
+            server, requests, compactions, refusals = _compaction_api(
+                tokens, workspace / "notes.txt", refuse
+            )
             port = server.server_address[1]
         else:
             status = {"server-retries": 529, "rate-limit-retries": 429}.get(fixture, 401)
@@ -793,7 +812,9 @@ def capture(fixture: str, out: Path) -> None:
             shutil.rmtree(scratch, ignore_errors=True)
             sys.exit(refusal)
     if compaction:
-        refusal = compaction_refusal(fixture, [line for _, line in lines], len(compactions))
+        refusal = compaction_refusal(
+            fixture, [line for _, line in lines], len(compactions), len(refusals)
+        )
         if refusal is not None:
             shutil.rmtree(scratch, ignore_errors=True)
             sys.exit(refusal)
