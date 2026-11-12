@@ -70,8 +70,9 @@ so it stays true for that runner, and runners aren't asked to tell the two apart
 ### D2. Only on an `error` result whose reason a retry can name
 
 `$defs/result` gains: `if notRetried is present then status is error and reason is one of retry's five`. Written as
-`{"if": {"required": ["notRetried"]}, "then": {"properties": {"status": {"const": "error"}, "reason": {"$ref":
-"#/$defs/retryReason"}}}}`, with `$defs/retry`'s inline enum moved to a named `$defs/retryReason` that both use, so
+`"dependentSchemas": {"notRetried": {"required": ["reason"], "properties": {"status": {"const": "error"}, "reason":
+{"$ref": "#/$defs/retryReason"}}}}` (the result's existing `if`/`then`/`else` already holds the reason rule, so this
+one uses `dependentSchemas` rather than a second `if`), with `$defs/retry`'s inline enum moved to a named `$defs/retryReason` that both use, so
 the two can't drift. Because the rule is on `$defs/result`, it holds for `$defs/event`, `$defs/hostEvent` and
 `run-ended`'s `outcome.result` alike: no lenient form for records, since there are none from before it (#305).
 
