@@ -73,7 +73,7 @@
 - [x] 5.1 Open one draft pull request (`gh pr create --draft`) whose body closes #362 and #365, carries the measured
   numbers, the audit's results and the infrastructure pull request's link, and verify both issues show the PR as
   closing them
-- [ ] 5.2 Act on Claude's review of the last push per CLAUDE.md, and mark the PR ready only when the review is clean.
+- [x] 5.2 Act on Claude's review of the last push per CLAUDE.md, and mark the PR ready only when the review is clean.
   Verify every CI leg passes on Linux, macOS and Windows
 
 ## Workflow follow-up

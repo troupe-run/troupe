@@ -106,6 +106,15 @@ file, and the tag to add or the skip entry it contradicts.
 - **WHEN** the tests run in parallel and a test in any worker reads `contributing/runs.md` without the `docs` tag
 - **THEN** that test fails, naming itself, `contributing/runs.md` and the `docs` tag, as it does in one process
 
+#### Scenario: Tests from several packages selected by node id
+- **WHEN** a developer runs pytest on tests from the git adapter's and the Ollama runner's suites, each named by its
+  node id, in one process or across workers, and neither test reads the other package's files itself
+- **THEN** both tests pass with no guard failure, although collecting them imported both suites' modules
+
+#### Scenario: A real untagged read in a selection by node id
+- **WHEN** the same kind of selection also names a test that reads `contributing/runs.md` without the `docs` tag
+- **THEN** that test fails, naming itself, `contributing/runs.md` and the `docs` tag, and the other selected tests pass
+
 ### Requirement: The check runs the tests in parallel
 `scripts/check.py` SHALL run the tests across several worker processes, one for each CPU it may use, on Linux, macOS
 and Windows. A scoped check SHALL run its tests the same way. The tests gate SHALL pass or fail on the same results
