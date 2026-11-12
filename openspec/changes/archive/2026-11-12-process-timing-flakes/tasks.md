@@ -22,6 +22,10 @@
 - [x] 2.2 Put the 20 ms tick back as `time.sleep(0.02)` (#360's regression). Verify: the new test fails each of 5
   runs, with the medians in its message. With `output.changed.wait(0.02)` it passes, as D3 explains, and 1.3 covers
   that tick.
+- [x] 2.3 Make the tick check part of the suite, so it runs on Windows as well, where timers are coarser:
+  `test_the_time_after_the_end_tells_a_20_ms_tick_put_back` puts a 20 ms tick back through a ticking `Event` and
+  asserts the shared measurement is at least the bound. Verify: it passes 5 of 5 locally, and fails when its event
+  doesn't tick (0.2 ms measured). CI's Windows legs then show the bound catches a tick there.
 
 ## 3. Checks
 

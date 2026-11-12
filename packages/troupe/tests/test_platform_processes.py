@@ -858,18 +858,35 @@ os._exit(0)
 Windows, so the stamp can be compared with the test's own clock."""
 
 
-def test_a_command_returns_as_soon_after_it_ends_as_one_started_directly() -> None:
-    # Timed from the command's end, not its start: start-up is what load moves, and a tick costs
-    # time only after the command ends. The ends are spread across one old tick, so a tick that
-    # came back would cost about half of it in the median, whatever start-up takes
-    # (troupe-run/troupe#398).
+class _AfterTheEnd(typing.NamedTuple):
+    """How long after a command's end each call returned, in seconds, run by run."""
+
+    direct: list[float]
+    bounded: list[float]
+
+    def extra(self) -> float:
+        return statistics.median(self.bounded) - statistics.median(self.direct)
+
+    def describe(self) -> str:
+        return (
+            f"run_to_completion returned {self.extra() * 1000:.1f} ms later after the command "
+            f"ended than subprocess.run did (medians of {_END_RUNS}: "
+            f"{statistics.median(self.bounded) * 1000:.1f} ms against "
+            f"{statistics.median(self.direct) * 1000:.1f} ms)"
+        )
+
+
+def _time_after_the_end() -> _AfterTheEnd:
+    """Time each call from the command's end, not its start: start-up is what load moves, and a
+    tick costs time only after the command ends. The ends are spread across one old tick, so a tick
+    that came back would cost about half of it in the median, whatever start-up takes
+    (troupe-run/troupe#398)."""
     env = dict(os.environ)
-    direct: list[float] = []
-    bounded: list[float] = []
+    timed = _AfterTheEnd([], [])
     for run in range(_END_RUNS):  # interleaved, so load on the machine falls on both alike
         argv = _python(_ENDS_AND_STAMPS.format(sleep=_OLD_TICK * run / _END_RUNS))
         done = subprocess.run(argv, env=env, capture_output=True, check=True)
-        direct.append(time.perf_counter() - float(done.stdout))
+        timed.direct.append(time.perf_counter() - float(done.stdout))
         completed = processes.run_to_completion(
             argv,
             cwd=Path.cwd(),
@@ -878,16 +895,37 @@ def test_a_command_returns_as_soon_after_it_ends_as_one_started_directly() -> No
             max_output_bytes=LIMIT,
             announce_after=30.0,
         )
-        bounded.append(time.perf_counter() - float(completed.stdout))
-    assert min(direct) >= 0, (
-        f"a command's stamp is {-min(direct) * 1000:.1f} ms after the test read the clock: "
+        timed.bounded.append(time.perf_counter() - float(completed.stdout))
+    assert min(timed.direct) >= 0, (
+        f"a command's stamp is {-min(timed.direct) * 1000:.1f} ms after the test read the clock: "
         "the child's time.perf_counter isn't the test's clock on this platform"
     )
-    extra = statistics.median(bounded) - statistics.median(direct)
-    assert extra < _A_QUARTER_OF_THE_OLD_TICK, (
-        f"run_to_completion returned {extra * 1000:.1f} ms later after the command ended than "
-        f"subprocess.run did (medians of {_END_RUNS}: {statistics.median(bounded) * 1000:.1f} ms "
-        f"against {statistics.median(direct) * 1000:.1f} ms)"
+    return timed
+
+
+def test_a_command_returns_as_soon_after_it_ends_as_one_started_directly() -> None:
+    timed = _time_after_the_end()
+    assert timed.extra() < _A_QUARTER_OF_THE_OLD_TICK, timed.describe()
+
+
+def test_the_time_after_the_end_tells_a_20_ms_tick_put_back(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The test above is only worth its bound if a tick that came back would fail it on every
+    # platform CI runs, Windows' coarser timers included. So put one back, as the loop was
+    # before #360: each wait sleeps a fixed 20 ms, or less when a deadline is nearer, whatever
+    # wakes the event.
+    class TickingEvent(threading.Event):
+        def wait(self, timeout: float | None = None) -> bool:
+            time.sleep(_OLD_TICK if timeout is None else min(_OLD_TICK, timeout))
+            return self.is_set()
+
+    ticking = types.SimpleNamespace(**vars(threading))
+    ticking.Event = TickingEvent
+    monkeypatch.setattr(processes, "threading", ticking)
+    timed = _time_after_the_end()
+    assert timed.extra() >= _A_QUARTER_OF_THE_OLD_TICK, (
+        f"with a 20 ms tick put back, {timed.describe()}: the bound wouldn't catch the tick"
     )
 
 

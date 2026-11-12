@@ -77,6 +77,13 @@ output, the same env) and `run_to_completion`.
   The test checks every direct latency is at least 0, with a message saying the child's clock isn't the test's,
   so a platform where this stops holding fails clearly rather than measuring nonsense.
 - **The name says what it checks:** `test_a_command_returns_as_soon_after_it_ends_as_one_started_directly`.
+- **The bound's power is tested on every platform too.** A local check with a tick put back proves the bound
+  catches it on the machine it ran on, and macOS's timers aren't Windows'. So
+  `test_the_time_after_the_end_tells_a_20_ms_tick_put_back` swaps the module's `threading.Event` for one whose
+  `wait` sleeps a fixed 20 ms (or less, to a nearer deadline), as the loop did before #360. It then takes the same
+  measurement and asserts the difference is at least the 5 ms bound. It runs on all of CI's legs. It shares the
+  measurement with the test above, so the two can't drift apart. The chance that it misses a real tick is the same
+  0.2%, as a false failure here.
 
 *Alternatives:* a bound relative to the direct median, more git runs, or the minimum of each series (#398's
 suggestions). All three still time start-up. A relative bound gets looser as start-up gets slower, so on Windows it
