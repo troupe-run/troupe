@@ -295,6 +295,7 @@ def test_the_character_and_tool_rules_reach_claude_in_private_files_removed_afte
             "deny": [f"Edit(/{root}/.git/**)", f"Edit(/{root}/.troupe/**)"],
         },
         "sandbox": {"autoAllowBashIfSandboxed": False},
+        "autoCompactEnabled": False,
     }
     private = Path(argv[argv.index("--settings") + 1]).parent
     assert not private.resolve().is_relative_to(workspace.resolve())
