@@ -29,6 +29,7 @@ def _start(effects: dict[str, Any]) -> dict[str, Any]:
         "limits": {"eventMaxBytes": 65536},
         "effects": {"write": [], "delete": [], "move": [], **effects},
         "scratch": "/s/run",
+        "onContextFull": "fail",
     }
 
 

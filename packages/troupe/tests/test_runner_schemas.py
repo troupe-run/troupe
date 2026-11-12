@@ -46,6 +46,7 @@ START: dict[str, Any] = {
     "workspace": "/workspace",
     "effects": {"write": [], "delete": [], "move": []},
     "scratch": "/scratch",
+    "onContextFull": "fail",
     "options": {"script": {"steps": [{"wait": {"ms": 1}}]}},
     "limits": {"eventMaxBytes": 65536},
 }
@@ -908,6 +909,26 @@ def test_a_run_start_whose_effects_lack_a_list_does_not_validate(missing: str) -
 def test_a_run_start_without_effects_or_scratch_does_not_validate(field: str) -> None:
     params = {key: value for key, value in START.items() if key != field}
     assert not is_valid(_request("run/start", params), "run-start.schema.json")
+
+
+# Requirement: Run start says whether the run may compact (compaction-opt-in)
+
+
+def test_a_run_start_without_on_context_full_does_not_validate() -> None:
+    params = {key: value for key, value in START.items() if key != "onContextFull"}
+    assert not is_valid(_request("run/start", params), "run-start.schema.json")
+
+
+def test_a_run_start_with_an_on_context_full_off_the_list_does_not_validate() -> None:
+    params = {**START, "onContextFull": "summarise"}
+    assert not is_valid(_request("run/start", params), "run-start.schema.json")
+
+
+@pytest.mark.parametrize("value", ["fail", "compact"])
+def test_a_run_start_with_either_on_context_full_validates(value: str) -> None:
+    assert is_valid(
+        _request("run/start", {**START, "onContextFull": value}), "run-start.schema.json"
+    )
 
 
 @pytest.mark.parametrize("pattern", ["/abs/**", "../x", "a**", ".troupe/**", ".git/config", ""])

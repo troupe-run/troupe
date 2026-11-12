@@ -43,6 +43,7 @@ def _params(runtime: p.RunStartRuntime | None) -> p.RunStartParams:
         limits=p.StartLimits(event_max_bytes=65536),
         effects=p.EffectsDeclaration(write=[], delete=[], move=[]),
         scratch="/s",
+        on_context_full="fail",
         runtime=runtime,
     )
 

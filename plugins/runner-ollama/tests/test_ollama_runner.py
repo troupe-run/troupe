@@ -512,6 +512,7 @@ def test_a_scratch_directory_that_isnt_there_is_refused_never_acknowledged(
                 "limits": {"eventMaxBytes": 65536},
                 "effects": {"write": [], "delete": [], "move": []},
                 "scratch": str(workspace.parent / "no-such-scratch"),
+                "onContextFull": "fail",
             }
             data = _error(running.request("run/start", params))
             assert data["code"] == "runner.invalid-params"

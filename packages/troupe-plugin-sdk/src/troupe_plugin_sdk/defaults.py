@@ -56,3 +56,18 @@ class ToolLimits:
                     f"ToolLimits.{field.name} is {value}, above its default {default}: a runner "
                     "can lower a limit, never raise it"
                 )
+
+
+BYTES_PER_TOKEN = 3
+"""The bytes of text taken to make one token, before an engine has reported a count to calibrate
+from. An estimate on the low side for code and English, so a budget in bytes errs small and an
+estimate in tokens errs large (compaction-opt-in design D6; the Ollama runner's design D15)."""
+
+COMPACT_AT_SHARE = 0.85
+"""The share of a known context window above which a runner told to compact does so before its
+next request. Below the whole window, because the window holds the answer too (design D6)."""
+
+COMPACT_TO_SHARE = 0.5
+"""The share a compaction brings the conversation down to: of the window when it's known, otherwise
+of the last request the engine accepted. Well below the trigger, so the next turn doesn't compact
+again at once (design D6)."""

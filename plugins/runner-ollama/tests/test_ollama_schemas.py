@@ -42,6 +42,7 @@ def _run_start(options: dict[str, Any]) -> dict[str, Any]:
             "limits": {"eventMaxBytes": 65536},
             "effects": {"write": [], "delete": [], "move": []},
             "scratch": "/s",
+            "onContextFull": "fail",
             "runtime": {
                 "name": "ollama",
                 "endpoint": "http://127.0.0.1:11434",

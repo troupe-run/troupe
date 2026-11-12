@@ -84,6 +84,9 @@ class RunRequest:
     (spec: effects, "Every run gets scratch space outside its declaration")."""
     runtime: p.RunStartRuntime | None = None
     """The run's runtime as troupe resolved it, for run/start; None when the actor names none."""
+    on_context_full: p.OnContextFull = "fail"
+    """What the run does when its engine's context fills, as perform resolved it from the actor and
+    policy (compaction-opt-in design D2, D3). fail, the safe value, when nothing resolved it."""
     credential: str | None = field(default=None, repr=False)
     """The runtime's credential, which the runner's environment holds: never sent in run/start,
     and masked in everything kept from the run (runtimes design D6)."""
@@ -748,6 +751,7 @@ async def _start(run: _Run) -> TroupeError | None:
             limits=p.StartLimits(run.limits.event_max_bytes),
             effects=run.request.effects,
             scratch=str(run.request.scratch),
+            on_context_full=run.request.on_context_full,
             character=run.request.character,
             runtime=run.request.runtime,
         ),

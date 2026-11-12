@@ -83,9 +83,21 @@ def test_a_second_run_start_is_refused_and_the_run_still_ends_with_its_result(
             "limits": {"eventMaxBytes": 1},
             "effects": {"write": [], "delete": [], "move": []},
             "scratch": str(session.scratch()),
+            "onContextFull": "fail",
         },
     )
     assert second["error"]["data"]["code"] == "runner.already-started"
+    session.until_result()
+    events = _events(session.received)
+    assert [e["type"] for e in events] == ["init", "result"]
+    assert events[-1]["status"] == "ok"
+    session.validate_all()
+
+
+def test_a_run_told_compact_plays_its_script_unchanged(session: Session) -> None:
+    # Requirement: Run start says whether the run may compact (runner-protocol). The scripted
+    # runner has no engine and no context, so it accepts onContextFull and ignores it.
+    session.play({"steps": [{"event": INIT}, {"event": OK}]}, on_context_full="compact")
     session.until_result()
     events = _events(session.received)
     assert [e["type"] for e in events] == ["init", "result"]
@@ -504,6 +516,7 @@ def _played_with_everything_queued(
                 "limits": {"eventMaxBytes": 65536},
                 "effects": {"write": [], "delete": [], "move": []},
                 "scratch": str(workspace.parent),
+                "onContextFull": "fail",
             },
         },
         *({"jsonrpc": "2.0", "id": 3 + n, **m} for n, m in enumerate(after_start)),

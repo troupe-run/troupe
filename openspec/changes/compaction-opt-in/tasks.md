@@ -2,9 +2,9 @@
 
 ## 1. Contract and SDK
 
-- [ ] 1.1 Add the required `onContextFull` (`fail` | `compact`) to `run/start` in `protocol/schemas/runner/run-start.schema.json` and its packaged copy, and `on_context_full` to the SDK's `RunStartParams`. Verify: the SDK drift test passes, and new schema tests refuse a `run/start` without it and one with `summarise`.
-- [ ] 1.2 Add `troupe_plugin_sdk.compaction`: `Candidate`, `choose`, `stub` and `Estimate`. Move `BYTES_PER_TOKEN` into the SDK's `defaults.py` with `COMPACT_AT_SHARE` and `COMPACT_TO_SHARE` (design D6, D7). Verify: unit tests for the plugin-sdk scenarios, and a hypothesis property test that `choose` never picks a protected result and stops at the target.
-- [ ] 1.3 Update the scripted runner to accept `onContextFull` and ignore it. Verify: a test plays a script with `compact` unchanged, and the conformance suite passes.
+- [x] 1.1 Add the required `onContextFull` (`fail` | `compact`) to `run/start` in `protocol/schemas/runner/run-start.schema.json` and its packaged copy, and `on_context_full` to the SDK's `RunStartParams`. Verify: the SDK drift test passes, and new schema tests refuse a `run/start` without it and one with `summarise`.
+- [x] 1.2 Add `troupe_plugin_sdk.compaction`: `Candidate`, `choose`, `stub` and `Estimate`. Move `BYTES_PER_TOKEN` into the SDK's `defaults.py` with `COMPACT_AT_SHARE` and `COMPACT_TO_SHARE` (design D6, D7). Verify: unit tests for the plugin-sdk scenarios, and a hypothesis property test that `choose` never picks a protected result and stops at the target.
+- [x] 1.3 Update the scripted runner to accept `onContextFull` and ignore it. Verify: a test plays a script with `compact` unchanged, and the conformance suite passes.
 
 ## 2. Config, policy and perform
 

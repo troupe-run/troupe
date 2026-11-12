@@ -106,6 +106,7 @@ def _start(
             move=(effects or {}).get("move", []),
         ),
         scratch=str(scratch),
+        on_context_full="fail",
         character=character,
     )
 

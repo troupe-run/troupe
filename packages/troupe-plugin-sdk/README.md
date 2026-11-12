@@ -20,6 +20,8 @@ It holds:
 - **A cost estimated from troupe's price** (`troupe_plugin_sdk.cost`): `estimate(usage, price)` gives a run's usage at
   `run/start`'s `runtime.price` in US dollars, for `result.estimatedCostUsd`, or `None` when the contract says an
   estimate is absent ([Cost: reported or estimated](../../contributing/runners.md#cost-reported-or-estimated)).
+- **Compaction** (`troupe_plugin_sdk.compaction`), for a runner that holds its own conversation: which old tool
+  results to replace when the run may compact, and the stub that replaces them ([Compaction](#compaction)).
 
 [#58](https://github.com/troupe-run/troupe/issues/58) grows it into the full plugin SDK, with JSON-RPC framing and a
 server loop.
@@ -135,6 +137,36 @@ send(event)
 The message is cut to the summary limit and to `eventMaxBytes`, like a tool event's summaries. A count left as `None`
 is left out of the event. A kind or `by` off the contract's list raises a `ProtocolError`, and the counter is left as
 it was. A loss that ends the run isn't a `context` event: the run's `result` reports it.
+
+## Compaction
+
+A runner that holds its own conversation and is told `onContextFull` `compact` in `run/start` makes room by replacing
+old tool results with a short stub, oldest first, and keeping the call. `troupe_plugin_sdk.compaction` holds the rules,
+so every such runner compacts the same way. The runner offers its results in conversation order, replaces the content
+of each one `choose` returns with `stub(tool)`, and sends one `context` event with kind `truncated`, by `runner`:
+
+```python
+from troupe_plugin_sdk.compaction import Candidate, Estimate, choose, stub
+
+estimate = Estimate()  # bytes to tokens; calibrate() it from each request's reported input tokens
+candidates = [
+    Candidate(index, tool, size, latest=in_latest_turn)
+    for index, tool, size, in_latest_turn in results
+]
+for index in choose(candidates, estimate_bytes=size_now, target_bytes=size_wanted):
+    replace_content(index, stub(tool_at(index)))
+```
+
+`choose` never picks a result of the latest turn, which the model hasn't read yet, one already stubbed, or one no
+larger than its stub. It stops once the estimate is at or below the target, and returns nothing when nothing can
+help: the run then ends with `context-length`. Nothing here calls a model, so a compaction costs no tokens. The
+character, the direction and the model's own messages are the runner's to keep: it never offers them.
+
+| Setting | Default | What it sets |
+|---|---|---|
+| `BYTES_PER_TOKEN` | 3 | The bytes taken to make a token, until the engine reports a count to calibrate from |
+| `COMPACT_AT_SHARE` | 0.85 | The share of a known window above which the runner compacts before its next request |
+| `COMPACT_TO_SHARE` | 0.5 | The share a compaction brings the conversation down to |
 
 ## Limits
 

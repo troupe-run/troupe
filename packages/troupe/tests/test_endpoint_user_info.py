@@ -53,6 +53,7 @@ def _drive(runner: str, workspace: Path) -> tuple[list[dict[str, Any]], bytes]:
                 "limits": {"eventMaxBytes": 65536},
                 "effects": {"write": [], "delete": [], "move": []},
                 "scratch": str(scratch),
+                "onContextFull": "fail",
                 "runtime": {
                     "name": "box",
                     "endpoint": WITH_PASSWORD,

@@ -261,6 +261,7 @@ class Session:
             "limits": {"eventMaxBytes": event_max_bytes},
             "effects": {"write": [], "delete": [], "move": [], **(effects or {})},
             "scratch": str(self.scratch()),
+            "onContextFull": "fail",
         }
         if endpoint is not None:
             params["runtime"] = {

@@ -155,6 +155,11 @@ class RunStartRuntime(Message):
     a cost from (``troupe_plugin_sdk.cost.estimate``)."""
 
 
+OnContextFull = Literal["fail", "compact"]
+"""What a run does when its engine's context fills: end with ``context-length``, or compact and
+carry on, reporting each compaction with a ``context`` event (compaction-opt-in design D3)."""
+
+
 @dataclass(frozen=True)
 class RunStartParams(Message):
     run_id: str = json_field("runId", pattern=RUN_ID_PATTERN)
@@ -164,6 +169,7 @@ class RunStartParams(Message):
     limits: StartLimits = json_field("limits")
     effects: EffectsDeclaration = json_field("effects")
     scratch: str = json_field("scratch", min_length=1)
+    on_context_full: OnContextFull = json_field("onContextFull")
     character: str | None = json_field("character", default=None)
     runtime: RunStartRuntime | None = json_field("runtime", default=None)
 

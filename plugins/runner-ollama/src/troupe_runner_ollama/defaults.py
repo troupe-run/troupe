@@ -22,9 +22,6 @@ TOOL_OUTPUT_SHARE = 0.25
 """The share of the context window one tool result may take (design D15), so one large file read
 can't fill the window by itself."""
 
-BYTES_PER_TOKEN = 3
-"""The bytes of text taken to make one token, to turn the window into a byte budget for a tool
-result. An estimate on the low side for code and English, so the budget errs small (design D15)."""
 
 GLOB_PATH_BYTES = 64
 """The bytes one Glob path is taken to need, to scale the SDK's path count to the budget."""

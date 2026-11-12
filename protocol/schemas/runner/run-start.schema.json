@@ -31,7 +31,8 @@
         "effects",
         "scratch",
         "options",
-        "limits"
+        "limits",
+        "onContextFull"
       ],
       "properties": {
         "runId": {
@@ -76,6 +77,13 @@
               "minimum": 1
             }
           }
+        },
+        "onContextFull": {
+          "description": "What the run does when its engine's context fills, as troupe resolved it from the actor and policy. fail: the run ends with reason context-length, and the runner neither compacts nor lets its engine compact. compact: the runner, or its engine, may compact or drop earlier content and carry on, and reports each time with a context event.",
+          "enum": [
+            "fail",
+            "compact"
+          ]
         },
         "runtime": {
           "description": "The service this run talks to, as troupe resolved it from its defaults, the theatre's config and the person's environment. Absent: the actor names no runtime. The credential's value is never here: when credential is true, it is in the runner's environment as TROUPE_RUNTIME_CREDENTIAL, and the runner sends it only to the endpoint.",
