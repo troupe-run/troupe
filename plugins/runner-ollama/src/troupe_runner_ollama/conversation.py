@@ -17,15 +17,25 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from troupe_plugin_sdk import runner as p
+from troupe_plugin_sdk.compaction import Candidate, Estimate, choose, stub
 from troupe_plugin_sdk.declaration import Declaration
 from troupe_plugin_sdk.defaults import (
     BYTES_PER_TOKEN,
+    COMPACT_AT_SHARE,
+    COMPACT_TO_SHARE,
     GLOB_MAX_PATHS,
     GREP_MAX_MATCHES,
     READ_MAX_BYTES,
     ToolLimits,
 )
-from troupe_plugin_sdk.events import EventNumbering, ServedModels, cut, fit, utf8_size
+from troupe_plugin_sdk.events import (
+    EventNumbering,
+    ServedModels,
+    context_event,
+    cut,
+    fit,
+    utf8_size,
+)
 from troupe_plugin_sdk.tools import Tools
 from troupe_runner_ollama import NAME, __version__
 from troupe_runner_ollama.client import Client, EngineError, RetryableError, StoppedError
@@ -71,6 +81,25 @@ class Sink(Protocol):
 
 class _Stop(Exception):  # noqa: N818 - a signal to stop, not an error
     """The run is stopping: send nothing more."""
+
+
+@dataclass
+class _TooLong(Exception):  # noqa: N818 - a refusal the run may compact past, not an error
+    """Ollama refused a request as longer than the window, in a run told to compact."""
+
+    message: str
+
+
+@dataclass
+class _ToolResult:
+    """A ``tool`` message in the conversation, for compaction (compaction-opt-in design D4)."""
+
+    index: int
+    """Its position in the conversation's messages."""
+    tool: str
+    size: int
+    turn: int
+    stubbed: bool = False
 
 
 @dataclass
@@ -199,6 +228,12 @@ class Conversation:
         self._budget = tool_budget(window)
         self._tools = Tools.for_declaration(Declaration.from_run_start(start), tool_limits(window))
         self._messages: list[bytes] = []
+        self._results: list[_ToolResult] = []
+        self._turn = 0
+        self._estimate = Estimate()
+        self._send_whole = True
+        """Whether the next request's whole body goes in the transcript: the first, and the
+        first after a compaction changed messages already recorded."""
         self._requests = 0
         self._prompt_tokens: int | None = None
         self._cached_tokens = 0
@@ -299,7 +334,6 @@ class Conversation:
         self._result("ok", text or NO_TEXT)
 
     def _loop(self) -> str:
-        first = True
         while True:
             if self._requests >= self._options.max_turns:
                 raise _RunEnded(
@@ -307,15 +341,88 @@ class Conversation:
                     "calling tools",
                     "turn-limit",
                 )
-            body = self._body()
-            if first:
-                self._record("sent", body)
-                first = False
-            answer = self._request(body)
+            if self._compacting() and self._over(self._body()):
+                self._compact(self._estimate.bytes(int(self._window * COMPACT_TO_SHARE)))
+            answer = self._answer()
             self._after(answer)
             if not answer.tool_calls:
                 return answer.content
             self._call_tools(answer)
+
+    def _answer(self) -> _Answer:
+        """The answer to the next request. A run told to compact that Ollama refuses as too long
+        compacts and asks again, as the same turn (compaction-opt-in design D6)."""
+        while True:
+            body = self._body()
+            if self._send_whole:
+                self._record("sent", body)
+                self._send_whole = False
+            try:
+                answer = self._request(body)
+            except _TooLong as refused:
+                target = min(
+                    self._estimate.bytes(int(self._window * COMPACT_TO_SHARE)),
+                    int(len(body) * COMPACT_TO_SHARE),
+                )
+                if not self._compact(target):
+                    raise _RunEnded(
+                        refused.message + " onContextFull is compact, and compaction found "
+                        "nothing more to remove: the tool results left are the latest turn's. "
+                        "Raise contextLength, or give the actor a smaller task.",
+                        "context-length",
+                    ) from refused
+                self._requests -= 1
+                continue
+            if answer.prompt_tokens is not None:
+                self._estimate.calibrate(len(body), answer.prompt_tokens)
+            return answer
+
+    # Compaction (compaction-opt-in design D4, D6)
+
+    def _compacting(self) -> bool:
+        return self._start.on_context_full == "compact"
+
+    def _over(self, body: bytes) -> bool:
+        """Whether ``body`` is estimated over the share of the window that starts a compaction."""
+        return self._estimate.tokens(len(body)) > self._window * COMPACT_AT_SHARE
+
+    def _compact(self, target_bytes: int) -> bool:
+        """Replace old tool results with the SDK's stub, oldest first, until the request is
+        estimated at ``target_bytes``, and say so with a context event. False when nothing could
+        be removed."""
+        before = len(self._body())
+        candidates = [
+            Candidate(n, result.tool, result.size, result.turn == self._turn, result.stubbed)
+            for n, result in enumerate(self._results)
+        ]
+        chosen = choose(candidates, before, target_bytes)
+        if not chosen:
+            return False
+        removed = 0
+        for n in chosen:
+            result = self._results[n]
+            text = stub(result.tool)
+            self._messages[result.index] = encode(
+                {"role": "tool", "tool_name": result.tool, "content": text}
+            )
+            removed += result.size - utf8_size(text)
+            result.stubbed = True
+        if self._sink.stopping():
+            raise _Stop
+        count = len(self._messages)
+        self._sink.event(
+            context_event(
+                self._numbering,
+                "truncated",
+                "runner",
+                f"Removed {len(chosen)} old tool results ({removed} bytes) to fit the "
+                f"{self._window}-token context window; the model can call each tool again.",
+                messages_before=count,
+                messages_after=count,
+            )
+        )
+        self._send_whole = True
+        return True
 
     def _request(self, body: bytes) -> _Answer:
         self._requests += 1
@@ -329,6 +436,10 @@ class Conversation:
             except EngineError as error:
                 self._record("received", error.body)
                 message, reason = error.message, engine_failure(error)
+                if reason == "context-length" and self._compacting():
+                    raise _TooLong(
+                        f"{message}. The run's context window is {self._window} tokens."
+                    ) from error
                 if reason == "context-length":
                     message += (
                         f". The run's context window is {self._window} tokens; raise "
@@ -437,6 +548,7 @@ class Conversation:
             message["thinking"] = answer.thinking
         message["tool_calls"] = answer.tool_calls
         self._add(message)
+        self._turn += 1
         for index, call in enumerate(answer.tool_calls):
             if self._sink.stopping():
                 raise _Stop
@@ -458,13 +570,11 @@ class Conversation:
                 raise _Stop
             for event in step.events:
                 self._sink.event(event)
-            self._add(
-                {
-                    "role": "tool",
-                    "tool_name": name,
-                    "content": fit_output(step.output, self._budget),
-                }
+            content = fit_output(step.output, self._budget)
+            self._results.append(
+                _ToolResult(len(self._messages), name, utf8_size(content), self._turn)
             )
+            self._add({"role": "tool", "tool_name": name, "content": content})
 
     def fail(self, message: str) -> None:
         """Report the runner's own failure, ``message``, as a log error and, if the run hasn't sent

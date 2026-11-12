@@ -18,7 +18,14 @@ import pytest
 
 from fake_ollama import Answer, FakeOllama, Line, calls, done, final, message, serving, tool_call
 from troupe_plugin_sdk import runner as p
-from troupe_plugin_sdk.defaults import GLOB_MAX_PATHS, GREP_MAX_MATCHES, READ_MAX_BYTES
+from troupe_plugin_sdk.compaction import stub
+from troupe_plugin_sdk.defaults import (
+    BYTES_PER_TOKEN,
+    COMPACT_AT_SHARE,
+    GLOB_MAX_PATHS,
+    GREP_MAX_MATCHES,
+    READ_MAX_BYTES,
+)
 from troupe_plugin_sdk.events import encoded_size
 from troupe_runner_ollama.client import Client
 from troupe_runner_ollama.conversation import (
@@ -91,6 +98,7 @@ def _start(
     character: str | None = None,
     effects: dict[str, list[str]] | None = None,
     event_max_bytes: int = 65536,
+    on_context_full: p.OnContextFull = "fail",
 ) -> p.RunStartParams:
     scratch = workspace.parent / f"{workspace.name}-scratch"
     scratch.mkdir(exist_ok=True)
@@ -106,7 +114,7 @@ def _start(
             move=(effects or {}).get("move", []),
         ),
         scratch=str(scratch),
-        on_context_full="fail",
+        on_context_full=on_context_full,
         character=character,
     )
 
@@ -890,3 +898,143 @@ def test_fail_after_the_result_sends_only_the_log_error(tmp_path: Path) -> None:
 def test_fit_output_stays_within_a_budget_smaller_than_its_note() -> None:
     assert len(fit_output("x" * 500, 40).encode("utf-8")) <= 40
     assert fit_output("short", 40) == "short"
+
+
+# Requirement: A run told compact removes old tool results before a request that wouldn't fit
+# Requirement: A run told compact compacts after a refusal and asks again (compaction-opt-in)
+
+REFUSAL = (
+    b'{"error":"request (9000 tokens) exceeds the available context size (8192 tokens), '
+    b'try increasing it"}'
+)
+
+
+def _uncounted(*entries: dict[str, Any]) -> Answer:
+    """Tool calls with no prompt count, so the runner's estimate stays at its default rate."""
+    return Answer([message("", tool_calls=list(entries)), done(prompt=None)])
+
+
+def _three_reads(tmp_path: Path) -> list[Answer]:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir(exist_ok=True)
+    for name in ("a", "b", "c"):
+        (workspace / f"{name}.txt").write_text(f"{name}\n" * 300, encoding="utf-8")
+    return [
+        _uncounted(tool_call("Read", {"file_path": "a.txt"})),
+        _uncounted(tool_call("Read", {"file_path": "b.txt"})),
+        _uncounted(tool_call("Read", {"file_path": "c.txt"})),
+        final("done"),
+    ]
+
+
+def _a_window_three_reads_fill(tmp_path: Path) -> int:
+    """A window the fourth request of three reads (each about 2400 bytes as Read numbers them) is
+    estimated over the compaction share of, and the third isn't: from the size of a request with
+    no tool results."""
+    _, fake = _run(tmp_path / "probe", [final("hi")], direction="Read a, b and c.")
+    base = len(fake.chat_bodies()[0])
+    return int((base + 6000) / (BYTES_PER_TOKEN * COMPACT_AT_SHARE))
+
+
+def _tool_contents(chat: dict[str, Any]) -> list[str]:
+    return [m["content"] for m in chat["messages"] if m["role"] == "tool"]
+
+
+def test_a_run_told_compact_stubs_the_oldest_results_before_a_request_that_wouldnt_fit(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "probe").mkdir()
+    window = _a_window_three_reads_fill(tmp_path)
+    assert tool_budget(window) > 2500  # each read arrives whole
+    sink, fake = _run(
+        tmp_path,
+        _three_reads(tmp_path),
+        window=window,
+        direction="Read a, b and c.",
+        character="You are thorough.",
+        on_context_full="compact",
+    )
+    chats = fake.chats()
+    assert len(chats) == 4
+    a, b = _tool_contents(chats[2])
+    # Each was sent whole the first time.
+    assert a.endswith("\ta")
+    assert b.endswith("\tb")
+    fourth = _tool_contents(chats[3])
+    assert fourth[:2] == [stub("Read"), stub("Read")]
+    assert fourth[2].endswith("\tc")  # the latest turn's result is kept
+    # The character, the direction and every assistant message are sent unchanged.
+    third_others = [m for m in chats[2]["messages"] if m["role"] != "tool"]
+    assert [m for m in chats[3]["messages"] if m["role"] != "tool"][: len(third_others)] == (
+        third_others
+    )
+    assert chats[3]["messages"][0] == {"role": "system", "content": "You are thorough."}
+    assert chats[3]["messages"][1] == {"role": "user", "content": "Read a, b and c."}
+    (context,) = sink.of(p.ContextEvent)
+    assert (context.kind, context.by) == ("truncated", "runner")
+    assert context.messages_before == context.messages_after == len(chats[3]["messages"])
+    assert context.tokens_before is None
+    assert "Removed 2 old tool results" in context.message
+    # The event comes before the turn that follows from the reduced conversation, and the
+    # request it changed goes in the transcript whole.
+    events = sink.events
+    assert events.index(context) < events.index(sink.of(p.TurnEvent)[-1])
+    assert fake.chat_bodies()[3] in sink.records
+    assert (sink.result.status, sink.result.turns) == ("ok", 4)
+
+
+def test_a_run_told_fail_changes_no_tool_result_and_sends_no_context_event(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "probe").mkdir()
+    window = _a_window_three_reads_fill(tmp_path)
+    sink, fake = _run(tmp_path, _three_reads(tmp_path), window=window, direction="Read a, b and c.")
+    chats = fake.chats()
+    assert _tool_contents(chats[3])[:2] == _tool_contents(chats[2])
+    assert stub("Read") not in _tool_contents(chats[3])
+    assert sink.of(p.ContextEvent) == []
+    assert fake.chat_bodies()[3] not in sink.records
+
+
+def test_a_refusal_in_a_run_told_compact_stubs_old_results_and_asks_again_as_the_same_turn(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "a.txt").write_text("a\n" * 300, encoding="utf-8")
+    (workspace / "b.txt").write_text("b\n" * 300, encoding="utf-8")
+    sink, fake = _run(
+        tmp_path,
+        [
+            calls(tool_call("Read", {"file_path": "a.txt"})),
+            calls(tool_call("Read", {"file_path": "b.txt"})),
+            Answer(status=400, body=REFUSAL),
+            final("done"),
+        ],
+        options=Options(max_turns=3),
+        on_context_full="compact",
+    )
+    chats = fake.chats()
+    assert len(chats) == 4
+    a, b = _tool_contents(chats[2])
+    assert _tool_contents(chats[3]) == [stub("Read"), b]
+    assert a != stub("Read")
+    (context,) = sink.of(p.ContextEvent)
+    assert (context.kind, context.by) == ("truncated", "runner")
+    assert (sink.result.status, sink.result.turns) == ("ok", 3)
+
+
+def test_a_refusal_with_only_the_latest_turns_results_left_ends_with_context_length(
+    tmp_path: Path,
+) -> None:
+    sink, fake = _run(
+        tmp_path,
+        [calls(tool_call("Glob", {"pattern": "*"})), Answer(status=400, body=REFUSAL)],
+        on_context_full="compact",
+    )
+    assert len(fake.chats()) == 2
+    assert sink.of(p.ContextEvent) == []
+    assert (sink.result.status, sink.result.reason) == ("error", "context-length")
+    assert "exceeds the available context size" in sink.result.message
+    assert "compaction found nothing more to remove" in sink.result.message
+    assert "contextLength" in sink.result.message

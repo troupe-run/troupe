@@ -62,10 +62,20 @@ class Scenario:
     direction: str = ""
     effects: dict[str, list[str]] = field(default_factory=dict)
     files: dict[str, str] = field(default_factory=dict)
+    on_context_full: p.OnContextFull = "fail"
+    """run/start's onContextFull: compact for a fixture of the runner compacting."""
     preflight_only: bool = False
     """Only ask Ollama for its version and the model: the fixture is the preflight's answers."""
     note: str = ""
 
+
+COMPACTED_WINDOW = 4096
+COMPACTED_FILES = {
+    name: "".join(f"The {topic} log, entry {n}: all quiet.\n" for n in range(1, 81))
+    for name, topic in (("a.txt", "lighthouse"), ("b.txt", "harbour"), ("c.txt", "ferry"))
+}
+"""context-compacted's files: three reads that each fit the window's tool budget, and together
+don't fit the window."""
 
 SCENARIOS: dict[str, Scenario] = {
     "success-with-tools": Scenario(
@@ -120,6 +130,29 @@ SCENARIOS: dict[str, Scenario] = {
         {"write": ["log.txt"]},
         note="The direction holds the text to write, so the prompt (about 1690 tokens) fits the "
         "window and the call's arguments, as long again, don't.",
+    ),
+    "context-compacted": Scenario(
+        "Three reads that outgrow a small window, in a run told to compact: the runner replaces "
+        "the oldest results with the SDK's stub before the request that wouldn't fit, sends a "
+        "context event, and the run finishes.",
+        "qwen3.5:4b",
+        {"think": False, "temperature": 0, "seed": 1, "contextLength": COMPACTED_WINDOW},
+        "Read the whole of a.txt (in the workspace, so the path is just a.txt) with the Read "
+        "tool, giving only file_path. When you have its "
+        "text, read the whole of b.txt the same way, and then the whole of c.txt. Make one tool "
+        "call in each answer. Then say in one sentence what the three files are about.",
+        files=COMPACTED_FILES,
+        on_context_full="compact",
+    ),
+    "context-compaction-exhausted": Scenario(
+        "The context-overflow run told to compact: the first request is already longer than "
+        "the window and holds no tool result to remove, so the run still ends with "
+        "context-length, saying compaction found nothing more to remove.",
+        "qwen3:0.6b",
+        {"think": False, "contextLength": 512},
+        "Read notes.txt and summarise it.",
+        files={"notes.txt": "A line of notes.\n" * 200},
+        on_context_full="compact",
     ),
     "model-not-found": Scenario(
         "/api/show's answer for a model that isn't pulled.",
@@ -227,6 +260,7 @@ def capture(name: str, endpoint: str, out: Path = FIXTURES) -> Path:
         "options": scenario.options,
         "direction": scenario.direction,
         "effects": scenario.effects,
+        "onContextFull": scenario.on_context_full,
         "credential": "none: Ollama needs none",
         "scrubbing": "the workspace's and scratch directory's paths are <workspace> and "
         "<scratch>; /api/show's license, modelfile and template text are left out",
@@ -256,7 +290,7 @@ def capture(name: str, endpoint: str, out: Path = FIXTURES) -> Path:
                 move=scenario.effects.get("move", []),
             ),
             scratch=str(scratch),
-            on_context_full="fail",
+            on_context_full=scenario.on_context_full,
             runtime=runtime,
         )
         maximum = model_maximum(shown or {})

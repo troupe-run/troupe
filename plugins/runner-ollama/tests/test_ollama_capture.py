@@ -73,3 +73,19 @@ def test_a_capture_refuses_an_endpoint_that_isnt_on_this_machine(tmp_path: Path)
     with pytest.raises(SystemExit, match="isn't on this machine"):
         capture.capture("success-with-tools", "http://example.com:11434", tmp_path)
     assert list(tmp_path.iterdir()) == []
+
+
+def test_the_replay_starts_each_fixture_with_the_files_its_capture_made() -> None:
+    from fixture_replay import FILES
+
+    made = {name: s.files for name, s in _tool().SCENARIOS.items() if s.files}
+    assert made == FILES
+
+
+def test_a_compaction_capture_records_its_on_context_full(tmp_path: Path) -> None:
+    capture = _tool()
+    model = {"qwen3:0.6b": Settings().models["fake"]}
+    with serving([final("Done.")], Settings(models=model)) as fake:
+        directory = capture.capture("context-compacted", fake.url, tmp_path)
+    provenance = json.loads((directory / "provenance.json").read_text(encoding="utf-8"))
+    assert provenance["onContextFull"] == "compact"

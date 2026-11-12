@@ -1,0 +1,23 @@
+{
+  "what": "Three reads that outgrow a small window, in a run told to compact: the runner replaces the oldest results with the SDK's stub before the request that wouldn't fit, sends a context event, and the run finishes.",
+  "ollamaVersion": "0.40.14",
+  "model": "qwen3.5:4b",
+  "date": "2026-11-12",
+  "command": [
+    "capture_ollama.py",
+    "context-compacted"
+  ],
+  "options": {
+    "think": false,
+    "temperature": 0,
+    "seed": 1,
+    "contextLength": 4096
+  },
+  "direction": "Read the whole of a.txt (in the workspace, so the path is just a.txt) with the Read tool, giving only file_path. When you have its text, read the whole of b.txt the same way, and then the whole of c.txt. Make one tool call in each answer. Then say in one sentence what the three files are about.",
+  "effects": {},
+  "onContextFull": "compact",
+  "credential": "none: Ollama needs none",
+  "scrubbing": "the workspace's and scratch directory's paths are <workspace> and <scratch>; /api/show's license, modelfile and template text are left out",
+  "events": "recorded at capture, then reviewed by hand",
+  "window": 4096
+}

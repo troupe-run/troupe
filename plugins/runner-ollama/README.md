@@ -113,7 +113,33 @@ So the runner:
   how to narrow the call. One large file can't end a run.
 
 Decision #279 settled this: an engine never loses or cuts content without the run saying so, and by default the run
-ends. Letting an actor opt in to compaction is #310.
+ends.
+
+### Compaction
+
+An actor can opt in to compaction (`onContextFull: compact`, or the `compaction` policy, #310), and `run/start` then
+says `onContextFull` `compact`. The runner still asks Ollama never to cut, and makes room itself, with the plugin
+SDK's rules (`troupe_plugin_sdk.compaction`):
+
+- **before a request** whose size is estimated over 85% of the window, and **after a refusal** if the estimate was
+  wrong, it replaces old tool results with a short stub, oldest first, saying what was removed and to call the tool
+  again if it's still needed. It keeps the call itself, and brings the request down to about half the window, so the
+  next turn doesn't compact again at once. The estimate is in bytes, at 3 per token until Ollama reports a prompt
+  count, then at the last request's rate.
+- **never touched**: the character (the `system` message), the direction (the first `user` message), every
+  `assistant` message with its thinking and tool calls, and the latest turn's tool results, which the model hasn't
+  read yet.
+- **each compaction is a `context` event**, kind `truncated`, by `runner`, with the conversation's message count
+  before and after (equal: no message is removed) and how many bytes it removed. It sends no token counts, which it
+  only estimates. The request after it goes in the transcript whole.
+- **no model call**: nothing extra counts against `maxTurns`, and a request asked again after a refusal is the same
+  turn.
+- **when nothing is left to remove**, the run ends as it would without compaction, with `context-length`, saying
+  compaction was on and found nothing more to remove.
+
+[`context-compacted`](fixtures/ollama/context-compacted/events.json) is a real run compacting twice in a 4096-token
+window, and [`context-compaction-exhausted`](fixtures/ollama/context-compaction-exhausted/events.json) one that
+can't.
 
 ## What it sends Ollama
 
@@ -219,7 +245,8 @@ checks).
 [`fixtures/ollama/`](fixtures/ollama/) holds real exchanges with Ollama 0.40.14, each with its provenance:
 
 - captured by [`tools/capture_ollama.py`](tools/capture_ollama.py): `success-with-tools`, `refused-by-effects`,
-  `thinking`, `context-overflow`, `cut-answer`, `cut-tool-call`, `model-not-found` and `no-tools-capability`;
+  `thinking`, `context-overflow`, `context-compacted`, `context-compaction-exhausted`, `cut-answer`, `cut-tool-call`,
+  `model-not-found` and `no-tools-capability`;
 - hand-written from `success-with-tools`, with a failure put in front: `server-retries`, `network-retries` and
   `stream-error`.
 

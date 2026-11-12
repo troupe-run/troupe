@@ -11,6 +11,7 @@ import pytest
 
 from fixture_replay import fixture_records, load, names, replay
 from ollama_harness import FIXTURES
+from troupe_plugin_sdk.compaction import stub
 
 REFUSALS = {
     "model-not-found": "ollama.model-not-found",
@@ -50,6 +51,8 @@ def test_there_are_fixtures_for_each_shape() -> None:
         "refused-by-effects",
         "thinking",
         "context-overflow",
+        "context-compacted",
+        "context-compaction-exhausted",
         "cut-answer",
         "cut-tool-call",
         "model-not-found",
@@ -84,6 +87,31 @@ def test_the_context_overflow_fixture_is_ollamas_refusal_naming_the_window() -> 
     result = load("context-overflow", "events.json")[-1]
     assert result["status"] == "error"
     assert "context window is 512 tokens" in result["message"]
+
+
+def test_the_compacted_fixture_stubs_old_results_reports_each_compaction_and_finishes() -> None:
+    # Requirement: A run told compact removes old tool results before a request that wouldn't
+    # fit (compaction-opt-in).
+    events = load("context-compacted", "events.json")
+    contexts = [e for e in events if e["type"] == "context"]
+    assert len(contexts) == 2
+    for context in contexts:
+        assert (context["kind"], context["by"]) == ("truncated", "runner")
+        assert context["messagesBefore"] == context["messagesAfter"]
+        assert "tokensBefore" not in context
+    assert (events[-1]["type"], events[-1]["status"]) == ("result", "ok")
+    sent = [json.loads(line)["record"] for line in fixture_records("context-compacted")]
+    assert any(stub("Read") in record for record in sent)
+
+
+def test_the_exhausted_fixture_ends_with_context_length_and_no_context_event() -> None:
+    # Requirement: A run told compact compacts after a refusal and asks again (nothing left).
+    events = load("context-compaction-exhausted", "events.json")
+    assert [e["type"] for e in events] == ["init", "result"]
+    result = events[-1]
+    assert (result["status"], result["reason"]) == ("error", "context-length")
+    assert "compaction found nothing more to remove" in result["message"]
+    assert load("context-compaction-exhausted", "provenance.json")["onContextFull"] == "compact"
 
 
 @pytest.mark.parametrize("name", ["cut-answer", "cut-tool-call"])
