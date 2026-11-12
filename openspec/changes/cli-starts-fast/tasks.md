@@ -74,10 +74,16 @@
 - [x] 5.1 With `python -X importtime` on `troupe status`, `troupe logs`, `troupe config get` and `troupe perform` (a
   scripted actor) in a scratch theatre, list which of `importlib.metadata`, `jsonschema`, `referencing` and
   `ruamel.yaml` each loads without using; record the list in the design.
-- [x] 5.2 For each module on that list, move the import to where it's used (`entry_points()` in `core.stages`,
-  `core.vcs`, `core.artifacts`; `version` in `core.audition`; `jsonschema` in `core.interim`), keeping type-only uses
-  under `TYPE_CHECKING`; extend group 2.3's tests to assert the module isn't loaded on that command's path; verify
-  mypy --strict and the suite pass. Commit (signed, signed off, full check).
+- [x] 5.2 For each module on that list, move the import to where it's used, keeping type-only uses under
+  `TYPE_CHECKING`: `jsonschema` in `core.interim` and `core.config.kinds` (as `core.schemas` already does, task 3.4),
+  `ruamel.yaml` in `core.config.projection`, and `cli.values` into `config set`'s body; and move `Backends` and
+  `lease_dir` to `core.runs.backends`, so the queries and changes stop importing `perform`. Extend group 2.3's tests
+  so `status` and `config get` also assert that schema checking, YAML and (for `status`) `perform` aren't loaded.
+  Verify mypy --strict and the suite pass. Commit (signed, signed off, full check). (Planned too, and left out on the
+  list's evidence: `importlib.metadata` stays in `core.stages`, `core.vcs`, `core.artifacts`, `core.identity` and
+  `core.events.port`, since every command that opens a theatre reads an entry point, and `core.audition`'s `version`
+  is on init's path, which uses it. `logs` and `perform` get no test of their own: `logs` already loads none of the
+  heavy modules but asyncio, and `perform` uses them all.)
 
 ## 6. After numbers and integration
 
