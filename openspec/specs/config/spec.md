@@ -591,7 +591,8 @@ rather than refused. Its options are checked when it is next changed or performe
 #### Scenario: The actor's effects are still checked
 - **WHEN** `lead` is on the `lm-studio` runner, which isn't installed, one branch expects `docs/a.md` while `lead` may
   write `docs/**`, and another narrows its writes to `out/**`, and they are merged
-- **THEN** the merge is in conflict, naming `lead` and that `docs/a.md` is expected but no effect covers it
+- **THEN** the merge is in conflict, naming `lead` and that an `expect` item, by its position, isn't covered by any
+  effect
 
 ### Requirement: A refused config value is repeated nowhere
 When `config set`, `config unset` or `config get` refuses a value for its shape, no error, notice, client message or

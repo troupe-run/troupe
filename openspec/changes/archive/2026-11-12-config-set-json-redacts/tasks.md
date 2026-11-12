@@ -105,6 +105,10 @@
 - [x] 7.6 Name a null inside a value by the value's place, never the keys leading to it, in the request decoder and in
   core (design D7). Verify with canary tests in `test_client_messages.py`, `test_config_changes.py` and
   `test_config_value_echo.py`, which fail on `292bc734`. (All pass; a list position is still named.)
+- [x] 7.7 Bring the config spec's "The actor's effects are still checked" scenario in line with 7.2: the merge
+  conflict names the uncovered `expect` item by position, not its path (found checking #384 against the merge queue,
+  after archive). Verify the scenario's test, `test_a_merge_without_the_runner_still_checks_the_actors_effects`,
+  asserts that wording. (It does, since 7.2.)
 
 ## Workflow follow-up
 
