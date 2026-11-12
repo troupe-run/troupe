@@ -362,7 +362,16 @@ def new_recorder(store: Any, run_id: str, send: Any) -> Any:  # noqa: ANN401
         workspace="theatre",
     )
     return perform_module._Recorder(
-        run_id, what, store, person, agent, STAGE, "sha256:" + "a" * 64, send, asyncio.Event()
+        run_id,
+        what,
+        store,
+        person,
+        agent,
+        STAGE,
+        "sha256:" + "a" * 64,
+        send,
+        asyncio.Event(),
+        perform_module.ContextFull("fail", "default"),
     )
 
 
@@ -471,6 +480,7 @@ def interrupted_with_a_notice(harness: Harness) -> str:
         direction="sha256:" + "a" * 64,
         config=["sha256:" + "b" * 64],
         workspace={"kind": "theatre"},
+        on_context_full={"value": "fail", "source": "default"},
     )
     person = store.command(via="cli")
     person.record(run.collect_events())

@@ -8,10 +8,10 @@
 
 ## 2. Config, policy and perform
 
-- [ ] 2.1 Add `onContextFull` to the actor config schema, and its description. Verify: config tests for the config spec scenarios (`compact` recorded, `summarise` refused naming the path and both values).
-- [ ] 2.2 Add the `compaction` policy setting (`actors` | `all` | `none`, default `actors`) to `core/policy.py`, as an enum setting beside the flags. Verify: policy tests for the default, the env source and `policy.invalid-value` naming all three values.
-- [ ] 2.3 Resolve each run's `onContextFull` in `perform` (design D2 table), send it in `run/start`, and refuse with `perform.compaction-forbidden` under `none` before the run's start is recorded. Add the error code to the catalogue together with the code that raises it. Verify: runs tests for every cell of the D2 table and for the refusal, which records no run and starts no runner.
-- [ ] 2.4 Record `onContextFull` and its source in the run's start (the run-started event schema and the runs aggregate), and show it in `troupe logs`. Verify: runs tests for the `actor`, `policy` and `default` sources.
+- [x] 2.1 Add `onContextFull` to the actor config schema, and its description. Verify: config tests for the config spec scenarios (`compact` recorded, `summarise` refused naming the path and both values).
+- [x] 2.2 Add the `compaction` policy setting (`actors` | `all` | `none`, default `actors`) to `core/policy.py`, as an enum setting beside the flags. Verify: policy tests for the default, the env source and `policy.invalid-value` naming all three values.
+- [x] 2.3 Resolve each run's `onContextFull` in `perform` (design D2 table), send it in `run/start`, and refuse with `policy.compaction-forbidden` under `none` before the run's start is recorded. Add the error code to the catalogue together with the code that raises it. Verify: runs tests for every cell of the D2 table and for the refusal, which records no run and starts no runner.
+- [x] 2.4 Record `onContextFull` and its source in the run's start (the run-started event schema and the runs aggregate), as the run's runtime is recorded. Verify: runs tests for the `actor`, `policy` and `default` sources.
 
 ## 3. Ollama runner
 

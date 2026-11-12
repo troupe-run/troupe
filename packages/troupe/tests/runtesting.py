@@ -131,7 +131,7 @@ class Harness:
             actor["effects"] = effects
         if "character" in request:
             actor["character"] = request["character"]
-        for field_ in ("runtime", "model"):
+        for field_ in ("runtime", "model", "onContextFull"):
             if field_ in request:
                 actor[field_] = request[field_]
         actor["workspace"] = request.get("workspace", "theatre")

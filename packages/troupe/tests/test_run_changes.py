@@ -135,6 +135,7 @@ def test_a_run_with_no_end_is_refused_as_not_ended(repo: Repo) -> None:
             **json.loads(store.history(UUID(run.run_id))[0].state)["workspace"],
             "path": ".troupe/local/worktrees/0f8fad5b-d9cb-469f-a165-70867728950e",
         },
+        on_context_full={"value": "fail", "source": "default"},
     )
     store.command(via="cli").record(other.collect_events())
     with pytest.raises(TroupeError) as caught:
@@ -281,6 +282,7 @@ def test_discarding_an_interrupted_run_removes_its_worktree_and_records_the_disc
         direction="sha256:" + "a" * 64,
         config=started["config"],
         workspace={**started["workspace"], "path": f".troupe/local/worktrees/{other_id}"},
+        on_context_full={"value": "fail", "source": "default"},
     )
     store.command(via="cli").record(interrupted.collect_events())
     (repo.path / ".troupe" / "local" / "runs" / other_id).mkdir(parents=True)  # a free lease

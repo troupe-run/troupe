@@ -1687,6 +1687,34 @@
     {
       "properties": {
         "code": {
+          "const": "policy.compaction-forbidden"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "actor",
+            "variable"
+          ],
+          "properties": {
+            "actor": {
+              "type": "string",
+              "minLength": 1
+            },
+            "variable": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
           "const": "settings.invalid-value"
         },
         "details": {

@@ -116,6 +116,7 @@ def recorded_start(store: EventStore, run_id: str) -> None:
         direction="sha256:" + "a" * 64,
         config=["sha256:" + "b" * 64],
         workspace={"kind": "theatre"},
+        on_context_full={"value": "fail", "source": "default"},
     )
     store.command(via="cli").record(run.collect_events())
     run.report(0, {"runId": run_id, "seq": 0, "type": "log", "level": "info", "message": "m"})
@@ -286,6 +287,7 @@ def started(store: EventStore, workspace: dict[str, Any]) -> Run:
         direction="sha256:" + "a" * 64,
         config=["sha256:" + "b" * 64],
         workspace=workspace,
+        on_context_full={"value": "fail", "source": "default"},
     )
     store.command(via="cli").record(run.collect_events())
     return run

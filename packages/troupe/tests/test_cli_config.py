@@ -81,6 +81,7 @@ def test_an_actors_file_holds_every_field_config_sets_in_the_schemas_order(repo:
     # (spec: config-files, "Each actor is projected to its own files").
     code, _, err = _tester(
         "actors.tester.workspace=theatre",
+        "actors.tester.onContextFull=compact",
         "actors.tester.runtime=ollama",
         "actors.tester.model=llama3.2",
     )
@@ -91,6 +92,7 @@ def test_an_actors_file_holds_every_field_config_sets_in_the_schemas_order(repo:
     assert list(data) == list(schema["properties"])
     assert data["effects"] == {"write": ["out/**"]}
     assert data["workspace"] == "theatre"
+    assert data["onContextFull"] == "compact"
     assert data["runtime"] == "ollama"
     assert data["model"] == "llama3.2"
     ACTOR_FILE.validate(data)
@@ -463,6 +465,31 @@ def test_a_workspace_that_doesnt_exist_is_refused_naming_the_path_and_both_value
         "actors.tester.workspace: it must be one of 'worktree', 'theatre' (the actor schema)" in err
     )
     assert "sandbox" not in err
+
+
+# Requirement: An actor says what its runs do when the context fills (compaction-opt-in)
+
+
+def test_an_actor_can_opt_in_to_compaction(repo: Repo) -> None:
+    _tester()
+    code, _, err = cli("config", "set", "actors.tester.onContextFull=compact")
+    assert code == 0, err
+    assert _get("actors.tester.onContextFull") == "compact"
+    text = (repo.path / ".troupe" / "actors" / "tester.yaml").read_text(encoding="utf-8")
+    assert "onContextFull: compact" in text
+
+
+def test_an_on_context_full_off_the_list_is_refused_naming_the_path_and_both_values(
+    repo: Repo,
+) -> None:
+    _tester()
+    before = (repo.path / ".troupe" / "actors" / "tester.yaml").read_bytes()
+    code, _, err = cli("config", "set", "actors.tester.onContextFull=summarise")
+    assert code == 1
+    assert (
+        "actors.tester.onContextFull: it must be one of 'fail', 'compact' (the actor schema)" in err
+    )
+    assert (repo.path / ".troupe" / "actors" / "tester.yaml").read_bytes() == before
 
 
 # Requirement: A runtime is a named service... (spec: runtimes), set on the command line

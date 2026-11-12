@@ -28,7 +28,7 @@ import threading
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID, uuid4
 
 from troupe.core import defaults, runtimes
@@ -48,7 +48,7 @@ from troupe.core.identity import Identity
 from troupe.core.interim import runner_command, runner_environment
 from troupe.core.masking import Masker
 from troupe.core.notices import Notice
-from troupe.core.policy import read_policy
+from troupe.core.policy import PolicyCompaction, env_name, read_policy
 from troupe.core.runners.effects import (
     DeclaredEffects,
     EffectCheck,
@@ -152,6 +152,45 @@ class _What:
     effects: p.EffectsDeclaration = p.READ_ONLY_DECLARATION
     runtime: str | None = None
     model: str | None = None
+    on_context_full: str | None = None
+    """The actor's own onContextFull; None when it doesn't set one."""
+
+
+@dataclass(frozen=True)
+class ContextFull:
+    """A run's onContextFull as perform resolved it, and where it came from (compaction-opt-in
+    design D2, D3)."""
+
+    value: p.OnContextFull
+    source: Literal["default", "actor", "policy"]
+
+    def to_data(self) -> dict[str, str]:
+        return {"value": self.value, "source": self.source}
+
+
+def resolve_context_full(actor: str, own: str | None, policy: PolicyCompaction) -> ContextFull:
+    """The run's onContextFull from the actor's own value and the compaction policy: under actors,
+    the actor's value, fail when it has none; under all, compact unless the actor says fail; under
+    none, fail, and an actor that asks for compact is refused with policy.compaction-forbidden."""
+    if own == "compact" and policy.value == "none":
+        variable = env_name(policy.setting)
+        raise TroupeError(
+            "policy.compaction-forbidden",
+            problem=f"The actor {actor} asks to compact when its context fills "
+            f"(onContextFull: compact), and policy forbids compaction ({variable}=none).",
+            fix=f"Set the actor's onContextFull to fail (troupe config set "
+            f"{shown(('actors', actor, 'onContextFull'))}=fail), or change {variable}.",
+            details={"actor": actor, "variable": variable},
+        )
+    if own == "compact":
+        return ContextFull("compact", "actor")
+    if own == "fail":
+        return ContextFull("fail", "actor")
+    if policy.value == "all":
+        return ContextFull("compact", "policy")
+    if policy.value == "none":
+        return ContextFull("fail", "policy")
+    return ContextFull("fail", "default")
 
 
 def _from_config(merged: Merged, name: str) -> _What:
@@ -189,6 +228,7 @@ def _from_config(merged: Merged, name: str) -> _What:
         effects=effects,
         runtime=actor.get("runtime"),
         model=actor.get("model"),
+        on_context_full=actor.get("onContextFull"),
     )
 
 
@@ -264,11 +304,13 @@ class _Recorder:
         direction_ref: str,
         send: Send,
         cancel: asyncio.Event,
+        context_full: ContextFull,
         runtime: RunRuntime | None = None,
     ) -> None:
         self.run_id = run_id
         self.what = what
         self.runtime = runtime
+        self.context_full = context_full
         self.store = store
         self.stale = False
         self.person = person
@@ -296,6 +338,7 @@ class _Recorder:
             direction=self.direction_ref,
             config=list(self.what.config),
             workspace=self.workspace,
+            on_context_full=self.context_full.to_data(),
             runtime=self.runtime.to_data() if self.runtime is not None else None,
         )
         self.person.record(run.collect_events())
@@ -458,13 +501,15 @@ async def perform(
     store = await asyncio.to_thread(backends.event_store, session)
     person_identity = await asyncio.to_thread(store.identify)
     stage = load_stage(defaults.STAGE)
-    admission = stage.admit(read_policy(session.env))
+    policy = read_policy(session.env)
+    admission = stage.admit(policy)
     scratch_root = refuse_scratch_in_theatre(defaults.run_scratch_root(), theatre)
     merged = await asyncio.to_thread(read, store)
     refuse_conflicts(merged)
     what = _from_config(merged, request.actor)
     argv = runner_command(what.runner)
     check_actor(what.actor, merged.config)
+    context_full = resolve_context_full(what.actor, what.on_context_full, policy.compaction)
     runtime = (
         runtimes.for_run(
             what.runtime, what.actor, what.model, merged.config, session.env, runner=what.runner
@@ -529,6 +574,7 @@ async def perform(
             direction_ref,
             send,
             cancel,
+            context_full,
             runtime,
         )
         try:
@@ -578,6 +624,7 @@ async def perform(
                         else None
                     ),
                     credential=runtime.value if runtime is not None else None,
+                    on_context_full=context_full.value,
                 ),
                 store=artifacts,
                 effect=expected_files_for(what, workspace),

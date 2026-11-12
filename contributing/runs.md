@@ -167,6 +167,7 @@ and never from a command's request, so no client can loosen them.
 |---|---|---|
 | `allow_unenforced_local_stage` | `false` | Running an actor on a stage that can't enforce its declared effects, such as the local stage |
 | `allow_mark_merges_resolved` | `true` | Marking a rewritten conflicted config file resolved in git's index, when the setting `mark_merges_resolved` is on ([config.md](config.md#settings)) |
+| `compaction` | `actors` | Which actors' runs may compact when their engine's context fills: `actors`, each actor's `onContextFull` decides; `all`, every actor that doesn't say `fail`; `none`, no actor, and one that asks is refused with `policy.compaction-forbidden` |
 
 **Setting it, for now.** Until config brings policy files (#8), the only way to set a policy is an environment
 variable: `TROUPE_POLICY_` and the setting's name in capitals. This is interim, and config replaces it.
@@ -175,10 +176,12 @@ variable: `TROUPE_POLICY_` and the setting's name in capitals. This is interim, 
 export TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE=true
 ```
 
-- The value must be exactly `true` or `false`. Anything else (`yes`, `TRUE`, `1`) fails the command with
-  `policy.invalid-value`; it never falls back to the default.
+- A flag's value must be exactly `true` or `false`, and `compaction`'s exactly `actors`, `all` or `none`. Anything else
+  (`yes`, `TRUE`, `1`) fails the command with `policy.invalid-value`; it never falls back to the default.
 - Unset or empty means the default.
 - Lineage records where the value came from (`env` or `default`) for every run it allowed.
+- A run's start records its `onContextFull` and where it came from: `actor`, `policy` (when `compaction` is `all` or
+  `none` and the actor doesn't set it) or `default`.
 
 ## Notices and errors
 
@@ -190,7 +193,8 @@ export TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE=true
 | `runner.not-installed` | troupe knows the actor's runner but its package isn't installed here; it names the `troupe-run[<runner>]` extra that installs it, or, for a runner in the base install, says to reinstall troupe or run `uv sync` in a checkout |
 | `stage.unknown` | No stage of that name is installed |
 | `stage.effects-unenforced` | The stage can't enforce the actor's effects, and policy doesn't allow running it anyway |
-| `policy.invalid-value` | A policy variable is set to something other than `true` or `false` |
+| `policy.invalid-value` | A policy variable is set to a value its setting doesn't accept: other than `true` or `false` for a flag, or other than `actors`, `all` or `none` for `compaction` |
+| `policy.compaction-forbidden` | The actor's `onContextFull` is `compact`, and the `compaction` policy is `none` |
 | `run.out-of-sequence` | A run event isn't the next one its run expects, or a run event or notice arrived after the run ended: a fault, never retried |
 | `run.recording-failed` | A run event, a notice raised for the run, or the run's end, couldn't be recorded, so the run was stopped |
 | `run.not-found` | No run here has an id starting with what was given |

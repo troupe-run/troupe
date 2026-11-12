@@ -626,6 +626,7 @@ def _run() -> Run:
         direction=HASH,
         config=[HASH],
         workspace={"kind": "theatre"},
+        on_context_full={"value": "fail", "source": "default"},
     )
 
 
@@ -665,6 +666,7 @@ def test_a_worktree_made_with_a_field_its_topic_does_not_define_fails_naming_the
         direction=HASH,
         config=[HASH],
         workspace={**WORKTREE, "dirty": False},
+        on_context_full={"value": "fail", "source": "default"},
     )
     run.made_worktree(["teleport"])
     with pytest.raises(ProtocolGuardError, match=r"Run\.WorktreeMade.*'teleport'"):

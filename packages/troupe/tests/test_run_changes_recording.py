@@ -40,6 +40,7 @@ def new_run(workspace: dict[str, Any] = WORKTREE) -> Run:
         direction="sha256:" + "a" * 64,
         config=["sha256:" + "b" * 64],
         workspace=workspace,
+        on_context_full={"value": "fail", "source": "default"},
     )
 
 

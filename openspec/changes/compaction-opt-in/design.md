@@ -80,7 +80,7 @@ boolean, read through the same seam (`TROUPE_POLICY_COMPACTION`, value and sourc
 
 - `all` turns compaction on for every actor that hasn't said otherwise. An actor can still say `fail`, which is the
   tighter choice, so a lower level only tightens.
-- `none` refuses a run whose actor asks for `compact`, with `perform.compaction-forbidden` naming the actor, the
+- `none` refuses a run whose actor asks for `compact`, with `policy.compaction-forbidden` naming the actor, the
   policy variable and the fix (set the actor's `onContextFull` to `fail`, or change the policy). It doesn't quietly
   run the actor with `fail`: the actor's config asked for something the run would not do (refuse rather than guess).
   The refusal comes before the run's start is recorded, like other checks before a worktree is made.
