@@ -182,8 +182,9 @@ defaults in the SDK's `defaults.py`, because both runners use them.
 - `stub(tool) -> str`: the stub's text, one wording for every runner.
 - `Estimate`: bytes to tokens, calibrated as in D6.
 - The `context` event is the existing `context_event(...)`, with `messagesBefore` and `messagesAfter` (equal, since
-  stubbing removes no message), `tokensBefore` from the estimate, and a message such as "removed 7 old tool results
-  (41 KB) to fit the context window".
+  stubbing removes no message), and a message such as "removed 7 old tool results (41000 bytes) to fit the context
+  window". It carries no token counts: the runner only estimates them, and #307's contract sends a count only when
+  the engine or runner knows it.
 
 Each runner maps its own shapes: the Ollama runner re-encodes the stubbed `tool` messages in `_messages`, and the
 OpenAI runner replaces `output` in the chosen `function_call_output` items. The SDK has no conversation type, since

@@ -1,0 +1,21 @@
+{
+  "what": "The context-overflow run told to compact: the first request is already longer than the window and holds no tool result to remove, so the run still ends with context-length, saying compaction found nothing more to remove.",
+  "ollamaVersion": "0.40.14",
+  "model": "qwen3:0.6b",
+  "date": "2026-11-12",
+  "command": [
+    "capture_ollama.py",
+    "context-compaction-exhausted"
+  ],
+  "options": {
+    "think": false,
+    "contextLength": 512
+  },
+  "direction": "Read notes.txt and summarise it.",
+  "effects": {},
+  "onContextFull": "compact",
+  "credential": "none: Ollama needs none",
+  "scrubbing": "the workspace's and scratch directory's paths are <workspace> and <scratch>; /api/show's license, modelfile and template text are left out",
+  "events": "recorded at capture, then reviewed by hand",
+  "window": 512
+}

@@ -15,9 +15,9 @@
 
 ## 3. Ollama runner
 
-- [ ] 3.1 Compact before a request when it's `compact` and the estimate is over `COMPACT_AT_SHARE` of the window: stub chosen `tool` messages in `_messages` and send the `context` event before the request. Verify: unit tests for the ollama-runner scenarios (protected messages unchanged, one `truncated`/`runner` event with equal message counts, nothing changed when told `fail`).
-- [ ] 3.2 After a `CONTEXT_REFUSAL` in a run told `compact`, compact and send the request again without counting a turn. End with `context-length` and the "nothing more to remove" message when `choose` returns nothing. Verify: unit tests for both scenarios, and the existing `context-overflow` fixture still ends with `context-length` when told `fail`.
-- [ ] 3.3 Capture `context-compacted` and `context-compaction-exhausted` fixtures from real Ollama with `tools/capture_ollama.py` and a small `contextLength`, and play them in the fixture tests. Verify: the fixture tests pass, and the first ends `ok` with a `context` event.
+- [x] 3.1 Compact before a request when it's `compact` and the estimate is over `COMPACT_AT_SHARE` of the window: stub chosen `tool` messages in `_messages` and send the `context` event before the request. Verify: unit tests for the ollama-runner scenarios (protected messages unchanged, one `truncated`/`runner` event with equal message counts, nothing changed when told `fail`).
+- [x] 3.2 After a `CONTEXT_REFUSAL` in a run told `compact`, compact and send the request again without counting a turn. End with `context-length` and the "nothing more to remove" message when `choose` returns nothing. Verify: unit tests for both scenarios, and the existing `context-overflow` fixture still ends with `context-length` when told `fail`.
+- [x] 3.3 Capture `context-compacted` and `context-compaction-exhausted` fixtures from real Ollama with `tools/capture_ollama.py` and a small `contextLength`, and play them in the fixture tests. Verify: the fixture tests pass, and the first ends `ok` with a `context` event.
 
 ## 4. OpenAI runner
 

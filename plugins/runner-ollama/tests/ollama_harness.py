@@ -215,6 +215,7 @@ class Session:
         event_max_bytes: int = EVENT_MAX_BYTES,
         effects: dict[str, list[str]] | None = None,
         runtime: dict[str, Any] | None = None,
+        on_context_full: str = "fail",
     ) -> dict[str, Any]:
         """Initialize, then send run/start, with ``runtime`` (see ``runtime``) when given.
         ``valid=False`` marks options the runner must refuse, which the runner's options schema
@@ -230,7 +231,7 @@ class Session:
             "limits": {"eventMaxBytes": event_max_bytes},
             "effects": {"write": [], "delete": [], "move": [], **(effects or {})},
             "scratch": str(self.scratch()),
-            "onContextFull": "fail",
+            "onContextFull": on_context_full,
         }
         if character is not None:
             params["character"] = character

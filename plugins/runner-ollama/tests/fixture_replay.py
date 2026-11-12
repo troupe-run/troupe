@@ -18,8 +18,18 @@ from typing import Any
 from fake_ollama import Answer, FakeOllama, Settings
 from ollama_harness import FIXTURES, Session, runtime
 
-FILES = {"context-overflow": {"notes.txt": "A line of notes.\n" * 200}}
-"""The files a fixture's workspace starts with, as its capture made them."""
+NOTES = {"notes.txt": "A line of notes.\n" * 200}
+COMPACTED_FILES = {
+    name: "".join(f"The {topic} log, entry {n}: all quiet.\n" for n in range(1, 81))
+    for name, topic in (("a.txt", "lighthouse"), ("b.txt", "harbour"), ("c.txt", "ferry"))
+}
+FILES = {
+    "context-overflow": NOTES,
+    "context-compaction-exhausted": NOTES,
+    "context-compacted": COMPACTED_FILES,
+}
+"""The files a fixture's workspace starts with, as its capture made them. A test checks them
+against the capture tool's scenarios."""
 
 
 @dataclass(frozen=True)
@@ -89,6 +99,7 @@ def replay(name: str, root: Path) -> Replayed:
             direction=provenance.get("direction", ""),
             effects=provenance.get("effects"),
             runtime=runtime(fake.url, provenance["model"], name="ollama"),
+            on_context_full=provenance.get("onContextFull", "fail"),
         )
         if "error" in response:
             return Replayed(response["error"]["data"], [], [])

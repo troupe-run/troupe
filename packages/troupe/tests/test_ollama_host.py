@@ -28,7 +28,17 @@ REFUSALS = {
     "no-tools-capability": "ollama.model-without-tools",
 }
 RUNS = [name for name in ollama_stand_in.NAMES if name not in REFUSALS]
-FILES = {"context-overflow": {"notes.txt": "A line of notes.\n" * 200}}
+NOTES = {"notes.txt": "A line of notes.\n" * 200}
+FILES = {
+    "context-overflow": NOTES,
+    "context-compaction-exhausted": NOTES,
+    "context-compacted": {
+        name: "".join(f"The {topic} log, entry {n}: all quiet.\n" for n in range(1, 81))
+        for name, topic in (("a.txt", "lighthouse"), ("b.txt", "harbour"), ("c.txt", "ferry"))
+    },
+}
+"""The files each fixture's workspace starts with, as plugins/runner-ollama's capture tool made
+them (its fixture_replay.FILES, which its tests check against the tool)."""
 
 
 def _workspace(tmp_path: Path, name: str) -> Path:
@@ -66,6 +76,7 @@ def _run(
                     move=effects.get("move", []),
                 ),
                 scratch=scratch,
+                on_context_full=provenance.get("onContextFull", "fail"),
             ),
             store=store,
             effect=NoEffectExpected(),
