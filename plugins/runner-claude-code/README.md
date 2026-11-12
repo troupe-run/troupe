@@ -83,7 +83,7 @@ claude -p --output-format stream-json --verbose --no-session-persistence \
   run never carries on from a summary of its earlier turns
   ([#279](https://github.com/troupe-run/troupe/issues/279)). It's a setting rather than `DISABLE_AUTO_COMPACT`,
   because a setting source the actor loads can replace that variable through its `env`, while the file passed with
-  `--settings` ranks above every source. A run whose context fills ends with an error
+  `--settings` ranks above every source the actor can load. A run whose context fills ends with an error
   ([How a run ends](#how-a-run-ends)).
 - **The private files** live in a directory of the runner's own, outside the workspace (0700 on POSIX), removed when
   the runner exits. If the temporary directory is inside the workspace, the run is refused.

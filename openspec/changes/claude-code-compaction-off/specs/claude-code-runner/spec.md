@@ -14,9 +14,11 @@ then ends with an error result rather than carrying on from a summary of its ear
 - **THEN** the settings file Claude Code is given with `--settings` still holds `autoCompactEnabled` `false`
 
 ### Requirement: Claude Code's context limit maps to context-length
-An `is_error` result record whose `terminal_reason` is `prompt_too_long` (the API refused the request as too long) or
-`blocking_limit` (Claude Code stopped before sending a request that would not fit) SHALL map to a `result` with
-status `error` and `reason` `context-length`, whatever error code or retry came before it.
+An `is_error` result record under subtype `success` whose `terminal_reason` is `prompt_too_long` (the API refused the
+request as too long) or
+`blocking_limit` (Claude Code stopped before sending a request that would not fit) SHALL map to a `result` with status
+`error` and `reason` `context-length`, whatever error code or retry came before it. A failed subtype still maps by its
+subtype.
 
 #### Scenario: The API refuses a request as too long
 - **WHEN** the `context-limit-refused` fixture plays: its last assistant record has error `invalid_request` and its
@@ -32,6 +34,11 @@ status `error` and `reason` `context-length`, whatever error code or retry came 
 - **WHEN** a run retries a rate limit, and then ends with a result record with `is_error` true and `terminal_reason`
   `prompt_too_long`
 - **THEN** the `result` has `reason` `context-length`
+
+#### Scenario: A failed subtype that names the context limit
+- **WHEN** a result record has subtype `error_during_execution`, `is_error` true and `terminal_reason`
+  `prompt_too_long`
+- **THEN** the `result` has `reason` `engine`
 
 ## MODIFIED Requirements
 
