@@ -230,6 +230,7 @@ def test_a_second_run_start_is_refused(
             "limits": {"eventMaxBytes": 65536},
             "effects": {"write": [], "delete": [], "move": []},
             "scratch": str(session.scratch()),
+            "onContextFull": "fail",
         },
     )
     assert answer["error"]["data"]["code"] == "runner.already-started"
@@ -251,6 +252,7 @@ def test_killing_a_session_mid_run_ends_the_runner_and_its_hanging_stand_in(
             "limits": {"eventMaxBytes": 65536},
             "effects": {"write": [], "delete": [], "move": []},
             "scratch": str(session.scratch()),
+            "onContextFull": "fail",
         },
     )
     assert second["error"]["data"]["code"] == "runner.already-started"

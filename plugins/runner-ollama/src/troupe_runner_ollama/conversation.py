@@ -19,6 +19,7 @@ from typing import Any, Protocol
 from troupe_plugin_sdk import runner as p
 from troupe_plugin_sdk.declaration import Declaration
 from troupe_plugin_sdk.defaults import (
+    BYTES_PER_TOKEN,
     GLOB_MAX_PATHS,
     GREP_MAX_MATCHES,
     READ_MAX_BYTES,
@@ -29,7 +30,6 @@ from troupe_plugin_sdk.tools import Tools
 from troupe_runner_ollama import NAME, __version__
 from troupe_runner_ollama.client import Client, EngineError, RetryableError, StoppedError
 from troupe_runner_ollama.defaults import (
-    BYTES_PER_TOKEN,
     GLOB_PATH_BYTES,
     GREP_MATCH_BYTES,
     READ_NOTE_BYTES,

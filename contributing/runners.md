@@ -34,7 +34,7 @@ whose tool loop calls troupe's tools ([#291](https://github.com/troupe-run/troup
 | Method | Direction | Kind | Params | Result |
 |---|---|---|---|---|
 | `initialize` | troupe → runner | request | `protocolVersions`, `host {name, version}`, `capabilities` | `protocolVersion`, `runner {name, version}`, `capabilities` |
-| `run/start` | troupe → runner | request | `runId`, `direction`, `character` (optional), `workspace`, `effects {write, delete, move}`, `scratch`, `options`, `runtime {name, endpoint, model, credential, price}` (optional, and `price` within it), `limits {eventMaxBytes}` | `runId` |
+| `run/start` | troupe → runner | request | `runId`, `direction`, `character` (optional), `workspace`, `effects {write, delete, move}`, `scratch`, `options`, `onContextFull`, `runtime {name, endpoint, model, credential, price}` (optional, and `price` within it), `limits {eventMaxBytes}` | `runId` |
 | `run/event` | runner → troupe | notification | one run event | — |
 | `run/transcript` | runner → troupe | notification | `runId`, `record`, `encoding` (optional), `kind` (exactly when the runner accepted `transcript-kinds`) | — |
 | `run/cancel` | troupe → runner | request | `runId` | `{}` |
@@ -67,6 +67,8 @@ troupe passes through without looking inside them. The runner publishes their sc
 error naming it, rather than ignoring it. `limits.eventMaxBytes` is the largest serialised event troupe
 keeps inline: summarise below it. `effects` and `scratch` are covered in [Applying the effects](#applying-the-effects).
 `runtime` is covered in [The runtime and its credential](#the-runtime-and-its-credential).
+`onContextFull`, `fail` or `compact`, is what the run does when its engine's context fills, as troupe worked it out
+from the actor and policy. It's covered in [Lost content](#lost-content).
 
 ### The runtime and its credential
 
@@ -280,6 +282,14 @@ ends the run, and troupe records it with the run's other events.
   engine or runner knows it, and leave it out otherwise. Claude Code, for example, reports only the tokens before.
 - **`message`** says what happened, in words.
 - A cut answer at the engine's output limit isn't a `context` event. It ends the run with `output-limit`.
+
+`run/start`'s `onContextFull` says whether the run may lose content at all. With `fail`, never compact or drop the
+conversation's content, and stop your engine doing so: when the context fills, end the run with `context-length`.
+With `compact`, you may, or let your engine, and send a `context` event each time. When compaction can't make room,
+end the run with `context-length` and say compaction was on. A runner that holds its own conversation compacts it
+with the SDK's `troupe_plugin_sdk.compaction`, which replaces old tool results with a stub, oldest first, and never
+touches the character, the direction, the model's own messages or the latest turn's results (see the SDK's
+[README](../packages/troupe-plugin-sdk/README.md#compaction)).
 
 The SDK builds the event with `context_event` from `troupe_plugin_sdk.events`. It numbers the event with the run's
 `EventNumbering`, cuts the message to the run's limits, and leaves out each count you pass as `None`:

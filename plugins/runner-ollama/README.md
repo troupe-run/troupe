@@ -186,7 +186,9 @@ with code 0. It exits 1 only when it fails itself, after a `log` error and an `e
 
 ## Limits
 
-Each is a named setting in [`defaults.py`](src/troupe_runner_ollama/defaults.py).
+Each is a named setting in [`defaults.py`](src/troupe_runner_ollama/defaults.py). The bytes taken to make a token
+(`BYTES_PER_TOKEN`, 3), and the shares at which a run told to compact does so and how far, are the plugin SDK's, in
+its `defaults.py`, because every runner that holds its own conversation uses them.
 
 | Setting | Default | What it limits |
 |---|---|---|
@@ -194,7 +196,6 @@ Each is a named setting in [`defaults.py`](src/troupe_runner_ollama/defaults.py)
 | `MAX_TURNS_LIMIT` | 1000 | The largest `maxTurns` |
 | `DEFAULT_CONTEXT_LENGTH` | 16384 | The window without `contextLength`, lowered to the model's maximum |
 | `TOOL_OUTPUT_SHARE` | 0.25 | The share of the window one tool result may take |
-| `BYTES_PER_TOKEN` | 3 | The bytes taken to make a token, to turn the window into a byte budget |
 | `GLOB_PATH_BYTES` | 64 | The bytes one `Glob` path is taken to need |
 | `GREP_MATCH_BYTES` | 128 | The bytes one `Grep` match is taken to need |
 | `READ_NOTE_BYTES` | 128 | Room kept in a tool result's budget for the SDK's note saying where a capped `Read` stopped |

@@ -110,6 +110,7 @@ def _start(runtime: dict[str, Any] | None) -> RunStartParams:
         "limits": {"eventMaxBytes": 65536},
         "effects": {"write": [], "delete": [], "move": []},
         "scratch": "/s",
+        "onContextFull": "fail",
     }
     if runtime is not None:
         data["runtime"] = runtime

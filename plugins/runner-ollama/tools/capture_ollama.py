@@ -256,6 +256,7 @@ def capture(name: str, endpoint: str, out: Path = FIXTURES) -> Path:
                 move=scenario.effects.get("move", []),
             ),
             scratch=str(scratch),
+            on_context_full="fail",
             runtime=runtime,
         )
         maximum = model_maximum(shown or {})

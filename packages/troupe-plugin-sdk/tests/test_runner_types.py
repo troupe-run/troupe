@@ -117,6 +117,7 @@ CASES: list[tuple[type[p.Message], str, st.SearchStrategy[Any]]] = [
                     }
                 ),
                 "scratch": NAME,
+                "onContextFull": st.sampled_from(["fail", "compact"]),
             }
         ),
     ),
@@ -661,6 +662,7 @@ def test_messages_the_host_builds_validate_as_host_messages() -> None:
                 p.StartLimits(65536),
                 p.READ_ONLY_DECLARATION,
                 "/s",
+                "fail",
             ),
         ),
         p.request(3, "run/cancel", p.RunCancelParams(RUN)),
@@ -807,6 +809,7 @@ def _run_start(endpoint: str) -> dict[str, Any]:
         limits=p.StartLimits(event_max_bytes=1000),
         effects=p.READ_ONLY_DECLARATION,
         scratch="/s",
+        on_context_full="fail",
         runtime=p.RunStartRuntime(
             name="box", endpoint="https://example.com/v1", model="m", credential=False
         ),

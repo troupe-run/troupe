@@ -23,6 +23,7 @@ PARAMS = RunStartParams(
     limits=StartLimits(event_max_bytes=1000),
     effects=READ_ONLY_DECLARATION,
     scratch="/s",
+    on_context_full="fail",
 )
 RUNTIME = RunStartRuntime(
     name="openai", endpoint="https://api.openai.com/v1", model="gpt-test", credential=True

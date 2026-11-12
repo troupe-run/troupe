@@ -181,6 +181,7 @@ class Session:
         character: str | None = None,
         effects: dict[str, list[str]] | None = None,
         runtime: dict[str, Any] | None = None,
+        on_context_full: str = "fail",
     ) -> dict[str, Any]:
         """Initialize, then send run/start with ``options`` (and ``character``, when given).
         ``valid=False`` marks options the runner must refuse, which the runner's options schema
@@ -196,6 +197,7 @@ class Session:
             "limits": {"eventMaxBytes": 65536},
             "effects": {"write": [], "delete": [], "move": [], **(effects or {})},
             "scratch": str(self.scratch()),
+            "onContextFull": on_context_full,
         }
         if character is not None:
             params["character"] = character
@@ -211,9 +213,15 @@ class Session:
         character: str | None = None,
         effects: dict[str, list[str]] | None = None,
         runtime: dict[str, Any] | None = None,
+        on_context_full: str = "fail",
     ) -> dict[str, Any]:
         return self.start(
-            {"script": script}, valid=valid, character=character, effects=effects, runtime=runtime
+            {"script": script},
+            valid=valid,
+            character=character,
+            effects=effects,
+            runtime=runtime,
+            on_context_full=on_context_full,
         )
 
     def notifications(self, count: int) -> list[dict[str, Any]]:

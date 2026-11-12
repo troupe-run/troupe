@@ -115,6 +115,7 @@ class _Driver:
             limits=p.StartLimits(self.limits.event_max_bytes),
             effects=p.READ_ONLY_DECLARATION,
             scratch=str(scratch),
+            on_context_full="fail",
             character=character,
             runtime=self.runtime,
         )

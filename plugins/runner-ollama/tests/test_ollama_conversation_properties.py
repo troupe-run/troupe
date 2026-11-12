@@ -127,6 +127,7 @@ def _converse(tmp_path: Path, answers: list[list[bytes] | int]) -> Recorder:
         limits=p.StartLimits(event_max_bytes=EVENT_MAX_BYTES),
         effects=p.EffectsDeclaration(write=["**"], delete=[], move=[]),
         scratch=str(scratch),
+        on_context_full="fail",
     )
     Conversation(
         start=start,

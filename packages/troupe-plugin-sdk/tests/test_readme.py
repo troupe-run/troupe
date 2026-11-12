@@ -51,6 +51,16 @@ def test_the_limits_table_lists_each_limit_with_its_default() -> None:
             assert value == ast.literal_eval(shown), name
 
 
+def test_the_compaction_table_lists_each_setting_with_its_default() -> None:
+    rows = _table("Compaction")
+    documented = {_names(row[0])[0]: ast.literal_eval(row[1]) for row in rows}
+    assert documented == {
+        "BYTES_PER_TOKEN": defaults.BYTES_PER_TOKEN,
+        "COMPACT_AT_SHARE": defaults.COMPACT_AT_SHARE,
+        "COMPACT_TO_SHARE": defaults.COMPACT_TO_SHARE,
+    }
+
+
 def test_the_lost_content_example_runs_as_written_and_sends_a_valid_context_event() -> None:
     text = README.read_text(encoding="utf-8")
     section = text.split("## Lost content\n", 1)[1].split("\n## ", 1)[0]
