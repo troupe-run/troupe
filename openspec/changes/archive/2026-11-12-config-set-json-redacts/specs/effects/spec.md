@@ -44,7 +44,8 @@ pattern, with a placeholder for that pattern, and SHALL NOT repeat the path.
 
 #### Scenario: An actor that was valid before
 - **WHEN** an actor recorded before this rule expects `out/hello.txt` and declares no effects, and a person performs it
-- **THEN** it is refused with `config.invalid`, naming the path and the fix, and nothing is recorded
+- **THEN** it is refused with `config.invalid`, naming the `expect` list, the item's position and the fix, and
+  nothing is recorded
 
 #### Scenario: An expected path holding a password
 - **WHEN** a person sets `actors.tester.expect` to `["https://user:<canary>@example.com/x"]` and no effect covers it

@@ -66,7 +66,8 @@ troupe config unset 'runtimes.openai.prices[gpt-4.1]'
 ```
 
 A backslash outside brackets (`gpt-4\.1`) is refused rather than read, as is an unclosed `[` or an empty key, with
-`config.path-malformed` naming the text and where it went wrong.
+`config.path-malformed` naming where it went wrong and the text up to there, never what follows, which in `config set`
+can be the value.
 
 **`--rehearse`** on any command that changes anything runs its checks, shows what it would do, and changes nothing.
 It exits 3 when it would change something, 0 when there's nothing to do, and with the refusal's own code when the

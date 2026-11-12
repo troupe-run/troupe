@@ -65,15 +65,17 @@
 - [x] 6.1 Search `docs/` and the CLI's help text for any shown error that quotes a refused value (`isn't JSON`,
   `true or false, not`, `must be one of`, `isn't a config path`, a quoted effect pattern) and update each to the new wording; verify the docs
   check passes. (Rechecked at apply: no page or help text shows one; the SDK README now mentions `PatternError.rule`.
-  The docs check runs in 6.2.)
+  The review of #384 then found three lines describing errors this change alters: `docs/prompt-book/cli.md` and
+  `contributing/config.md`'s `config.invalid` and `config.path-malformed` rows, now updated. The docs check runs in
+  6.2.)
 - [x] 6.2 Run `uv run scripts/check.py` and record the test count; `openspec validate config-set-json-redacts --strict`
-  passes. (On `8a2b7345`, the last commit outside `openspec/`, after the review fixes in 7.1 to 7.6: all gates
+  passes. (On `8a2b7345`, the last code commit, after the review fixes in 7.1 to 7.6: all gates
   passed, 5705 passed and 16 skipped. Strict validation passes.)
 - [x] 6.3 Run issue #374's command by hand in a scratch theatre and record the before and after output in the PR.
   (Run, with the malformed-path, unset and effect-pattern cases too; none shows the password. The before is the
   issue's own output. Both go in the PR body.)
 - [x] 6.4 Open a draft PR that closes #374, and see CI pass on Linux, macOS and Windows once it's marked ready.
-  (PR #384. After review fixes up to `8a2b7345`, the last commit outside `openspec/`, CI run 43037972885 on
+  (PR #384. After review fixes up to `8a2b7345`, the last code commit, CI run 43037972885 on
   `a9e71f49` passed all 12 legs, Linux, macOS and Windows on Python 3.12 to 3.15, on its second attempt: the first
   failed one macOS leg on an openai runner test this PR doesn't reach, filed as #392.)
 
