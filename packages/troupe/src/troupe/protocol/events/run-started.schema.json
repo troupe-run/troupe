@@ -16,7 +16,8 @@
     "effect_check",
     "direction",
     "config",
-    "workspace"
+    "workspace",
+    "on_context_full"
   ],
   "properties": {
     "lineage": {
@@ -59,6 +60,30 @@
     "workspace": {
       "description": "Where the run works.",
       "$ref": "#/$defs/workspace"
+    },
+    "on_context_full": {
+      "description": "What the run does when its engine's context fills, as troupe resolved it when the run started, and where that came from: actor when the actor's onContextFull set it, policy when the compaction policy (all or none) decided it, default otherwise.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "source"
+      ],
+      "properties": {
+        "value": {
+          "enum": [
+            "fail",
+            "compact"
+          ]
+        },
+        "source": {
+          "enum": [
+            "default",
+            "actor",
+            "policy"
+          ]
+        }
+      }
     },
     "runtime": {
       "description": "The runtime the run talked to, as troupe resolved it when the run started, each value with its source: the model is always resolved, and a credential is named by its variable, never its value. Absent: the actor named no runtime.",

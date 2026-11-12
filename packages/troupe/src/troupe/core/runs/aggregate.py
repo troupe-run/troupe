@@ -70,10 +70,12 @@ class Run(Aggregate):
         direction: str,
         config: list[str],
         workspace: dict[str, Any],
+        on_context_full: dict[str, Any],
         runtime: dict[str, Any] | None = None,
     ) -> None:
         self.run_id = run_id
         self.runtime = runtime
+        self.on_context_full = on_context_full
         self.actor = actor
         self.runner_requested = runner_requested
         self.stage = stage

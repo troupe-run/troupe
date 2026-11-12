@@ -204,6 +204,7 @@ Policy decides what troupe may do, whoever asks. No command can loosen it.
 |---|---|---|
 | `allow_unenforced_local_stage` | `false` | Running an actor on a stage that can't enforce its declared effects, such as the local stage |
 | `allow_mark_merges_resolved` | `true` | Marking a config file troupe rewrote from a conflicted merge resolved in git, when the setting `mark_merges_resolved` asks for it |
+| `compaction` | `actors` | Which actors' runs may compact when their engine's context fills: `actors` leaves it to each actor's `onContextFull`, `all` lets every actor that doesn't say `fail` compact, and `none` lets none, refusing an actor that asks |
 
 Until policy has files of its own ([#8](https://github.com/troupe-run/troupe/issues/8)), you set it with an
 environment variable, `TROUPE_POLICY_` and the setting's name in capitals:
@@ -212,8 +213,9 @@ environment variable, `TROUPE_POLICY_` and the setting's name in capitals:
 export TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE=true
 ```
 
-The value must be exactly `true` or `false`. Anything else, such as `yes` or `1`, fails the command with
-`policy.invalid-value`, and never falls back to the default. Unset or empty means the default.
+A flag's value must be exactly `true` or `false`, and `compaction`'s exactly `actors`, `all` or `none`. Anything
+else, such as `yes` or `1`, fails the command with `policy.invalid-value`, and never falls back to the default. Unset
+or empty means the default.
 
 ## Settings
 

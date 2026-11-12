@@ -111,6 +111,7 @@ The payload of a run's first event (topic troupe.core.runs.aggregate:Run.Started
 | `direction` | string | Yes | The artifact reference of the run's direction: what the actor was asked to do. |
 | `config` | list of string | Yes | The config version the run used: the ids of the config stream's heads, sorted. Working out config at that version gives the actor's runner, options, effect check and character. |
 | `workspace` | object (In the theatre) or object (In its own worktree) | Yes | Where the run works. |
+| `on_context_full` | object | Yes | What the run does when its engine's context fills, as troupe resolved it when the run started, and where that came from: actor when the actor's onContextFull set it, policy when the compaction policy (all or none) decided it, default otherwise. |
 | `runtime` | object (Resolved runtime) | No | The runtime the run talked to, as troupe resolved it when the run started, each value with its source: the model is always resolved, and a credential is named by its variable, never its value. Absent: the actor named no runtime. |
 
 ### Run.WorktreeMade

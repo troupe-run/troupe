@@ -23,12 +23,12 @@ under `actors`, the actor's value, `fail` when absent; under `all`, `compact` un
 
 ### Requirement: Policy none refuses an actor that asks to compact
 When the `compaction` policy is `none`, `perform` SHALL refuse an actor whose `onContextFull` is `compact` with
-`perform.compaction-forbidden`, naming the actor, `TROUPE_POLICY_COMPACTION` and how to fix it, before the run's
+`policy.compaction-forbidden`, naming the actor, `TROUPE_POLICY_COMPACTION` and how to fix it, before the run's
 start is recorded and before any worktree is made.
 
 #### Scenario: A forbidden opt-in
 - **WHEN** `TROUPE_POLICY_COMPACTION` is `none` and an actor with `onContextFull` `compact` is performed
-- **THEN** `perform` fails with `perform.compaction-forbidden`, naming the actor and the variable
+- **THEN** `perform` fails with `policy.compaction-forbidden`, naming the actor and the variable
 - **AND** no run is recorded and no runner is started
 
 #### Scenario: An actor that didn't ask

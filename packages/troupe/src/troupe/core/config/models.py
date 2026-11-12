@@ -143,6 +143,12 @@ class Actor(StrictModel):
     """
     Where a run works. worktree, the default when absent: the run's own git worktree at HEAD, under .troupe/local/worktrees/, whose changes reach the theatre only through troupe accept. theatre: the theatre itself, so what the run writes lands among your files at once.
     """
+    onContextFull: Annotated[
+        Literal["fail", "compact"] | None, Field(title="When the context fills")
+    ] = None
+    """
+    What this actor's runs do when their engine's context fills. fail, the default when absent: the run ends with reason context-length, and nothing it was told is lost. compact: the run compacts its conversation and carries on, which changes what the model sees; each compaction is recorded with the run's events. Policy can turn compaction on for every actor that doesn't say fail (TROUPE_POLICY_COMPACTION=all), or forbid it (none).
+    """
     runtime: Annotated[str | None, Field(pattern="^[a-z][a-z0-9-]{0,63}$", title="Runtime")] = None
     """
     The runtime this actor's runs talk to, by name: one of troupe's built-in runtimes or one in config. Only for a runner that takes a runtime; required by one that needs it.

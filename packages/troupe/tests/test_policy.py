@@ -4,7 +4,14 @@ import pytest
 
 from troupe.core import defaults
 from troupe.core.errors import TroupeError
-from troupe.core.policy import PolicyFlag, env_name, read_policy
+from troupe.core.policy import (
+    COMPACTION_VALUES,
+    Compaction,
+    PolicyCompaction,
+    PolicyFlag,
+    env_name,
+    read_policy,
+)
 
 VARIABLE = "TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE"
 
@@ -59,3 +66,37 @@ def test_allow_mark_merges_resolved_false_is_read_from_the_env_source() -> None:
     assert read_policy({MARK: "false"}).allow_mark_merges_resolved == PolicyFlag(
         "allow_mark_merges_resolved", False, "env"
     )
+
+
+# Requirement: Policy decides whether actors may compact (compaction-opt-in)
+
+COMPACTION = "TROUPE_POLICY_COMPACTION"
+
+
+@pytest.mark.parametrize("env", [{}, {COMPACTION: ""}], ids=["unset", "empty"])
+def test_compaction_absent_is_actors_from_the_default_source(env: dict[str, str]) -> None:
+    assert read_policy(env).compaction == PolicyCompaction("compaction", "actors", "default")
+
+
+@pytest.mark.parametrize("raw", COMPACTION_VALUES)
+def test_each_compaction_value_is_read_from_the_env_source(raw: Compaction) -> None:
+    assert read_policy({COMPACTION: raw}).compaction == PolicyCompaction("compaction", raw, "env")
+
+
+@pytest.mark.parametrize("raw", ["yes", "ALL", " all", "true", "compact"])
+def test_any_other_compaction_value_is_refused_naming_the_variable_the_value_and_all_three(
+    raw: str,
+) -> None:
+    with pytest.raises(TroupeError) as caught:
+        read_policy({COMPACTION: raw})
+    error = caught.value
+    assert error.code == "policy.invalid-value"
+    assert COMPACTION in error.problem
+    assert repr(raw) in error.problem
+    assert error.details == {
+        "variable": COMPACTION,
+        "value": raw,
+        "accepted": ["actors", "all", "none"],
+    }
+    for value in ("actors", "all", "none"):
+        assert value in error.problem

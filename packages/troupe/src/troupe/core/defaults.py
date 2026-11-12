@@ -5,6 +5,7 @@ the ``settings`` capability will later let configuration override them too, boun
 """
 
 from pathlib import Path
+from typing import Literal
 
 from troupe.platform.files import temporary_directory
 from troupe.platform.processes import EnvironmentPolicy
@@ -96,6 +97,11 @@ events.subscription-not-stopped (stopped-event-store design D3). The thread need
 ALLOW_UNENFORCED_LOCAL_STAGE = False
 """Whether a stage that can't enforce an actor's declared effects may run it anyway (decision #3,
 option C). Off by default: the local stage then refuses every actor."""
+
+COMPACTION: Literal["actors", "all", "none"] = "actors"
+"""Which actors' runs may compact when their engine's context fills (compaction-opt-in design D2):
+actors, each actor's onContextFull deciding, with fail when it's absent. all turns it on for every
+actor that doesn't say fail, and none refuses an actor that asks for it."""
 
 ALLOW_MARK_MERGES_RESOLVED = True
 """Whether troupe may mark a config file it rewrote from a conflicted merge resolved in git's index,

@@ -56,6 +56,7 @@ def new_run(run_id: str | None = None, workspace: dict[str, Any] | None = None) 
         direction="sha256:" + "a" * 64,
         config=["sha256:" + "b" * 64],
         workspace=workspace or {"kind": "theatre"},
+        on_context_full={"value": "fail", "source": "default"},
     )
 
 
