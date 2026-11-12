@@ -178,7 +178,8 @@ and Python, the run and the release. The workflow can't add it to the roadmap bo
 its release stay as they are, and the docs already name it. Fix it forward in a patch release, whose release pull
 request moves the documented tag on. If a leg failed because of GitHub rather than troupe, re-run the check, and close
 the Bug with that run. Each install retries a package index that fails for about two minutes first (`HTTP_RETRIES` in
-`scripts/install_check.py`), so a leg that names a network fault has already outlasted a short outage. A re-run that fails while the Bug is open comments on it rather than opening another:
+`scripts/install_check.py`), so a leg that names a network fault has already outlasted a short outage. A re-run that
+fails while the Bug is open comments on it rather than opening another:
 
 ```sh
 gh workflow run release-install-check.yml -f ref=troupe-run-v<version>
