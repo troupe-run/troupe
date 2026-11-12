@@ -100,7 +100,7 @@ class EngineLike(Protocol):
         temperature: float | None,
         fragment: Fragment,
         round_done: Callable[[Round], None],
-        round_end: Callable[[int], None],
+        round_end: Callable[[int], bool],
         message: Callable[[dict[str, Any]], None],
         invalid: Callable[[str, str | None, object], str],
     ) -> int: ...
@@ -373,22 +373,24 @@ class Run:
             state.last_text = "".join(state.round_text).strip()
             state.round_text.clear()
 
-    def _round_end(self, index: int) -> None:
+    def _round_end(self, index: int) -> bool:
         """After a round's tool calls have finished, when it asked for any, so another round would
-        follow: the run stopped when the budget is spent, or when this was the last round the turn
-        limit allows (design D5). A round that asked for no tool ends the run anyway, whatever its
-        number, so a run that finishes on its last allowed round ends ok."""
+        follow: true, ending the library's loop before the next round, when the budget is spent or
+        this was the last round the turn limit allows (design D5). A round that asked for no tool
+        ends the run anyway, whatever its number, so a run that finishes on its last allowed round
+        ends ok."""
         state = self._state
         had_calls = index in state.rounds_with_calls
         state.calls_this_round = 0
         if not had_calls:
-            return
+            return False
         if state.usage_known and self._tokens() >= self.options.max_total_tokens:
             state.budget_spent = True
-            self.engine.close()
-        elif index + 1 >= self.options.max_turns:
+            return True
+        if index + 1 >= self.options.max_turns:
             state.turn_limit_reached = True
-            self.engine.close()
+            return True
+        return False
 
     def _message(self, message: dict[str, Any]) -> None:
         """The library's messages: a tool result message is what the run sends back (``sent``).

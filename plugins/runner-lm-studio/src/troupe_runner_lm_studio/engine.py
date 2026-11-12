@@ -35,6 +35,12 @@ found, any other failure on LM Studio's side, a message the library couldn't rea
 reason it doesn't know), or the client closed by the runner."""
 
 
+class _StopRounds(BaseException):
+    """Raised from act()'s round-end callback to end its loop before the next round: the library
+    swallows an Exception a callback raises, but lets anything else through, and closing the client
+    isn't enough, since the next round's channel reconnects it (lmstudio-runner design D9)."""
+
+
 class EngineError(Exception):
     """A failure talking to LM Studio, with what kind it is and the library's message."""
 
@@ -284,15 +290,22 @@ class Engine:
         temperature: float | None,
         fragment: Fragment,
         round_done: Callable[[Round], None],
-        round_end: Callable[[int], None],
+        round_end: Callable[[int], bool],
         message: Callable[[dict[str, Any]], None],
         invalid: Callable[[str, str | None, object], str],
     ) -> int:
         """Run the library's tool loop; how many rounds it made. Every round is offered the
-        tools: the library's own round limit, which sends its last round without them, isn't used,
-        and the run's caller stops it after its last round instead (design D5). ``invalid`` answers
-        a call the library rejected, with its error, the tool's name and its raw arguments."""
+        tools: the library's own round limit, which sends its last round without them, isn't used.
+        ``round_end`` is told each round's end once its calls have finished, and returns true to
+        end the loop there, before another round starts (design D5). ``invalid`` answers a call the
+        library rejected, with its error, the tool's name and its raw arguments."""
         self._require()
+        ended: list[int] = []
+
+        def on_round_end(index: int) -> None:
+            ended.append(index)
+            if round_end(index):
+                raise _StopRounds
 
         def on_fragment(piece: Any, _round: int) -> None:  # noqa: ANN401 - library type
             reasoning = getattr(piece, "reasoning_type", "none") not in (None, "none")
@@ -335,9 +348,11 @@ class Engine:
                 on_message=lambda m: message(_serialised(m)),
                 on_prediction_fragment=on_fragment,
                 on_prediction_completed=on_completed,
-                on_round_end=round_end,
+                on_round_end=on_round_end,
                 handle_invalid_tool_request=on_invalid,
             )
+        except _StopRounds:
+            return len(ended)
         except Exception as error:
             if self._closed:
                 raise EngineError("stopped", "The run was stopped.") from None
