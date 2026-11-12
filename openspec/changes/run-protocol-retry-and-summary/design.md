@@ -101,8 +101,9 @@ unknown), marked `!`.
 
 ### D5. The LM Studio runner
 
-PR #379 is expected to merge first (its session: ready, review clean, CI running, 2026-11-11). So this branch rebases
-onto `main` once it has, and then:
+**Moved to PR #379** (owner, 2026-11-12, through the orchestrating session): this change merges first, without
+waiting for #379, and #379's session adopts the field when it rebases onto it. #378 stays open until then, since its
+"in" names the LM Studio runner using the field. What #379 adopts, as agreed with its session:
 
 - `_from_error` sets `notRetried: side-effect` exactly when `error.failure` is `lost` or `unreachable` and the run has
   carried out or answered a tool call. Not for `timeout` (never retried), and not for the turn limit or the budget.
@@ -112,9 +113,9 @@ onto `main` once it has, and then:
   has neither the field nor the sentence.
 - A delta to `lm-studio-runner`'s spec says so, and its README and `contributing/runners.md`'s LM Studio section.
 
-If #379 hasn't merged when the rest of this change is reviewed and ready, this change ships without the LM Studio
-part, the delta and tasks move to a follow-up issue on the board, and #378 stays open until it lands, since #378's
-"in" names the LM Studio runner using it. The owner decides which at that point.
+This change gives it everything to build on: the contract's rule and its scenarios (runner-protocol), the SDK's
+`ResultEvent.not_retried`, which refuses a misuse before it's sent, the outcome and `logs`, and
+`contributing/runners.md`'s "When a retry isn't safe".
 
 ### D6. Ollama, OpenAI and Claude Code don't meet the case
 
@@ -149,8 +150,8 @@ rebuilds commits unsigned and DCO fails there without it. There are no theatres 
 
 ## Risks / Trade-offs
 
-- [The LM Studio PR doesn't merge in time, and the motivating runner doesn't use the field] → D5's fallback, decided
-  by the owner then; the field is defined either way, which #379's session asked for.
+- [The field merges before any runner troupe ships sends it] → #379 adopts it (D5), and #378 stays open until it
+  does; the scripted runner's tests drive it end to end meanwhile.
 - [A runner sets `notRetried` where a retry would in fact have been safe] → it only stops troupe from retrying, the
   safe direction; the message still says what happened.
 - [`run-event.schema.json` changes collide with another runner-contract change in flight] → checked open PRs at
@@ -160,8 +161,8 @@ rebuilds commits unsigned and DCO fails there without it. There are no theatres 
 
 ## Migration Plan
 
-One pull request: schemas, SDK, core, CLI, scripted runner, LM Studio runner (D5), fixtures and docs, closing #378
-and #313. Rollback is reverting it.
+One pull request: schemas, SDK, core, CLI, scripted runner, fixtures and docs, closing #313 and referring to #378,
+which #379 closes when it adopts the field (D5). Rollback is reverting it.
 
 ## Resolved Questions
 

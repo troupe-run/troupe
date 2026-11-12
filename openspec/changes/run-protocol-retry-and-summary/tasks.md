@@ -57,21 +57,19 @@ Every commit is signed and signed off (`git commit -S -s`), and `uv run scripts/
   `protocol/README.md`, whichever describe it). Verify: the docs check passes, and a search for "hasn't ended" in the
   docs finds no description that the schema doesn't enforce.
 
-## 6. The LM Studio runner (design D5)
+## 6. The LM Studio runner: moved to #379 (design D5)
 
-- [ ] 6.1 Once PR #379 has merged, rebase onto `main` and re-run the full check. Verify: `scripts/check.py` passes on
-  the rebased branch, and `lm-studio-runner`'s spec is on `main`. If #379 hasn't merged when groups 1 to 5 are ready,
-  ask the owner whether to wait or move group 6 to a follow-up issue (on the board), and record the answer here.
-  Asked 2026-11-11 with groups 1 to 5 done and #379 still open: the owner chose to open the draft PR now and wait
-  for #379, then rebase and add group 6 to this PR before marking it ready.
-- [ ] 6.2 Add the `lm-studio-runner` delta to this change: a connection lost or unreachable after a tool call has been
-  carried out or answered ends `network` with `notRetried` `side-effect`; a message timeout and the turn limit and
-  budget carry none. Verify: `openspec validate run-protocol-retry-and-summary --strict` passes.
-- [ ] 6.3 In `plugins/runner-lm-studio`'s `_from_error`, set `notRetried` for `lost` and `unreachable` after a call,
-  and make the "a retry could run a tool twice" sentence depend on the same condition. Verify:
-  `test_a_lost_connection_after_a_call_isnt_retried` asserts the field; new tests pin that a timeout after a call has
-  neither the field nor the sentence, and that the turn limit and budget carry none; the conformance suite passes; the
-  runner's README and `contributing/runners.md`'s LM Studio section say so.
+Not built here. The owner decided (2026-11-12, through the orchestrating session) that #390 merges before #379 and
+doesn't wait for it, and that #379's session adopts the field in the LM Studio runner when it rebases onto this change.
+What it adopts, as agreed with that session:
+
+- An `lm-studio-runner` delta: a connection lost or unreachable after a tool call has been carried out or answered
+  ends `network` with `notRetried` `side-effect`; a message timeout, the turn limit and the budget carry none.
+- `_from_error` sets `notRetried` for `lost` and `unreachable` after a call, and the "a retry could run a tool twice"
+  sentence follows the same condition.
+- `test_a_lost_connection_after_a_call_isnt_retried` asserts the field; tests pin that a timeout after a call has
+  neither the field nor the sentence, and that the turn limit and budget carry none; the runner's README and
+  `contributing/runners.md`'s LM Studio section say so.
 
 ## 7. Integration
 
@@ -82,9 +80,9 @@ Every commit is signed and signed off (`git commit -S -s`), and `uv run scripts/
 ## Workflow follow-up
 
 - No spec is added or removed and no Purpose changes, so infrastructure's `oob/troupe-spec-purposes.json` needs no
-  pull request; re-check at archive (the `lm-studio-runner` delta modifies a spec #379 adds, and adds none).
-- Open a draft PR that says `Closes #378` and `Closes #313`; act on Claude's review; mark it ready; archive on the
-  branch; hand it to the owner to merge.
-- Set #378's and #313's cards to In Progress when this branch's work starts; after the merge, comment on both with the
-  PR and the archived change, check they're closed and their cards say Done.
-- Tell the track-b-11-291 session when the field lands, if group 6 moved to a follow-up.
+  pull request; re-check at archive.
+- Open a draft PR that says `Closes #313` and refers to #378, which stays open until #379 adopts the field; act on
+  Claude's review; mark it ready; archive on the branch; hand it to the owner to merge.
+- Set #378's and #313's cards to In Progress when this branch's work starts. After the merge, comment on both with the
+  PR and the archived change; check #313 is closed and its card says Done; #378 stays open, In Progress, for #379.
+- Tell the track-b-11-291 session when this change merges, so #379 can rebase and adopt the field (group 6).
