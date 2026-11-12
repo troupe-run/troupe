@@ -69,7 +69,10 @@ only falls if the common path is the fast one.
 ### D2. One template per test process, built on first use, under pytest's base temp
 
 The template for a shape is built the first time a test asks for it, in a directory under
-`tmp_path_factory.getbasetemp()`. Under xdist each worker has its own session and base temp, so each builds its own:
+`tmp_path_factory.getbasetemp()`. That directory is made only then, never at session start: making pytest's base temp
+registers a cleanup that deletes older runs' directories at exit, and a child pytest run that builds no repository
+mustn't pay for it. Making it at session start did that, and timed out `test_hypothesis_profiles.py`'s child run
+twice under load, while it deleted 2.3 GB of earlier full runs' repositories. Under xdist each worker has its own session and base temp, so each builds its own:
 no locking, no sharing between processes, and a fresh `--basetemp` gives fresh templates.
 
 `make_repo` is a plain function, also imported by helper scripts that tests start as child processes
