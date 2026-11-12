@@ -37,11 +37,10 @@ left it out of scope and filed it.
   reason's usual fix alone. `logs` shows it on the result's line (design D3).
 - **The SDK's result type carries it**, typed as the contract's list, and refuses it on an `ok` result or beside a
   reason a retry can't name (design D4).
-- **The runners that retry use it.** The LM Studio runner, the motivating case, sends `notRetried: side-effect` when
-  it ends a run on a lost connection after a tool call has run. PR #379 is expected to merge first (its session,
-  2026-11-11), so this change adds the field to that runner after rebasing onto it, and makes the runner's "a retry
-  could run a tool twice" message depend on the same case, which today it also appends to a message timeout that is
-  never retried (design D5). The Ollama, OpenAI and Claude Code runners never meet the case: each retry
+- **The runners that retry use it.** The LM Studio runner, the motivating case, is to send `notRetried:
+  side-effect` when it ends a run on a lost connection after a tool call has run. It isn't on `main` yet, and the
+  owner decided (2026-11-12) that this change merges first, so PR #379 adopts the field when it rebases onto this
+  one, and #378 stays open until it does (design D5). The Ollama, OpenAI and Claude Code runners never meet the case: each retry
   sends one request again, whose conversation already holds every tool result, and calls are carried out only after
   a whole reply has arrived. So they never send it, and their docs say why (design D6). The scripted runner lets a
   script name it, so tests can drive it.
@@ -52,7 +51,8 @@ left it out of scope and filed it.
   ends, both come only from the run's end in the projection, and neither is enforced. Following #305's search-and-
   include, the not-ended branch forbids them too. This widens #313's literal scope, with the owner's agreement (2026-11-11).
 
-Out: retrying runs from troupe's side (#378's out of scope); acting on `notRetried` beyond the outcome's fix (a later
+Out: retrying runs from troupe's side (#378's out of scope); the LM Studio runner's use of the field, which PR #379
+adopts (owner, 2026-11-12); acting on `notRetried` beyond the outcome's fix (a later
 retry policy); changing what `transcript`, `stderr`, `error` or `recording` mean, or when troupe records them.
 
 ## Capabilities
@@ -71,9 +71,8 @@ None.
 - `client-protocol`: a run summary that hasn't ended carries no `transcript`, `transcriptFormat`, `stderr`, `error`
   or `recording`.
 
-- `lm-studio-runner`: its lost connection after a tool call ends with `notRetried` `side-effect`. The spec doesn't
-  exist on `main` yet; it arrives with PR #379, and this delta is written once this branch is rebased onto it (design
-  D5). If #379 hasn't merged when this change is otherwise ready, the delta moves to #379's follow-up instead.
+The LM Studio runner's spec (`lm-studio-runner`) arrives with PR #379, which adds its requirement for this case
+when it adopts the field (design D5).
 
 ## Impact
 
@@ -85,8 +84,7 @@ None.
   (released at its own version).
 - **Core:** `troupe.core.runners.outcome` (details and fix), `troupe.core.client.messages.RunSummary._check`, the
   CLI's line for a result event (`troupe.cli.render`).
-- **Runners:** `plugins/runner-scripted` (options schema, runner); `plugins/runner-lm-studio` if PR #379 merges first;
-  docs only for Ollama, OpenAI and Claude Code.
+- **Runners:** `plugins/runner-scripted` (options schema, runner); docs only for Ollama, OpenAI and Claude Code.
 - **Tests:** `test_runner_schemas.py`, `test_run_outcome.py`, `test_client_schemas.py`, `test_client_messages.py`'s
   generator, the SDK's tests, the scripted runner's tests.
 - **Docs:** `contributing/runners.md` (the result event, the outcomes, each runner's retry section), the generated
