@@ -33,8 +33,8 @@
 
 ## 6. Docs and the whole check
 
-- [ ] 6.1 Document `onContextFull` on the actor reference page, `TROUPE_POLICY_COMPACTION` beside the other policy settings, and each runner's compaction behaviour on its runner page under `docs/`. Say that compaction changes what the model sees, and that a project's settings `env` can still turn Claude Code's off. Verify: the docs checks in `scripts/check.py` pass, and the generated reference is current.
-- [ ] 6.2 Run `uv run scripts/check.py` in full, keeping the log in a scratch file. Verify: every gate passes.
+- [x] 6.1 Document `onContextFull` on the actor reference page, `TROUPE_POLICY_COMPACTION` beside the other policy settings, and each runner's compaction behaviour on its runner page under `docs/`. Say that compaction changes what the model sees, and that a project's settings `env` can still turn Claude Code's off. Verify: the docs checks in `scripts/check.py` pass, and the generated reference is current.
+- [x] 6.2 Run `uv run scripts/check.py` in full, keeping the log in a scratch file. Verify: every gate passes.
 
 ## Workflow follow-up
 

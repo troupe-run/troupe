@@ -183,7 +183,9 @@ one for the Ollama on your machine (`http://127.0.0.1:11434`). Point it at an Ol
 `troupe config set runtimes.ollama.endpoint=<url>` for the theatre, or `TROUPE_RUNTIME_OLLAMA_ENDPOINT` for you alone.
 The actor's options can give the model a larger context window (`contextLength`, 16384 tokens unless you set it). A
 small local model is less reliable at using tools than Claude Code: troupe's effects and audit still decide what a run
-may change, and a run that outgrows its context window fails rather than carrying on with its direction cut off. The
+may change, and a run that outgrows its context window fails rather than carrying on with its direction cut off,
+unless the actor opts in to compaction (`onContextFull: compact`), when troupe removes old tool results to make room
+([When the context fills](../the-company/performances-and-runs.md#when-the-context-fills)). The
 [Ollama runner's README](https://github.com/troupe-run/troupe/blob/main/plugins/runner-ollama/README.md) lists every
 option.
 
@@ -248,8 +250,9 @@ succeed. `effects` is what a run may change: here, only `REVIEW.md`.
 - **Claude Code doesn't compact the conversation.** Left to itself, Claude Code replaces earlier turns with a
   summary when the conversation fills the model's context, and carries on from it. troupe turns that off, so a run
   never works from a summary without saying so. A run whose conversation grows too long for the model fails instead,
-  and `troupe logs` shows `error (context-length)`. Split a long task into smaller directions. Letting an actor opt in
-  to compaction is coming ([#310](https://github.com/troupe-run/troupe/issues/310)).
+  and `troupe logs` shows `error (context-length)`. Split a long task into smaller directions, or let the actor
+  compact with `onContextFull: compact`, and Claude Code compacts again, with each compaction recorded
+  ([When the context fills](../the-company/performances-and-runs.md#when-the-context-fills)).
 - **Claude Code uses your existing login,** or `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY` when one is set. It
   doesn't load your Claude Code settings, hooks or MCP servers, or the theatre's, or its `CLAUDE.md`: a run doesn't
   depend on whose machine it's on. The option `settingSources` loads them again.
