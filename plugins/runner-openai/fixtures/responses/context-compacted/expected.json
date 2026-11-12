@@ -1,0 +1,86 @@
+{
+  "requests": 4,
+  "outcome": "succeeded",
+  "events": [
+    {
+      "type": "init",
+      "seq": 0,
+      "runner": {
+        "name": "openai",
+        "version": "<package version>"
+      },
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "Delete",
+        "Move"
+      ],
+      "effects": "checked",
+      "engine": {
+        "name": "responses",
+        "model": "gpt-6-luna"
+      }
+    },
+    {
+      "type": "tool_call",
+      "seq": 1,
+      "callId": "call_NPKm1VnAslnyZfbP0a5BAqMq",
+      "tool": "Read",
+      "inputSummary": "{\"file_path\":\"notes/todo.txt\"}"
+    },
+    {
+      "type": "tool_result",
+      "seq": 2,
+      "callId": "call_NPKm1VnAslnyZfbP0a5BAqMq",
+      "isError": false,
+      "outputSummary": "1\tbuy milk\n2\twrite the troupe docs\n3\tlater: tidy shelf 1\n4\tlater: tidy shelf 2\n5\tlater: tidy shelf 3\n6\tlater: tidy shelf 4\n7\tlater: tidy shelf 5\n8\tlater: tidy shelf 6\n9\tlater: tidy shelf 7\n10\tlater: tidy shelf 8\n11\tlater: tidy shelf 9\n12\tlater: tidy shelf 10\n13\tlater: tidy shelf 11\n14\tlater: tidy shelf 12\n15\tlater: tidy shelf 13\n16\tlater: tidy shelf 14\n17\tlater: tidy shelf 15\n18\tlater: tidy shelf 16\n19\tlater: tidy shelf 17\n20\tlater: tidy shelf 18\n21\tlater: tidy shelf 19\n22\tlater: tidy shelf 20\n23\tlater: tidy shelf 21\n24\tlater: tidy shelf 22\n25\tlater: tidy shelf 23\n26\tlater: tidy shelf 24\n27\tlater: tidy shelf 25\n28\tlater: tidy shelf 26\n29\tlater: tidy shelf 27\n30\tlater: tidy shelf 28\n31\tlater: tidy shelf 29\n32\tlater: tidy shelf 30\n33\tlater: tidy shelf 31\n34\tlater: tidy shelf 32\n35\tlater: tidy shelf 33\n36\tlater: tidy shelf 34\n37\tlater: tidy shelf 35\n38\tlater: tidy shelf 36\n39\tlater: tidy shelf 37\n40\tlater: tidy shelf 38\n41\tlater: tidy shelf 39\n42\tlater: tidy shelf 40",
+      "outputBytes": 978
+    },
+    {
+      "type": "tool_call",
+      "seq": 3,
+      "callId": "call_NPKm1VnAslnyZfbP0a5Btwo2",
+      "tool": "Read",
+      "inputSummary": "{\"file_path\":\"notes/todo.txt\"}"
+    },
+    {
+      "type": "tool_result",
+      "seq": 4,
+      "callId": "call_NPKm1VnAslnyZfbP0a5Btwo2",
+      "isError": false,
+      "outputSummary": "1\tbuy milk\n2\twrite the troupe docs\n3\tlater: tidy shelf 1\n4\tlater: tidy shelf 2\n5\tlater: tidy shelf 3\n6\tlater: tidy shelf 4\n7\tlater: tidy shelf 5\n8\tlater: tidy shelf 6\n9\tlater: tidy shelf 7\n10\tlater: tidy shelf 8\n11\tlater: tidy shelf 9\n12\tlater: tidy shelf 10\n13\tlater: tidy shelf 11\n14\tlater: tidy shelf 12\n15\tlater: tidy shelf 13\n16\tlater: tidy shelf 14\n17\tlater: tidy shelf 15\n18\tlater: tidy shelf 16\n19\tlater: tidy shelf 17\n20\tlater: tidy shelf 18\n21\tlater: tidy shelf 19\n22\tlater: tidy shelf 20\n23\tlater: tidy shelf 21\n24\tlater: tidy shelf 22\n25\tlater: tidy shelf 23\n26\tlater: tidy shelf 24\n27\tlater: tidy shelf 25\n28\tlater: tidy shelf 26\n29\tlater: tidy shelf 27\n30\tlater: tidy shelf 28\n31\tlater: tidy shelf 29\n32\tlater: tidy shelf 30\n33\tlater: tidy shelf 31\n34\tlater: tidy shelf 32\n35\tlater: tidy shelf 33\n36\tlater: tidy shelf 34\n37\tlater: tidy shelf 35\n38\tlater: tidy shelf 36\n39\tlater: tidy shelf 37\n40\tlater: tidy shelf 38\n41\tlater: tidy shelf 39\n42\tlater: tidy shelf 40",
+      "outputBytes": 978
+    },
+    {
+      "type": "context",
+      "seq": 5,
+      "kind": "truncated",
+      "by": "runner",
+      "message": "Removed 1 old tool output (871 bytes) after the service refused the request as too long; the model can call each tool again.",
+      "messagesBefore": 5,
+      "messagesAfter": 5
+    },
+    {
+      "type": "turn",
+      "seq": 6,
+      "role": "assistant",
+      "text": "Buy milk and write the troupe docs."
+    },
+    {
+      "type": "result",
+      "seq": 7,
+      "status": "ok",
+      "message": "Buy milk and write the troupe docs.",
+      "turns": 3,
+      "usage": {
+        "inputTokens": 267,
+        "outputTokens": 54,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      }
+    }
+  ]
+}

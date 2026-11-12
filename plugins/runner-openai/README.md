@@ -124,7 +124,7 @@ nothing is retried:
 | 401 or 403 | the service refused the credential, with its message | `authentication` |
 | 429 `insufficient_quota` | the account is out of quota | `quota` |
 | 429 asking to wait longer than the runner waits | the wait asked for, and the cap | `rate-limit` |
-| 400 `context_length_exceeded` | the conversation is longer than the model's context | `context-length` |
+| 400 `context_length_exceeded`, in a run told `fail`, or told `compact` with nothing left to remove | the conversation is longer than the model's context, and, when told `compact`, that compaction found nothing more to remove | `context-length` |
 | 404 without OpenAI's error shape | the URL it tried, and that the endpoint must be the API's base, often ending in `/v1` | `configuration` |
 | 404 `model_not_found` | the service has no such model | `configuration` |
 | a 3xx | the status and where it pointed; never followed | `configuration` |
@@ -142,6 +142,21 @@ nothing is retried:
 | `maxTotalTokens` spent | the budget and the tokens used, and the option to raise | `budget` |
 | retries run out | the last failure, and the attempts made | the last retry's |
 | the runner fails itself | the error | `runner` |
+
+### Compaction
+
+When `run/start`'s `onContextFull` is `compact` (the actor opted in, or the `compaction` policy is `all`), a 400
+`context_length_exceeded` doesn't end the run at once. The runner doesn't know the model's window, so it compacts
+only after the service refuses: it replaces the oldest `function_call_output`s with the plugin SDK's stub, saying what
+was removed and to call the tool again if it's still needed, down to half the size of the last request the service
+accepted. It sends a `context` event (kind `truncated`, by `runner`, the input's item count before and after), then
+sends the request again, as the same turn. The refused request used no tokens.
+
+It never changes the instructions (the character), the first input (the direction), any item of the service's
+replies (`reasoning` items, `function_call`s and messages, sent back unchanged), or the latest turn's outputs. When
+only those are left, the run ends with `context-length`. Encrypted reasoning items can't be shortened, so a run whose
+reasoning alone fills the window still fails. [`context-compacted`](fixtures/responses/context-compacted/expected.json)
+and [`context-compaction-exhausted`](fixtures/responses/context-compaction-exhausted/expected.json) show both.
 
 ## The transcript
 
@@ -202,7 +217,8 @@ no request is sent:
 [`fixtures/responses/`](fixtures/responses) holds, for each run, the service's replies, their provenance, and the
 events they map to. Recorded: a two-turn tool loop on OpenAI and one on local Ollama, and a rejected credential from
 OpenAI with a deliberately invalid key. Derived from those, or built from OpenAI's shapes: a broken stream, a rate
-limit, a server error, an incomplete response, a refusal, a failed response and a response in the wrong shape.
+limit, a server error, an incomplete response, a refusal, a failed response, a response in the wrong shape, and a
+context-length refusal in a run told to compact, once with an old output to remove and once without.
 [`tools/capture_openai.py`](tools/capture_openai.py) records new ones, and scrubs the key and the host's home.
 
 ## Tests

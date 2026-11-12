@@ -86,7 +86,13 @@ def replay(name: str, tmp_path: Path) -> Replayed:
         session = Session(workspace, CANARY)
         try:
             model = provenance["model"]
-            session.start(fake.endpoint, dict(TEST_LIMITS), model=model, direction=DIRECTION)
+            session.start(
+                fake.endpoint,
+                dict(TEST_LIMITS),
+                model=model,
+                direction=DIRECTION,
+                on_context_full=provenance.get("onContextFull", "fail"),
+            )
             messages = session.until_result()
             session.shutdown()
         finally:

@@ -1,0 +1,10 @@
+{
+  "service": "OpenAI",
+  "model": "gpt-6-luna",
+  "how": "built for a run told to compact: openai-tool-loop's first reply, then the same reply again with new ids, then a 400 context_length_exceeded in OpenAI's error shape (https://platform.openai.com/docs/guides/error-codes), then openai-tool-loop's final reply, answering the request sent again after the oldest output was stubbed; the workspace's notes/todo.txt has 40 more lines than openai-tool-loop's, so the first Read's output is larger than the stub that replaces it",
+  "credential": "none",
+  "workspace": {
+    "notes/todo.txt": "buy milk\nwrite the troupe docs\nlater: tidy shelf 1\nlater: tidy shelf 2\nlater: tidy shelf 3\nlater: tidy shelf 4\nlater: tidy shelf 5\nlater: tidy shelf 6\nlater: tidy shelf 7\nlater: tidy shelf 8\nlater: tidy shelf 9\nlater: tidy shelf 10\nlater: tidy shelf 11\nlater: tidy shelf 12\nlater: tidy shelf 13\nlater: tidy shelf 14\nlater: tidy shelf 15\nlater: tidy shelf 16\nlater: tidy shelf 17\nlater: tidy shelf 18\nlater: tidy shelf 19\nlater: tidy shelf 20\nlater: tidy shelf 21\nlater: tidy shelf 22\nlater: tidy shelf 23\nlater: tidy shelf 24\nlater: tidy shelf 25\nlater: tidy shelf 26\nlater: tidy shelf 27\nlater: tidy shelf 28\nlater: tidy shelf 29\nlater: tidy shelf 30\nlater: tidy shelf 31\nlater: tidy shelf 32\nlater: tidy shelf 33\nlater: tidy shelf 34\nlater: tidy shelf 35\nlater: tidy shelf 36\nlater: tidy shelf 37\nlater: tidy shelf 38\nlater: tidy shelf 39\nlater: tidy shelf 40\n"
+  },
+  "onContextFull": "compact"
+}

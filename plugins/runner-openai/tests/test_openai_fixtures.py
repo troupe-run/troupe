@@ -24,9 +24,12 @@ REQUIRED = {
     "refusal",
     "failed-response",
     "wrong-shape",
+    "context-compacted",
+    "context-compaction-exhausted",
 }
 """The fixtures the spec names: a successful tool loop against OpenAI and one against local Ollama,
-and each way a hosted service fails that a fixture can show."""
+each way a hosted service fails that a fixture can show, and a run told to compact that does and
+one that can't."""
 
 DATA = Path(__file__).parent / "data"
 """The raw recordings the fixtures were made from, scanned as well."""
@@ -86,6 +89,26 @@ def test_each_fixtures_provenance_names_its_service_and_whether_it_was_recorded_
     assert provenance["model"]
     assert provenance["how"].split(":")[0].split(" ")[0] in ("recorded", "derived", "built")
     assert provenance["credential"]
+
+
+def test_the_compacted_fixture_stubs_the_oldest_output_after_the_refusal_and_finishes() -> None:
+    # Requirement: A run told compact compacts after a context-length refusal and asks again.
+    expected = load("context-compacted", "expected.json")
+    assert expected["requests"] == 4
+    (context,) = [e for e in expected["events"] if e["type"] == "context"]
+    assert (context["kind"], context["by"]) == ("truncated", "runner")
+    assert context["messagesBefore"] == context["messagesAfter"]
+    result = expected["events"][-1]
+    assert (result["status"], result["turns"]) == ("ok", 3)
+
+
+def test_the_exhausted_fixture_ends_with_context_length_and_sends_no_context_event() -> None:
+    expected = load("context-compaction-exhausted", "expected.json")
+    assert expected["requests"] == 2
+    assert [e["type"] for e in expected["events"]] == ["init", "tool_call", "tool_result", "result"]
+    result = expected["events"][-1]
+    assert (result["status"], result["reason"]) == ("error", "context-length")
+    assert "compaction found nothing more to remove" in result["message"]
 
 
 def test_the_rejected_credential_fixture_used_no_working_credential() -> None:

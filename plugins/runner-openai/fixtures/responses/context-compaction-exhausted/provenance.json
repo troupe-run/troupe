@@ -1,0 +1,10 @@
+{
+  "service": "OpenAI",
+  "model": "gpt-6-luna",
+  "how": "built for a run told to compact: openai-tool-loop's first reply, then a 400 context_length_exceeded in OpenAI's error shape (https://platform.openai.com/docs/guides/error-codes); the only output is the latest turn's, so nothing can be removed",
+  "credential": "none",
+  "workspace": {
+    "notes/todo.txt": "buy milk\nwrite the troupe docs\n"
+  },
+  "onContextFull": "compact"
+}

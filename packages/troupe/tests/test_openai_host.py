@@ -51,6 +51,7 @@ def _run(
                     dict(openai_stand_in.TEST_LIMITS),
                     runtime=p.RunStartRuntime("test", fake.endpoint, provenance["model"], True),
                     credential=key,
+                    on_context_full=provenance.get("onContextFull", "fail"),
                 ),
                 store=store,
                 effect=NoEffectExpected(),
