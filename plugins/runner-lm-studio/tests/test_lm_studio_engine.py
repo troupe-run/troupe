@@ -277,3 +277,33 @@ def test_a_round_end_that_says_stop_ends_act_before_another_round_is_asked_for(
         assert len(fake.sent_on("/llm", "predict")) == 1
         assert fake.mismatches == []
         connection.close()
+
+
+# Requirement: Every prediction stops at the context length (compaction-opt-in, #394)
+
+
+@pytest.mark.parametrize("temperature", [None, 0.2])
+def test_every_prediction_asks_lm_studio_to_stop_at_the_context_length(
+    tmp_path: Path, temperature: float | None
+) -> None:
+    import json
+
+    script = run_script(predict_step("hi"))
+    with FakeLMStudio(script) as fake:
+        connection, handle = _acting(fake, tmp_path)
+        connection.act(
+            handle,
+            {"messages": [{"role": "user", "content": [{"type": "text", "text": "hi"}]}]},
+            tool_definitions(tool_specs(Tools(tmp_path)), lambda name, args: "ok"),
+            temperature=temperature,
+            fragment=lambda text, reasoning: None,
+            round_done=lambda r: None,
+            round_end=lambda index: False,
+            message=lambda m: None,
+            invalid=lambda e, n, a: "",
+        )
+        (predict,) = fake.sent_on("/llm", "predict")
+        connection.close()
+    sent = json.dumps(predict)
+    assert '"llm.prediction.contextOverflowPolicy"' in sent
+    assert '"stopAtLimit"' in sent

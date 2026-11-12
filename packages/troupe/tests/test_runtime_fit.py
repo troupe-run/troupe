@@ -61,6 +61,7 @@ def _lm_studio_accepts(endpoint: str, credential: bool) -> bool:
             "limits": {"eventMaxBytes": 65536},
             "effects": {"write": [], "delete": [], "move": []},
             "scratch": "s",
+            "onContextFull": "fail",
             "runtime": {
                 "name": "box",
                 "endpoint": endpoint,

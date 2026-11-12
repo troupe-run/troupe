@@ -30,7 +30,7 @@ A run is its own stream, keyed by its run id. Its events, in order:
 
 | Event | When | Actor and via |
 |---|---|---|
-| `Run.Started` | Before the run's workspace is made and its runner starts, once every check that can refuse it has passed, and after its direction is stored. It holds the actor's name, the runner asked for, the stage's admission, the effect check, the direction's reference, the config version (the config stream's heads, sorted), and the workspace: the worktree's path, base commit and whether the theatre was dirty, or `theatre` | You, through `cli` |
+| `Run.Started` | Before the run's workspace is made and its runner starts, once every check that can refuse it has passed, and after its direction is stored. It holds the actor's name, the runner asked for, the stage's admission, the effect check, the direction's reference, the config version (the config stream's heads, sorted), the workspace: the worktree's path, base commit and whether the theatre was dirty, or `theatre`, and the run's `onContextFull` with where it came from (`actor`, `policy` or `default`) | You, through `cli` |
 | `Run.WorktreeMade` | For a worktree run, once its worktree is made and filled, before the runner starts. It holds the clone mechanisms | You, through `cli` |
 | `Run.Reported` | Once per run event, in `seq` order. It holds the event's `seq` and the event as received. The first is `init`, and a run's reported runner is read from it | The agent (`source: troupe`), through `runner` |
 | `Run.Noticed` | Once per notice troupe raises for the run, in the order it was raised among the run's events, before the end. It holds the notice, its credential masked. One raised before the start (planning the worktree) is recorded straight after it. It has no `seq` | You, through `cli` |
@@ -229,6 +229,7 @@ Every limit and default runs use has its default in `troupe.core.defaults`.
 | `STATUS_RUNS_LIMIT` | 20 | How many runs `troupe status` lists when it isn't given `--limit` |
 | `ALLOW_UNENFORCED_LOCAL_STAGE` | false | The policy setting `allow_unenforced_local_stage`, when nothing sets it |
 | `ALLOW_MARK_MERGES_RESOLVED` | true | The policy setting `allow_mark_merges_resolved`, when nothing sets it |
+| `COMPACTION` | `actors` | The policy setting `compaction`, when nothing sets it |
 | `WORKSPACE_ANNOUNCE_AFTER_SECONDS` | 2 | How long a worktree operation runs before `workspace.waiting` says so |
 | `UNCOMMITTED_NOTICE_PATHS` | 20 | How many of the paths that differ from HEAD `workspace.uncommitted-unseen` names |
 | `WORKSPACE` | `worktree` | Where a run works when its actor doesn't set `workspace` |

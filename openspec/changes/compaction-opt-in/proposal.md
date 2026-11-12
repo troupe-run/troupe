@@ -31,13 +31,17 @@ builds that choice. #307's `context` event, now on main, reports each compaction
 - **The Claude Code runner lets Claude Code compact** when it's `compact`. It writes `autoCompactEnabled: true` in its
   per-run settings file, and removes `DISABLE_AUTO_COMPACT` from Claude Code's environment so the person's variable
   can't silently override the actor's choice. It maps Claude Code's `system/compact_boundary` record to a `context`
-  event (`compacted`, `by` `engine`, `tokensBefore` from `pre_tokens`). It maps the `system/status` records with
+  event (`compacted`, `by` `engine`, `tokensBefore` from `pre_tokens` and `tokensAfter` from `post_tokens`). It maps the `system/status` records with
   `compacting` and `compact_result` to debug logs, not to events, because no content is lost until the boundary. A
   compaction that fails still ends the run with `context-length`, as #308 maps it.
 - **Fixtures**: the Claude Code capture tool gets a compaction mode. Its stand-in API answers Claude Code's compaction
   request with a summary, and the tool refuses to write the fixture unless it saw a compaction. The opposite check,
   for the context-limit fixtures, is unchanged. The Ollama and OpenAI runners get fixtures of a conversation that is
   compacted and then finishes.
+- **The LM Studio runner** (merged while this was in review) doesn't compact yet: told `compact`, it sends a `log`
+  warning after `init` saying so, and a full context ends the run with `context-length`. With #394, which this change
+  closes too, every prediction sets LM Studio's `contextOverflowPolicy` to `stopAtLimit`, so LM Studio never drops
+  content silently. Compacting between `act()` rounds is a follow-up Feature (owner, 2026-11-12).
 - **Docs**: the actor reference, the runner docs and the policy reference say what `onContextFull` and
   `TROUPE_POLICY_COMPACTION` do, and that compaction changes what the model sees.
 - **The run's start records** its `onContextFull` and where it came from (`default`, `actor` or `policy`), so a
@@ -61,6 +65,8 @@ None.
 - `openai-runner`: compacts after a `context_length_exceeded` refusal and sends the request again, when told
   `compact`.
 - `claude-code-runner`: compaction is off unless the run says `compact`, and a compaction is a `context` event.
+- `lm-studio-runner`: every prediction stops at the context length (#394), and a run told `compact` says the runner
+  doesn't compact.
 
 ## Impact
 

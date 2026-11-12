@@ -576,7 +576,7 @@ def test_a_run_told_compact_drops_disable_auto_compact_and_warns_naming_it(
     ]
     (named,) = [(n, w) for n, w in warnings if "DISABLE_AUTO_COMPACT" in w]
     assert named[0] > 0  # after init
-    assert "onContextFull is compact" in named[1]
+    assert "The run's onContextFull is compact" in named[1]
     seen = wait_for_record(record, "files")
     assert "DISABLE_AUTO_COMPACT" not in seen["env"]
     assert json.loads(seen["files"]["--settings"])["autoCompactEnabled"] is True

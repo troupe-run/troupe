@@ -26,6 +26,11 @@ from troupe_runner_lm_studio.defaults import (
     WEBSOCKET_CLOSE_TIMEOUT_SECONDS,
 )
 
+CONTEXT_OVERFLOW_POLICY = "stopAtLimit"
+"""LM Studio's contextOverflowPolicy for every prediction. Not a setting: the other policies
+(truncateMiddle, rollingWindow) drop content while the run carries on, and LM Studio doesn't tell
+the client when they do, so troupe couldn't report it (#394; compaction-opt-in design D11)."""
+
 Failure = Literal[
     "unreachable", "incompatible", "lost", "timeout", "model", "engine", "unreadable", "stopped"
 ]
@@ -336,7 +341,11 @@ class Engine:
                 return invalid(str(error), None, None)
             return invalid(str(error), str(request.name), request.arguments)
 
-        config: dict[str, Any] = {}
+        # Every prediction stops at the context length rather than inheriting the server's or the
+        # model's policy, which may truncate or roll the window and drop content while the run
+        # carries on unreported: a full context ends the run with context-length (#394,
+        # compaction-opt-in design D11).
+        config: dict[str, Any] = {"contextOverflowPolicy": CONTEXT_OVERFLOW_POLICY}
         if temperature is not None:
             config["temperature"] = temperature
         try:
@@ -344,7 +353,7 @@ class Engine:
                 history,
                 list(definitions),
                 max_parallel_tool_calls=1,
-                config=config or None,
+                config=config,
                 on_message=lambda m: message(_serialised(m)),
                 on_prediction_fragment=on_fragment,
                 on_prediction_completed=on_completed,

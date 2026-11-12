@@ -397,6 +397,10 @@ class Runner:
     def _perform(self, run: Run, start: p.RunStartParams, tools: Tools) -> None:
         try:
             self.event(self._init(start, run.runtime.model, tools))
+            if start.on_context_full == "compact":
+                # It doesn't compact yet: say so, so the opt-in isn't quietly ignored. A full
+                # context still ends the run with context-length (compaction-opt-in design D11).
+                run.warn(NO_COMPACTION)
             result = run.run(start.character, start.direction)
             if result is not None:
                 self.event(result)
@@ -438,6 +442,13 @@ class Runner:
         self._result(id_, {})
         self._halt()
         raise _Exit(1 if self._failed else 0)
+
+
+NO_COMPACTION = (
+    "This run's onContextFull is compact, but the LM Studio runner doesn't compact a conversation "
+    "yet: when the model's context fills, the run ends with context-length."
+)
+"""The warning a run told to compact gets: compacting between act() rounds is a follow-up."""
 
 
 def main() -> NoReturn:

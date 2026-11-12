@@ -372,8 +372,8 @@ class Runner:
         )
         self._mapper.hold_warnings(
             f"{name} was set in the runner's environment, and would have turned Claude Code's "
-            "compaction off. The actor's onContextFull is compact, which this run follows, so "
-            f"Claude Code doesn't get {name}."
+            "compaction off. The run's onContextFull is compact (from the actor or the compaction "
+            f"policy), which this run follows, so Claude Code doesn't get {name}."
             for name in launch.overridden
         )
         self._diagnose(f"running {claude}")
