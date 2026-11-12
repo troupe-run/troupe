@@ -160,6 +160,11 @@ a local stand-in for the API or an address nothing listens on, with a deliberate
 Anthropic and an agent session can capture it. Only `success-with-tools` needs a real credential, and the owner
 captures it.
 
+`context-limit-refused` and `context-limit-blocked` are captured through the runner's own launch, so compaction is
+off, against a stand-in that reports a context near the window. The tool refuses to write either one when Claude Code
+reported compacting, sent more requests than compaction being off allows, or ended for another reason. A recapture on
+a newer Claude Code therefore checks again that the runner's setting still turns compaction off.
+
 ## Tests
 
 The tests import nothing from troupe. They drive the runner over pipes with a stand-in `claude`

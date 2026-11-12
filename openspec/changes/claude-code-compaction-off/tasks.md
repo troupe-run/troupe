@@ -28,18 +28,18 @@ Every commit is signed and signed off (`git commit -S -s`), and `uv run scripts/
 
 ## 3. Context-limit fixtures, captured offline
 
-- [ ] 3.1 Extend `tools/capture_claude.py` (design D3): a stand-in API that streams one `Read` tool call with a given
+- [x] 3.1 Extend `tools/capture_claude.py` (design D3): a stand-in API that streams one `Read` tool call with a given
   `input_tokens` and refuses any later request with the API's 400 `invalid_request_error` "prompt is too long"; the
   fixtures `context-limit-refused` (185,000 tokens) and `context-limit-blocked` (990,000 tokens), launched through the
   runner's `build()`; and a refusal to write the fixture when the output holds `system/status` `compacting` or the
   stand-in saw more requests than the case expects. Document both in the module docstring. Verify by running the
   tool for both fixtures and checking it writes them, and by running it once with the setting taken out of a local
   copy of the launch, checking it refuses (not committed).
-- [ ] 3.2 Write each fixture's `expected.json` (outcome `failed`, `run.error-result`, exit code 1) and the paired
+- [x] 3.2 Write each fixture's `expected.json` (outcome `failed`, `run.error-result`, exit code 1) and the paired
   events by hand from the native lines, following the updated mapping, ending in a `result` with `reason`
   `context-length`. Verify `test_claude_code_fixtures.py` (mapping, provenance, secret scan) passes with both, and
   that `packages/troupe/tests/test_claude_code_host.py` replays both through the host.
-- [ ] 3.3 Add the two fixtures to the README's fixture list, and to the fixture names `test_claude_code_fixtures.py`
+- [x] 3.3 Add the two fixtures to the README's fixture list, and to the fixture names `test_claude_code_fixtures.py`
   lists explicitly, if it lists them. Run the full `uv run scripts/check.py`, keeping its log in a scratch file, and
   commit.
 
