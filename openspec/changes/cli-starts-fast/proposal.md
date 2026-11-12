@@ -50,12 +50,16 @@ None.
 
 ## Impact
 
-- `packages/troupe/src/troupe/cli/`: command declarations split from their bodies, with each body imported when its
-  command runs; `--version` reads the version lazily.
-- `packages/troupe/src/troupe/core/client/dispatch.py`: a method's handlers are imported when it's called.
-- Core modules that import `importlib.metadata`, `jsonschema` or `ruamel.yaml` at the top only for one path
-  (`core/stages.py`, `core/vcs.py`, `core/artifacts.py`, `core/audition.py`, `core/interim.py`, `cli/values.py`),
-  where the count shows it matters.
+- `packages/troupe/src/troupe/cli/`: a new `table.py` declares every command and imports its family's module when it
+  runs; `__init__.py` takes the commands from it and reads the version lazily; `render.py` imports the runner effects
+  module only to show an audit; `config.py` imports `cli.values` only in `config set`.
+- `packages/troupe/src/troupe/core/client/dispatch.py`: a method's family is imported when it's called, and
+  `core/runs/__init__.py` imports each handler when it's called.
+- Core modules that imported `jsonschema` or `ruamel.yaml` at the top for one use: `core/schemas.py`,
+  `core/interim.py` and `core/config/kinds.py` (schema checking), `core/config/projection.py` (YAML). `Backends` and
+  `lease_dir` move from `core/runs/perform.py` to a new `core/runs/backends.py`, and `perform` imports config's
+  `sync_files` where it syncs. `importlib.metadata` stays where it is, since every command that opens a theatre reads
+  entry points (design, Measurements).
 - New tests in `packages/troupe/tests/` that run a fresh interpreter. No new dependencies, settings or error codes.
 - The measurement tooling (a counting hook in the local `.venv`, timing scripts) stays out of the repository; its
   method and results are recorded in the design.
