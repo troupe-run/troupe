@@ -188,7 +188,6 @@ class _State:
     turns: int = 0
     tool_calls: int = 0
     calls_this_round: int = 0
-    rounds_with_calls: set[int] = field(default_factory=set)
     rounds: list[Round] = field(default_factory=list)
     prompt_tokens: int = 0
     predicted_tokens: int = 0
@@ -366,8 +365,6 @@ class Run:
             state.predicted_tokens += round_.predicted_tokens
         self.record("received", _json(round_.record))
         self._note_model(round_.model_key)
-        if state.calls_this_round:
-            state.rounds_with_calls.add(round_.index)
         self._flush_turn()
         with self._lock:
             state.last_text = "".join(state.round_text).strip()
@@ -378,10 +375,12 @@ class Run:
         follow: true, ending the library's loop before the next round, when the budget is spent or
         this was the last round the turn limit allows (design D5). A round that asked for no tool
         ends the run anyway, whatever its number, so a run that finishes on its last allowed round
-        ends ok."""
+        ends ok. The round's calls are counted here, not when its prediction is reported done:
+        the library reports that before the calls it asked for have run."""
         state = self._state
-        had_calls = index in state.rounds_with_calls
-        state.calls_this_round = 0
+        with self._lock:
+            had_calls = state.calls_this_round > 0
+            state.calls_this_round = 0
         if not had_calls:
             return False
         if state.usage_known and self._tokens() >= self.options.max_total_tokens:
