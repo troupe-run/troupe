@@ -67,8 +67,10 @@ was checked against. Alternatives considered:
 - **Add a cap (`<5`).** The other unpinned dev dependencies (`pytest-xdist`, `hypothesis`, `mypy`) have none, and
   a future major comes as a Dependabot major update that needs a change anyway.
 
-The lock is regenerated with `uv lock --upgrade-package pycryptodome`, and its diff is compared with #343's: the
-same pycryptodome entry and the same dev-group specifier, nothing else.
+The lock is regenerated with `uv lock --upgrade-package pycryptodome==4.2.0`, and its diff is compared with #343's:
+the same pycryptodome entry and the same dev-group specifier, nothing else. The version is named because a bare
+`--upgrade-package` now resolves 4.4.0 (released 2026-11-07, inside Dependabot's cooldown), which D1 didn't check.
+Dependabot proposes 4.4.0 later as a minor update, which merges on the full check.
 
 ### D3. Dependabot's #343 is closed only after this change merges
 
