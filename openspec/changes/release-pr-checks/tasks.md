@@ -15,13 +15,15 @@ scratch copy of the repository with its own `uv sync`, or by copying the real fi
   one line each, and `uv run pytest plugins/runner-ollama/tests/test_ollama_fixtures.py` passes on `main` and with
   the plugin's version set to 0.1.0 (#263's state).
 
-## 2. Workspace tests take LM Studio's state from their copy (design D2)
+## 2. Workspace tests keep the copy's real extras, whatever they hold (design D2)
 
-- [ ] 2.1 In `scripts/tests/workspace/test_bundle.py` and `test_release_config.py`, read the copy's requirement for
-  `troupe-runner-lm-studio` wherever a test keeps the real `lm-studio` extra (`with_lm_studio`, `set_extras` calls,
-  `test_the_bundle_has_the_lm_studio_extra_and_all_naming_it`), instead of writing or expecting it bare. Verify:
-  the 6 LM Studio failures from #263 pass in all three states, and each changed test still fails if its broken
-  property is reverted (one mutation per test, noted in the commit).
+- [ ] 2.1 In `scripts/tests/workspace/test_bundle.py` and `test_release_config.py`, replace `LM_STUDIO` and
+  `with_lm_studio` with a helper that keeps the copy's real extras as they are (any runners, bare or pinned, or none)
+  beside the fixture runner `example`. Turn `test_the_bundle_has_the_lm_studio_extra_and_all_naming_it` into a check
+  of the real extras against core's runner table. No new test names a specific real runner. Verify: the 6 extras
+  failures from #263 pass in all three states. Each changed test still fails when its broken property is reverted
+  (one mutation per test, noted in the commit). The tests also pass with LM Studio's extra and its table entry
+  removed from a copy (the state #413 will leave).
 
 ## 3. Remove the pinned-dependency rule (design D3, D4; the owner chose option A on #411, 2026-11-13)
 
