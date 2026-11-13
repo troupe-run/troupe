@@ -13,9 +13,9 @@
 
 ## 2. A killed perform is waited for itself (#405, design D3)
 
-- [ ] 2.1 `perform_child.py` prints its own pid with `STARTED`, and every `STARTED` reader takes it. Verify:
+- [x] 2.1 `perform_child.py` prints its own pid with `STARTED`, and every `STARTED` reader takes it. Verify:
   `test_run_queries.py`, `test_cli_runs.py`, `test_run_notices.py` and `test_run_workspaces.py` pass.
-- [ ] 2.2 `Child.kill()` ends the perform's own pid if it's still running, then waits (bounded, naming the pid) until
+- [x] 2.2 `Child.kill()` ends the perform's own pid if it's still running, then waits (bounded, naming the pid) until
   `is_running` says it has ended. The #405 test's assertion message carries the timings. Verify: a test checks that the pid
   `perform_child.py` reported has ended when `Child.kill()` returns.
   Run `uv run mypy --platform win32` on the changed files.
