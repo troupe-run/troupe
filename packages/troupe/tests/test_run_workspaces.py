@@ -72,6 +72,18 @@ def history(made: Harness, run_id: str) -> list[dict[str, Any]]:
     return [json.loads(event.state) for event in made.stores[-1].history(UUID(run_id))]
 
 
+def event_of(made: Harness, run_id: str, topic: str) -> dict[str, Any]:
+    """The state of the run's one recorded event with this topic, found by topic, not position: a
+    workspace.waiting notice can be recorded between any two of a worktree run's events (#402)."""
+    found: list[dict[str, Any]] = [
+        json.loads(event.state)
+        for event in made.stores[-1].history(UUID(run_id))
+        if event.topic.rsplit(":", 1)[1] == topic
+    ]
+    assert len(found) == 1, f"{len(found)} {topic} events in {topics(made, run_id)}"
+    return found[0]
+
+
 def notices(made: Harness, code: str) -> list[dict[str, Any]]:
     return [
         update["notice"]
@@ -152,10 +164,31 @@ def test_a_clean_theatre_with_troupes_own_uncommitted_events_isnt_dirty(repo: Re
 
 def test_the_start_names_the_worktree_and_worktree_made_records_its_clones(repo: Repo) -> None:
     made = harness(repo)
+    check_the_start_and_worktree_made(made, repo)
+
+
+def test_worktree_made_is_found_with_a_waiting_notice_recorded_before_it(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With the threshold at 0, making the worktree always raises workspace.waiting, recorded
+    before Run.WorktreeMade: what a loaded runner did by chance in #402."""
+    from troupe.core import defaults
+
+    monkeypatch.setattr(defaults, "WORKSPACE_ANNOUNCE_AFTER_SECONDS", 0)
+    made = harness(repo)
+    run_id = check_the_start_and_worktree_made(made, repo)
+    recorded = topics(made, run_id)
+    assert "Run.Noticed" in recorded[: recorded.index("Run.WorktreeMade")], recorded
+
+
+def check_the_start_and_worktree_made(made: Recording, repo: Repo) -> str:
+    """Perform a worktree run; check its start names the worktree and Run.WorktreeMade records
+    its clones. Returns the run's id."""
     asked = configured(made, INIT, OK)
     head = repo.git("rev-parse", "HEAD").strip()
     run = made.perform(asked).run
-    start, worktree_made = history(made, run.run_id)[:2]
+    start = event_of(made, run.run_id, "Run.Started")
+    worktree_made = event_of(made, run.run_id, "Run.WorktreeMade")
     assert start["workspace"] == {
         "kind": "worktree",
         "path": f".troupe/local/worktrees/{run.run_id}",
@@ -166,6 +199,7 @@ def test_the_start_names_the_worktree_and_worktree_made_records_its_clones(repo:
     assert clones  # whatever this file system gave: clonefile, ficlone, copy...
     assert set(clones) <= {"clonefile", "ficlone", "copyfile2", "copy", "symlink"}
     assert run.to_data()["workspace"] == {**start["workspace"], "clones": clones}
+    return run.run_id
 
 
 # Requirement: A worktree needs git and a commit

@@ -21,11 +21,11 @@ Two run tests fail depending on timing, and each has cost a CI round or a queued
 
 - **#402: events are found by type, not position.** The test picks `Run.Started` and `Run.WorktreeMade` out of the
   run's history by their topics. A copy of it runs with the announce threshold at 0, so a `workspace.waiting` notice
-  always comes between them, and pins that. Every worktree-using test file was run with the threshold at 0
-  (`test_run_workspaces.py`, `test_run_aggregate.py`, `test_run_changes.py`, `test_run_changes_recording.py`,
-  `test_run_notices.py`, `test_perform.py`, `test_run_queries.py`, `test_cli_config.py`, `test_cli_runs.py`).
-  Nothing else failed: the other positional reads are `[0]` (the start, always first) and `[-1]` (the end, always
-  last).
+  always comes between them, and pins that. Every test file in `packages/troupe` that mentions worktrees was run
+  with the threshold at 0 for every test. One more failed the same way: `test_event_payloads.py`'s worktree-run test
+  compares the run's exact topics, so a `Run.Noticed` among them fails it. It now compares them less notices,
+  allows only `workspace.waiting` there, and runs at the threshold of 0 too. The other positional reads are `[0]`
+  (the start, always first) and `[-1]` (the end, always last).
 - **#405: a killed `perform` is waited for itself, not its launcher.** `perform_child.py` reports its own pid with
   `STARTED`. `Child.kill()` kills the process it started, then waits, bounded and naming what it waits for, until
   that pid has ended (the platform seam's `is_running`). Every test that kills a `Child` and then reads the run's

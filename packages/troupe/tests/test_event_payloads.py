@@ -18,6 +18,7 @@ from protocol_guard import ProtocolGuardError
 from protocol_schemas import PROTOCOL_BASE, SCHEMAS, SCRIPTED, load, validator_for
 from runtesting import INIT, OK, Harness, failing_at, request, script, theatre, turn
 from storetesting import git_service, segments
+from troupe.core import defaults
 from troupe.core.config import aggregate as config_aggregate
 from troupe.core.errors import TroupeError
 from troupe.core.runners.limits import RunLimits
@@ -84,9 +85,15 @@ def test_every_line_a_succeeded_run_records_validates_by_topic(tmp_path: Path) -
     assert _problems(lines) == []
 
 
+@pytest.mark.parametrize("announce_after", [None, 0], ids=["default", "always-announced"])
 def test_every_line_a_worktree_run_records_validates_by_topic_with_its_worktree_made(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, announce_after: float | None
 ) -> None:
+    """A worktree step slower than WORKSPACE_ANNOUNCE_AFTER_SECONDS, as on a loaded machine,
+    records workspace.waiting among the run's topics (#402). At 0 it always does, so the
+    comparison is checked with them there."""
+    if announce_after is not None:
+        monkeypatch.setattr(defaults, "WORKSPACE_ANNOUNCE_AFTER_SECONDS", announce_after)
     harness = Harness(theatre(tmp_path))
     (harness.repo.path / "a.txt").write_text("one\n", encoding="utf-8")
     harness.repo.commit_all("base")
@@ -96,7 +103,17 @@ def test_every_line_a_worktree_run_records_validates_by_topic_with_its_worktree_
     harness.perform(asked)
     lines = _lines(harness)
     topics = [line.get("topic") for line in lines if line.get("topic") in TOPICS]
-    assert topics == [STARTED, WORKTREE_MADE, REPORTED, REPORTED, ENDED]
+    assert [topic for topic in topics if topic != NOTICED] == [
+        STARTED,
+        WORKTREE_MADE,
+        REPORTED,
+        REPORTED,
+        ENDED,
+    ]
+    waiting = {line["state"]["notice"]["code"] for line in lines if line.get("topic") == NOTICED}
+    assert waiting <= {"workspace.waiting"}
+    if announce_after == 0:
+        assert waiting == {"workspace.waiting"}
     started = next(line for line in lines if line.get("topic") == STARTED)["state"]
     assert "clones" not in started["workspace"]
     assert "runner_reported" not in started

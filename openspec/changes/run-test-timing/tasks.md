@@ -2,11 +2,14 @@
 
 ## 1. Worktree events found by topic (#402, design D1, D2)
 
-- [ ] 1.1 Write the threshold-0 pin first (D2): the #402 test's body with `WORKSPACE_ANNOUNCE_AFTER_SECONDS` at 0,
+- [x] 1.1 Write the threshold-0 pin first (D2): the #402 test's body with `WORKSPACE_ANNOUNCE_AFTER_SECONDS` at 0,
   asserting a `workspace.waiting` was recorded before `Run.WorktreeMade`. Verify: it fails on the current test body
   with `KeyError: 'clones'`.
-- [ ] 1.2 Add `event_of(made, run_id, topic)` and read `Run.Started` and `Run.WorktreeMade` through it in both
+- [x] 1.2 Add `event_of(made, run_id, topic)` and read `Run.Started` and `Run.WorktreeMade` through it in both
   tests. Verify: both pass, and `uv run pytest packages/troupe/tests/test_run_workspaces.py` passes.
+- [x] 1.3 `test_event_payloads.py`'s worktree-run test, which failed at the threshold of 0 too, compares topics less
+  `Run.Noticed`, allows only `workspace.waiting` there, and runs at 0 as well. Verify: every `packages/troupe` test
+  file that mentions worktrees passes with the threshold at 0 for every test.
 
 ## 2. A killed perform is waited for itself (#405, design D3)
 
