@@ -109,7 +109,9 @@ across messages make Claude stop calling tools in parallel).
   disk, which could send the person's own Claude token to a local engine. So the client is built by a subclass of the
   library's client (`_RunnerClient`), which the library treats as having its own auth and never runs discovery for,
   with `Authorization` explicitly omitted. The runner also passes `base_url`, `default_headers` and `http_client`
-  itself, so `ANTHROPIC_BASE_URL` and `ANTHROPIC_CUSTOM_HEADERS` change nothing. Perform starts the runner without
+  itself. That isn't enough for `ANTHROPIC_CUSTOM_HEADERS`: the probe found the library merges it under the
+  runner's own headers. So the runner removes every `ANTHROPIC_*` variable from its own environment before it builds
+  the client. Perform starts the runner without
   those variables (D3), and a test starts it with them set, and with a profile under `ANTHROPIC_CONFIG_DIR`, to show
   they change nothing (spec: "The library finds nothing of its own").
 - Masking: everything the runner sends troupe passes through the SDK's credential masking (whole value, and the
@@ -195,10 +197,13 @@ for every tokenizer. Leave it to the engine: that's the silent loss #279 rules o
 As the OpenAI runner: the main thread reads troupe's messages and answers them; after `run/start` is acknowledged a
 worker thread sends `init` and runs the loop; every line goes to standard output whole under one lock. Stopping
 (`run/cancel`, end of input, `shutdown`) sets a flag under the lock, so no event follows the acknowledgement, and the
-loop checks it before each tool call and each request. The request in flight is abandoned by closing the library's
-stream and the runner's own HTTP client from the main thread, which closes the connection; the probe (D12) confirms
-the library's stream raises at once when that happens mid-read. The runner exits within its own named grace, below
-troupe's, whether or not the worker has finished, ending the process from its exit path if it must.
+loop checks it before each tool call and each request. **The request in flight is abandoned by ending the process.**
+The probe (D12) found that closing the library's stream and the `httpx2` client from another thread doesn't
+interrupt a read in progress: the worker stays blocked until its read timeout. So on cancel and end of input the main
+thread answers, flushes standard output, and ends the runner's own process (`os._exit`, from the runner's exit path),
+which closes the connection; the service sees it closed. A runner process holds one run (runner-protocol), so nothing
+else is lost, and no `result` can follow, since the flag is set first. Between requests, when nothing is in flight,
+the worker finishes on its own and the process exits normally within the same named grace, below troupe's.
 
 ### D10. Retries, redirects and timeouts
 
@@ -247,9 +252,13 @@ never committed:
   troupe's local runs, it refuses an over-long first prompt (Ollama cuts that silently), its small loaded window makes
   context fixtures cheap to record, and #413's removal of its own runner leaves this one as the way troupe reaches it.
   Ollama is documented as working, without fixtures.
-- **Still to probe before the code that depends on each:** cancel mid-stream from another thread (D9); a 3xx through
-  the runner's client (D10); `max_tokens` above LM Studio's window; LM Studio with "Require Authentication" on and a
-  Bearer token (D4); the subclass that turns off credential discovery (D4).
+- **Done (2026-11-14, part 2; findings on troupe#415, issuecomment-6866687695):** a `307` through the runner's
+  client raises a status error after one request (the library's own client followed it 20 times); the subclass with
+  `Authorization` omitted sends no credential with the variables set, but `ANTHROPIC_CUSTOM_HEADERS` still leaks in
+  (D4); closing the stream or client from another thread doesn't interrupt a read, so cancel ends the process (D9);
+  LM Studio accepts `max_tokens` above its window. **Not probed:** LM Studio with "Require Authentication" on, which
+  needs the owner; the runner sends a credential as a Bearer token, which LM Studio's documentation describes, and the
+  README says it's unverified.
 - **Claude's API needs the owner's key.** The capture tool runs the cases that need it (a tool loop, a context
   refusal from a long prompt, a refusal if one can be had); the owner runs it with `!` and the key in their own
   environment, and the tool never writes the key. A rejected credential is captured with a deliberately invalid key,
