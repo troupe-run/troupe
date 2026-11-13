@@ -449,7 +449,7 @@ MALFORMED: dict[str, Callable[[int, str], bytes | None]] = {
     "negative": lambda pid, token: f"-{pid}\n{token}\n".encode(),
     "zero": lambda pid, token: f"0\n{token}\n".encode(),
     "too-big": lambda pid, token: f"{pid}{'9' * 30}\n{token}\n".encode(),
-    "not-utf-8": lambda pid, token: f"{pid}\n".encode() + b"\xff\xfe\n",
+    "pid-not-ascii": lambda pid, token: b"\xff\xfe\n" + f"{token}\n".encode(),
     "empty-token": lambda pid, token: f"{pid}\n\n".encode(),
     "unterminated": lambda pid, token: f"{pid}\n{token}".encode(),
     "a-third-line": lambda pid, token: f"{pid}\n{token}\nmore\n".encode(),
