@@ -23,10 +23,11 @@ timing doesn't guarantee.
 - Each of the two tests passes whatever the timing, and checks what it did before.
 - A regression of either is caught deterministically, not by waiting for a loaded runner.
 
+- A run's state follows whether its `perform` has gone, not when the OS lets go of a dead process's lock (D4).
+
 **Non-Goals:**
 
-- Changing how a run's state is derived. See D3 for why the product is right as it is, and what would show
-  otherwise.
+- Changing what a lease is, or how `perform` takes it. The lock stays the first test; the pid only refines "held".
 
 ## Decisions
 
@@ -65,24 +66,54 @@ After that the perform is gone, so `interrupted` is the only right answer. The #
 the time from the kill to the end of step 3, and the time from then to `logs` returning, for any later Windows
 failure.
 
-Why the product needn't change: on Windows, a handle's byte-range locks are released when it's cleaned up (closed),
-and a process's handles are closed during its exit, before the process object is signalled. So once `is_running`
-says a process has ended, its locks are free. The `LockFileEx` documentation's warning, that unlocking "depends upon
-available system resources", is about a process that is still terminating. That's the window the old test sat in.
-
-*Alternative considered and dropped:* perform records its pid in the lease, and `lease_state` treats a held lock
-whose holder has ended as `interrupted`. That would be the fix if Windows held a lock past its holder's end. The
-reasoning above says it doesn't, and D3's diagnostics would show it if it did. Building it now would add a recorded
-file and a second source of truth for a case not shown to exist.
-
 *Alternative:* run `sys._base_executable` so there's no launcher. The child then needs the venv's paths set up by
 hand, and #55 found that it didn't remove that flake's cause. Waiting on the real pid works whatever starts it.
+
+### D4. A held lease whose holder has ended is `interrupted` (owner decision, 2026-11-13)
+
+D3 is the cause of #405 as far as anything shows. But the runs spec says `interrupted` once the `perform` "has
+gone", and `lease_state` only knows whether the OS still holds the lock. Windows doesn't promise when that is:
+`LockFileEx` says a terminated process's locks are released in a time that "depends upon available system
+resources". So the state is tied to the process, not to the lock's release:
+
+1. `perform`, once it holds the lease (`directory_lock(lease)` in `core/runs/perform.py`), writes `perform.pid` in
+   the lease directory: its `os.getpid()` in ASCII decimal and a newline, through `core.files.replace_file`, so a
+   reader never sees a half-written file. The write happens before the run's start is recorded, so a run that anyone
+   can see already has its pid file.
+2. `lease_state` tries the lock as now. Taken means `interrupted`, and no lease directory means
+   `unfinished-elsewhere`, both as now. When the lock is held, it reads `perform.pid`:
+   - a pid whose process has ended (platform `is_running` is false) means `interrupted`;
+   - no file, a file that isn't one positive decimal number, a pid still running, or the OS unable to say
+     (`ProcessStateUnknownError`) means `running`, as today.
+
+Why the fallback is `running` rather than an error, even for a malformed file: the lock is still the authority, and
+the pid only lets a held lock be read as gone. A wrong `interrupted` lets `discard` remove a live run's worktree. A
+wrong `running` only means the state reads as it does today until the lock is released. So anything short of a pid
+proven ended keeps today's answer. The owner set this rule.
+
+Why it can't make a live run `interrupted`: the lock is held either by the `perform` that wrote the file, which is
+then running, or for a moment by another reader's `lease_state` probe. That second case only happens once the
+`perform` has released the lock, so it has ended or finished anyway. A reused pid can only make a dead `perform`
+read as `running`, which is today's answer.
+
+The pid file is local state under `.troupe/local/runs/<run id>/`, like the lease itself, and never committed. It
+isn't an event, so it adds nothing to the history or the protocol.
+
+*Alternative:* a short retry of the lock before saying `running`. Every query of a live run would pay the wait, and
+no wait is promised to be long enough.
+
+**Testing it on every OS.** A helper process takes the lease lock and keeps it (as `test_platform_locks.py`'s
+holder does), while the lease's `perform.pid` names a process that has ended: a child the test started and waited
+for. `status` and `logs` say `interrupted`. The same set-up with the pid of a live process says `running`, and so do
+a missing file and a malformed one. On main, the first test fails, saying `running`.
 
 ## Risks / Trade-offs
 
 - [The real interpreter's pid is reused before step 3 looks] → Step 3 starts straight after the launcher's wait, and
   a reused pid would only make it wait the full `WITHIN` and fail naming the pid. It can't make the test pass wrongly.
-- [Windows does hold the lock past the process's end after all] → The test fails with the timings in its message,
-  and that's raised as a product issue (the dropped alternative in D3), not retried away.
+- [A pid recorded by a `perform` from before this change] → None exist outside tests: lease directories are local,
+  and pre-1.0 nothing reads an old one any differently. A lease without `perform.pid` keeps today's answer.
+- [Reading the pid costs `status` a file read per run with no end] → Only when the lock is held, so only for runs
+  that are, or were just, running. It's one small read.
 - [A Windows flake hunt isn't possible from this machine] → CI's Windows legs run the tests. The owner is asked
   whether to also run the issue's Windows flake hunt.

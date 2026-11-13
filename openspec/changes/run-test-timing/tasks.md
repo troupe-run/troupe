@@ -16,17 +16,30 @@
   `is_running` says it has ended. The #405 test's assertion message carries the timings. Verify: a test checks that the pid
   `perform_child.py` reported has ended when `Child.kill()` returns.
   Run `uv run mypy --platform win32` on the changed files.
-- [ ] 2.3 Run `scripts/flake_hunt.py --rounds 10 --load 2` (load under ~40 first) on `test_cli_runs.py`,
+
+## 3. A held lease whose holder has ended is interrupted (design D4)
+
+- [ ] 3.1 Write the tests first (D4, "Testing it on every OS"): a helper holds the lease lock while `perform.pid`
+  names an ended process, and `status` and `logs` say `interrupted`; with a live pid, no file, or a malformed file,
+  they say `running`. Verify: the ended-pid test fails on the current `lease_state`, saying `running`, and the
+  others pass.
+- [ ] 3.2 `perform` writes `perform.pid` through `replace_file` once it holds the lease, before the start is
+  recorded. Verify: a test reads the pid file of a live `Child` and finds the pid `perform_child.py` reported.
+- [ ] 3.3 `lease_state` reads the pid when the lock is held, as D4 says. Verify: 3.1's tests all pass, and so do
+  `test_run_queries.py`, `test_cli_runs.py`, `test_run_notices.py` and `test_run_changes.py`.
+- [ ] 3.4 `contributing/runs.md`'s lease step and state table say what the pid file is for. Verify: the table's
+  `running` and `interrupted` rows match D4.
+
+## 4. Check and deliver
+
+- [ ] 4.1 `uv run scripts/check.py` passes, its log kept in a scratch file. Verify: the log shows no failures.
+- [ ] 4.2 Run `scripts/flake_hunt.py --rounds 10 --load 2` (load under ~40 first) on `test_cli_runs.py`,
   `test_run_queries.py` and `test_run_workspaces.py`. Verify: no failures, and the counts are recorded in the PR.
-
-## 3. Check and deliver
-
-- [ ] 3.1 `uv run scripts/check.py` passes, its log kept in a scratch file. Verify: the log shows no failures.
-- [ ] 3.2 Draft PR closing #402 and #405, with the threshold-0 failure on main and the flake hunt counts. Verify:
+- [ ] 4.3 Draft PR closing #402 and #405, with the threshold-0 failure on main and the flake hunt counts. Verify:
   `gh pr view` shows both `Closes`.
 
 ## Workflow follow-up
 
 - Act on Claude's review of the last push; mark ready once clean, and check CI's Windows legs ran the #405 test.
-- Ask the owner whether to also run the issue's flake hunt on Windows.
+- The PR records that CI's Windows legs are the Windows check (owner decision, 2026-11-13; as #407 did for #406).
 - `/opsx:archive` on the branch before the owner merges; after the merge, check #402 and #405 are closed and Done.

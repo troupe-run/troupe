@@ -30,10 +30,13 @@ Two run tests fail depending on timing, and each has cost a CI round or a queued
   `STARTED`. `Child.kill()` kills the process it started, then waits, bounded and naming what it waits for, until
   that pid has ended (the platform seam's `is_running`). Every test that kills a `Child` and then reads the run's
   state gets the fix: `test_run_queries.py`'s interrupted-run tests as well as `test_cli_runs.py`'s.
-- **No product change.** `lease_state` says `running` while the lock is held. Once a process has ended, Windows has
-  already released its locks, because a handle's byte-range locks are released at handle cleanup, before the process
-  is signalled. If a Windows run still reads `running` after the real `perform` has ended, the test's assertion says
-  so, with the timings. That would be evidence for a product change, raised as its own issue.
+- **A held lease whose holder has ended reads as `interrupted` (owner decision, 2026-11-13).** Once `perform` holds
+  its run's lease, it writes its pid into the lease directory (`perform.pid`). When `lease_state` finds the lock
+  held, it reads that pid and asks the platform seam whether the process has ended. If it has, the run is
+  `interrupted`. A missing or unreadable pid file, a pid still running, or a process the OS can't answer for stays
+  `running`, as today. This makes the state depend on whether the `perform` has gone, as the runs spec says, not on
+  how soon the OS lets go of a dead process's lock. That timing isn't promised on Windows: `LockFileEx` says it
+  "depends upon available system resources".
 
 ## Capabilities
 
@@ -43,11 +46,15 @@ None.
 
 ### Modified Capabilities
 
-None. Only tests and test helpers change, so the change sets `skip_specs: true`.
+- `runs`: "A run's state is derived, never recorded as running" gains a scenario. A `perform` that has ended while
+  its lease still reads as held is `interrupted`.
 
 ## Impact
 
 - `packages/troupe/tests/test_run_workspaces.py`: the #402 test, and its threshold-0 pin.
 - `packages/troupe/tests/perform_child.py` and `test_run_queries.py`'s `Child`: the perform's own pid, and waiting
   for it.
-- No product code, spec, protocol or dependency changes.
+- `packages/troupe/src/troupe/core/runs/perform.py` (writes the pid) and `core/runs/queries.py` (`lease_state`
+  reads it). `status`, `logs`, `accept`, `discard` and `diff` all derive state through `lease_state`.
+- `contributing/runs.md`: the lease and the state table.
+- No protocol, schema or dependency changes. `perform.pid` is local (`.troupe/local/`), never committed.
