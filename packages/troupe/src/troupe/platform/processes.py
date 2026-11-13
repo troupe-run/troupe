@@ -515,12 +515,12 @@ def namespace_token() -> str | None:
     Two processes get the same token when a pid means the same process to both, and different
     tokens across machines, pid namespaces and restarts. Linux: the pid namespace's identity and
     the boot id. macOS and Windows, which have no pid namespaces: the host name and the boot time,
-    to the second. Nothing is guessed: any OS error, or a part that's empty or holds a line break,
-    gives None.
+    to the second. Nothing is guessed: any OS error, a part that can't be decoded, or a part
+    that's empty or holds a line break, gives None.
     """
     try:
         parts = _namespace_parts()
-    except OSError:
+    except (OSError, ValueError):  # ValueError: a part that isn't text, such as a non-ASCII boot id
         return None
     if not parts or any(not part or "\n" in part or "\r" in part for part in parts):
         return None

@@ -76,7 +76,7 @@ troupe calls it and sees one behaviour on Linux, macOS and Windows. An import co
   line of text, so a pid written by one process can be trusted by another only when their tokens match. On Linux
   it's the pid namespace (`readlink /proc/self/ns/pid`) and the boot id; on macOS the host name and `kern.boottime`;
   on Windows the host name and the boot time the kernel keeps (`NtQuerySystemInformation`), both to the second.
-  Any OS error, or an empty part, gives None, never a guess. A host name can change with the network on macOS, and
+  Any OS error, a part that can't be decoded, or an empty part, gives None, never a guess. A host name can change with the network on macOS, and
   a clock step can move a boot time, so a token can differ for the same namespace. That only makes the reader trust
   less, which is the safe direction.
 - **One question:** `watch(directory).wait(timeout)` says whether anything in the directory changed since the last
