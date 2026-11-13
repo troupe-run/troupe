@@ -35,8 +35,8 @@
 
 ## 4. Check and deliver
 
-- [ ] 4.1 `uv run scripts/check.py` passes, its log kept in a scratch file. Verify: the log shows no failures.
-- [ ] 4.2 Run `scripts/flake_hunt.py --rounds 10 --load 2` (load under ~40 first) on `test_cli_runs.py`,
+- [x] 4.1 `uv run scripts/check.py` passes, its log kept in a scratch file. Verify: the log shows no failures.
+- [x] 4.2 Run `scripts/flake_hunt.py --rounds 10 --load 2` (load under ~40 first) on `test_cli_runs.py`,
   `test_run_queries.py` and `test_run_workspaces.py`. Verify: no failures, and the counts are recorded in the PR.
 - [ ] 4.3 Draft PR closing #402 and #405, with the threshold-0 failure on main and the flake hunt counts. Verify:
   `gh pr view` shows both `Closes`.
