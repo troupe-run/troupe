@@ -84,16 +84,23 @@ def test_a_repository_starts_on_the_branch_and_ref_format_it_was_asked_for(
 
 def _observed(repo: Repo) -> dict[str, Any]:
     """What a test can see of a repository through git, and its .git directory's layout and modes,
-    less what differs between any two builds of it: the commit's time (so its SHA and its object's
-    name) and reftable's table names. Files' contents are seen only through git's own answers."""
+    less what differs between any two builds of it: the commit's time (so its SHA, its object's
+    name, and how many fan-out directories the objects take) and reftable's table names. Files'
+    contents are seen only through git's own answers."""
     git_dir = repo.path / ".git"
     layout: Counter[str] = Counter()
     for path in git_dir.rglob("*"):
         parts = path.relative_to(git_dir).parts
         if path.suffix == ".lock":
             continue  # git's background maintenance holds one for a moment after a commit
-        if parts[0] == "objects" and len(parts) in (2, 3) and len(parts[1]) == 2:
-            name = "objects/<fan-out>" + ("/<loose object>" if len(parts) == 3 else "")
+        if parts[0] == "objects" and len(parts) == 2 and len(parts[1]) == 2:
+            # How many fan-out directories there are follows the objects' names, which differ
+            # between builds, so only an empty one is counted: no build makes one (troupe#408).
+            if any(path.iterdir()):
+                continue
+            name = "objects/<fan-out> empty"
+        elif parts[0] == "objects" and len(parts) == 3 and len(parts[1]) == 2:
+            name = "objects/<fan-out>/<loose object>"
         elif parts[0] == "reftable" and path.suffix == ".ref":
             name = "reftable/<table>"
         else:
@@ -140,6 +147,73 @@ def test_a_copy_shows_git_what_a_fresh_build_of_its_shape_shows(tmp_path: Path, 
     built = build(tmp_path / "built")
 
     assert _observed(copied) == _observed(built)
+
+
+def _fan_outs(repo: Repo) -> list[str]:
+    return sorted(p.name for p in (repo.path / ".git" / "objects").iterdir() if len(p.name) == 2)
+
+
+def _loose_objects(repo: Repo) -> int:
+    return len(list((repo.path / ".git" / "objects").glob("??/*")))
+
+
+def _built_at(root: Path, seconds: int, monkeypatch: pytest.MonkeyPatch) -> Repo:
+    """``committed()``'s theatre built from scratch, committed at ``seconds`` past the epoch."""
+    with monkeypatch.context() as patch:
+        for variable in ("GIT_AUTHOR_DATE", "GIT_COMMITTER_DATE"):
+            patch.setitem(gitrepo.AUTHOR, variable, f"{seconds} +0000")
+        return build_committed(root, "theatre")
+
+
+def test_two_builds_whose_commits_fall_in_different_fan_out_directories_look_the_same(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # committed()'s blobs and trees always have the same names, in four fan-out directories. A
+    # commit made at 1700000030 is named 566047d7..., sharing 56/ with one of them; one made at
+    # 1700000000 is named c232587f..., in a directory of its own (troupe#408, design D2).
+    sharing = _built_at(tmp_path / "sharing", 1_700_000_030, monkeypatch)
+    alone = _built_at(tmp_path / "alone", 1_700_000_000, monkeypatch)
+
+    # The premise: if committed()'s contents change, these times may stop giving two layouts, and
+    # this fails, naming the counts, rather than passing on two identical ones.
+    assert (len(_fan_outs(sharing)), len(_fan_outs(alone))) == (4, 5)
+    assert _loose_objects(sharing) == _loose_objects(alone) == 6
+
+    assert _observed(sharing) == _observed(alone)
+
+
+ONE_BLOB = Path("objects") / "56" / "26abf0f72e58d7a153368ba57db4c673c0e171"
+"""src/a.txt's blob ("one\\n") as a loose object, in every committed() theatre."""
+
+
+def _remove_one_blob(git_dir: Path) -> None:
+    (git_dir / ONE_BLOB).chmod(0o644)  # loose objects are read-only, which Windows won't unlink
+    (git_dir / ONE_BLOB).unlink()
+
+
+def _remove_main(git_dir: Path) -> None:
+    (git_dir / "refs" / "heads" / "main").unlink()
+
+
+def _make_an_empty_fan_out(git_dir: Path) -> None:
+    assert not (git_dir / "objects" / "00").exists()  # no object of the copy's is named 00...
+    (git_dir / "objects" / "00").mkdir()
+
+
+@pytest.mark.parametrize(
+    "alter", [_remove_one_blob, _remove_main, _make_an_empty_fan_out], ids=lambda f: f.__name__
+)
+def test_a_copy_that_differs_from_a_fresh_build_where_git_looks_compares_unequal(
+    tmp_path: Path, alter: Callable[[Path], None]
+) -> None:
+    # The comparison leaves out what differs between any two builds, and nothing more (design D3).
+    copied = committed(tmp_path / "copied")
+    built = build_committed(tmp_path / "built", "theatre")
+    assert (copied.path / ".git" / ONE_BLOB).is_file()
+
+    alter(copied.path / ".git")
+
+    assert _observed(copied) != _observed(built)
 
 
 def test_a_lock_file_in_the_template_is_left_out_of_the_copy(tmp_path: Path) -> None:
