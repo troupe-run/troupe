@@ -3,10 +3,10 @@
 Core finds its adapters by entry point and starts its runners in its own environment, so an install
 needs every workspace member beside it. troupe-run depends on all of them, and core on none but the
 plugin SDK, whose runner contract types it uses (install-with-uv design D1, D6; runner-sdk D12).
-Its `troupe` command must be core's own (design D2). When the bundle pins a component, it pins each
-released workspace member that component depends on too, so a tag install never looks one up on a
-package index (runner-sdk D12). It runs as a test, inside scripts/check.py; each problem names the
-package and the file to fix.
+Its `troupe` command must be core's own (design D2). It runs as a test, inside scripts/check.py;
+each problem names the package and the file to fix. That a tag install never looks a workspace
+member up on a package index is release_config.py's to check: the bundle doesn't release while it
+names one bare (#262, #411).
 
 A runner plugin that depends on anything beyond the plugin SDK is an optional extra of troupe-run,
 named exactly as core's runner table names its runner, and 'all' names every one; a plugin that
@@ -18,18 +18,15 @@ Standard library only, like check.py.
 """
 
 import ast
-import json
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from release_config import (
-    MANIFEST,
     bundle_requirements,
     members,
     normalise,
-    pinned_version,
     requirement_name,
 )
 
@@ -40,7 +37,6 @@ CORE_PYPROJECT = "packages/troupe/pyproject.toml"
 SDK = "troupe-plugin-sdk"
 """The one workspace member core depends on: the runner contract's types live there (spec:
 installation, plugin-sdk)."""
-UNRELEASED = "0.0.0"
 COMMAND = "troupe"
 ALL = "all"
 """The extra that installs every runner (runner-extras design D4)."""
@@ -146,8 +142,6 @@ def problems(root: Path) -> list[str]:
                 "what brings it into an install."
             )
 
-    found.extend(_unpinned_dependencies(root, workspace, bundle))
-
     expected = core.get("scripts", {}).get(COMMAND)
     actual = bundle.get("scripts", {}).get(COMMAND)
     if actual != expected:
@@ -159,43 +153,6 @@ def problems(root: Path) -> list[str]:
             f"{runs}, but {CORE}'s runs {expected!r}: set [project.scripts] "
             f"{COMMAND} = {expected!r} in {BUNDLE_PYPROJECT}."
         )
-    return found
-
-
-def _unpinned_dependencies(
-    root: Path, workspace: dict[str, str], bundle: dict[str, Any]
-) -> list[str]:
-    """Each released workspace member that a component the bundle pins depends on, but that the
-    bundle names bare (installation spec; runner-sdk D12). An unreleased member can't be pinned yet,
-    so it's left out. A malformed pin is the release config check's to report."""
-    manifest_file = root / MANIFEST
-    manifest: dict[str, str] = (
-        json.loads(manifest_file.read_text(encoding="utf-8")) if manifest_file.is_file() else {}
-    )
-    held = {requirement_name(r): r for _, r in bundle_requirements(bundle)}
-
-    def pinned(name: str) -> bool:
-        try:
-            return name in held and pinned_version(held[name], name, workspace[name]) is not None
-        except ValueError:
-            return True
-
-    found: list[str] = []
-    for name in sorted(held):
-        if name not in workspace or not pinned(name):
-            continue
-        project = _project(root, f"{workspace[name]}/pyproject.toml") or {}
-        for requirement in project.get("dependencies", []):
-            needed = requirement_name(requirement)
-            if needed not in workspace or needed not in held or pinned(needed):
-                continue
-            if manifest.get(workspace[needed], UNRELEASED) == UNRELEASED:
-                continue
-            found.append(
-                f"{BUNDLE} pins {name}, which depends on {needed}, but names {needed} bare in "
-                f"{BUNDLE_PYPROJECT}: pin it at its latest release too, so an install of the "
-                "bundle's tag never looks it up on a package index."
-            )
     return found
 
 

@@ -59,8 +59,9 @@ def set_dependency(root: Path, name: str, requirement: str | None) -> None:
 
 
 def unpinned(root: Path) -> None:
-    """As before the first pin: every dependency on a workspace member bare, the bundle's
-    'exclude-paths' in the config, and the bundle unreleased in the manifest. The exclusion goes
+    """As before the first pin: every dependency on a workspace member bare, in its dependencies and
+    its extras, the bundle's 'exclude-paths' in the config, and the bundle unreleased in the
+    manifest. The exclusion goes
     with something being bare: the check fails a bare member without it, and an exclusion with
     nothing bare (refuse-bare-bundle-member design D2)."""
     pyproject = bundle_pyproject(root)
@@ -71,6 +72,14 @@ def unpinned(root: Path) -> None:
         name = names.get(release_config.requirement_name(requirement))
         if name is not None:
             set_dependency(root, name, name)
+    # The extras too: after a real pin, a runner in an extra is pinned there, and in 'all' (#411).
+    held = extras(root)
+    bare = {
+        extra: [names.get(release_config.requirement_name(r), r) for r in requirements]
+        for extra, requirements in held.items()
+    }
+    if bare != held:
+        set_extras(root, bare)
     if (root / CONFIG).exists():
         exclude(root)
     manifest = root / MANIFEST
@@ -175,6 +184,24 @@ def extras(root: Path) -> dict[str, list[str]]:
     project = tomllib.loads(bundle_pyproject(root).read_bytes().decode("utf-8"))["project"]
     found: dict[str, list[str]] = project.get("optional-dependencies", {})
     return found
+
+
+def with_real_extras(
+    real: dict[str, list[str]], wanted: dict[str, list[str]]
+) -> dict[str, list[str]]:
+    """``wanted``, with ``real``, the copy's extras as read before the test changed them, kept as
+    they are (whichever runners they hold, bare or pinned, or none), and their entries kept in 'all'
+    when ``wanted`` gives 'all'. A test that adds a fixture runner beside them then needs no change
+    when a real runner is added to an extra or removed (#411)."""
+    kept = {extra: held for extra, held in real.items() if extra != "all"}
+    kept.update(wanted)
+    if "all" in wanted:
+        named = {release_config.requirement_name(r) for r in wanted["all"]}
+        kept["all"] = [
+            *wanted["all"],
+            *(r for r in real.get("all", []) if release_config.requirement_name(r) not in named),
+        ]
+    return kept
 
 
 def set_extras(root: Path, wanted: dict[str, list[str]]) -> None:
