@@ -30,10 +30,10 @@ asks for the key.
 
 ## 3. The built-in runtime (design D3)
 
-- [ ] 3.1 Add `defaults.RUNTIMES["anthropic"] = {"endpoint": "https://api.anthropic.com", "credential": {"env":
+- [x] 3.1 Add `defaults.RUNTIMES["anthropic"] = {"endpoint": "https://api.anthropic.com", "credential": {"env":
   "ANTHROPIC_API_KEY"}}`, and update the tests that list the built-ins. Verify: a test for the runtimes delta's
   "Claude's API is a built-in", and core's suite passes.
-- [ ] 3.2 Update `docs/stagecraft/runtimes.md`: the `anthropic` built-in, and a runtime of your own for a local engine
+- [x] 3.2 Update `docs/stagecraft/runtimes.md`: the `anthropic` built-in, and a runtime of your own for a local engine
   serving the Messages API (LM Studio's root, with the two `troupe config set` lines: the runtime's endpoint and the
   actor's runtime), not the built-in `lm-studio` runtime, which #413 removes (owner, 2026-11-14). Verify: the docs page
   tests pass, and the page shows both lines.
