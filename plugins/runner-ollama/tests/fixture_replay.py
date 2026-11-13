@@ -12,11 +12,15 @@ record and its kind, in the form troupe stores a transcript whose runner accepte
 
 import json
 from dataclasses import dataclass
+from importlib.metadata import version
 from pathlib import Path
 from typing import Any
 
 from fake_ollama import Answer, FakeOllama, Settings
 from ollama_harness import FIXTURES, Session, runtime
+
+PACKAGE_VERSION = "<package version>"
+"""What a fixture's ``init`` event holds for the runner's version, as the capture tool writes it."""
 
 NOTES = {"notes.txt": "A line of notes.\n" * 200}
 COMPACTED_FILES = {
@@ -123,6 +127,11 @@ def replay(name: str, root: Path) -> Replayed:
         event = dict(message["params"])
         event.pop("runId")
         event.pop("durationMs", None)
+        if event["type"] == "init":
+            # The runner reports its own package's version; a fixture holds the placeholder, so a
+            # release changes no fixture.
+            assert event["runner"]["version"] == version("troupe-runner-ollama")
+            event["runner"] = {**event["runner"], "version": PACKAGE_VERSION}
         events.append(json.loads(_scrub(json.dumps(event, ensure_ascii=False), workspace, scratch)))
     return Replayed(None, records, events)
 

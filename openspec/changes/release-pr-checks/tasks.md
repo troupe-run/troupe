@@ -7,10 +7,12 @@ scratch copy of the repository with its own `uv sync`, or by copying the real fi
 
 ## 1. Ollama's fixtures don't hold the runner's version (design D1)
 
-- [ ] 1.1 In `plugins/runner-ollama/tests/fixture_replay.py`, check `init`'s `runner.version` against the installed
+- [x] 1.1 In `plugins/runner-ollama/tests/fixture_replay.py`, check `init`'s `runner.version` against the installed
   `troupe-runner-ollama` and replace it with `<package version>`, as `openai_fixture_replay.py` does. Verify: the
   fixture test fails on every run fixture before the fixtures change (showing the replay compares the placeholder).
-- [ ] 1.2 Replace `"version": "0.0.0"` in each run fixture's `events.json` `init` event's `runner` with
+  The capture tool writes the placeholder too, and `test_ollama_capture.py` checks it (fails when the capture keeps
+  the real version).
+- [x] 1.2 Replace `"version": "0.0.0"` in each run fixture's `events.json` `init` event's `runner` with
   `"<package version>"`, and nothing else. Verify: `git diff --stat` touches only the 11 run fixtures' `events.json`,
   one line each, and `uv run pytest plugins/runner-ollama/tests/test_ollama_fixtures.py` passes on `main` and with
   the plugin's version set to 0.1.0 (#263's state).
