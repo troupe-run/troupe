@@ -45,8 +45,7 @@
   controls, refusal fallbacks, batches, structured outputs. The runner speaks the subset every engine serves (D2).
 - Choosing thinking or effort settings. The model's default applies, and thinking blocks are sent back unchanged.
 - The Bedrock, Vertex and Foundry clients, and an `x-api-key` header (D4).
-- Removing the LM Studio runner, and which built-in runtime LM Studio's users get afterwards (D3, raised with the
-  owner).
+- Removing the LM Studio runner and its built-in `lm-studio` runtime, which is #413's job (D3).
 
 ## Decisions
 
@@ -91,13 +90,13 @@ across messages make Claude stop calling tools in parallel).
   `fit=RuntimeFit(built_in="anthropic")` (path `any`, a credential allowed, any scheme). Its environment is the
   same proxy variables the OpenAI runner gets (`OPENAI_ENVIRONMENT`), since the library's HTTP client reads them as
   `urllib` does; nothing else reaches it, so none of the `ANTHROPIC_*` variables do (D4 defends against them anyway).
-- **A local engine is a runtime the person defines**, for example
-  `troupe config set runtimes.lm-studio-messages.endpoint=http://127.0.0.1:1234`. The built-in `lm-studio` runtime has
-  the same endpoint, but a built-in fits only the runner it's made for (lmstudio-runner design D3), and that's the
-  LM Studio runner until #413 removes it. **Raised with the owner (2026-11-14):** whether, once #413 lands, the
-  `lm-studio` built-in should fit this runner instead (recommended), be removed, or fit both. Whatever the answer, a
-  runtime of your own is needed for any other engine, so this change documents it; the built-in's fit is done in
-  whichever of #413 and this change merges second, if the owner chooses it.
+- **A local engine is a runtime the person defines**: for LM Studio, `troupe config set
+  runtimes.lm-studio-messages.endpoint=http://127.0.0.1:1234` and `troupe config set
+  actors.<name>.runtime=lm-studio-messages`. This change neither keeps nor re-points the built-in `lm-studio` runtime:
+  it fits only the LM Studio runner (lmstudio-runner design D3), and #413 removes both (owner decision, 2026-11-14,
+  option 2 of the three raised: re-point it to this runner, remove it, or let it fit both). No built-in serves a local
+  Messages API engine, so the docs and the README show the two lines, and a spec scenario pins that such a runtime
+  reaches the engine.
 
 ### D4. The credential, and nothing the library finds for itself
 
@@ -311,7 +310,8 @@ The spec `anthropic-runner` is new, so its Purpose goes into troupe-run/infrastr
 
 **#413 runs alongside.** It edits the same requirements (the runner list in `cli` and `quality-check`, the built-ins
 in `runtimes`), the same runner table, docs and extras. Whichever merges second rebases and carries the other's
-wording, re-archiving if the archive commit conflicts.
+wording, re-archiving if the archive commit conflicts. This change's `runtimes` delta lists `lm-studio` only because
+main still has it; if #413 merges first, the delta drops it, and nothing here depends on it.
 
 ## Risks / Trade-offs
 
@@ -329,4 +329,4 @@ wording, re-archiving if the archive commit conflicts.
 - **A local engine's model may leak its reasoning into text** (Gemma on LM Studio). → Shown as is; the README says so.
 - **Claude fixtures need the owner.** → The capture tool is a script the owner runs; everything else is captured
   without a key, and the PR isn't marked ready without the owner's capture or the owner's word to go without it.
-- **Concurrent work on #413** touches the same files. → D15's order, and the built-in question raised with the owner.
+- **Concurrent work on #413** touches the same files. → D15's order; the owner settled the built-in (D3).

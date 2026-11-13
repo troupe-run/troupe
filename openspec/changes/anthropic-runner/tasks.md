@@ -31,8 +31,9 @@ asks for the key.
   "ANTHROPIC_API_KEY"}}`, and update the tests that list the built-ins. Verify: a test for the runtimes delta's
   "Claude's API is a built-in", and core's suite passes.
 - [ ] 3.2 Update `docs/stagecraft/runtimes.md`: the `anthropic` built-in, and a runtime of your own for a local engine
-  serving the Messages API (LM Studio's root, with the two `troupe config set` lines). Verify: the docs page tests
-  pass.
+  serving the Messages API (LM Studio's root, with the two `troupe config set` lines: the runtime's endpoint and the
+  actor's runtime), not the built-in `lm-studio` runtime, which #413 removes (owner, 2026-11-14). Verify: the docs page
+  tests pass, and the page shows both lines.
 
 ## 4. Check the library's dependencies before locking them (design D15)
 
@@ -164,13 +165,15 @@ asks for the key.
   `interim.RUNNERS["anthropic"]` with `runtime="required"`, `in_extra=True`, the proxy environment and
   `fit=RuntimeFit(built_in="anthropic")`; the bundle's exclude-paths as `scripts/release_config.py` says; and a row in
   `docs/opening-night/install.md`'s extras table. Verify: `uv sync --locked`, the bundle, release configuration,
-  install docs and licence checks pass; core tests show an `anthropic` actor with no runtime refused naming
+  install docs and licence checks pass; core tests show an `anthropic` actor on a runtime of your own at
+  `http://127.0.0.1:1234` accepted, an `anthropic` actor with no runtime refused naming
   `actors.<name>.runtime`, the base install refusing it with `runner.not-installed` naming `troupe-run[anthropic]`, and
   perform passing the runner no `ANTHROPIC_*` variable.
 - [ ] 13.2 Add the audition: `_anthropic` in `core/audition.py`, `ANTHROPIC_AUDITION_MODEL = "claude-haiku-5-5"` in
   one place, `maxTurns` 10 and `maxTotalTokens` 100,000, and the note `init` prints. Verify: tests for the cli delta's
   scenarios and the config delta's.
-- [ ] 13.3 Write the plugin's README (the extra, the runtime and a local engine's, the options and their defaults, the
+- [ ] 13.3 Write the plugin's README (the extra, the `anthropic` runtime and a local engine's runtime of your own with its two
+  `troupe config set` lines, the options and their defaults, the
   named timeouts, the context guard and what it can't catch, what the transcript keeps and loses, reasoning in a local
   model's text, and the gaps from D13), and update `plugins/README.md`, `contributing/runners.md` and
   `docs/stagecraft/bring-your-own-agent.md` where they list runners. Verify: the README test passes, and every page

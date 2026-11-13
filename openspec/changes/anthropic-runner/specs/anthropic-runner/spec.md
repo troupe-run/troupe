@@ -68,6 +68,11 @@ SHALL be hard-coded in the runner.
 - **WHEN** a run's runtime names the model `small-model`
 - **THEN** every request asks for `small-model`, and the `init` event's `engine.model` is `small-model`
 
+#### Scenario: A local engine through a runtime of your own
+- **WHEN** config defines `runtimes.lm-studio-messages.endpoint=http://127.0.0.1:1234` and an `anthropic` actor names
+  that runtime and the model `google/gemma-4-e4b`
+- **THEN** the actor is accepted, and the run's requests go to `http://127.0.0.1:1234/v1/messages` with no credential
+
 ### Requirement: The library finds nothing of its own
 The runner SHALL give the library its base URL, its credential or the absence of one, its HTTP client and every
 header itself, so that no environment variable or file the library would otherwise read (`ANTHROPIC_API_KEY`,

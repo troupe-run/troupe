@@ -34,7 +34,8 @@ Studio 0.4 keeps the system prompt and cuts the middle, Ollama 0.40 keeps a frac
   when it has one, the only credential sent. The options hold no endpoint, model or credential.
 - **A new built-in runtime, `anthropic`**: endpoint `https://api.anthropic.com`, credential from `ANTHROPIC_API_KEY`,
   no model, no price. A local engine is a runtime the person defines (for LM Studio, its server root); the docs show
-  how.
+  the two `troupe config set` lines. The built-in `lm-studio` runtime isn't kept or re-pointed for it (owner,
+  2026-11-14): #413 removes it with the LM Studio runner.
 - **Every run is capped**, as the OpenAI runner's are: a turn limit, a token budget, and the output limit each request
   asks for (the API requires one), each default named in one place. An optional `contextWindow` option names the
   engine's window when the person knows it.
@@ -63,8 +64,9 @@ Studio 0.4 keeps the system prompt and cuts the middle, Ollama 0.40 keeps a frac
 
 Out: Claude's server-side features (server tools, the tool runner helper, server-side compaction, message threads,
 batches, prompt caching controls, fallbacks), extended-thinking settings beyond the model's default, the Bedrock,
-Vertex and Foundry clients, removing the LM Studio runner (#413), and choosing which built-in runtime LM Studio users
-get once #413 lands (raised with the owner, design D3).
+Vertex and Foundry clients, and removing the LM Studio runner and its built-in `lm-studio` runtime (#413; the owner
+chose, 2026-11-14, that LM Studio's users define their own runtime for this runner rather than keep or re-point the
+built-in).
 
 ## Capabilities
 
