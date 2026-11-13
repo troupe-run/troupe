@@ -844,6 +844,7 @@ def test_a_command_that_closes_its_output_and_exits_after_the_announcement_retur
 
 
 _END_RUNS = 30
+_END_BATCHES = 3
 _OLD_TICK = 0.020
 _A_QUARTER_OF_THE_OLD_TICK = _OLD_TICK / 4
 
@@ -867,12 +868,17 @@ class _AfterTheEnd(typing.NamedTuple):
     def extra(self) -> float:
         return statistics.median(self.bounded) - statistics.median(self.direct)
 
-    def describe(self) -> str:
+    def measured(self) -> str:
         return (
-            f"run_to_completion returned {self.extra() * 1000:.1f} ms later after the command "
-            f"ended than subprocess.run did (medians of {_END_RUNS}: "
+            f"{self.extra() * 1000:.1f} ms (medians of {_END_RUNS}: "
             f"{statistics.median(self.bounded) * 1000:.1f} ms against "
             f"{statistics.median(self.direct) * 1000:.1f} ms)"
+        )
+
+    def describe(self) -> str:
+        return (
+            "run_to_completion returned later after the command ended than subprocess.run did "
+            f"by {self.measured()}"
         )
 
 
@@ -904,8 +910,19 @@ def _time_after_the_end() -> _AfterTheEnd:
 
 
 def test_a_command_returns_as_soon_after_it_ends_as_one_started_directly() -> None:
-    timed = _time_after_the_end()
-    assert timed.extra() < _A_QUARTER_OF_THE_OLD_TICK, timed.describe()
+    # A burst of load on a busy runner can push one batch past the bound; a tick that came back
+    # is in the code, so it's in every batch. Pass at the first batch under the bound, and fail
+    # only when every one is over (troupe-run/troupe#406). A tick passes a batch about 0.27% of
+    # the time, so it would pass this test in under 1% of runs, on each leg.
+    batches: list[_AfterTheEnd] = []
+    for _ in range(_END_BATCHES):
+        batches.append(_time_after_the_end())
+        if batches[-1].extra() < _A_QUARTER_OF_THE_OLD_TICK:
+            return
+    pytest.fail(
+        "run_to_completion returned later after the command ended than subprocess.run did, "
+        f"in each of {_END_BATCHES} batches: " + "; ".join(timed.measured() for timed in batches)
+    )
 
 
 def test_the_time_after_the_end_tells_a_20_ms_tick_put_back(
@@ -914,7 +931,9 @@ def test_the_time_after_the_end_tells_a_20_ms_tick_put_back(
     # The test above is only worth its bound if a tick that came back would fail it on every
     # platform CI runs, Windows' coarser timers included. So put one back, as the loop was
     # before #360: each wait sleeps a fixed 20 ms, or less when a deadline is nearer, whatever
-    # wakes the event.
+    # wakes the event. This checks one batch: the test above fails with a tick only when all of
+    # its batches catch it, so its power is this batch's power to that power, and checking all
+    # of them here would triple this test's own chance of failing on a lucky batch.
     class TickingEvent(threading.Event):
         def wait(self, timeout: float | None = None) -> bool:
             time.sleep(_OLD_TICK if timeout is None else min(_OLD_TICK, timeout))
