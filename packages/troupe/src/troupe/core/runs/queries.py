@@ -5,7 +5,9 @@ Each query rebuilds what it needs from the event store with the folds in project
 is derived: ended when its end is recorded, otherwise from its lease in this clone. The lease is
 the platform's lock on ``.troupe/local/runs/<id>/``, which perform holds while the run goes and
 the OS releases if perform dies, so a lock nobody holds means the run was interrupted, and no lease
-at all means it was started in another clone. Nothing is ever recorded for an interrupted run.
+at all means it was started in another clone. The OS doesn't promise when it releases a dead
+process's lock (Windows), so a held lock whose holder, named in the lease's perform.pid, has ended
+means interrupted too (run-test-timing design D4). Nothing is ever recorded for an interrupted run.
 
 Following subscribes through the event store port: the store wakes it when anything is recorded,
 whoever wrote it. It has no timer for new events. Its one timer checks the lease, because a perform
@@ -14,6 +16,7 @@ that dies writes nothing that could wake it.
 
 import asyncio
 import contextlib
+import re
 import threading
 from collections.abc import Iterator
 from pathlib import Path
@@ -27,10 +30,14 @@ from troupe.core.errors import TroupeError
 from troupe.core.events import EventStore
 from troupe.core.notices import Notice
 from troupe.core.runs.aggregate import TOPICS
-from troupe.core.runs.backends import Backends, lease_dir
+from troupe.core.runs.backends import PERFORM_PID_FILE, Backends, lease_dir
 from troupe.core.runs.projections import Recording, RunView, fold_runs
-from troupe.platform import locks
-from troupe.platform.errors import LockAlreadyHeldError, LockTimeoutError
+from troupe.platform import locks, processes
+from troupe.platform.errors import (
+    LockAlreadyHeldError,
+    LockTimeoutError,
+    ProcessStateUnknownError,
+)
 
 _PAGE = 1000
 
@@ -44,7 +51,32 @@ def lease_state(theatre: Path, run_id: str) -> m.State:
         with locks.hold(lease, timeout=0, announce_after=0):
             return "interrupted"
     except (LockTimeoutError, LockAlreadyHeldError):
-        return "running"
+        return "interrupted" if _holder_has_ended(lease) else "running"
+
+
+_PID = re.compile(rb"([1-9][0-9]*)\n")
+"""perform.pid as perform writes it: the pid in ASCII decimal, then a line feed."""
+
+
+def _holder_has_ended(lease: Path) -> bool:
+    """Whether the process the lease's perform.pid names has ended (design D4).
+
+    Only a pid proven ended says so. A missing, unreadable or malformed file, a pid still running,
+    or one the OS can't answer for, all say no: the lock stays the authority, so the run reads as
+    running, as it did before the pid was recorded. A wrong "interrupted" would let discard remove
+    a live run's worktree; a wrong "running" only lasts until the OS releases the lock.
+    """
+    try:
+        data = (lease / PERFORM_PID_FILE).read_bytes()
+    except OSError:
+        return False
+    found = _PID.fullmatch(data)
+    if found is None:
+        return False
+    try:
+        return not processes.is_running(int(found[1]))
+    except (ValueError, ProcessStateUnknownError):
+        return False
 
 
 def run_state(view: RunView, theatre: Path) -> m.State:

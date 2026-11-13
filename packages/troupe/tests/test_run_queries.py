@@ -12,6 +12,7 @@ import subprocess
 import sys
 import threading
 import time
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -30,12 +31,14 @@ from storetesting import (
     wait_until,
     watched_delays,
 )
+from test_platform_locks import held_by_another_process
 from troupe.core import defaults
 from troupe.core.client import messages as m
 from troupe.core.errors import TroupeError
 from troupe.core.events import EventStore
 from troupe.core.notices import Notice
 from troupe.core.runs.aggregate import Run
+from troupe.core.runs.backends import PERFORM_PID_FILE, lease_dir
 from troupe.platform.errors import WatchUnavailableError
 from troupe.platform.processes import is_running
 from troupe.platform.watching import DirectoryWatch
@@ -386,6 +389,84 @@ def test_following_from_another_process_sees_each_event_and_stops_at_the_end(
     assert [e.seq for e in events_of(result)] == [0, 1, 2, 3]
     assert result.run.state == "ended"
     assert time.monotonic() - started >= 2.0  # it waited for events still to come
+
+
+# A held lease whose holder has ended (run-test-timing design D4). Windows doesn't promise when a
+# dead process's lock is released, so these hold the lease in a helper process while its
+# perform.pid names whatever the case needs: the same state on every OS.
+
+
+def ended_pid() -> int:
+    """The id of a process that has ended: started, and waited for."""
+    process = subprocess.Popen([sys.executable, "-c", "pass"])
+    process.wait(timeout=30)
+    assert not is_running(process.pid)
+    return process.pid
+
+
+@contextlib.contextmanager
+def held_lease(repo: Repo, pid_file: bytes | None) -> Iterator[str]:
+    """A run with a start and no end, whose lease another process holds, and whose lease holds
+    ``pid_file`` as perform.pid (none when None). Yields the run's id."""
+    run_id = "5e1f0000-0000-4000-8000-000000000405"
+    recorded_start(git_service(repo), run_id)
+    lease = lease_dir(repo.path, run_id)
+    lease.mkdir(parents=True)
+    if pid_file is not None:
+        (lease / PERFORM_PID_FILE).write_bytes(pid_file)
+    with held_by_another_process(lease):
+        yield run_id
+
+
+def test_a_held_lease_whose_perform_has_ended_is_interrupted(tmp_path: Path) -> None:
+    repo = theatre(tmp_path)
+    with held_lease(repo, f"{ended_pid()}\n".encode("ascii")) as run_id:
+        harness = Harness(repo)
+        result = harness.status(run=run_id)
+        [run] = result.runs
+        assert run.state == "interrupted"
+        assert [n.code for n in result.notices] == ["run.interrupted"]
+        assert harness.logs(run=run_id).run.state == "interrupted"
+
+
+@pytest.mark.parametrize(
+    "pid_file",
+    [
+        None,
+        b"",
+        b"not a pid\n",
+        b"12 34\n",
+        b"-5\n",
+        b"0\n",
+        b"\xff\xfe\n",
+        b"99999999999999999999999\n",
+    ],
+    ids=["no-file", "empty", "words", "two-numbers", "negative", "zero", "not-ascii", "too-big"],
+)
+def test_a_held_lease_whose_pid_cant_be_read_stays_running(
+    tmp_path: Path, pid_file: bytes | None
+) -> None:
+    repo = theatre(tmp_path)
+    with held_lease(repo, pid_file) as run_id:
+        [run] = Harness(repo).status(run=run_id).runs
+        assert run.state == "running"
+
+
+def test_a_held_lease_whose_perform_is_alive_stays_running(tmp_path: Path) -> None:
+    repo = theatre(tmp_path)
+    with held_lease(repo, f"{os.getpid()}\n".encode("ascii")) as run_id:
+        [run] = Harness(repo).status(run=run_id).runs
+        assert run.state == "running"
+
+
+def test_perform_writes_its_own_pid_into_its_lease(tmp_path: Path) -> None:
+    repo = theatre(tmp_path)
+    child = Child(repo, HANG)
+    try:
+        pid_file = lease_dir(repo.path, child.run_id) / PERFORM_PID_FILE
+        assert pid_file.read_bytes() == f"{child.pid}\n".encode("ascii")
+    finally:
+        child.kill()
 
 
 def test_following_an_interrupted_run_returns_at_once_saying_why(tmp_path: Path) -> None:

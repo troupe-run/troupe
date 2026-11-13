@@ -24,6 +24,7 @@ perform fails with run.recording-failed.
 import asyncio
 import contextlib
 import hashlib
+import os
 import threading
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -43,7 +44,7 @@ from troupe.core.config.stream import read, refuse_conflicts
 from troupe.core.config_paths import shown
 from troupe.core.errors import TroupeError
 from troupe.core.events import Command, EventStore
-from troupe.core.files import directory_lock
+from troupe.core.files import directory_lock, replace_file
 from troupe.core.identity import Identity
 from troupe.core.interim import runner_command, runner_environment
 from troupe.core.masking import Masker
@@ -59,6 +60,7 @@ from troupe.core.runners.host import RunnerCommand, RunRequest, not_started, run
 from troupe.core.runners.limits import RunLimits
 from troupe.core.runners.outcome import RunOutcome
 from troupe.core.runs.aggregate import Run
+from troupe.core.runs.backends import PERFORM_PID_FILE
 from troupe.core.runs.backends import Backends as Backends
 from troupe.core.runs.backends import lease_dir as lease_dir
 from troupe.core.runs.projections import fold_runs
@@ -555,6 +557,10 @@ async def perform(
     lease = lease_dir(theatre, run_id)
     lease.mkdir(parents=True)
     with directory_lock(lease):
+        # Before the start is recorded, so any run that can be seen has it (run-test-timing D4).
+        await asyncio.to_thread(
+            replace_file, lease / PERFORM_PID_FILE, f"{os.getpid()}\n".encode("ascii")
+        )
         artifacts = backends.artifact_store(session)
         direction_ref = await asyncio.to_thread(artifacts.put, direction.encode("utf-8"))
         person = store.command(via="cli", actor=person_identity, stage=admission)

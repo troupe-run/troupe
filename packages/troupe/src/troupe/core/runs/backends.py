@@ -22,6 +22,12 @@ def lease_dir(theatre: Path, run_id: str) -> Path:
     return local_dir(theatre) / "runs" / run_id
 
 
+PERFORM_PID_FILE = "perform.pid"
+"""In a run's lease directory: the id of the process running its perform, written once it holds
+the lease, so a lease still held after that process has ended reads as interrupted
+(run-test-timing design D4)."""
+
+
 @dataclass(frozen=True)
 class Backends:
     """Where runs are recorded and kept, and the limits they run under. Tests replace these."""

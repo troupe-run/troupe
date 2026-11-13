@@ -18,7 +18,9 @@ event store ([contributing/event-store.md](event-store.md)). The runner contract
    `[]` is none) and its character, which `run/start` carries apart from the direction. The config files are
    flushed first, as every command that uses config does.
 3. **The run id** is a new UUID. `perform` shows it at once, so you can follow the run from another terminal.
-4. **The run's lease** is taken: a lock on `.troupe/local/runs/<run id>/`, held while `perform` runs.
+4. **The run's lease** is taken: a lock on `.troupe/local/runs/<run id>/`, held while `perform` runs. Once it
+   holds the lock, `perform` writes its process id there as `perform.pid`, so a lock that's still held after the
+   process has ended can be told apart (see the states below).
 5. **The direction** is stored as an artifact and referenced by hash, since it can be large or hold what shouldn't
    be in git. The options aren't stored again: the run's start records the config version, which holds them.
 6. **Each run event is recorded as it arrives,** and each notice troupe raises for the run, then the run's end, with
@@ -73,9 +75,15 @@ A run's state isn't recorded. It's worked out each time it's read:
 | State | When |
 |---|---|
 | `ended` | The run's end is recorded |
-| `running` | No end yet, and the `perform` running it holds its lease in this clone |
-| `interrupted` | No end, and its lease in this clone is free: the `perform` that ran it stopped without recording an end (it was killed, or its end couldn't be written) |
+| `running` | No end yet, and its lease in this clone is held, by a `perform` that hasn't ended, or by one whose `perform.pid` can't be read |
+| `interrupted` | No end, and its lease in this clone is free, or still held by a `perform` whose `perform.pid` says it has ended: the `perform` that ran it stopped without recording an end (it was killed, or its end couldn't be written) |
 | `unfinished-elsewhere` | No end, and no lease in this clone: it was started in another clone, which this one can't see |
+
+The OS releases a dead process's lock on its own, but Windows doesn't promise how soon, so the lock alone could say
+`running` for a moment after `perform` has gone. When the lock is held, `lease_state` reads `perform.pid` and asks
+the platform seam whether that process has ended. Only a pid proven ended reads as `interrupted`. A missing or
+malformed file, a pid still running, or a process the OS can't answer for keeps `running`, because a wrong
+`interrupted` would let `discard` remove a live run's worktree.
 
 Nothing is ever recorded on behalf of an interrupted run: how it ended would be a guess. Its events and transcript
 show how far it got. Lease directories stay in `.troupe/local/runs/` (they're local and small); removing one while a
