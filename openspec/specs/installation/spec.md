@@ -245,20 +245,6 @@ SHALL be able to read the repository and its runs and write issues, and nothing 
 - **WHEN** the check for `troupe-run-v0.1.0` is run again on demand and fails, and its Bug is still open
 - **THEN** no second issue is opened, and the open Bug gets a comment naming the failed legs and the new run
 
-### Requirement: A pinned component's released workspace dependencies are pinned too
-When the bundle pins a component that depends on another workspace member that has released, the bundle SHALL pin
-that member too, so an install of the bundle's tag never looks it up on a package index. The check SHALL fail
-otherwise, naming both and the file.
-
-#### Scenario: Core pinned, the released SDK bare
-- **WHEN** `troupe-run` pins `troupe`, core depends on the SDK, the manifest gives the SDK 0.1.0, and `troupe-run`
-  names `troupe-plugin-sdk` bare
-- **THEN** `scripts/check.py` fails, naming `troupe-plugin-sdk`, `troupe` and `packages/troupe-run/pyproject.toml`
-
-#### Scenario: The SDK not yet released
-- **WHEN** `troupe-run` pins `troupe` and names `troupe-plugin-sdk` bare, and the manifest gives the SDK 0.0.0
-- **THEN** the check passes
-
 ### Requirement: A runner with dependencies beyond the SDK is an extra named after it
 A plugin under `plugins/` that depends on anything besides `troupe-plugin-sdk` SHALL be in `troupe-run`'s optional
 dependencies under an extra named exactly as troupe's runner table names its runner, and SHALL NOT be in the base
