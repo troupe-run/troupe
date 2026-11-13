@@ -1,0 +1,26 @@
+# Spec Delta
+
+## MODIFIED Requirements
+
+### Requirement: troupe has built-in runtimes
+troupe SHALL define the runtimes `openai` (endpoint `https://api.openai.com/v1`, credential from `OPENAI_API_KEY`),
+`anthropic` (endpoint `https://api.anthropic.com`, credential from `ANTHROPIC_API_KEY`), `ollama` (endpoint
+`http://127.0.0.1:11434`, no credential) and `lm-studio` (endpoint `http://127.0.0.1:1234`, no credential), as
+defaults in one named place. No built-in runtime SHALL name a model or a price.
+
+#### Scenario: A built-in needs no config
+- **WHEN** config has no `runtimes` and an actor names the runtime `ollama`
+- **THEN** the actor is valid, and the runtime's endpoint is `http://127.0.0.1:11434` with source `default`
+
+#### Scenario: No built-in price
+- **WHEN** config has no `runtimes` and an actor on `openai` with the model `gpt-test` is performed
+- **THEN** the run has no price, and its `run/start` carries none
+
+#### Scenario: LM Studio's built-in is its server root
+- **WHEN** config has no `runtimes` and a person runs `troupe config get --resolved runtimes.lm-studio`
+- **THEN** it shows the endpoint `http://127.0.0.1:1234` from `default`, the base LM Studio's own API lives under
+
+#### Scenario: Claude's API is a built-in
+- **WHEN** config has no `runtimes` and a person runs `troupe config get --resolved runtimes.anthropic`
+- **THEN** it shows the endpoint `https://api.anthropic.com` and the credential variable `ANTHROPIC_API_KEY`, each
+  from `default`, and no model
