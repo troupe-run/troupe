@@ -46,10 +46,10 @@ scratch copy of the repository with its own `uv sync`, or by copying the real fi
 
 ## 4. Integration
 
-- [ ] 4.1 Run `scripts/tests/workspace/`, `scripts/tests/test_release_workflow.py` and the Ollama plugin's tests in
+- [x] 4.1 Run `scripts/tests/workspace/`, `scripts/tests/test_release_workflow.py` and the Ollama plugin's tests in
   each of the three states. Verify: all pass, and the result for each state is recorded in the PR's verification
   section.
-- [ ] 4.2 `openspec validate release-pr-checks --strict` passes, and `uv run scripts/check.py` passes on the branch
+- [x] 4.2 `openspec validate release-pr-checks --strict` passes, and `uv run scripts/check.py` passes on the branch
   (full log kept in a scratch file). Load under ~40 before the full run.
 
 ## Workflow follow-up
