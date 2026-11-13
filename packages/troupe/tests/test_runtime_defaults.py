@@ -8,11 +8,15 @@ from troupe.core import defaults
 RUNTIME = validator_for(PROTOCOL_BASE + "config/runtime.schema.json")
 
 
-def test_the_built_in_runtimes_are_openai_ollama_and_lm_studio() -> None:
-    assert sorted(defaults.RUNTIMES) == ["lm-studio", "ollama", "openai"]
+def test_the_built_in_runtimes_are_openai_anthropic_ollama_and_lm_studio() -> None:
+    assert sorted(defaults.RUNTIMES) == ["anthropic", "lm-studio", "ollama", "openai"]
     assert defaults.RUNTIMES["openai"] == {
         "endpoint": "https://api.openai.com/v1",
         "credential": {"env": "OPENAI_API_KEY"},
+    }
+    assert defaults.RUNTIMES["anthropic"] == {
+        "endpoint": "https://api.anthropic.com",
+        "credential": {"env": "ANTHROPIC_API_KEY"},
     }
     assert defaults.RUNTIMES["ollama"] == {"endpoint": "http://127.0.0.1:11434"}
     assert defaults.RUNTIMES["lm-studio"] == {"endpoint": "http://127.0.0.1:1234"}

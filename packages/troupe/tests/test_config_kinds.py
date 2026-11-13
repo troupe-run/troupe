@@ -406,7 +406,7 @@ def test_removing_a_runtime_an_actor_uses_is_refused_naming_the_actors_runtime()
 def test_a_runtime_that_doesnt_exist_is_refused_naming_those_that_do() -> None:
     error = _refused(_with({"myhost": MYHOST}, runtime="nowhere"))
     assert error.details["path"] == ["actors", "tester", "runtime"]
-    assert "(there are: lm-studio, myhost, ollama, openai)" in error.problem
+    assert "(there are: anthropic, lm-studio, myhost, ollama, openai)" in error.problem
 
 
 def test_a_runner_that_takes_no_runtime_is_refused() -> None:

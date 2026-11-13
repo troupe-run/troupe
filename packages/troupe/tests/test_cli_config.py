@@ -629,6 +629,21 @@ def test_the_built_in_lm_studio_runtime_resolves_to_lm_studios_server_root(repo:
     assert "  endpoint: http://127.0.0.1:1234 (from default)" in out.splitlines()
 
 
+def test_the_built_in_anthropic_runtime_resolves_to_claudes_api_with_its_key_variable(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    code, out, err = cli("config", "get", "--resolved", "runtimes.anthropic")
+    assert code == 0, err
+    assert out.splitlines() == [
+        "runtime anthropic",
+        "  endpoint: https://api.anthropic.com (from default)",
+        "  model: none (an actor's model, runtimes.anthropic.model or "
+        "TROUPE_RUNTIME_ANTHROPIC_MODEL sets one)",
+        "  credential: from ANTHROPIC_API_KEY (named by default), not set",
+    ]
+
+
 def test_resolved_as_json_shows_each_value_and_its_source(
     repo: Repo, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -639,7 +654,7 @@ def test_resolved_as_json_shows_each_value_and_its_source(
     assert code == 0
     result = json.loads(out)
     check(result, "config-get-result.schema.json")
-    assert sorted(result["runtimes"]) == ["lm-studio", "ollama", "openai"]
+    assert sorted(result["runtimes"]) == ["anthropic", "lm-studio", "ollama", "openai"]
     assert result["runtimes"]["openai"]["model"] == {"value": "gpt-test", "source": "theatre"}
     assert result["runtimes"]["openai"]["credential"]["set"] is False
     assert result["runtimes"]["ollama"]["model"] == {"value": "qwen3", "source": "env"}

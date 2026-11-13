@@ -164,6 +164,12 @@ RUNTIMES: dict[str, dict[str, object]] = {
         "endpoint": "https://api.openai.com/v1",
         "credential": {"env": "OPENAI_API_KEY"},
     },
+    # Claude's own Messages API: the anthropic runner adds /v1/messages to it (anthropic-runner
+    # design D3). A local engine serving the same API is a runtime the person defines.
+    "anthropic": {
+        "endpoint": "https://api.anthropic.com",
+        "credential": {"env": "ANTHROPIC_API_KEY"},
+    },
     "ollama": {"endpoint": "http://127.0.0.1:11434"},
     # LM Studio's server root, which its own client library connects to; its OpenAI-compatible
     # API under /v1 has no built-in (lmstudio-runner design D3).

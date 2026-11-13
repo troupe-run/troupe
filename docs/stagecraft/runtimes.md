@@ -16,31 +16,36 @@ Ollama runner needs one too: the built-in `ollama`, or one of your own for an Ol
 Ollama's own address with no path, such as `http://gpu-box.local:11434`. It refuses a runtime with a credential,
 since Ollama takes none. An Ollama actor still holding `model` or `endpoint` in its options, as early versions of
 `troupe init --audition` wrote it, is refused with the one `troupe config set` that moves them. The LM Studio runner
-needs one as well: the built-in `lm-studio`, LM Studio's server root, or one of your own. The scripted runner takes
-one optionally, for troupe's own tests.
+needs one as well: the built-in `lm-studio`, LM Studio's server root, or one of your own. The Anthropic runner needs
+one too: the built-in `anthropic`, Claude's own API, or one of your own for a local engine that serves the Anthropic
+Messages API, such as LM Studio's or Ollama's server root. The scripted runner takes one optionally, for troupe's own
+tests.
 
 ## The runtimes troupe knows
 
-troupe has three built in:
+troupe has four built in:
 
 | Runtime | Endpoint | Credential |
 |---|---|---|
 | `openai` | `https://api.openai.com/v1` | `OPENAI_API_KEY` |
+| `anthropic` | `https://api.anthropic.com` | `ANTHROPIC_API_KEY` |
 | `ollama` | `http://127.0.0.1:11434` | none |
 | `lm-studio` | `http://127.0.0.1:1234` | none |
 
 Which runner each fits:
 
-| Runtime | `openai` runner | `ollama` runner | `lm-studio` runner | `scripted` runner |
-|---|---|---|---|---|
-| `openai` | yes | no: it has a credential, and Ollama takes none | no: it has a credential, and is `https` with a path | yes |
-| `ollama` | no: its endpoint has no path, so it isn't the Responses API | yes | no: it's Ollama's | yes |
-| `lm-studio` | no: its endpoint has no path | no: it's LM Studio's | yes | yes |
+| Runtime | `openai` runner | `anthropic` runner | `ollama` runner | `lm-studio` runner | `scripted` runner |
+|---|---|---|---|---|---|
+| `openai` | yes | no: it's OpenAI's | no: it has a credential, and Ollama takes none | no: it has a credential, and is `https` with a path | yes |
+| `anthropic` | no: its endpoint has no path, so it isn't the Responses API | yes | no: it has a credential, and Ollama takes none | no: it has a credential, and is `https` | yes |
+| `ollama` | no: its endpoint has no path, so it isn't the Responses API | no: it's Ollama's | yes | no: it's Ollama's | yes |
+| `lm-studio` | no: its endpoint has no path | no: it's LM Studio's | no: it's LM Studio's | yes | yes |
 
 Each built-in fits only the runner it's made for (and the scripted runner, which takes any), even where its address has
 the shape another needs: `ollama` and `lm-studio` look alike, but serve different engines. A runtime of your own fits by
 the rules alone: the OpenAI runner needs an endpoint with a path, the Ollama runner one with no path and no credential,
-and the LM Studio runner a plain `http` one with no path and no credential. Config refuses an actor on a runtime that
+the LM Studio runner a plain `http` one with no path and no credential, and the Anthropic runner any endpoint
+(its path, if it has one, must not end in `/v1`, which the runner adds itself). Config refuses an actor on a runtime that
 doesn't fit, naming the runtimes that do, and so does `troupe perform` (`runtime.unfit`) when a `TROUPE_RUNTIME_`
 variable makes one stop fitting.
 
@@ -75,6 +80,19 @@ through its OpenAI-compatible API, define a runtime of your own at its `/v1`:
 
 ```sh
 troupe config set runtimes.lm-studio-openai.endpoint=http://127.0.0.1:1234/v1
+```
+
+The Anthropic runner reaches a local engine that serves the Anthropic Messages API through a runtime of your own at
+the engine's server root, not a built-in. For LM Studio, define the runtime:
+
+```sh
+troupe config set runtimes.lm-studio-messages.endpoint=http://127.0.0.1:1234
+```
+
+Then point an actor on the `anthropic` runner at it, with a model LM Studio has:
+
+```text
+troupe config set actors.lead.runtime=lm-studio-messages actors.lead.model=google/gemma-4-e4b
 ```
 
 Define a service troupe doesn't know with its endpoint, and the rest as it needs:
