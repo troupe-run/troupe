@@ -39,7 +39,8 @@ through `main`, and release-please then rebuilds #263.
 `importlib.metadata.version("troupe-runner-ollama")`, then replaces it with `<package version>`. Each fixture's
 `events.json` holds `<package version>`. This is exactly what `openai_fixture_replay.py` does, so the two plugins
 read alike. `write_recorded`, which writes a hand-written fixture's events, goes through `replay` and so writes the
-placeholder too.
+placeholder too. The capture tool (`tools/capture_ollama.py`) writes the placeholder into `init` as well, so a fixture
+captured after a release still replays, and its test checks it does.
 
 *Alternative:* write the version into the fixtures at release time. Rejected, because only the release App writes the
 release branch, and the fixture would then record a version the capture never saw.

@@ -13,9 +13,9 @@ fixtures/ollama/<scenario>/:
 - ``answers.json``: each /api/chat answer, its status and its lines (or its error body), which the
   fake Ollama replays;
 - ``transcript.jsonl`` and ``events.json``: the transcript records, each with its kind as troupe
-  stores it, and run events the runner sent,
-  for the replay test to compare with. Review the events before committing: they're what the runner
-  did, recorded, not what it should do;
+  stores it, and run events the runner sent, with ``init``'s runner version as
+  ``<package version>``, for the replay test to compare with. Review the events before committing:
+  they're what the runner did, recorded, not what it should do;
 - ``provenance.json``: Ollama's version, the model, the date, the command and the scrubbing.
 
 It needs no credential. It refuses an endpoint that isn't on this machine, so it can't record
@@ -42,6 +42,10 @@ from troupe_runner_ollama.defaults import PREFLIGHT_TIMEOUT_SECONDS
 from troupe_runner_ollama.options import parse_options
 from troupe_runner_ollama.runner import default_window, model_maximum
 from troupe_runner_ollama.runtime import checked
+
+PACKAGE_VERSION = "<package version>"
+"""What a fixture's ``init`` event holds for the runner's version: the replay checks the version
+against the installed package's, then compares it as this."""
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "ollama"
 LOOPBACK = ("127.0.0.1", "::1", "localhost")
@@ -320,6 +324,10 @@ def capture(name: str, endpoint: str, out: Path = FIXTURES) -> Path:
             data = event.to_data()
             data.pop("runId")
             data.pop("durationMs", None)
+            if data["type"] == "init":
+                # The replay compares the runner's version as this placeholder, so a release
+                # changes no fixture.
+                data["runner"] = {**data["runner"], "version": PACKAGE_VERSION}
             events.append(json.loads(scrub(json.dumps(data, ensure_ascii=False), paths)))
         answers = json.loads(scrub(json.dumps(client.answers, ensure_ascii=False), paths))
     _write(directory, "answers.json", answers)

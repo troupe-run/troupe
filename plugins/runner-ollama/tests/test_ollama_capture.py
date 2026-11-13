@@ -49,6 +49,8 @@ def test_a_capture_writes_the_fixtures_files_with_no_host_path(tmp_path: Path) -
         "result",
     ]
     assert all("runId" not in event and "durationMs" not in event for event in events)
+    # The replay compares the runner's version as a placeholder, so the capture writes it.
+    assert events[0]["runner"]["version"] == "<package version>"
     answers_written = json.loads((directory / "answers.json").read_text(encoding="utf-8"))
     assert [answer["status"] for answer in answers_written] == [200, 200]
     transcript = (directory / "transcript.jsonl").read_text(encoding="utf-8")
