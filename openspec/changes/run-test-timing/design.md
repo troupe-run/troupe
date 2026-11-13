@@ -80,14 +80,15 @@ gone", and `lease_state` only knows whether the OS still holds the lock. Windows
 resources". So the state is tied to the process, not to the lock's release:
 
 1. `perform`, once it holds the lease (`directory_lock(lease)` in `core/runs/perform.py`), writes `perform.pid` in
-   the lease directory: its `os.getpid()` in ASCII decimal and a newline, through `core.files.replace_file`, so a
-   reader never sees a half-written file. The write happens before the run's start is recorded, so a run that anyone
-   can see already has its pid file.
+   the lease directory: its `os.getpid()` in ASCII decimal, a newline, then the platform seam's namespace token
+   (D5) and a newline. It goes through `core.files.replace_file`, so a reader never sees a half-written file. The
+   write happens before the run's start is recorded, so a run that anyone can see already has its pid file.
 2. `lease_state` tries the lock as now. Taken means `interrupted`, and no lease directory means
    `unfinished-elsewhere`, both as now. When the lock is held, it reads `perform.pid`:
-   - a pid whose process has ended (platform `is_running` is false) means `interrupted`;
-   - no file, a file that isn't one positive decimal number, a pid still running, or the OS unable to say
-     (`ProcessStateUnknownError`) means `running`, as today.
+   - a pid whose process has ended (platform `is_running` is false), with a token equal to the reader's own, means
+     `interrupted`;
+   - no file, a file not in that shape, a missing or different token, a reader with no token of its own, a pid
+     still running, or the OS unable to say (`ProcessStateUnknownError`) means `running`, as today.
 
 Why the fallback is `running` rather than an error, even for a malformed file: the lock is still the authority, and
 the pid only lets a held lock be read as gone. A wrong `interrupted` lets `discard` remove a live run's worktree. A
@@ -102,13 +103,42 @@ read as `running`, which is today's answer.
 The pid file is local state under `.troupe/local/runs/<run id>/`, like the lease itself, and never committed. It
 isn't an event, so it adds nothing to the history or the protocol.
 
+A pid only names a process within its pid namespace. If a theatre is shared across namespaces, as with one
+bind-mounted into a container, the lock still works across the mount, but the reader's "no such process" says
+nothing about the writer's. The token (D5) is how the reader tells: a different or missing token stays `running`
+(owner decision, 2026-11-13, from the review of #410).
+
 *Alternative:* a short retry of the lock before saying `running`. Every query of a live run would pay the wait, and
 no wait is promised to be long enough.
 
 **Testing it on every OS.** A helper process takes the lease lock and keeps it (as `test_platform_locks.py`'s
 holder does), while the lease's `perform.pid` names a process that has ended: a child the test started and waited
-for. `status` and `logs` say `interrupted`. The same set-up with the pid of a live process says `running`, and so do
-a missing file and a malformed one. On main, the first test fails, saying `running`.
+for, with the reader's own token. `status` and `logs` say `interrupted`. The same set-up says `running` with a
+different token, with no token, with the pid of a live process, with no file, and with malformed files. On main, the
+first test fails, saying `running`.
+
+### D5. The namespace token comes from the platform seam
+
+`troupe.platform.processes.namespace_token()` returns one line of text naming where this process's ids mean
+something, or None when the OS can't say:
+
+- **Linux:** the pid namespace's identity, `readlink /proc/self/ns/pid` (`pid:[4026531836]`), and the boot id,
+  `/proc/sys/kernel/random/boot_id`. Two containers on one host differ in the first; a restarted host differs in
+  the second.
+- **macOS:** the host name and `kern.boottime` (`sysctlbyname`), to the second.
+- **Windows:** the host name and the boot time from `NtQuerySystemInformation(SystemTimeOfDayInformation)`, which
+  the kernel keeps as one stored value, rather than computed from an uptime counter that jitters.
+
+A host name names the machine across a shared drive (WSL sees Windows' drives; a network share is seen by several
+hosts). The boot time tells two boots of one host apart, since pids are reused after a restart. macOS and Windows
+have no pid namespaces of their own.
+
+A token is never guessed: any OS error, or a part that's empty or holds a line feed, gives None. A `perform` with
+no token writes its pid alone, and a reader with none trusts no pid. Both stay `running`, which is today's
+behaviour.
+
+Tests on each OS: a child process's token equals its parent's, a token read twice is the same, and the token holds
+the parts listed above (the boot id on Linux, the host name on macOS and Windows).
 
 ## Risks / Trade-offs
 

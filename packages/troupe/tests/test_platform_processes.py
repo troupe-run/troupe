@@ -1288,3 +1288,34 @@ def test_an_os_error_that_isnt_a_refusal_or_no_such_process_fails_naming_the_pid
         processes.is_running(1234)
     assert (caught.value.pid, caught.value.code) == (1234, errno.EINVAL)
     assert str(caught.value).startswith("can't tell whether process 1234 has ended: ")
+
+
+# Requirement: A process id's namespace can be named
+
+
+def test_a_child_gets_the_same_namespace_token_as_its_parent() -> None:
+    token = processes.namespace_token()
+    assert token is not None, "the OS couldn't say: every supported CI platform can"
+    code = "from troupe.platform.processes import namespace_token; print(namespace_token())"
+    done = subprocess.run(_python(code), capture_output=True, text=True, timeout=60, check=True)
+    assert done.stdout.rstrip("\n") == token
+
+
+def test_a_namespace_token_read_twice_is_the_same() -> None:
+    first = processes.namespace_token()
+    time.sleep(0.2)
+    assert processes.namespace_token() == first
+
+
+def test_the_namespace_token_holds_what_names_the_namespace_on_this_os() -> None:
+    import socket
+
+    token = processes.namespace_token()
+    assert token is not None
+    assert "\n" not in token
+    if sys.platform == "linux":
+        boot_id = Path("/proc/sys/kernel/random/boot_id").read_text(encoding="ascii").strip()
+        assert boot_id in token
+        assert os.readlink("/proc/self/ns/pid") in token
+    else:
+        assert socket.gethostname() in token

@@ -31,9 +31,11 @@ Two run tests fail depending on timing, and each has cost a CI round or a queued
   that pid has ended (the platform seam's `is_running`). Every test that kills a `Child` and then reads the run's
   state gets the fix: `test_run_queries.py`'s interrupted-run tests as well as `test_cli_runs.py`'s.
 - **A held lease whose holder has ended reads as `interrupted` (owner decision, 2026-11-13).** Once `perform` holds
-  its run's lease, it writes its pid into the lease directory (`perform.pid`). When `lease_state` finds the lock
-  held, it reads that pid and asks the platform seam whether the process has ended. If it has, the run is
-  `interrupted`. A missing or unreadable pid file, a pid still running, or a process the OS can't answer for stays
+  its run's lease, it writes its pid into the lease directory (`perform.pid`), with a token from the platform seam
+  naming the pid namespace the pid belongs to. When `lease_state` finds the lock held, it reads that pid and asks
+  the platform seam whether the process has ended. If it has, and the token is the reader's own, the run is
+  `interrupted`. A different or missing token stays `running`, so a theatre shared with a container can't read a
+  live run as ended (owner decision, 2026-11-13, from the review of #410). A missing or unreadable pid file, a pid still running, or a process the OS can't answer for stays
   `running`, as today. This makes the state depend on whether the `perform` has gone, as the runs spec says, not on
   how soon the OS lets go of a dead process's lock. That timing isn't promised on Windows: `LockFileEx` says it
   "depends upon available system resources".
@@ -46,8 +48,10 @@ None.
 
 ### Modified Capabilities
 
-- `runs`: "A run's state is derived, never recorded as running" gains a scenario. A `perform` that has ended while
-  its lease still reads as held is `interrupted`.
+- `runs`: "A run's state is derived, never recorded as running" gains two scenarios. A `perform` that has ended while
+  its lease still reads as held is `interrupted` when it ran in the reader's pid namespace, and a lease held from
+  another pid namespace stays `running`.
+- `platform`: a new requirement, "A process id's namespace can be named", for the token.
 
 ## Impact
 

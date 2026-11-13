@@ -78,6 +78,7 @@ from troupe.core.workspaces import (
     snapshot,
     worktree_base,
 )
+from troupe.platform.processes import namespace_token
 from troupe_plugin_sdk import runner as p
 from troupe_plugin_sdk.credential import CREDENTIAL_VARIABLE
 from troupe_plugin_sdk.effects import Effects
@@ -494,6 +495,14 @@ class _Recorder:
         await asyncio.to_thread(self._end, outcome, changes)
 
 
+def _pid_file() -> bytes:
+    """perform.pid: this process's id, then its namespace token, each on its own line. With no
+    token the pid is written alone, and no reader trusts it (run-test-timing design D5)."""
+    token = namespace_token()
+    lines = [str(os.getpid())] if token is None else [str(os.getpid()), token]
+    return "".join(f"{line}\n" for line in lines).encode("utf-8")
+
+
 async def perform(
     request: m.PerformRequest, session: Session, send: Send, *, backends: Backends | None = None
 ) -> m.PerformResult:
@@ -557,10 +566,8 @@ async def perform(
     lease = lease_dir(theatre, run_id)
     lease.mkdir(parents=True)
     with directory_lock(lease):
-        # Before the start is recorded, so any run that can be seen has it (run-test-timing D4).
-        await asyncio.to_thread(
-            replace_file, lease / PERFORM_PID_FILE, f"{os.getpid()}\n".encode("ascii")
-        )
+        # Before the start is recorded, so any run that can be seen has it (run-test-timing D4, D5).
+        await asyncio.to_thread(replace_file, lease / PERFORM_PID_FILE, _pid_file())
         artifacts = backends.artifact_store(session)
         direction_ref = await asyncio.to_thread(artifacts.put, direction.encode("utf-8"))
         person = store.command(via="cli", actor=person_identity, stage=admission)

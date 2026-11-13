@@ -12,7 +12,7 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -40,7 +40,7 @@ from troupe.core.notices import Notice
 from troupe.core.runs.aggregate import Run
 from troupe.core.runs.backends import PERFORM_PID_FILE, lease_dir
 from troupe.platform.errors import WatchUnavailableError
-from troupe.platform.processes import is_running
+from troupe.platform.processes import is_running, namespace_token
 from troupe.platform.watching import DirectoryWatch
 
 CHILD = Path(__file__).with_name("perform_child.py")
@@ -418,9 +418,21 @@ def held_lease(repo: Repo, pid_file: bytes | None) -> Iterator[str]:
         yield run_id
 
 
+def pid_file(pid: int, token: str | None) -> bytes:
+    """perform.pid as perform writes it: the pid, then the namespace token, each on its line."""
+    lines = [str(pid)] if token is None else [str(pid), token]
+    return "".join(f"{line}\n" for line in lines).encode("utf-8")
+
+
+def own_token() -> str:
+    token = namespace_token()
+    assert token is not None, "the OS couldn't say: every supported CI platform can"
+    return token
+
+
 def test_a_held_lease_whose_perform_has_ended_is_interrupted(tmp_path: Path) -> None:
     repo = theatre(tmp_path)
-    with held_lease(repo, f"{ended_pid()}\n".encode("ascii")) as run_id:
+    with held_lease(repo, pid_file(ended_pid(), own_token())) as run_id:
         harness = Harness(repo)
         result = harness.status(run=run_id)
         [run] = result.runs
@@ -429,32 +441,50 @@ def test_a_held_lease_whose_perform_has_ended_is_interrupted(tmp_path: Path) -> 
         assert harness.logs(run=run_id).run.state == "interrupted"
 
 
-@pytest.mark.parametrize(
-    "pid_file",
-    [
-        None,
-        b"",
-        b"not a pid\n",
-        b"12 34\n",
-        b"-5\n",
-        b"0\n",
-        b"\xff\xfe\n",
-        b"99999999999999999999999\n",
-    ],
-    ids=["no-file", "empty", "words", "two-numbers", "negative", "zero", "not-ascii", "too-big"],
-)
-def test_a_held_lease_whose_pid_cant_be_read_stays_running(
-    tmp_path: Path, pid_file: bytes | None
+MALFORMED: dict[str, Callable[[int, str], bytes | None]] = {
+    "no-file": lambda pid, token: None,
+    "empty": lambda pid, token: b"",
+    "words": lambda pid, token: f"a pid\n{token}\n".encode(),
+    "two-numbers": lambda pid, token: f"{pid} {pid}\n{token}\n".encode(),
+    "negative": lambda pid, token: f"-{pid}\n{token}\n".encode(),
+    "zero": lambda pid, token: f"0\n{token}\n".encode(),
+    "too-big": lambda pid, token: f"{pid}{'9' * 30}\n{token}\n".encode(),
+    "not-utf-8": lambda pid, token: f"{pid}\n".encode() + b"\xff\xfe\n",
+    "empty-token": lambda pid, token: f"{pid}\n\n".encode(),
+    "unterminated": lambda pid, token: f"{pid}\n{token}".encode(),
+    "a-third-line": lambda pid, token: f"{pid}\n{token}\nmore\n".encode(),
+}
+"""perform.pid files not in the shape perform writes, each made from an ended pid and the reader's
+own token, so only the shape keeps the run running."""
+
+
+@pytest.mark.parametrize("shape", sorted(MALFORMED))
+def test_a_held_lease_whose_pid_file_isnt_as_perform_writes_it_stays_running(
+    tmp_path: Path, shape: str
 ) -> None:
     repo = theatre(tmp_path)
-    with held_lease(repo, pid_file) as run_id:
+    with held_lease(repo, MALFORMED[shape](ended_pid(), own_token())) as run_id:
+        [run] = Harness(repo).status(run=run_id).runs
+        assert run.state == "running"
+
+
+@pytest.mark.parametrize(
+    "token", [None, "another namespace"], ids=["no-token", "another-namespace"]
+)
+def test_a_held_lease_whose_ended_pid_isnt_from_this_namespace_stays_running(
+    tmp_path: Path, token: str | None
+) -> None:
+    """A theatre shared with a container: the lock holds across the mount, but the pid names a
+    process in the writer's namespace, so its absence here says nothing (design D4, D5)."""
+    repo = theatre(tmp_path)
+    with held_lease(repo, pid_file(ended_pid(), token)) as run_id:
         [run] = Harness(repo).status(run=run_id).runs
         assert run.state == "running"
 
 
 def test_a_held_lease_whose_perform_is_alive_stays_running(tmp_path: Path) -> None:
     repo = theatre(tmp_path)
-    with held_lease(repo, f"{os.getpid()}\n".encode("ascii")) as run_id:
+    with held_lease(repo, pid_file(os.getpid(), own_token())) as run_id:
         [run] = Harness(repo).status(run=run_id).runs
         assert run.state == "running"
 
@@ -463,8 +493,8 @@ def test_perform_writes_its_own_pid_into_its_lease(tmp_path: Path) -> None:
     repo = theatre(tmp_path)
     child = Child(repo, HANG)
     try:
-        pid_file = lease_dir(repo.path, child.run_id) / PERFORM_PID_FILE
-        assert pid_file.read_bytes() == f"{child.pid}\n".encode("ascii")
+        written = lease_dir(repo.path, child.run_id) / PERFORM_PID_FILE
+        assert written.read_bytes() == pid_file(child.pid, own_token())
     finally:
         child.kill()
 
