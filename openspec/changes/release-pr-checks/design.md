@@ -66,6 +66,13 @@ today. Rewording them is #413's job, along with the rest of the spec text that n
 `test_all_pinning_another_version_names_both_references[unpinned]` failed only because D3's rule fired on the
 unpinned copy with the SDK released. Under D3 it passes as it is.
 
+`bundle_state.unpinned()` built the "before the first pin" copy by unpinning the bundle's dependencies only, not its
+extras. That held while no runner in an extra had released. After the real pin, a runner's extra stays pinned in the
+"unpinned" copy, and three `test_pin_bundle.py` tests fail. Found running the tests in the after-pin state. It
+unpins the extras too, which is the same kind of state assumption this group removes. The helper keeping the real
+extras (`bundle_state.with_real_extras`) takes the extras the test read before changing the copy, so it never keeps
+the fixture runner a test just added.
+
 Each test is checked in three states of the real files: `main`, #263's branch, and that branch with
 `pin_bundle.py` applied (the pinning pull request's state). The real files are copied aside and restored, never
 stashed.

@@ -366,6 +366,42 @@ def test_a_new_member_with_the_exclusion_has_no_problems(everything_pinned: Path
     assert bundle_check.problems(everything_pinned) == []
 
 
+def first_release_before_its_pin(root: Path) -> None:
+    """Leave root as a release pull request that first releases the SDK leaves it, before the
+    pinning pull request: the manifest gives the SDK a release, the bundle pins troupe and the
+    runners, which depend on the SDK, names the SDK bare, and excludes its own commits (#411, the
+    shape of #263)."""
+    sdk = "packages/troupe-plugin-sdk"
+    manifest = json.loads((root / MANIFEST).read_text(encoding="utf-8"))
+    assert manifest[sdk] != "0.0.0"
+    bundle_state.set_dependency(root, "troupe-plugin-sdk", "troupe-plugin-sdk")
+    bundle_state.exclude(root)
+    assert bare(root) == ["troupe-plugin-sdk"]
+
+
+def test_a_components_first_release_before_its_pin_has_no_problems(
+    everything_pinned: Path,
+) -> None:
+    """releases: "A component's first release before its pin". The bundle doesn't release while
+    the SDK is bare, so neither check refuses the release pull request."""
+    first_release_before_its_pin(everything_pinned)
+    assert release_config.problems(everything_pinned) == []
+    assert bundle_check.problems(everything_pinned) == []
+
+
+def test_a_bundle_that_could_release_naming_the_released_sdk_bare_is_refused(
+    everything_pinned: Path,
+) -> None:
+    """The same state with nothing keeping the bundle out of release pull requests: its tag would
+    name the SDK bare, so the check refuses it (installation's pinned-dependency rule removed, #411;
+    releases, "The bundle doesn't release while it names a member bare")."""
+    first_release_before_its_pin(everything_pinned)
+    unexcluded(everything_pinned)
+    assert release_config.problems(everything_pinned) == [
+        missing(everything_pinned, ["troupe-plugin-sdk"])
+    ]
+
+
 def test_a_new_member_bare_after_the_bundles_first_release_without_the_exclusion_is_named(
     everything_pinned: Path,
 ) -> None:
@@ -667,23 +703,23 @@ def test_every_workspace_member_is_configured_for_release() -> None:
     assert release_config.problems(REPO) == []
 
 
-# The bundle's extras are pinned like its dependencies (spec: releases, "The bundle's extras are
-# pinned like its dependencies"; runner-extras design D3).
+# The bundle's extras follow its dependencies' rules (spec: releases, "The bundle's extras follow
+# its dependencies' rules"; runner-extras design D3).
 
-LM_STUDIO = "troupe-runner-lm-studio"
 EXAMPLE = "troupe-runner-example"
 EXAMPLE_PATH = "plugins/runner-example"
 LIBRARY = "example-client>=1"
-"""lm-studio is the first runner in an extra (#291): each case keeps it, and adds a fixture runner,
-example, for the next one."""
+"""Each case keeps the copy's real extras as they are, whichever runners they hold or none, and adds
+a fixture runner, example, for a library-backed runner (#411)."""
 
 
 def test_a_pin_in_an_extra_to_another_subdirectory_names_the_extra(copy: Path) -> None:
+    real = bundle_state.extras(copy)
     bundle_state.add_runner(copy, "example", library=LIBRARY, extra="example")
     set_version(copy, EXAMPLE_PATH, "0.1.0")
     wrong = release_config.pin(EXAMPLE, "0.1.0", "plugins/runner-ollama")
     bundle_state.set_extras(
-        copy, {"lm-studio": [LM_STUDIO], "example": [wrong], "all": [LM_STUDIO, wrong]}
+        copy, bundle_state.with_real_extras(real, {"example": [wrong], "all": [wrong]})
     )
     pyproject = f"{bundle_member(copy)}/pyproject.toml"
     expected = release_config.pin(EXAMPLE, "0.1.0", EXAMPLE_PATH)
@@ -694,11 +730,12 @@ def test_a_pin_in_an_extra_to_another_subdirectory_names_the_extra(copy: Path) -
 
 
 def test_a_pin_in_an_extra_ahead_of_the_release_names_the_extra(copy: Path) -> None:
+    real = bundle_state.extras(copy)
     bundle_state.add_runner(copy, "example", library=LIBRARY, extra="example")
     set_version(copy, EXAMPLE_PATH, "0.1.0")
     ahead = release_config.pin(EXAMPLE, "0.2.0", EXAMPLE_PATH)
     bundle_state.set_extras(
-        copy, {"lm-studio": [LM_STUDIO], "example": [ahead], "all": [LM_STUDIO, ahead]}
+        copy, bundle_state.with_real_extras(real, {"example": [ahead], "all": [ahead]})
     )
     pyproject = f"{bundle_member(copy)}/pyproject.toml"
     assert release_config.problems(copy) == [
