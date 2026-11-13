@@ -20,7 +20,7 @@
   removed, and with an empty `objects/00` made, each compares unequal to a fresh build. Verify each fails when its
   alteration is taken out (so each one checks what its name says), then passes with it
 - [x] 3.3 Run `test_theatres.py` in full, then `uv run scripts/check.py`, keeping the full log in the scratchpad
-- [ ] 3.4 Check the load (`uptime`, 1-minute under ~40), then run `scripts/flake_hunt.py` on `test_theatres.py` with
+- [x] 3.4 Check the load (`uptime`, 1-minute under ~40), then run `scripts/flake_hunt.py` on `test_theatres.py` with
   `--load 2` at most, and record rounds and failures for the pull request
 
 ## Workflow follow-up
