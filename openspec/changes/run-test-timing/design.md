@@ -48,9 +48,12 @@ A second test runs the same body with `defaults.WORKSPACE_ANNOUNCE_AFTER_SECONDS
 was recorded before `Run.WorktreeMade`, so the pin can't pass by the notice not happening. On main this test fails
 with the `KeyError` from #402, and that failing run is recorded in the PR.
 
-The other positional reads in the file are `[0]`, the start, which is always recorded first, and `[-1]`, the end,
-always last. The whole file, and the other eight files that run worktrees, passed with the threshold at 0 for every
-test (a pytest plugin that monkeypatches it, from outside the repository). So none of them needs changing.
+Every test file in `packages/troupe` that mentions worktrees (20 files) was run with the threshold at 0 for every
+test, through a pytest plugin from outside the repository that monkeypatches it. Two tests failed. One is #402's.
+The other is `test_event_payloads.py::test_every_line_a_worktree_run_records_validates_by_topic_with_its_worktree_made`,
+which compares the run's exact topics. It now compares them less `Run.Noticed`, checks that any notices are
+`workspace.waiting`, and is parametrised to run at the threshold of 0 too, where it requires one. The other
+positional reads are `[0]`, the start, which is always recorded first, and `[-1]`, the end, always last.
 
 ### D3. Wait for the perform's own process (#405)
 
