@@ -121,6 +121,20 @@ DEPENDABOT_REQUIREMENT = re.compile(
 """Dependabot's subject for a requirement update, which moves a range: a copy of REQUIREMENT in
 scripts/dependabot_issues.py. A commit's subject stops at "requirement", so its versions are read
 from its manifest lines (guard-requirement-range design D2, D3)."""
+DEPENDABOT_SHORT_SUBJECT = re.compile(
+    r"(?:[a-z]+(?:\([^)]*\))?!?:\s*)?[Bb]ump\s+(?P<dependency>\S+)(?:\s+in\s+(?P<directory>\S+))?"
+)
+"""Dependabot's subject for a bump whose versions it left out because they're long: "Bump X".
+Read only when DEPENDABOT_REQUIREMENT and DEPENDABOT_SUBJECT don't match, so a subject that gives
+its versions is read as before (guard-dependabot-short-subject design D1)."""
+DEPENDABOT_BUMPS_LINE = re.compile(
+    r"Bumps\s+(?:\[(?P<linked>[^\]]+)\]\([^)\s]*\)|(?P<plain>\S+))"
+    r"\s+from\s+(?P<old>\S+)\s+to\s+(?P<new>\S+?)\.?"
+)
+"""The first line of a Dependabot bump's message body: "Bumps [X](<url>) from A to B."
+(guard-dependabot-short-subject design D2)."""
+DEPENDABOT_LOCKS = frozenset({"uv.lock", "package-lock.json"})
+"""The lock files whose versions of a dependency are read for a short subject (design D2)."""
 DEPENDABOT_SPECIFIER = re.compile(r"(?P<operator><=|>=|==|!=|~=|<|>|\^|~|=)?(?P<version>.+)")
 """One bound of a range: a copy of SPECIFIER in scripts/dependabot_issues.py (design D4)."""
 DEPENDABOT_VERSION = re.compile(r"v?(\d+(?:\.\d+)*)")
@@ -3284,6 +3298,17 @@ def dependabot_subject_kind(subject: str) -> str:
     return dependabot_update_kind(match.group("old"), match.group("new"))
 
 
+def dependabot_short_subject(subject: str) -> str | None:
+    """The dependency a "Bump X" subject names when it leaves out the versions, or None when it
+    doesn't, including every subject DEPENDABOT_REQUIREMENT or DEPENDABOT_SUBJECT reads, which keep
+    their reading (guard-dependabot-short-subject design D1)."""
+    text = subject.strip()
+    if DEPENDABOT_REQUIREMENT.fullmatch(text) or DEPENDABOT_SUBJECT.fullmatch(text):
+        return None
+    match = DEPENDABOT_SHORT_SUBJECT.fullmatch(text)
+    return match.group("dependency") if match else None
+
+
 def _only_uses_lines(root: Path, sha: str, path: str) -> bool:
     """Whether every line the commit adds or removes in ``path`` is a uses: line. Only lines inside
     a hunk count, so a file's ---/+++ headers are skipped by where they are, not by how they begin,
@@ -3350,28 +3375,45 @@ def requirement_commit_kind(root: Path, sha: str, dependency: str) -> tuple[str,
     and why it can't be read. Its other paths may be only lock files, which aren't read. Removed
     and added lines pair in order within each hunk, and the largest line's kind is the commit's
     (design D3 steps 1 to 5)."""
-    paths = git(
+    kinds: list[str] = []
+    # Path by path, in diff-tree's order, so the first problem found is the one reported.
+    for path in _commit_paths(root, sha):
+        if path.rsplit("/", 1)[-1] not in DEPENDENCY_FILES:
+            return "unknown", f"{path} isn't a manifest or lock file"
+        found, why = _manifest_kinds(root, sha, dependency, [path])
+        if why is not None:
+            return "unknown", why
+        kinds += found
+    if not kinds:
+        return "unknown", "it changes no manifest line"
+    return max(kinds, key=DEPENDABOT_KINDS.index), None
+
+
+def _commit_paths(root: Path, sha: str) -> list[str]:
+    return git(
         root, "diff-tree", "--no-commit-id", "--name-only", "--no-renames", "-r", sha
     ).splitlines()
+
+
+def _manifest_kinds(
+    root: Path, sha: str, dependency: str, paths: Iterable[str]
+) -> tuple[list[str], str | None]:
+    """The kind of each manifest line pair the commit changes in ``paths``, and None; or why a
+    pair can't be read. Paths that aren't manifests are skipped (design D3 steps 2 to 5)."""
     kinds: list[str] = []
     for path in paths:
-        name = path.rsplit("/", 1)[-1]
-        if name not in DEPENDENCY_FILES:
-            return "unknown", f"{path} isn't a manifest or lock file"
-        if name not in DEPENDABOT_MANIFESTS:
+        if path.rsplit("/", 1)[-1] not in DEPENDABOT_MANIFESTS:
             continue
         diff = git(root, "diff-tree", "-p", "-U0", "--no-commit-id", "--no-color", sha, "--", path)
         for removed, added in _changed_hunks(diff):
             if len(removed) != len(added):
-                return "unknown", f"{path} doesn't pair line for line"
+                return kinds, f"{path} doesn't pair line for line"
             for old, new in zip(removed, added, strict=True):
                 kind, why = dependabot_line_kind(dependency, old, new)
                 if why is not None:
-                    return "unknown", f"{path} '{_shown(old)}' to '{_shown(new)}' {why}"
+                    return kinds, f"{path} '{_shown(old)}' to '{_shown(new)}' {why}"
                 kinds.append(kind)
-    if not kinds:
-        return "unknown", "it changes no manifest line"
-    return max(kinds, key=DEPENDABOT_KINDS.index), None
+    return kinds, None
 
 
 def non_dependency_paths(root: Path, commits: Iterable[str]) -> list[str]:
@@ -3413,6 +3455,135 @@ def requirement_reasons(
     return reasons
 
 
+def _plain_version(version: str) -> str:
+    return version[1:] if version[:1] == "v" else version
+
+
+def bumps_line_versions(message: str, dependency: str) -> tuple[str, str] | str | None:
+    """The versions the message's first body line gives for ``dependency``: (A, B); a string
+    saying why that line can't be read; or None when the line isn't a Bumps line. Only the first
+    line after the subject is read, so a changelog quoted further down isn't taken for it
+    (guard-dependabot-short-subject design D2.1)."""
+    body = [line.strip() for line in message.splitlines()[1:]]
+    first = next((line for line in body if line), "")
+    match = DEPENDABOT_BUMPS_LINE.fullmatch(first)
+    if not match:
+        return None
+    named = match.group("linked") or match.group("plain")
+    if _package_name(named) != _package_name(dependency):
+        return f"its Bumps line names {named}, not {dependency}"
+    return _plain_version(match.group("old")), _plain_version(match.group("new"))
+
+
+def lock_versions(name: str, text: str, dependency: str) -> list[str] | str:
+    """Every version of ``dependency`` a uv.lock or package-lock.json holds, or why it can't be
+    read: uv.lock's [[package]] entries by PEP 503 name, package-lock.json's packages by their
+    last node_modules/ segment (design D2.2)."""
+    wanted = _package_name(dependency)
+    found: list[str] = []
+    try:
+        if name == "uv.lock":
+            packages = tomllib.loads(text).get("package", [])
+            if not isinstance(packages, list):
+                return "has no [[package]] list"
+            for package in packages:
+                if isinstance(package, dict) and _package_name(str(package.get("name"))) == wanted:
+                    found.append(str(package.get("version")))
+        else:
+            entries = json.loads(text).get("packages")
+            if not isinstance(entries, dict):
+                return "has no packages"
+            for key, entry in entries.items():
+                if "node_modules/" not in key or not isinstance(entry, dict):
+                    continue
+                if key.rsplit("node_modules/", 1)[1].lower() == dependency.lower():
+                    found.append(str(entry.get("version")))
+    except (tomllib.TOMLDecodeError, json.JSONDecodeError, AttributeError) as error:
+        return f"can't be parsed ({type(error).__name__})"
+    return found
+
+
+def lock_move(root: Path, sha: str, path: str, dependency: str) -> tuple[str, str] | str:
+    """The one version of ``dependency`` that ``path`` moves from and the one it moves to, read
+    from the file at the commit's parent and at the commit; or why it can't be read (design D2.2).
+    Entries are compared as multisets, so one that stays the same doesn't count, and the versions
+    that go and come are counted once each: copies of one version moving together are one move."""
+    name = path.rsplit("/", 1)[-1]
+    sides: list[list[str]] = []
+    for revision in (f"{sha}^", sha):
+        try:
+            text = git(root, "show", f"{revision}:{path}")
+        except RuntimeError:
+            return f"{path} can't be read at {revision[:8]}"
+        versions = lock_versions(name, text, dependency)
+        if isinstance(versions, str):
+            return f"{path} {versions}"
+        sides.append(versions)
+    before, after = sides
+    # Distinct versions, so entries at one version that all move to another (hoisted and nested
+    # copies) count as one move (review on #302).
+    gone = sorted({v for v in before if before.count(v) > after.count(v)})
+    came = sorted({v for v in after if after.count(v) > before.count(v)})
+    if len(gone) != 1 or len(came) != 1:
+        return (
+            f"{path} doesn't move one version of {dependency} to one other "
+            f"(from {', '.join(gone) or 'none'} to {', '.join(came) or 'none'})"
+        )
+    return gone[0], came[0]
+
+
+def short_subject_reasons(
+    root: Path, sha: str, subject: str, message: str, dependency: str
+) -> list[str]:
+    """Why a commit whose subject is "Bump X", with no versions, isn't a minor or patch update.
+    Its versions are read from its message's Bumps line and each lock file it changes, and the
+    step from each manifest line it changes. At least two readings must be found and agree; the
+    updated-dependencies metadata is never one (design D2, D3, D5)."""
+    short = sha[:7]
+    readings: list[tuple[str, tuple[str, str]]] = []
+    bumps = bumps_line_versions(message, dependency)
+    if isinstance(bumps, str):
+        return [f"{short}'s {bumps}"]
+    if bumps is not None:
+        readings.append(("its Bumps line", bumps))
+    paths = _commit_paths(root, sha)
+    for path in paths:
+        if path.rsplit("/", 1)[-1] in DEPENDABOT_LOCKS:
+            move = lock_move(root, sha, path, dependency)
+            if isinstance(move, str):
+                return [f"{short}'s {move}"]
+            readings.append((path, move))
+    kinds, why = _manifest_kinds(root, sha, dependency, paths)
+    if why is not None:
+        return [f"{short}'s manifest lines can't be read for {dependency}: {why}"]
+    manifest = max(kinds, key=DEPENDABOT_KINDS.index) if kinds else None
+    found = [source for source, _ in readings] + (["its manifest lines"] if manifest else [])
+    if len(found) < 2:
+        return [
+            f"{short}'s subject '{subject}' gives no versions, and its message and diff give "
+            f"{len(found)} reading(s) of {dependency}'s, where two must agree "
+            f"(found: {', '.join(found) or 'none'})"
+        ]
+    if len({versions for _, versions in readings}) > 1:
+        said = ", ".join(f"{source} says {old} to {new}" for source, (old, new) in readings)
+        return [f"{short}'s readings of {dependency}'s versions disagree: {said}"]
+    old, new = readings[0][1]
+    kind = dependabot_update_kind(old, new)
+    if kind == "unknown" or not _dependabot_raised(old, new):
+        return [
+            f"{short}'s versions of {dependency}, {old} to {new}, can't be read as a minor or "
+            "patch update"
+        ]
+    if manifest is not None and manifest != kind:
+        return [
+            f"{short}'s manifest lines move {dependency} by a {manifest} step, but its versions "
+            f"{old} to {new} are a {kind}"
+        ]
+    if kind == "major":
+        return [f"{short} ('{subject}', {dependency} {old} to {new}) is a major update"]
+    return []
+
+
 def dependabot_ineligibility(root: Path, commits: Sequence[str]) -> str | None:
     """Why the commits aren't a minor or patch update of dependency files only, or None when they
     are. Each commit's message is read, not the pull request's title, which anyone with write
@@ -3430,8 +3601,11 @@ def dependabot_ineligibility(root: Path, commits: Sequence[str]) -> str | None:
             )
         subject = message.splitlines()[0] if message else ""
         requirement = DEPENDABOT_REQUIREMENT.fullmatch(subject.strip())
+        short = dependabot_short_subject(subject)
         if requirement:
             reasons += requirement_reasons(root, sha, subject, requirement)
+        elif short is not None:
+            reasons += short_subject_reasons(root, sha, subject, message, short)
         elif (kind := dependabot_subject_kind(subject)) == "unknown":
             reasons.append(
                 f"{sha[:7]}'s subject '{subject}' doesn't give one dependency's versions, so its "
