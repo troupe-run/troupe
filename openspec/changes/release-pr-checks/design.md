@@ -47,13 +47,20 @@ release branch, and the fixture would then record a version the capture never sa
 The check against the installed version keeps what the fixture test showed before: the runner reports its own
 package's version, not a constant.
 
-### D2. Workspace tests take LM Studio's requirement from their copy
+### D2. Workspace tests keep the copy's real extras, whatever they hold
 
 The tests that keep "the real `lm-studio` extra" (`with_lm_studio`, `set_extras` calls with `[LM_STUDIO]`, and
-`test_the_bundle_has_the_lm_studio_extra_and_all_naming_it`) read the requirement the copy's bundle holds for
-`troupe-runner-lm-studio` (bare when it's unreleased, pinned once the copy is pinned and it has released), and use
-that. This follows pin-tests-any-state D1 (#229): a test builds or reads the state it needs and doesn't assume the
-repository's.
+`test_the_bundle_has_the_lm_studio_extra_and_all_naming_it`) stop naming LM Studio. They read the extras the copy's
+bundle holds (each runner's requirement, bare or pinned as the copy has it, and `all`) and keep them as they are
+beside the fixture runner `example`, which stands for a library-backed runner in an extra. This works with LM Studio's
+extra, with whichever runner fills that role later, and with none: the owner is removing the LM Studio runner before
+0.2.0 (#412, #413), and these tests should need no rewrite when it goes. The LM Studio-specific test becomes one that
+checks the real extras against core's runner table: each runner the table puts in an extra has its extra, and `all`
+names each one. With no such runner, it checks that `all` names nothing. This follows pin-tests-any-state D1 (#229):
+a test builds or reads the state it needs and doesn't assume the repository's.
+
+The releases scenarios this change re-adds unchanged (D4) still name `troupe-runner-lm-studio`, as the main spec does
+today. Rewording them is #413's job, along with the rest of the spec text that names the runner.
 
 `test_all_pinning_another_version_names_both_references[unpinned]` failed only because D3's rule fired on the
 unpinned copy with the SDK released. Under D3 it passes as it is.
