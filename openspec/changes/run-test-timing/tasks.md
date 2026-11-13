@@ -22,15 +22,15 @@
 
 ## 3. A held lease whose holder has ended is interrupted (design D4)
 
-- [ ] 3.1 Write the tests first (D4, "Testing it on every OS"): a helper holds the lease lock while `perform.pid`
+- [x] 3.1 Write the tests first (D4, "Testing it on every OS"): a helper holds the lease lock while `perform.pid`
   names an ended process, and `status` and `logs` say `interrupted`; with a live pid, no file, or a malformed file,
   they say `running`. Verify: the ended-pid test fails on the current `lease_state`, saying `running`, and the
   others pass.
-- [ ] 3.2 `perform` writes `perform.pid` through `replace_file` once it holds the lease, before the start is
+- [x] 3.2 `perform` writes `perform.pid` through `replace_file` once it holds the lease, before the start is
   recorded. Verify: a test reads the pid file of a live `Child` and finds the pid `perform_child.py` reported.
-- [ ] 3.3 `lease_state` reads the pid when the lock is held, as D4 says. Verify: 3.1's tests all pass, and so do
+- [x] 3.3 `lease_state` reads the pid when the lock is held, as D4 says. Verify: 3.1's tests all pass, and so do
   `test_run_queries.py`, `test_cli_runs.py`, `test_run_notices.py` and `test_run_changes.py`.
-- [ ] 3.4 `contributing/runs.md`'s lease step and state table say what the pid file is for. Verify: the table's
+- [x] 3.4 `contributing/runs.md`'s lease step and state table say what the pid file is for. Verify: the table's
   `running` and `interrupted` rows match D4.
 
 ## 4. Check and deliver
