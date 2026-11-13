@@ -1,8 +1,10 @@
 """Runs perform in its own process, for tests that kill it mid-run or read its run from another
 process. Arguments: the theatre's path, its isolated git environment as JSON, and the perform
-request as JSON. Prints ``STARTED <run id>`` once the run's first event is recorded.
+request as JSON. Prints ``STARTED <run id> <pid>`` once the run's first event is recorded: the pid
+is this process's own, which on Windows isn't the one the test started when that is the venv's
+launcher (#405).
 
-With TROUPE_TEST_STOP set in its environment, it prints ``STARTED <run id>`` at that point
+With TROUPE_TEST_STOP set in its environment, it prints the ``STARTED`` line at that point
 instead, for tests that kill it before the run's first event (account-for-every-worktree design
 D6): ``before-worktree`` blocks once the run's start is recorded and before git begins its
 worktree; ``worktree-added`` blocks once git has added the worktree and before it is filled; and
@@ -48,6 +50,11 @@ SILENCE = os.environ.get("TROUPE_TEST_SILENCE_SECONDS")
 BLOCK_SECONDS = 600  # far longer than any test waits: the test kills it first
 
 
+def announce(run_id: str) -> None:
+    """Tell the test the run has started, and which process is running its perform."""
+    print(f"STARTED {run_id} {os.getpid()}", flush=True)
+
+
 class Stopping:
     """The theatre's VCS adapter, announcing the run at the point STOP names."""
 
@@ -61,17 +68,17 @@ class Stopping:
     def add_worktree(self, path: Path, at: str) -> None:
         self._run_id = path.name
         if STOP == "before-worktree":
-            print(f"STARTED {self._run_id}", flush=True)
+            announce(self._run_id)
             time.sleep(BLOCK_SECONDS)
         self._inner.add_worktree(path, at)
         if STOP == "worktree-added":
-            print(f"STARTED {self._run_id}", flush=True)
+            announce(self._run_id)
             time.sleep(BLOCK_SECONDS)
 
     def shared_state(self) -> SharedState:
         state: SharedState = self._inner.shared_state()
         if STOP == "before-init" and self._run_id:
-            print(f"STARTED {self._run_id}", flush=True)
+            announce(self._run_id)
             self._run_id = ""  # the second read is after the run
         return state
 
@@ -119,7 +126,7 @@ class Announcing(Harness):
     def send(self, update: Message) -> None:
         data: dict[str, Any] = update.to_data()
         if STOP is None and data["kind"] == "event" and data["seq"] == 0:
-            print(f"STARTED {data['runId']}", flush=True)
+            announce(data["runId"])
         if HANDSHAKE is not None and data["kind"] == "event":
             HANDSHAKE.wait(data["seq"])
 

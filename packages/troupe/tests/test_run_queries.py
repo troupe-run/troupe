@@ -1,10 +1,12 @@
 """status and logs read runs back from projections (spec: runs; perform-status-logs design D11 to
 D13)."""
 
+import contextlib
 import json
 import math
 import os
 import queue
+import signal
 import statistics
 import subprocess
 import sys
@@ -35,6 +37,7 @@ from troupe.core.events import EventStore
 from troupe.core.notices import Notice
 from troupe.core.runs.aggregate import Run
 from troupe.platform.errors import WatchUnavailableError
+from troupe.platform.processes import is_running
 from troupe.platform.watching import DirectoryWatch
 
 CHILD = Path(__file__).with_name("perform_child.py")
@@ -88,11 +91,28 @@ class Child:
         assert self.process.stdout is not None
         line = self.process.stdout.readline().split()
         assert line[:1] == ["STARTED"], line
+        assert len(line) == 3, line
         self.run_id = line[1]
+        self.pid = int(line[2])
+        """The process running perform, which on Windows isn't ``self.process`` when that is the
+        venv's python.exe: a launcher, whose child is the interpreter (#405)."""
+        self.killed_in: float | None = None
+        """Seconds from the kill until perform's own process had ended, once killed."""
 
     def kill(self) -> None:
+        """Kill perform, and return once its own process has ended. Waiting on the process this
+        started isn't enough on Windows: the launcher ends first, and perform, ended by the
+        launcher's job a moment later, still holds its run's lease until it has (#405)."""
+        started = time.monotonic()
         self.process.kill()
         self.process.wait(timeout=30)
+        if is_running(self.pid):
+            # The launcher's job normally ends it. If not, end it here: nothing should depend on
+            # how the launcher is built. OSError: it ended between the look and the kill.
+            with contextlib.suppress(OSError):
+                os.kill(self.pid, signal.SIGTERM)
+        wait_until(lambda: not is_running(self.pid), f"perform's process {self.pid} to end")
+        self.killed_in = time.monotonic() - started
 
     def finish(self) -> str:
         assert self.process.stdout is not None
@@ -153,6 +173,7 @@ def test_a_run_whose_perform_was_killed_is_interrupted_and_nothing_is_recorded_f
     repo = theatre(tmp_path)
     child = Child(repo, HANG)
     child.kill()
+    assert not is_running(child.pid), "kill() returned before perform's own process had ended"
     harness = Harness(repo)
     result = harness.status(run=child.run_id)
     [run] = result.runs

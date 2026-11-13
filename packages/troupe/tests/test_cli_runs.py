@@ -465,10 +465,15 @@ def test_logs_follow_json_writes_each_update_on_a_line_then_the_result(repo: Rep
 def test_logs_shows_events_on_stdout_and_notices_on_stderr(repo: Repo, tmp_path: Path) -> None:
     child = Child(repo, script(INIT, {"hang": True}))
     child.kill()
+    read = time.monotonic()
     code, out, err = cli("logs", child.run_id)
     assert code == 0
     assert "init: scripted 0.1.0" in out
-    assert out.splitlines()[-1] == f"run {child.run_id}: interrupted"
+    # #405: on Windows this once read running, when kill() waited on the venv's launcher only.
+    assert out.splitlines()[-1] == f"run {child.run_id}: interrupted", (
+        f"perform's process {child.pid} ended {child.killed_in:.3f} s after the kill, and logs "
+        f"took {time.monotonic() - read:.3f} s"
+    )
     assert "has no recorded end" in err
     assert "has no recorded end" not in out
 
