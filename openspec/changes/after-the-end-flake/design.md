@@ -68,9 +68,11 @@ measurement, the same `_time_after_the_end()` batch, tells a tick.
 
 Uncommitted patches, each reverted after:
 
-- **A burst, forced:** a stand-in delays `run_to_completion`'s return by 8 ms for the first batch's runs only (a
-  counter in the test module, at the call site). The current test fails; the new one passes at its second batch.
-- **A steady delay:** the same 8 ms on every call. The new test fails, listing three batches each about 8 ms over.
+- **A burst, forced:** `run_to_completion` sleeps 8 ms before it returns, for its first 30 calls only (a counter in
+  `processes`). The current test fails; the new one passes at its second batch. macOS overshoots the sleep, so it
+  measures about 10 ms.
+- **A steady delay:** the same sleep on every call. The new test fails, listing three batches each about 10 ms
+  over.
 - **The tick put back:** `output.changed.wait(...)` in `run_to_completion` replaced by `time.sleep(0.02)` (#360's
   regression). The new test fails in all three batches, run 5 times.
 - **Flake hunt:** `scripts/flake_hunt.py --load 2` on the latency test alone, once the 1-minute load average is under
