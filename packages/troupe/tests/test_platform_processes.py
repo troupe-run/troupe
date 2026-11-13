@@ -1319,3 +1319,28 @@ def test_the_namespace_token_holds_what_names_the_namespace_on_this_os() -> None
         assert os.readlink("/proc/self/ns/pid") in token
     else:
         assert socket.gethostname() in token
+
+
+@pytest.mark.parametrize(
+    "error",
+    [OSError(errno.EACCES, "refused"), UnicodeDecodeError("ascii", b"\xff", 0, 1, "not ascii")],
+    ids=["os-error", "undecodable"],
+)
+def test_a_namespace_the_os_cant_name_gives_no_token(
+    monkeypatch: pytest.MonkeyPatch, error: Exception
+) -> None:
+    def failing() -> tuple[str, ...]:
+        raise error
+
+    monkeypatch.setattr(processes, "_namespace_parts", failing)
+    assert processes.namespace_token() is None
+
+
+@pytest.mark.parametrize(
+    "parts", [(), ("linux", ""), ("linux", "a\nb")], ids=["none", "empty", "two-lines"]
+)
+def test_a_namespace_part_that_cant_be_one_line_gives_no_token(
+    monkeypatch: pytest.MonkeyPatch, parts: tuple[str, ...]
+) -> None:
+    monkeypatch.setattr(processes, "_namespace_parts", lambda: parts)
+    assert processes.namespace_token() is None
