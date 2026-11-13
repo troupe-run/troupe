@@ -113,7 +113,8 @@ Ctrl-C, saying why.
   `SUBSCRIBE_POLL_SECONDS` late.
 - **A `perform` that dies is still noticed.** It writes nothing, so nothing wakes following. Every
   `LOGS_LEASE_CHECK_SECONDS` following checks the run's lease, one try of a lock, and stops with `run.interrupted`
-  once nobody holds it.
+  once the run reads as interrupted: nobody holds the lease, or it's still held but its `perform.pid` names a
+  process that has ended in the reader's pid namespace (see the states above).
 
 A run is named by its full id or by a prefix of at least 8 hex digits that matches exactly one run. Both commands
 work from another terminal while a run is going: they read the event store, which `perform` writes as it goes.

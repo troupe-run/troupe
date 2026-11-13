@@ -19,6 +19,7 @@ troupe calls it and sees one behaviour on Linux, macOS and Windows. An import co
 | Killing a child and everything it started | `platform/processes.py` | `SIGKILL` to the process group | The job is terminated. If troupe itself dies, the job's last handle closes and the tree dies with it. |
 | Reading a child's output | `platform/processes.py` | Line by line, with a caller-set maximum; a longer line is an error naming the maximum, never a hang | The same |
 | Whether a process has ended | `platform/processes.py` | `kill(pid, 0)`: no such process (`ESRCH`) is ended; success or a refusal (`EPERM`) is running | `OpenProcess`, then whether the handle is signalled (`WaitForSingleObject`, zero timeout): no such process (`ERROR_INVALID_PARAMETER`) or signalled is ended; a refusal (`ERROR_ACCESS_DENIED`) or not signalled is running |
+| Where a pid means something | `platform/processes.py` | `namespace_token()`: on Linux the pid namespace (`readlink /proc/self/ns/pid`) and the boot id; on macOS the host name and `kern.boottime` | The host name and the boot time the kernel keeps (`NtQuerySystemInformation`) |
 | Watching a directory for changes | `platform/watching.py` | inotify on Linux, one watch on the directory; FSEvents on macOS, one stream with file events, no defer and latency 0 | `ReadDirectoryChangesW` on the directory, kept outstanding with overlapped I/O |
 | Catching Ctrl-C | `platform/interrupts.py` | `SIGINT`, through `signal.signal`, calls back instead of raising `KeyboardInterrupt` | `SIGINT` and `SIGBREAK` (Ctrl-Break: a process in its own console process group gets only that). The previous handlers come back when the block ends |
 | Cloning a file copy-on-write | `platform/clones.py` | `clonefile` on macOS (APFS); the `FICLONE` ioctl on Linux (Btrfs, XFS). Where the file system refuses, a plain copy | `CopyFile2`, which block-clones on ReFS and Dev Drive volumes |
@@ -69,16 +70,16 @@ troupe calls it and sees one behaviour on Linux, macOS and Windows. An import co
   Windows reads the exit from the process handle, not the exit code, because a process can exit with 259, the value
   `STILL_ACTIVE` uses. A value that can't name one process (`0`, a negative number, more than `PID_MAX`, a `bool`)
   is a `ValueError` before the OS is asked: on Linux and macOS `0` and negative pids address process groups.
-
-## Watching
-
 - **Where a pid means something:** `namespace_token()` names the pid namespace this process's ids belong to, as one
   line of text, so a pid written by one process can be trusted by another only when their tokens match. On Linux
   it's the pid namespace (`readlink /proc/self/ns/pid`) and the boot id; on macOS the host name and `kern.boottime`;
   on Windows the host name and the boot time the kernel keeps (`NtQuerySystemInformation`), both to the second.
-  Any OS error, a part that can't be decoded, or an empty part, gives None, never a guess. A host name can change with the network on macOS, and
-  a clock step can move a boot time, so a token can differ for the same namespace. That only makes the reader trust
-  less, which is the safe direction.
+  Any OS error, a part that can't be decoded, or an empty part, gives None, never a guess. A host name can change
+  with the network on macOS, and a clock step can move a boot time, so a token can differ for the same namespace.
+  That only makes the reader trust less, which is the safe direction.
+
+## Watching
+
 - **One question:** `watch(directory).wait(timeout)` says whether anything in the directory changed since the last
   wait returned: a file created, written, renamed, replaced or removed, or the directory itself removed. It never
   says what changed, because callers rescan anyway. It may report a change that wasn't one, never miss one.
