@@ -369,10 +369,10 @@ SHALL fail when one isn't.
 - **WHEN** `.github/dependabot.yml` is missing, can't be parsed, or has no `uv` entry for `/`
 - **THEN** `scripts/check.py` fails, naming the file and what it lacks, and doesn't pass for want of anything to check
 
-### Requirement: The bundle's extras are pinned like its dependencies
+### Requirement: The bundle's extras follow its dependencies' rules
 Every rule for `troupe-run`'s dependencies SHALL hold for each entry in its extras as well: the bare-or-pinned form,
-pins no higher than the manifest, the pinning pull request moving pins that are behind, its commit type, the hold on
-releasing while a member is bare, and pinning a pinned component's released workspace dependencies.
+pins no higher than the manifest, the pinning pull request moving pins that are behind, its commit type, and the hold
+on releasing while a member is bare.
 
 #### Scenario: A pin in an extra to another subdirectory
 - **WHEN** the `lm-studio` extra pins `troupe-runner-lm-studio-v0.1.0` with `#subdirectory=plugins/runner-ollama`
@@ -390,7 +390,7 @@ releasing while a member is bare, and pinning a pinned component's released work
 - **THEN** `scripts/check.py` fails, naming `troupe-runner-lm-studio`, `release-please-config.json` and the exclusion
   to add
 
-#### Scenario: An extra's runner pins the released SDK bare
-- **WHEN** the `lm-studio` extra pins `troupe-runner-lm-studio`, the manifest gives the SDK 0.1.0, and `troupe-run`
-  names `troupe-plugin-sdk` bare
-- **THEN** `scripts/check.py` fails, naming `troupe-plugin-sdk`, `troupe-runner-lm-studio` and the file
+#### Scenario: A component's first release before its pin
+- **WHEN** a release pull request first releases `troupe-plugin-sdk`, the bundle pins `troupe` and names the SDK
+  bare, and the bundle's release configuration excludes its commits
+- **THEN** the bundle check passes on it, and the pinning pull request after its merge pins the SDK
