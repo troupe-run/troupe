@@ -508,6 +508,82 @@ _before_job_assignment: Callable[[int], None] = _no_hook
 tests replace it to hold that moment open and show nothing the child starts escapes the job."""
 
 
+def namespace_token() -> str | None:
+    """Where this process's ids name processes, as one line of text; None when the OS can't say
+    (spec: platform; run-test-timing design D5).
+
+    Two processes get the same token when a pid means the same process to both, and different
+    tokens across machines, pid namespaces and restarts. Linux: the pid namespace's identity and
+    the boot id. macOS and Windows, which have no pid namespaces: the host name and the boot time,
+    to the second. Nothing is guessed: any OS error, or a part that's empty or holds a line break,
+    gives None.
+    """
+    try:
+        parts = _namespace_parts()
+    except OSError:
+        return None
+    if not parts or any(not part or "\n" in part or "\r" in part for part in parts):
+        return None
+    return " ".join(parts)
+
+
+def _namespace_parts() -> tuple[str, ...]:
+    import socket
+
+    if sys.platform == "linux":
+        boot_id = Path("/proc/sys/kernel/random/boot_id").read_text(encoding="ascii").strip()
+        return ("linux", os.readlink("/proc/self/ns/pid"), boot_id)
+    if sys.platform == "darwin":
+        return ("darwin", socket.gethostname(), str(_darwin_boot_seconds()))
+    if sys.platform == "win32":
+        return ("windows", socket.gethostname(), str(_windows_boot_seconds()))
+    return ()
+
+
+def _darwin_boot_seconds() -> int:
+    """kern.boottime's seconds, from sysctlbyname."""
+    import ctypes
+    import ctypes.util
+
+    class _Timeval(ctypes.Structure):
+        _fields_ = [("tv_sec", ctypes.c_long), ("tv_usec", ctypes.c_int32)]
+
+    libc = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
+    boot = _Timeval()
+    size = ctypes.c_size_t(ctypes.sizeof(boot))
+    if libc.sysctlbyname(b"kern.boottime", ctypes.byref(boot), ctypes.byref(size), None, 0) != 0:
+        code = ctypes.get_errno()
+        raise OSError(code, f"couldn't read kern.boottime: {os.strerror(code)}")
+    return int(boot.tv_sec)
+
+
+def _windows_boot_seconds() -> int:
+    """The boot time the kernel keeps, from NtQuerySystemInformation(SystemTimeOfDayInformation),
+    in seconds: one stored value, not one computed from an uptime counter that jitters."""
+    if sys.platform != "win32":
+        raise OSError(errno.ENOSYS, "the boot time is read this way only on Windows")
+    import ctypes
+    from ctypes import wintypes
+
+    ntdll = ctypes.WinDLL("ntdll")
+    ntdll.NtQuerySystemInformation.restype = ctypes.c_long  # NTSTATUS
+    ntdll.NtQuerySystemInformation.argtypes = [
+        wintypes.ULONG,
+        ctypes.c_void_p,
+        wintypes.ULONG,
+        ctypes.POINTER(wintypes.ULONG),
+    ]
+    buffer = (ctypes.c_byte * 48)()  # SYSTEM_TIMEOFDAY_INFORMATION; BootTime is its first field
+    returned = wintypes.ULONG(0)
+    status = ntdll.NtQuerySystemInformation(3, buffer, len(buffer), ctypes.byref(returned))
+    if status != 0:
+        raise OSError(
+            errno.EINVAL,
+            f"couldn't read the boot time (NTSTATUS {status & 0xFFFFFFFF:#010x})",
+        )
+    return ctypes.c_int64.from_buffer(buffer).value // 10_000_000
+
+
 def resolve_command(command: str, search_path: str | None) -> str:
     """The absolute path of ``command``, found on ``search_path`` when it has no directory part."""
     found = shutil.which(command, path=search_path)

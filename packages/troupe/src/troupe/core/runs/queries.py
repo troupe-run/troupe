@@ -54,15 +54,17 @@ def lease_state(theatre: Path, run_id: str) -> m.State:
         return "interrupted" if _holder_has_ended(lease) else "running"
 
 
-_PID = re.compile(rb"([1-9][0-9]*)\n")
-"""perform.pid as perform writes it: the pid in ASCII decimal, then a line feed."""
+_PID_FILE = re.compile(rb"([1-9][0-9]*)\n([^\r\n]+)\n")
+"""perform.pid as perform writes it: the pid in ASCII decimal, then its namespace token, each
+followed by a line feed."""
 
 
 def _holder_has_ended(lease: Path) -> bool:
-    """Whether the process the lease's perform.pid names has ended (design D4).
+    """Whether the process the lease's perform.pid names has ended (design D4, D5).
 
-    Only a pid proven ended says so. A missing, unreadable or malformed file, a pid still running,
-    or one the OS can't answer for, all say no: the lock stays the authority, so the run reads as
+    Only a pid proven ended, in this process's pid namespace, says so. A missing, unreadable or
+    malformed file, a token that isn't this process's own, no token here, a pid still running, or
+    one the OS can't answer for, all say no: the lock stays the authority, so the run reads as
     running, as it did before the pid was recorded. A wrong "interrupted" would let discard remove
     a live run's worktree; a wrong "running" only lasts until the OS releases the lock.
     """
@@ -70,8 +72,9 @@ def _holder_has_ended(lease: Path) -> bool:
         data = (lease / PERFORM_PID_FILE).read_bytes()
     except OSError:
         return False
-    found = _PID.fullmatch(data)
-    if found is None:
+    found = _PID_FILE.fullmatch(data)
+    token = processes.namespace_token()
+    if found is None or token is None or found[2] != token.encode("utf-8"):
         return False
     try:
         return not processes.is_running(int(found[1]))

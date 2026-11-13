@@ -33,6 +33,19 @@
 - [x] 3.4 `contributing/runs.md`'s lease step and state table say what the pid file is for. Verify: the table's
   `running` and `interrupted` rows match D4.
 
+## 5. The pid's namespace token (design D4, D5; owner decision 2026-11-13, from #410's review)
+
+- [x] 5.1 Tests first: `test_platform_processes.py` checks a child's token equals its parent's, a token read twice is
+  the same, and it holds the boot id (Linux) or the host name (macOS, Windows). `test_run_queries.py` writes the
+  reader's token with the ended pid, and adds cases that read `running`: a different token, no token. Verify: the
+  new tests fail before 5.2 and 5.3 (no `namespace_token`; a different token reads `interrupted`).
+- [x] 5.2 `namespace_token()` in `troupe.platform.processes`, per OS as D5 says. Verify: 5.1's platform tests
+  pass, and `uv run mypy --strict --platform win32` and `--platform linux` pass on `processes.py`.
+- [x] 5.3 `perform` writes the token after the pid, and `lease_state` trusts "ended" only with a token equal to its
+  own. `contributing/runs.md` and `contributing/platform.md` say so. Verify: 5.1's tests pass, and so do
+  `test_run_queries.py`, `test_cli_runs.py`, `test_run_notices.py` and `test_run_changes.py`.
+- [ ] 5.4 `uv run scripts/check.py` passes, and the push gets a fresh review. Verify: the log shows no failures.
+
 ## 4. Check and deliver
 
 - [x] 4.1 `uv run scripts/check.py` passes, its log kept in a scratch file. Verify: the log shows no failures.

@@ -19,8 +19,9 @@ event store ([contributing/event-store.md](event-store.md)). The runner contract
    flushed first, as every command that uses config does.
 3. **The run id** is a new UUID. `perform` shows it at once, so you can follow the run from another terminal.
 4. **The run's lease** is taken: a lock on `.troupe/local/runs/<run id>/`, held while `perform` runs. Once it
-   holds the lock, `perform` writes its process id there as `perform.pid`, so a lock that's still held after the
-   process has ended can be told apart (see the states below).
+   holds the lock, `perform` writes its process id there as `perform.pid`, with the platform seam's namespace
+   token on the next line, so a lock that's still held after the process has ended can be told apart (see the
+   states below).
 5. **The direction** is stored as an artifact and referenced by hash, since it can be large or hold what shouldn't
    be in git. The options aren't stored again: the run's start records the config version, which holds them.
 6. **Each run event is recorded as it arrives,** and each notice troupe raises for the run, then the run's end, with
@@ -81,9 +82,11 @@ A run's state isn't recorded. It's worked out each time it's read:
 
 The OS releases a dead process's lock on its own, but Windows doesn't promise how soon, so the lock alone could say
 `running` for a moment after `perform` has gone. When the lock is held, `lease_state` reads `perform.pid` and asks
-the platform seam whether that process has ended. Only a pid proven ended reads as `interrupted`. A missing or
-malformed file, a pid still running, or a process the OS can't answer for keeps `running`, because a wrong
-`interrupted` would let `discard` remove a live run's worktree.
+the platform seam whether that process has ended. Only a pid proven ended, with a namespace token equal to the
+reader's own, reads as `interrupted`. A pid only names a process within its pid namespace: a theatre shared with a
+container holds its lock across the mount, but a pid from inside says nothing outside. So a missing or malformed
+file, a missing or different token, a pid still running, or a process the OS can't answer for keeps `running`,
+because a wrong `interrupted` would let `discard` remove a live run's worktree.
 
 Nothing is ever recorded on behalf of an interrupted run: how it ended would be a guess. Its events and transcript
 show how far it got. Lease directories stay in `.troupe/local/runs/` (they're local and small); removing one while a
