@@ -44,7 +44,7 @@
 - [x] 5.3 `perform` writes the token after the pid, and `lease_state` trusts "ended" only with a token equal to its
   own. `contributing/runs.md` and `contributing/platform.md` say so. Verify: 5.1's tests pass, and so do
   `test_run_queries.py`, `test_cli_runs.py`, `test_run_notices.py` and `test_run_changes.py`.
-- [ ] 5.4 `uv run scripts/check.py` passes, and the push gets a fresh review. Verify: the log shows no failures.
+- [x] 5.4 `uv run scripts/check.py` passes, and the push gets a fresh review. Verify: the log shows no failures.
 
 ## 4. Check and deliver
 
