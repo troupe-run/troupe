@@ -11,12 +11,15 @@ asks for the key.
   through `anthropic` 2.8.0, from the scratchpad, and read the library's redirect, retry and credential behaviour from
   its source. Verify: the findings are on troupe#415 (issuecomment-6865689324), each naming the engine, its version,
   the library's version and the model.
-- [ ] 1.2 Probe what's left, each before the code that depends on it: cancel mid-stream by closing the stream and the
+- [x] 1.2 Probe what's left, each before the code that depends on it: cancel mid-stream by closing the stream and the
   client from another thread (D9); a 3xx through a client built with `follow_redirects=False` (D10); `max_tokens`
   above LM Studio's loaded window; LM Studio with "Require Authentication" on and a Bearer token (ask the owner to turn
   it on, or skip and say so); and that the client subclass with `Authorization` omitted reads no `ANTHROPIC_*` variable
   or profile (D4). Verify: findings added to troupe#415, and where one differs from the design or the spec, the
   artifacts are updated with `/opsx:update` and `openspec validate anthropic-runner --strict` passes.
+  Done: findings on troupe#415 (issuecomment-6866687695); D4, D9 and D12 updated (cancel ends the process, the
+  runner clears `ANTHROPIC_*` from its environment); LM Studio's authentication not probed (needs the owner), said in
+  D12.
 
 ## 2. Record the new spec's Purpose in infrastructure (design D15)
 
