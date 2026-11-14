@@ -124,7 +124,7 @@ Before it loads the engine, the runner SHALL keep its standard output for the co
 the engine writes to standard output to standard error instead.
 
 #### Scenario: The engine's log lines
-- **WHEN** the runner loads the packaged model and answers one request with it, with standard output a pipe
+- **WHEN** a run on the packaged model starts with standard output a pipe, and ends
 - **THEN** every line on its standard output is a contract message, and the engine's log lines are on its standard
   error
 
@@ -315,14 +315,15 @@ runner's own unexpected failure `runner`. No failure SHALL be retried.
 - **THEN** the `result` has `reason` `runner`
 
 ### Requirement: Every exchange with the engine is a transcript record
-The runner SHALL send as transcript records, before any event they lead to: the first request as it passed it to the
-engine, then before each later request each message it added, serialised (kind `sent` when it uses kinds); and each
-response as the engine returned it, serialised (kind `received`). It SHALL NOT send re-sent history again.
+Before any event they lead to, the runner SHALL send as transcript records the first request as passed to the
+engine, then before each later request each message it added and that request's settings (`sent` when it uses
+kinds), and each response as the engine returned it (`received`), all serialised. It SHALL NOT resend history.
 
 #### Scenario: A run with one tool call
 - **WHEN** a run's first answer calls `Read` once and its second answer ends the run
 - **THEN** its transcript is the first request, the first response, the assistant and `tool` messages the runner
-  added, and the second response, in that order, with kinds `sent`, `received`, `sent`, `sent`, `received`
+  added, the second request's settings (its `max_tokens`), and the second response, in that order, with kinds
+  `sent`, `received`, `sent`, `sent`, `sent`, `received`
 
 ### Requirement: The mistralrs runner uses transcript kinds
 The runner SHALL accept `transcript-kinds` when troupe offers it, and otherwise SHALL send the same records without a

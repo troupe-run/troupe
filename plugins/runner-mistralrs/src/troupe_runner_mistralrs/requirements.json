@@ -1,0 +1,9 @@
+{
+  "requires": [
+    {
+      "name": "mistralrs",
+      "version": "0.9.5",
+      "why": "The runner reads mistral.rs's own words for a request longer than the model's length or its KV budget, and for Metal kernels that don't compile, to map each to the run's reason; those words aren't an API, and were captured from 0.9.5. Another version may word them differently, so a full context could be reported as an engine error. A bump re-captures the fixtures."
+    }
+  ]
+}

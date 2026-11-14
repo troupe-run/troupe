@@ -11,14 +11,14 @@
 
 ## 2. The plugin's package and wiring
 
-- [ ] 2.1 Create `plugins/runner-mistralrs` (Apache-2.0, `troupe_runner_mistralrs`), depending on `troupe-plugin-sdk` and `mistralrs==0.9.5`, and `uv lock`. Wire it into the root `pyproject.toml` (sources, dev group, ruff, mypy, pytest, import-linter), `scripts/check-paths.toml` (a `runner_mistralrs` scope), release-please config and manifest, and `troupe-run`'s optional dependencies (`mistralrs` and `all`). Verify: `uv run scripts/runner_licences.py` passes, and the workspace bundle and install-docs tests pass.
-- [ ] 2.2 Add `mistralrs` to `RUNNERS` (`in_extra`, `runtime: required`, a fit with no endpoint, no credential and the built-in `mistralrs`), with an audition and an init note saying how to point `TROUPE_RUNTIME_MISTRALRS_MODEL` at a GGUF file. Verify: core tests for the base install refusing it with `runner.not-installed` naming `troupe-run[mistralrs]`, and the audition rehearsing.
-- [ ] 2.3 Package the check model `check_model/stories260K.gguf` with `PROVENANCE.md`: the weights from karpathy/tinyllamas `stories260K` (MIT), the GGUF from ggml-org/models, the MIT licence text, the SHA-256 `270cba1b…256d` and the date (design D10). Verify: a test checks the file's SHA-256 against the provenance and that the licence is recorded, and the built wheel holds both files.
+- [x] 2.1 Create `plugins/runner-mistralrs` (Apache-2.0, `troupe_runner_mistralrs`), depending on `troupe-plugin-sdk` and `mistralrs==0.9.5`, and `uv lock`. Wire it into the root `pyproject.toml` (sources, dev group, ruff, mypy, pytest, import-linter), `scripts/check-paths.toml` (a `runner_mistralrs` scope), release-please config and manifest, and `troupe-run`'s optional dependencies (`mistralrs` and `all`). Verify: `uv run scripts/runner_licences.py` passes, and the workspace bundle and install-docs tests pass.
+- [x] 2.2 Add `mistralrs` to `RUNNERS` (`in_extra`, `runtime: required`, a fit with no endpoint, no credential and the built-in `mistralrs`), with an audition and an init note saying how to point `TROUPE_RUNTIME_MISTRALRS_MODEL` at a GGUF file. Verify: core tests for the base install refusing it with `runner.not-installed` naming `troupe-run[mistralrs]`, and the audition rehearsing.
+- [x] 2.3 Package the check model `check_model/stories260K.gguf` with `PROVENANCE.md`: the weights from karpathy/tinyllamas `stories260K` (MIT), the GGUF from ggml-org/models, the MIT licence text, the SHA-256 `270cba1b…256d` and the date (design D10). Verify: a test checks the file's SHA-256 against the provenance and that the licence is recorded, and the built wheel holds both files.
 
 ## 3. The entry point and the protocol channel
 
-- [ ] 3.1 Write the entry point and `runner.py`'s main-thread reader and output lock (design D1). Keep the protocol on a duplicate of fd 1, point fd 1 at standard error, and rebind `sys.stdout`, all before `engine.py` imports `mistralrs` (D3). Add an import-linter contract so only `engine.py` imports `mistralrs`. Verify: a test that importing the entry module doesn't import `mistralrs`.
-- [ ] 3.2 Define the `Engine` protocol (load, chat, count tokens) in `engine.py`, with the real implementation over `mistralrs` and the error table that classifies its `ValueError`s (Metal library, prompt over the model's length, KV capacity, other). Verify: unit tests of the table against each recorded message from the probe.
+- [x] 3.1 Write the entry point and `runner.py`'s main-thread reader and output lock (design D1). Keep the protocol on a duplicate of fd 1, point fd 1 at standard error, and rebind `sys.stdout`, all before `engine.py` imports `mistralrs` (D3). Add an import-linter contract so only `engine.py` imports `mistralrs`. Verify: a test that importing the entry module doesn't import `mistralrs`.
+- [x] 3.2 Define the `Engine` protocol (load, chat, count tokens) in `port.py` with the error table, and the real implementation over `mistralrs` in `engine.py`; the table that classifies its `ValueError`s (Metal library, prompt over the model's length, KV capacity, other). Verify: unit tests of the table against each recorded message from the probe.
 - [ ] 3.3 Test the protocol channel with the real engine. Run the runner process with the check model on standard output as a pipe, through `initialize`, a `run/start` the runner refuses after loading, and `shutdown`. Verify: every standard-output line parses as a contract message, the engine's log lines are on standard error, and the test passes on all three OSes in CI.
 
 ## 4. Before the acknowledgement
@@ -43,7 +43,7 @@
 ## 7. The context window
 
 - [ ] 7.1 Count the conversation before each request (D7), ask for at most the room left less `TOKEN_MARGIN`, and end a run told `fail` with `context-length` when there's no room. Map a `length` stop and the engine's two length refusals to `context-length` without carrying out that answer's tool calls. Verify: tests for "Each answer is bounded by the room left in the window" and "A run never carries on past its context window", and a hypothesis test that `max_tokens` never exceeds the room left.
-- [ ] 7.2 Compact in a run told `compact`, before a request over `COMPACT_ABOVE_SHARE` and after a refusal or `length` stop, using the SDK's `compaction`, with the `context` event. End with `context-length` when nothing is left to remove. Verify: tests for both compaction requirements' scenarios.
+- [ ] 7.2 Compact in a run told `compact`, before a request over the SDK's `COMPACT_AT_SHARE` and after a refusal or `length` stop, using the SDK's `compaction`, with the `context` event. End with `context-length` when nothing is left to remove. Verify: tests for both compaction requirements' scenarios.
 
 ## 8. Cancel, end of input and shutdown
 

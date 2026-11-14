@@ -171,16 +171,17 @@ need it (D2). The response's `model` is the id the runner gave, so there's never
 - **KV budget.** On Metal, the window is also the KV budget (`memory_goal`). That sizes the cache for a small Mac
   (fix 3 of the probe) and makes the engine refuse past the window. CPU builds refuse a KV budget, so they get none.
   On CPU the runner's own bound below is what holds.
-- **Counting.** Before each request the runner counts the conversation: the last response's `prompt_tokens +
-  completion_tokens`, plus `tokenize_text` of each message added since, plus `MESSAGE_OVERHEAD_TOKENS` per message
-  for the chat template. The first request is counted the same way from zero, plus `TOOLS_OVERHEAD` (the tokenized
-  tool definitions).
+- **Counting.** Before each request the runner counts the conversation: `tokenize_text` of each message (counted
+  once, when it's added or stubbed), plus `MESSAGE_OVERHEAD_TOKENS` per message for the chat template, plus the
+  tokenized tool definitions and `TOOLS_OVERHEAD_TOKENS` for the template's preamble. From the second request on, it
+  adds the difference between the engine's prompt count and the runner's at the last request. In the first live run, the real prompt was 1,432
+  tokens, mostly the SDK's tool definitions, so `contextLength` is at least 2048 and `TOKEN_MARGIN` is 256.
 - **Bounding the answer.** `max_tokens` is the window less that count, less `TOKEN_MARGIN`. With no room left, a run
   told `fail` ends with `context-length` before sending.
 - **What counts as a full window.** A `finish_reason` of `length` can only mean the answer reached the window, since
   the runner sets no other output cap. It ends the run with `context-length`, and its tool calls aren't carried out,
   since they may be cut. So do the engine's two length refusals ("Prompt sequence length is greater than",
-  "exceeds the total KV cache capacity"). These are matched in one table in `engine.py`, with a fixture of each
+  "exceeds the total KV cache capacity"). These are matched in one table in `port.py`, with a test of each
   message, so a wording change in a new `mistralrs` fails a test rather than becoming `engine`.
 
 The runner never sends `output-limit`. #279 kept `output-limit` for an answer cut at an engine's own output cap, and
@@ -190,8 +191,8 @@ the person can set, was the limit.
 ### D8. Compaction when told `compact`
 
 This is the Ollama runner's algorithm, on exact counts:
-- Before a request whose count is over `COMPACT_ABOVE_SHARE` of the window, the runner replaces old tool results with
-  the SDK's stub (`compaction.choose`/`stub`), oldest first, until the count is at or below `COMPACT_TO_SHARE`. It
+- Before a request whose count is over the SDK's `COMPACT_AT_SHARE` of the window, the runner replaces old tool results with
+  the SDK's stub (`compaction.choose`/`stub`), oldest first, until the count is at or below the SDK's `COMPACT_TO_SHARE`. It
   sends a `context` event (`truncated`, `by: runner`) first.
 - After an engine length refusal, or a `length` stop, it compacts and asks again, without counting a turn. A
   `length` stop's partial answer is kept in the transcript, not in the conversation.
@@ -210,7 +211,9 @@ This is the Ollama runner's algorithm, on exact counts:
 
 **What the transcript leaves out compared with a wire.** There's no wire. The `sent` records are each
 `ChatCompletionRequest` as the runner built it, serialised from the fields it set (with `tool_schemas` as parsed JSON).
-The `received` records are each `ChatCompletionResponse` as returned, serialised from its attributes. Left out:
+The `received` records are each `ChatCompletionResponse` as returned, serialised from its attributes. Before each
+later request, the transcript holds the messages added since and that request's settings, since its `max_tokens`
+(the room left) changes every turn. Left out:
 - the prompt the chat template rendered, and the token ids;
 - the engine's own log lines, which go to stderr (D3);
 - the timing fields in `usage` beyond the token counts.

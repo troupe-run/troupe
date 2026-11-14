@@ -287,6 +287,21 @@ def test_the_lm_studio_actor_names_its_runtime_and_model_with_small_limits_and_w
     assert (repo.path / ".troupe" / "actors" / "lead.md").read_text(encoding="utf-8").strip()
 
 
+def test_the_mistralrs_actor_names_the_in_process_runtime_and_no_model(repo: Repo) -> None:
+    # In-process-runner design D10: the model is the person's own file, from
+    # TROUPE_RUNTIME_MISTRALRS_MODEL, so the audition sets none.
+    _init(repo.path, _env(repo), audition={"runner": "mistralrs"})
+    lead = read(git_service(repo)).config["actors"]["lead"]
+    assert lead == {
+        "runner": "mistralrs",
+        "runtime": "mistralrs",
+        "options": {"maxTurns": 10},
+        "effects": {"write": ["**"]},
+        "expect": [],
+        "character": auditions.CHARACTER,
+    }
+
+
 # Requirement: The Claude Code audition can edit files on a small budget (spec: config)
 
 
@@ -361,6 +376,7 @@ def test_an_unknown_runner_is_refused_naming_the_known_ones_and_nothing_is_made(
         "anthropic",
         "claude-code",
         "lm-studio",
+        "mistralrs",
         "ollama",
         "openai",
         "scripted",

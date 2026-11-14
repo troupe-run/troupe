@@ -175,6 +175,18 @@
         }
       ]
     },
+    "plugins/runner-mistralrs": {
+      "release-type": "python",
+      "package-name": "troupe-runner-mistralrs",
+      "component": "troupe-runner-mistralrs",
+      "extra-files": [
+        {
+          "type": "toml",
+          "path": "/uv.lock",
+          "jsonpath": "$.package[?(@.name.value=='troupe-runner-mistralrs')].version"
+        }
+      ]
+    },
     "plugins/runner-ollama": {
       "release-type": "python",
       "package-name": "troupe-runner-ollama",

@@ -152,6 +152,13 @@ def _step_notes(step: dict[str, Any], entries: list[dict[str, Any]]) -> list[str
                 else ", and the actor's model downloaded."
             )
         )
+    if step["runner"] == "mistralrs":
+        notes.append(
+            "Set TROUPE_RUNTIME_MISTRALRS_MODEL to the absolute path of a GGUF model file that "
+            "can call tools, such as Qwen3-0.6B's. The model runs inside the runner, on this "
+            "machine. On macOS, install troupe on a uv-managed Python (uv tool install "
+            "--managed-python ...)."
+        )
     if step["runner"] in ("anthropic", "openai"):
         runtime = _value(entries, step["actor"], "runtime")
         tokens = _option(entries, step["actor"], "maxTotalTokens")

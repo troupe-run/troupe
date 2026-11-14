@@ -79,6 +79,10 @@ tools in every round of the runner's probe (lmstudio-runner design D12, D15). Na
 changing it is one line."""
 
 LM_STUDIO_AUDITION_LIMITS = {"maxTurns": 10, "maxTotalTokens": 100_000}
+
+MISTRALRS_AUDITION_LIMITS = {"maxTurns": 10}
+"""The mistralrs example's options. It names no model: its model is a GGUF file on the person's
+machine, which they point TROUPE_RUNTIME_MISTRALRS_MODEL at (in-process-runner design D10)."""
 """The LM Studio example's limits, as the OpenAI example's: enough to read a few files and write
 one (lmstudio-runner design D15)."""
 
@@ -158,6 +162,20 @@ def _lm_studio() -> dict[str, Any]:
     }
 
 
+def _mistralrs() -> dict[str, Any]:
+    # Like the Claude Code example: it may write any file in its worktree, and no file has to
+    # change. Its runtime is the built-in, in-process mistralrs, and its model is the person's own
+    # file, from TROUPE_RUNTIME_MISTRALRS_MODEL, so it sets none.
+    return {
+        "runner": "mistralrs",
+        "runtime": "mistralrs",
+        "options": dict(MISTRALRS_AUDITION_LIMITS),
+        "effects": {key: list(value) for key, value in CLAUDE_CODE_EFFECTS.items()},
+        "expect": [],
+        "character": CHARACTER,
+    }
+
+
 def _ollama() -> dict[str, Any]:
     # Like the Claude Code example: it may write any file in its worktree, and no file has to
     # change. Its service is the built-in ollama runtime, the local Ollama, and it takes no
@@ -207,6 +225,7 @@ AUDITIONS: Mapping[str, Callable[[], dict[str, Any]]] = {
     "anthropic": _anthropic,
     "claude-code": _claude_code,
     "lm-studio": _lm_studio,
+    "mistralrs": _mistralrs,
     "ollama": _ollama,
     "openai": _openai,
     "scripted": _scripted,

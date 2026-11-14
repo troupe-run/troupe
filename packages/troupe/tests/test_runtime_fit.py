@@ -8,6 +8,8 @@ refuses for another reason, or plain HTTP with a credential to another machine, 
 config refuses neither for fit.
 """
 
+from pathlib import Path
+
 from hypothesis import given
 from hypothesis import strategies as st
 
@@ -15,6 +17,7 @@ from troupe.core import defaults, interim, runtimes
 from troupe_plugin_sdk.runner import RunStartParams, RunStartRuntime
 from troupe_runner_anthropic import runtime as anthropic_runtime
 from troupe_runner_lm_studio import runtime as lm_studio_runtime
+from troupe_runner_mistralrs import runtime as mistralrs_runtime
 from troupe_runner_ollama import runtime as ollama_runtime
 from troupe_runner_openai import runtime as openai_runtime
 
@@ -85,9 +88,38 @@ def _lm_studio_accepts(endpoint: str | None, credential: bool) -> bool:
     return True
 
 
+CHECK_MODEL = str(Path(mistralrs_runtime.__file__).with_name("check_model") / "stories260K.gguf")
+"""A real GGUF file, so the mistralrs runner judges the runtime alone, not the model."""
+
+
+def _mistralrs_accepts(endpoint: str | None, credential: bool) -> bool:
+    runtime: dict[str, object] = {"name": "box", "model": CHECK_MODEL, "credential": credential}
+    if endpoint is not None:
+        runtime["endpoint"] = endpoint
+    start = RunStartParams.from_data(
+        {
+            "runId": "11111111-1111-4111-8111-111111111111",
+            "direction": "d",
+            "workspace": "w",
+            "options": {},
+            "limits": {"eventMaxBytes": 65536},
+            "effects": {"write": [], "delete": [], "move": []},
+            "scratch": "s",
+            "onContextFull": "fail",
+            "runtime": runtime,
+        }
+    )
+    try:
+        mistralrs_runtime.from_run_start(start)
+    except mistralrs_runtime.RuntimeRefusedError:
+        return False
+    return True
+
+
 ORACLES = {
     "anthropic": _anthropic_accepts,
     "lm-studio": _lm_studio_accepts,
+    "mistralrs": _mistralrs_accepts,
     "ollama": _ollama_accepts,
     "openai": _openai_accepts,
 }

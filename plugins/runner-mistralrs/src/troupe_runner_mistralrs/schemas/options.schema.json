@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/plugins/runner-mistralrs/options.schema.json",
+  "title": "mistralrs runner options",
+  "description": "The run/start options the mistralrs runner takes, each optional. They fill the runner contract's runnerOptions extension point. The model isn't an option: it comes from the run's runtime, the built-in in-process mistralrs, as the absolute path of a GGUF file. Nothing here names a program to run, a file to download or a server to reach.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "maxTurns": {
+      "description": "The requests one run may make. Reaching it ends the run with an error result, reason turn-limit. Absent: 50.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000
+    },
+    "contextLength": {
+      "description": "The context window, in tokens: the most the conversation and the answer together may hold. At most the model's own length; a larger one ends the run with an error result, reason configuration. Absent: 16384, or the model's length if that's smaller. The runner bounds every answer to the room left, and a conversation that fills it ends the run with context-length (or, told compact, is compacted). On macOS it is also the engine's KV budget.",
+      "type": "integer",
+      "minimum": 2048,
+      "maximum": 1048576
+    },
+    "temperature": {
+      "description": "The sampling temperature. Absent: the model's own.",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 2
+    },
+    "seed": {
+      "description": "The sampling seed, given to the engine when it loads the model. Absent: none.",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 18446744073709551615
+    },
+    "think": {
+      "description": "Whether a thinking model thinks before it answers. Absent: the model's own. The thinking is kept in the transcript only.",
+      "type": "boolean"
+    }
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/plugins/runner-mistralrs/errors.schema.json",
+  "title": "mistralrs runner errors",
+  "description": "The mistralrs runner's own error codes, beyond the runner contract's. They fill the contract's runnerErrors extension point. Each refuses run/start, so no run starts and no model is loaded.",
+  "$ref": "https://troupe.run/protocol/error.schema.json#/$defs/fields",
+  "unevaluatedProperties": false,
+  "oneOf": [
+    {
+      "description": "The run/start options hold a key the runner doesn't define, such as model, which is the runtime's.",
+      "required": ["details"],
+      "properties": {"code": {"const": "mistralrs.unknown-option"}, "details": {"$ref": "#/$defs/where"}}
+    },
+    {
+      "description": "An option's value has the wrong shape. The fix names what is valid.",
+      "required": ["details"],
+      "properties": {"code": {"const": "mistralrs.invalid-options"}, "details": {"$ref": "#/$defs/where"}}
+    },
+    {
+      "description": "run/start names no runtime, so the runner has no model. The fix says to name the runtime mistralrs for the actor.",
+      "required": ["details"],
+      "properties": {"code": {"const": "mistralrs.no-runtime"}, "details": {"$ref": "#/$defs/where"}}
+    },
+    {
+      "description": "The runtime has an endpoint or a credential, which an in-process runtime never has: the runner loads its model in its own process and talks to no service. A credential's value isn't read, and isn't in the error.",
+      "required": ["details"],
+      "properties": {"code": {"const": "mistralrs.invalid-runtime"}, "details": {"$ref": "#/$defs/where"}}
+    },
+    {
+      "description": "The run's model isn't the absolute path of a GGUF file: it's a relative path or a model's name, or the file doesn't start with the GGUF signature. Nothing is fetched. The fix names TROUPE_RUNTIME_MISTRALRS_MODEL.",
+      "required": ["details"],
+      "properties": {"code": {"const": "mistralrs.invalid-model"}, "details": {"$ref": "#/$defs/model"}}
+    },
+    {
+      "description": "No file is at the run's model's path, or it can't be read. The fix names TROUPE_RUNTIME_MISTRALRS_MODEL.",
+      "required": ["details"],
+      "properties": {"code": {"const": "mistralrs.model-not-found"}, "details": {"$ref": "#/$defs/model"}}
+    },
+    {
+      "description": "On macOS, the engine can't compile its Metal kernels under the Python the runner runs in, which depends on the SDK that Python was built with: Homebrew's Pythons on macOS 27 and python.org's 3.12 fail, and uv-managed Pythons work. The fix says to install troupe on a uv-managed Python.",
+      "required": ["details"],
+      "properties": {
+        "code": {"const": "mistralrs.unsupported-python"},
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["python", "version"],
+          "properties": {
+            "python": {"description": "The Python the runner runs in: sys.executable.", "type": "string", "minLength": 1},
+            "version": {"description": "That Python's version, such as 3.15.2.", "type": "string", "minLength": 1}
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "where": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["where"],
+      "properties": {
+        "where": {
+          "description": "Where the problem is, such as options.maxTurns or runtime.endpoint.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["where", "model"],
+      "properties": {
+        "where": {"description": "Always runtime.model.", "const": "runtime.model"},
+        "model": {"description": "The model, as the run's runtime gave it.", "type": "string", "minLength": 1}
+      }
+    }
+  }
+}
