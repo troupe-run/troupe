@@ -39,11 +39,13 @@ Studio 0.4 keeps the system prompt and cuts the middle, Ollama 0.40 keeps a frac
 - **Every run is capped**, as the OpenAI runner's are: a turn limit, a token budget, and the output limit each request
   asks for (the API requires one), each default named in one place. An optional `contextWindow` option names the
   engine's window when the person knows it.
-- **A full context never passes silently.** A context-length refusal (Claude's API) ends the run with
-  `context-length`; so does a reply the runner can tell was made from less than the conversation it sent: a request
-  whose reported input is smaller than the previous one's (the conversation only grows), or one that reaches the
-  `contextWindow` the person named. A reply made from a cut conversation is never acted on. A run told `compact`
-  compacts its own conversation and asks again, as the OpenAI runner does, reporting it with a `context` event.
+- **A full context ends the run wherever the runner can tell.** A context-length refusal (Claude's API, LM Studio)
+  ends the run with `context-length`; so does a reply the runner can tell was made from less than the conversation it
+  sent: a request whose reported input is smaller than the previous one's (the conversation only grows), or one that
+  reaches the `contextWindow` the person named. Such a reply is never acted on. A run told `compact` compacts its own
+  conversation and asks again, as the OpenAI runner does, reporting it with a `context` event. **One case it can't
+  tell:** an engine that silently cuts a run's first request (Ollama does), since there's no earlier prompt to compare
+  with; the README says so, and #418 tracks it.
 - **troupe's guarantees, kept by the runner, not the library** (#319): the library's retries are off and troupe's loop
   retries within its named limits, honouring `Retry-After`; redirects are never followed (the library follows them by
   default, so the runner gives it a client that doesn't); the credential goes only in its header, is never logged, and

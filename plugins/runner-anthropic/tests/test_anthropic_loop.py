@@ -572,7 +572,7 @@ def test_an_engines_context_refusal_isnt_retried_and_ends_context_length(
     assert "longer than the model's context" in result["message"]
 
 
-# Requirement: A reply made from a cut conversation is never acted on
+# Requirement: A reply from a conversation the engine shrank isn't acted on
 
 
 def test_a_reply_from_a_shrunk_prompt_sends_no_turn_or_call_and_ends_context_length(
@@ -599,6 +599,21 @@ def test_a_conversation_that_grows_goes_on(tmp_path: Path) -> None:
         text_reply("Done.", prompt=6000),
     ]
     assert _result(run(tmp_path, script))["status"] == "ok"
+
+
+def test_a_first_reply_from_a_prompt_the_engine_cut_is_acted_on_since_nothing_shows_it(
+    tmp_path: Path,
+) -> None:
+    # Scenario: "A first request an engine cut". Ollama reports a cut first prompt as small as it
+    # kept (2,050 of ~36,000 tokens in the probe), and there's no earlier prompt to compare it with:
+    # the stated limit, not a guarantee.
+    script = [
+        tool_reply([("t1", "Glob", {"pattern": "*"})], text="From the half it kept.", prompt=2050),
+        text_reply("Done.", prompt=2200),
+    ]
+    ran = run(tmp_path, script)
+    assert [e["callId"] for e in ran.of("tool_call")] == ["t1"]
+    assert _result(ran)["status"] == "ok"
 
 
 # Requirement: A run stops before the context window the person named

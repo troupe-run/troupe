@@ -1,7 +1,7 @@
 """One reply gathered from its stream events (spec: anthropic-runner, "Tool calls are carried out
 in order and answered in the next request", "A malformed tool call is answered, not fatal", "A
-reply the runner can't read ends the run", "Usage is summed into the result", "A reply made from a
-cut conversation is never acted on"; design D7, D8).
+reply the runner can't read ends the run", "Usage is summed into the result", "A reply from a
+conversation the engine shrank isn't acted on"; design D7, D8).
 
 The events are built with fake_messages' builders, the same the fake endpoint streams, and fed to
 ReplyParser as dicts, as the library's ``to_dict`` gives them."""

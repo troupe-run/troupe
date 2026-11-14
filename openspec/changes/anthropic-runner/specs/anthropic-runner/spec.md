@@ -455,10 +455,11 @@ table SHALL hold Claude's `prompt is too long` refusal and each local engine's o
   the initial prompt is greater than the context length`
 - **THEN** it isn't retried as a server error, and the run ends with `error` and `reason` `context-length`
 
-### Requirement: A reply made from a cut conversation is never acted on
+### Requirement: A reply from a conversation the engine shrank isn't acted on
 The conversation only grows, so a reply whose reported prompt (its input, cache-read and cache-write tokens) is
 smaller than the previous request's SHALL be taken as made from a conversation the engine cut. No `turn` or tool call
-from it SHALL be sent, and a run told `fail` SHALL end with `error` and `reason` `context-length`.
+from it SHALL be sent, and a run told `fail` SHALL end with `error` and `reason` `context-length`. A first request has
+no earlier prompt, so an engine that cuts it silently isn't caught, and the README SHALL say so.
 
 #### Scenario: An engine that cuts the middle
 - **WHEN** a run's second request is reported as 5,900 prompt tokens and its third, which adds a tool result to it, as
@@ -469,6 +470,11 @@ from it SHALL be sent, and a run told `fail` SHALL end with `error` and `reason`
 #### Scenario: A conversation that grows
 - **WHEN** each reply reports a larger prompt than the one before
 - **THEN** the run goes on
+
+#### Scenario: A first request an engine cut
+- **WHEN** a run's first request is over an engine's window, and the engine cuts it and answers, as Ollama does
+- **THEN** the runner can't tell, and acts on the reply: the README names this limit and the engines it's proved
+  against that refuse such a request instead (Claude's API and LM Studio)
 
 ### Requirement: A run stops before the context window the person named
 When `contextWindow` is set, a reply whose reported prompt and output reach it SHALL be acted on, and the runner SHALL

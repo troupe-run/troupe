@@ -1,6 +1,6 @@
 """The context guard's three judgements (spec: anthropic-runner, "A context-length refusal ends the
-run with context-length", "A reply made from a cut conversation is never acted on", "A run stops
-before the context window the person named"; design D8).
+run with context-length", "A reply from a conversation the engine shrank isn't acted on", "A run
+stops before the context window the person named"; design D8).
 
 These check context.py's table and arithmetic. That the loop acts on them (no turn, no tool call,
 the result's reason) is the loop tests' to show."""
@@ -112,7 +112,7 @@ def test_a_failure_with_another_message_matches_nothing(
     assert signal_of(status, error_type, message) is None
 
 
-# Requirement: A reply made from a cut conversation is never acted on (guard 2)
+# Requirement: A reply from a conversation the engine shrank isn't acted on (guard 2)
 
 
 def test_a_prompt_smaller_than_the_previous_requests_shrank() -> None:
