@@ -169,7 +169,12 @@ class _Handler(BaseHTTPRequestHandler):
         if reply.lines is None:
             body = reply.body or b""
             self.send_header("Content-Length", str(len(body)))
+            # Every connection closes after its reply, so no handler thread outlives its test
+            # waiting for a pooled client's next request: another suite in the same worker counts
+            # the threads named process_request_thread (#403's read guard check).
+            self.send_header("Connection", "close")
             self.end_headers()
+            self.close_connection = True
             self.wfile.write(body)
             return
         self.send_header("Connection", "close")
