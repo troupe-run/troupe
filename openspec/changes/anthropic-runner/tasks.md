@@ -188,15 +188,18 @@ asks for the key.
 
 ## 14. File the gaps (design D13)
 
-- [ ] 14.1 For each D13 candidate that building confirmed, check #279's, #319's and #412's issues and file it: troupe
+- [x] 14.1 For each D13 candidate that building confirmed, check #279's, #319's and #412's issues and file it: troupe
   issues on the troupe roadmap board citing this change, and upstream reports linked from a troupe issue. Verify: each
   troupe issue shows the board in `gh issue view <n> --json projectItems`, and D13 lists its number or says why it
   wasn't filed.
+  Done: troupe#418 (local engines cut a full context silently) and troupe#419 (LM Studio's `input_tokens` holds its
+  cache reads), both Bugs on the board; upstream reports left to the owner; `x-api-key` not filed (D13).
 
 ## 15. Verify the whole change
 
-- [ ] 15.1 Run `uv run scripts/check.py` (the full check, when the load is under 40), its output kept in a scratch
+- [x] 15.1 Run `uv run scripts/check.py` (the full check, when the load is under 40), its output kept in a scratch
   file. Verify: it passes, and its summary line is quoted in the last commit's message or the pull request.
+  Done: the commit guard's full check on b781e4f7, "check: all gates passed" (tests passed in 304.2s).
 - [ ] 15.2 Open the pull request as a draft (`Closes #415`), act on the review of the last push, and mark it ready once
   the review is clean, the infrastructure Purpose pull request's checks pass, and the owner's Claude capture is in or
   the owner has said to go without it. Verify: `gh pr checks` shows every job passing on the head commit, on Linux,

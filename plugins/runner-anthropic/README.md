@@ -119,7 +119,7 @@ Studio writes its reasoning, then `<channel|>`, then its answer. The runner does
 `result.usage` sums each reply's usage as the Messages API defines it: `inputTokens` is `input_tokens`, which excludes
 the cache; `cacheReadTokens` is `cache_read_input_tokens` and `cacheWriteTokens` is `cache_creation_input_tokens`, each
 when every reply reports it. LM Studio counts its cache reads inside `input_tokens` as well, so its runs over-report
-input by them. The API reports no cost, so the result never has `costUsd`; when the theatre prices the run's model, it
+input by them ([#419](https://github.com/troupe-run/troupe/issues/419)). The API reports no cost, so the result never has `costUsd`; when the theatre prices the run's model, it
 carries `estimatedCostUsd` instead. Price a model with every rate its runs use, cache reads and writes included:
 
 ```sh
@@ -142,7 +142,8 @@ in the Messages API to stop them. So the runner guards against acting on a reply
 
 In a run told `fail` (the default), each ends the run with `context-length`. **What it can't catch:** a first request
 already over the window on an engine that cuts it silently (Ollama does): there's no earlier prompt to compare with,
-and counting tokens needs the model's tokenizer. Claude's API and LM Studio refuse that case. On another engine, set
+and counting tokens needs the model's tokenizer. Claude's API and LM Studio refuse that case
+([#418](https://github.com/troupe-run/troupe/issues/418) tracks the engines that cut). On another engine, set
 `contextWindow` and give the actor a direction that fits.
 
 ### Compaction
