@@ -2,6 +2,7 @@
 (anthropic-runner design D14). The runner's other tests rely on each behaviour here."""
 
 import threading
+import time
 from typing import Any
 
 import anthropic
@@ -119,3 +120,22 @@ def test_a_body_given_with_status_200_is_sent_as_application_json() -> None:
         client = anthropic.Anthropic(base_url=fake.endpoint, api_key="x", max_retries=0)
         response = client.messages.with_raw_response.create(**PARAMS)
     assert response.headers["content-type"] == "application/json"
+
+
+def _handlers() -> list[threading.Thread]:
+    return [t for t in threading.enumerate() if "process_request_thread" in t.name]
+
+
+def test_no_handler_thread_outlives_an_error_reply_to_a_pooled_client() -> None:
+    # A kept-alive connection held a handler thread open past its test, and another suite in the
+    # same worker waits for every thread named process_request_thread to end (the Claude Code
+    # runner's capture tests): the fake closes each connection after its reply.
+    client = anthropic.Anthropic(base_url="http://127.0.0.1:1", api_key="x", max_retries=0)
+    with FakeEndpoint([error_reply(429, "slow down", "rate_limit_error")]) as fake:
+        client = client.with_options(base_url=fake.endpoint)
+        with pytest.raises(anthropic.RateLimitError):
+            client.messages.create(**PARAMS, stream=True)
+        deadline = time.monotonic() + 5
+        while _handlers() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert _handlers() == []
