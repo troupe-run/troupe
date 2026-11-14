@@ -185,3 +185,9 @@ campaign in which any hunt failed or didn't run SHALL exit non-zero.
 - **WHEN** the person presses Ctrl-C during the third hunt
 - **THEN** the campaign stops that hunt, runs no more, and writes the report of the hunts that ran, marking the third
   as stopped
+
+#### Scenario: The interrupt lands at any moment
+- **WHEN** the person presses Ctrl-C while the campaign waits on a hunt, at whatever point of that wait it lands,
+  and the hunt then exits
+- **THEN** the campaign sees the hunt's exit, reports it as stopped and exits, within its own stop limit, and never
+  waits on a hunt that has already exited
