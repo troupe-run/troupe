@@ -109,8 +109,8 @@ then runs your command with them once, after it records the audition, with a run
 - `{"warmedUp": false}` when there's nothing to warm here;
 - `{"error": {...}}`, with the error your run would be refused with.
 
-troupe reports it as `runner.warmed-up`, `runner.warm-up-failed` (with your problem and fix) or
-`runner.warm-up-cut-off`. Keep a check at the start of each run as the backstop. The mistralrs runner is the
+troupe says it has started with `runner.warming-up`, then reports how it went as `runner.warmed-up`,
+`runner.warm-up-failed` (with your problem and fix) or `runner.warm-up-cut-off`. Keep a check at the start of each run as the backstop. The mistralrs runner is the
 example: `--warm-up` loads its check model, which compiles mistral.rs's Metal kernels into macOS's cache.
 
 Your runner should refuse the same runtimes itself, since a host other than troupe may start it.

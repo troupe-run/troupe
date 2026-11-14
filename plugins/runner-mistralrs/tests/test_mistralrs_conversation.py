@@ -569,3 +569,86 @@ def test_a_run_told_compact_with_nothing_to_remove_ends_with_context_length(tmp_
     assert sink.of("context") == []
     assert sink.result["reason"] == "context-length"
     assert "nothing more to remove" in sink.result["message"]
+
+
+# A Rust panic in the engine (PyO3's PanicException, a BaseException) never escapes unreported.
+
+
+class Panic(BaseException):
+    pass
+
+
+def test_a_panic_in_the_engine_is_an_engine_failure_and_an_exit_is_not(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import mistralrs
+
+    from troupe_runner_mistralrs import engine
+    from troupe_runner_mistralrs.port import EngineFailure
+
+    def panics(**kwargs: object) -> None:
+        raise Panic("called `Option::unwrap()` on a `None` value")
+
+    monkeypatch.setattr(mistralrs, "Runner", panics)
+    with pytest.raises(EngineFailure, match="the engine panicked: Panic"):
+        engine.load(LoadSpec(Path("/models/m.gguf")))
+
+    def exits(**kwargs: object) -> None:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(mistralrs, "Runner", exits)
+    with pytest.raises(KeyboardInterrupt):
+        engine.load(LoadSpec(Path("/models/m.gguf")))
+
+
+def test_a_load_that_dies_is_configuration_with_its_words_not_the_runners_failure(
+    tmp_path: Path,
+) -> None:
+    def dies(spec: LoadSpec) -> Any:  # noqa: ANN401
+        raise Panic("the loader died")
+
+    sink = Sink()
+    Conversation(
+        start=_start(tmp_path),
+        options=Options(),
+        model="/m.gguf",
+        spec=LoadSpec(Path("/m.gguf")),
+        engine_version="0.9.5",
+        loader=dies,
+        sink=sink,
+    ).run()
+    assert sink.result["reason"] == "configuration"
+    assert "Panic: the loader died" in sink.result["message"]
+
+
+def test_the_worker_reports_a_panic_as_the_runners_own_failure() -> None:
+    reported: list[str] = []
+
+    class Conversing:
+        def run(self) -> None:
+            raise Panic("boom")
+
+        def fail(self, message: str) -> None:
+            reported.append(message)
+
+    stand_in = StandIn({})
+    import io
+
+    runner = Runner(
+        io.BytesIO(), io.BytesIO(), io.BytesIO(), loader=stand_in.load, check=stand_in.check
+    )
+    runner._converse(Conversing())  # type: ignore[arg-type]
+    assert reported == ["The mistralrs runner failed: Panic: boom"]
+
+
+def test_a_cut_answer_told_compact_with_nothing_to_remove_is_a_turn_and_a_counted_request(
+    tmp_path: Path,
+) -> None:
+    sink, stand_in = converse(
+        tmp_path, {"responses": [response("Once upon", finish="length")]}, on_context_full="compact"
+    )
+    assert sink.of("turn")[0]["text"] == "Once upon"
+    assert sink.result["reason"] == "context-length"
+    assert sink.result["turns"] == 1 == len(requests(stand_in))
+    assert "nothing more to remove" in sink.result["message"]
+    assert "latest turn's" not in sink.result["message"]

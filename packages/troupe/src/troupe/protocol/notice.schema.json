@@ -501,6 +501,31 @@
       ]
     },
     {
+      "description": "troupe init --audition has started preparing a runner's engine outside any run, which can take tens of seconds, up to RUNNER_WARM_UP_TIMEOUT_SECONDS. Sent as it starts, so nobody waits on it silently.",
+      "properties": {
+        "code": {
+          "const": "runner.warming-up"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "runner"
+          ],
+          "properties": {
+            "runner": {
+              "description": "The runner's name.",
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
       "description": "A runner's engine was prepared outside any run, by troupe init --audition, so its first run starts quickly.",
       "properties": {
         "code": {
