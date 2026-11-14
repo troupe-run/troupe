@@ -9,7 +9,7 @@ and output. A runner can be written in any language. This page and the schemas i
 In Python, the [plugin SDK](../packages/troupe-plugin-sdk/README.md) (`troupe_plugin_sdk.runner`) has the contract's
 types, checked against those schemas, and core uses the same ones. A runner in another language reads the schemas.
 
-troupe ships six runners: the [scripted runner](../plugins/runner-scripted/README.md), which tests use to produce
+troupe ships seven runners: the [scripted runner](../plugins/runner-scripted/README.md), which tests use to produce
 every outcome on demand, the [Claude Code runner](../plugins/runner-claude-code/README.md), the
 [Ollama runner](../plugins/runner-ollama/README.md), which drives a local model through Ollama's own API with troupe's
 own tool loop (decision [#16](https://github.com/troupe-run/troupe/issues/16)), the
@@ -374,7 +374,7 @@ In a run that uses kinds, troupe stores each line as compact JSON: `{"kind": ...
 ([`transcript-record.schema.json`](../protocol/schemas/transcript-record.schema.json)). It masks the credential in
 the record's bytes before it frames them. The transcript limit counts the stored bytes, framing included. The run's
 end records `transcriptFormat`, `native` or `kinds`, beside the transcript's reference, so a reader always knows
-which form its lines are. The OpenAI, Ollama, LM Studio and Anthropic runners use kinds.
+which form its lines are. The OpenAI, Ollama, LM Studio, Anthropic and mistralrs runners use kinds.
 
 ### Where transcripts are kept
 
