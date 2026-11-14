@@ -694,8 +694,9 @@ def test_an_endpoint_ending_in_v1_doesnt_fit_a_runner_that_adds_v1_itself() -> N
 
 
 def test_the_anthropic_runner_fits_any_endpoint_but_one_ending_in_v1() -> None:
+    # It needs an endpoint: a runtime without one is in-process (in-process-runner design D5).
     assert interim.RUNNERS["anthropic"].fit == interim.RuntimeFit(
-        version=True, built_in="anthropic"
+        version=True, endpoint="required", built_in="anthropic"
     )
 
 

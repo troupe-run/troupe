@@ -216,7 +216,9 @@ def test_the_anthropic_runner_passes_every_check_given_a_runtime_naming_a_stand_
     workspace.mkdir()
     key = "sk-ant-conformance-0123456789"
     with anthropic_stand_in.serving([anthropic_stand_in.text_reply("Done.")] * 20) as fake:
-        runtime = RunStartRuntime("test", fake.endpoint, "fake-model", credential=True)
+        runtime = RunStartRuntime(
+            name="test", endpoint=fake.endpoint, model="fake-model", credential=True
+        )
         results = asyncio.run(
             check_runner(
                 RunnerCommand(

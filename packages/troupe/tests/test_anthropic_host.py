@@ -48,7 +48,12 @@ def _run(
                     DIRECTION,
                     workspace,
                     dict(anthropic_stand_in.TEST_LIMITS),
-                    runtime=p.RunStartRuntime("test", fake.endpoint, provenance["model"], True),
+                    runtime=p.RunStartRuntime(
+                        name="test",
+                        endpoint=fake.endpoint,
+                        model=provenance["model"],
+                        credential=True,
+                    ),
                     credential=key,
                     on_context_full=provenance.get("onContextFull", "fail"),
                 ),
