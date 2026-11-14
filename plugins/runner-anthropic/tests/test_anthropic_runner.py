@@ -570,3 +570,20 @@ def test_shutdown_after_the_result_exits_zero_without_another_request(
         assert len(fake.requests) == 2
     assert [e["type"] for e in events if e["type"] == "retry"] == ["retry"]
     assert events[-1]["status"] == "ok"
+
+
+def test_importing_the_runner_doesnt_import_the_library_so_the_handshake_isnt_kept_waiting() -> (
+    None
+):
+    # The anthropic package takes about two seconds to import, more on a loaded machine: on the
+    # handshake's path it made troupe's conformance checks time out at start under load. The
+    # runner imports it in the worker, after run/start is answered (design D9).
+    code = (
+        "import sys, troupe_runner_anthropic.runner, troupe_runner_anthropic.loop; "
+        "assert 'anthropic' not in sys.modules and 'httpx2' not in sys.modules, sorted(sys.modules)"
+    )
+    import subprocess
+    import sys
+
+    done = subprocess.run([sys.executable, "-c", code], capture_output=True, check=False)
+    assert done.returncode == 0, done.stderr.decode()[-2000:]

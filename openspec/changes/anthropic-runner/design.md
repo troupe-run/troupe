@@ -213,7 +213,11 @@ interrupt a read in progress: the worker stays blocked until its read timeout. S
 thread answers, flushes standard output, and ends the runner's own process (`os._exit`, from the runner's exit path),
 which closes the connection; the service sees it closed. A runner process holds one run (runner-protocol), so nothing
 else is lost, and no `result` can follow, since the flag is set first. Between requests, when nothing is in flight,
-the worker finishes on its own and the process exits normally within the same named grace, below troupe's.
+the worker finishes on its own and the process exits normally within the same named grace, below troupe's. **The library is imported in
+the worker,** after `run/start` is answered, and warmed by a background import at start: it takes about two seconds
+(more under load), and on the handshake's path it made the conformance checks time out at start on a loaded machine.
+Only `service.py` imports it; the failure types the loop and exchange use are in `failures.py`, and what the runner
+sets around the library (its environment and loggers) in `library.py`, neither of which imports it.
 
 ### D10. Retries, redirects and timeouts
 

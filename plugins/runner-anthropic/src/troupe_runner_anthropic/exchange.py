@@ -35,14 +35,14 @@ from troupe_runner_anthropic.defaults import (
     TRANSCRIPT_HEADER_PREFIXES,
     TRANSCRIPT_HEADERS,
 )
-from troupe_runner_anthropic.reply import Reply, ReplyParser, ShapeError
-from troupe_runner_anthropic.service import (
+from troupe_runner_anthropic.failures import (
     NetworkError,
     NotAStreamError,
     Opened,
     StatusError,
     UnreadableError,
 )
+from troupe_runner_anthropic.reply import Reply, ReplyParser, ShapeError
 
 RetryReason = Literal["rate-limit", "server", "network"]
 

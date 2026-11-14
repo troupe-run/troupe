@@ -25,7 +25,8 @@ import queue
 import sys
 import threading
 import traceback
-from typing import Any, BinaryIO, NoReturn
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any, BinaryIO, NoReturn
 
 from troupe_plugin_sdk import runner as p
 from troupe_plugin_sdk.declaration import Declaration
@@ -33,11 +34,15 @@ from troupe_plugin_sdk.events import EventNumbering
 from troupe_plugin_sdk.tools import Tools
 from troupe_runner_anthropic import NAME, __version__
 from troupe_runner_anthropic.defaults import STOP_GRACE_SECONDS, SUMMARY_MAX_BYTES
+from troupe_runner_anthropic.failures import Opened
+from troupe_runner_anthropic.library import quiet_library_logging
 from troupe_runner_anthropic.loop import Loop
 from troupe_runner_anthropic.masking import Mask
 from troupe_runner_anthropic.options import OptionsError, parse_options
 from troupe_runner_anthropic.runtime import Runtime, RuntimeRefusedError, from_run_start
-from troupe_runner_anthropic.service import Service, quiet_library_logging
+
+if TYPE_CHECKING:
+    from troupe_runner_anthropic.service import Service
 
 ENGINE = "messages"
 """The engine the init event names: the API the runner speaks, whichever service serves it."""
@@ -94,6 +99,7 @@ class Runner:
         self._in_flight = False
         """Whether a request is in flight, set under the output lock."""
         self._service: Service | None = None
+        self._runtime: Runtime | None = None
         self._failed = False
 
     # Output
@@ -187,6 +193,9 @@ class Runner:
     def run(self) -> int:
         """Serve troupe until the run ends; the exit code."""
         threading.Thread(target=self._read_troupe, daemon=True).start()
+        # Import the anthropic package in the background, so the handshake isn't kept waiting for
+        # it and the first request mostly isn't either.
+        threading.Thread(target=_warm, daemon=True).start()
         try:
             while True:
                 kind, data = self._inbox.get()
@@ -355,13 +364,13 @@ class Runner:
             next_seq=1,
             summary_max_bytes=SUMMARY_MAX_BYTES,
         )
-        self._service = self._make_service(runtime)
+        self._runtime = runtime
         loop = Loop(
             runtime=runtime,
             options=options,
             tools=tools,
             numbering=numbering,
-            open=self._service.stream,
+            open=self._open,
             send=self.event,
             record=self.transcript,
             wait=self._stop.wait,
@@ -432,9 +441,24 @@ class Runner:
         self._halt()
         raise _Exit(1 if self._failed else 0)
 
+    def _open(self, params: Mapping[str, Any]) -> Opened:
+        """Send one request, making the service on the first: in the worker, after run/start is
+        answered, since importing the anthropic package takes about two seconds."""
+        if self._service is None:
+            assert self._runtime is not None  # noqa: S101 - set before the worker starts
+            self._service = self._make_service(self._runtime)
+        return self._service.stream(params)
+
     @staticmethod
-    def _make_service(runtime: Runtime) -> Service:
+    def _make_service(runtime: Runtime) -> "Service":
+        from troupe_runner_anthropic.service import Service  # slow: see _open
+
         return Service(runtime)
+
+
+def _warm() -> None:
+    with contextlib.suppress(Exception):
+        import troupe_runner_anthropic.service  # noqa: F401 - see Runner.run
 
 
 class _TextOut:
