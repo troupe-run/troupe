@@ -55,10 +55,13 @@ def warm_up(
     cwd: Path,
     env: Mapping[str, str],
     *,
-    timeout: float = defaults.RUNNER_WARM_UP_TIMEOUT_SECONDS,
+    timeout: float | None = None,
 ) -> list[Notice]:
     """Warm ``runner``'s engine, if it has a warm-up: the notices that say how it went. Nothing for
-    a runner without one, or one with nothing to warm on this platform. It blocks."""
+    a runner without one, or one with nothing to warm on this platform. It blocks. ``timeout`` is
+    RUNNER_WARM_UP_TIMEOUT_SECONDS, read when it's called, unless given."""
+    if timeout is None:
+        timeout = defaults.RUNNER_WARM_UP_TIMEOUT_SECONDS
     entry = interim.runner(runner)
     if not entry.warm_up:
         return []

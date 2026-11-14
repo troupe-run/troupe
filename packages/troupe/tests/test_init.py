@@ -16,7 +16,7 @@ from gitrepo import Repo, isolated_environment, make_repo
 from runtesting import ADA
 from storetesting import git_service
 from troupe.core import audition as auditions
-from troupe.core import identity, init, interim
+from troupe.core import defaults, identity, init, interim
 from troupe.core.client.dispatch import call
 from troupe.core.client.session import Session
 from troupe.core.config import aggregate
@@ -314,13 +314,59 @@ def _warming(monkeypatch: pytest.MonkeyPatch, answer: dict[str, object]) -> None
     monkeypatch.setitem(interim.RUNNERS, "mistralrs", entry)
 
 
-def test_an_audition_warms_its_runners_engine_and_says_so(
+def _init_watching(repo: Repo, **params: Any) -> tuple[dict[str, Any], list[dict[str, Any]]]:  # noqa: ANN401
+    """init's result, and the updates it sent as it went."""
+    updates: list[dict[str, Any]] = []
+    result = asyncio.run(
+        call("init", params, Session(theatre=repo.path, env=_env(repo)), updates.append)
+    )
+    assert is_valid(result, MESSAGES["init"]["result"]), result
+    return result, updates
+
+
+def test_an_audition_says_it_warms_its_runners_engine_then_how_it_went(
     repo: Repo, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _warming(monkeypatch, {"warmedUp": True, "seconds": 16.4})
-    result = _init(repo.path, _env(repo), audition={"runner": "mistralrs"})
+    result, updates = _init_watching(repo, audition={"runner": "mistralrs"})
+    started = [u["notice"] for u in updates if u.get("kind") == "notice"]
+    assert [n["code"] for n in started] == ["runner.warming-up"]
+    assert started[0]["details"] == {"runner": "mistralrs"}
     warmed = [n for n in result["notices"] if n["code"] == "runner.warmed-up"]
     assert [n["details"] for n in warmed] == [{"runner": "mistralrs", "seconds": 16.4}]
+
+
+def test_a_warm_up_that_fails_leaves_init_succeeding_with_the_runners_problem_and_fix(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Spec: cli, "Init with an audition warms its runner's engine", "A runner that can't run here".
+    error = {
+        "code": "mistralrs.unsupported-python",
+        "problem": "mistral.rs can't compile its Metal kernels under this Python.",
+        "fix": "Install troupe on a uv-managed Python.",
+    }
+    _warming(monkeypatch, {"error": error})
+    result, _ = _init_watching(repo, audition={"runner": "mistralrs"})
+    assert result["actor"] == {"name": "lead", "runner": "mistralrs"}
+    (failed,) = [n for n in result["notices"] if n["code"] == "runner.warm-up-failed"]
+    assert error["problem"] in failed["problem"]
+    assert failed["fix"] == error["fix"]
+
+
+def test_a_warm_up_past_its_limit_leaves_init_succeeding_and_says_the_first_run_finishes_it(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Spec: cli, "Init with an audition warms its runner's engine", "A warm-up past its limit".
+    entry = dataclasses.replace(
+        interim.RUNNERS["mistralrs"],
+        command=(sys.executable, "-c", "import time; time.sleep(60)"),
+        warm_up=("go",),
+    )
+    monkeypatch.setitem(interim.RUNNERS, "mistralrs", entry)
+    monkeypatch.setattr(defaults, "RUNNER_WARM_UP_TIMEOUT_SECONDS", 0.5)
+    result, _ = _init_watching(repo, audition={"runner": "mistralrs"})
+    (cut,) = [n for n in result["notices"] if n["code"] == "runner.warm-up-cut-off"]
+    assert "first run" in cut["fix"]
 
 
 def test_a_rehearsed_audition_warms_nothing(repo: Repo, monkeypatch: pytest.MonkeyPatch) -> None:
