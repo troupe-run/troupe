@@ -5,6 +5,7 @@ model is downloaded; that model has no chat template, so the run itself ends wit
 this test doesn't look at."""
 
 import json
+import sys
 from pathlib import Path
 
 from mistralrs_harness import CHECK_MODEL, REAL, Session, run_start
@@ -20,8 +21,10 @@ def test_every_line_on_standard_output_is_a_contract_message_with_the_real_engin
     try:
         assert "result" in session.initialize()
         started = session.start(run_start(workspace, scratch, str(CHECK_MODEL)))
-        assert "result" in started, started
-        session.until_result()
+        refused = _refused_python(started)
+        if not refused:
+            assert "result" in started, started
+            session.until_result()
         assert session.shutdown() == 0
     finally:
         session.kill()
@@ -29,5 +32,19 @@ def test_every_line_on_standard_output_is_a_contract_message_with_the_real_engin
         message = json.loads(line)  # a line that isn't JSON fails here
         assert message.get("jsonrpc") == "2.0", line
     stderr = session.stderr()
-    assert b"mistralrs_core" in stderr  # the engine's own log lines, moved off fd 1
+    if not refused:  # the engine ran, so its own log lines were written, to fd 2 not fd 1
+        assert b"mistralrs_core" in stderr
     assert all(b"mistralrs_core" not in line for line in session.lines)
+
+
+def _refused_python(answer: dict[str, object]) -> bool:
+    """Whether run/start was refused because the engine can't compile its Metal kernels under
+    this Python, as it is on CI's macOS leg with python.org's 3.12 (design D4). Only on macOS."""
+    error = answer.get("error")
+    if not isinstance(error, dict):
+        return False
+    data = error.get("data")
+    code = data.get("code") if isinstance(data, dict) else None
+    assert sys.platform == "darwin", answer
+    assert code == "mistralrs.unsupported-python", answer
+    return True

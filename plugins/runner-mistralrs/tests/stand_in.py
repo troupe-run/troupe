@@ -73,7 +73,9 @@ class StandInEngine:
     def count(self, text: str) -> int:
         named = text
         for placeholder, path in self.script.get("paths", {}).items():
-            named = named.replace(path, placeholder)
+            # As written, and as JSON writes it (a Windows path's backslashes doubled), since the
+            # tool definitions are counted as JSON.
+            named = named.replace(json.dumps(path)[1:-1], placeholder).replace(path, placeholder)
         recorded = self.script.get("counts", {}).get(
             hashlib.sha256(named.encode("utf-8")).hexdigest()
         )

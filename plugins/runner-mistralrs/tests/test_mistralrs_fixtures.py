@@ -105,3 +105,16 @@ def test_a_fixture_replayed_gives_exactly_its_events_and_transcript_kinds(
     assert [kind for kind, _ in sink.records] == expected["transcriptKinds"]
     if (workspace / "notes.txt").exists() or "notes.txt" in run["files"]:
         assert (workspace / "notes.txt").exists()  # a refused Delete deleted nothing
+
+
+def test_a_recorded_count_is_found_for_a_windows_path_written_into_json() -> None:
+    # The tool definitions are counted as JSON, which doubles a Windows path's backslashes; the
+    # replay must still find the count the capture recorded for the path's placeholder.
+    import hashlib
+
+    recorded = '{"scratch":"<scratch>"}'
+    key = hashlib.sha256(recorded.encode()).hexdigest()
+    scratch = "C:\\Users\\runner\\AppData\\Local\\Temp\\s"
+    stand_in = StandIn({"counts": {key: 1160}, "paths": {"<scratch>": scratch}})
+    (engine,) = [stand_in.load(LoadSpec(Path("/m.gguf")))]
+    assert engine.count(json.dumps({"scratch": scratch}, separators=(",", ":"))) == 1160
