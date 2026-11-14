@@ -112,8 +112,13 @@ def test_the_mistralrs_runner_warms_with_its_own_argument() -> None:
 def test_the_real_mistralrs_runners_warm_up_answers_in_one_line(tmp_path: Path) -> None:
     notices = warm_up("mistralrs", tmp_path, {})
     if sys.platform == "darwin":
+        # Under a Python whose build the engine's Metal kernels don't compile under (python.org's
+        # 3.12, as on CI's macOS 3.12 leg), the warm-up says so, with the runner's own refusal.
         (notice,) = notices
-        assert notice.code == "runner.warmed-up", notice.problem
+        if notice.code == "runner.warm-up-failed":
+            assert notice.details["code"] == "mistralrs.unsupported-python", notice.problem
+        else:
+            assert notice.code == "runner.warmed-up", notice.problem
     else:
         assert notices == []
     assert json.dumps([n.to_data() for n in notices])
