@@ -88,7 +88,7 @@ moved fd 1.
 *Alternatives.* Turning the engine's logging off was rejected. It has no Python switch, and its log lines are useful
 on stderr.
 
-### D4. What's checked before the acknowledgement, and the load after it *(pending the owner's answer)*
+### D4. What's checked before the acknowledgement, and the load after it (owner, 2026-11-14)
 
 Loading the model can take longer than troupe's 30 s start limit, so the runner checks only what's quick before it
 answers `run/start`:
@@ -108,10 +108,10 @@ After acknowledging, the worker sends a `log` that it is loading the model and l
 load that passes the limit, after which the process exits, since the load can't be stopped. This matches the Ollama
 runner, where Ollama failing to load a model is an error result after the acknowledgement.
 
-*Alternatives, put to the owner on 2026-11-14:*
+*Alternatives, put to the owner, who chose 2 on 2026-11-14:*
 1. Load before the acknowledgement, letting a runner's `initialize` answer ask for a longer start, up to a ceiling
    in core. This would be a runner-protocol and host change.
-2. **(Recommended, written here.)** The quick checks above, including the packaged-model check on macOS, before the
+2. **(Chosen.)** The quick checks above, including the packaged-model check on macOS, before the
    acknowledgement.
 3. As 2, without the packaged model. The unsupported-Python failure would then be an error result after the
    acknowledgement, not a refusal.
@@ -219,8 +219,11 @@ The token counts stay, in the record.
 
 ### D10. Tests without a downloaded model
 
-**The packaged model.** `stories260K.gguf` (1.2 MB, from ggml-org/models, karpathy's llama2.c, MIT) ships in the
-package under `troupe_runner_mistralrs/check_model/`, with its SHA-256 and provenance. It serves the macOS check
+**The packaged model.** `stories260K.gguf` (1.2 MB) ships in the package under
+`troupe_runner_mistralrs/check_model/`. Its weights are `stories260K` from karpathy/tinyllamas (MIT, the llama2.c
+project), and the GGUF conversion is ggml-org/models' `tinyllamas/stories260K.gguf` (SHA-256
+`270cba1bd5109f42d03350f60406024560464db173c0e387d91f0426d3bd256d`). Beside it is a `PROVENANCE.md` holding both
+sources, the MIT licence text, the SHA-256 and the date fetched, which the owner asked for on 2026-11-14. It serves the macOS check
 (D4), and it lets tests run the real engine on every OS:
 - loading it;
 - the protocol channel (D3), by a test that runs the runner process with it and checks every stdout line parses as
@@ -290,4 +293,4 @@ built-in runtime. Configs naming them would then be refused as an unknown runner
 
 ## Open Questions
 
-None that change the specs or tasks once D4 is answered.
+None that change the specs or tasks.

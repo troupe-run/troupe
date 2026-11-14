@@ -13,7 +13,7 @@
 
 - [ ] 2.1 Create `plugins/runner-mistralrs` (Apache-2.0, `troupe_runner_mistralrs`), depending on `troupe-plugin-sdk` and `mistralrs==0.9.5`, and `uv lock`. Wire it into the root `pyproject.toml` (sources, dev group, ruff, mypy, pytest, import-linter), `scripts/check-paths.toml` (a `runner_mistralrs` scope), release-please config and manifest, and `troupe-run`'s optional dependencies (`mistralrs` and `all`). Verify: `uv run scripts/runner_licences.py` passes, and the workspace bundle and install-docs tests pass.
 - [ ] 2.2 Add `mistralrs` to `RUNNERS` (`in_extra`, `runtime: required`, a fit with no endpoint, no credential and the built-in `mistralrs`), with an audition and an init note saying how to point `TROUPE_RUNTIME_MISTRALRS_MODEL` at a GGUF file. Verify: core tests for the base install refusing it with `runner.not-installed` naming `troupe-run[mistralrs]`, and the audition rehearsing.
-- [ ] 2.3 Package the check model `check_model/stories260K.gguf` with its provenance (source URL, licence MIT, SHA-256, date). Verify: a test checks the file's SHA-256 against the provenance, and that it's in the built wheel.
+- [ ] 2.3 Package the check model `check_model/stories260K.gguf` with `PROVENANCE.md`: the weights from karpathy/tinyllamas `stories260K` (MIT), the GGUF from ggml-org/models, the MIT licence text, the SHA-256 `270cba1b…256d` and the date (design D10). Verify: a test checks the file's SHA-256 against the provenance and that the licence is recorded, and the built wheel holds both files.
 
 ## 3. The entry point and the protocol channel
 

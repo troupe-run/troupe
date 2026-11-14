@@ -35,8 +35,9 @@ silent cut. It also found three limits, each decided by the owner (2026-11-14):
   model is an absolute path to a readable GGUF file, and, on macOS, that this Python can compile mistral.rs's Metal
   kernels. It does the last by loading a 1.2 MB model bundled with the plugin. An unsupported macOS Python is refused
   with `mistralrs.unsupported-python`, whose fix says to install troupe on a uv-managed Python
-  (`uv tool install --managed-python ...`). The install guide says the same. *(Pending the owner's answer on loading
-  before the acknowledgement; see design D4.)*
+  (`uv tool install --managed-python ...`). The install guide says the same.
+  The real model loads after the acknowledgement, and a failure to load it ends the run with reason
+  `configuration` (owner, 2026-11-14; design D4).
 - **The engine never writes to the protocol channel.** Before importing `mistralrs`, the runner keeps standard output
   for itself and points file descriptor 1 at standard error, so the engine's log lines reach troupe as runner stderr.
   A test runs the real engine and checks that standard output holds only protocol messages.
