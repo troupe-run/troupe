@@ -19,14 +19,14 @@
 
 - [x] 3.1 Write the entry point and `runner.py`'s main-thread reader and output lock (design D1). Keep the protocol on a duplicate of fd 1, point fd 1 at standard error, and rebind `sys.stdout`, all before `engine.py` imports `mistralrs` (D3). Add an import-linter contract so only `engine.py` imports `mistralrs`. Verify: a test that importing the entry module doesn't import `mistralrs`.
 - [x] 3.2 Define the `Engine` protocol (load, chat, count tokens) in `port.py` with the error table, and the real implementation over `mistralrs` in `engine.py`; the table that classifies its `ValueError`s (Metal library, prompt over the model's length, KV capacity, other). Verify: unit tests of the table against each recorded message from the probe.
-- [ ] 3.3 Test the protocol channel with the real engine. Run the runner process with the check model on standard output as a pipe, through `initialize`, a `run/start` the runner refuses after loading, and `shutdown`. Verify: every standard-output line parses as a contract message, the engine's log lines are on standard error, and the test passes on all three OSes in CI.
+- [x] 3.3 Test the protocol channel with the real engine. Run the runner process with the check model on standard output as a pipe, through `initialize`, a `run/start` the runner refuses after loading, and `shutdown`. Verify: every standard-output line parses as a contract message, the engine's log lines are on standard error, and the test passes on all three OSes in CI. Passed on all twelve legs of CI run 43588824784 (d59d00a8); on macOS's Python 3.12 leg the engine isn't loaded, and the test checks the refusal instead (4.4).
 
 ## 4. Before the acknowledgement
 
 - [x] 4.1 Add the options parser and `options.schema.json`/`errors.schema.json` (`maxTurns`, `contextLength`, `temperature`, `seed`, `think`; `mistralrs.unknown-option`, `mistralrs.invalid-options`). Verify: the options scenarios, and a hypothesis test that the parser and the published schema agree.
 - [x] 4.2 Check the runtime and the model file: `mistralrs.no-runtime`, `mistralrs.invalid-runtime` (endpoint or credential, holding no part of `TROUPE_RUNTIME_CREDENTIAL`), and an absolute path to an existing file with the GGUF signature (`mistralrs.invalid-model`, `mistralrs.model-not-found`, naming `TROUPE_RUNTIME_MISTRALRS_MODEL`). Verify: tests for each spec scenario, none of which loads a model.
 - [x] 4.3 Publish `requirements.json` (`mistralrs` `0.9.5`, with why), and refuse another installed version with `runner.requirement-unmet`. Verify: the spec scenario, with the installed version stubbed.
-- [ ] 4.4 On macOS, load the check model before answering `run/start`, and refuse a Metal library failure with `mistralrs.unsupported-python`, naming `sys.executable` and the version, with the `uv tool install --managed-python` fix (D4). Verify: a stand-in test for the refusal, a test that Linux and Windows load nothing before answering, and on CI's macOS legs (uv-managed Pythons) the check passes with the real engine.
+- [x] 4.4 On macOS, load the check model before answering `run/start`, and refuse a Metal library failure with `mistralrs.unsupported-python`, naming `sys.executable` and the version, with the `uv tool install --managed-python` fix (D4). Verify: a stand-in test for the refusal, a test that Linux and Windows load nothing before answering, and on CI's macOS legs the real engine: the 3.13–3.15 legs (uv-managed Pythons) pass the check and load the engine, and the 3.12 leg (python.org's Python, SDK 12.1) is refused with `mistralrs.unsupported-python`, which the channel test asserts. CI run 43588824784 (d59d00a8).
 
 ## 5. Loading the model after the acknowledgement
 
@@ -48,7 +48,7 @@
 ## 8. Cancel, end of input and shutdown
 
 - [x] 8.1 On `run/cancel`, end of input or `shutdown`, set the stop flag under the output lock, acknowledge, flush, and `os._exit` within `STOP_GRACE_SECONDS`, abandoning the engine call (D2). Verify: stand-in tests that no event follows the acknowledgement and no further tool call is carried out.
-- [ ] 8.2 Test cancel, end of input and shutdown as processes: with the stand-in holding a request open (as the engine does, the GIL released) and holding the load; and with the real engine and the check model, while it loads and answers. The check model can't chat and answers in milliseconds, so a real model mid-generation is the live test's (9.3). Verify: the runner process exits within its grace on all three OSes in CI.
+- [x] 8.2 Test cancel, end of input and shutdown as processes: with the stand-in holding a request open (as the engine does, the GIL released) and holding the load; and with the real engine and the check model, while it loads and answers. The check model can't chat and answers in milliseconds, so a real model mid-generation is the live test's (9.3). Verify: the runner process exits within its grace on all three OSes in CI. Passed on all twelve legs of CI run 43588824784 (d59d00a8).
 
 ## 9. Fixtures, conformance and the live test
 

@@ -56,10 +56,10 @@ a model or a price.
 
 ### Requirement: An actor's runtime fits its runner
 Config SHALL refuse an actor whose runtime doesn't fit its runner, judged from the runtime's built-in and theatre
-values: a credential the runner never sends, an endpoint path it can't use (a final `/v1`, for one that adds it),
-an endpoint it doesn't take or none where it needs one, `https` where it needs plain `http`, or another runner's
-built-in. The error SHALL name the actor's `runtime` path, the runner, the runtime, why, and the runtimes that fit. A
-change to a runtime that makes an actor on it unfit SHALL be refused the same way.
+values: a credential it never sends, an endpoint path it can't use (a final `/v1`, for one that adds it), an unwanted or
+missing endpoint, `https` where it needs `http`, or another runner's built-in. The error SHALL name the actor's
+`runtime` path, the runner, the runtime, why, and the runtimes that fit. A runtime change that makes an actor on it
+unfit SHALL be refused the same way.
 
 #### Scenario: An Ollama actor on a runtime with a credential
 - **WHEN** a person sets `actors.tester.runner=ollama` and `actors.tester.runtime=openai`

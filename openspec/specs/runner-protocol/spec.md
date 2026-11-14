@@ -403,10 +403,10 @@ what's wanted, and what was found when the runner could find it.
 - **THEN** its `runner.requirement-unmet` details have no `found`
 
 ### Requirement: Run start carries the run's runtime
-When an actor names a runtime, `run/start` SHALL carry `runtime`: its `name`, `endpoint` and `model` as troupe
-resolved them, `credential`, `true` when the runner's environment holds the credential and `false` when the
-runtime has none, and `price` when troupe has a price for the run's model (spec: runtimes). It SHALL NOT carry the
-credential's value or its variable's name. Without a runtime it is absent.
+When an actor names a runtime, `run/start` SHALL carry `runtime`: its `name`, `endpoint` (only when the runtime has
+one) and `model` as troupe resolved them, `credential`, `true` when the runner's environment holds the credential and
+`false` when the runtime has none, and `price` when troupe has a price for the run's model (spec: runtimes). It SHALL
+NOT carry the credential's value or its variable's name. Without a runtime it is absent.
 
 #### Scenario: A runtime with a credential
 - **WHEN** troupe starts a run on the runtime `openai` with the model `gpt-test`, and config has no price for it
@@ -425,6 +425,11 @@ credential's value or its variable's name. Without a runtime it is absent.
 #### Scenario: The value isn't in run start
 - **WHEN** a `run/start` with a `runtime` is validated against the contract's schema
 - **THEN** the schema has no field for a credential's value or its variable's name
+
+#### Scenario: An in-process runtime
+- **WHEN** troupe starts a run on the runtime `mistralrs` with the model `/models/qwen3-0.6b.gguf`
+- **THEN** `run/start` carries `runtime` with `name` `mistralrs`, that `model` and `credential` `false`, and no
+  `endpoint` field, rather than a null
 
 ### Requirement: The credential's value is in the runner's environment as TROUPE_RUNTIME_CREDENTIAL
 When `run/start`'s `runtime.credential` is `true`, the runner's environment SHALL hold the credential's value as
