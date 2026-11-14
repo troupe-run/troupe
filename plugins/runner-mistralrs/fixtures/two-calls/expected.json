@@ -1,0 +1,98 @@
+{
+  "events": [
+    {
+      "type": "init",
+      "runId": "<run>",
+      "seq": 0,
+      "runner": {
+        "name": "mistralrs",
+        "version": "0.0.0"
+      },
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "Delete",
+        "Move"
+      ],
+      "effects": "checked",
+      "engine": {
+        "name": "mistral.rs",
+        "version": "0.9.5",
+        "model": "<model>"
+      }
+    },
+    {
+      "type": "log",
+      "runId": "<run>",
+      "seq": 1,
+      "level": "info",
+      "message": "Loading the model <model> in the runner's process."
+    },
+    {
+      "type": "tool_call",
+      "runId": "<run>",
+      "seq": 2,
+      "callId": "call-40d7c950-e090-4fc3-a639-e16317c967a2",
+      "tool": "Read",
+      "inputSummary": "{\"file_path\":\"a.txt\",\"offset\":1,\"limit\":10}"
+    },
+    {
+      "type": "tool_result",
+      "runId": "<run>",
+      "seq": 3,
+      "callId": "call-40d7c950-e090-4fc3-a639-e16317c967a2",
+      "isError": false,
+      "outputSummary": "1\talpha",
+      "outputBytes": 7
+    },
+    {
+      "type": "tool_call",
+      "runId": "<run>",
+      "seq": 4,
+      "callId": "call-ffd2de8b-6f1d-4c87-b10a-49d0223771a3",
+      "tool": "Read",
+      "inputSummary": "{\"file_path\":\"b.txt\",\"offset\":1,\"limit\":10}"
+    },
+    {
+      "type": "tool_result",
+      "runId": "<run>",
+      "seq": 5,
+      "callId": "call-ffd2de8b-6f1d-4c87-b10a-49d0223771a3",
+      "isError": false,
+      "outputSummary": "1\tbeta",
+      "outputBytes": 6
+    },
+    {
+      "type": "turn",
+      "runId": "<run>",
+      "seq": 6,
+      "role": "assistant",
+      "text": "1. The file `a.txt` contains: alpha  \n2. The file `b.txt` contains: beta"
+    },
+    {
+      "type": "result",
+      "runId": "<run>",
+      "seq": 7,
+      "status": "ok",
+      "message": "1. The file `a.txt` contains: alpha  \n2. The file `b.txt` contains: beta",
+      "turns": 2,
+      "durationMs": 0,
+      "usage": {
+        "inputTokens": 2982,
+        "outputTokens": 104
+      }
+    }
+  ],
+  "transcriptKinds": [
+    "sent",
+    "received",
+    "sent",
+    "sent",
+    "sent",
+    "sent",
+    "received"
+  ]
+}

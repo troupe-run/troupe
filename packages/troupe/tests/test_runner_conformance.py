@@ -263,6 +263,53 @@ def test_the_lm_studio_runner_passes_every_check_given_a_runtime_naming_a_stand_
     assert len(results) == 8
 
 
+def test_the_mistralrs_runner_passes_every_check_with_the_engine_stand_in(tmp_path: Path) -> None:
+    # Spec: mistralrs-runner, "The runner conforms to the contract" (in-process-runner task 9.1).
+    # Each check starts its own runner process, which reads the stand-in's script afresh; each
+    # answer takes a moment, so the checks that cancel a run part-way find it running.
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    plugin = Path(__file__).resolve().parents[3] / "plugins" / "runner-mistralrs"
+    glob = {
+        "id": "c",
+        "type": "function",
+        "function": {"name": "Glob", "arguments": '{"pattern": "*"}'},
+    }
+
+    def answer(message: dict[str, Any], finish: str) -> dict[str, Any]:
+        return {
+            "id": "1",
+            "object": "chat.completion",
+            "created": 0,
+            "model": "mistralrs",
+            "system_fingerprint": "local",
+            "choices": [{"index": 0, "finish_reason": finish, "message": message}],
+            "usage": {"prompt_tokens": 100, "completion_tokens": 5, "total_tokens": 105},
+            "delay": 0.3,
+        }
+
+    calls = [answer({"role": "assistant", "content": "", "tool_calls": [glob]}, "tool_calls")]
+    done = answer({"role": "assistant", "content": "Done."}, "stop")
+    script = tmp_path / "script.json"
+    script.write_text(json.dumps({"responses": [*calls * 3, done]}), encoding="utf-8")
+    results = _check(
+        [sys.executable, str(plugin / "tests" / "stand_in_runner.py")],
+        {},
+        workspace,
+        RunLimits(start_timeout=10.0, cancel_grace=10.0, run_timeout=30.0),
+        {"TROUPE_MISTRALRS_STAND_IN": str(script)},
+        RunStartRuntime(
+            name="mistralrs",
+            model=str(
+                plugin / "src" / "troupe_runner_mistralrs" / "check_model" / "stories260K.gguf"
+            ),
+            credential=False,
+        ),
+    )
+    assert {name: r.problem for name, r in results.items() if not r.passed} == {}
+    assert len(results) == 8
+
+
 # Requirement: Any conforming runner can be checked: init says how the runner applies the effects
 # (declared-effects)
 

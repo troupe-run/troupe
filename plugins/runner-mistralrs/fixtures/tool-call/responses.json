@@ -1,0 +1,56 @@
+[
+  {
+    "id": "1",
+    "object": "chat.completion",
+    "created": 1794633103,
+    "model": "/private/tmp/claude-502/-Users-martin-Projects-troupe-track-b-12-414-troupe-in-process-runner/5560105f-6993-457d-bfa6-64ee6626dae7/scratchpad/qwen-q8",
+    "system_fingerprint": "local",
+    "choices": [
+      {
+        "index": 0,
+        "finish_reason": "tool_calls",
+        "message": {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "call-fc9efeb5-4543-4869-b477-7ac54d3dbd5b",
+              "type": "function",
+              "function": {
+                "name": "Read",
+                "arguments": "{\"file_path\":\"notes.txt\",\"offset\":1,\"limit\":10}"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 1462,
+      "completion_tokens": 42,
+      "total_tokens": 1504
+    }
+  },
+  {
+    "id": "2",
+    "object": "chat.completion",
+    "created": 1794633104,
+    "model": "/private/tmp/claude-502/-Users-martin-Projects-troupe-track-b-12-414-troupe-in-process-runner/5560105f-6993-457d-bfa6-64ee6626dae7/scratchpad/qwen-q8",
+    "system_fingerprint": "local",
+    "choices": [
+      {
+        "index": 0,
+        "finish_reason": "stop",
+        "message": {
+          "role": "assistant",
+          "content": "The launch code for the file `notes.txt` is **BLUE-42**."
+        }
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 1485,
+      "completion_tokens": 19,
+      "total_tokens": 1504
+    }
+  }
+]

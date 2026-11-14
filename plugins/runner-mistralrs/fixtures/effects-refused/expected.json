@@ -1,0 +1,154 @@
+{
+  "events": [
+    {
+      "type": "init",
+      "runId": "<run>",
+      "seq": 0,
+      "runner": {
+        "name": "mistralrs",
+        "version": "0.0.0"
+      },
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "Delete",
+        "Move"
+      ],
+      "effects": "checked",
+      "engine": {
+        "name": "mistral.rs",
+        "version": "0.9.5",
+        "model": "<model>"
+      }
+    },
+    {
+      "type": "log",
+      "runId": "<run>",
+      "seq": 1,
+      "level": "info",
+      "message": "Loading the model <model> in the runner's process."
+    },
+    {
+      "type": "tool_call",
+      "runId": "<run>",
+      "seq": 2,
+      "callId": "call-571b148c-1dce-4887-b9cb-86a897177f46",
+      "tool": "Delete",
+      "inputSummary": "{\"file_path\":\"notes.txt\"}"
+    },
+    {
+      "type": "tool_result",
+      "runId": "<run>",
+      "seq": 3,
+      "callId": "call-571b148c-1dce-4887-b9cb-86a897177f46",
+      "isError": true,
+      "outputSummary": "Delete on notes.txt needs the delete effect for notes.txt, which this actor doesn't declare. It declares no delete paths.",
+      "outputBytes": 121
+    },
+    {
+      "type": "tool_call",
+      "runId": "<run>",
+      "seq": 4,
+      "callId": "call-0be5fe71-9c08-4903-9a4c-0a89bd728566",
+      "tool": "Delete",
+      "inputSummary": "{\"file_path\":\"notes.txt\"}"
+    },
+    {
+      "type": "tool_result",
+      "runId": "<run>",
+      "seq": 5,
+      "callId": "call-0be5fe71-9c08-4903-9a4c-0a89bd728566",
+      "isError": true,
+      "outputSummary": "Delete on notes.txt needs the delete effect for notes.txt, which this actor doesn't declare. It declares no delete paths.",
+      "outputBytes": 121
+    },
+    {
+      "type": "tool_call",
+      "runId": "<run>",
+      "seq": 6,
+      "callId": "call-83f64674-b116-44fd-9a8c-b77bbbc9251f",
+      "tool": "Delete",
+      "inputSummary": "{\"file_path\":\"notes.txt\"}"
+    },
+    {
+      "type": "tool_result",
+      "runId": "<run>",
+      "seq": 7,
+      "callId": "call-83f64674-b116-44fd-9a8c-b77bbbc9251f",
+      "isError": true,
+      "outputSummary": "Delete on notes.txt needs the delete effect for notes.txt, which this actor doesn't declare. It declares no delete paths.",
+      "outputBytes": 121
+    },
+    {
+      "type": "tool_call",
+      "runId": "<run>",
+      "seq": 8,
+      "callId": "call-4342eb89-fad4-4d69-85e4-3444bba21ebf",
+      "tool": "Delete",
+      "inputSummary": "{\"file_path\":\"notes.txt\"}"
+    },
+    {
+      "type": "tool_result",
+      "runId": "<run>",
+      "seq": 9,
+      "callId": "call-4342eb89-fad4-4d69-85e4-3444bba21ebf",
+      "isError": true,
+      "outputSummary": "Delete on notes.txt needs the delete effect for notes.txt, which this actor doesn't declare. It declares no delete paths.",
+      "outputBytes": 121
+    },
+    {
+      "type": "tool_call",
+      "runId": "<run>",
+      "seq": 10,
+      "callId": "call-c3e7fe3c-5131-4de3-93c3-8264502cc794",
+      "tool": "Delete",
+      "inputSummary": "{\"file_path\":\"notes.txt\"}"
+    },
+    {
+      "type": "tool_result",
+      "runId": "<run>",
+      "seq": 11,
+      "callId": "call-c3e7fe3c-5131-4de3-93c3-8264502cc794",
+      "isError": true,
+      "outputSummary": "Delete on notes.txt needs the delete effect for notes.txt, which this actor doesn't declare. It declares no delete paths.",
+      "outputBytes": 121
+    },
+    {
+      "type": "result",
+      "runId": "<run>",
+      "seq": 12,
+      "status": "error",
+      "message": "stopped after 5 turns (maxTurns); the model was still calling tools",
+      "reason": "turn-limit",
+      "turns": 5,
+      "durationMs": 0,
+      "usage": {
+        "inputTokens": 7700,
+        "outputTokens": 115
+      }
+    }
+  ],
+  "transcriptKinds": [
+    "sent",
+    "received",
+    "sent",
+    "sent",
+    "sent",
+    "received",
+    "sent",
+    "sent",
+    "sent",
+    "received",
+    "sent",
+    "sent",
+    "sent",
+    "received",
+    "sent",
+    "sent",
+    "sent",
+    "received"
+  ]
+}

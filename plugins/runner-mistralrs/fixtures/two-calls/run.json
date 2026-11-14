@@ -1,0 +1,14 @@
+{
+  "direction": "Call the Read tool twice in one reply: once with file_path a.txt and once with file_path b.txt (paths relative to the workspace). Then say what each file says.",
+  "options": {
+    "temperature": 0,
+    "think": false,
+    "seed": 7,
+    "maxTurns": 5
+  },
+  "onContextFull": "fail",
+  "files": {
+    "a.txt": "alpha\n",
+    "b.txt": "beta\n"
+  }
+}

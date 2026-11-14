@@ -14,12 +14,14 @@ every outcome on demand, the [Claude Code runner](../plugins/runner-claude-code/
 [Ollama runner](../plugins/runner-ollama/README.md), which drives a local model through Ollama's own API with troupe's
 own tool loop (decision [#16](https://github.com/troupe-run/troupe/issues/16)), the
 [OpenAI runner](../plugins/runner-openai/README.md), which drives OpenAI's Responses API with the same kind of loop
-([#162](https://github.com/troupe-run/troupe/issues/162)), and the
+([#162](https://github.com/troupe-run/troupe/issues/162)), the
 [LM Studio runner](../plugins/runner-lm-studio/README.md), which drives LM Studio through its own client library,
-whose tool loop calls troupe's tools ([#291](https://github.com/troupe-run/troupe/issues/291)), and the
+whose tool loop calls troupe's tools ([#291](https://github.com/troupe-run/troupe/issues/291)), the
 [Anthropic runner](../plugins/runner-anthropic/README.md), which drives the Anthropic Messages API, on Claude's API or
 a local engine, through the `anthropic` package with troupe's own tool loop
-([#415](https://github.com/troupe-run/troupe/issues/415)).
+([#415](https://github.com/troupe-run/troupe/issues/415)), and the
+[mistralrs runner](../plugins/runner-mistralrs/README.md), which loads a model inside its own process with
+mistral.rs's `mistralrs`, with troupe's own tool loop ([#414](https://github.com/troupe-run/troupe/issues/414)).
 
 ## The contract
 
@@ -92,6 +94,10 @@ alone, so troupe refuses a pair your runner would refuse before anything is reco
   otherwise.
 - `version`: `True` when you add the API's version path (`/v1`) below the endpoint yourself, as the Anthropic runner's
   library does, so an endpoint whose path already ends in `/v1` is refused (`endpoint-version`); `False` otherwise.
+- `endpoint`: `"required"` when you talk to a service at the runtime's endpoint, `"none"` when you load the model in
+  your own process, as the mistralrs runner does (you then fit only an in-process runtime, which has no endpoint), or
+  `"any"`. troupe's in-process runtimes are listed in `troupe.core.defaults.IN_PROCESS_RUNTIMES`, and `run/start`
+  carries no `endpoint` for one.
 - `built_in`: the built-in runtime made for your runner, if troupe has one. Your runner then fits no other runner's
   built-in, whatever its shape, since built-ins of the same shape serve different engines.
 
@@ -591,6 +597,40 @@ run told `fail` with `context-length`, and compacts one told `compact`
 
 Its transcript is what the library exposes, with the record kinds: each request's parameters are `sent`, each stream
 event as the library parsed it and each error body `received`, and each status and dropped stream a `note`.
+
+### Mapping an engine: a model in your own process
+
+The [mistralrs runner](../plugins/runner-mistralrs/README.md) is a fifth shape: the engine is a library that loads
+the model into the runner's own process, `mistralrs`, with no server and no network. The runner keeps troupe's own
+tool loop, as the Ollama runner does. What's different is what can't be closed:
+- **Stopping.** An engine call blocks a thread with the GIL released, and nothing can interrupt it. So stopping means
+  leaving: on `run/cancel`, end of input or `shutdown` the runner sets its stop flag under the output lock,
+  acknowledges, and ends its process with `os._exit`, abandoning the call. Loading runs on a worker too, so end of
+  input during a load is read.
+- **The protocol channel.** The engine writes its log lines to file descriptor 1. Before anything imports the
+  engine, the entry point keeps a duplicate of fd 1 for the contract and points fd 1 at standard error, and an
+  import-linter contract keeps the engine's import in one module.
+- **The context window.** The engine caps its KV cache only on Metal. So the runner counts every request with the
+  model's tokenizer and asks for at most the room left. An answer stopped at that bound, or the engine's own length
+  refusal, is `context-length`.
+- **The model.** It loads after `run/start` is answered, since a large model takes longer than troupe's start limit,
+  and a load failure is an `error` result with reason `configuration`.
+
+| From the engine | Run event |
+|---|---|
+| the model file, about to load | `init`, with engine `mistral.rs`, then a `log` saying it loads |
+| an answer's text | a `turn` |
+| each tool call, carried out through the SDK's `Tools` | `tool_call` and `tool_result`, from the SDK |
+| an answer with no tool call, `finish_reason` `stop` | `result` `ok`, with its text |
+| `finish_reason` `length`, or the engine's length refusal | `result` `error`, reason `context-length`; a run told `compact` compacts and asks again |
+| a model the engine won't load, or a load past its limit | `result` `error`, reason `configuration` |
+| any other engine error | `result` `error`, reason `engine`, never retried |
+| each response's `prompt_tokens` and `completion_tokens` | summed into `result.usage` as `inputTokens` and `outputTokens`; no cache counters and no cost |
+
+Its transcript holds the first request whole, then, before each later request, the messages added and that request's
+settings (its `max_tokens` shrinks each turn), all `sent`. Each response is `received`, serialised from the library's
+objects. Its fixtures pin it: responses recorded from a real model, with every token count, replayed by a stand-in for
+the engine that a test-only entry script hands to the runner.
 
 ## How troupe runs a runner
 

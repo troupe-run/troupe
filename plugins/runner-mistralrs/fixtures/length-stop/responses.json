@@ -1,0 +1,24 @@
+[
+  {
+    "id": "1",
+    "object": "chat.completion",
+    "created": 1794633112,
+    "model": "/private/tmp/claude-502/-Users-martin-Projects-troupe-track-b-12-414-troupe-in-process-runner/5560105f-6993-457d-bfa6-64ee6626dae7/scratchpad/qwen-q8",
+    "system_fingerprint": "local",
+    "choices": [
+      {
+        "index": 0,
+        "finish_reason": "length",
+        "message": {
+          "role": "assistant",
+          "content": "### The Lighthouse Keeper’s Daily Life  \n\nThe lighthouse keeper, Elara, lived in a quiet village nestled between rolling hills and dense forests. The village was small, with only a few houses and a barn where the sheep were kept. The lighthouse, located on the edge of the village, was a beacon that guided ships safely to the sea. Elara had spent her life working at the lighthouse, her days filled with routine and dedication.  \n\nEach morning, she would wake up at dawn, the sun rising over the horizon. The lighthouse was the only place where the sky was clear, and the sea was calm. She would check the weather forecast and ensure that the lighthouse was in the right position. The lighthouse was a symbol of hope and safety, and Elara believed that the lighthouse was the heart of her village.  \n\nAs the days passed, Elara’s life became more and more routine. She would spend her days at the lighthouse, reading, writing, and even playing games. She loved the quiet of the village and the beauty of the sea. The lighthouse was a place of peace, and she felt a deep connection to it.  \n\nOne day, Elara noticed something unusual about the lighthouse. The sea was getting warmer, and the waves were rising higher. She felt a sense of foreboding. The lighthouse was not just a beacon—it was a warning. The sea was changing, and she was beginning to feel the weight of the lighthouse’s role in her life.  \n\n### The Lighthouse Keeper’s Daily Routine  \n\nElara’s daily routine was a blend of work and leisure. She would start her day early, waking up at dawn. The lighthouse was the only place where the sky was clear, and the sea was calm. She would check the weather forecast and ensure that the lighthouse was in the right position. The lighthouse was a symbol of hope and safety, and she believed that the lighthouse was the heart of her village.  \n\nAs the days passed, Elara’s life became more and more routine. She would spend her days at the lighthouse, reading, writing, and even playing games. She loved the quiet of the village and the beauty of the sea. The lighthouse was a place of peace, and she felt a deep connection to it.  \n\nOne day, El"
+        }
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 1451,
+      "completion_tokens": 481,
+      "total_tokens": 1932
+    }
+  }
+]

@@ -1,0 +1,7 @@
+{
+  "mistralrs": "0.9.5",
+  "model": "Qwen3-0.6B-Q8_0.gguf",
+  "sha256": "9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031",
+  "date": "2026-11-14",
+  "tool": "plugins/runner-mistralrs/tools/capture_mistralrs.py"
+}

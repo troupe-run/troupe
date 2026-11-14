@@ -1,0 +1,80 @@
+{
+  "events": [
+    {
+      "type": "init",
+      "runId": "<run>",
+      "seq": 0,
+      "runner": {
+        "name": "mistralrs",
+        "version": "0.0.0"
+      },
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "Delete",
+        "Move"
+      ],
+      "effects": "checked",
+      "engine": {
+        "name": "mistral.rs",
+        "version": "0.9.5",
+        "model": "<model>"
+      }
+    },
+    {
+      "type": "log",
+      "runId": "<run>",
+      "seq": 1,
+      "level": "info",
+      "message": "Loading the model <model> in the runner's process."
+    },
+    {
+      "type": "tool_call",
+      "runId": "<run>",
+      "seq": 2,
+      "callId": "call-fc9efeb5-4543-4869-b477-7ac54d3dbd5b",
+      "tool": "Read",
+      "inputSummary": "{\"file_path\":\"notes.txt\",\"offset\":1,\"limit\":10}"
+    },
+    {
+      "type": "tool_result",
+      "runId": "<run>",
+      "seq": 3,
+      "callId": "call-fc9efeb5-4543-4869-b477-7ac54d3dbd5b",
+      "isError": false,
+      "outputSummary": "1\tThe launch code is BLUE-42.",
+      "outputBytes": 29
+    },
+    {
+      "type": "turn",
+      "runId": "<run>",
+      "seq": 4,
+      "role": "assistant",
+      "text": "The launch code for the file `notes.txt` is **BLUE-42**."
+    },
+    {
+      "type": "result",
+      "runId": "<run>",
+      "seq": 5,
+      "status": "ok",
+      "message": "The launch code for the file `notes.txt` is **BLUE-42**.",
+      "turns": 2,
+      "durationMs": 0,
+      "usage": {
+        "inputTokens": 2947,
+        "outputTokens": 61
+      }
+    }
+  ],
+  "transcriptKinds": [
+    "sent",
+    "received",
+    "sent",
+    "sent",
+    "sent",
+    "received"
+  ]
+}

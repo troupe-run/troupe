@@ -345,13 +345,17 @@ were left out, and a `tool_result`'s `outputBytes` SHALL be the full output's si
 On `run/cancel`, end of input or `shutdown`, the runner SHALL carry out no further tool call, send no event after its
 acknowledgement, and exit within a named grace well below troupe's own, abandoning any engine call in flight.
 
-#### Scenario: Cancel while the engine answers
-- **WHEN** troupe sends `run/cancel` while the packaged model is generating an answer
+#### Scenario: Cancel while the engine holds a request
+- **WHEN** troupe sends `run/cancel` while the engine holds a request open, not returning
 - **THEN** the runner acknowledges it, sends no further event, and exits within its grace
 
-#### Scenario: End of input while the engine reads a long prompt
-- **WHEN** the runner's standard input closes while the packaged model reads a long prompt
+#### Scenario: End of input while the engine holds a request
+- **WHEN** the runner's standard input closes while the engine holds a request open
 - **THEN** the runner exits within its grace
+
+#### Scenario: Cancel while a real model generates
+- **WHEN** the live test cancels a run while a real model generates a long answer
+- **THEN** the runner acknowledges it and exits within its grace
 
 ### Requirement: The runner publishes its schemas
 The runner SHALL publish `options.schema.json` and `errors.schema.json` in its package, passing the protocol's

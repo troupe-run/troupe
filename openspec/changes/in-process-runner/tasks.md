@@ -23,43 +23,43 @@
 
 ## 4. Before the acknowledgement
 
-- [ ] 4.1 Add the options parser and `options.schema.json`/`errors.schema.json` (`maxTurns`, `contextLength`, `temperature`, `seed`, `think`; `mistralrs.unknown-option`, `mistralrs.invalid-options`). Verify: the options scenarios, and a hypothesis test that the parser and the published schema agree.
-- [ ] 4.2 Check the runtime and the model file: `mistralrs.no-runtime`, `mistralrs.invalid-runtime` (endpoint or credential, holding no part of `TROUPE_RUNTIME_CREDENTIAL`), and an absolute path to an existing file with the GGUF signature (`mistralrs.invalid-model`, `mistralrs.model-not-found`, naming `TROUPE_RUNTIME_MISTRALRS_MODEL`). Verify: tests for each spec scenario, none of which loads a model.
-- [ ] 4.3 Publish `requirements.json` (`mistralrs` `0.9.5`, with why), and refuse another installed version with `runner.requirement-unmet`. Verify: the spec scenario, with the installed version stubbed.
+- [x] 4.1 Add the options parser and `options.schema.json`/`errors.schema.json` (`maxTurns`, `contextLength`, `temperature`, `seed`, `think`; `mistralrs.unknown-option`, `mistralrs.invalid-options`). Verify: the options scenarios, and a hypothesis test that the parser and the published schema agree.
+- [x] 4.2 Check the runtime and the model file: `mistralrs.no-runtime`, `mistralrs.invalid-runtime` (endpoint or credential, holding no part of `TROUPE_RUNTIME_CREDENTIAL`), and an absolute path to an existing file with the GGUF signature (`mistralrs.invalid-model`, `mistralrs.model-not-found`, naming `TROUPE_RUNTIME_MISTRALRS_MODEL`). Verify: tests for each spec scenario, none of which loads a model.
+- [x] 4.3 Publish `requirements.json` (`mistralrs` `0.9.5`, with why), and refuse another installed version with `runner.requirement-unmet`. Verify: the spec scenario, with the installed version stubbed.
 - [ ] 4.4 On macOS, load the check model before answering `run/start`, and refuse a Metal library failure with `mistralrs.unsupported-python`, naming `sys.executable` and the version, with the `uv tool install --managed-python` fix (D4). Verify: a stand-in test for the refusal, a test that Linux and Windows load nothing before answering, and on CI's macOS legs (uv-managed Pythons) the check passes with the real engine.
 
 ## 5. Loading the model after the acknowledgement
 
-- [ ] 5.1 Load on the worker after the acknowledgement, with a `log` event, within `LOAD_TIMEOUT_SECONDS`. A failure or overrun ends the run with `configuration` and the engine's message. On Metal, pass the window as the KV budget. Verify: stand-in tests for a refused load, an overrun, and "End of input during the load".
-- [ ] 5.2 Set the window: `contextLength`, else `DEFAULT_CONTEXT_LENGTH` lowered to the model's length. A `contextLength` above the model's length ends the run with `configuration`. Verify: tests for the three "always sets the context window" scenarios, the Metal one checking the load's KV budget through the stand-in.
+- [x] 5.1 Load on the worker after the acknowledgement, with a `log` event, within `LOAD_TIMEOUT_SECONDS`. A failure or overrun ends the run with `configuration` and the engine's message. On Metal, pass the window as the KV budget. Verify: stand-in tests for a refused load, an overrun, and "End of input during the load".
+- [x] 5.2 Set the window: `contextLength`, else `DEFAULT_CONTEXT_LENGTH` lowered to the model's length. A `contextLength` above the model's length ends the run with `configuration`. Verify: tests for the three "always sets the context window" scenarios, the Metal one checking the load's KV budget through the stand-in.
 
 ## 6. The conversation
 
-- [ ] 6.1 Build each request: the character and direction first, the SDK's tools as function schemas, `temperature`/`seed`/`think`, no truncation, and no engine tools, callbacks, search or code execution. Verify: tests for "The character and the direction start the conversation" and "Every request offers the SDK's tools and nothing of the engine's own".
-- [ ] 6.2 Carry out tool calls with the SDK in order, give a missing call id one of the runner's, cap each result to the window's share with the cut note, and map answers to `turn`, `tool_call` and `tool_result` events, with reasoning only in the transcript. Verify: the spec scenarios for tool calls, turns and one tool result fitting the window.
-- [ ] 6.3 End the loop: `ok` on an answer with no tool call, `turn-limit` at `maxTurns`, the result's `turns`, duration and `usage` with no cost or cache counter. Map every error through one reason table (`context-length`, `configuration`, `turn-limit`, `engine`, `runner`) with no retries. Verify: tests for each reason, and that no `retry` event is ever sent.
-- [ ] 6.4 Send transcript records: the first request and each added message as `sent`, each response as `received`, serialised from the library's objects, with or without kinds by capability. Cut event text to `eventMaxBytes`. Verify: the transcript and summary scenarios, and that re-sent history isn't sent again.
+- [x] 6.1 Build each request: the character and direction first, the SDK's tools as function schemas, `temperature`/`seed`/`think`, no truncation, and no engine tools, callbacks, search or code execution. Verify: tests for "The character and the direction start the conversation" and "Every request offers the SDK's tools and nothing of the engine's own".
+- [x] 6.2 Carry out tool calls with the SDK in order, give a missing call id one of the runner's, cap each result to the window's share with the cut note, and map answers to `turn`, `tool_call` and `tool_result` events, with reasoning only in the transcript. Verify: the spec scenarios for tool calls, turns and one tool result fitting the window.
+- [x] 6.3 End the loop: `ok` on an answer with no tool call, `turn-limit` at `maxTurns`, the result's `turns`, duration and `usage` with no cost or cache counter. Map every error through one reason table (`context-length`, `configuration`, `turn-limit`, `engine`, `runner`) with no retries. Verify: tests for each reason, and that no `retry` event is ever sent.
+- [x] 6.4 Send transcript records: the first request and each added message as `sent`, each response as `received`, serialised from the library's objects, with or without kinds by capability. Cut event text to `eventMaxBytes`. Verify: the transcript and summary scenarios, and that re-sent history isn't sent again.
 
 ## 7. The context window
 
-- [ ] 7.1 Count the conversation before each request (D7), ask for at most the room left less `TOKEN_MARGIN`, and end a run told `fail` with `context-length` when there's no room. Map a `length` stop and the engine's two length refusals to `context-length` without carrying out that answer's tool calls. Verify: tests for "Each answer is bounded by the room left in the window" and "A run never carries on past its context window", and a hypothesis test that `max_tokens` never exceeds the room left.
-- [ ] 7.2 Compact in a run told `compact`, before a request over the SDK's `COMPACT_AT_SHARE` and after a refusal or `length` stop, using the SDK's `compaction`, with the `context` event. End with `context-length` when nothing is left to remove. Verify: tests for both compaction requirements' scenarios.
+- [x] 7.1 Count the conversation before each request (D7), ask for at most the room left less `TOKEN_MARGIN`, and end a run told `fail` with `context-length` when there's no room. Map a `length` stop and the engine's two length refusals to `context-length` without carrying out that answer's tool calls. Verify: tests for "Each answer is bounded by the room left in the window" and "A run never carries on past its context window", and a hypothesis test that `max_tokens` never exceeds the room left.
+- [x] 7.2 Compact in a run told `compact`, before a request over the SDK's `COMPACT_AT_SHARE` and after a refusal or `length` stop, using the SDK's `compaction`, with the `context` event. End with `context-length` when nothing is left to remove. Verify: tests for both compaction requirements' scenarios.
 
 ## 8. Cancel, end of input and shutdown
 
-- [ ] 8.1 On `run/cancel`, end of input or `shutdown`, set the stop flag under the output lock, acknowledge, flush, and `os._exit` within `STOP_GRACE_SECONDS`, abandoning the engine call (D2). Verify: stand-in tests that no event follows the acknowledgement and no further tool call is carried out.
-- [ ] 8.2 Test cancel and end of input with the real engine and the check model, mid-generation and mid-prompt. Verify: the runner process exits within its grace on all three OSes in CI.
+- [x] 8.1 On `run/cancel`, end of input or `shutdown`, set the stop flag under the output lock, acknowledge, flush, and `os._exit` within `STOP_GRACE_SECONDS`, abandoning the engine call (D2). Verify: stand-in tests that no event follows the acknowledgement and no further tool call is carried out.
+- [ ] 8.2 Test cancel, end of input and shutdown as processes: with the stand-in holding a request open (as the engine does, the GIL released) and holding the load; and with the real engine and the check model, while it loads and answers. The check model can't chat and answers in milliseconds, so a real model mid-generation is the live test's (9.3). Verify: the runner process exits within its grace on all three OSes in CI.
 
 ## 9. Fixtures, conformance and the live test
 
-- [ ] 9.1 Write the engine stand-in and the test-only entry script that hands it to `runner.main`, and add a conformance test for the runner in `packages/troupe/tests/test_runner_conformance.py`. Verify: every conformance check passes.
-- [ ] 9.2 Write `tools/capture_mistralrs.py`, and capture the six fixtures with Qwen3-0.6B Q8_0 locally, at one heavy run at a time with load under 40 (design D10). Add the fixture replay test. Verify: each fixture replays to exactly its events and transcript records.
-- [ ] 9.3 Add the live test, run only when `TROUPE_LIVE_MISTRALRS` names a model file. Verify: it's skipped naming the variable without it, and passes locally with Qwen3-0.6B.
+- [x] 9.1 Write the engine stand-in and the test-only entry script that hands it to `runner.main`, and add a conformance test for the runner in `packages/troupe/tests/test_runner_conformance.py`. Verify: every conformance check passes.
+- [x] 9.2 Write `tools/capture_mistralrs.py`, and capture the fixtures (`tool-call`, `two-calls`, `effects-refused`, `length-stop`; design D10 says why there's no compaction one) with Qwen3-0.6B Q8_0 locally, at one heavy run at a time with load under 40. Add the fixture replay test. Verify: each fixture replays to exactly its events and transcript records.
+- [x] 9.3 Add the live test, run only when `TROUPE_LIVE_MISTRALRS` names a model file: a run with a tool call to its result, and a cancel while the model generates a long answer, exiting within the grace. Verify: it's skipped naming the variable without it, and passes locally with Qwen3-0.6B.
 
 ## 10. Docs
 
-- [ ] 10.1 Write the plugin README, with every setting in `defaults.py` documented and a test that each has a row. Verify: the README test passes.
-- [ ] 10.2 Update `docs/opening-night/install.md` (the extra, and on macOS `--managed-python` with why), `contributing/runners.md`, `plugins/README.md` and the changelog. Verify: the docs checks and `test_user_docs_pages.py` pass.
+- [x] 10.1 Write the plugin README, with every setting in `defaults.py` documented and a test that each has a row. Verify: the README test passes.
+- [x] 10.2 Update `docs/opening-night/install.md` (the extra, and on macOS `--managed-python` with why), `contributing/runners.md`, `plugins/README.md` and the changelog. Verify: the docs checks and `test_user_docs_pages.py` pass.
 
 ## 11. The whole check
 
