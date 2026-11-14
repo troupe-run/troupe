@@ -289,8 +289,9 @@ def test_the_lm_studio_actor_names_its_runtime_and_model_with_small_limits_and_w
 
 
 def test_the_mistralrs_actor_names_the_in_process_runtime_and_no_model(repo: Repo) -> None:
-    # In-process-runner design D10: the model is the person's own file, from
-    # TROUPE_RUNTIME_MISTRALRS_MODEL, so the audition sets none.
+    # Spec: config, "The mistralrs audition can edit files with a model on this machine", "The
+    # mistralrs actor's file" (in-process-runner design D10): the model is the person's own file,
+    # from TROUPE_RUNTIME_MISTRALRS_MODEL, so the audition sets none.
     _init(repo.path, _env(repo), audition={"runner": "mistralrs"})
     lead = read(git_service(repo)).config["actors"]["lead"]
     assert lead == {

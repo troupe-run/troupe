@@ -75,6 +75,8 @@ file; downloading models.
   it, and runtime fit adds whether a runner needs an endpoint or takes none.
 - `runner-protocol`: `run/start`'s `runtime` carries `endpoint` only when the runtime has one.
 - `cli`: `troupe init --audition` warms its runner's engine, when the runner has a warm-up.
+- `config`: a mistralrs audition, whose actor names the `mistralrs` runtime and no model, and whose init note says
+  where the model comes from.
 
 ## Impact
 

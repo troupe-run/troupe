@@ -265,8 +265,8 @@ def test_the_lm_studio_audition_says_to_start_lm_studio_and_get_the_model_and_na
 def test_the_mistralrs_audition_says_where_the_model_comes_from_and_names_the_extra(
     repo: Repo,
 ) -> None:
-    # In-process-runner design D10, D4: the model is a file the person points troupe at, and on
-    # macOS troupe runs on a uv-managed Python.
+    # Spec: config, "The mistralrs audition can edit files with a model on this machine", "What
+    # init prints for it" (in-process-runner design D10, D4).
     code, out, err = cli("init", "--audition", "--runner", "mistralrs")
     assert code == ExitCode.OK, err
     assert "Defined the actor lead, with the mistralrs runner." in out
