@@ -23,14 +23,14 @@
 
 ## 2. Plugin, bundle and release config
 
-- [x] 2.1 Delete `plugins/runner-lm-studio/`. Remove it from the root `pyproject.toml` (workspace member and
-      source, mypy and coverage paths, import-linter contracts), `troupe-run`'s `lm-studio` extra and its entry in
-      `all` (leaving `all = ["troupe-runner-anthropic"]`, design D4), `release-please-config.json`,
-      `.release-please-manifest.json`, `scripts/check-paths.toml`'s `runner_lm_studio` scope and other entries,
-      and `scripts/licences.toml`'s mention. Run `uv lock`. Verify: `uv lock --check` passes and `lmstudio` is
-      gone from `uv.lock`. (`uv lock` removed lmstudio, msgspec, httpx, httpx-ws, httpcore, certifi and
-      wsproto, rebased onto #420; nothing else needs them, so `scripts/licences.toml`'s MPL-2.0 reason now cites lmstudio
-      as the past case.)
+- [x] 2.1 Delete `plugins/runner-lm-studio/`. Remove it from the root `pyproject.toml` (workspace member and source,
+      mypy and coverage paths, import-linter contracts), `troupe-run`'s `lm-studio` extra and its entry in `all`
+      (leaving `all` with `troupe-runner-anthropic` and `troupe-runner-mistralrs`, design D4),
+      `release-please-config.json`, `.release-please-manifest.json`, `scripts/check-paths.toml`'s `runner_lm_studio`
+      scope and other entries, and `scripts/licences.toml`'s mention. Run `uv lock`. Verify: `uv lock --check` passes
+      and `lmstudio` is gone from `uv.lock`. (`uv lock` removed lmstudio, msgspec, httpx, httpx-ws, httpcore, certifi
+      and wsproto, rebased onto #420 and #422; nothing else needs them, so `scripts/licences.toml`'s MPL-2.0 reason
+      now cites lmstudio as the past case.)
 - [x] 2.2 Update the workspace tests that name LM Studio (`test_install_check.py`, `test_install_docs.py`,
       `test_plugin_imports.py`, `test_runner_licences.py`, `bundle_state.py`) to the fixture runner `example`.
       Verify: the bundle, release-config, install-docs and licence checks pass with one runner extra fewer, and
@@ -39,7 +39,7 @@
 
 ## 3. Docs
 
-- [x] 3.1 Remove LM Studio from `docs/opening-night/install.md` (extras table: `all` and `anthropic`),
+- [x] 3.1 Remove LM Studio from `docs/opening-night/install.md` (extras table: `all`, `anthropic` and `mistralrs`),
       `docs/stagecraft/bring-your-own-agent.md`, `docs/stagecraft/runtimes.md` (built-ins, fit table, the plain-`http`
       rule, the env example), `docs/the-company/performances-and-runs.md`, `docs/backstage/changelog.md`,
       `plugins/README.md`, `contributing/runners.md` and `contributing/config.md`. Verify: `grep -rni
