@@ -11,7 +11,7 @@ swap the agent by swapping its runner, and your process stays the same.
 
 ## Runners today
 
-troupe ships six runners:
+troupe ships seven runners:
 
 - **The scripted runner** plays a script instead of running an agent, so you can try troupe offline.
 - **The Claude Code runner** runs [Claude Code](https://code.claude.com) with your existing login. It leaves out your
@@ -49,6 +49,14 @@ troupe ships six runners:
   your own at a local engine's server root. A run on Claude's API costs money, within the limits its options set
   (`maxTurns`, `maxTotalTokens`, `maxOutputTokens`); `contextWindow` names a local engine's window, since some cut a
   full context without saying so.
+
+- **The mistralrs runner** runs a model inside its own process with
+  [mistral.rs](https://github.com/EricLBuehler/mistral.rs): no server and no network, with troupe's own tool loop,
+  checked against the actor's effects. It costs nothing per run.
+  It comes with `troupe-run[mistralrs]` ([Install](../opening-night/install.md#runners-that-come-as-extras)). Its model
+  is a GGUF file on your machine, which the built-in in-process [runtime](runtimes.md) `mistralrs` points at: set
+  `TROUPE_RUNTIME_MISTRALRS_MODEL` to its absolute path. On a Mac, install troupe on a uv-managed Python. Its options
+  include the context window (`contextLength`), which it keeps to on every computer.
 
 You can write a runner for any agent today, and check it against the contract, but you can't run it with
 `troupe perform` yet: until config names runners ([#60](https://github.com/troupe-run/troupe/issues/60)),
