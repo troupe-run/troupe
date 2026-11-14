@@ -10,9 +10,10 @@ credential held only by reference and kept out of everything troupe writes.
 ## Requirements
 
 ### Requirement: A runtime is a named service with an endpoint, a model and a credential reference
-A runtime SHALL have an `endpoint` (an `http` or `https` URL with no user info, query or fragment), an optional
-`model` (non-empty text) and an optional `credential` whose only field, `env`, names an environment variable. Its
-name SHALL match the actor-name pattern. Config SHALL never hold a credential's value.
+A runtime SHALL have an `endpoint` (an `http` or `https` URL with no user info, query or fragment), unless it is an
+in-process runtime, which has none; an optional `model` (non-empty text); and an optional `credential` whose only
+field, `env`, names an environment variable. Its name SHALL match the actor-name pattern. Config SHALL never hold a
+credential's value.
 
 #### Scenario: A credential by reference
 - **WHEN** a person runs `troupe config set runtimes.openai.credential.env=MY_OPENAI_KEY`
@@ -40,8 +41,9 @@ A runtime's `credential.env` SHALL NOT name a variable that starts with `TROUPE_
 ### Requirement: troupe has built-in runtimes
 troupe SHALL define the runtimes `openai` (endpoint `https://api.openai.com/v1`, credential from `OPENAI_API_KEY`),
 `anthropic` (endpoint `https://api.anthropic.com`, credential from `ANTHROPIC_API_KEY`), `ollama` (endpoint
-`http://127.0.0.1:11434`, no credential) and `lm-studio` (endpoint `http://127.0.0.1:1234`, no credential), as
-defaults in one named place. No built-in runtime SHALL name a model or a price.
+`http://127.0.0.1:11434`, no credential), `lm-studio` (endpoint `http://127.0.0.1:1234`, no credential) and
+`mistralrs` (in-process: no endpoint, no credential), as defaults in one named place. No built-in runtime SHALL name
+a model or a price.
 
 #### Scenario: A built-in needs no config
 - **WHEN** config has no `runtimes` and an actor names the runtime `ollama`
@@ -59,6 +61,11 @@ defaults in one named place. No built-in runtime SHALL name a model or a price.
 - **WHEN** config has no `runtimes` and a person runs `troupe config get --resolved runtimes.anthropic`
 - **THEN** it shows the endpoint `https://api.anthropic.com` and the credential variable `ANTHROPIC_API_KEY`, each
   from `default`, and no model
+
+#### Scenario: The in-process built-in
+- **WHEN** config has no `runtimes`, `TROUPE_RUNTIME_MISTRALRS_MODEL` is `/models/qwen3-0.6b.gguf`, and a person runs
+  `troupe config get --resolved runtimes.mistralrs`
+- **THEN** it shows no endpoint and no credential, and the model `/models/qwen3-0.6b.gguf` from `env`
 
 ### Requirement: Theatre config overrides a built-in field by field
 A runtime in the theatre's config with a built-in's name SHALL override only the fields it sets. A runtime with any
@@ -343,10 +350,10 @@ A run's price SHALL be the price its runtime's `prices` holds for the run's mode
 
 ### Requirement: An actor's runtime fits its runner
 Config SHALL refuse an actor whose runtime doesn't fit its runner, judged from the runtime's built-in and theatre
-values: a credential the runner never sends, an endpoint path it can't use (a final `/v1`, for one that adds it),
-`https` where it needs plain `http`, or another runner's built-in. The error SHALL name the actor's `runtime` path,
-the runner, the runtime, why, and the runtimes that fit. A change to a runtime that makes an actor on it unfit SHALL
-be refused the same way.
+values: a credential it never sends, an endpoint path it can't use (a final `/v1`, for one that adds it), an unwanted or
+missing endpoint, `https` where it needs `http`, or another runner's built-in. The error SHALL name the actor's
+`runtime` path, the runner, the runtime, why, and the runtimes that fit. A runtime change that makes an actor on it
+unfit SHALL be refused the same way.
 
 #### Scenario: An Ollama actor on a runtime with a credential
 - **WHEN** a person sets `actors.tester.runner=ollama` and `actors.tester.runtime=openai`
@@ -404,6 +411,16 @@ be refused the same way.
   names `gateway`
 - **THEN** it is accepted
 
+#### Scenario: An in-process actor on a served runtime
+- **WHEN** a person sets `actors.tester.runner=mistralrs` and `actors.tester.runtime=ollama`
+- **THEN** it is refused, saying the `mistralrs` runner runs its model in process and takes a runtime with no
+  endpoint, and listing `mistralrs` as a runtime that fits
+
+#### Scenario: A served actor on the in-process runtime
+- **WHEN** a person sets `actors.tester.runner=ollama` and `actors.tester.runtime=mistralrs`
+- **THEN** it is refused, saying the `ollama` runner needs an endpoint and `mistralrs` has none, and listing `ollama`
+  as a runtime that fits
+
 ### Requirement: Perform refuses a runtime that doesn't fit its runner
 Perform SHALL judge the run's runtime as resolved, the person's environment included, by the same rule as config, and
 SHALL refuse a runtime that doesn't fit with `runtime.unfit`, naming the actor, the runner, the runtime and why, before
@@ -443,3 +460,17 @@ runtime variable, or a runner's refusal of `run/start`.
   `https://user:<canary>@example.com/v1`
 - **THEN** it refuses with `runner.invalid-params` naming `runtime.endpoint`, and neither the error nor the runner's
   standard error holds the canary
+
+### Requirement: An in-process runtime takes no endpoint
+An in-process runtime SHALL NOT be given an endpoint. Setting `runtimes.<name>.endpoint` for one SHALL be refused,
+naming the path, and a `TROUPE_RUNTIME_<NAME>_ENDPOINT` set for one SHALL fail the command that resolves it with
+`runtime.invalid-value`, naming the variable, each saying the runtime runs its model in the runner's own process.
+
+#### Scenario: An endpoint in config
+- **WHEN** a person sets `runtimes.mistralrs.endpoint=http://127.0.0.1:1234`
+- **THEN** it is refused, naming `runtimes.mistralrs.endpoint` and saying `mistralrs` runs its model in process
+
+#### Scenario: An endpoint from the environment
+- **WHEN** `TROUPE_RUNTIME_MISTRALRS_ENDPOINT` is set and a person performs an actor on `mistralrs`
+- **THEN** perform fails with `runtime.invalid-value`, naming `TROUPE_RUNTIME_MISTRALRS_ENDPOINT`, and nothing is
+  recorded
