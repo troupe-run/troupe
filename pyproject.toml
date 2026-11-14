@@ -15,6 +15,7 @@ members = ["packages/*", "plugins/*"]
 troupe = { workspace = true }
 troupe-artifacts-local = { workspace = true }
 troupe-plugin-sdk = { workspace = true }
+troupe-runner-anthropic = { workspace = true }
 troupe-runner-claude-code = { workspace = true }
 troupe-runner-lm-studio = { workspace = true }
 troupe-runner-ollama = { workspace = true }
@@ -32,6 +33,7 @@ dev = [
     "troupe",
     "troupe-artifacts-local",
     "troupe-plugin-sdk",
+    "troupe-runner-anthropic",
     "troupe-runner-claude-code",
     "troupe-runner-lm-studio",
     "troupe-runner-ollama",
@@ -83,6 +85,9 @@ src = [
     "packages/troupe-vcs-files/tests",
     "packages/troupe-vcs-git/src",
     "packages/troupe-vcs-git/tests",
+    "plugins/runner-anthropic/src",
+    "plugins/runner-anthropic/tests",
+    "plugins/runner-anthropic/tools",
     "plugins/runner-claude-code/src",
     "plugins/runner-claude-code/tests",
     "plugins/runner-lm-studio/src",
@@ -138,6 +143,9 @@ files = [
     "packages/troupe-vcs-files/tests",
     "packages/troupe-vcs-git/src",
     "packages/troupe-vcs-git/tests",
+    "plugins/runner-anthropic/src",
+    "plugins/runner-anthropic/tests",
+    "plugins/runner-anthropic/tools",
     "plugins/runner-claude-code/src",
     "plugins/runner-claude-code/tests",
     "plugins/runner-lm-studio/src",
@@ -163,6 +171,9 @@ mypy_path = [
     "packages/troupe-store-text/src",
     "packages/troupe-vcs-files/src",
     "packages/troupe-vcs-git/src",
+    "plugins/runner-anthropic/src",
+    "plugins/runner-anthropic/tests",
+    "plugins/runner-anthropic/tools",
     "plugins/runner-claude-code/src",
     "plugins/runner-claude-code/tests",
     "plugins/runner-lm-studio/src",
@@ -188,6 +199,7 @@ testpaths = [
     "packages/troupe-store-text/tests",
     "packages/troupe-vcs-files/tests",
     "packages/troupe-vcs-git/tests",
+    "plugins/runner-anthropic/tests",
     "plugins/runner-claude-code/tests",
     "plugins/runner-lm-studio/tests",
     "plugins/runner-ollama/tests",
@@ -235,6 +247,7 @@ root_packages = [
     "troupe_store_text",
     "troupe_vcs_files",
     "troupe_vcs_git",
+    "troupe_runner_anthropic",
     "troupe_runner_claude_code",
     "troupe_runner_lm_studio",
     "troupe_runner_ollama",
@@ -268,6 +281,9 @@ source_modules = [
     # Nor does the LM Studio runner: its only seam is the one module that uses LM Studio's library
     # (lmstudio-runner design D3).
     "troupe_runner_lm_studio",
+    # Nor does the Anthropic runner: its only seam is the one module that uses the anthropic package
+    # (anthropic-runner design D1).
+    "troupe_runner_anthropic",
 ]
 forbidden_modules = ["fcntl", "msvcrt", "termios", "signal", "winreg", "pwd", "grp", "ctypes"]
 ignore_imports = ["troupe.platform.** -> *"]
@@ -285,14 +301,14 @@ forbidden_modules = ["troupe_artifacts_local"]
 # fails the check when a plugin is missing from this contract or the next.
 name = "plugins import nothing from troupe"
 type = "forbidden"
-source_modules = ["troupe_runner_claude_code", "troupe_runner_lm_studio", "troupe_runner_ollama", "troupe_runner_openai", "troupe_runner_scripted"]
+source_modules = ["troupe_runner_anthropic", "troupe_runner_claude_code", "troupe_runner_lm_studio", "troupe_runner_ollama", "troupe_runner_openai", "troupe_runner_scripted"]
 forbidden_modules = ["troupe", "troupe_run", "troupe_artifacts_local", "troupe_identity_local", "troupe_stage_local", "troupe_store_text", "troupe_vcs_files", "troupe_vcs_git"]
 
 [[tool.importlinter.contracts]]
 # Each plugin is self-contained, so it can move to its own repository (plugins/README.md; spec: plugin-sdk).
 name = "plugins are independent of each other"
 type = "independence"
-modules = ["troupe_runner_claude_code", "troupe_runner_lm_studio", "troupe_runner_ollama", "troupe_runner_openai", "troupe_runner_scripted"]
+modules = ["troupe_runner_anthropic", "troupe_runner_claude_code", "troupe_runner_lm_studio", "troupe_runner_ollama", "troupe_runner_openai", "troupe_runner_scripted"]
 
 [[tool.importlinter.contracts]]
 # Core and the plugins depend on the plugin SDK, never the other way round, so it imports nothing of troupe's: not
@@ -300,7 +316,7 @@ modules = ["troupe_runner_claude_code", "troupe_runner_lm_studio", "troupe_runne
 name = "the plugin SDK imports nothing of troupe's"
 type = "forbidden"
 source_modules = ["troupe_plugin_sdk"]
-forbidden_modules = ["troupe", "troupe_artifacts_local", "troupe_identity_local", "troupe_stage_local", "troupe_store_text", "troupe_vcs_files", "troupe_vcs_git", "troupe_runner_claude_code", "troupe_runner_lm_studio", "troupe_runner_ollama", "troupe_runner_openai", "troupe_runner_scripted"]
+forbidden_modules = ["troupe", "troupe_artifacts_local", "troupe_identity_local", "troupe_stage_local", "troupe_store_text", "troupe_vcs_files", "troupe_vcs_git", "troupe_runner_anthropic", "troupe_runner_claude_code", "troupe_runner_lm_studio", "troupe_runner_ollama", "troupe_runner_openai", "troupe_runner_scripted"]
 
 [[tool.importlinter.contracts]]
 # The Claude Code runner can't use troupe.platform, so it keeps its own OS-specific behaviour (signals, Windows
@@ -330,6 +346,17 @@ type = "forbidden"
 source_modules = ["troupe_runner_lm_studio"]
 forbidden_modules = ["lmstudio", "msgspec", "httpx", "httpx_ws", "http", "socket", "ssl"]
 ignore_imports = ["troupe_runner_lm_studio.engine -> *"]
+
+[[tool.importlinter.contracts]]
+# The Anthropic runner reaches its service only through the anthropic package, from one module, so how it talks to
+# a service (its own HTTP client with no redirects, the named timeouts, no retries of the library's, no credential
+# the library finds for itself) is decided in one place (anthropic-runner design D1, D4, D10). urllib isn't listed:
+# runtime.py parses the endpoint with urllib.parse, which does no I/O.
+name = "only the Anthropic runner's service module imports the anthropic package or does network I/O"
+type = "forbidden"
+source_modules = ["troupe_runner_anthropic"]
+forbidden_modules = ["anthropic", "httpx2", "httpcore2", "http", "socket", "ssl"]
+ignore_imports = ["troupe_runner_anthropic.service -> *"]
 
 [[tool.importlinter.contracts]]
 # Event-store adapters are found by name through the troupe.store, troupe.vcs and troupe.identity entry point

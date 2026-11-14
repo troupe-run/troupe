@@ -1,0 +1,6 @@
+{
+  "service": "https://api.anthropic.com",
+  "model": "claude-haiku-5-5",
+  "credential": "none",
+  "how": "built: a 429 rate_limit_error in the Messages API's error shape (https://platform.claude.com/docs/en/api/errors), then a text reply in its streaming shape (https://platform.claude.com/docs/en/build-with-claude/streaming)"
+}

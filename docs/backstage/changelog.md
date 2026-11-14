@@ -40,13 +40,14 @@ changes. `troupe --version` names the protocol version that troupe carries.
 
 The runners are released on their own, like the other parts, and `troupe-run` ships each release.
 
+- `troupe-runner-anthropic`
 - [troupe-runner-claude-code](https://github.com/troupe-run/troupe/blob/main/plugins/runner-claude-code/CHANGELOG.md)
 - `troupe-runner-lm-studio`
 - `troupe-runner-ollama`
 - `troupe-runner-openai`
 - [troupe-runner-scripted](https://github.com/troupe-run/troupe/blob/main/plugins/runner-scripted/CHANGELOG.md)
 
-The LM Studio, Ollama and OpenAI runners' changelogs start with their first releases, and are linked here once they
+The Anthropic, LM Studio, Ollama and OpenAI runners' changelogs start with their first releases, and are linked here once they
 exist.
 
 The plugin SDK, the library the runners and the core share for the runner contract, is released on its own too. Its

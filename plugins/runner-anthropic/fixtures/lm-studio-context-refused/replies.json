@@ -1,0 +1,16 @@
+[
+  {
+    "status": 200,
+    "headers": [
+      [
+        "content-type",
+        "text/event-stream"
+      ]
+    ],
+    "lines": [
+      "event: error",
+      "data: {\"type\":\"error\",\"error\":{\"type\":\"api_error\",\"message\":\"The number of tokens to keep from the initial prompt is greater than the context length. Try to load the model with a larger context length, or provide a shorter input\"}}",
+      ""
+    ]
+  }
+]

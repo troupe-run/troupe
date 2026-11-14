@@ -1,0 +1,62 @@
+{
+  "requests": 2,
+  "outcome": "succeeded",
+  "events": [
+    {
+      "type": "init",
+      "seq": 0,
+      "runner": {
+        "name": "anthropic",
+        "version": "<package version>"
+      },
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "Delete",
+        "Move"
+      ],
+      "effects": "checked",
+      "engine": {
+        "name": "messages",
+        "model": "claude-haiku-5-5"
+      }
+    },
+    {
+      "type": "tool_call",
+      "seq": 1,
+      "callId": "toolu_015gQvK3yCft2cFvPFqeRT1W",
+      "tool": "Read",
+      "inputSummary": "{\"file_path\":\"notes/todo.txt\"}"
+    },
+    {
+      "type": "tool_result",
+      "seq": 2,
+      "callId": "toolu_015gQvK3yCft2cFvPFqeRT1W",
+      "isError": false,
+      "outputSummary": "1\tbuy milk\n2\twrite the troupe docs",
+      "outputBytes": 34
+    },
+    {
+      "type": "turn",
+      "seq": 3,
+      "role": "assistant",
+      "text": "The file lists two to-dos: buy milk, and write the troupe docs."
+    },
+    {
+      "type": "result",
+      "seq": 4,
+      "status": "ok",
+      "message": "The file lists two to-dos: buy milk, and write the troupe docs.",
+      "turns": 2,
+      "usage": {
+        "inputTokens": 907,
+        "outputTokens": 105,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      }
+    }
+  ]
+}

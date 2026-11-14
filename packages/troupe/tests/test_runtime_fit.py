@@ -13,6 +13,7 @@ from hypothesis import strategies as st
 
 from troupe.core import defaults, interim, runtimes
 from troupe_plugin_sdk.runner import RunStartParams, RunStartRuntime
+from troupe_runner_anthropic import runtime as anthropic_runtime
 from troupe_runner_lm_studio import runtime as lm_studio_runtime
 from troupe_runner_ollama import runtime as ollama_runtime
 from troupe_runner_openai import runtime as openai_runtime
@@ -51,6 +52,14 @@ def _openai_accepts(endpoint: str, credential: bool) -> bool:
     return True
 
 
+def _anthropic_accepts(endpoint: str, credential: bool) -> bool:
+    try:
+        anthropic_runtime.Runtime.checked(endpoint, "m", KEY if credential else None)
+    except anthropic_runtime.RuntimeRefusedError:
+        return False
+    return True
+
+
 def _lm_studio_accepts(endpoint: str, credential: bool) -> bool:
     start = RunStartParams.from_data(
         {
@@ -79,6 +88,7 @@ def _lm_studio_accepts(endpoint: str, credential: bool) -> bool:
 
 
 ORACLES = {
+    "anthropic": _anthropic_accepts,
     "lm-studio": _lm_studio_accepts,
     "ollama": _ollama_accepts,
     "openai": _openai_accepts,

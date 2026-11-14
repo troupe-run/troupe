@@ -238,6 +238,32 @@ def test_the_openai_actor_names_its_runtime_and_model_with_small_limits_and_writ
     assert (repo.path / ".troupe" / "actors" / "lead.md").read_text(encoding="utf-8").strip()
 
 
+# Requirement: The Anthropic audition can edit files on a small budget (spec: config;
+# anthropic-runner design D15)
+
+
+def test_the_anthropic_actor_names_its_runtime_and_model_with_small_limits_and_write_effects(
+    repo: Repo,
+) -> None:
+    _init(repo.path, _env(repo), audition={"runner": "anthropic"})
+    lead = read(git_service(repo)).config["actors"]["lead"]
+    assert lead == {
+        "runner": "anthropic",
+        "runtime": "anthropic",
+        "model": auditions.ANTHROPIC_AUDITION_MODEL,
+        "options": {"maxTurns": 10, "maxTotalTokens": 100_000},
+        "effects": {"write": ["**"]},
+        "expect": [],
+        "character": auditions.CHARACTER,
+    }
+    assert "workspace" not in lead
+    assert (repo.path / ".troupe" / "actors" / "lead.md").read_text(encoding="utf-8").strip()
+
+
+def test_the_anthropic_audition_model_is_claudes_cheapest_current_model() -> None:
+    assert auditions.ANTHROPIC_AUDITION_MODEL == "claude-haiku-5-5"
+
+
 # Requirement: The LM Studio audition can edit files with a small local model (spec: config;
 # lmstudio-runner design D15)
 
@@ -330,7 +356,14 @@ def test_an_unknown_runner_is_refused_naming_the_known_ones_and_nothing_is_made(
     error = _refused(repo.path, _env(repo), audition={"runner": "gemini"})
     assert error.code == "runner.unknown"
     assert "gemini" in error.problem
-    assert error.details["known"] == ["claude-code", "lm-studio", "ollama", "openai", "scripted"]
+    assert error.details["known"] == [
+        "anthropic",
+        "claude-code",
+        "lm-studio",
+        "ollama",
+        "openai",
+        "scripted",
+    ]
     assert not (repo.path / ".troupe").exists()
 
 
@@ -348,6 +381,21 @@ def test_a_runner_that_isnt_installed_is_refused_naming_its_extra_and_nothing_is
     assert error.code == "runner.not-installed"
     assert error.details["extra"] == "lm-studio"
     assert "troupe-run[lm-studio]" in error.fix
+    assert not (repo.path / ".troupe").exists()
+
+
+def test_the_anthropic_runner_when_it_isnt_installed_is_refused_naming_its_extra(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """cli: "The Anthropic runner when it isn't installed"."""
+    absent = dataclasses.replace(
+        interim.RUNNERS["anthropic"], package="troupe_runner_not_installed"
+    )
+    monkeypatch.setitem(interim.RUNNERS, "anthropic", absent)
+    error = _refused(repo.path, _env(repo), audition={"runner": "anthropic"})
+    assert error.code == "runner.not-installed"
+    assert error.details["extra"] == "anthropic"
+    assert "troupe-run[anthropic]" in error.fix
     assert not (repo.path / ".troupe").exists()
 
 

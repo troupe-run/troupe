@@ -546,6 +546,34 @@ def test_a_runtime_that_doesnt_fit_its_actors_runner_is_refused_naming_both_and_
     assert f"Set actors.tester.runtime to one that fits: {fits}" in error.fix
 
 
+def test_an_anthropic_actor_on_an_endpoint_ending_in_v1_is_refused_naming_the_base_to_use() -> None:
+    # Spec: runtimes, "An Anthropic actor on an endpoint ending in /v1" (owner, 2026-11-14).
+    error = _refused(
+        _with(
+            {"claude-v1": {"endpoint": "https://api.anthropic.com/v1"}},
+            runner="anthropic",
+            options={},
+            runtime="claude-v1",
+        )
+    )
+    assert error.details["path"] == ["actors", "tester", "runtime"]
+    assert (
+        "the anthropic runner adds /v1/... below its endpoint itself, and the runtime 'claude-v1' "
+        "has an endpoint that already ends in /v1 (use https://api.anthropic.com)" in error.problem
+    )
+    assert "Set actors.tester.runtime to one that fits: anthropic" in error.fix
+
+
+def test_an_anthropic_actor_on_a_gateways_own_path_fits() -> None:
+    config = _with(
+        {"gateway": {"endpoint": "https://gateway.example/anthropic"}},
+        runner="anthropic",
+        options={},
+        runtime="gateway",
+    )
+    assert problems(config) == []
+
+
 def test_an_ollama_actor_on_a_runtime_defined_in_config_without_a_path_fits() -> None:
     config = _with(
         {"gpu-box": {"endpoint": "http://10.0.0.5:11434"}},

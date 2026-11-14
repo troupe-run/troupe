@@ -42,6 +42,14 @@ troupe ships five runners:
   built-in `lm-studio` for the LM Studio on your machine. The actor names the model, and its options the limits
   (`maxTurns`, `maxTotalTokens`) and the context length (`contextLength`).
 
+- **The Anthropic runner** runs a model over the Anthropic Messages API: Claude's own API, or a local engine that
+  serves it, such as LM Studio, with troupe's own tool loop, checked against the actor's effects. It comes with
+  `troupe-run[anthropic]` ([Install](../opening-night/install.md#runners-that-come-as-extras)). Its service comes from
+  a [runtime](runtimes.md): the built-in `anthropic` for Claude's API, with its key in `ANTHROPIC_API_KEY`, or one of
+  your own at a local engine's server root. A run on Claude's API costs money, within the limits its options set
+  (`maxTurns`, `maxTotalTokens`, `maxOutputTokens`); `contextWindow` names a local engine's window, since some cut a
+  full context without saying so.
+
 You can write a runner for any agent today, and check it against the contract, but you can't run it with
 `troupe perform` yet: until config names runners ([#60](https://github.com/troupe-run/troupe/issues/60)),
 `perform` only knows the runners troupe ships with.

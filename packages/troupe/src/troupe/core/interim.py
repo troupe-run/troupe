@@ -38,6 +38,11 @@ class RuntimeFit:
     """Which of the endpoint's schemes the runner can use: either, or plain http alone, for a
     runner whose engine can't be reached over TLS (lmstudio-runner design D3)."""
 
+    version: bool = False
+    """Whether the runner adds its API's version path (/v1) below the endpoint itself, so an
+    endpoint whose path already ends in /v1 doesn't fit: requests would go to /v1/v1/...
+    (anthropic-runner design D3; owner, 2026-11-14)."""
+
     built_in: str | None = None
     """The built-in runtime made for this runner, when there is one. A runner with one fits no
     other runner's built-in, whatever its shape: built-ins of the same shape (ollama and lm-studio)
@@ -133,6 +138,23 @@ reaches it only as TROUPE_RUNTIME_CREDENTIAL, from its runtime (openai-style-run
 
 
 RUNNERS: dict[str, Runner] = {
+    "anthropic": Runner(
+        command=(sys.executable, "-m", "troupe_runner_anthropic"),
+        package="troupe_runner_anthropic",
+        # The same as the OpenAI runner: the proxy and certificate variables its HTTP client
+        # reads, and nothing else, so none of the anthropic package's own ANTHROPIC_* variables
+        # reach it. Its endpoint and model are its runtime's, in run/start, and its credential
+        # comes only as TROUPE_RUNTIME_CREDENTIAL (anthropic-runner design D3, D4).
+        environment=OPENAI_ENVIRONMENT,
+        runtime="required",
+        # The anthropic package comes with troupe-run[anthropic], not the base install
+        # (runner-extras design D1, D5).
+        in_extra=True,
+        # Any endpoint, since Claude's API and a local engine's server root have no path and a
+        # gateway's may, but not one ending in /v1: the library adds /v1/messages itself
+        # (anthropic-runner design D3).
+        fit=RuntimeFit(version=True, built_in="anthropic"),
+    ),
     "claude-code": Runner(
         command=(sys.executable, "-m", "troupe_runner_claude_code"),
         package="troupe_runner_claude_code",

@@ -1,0 +1,20 @@
+[
+  {
+    "status": 401,
+    "headers": [
+      [
+        "content-type",
+        "application/json"
+      ],
+      [
+        "request-id",
+        "req_scrubbed"
+      ],
+      [
+        "x-should-retry",
+        "false"
+      ]
+    ],
+    "body": "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_scrubbed\"}"
+  }
+]

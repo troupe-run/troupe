@@ -253,13 +253,19 @@ per call, in order, each naming its `tool_use_id`.
 - **THEN** the next request's assistant message holds that `thinking` block unchanged before the `tool_use`
 
 ### Requirement: A malformed tool call is answered, not fatal
-A tool call whose input isn't a JSON object, or whose tool isn't one of the SDK's, SHALL be answered with an error
-result the model is sent, as the SDK makes it, and the run SHALL go on.
+A tool call whose streamed input isn't a JSON object, or whose tool isn't one of the SDK's, SHALL be answered with an
+error result the model is sent, as the SDK makes it, and the run SHALL go on. The call's block is sent back with an
+empty `input`, since the API takes only an object there.
 
 #### Scenario: A tool the SDK doesn't have
 - **WHEN** a reply asks to call `Bash`
 - **THEN** the `tool_result` is an error naming the tools there are, and the next request carries it with `is_error`
   true
+
+#### Scenario: Input that isn't JSON
+- **WHEN** a reply's `tool_use` for `Write` streams the input `{"file_path": "a.txt"`
+- **THEN** the `tool_result` is the SDK's error saying the input isn't valid JSON, and the next request carries the call's
+  block with `input` `{}` and that result
 
 ### Requirement: A finished reply without tool calls ends the run
 A reply whose `stop_reason` is `end_turn` or `stop_sequence` SHALL end the run with an `ok` result whose message is
@@ -351,7 +357,7 @@ retried up to the runner's named attempts, with a growing delay, each retry firs
 - **THEN** a `retry` event with attempt 1 and reason `server` comes before the second request, and the run goes on
 
 #### Scenario: Retries run out
-- **WHEN** every attempt is answered 500 and the runner's attempts are 2
+- **WHEN** every attempt is answered 500 and the runner makes at most 3 attempts, the first included
 - **THEN** the service receives exactly 3 requests, the runner sends 2 `retry` events, and the run ends with `error`
   and `reason` `server`, naming the status and the attempts made
 
@@ -417,9 +423,9 @@ named stream timeout.
 - **THEN** the request is abandoned and retried, with a `retry` event with reason `network`
 
 ### Requirement: A reply the runner can't read ends the run
-A reply the service finished but the library or the runner can't read (an event that isn't JSON, a `tool_use` whose
-input isn't an object, a `tool_use` without an id) SHALL end the run at once with `error` and `reason` `engine`,
-naming what was wrong, not retried, and no tool call from it SHALL be carried out.
+A reply the service finished but the library or the runner can't read (an event that isn't JSON, a delta for a
+content block it never started, a `tool_use` without an id or a name) SHALL end the run at once with `error` and
+`reason` `engine`, naming what was wrong, not retried, and no tool call from it SHALL be carried out.
 
 #### Scenario: An event that isn't JSON
 - **WHEN** a reply's stream holds the line `data: not json` followed by a blank line
@@ -445,8 +451,8 @@ table SHALL hold Claude's `prompt is too long` refusal and each local engine's o
 - **THEN** it isn't retried, and the run ends with `error` and `reason` `context-length`
 
 #### Scenario: LM Studio's refusal
-- **WHEN** a request is answered 500 with `api_error` and the message `The number of tokens to keep from the initial
-  prompt is greater than the context length`
+- **WHEN** a reply's stream holds an `error` event with `api_error` and the message `The number of tokens to keep from
+  the initial prompt is greater than the context length`
 - **THEN** it isn't retried as a server error, and the run ends with `error` and `reason` `context-length`
 
 ### Requirement: A reply made from a cut conversation is never acted on

@@ -1,0 +1,36 @@
+{
+  "requests": 1,
+  "outcome": "failed",
+  "events": [
+    {
+      "type": "init",
+      "seq": 0,
+      "runner": {
+        "name": "anthropic",
+        "version": "<package version>"
+      },
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "Delete",
+        "Move"
+      ],
+      "effects": "checked",
+      "engine": {
+        "name": "messages",
+        "model": "claude-haiku-5-5"
+      }
+    },
+    {
+      "type": "result",
+      "seq": 1,
+      "status": "error",
+      "message": "The conversation is longer than the model's context (Claude's API, HTTP 400 invalid_request_error): prompt is too long: 2100077 tokens > 1000000 maximum. Give the actor a smaller task, or a model with a longer context.",
+      "reason": "context-length",
+      "turns": 0
+    }
+  ]
+}

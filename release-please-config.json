@@ -139,6 +139,18 @@
         }
       ]
     },
+    "plugins/runner-anthropic": {
+      "release-type": "python",
+      "package-name": "troupe-runner-anthropic",
+      "component": "troupe-runner-anthropic",
+      "extra-files": [
+        {
+          "type": "toml",
+          "path": "/uv.lock",
+          "jsonpath": "$.package[?(@.name.value=='troupe-runner-anthropic')].version"
+        }
+      ]
+    },
     "plugins/runner-claude-code": {
       "release-type": "python",
       "package-name": "troupe-runner-claude-code",

@@ -1,0 +1,6 @@
+{
+  "service": "https://api.anthropic.com",
+  "model": "claude-haiku-5-5",
+  "credential": "none",
+  "how": "built: a 529 overloaded_error (https://platform.claude.com/docs/en/api/errors), then a text reply (https://platform.claude.com/docs/en/build-with-claude/streaming)"
+}

@@ -269,7 +269,14 @@ def resolve(name: str, config: Mapping[str, Any], env: Mapping[str, str]) -> Res
     )
 
 
-Reason = Literal["credential", "endpoint-path", "endpoint-no-path", "endpoint-scheme", "built-in"]
+Reason = Literal[
+    "credential",
+    "endpoint-path",
+    "endpoint-no-path",
+    "endpoint-scheme",
+    "endpoint-version",
+    "built-in",
+]
 """Why a runtime doesn't fit a runner: it has a credential the runner never sends, its endpoint has
 a path the runner can't use, it has none where the runner needs one (runtime-checks design D2),
 it's https for a runner that can only use plain http, or it's another runner's built-in
@@ -305,11 +312,39 @@ def unfit(
         reasons.append("endpoint-no-path")
     if fit.scheme == "http" and urlsplit(endpoint).scheme != "http":
         reasons.append("endpoint-scheme")
+    if fit.version and ends_in_version(endpoint):
+        reasons.append("endpoint-version")
     return reasons
 
 
-def unfit_words(runner: str, runtime: str, reason: Reason) -> str:
-    """``reason`` in words, naming the runner and the runtime."""
+VERSION_PATH = "/v1"
+"""The API version path a runner whose fit says ``version`` adds below its endpoint itself."""
+
+
+def ends_in_version(endpoint: str) -> bool:
+    """Whether ``endpoint``'s path ends in /v1, a trailing / aside, as the Anthropic runner reads
+    it (anthropic-runner design D3)."""
+    return urlsplit(endpoint).path.removesuffix("/").endswith(VERSION_PATH)
+
+
+def without_version(endpoint: str) -> str:
+    """``endpoint`` with its trailing /v1 (and a / after it) taken off: the base to use."""
+    return endpoint.removesuffix("/").removesuffix(VERSION_PATH)
+
+
+def unfit_words(runner: str, runtime: str, reason: Reason, endpoint: str | None = None) -> str:
+    """``reason`` in words, naming the runner and the runtime, and for endpoint-version the base to
+    use, from ``endpoint``."""
+    if reason == "endpoint-version":
+        use = (
+            f" (use {without_version(endpoint)})"
+            if endpoint is not None and "@" not in endpoint
+            else ""
+        )
+        return (
+            f"the {runner} runner adds {VERSION_PATH}/... below its endpoint itself, and the "
+            f"runtime {runtime!r} has an endpoint that already ends in {VERSION_PATH}{use}"
+        )
     if reason == "credential":
         return f"the {runner} runner sends no credential, and the runtime {runtime!r} has one"
     if reason == "endpoint-path":
@@ -348,6 +383,8 @@ def fitting(fit: interim.RuntimeFit) -> str:
     words = parts[fit.path]
     if fit.scheme == "http":
         words = "a plain http " + words.removeprefix("an ")
+    if fit.version:
+        words += f" whose path doesn't end in {VERSION_PATH}"
     return words + ("" if fit.credential else " and no credential")
 
 
@@ -423,7 +460,7 @@ def refuse_unfit(
     came_from: dict[str, str] = {}
     if "credential" in reasons and resolved.credential is not None:
         came_from["credential"] = _came_from(resolved.name, "credential_env", resolved.credential)
-    if {"endpoint-path", "endpoint-no-path", "endpoint-scheme"} & set(reasons):
+    if {"endpoint-path", "endpoint-no-path", "endpoint-scheme", "endpoint-version"} & set(reasons):
         came_from["endpoint"] = _came_from(resolved.name, "endpoint", resolved.endpoint)
     fits: list[str] = []
     for other in names(config):
@@ -433,7 +470,11 @@ def refuse_unfit(
             continue
         if not unfit(fit, candidate.endpoint.value, candidate.credential is not None, other):
             fits.append(other)
-    why = "; and ".join(unfit_words(runner, resolved.name, reason) for reason in reasons)
+    # An endpoint the person's environment set is never repeated (runtime-checks design D8).
+    shown_endpoint = None if resolved.endpoint.source == "env" else resolved.endpoint.value
+    why = "; and ".join(
+        unfit_words(runner, resolved.name, reason, shown_endpoint) for reason in reasons
+    )
     where = ", ".join(f"its {key} from {place}" for key, place in came_from.items())
     change = " or ".join(
         f"unset {place}" if place.startswith(ENV_PREFIX) else f"change {place}"

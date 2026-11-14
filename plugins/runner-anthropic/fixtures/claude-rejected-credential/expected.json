@@ -1,0 +1,36 @@
+{
+  "requests": 1,
+  "outcome": "failed",
+  "events": [
+    {
+      "type": "init",
+      "seq": 0,
+      "runner": {
+        "name": "anthropic",
+        "version": "<package version>"
+      },
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "Delete",
+        "Move"
+      ],
+      "effects": "checked",
+      "engine": {
+        "name": "messages",
+        "model": "claude-haiku-5-5"
+      }
+    },
+    {
+      "type": "result",
+      "seq": 1,
+      "status": "error",
+      "message": "The service refused the credential (HTTP 401 authentication_error): invalid x-api-key. Check the key the actor's runtime names, and that it's allowed to use this model.",
+      "reason": "authentication",
+      "turns": 0
+    }
+  ]
+}

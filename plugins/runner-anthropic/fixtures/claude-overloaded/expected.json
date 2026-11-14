@@ -1,0 +1,56 @@
+{
+  "requests": 2,
+  "outcome": "succeeded",
+  "events": [
+    {
+      "type": "init",
+      "seq": 0,
+      "runner": {
+        "name": "anthropic",
+        "version": "<package version>"
+      },
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "Delete",
+        "Move"
+      ],
+      "effects": "checked",
+      "engine": {
+        "name": "messages",
+        "model": "claude-haiku-5-5"
+      }
+    },
+    {
+      "type": "retry",
+      "seq": 1,
+      "attempt": 1,
+      "delayMs": 1000,
+      "reason": "server",
+      "maxAttempts": 5,
+      "message": "HTTP 529 overloaded_error: Overloaded"
+    },
+    {
+      "type": "turn",
+      "seq": 2,
+      "role": "assistant",
+      "text": "Buy milk and write the troupe docs."
+    },
+    {
+      "type": "result",
+      "seq": 3,
+      "status": "ok",
+      "message": "Buy milk and write the troupe docs.",
+      "turns": 1,
+      "usage": {
+        "inputTokens": 120,
+        "outputTokens": 12,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      }
+    }
+  ]
+}

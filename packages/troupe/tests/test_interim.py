@@ -55,9 +55,9 @@ def test_an_unknown_runner_is_refused_naming_every_runner_troupe_ships() -> None
         runner_command("codex")
     assert caught.value.details == {
         "runner": "codex",
-        "known": ["claude-code", "lm-studio", "ollama", "openai", "scripted"],
+        "known": ["anthropic", "claude-code", "lm-studio", "ollama", "openai", "scripted"],
     }
-    assert "claude-code, lm-studio, ollama, openai, scripted" in caught.value.fix
+    assert "anthropic, claude-code, lm-studio, ollama, openai, scripted" in caught.value.fix
 
 
 def test_openai_resolves_to_its_module_requiring_a_runtime_and_naming_no_credential() -> None:
@@ -77,6 +77,7 @@ def test_openai_resolves_to_its_module_requiring_a_runtime_and_naming_no_credent
 
 def test_what_each_runner_takes_as_a_runtime() -> None:
     assert {name: runner.runtime for name, runner in RUNNERS.items()} == {
+        "anthropic": "required",
         "claude-code": "none",
         "lm-studio": "required",
         "ollama": "required",
@@ -96,12 +97,24 @@ def absent(*, in_extra: bool) -> Runner:
     )
 
 
-def test_only_the_lm_studio_runner_comes_as_an_extra() -> None:
-    """lm-studio depends on LM Studio's client library, so it's troupe-run's lm-studio extra;
-    every other shipped runner depends only on the SDK (#291; #331 and #332 add more)."""
+def test_only_the_anthropic_and_lm_studio_runners_come_as_extras() -> None:
+    """anthropic depends on the anthropic package and lm-studio on LM Studio's client library, so
+    each is troupe-run's extra of its name; every other shipped runner depends only on the SDK
+    (#291, #415; #331 and #332 add more)."""
     assert {name: entry.in_extra for name, entry in RUNNERS.items()} == {
-        name: name == "lm-studio" for name in RUNNERS
+        name: name in ("anthropic", "lm-studio") for name in RUNNERS
     }
+
+
+def test_anthropic_resolves_to_its_module_requiring_a_runtime_with_only_the_proxy_variables() -> (
+    None
+):
+    """No ANTHROPIC_* variable reaches it: the anthropic package would read them (anthropic-runner
+    design D3, D4)."""
+    assert list(runner_command("anthropic"))[1:] == ["-m", "troupe_runner_anthropic"]
+    assert RUNNERS["anthropic"].runtime == "required"
+    assert RUNNERS["anthropic"].environment == RUNNERS["openai"].environment
+    assert not any(name.startswith("ANTHROPIC_") for name in RUNNERS["anthropic"].environment)
 
 
 def test_lm_studio_resolves_to_its_module_requiring_a_runtime_given_no_variables() -> None:

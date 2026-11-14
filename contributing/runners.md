@@ -9,14 +9,17 @@ and output. A runner can be written in any language. This page and the schemas i
 In Python, the [plugin SDK](../packages/troupe-plugin-sdk/README.md) (`troupe_plugin_sdk.runner`) has the contract's
 types, checked against those schemas, and core uses the same ones. A runner in another language reads the schemas.
 
-troupe ships five runners: the [scripted runner](../plugins/runner-scripted/README.md), which tests use to produce
+troupe ships six runners: the [scripted runner](../plugins/runner-scripted/README.md), which tests use to produce
 every outcome on demand, the [Claude Code runner](../plugins/runner-claude-code/README.md), the
 [Ollama runner](../plugins/runner-ollama/README.md), which drives a local model through Ollama's own API with troupe's
 own tool loop (decision [#16](https://github.com/troupe-run/troupe/issues/16)), the
 [OpenAI runner](../plugins/runner-openai/README.md), which drives OpenAI's Responses API with the same kind of loop
 ([#162](https://github.com/troupe-run/troupe/issues/162)), and the
 [LM Studio runner](../plugins/runner-lm-studio/README.md), which drives LM Studio through its own client library,
-whose tool loop calls troupe's tools ([#291](https://github.com/troupe-run/troupe/issues/291)).
+whose tool loop calls troupe's tools ([#291](https://github.com/troupe-run/troupe/issues/291)), and the
+[Anthropic runner](../plugins/runner-anthropic/README.md), which drives the Anthropic Messages API, on Claude's API or
+a local engine, through the `anthropic` package with troupe's own tool loop
+([#415](https://github.com/troupe-run/troupe/issues/415)).
 
 ## The contract
 
@@ -556,6 +559,36 @@ callback (closing the client isn't enough, since the next round reconnects it), 
 
 Its transcript is what the library exposes, with the contract's record kinds: the model's listing and each round's
 result are `received`, the chat and tools it passes the library and each tool result message are `sent`.
+
+### Mapping an engine: a client library under troupe's own loop
+
+The [Anthropic runner](../plugins/runner-anthropic/README.md) is a fourth shape: troupe's own tool loop, as the OpenAI
+runner's, with each request sent through a [client library](#runners-with-client-libraries), the `anthropic` package,
+whose defaults break three of troupe's guarantees and are each turned off in one module: it follows redirects, retries
+on its own terms, and looks for a credential in the environment and on disk. The runner gives it its own HTTP client,
+`max_retries=0`, the runtime's key or none, and removes the library's `ANTHROPIC_*` variables from its own
+environment. A read in flight can't be interrupted from another thread, so on cancel with a request in flight it ends
+its process.
+
+The Messages API serves Claude and several local engines, and the local ones can cut a conversation that outgrows
+their context while answering as if nothing happened. So the runner never acts on a reply whose reported prompt
+shrank since the request before, besides the engines' own refusals and a `contextWindow` the actor names; each ends a
+run told `fail` with `context-length`, and compacts one told `compact`
+([its README](../plugins/runner-anthropic/README.md#the-context)).
+
+| From the service | Run event |
+|---|---|
+| the runtime's model | `init`, with engine `messages`; `effects` is `checked` |
+| a reply's `model`, when it isn't the runtime's | `served_model`, the first time |
+| a reply's `text` blocks (`thinking` stays in the transcript) | a `turn`, before its tool calls |
+| each `tool_use` block, carried out through the SDK's `Tools` | `tool_call` and `tool_result`; the results go back in one user message |
+| a 429, a 5xx or `overloaded_error`, a network failure or a broken stream | `retry`, by the runner, never the library |
+| `stop_reason` `end_turn` or `stop_sequence` | `result` `ok`, with its text |
+| a refusal, the output limit, a context refusal or a cut conversation, a refused key, a turn limit or a spent budget | `result` `error`, with `refused`, `output-limit`, `context-length`, `authentication`, `turn-limit` or `budget` |
+| each reply's `input_tokens`, cache counters and `output_tokens` | summed into `result.usage`; no cost is reported, so `estimatedCostUsd` from a price |
+
+Its transcript is what the library exposes, with the record kinds: each request's parameters are `sent`, each stream
+event as the library parsed it and each error body `received`, and each status and dropped stream a `note`.
 
 ## How troupe runs a runner
 

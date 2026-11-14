@@ -1,0 +1,7 @@
+{
+  "service": "https://api.anthropic.com",
+  "model": "claude-haiku-5-5",
+  "captured": "2026-11-14",
+  "how": "recorded with tools/capture_anthropic.py context (700000 words)",
+  "credential": "a working key from ANTHROPIC_API_KEY, never written"
+}

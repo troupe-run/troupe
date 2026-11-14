@@ -26,7 +26,8 @@
   - its default timeout is ten minutes.
 - **The probe** (D12; findings on troupe#415, issuecomment-6865689324): LM Studio and Ollama both serve the Messages
   API with working tool calls; both cut a conversation that outgrows their window and answer `200`; LM Studio refuses
-  a first prompt over the window with a `500`; and the two disagree on what `input_tokens` counts.
+  a first prompt over the window with an `api_error` (a `500`, or an `error` event in a streamed reply); and the two
+  disagree on what `input_tokens` counts.
 
 ## Goals / Non-Goals
 
@@ -71,7 +72,9 @@ them, which Claude's current models require.
 
 Tools are the SDK's definitions as custom tools (`name`, `description`, `input_schema`), not `strict`: Claude's strict
 mode requires every property in `required`, which the SDK's optional fields aren't, and local engines ignore it. A
-`tool_use` block's `input` is checked by the SDK when the call runs, as for the other loop runners. Calls run one at a
+`tool_use` block's `input` is checked by the SDK when the call runs, as for the other loop runners. The runner
+gathers each block's streamed input itself; input that doesn't parse is passed to the SDK as text, which answers it as
+malformed, and the block goes back with `input` `{}`, since the API takes only an object there. Calls run one at a
 time in the reply's order, and their results go back in **one** user message, which the API expects (results split
 across messages make Claude stop calling tools in parallel).
 
@@ -84,10 +87,16 @@ across messages make Claude stop calling tools in parallel).
   the API under one (`https://gateway.example/anthropic`), but a path ending in `/v1` is refused
   (`anthropic.unsupported-endpoint`), naming the base without it: it's the OpenAI-style base copied across, and would
   send requests to `/v1/v1/messages`. A query or fragment is refused too, since the library would drop or garble it.
-  Refusing is the rule for an input that can't be used as given; stripping `/v1` would be guessing.
+  Refusing is the rule for an input that can't be used as given; stripping `/v1` would be guessing. **Config and
+  perform refuse it too** (owner, 2026-11-14, as for `endpoint-scheme` on 2026-11-11): the runner table's fit gains
+  `version=True`, and `runtime.unfit` a reason, `endpoint-version` (a protocol change), naming the base to use unless
+  the endpoint came from the person's environment or holds user info. So an actor on such a runtime is refused before
+  anything is recorded, and config's fit and the runner's own check still agree on every endpoint
+  (`test_runtime_fit.py`).
 - **A new built-in, `anthropic`**: `https://api.anthropic.com`, credential from `ANTHROPIC_API_KEY`, no model and no
   price, as every built-in. The runner table gives the runner `runtime="required"`, `in_extra=True` and
-  `fit=RuntimeFit(built_in="anthropic")` (path `any`, a credential allowed, any scheme). Its environment is the
+  `fit=RuntimeFit(version=True, built_in="anthropic")` (path `any` but a final `/v1`, a credential allowed, any
+  scheme). Its environment is the
   same proxy variables the OpenAI runner gets (`OPENAI_ENVIRONMENT`), since the library's HTTP client reads them as
   `urllib` does; nothing else reaches it, so none of the `ANTHROPIC_*` variables do (D4 defends against them anyway).
 - **A local engine is a runtime the person defines**: for LM Studio, `troupe config set
@@ -163,12 +172,13 @@ then ended with that reason, as the OpenAI runner's does.
 
 #279 and the contract say a run told `fail` ends with `context-length` when its context fills, and that neither the
 runner nor its engine may drop content silently. The probe found that both local engines do exactly that through the
-Messages API, with no request parameter to stop them, and LM Studio's refusal of an over-long first prompt is a `500`
-that would otherwise be retried as a server error. So the runner guards three ways, each judged in one place
+Messages API, with no request parameter to stop them, and LM Studio's refusal of an over-long first prompt is an `api_error`
+(an `error` event in its stream) that would otherwise be retried as a server error. So the runner guards three ways, each judged in one place
 (`context.py`):
 
 1. **Signals.** One table maps each engine's context refusal to `context-length`: Claude's `400`
-   `invalid_request_error` "prompt is too long", LM Studio's `500` "greater than the context length", and llama.cpp's
+   `invalid_request_error` "prompt is too long", LM Studio's `api_error` "greater than the context length" (an `error` event in the stream when the request is
+   streamed, as the runner's are; a `500` when it isn't), and llama.cpp's
    `exceed_context_size_error` (from its documentation, marked as such until a probe or a fixture confirms it), and
    `stop_reason` `model_context_window_exceeded`. Matching a message is fragile, so each entry names its engine and
    the fixture that pins it, and a signal the table doesn't know falls to the general rules: a `500` is retried and
