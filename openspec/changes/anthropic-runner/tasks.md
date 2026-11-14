@@ -137,7 +137,7 @@ asks for the key.
 - [x] 10.1 Write `context.py`: the table of context signals (each entry naming its engine and the fixture that pins
   it), the shrinking-prompt rule and the `contextWindow` rule, each ending a run told `fail` with `context-length`
   without acting on a reply made from a cut conversation. Verify: tests for each scenario under "A context-length
-  refusal ends the run with context-length", "A reply made from a cut conversation is never acted on" and "A run stops
+  refusal ends the run with context-length", "A reply from a conversation the engine shrank isn't acted on" and "A run stops
   before the context window the person named", the LM Studio fixtures among them, and a property test that a prompt
   that never shrinks never trips the rule.
 - [x] 10.2 Write compaction for a run told `compact`, through the SDK's `compaction` helpers. Verify: tests for each

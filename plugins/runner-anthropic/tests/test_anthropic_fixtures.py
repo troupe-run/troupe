@@ -117,8 +117,8 @@ def test_claudes_tool_loop_was_recorded_with_a_working_key_and_succeeds() -> Non
 
 
 def test_the_conversation_lm_studio_cut_ends_before_its_reply_is_acted_on() -> None:
-    # Requirement: A reply made from a cut conversation is never acted on. The third reply asks for
-    # a tool call; none follows the second's.
+    # Requirement: A reply from a conversation the engine shrank isn't acted on. The third reply
+    # asks for a tool call; none follows the second's.
     expected = load("lm-studio-conversation-cut", "expected.json")
     assert expected["requests"] == 3
     calls = [e for e in expected["events"] if e["type"] == "tool_call"]

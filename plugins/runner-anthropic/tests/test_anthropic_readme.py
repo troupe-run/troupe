@@ -44,3 +44,12 @@ def test_every_relative_link_in_the_readme_names_a_path_that_exists() -> None:
     missing = [t for t in targets if not (README.parent / t).exists()]
     assert targets
     assert missing == []
+
+
+def test_the_readme_says_a_first_request_an_engine_cuts_silently_isnt_caught() -> None:
+    # Spec: anthropic-runner, "A reply from a conversation the engine shrank isn't acted on",
+    # "A first request an engine cut": the limit is stated, not claimed away.
+    text = " ".join(_section("The context").split())
+    assert "What it can't catch:** a first request already over the window" in text
+    assert "Ollama does" in text
+    assert "Claude's API and LM Studio refuse that case" in text
