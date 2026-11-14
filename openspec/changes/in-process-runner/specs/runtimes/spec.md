@@ -26,9 +26,10 @@ credential's value.
 
 ### Requirement: troupe has built-in runtimes
 troupe SHALL define the runtimes `openai` (endpoint `https://api.openai.com/v1`, credential from `OPENAI_API_KEY`),
-`ollama` (endpoint `http://127.0.0.1:11434`, no credential), `lm-studio` (endpoint `http://127.0.0.1:1234`, no
-credential) and `mistralrs` (in-process: no endpoint, no credential), as defaults in one named place. No built-in
-runtime SHALL name a model or a price.
+`anthropic` (endpoint `https://api.anthropic.com`, credential from `ANTHROPIC_API_KEY`), `ollama` (endpoint
+`http://127.0.0.1:11434`, no credential), `lm-studio` (endpoint `http://127.0.0.1:1234`, no credential) and
+`mistralrs` (in-process: no endpoint, no credential), as defaults in one named place. No built-in runtime SHALL name
+a model or a price.
 
 #### Scenario: A built-in needs no config
 - **WHEN** config has no `runtimes` and an actor names the runtime `ollama`
@@ -42,17 +43,23 @@ runtime SHALL name a model or a price.
 - **WHEN** config has no `runtimes` and a person runs `troupe config get --resolved runtimes.lm-studio`
 - **THEN** it shows the endpoint `http://127.0.0.1:1234` from `default`, the base LM Studio's own API lives under
 
+#### Scenario: Claude's API is a built-in
+- **WHEN** config has no `runtimes` and a person runs `troupe config get --resolved runtimes.anthropic`
+- **THEN** it shows the endpoint `https://api.anthropic.com` and the credential variable `ANTHROPIC_API_KEY`, each
+  from `default`, and no model
+
 #### Scenario: The in-process built-in
 - **WHEN** config has no `runtimes`, `TROUPE_RUNTIME_MISTRALRS_MODEL` is `/models/qwen3-0.6b.gguf`, and a person runs
   `troupe config get --resolved runtimes.mistralrs`
 - **THEN** it shows no endpoint and no credential, and the model `/models/qwen3-0.6b.gguf` from `env`
 
+
 ### Requirement: An actor's runtime fits its runner
 Config SHALL refuse an actor whose runtime doesn't fit its runner, judged from the runtime's built-in and theatre
-values: a credential the runner never sends, an endpoint it can't use or one missing that it needs, `https` where it
-needs plain `http`, or another runner's built-in, whatever its shape. The error SHALL name the actor's `runtime` path,
-the runner, the runtime, why, and the runtimes that fit. A change that makes an actor unfit SHALL be refused the same
-way.
+values: a credential the runner never sends, an endpoint path it can't use (a final `/v1`, for one that adds it),
+an endpoint it doesn't take or none where it needs one, `https` where it needs plain `http`, or another runner's
+built-in. The error SHALL name the actor's `runtime` path, the runner, the runtime, why, and the runtimes that fit. A
+change to a runtime that makes an actor on it unfit SHALL be refused the same way.
 
 #### Scenario: An Ollama actor on a runtime with a credential
 - **WHEN** a person sets `actors.tester.runner=ollama` and `actors.tester.runtime=openai`
@@ -98,6 +105,18 @@ way.
 - **WHEN** a `scripted` actor names any runtime there is
 - **THEN** no fit is refused
 
+#### Scenario: An Anthropic actor on an endpoint ending in /v1
+- **WHEN** config defines `runtimes.claude-v1.endpoint=https://api.anthropic.com/v1`, and a person sets
+  `actors.tester.runner=anthropic` and `actors.tester.runtime=claude-v1`
+- **THEN** it is refused, saying the `anthropic` runner adds `/v1` below its endpoint itself and `claude-v1`'s
+  already ends in `/v1`, naming `https://api.anthropic.com` as the base to use, and listing `anthropic` as a runtime
+  that fits
+
+#### Scenario: An Anthropic actor on a gateway's own path
+- **WHEN** config defines `runtimes.gateway.endpoint=https://gateway.example/anthropic`, and an `anthropic` actor
+  names `gateway`
+- **THEN** it is accepted
+
 #### Scenario: An in-process actor on a served runtime
 - **WHEN** a person sets `actors.tester.runner=mistralrs` and `actors.tester.runtime=ollama`
 - **THEN** it is refused, saying the `mistralrs` runner runs its model in process and takes a runtime with no
@@ -107,6 +126,7 @@ way.
 - **WHEN** a person sets `actors.tester.runner=ollama` and `actors.tester.runtime=mistralrs`
 - **THEN** it is refused, saying the `ollama` runner needs an endpoint and `mistralrs` has none, and listing `ollama`
   as a runtime that fits
+
 
 ## ADDED Requirements
 

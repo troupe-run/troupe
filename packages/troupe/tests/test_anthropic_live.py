@@ -61,7 +61,9 @@ def _live_run(tmp_path: Path, endpoint: str, model: str, credential: str | None)
                 workspace,
                 dict(TEST_LIMITS),
                 effects=p.EffectsDeclaration(write=["out/**"], delete=[], move=[]),
-                runtime=p.RunStartRuntime("live", endpoint, model, credential is not None),
+                runtime=p.RunStartRuntime(
+                    name="live", endpoint=endpoint, model=model, credential=credential is not None
+                ),
                 credential=credential,
             ),
             store=MemoryArtifactStore(),
