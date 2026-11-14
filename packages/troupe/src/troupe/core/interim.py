@@ -72,6 +72,11 @@ class Runner:
     """Whether its actors name a runtime: the service it talks to (spec: runtimes; runtimes design
     D4). Config refuses an actor whose runtime doesn't fit."""
 
+    warm_up: tuple[str, ...] = ()
+    """Arguments that, after its command, have it warm its engine outside any run, so its first run
+    starts quickly: troupe init --audition runs it once (troupe.core.runners.warm_up; in-process-
+    runner design D4). Empty: nothing to warm."""
+
     in_extra: bool = False
     """Whether it's installed through troupe-run's extra named exactly after it, rather than the
     base install: true for a runner whose plugin depends on more than the plugin SDK (spec: runs,
@@ -195,6 +200,9 @@ RUNNERS: dict[str, Runner] = {
         # It loads its model in its own process, so it fits only a runtime with no endpoint, and
         # sends no credential (in-process-runner design D5).
         fit=RuntimeFit(credential=False, endpoint="none", built_in="mistralrs"),
+        # On macOS, loading its check model compiles mistral.rs's Metal kernels into macOS's
+        # cache, which a first run would otherwise wait for (owner, 2026-11-14; its design D4).
+        warm_up=("--warm-up",),
     ),
     "ollama": Runner(
         command=(sys.executable, "-m", "troupe_runner_ollama"),

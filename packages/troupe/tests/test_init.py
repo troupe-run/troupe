@@ -4,6 +4,7 @@ init-and-audition design D1, D2, D6, D8)."""
 import asyncio
 import dataclasses
 import hashlib
+import sys
 from importlib.metadata import version
 from pathlib import Path
 from typing import Any
@@ -300,6 +301,40 @@ def test_the_mistralrs_actor_names_the_in_process_runtime_and_no_model(repo: Rep
         "expect": [],
         "character": auditions.CHARACTER,
     }
+
+
+# Requirement: Init with an audition warms its runner's engine (spec: cli; in-process-runner D4)
+
+
+def _warming(monkeypatch: pytest.MonkeyPatch, answer: dict[str, object]) -> None:
+    script = f"import json; print(json.dumps({answer!r}))"
+    entry = dataclasses.replace(
+        interim.RUNNERS["mistralrs"], command=(sys.executable, "-c", script), warm_up=("go",)
+    )
+    monkeypatch.setitem(interim.RUNNERS, "mistralrs", entry)
+
+
+def test_an_audition_warms_its_runners_engine_and_says_so(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _warming(monkeypatch, {"warmedUp": True, "seconds": 16.4})
+    result = _init(repo.path, _env(repo), audition={"runner": "mistralrs"})
+    warmed = [n for n in result["notices"] if n["code"] == "runner.warmed-up"]
+    assert [n["details"] for n in warmed] == [{"runner": "mistralrs", "seconds": 16.4}]
+
+
+def test_a_rehearsed_audition_warms_nothing(repo: Repo, monkeypatch: pytest.MonkeyPatch) -> None:
+    _warming(monkeypatch, {"warmedUp": True, "seconds": 16.4})
+    result = _init(repo.path, _env(repo), audition={"runner": "mistralrs"}, rehearse=True)
+    assert result["notices"] == []
+
+
+def test_a_runner_with_nothing_to_warm_adds_no_notice(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _warming(monkeypatch, {"warmedUp": False})
+    result = _init(repo.path, _env(repo), audition={"runner": "mistralrs"})
+    assert not [n for n in result["notices"] if n["code"].startswith("runner.warm")]
 
 
 # Requirement: The Claude Code audition can edit files on a small budget (spec: config)

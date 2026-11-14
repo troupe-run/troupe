@@ -119,6 +119,23 @@ Python, whose fix says to install troupe on a uv-managed Python.
 - **WHEN** the runner starts a run on Linux or Windows
 - **THEN** it loads no packaged model before answering `run/start`
 
+### Requirement: The runner warms its engine when troupe asks, outside any run
+Run with `--warm-up`, the runner SHALL, on macOS, load the small model its package carries, so the engine's Metal
+kernels are compiled and cached, and SHALL write one JSON line: that it warmed up and in how many seconds, that there
+was nothing to warm on this platform, or the error its platform check would refuse a run with.
+
+#### Scenario: A warm-up on macOS
+- **WHEN** the runner is run with `--warm-up` on macOS, under a Python the engine can compile its kernels under
+- **THEN** it writes `{"warmedUp": true, "seconds": ...}` and exits 0
+
+#### Scenario: Nothing to warm
+- **WHEN** the runner is run with `--warm-up` on Linux or Windows
+- **THEN** it writes `{"warmedUp": false}`, loads nothing, and exits 0
+
+#### Scenario: A Python the engine can't run under
+- **WHEN** the runner is run with `--warm-up` and the engine's Metal library doesn't compile
+- **THEN** it writes the `mistralrs.unsupported-python` error, with its fix, and exits 1
+
 ### Requirement: The protocol channel carries only protocol messages
 Before it loads the engine, the runner SHALL keep its standard output for the contract's messages and send whatever
 the engine writes to standard output to standard error instead.

@@ -67,6 +67,14 @@ RUNNER_STDERR_MAX_BYTES = 1024 * 1024
 RUNNER_FAIL_FAST_ON_AUTH_RETRY = True
 """Whether a retry because authentication failed cancels the run at once."""
 
+RUNNER_WARM_UP_TIMEOUT_SECONDS = 120.0
+"""How long warming a runner's engine outside any run may take before it's stopped
+(troupe.core.runners.warm_up). The mistralrs runner's takes 15-20 s the first time on a Mac, and a
+warm-up cut off keeps what it did, so a run picks up where it stopped."""
+
+RUNNER_WARM_UP_OUTPUT_MAX_BYTES = 1024 * 1024
+"""The most a runner's warm-up may write to its standard output and error together."""
+
 RUNNER_ENVIRONMENT = EnvironmentPolicy()
 """What a runner receives from troupe's environment: nothing. It gets only the variables its caller
 names, plus the platform minimum (design D6)."""

@@ -25,6 +25,7 @@ import platform
 import queue
 import sys
 import threading
+import time
 import traceback
 from collections.abc import Callable
 from typing import Any, BinaryIO, NoReturn
@@ -41,6 +42,9 @@ from troupe_runner_mistralrs.runtime import RuntimeRefusedError, from_run_start
 _TROUPE = "troupe"
 _TROUPE_EOF = "troupe-eof"
 _WORKER_DONE = "worker-done"
+
+WARM_UP = "--warm-up"
+"""The argument troupe runs the runner with to warm its engine outside any run (design D4)."""
 
 MANAGED_PYTHON_FIX = (
     "Install troupe on a uv-managed Python, whose build mistral.rs's Metal kernels compile under: "
@@ -413,29 +417,8 @@ class Runner:
         try:
             self._check()
         except EngineFailure as failure:
-            if failure.kind == "metal":
-                raise _Refused(
-                    p.JSONRPC_REFUSED,
-                    "mistralrs.unsupported-python",
-                    f"mistral.rs can't compile its Metal kernels under this Python "
-                    f"({sys.executable}, {platform.python_version()}): which Pythons work depends "
-                    "on the macOS SDK each was built with, and Homebrew's on macOS 27 and "
-                    f"python.org's 3.12 don't. The engine said: {failure.message}",
-                    MANAGED_PYTHON_FIX,
-                    {"python": sys.executable, "version": platform.python_version()},
-                ) from None
-            raise _Refused(
-                p.JSONRPC_REFUSED,
-                "runner.requirement-unmet",
-                f"mistral.rs couldn't load the check model the runner carries, so it can't run "
-                f"here: {failure.message}",
-                "Report it, with this message, at https://github.com/troupe-run/troupe/issues.",
-                {
-                    "requirement": "mistral.rs on this platform",
-                    "wanted": "the check model loads",
-                    "found": failure.message,
-                },
-            ) from None
+            code, problem, fix, details = platform_refusal(failure)
+            raise _Refused(p.JSONRPC_REFUSED, code, problem, fix, details) from None
 
     # The run
 
@@ -476,6 +459,54 @@ class Runner:
         raise _Exit(1 if self._failed else 0)
 
 
+def platform_refusal(failure: EngineFailure) -> tuple[str, str, str, dict[str, Any]]:
+    """The error for a failed platform check: an unsupported macOS Python when the engine's Metal
+    library didn't compile, otherwise an unmet requirement holding the engine's words (design D4).
+    The run-time check and the warm-up both say it this way."""
+    if failure.kind == "metal":
+        return (
+            "mistralrs.unsupported-python",
+            f"mistral.rs can't compile its Metal kernels under this Python ({sys.executable}, "
+            f"{platform.python_version()}): which Pythons work depends on the macOS SDK each was "
+            "built with, and Homebrew's on macOS 27 and python.org's 3.12 don't. The engine said: "
+            f"{failure.message}",
+            MANAGED_PYTHON_FIX,
+            {"python": sys.executable, "version": platform.python_version()},
+        )
+    return (
+        "runner.requirement-unmet",
+        "mistral.rs couldn't load the check model the runner carries, so it can't run here: "
+        f"{failure.message}",
+        "Report it, with this message, at https://github.com/troupe-run/troupe/issues.",
+        {
+            "requirement": "mistral.rs on this platform",
+            "wanted": "the check model loads",
+            "found": failure.message,
+        },
+    )
+
+
+def warm_up(check: PlatformCheck, out: BinaryIO, clock: Callable[[], float]) -> int:
+    """Warm the engine outside any run: on macOS, load the check model once, so mistral.rs's Metal
+    kernels are compiled and in macOS's cache before the first run (owner, 2026-11-14; design D4).
+    Writes one JSON line: ``{"warmedUp": true, "seconds": ...}``, ``{"warmedUp": false}`` where
+    there's nothing to warm, or the platform check's error. The exit code: 0, or 1 for an error."""
+    if sys.platform != "darwin":
+        out.write(json.dumps({"warmedUp": False}).encode() + b"\n")
+        return 0
+    began = clock()
+    try:
+        check()
+    except EngineFailure as failure:
+        code, problem, fix, details = platform_refusal(failure)
+        error = {"code": code, "problem": problem, "fix": fix, "details": details}
+        out.write(json.dumps({"error": error}).encode() + b"\n")
+        return 1
+    seconds = round(clock() - began, 1)
+    out.write(json.dumps({"warmedUp": True, "seconds": seconds}).encode() + b"\n")
+    return 0
+
+
 def keep_protocol_channel() -> BinaryIO:
     """Keep standard output for troupe's messages, and point file descriptor 1 at standard error,
     so whatever the engine (or a stray print) writes to it never reaches the protocol channel
@@ -497,6 +528,10 @@ def main(loader: Loader | None = None, check: PlatformCheck | None = None) -> No
 
         loader = loader if loader is not None else engine.load
         check = check if check is not None else engine.check_platform
+    if sys.argv[1:] == [WARM_UP]:
+        code = warm_up(check, protocol, time.monotonic)
+        protocol.flush()
+        os._exit(code)
     code = Runner(sys.stdin.buffer, protocol, sys.stderr.buffer, loader=loader, check=check).run()
     for stream in (protocol, sys.stderr):
         with contextlib.suppress(OSError):

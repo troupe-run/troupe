@@ -13,6 +13,7 @@ theatre stays, and the next command's flush finishes any file not yet in place (
 design D9).
 """
 
+import asyncio
 import shutil
 from collections.abc import Mapping
 from typing import Any
@@ -28,6 +29,7 @@ from troupe.core.config.kinds import check
 from troupe.core.config.projection import render
 from troupe.core.events.lineage import Actor
 from troupe.core.policy import ALLOW_UNENFORCED_LOCAL_STAGE, env_name, read_unenforced_local_stage
+from troupe.core.runners.warm_up import warm_up
 from troupe.core.stores import open_event_store
 from troupe.core.theatre import GIT_FILES, THEATRE_DIR, ensure_git_files, refuse_existing
 from troupe.core.vcs import load_vcs
@@ -108,6 +110,9 @@ async def init(request: m.InitRequest, session: Session, send: Send) -> Message:
         if not (events.is_dir() and any(events.iterdir())):
             shutil.rmtree(troupe_dir, ignore_errors=True)
         raise
+    # 7. Warm the runner's engine, if it has a warm-up, so the first run starts quickly
+    # (in-process-runner design D4). It changes no file; how it went is a notice.
+    warmed = await asyncio.to_thread(warm_up, chosen.runner, directory, session.env)
     return m.InitResult(
         rehearsed=False,
         files=_git_files() + recorded.files,
@@ -115,7 +120,7 @@ async def init(request: m.InitRequest, session: Session, send: Send) -> Message:
         change=recorded.change,
         entries=recorded.entries,
         steps=steps,
-        notices=recorded.notices,
+        notices=[*recorded.notices, *(m.NoticeData.from_data(n.to_data()) for n in warmed)],
     )
 
 
