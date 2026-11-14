@@ -4,9 +4,11 @@ runtime", "The model is a local GGUF file", "The runner checks its engine's vers
 published data", "An unsupported macOS Python is refused before the run is acknowledged", "The
 runner publishes its schemas"; in-process-runner design D4)."""
 
+import io
 import json
 import math
 import sys
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +31,7 @@ from stand_in import StandIn
 from troupe_runner_mistralrs.options import OptionsError, parse_options
 from troupe_runner_mistralrs.port import LoadSpec
 from troupe_runner_mistralrs.requirements import load
+from troupe_runner_mistralrs.runner import Runner
 
 METAL_FAILURE = (
     "Metal error Error while loading library: Error while loading library: program_source:318:14: "
@@ -248,8 +251,29 @@ def test_off_macos_the_platform_check_loads_nothing(monkeypatch: pytest.MonkeyPa
 
 
 def test_an_acknowledged_run_is_answered_before_its_model_loads(dirs: tuple[Path, Path]) -> None:
-    messages = drive(
-        [initialize(), start_message(run_start(*dirs, str(CHECK_MODEL)))],
-        script={"load": {"sleep": 0.2}},
-    )
-    assert _answer(messages)["result"] == {"runId": messages[1]["result"]["runId"]}
+    # The loader looks at what the runner has written when it's called: the run/start answer must
+    # already be there (design D4). The worker sends nothing more once input ends, so the loader
+    # holds the main thread's end of input back until it has looked.
+    stdout = io.BytesIO()
+    looked = threading.Event()
+    seen: list[bytes] = []
+    stand_in = StandIn({})
+
+    def loader(spec: LoadSpec) -> Any:  # noqa: ANN401
+        seen.append(stdout.getvalue())
+        looked.set()
+        return stand_in.load(spec)
+
+    class HeldInput(io.BytesIO):
+        def readline(self, size: int | None = -1) -> bytes:
+            line = super().readline(size)
+            if not line:
+                looked.wait(10)
+            return line
+
+    lines = [initialize(), start_message(run_start(*dirs, str(CHECK_MODEL)))]
+    stdin = HeldInput(b"".join(json.dumps(line).encode() + b"\n" for line in lines))
+    Runner(stdin, stdout, io.BytesIO(), loader=loader, check=stand_in.check).run()
+    (written,) = seen
+    answers = [json.loads(line) for line in written.splitlines()]
+    assert any(a.get("id") == 2 and "result" in a for a in answers)  # answered, then loaded

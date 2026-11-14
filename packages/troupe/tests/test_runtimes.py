@@ -75,6 +75,16 @@ def test_a_malformed_endpoint_variable_for_the_in_process_runtime_says_to_unset_
     assert "not a url" not in raised.value.problem
 
 
+def test_an_endpoint_config_holds_for_the_in_process_runtime_is_refused_naming_its_path() -> None:
+    # Config refuses it on set and merge; config that got past them is refused here, by its path.
+    config = _config(mistralrs={"endpoint": "http://127.0.0.1:1234"})
+    with pytest.raises(TroupeError) as raised:
+        resolve("mistralrs", config, {})
+    assert raised.value.code == "config.invalid"
+    assert raised.value.fix == "Unset runtimes.mistralrs.endpoint."
+    assert "TROUPE_RUNTIME" not in raised.value.problem + raised.value.fix
+
+
 def test_an_endpoint_in_config_for_the_in_process_runtime_is_refused_naming_its_path() -> None:
     # Spec: runtimes, "An in-process runtime takes no endpoint", "An endpoint in config".
     found = runtime_problems("mistralrs", {"endpoint": "http://127.0.0.1:1234"})
