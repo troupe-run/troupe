@@ -33,6 +33,20 @@ CHECK_MODEL = "check_model/stories260K.gguf"
 
 ENGINE_VERSION = version("mistralrs")
 
+EXITS = (KeyboardInterrupt, SystemExit, GeneratorExit)
+"""What a call to the engine passes on rather than turning into an EngineFailure."""
+
+
+def failure(error: BaseException) -> EngineFailure:
+    """``error``, raised by the engine, as an EngineFailure: its ``ValueError`` with its own words,
+    and a Rust panic (PyO3's ``PanicException``, a ``BaseException``) said to be one, so a panic
+    ends the run with a reason rather than escaping every handler. An exit is raised again."""
+    if isinstance(error, EXITS):
+        raise error
+    if isinstance(error, ValueError):
+        return EngineFailure(str(error))
+    return EngineFailure(f"the engine panicked: {type(error).__name__}: {error}")
+
 
 def _gguf(directory: str, filename: str) -> "mistralrs.Which":
     """A GGUF file to load. The library's stub types its variants apart from Which, which takes
@@ -56,8 +70,8 @@ def _runner(spec: LoadSpec) -> "mistralrs.Runner":
             seed=spec.seed,
             **extra,
         )
-    except ValueError as error:
-        raise EngineFailure(str(error)) from None
+    except BaseException as error:  # a Rust panic is a BaseException
+        raise failure(error) from None
 
 
 def load(spec: LoadSpec) -> "MistralRs":
@@ -81,8 +95,8 @@ def check_platform() -> None:
                 max_seqs=1,
                 no_paged_attn=True,
             )
-        except ValueError as error:
-            raise EngineFailure(str(error)) from None
+        except BaseException as error:  # a Rust panic is a BaseException
+            raise failure(error) from None
         del checked
 
 
@@ -159,8 +173,8 @@ class MistralRs:
     def count(self, text: str) -> int:
         try:
             return len(self._runner.tokenize_text(text, False, None))
-        except ValueError as error:
-            raise EngineFailure(str(error)) from None
+        except BaseException as error:  # a Rust panic is a BaseException
+            raise failure(error) from None
 
     def chat(self, request: ChatRequest) -> Answer:
         library_request = mistralrs.ChatCompletionRequest(
@@ -175,8 +189,8 @@ class MistralRs:
         )
         try:
             response = self._runner.send_chat_completion_request(library_request)
-        except ValueError as error:
-            raise EngineFailure(str(error)) from None
+        except BaseException as error:  # a Rust panic is a BaseException
+            raise failure(error) from None
         if not isinstance(response, mistralrs.ChatCompletionResponse):  # a stream: never asked
             raise EngineFailure("the engine streamed an answer the runner didn't ask to stream")
         return answer_of(response)

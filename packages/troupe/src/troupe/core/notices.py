@@ -26,6 +26,8 @@ CODES: dict[str, str] = {
     "run.unfinished-elsewhere": "A run started in another clone has no recorded end here.",
     "run.scratch-not-removed": "A run's scratch directory couldn't be removed when it ended.",
     # Warming a runner's engine (in-process-runner design D4). contributing/runners.md lists them.
+    "runner.warming-up": "A runner's engine is being prepared outside any run, which can take a "
+    "while.",
     "runner.warmed-up": "A runner's engine was prepared outside any run, so its first run starts "
     "quickly.",
     "runner.warm-up-failed": "A runner couldn't prepare its engine outside any run, and says why.",

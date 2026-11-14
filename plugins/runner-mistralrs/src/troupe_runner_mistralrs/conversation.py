@@ -95,9 +95,13 @@ class _RunEnded(Exception):  # noqa: N818 - an ending, not an error of the runne
 
 @dataclass
 class _Full(Exception):  # noqa: N818 - the window is full, which a run told compact may get past
-    """The conversation, or the answer, reached the run's window: ``message`` says how."""
+    """The conversation, or the answer, reached the run's window: ``message`` says how. ``asked``
+    is whether the request was made, so counts as a turn unless it's asked again; ``cut`` the
+    answer that stopped at the room left, whose text is a turn if the run ends on it."""
 
     message: str
+    asked: bool = False
+    cut: Answer | None = None
 
 
 @dataclass
@@ -297,6 +301,8 @@ class Conversation:
                 loaded.append(self._loader(self._spec))
             except EngineFailure as error:
                 failed.append(error)
+            except BaseException as error:  # anything else, so the thread never dies unreported
+                failed.append(EngineFailure(f"{type(error).__name__}: {error}"))
 
         loading = threading.Thread(target=load, name="load", daemon=True)
         loading.start()
@@ -313,6 +319,10 @@ class Conversation:
             raise _RunEnded(
                 f"The engine couldn't load the model {self._model}: {failed[0].message}",
                 "configuration",
+            )
+        if not loaded:  # the load thread ended without a model or the engine's words
+            raise _RunEnded(
+                f"Loading the model {self._model} stopped without a result.", "configuration"
             )
         return loaded[0]
 
@@ -416,19 +426,24 @@ class Conversation:
             try:
                 return self._ask()
             except _Full as full:
+                if self._compacting() and self._compact(int(self._window * COMPACT_TO_SHARE)):
+                    if full.asked:
+                        self._requests -= 1  # asked again after compacting, as the same turn
+                    continue
+                if full.cut is not None:
+                    self._turn_event(full.cut)
                 if not self._compacting():
                     raise _RunEnded(
                         f"{full.message} The run's context window is {self._window} tokens: "
                         "raise contextLength, or give the actor a smaller task.",
                         "context-length",
                     ) from full
-                if not self._compact(int(self._window * COMPACT_TO_SHARE)):
-                    raise _RunEnded(
-                        f"{full.message} onContextFull is compact, and compaction found nothing "
-                        "more to remove: the tool results left are the latest turn's. Raise "
-                        "contextLength, or give the actor a smaller task.",
-                        "context-length",
-                    ) from full
+                raise _RunEnded(
+                    f"{full.message} onContextFull is compact, and compaction found nothing more "
+                    "to remove to make room. Raise contextLength, or give the actor a smaller "
+                    "task.",
+                    "context-length",
+                ) from full
 
     def _ask(self) -> Answer:
         engine = self._loaded()
@@ -441,25 +456,21 @@ class Conversation:
             if self._sink.stopping():
                 raise _Stop from error
             if error.kind == "too-long":
-                if self._compacting():
-                    self._requests -= 1  # asked again after compacting, as the same turn
-                raise _Full(f"The engine refused the request: {error.message}.") from error
+                raise _Full(
+                    f"The engine refused the request: {error.message}.", asked=True
+                ) from error
             raise _RunEnded(f"The engine failed: {error.message}", "engine") from error
         self._record("received", dict(answer.record))
         self._counted(answer)
         if answer.finish_reason == "length":
             # The answer reached the room left: the window, the only limit the runner sets. Its
-            # text is reported, its calls (which may be cut) aren't carried out (design D7).
-            if self._compacting():
-                self._requests -= 1
-                raise _Full(
-                    f"The model's answer filled the room left in the run's context window "
-                    f"({request.max_tokens} tokens)."
-                )
-            self._turn_event(answer)
+            # calls (which may be cut) aren't carried out; its text is a turn if the run ends on
+            # it, and is left out if a run told compact asks again (design D7).
             raise _Full(
                 f"The model's answer filled the room left in the run's context window "
-                f"({request.max_tokens} tokens) and was cut there."
+                f"({request.max_tokens} tokens) and was cut there.",
+                asked=True,
+                cut=answer,
             )
         self._turn_event(answer)
         return answer

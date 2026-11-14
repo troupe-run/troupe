@@ -117,3 +117,23 @@ def test_the_real_mistralrs_runners_warm_up_answers_in_one_line(tmp_path: Path) 
     else:
         assert notices == []
     assert json.dumps([n.to_data() for n in notices])
+
+
+@pytest.mark.parametrize("seconds", [True, float("inf"), -1, "17"])
+def test_a_warm_up_time_that_isnt_a_finite_number_is_recorded_as_zero(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, seconds: object
+) -> None:
+    # json.dumps writes Infinity for inf, which json.loads reads back: the runner could say it.
+    _runner(monkeypatch, f"print({json.dumps({'warmedUp': True, 'seconds': seconds})!r})")
+    (notice,) = warm_up("mistralrs", tmp_path, {})
+    assert notice.details["seconds"] == 0
+    check_notice(notice.to_data())
+
+
+def test_the_warm_up_is_announced_before_it_starts() -> None:
+    from troupe.core.runners.warm_up import warming
+
+    notice = warming("mistralrs")
+    assert notice.code == "runner.warming-up"
+    assert notice.details == {"runner": "mistralrs"}
+    check_notice(notice.to_data())

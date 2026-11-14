@@ -425,7 +425,7 @@ class Runner:
     def _converse(self, conversation: Conversation) -> None:
         try:
             conversation.run()
-        except Exception as error:  # the runner's own failure: reported, then exit 1
+        except BaseException as error:  # its own failure, a panic included
             self._failed = True
             self._diagnose("the conversation failed:\n" + traceback.format_exc())
             conversation.fail(f"The mistralrs runner failed: {type(error).__name__}: {error}")
@@ -513,7 +513,9 @@ def keep_protocol_channel() -> BinaryIO:
     (design D3). On Windows the C runtime's dup2 on descriptor 1 also moves the standard handle
     the engine writes through. Call it before anything imports ``mistralrs``."""
     sys.stdout.flush()
-    protocol = os.fdopen(os.dup(1), "wb", buffering=0)
+    # Buffered, and flushed after each line: a raw write can land only in part, which the buffer
+    # finishes, so the channel never holds a cut line.
+    protocol = os.fdopen(os.dup(1), "wb")
     os.dup2(2, 1)
     sys.stdout = sys.stderr
     return protocol

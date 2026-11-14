@@ -209,6 +209,9 @@ def _from_env(runtime: str, field: str, env: Mapping[str, str]) -> str | None:
     raw = env.get(variable, "")
     if raw == "":
         return None
+    if field == "endpoint" and runtime in defaults.IN_PROCESS_RUNTIMES:
+        # Refused for being set at all, before its shape: the fix is to unset it, not reshape it.
+        raise _no_endpoint(runtime, variable)
     if not PATTERNS[field].match(raw):
         # Never the value: a key put here by mistake, or an endpoint's password, would be
         # printed and recorded (#298). The person can read it from their own environment.
@@ -220,6 +223,17 @@ def _from_env(runtime: str, field: str, env: Mapping[str, str]) -> str | None:
             details={"variable": variable, "accepted": [ACCEPTED[field]]},
         )
     return raw
+
+
+def _no_endpoint(runtime: str, variable: str) -> TroupeError:
+    """The refusal of an endpoint for an in-process runtime, from ``variable``."""
+    return TroupeError(
+        "runtime.invalid-value",
+        problem=f"The runtime variable {variable} is set, but the runtime {runtime!r} runs its "
+        "model in the runner's own process and takes no endpoint.",
+        fix=f"Unset {variable}.",
+        details={"variable": variable, "accepted": ["nothing: unset it"]},
+    )
 
 
 def _field(
@@ -263,15 +277,8 @@ def resolve(name: str, config: Mapping[str, Any], env: Mapping[str, str]) -> Res
         )
     endpoint = resolved["endpoint"]
     if name in defaults.IN_PROCESS_RUNTIMES:
-        if endpoint is not None:  # config refuses one, so it came from the environment
-            variable = env_name(name, "endpoint")
-            raise TroupeError(
-                "runtime.invalid-value",
-                problem=f"The runtime variable {variable} is set, but the runtime {name!r} runs "
-                "its model in the runner's own process and takes no endpoint.",
-                fix=f"Unset {variable}.",
-                details={"variable": variable, "accepted": ["nothing: unset it"]},
-            )
+        if endpoint is not None:  # config refuses one, and _from_env one from the environment
+            raise _no_endpoint(name, env_name(name, "endpoint"))
     elif endpoint is None:  # config's check refuses a runtime with no endpoint
         msg = f"the runtime {name!r} has no endpoint"
         raise RuntimeError(msg)

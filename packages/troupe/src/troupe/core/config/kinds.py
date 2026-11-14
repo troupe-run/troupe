@@ -381,6 +381,17 @@ def _runtime_problems(
         f"troupe config set {shown((RUNTIMES, '<name>', 'endpoint'))}=<url>, with "
         f"{runtimes.fitting(fit)}"
     )
+    # A runner that loads its model in process fits only its in-process built-in, which config
+    # can't define again: the fix is the built-in itself (in-process-runner design D5).
+    in_process = fit.endpoint == "none" and fit.built_in is not None
+    none_fit = (
+        f"Only troupe's built-in {fit.built_in!r} can fit the {runner} runner, which runs its "
+        f"model in its own process: unset what config sets under "
+        f"{shown((RUNTIMES, str(fit.built_in)))} "
+        f"that makes it unfit, then set {shown(at)} to {fit.built_in}."
+        if in_process
+        else f"Define one that fits with {define}, then set {shown(at)} to it."
+    )
     if runtime is None:
         if takes == "required":
             if not fits:
@@ -389,7 +400,7 @@ def _runtime_problems(
                         at,
                         f"the {runner} runner needs a runtime, and no runtime there is fits the "
                         f"{runner} runner",
-                        f"Define one that fits with {define}, then set {shown(at)} to it.",
+                        none_fit,
                     )
                 ]
             return [
@@ -422,11 +433,15 @@ def _runtime_problems(
                 at,
                 f"there's no runtime named {runtime!r} ({there_are}: {listed})",
                 (
-                    f"Set it to one of: {', '.join(fits)}, or define it with "
-                    if fits
-                    else "Define it with "
-                )
-                + f"troupe config set {shown((RUNTIMES, str(runtime), 'endpoint'))}=<url>.",
+                    (f"Set it to one of: {', '.join(fits)}." if fits else none_fit)
+                    if in_process
+                    else (
+                        f"Set it to one of: {', '.join(fits)}, or define it with "
+                        if fits
+                        else "Define it with "
+                    )
+                    + f"troupe config set {shown((RUNTIMES, str(runtime), 'endpoint'))}=<url>."
+                ),
                 related=((RUNTIMES, str(runtime)),),
             )
         ]
@@ -440,11 +455,12 @@ def _runtime_problems(
         runtimes.unfit_words(str(runner), runtime, reason, shape.endpoint_value)
         for reason in reasons
     )
-    fix = (
-        f"Set {shown(at)} to one that fits: {', '.join(fits)}, or define one with {define}."
-        if fits
-        else f"Define one that fits with {define}, then set {shown(at)} to it."
-    )
+    if not fits:
+        fix = none_fit
+    elif in_process:
+        fix = f"Set {shown(at)} to one that fits: {', '.join(fits)}."
+    else:
+        fix = f"Set {shown(at)} to one that fits: {', '.join(fits)}, or define one with {define}."
     return [Problem(at, why, fix, related=((RUNTIMES, runtime),))]
 
 

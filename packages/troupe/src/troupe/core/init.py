@@ -29,7 +29,7 @@ from troupe.core.config.kinds import check
 from troupe.core.config.projection import render
 from troupe.core.events.lineage import Actor
 from troupe.core.policy import ALLOW_UNENFORCED_LOCAL_STAGE, env_name, read_unenforced_local_stage
-from troupe.core.runners.warm_up import warm_up
+from troupe.core.runners.warm_up import warm_up, warming
 from troupe.core.stores import open_event_store
 from troupe.core.theatre import GIT_FILES, THEATRE_DIR, ensure_git_files, refuse_existing
 from troupe.core.vcs import load_vcs
@@ -112,6 +112,8 @@ async def init(request: m.InitRequest, session: Session, send: Send) -> Message:
         raise
     # 7. Warm the runner's engine, if it has a warm-up, so the first run starts quickly
     # (in-process-runner design D4). It changes no file; how it went is a notice.
+    if interim.runner(chosen.runner).warm_up:
+        send(m.NoticeUpdate(notice=m.NoticeData.of(warming(chosen.runner))))
     warmed = await asyncio.to_thread(warm_up, chosen.runner, directory, session.env)
     return m.InitResult(
         rehearsed=False,

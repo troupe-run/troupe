@@ -14,6 +14,7 @@ run's check, picks up where it stopped (measured on #414).
 """
 
 import json
+import math
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -22,6 +23,19 @@ from troupe.core import defaults, interim
 from troupe.core.notices import Notice
 from troupe.platform import processes
 from troupe.platform.errors import OutputTooLargeError, PlatformError, ProcessTimeoutError
+
+
+def warming(runner: str) -> Notice:
+    """The notice that the warm-up has started, so nobody waits on it silently: it can take tens
+    of seconds, and up to RUNNER_WARM_UP_TIMEOUT_SECONDS."""
+    return Notice(
+        "runner.warming-up",
+        problem=f"Preparing the {runner} runner's engine, so its first run starts quickly. The "
+        f"first time on this machine this can take a minute; it stops after "
+        f"{defaults.RUNNER_WARM_UP_TIMEOUT_SECONDS:g}s.",
+        fix="Nothing to do: wait for it.",
+        details={"runner": runner},
+    )
 
 
 def _answer(stdout: bytes) -> dict[str, Any] | None:
@@ -87,7 +101,15 @@ def warm_up(
         return []
     if answer is not None and answer.get("warmedUp") is True and done.returncode == 0:
         seconds = answer.get("seconds")
-        took = seconds if isinstance(seconds, int | float) and seconds >= 0 else 0
+        took: float = 0
+        # A boolean is an int, and json reads Infinity: neither is a time.
+        if (
+            isinstance(seconds, int | float)
+            and not isinstance(seconds, bool)
+            and math.isfinite(seconds)
+            and seconds >= 0
+        ):
+            took = seconds
         return [
             Notice(
                 "runner.warmed-up",

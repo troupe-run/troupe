@@ -488,6 +488,23 @@ def test_a_served_actor_on_the_in_process_runtime_is_refused_listing_ollama() ->
     assert "one that fits: ollama" in error.fix
 
 
+def test_an_in_process_actors_fix_names_the_built_in_never_a_runtime_to_define() -> None:
+    # A runtime config defines always has an endpoint, so it could never fit (design D5).
+    unfit = _refused(_actor(runner="mistralrs", options={}, runtime="ollama"))
+    assert "define" not in unfit.fix.lower()
+    unknown = _refused(_actor(runner="mistralrs", options={}, runtime="nope"))
+    assert "Set it to one of: mistralrs." in unknown.fix
+    assert "endpoint" not in unknown.fix
+    broken = _refused(
+        {
+            "runtimes": {"mistralrs": {"credential": {"env": "FOO"}}},
+            "actors": {"tester": {**TESTER, "runner": "mistralrs", "options": {}}},
+        }
+    )
+    assert "Only troupe's built-in 'mistralrs' can fit" in broken.fix
+    assert "runtimes.mistralrs" in broken.fix
+
+
 def test_a_mistralrs_actor_on_the_in_process_runtime_is_valid() -> None:
     check(_actor(runner="mistralrs", options={}, runtime="mistralrs"))
 

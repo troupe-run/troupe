@@ -79,12 +79,12 @@ tools in every round of the runner's probe (lmstudio-runner design D12, D15). Na
 changing it is one line."""
 
 LM_STUDIO_AUDITION_LIMITS = {"maxTurns": 10, "maxTotalTokens": 100_000}
+"""The LM Studio example's limits, as the OpenAI example's: enough to read a few files and write
+one (lmstudio-runner design D15)."""
 
 MISTRALRS_AUDITION_LIMITS = {"maxTurns": 10}
 """The mistralrs example's options. It names no model: its model is a GGUF file on the person's
 machine, which they point TROUPE_RUNTIME_MISTRALRS_MODEL at (in-process-runner design D10)."""
-"""The LM Studio example's limits, as the OpenAI example's: enough to read a few files and write
-one (lmstudio-runner design D15)."""
 
 SCRIPTED_CONTENT = (
     "# Audition\n\nWritten by troupe's scripted runner, which plays a script instead of running an "
