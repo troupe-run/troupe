@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from protocol_schemas import check_notice
-from troupe.core import interim
+from troupe.core import defaults, interim
 from troupe.core.runners.warm_up import warm_up
 
 
@@ -88,6 +88,19 @@ def test_a_warm_up_past_its_limit_is_stopped_and_its_first_run_finishes_it(
     (notice,) = warm_up("mistralrs", tmp_path, {}, timeout=0.5)
     assert notice.code == "runner.warm-up-cut-off"
     assert notice.details == {"runner": "mistralrs", "seconds": 0.5}
+    assert "perform it again" in notice.fix
+    check_notice(notice.to_data())
+
+
+def test_a_warm_up_that_writes_past_its_output_limit_is_a_failure(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(defaults, "RUNNER_WARM_UP_OUTPUT_MAX_BYTES", 1024)
+    _runner(monkeypatch, "import sys; sys.stdout.write('x' * 65536); sys.stdout.flush()")
+    (notice,) = warm_up("mistralrs", tmp_path, {})
+    assert notice.code == "runner.warm-up-failed"
+    assert notice.details == {"runner": "mistralrs"}
+    assert "more than the limit of 1024 bytes" in notice.problem
     assert "perform it again" in notice.fix
     check_notice(notice.to_data())
 
