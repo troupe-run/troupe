@@ -30,9 +30,9 @@ def warming(runner: str) -> Notice:
     of seconds, and up to RUNNER_WARM_UP_TIMEOUT_SECONDS."""
     return Notice(
         "runner.warming-up",
-        problem=f"Preparing the {runner} runner's engine, so its first run starts quickly. The "
-        f"first time on this machine this can take a minute; it stops after "
-        f"{defaults.RUNNER_WARM_UP_TIMEOUT_SECONDS:g}s.",
+        problem=f"Preparing the {runner} runner's engine, if it needs it on this machine, so its "
+        "first run starts quickly. Where there's work to do, the first time can take a minute; "
+        f"it stops after {defaults.RUNNER_WARM_UP_TIMEOUT_SECONDS:g}s.",
         fix="Nothing to do: wait for it.",
         details={"runner": runner},
     )

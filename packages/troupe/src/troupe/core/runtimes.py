@@ -277,8 +277,15 @@ def resolve(name: str, config: Mapping[str, Any], env: Mapping[str, str]) -> Res
         )
     endpoint = resolved["endpoint"]
     if name in defaults.IN_PROCESS_RUNTIMES:
-        if endpoint is not None:  # config refuses one, and _from_env one from the environment
-            raise _no_endpoint(name, env_name(name, "endpoint"))
+        if endpoint is not None:  # _from_env refused one from the environment: it's config's
+            path = (RUNTIMES, name, "endpoint")
+            raise TroupeError(
+                "config.invalid",
+                problem=f"{shown(path)} is set, but the runtime {name!r} runs its model in the "
+                "runner's own process and takes no endpoint.",
+                fix=f"Unset {shown(path)}.",
+                details={"path": list(path), "rule": "an in-process runtime takes no endpoint"},
+            )
     elif endpoint is None:  # config's check refuses a runtime with no endpoint
         msg = f"the runtime {name!r} has no endpoint"
         raise RuntimeError(msg)
