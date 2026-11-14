@@ -73,7 +73,8 @@ def _temperature(value: object) -> float:
     fix = f"Give a number from 0 to {TEMPERATURE_MAX:g}, such as 0 for the least random answers."
     if isinstance(value, bool) or not isinstance(value, int | float):
         raise invalid(where, f"{value!r} isn't a number.", fix)
-    if not math.isfinite(value) or value < 0 or value > TEMPERATURE_MAX:
+    # The range first: isfinite turns an int into a float, which a huge one overflows.
+    if value < 0 or value > TEMPERATURE_MAX or not math.isfinite(value):
         raise invalid(where, f"{value!r} isn't 0 to {TEMPERATURE_MAX:g}.", fix)
     return float(value)
 

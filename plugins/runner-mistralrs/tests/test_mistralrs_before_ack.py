@@ -99,9 +99,20 @@ OPTION_VALUES = st.one_of(
     st.none(),
     st.booleans(),
     st.integers(min_value=-5, max_value=2**65),
+    st.sampled_from([10**400, -(10**400)]),  # past a float's range: a JSON reader takes them
     st.floats(allow_nan=True, allow_infinity=True),
     st.text(max_size=5),
 )
+
+
+@pytest.mark.parametrize("option", ["temperature", "seed", "maxTurns", "contextLength"])
+@pytest.mark.parametrize("value", [10**400, -(10**400)])
+def test_an_integer_past_a_floats_range_is_refused_as_an_invalid_option(
+    option: str, value: int
+) -> None:
+    # A JSON reader takes a 400-digit integer; comparing it as a float would overflow.
+    with pytest.raises(OptionsError):
+        parse_options({option: value})
 
 
 @given(
