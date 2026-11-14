@@ -70,7 +70,7 @@
 
 ## 12. The whole check
 
-- [ ] 12.1 Run `uv run scripts/check.py` in full, with the log kept in a scratch file. Verify: every gate passes.
+- [x] 12.1 Run `uv run scripts/check.py` in full, with the log kept in a scratch file. Verify: every gate passes.
 
 ## Workflow follow-up
 
