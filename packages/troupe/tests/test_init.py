@@ -260,7 +260,8 @@ def test_the_anthropic_actor_names_its_runtime_and_model_with_small_limits_and_w
     assert (repo.path / ".troupe" / "actors" / "lead.md").read_text(encoding="utf-8").strip()
 
 
-def test_the_anthropic_audition_model_is_claudes_cheapest_current_model() -> None:
+def test_the_anthropic_audition_model_is_claude_haiku_5_5() -> None:
+    # Claude's cheapest current model (anthropic-runner design D15); this pins the name only.
     assert auditions.ANTHROPIC_AUDITION_MODEL == "claude-haiku-5-5"
 
 

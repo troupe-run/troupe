@@ -90,6 +90,8 @@ alone, so troupe refuses a pair your runner would refuse before anything is reco
   `/` is no path; `//` is one.
 - `scheme`: `"http"` when you can only reach plain `http`, as the LM Studio runner, whose library has no TLS; `"any"`
   otherwise.
+- `version`: `True` when you add the API's version path (`/v1`) below the endpoint yourself, as the Anthropic runner's
+  library does, so an endpoint whose path already ends in `/v1` is refused (`endpoint-version`); `False` otherwise.
 - `built_in`: the built-in runtime made for your runner, if troupe has one. Your runner then fits no other runner's
   built-in, whatever its shape, since built-ins of the same shape serve different engines.
 
@@ -353,7 +355,7 @@ In a run that uses kinds, troupe stores each line as compact JSON: `{"kind": ...
 ([`transcript-record.schema.json`](../protocol/schemas/transcript-record.schema.json)). It masks the credential in
 the record's bytes before it frames them. The transcript limit counts the stored bytes, framing included. The run's
 end records `transcriptFormat`, `native` or `kinds`, beside the transcript's reference, so a reader always knows
-which form its lines are. The OpenAI, Ollama and LM Studio runners use kinds.
+which form its lines are. The OpenAI, Ollama, LM Studio and Anthropic runners use kinds.
 
 ### Where transcripts are kept
 
