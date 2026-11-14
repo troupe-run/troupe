@@ -281,8 +281,8 @@ It has no chat template or tool calling, so it can't play a conversation, and it
 can catch it mid-answer. Cancel mid-request is tested with the stand-in holding a request open, as the engine does
 (the GIL released, nothing to interrupt), and with a real model mid-answer by the live test.
 
-**The engine stand-in.** The runner reaches the engine through a small `Engine` protocol in `engine.py` with three
-methods: load, chat and count tokens. Tests give the runner a stand-in that serves recorded responses. Production code
+**The engine stand-in.** The runner reaches the engine through a small `Engine` protocol in `port.py`: a loader, then
+chat and count tokens. `engine.py` holds the real implementation, the one module that imports `mistralrs`. Tests give the runner a stand-in that serves recorded responses. Production code
 has no hook. Tests start the runner through a test-only entry script that passes the stand-in to `runner.main`, and
 the conformance suite takes that script as its command.
 
