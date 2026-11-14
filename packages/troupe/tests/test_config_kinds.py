@@ -9,7 +9,7 @@ import jsonschema
 import pytest
 
 from protocol_schemas import check_error
-from troupe.core import interim
+from troupe.core import defaults, interim
 from troupe.core.config.kinds import check, problems
 from troupe.core.errors import TroupeError
 
@@ -448,6 +448,26 @@ def test_an_ollama_actor_without_a_runtime_is_refused_naming_only_the_runtimes_t
         assert unfit not in error.problem + error.fix
 
 
+def test_an_anthropic_actor_without_a_runtime_is_refused_naming_its_runtime_path() -> None:
+    # Task 13.1: the anthropic runner needs a runtime (runtime="required").
+    error = _refused(_actor(runner="anthropic", options={}))
+    assert error.details["path"] == ["actors", "tester", "runtime"]
+    assert "the anthropic runner needs a runtime" in error.problem
+    assert "anthropic" in error.fix
+
+
+def test_an_anthropic_actor_on_a_local_engines_runtime_of_your_own_is_accepted() -> None:
+    # Spec: anthropic-runner, "A local engine through a runtime of your own".
+    config = _with(
+        {"lm-studio-messages": {"endpoint": "http://127.0.0.1:1234"}},
+        runner="anthropic",
+        options={},
+        runtime="lm-studio-messages",
+        model="google/gemma-4-e4b",
+    )
+    assert problems(config) == []
+
+
 def test_an_actor_naming_a_runtime_that_doesnt_exist_is_told_only_those_that_fit() -> None:
     error = _refused(_actor(runner="ollama", options={}, runtime="nowhere"))
     assert "no runtime named 'nowhere'" in error.problem
@@ -662,7 +682,7 @@ def test_a_runtime_with_problems_of_its_own_is_never_offered_as_one_that_fits() 
     assert "(these fit it: ollama)" in actor.rule
 
 
-@pytest.mark.parametrize("runtime", ["lm-studio", "ollama", "openai"])
+@pytest.mark.parametrize("runtime", sorted(defaults.RUNTIMES))
 def test_every_runtime_fits_a_runner_that_takes_any(runtime: str) -> None:
     # Spec: runtimes, "Every runtime fits a runner that takes any".
     assert problems(_actor(runtime=runtime, model="m")) == []

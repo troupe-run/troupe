@@ -128,7 +128,7 @@ across messages make Claude stop calling tools in parallel).
 
 ### D5. Options and limits, each default named once
 
-The options are closed: `maxTurns` (default 20), `maxTotalTokens` (default 200,000), `maxOutputTokens` (default
+The options are closed: `maxTurns` (default 50), `maxTotalTokens` (default 1,000,000), as the OpenAI runner's, `maxOutputTokens` (default
 16,000, sent as `max_tokens`, which the API requires) and `contextWindow` (no default). The defaults live in the
 runner's `defaults.py`, with the library's timeouts (D10), the retry count and backoff, the `Retry-After` cap, the
 stream timeout, the cancel grace, the compaction share (D11) and the summary limit.

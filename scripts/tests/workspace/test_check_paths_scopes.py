@@ -20,6 +20,13 @@ def test_troupes_declaration_scopes_the_ollama_runners_source_to_runner_ollama()
     assert guard.check_scope(paths, declaration).names == ("runner_ollama",)
 
 
+def test_troupes_declaration_scopes_the_anthropic_runners_source_to_runner_anthropic() -> None:
+    # Spec: quality-check, "A commit that changes the Anthropic runner".
+    declaration = _troupes_declaration()
+    paths = ["plugins/runner-anthropic/src/troupe_runner_anthropic/runner.py"]
+    assert guard.check_scope(paths, declaration).names == ("runner_anthropic",)
+
+
 def test_troupes_declaration_scopes_the_openai_runners_source_to_runner_openai() -> None:
     declaration = _troupes_declaration()
     paths = ["plugins/runner-openai/src/troupe_runner_openai/runner.py"]

@@ -106,6 +106,19 @@ def test_only_the_anthropic_and_lm_studio_runners_come_as_extras() -> None:
     }
 
 
+def test_perform_gives_the_anthropic_runner_no_anthropic_variable_from_its_environment() -> None:
+    # Task 13.1: the variables the anthropic package would read never reach the runner.
+    source = {
+        "ANTHROPIC_API_KEY": "sk-ant-canary-0123456789",
+        "ANTHROPIC_BASE_URL": "https://elsewhere.example",
+        "ANTHROPIC_CUSTOM_HEADERS": "X-Leak: yes",
+        "HTTPS_PROXY": "http://proxy.example:3128",
+    }
+    assert interim.runner_environment("anthropic", source) == {
+        "HTTPS_PROXY": "http://proxy.example:3128"
+    }
+
+
 def test_anthropic_resolves_to_its_module_requiring_a_runtime_with_only_the_proxy_variables() -> (
     None
 ):

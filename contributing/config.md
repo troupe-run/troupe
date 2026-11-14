@@ -123,8 +123,8 @@ Its default, in `troupe.core.defaults`:
 ## Runtimes
 
 A runtime is a service a runner talks to, named once in config (`runtimes.<name>`, spec: runtimes) and resolved by
-`troupe.core.runtimes`: troupe's built-in runtimes (`RUNTIMES` in `troupe.core.defaults`: `openai`, `ollama` and
-`lm-studio`), then the theatre's config field by field, then the session's environment
+`troupe.core.runtimes`: troupe's built-in runtimes (`RUNTIMES` in `troupe.core.defaults`: `openai`, `anthropic`,
+`ollama` and `lm-studio`), then the theatre's config field by field, then the session's environment
 (`TROUPE_RUNTIME_<NAME>_ENDPOINT`, `_MODEL` and `_CREDENTIAL_ENV`, the name in capitals with `-` as `_`). Each value
 resolved carries its source (`default`, `theatre`, `env`, or `actor` for an actor's model), and `troupe config get
 --resolved` shows them. An unset or empty variable is absent; one that's set but malformed is `runtime.invalid-value`.
