@@ -74,7 +74,8 @@ for ever.
 While `campaign()` runs, a context manager installs handlers for `SIGINT`, and for `SIGBREAK` on Windows, that only
 set a `threading.Event`. It restores the previous handlers afterwards. Code that waits checks the event:
 
-- `wait(process, stopping)` loops `poll()` and `wait(WAIT_SECONDS)` until the hunt exits or a stop is requested. On a
+- `wait(process, stopping)` loops `poll()` and `wait(WAIT_SECONDS)` until the hunt exits or a stop is requested. A
+  stop requested before it returns, even one that came as the hunt exited, counts as stopping that hunt. On a
   stop it prints the same line as before, keeps waiting up to `STOP_WAIT_SECONDS` for the hunt to exit, kills it if
   it doesn't, and raises `Stopped`, as before. No exception can now land inside `subprocess`. That also removes the
   smaller window between `waitpid` reaping the hunt and `Popen` recording its status, where the exit code was lost
@@ -94,12 +95,31 @@ set a `threading.Event`. It restores the previous handlers afterwards. Code that
 
 The flag removes the whole class of bug: an asynchronous exception partway through library code.
 
-### D3. `flake_hunt.py` is unchanged
+### D3. Nothing else that waits on a `Popen` under Ctrl-C has this hang
 
-The hunt's main thread waits on worker threads with `Thread.join(timeout)`, not on `Popen`. Its rounds' `Popen` calls
-run in worker threads, which never receive signal handlers. Once it has caught the interrupt, it ignores `SIGINT` for
-the whole stop. The failing run shows it stopping and summarising correctly. Nothing here needs it to change, and
-changing it would widen this fix without a reproduced fault.
+The window only hangs a program that **catches** the interrupt and then waits on the **same** `Popen` again. If the
+`KeyboardInterrupt` propagates and nothing waits on that `Popen` afterwards, the stuck lock does no harm. The owner
+asked for a check of every `wait()`, `poll()` and `communicate()` outside tests, and of every handler for `SIGINT`,
+`SIGBREAK` or `KeyboardInterrupt` (`git grep`, 2026-11-14):
+
+- **`scripts/flake_hunt.py` (unchanged):** the main thread waits on worker threads with `Thread.join(timeout)`.
+  CPython's join releases its own lock when an interrupt lands mid-acquire (bpo-21822). The rounds' `Popen` waits run
+  in worker threads, and signal handlers only run in the main thread. The main thread touches a `Popen` only to start
+  the load before any round runs, and to stop the trees in its `finally`. On the stop path that `finally` runs with
+  `SIGINT` ignored. On the normal path a Ctrl-C there raises and ends the hunt, and nothing waits on that `Popen`
+  again. A load process notices its parent has gone and exits. The failing run also shows the hunt stopping and
+  summarising correctly.
+- **troupe's CLI (`packages/troupe/src/troupe/cli/commands.py`):** it already uses this design. `platform/interrupts.py`
+  `on_interrupt` turns Ctrl-C into a cancel request, never an exception. The campaign can't import troupe (the
+  tooling must work when the code it hunts is broken), so it carries its own copy of the same few lines.
+- **`troupe.platform.processes.run`:** its synchronous `Popen` wait runs under the CLI's `on_interrupt`. Even
+  without it, an interrupt would propagate and nothing would wait on that `Popen` again.
+- **`plugins/runner-claude-code/.../processes.py`:** this runs in a runner process. troupe starts runners in a session
+  of their own, so a terminal's Ctrl-C doesn't reach them. troupe stops them with its own signals.
+- **`scripts/guard.py`:** a hook that handles no interrupt. If one arrives, it ends the hook, and nothing waits again.
+- **Tests' helpers (`scripts/tests/conftest.py`):** they run under pytest, where no Ctrl-C is sent.
+
+No change outside the campaign is needed.
 
 ### D4. The regression test forces the exact moment with a real signal
 
