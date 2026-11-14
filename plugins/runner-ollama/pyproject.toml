@@ -1,6 +1,6 @@
 [project]
 name = "troupe-runner-ollama"
-version = "0.0.0"
+version = "0.1.0"
 description = "An actor runner for troupe that drives a model served by Ollama, with troupe's own tool loop."
 readme = "README.md"
 license = "Apache-2.0"

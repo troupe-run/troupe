@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.2.0](https://github.com/troupe-run/troupe/compare/troupe-vcs-git-v0.1.0...troupe-vcs-git-v0.2.0) (2026-11-14)
+
+
+### Features
+
+* audit every run's changes against its declared effects ([3f5e31e](https://github.com/troupe-run/troupe/commit/3f5e31e85ef2d2b4f421a75d4fd918cd7ee7ffb4))
+* **vcs:** say whether a directory is in a repository ([09abe93](https://github.com/troupe-run/troupe/commit/09abe93e078ef6635ab10a4e240ca79ddc6a852e))
+
+
+### Bug Fixes
+
+* **vcs-git:** stat the branch's ref before the read that names it ([b4a017b](https://github.com/troupe-run/troupe/commit/b4a017b8b201ecfcca84bb3d9d45e4ade1ddbc18))
+* **vcs:** judge root names only as far as the walk needs them ([14e5c1a](https://github.com/troupe-run/troupe/commit/14e5c1a4eeaf57c6260b126509e42a4c47a2e406)), closes [#388](https://github.com/troupe-run/troupe/issues/388)
+* **vcs:** name an unborn branch as git will once it's born ([f60d21d](https://github.com/troupe-run/troupe/commit/f60d21db6c4946bf32729219abc576f65dbc3e4b)), closes [#388](https://github.com/troupe-run/troupe/issues/388)
+* **vcs:** watch refs sharing the branch's name in the token ([a2ab9cb](https://github.com/troupe-run/troupe/commit/a2ab9cba27ef32861ce224eff67e7224e05c1395))
+
+
+### Performance Improvements
+
+* **vcs-git:** re-read the branch and HEAD in one git process ([5f5420a](https://github.com/troupe-run/troupe/commit/5f5420a5ab0b1f1a06077cce4927a867cf47a77f))
+
 ## 0.1.0 (2026-11-01)
 
 

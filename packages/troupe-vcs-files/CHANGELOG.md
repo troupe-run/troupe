@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.0](https://github.com/troupe-run/troupe/compare/troupe-vcs-files-v0.1.0...troupe-vcs-files-v0.2.0) (2026-11-14)
+
+
+### Features
+
+* audit every run's changes against its declared effects ([3f5e31e](https://github.com/troupe-run/troupe/commit/3f5e31e85ef2d2b4f421a75d4fd918cd7ee7ffb4))
+* **vcs:** say whether a directory is in a repository ([09abe93](https://github.com/troupe-run/troupe/commit/09abe93e078ef6635ab10a4e240ca79ddc6a852e))
+
 ## 0.1.0 (2026-11-01)
 
 

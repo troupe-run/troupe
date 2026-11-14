@@ -1,6 +1,6 @@
 [project]
 name = "troupe-runner-lm-studio"
-version = "0.0.0"
+version = "0.1.0"
 description = "An actor runner for troupe that drives a model in LM Studio through LM Studio's own client library, with troupe's own tools."
 readme = "README.md"
 license = "Apache-2.0"
