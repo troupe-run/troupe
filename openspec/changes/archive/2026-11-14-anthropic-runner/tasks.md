@@ -23,10 +23,13 @@ asks for the key.
 
 ## 2. Record the new spec's Purpose in infrastructure (design D15)
 
-- [ ] 2.1 Raise an infrastructure issue on the board and open its pull request adding `anthropic-runner`'s Purpose
+- [x] 2.1 Raise an infrastructure issue on the board and open its pull request adding `anthropic-runner`'s Purpose
   (without its `Capability:` line, whitespace collapsed) to `oob/troupe-spec-purposes.json`, following its
   `oob/README.md`, and check `cap:actor-runners`' description still covers it. Verify: the recorded Purpose matches
   this branch's spec verbatim, its checks pass, and this change's pull request says it merges first and links it.
+  Done: infrastructure#303 is on the board, and infrastructure#304 (change `anthropic-runner-spec-purpose`) adds only
+  this spec's record. Read through `oob.py`'s `purpose()` from this branch, it equals the spec's Purpose. Every
+  check passed, and the review left no open conversation. troupe#420 says it merges first, and links it.
 
 ## 3. The built-in runtime (design D3)
 
@@ -203,10 +206,12 @@ asks for the key.
 - [x] 15.1 Run `uv run scripts/check.py` (the full check, when the load is under 40), its output kept in a scratch
   file. Verify: it passes, and its summary line is quoted in the last commit's message or the pull request.
   Done: the commit guard's full check on b781e4f7, "check: all gates passed" (tests passed in 304.2s).
-- [ ] 15.2 Open the pull request as a draft (`Closes #415`), act on the review of the last push, and mark it ready once
+- [x] 15.2 Open the pull request as a draft (`Closes #415`), act on the review of the last push, and mark it ready once
   the review is clean, the infrastructure Purpose pull request's checks pass, and the owner's Claude capture is in or
   the owner has said to go without it. Verify: `gh pr checks` shows every job passing on the head commit, on Linux,
   macOS and Windows.
+  Done: PR #420. The review of 14747b6d was clean, with every conversation resolved and `claude review completed`
+  passed. Marked ready; CI run 43566205765 passed every job on Linux, macOS and Windows, Python 3.12 to 3.15.
 
 ## Workflow follow-up
 

@@ -490,16 +490,25 @@ a usage error.
 - **WHEN** a person runs `troupe init --audition --runner lm-studio` with its extra installed
 - **THEN** `.troupe/actors/lead.yaml` names the runner `lm-studio`, and config's `actors.lead.runtime` is `lm-studio`
 
+#### Scenario: The Anthropic runner
+- **WHEN** a person runs `troupe init --audition --runner anthropic` with its extra installed
+- **THEN** `.troupe/actors/lead.yaml` names the runner `anthropic`, and config's `actors.lead.runtime` is `anthropic`
+
 #### Scenario: A runner troupe doesn't know
 - **WHEN** a person runs `troupe init --audition --runner gemini`
-- **THEN** it fails with `runner.unknown`, naming `gemini`, `claude-code`, `lm-studio`, `ollama`, `openai` and
-  `scripted`
+- **THEN** it fails with `runner.unknown`, naming `gemini`, `anthropic`, `claude-code`, `lm-studio`, `ollama`, `openai`
+  and `scripted`
 - **AND** no `.troupe/` is made
 
 #### Scenario: A runner that isn't installed
 - **WHEN** a person runs `troupe init --audition --runner lm-studio`, whose extra is `lm-studio`, without it installed
 - **THEN** it fails with `runner.not-installed`, naming `lm-studio` and `troupe-run[lm-studio]`
 - **AND** no `.troupe/` is made, and `--rehearse` refuses the same way
+
+#### Scenario: The Anthropic runner when it isn't installed
+- **WHEN** a person runs `troupe init --audition --runner anthropic` without its extra installed
+- **THEN** it fails with `runner.not-installed`, naming `anthropic` and `troupe-run[anthropic]`
+- **AND** no `.troupe/` is made
 
 #### Scenario: A runner without an audition
 - **WHEN** a person runs `troupe init --runner scripted`

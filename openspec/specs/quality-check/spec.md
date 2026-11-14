@@ -185,10 +185,10 @@ every code raised in any worker process, and SHALL run once per run, never in ea
 
 ### Requirement: Each package outside core has a scope
 Each workspace package but core SHALL have a scope: `artifacts_local`, `identity_local`, `stage_local`, `store_text`,
-`vcs_files`, `vcs_git`, `plugin_sdk` and `run` for `packages/troupe-<name>/`, and `runner_claude_code`,
-`runner_lm_studio`, `runner_ollama`, `runner_openai` and `runner_scripted` for `plugins/runner-<name>/`. Each SHALL
-cover its package's files but `pyproject.toml`. Core (`packages/troupe/**`) and every `pyproject.toml` SHALL be in no
-scope, so changing them runs the full check.
+`vcs_files`, `vcs_git`, `plugin_sdk` and `run` for `packages/troupe-<name>/`, and `runner_anthropic`,
+`runner_claude_code`, `runner_lm_studio`, `runner_ollama`, `runner_openai` and `runner_scripted` for
+`plugins/runner-<name>/`. Each SHALL cover its package's files but `pyproject.toml`. Core (`packages/troupe/**`) and
+every `pyproject.toml` SHALL be in no scope, so changing them runs the full check.
 
 #### Scenario: A commit that changes one leaf package
 - **WHEN** a commit stages only files under `packages/troupe-stage-local/`, possibly with files under `openspec/`
@@ -226,6 +226,11 @@ scope, so changing them runs the full check.
 #### Scenario: A commit that changes the OpenAI runner
 - **WHEN** a commit stages only files under `plugins/runner-openai/src/`
 - **THEN** the commit guard runs `scripts/check.py --scope runner_openai`, and the tests that run are the OpenAI
+  runner's suite and the suites that reach it
+
+#### Scenario: A commit that changes the Anthropic runner
+- **WHEN** a commit stages only files under `plugins/runner-anthropic/src/`
+- **THEN** the commit guard runs `scripts/check.py --scope runner_anthropic`, and the tests that run are the Anthropic
   runner's suite and the suites that reach it
 
 ### Requirement: The scripts have a scope that leaves out the check and the guard
