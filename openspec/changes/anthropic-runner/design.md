@@ -281,11 +281,11 @@ host paths.
 
 ### D13. Gaps, found so far
 
-1. **LM Studio counts cache reads in `input_tokens`** (D7). Filed as troupe#419; the upstream report is the owner's
-   call.
+1. **LM Studio counts cache reads in `input_tokens`** (D7). Filed as troupe#419, and kept as troupe's own bug, not
+   reported upstream (owner, 2026-11-14).
 2. **Both local engines cut an over-long conversation silently through the Messages API** (D8). Filed as troupe#418,
-   which tracks the upstream reports (LM Studio: a way to choose `stopAtLimit`; Ollama: an error instead of
-   truncation) and dropping guard 2 for an engine once it refuses.
+   kept as troupe's own bug, not reported upstream (owner, 2026-11-14). It tracks each engine gaining a way to refuse
+   (LM Studio: choosing `stopAtLimit`; Ollama: an error instead of truncation), and dropping guard 2 for it then.
 3. **The first request isn't guarded on an engine that cuts silently** (D8). Recorded in the README and in troupe#418,
    not filed separately.
 4. **No `x-api-key`** (D4). Not filed: the owner's capture showed Claude's API takes the key as `Authorization:
