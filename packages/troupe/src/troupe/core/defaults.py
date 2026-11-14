@@ -179,9 +179,6 @@ RUNTIMES: dict[str, dict[str, object]] = {
         "credential": {"env": "ANTHROPIC_API_KEY"},
     },
     "ollama": {"endpoint": "http://127.0.0.1:11434"},
-    # LM Studio's server root, which its own client library connects to; its OpenAI-compatible
-    # API under /v1 has no built-in (lmstudio-runner design D3).
-    "lm-studio": {"endpoint": "http://127.0.0.1:1234"},
     # In-process: the mistralrs runner loads its model, a GGUF file, in its own process, so the
     # runtime has no endpoint (in-process-runner design D5).
     "mistralrs": {},

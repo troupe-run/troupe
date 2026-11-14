@@ -32,7 +32,7 @@ path."""
 
 
 def env_name(runtime: str, field: str) -> str:
-    """The variable that sets ``field`` of ``runtime``: ``TROUPE_RUNTIME_LM_STUDIO_ENDPOINT``."""
+    """The variable that sets ``field`` of ``runtime``: ``TROUPE_RUNTIME_GPU_BOX_ENDPOINT``."""
     return f"{ENV_PREFIX}{runtime.upper().replace('-', '_')}_{field.upper()}"
 
 

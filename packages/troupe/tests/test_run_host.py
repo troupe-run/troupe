@@ -372,7 +372,7 @@ def test_each_protocol_violation_crashes_the_run_naming_it(
 
 ESTIMATE = {**OK, "estimatedCostUsd": 0.5}
 UNPRICED = p.RunStartRuntime(
-    name="lm-studio", endpoint="http://127.0.0.1:1234/v1", model="m", credential=False
+    name="local-ai", endpoint="http://127.0.0.1:1234/v1", model="m", credential=False
 )
 
 
