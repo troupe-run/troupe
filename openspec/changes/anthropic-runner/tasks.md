@@ -159,11 +159,14 @@ asks for the key.
   until 7.3).
 - [x] 12.2 Run the conformance suite against the runner on a runtime naming the fake endpoint. Verify: the conformance
   test passes.
-- [ ] 12.3 Write the live tests, `TROUPE_LIVE_ANTHROPIC=1` (Claude's API, the audition model, low limits) and
+- [x] 12.3 Write the live tests, `TROUPE_LIVE_ANTHROPIC=1` (Claude's API, the audition model, low limits) and
   `TROUPE_LIVE_ANTHROPIC_LOCAL=1` (a runtime and model from the environment). Verify: without the variables both are
   skipped, naming them; the local one passes against the owner's LM Studio (the agent runs it, since it costs
   nothing), and the owner runs the Claude one with `!` (sent through the orchestrator with 7.3), its output quoted in
   the pull request.
+  Done: the agent ran the local one against the owner's LM Studio with `google/gemma-4-e4b` (succeeded: `init`,
+  `turn`, two tool pairs, `turn`, `result`); the owner ran the Claude one on 2026-11-14 (succeeded on
+  `claude-haiku-5-5`: two tool pairs, `turn`, `result`; usage 7094 input and 166 output tokens), quoted in the PR.
 
 ## 13. Ship it in troupe (design D3, D15)
 
