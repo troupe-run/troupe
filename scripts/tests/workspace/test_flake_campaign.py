@@ -7,6 +7,7 @@ import signal
 import subprocess
 import sys
 import textwrap
+import threading
 import time
 from pathlib import Path
 
@@ -230,6 +231,107 @@ def test_the_report_names_each_hunt_its_failing_tests_and_the_commit(tmp_path: P
     assert "`test_flaky.py::test_fails_on_its_second_run` failed in 1 of 2 runs" in report
     assert "the second run" in report
     assert json.loads(json.dumps(data))["hunts"][1]["summary"]["tests"][0]["failures"] == 1
+
+
+# Requirement: The campaign reports every hunt together, scenario: The interrupt lands at any moment
+
+
+STOP_SEEN_WITHIN = 30.0
+"""Seconds for the campaign's wait to see that a hunt has exited after a stop (#358). The hunt here
+exits at once, so a campaign that still waits at this limit is stuck, and a watchdog unsticks it."""
+
+
+class _InterruptedOnce:
+    """Stands in for a Popen's private ``_waitpid_lock``: takes the real lock, then has a real
+    SIGINT handled right there, as a Ctrl-C landing just after Popen's wait took it would be."""
+
+    def __init__(self, real: threading.Lock) -> None:
+        self.real = real
+        self.fired = False
+
+    def acquire(self, blocking: bool = True, timeout: float = -1) -> bool:
+        got = self.real.acquire(blocking, timeout)
+        if got and not self.fired:
+            self.fired = True
+            signal.raise_signal(signal.SIGINT)  # its handler runs before this returns
+        return got
+
+    def release(self) -> None:
+        self.real.release()
+
+    def locked(self) -> bool:
+        return self.real.locked()
+
+    def __enter__(self) -> bool:
+        return self.acquire()
+
+    def __exit__(self, *exc: object) -> None:
+        self.real.release()
+
+
+@pytest.mark.skipif(WINDOWS, reason="Windows' Popen waits with WaitForSingleObject, with no lock")
+def test_a_stop_landing_inside_the_wait_on_a_hunt_still_stops_promptly() -> None:
+    process = subprocess.Popen([sys.executable, "-c", "import sys; sys.exit(3)"])
+    real = getattr(process, "_waitpid_lock", None)
+    # The window #358 hit is in CPython's own Popen: if that changes, say so rather than pass.
+    assert isinstance(real, type(threading.Lock())), "Popen has no _waitpid_lock to interrupt"
+    interrupted = _InterruptedOnce(real)
+    process._waitpid_lock = interrupted  # type: ignore[attr-defined]
+    stuck = threading.Event()
+
+    def unstick() -> None:
+        stuck.set()
+        with contextlib.suppress(RuntimeError):
+            real.release()
+
+    watchdog = threading.Timer(STOP_SEEN_WITHIN, unstick)
+    watchdog.daemon = True
+    watchdog.start()
+    try:
+        with flake_campaign.stop_requests() as stopping, pytest.raises(flake_campaign.Stopped):
+            flake_campaign.wait(process, stopping)
+    finally:
+        watchdog.cancel()
+        process._waitpid_lock = real  # type: ignore[attr-defined]
+    assert interrupted.fired, "the interrupt never landed inside Popen's wait"
+    assert not stuck.is_set(), (
+        f"the campaign was still waiting on an exited hunt after {STOP_SEEN_WITHIN:g}s"
+    )
+    assert process.returncode == 3  # the hunt's own exit code, not one guessed after losing it
+
+
+def test_a_stop_between_hunts_records_the_hunt_and_runs_no_more(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = make_tests_root(tmp_path, "def test_passes():\n    pass\n")
+    ran: list[str] = []
+
+    def a_hunt_that_ends_as_ctrl_c_comes(
+        chosen: flake_campaign.Options,
+        hunt: Hunt,
+        uv: str,
+        out: Path,
+        stopping: threading.Event,
+    ) -> flake_campaign.Outcome:
+        ran.append(hunt.name)
+        signal.raise_signal(signal.SIGINT)  # a Ctrl-C as the hunt ends
+        return flake_campaign.Outcome(hunt, "clean", 0, None)
+
+    monkeypatch.setattr(flake_campaign, "run_direct", a_hunt_that_ends_as_ctrl_c_comes)
+    out = tmp_path / "out"
+    code = flake_campaign.main(
+        [
+            *["--pythons", RUNNING, "--loads", "0,2", "--out", str(out)],
+            *["--hunt-root", str(root), "test_it.py"],
+        ]
+    )
+    assert code == 130
+    assert ran == [f"direct-{RUNNING}-load0"]
+    data = json.loads((out / "campaign.json").read_text(encoding="utf-8"))
+    assert data["stopped"] is True
+    assert [(hunt["hunt"], hunt["status"]) for hunt in data["hunts"]] == [
+        (f"direct-{RUNNING}-load0", "clean")
+    ]
 
 
 # End to end: one direct campaign, and one stopped part-way

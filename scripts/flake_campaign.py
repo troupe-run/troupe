@@ -25,8 +25,9 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -325,28 +326,51 @@ class Stopped(Exception):  # noqa: N818 - control flow, not an error
     """Ctrl-C (or Ctrl-Break) during a hunt: it has been stopped, and no more should run."""
 
 
-def _raise_interrupt(signum: int, frame: object) -> None:
-    raise KeyboardInterrupt
+@contextlib.contextmanager
+def stop_requests() -> Iterator[threading.Event]:
+    """While the block runs, Ctrl-C (and Ctrl-Break on Windows) sets the event and raises nothing.
 
+    A KeyboardInterrupt raised wherever the main thread is can land inside subprocess's own wait on
+    a hunt, after it takes its lock and before the ``try`` that releases it: from then on the hunt's
+    Popen can't see it exit, and waiting on it again blocks for ever (#358). So a Ctrl-C only asks,
+    and the campaign looks at the event where it waits. The previous handlers come back when the
+    block ends. Must be entered in the main thread."""
+    stopping = threading.Event()
 
-def wait(process: subprocess.Popen[bytes]) -> int:
-    """Wait for a hunt, in short waits. On Ctrl-C the hunt has had it too, and stops itself:
-    give it time to write its summary, then raise Stopped."""
+    def handler(signum: int, frame: object) -> None:
+        stopping.set()
+
+    if sys.platform == "win32":
+        interrupts: tuple[signal.Signals, ...] = (signal.SIGINT, signal.SIGBREAK)
+    else:
+        interrupts = (signal.SIGINT,)
+    previous = {each: signal.getsignal(each) for each in interrupts}
     try:
-        while (code := process.poll()) is None:
-            with contextlib.suppress(subprocess.TimeoutExpired):
-                process.wait(WAIT_SECONDS)
-        return code
-    except KeyboardInterrupt:
-        print("\nflake_campaign: stopping after this hunt has written its summary", flush=True)
-        deadline = time.monotonic() + STOP_WAIT_SECONDS
-        while process.poll() is None and time.monotonic() < deadline:
-            with contextlib.suppress(subprocess.TimeoutExpired, KeyboardInterrupt):
-                process.wait(WAIT_SECONDS)
-        if process.poll() is None:
-            process.kill()
-            process.wait()
-        raise Stopped from None
+        for each in interrupts:
+            signal.signal(each, handler)
+        yield stopping
+    finally:
+        for each, old in previous.items():
+            signal.signal(each, old)
+
+
+def wait(process: subprocess.Popen[bytes], stopping: threading.Event) -> int:
+    """Wait for a hunt, in short waits. On a stop request the hunt has had the Ctrl-C too, and
+    stops itself: give it time to write its summary, kill it if it hasn't, then raise Stopped."""
+    while process.poll() is None and not stopping.is_set():
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            process.wait(WAIT_SECONDS)
+    if not stopping.is_set():
+        return process.wait()
+    print("\nflake_campaign: stopping after this hunt has written its summary", flush=True)
+    deadline = time.monotonic() + STOP_WAIT_SECONDS
+    while process.poll() is None and time.monotonic() < deadline:
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            process.wait(WAIT_SECONDS)
+    if process.poll() is None:
+        process.kill()
+        process.wait()
+    raise Stopped
 
 
 def read_summary(out: Path) -> dict[str, Any] | None:
@@ -366,17 +390,21 @@ def outcome_of(hunt: Hunt, code: int, out: Path) -> Outcome:
     return Outcome(hunt, "failed" if summary["roundsFailed"] else "clean", code, summary)
 
 
-def run_direct(options: Options, hunt: Hunt, uv: str, out: Path) -> Outcome:
+def run_direct(
+    options: Options, hunt: Hunt, uv: str, out: Path, stopping: threading.Event
+) -> Outcome:
     env = {key: value for key, value in os.environ.items() if key != "VIRTUAL_ENV"}  # as on.py
     env["UV_PROJECT_ENVIRONMENT"] = str(options.environments / hunt.python)
     print(f"flake_campaign: {hunt.name}: syncing Python {hunt.python}", flush=True)
     sync = subprocess.run(sync_command(uv, hunt), cwd=options.root, env=env, check=False)
+    if stopping.is_set():  # the Ctrl-C reached uv too
+        raise Stopped
     if sync.returncode != 0:
         return Outcome(hunt, "didn't run", sync.returncode, None, "uv sync failed (see above)")
     print(f"flake_campaign: {hunt.name}: hunting", flush=True)
     process = subprocess.Popen(direct_command(options, hunt, out), cwd=options.root, env=env)
     try:
-        code = wait(process)
+        code = wait(process, stopping)
     except Stopped:
         raise Stopped(outcome_of(hunt, process.returncode, out)) from None
     return outcome_of(hunt, code, out)
@@ -395,14 +423,16 @@ def build_image(docker: str, git: str, hunt: Hunt, root: Path) -> int:
     return built.returncode or archive.returncode
 
 
-def run_docker(options: Options, hunt: Hunt, docker: str, stamp: str, out: Path) -> Outcome:
+def run_docker(
+    options: Options, hunt: Hunt, docker: str, stamp: str, out: Path, stopping: threading.Event
+) -> Outcome:
     name = container(stamp, hunt)
     try:
         print(f"flake_campaign: {hunt.name}: hunting in {image(hunt)}", flush=True)
         process = subprocess.Popen(docker_command(docker, options, hunt, name), cwd=options.root)
         stopped = False
         try:
-            code = wait(process)
+            code = wait(process, stopping)
         except Stopped:
             stopped, code = True, process.returncode
         subprocess.run(
@@ -411,7 +441,7 @@ def run_docker(options: Options, hunt: Hunt, docker: str, stamp: str, out: Path)
             stdout=subprocess.DEVNULL,
         )
         result = outcome_of(hunt, code, out)
-        if stopped:
+        if stopped or stopping.is_set():  # stopped while copying its results out
             raise Stopped(result)
         return result
     finally:
@@ -557,6 +587,11 @@ def require_committed(changes: list[str]) -> None:
 
 
 def campaign(options: Options) -> tuple[list[Outcome], bool]:
+    with stop_requests() as stopping:
+        return _campaign(options, stopping)
+
+
+def _campaign(options: Options, stopping: threading.Event) -> tuple[list[Outcome], bool]:
     uv, git, docker = preflight(options)
     options.out.mkdir(parents=True, exist_ok=True)
     stamp = options.out.name.lower()
@@ -564,9 +599,6 @@ def campaign(options: Options) -> tuple[list[Outcome], bool]:
     outcomes: list[Outcome] = []
     stopped = False
     built: set[str] = set()
-    previous_break = None
-    if sys.platform == "win32":
-        previous_break = signal.signal(signal.SIGBREAK, _raise_interrupt)
     plan = options.hunts()
     print(
         f"flake_campaign: {len(plan)} hunts of {options.workers} workers x {options.rounds} rounds "
@@ -575,21 +607,26 @@ def campaign(options: Options) -> tuple[list[Outcome], bool]:
     )
     try:
         for index, hunt in enumerate(plan, start=1):
+            if stopping.is_set():  # between hunts: a hunt that ended as it came keeps its outcome
+                stopped = True
+                break
             print(f"\nflake_campaign: hunt {index} of {len(plan)}: {hunt.name}", flush=True)
             out = options.out / hunt.name
             try:
                 if hunt.docker and docker is not None:
                     if hunt.python not in built:
                         code = build_image(docker, git, hunt, options.root)
+                        if stopping.is_set():  # the Ctrl-C reached the build too
+                            raise Stopped
                         if code != 0:
                             outcomes.append(
                                 Outcome(hunt, "didn't run", code, None, "the image didn't build")
                             )
                             continue
                         built.add(hunt.python)
-                    outcomes.append(run_docker(options, hunt, docker, stamp, out))
+                    outcomes.append(run_docker(options, hunt, docker, stamp, out, stopping))
                 else:
-                    outcomes.append(run_direct(options, hunt, uv, out))
+                    outcomes.append(run_direct(options, hunt, uv, out, stopping))
             except Stopped as stop:
                 if stop.args and isinstance(stop.args[0], Outcome):
                     result = stop.args[0]
@@ -601,11 +638,8 @@ def campaign(options: Options) -> tuple[list[Outcome], bool]:
                 break
             finally:
                 write_report(options.out, report_data(options, outcomes, head, changes, stopped))
-    except KeyboardInterrupt:  # between hunts
-        stopped = True
+        stopped = stopped or stopping.is_set()
     finally:
-        if previous_break is not None and sys.platform == "win32":
-            signal.signal(signal.SIGBREAK, previous_break)
         write_report(options.out, report_data(options, outcomes, head, changes, stopped))
     return outcomes, stopped
 
