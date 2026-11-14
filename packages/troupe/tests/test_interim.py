@@ -55,9 +55,19 @@ def test_an_unknown_runner_is_refused_naming_every_runner_troupe_ships() -> None
         runner_command("codex")
     assert caught.value.details == {
         "runner": "codex",
-        "known": ["anthropic", "claude-code", "lm-studio", "ollama", "openai", "scripted"],
+        "known": [
+            "anthropic",
+            "claude-code",
+            "lm-studio",
+            "mistralrs",
+            "ollama",
+            "openai",
+            "scripted",
+        ],
     }
-    assert "anthropic, claude-code, lm-studio, ollama, openai, scripted" in caught.value.fix
+    assert "anthropic, claude-code, lm-studio, mistralrs, ollama, openai, scripted" in (
+        caught.value.fix
+    )
 
 
 def test_openai_resolves_to_its_module_requiring_a_runtime_and_naming_no_credential() -> None:
@@ -80,6 +90,7 @@ def test_what_each_runner_takes_as_a_runtime() -> None:
         "anthropic": "required",
         "claude-code": "none",
         "lm-studio": "required",
+        "mistralrs": "required",
         "ollama": "required",
         "openai": "required",
         "scripted": "optional",
@@ -97,12 +108,12 @@ def absent(*, in_extra: bool) -> Runner:
     )
 
 
-def test_only_the_anthropic_and_lm_studio_runners_come_as_extras() -> None:
-    """anthropic depends on the anthropic package and lm-studio on LM Studio's client library, so
-    each is troupe-run's extra of its name; every other shipped runner depends only on the SDK
-    (#291, #415; #331 and #332 add more)."""
+def test_only_the_anthropic_lm_studio_and_mistralrs_runners_come_as_extras() -> None:
+    """anthropic depends on the anthropic package, lm-studio on LM Studio's client library and
+    mistralrs on mistral.rs's package, so each is troupe-run's extra of its name; every other
+    shipped runner depends only on the SDK (#291, #414, #415; #331 and #332 add more)."""
     assert {name: entry.in_extra for name, entry in RUNNERS.items()} == {
-        name: name in ("anthropic", "lm-studio") for name in RUNNERS
+        name: name in ("anthropic", "lm-studio", "mistralrs") for name in RUNNERS
     }
 
 
@@ -134,6 +145,26 @@ def test_lm_studio_resolves_to_its_module_requiring_a_runtime_given_no_variables
     assert list(runner_command("lm-studio"))[1:] == ["-m", "troupe_runner_lm_studio"]
     assert RUNNERS["lm-studio"].runtime == "required"
     assert RUNNERS["lm-studio"].environment == ()
+
+
+def test_mistralrs_resolves_to_its_module_in_an_extra_requiring_the_in_process_runtime() -> None:
+    assert list(runner_command("mistralrs"))[1:] == ["-m", "troupe_runner_mistralrs"]
+    entry = RUNNERS["mistralrs"]
+    assert entry.runtime == "required"
+    assert entry.environment == ()
+    assert entry.in_extra
+    assert entry.fit == interim.RuntimeFit(credential=False, endpoint="none", built_in="mistralrs")
+
+
+def test_mistralrs_not_installed_is_refused_naming_its_extra(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setitem(RUNNERS, "mistralrs", absent(in_extra=True))
+    with pytest.raises(TroupeError) as caught:
+        interim.installed_runner("mistralrs")
+    assert caught.value.code == "runner.not-installed"
+    assert caught.value.details["extra"] == "mistralrs"
+    assert "troupe-run[mistralrs]" in caught.value.fix
 
 
 @pytest.mark.parametrize(

@@ -11,6 +11,7 @@
   "plugins/runner-anthropic": "0.0.0",
   "plugins/runner-claude-code": "0.1.0",
   "plugins/runner-lm-studio": "0.0.0",
+  "plugins/runner-mistralrs": "0.0.0",
   "plugins/runner-ollama": "0.0.0",
   "plugins/runner-openai": "0.0.0",
   "plugins/runner-scripted": "0.1.0",

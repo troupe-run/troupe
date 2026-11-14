@@ -33,12 +33,16 @@ dependencies = [
 all = [
     "troupe-runner-anthropic",
     "troupe-runner-lm-studio",
+    "troupe-runner-mistralrs",
 ]
 anthropic = [
     "troupe-runner-anthropic",
 ]
 lm-studio = [
     "troupe-runner-lm-studio",
+]
+mistralrs = [
+    "troupe-runner-mistralrs",
 ]
 
 [project.urls]

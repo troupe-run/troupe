@@ -262,6 +262,23 @@ def test_the_lm_studio_audition_says_to_start_lm_studio_and_get_the_model_and_na
     assert json.loads(out)["value"] == "lm-studio"
 
 
+def test_the_mistralrs_audition_says_where_the_model_comes_from_and_names_the_extra(
+    repo: Repo,
+) -> None:
+    # In-process-runner design D10, D4: the model is a file the person points troupe at, and on
+    # macOS troupe runs on a uv-managed Python.
+    code, out, err = cli("init", "--audition", "--runner", "mistralrs")
+    assert code == ExitCode.OK, err
+    assert "Defined the actor lead, with the mistralrs runner." in out
+    lines = "\n".join(_next(out))
+    assert "TROUPE_RUNTIME_MISTRALRS_MODEL" in lines
+    assert "--managed-python" in lines
+    assert "troupe-run[mistralrs]" in lines
+    code, out, err = cli("config", "get", "actors.lead.runtime", "--json")
+    assert code == ExitCode.OK, err
+    assert json.loads(out)["value"] == "mistralrs"
+
+
 def test_the_openai_audition_says_which_key_to_set_and_that_a_run_costs_money(
     repo: Repo,
 ) -> None:
@@ -339,7 +356,7 @@ def test_an_unknown_runner_names_the_runners_troupe_has_and_makes_nothing(repo: 
     code, _, err = cli("init", "--audition", "--runner", "gemini")
     assert code == ExitCode.FAILURE
     assert "gemini" in err
-    assert "anthropic, claude-code, lm-studio, ollama, openai, scripted" in err
+    assert "anthropic, claude-code, lm-studio, mistralrs, ollama, openai, scripted" in err
     assert not (repo.path / ".troupe").exists()
 
 

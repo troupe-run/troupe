@@ -1,0 +1,25 @@
+[project]
+name = "troupe-runner-mistralrs"
+version = "0.0.0"
+description = "An actor runner for troupe that loads a GGUF model inside its own process with mistral.rs, with troupe's own tool loop."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "src/troupe_runner_mistralrs/check_model/LICENSE"]
+requires-python = ">=3.12,<3.16"
+# The plugin SDK, for the runner contract's types and the file tools (spec: plugin-sdk), and mistral.rs's Python
+# package, pinned exactly, which loads and runs the model in this process (decision #412; in-process-runner design
+# D6). It is MIT and has no dependencies of its own. A plugin imports nothing else of troupe's. The SDK is bare, like
+# an adapter's dependency on troupe: the bundle pins it (runner-sdk D12). With a library, this runner is troupe-run's
+# mistralrs extra, not part of the base install (runner-extras design D1, D2).
+dependencies = ["troupe-plugin-sdk", "mistralrs==0.9.5"]
+
+[project.urls]
+Homepage = "https://troupe.run"
+Repository = "https://github.com/troupe-run/troupe"
+
+[project.scripts]
+troupe-runner-mistralrs = "troupe_runner_mistralrs.runner:main"
+
+[build-system]
+requires = ["uv_build>=0.13.6,<0.14"]
+build-backend = "uv_build"

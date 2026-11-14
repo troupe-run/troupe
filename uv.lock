@@ -18,6 +18,7 @@ members = [
     "troupe-runner-anthropic",
     "troupe-runner-claude-code",
     "troupe-runner-lm-studio",
+    "troupe-runner-mistralrs",
     "troupe-runner-ollama",
     "troupe-runner-openai",
     "troupe-runner-scripted",
@@ -965,6 +966,17 @@ wheels = [
 ]
 
 [[package]]
+name = "mistralrs"
+version = "0.9.5"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7c/99/7ff50706ccb40ee8894204a43162769e640c4414d82237fc6620ea25947a/mistralrs-0.9.5-cp310-abi3-macosx_11_0_arm64.whl", hash = "sha256:564f6f0204e074104510af4ab6c9391790d1a9f73cb8e0a65299736c13b3536c", size = 40400801, upload-time = "2026-10-19T18:12:04.233Z" },
+    { url = "https://files.pythonhosted.org/packages/96/73/9e6c1eeb0c53d259fc29b2e3afea21d6938f1ce0f762375fc0be4ec57635/mistralrs-0.9.5-cp310-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:0e66c659488a8b988b48b0986f88c15dcea6a2ea31b380bebba5e40beabbbcf7", size = 26123293, upload-time = "2026-10-19T18:12:08.416Z" },
+    { url = "https://files.pythonhosted.org/packages/03/bc/1540501c33478381eddcbaf3f49f592c098e8a864b26f25b21ec58ebb4aa/mistralrs-0.9.5-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:60cd70976a2ec50175f3d68cd269ccfa75b488c521a34e1d631c1f3da384bd01", size = 26041923, upload-time = "2026-10-19T18:12:13.26Z" },
+    { url = "https://files.pythonhosted.org/packages/cf/a3/fb05f0becdc28cf902a2ca2a4bb46cec5ea6e10cb4d3086d10343a9a4e8e/mistralrs-0.9.5-cp310-abi3-win_amd64.whl", hash = "sha256:bcc7817e3c775e1747254804b8e936869e9052fbfda29e37608dfd61c19409dd", size = 23182181, upload-time = "2026-10-19T18:12:17.224Z" },
+]
+
+[[package]]
 name = "more-itertools"
 version = "11.2.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1671,12 +1683,16 @@ dependencies = [
 all = [
     { name = "troupe-runner-anthropic" },
     { name = "troupe-runner-lm-studio" },
+    { name = "troupe-runner-mistralrs" },
 ]
 anthropic = [
     { name = "troupe-runner-anthropic" },
 ]
 lm-studio = [
     { name = "troupe-runner-lm-studio" },
+]
+mistralrs = [
+    { name = "troupe-runner-mistralrs" },
 ]
 
 [package.metadata]
@@ -1690,6 +1706,8 @@ requires-dist = [
     { name = "troupe-runner-claude-code", editable = "plugins/runner-claude-code" },
     { name = "troupe-runner-lm-studio", marker = "extra == 'all'", editable = "plugins/runner-lm-studio" },
     { name = "troupe-runner-lm-studio", marker = "extra == 'lm-studio'", editable = "plugins/runner-lm-studio" },
+    { name = "troupe-runner-mistralrs", marker = "extra == 'all'", editable = "plugins/runner-mistralrs" },
+    { name = "troupe-runner-mistralrs", marker = "extra == 'mistralrs'", editable = "plugins/runner-mistralrs" },
     { name = "troupe-runner-ollama", editable = "plugins/runner-ollama" },
     { name = "troupe-runner-openai", editable = "plugins/runner-openai" },
     { name = "troupe-runner-scripted", editable = "plugins/runner-scripted" },
@@ -1698,7 +1716,7 @@ requires-dist = [
     { name = "troupe-vcs-files", editable = "packages/troupe-vcs-files" },
     { name = "troupe-vcs-git", editable = "packages/troupe-vcs-git" },
 ]
-provides-extras = ["all", "anthropic", "lm-studio"]
+provides-extras = ["all", "anthropic", "lm-studio", "mistralrs"]
 
 [[package]]
 name = "troupe-runner-anthropic"
@@ -1738,6 +1756,21 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "lmstudio", specifier = "==1.5.0" },
+    { name = "troupe-plugin-sdk", editable = "packages/troupe-plugin-sdk" },
+]
+
+[[package]]
+name = "troupe-runner-mistralrs"
+version = "0.0.0"
+source = { editable = "plugins/runner-mistralrs" }
+dependencies = [
+    { name = "mistralrs" },
+    { name = "troupe-plugin-sdk" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "mistralrs", specifier = "==0.9.5" },
     { name = "troupe-plugin-sdk", editable = "packages/troupe-plugin-sdk" },
 ]
 
@@ -1846,6 +1879,7 @@ dev = [
     { name = "troupe-runner-anthropic" },
     { name = "troupe-runner-claude-code" },
     { name = "troupe-runner-lm-studio" },
+    { name = "troupe-runner-mistralrs" },
     { name = "troupe-runner-ollama" },
     { name = "troupe-runner-openai" },
     { name = "troupe-runner-scripted" },
@@ -1878,6 +1912,7 @@ dev = [
     { name = "troupe-runner-anthropic", editable = "plugins/runner-anthropic" },
     { name = "troupe-runner-claude-code", editable = "plugins/runner-claude-code" },
     { name = "troupe-runner-lm-studio", editable = "plugins/runner-lm-studio" },
+    { name = "troupe-runner-mistralrs", editable = "plugins/runner-mistralrs" },
     { name = "troupe-runner-ollama", editable = "plugins/runner-ollama" },
     { name = "troupe-runner-openai", editable = "plugins/runner-openai" },
     { name = "troupe-runner-scripted", editable = "plugins/runner-scripted" },

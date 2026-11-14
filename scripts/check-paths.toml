@@ -70,6 +70,7 @@ tests = [
     "plugins/runner-anthropic/tests/**",
     "plugins/runner-claude-code/tests/**",
     "plugins/runner-lm-studio/tests/**",
+    "plugins/runner-mistralrs/tests/**",
     "plugins/runner-ollama/tests/**",
     "plugins/runner-openai/tests/**",
     "plugins/runner-scripted/tests/**",
@@ -227,6 +228,26 @@ tests = [
     "packages/troupe-plugin-sdk/tests/**",
     "packages/troupe-store-text/tests/**",
     "plugins/runner-lm-studio/tests/**",
+    "scripts/tests/workspace/**",
+]
+
+# Started as a subprocess by the core suite (the conformance test) with an engine stand-in. Reached through the bundle's
+# mistralrs extra by its tests (scripts/tests/workspace).
+[scopes.runner_mistralrs]
+paths = [
+    "plugins/runner-mistralrs/src/**",
+    "plugins/runner-mistralrs/tests/**",
+    "plugins/runner-mistralrs/fixtures/**",
+    "plugins/runner-mistralrs/tools/**",
+    "plugins/runner-mistralrs/README.md",
+    "plugins/runner-mistralrs/LICENSE",
+]
+tests = [
+    "packages/troupe/tests/**",
+    "packages/troupe-artifacts-local/tests/**",
+    "packages/troupe-plugin-sdk/tests/**",
+    "packages/troupe-store-text/tests/**",
+    "plugins/runner-mistralrs/tests/**",
     "scripts/tests/workspace/**",
 ]
 

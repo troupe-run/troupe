@@ -184,6 +184,18 @@ RUNNERS: dict[str, Runner] = {
             built_in="lm-studio",
         ),
     ),
+    "mistralrs": Runner(
+        command=(sys.executable, "-m", "troupe_runner_mistralrs"),
+        package="troupe_runner_mistralrs",
+        # No variables: its model is its runtime's, in run/start, and it talks to no service.
+        runtime="required",
+        # mistral.rs's Python package, mistralrs, comes with troupe-run[mistralrs], not the base
+        # install (runner-extras design D1, D5).
+        in_extra=True,
+        # It loads its model in its own process, so it fits only a runtime with no endpoint, and
+        # sends no credential (in-process-runner design D5).
+        fit=RuntimeFit(credential=False, endpoint="none", built_in="mistralrs"),
+    ),
     "ollama": Runner(
         command=(sys.executable, "-m", "troupe_runner_ollama"),
         package="troupe_runner_ollama",

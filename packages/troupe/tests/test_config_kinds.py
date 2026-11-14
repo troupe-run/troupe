@@ -468,6 +468,30 @@ def test_an_anthropic_actor_on_a_local_engines_runtime_of_your_own_is_accepted()
     assert problems(config) == []
 
 
+def test_an_in_process_actor_on_a_served_runtime_is_refused_listing_mistralrs() -> None:
+    # Spec: runtimes, "An actor's runtime fits its runner": "An in-process actor on a served
+    # runtime".
+    error = _refused(_actor(runner="mistralrs", options={}, runtime="ollama"))
+    assert error.details["path"] == ["actors", "tester", "runtime"]
+    assert "the mistralrs runner runs its model in its own process" in error.problem
+    assert "one that fits: mistralrs" in error.fix
+
+
+def test_a_served_actor_on_the_in_process_runtime_is_refused_listing_ollama() -> None:
+    # Spec: runtimes, "An actor's runtime fits its runner": "A served actor on the in-process
+    # runtime".
+    error = _refused(_actor(runner="ollama", options={}, runtime="mistralrs"))
+    assert error.details["path"] == ["actors", "tester", "runtime"]
+    assert (
+        "the ollama runner needs an endpoint, and the runtime 'mistralrs' has none" in error.problem
+    )
+    assert "one that fits: ollama" in error.fix
+
+
+def test_a_mistralrs_actor_on_the_in_process_runtime_is_valid() -> None:
+    check(_actor(runner="mistralrs", options={}, runtime="mistralrs"))
+
+
 def test_an_actor_naming_a_runtime_that_doesnt_exist_is_told_only_those_that_fit() -> None:
     error = _refused(_actor(runner="ollama", options={}, runtime="nowhere"))
     assert "no runtime named 'nowhere'" in error.problem
