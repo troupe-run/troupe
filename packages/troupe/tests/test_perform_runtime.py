@@ -13,6 +13,7 @@ import pytest
 
 from runtesting import INIT, OK, Harness, request, script, theatre
 from test_perform import configured, nothing_written
+from troupe.core import runtimes
 from troupe.core.client import messages as m
 from troupe.core.errors import TroupeError
 from troupe.core.masking import MARKER
@@ -432,6 +433,52 @@ def test_a_runtime_the_environment_makes_unfit_is_refused_and_nothing_is_recorde
     assert "11434/v1" not in data  # the endpoint as resolved isn't repeated
     assert nothing_written(harness, before)
     assert harness.updates == []
+    assert launched == []
+
+
+ANTHROPIC_ACTOR: dict[str, Any] = {"runner": "anthropic", "model": "claude-haiku-5-5"}
+
+
+def test_the_unfit_refusal_names_the_base_for_an_endpoint_from_config_ending_in_v1() -> None:
+    # Spec: runtimes, "An Anthropic actor on an endpoint ending in /v1". Config refuses such a
+    # runtime when it's set, so perform meets one only from a merge that brought it in; the shared
+    # refusal names the base to use, and where the endpoint came from (owner, 2026-11-14).
+    config = {"runtimes": {"claude-v1": {"endpoint": "https://api.anthropic.com/v1"}}}
+    resolved = runtimes.resolve("claude-v1", config, {})
+    with pytest.raises(TroupeError) as raised:
+        runtimes.refuse_unfit(resolved, "anthropic", "tester", config, {})
+    error = raised.value
+    assert error.code == "runtime.unfit"
+    assert error.details["reasons"] == ["endpoint-version"]
+    assert error.details["from"] == {"endpoint": "runtimes.claude-v1.endpoint"}
+    assert "already ends in /v1 (use https://api.anthropic.com)" in error.problem
+    assert "runtimes.claude-v1.endpoint" in error.fix
+
+
+def test_perform_refuses_an_anthropic_endpoint_from_the_environment_without_repeating_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The endpoint came from the person's environment, so its base isn't repeated (runtime-checks
+    # design D8); details.from names the variable.
+    launched = _runner_commands(monkeypatch)
+    harness = _harness(
+        tmp_path,
+        TROUPE_RUNTIME_ANTHROPIC_ENDPOINT="https://private-gw.example/anthropic/v1",
+        ANTHROPIC_API_KEY=KEY,
+    )
+    asked = request({}, **ANTHROPIC_ACTOR, runtime="anthropic")
+    before = configured(harness, asked)
+    with pytest.raises(TroupeError) as raised:
+        harness.perform(asked)
+    error = raised.value
+    assert error.code == "runtime.unfit"
+    assert error.details["reasons"] == ["endpoint-version"]
+    assert error.details["from"] == {"endpoint": "TROUPE_RUNTIME_ANTHROPIC_ENDPOINT"}
+    assert "already ends in /v1" in error.problem
+    data = json.dumps(error.to_data())
+    assert "private-gw.example" not in data
+    assert KEY not in data
+    assert nothing_written(harness, before)
     assert launched == []
 
 
