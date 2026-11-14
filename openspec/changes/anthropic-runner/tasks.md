@@ -193,7 +193,7 @@ asks for the key.
   troupe issue shows the board in `gh issue view <n> --json projectItems`, and D13 lists its number or says why it
   wasn't filed.
   Done: troupe#418 (local engines cut a full context silently) and troupe#419 (LM Studio's `input_tokens` holds its
-  cache reads), both Bugs on the board; upstream reports left to the owner; `x-api-key` not filed (D13).
+  cache reads), both Bugs on the board; not reported upstream (owner, 2026-11-14); `x-api-key` not filed (D13).
 
 ## 15. Verify the whole change
 
