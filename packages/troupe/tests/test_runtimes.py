@@ -608,6 +608,40 @@ def test_an_https_endpoint_doesnt_fit_a_runner_that_needs_plain_http() -> None:
     assert runtimes.unfit(plain, "http://h:1", has_credential=False) == []
 
 
+def test_an_endpoint_ending_in_v1_doesnt_fit_a_runner_that_adds_v1_itself() -> None:
+    # Spec: runtimes, "An actor's runtime fits its runner": the Anthropic runner's library adds
+    # /v1/messages below its endpoint.
+    adds = interim.RuntimeFit(version=True)
+    for endpoint in ("http://h:1/v1", "http://h:1/v1/", "https://gw.example/anthropic/v1"):
+        assert runtimes.unfit(adds, endpoint, has_credential=False) == ["endpoint-version"]
+    for endpoint in (
+        "http://h:1",
+        "https://gw.example/anthropic",
+        "http://h:1/v10",
+        "http://h:1/v1x",
+    ):
+        assert runtimes.unfit(adds, endpoint, has_credential=False) == []
+    assert runtimes.unfit(interim.RuntimeFit(), "http://h:1/v1", has_credential=False) == []
+
+
+def test_the_anthropic_runner_fits_any_endpoint_but_one_ending_in_v1() -> None:
+    assert interim.RUNNERS["anthropic"].fit == interim.RuntimeFit(
+        version=True, built_in="anthropic"
+    )
+
+
+def test_the_endpoint_version_reason_names_the_base_to_use_unless_its_withheld() -> None:
+    said = runtimes.unfit_words("anthropic", "box", "endpoint-version", "http://127.0.0.1:1234/v1/")
+    assert said == (
+        "the anthropic runner adds /v1/... below its endpoint itself, and the runtime 'box' has "
+        "an endpoint that already ends in /v1 (use http://127.0.0.1:1234)"
+    )
+    withheld = runtimes.unfit_words("anthropic", "box", "endpoint-version", None)
+    assert withheld.endswith("already ends in /v1")
+    with_user = runtimes.unfit_words("anthropic", "box", "endpoint-version", "http://u:p@h/v1")
+    assert "u:p" not in with_user
+
+
 def test_another_runners_built_in_doesnt_fit_whatever_its_shape() -> None:
     # Spec: runtimes, "An actor's runtime fits its runner". ollama and lm-studio share a shape.
     ollama = interim.RUNNERS["ollama"].fit

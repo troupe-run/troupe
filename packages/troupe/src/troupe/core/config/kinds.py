@@ -427,7 +427,10 @@ def _runtime_problems(
     reasons = runtimes.unfit(fit, shape.endpoint.value, shape.credential is not None, runtime)
     if not reasons:
         return []
-    why = "; and ".join(runtimes.unfit_words(str(runner), runtime, reason) for reason in reasons)
+    why = "; and ".join(
+        runtimes.unfit_words(str(runner), runtime, reason, shape.endpoint.value)
+        for reason in reasons
+    )
     fix = (
         f"Set {shown(at)} to one that fits: {', '.join(fits)}, or define one with {define}."
         if fits

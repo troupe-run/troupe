@@ -13,6 +13,7 @@ from typing import Any
 
 import pytest
 
+import anthropic_stand_in
 import claude_stand_in
 import lm_studio_stand_in
 import ollama_stand_in
@@ -193,6 +194,35 @@ def test_the_openai_style_runner_passes_every_check_given_a_runtime_naming_a_sta
                     env={"TROUPE_RUNTIME_CREDENTIAL": key},
                 ),
                 openai_stand_in.TEST_LIMITS,
+                workspace=workspace,
+                limits=RunLimits(start_timeout=10.0, cancel_grace=10.0, run_timeout=30.0),
+                runtime=runtime,
+                credential=key,
+            )
+        )
+        assert fake.requests
+        assert {r.headers["authorization"] for r in fake.requests} == {f"Bearer {key}"}
+    assert {r.name: r.problem for r in results if not r.passed} == {}
+    assert len(results) == 8
+
+
+def test_the_anthropic_runner_passes_every_check_given_a_runtime_naming_a_stand_in(
+    tmp_path: Path,
+) -> None:
+    # Spec: anthropic-runner, "The runner conforms to the contract" (anthropic-runner task 12.2).
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    key = "sk-ant-conformance-0123456789"
+    with anthropic_stand_in.serving([anthropic_stand_in.text_reply("Done.")] * 20) as fake:
+        runtime = RunStartRuntime("test", fake.endpoint, "fake-model", credential=True)
+        results = asyncio.run(
+            check_runner(
+                RunnerCommand(
+                    [sys.executable, "-m", "troupe_runner_anthropic"],
+                    cwd=workspace,
+                    env={"TROUPE_RUNTIME_CREDENTIAL": key},
+                ),
+                anthropic_stand_in.TEST_LIMITS,
                 workspace=workspace,
                 limits=RunLimits(start_timeout=10.0, cancel_grace=10.0, run_timeout=30.0),
                 runtime=runtime,

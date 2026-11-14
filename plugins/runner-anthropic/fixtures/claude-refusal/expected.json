@@ -1,0 +1,42 @@
+{
+  "requests": 1,
+  "outcome": "failed",
+  "events": [
+    {
+      "type": "init",
+      "seq": 0,
+      "runner": {
+        "name": "anthropic",
+        "version": "<package version>"
+      },
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "Delete",
+        "Move"
+      ],
+      "effects": "checked",
+      "engine": {
+        "name": "messages",
+        "model": "claude-haiku-5-5"
+      }
+    },
+    {
+      "type": "result",
+      "seq": 1,
+      "status": "error",
+      "message": "The model refused ({\"category\": \"cyber\", \"explanation\": \"The request was declined.\", \"type\": \"refusal\"})",
+      "reason": "refused",
+      "turns": 1,
+      "usage": {
+        "inputTokens": 120,
+        "outputTokens": 3,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      }
+    }
+  ]
+}

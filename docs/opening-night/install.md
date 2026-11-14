@@ -48,6 +48,7 @@ uv tool install --no-sources "troupe-run[all] @ git+https://github.com/troupe-ru
 | Extra | Installs |
 |---|---|
 | `all` | Every runner that comes as an extra. |
+| `anthropic` | The Anthropic runner, which drives a model over the Anthropic Messages API, on [Claude's API](https://platform.claude.com/docs/en/api/messages) or a local engine that serves it, through the `anthropic` package. |
 | `lm-studio` | The LM Studio runner, which drives a model in [LM Studio](https://lmstudio.ai) through LM Studio's own client library, `lmstudio`. |
 
 An actor on a runner you haven't installed is refused, and the message names the extra to install.

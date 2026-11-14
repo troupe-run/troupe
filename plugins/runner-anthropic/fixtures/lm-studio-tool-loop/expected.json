@@ -1,0 +1,67 @@
+{
+  "requests": 2,
+  "outcome": "succeeded",
+  "events": [
+    {
+      "type": "init",
+      "seq": 0,
+      "runner": {
+        "name": "anthropic",
+        "version": "<package version>"
+      },
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "Delete",
+        "Move"
+      ],
+      "effects": "checked",
+      "engine": {
+        "name": "messages",
+        "model": "google/gemma-4-e4b"
+      }
+    },
+    {
+      "type": "turn",
+      "seq": 1,
+      "role": "assistant",
+      "text": "The user wants me to read the content of the file `notes/todo.txt` and then summarize its content in a single line.\n\nI need to use the `Read` tool with the path `notes/todo.txt`. After I get the content, I will condense it into one line.<channel|>"
+    },
+    {
+      "type": "tool_call",
+      "seq": 2,
+      "callId": "629001371",
+      "tool": "Read",
+      "inputSummary": "{\"file_path\":\"notes/todo.txt\"}"
+    },
+    {
+      "type": "tool_result",
+      "seq": 3,
+      "callId": "629001371",
+      "isError": false,
+      "outputSummary": "1\tbuy milk\n2\twrite the troupe docs",
+      "outputBytes": 34
+    },
+    {
+      "type": "turn",
+      "seq": 4,
+      "role": "assistant",
+      "text": "The file contains two tasks: buy milk and write the troupe docs."
+    },
+    {
+      "type": "result",
+      "seq": 5,
+      "status": "ok",
+      "message": "The file contains two tasks: buy milk and write the troupe docs.",
+      "turns": 2,
+      "usage": {
+        "inputTokens": 219,
+        "outputTokens": 97,
+        "cacheReadTokens": 89
+      }
+    }
+  ]
+}

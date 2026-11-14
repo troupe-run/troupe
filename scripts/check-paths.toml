@@ -67,6 +67,7 @@ tests = [
     "packages/troupe-store-text/tests/**",
     "packages/troupe-vcs-files/tests/**",
     "packages/troupe-vcs-git/tests/**",
+    "plugins/runner-anthropic/tests/**",
     "plugins/runner-claude-code/tests/**",
     "plugins/runner-lm-studio/tests/**",
     "plugins/runner-ollama/tests/**",
@@ -186,6 +187,26 @@ tests = [
     "packages/troupe-plugin-sdk/tests/**",
     "packages/troupe-store-text/tests/**",
     "plugins/runner-ollama/tests/**",
+    "scripts/tests/workspace/**",
+]
+
+# Started as a subprocess by the core suite (the conformance and perform tests) against a fake Messages endpoint.
+# Reached through the bundle's anthropic extra by its tests (scripts/tests/workspace).
+[scopes.runner_anthropic]
+paths = [
+    "plugins/runner-anthropic/src/**",
+    "plugins/runner-anthropic/tests/**",
+    "plugins/runner-anthropic/fixtures/**",
+    "plugins/runner-anthropic/tools/**",
+    "plugins/runner-anthropic/README.md",
+    "plugins/runner-anthropic/LICENSE",
+]
+tests = [
+    "packages/troupe/tests/**",
+    "packages/troupe-artifacts-local/tests/**",
+    "packages/troupe-plugin-sdk/tests/**",
+    "packages/troupe-store-text/tests/**",
+    "plugins/runner-anthropic/tests/**",
     "scripts/tests/workspace/**",
 ]
 

@@ -1,0 +1,25 @@
+[project]
+name = "troupe-runner-anthropic"
+version = "0.0.0"
+description = "An actor runner for troupe that drives the Anthropic Messages API, on Claude's API or a local engine, through the anthropic package, with troupe's own tools."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.12,<3.16"
+# The plugin SDK, for the runner contract's types and the file tools (spec: plugin-sdk), and the anthropic package,
+# pinned, which sends each request to the Messages API (decisions #319, #412; anthropic-runner design D1). A plugin
+# imports nothing else of troupe's. The SDK is bare, like an adapter's dependency on troupe: the bundle pins it
+# (runner-sdk D12). With a library, this runner is troupe-run's anthropic extra, not part of the base install
+# (runner-extras design D1, D2).
+dependencies = ["troupe-plugin-sdk", "anthropic==2.8.0"]
+
+[project.urls]
+Homepage = "https://troupe.run"
+Repository = "https://github.com/troupe-run/troupe"
+
+[project.scripts]
+troupe-runner-anthropic = "troupe_runner_anthropic.runner:main"
+
+[build-system]
+requires = ["uv_build>=0.13.5,<0.14"]
+build-backend = "uv_build"

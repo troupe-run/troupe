@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/plugins/runner-anthropic/options.schema.json",
+  "title": "Anthropic runner options",
+  "description": "The run/start options the Anthropic runner takes, each optional. They fill the runner contract's runnerOptions extension point. The service (its endpoint, model and credential) comes from the run's runtime, never from these options.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "maxTurns": {
+      "description": "The most requests a run may send to the service. Absent: the runner's default, 50.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "maxTotalTokens": {
+      "description": "The most input, cache and output tokens a run may use, summed over its replies as the service reports them. Checked after each reply, so a run can pass it by one reply. Absent: the runner's default, 1,000,000.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "maxOutputTokens": {
+      "description": "Each request's max_tokens: the most the model may write in one reply. A reply that reaches it ends the run with output-limit. Absent: the runner's default, 16,000.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "contextWindow": {
+      "description": "The engine's context window, in tokens, when you know it. A reply whose prompt reaches it isn't acted on, and once a reply's prompt and output reach it, no further request is sent. Absent: only the engine's refusals and a shrinking prompt end a run for its context.",
+      "type": "integer",
+      "minimum": 1
+    }
+  }
+}

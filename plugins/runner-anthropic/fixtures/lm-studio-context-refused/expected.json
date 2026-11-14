@@ -1,0 +1,36 @@
+{
+  "requests": 1,
+  "outcome": "failed",
+  "events": [
+    {
+      "type": "init",
+      "seq": 0,
+      "runner": {
+        "name": "anthropic",
+        "version": "<package version>"
+      },
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "Delete",
+        "Move"
+      ],
+      "effects": "checked",
+      "engine": {
+        "name": "messages",
+        "model": "google/gemma-4-e4b"
+      }
+    },
+    {
+      "type": "result",
+      "seq": 1,
+      "status": "error",
+      "message": "The conversation is longer than the model's context (LM Studio, an error event in the reply's stream, api_error): The number of tokens to keep from the initial prompt is greater than the context length. Try to load the model with a larger context length, or provide a shorter input. Give the actor a smaller task, or a model with a longer context.",
+      "reason": "context-length",
+      "turns": 0
+    }
+  ]
+}

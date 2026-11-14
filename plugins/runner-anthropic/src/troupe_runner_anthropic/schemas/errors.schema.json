@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/plugins/runner-anthropic/errors.schema.json",
+  "title": "Anthropic runner errors",
+  "description": "The Anthropic runner's own error codes, beyond the runner contract's. They fill the contract's runnerErrors extension point. Each refuses run/start, so no request is sent.",
+  "$ref": "https://troupe.run/protocol/error.schema.json#/$defs/fields",
+  "unevaluatedProperties": false,
+  "oneOf": [
+    {
+      "description": "The run/start options hold a key the runner doesn't define, such as endpoint or model, which come from the run's runtime.",
+      "required": [
+        "details"
+      ],
+      "properties": {
+        "code": {
+          "const": "anthropic.unknown-option"
+        },
+        "details": {
+          "$ref": "#/$defs/where"
+        }
+      }
+    },
+    {
+      "description": "An option's value has the wrong shape. The fix names what is valid.",
+      "required": [
+        "details"
+      ],
+      "properties": {
+        "code": {
+          "const": "anthropic.invalid-options"
+        },
+        "details": {
+          "$ref": "#/$defs/where"
+        }
+      }
+    },
+    {
+      "description": "The run/start names no runtime, or one that names no model, so the runner has no service to talk to. The fix says what to give the runtime.",
+      "required": [
+        "details"
+      ],
+      "properties": {
+        "code": {
+          "const": "anthropic.no-runtime"
+        },
+        "details": {
+          "$ref": "#/$defs/where"
+        }
+      }
+    },
+    {
+      "description": "The runtime's endpoint can't be used as the Messages API's base URL: it ends in /v1 (the library adds /v1/messages itself), holds a query, a fragment or user info, or isn't an http or https URL with a host. The fix names the endpoint to use, never repeating one that holds user info.",
+      "required": [
+        "details"
+      ],
+      "properties": {
+        "code": {
+          "const": "anthropic.unsupported-endpoint"
+        },
+        "details": {
+          "$ref": "#/$defs/where"
+        }
+      }
+    },
+    {
+      "description": "run/start and the runner's environment disagree about the credential: run/start's runtime.credential is true and TROUPE_RUNTIME_CREDENTIAL isn't set, or it's false and the variable is set. The problem says which way, never the value.",
+      "required": [
+        "details"
+      ],
+      "properties": {
+        "code": {
+          "const": "anthropic.credential-mismatch"
+        },
+        "details": {
+          "$ref": "#/$defs/where"
+        }
+      }
+    },
+    {
+      "description": "The runtime has a credential and an http endpoint whose host isn't this machine, so the credential would travel in the clear.",
+      "required": [
+        "details"
+      ],
+      "properties": {
+        "code": {
+          "const": "anthropic.insecure-endpoint"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "endpoint"
+          ],
+          "properties": {
+            "endpoint": {
+              "description": "The endpoint refused.",
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "description": "The run's credential holds a character a request header can't carry: anything but visible ASCII, such as a line ending left from the file it was read from, or a letter outside ASCII. The problem names the variable, never the value.",
+      "required": [
+        "details"
+      ],
+      "properties": {
+        "code": {
+          "const": "anthropic.malformed-credential"
+        },
+        "details": {
+          "$ref": "#/$defs/where"
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "where": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "where"
+      ],
+      "properties": {
+        "where": {
+          "description": "Where the problem is, such as options.maxTurns or runtime.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

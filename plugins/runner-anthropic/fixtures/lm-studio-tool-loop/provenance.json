@@ -1,0 +1,10 @@
+{
+  "service": "http://127.0.0.1:1234",
+  "model": "google/gemma-4-e4b",
+  "captured": "2026-11-14",
+  "how": "recorded with tools/capture_anthropic.py loop",
+  "credential": "none",
+  "workspace": {
+    "notes/todo.txt": "buy milk\nwrite the troupe docs\n"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "service": "https://api.anthropic.com",
+  "model": "claude-haiku-5-5",
+  "credential": "none",
+  "how": "built: a reply that stops with stop_reason refusal and stop_details, from the refusals documentation (https://platform.claude.com/docs/en/build-with-claude/refusals-and-fallback)"
+}

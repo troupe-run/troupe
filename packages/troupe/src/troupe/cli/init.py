@@ -152,7 +152,7 @@ def _step_notes(step: dict[str, Any], entries: list[dict[str, Any]]) -> list[str
                 else ", and the actor's model downloaded."
             )
         )
-    if step["runner"] == "openai":
+    if step["runner"] in ("anthropic", "openai"):
         runtime = _value(entries, step["actor"], "runtime")
         tokens = _option(entries, step["actor"], "maxTotalTokens")
         notes.append(

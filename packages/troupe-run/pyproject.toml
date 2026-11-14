@@ -31,7 +31,11 @@ dependencies = [
 # the check otherwise (runner-extras design D2, D4; owner, #333).
 [project.optional-dependencies]
 all = [
+    "troupe-runner-anthropic",
     "troupe-runner-lm-studio",
+]
+anthropic = [
+    "troupe-runner-anthropic",
 ]
 lm-studio = [
     "troupe-runner-lm-studio",

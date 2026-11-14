@@ -281,6 +281,27 @@ def test_the_openai_audition_says_which_key_to_set_and_that_a_run_costs_money(
     assert "runner: openai" in lead
 
 
+def test_the_anthropic_audition_says_which_key_to_set_that_a_run_costs_money_and_its_extra(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Spec: config, "What init prints for it"; cli, "The Anthropic runner".
+    monkeypatch.delenv("TROUPE_RUNTIME_ANTHROPIC_CREDENTIAL_ENV", raising=False)
+    code, out, err = cli("init", "--audition", "--runner", "anthropic")
+    assert code == ExitCode.OK, err
+    assert "Defined the actor lead, with the anthropic runner." in out
+    lines = _next(out)
+    assert (
+        "   # Set ANTHROPIC_API_KEY to your API key for the anthropic runtime. A run costs money, "
+        "and stops once it has used the actor's budget of 100,000 tokens." in lines
+    )
+    assert any("troupe-run[anthropic]" in line for line in lines)
+    lead = (repo.path / ".troupe" / "actors" / "lead.yaml").read_text(encoding="utf-8")
+    assert "runner: anthropic" in lead
+    code, out, err = cli("config", "get", "actors.lead.runtime", "--json")
+    assert code == ExitCode.OK, err
+    assert json.loads(out)["value"] == "anthropic"
+
+
 def test_the_openai_audition_names_the_key_variable_the_person_chose(
     repo: Repo, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -318,7 +339,7 @@ def test_an_unknown_runner_names_the_runners_troupe_has_and_makes_nothing(repo: 
     code, _, err = cli("init", "--audition", "--runner", "gemini")
     assert code == ExitCode.FAILURE
     assert "gemini" in err
-    assert "claude-code, lm-studio, ollama, openai, scripted" in err
+    assert "anthropic, claude-code, lm-studio, ollama, openai, scripted" in err
     assert not (repo.path / ".troupe").exists()
 
 

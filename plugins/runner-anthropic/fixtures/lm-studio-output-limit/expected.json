@@ -1,0 +1,47 @@
+{
+  "requests": 1,
+  "outcome": "failed",
+  "events": [
+    {
+      "type": "init",
+      "seq": 0,
+      "runner": {
+        "name": "anthropic",
+        "version": "<package version>"
+      },
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Glob",
+        "Grep",
+        "Delete",
+        "Move"
+      ],
+      "effects": "checked",
+      "engine": {
+        "name": "messages",
+        "model": "google/gemma-4-e4b"
+      }
+    },
+    {
+      "type": "turn",
+      "seq": 1,
+      "role": "assistant",
+      "text": "The user wants me"
+    },
+    {
+      "type": "result",
+      "seq": 2,
+      "status": "error",
+      "message": "The reply reached the output limit the runner asked for (maxOutputTokens) before the model finished; nothing in it was carried out. Raise maxOutputTokens in the actor's options.",
+      "reason": "output-limit",
+      "turns": 1,
+      "usage": {
+        "inputTokens": 43,
+        "outputTokens": 4,
+        "cacheReadTokens": 15
+      }
+    }
+  ]
+}
