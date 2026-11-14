@@ -494,7 +494,7 @@ def add_extra(root: Path, name: str) -> None:
 def test_the_install_page_gives_the_extras_form_and_lists_the_extras() -> None:
     text = (REPO / EXTRAS_PAGE).read_text(encoding="utf-8")
     assert '"troupe-run[all] @ git+' in text
-    assert listed_extras(text) == ["all", "anthropic", "lm-studio"]
+    assert listed_extras(text) == ["all", "anthropic"]
 
 
 def test_the_extras_form_at_the_released_tag_passes(copy: Path) -> None:
@@ -515,7 +515,7 @@ def test_an_extra_the_bundle_doesnt_have_is_named_with_the_page_line_and_its_ext
     number = line_of(copy, EXTRAS_PAGE, "troupe-run[gemini]")
     assert problems(copy) == [
         f"{EXTRAS_PAGE}:{number} names troupe-run[gemini], but troupe-run has no extra 'gemini' "
-        "(it has: all, anthropic, lm-studio): name one of those, as "
+        "(it has: all, anthropic): name one of those, as "
         f"{BUNDLE_PYPROJECT} declares them."
     ]
 
@@ -523,6 +523,6 @@ def test_an_extra_the_bundle_doesnt_have_is_named_with_the_page_line_and_its_ext
 def test_an_extra_missing_from_the_install_pages_list_is_named(copy: Path) -> None:
     add_extra(copy, "example")
     assert problems(copy) == [
-        f"{EXTRAS_PAGE}'s list of extras names all, anthropic and lm-studio, but troupe-run has "
-        "all, anthropic, example and lm-studio: add a row for example, under its | Extra | header."
+        f"{EXTRAS_PAGE}'s list of extras names all and anthropic, but troupe-run has all, "
+        "anthropic and example: add a row for example, under its | Extra | header."
     ]

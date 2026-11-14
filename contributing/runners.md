@@ -9,14 +9,12 @@ and output. A runner can be written in any language. This page and the schemas i
 In Python, the [plugin SDK](../packages/troupe-plugin-sdk/README.md) (`troupe_plugin_sdk.runner`) has the contract's
 types, checked against those schemas, and core uses the same ones. A runner in another language reads the schemas.
 
-troupe ships six runners: the [scripted runner](../plugins/runner-scripted/README.md), which tests use to produce
+troupe ships five runners: the [scripted runner](../plugins/runner-scripted/README.md), which tests use to produce
 every outcome on demand, the [Claude Code runner](../plugins/runner-claude-code/README.md), the
 [Ollama runner](../plugins/runner-ollama/README.md), which drives a local model through Ollama's own API with troupe's
-own tool loop (decision [#16](https://github.com/troupe-run/troupe/issues/16)), the
+own tool loop (decision [#16](https://github.com/troupe-run/troupe/issues/16)), and the
 [OpenAI runner](../plugins/runner-openai/README.md), which drives OpenAI's Responses API with the same kind of loop
 ([#162](https://github.com/troupe-run/troupe/issues/162)), and the
-[LM Studio runner](../plugins/runner-lm-studio/README.md), which drives LM Studio through its own client library,
-whose tool loop calls troupe's tools ([#291](https://github.com/troupe-run/troupe/issues/291)), and the
 [Anthropic runner](../plugins/runner-anthropic/README.md), which drives the Anthropic Messages API, on Claude's API or
 a local engine, through the `anthropic` package with troupe's own tool loop
 ([#415](https://github.com/troupe-run/troupe/issues/415)).
@@ -88,8 +86,6 @@ alone, so troupe refuses a pair your runner would refuse before anything is reco
 - `path`: what the endpoint's path must be: `"none"` (you add your own API's path, as the Ollama runner does),
   `"required"` (your requests go below it, such as `/v1`, as the OpenAI runner's do) or `"any"`. A single trailing
   `/` is no path; `//` is one.
-- `scheme`: `"http"` when you can only reach plain `http`, as the LM Studio runner, whose library has no TLS; `"any"`
-  otherwise.
 - `version`: `True` when you add the API's version path (`/v1`) below the endpoint yourself, as the Anthropic runner's
   library does, so an endpoint whose path already ends in `/v1` is refused (`endpoint-version`); `False` otherwise.
 - `built_in`: the built-in runtime made for your runner, if troupe has one. Your runner then fits no other runner's
@@ -262,11 +258,9 @@ closed, with one value:
 - **Absent means the runner retried until its attempts ran out, or doesn't retry that failure.** Send it only when
   you held back.
 - **Which runners need it:** one whose retry starts the run's conversation again from the direction, so the tool
-  calls already carried out would be asked for and carried out again. The LM Studio runner is one: the library's
-  `act()` starts again from the direction. It sends `notRetried` for a connection lost or unreachable after a call,
-  and not for a message timeout, which it never retries. A runner whose retry sends one request again, and carries out a reply's
-  calls only once the whole reply has arrived, never needs it: the Ollama, Responses API and Claude Code runners all
-  work that way, since the conversation each retry sends already holds every tool result.
+  calls already carried out would be asked for and carried out again. A runner whose retry sends one request again,
+  and carries out a reply's calls only once the whole reply has arrived, never needs it: the Ollama, Responses API and
+  Claude Code runners all work that way, since the conversation each retry sends already holds every tool result.
 - **troupe's outcome carries it,** and its fix says to review the run's changes before performing the actor again
   (see [Outcomes](#outcomes)).
 
@@ -295,8 +289,7 @@ With `compact`, you may, or let your engine, and send a `context` event each tim
 end the run with `context-length` and say compaction was on. A runner that holds its own conversation compacts it
 with the SDK's `troupe_plugin_sdk.compaction`, which replaces old tool results with a stub, oldest first, and never
 touches the character, the direction, the model's own messages or the latest turn's results (see the SDK's
-[README](../packages/troupe-plugin-sdk/README.md#compaction)). A runner that can't compact yet, such as the LM Studio
-runner, says so with a `log` warning after `init` when told `compact`, and ends with `context-length` as with `fail`.
+[README](../packages/troupe-plugin-sdk/README.md#compaction)). A runner that can't compact yet says so with a `log` warning after `init` when told `compact`, and ends with `context-length` as with `fail`.
 
 The SDK builds the event with `context_event` from `troupe_plugin_sdk.events`. It numbers the event with the run's
 `EventNumbering`, cuts the message to the run's limits, and leaves out each count you pass as `None`:
@@ -355,7 +348,7 @@ In a run that uses kinds, troupe stores each line as compact JSON: `{"kind": ...
 ([`transcript-record.schema.json`](../protocol/schemas/transcript-record.schema.json)). It masks the credential in
 the record's bytes before it frames them. The transcript limit counts the stored bytes, framing included. The run's
 end records `transcriptFormat`, `native` or `kinds`, beside the transcript's reference, so a reader always knows
-which form its lines are. The OpenAI, Ollama, LM Studio and Anthropic runners use kinds.
+which form its lines are. The OpenAI, Ollama and Anthropic runners use kinds.
 
 ### Where transcripts are kept
 
@@ -538,33 +531,9 @@ stream line unchanged, and the body of an error or of a 2xx that isn't a stream,
 are `note`s. The request's URL isn't recorded, since the run's start records the runtime's endpoint. The key, and a
 masked echo of it, are masked in everything it sends.
 
-### Mapping an engine: a client library's tool loop
-
-The [LM Studio runner](../plugins/runner-lm-studio/README.md) is a third shape: a [client
-library](#runners-with-client-libraries), LM Studio's `lmstudio`, runs the rounds, and calls a Python function for
-each tool the model asks for. Each function is the plugin SDK's `Tools`, so troupe still carries out and checks every
-call, and `init`'s `effects` is `checked`. The runner stops between rounds by raising from the library's round-end
-callback (closing the client isn't enough, since the next round reconnects it), and cancels by closing the client. Its fixtures pin it: websocket exchanges recorded from LM Studio, replayed by a fake.
-
-| From the library | Run event |
-|---|---|
-| the runtime's model, loaded (a load that starts reported) | `init`, with engine `lm-studio`; `log` events for the load, and for a loaded context length other than the run's |
-| a model key other than the runtime's model | `served_model`, the first time, before any turn it answers |
-| answer fragments (reasoning fragments are read past) | a `turn` when the round's first tool call starts, and one for the rest when the round ends |
-| each tool call, made through the SDK's `Tools` | `tool_call` and `tool_result`, from the SDK |
-| a call the library rejects (an unknown tool, arguments that don't fit) | `tool_call` and an error `tool_result`, with the SDK's own message for that input |
-| a lost connection, while no tool call has run | `retry` with reason `network` |
-| a round with no tool call, stopped at `eosFound` or `stopStringFound` | `result` `ok`, with its text |
-| every round used while the model still called tools, the budget spent once a round's calls finish, the context or predicted-token limit, the model unloaded or a failed prediction, a lost connection after a tool call or a timeout, or a message the library can't read | `result` `error`. Its `reason`: `turn-limit`, `budget`, `context-length`, `output-limit`, `engine`, `network` and `other`; a lost or unreachable connection after a tool call also has `notRetried: side-effect` |
-| each round's `promptTokensCount` and `predictedTokensCount` | summed into `result.usage` as `inputTokens` and `outputTokens`; LM Studio reports no cache counters and no cost |
-| no cost, and a price in `run/start` | `result.estimatedCostUsd`, from the SDK's estimator |
-
-Its transcript is what the library exposes, with the contract's record kinds: the model's listing and each round's
-result are `received`, the chat and tools it passes the library and each tool result message are `sent`.
-
 ### Mapping an engine: a client library under troupe's own loop
 
-The [Anthropic runner](../plugins/runner-anthropic/README.md) is a fourth shape: troupe's own tool loop, as the OpenAI
+The [Anthropic runner](../plugins/runner-anthropic/README.md) is a third shape: troupe's own tool loop, as the OpenAI
 runner's, with each request sent through a [client library](#runners-with-client-libraries), the `anthropic` package,
 whose defaults break three of troupe's guarantees and are each turned off in one module: it follows redirects, retries
 on its own terms, and looks for a credential in the environment and on disk. The runner gives it its own HTTP client,
@@ -698,7 +667,7 @@ it uses. Adding one takes these steps, and each has a check that fails when it's
 | Step | The check that fails without it |
 |---|---|
 | Add the library to the plugin's `dependencies`, and run `uv lock` | `uv sync --locked` in `scripts/check.py` |
-| Move the plugin from `troupe-run`'s `dependencies` to an extra named exactly after its runner (`lm-studio`, not the library's `lmstudio`), and add the same entry to `all` | The bundle check (`scripts/bundle.py`) |
+| Move the plugin from `troupe-run`'s `dependencies` to an extra named exactly after its runner, not after its library, and add the same entry to `all` | The bundle check (`scripts/bundle.py`) |
 | Set `in_extra=True` on the runner's entry in core's runner table (`troupe.core.interim.RUNNERS`) | The bundle check |
 | While the plugin hasn't released, so the bundle names it bare, keep the bundle's commits out of release pull requests | The release configuration check (`scripts/release_config.py`) |
 | Add a row for the extra to the list on the [install page](../docs/opening-night/install.md) | The docs check (`scripts/tests/workspace/test_install_docs.py`) |

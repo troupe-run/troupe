@@ -273,14 +273,12 @@ Reason = Literal[
     "credential",
     "endpoint-path",
     "endpoint-no-path",
-    "endpoint-scheme",
     "endpoint-version",
     "built-in",
 ]
 """Why a runtime doesn't fit a runner: it has a credential the runner never sends, its endpoint has
-a path the runner can't use, it has none where the runner needs one (runtime-checks design D2),
-it's https for a runner that can only use plain http, or it's another runner's built-in
-(lmstudio-runner design D3)."""
+a path the runner can't use, it has none where the runner needs one (runtime-checks design D2), or
+it's another runner's built-in (lmstudio-runner design D3)."""
 
 
 def has_path(endpoint: str) -> bool:
@@ -310,8 +308,6 @@ def unfit(
         reasons.append("endpoint-path")
     if fit.path == "required" and not has_path(endpoint):
         reasons.append("endpoint-no-path")
-    if fit.scheme == "http" and urlsplit(endpoint).scheme != "http":
-        reasons.append("endpoint-scheme")
     if fit.version and ends_in_version(endpoint):
         reasons.append("endpoint-version")
     return reasons
@@ -362,11 +358,6 @@ def unfit_words(runner: str, runtime: str, reason: Reason, endpoint: str | None 
             f"the runtime {runtime!r} is troupe's built-in for {made}, and the {runner} runner "
             "can't use it"
         )
-    if reason == "endpoint-scheme":
-        return (
-            f"the {runner} runner can only reach a plain http endpoint, and the runtime "
-            f"{runtime!r} has an https one"
-        )
     return (
         f"the {runner} runner needs an endpoint with a path, such as /v1, and the runtime "
         f"{runtime!r} has one without"
@@ -381,8 +372,6 @@ def fitting(fit: interim.RuntimeFit) -> str:
         "any": "an endpoint",
     }
     words = parts[fit.path]
-    if fit.scheme == "http":
-        words = "a plain http " + words.removeprefix("an ")
     if fit.version:
         words += f" whose path doesn't end in {VERSION_PATH}"
     return words + ("" if fit.credential else " and no credential")
@@ -460,7 +449,7 @@ def refuse_unfit(
     came_from: dict[str, str] = {}
     if "credential" in reasons and resolved.credential is not None:
         came_from["credential"] = _came_from(resolved.name, "credential_env", resolved.credential)
-    if {"endpoint-path", "endpoint-no-path", "endpoint-scheme", "endpoint-version"} & set(reasons):
+    if {"endpoint-path", "endpoint-no-path", "endpoint-version"} & set(reasons):
         came_from["endpoint"] = _came_from(resolved.name, "endpoint", resolved.endpoint)
     fits: list[str] = []
     for other in names(config):

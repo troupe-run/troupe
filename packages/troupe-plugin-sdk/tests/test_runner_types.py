@@ -126,7 +126,7 @@ CASES: list[tuple[type[p.Message], str, st.SearchStrategy[Any]]] = [
         "run-start.schema.json#/$defs/runtime",
         _with_optional(
             {
-                "name": st.sampled_from(["openai", "lm-studio"]),
+                "name": st.sampled_from(["openai", "local-ai"]),
                 "endpoint": st.sampled_from(["https://api.openai.com/v1", "http://127.0.0.1:1234"]),
                 "model": NAME.filter(lambda s: s.isprintable()),
                 "credential": st.booleans(),

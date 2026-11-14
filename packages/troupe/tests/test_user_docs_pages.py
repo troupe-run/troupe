@@ -549,8 +549,8 @@ def test_the_runtimes_pages_commands_run_as_written_and_show_what_it_says(
     prices = YAML(typ="safe", pure=True).load(written)["prices"]
     assert sorted(prices) == ["gpt-4.1", "gpt-5-mini"]  # one set in brackets, beside the other
     assert prices["gpt-4.1"] == {"input": 2, "cacheRead": 0.5, "cacheWrite": 0, "output": 8}
-    lm_studio_openai = project.path / ".troupe" / "runtimes" / "lm-studio-openai.yaml"
-    assert "endpoint: http://127.0.0.1:1234/v1" in lm_studio_openai.read_text(encoding="utf-8")
+    local_openai = project.path / ".troupe" / "runtimes" / "local-openai.yaml"
+    assert "endpoint: http://127.0.0.1:8080/v1" in local_openai.read_text(encoding="utf-8")
 
 
 def test_the_runtimes_page_gives_the_built_in_runtimes_as_the_code_does() -> None:

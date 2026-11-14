@@ -34,10 +34,6 @@ class RuntimeFit:
     """What the runtime's endpoint's path must be: none (the runner adds its own API's path),
     one (such as /v1, which the runner's requests go below), or either. A lone / is no path."""
 
-    scheme: Literal["any", "http"] = "any"
-    """Which of the endpoint's schemes the runner can use: either, or plain http alone, for a
-    runner whose engine can't be reached over TLS (lmstudio-runner design D3)."""
-
     version: bool = False
     """Whether the runner adds its API's version path (/v1) below the endpoint itself, so an
     endpoint whose path already ends in /v1 doesn't fit: requests would go to /v1/v1/...
@@ -45,8 +41,8 @@ class RuntimeFit:
 
     built_in: str | None = None
     """The built-in runtime made for this runner, when there is one. A runner with one fits no
-    other runner's built-in, whatever its shape: built-ins of the same shape (ollama and lm-studio)
-    serve different engines (lmstudio-runner design D3). None: any built-in fits by its shape."""
+    other runner's built-in, whatever its shape: two built-ins of the same shape would serve
+    different engines (lmstudio-runner design D3). None: any built-in fits by its shape."""
 
 
 @dataclass(frozen=True)
@@ -159,19 +155,6 @@ RUNNERS: dict[str, Runner] = {
         command=(sys.executable, "-m", "troupe_runner_claude_code"),
         package="troupe_runner_claude_code",
         environment=CLAUDE_CODE_ENVIRONMENT,
-    ),
-    "lm-studio": Runner(
-        command=(sys.executable, "-m", "troupe_runner_lm_studio"),
-        package="troupe_runner_lm_studio",
-        # No variables: its endpoint and model are its runtime's, in run/start, and it takes no
-        # credential, since LM Studio's library can't send one (lmstudio-runner design D3, D4).
-        runtime="required",
-        # LM Studio's own client library, lmstudio, comes with troupe-run[lm-studio], not the
-        # base install (runner-extras design D1, D5).
-        in_extra=True,
-        # It sends no credential, connects to LM Studio's server root, and only over plain ws://,
-        # since the library has no TLS (lmstudio-runner design D3, D4).
-        fit=RuntimeFit(credential=False, path="none", scheme="http", built_in="lm-studio"),
     ),
     "ollama": Runner(
         command=(sys.executable, "-m", "troupe_runner_ollama"),

@@ -44,8 +44,8 @@ class Tree:
 
     def runner(self, *dependencies: str) -> None:
         self.member(
-            "plugins/runner-lm-studio",
-            "troupe-runner-lm-studio",
+            "plugins/runner-example",
+            "troupe-runner-example",
             ["troupe-plugin-sdk", *dependencies],
         )
 
@@ -100,39 +100,39 @@ def tree(tmp_path: Path) -> Tree:
 
 
 def test_permissive_licences_pass(tree: Tree) -> None:
-    tree.runner("lmstudio")
-    tree.package("lmstudio", "msgspec", expression="MIT")
-    tree.package("msgspec", expression="BSD-3-Clause")
+    tree.runner("example-sdk")
+    tree.package("example-sdk", "example-codec", expression="MIT")
+    tree.package("example-codec", expression="BSD-3-Clause")
     assert tree.problems() == []
 
 
 def test_a_licence_on_neither_tier_is_named_with_the_package_runner_and_list(tree: Tree) -> None:
-    tree.runner("lmstudio")
-    tree.package("lmstudio", "gpl-thing", expression="MIT")
+    tree.runner("example-sdk")
+    tree.package("example-sdk", "gpl-thing", expression="MIT")
     tree.package("gpl-thing", expression="GPL-3.0-only")
     assert tree.problems() == [
-        "gpl-thing, which troupe-runner-lm-studio depends on, is licensed GPL-3.0-only, which "
+        "gpl-thing, which troupe-runner-example depends on, is licensed GPL-3.0-only, which "
         f"isn't on either tier of {LIST}: replace the dependency, or, if the licence is compatible "
         f"with Apache-2.0, add it to {LIST} in a reviewed change."
     ]
 
 
 def test_no_declared_licence_is_named(tree: Tree) -> None:
-    tree.runner("lmstudio")
-    tree.package("lmstudio")
+    tree.runner("example-sdk")
+    tree.package("example-sdk")
     assert tree.problems() == [
-        "lmstudio, which troupe-runner-lm-studio depends on, declares no licence in its metadata "
+        "example-sdk, which troupe-runner-example depends on, declares no licence in its metadata "
         f"(License-Expression, License or a licence classifier): no licence was found, so it can't "
         f"be checked against {LIST}. Replace it, or find its licence and raise it with the owner."
     ]
 
 
 def test_a_package_that_isnt_installed_is_named(tree: Tree) -> None:
-    tree.runner("lmstudio")
-    tree.lock("lmstudio", [])
+    tree.runner("example-sdk")
+    tree.lock("example-sdk", [])
     assert tree.problems() == [
-        "lmstudio, which troupe-runner-lm-studio depends on, isn't installed, so its licence can't "
-        "be read: run uv sync, which installs every runner's dependencies."
+        "example-sdk, which troupe-runner-example depends on, isn't installed, so its licence "
+        "can't be read: run uv sync, which installs every runner's dependencies."
     ]
 
 
@@ -189,7 +189,7 @@ def test_a_package_locked_only_for_another_platform_is_still_checked_where_it_is
     tree.package("tqdm", "colorama; sys_platform == 'win32'", expression="MIT")
     tree.package("colorama", expression="GPL-3.0-only")
     [problem] = tree.problems()
-    assert problem.startswith("colorama, which troupe-runner-lm-studio depends on, is licensed GPL")
+    assert problem.startswith("colorama, which troupe-runner-example depends on, is licensed GPL")
 
 
 def test_a_package_reached_unconditionally_too_isnt_skipped_when_missing(tree: Tree) -> None:
@@ -197,7 +197,7 @@ def test_a_package_reached_unconditionally_too_isnt_skipped_when_missing(tree: T
     tree.package("tqdm", "colorama; sys_platform == 'win32'", expression="MIT")
     tree.lock("colorama", [])
     assert tree.problems() == [
-        "colorama, which troupe-runner-lm-studio depends on, isn't installed, so its licence can't "
+        "colorama, which troupe-runner-example depends on, isn't installed, so its licence can't "
         "be read: run uv sync, which installs every runner's dependencies."
     ]
 
@@ -235,7 +235,7 @@ def test_an_unmapped_classifier_fails(tree: Tree) -> None:
     tree.runner("odd")
     tree.package("odd", classifiers=("License :: Other/Proprietary License",))
     assert tree.problems() == [
-        "odd, which troupe-runner-lm-studio depends on, declares no licence in its metadata "
+        "odd, which troupe-runner-example depends on, declares no licence in its metadata "
         f"(License-Expression, License or a licence classifier): no licence was found, so it can't "
         f"be checked against {LIST}. Replace it, or find its licence and raise it with the owner."
     ]
@@ -275,7 +275,7 @@ def test_a_weak_copyleft_package_from_a_git_source_is_named(tree: Tree) -> None:
     git = 'source = { git = "https://github.com/certifi/python-certifi?rev=abc#abc" }'
     tree.package("certifi", expression="MPL-2.0", source=git)
     assert tree.problems() == [
-        "certifi, which troupe-runner-lm-studio depends on, is licensed MPL-2.0, in the "
+        "certifi, which troupe-runner-example depends on, is licensed MPL-2.0, in the "
         f"weak-copyleft tier of {LIST}, so it's used only unmodified, installed from a package "
         "index as its own package, but uv.lock takes it from a git source: lock it from the "
         "package index."
@@ -288,7 +288,7 @@ def test_a_weak_copyleft_package_overridden_in_the_workspace_sources_is_named(tr
     tree.package("certifi", expression="MPL-2.0")
     tree.sources = '\n[tool.uv.sources]\ncertifi = { path = "vendor/certifi" }\n'
     assert tree.problems() == [
-        "certifi, which troupe-runner-lm-studio depends on, is licensed MPL-2.0, in the "
+        "certifi, which troupe-runner-example depends on, is licensed MPL-2.0, in the "
         f"weak-copyleft tier of {LIST}, so it's used only unmodified, installed from a package "
         "index as its own package, but the root pyproject.toml's [tool.uv.sources] overrides it: "
         "remove the override."
@@ -298,8 +298,8 @@ def test_a_weak_copyleft_package_overridden_in_the_workspace_sources_is_named(tr
 def test_a_tracked_file_carrying_a_weak_copyleft_notice_is_named(tree: Tree) -> None:
     tree.runner()
     copied = f"# {NOTICE} v. 2.0.\nVALUE = 1\n"
-    assert tree.problems({"plugins/runner-lm-studio/src/vendored.py": copied}) == [
-        "plugins/runner-lm-studio/src/vendored.py carries the MPL-2.0 notice: weak-copyleft code "
+    assert tree.problems({"plugins/runner-example/src/vendored.py": copied}) == [
+        "plugins/runner-example/src/vendored.py carries the MPL-2.0 notice: weak-copyleft code "
         "is used only as an unmodified dependency, installed as its own package, never copied, "
         "vendored or patched into troupe's source. Remove the file, and depend on its package."
     ]

@@ -232,7 +232,7 @@ def add_runner(
     root: Path,
     runner: str,
     *,
-    library: str | None = "lmstudio>=1.5",
+    library: str | None = "example-sdk>=1.5",
     extra: str | None = None,
     in_extra: bool | None = None,
 ) -> str:

@@ -163,18 +163,6 @@
         }
       ]
     },
-    "plugins/runner-lm-studio": {
-      "release-type": "python",
-      "package-name": "troupe-runner-lm-studio",
-      "component": "troupe-runner-lm-studio",
-      "extra-files": [
-        {
-          "type": "toml",
-          "path": "/uv.lock",
-          "jsonpath": "$.package[?(@.name.value=='troupe-runner-lm-studio')].version"
-        }
-      ]
-    },
     "plugins/runner-ollama": {
       "release-type": "python",
       "package-name": "troupe-runner-ollama",
