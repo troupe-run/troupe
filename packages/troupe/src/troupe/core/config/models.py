@@ -244,7 +244,7 @@ class Runtime(StrictModel):
         ),
     ] = None
     """
-    The base URL the runner's API is served under: http or https, a host and an optional port and path, with no user info, query or fragment. The runner adds its own paths. Required for a runtime that isn't built in.
+    The base URL the runner's API is served under: http or https, a host and an optional port and path, with no user info, query or fragment. The runner adds its own paths. Required for a runtime that isn't built in, and refused for an in-process built-in (mistralrs), which loads its model in the runner's own process.
     """
     model: Annotated[
         str | None,

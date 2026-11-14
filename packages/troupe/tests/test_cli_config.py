@@ -654,7 +654,8 @@ def test_resolved_as_json_shows_each_value_and_its_source(
     assert code == 0
     result = json.loads(out)
     check(result, "config-get-result.schema.json")
-    assert sorted(result["runtimes"]) == ["anthropic", "lm-studio", "ollama", "openai"]
+    assert sorted(result["runtimes"]) == ["anthropic", "lm-studio", "mistralrs", "ollama", "openai"]
+    assert "endpoint" not in result["runtimes"]["mistralrs"]
     assert result["runtimes"]["openai"]["model"] == {"value": "gpt-test", "source": "theatre"}
     assert result["runtimes"]["openai"]["credential"]["set"] is False
     assert result["runtimes"]["ollama"]["model"] == {"value": "qwen3", "source": "env"}

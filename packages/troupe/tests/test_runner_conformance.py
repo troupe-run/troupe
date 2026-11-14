@@ -171,7 +171,7 @@ def test_the_ollama_runner_passes_every_check_given_a_runtime_naming_a_stand_in(
             workspace,
             RunLimits(start_timeout=10.0, cancel_grace=10.0, run_timeout=30.0),
             {},
-            RunStartRuntime("test", fake.url, "fake", credential=False),
+            RunStartRuntime(name="test", endpoint=fake.url, model="fake", credential=False),
         )
     assert {name: r.problem for name, r in results.items() if not r.passed} == {}
     assert len(results) == 8
@@ -185,7 +185,9 @@ def test_the_openai_style_runner_passes_every_check_given_a_runtime_naming_a_sta
     workspace.mkdir()
     key = "sk-conformance-0123456789"
     with openai_stand_in.serving([openai_stand_in.text_reply("Done.")] * 20) as fake:
-        runtime = RunStartRuntime("test", fake.endpoint, "fake-model", credential=True)
+        runtime = RunStartRuntime(
+            name="test", endpoint=fake.endpoint, model="fake-model", credential=True
+        )
         results = asyncio.run(
             check_runner(
                 RunnerCommand(
@@ -250,7 +252,12 @@ def test_the_lm_studio_runner_passes_every_check_given_a_runtime_naming_a_stand_
             workspace,
             RunLimits(start_timeout=10.0, cancel_grace=10.0, run_timeout=30.0),
             {},
-            RunStartRuntime("test", fake.endpoint, lm_studio_stand_in.MODEL, credential=False),
+            RunStartRuntime(
+                name="test",
+                endpoint=fake.endpoint,
+                model=lm_studio_stand_in.MODEL,
+                credential=False,
+            ),
         )
     assert {name: r.problem for name, r in results.items() if not r.passed} == {}
     assert len(results) == 8

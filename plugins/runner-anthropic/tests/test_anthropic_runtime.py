@@ -353,3 +353,12 @@ def test_a_malformed_key_in_the_environment_is_refused_as_malformed_by_from_run_
             _start({**ANTHROPIC, "credential": True}), {"TROUPE_RUNTIME_CREDENTIAL": KEY + "\r\n"}
         )
     assert raised.value.code == "anthropic.malformed-credential"
+
+
+def test_an_in_process_runtime_without_an_endpoint_is_refused_naming_the_endpoint() -> None:
+    # In-process-runner design D5: config wouldn't pair one with an Anthropic actor; the runner
+    # still refuses it rather than failing on a missing endpoint.
+    with pytest.raises(RuntimeRefusedError) as raised:
+        Runtime.checked(None, "m", None)
+    assert raised.value.code == "anthropic.no-runtime"
+    assert raised.value.details == {"where": "runtime.endpoint"}

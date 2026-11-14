@@ -147,9 +147,14 @@ class RunStartRuntime(Message):
     (read it with ``troupe_plugin_sdk.credential.runtime_credential``)."""
 
     name: str = json_field("name", pattern=RUNTIME_NAME_PATTERN)
-    endpoint: str = json_field("endpoint", pattern=ENDPOINT_PATTERN, unquoted=ENDPOINT_ACCEPTED)
     model: str = json_field("model", pattern=MODEL_PATTERN)
     credential: bool = json_field("credential")
+    endpoint: str | None = json_field(
+        "endpoint", default=None, pattern=ENDPOINT_PATTERN, unquoted=ENDPOINT_ACCEPTED
+    )
+    """The base URL the runner's API is served under. None for an in-process runtime, which has
+    no endpoint: its runner loads the model in its own process (in-process-runner design D5). A
+    runner that talks to a service refuses a runtime without one."""
     price: Price | None = json_field("price", default=None)
     """The run's model's price, when the theatre prices it: the only price a runner may estimate
     a cost from (``troupe_plugin_sdk.cost.estimate``)."""

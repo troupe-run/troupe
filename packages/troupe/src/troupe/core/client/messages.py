@@ -468,7 +468,8 @@ class ResolvedRuntime(Message):
     """A runtime as troupe resolves it, each value with its source."""
 
     name: str = json_field("name", pattern=RUNTIME_NAME)
-    endpoint: SourcedValue = json_field("endpoint")
+    endpoint: SourcedValue | None = json_field("endpoint", default=None)
+    """None for an in-process runtime, which has no endpoint (in-process-runner design D5)."""
     model: SourcedValue | None = json_field("model", default=None)
     credential: ResolvedCredential | None = json_field("credential", default=None)
     price: SourcedPrice | None = json_field("price", default=None)

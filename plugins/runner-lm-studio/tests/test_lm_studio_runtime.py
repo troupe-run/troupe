@@ -120,3 +120,14 @@ def test_a_credential_run_start_doesnt_mention_is_a_mismatch_without_the_value()
         from_run_start(_start(), {"TROUPE_RUNTIME_CREDENTIAL": CANARY})
     assert caught.value.code == "lm-studio.credential-mismatch"
     assert CANARY not in caught.value.problem + caught.value.fix + str(caught.value.details)
+
+
+def test_an_in_process_runtime_without_an_endpoint_is_refused_naming_the_endpoint() -> None:
+    # In-process-runner design D5: config wouldn't pair one with an LM Studio actor; the runner
+    # still refuses it rather than failing on a missing endpoint.
+    data = _start().to_data()
+    del data["runtime"]["endpoint"]
+    with pytest.raises(RuntimeRefusedError) as raised:
+        from_run_start(RunStartParams.from_data(data), {})
+    assert raised.value.code == "lm-studio.no-runtime"
+    assert raised.value.details == {"where": "runtime.endpoint"}

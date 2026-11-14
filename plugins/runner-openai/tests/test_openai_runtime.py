@@ -196,3 +196,12 @@ def test_a_key_holding_a_character_a_header_cant_carry_is_refused_without_its_va
     for text in (error.problem, error.fix):
         assert KEY not in text
         assert KEY[:8] not in text
+
+
+def test_an_in_process_runtime_without_an_endpoint_is_refused_naming_the_endpoint() -> None:
+    # In-process-runner design D5: config wouldn't pair one with an OpenAI actor; the runner still
+    # refuses it rather than failing on a missing endpoint.
+    with pytest.raises(RuntimeRefusedError) as raised:
+        Runtime.checked(None, "m", None)
+    assert raised.value.code == "openai.no-runtime"
+    assert raised.value.details == {"where": "runtime.endpoint"}

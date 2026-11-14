@@ -18,12 +18,14 @@ since Ollama takes none. An Ollama actor still holding `model` or `endpoint` in 
 `troupe init --audition` wrote it, is refused with the one `troupe config set` that moves them. The LM Studio runner
 needs one as well: the built-in `lm-studio`, LM Studio's server root, or one of your own. The Anthropic runner needs
 one too: the built-in `anthropic`, Claude's own API, or one of your own for a local engine that serves the Anthropic
-Messages API, such as LM Studio's or Ollama's server root. The scripted runner takes one optionally, for troupe's own
+Messages API, such as LM Studio's or Ollama's server root. The mistralrs runner needs the built-in `mistralrs`, which
+has no endpoint at all: the runner loads the model, a GGUF file, in its own process, and the runtime's model is that
+file's absolute path. The scripted runner takes one optionally, for troupe's own
 tests.
 
 ## The runtimes troupe knows
 
-troupe has four built in:
+troupe has five built in:
 
 | Runtime | Endpoint | Credential |
 |---|---|---|
@@ -31,21 +33,25 @@ troupe has four built in:
 | `anthropic` | `https://api.anthropic.com` | `ANTHROPIC_API_KEY` |
 | `ollama` | `http://127.0.0.1:11434` | none |
 | `lm-studio` | `http://127.0.0.1:1234` | none |
+| `mistralrs` | none: in-process | none |
 
 Which runner each fits:
 
-| Runtime | `openai` runner | `anthropic` runner | `ollama` runner | `lm-studio` runner | `scripted` runner |
-|---|---|---|---|---|---|
-| `openai` | yes | no: it's OpenAI's | no: it has a credential, and Ollama takes none | no: it has a credential, and is `https` with a path | yes |
-| `anthropic` | no: its endpoint has no path, so it isn't the Responses API | yes | no: it has a credential, and Ollama takes none | no: it has a credential, and is `https` | yes |
-| `ollama` | no: its endpoint has no path, so it isn't the Responses API | no: it's Ollama's | yes | no: it's Ollama's | yes |
-| `lm-studio` | no: its endpoint has no path | no: it's LM Studio's | no: it's LM Studio's | yes | yes |
+| Runtime | `openai` runner | `anthropic` runner | `ollama` runner | `lm-studio` runner | `mistralrs` runner | `scripted` runner |
+|---|---|---|---|---|---|---|
+| `openai` | yes | no: it's OpenAI's | no: it has a credential, and Ollama takes none | no: it has a credential, and is `https` with a path | no: it has an endpoint | yes |
+| `anthropic` | no: its endpoint has no path, so it isn't the Responses API | yes | no: it has a credential, and Ollama takes none | no: it has a credential, and is `https` | no: it has an endpoint | yes |
+| `ollama` | no: its endpoint has no path, so it isn't the Responses API | no: it's Ollama's | yes | no: it's Ollama's | no: it has an endpoint | yes |
+| `lm-studio` | no: its endpoint has no path | no: it's LM Studio's | no: it's LM Studio's | yes | no: it has an endpoint | yes |
+| `mistralrs` | no: it has no endpoint | no: it has no endpoint | no: it has no endpoint | no: it has no endpoint | yes | yes |
 
 Each built-in fits only the runner it's made for (and the scripted runner, which takes any), even where its address has
 the shape another needs: `ollama` and `lm-studio` look alike, but serve different engines. A runtime of your own fits by
 the rules alone: the OpenAI runner needs an endpoint with a path, the Ollama runner one with no path and no credential,
 the LM Studio runner a plain `http` one with no path and no credential, and the Anthropic runner any endpoint
-(its path, if it has one, must not end in `/v1`, which the runner adds itself). Config refuses an actor on a runtime that
+(its path, if it has one, must not end in `/v1`, which the runner adds itself). The mistralrs runner fits only a
+runtime with no endpoint, and only the built-in `mistralrs` has none: config refuses `runtimes.mistralrs.endpoint`, and
+`troupe perform` refuses a `TROUPE_RUNTIME_MISTRALRS_ENDPOINT` (`runtime.invalid-value`). Config refuses an actor on a runtime that
 doesn't fit, naming the runtimes that do, and so does `troupe perform` (`runtime.unfit`) when a `TROUPE_RUNTIME_`
 variable makes one stop fitting.
 
@@ -64,6 +70,21 @@ runtime openai
 ```
 
 `set` or `not set` says whether the variable has a value in your environment. troupe never shows the value.
+
+The in-process runtime shows no endpoint. Its model is a file on your machine, so set it in your environment rather
+than in the theatre's shared config:
+
+```sh
+export TROUPE_RUNTIME_MISTRALRS_MODEL=/Users/you/models/qwen3-0.6b-q8_0.gguf
+troupe config get --resolved runtimes.mistralrs
+```
+
+```text
+runtime mistralrs
+  endpoint: none (the runner loads the model in its own process)
+  model: /Users/you/models/qwen3-0.6b-q8_0.gguf (from env)
+  credential: none
+```
 
 ## Change a runtime for this theatre
 

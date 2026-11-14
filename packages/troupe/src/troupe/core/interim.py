@@ -43,6 +43,11 @@ class RuntimeFit:
     endpoint whose path already ends in /v1 doesn't fit: requests would go to /v1/v1/...
     (anthropic-runner design D3; owner, 2026-11-14)."""
 
+    endpoint: Literal["any", "required", "none"] = "any"
+    """Whether the runtime must have an endpoint: required for a runner that talks to a service,
+    none for one that loads its model in its own process, which fits only an in-process runtime
+    (in-process-runner design D5), or either."""
+
     built_in: str | None = None
     """The built-in runtime made for this runner, when there is one. A runner with one fits no
     other runner's built-in, whatever its shape: built-ins of the same shape (ollama and lm-studio)
@@ -153,7 +158,7 @@ RUNNERS: dict[str, Runner] = {
         # Any endpoint, since Claude's API and a local engine's server root have no path and a
         # gateway's may, but not one ending in /v1: the library adds /v1/messages itself
         # (anthropic-runner design D3).
-        fit=RuntimeFit(version=True, built_in="anthropic"),
+        fit=RuntimeFit(version=True, endpoint="required", built_in="anthropic"),
     ),
     "claude-code": Runner(
         command=(sys.executable, "-m", "troupe_runner_claude_code"),
@@ -171,7 +176,13 @@ RUNNERS: dict[str, Runner] = {
         in_extra=True,
         # It sends no credential, connects to LM Studio's server root, and only over plain ws://,
         # since the library has no TLS (lmstudio-runner design D3, D4).
-        fit=RuntimeFit(credential=False, path="none", scheme="http", built_in="lm-studio"),
+        fit=RuntimeFit(
+            credential=False,
+            path="none",
+            scheme="http",
+            endpoint="required",
+            built_in="lm-studio",
+        ),
     ),
     "ollama": Runner(
         command=(sys.executable, "-m", "troupe_runner_ollama"),
@@ -180,7 +191,7 @@ RUNNERS: dict[str, Runner] = {
         # its runtime's, which reach it in run/start (ollama-uses-runtime design D1).
         runtime="required",
         # It sends no credential, and adds /api/... to an endpoint at the root (its design D3, D4).
-        fit=RuntimeFit(credential=False, path="none", built_in="ollama"),
+        fit=RuntimeFit(credential=False, path="none", endpoint="required", built_in="ollama"),
     ),
     "openai": Runner(
         command=(sys.executable, "-m", "troupe_runner_openai"),
@@ -189,7 +200,7 @@ RUNNERS: dict[str, Runner] = {
         runtime="required",
         # Its requests go below the endpoint, which an OpenAI-style service serves under a path
         # such as /v1 (runtime-checks design D5).
-        fit=RuntimeFit(path="required", built_in="openai"),
+        fit=RuntimeFit(path="required", endpoint="required", built_in="openai"),
     ),
     "scripted": Runner(
         command=(sys.executable, "-m", "troupe_runner_scripted"),

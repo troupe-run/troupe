@@ -2,12 +2,12 @@
 
 ## 1. An in-process runtime (core and contract)
 
-- [ ] 1.1 Make `endpoint` optional in the resolved runtime (`protocol/schemas/runtime.schema.json`), the config schema (`protocol/schemas/config/runtime.schema.json`) and `run-start.schema.json`'s `$defs/runtime`, with their packaged copies, and in the SDK's `RunStartRuntime`. Verify: schema tests accept a `run/start` runtime with no `endpoint` and refuse one with `endpoint: null`, and the SDK drift test passes.
-- [ ] 1.2 Add the built-in `mistralrs` (in-process: no endpoint, no credential) to the built-in runtimes in `core/defaults.py`, with "in-process" a property of the built-in. Keep "a runtime of your own needs an endpoint". Refuse `runtimes.mistralrs.endpoint` in config, and `TROUPE_RUNTIME_MISTRALRS_ENDPOINT` as `runtime.invalid-value`. Verify: runtimes tests for the scenarios "The in-process built-in", "An endpoint in config" and "An endpoint from the environment".
-- [ ] 1.3 Send no `endpoint` in `run/start` for an in-process runtime. Verify: a runs test for the runner-protocol scenario "An in-process runtime" (no `endpoint` field, not null).
-- [ ] 1.4 Add `endpoint: required | none | any` to `RuntimeFit`: `required` for ollama, openai and lm-studio, `any` for scripted. Make config fit and perform's `runtime.unfit` name a missing or unwanted endpoint. Verify: `test_runtime_fit.py` cases for "An in-process actor on a served runtime" and "A served actor on the in-process runtime", and every existing fit test still passes.
-- [ ] 1.5 Make the Ollama, OpenAI and LM Studio runners refuse a `run/start` runtime with no endpoint, each with its own invalid-runtime code naming `runtime.endpoint`, before any request. Verify: one test per runner.
-- [ ] 1.6 Document the built-in and the "no endpoint" fit in `docs/stagecraft/runtimes.md`. Verify: the docs checks in `scripts/check.py` pass.
+- [x] 1.1 Make `endpoint` optional in the resolved runtime (`protocol/schemas/runtime.schema.json`), the config schema (`protocol/schemas/config/runtime.schema.json`) and `run-start.schema.json`'s `$defs/runtime`, with their packaged copies, and in the SDK's `RunStartRuntime`. Verify: schema tests accept a `run/start` runtime with no `endpoint` and refuse one with `endpoint: null`, and the SDK drift test passes.
+- [x] 1.2 Add the built-in `mistralrs` (in-process: no endpoint, no credential) to the built-in runtimes in `core/defaults.py`, with "in-process" a property of the built-in. Keep "a runtime of your own needs an endpoint". Refuse `runtimes.mistralrs.endpoint` in config, and `TROUPE_RUNTIME_MISTRALRS_ENDPOINT` as `runtime.invalid-value`. Verify: runtimes tests for the scenarios "The in-process built-in", "An endpoint in config" and "An endpoint from the environment".
+- [x] 1.3 Send no `endpoint` in `run/start` for an in-process runtime. Verify: a runs test for the runner-protocol scenario "An in-process runtime" (no `endpoint` field, not null).
+- [x] 1.4 Add `endpoint: required | none | any` to `RuntimeFit`: `required` for ollama, openai and lm-studio, `any` for scripted. Make config fit and perform's `runtime.unfit` name a missing or unwanted endpoint. Verify: `test_runtime_fit.py` cases for "An in-process actor on a served runtime" and "A served actor on the in-process runtime", and every existing fit test still passes.
+- [x] 1.5 Make the Ollama, OpenAI and LM Studio runners refuse a `run/start` runtime with no endpoint, each with its own invalid-runtime code naming `runtime.endpoint`, before any request. Verify: one test per runner.
+- [x] 1.6 Document the built-in and the "no endpoint" fit in `docs/stagecraft/runtimes.md`. Verify: the docs checks in `scripts/check.py` pass.
 
 ## 2. The plugin's package and wiring
 

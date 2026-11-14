@@ -119,7 +119,6 @@
       "additionalProperties": false,
       "required": [
         "name",
-        "endpoint",
         "model",
         "credential"
       ],
@@ -129,11 +128,11 @@
           "$ref": "../runtime.schema.json#/$defs/name"
         },
         "endpoint": {
-          "description": "The base URL the runner's API is served under. The runner adds its own paths.",
+          "description": "The base URL the runner's API is served under. The runner adds its own paths. Absent for an in-process runtime, which has no endpoint: its runner loads the model in its own process.",
           "$ref": "../runtime.schema.json#/$defs/endpoint"
         },
         "model": {
-          "description": "The model the run uses, as the service names it.",
+          "description": "The model the run uses, as the service names it, or, for an in-process runtime, as its runner reads it (for mistralrs, the absolute path of a GGUF file).",
           "$ref": "../runtime.schema.json#/$defs/model"
         },
         "credential": {

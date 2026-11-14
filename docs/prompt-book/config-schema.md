@@ -47,7 +47,7 @@ One runtime's config file, .troupe/runtimes/<name>.yaml: a service a runner talk
 | Field | Holds | Always there | What it is |
 |---|---|---|---|
 | `$schema` | string | No | Where this file's schema is, so editors can check it. troupe writes it. |
-| `endpoint` | string | No | The base URL the runner's API is served under: http or https, a host and an optional port and path, with no user info, query or fragment. The runner adds its own paths. Required for a runtime that isn't built in. |
+| `endpoint` | string | No | The base URL the runner's API is served under: http or https, a host and an optional port and path, with no user info, query or fragment. The runner adds its own paths. Required for a runtime that isn't built in, and refused for an in-process built-in (mistralrs), which loads its model in the runner's own process. |
 | `model` | string | No | The model a run uses when its actor sets none, as the service names it. |
 | `credential` | object (Credential) | No | Where the runtime's credential comes from. Never the credential itself: config is committed, so it holds only a reference. |
 | `prices` | object (Prices) | No | What each model costs at this service, by the model's name exactly as a run names it, in US dollars per million tokens. A runner whose service reports no cost estimates one from the run's model's price, marked as an estimate; a model with no price gets none. Set a rate for every kind of token the service's runs use, cacheRead and cacheWrite included (0 for a kind it doesn't charge for), or runs that use it get no estimate. In a config set path, a model's name that holds a dot goes in brackets: runtimes.openai.prices[gpt-4.1]. |

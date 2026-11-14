@@ -14,8 +14,11 @@ def runtime_lines(runtime: dict[str, Any], indent: str = "") -> list[str]:
     """The lines that show ``runtime`` (the protocol's resolved runtime)."""
     name = runtime["name"]
     lines = [f"{indent}runtime {name}"]
-    endpoint = runtime["endpoint"]
-    lines.append(f"{indent}  endpoint: {endpoint['value']} (from {endpoint['source']})")
+    endpoint = runtime.get("endpoint")
+    if endpoint is None:  # an in-process runtime (in-process-runner design D5)
+        lines.append(f"{indent}  endpoint: none (the runner loads the model in its own process)")
+    else:
+        lines.append(f"{indent}  endpoint: {endpoint['value']} (from {endpoint['source']})")
     model = runtime.get("model")
     if model is not None:
         lines.append(f"{indent}  model: {model['value']} (from {model['source']})")
