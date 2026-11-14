@@ -32,13 +32,9 @@ dependencies = [
 [project.optional-dependencies]
 all = [
     "troupe-runner-anthropic",
-    "troupe-runner-lm-studio",
 ]
 anthropic = [
     "troupe-runner-anthropic",
-]
-lm-studio = [
-    "troupe-runner-lm-studio",
 ]
 
 [project.urls]

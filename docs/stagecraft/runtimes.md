@@ -15,39 +15,35 @@ API, such as local Ollama's under `/v1` (`http://127.0.0.1:11434/v1`, not the bu
 Ollama runner needs one too: the built-in `ollama`, or one of your own for an Ollama elsewhere, whose endpoint is
 Ollama's own address with no path, such as `http://gpu-box.local:11434`. It refuses a runtime with a credential,
 since Ollama takes none. An Ollama actor still holding `model` or `endpoint` in its options, as early versions of
-`troupe init --audition` wrote it, is refused with the one `troupe config set` that moves them. The LM Studio runner
-needs one as well: the built-in `lm-studio`, LM Studio's server root, or one of your own. The Anthropic runner needs
-one too: the built-in `anthropic`, Claude's own API, or one of your own for a local engine that serves the Anthropic
+`troupe init --audition` wrote it, is refused with the one `troupe config set` that moves them. The Anthropic runner
+needs one too: the built-in `anthropic`, Claude's own API, or one of your own for a local engine that serves the Anthropic
 Messages API, such as LM Studio's or Ollama's server root. The scripted runner takes one optionally, for troupe's own
 tests.
 
 ## The runtimes troupe knows
 
-troupe has four built in:
+troupe has three built in:
 
 | Runtime | Endpoint | Credential |
 |---|---|---|
 | `openai` | `https://api.openai.com/v1` | `OPENAI_API_KEY` |
 | `anthropic` | `https://api.anthropic.com` | `ANTHROPIC_API_KEY` |
 | `ollama` | `http://127.0.0.1:11434` | none |
-| `lm-studio` | `http://127.0.0.1:1234` | none |
 
 Which runner each fits:
 
-| Runtime | `openai` runner | `anthropic` runner | `ollama` runner | `lm-studio` runner | `scripted` runner |
-|---|---|---|---|---|---|
-| `openai` | yes | no: it's OpenAI's | no: it has a credential, and Ollama takes none | no: it has a credential, and is `https` with a path | yes |
-| `anthropic` | no: its endpoint has no path, so it isn't the Responses API | yes | no: it has a credential, and Ollama takes none | no: it has a credential, and is `https` | yes |
-| `ollama` | no: its endpoint has no path, so it isn't the Responses API | no: it's Ollama's | yes | no: it's Ollama's | yes |
-| `lm-studio` | no: its endpoint has no path | no: it's LM Studio's | no: it's LM Studio's | yes | yes |
+| Runtime | `openai` runner | `anthropic` runner | `ollama` runner | `scripted` runner |
+|---|---|---|---|---|
+| `openai` | yes | no: it's OpenAI's | no: it has a credential, and Ollama takes none | yes |
+| `anthropic` | no: its endpoint has no path, so it isn't the Responses API | yes | no: it has a credential, and Ollama takes none | yes |
+| `ollama` | no: its endpoint has no path, so it isn't the Responses API | no: it's Ollama's | yes | yes |
 
 Each built-in fits only the runner it's made for (and the scripted runner, which takes any), even where its address has
-the shape another needs: `ollama` and `lm-studio` look alike, but serve different engines. A runtime of your own fits by
-the rules alone: the OpenAI runner needs an endpoint with a path, the Ollama runner one with no path and no credential,
-the LM Studio runner a plain `http` one with no path and no credential, and the Anthropic runner any endpoint
-(its path, if it has one, must not end in `/v1`, which the runner adds itself). Config refuses an actor on a runtime that
-doesn't fit, naming the runtimes that do, and so does `troupe perform` (`runtime.unfit`) when a `TROUPE_RUNTIME_`
-variable makes one stop fitting.
+the shape another needs, since two engines can look alike at the same address. A runtime of your own fits by the rules
+alone: the OpenAI runner needs an endpoint with a path, the Ollama runner one with no path and no credential, and the
+Anthropic runner any endpoint (its path, if it has one, must not end in `/v1`, which the runner adds itself). Config
+refuses an actor on a runtime that doesn't fit, naming the runtimes that do, and so does `troupe perform`
+(`runtime.unfit`) when a `TROUPE_RUNTIME_` variable makes one stop fitting.
 
 None names a model: model names change too often for a default to stay right. `troupe config get --resolved` shows
 what every runtime resolves to, and where each value came from. For one of them:
@@ -75,11 +71,11 @@ troupe config set runtimes.openai.model=gpt-4.1-mini
 troupe config set runtimes.openai.credential.env=MY_OPENAI_KEY
 ```
 
-The built-in `lm-studio` is the address LM Studio's own API lives under. To run the OpenAI runner on LM Studio,
-through its OpenAI-compatible API, define a runtime of your own at its `/v1`:
+To run the OpenAI runner on a server on your own machine that serves an OpenAI-compatible API, define a runtime of
+your own at that API's `/v1`:
 
 ```sh
-troupe config set runtimes.lm-studio-openai.endpoint=http://127.0.0.1:1234/v1
+troupe config set runtimes.local-openai.endpoint=http://127.0.0.1:8080/v1
 ```
 
 The Anthropic runner reaches a local engine that serves the Anthropic Messages API through a runtime of your own at
@@ -118,7 +114,7 @@ Your environment overrides the theatre's config, for you alone, without a change
 | `TROUPE_RUNTIME_<NAME>_MODEL` | the model, for every actor on the runtime, the actor's own included |
 | `TROUPE_RUNTIME_<NAME>_CREDENTIAL_ENV` | which variable the key is read from |
 
-`<NAME>` is the runtime's name in capitals, with `-` as `_`: `TROUPE_RUNTIME_LM_STUDIO_MODEL`. An empty variable
+`<NAME>` is the runtime's name in capitals, with `-` as `_`: `TROUPE_RUNTIME_LOCAL_OPENAI_MODEL`. An empty variable
 counts as unset. One that's set but malformed, such as an endpoint that isn't a URL, stops the command, naming the
 variable and what it takes, rather than quietly using another value. The error never repeats what the variable holds,
 in case it's a key put there by mistake.

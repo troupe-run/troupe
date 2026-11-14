@@ -13,7 +13,7 @@ import pytest
 
 from runtesting import INIT, OK, Harness, request, script, theatre
 from test_perform import configured, nothing_written
-from troupe.core import runtimes
+from troupe.core import defaults, runtimes
 from troupe.core.client import messages as m
 from troupe.core.errors import TroupeError
 from troupe.core.masking import MARKER
@@ -482,9 +482,12 @@ def test_perform_refuses_an_anthropic_endpoint_from_the_environment_without_repe
     assert launched == []
 
 
-def test_a_runtime_that_fits_lists_with_the_environment_applied(tmp_path: Path) -> None:
-    # gpu-box has a path in config, which the environment takes away; lm-studio, LM Studio's
-    # built-in, has Ollama's shape but isn't listed, since it's another runner's built-in.
+def test_a_runtime_that_fits_lists_with_the_environment_applied(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # gpu-box has a path in config, which the environment takes away; example-engine, a stand-in
+    # for another runner's built-in, has Ollama's shape but isn't listed, since it's a built-in.
+    monkeypatch.setitem(defaults.RUNTIMES, "example-engine", {"endpoint": "http://127.0.0.1:1234"})
     harness = _harness(
         tmp_path,
         TROUPE_RUNTIME_OLLAMA_ENDPOINT="http://127.0.0.1:11434/v1",
@@ -497,7 +500,7 @@ def test_a_runtime_that_fits_lists_with_the_environment_applied(tmp_path: Path) 
         harness.perform(asked)
     assert raised.value.details["fits"] == ["gpu-box"]
     assert "gpu-box" in raised.value.fix
-    assert "lm-studio" not in raised.value.fix
+    assert "example-engine" not in raised.value.fix
 
 
 def test_a_rehearsal_refuses_an_unfit_runtime_as_perform_would(tmp_path: Path) -> None:

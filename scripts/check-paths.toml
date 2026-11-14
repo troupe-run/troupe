@@ -69,7 +69,6 @@ tests = [
     "packages/troupe-vcs-git/tests/**",
     "plugins/runner-anthropic/tests/**",
     "plugins/runner-claude-code/tests/**",
-    "plugins/runner-lm-studio/tests/**",
     "plugins/runner-ollama/tests/**",
     "plugins/runner-openai/tests/**",
     "plugins/runner-scripted/tests/**",
@@ -207,26 +206,6 @@ tests = [
     "packages/troupe-plugin-sdk/tests/**",
     "packages/troupe-store-text/tests/**",
     "plugins/runner-anthropic/tests/**",
-    "scripts/tests/workspace/**",
-]
-
-# Started as a subprocess by the core suite (the conformance and perform tests) against a fake LM Studio. Reached
-# through the bundle's lm-studio extra by its tests (scripts/tests/workspace).
-[scopes.runner_lm_studio]
-paths = [
-    "plugins/runner-lm-studio/src/**",
-    "plugins/runner-lm-studio/tests/**",
-    "plugins/runner-lm-studio/fixtures/**",
-    "plugins/runner-lm-studio/tools/**",
-    "plugins/runner-lm-studio/README.md",
-    "plugins/runner-lm-studio/LICENSE",
-]
-tests = [
-    "packages/troupe/tests/**",
-    "packages/troupe-artifacts-local/tests/**",
-    "packages/troupe-plugin-sdk/tests/**",
-    "packages/troupe-store-text/tests/**",
-    "plugins/runner-lm-studio/tests/**",
     "scripts/tests/workspace/**",
 ]
 

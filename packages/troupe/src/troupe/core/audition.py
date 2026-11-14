@@ -73,15 +73,6 @@ ANTHROPIC_AUDITION_LIMITS = {"maxTurns": 10, "maxTotalTokens": 100_000}
 """The Anthropic example's limits, as the OpenAI example's: enough to read a few files and write
 one, on a small budget (anthropic-runner design D15)."""
 
-LM_STUDIO_AUDITION_MODEL = "google/gemma-4-e4b"
-"""The LM Studio example's model: a 4B model LM Studio marks as trained for tool use, which called
-tools in every round of the runner's probe (lmstudio-runner design D12, D15). Named here alone, so
-changing it is one line."""
-
-LM_STUDIO_AUDITION_LIMITS = {"maxTurns": 10, "maxTotalTokens": 100_000}
-"""The LM Studio example's limits, as the OpenAI example's: enough to read a few files and write
-one (lmstudio-runner design D15)."""
-
 SCRIPTED_CONTENT = (
     "# Audition\n\nWritten by troupe's scripted runner, which plays a script instead of running an "
     "agent. Swap the runner for claude-code to run a real one.\n"
@@ -144,20 +135,6 @@ def _anthropic() -> dict[str, Any]:
     }
 
 
-def _lm_studio() -> dict[str, Any]:
-    # Like the Claude Code example: it may write any file in its worktree, and no file has to
-    # change. Its service is the built-in lm-studio runtime, the local LM Studio's server.
-    return {
-        "runner": "lm-studio",
-        "runtime": "lm-studio",
-        "model": LM_STUDIO_AUDITION_MODEL,
-        "options": dict(LM_STUDIO_AUDITION_LIMITS),
-        "effects": {key: list(value) for key, value in CLAUDE_CODE_EFFECTS.items()},
-        "expect": [],
-        "character": CHARACTER,
-    }
-
-
 def _ollama() -> dict[str, Any]:
     # Like the Claude Code example: it may write any file in its worktree, and no file has to
     # change. Its service is the built-in ollama runtime, the local Ollama, and it takes no
@@ -206,7 +183,6 @@ def _scripted() -> dict[str, Any]:
 AUDITIONS: Mapping[str, Callable[[], dict[str, Any]]] = {
     "anthropic": _anthropic,
     "claude-code": _claude_code,
-    "lm-studio": _lm_studio,
     "ollama": _ollama,
     "openai": _openai,
     "scripted": _scripted,

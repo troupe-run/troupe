@@ -141,17 +141,6 @@ def _step_notes(step: dict[str, Any], entries: list[dict[str, Any]]) -> list[str
             if isinstance(model, str)
             else "Ollama must be running, with the actor's model pulled."
         )
-    if step["runner"] == "lm-studio":
-        model = _value(entries, step["actor"], "model")
-        notes.append(
-            "LM Studio's server must be running (lms server start), with Require Authentication "
-            "off"
-            + (
-                f", and its model downloaded: lms get {model}"
-                if isinstance(model, str)
-                else ", and the actor's model downloaded."
-            )
-        )
     if step["runner"] in ("anthropic", "openai"):
         runtime = _value(entries, step["actor"], "runtime")
         tokens = _option(entries, step["actor"], "maxTotalTokens")

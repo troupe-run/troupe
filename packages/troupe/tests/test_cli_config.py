@@ -623,10 +623,12 @@ def test_the_built_in_openai_runtime_resolved(repo: Repo, monkeypatch: pytest.Mo
     assert "sk-test-canary" not in out + err
 
 
-def test_the_built_in_lm_studio_runtime_resolves_to_lm_studios_server_root(repo: Repo) -> None:
+def test_lm_studio_is_no_longer_a_built_in_runtime(repo: Repo) -> None:
+    # Spec: runtimes, "LM Studio has no built-in" (remove-lm-studio).
     code, out, err = cli("config", "get", "--resolved", "runtimes.lm-studio")
-    assert code == 0, err
-    assert "  endpoint: http://127.0.0.1:1234 (from default)" in out.splitlines()
+    assert code == ExitCode.FAILURE, out
+    assert "lm-studio" in err
+    assert "ollama, openai" in err
 
 
 def test_the_built_in_anthropic_runtime_resolves_to_claudes_api_with_its_key_variable(
@@ -654,7 +656,7 @@ def test_resolved_as_json_shows_each_value_and_its_source(
     assert code == 0
     result = json.loads(out)
     check(result, "config-get-result.schema.json")
-    assert sorted(result["runtimes"]) == ["anthropic", "lm-studio", "ollama", "openai"]
+    assert sorted(result["runtimes"]) == ["anthropic", "ollama", "openai"]
     assert result["runtimes"]["openai"]["model"] == {"value": "gpt-test", "source": "theatre"}
     assert result["runtimes"]["openai"]["credential"]["set"] is False
     assert result["runtimes"]["ollama"]["model"] == {"value": "qwen3", "source": "env"}
@@ -779,17 +781,17 @@ def test_an_options_value_on_an_uninstalled_runner_is_refused_naming_the_actors_
     """The CLI's value typing doesn't refuse first: core's check does, naming the actor's runner
     path and its extra (spec: config; review of #338)."""
     monkeypatch.setitem(
-        interim.RUNNERS, "lm-studio", replace(interim.RUNNERS["scripted"], in_extra=True)
+        interim.RUNNERS, "example", replace(interim.RUNNERS["scripted"], in_extra=True)
     )
     code, _, err = _tester()
     assert code == 0, err
-    code, _, err = cli("config", "set", "actors.tester.runner=lm-studio")
+    code, _, err = cli("config", "set", "actors.tester.runner=example")
     assert code == 0, err
-    gone = replace(interim.RUNNERS["lm-studio"], package="troupe_runner_not_installed")
-    monkeypatch.setitem(interim.RUNNERS, "lm-studio", gone)
+    gone = replace(interim.RUNNERS["example"], package="troupe_runner_not_installed")
+    monkeypatch.setitem(interim.RUNNERS, "example", gone)
     before = len(git_service(repo).history(aggregate.STREAM))
     code, _, err = cli("config", "set", "--json", 'actors.tester.options.script={"steps": []}')
     assert code == ExitCode.FAILURE
     assert "actors.tester.runner: " in err
-    assert "troupe-run[lm-studio]" in err
+    assert "troupe-run[example]" in err
     assert len(git_service(repo).history(aggregate.STREAM)) == before

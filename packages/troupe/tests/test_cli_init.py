@@ -17,7 +17,6 @@ from troupe.cli import init as init_cli
 from troupe.cli import main
 from troupe.core import audition as auditions
 from troupe.core import interim
-from troupe.core.audition import LM_STUDIO_AUDITION_MODEL
 from troupe.core.audition import OLLAMA_AUDITION_MODEL as OLLAMA_MODEL
 from troupe.core.exit_codes import ExitCode
 from troupe.core.policy import ALLOW_UNENFORCED_LOCAL_STAGE, env_name
@@ -242,24 +241,14 @@ def test_the_ollama_actor_names_the_ollama_runtime_and_its_model_with_no_options
     assert not (repo.path / ".troupe" / "runtimes").exists()
 
 
-def test_the_lm_studio_audition_says_to_start_lm_studio_and_get_the_model_and_names_the_extra(
-    repo: Repo,
-) -> None:
-    # Spec: config, "What init prints for it"; cli, "The LM Studio runner".
-    code, out, err = cli("init", "--audition", "--runner", "lm-studio")
-    assert code == ExitCode.OK, err
-    assert "Defined the actor lead, with the lm-studio runner." in out
-    lines = _next(out)
-    assert (
-        "   # LM Studio's server must be running (lms server start), with Require Authentication "
-        f"off, and its model downloaded: lms get {LM_STUDIO_AUDITION_MODEL}" in lines
-    )
-    assert any("troupe-run[lm-studio]" in line for line in lines)
-    lead = (repo.path / ".troupe" / "actors" / "lead.yaml").read_text(encoding="utf-8")
-    assert "runner: lm-studio" in lead
-    code, out, err = cli("config", "get", "actors.lead.runtime", "--json")
-    assert code == ExitCode.OK, err
-    assert json.loads(out)["value"] == "lm-studio"
+def test_the_removed_lm_studio_runner_is_refused_as_unknown_and_makes_nothing(repo: Repo) -> None:
+    # Spec: cli, "The LM Studio runner" (remove-lm-studio).
+    for rehearse in ((), ("--rehearse",)):
+        code, _, err = cli("init", "--audition", "--runner", "lm-studio", *rehearse)
+        assert code == ExitCode.FAILURE
+        assert "lm-studio" in err
+        assert "claude-code, ollama, openai, scripted" in err
+        assert not (repo.path / ".troupe").exists()
 
 
 def test_the_openai_audition_says_which_key_to_set_and_that_a_run_costs_money(
@@ -339,7 +328,7 @@ def test_an_unknown_runner_names_the_runners_troupe_has_and_makes_nothing(repo: 
     code, _, err = cli("init", "--audition", "--runner", "gemini")
     assert code == ExitCode.FAILURE
     assert "gemini" in err
-    assert "anthropic, claude-code, lm-studio, ollama, openai, scripted" in err
+    assert "anthropic, claude-code, ollama, openai, scripted" in err
     assert not (repo.path / ".troupe").exists()
 
 
@@ -465,21 +454,21 @@ def test_the_printed_steps_of_an_ollama_audition_give_a_successful_run_with_a_st
 def test_an_audition_on_a_runner_in_an_extra_names_the_extra_in_the_perform_step(
     repo: Repo, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # lm-studio, in an extra (#291), stood in for by the scripted runner, so the audition runs
-    # offline. Its audition is the scripted one's.
+    # The fixture runner example, in an extra (remove-lm-studio design D1), stood in for by the
+    # scripted runner, so the audition runs offline. Its audition is the scripted one's.
     entry = dataclasses.replace(interim.RUNNERS["scripted"], in_extra=True)
-    monkeypatch.setitem(interim.RUNNERS, "lm-studio", entry)
+    monkeypatch.setitem(interim.RUNNERS, "example", entry)
     monkeypatch.setitem(
         auditions.AUDITIONS,
-        "lm-studio",
-        lambda: {**auditions.AUDITIONS["scripted"](), "runner": "lm-studio"},
+        "example",
+        lambda: {**auditions.AUDITIONS["scripted"](), "runner": "example"},
     )
-    code, out, err = cli("init", "--audition", "--runner", "lm-studio")
+    code, out, err = cli("init", "--audition", "--runner", "example")
     assert code == 0, err
     lines = _next(out)
     perform = next(n for n, line in enumerate(lines) if "troupe perform lead" in line)
     notes = lines[perform + 1 :]
-    assert any("troupe-run[lm-studio]" in line and INSTALL_PAGE in line for line in notes), notes
+    assert any("troupe-run[example]" in line and INSTALL_PAGE in line for line in notes), notes
 
 
 def test_an_audition_on_a_base_runner_mentions_no_extra(repo: Repo) -> None:

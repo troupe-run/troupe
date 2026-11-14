@@ -254,7 +254,8 @@ def test_an_install_that_prints_the_expected_version_passes() -> None:
 
 
 # The extras (spec: installation; runner-extras design D9, D10). Each case gives a runner table of
-# its own, naming lm-studio, the runner in troupe-run's lm-studio extra (#291).
+# its own, naming example, a fixture runner in troupe-run's example extra (remove-lm-studio
+# design D1).
 
 
 def test_the_extras_form_names_the_extras_before_the_url_in_both_ref_forms() -> None:
@@ -289,13 +290,13 @@ def with_extras(text: str, extras: dict[str, list[str]]) -> str:
 def test_a_tag_with_a_runner_bare_in_an_extra_is_refused_naming_the_extra() -> None:
     text = with_extras(
         bundle("0.2.0", pinned("troupe", "0.1.0")),
-        {"lm-studio": ["troupe-runner-lm-studio"], "all": ["troupe-runner-lm-studio"]},
+        {"example": ["troupe-runner-example"], "all": ["troupe-runner-example"]},
     )
     with pytest.raises(InstallCheckError) as caught:
         install_check.expected_version("troupe-run-v0.2.0", "0.1.0", text, "abc")
     assert str(caught.value) == (
-        "--ref troupe-run-v0.2.0: troupe-run doesn't pin troupe-runner-lm-studio (in its "
-        "'lm-studio' extra) at abc, so --no-sources would look for them on a package index. A "
+        "--ref troupe-run-v0.2.0: troupe-run doesn't pin troupe-runner-example (in its "
+        "'example' extra) at abc, so --no-sources would look for them on a package index. A "
         "pinning pull request pins them, and the bundle's next release ships them."
     )
 
@@ -303,14 +304,14 @@ def test_a_tag_with_a_runner_bare_in_an_extra_is_refused_naming_the_extra() -> N
 TABLE = """
 RUNNERS: dict[str, Runner] = {
     "scripted": Runner(command=("python",), package="troupe_runner_scripted"),
-    "lm-studio": Runner(command=("python",), package="troupe_runner_lm_studio", in_extra=True),
+    "example": Runner(command=("python",), package="troupe_runner_example", in_extra=True),
 }
 """
 
 
 def test_the_runners_are_read_from_cores_table_as_text() -> None:
     runners = install_check.runners_in(TABLE, "abc")
-    assert [(r.name, r.in_extra) for r in runners] == [("scripted", False), ("lm-studio", True)]
+    assert [(r.name, r.in_extra) for r in runners] == [("scripted", False), ("example", True)]
 
 
 def test_a_commit_without_a_runner_table_is_refused_naming_it() -> None:
@@ -324,8 +325,8 @@ def test_a_commit_without_a_runner_table_is_refused_naming_it() -> None:
 
 def test_the_base_refuses_each_runner_in_an_extra_and_all_rehearses_every_runner() -> None:
     runners = install_check.runners_in(TABLE, "abc")
-    assert install_check.refused_in_the_base(runners) == ["lm-studio"]
-    assert install_check.rehearsed_with_all(runners) == ["scripted", "lm-studio"]
+    assert install_check.refused_in_the_base(runners) == ["example"]
+    assert install_check.rehearsed_with_all(runners) == ["scripted", "example"]
 
 
 def test_only_a_bundle_with_an_all_extra_is_installed_with_it() -> None:
@@ -335,9 +336,7 @@ def test_only_a_bundle_with_an_all_extra_is_installed_with_it() -> None:
 
 
 def test_a_refusal_naming_the_extra_passes() -> None:
-    install_check.confirm_refused(
-        "lm-studio", 1, "", "  fix: Install troupe-run[lm-studio] with ..."
-    )
+    install_check.confirm_refused("example", 1, "", "  fix: Install troupe-run[example] with ...")
 
 
 @pytest.mark.parametrize(
@@ -349,21 +348,21 @@ def test_anything_but_a_refusal_naming_the_extra_fails_naming_the_runner(
     code: int, stderr: str
 ) -> None:
     with pytest.raises(InstallCheckError) as caught:
-        install_check.confirm_refused("lm-studio", code, "out", stderr)
+        install_check.confirm_refused("example", code, "out", stderr)
     message = str(caught.value)
     assert message.startswith(
-        "base install: rehearsing an audition on lm-studio should be refused, naming "
-        f"troupe-run[lm-studio], but it exited {code}."
+        "base install: rehearsing an audition on example should be refused, naming "
+        f"troupe-run[example], but it exited {code}."
     )
     assert "out" in message
 
 
 def test_a_rehearsal_that_would_change_passes_and_anything_else_fails() -> None:
-    install_check.confirm_rehearsed("lm-studio", install_check.WOULD_CHANGE, "", "")
+    install_check.confirm_rehearsed("example", install_check.WOULD_CHANGE, "", "")
     with pytest.raises(InstallCheckError) as caught:
-        install_check.confirm_rehearsed("lm-studio", 1, "", "troupe: not installed")
+        install_check.confirm_rehearsed("example", 1, "", "troupe: not installed")
     assert str(caught.value).startswith(
-        "all install: rehearsing an audition on lm-studio should succeed with the would-change "
+        "all install: rehearsing an audition on example should succeed with the would-change "
         f"code ({install_check.WOULD_CHANGE}), but it exited 1."
     )
 

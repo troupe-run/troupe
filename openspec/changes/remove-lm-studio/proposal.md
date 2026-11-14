@@ -15,13 +15,13 @@ Studio users define their own runtime for the anthropic runner, which #415 docum
   --runner lm-studio`) and init's LM Studio note, and core's LM Studio stand-in and live test. `troupe init --audition
   --runner lm-studio` and an actor on `lm-studio` are now refused with `runner.unknown`. `contextOverflowPolicy`
   (#394) and the compaction warning (#310) go with it, since nothing else has them.
-- **BREAKING (unreleased): the built-in `lm-studio` runtime is gone.** troupe's built-ins are `openai` and `ollama`.
+- **BREAKING (unreleased): the built-in `lm-studio` runtime is gone.** troupe's built-ins are `openai`, `anthropic` and `ollama`.
   A config that names `runtimes.lm-studio` now defines a runtime of its own, wholly by config.
 - **The "plain `http` only" fit rule goes too.** Only the LM Studio runner needed it (its library has no TLS). An
   actor's runtime is still refused for a credential its runner never sends, an endpoint path it can't use, or another
   runner's built-in.
-- **The bundle and release config lose it.** `troupe-run`'s `lm-studio` extra goes, and `all` is empty until another
-  runner comes as an extra (#420's anthropic runner is next). Its entries in `release-please-config.json`, the
+- **The bundle and release config lose it.** `troupe-run`'s `lm-studio` extra goes, leaving `anthropic` (#420) as
+  the one runner extra, and the only entry in `all`. Its entries in `release-please-config.json`, the
   manifest, the root `pyproject.toml` (workspace, mypy, coverage, import contracts), `uv.lock`,
   `scripts/check-paths.toml` (its `runner_lm_studio` scope) and `scripts/licences.toml` go.
 - **The `lm-studio-runner` spec is retired** through a removal delta (`retire_capabilities: true`).
@@ -62,5 +62,5 @@ None.
   `scripts/licences.toml`, and the workspace tests that name LM Studio.
 - infrastructure: `oob/troupe-spec-purposes.json` loses its `lm-studio-runner` entry, in an infrastructure pull
   request merged right after this one; otherwise its drift job fails.
-- Overlap: #420 (anthropic runner) and #414 also change the runtimes spec, `interim.py`, `defaults.py`, the bundle and
+- Overlap: #420 (anthropic runner, merged first, so this change is rebased on it) and #414 also change the runtimes spec, `interim.py`, `defaults.py`, the bundle and
   the docs; whichever merges second rebases.

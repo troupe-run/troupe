@@ -59,7 +59,8 @@ def test_a_runtime_that_doesnt_exist_is_refused_naming_those_that_do() -> None:
     with pytest.raises(TroupeError) as raised:
         resolve("nowhere", NO_CONFIG, {})
     assert raised.value.code == "config.invalid"
-    assert "lm-studio, ollama, openai" in raised.value.problem
+    assert "ollama, openai" in raised.value.problem
+    assert "lm-studio" not in raised.value.problem
 
 
 # Requirement: The person's environment overrides a runtime's values
@@ -72,8 +73,17 @@ def test_the_endpoint_from_the_environment() -> None:
 
 
 def test_a_hyphenated_name() -> None:
-    env = {"TROUPE_RUNTIME_LM_STUDIO_MODEL": "qwen3"}
-    assert resolve("lm-studio", NO_CONFIG, env).model == Sourced("qwen3", "env")
+    config = _config(**{"gpu-box": {"endpoint": "http://10.0.0.5:11434"}})
+    env = {"TROUPE_RUNTIME_GPU_BOX_MODEL": "qwen3"}
+    assert resolve("gpu-box", config, env).model == Sourced("qwen3", "env")
+
+
+def test_lm_studio_is_no_longer_a_built_in_runtime() -> None:
+    # Spec: runtimes, "LM Studio has no built-in" (remove-lm-studio).
+    with pytest.raises(TroupeError) as raised:
+        resolve("lm-studio", NO_CONFIG, {})
+    assert raised.value.code == "config.invalid"
+    assert "ollama, openai" in raised.value.problem
 
 
 def test_the_credentials_variable_from_the_environment() -> None:
@@ -547,7 +557,7 @@ def test_the_variable_check_and_the_schema_accept_the_same(value: str) -> None:
 # the guard against the two drifting apart.
 
 
-@pytest.mark.parametrize("name", ["ollama", "openai", "lm-studio", "my-gpu-box-2"])
+@pytest.mark.parametrize("name", ["ollama", "openai", "local-ai", "my-gpu-box-2"])
 @pytest.mark.parametrize("field", ["endpoint", "model", "credential_env"])
 def test_the_ollama_runners_variable_names_are_cores(name: str, field: str) -> None:
     assert ollama_runtime.env_name(name, field) == runtimes.env_name(name, field)
@@ -596,16 +606,14 @@ def test_each_reason_a_runtime_doesnt_fit() -> None:
 def test_what_runtime_each_runner_fits() -> None:
     assert interim.RUNNERS["ollama"].fit == replace(ROOT_ONLY, built_in="ollama")
     assert interim.RUNNERS["openai"].fit == replace(PATHED, built_in="openai")
-    assert interim.RUNNERS["lm-studio"].fit == replace(
-        ROOT_ONLY, scheme="http", built_in="lm-studio"
-    )
     assert interim.RUNNERS["scripted"].fit == interim.RuntimeFit()
 
 
-def test_an_https_endpoint_doesnt_fit_a_runner_that_needs_plain_http() -> None:
-    plain = interim.RuntimeFit(scheme="http")
-    assert runtimes.unfit(plain, "https://h:1", has_credential=False) == ["endpoint-scheme"]
-    assert runtimes.unfit(plain, "http://h:1", has_credential=False) == []
+def test_an_https_endpoint_of_the_right_shape_fits_every_runner() -> None:
+    # No runner is limited to plain http (remove-lm-studio design D2).
+    for name, entry in interim.RUNNERS.items():
+        endpoint = "https://h:1/v1" if entry.fit.path == "required" else "https://h:1"
+        assert runtimes.unfit(entry.fit, endpoint, has_credential=entry.fit.credential) == [], name
 
 
 def test_an_endpoint_ending_in_v1_doesnt_fit_a_runner_that_adds_v1_itself() -> None:
@@ -642,10 +650,15 @@ def test_the_endpoint_version_reason_names_the_base_to_use_unless_its_withheld()
     assert "u:p" not in with_user
 
 
-def test_another_runners_built_in_doesnt_fit_whatever_its_shape() -> None:
-    # Spec: runtimes, "An actor's runtime fits its runner". ollama and lm-studio share a shape.
+def test_another_runners_built_in_doesnt_fit_whatever_its_shape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Spec: runtimes, "Another runner's built-in of the same shape". example-engine, a stand-in
+    # built-in, has the ollama runner's shape.
+    monkeypatch.setitem(defaults.RUNTIMES, "example-engine", {"endpoint": "http://127.0.0.1:1234"})
     ollama = interim.RUNNERS["ollama"].fit
-    assert runtimes.unfit(ollama, "http://127.0.0.1:1234", False, "lm-studio") == ["built-in"]
+    assert runtimes.unfit(ollama, "http://127.0.0.1:1234", False, "example-engine") == ["built-in"]
     assert runtimes.unfit(ollama, "http://127.0.0.1:11434", False, "ollama") == []
     assert runtimes.unfit(ollama, "http://10.0.0.5:11434", False, "gpu-box") == []
-    assert runtimes.unfit(interim.RuntimeFit(), "http://127.0.0.1:1234", False, "lm-studio") == []
+    anything = interim.RuntimeFit()
+    assert runtimes.unfit(anything, "http://127.0.0.1:1234", False, "example-engine") == []

@@ -265,28 +265,6 @@ def test_the_anthropic_audition_model_is_claude_haiku_5_5() -> None:
     assert auditions.ANTHROPIC_AUDITION_MODEL == "claude-haiku-5-5"
 
 
-# Requirement: The LM Studio audition can edit files with a small local model (spec: config;
-# lmstudio-runner design D15)
-
-
-def test_the_lm_studio_actor_names_its_runtime_and_model_with_small_limits_and_write_effects(
-    repo: Repo,
-) -> None:
-    _init(repo.path, _env(repo), audition={"runner": "lm-studio"})
-    lead = read(git_service(repo)).config["actors"]["lead"]
-    assert lead == {
-        "runner": "lm-studio",
-        "runtime": "lm-studio",
-        "model": auditions.LM_STUDIO_AUDITION_MODEL,
-        "options": {"maxTurns": 10, "maxTotalTokens": 100_000},
-        "effects": {"write": ["**"]},
-        "expect": [],
-        "character": auditions.CHARACTER,
-    }
-    assert "workspace" not in lead
-    assert (repo.path / ".troupe" / "actors" / "lead.md").read_text(encoding="utf-8").strip()
-
-
 # Requirement: The Claude Code audition can edit files on a small budget (spec: config)
 
 
@@ -360,7 +338,6 @@ def test_an_unknown_runner_is_refused_naming_the_known_ones_and_nothing_is_made(
     assert error.details["known"] == [
         "anthropic",
         "claude-code",
-        "lm-studio",
         "ollama",
         "openai",
         "scripted",
@@ -376,12 +353,12 @@ def test_a_runner_that_isnt_installed_is_refused_naming_its_extra_and_nothing_is
     absent = dataclasses.replace(
         interim.RUNNERS["scripted"], package="troupe_runner_not_installed", in_extra=True
     )
-    monkeypatch.setitem(interim.RUNNERS, "lm-studio", absent)
-    asked = {"audition": {"runner": "lm-studio"}} | ({"rehearse": True} if rehearse else {})
+    monkeypatch.setitem(interim.RUNNERS, "example", absent)
+    asked = {"audition": {"runner": "example"}} | ({"rehearse": True} if rehearse else {})
     error = _refused(repo.path, _env(repo), **asked)
     assert error.code == "runner.not-installed"
-    assert error.details["extra"] == "lm-studio"
-    assert "troupe-run[lm-studio]" in error.fix
+    assert error.details["extra"] == "example"
+    assert "troupe-run[example]" in error.fix
     assert not (repo.path / ".troupe").exists()
 
 
@@ -440,15 +417,15 @@ def test_the_perform_step_names_the_extra_of_a_runner_in_one(
 ) -> None:
     """client-protocol: "A runner in an extra" (runner-extras design D8)."""
     entry = dataclasses.replace(interim.RUNNERS["scripted"], in_extra=True)
-    monkeypatch.setitem(interim.RUNNERS, "lm-studio", entry)
+    monkeypatch.setitem(interim.RUNNERS, "example", entry)
     monkeypatch.setitem(
         auditions.AUDITIONS,
-        "lm-studio",
-        lambda: {**auditions.AUDITIONS["scripted"](), "runner": "lm-studio"},
+        "example",
+        lambda: {**auditions.AUDITIONS["scripted"](), "runner": "example"},
     )
-    result = _init(repo.path, _env(repo), audition={"runner": "lm-studio"})
+    result = _init(repo.path, _env(repo), audition={"runner": "example"})
     [perform] = [step for step in result["steps"] if step["kind"] == "perform"]
-    assert perform["extra"] == "lm-studio"
+    assert perform["extra"] == "example"
 
 
 def test_the_perform_step_of_a_base_runner_has_no_extra(repo: Repo) -> None:

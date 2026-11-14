@@ -11,7 +11,7 @@ swap the agent by swapping its runner, and your process stays the same.
 
 ## Runners today
 
-troupe ships six runners:
+troupe ships five runners:
 
 - **The scripted runner** plays a script instead of running an agent, so you can try troupe offline.
 - **The Claude Code runner** runs [Claude Code](https://code.claude.com) with your existing login. It leaves out your
@@ -33,14 +33,6 @@ troupe ships six runners:
   [runtime](runtimes.md), and its key from your environment, never from config. A run costs money on OpenAI, within
   the limits its options set (`maxTurns`, `maxTotalTokens`)
   ([Try it on OpenAI](../opening-night/first-performance.md#try-it-on-openai)).
-
-- **The LM Studio runner** runs a model in [LM Studio](https://lmstudio.ai) on your own computer, through LM Studio's
-  own client library: the library runs the model's rounds, and troupe carries out each tool call it asks for, checked
-  against the actor's effects. It needs no credential and costs nothing per run. It comes with
-  `troupe-run[lm-studio]` ([Install](../opening-night/install.md#runners-that-come-as-extras)), and LM Studio's server
-  must be running with Require Authentication off. Where LM Studio listens comes from a [runtime](runtimes.md), the
-  built-in `lm-studio` for the LM Studio on your machine. The actor names the model, and its options the limits
-  (`maxTurns`, `maxTotalTokens`) and the context length (`contextLength`).
 
 - **The Anthropic runner** runs a model over the Anthropic Messages API: Claude's own API, or a local engine that
   serves it, such as LM Studio, with troupe's own tool loop, checked against the actor's effects. It comes with

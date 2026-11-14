@@ -110,8 +110,6 @@ The run then makes room and carries on, which changes what the model sees:
 - **The Ollama and OpenAI runners** replace old tool results, oldest first, with a short note saying what was removed
   and to call the tool again if it's still needed. They never touch the actor's character, its direction, what the
   model said, or the results it hasn't read yet, and they make no extra model call, so compaction costs no tokens.
-- **The LM Studio runner** doesn't compact yet. A run told to compact says so with a warning, and a full context ends
-  it with `context-length`. It always asks LM Studio to stop at the context length rather than drop content.
 
 Each compaction is recorded with the run's events, as a `context` event saying what happened and how much. When
 compaction can't make room, the run fails with `context-length` as it would have. The run's start records whether

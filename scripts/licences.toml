@@ -17,8 +17,8 @@
 # patched into troupe's source. Each names the notice its files carry, which the check looks for in
 # troupe's tracked files.
 [weak-copyleft."MPL-2.0"]
-reason = """httpx and httpcore depend on certifi (MPL-2.0), so lmstudio (#291), openai (#331) and \
-ollama (#332) all pull it in. MPL-2.0 binds only changes to its own files, so using it unmodified \
-leaves troupe's Apache-2.0 licence unaffected, as the ASF's category B treats it."""
+reason = """httpx and httpcore depend on certifi (MPL-2.0), so a runner whose client library uses \
+httpx pulls it in, as lmstudio did (#291). MPL-2.0 binds only changes to its own files, so using \
+it unmodified leaves troupe's Apache-2.0 licence unaffected, as the ASF's category B treats it."""
 decided = "https://github.com/troupe-run/troupe/issues/333#issuecomment-6707703235"
 notice = "This Source Code Form is subject to the terms of the Mozilla Public License"

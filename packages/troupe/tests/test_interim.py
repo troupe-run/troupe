@@ -55,9 +55,9 @@ def test_an_unknown_runner_is_refused_naming_every_runner_troupe_ships() -> None
         runner_command("codex")
     assert caught.value.details == {
         "runner": "codex",
-        "known": ["anthropic", "claude-code", "lm-studio", "ollama", "openai", "scripted"],
+        "known": ["anthropic", "claude-code", "ollama", "openai", "scripted"],
     }
-    assert "anthropic, claude-code, lm-studio, ollama, openai, scripted" in caught.value.fix
+    assert "anthropic, claude-code, ollama, openai, scripted" in caught.value.fix
 
 
 def test_openai_resolves_to_its_module_requiring_a_runtime_and_naming_no_credential() -> None:
@@ -79,7 +79,6 @@ def test_what_each_runner_takes_as_a_runtime() -> None:
     assert {name: runner.runtime for name, runner in RUNNERS.items()} == {
         "anthropic": "required",
         "claude-code": "none",
-        "lm-studio": "required",
         "ollama": "required",
         "openai": "required",
         "scripted": "optional",
@@ -97,12 +96,12 @@ def absent(*, in_extra: bool) -> Runner:
     )
 
 
-def test_only_the_anthropic_and_lm_studio_runners_come_as_extras() -> None:
-    """anthropic depends on the anthropic package and lm-studio on LM Studio's client library, so
-    each is troupe-run's extra of its name; every other shipped runner depends only on the SDK
-    (#291, #415; #331 and #332 add more)."""
+def test_only_the_anthropic_runner_comes_as_an_extra() -> None:
+    """anthropic depends on the anthropic package, so it's troupe-run's anthropic extra; every
+    other shipped runner depends only on the SDK, now that the LM Studio runner is gone (#415,
+    #413)."""
     assert {name: entry.in_extra for name, entry in RUNNERS.items()} == {
-        name: name in ("anthropic", "lm-studio") for name in RUNNERS
+        name: name == "anthropic" for name in RUNNERS
     }
 
 
@@ -130,10 +129,12 @@ def test_anthropic_resolves_to_its_module_requiring_a_runtime_with_only_the_prox
     assert not any(name.startswith("ANTHROPIC_") for name in RUNNERS["anthropic"].environment)
 
 
-def test_lm_studio_resolves_to_its_module_requiring_a_runtime_given_no_variables() -> None:
-    assert list(runner_command("lm-studio"))[1:] == ["-m", "troupe_runner_lm_studio"]
-    assert RUNNERS["lm-studio"].runtime == "required"
-    assert RUNNERS["lm-studio"].environment == ()
+def test_the_removed_lm_studio_runner_is_refused_as_unknown() -> None:
+    # The runner table no longer has it (remove-lm-studio).
+    with pytest.raises(TroupeError) as caught:
+        runner_command("lm-studio")
+    assert caught.value.code == "runner.unknown"
+    assert caught.value.details["runner"] == "lm-studio"
 
 
 @pytest.mark.parametrize(
@@ -144,17 +145,17 @@ def test_lm_studio_resolves_to_its_module_requiring_a_runtime_given_no_variables
 def test_a_runner_in_an_extra_that_isnt_installed_is_refused_naming_the_extra(
     monkeypatch: pytest.MonkeyPatch, use: Callable[[str], object]
 ) -> None:
-    monkeypatch.setitem(RUNNERS, "lm-studio", absent(in_extra=True))
+    monkeypatch.setitem(RUNNERS, "example", absent(in_extra=True))
     with pytest.raises(TroupeError) as caught:
-        use("lm-studio")
+        use("example")
     assert caught.value.code == "runner.not-installed"
     assert caught.value.details == {
-        "runner": "lm-studio",
+        "runner": "example",
         "package": "troupe_runner_absent",
-        "extra": "lm-studio",
+        "extra": "example",
     }
-    assert "'lm-studio'" in caught.value.problem
-    assert "troupe-run[lm-studio]" in caught.value.fix
+    assert "'example'" in caught.value.problem
+    assert "troupe-run[example]" in caught.value.fix
     assert schemas.INSTALL_PAGE in caught.value.fix
 
 
