@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.2.0](https://github.com/troupe-run/troupe/compare/troupe-runner-claude-code-v0.1.0...troupe-runner-claude-code-v0.2.0) (2026-11-14)
+
+
+### ⚠ BREAKING CHANGES
+
+* **runner-protocol:** a runner that predates this rejects run/start's new onContextFull field. The contract is version 0, and every runner is in this repository.
+* **claude-code:** a Claude Code run whose context fills now ends with an error result instead of compacting. A long run that got through by compacting fails until its task is split or its actor opts in ([#310](https://github.com/troupe-run/troupe/issues/310)).
+* **runner-protocol:** a runner's result with status error must carry a reason from the contract's list, and an ok result must not; troupe refuses either as a protocol violation, and run.error-result's details now require the reason. Every runner that speaks the contract is in this repository and is updated here; there are no recorded theatres to migrate.
+
+### Features
+
+* carry declared effects and a scratch directory to runners ([ce62005](https://github.com/troupe-run/troupe/commit/ce6200565f60b7a1b6661f2061aa7994cedb7d86))
+* **claude-code:** capture fixtures through the runner's own rules ([2e25dce](https://github.com/troupe-run/troupe/commit/2e25dce0494625c266e59da14c113fb9c888f60d))
+* **claude-code:** Claude Code compacts when the run says compact ([dbd05a2](https://github.com/troupe-run/troupe/commit/dbd05a2afb9e05d1dc4d9dcda811ccc26e77595e))
+* **claude-code:** map Claude Code's context limit to context-length ([daa5baa](https://github.com/troupe-run/troupe/commit/daa5baa20c232941a42aefa9dd82b7788a9481f0))
+* **claude-code:** translate declared effects into permission rules ([7ed5cf1](https://github.com/troupe-run/troupe/commit/7ed5cf1e6ec9596af2fafde03e392a6084546b46))
+* **claude-code:** turn off Claude Code's automatic compaction ([d2524d0](https://github.com/troupe-run/troupe/commit/d2524d01cc119a4e15860559ba74b8a6d3e26548))
+* **lm-studio:** stop at the context limit, and warn it won't compact ([a45df7b](https://github.com/troupe-run/troupe/commit/a45df7b2516f79aa9c7c11bcc439ebb10c1d6df6))
+* **runner-protocol:** a failed result says why, in a reason ([3dcfe3f](https://github.com/troupe-run/troupe/commit/3dcfe3f344d1621109761bedbe5eda5ed773b5a7)), closes [#296](https://github.com/troupe-run/troupe/issues/296)
+* **runner-protocol:** report the model that served a run ([409a5f9](https://github.com/troupe-run/troupe/commit/409a5f9c82361e8134d88816010d98e47419defc)), closes [#295](https://github.com/troupe-run/troupe/issues/295)
+* **runner-protocol:** run/start says whether the run may compact ([21851c3](https://github.com/troupe-run/troupe/commit/21851c36e6b9e74a5cf7715325580119fe6b8cf1))
+
 ## 0.1.0 (2026-11-01)
 
 

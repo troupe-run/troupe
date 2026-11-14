@@ -1,5 +1,69 @@
 # Changelog
 
+## [0.2.0](https://github.com/troupe-run/troupe/compare/protocol-v0.1.0...protocol-v0.2.0) (2026-11-14)
+
+
+### ⚠ BREAKING CHANGES
+
+* **runs:** Run.Started requires on_context_full, so a run started before this no longer reads. There are no theatres to migrate.
+* **runner-protocol:** a runner that predates this rejects run/start's new onContextFull field. The contract is version 0, and every runner is in this repository.
+* **protocol:** a run that hasn't ended has nothing from its end
+* **runner-protocol:** say when a retry wasn't safe
+* **protocol:** records and messages that leave out these fields, or hold runner_reported or a start's clones, no longer validate.
+* **runner-protocol:** a runner's result with status error must carry a reason from the contract's list, and an ok result must not; troupe refuses either as a protocol violation, and run.error-result's details now require the reason. Every runner that speaks the contract is in this repository and is updated here; there are no recorded theatres to migrate.
+* **runner-protocol:** a Run.Ended outcome with a transcript but no transcriptFormat no longer validates, so ends recorded before this change don't read back (pre-1.0: there are no theatres in use). the OpenAI runner's transcript records are the bytes themselves with the contract's kinds, not its own JSON objects with kind request, response, stream, body or dropped, and the request URL is no longer recorded.
+
+### Features
+
+* audit every run's changes against its declared effects ([3f5e31e](https://github.com/troupe-run/troupe/commit/3f5e31e85ef2d2b4f421a75d4fd918cd7ee7ffb4))
+* carry declared effects and a scratch directory to runners ([ce62005](https://github.com/troupe-run/troupe/commit/ce6200565f60b7a1b6661f2061aa7994cedb7d86))
+* **cli:** init names the extra an audition's runner comes with ([7083013](https://github.com/troupe-run/troupe/commit/7083013781cf477f1468320815391c46ca3b32cd)), closes [#333](https://github.com/troupe-run/troupe/issues/333)
+* **cli:** troupe init, and init --audition for an example actor ([fc34264](https://github.com/troupe-run/troupe/commit/fc342642ac4ec34ef08369688b925cbda3c00fcf))
+* **config:** read and show config paths with brackets for any key ([d2e2bd6](https://github.com/troupe-run/troupe/commit/d2e2bd65fee97daeed93afa8eb380766fcbeffcf))
+* **init:** warm a runner's engine before its first run ([23662dc](https://github.com/troupe-run/troupe/commit/23662dc55a76e351ede838b9bdd1772b0d955062))
+* **protocol:** a run that hasn't ended has nothing from its end ([81db7f0](https://github.com/troupe-run/troupe/commit/81db7f054e201428a9fbd649a129022fa7b0eba9)), closes [#313](https://github.com/troupe-run/troupe/issues/313)
+* **protocol:** estimate a run's cost from a price troupe resolves ([b809b61](https://github.com/troupe-run/troupe/commit/b809b61b451cd5aeac6154eaa0cd16ab8f5b4ba9))
+* **protocol:** refuse a runner that isn't installed, naming its extra ([a81a3fb](https://github.com/troupe-run/troupe/commit/a81a3fb2b9c13478c763cc93ea9995648d9a40d4)), closes [#333](https://github.com/troupe-run/troupe/issues/333)
+* **protocol:** require the fields troupe always writes ([1222e08](https://github.com/troupe-run/troupe/commit/1222e08981ebc1c06d978a5f200c5ff670b71726)), closes [#305](https://github.com/troupe-run/troupe/issues/305)
+* **runner-anthropic:** add a runner for the Anthropic Messages API ([0d3bd99](https://github.com/troupe-run/troupe/commit/0d3bd995def2ce4d24be238614864170fb109465))
+* **runner-ollama:** talk to Ollama and check what it requires ([#277](https://github.com/troupe-run/troupe/issues/277)) ([8893bae](https://github.com/troupe-run/troupe/commit/8893baef1b7a6055235fd1a0da79ea59f216d140))
+* **runner-protocol:** a context event for content lost mid-run ([66a0127](https://github.com/troupe-run/troupe/commit/66a012776a1b8aa37ff544397b9d5096b6ef63ce))
+* **runner-protocol:** a failed result says why, in a reason ([3dcfe3f](https://github.com/troupe-run/troupe/commit/3dcfe3f344d1621109761bedbe5eda5ed773b5a7)), closes [#296](https://github.com/troupe-run/troupe/issues/296)
+* **runner-protocol:** report the model that served a run ([409a5f9](https://github.com/troupe-run/troupe/commit/409a5f9c82361e8134d88816010d98e47419defc)), closes [#295](https://github.com/troupe-run/troupe/issues/295)
+* **runner-protocol:** run/start says whether the run may compact ([21851c3](https://github.com/troupe-run/troupe/commit/21851c36e6b9e74a5cf7715325580119fe6b8cf1))
+* **runner-protocol:** say when a retry wasn't safe ([0dda581](https://github.com/troupe-run/troupe/commit/0dda58103d34b1aece6cf01c9c8636776dd36168)), closes [#378](https://github.com/troupe-run/troupe/issues/378)
+* **runner-protocol:** transcript records can say what kind they are ([a0c3fd4](https://github.com/troupe-run/troupe/commit/a0c3fd4d6b13778e4c47833e2cf2c4f062ada922))
+* **runs:** actors opt in to compaction; policy can allow or forbid it ([27c8f6f](https://github.com/troupe-run/troupe/commit/27c8f6f53ddef172961180fd8f7db8bf2096253a))
+* **runs:** audit every started run and record what it found ([ac99c89](https://github.com/troupe-run/troupe/commit/ac99c8938a494fff2f14bfa89dfd708e67427107))
+* **runs:** keep the notices a run raises in its history ([2ceae43](https://github.com/troupe-run/troupe/commit/2ceae432c1934a15318e88b6d60832b8a00bca23))
+* **runs:** perform runs the Ollama runner by name ([#277](https://github.com/troupe-run/troupe/issues/277)) ([d50be0c](https://github.com/troupe-run/troupe/commit/d50be0c411cf9b1d87510e17ca8f403de6769e79))
+* **runs:** refuse a runtime the environment makes unfit for its runner ([f722217](https://github.com/troupe-run/troupe/commit/f7222172dd2c68925dd8d9d6d8da55e2637fb253))
+* **runtimes:** add an in-process runtime with no endpoint ([3e9ecbd](https://github.com/troupe-run/troupe/commit/3e9ecbdd7e34458cccb6b620b02ae68f87bf6411))
+* **runtimes:** fit a built-in runtime only to the runner it's for ([6e1df8e](https://github.com/troupe-run/troupe/commit/6e1df8e385a45ccd027aafeccfe235b5d96327b5)), closes [#291](https://github.com/troupe-run/troupe/issues/291)
+* **runtimes:** judge the lm-studio runner's fit, https included ([4f07f83](https://github.com/troupe-run/troupe/commit/4f07f836c03c1ee890288d3f7d49b8e0d1b5ad70)), closes [#291](https://github.com/troupe-run/troupe/issues/291)
+* **runtimes:** name runtimes in config and hand runs their credential ([5e14751](https://github.com/troupe-run/troupe/commit/5e14751ac70c364326dedd44a2e6b8c8186cb05c))
+* **runtimes:** refuse a credential holding whitespace in core ([cac94eb](https://github.com/troupe-run/troupe/commit/cac94ebbed4a886a4aaf4119b16c5e9f9a015df9))
+* **vcs:** say whether a directory is in a repository ([09abe93](https://github.com/troupe-run/troupe/commit/09abe93e078ef6635ab10a4e240ca79ddc6a852e))
+
+
+### Bug Fixes
+
+* act on the review of [#338](https://github.com/troupe-run/troupe/issues/338) ([76457e4](https://github.com/troupe-run/troupe/commit/76457e4de9fa3327d1cf5093e0aa532e85eac35a)), closes [#333](https://github.com/troupe-run/troupe/issues/333)
+* **cli:** never repeat a value config set can't type ([cf16bd2](https://github.com/troupe-run/troupe/commit/cf16bd270562c5129525a5812d37a288f05ff1c0))
+* **config:** cut a malformed path at a bracket it failed in ([fd47af2](https://github.com/troupe-run/troupe/commit/fd47af2e8df512dbf180f765bb8980a43f183db9))
+* **config:** price a model whose name holds a dot in brackets ([3a77deb](https://github.com/troupe-run/troupe/commit/3a77deb1891beb00eb7749077de96b5046efbc6c))
+* **config:** show a credential name from the environment by its setter ([7924383](https://github.com/troupe-run/troupe/commit/7924383dd0c43ada4dbdf7a9ac73a0e6797e976a))
+* **protocol:** say a malformed path's offset can pass its text ([77a0825](https://github.com/troupe-run/troupe/commit/77a08258a830b5daff9abc6fddd0153174ed187e))
+* **runner-mistralrs:** act on the review of [#422](https://github.com/troupe-run/troupe/issues/422) ([417a843](https://github.com/troupe-run/troupe/commit/417a843a5849cdc06d41d7533b28a75c828ee113))
+* **runner-protocol:** act on the slice reviews of record kinds ([87d51d8](https://github.com/troupe-run/troupe/commit/87d51d83149f7547852f81721a84a2e9d627daef)), closes [#294](https://github.com/troupe-run/troupe/issues/294)
+* **runner-protocol:** say a retry can name five reasons ([723516f](https://github.com/troupe-run/troupe/commit/723516f2c7fec4bbc7cc881325471e642cb160e5))
+* **runner-protocol:** say usage.inputTokens leaves out cache tokens ([f6d80b5](https://github.com/troupe-run/troupe/commit/f6d80b50f51845773243bcf22ebbfadbbc985da5))
+* **runs:** drop an unpriced cost estimate with a notice, not a crash ([a6fa0d2](https://github.com/troupe-run/troupe/commit/a6fa0d23630513d904aca5b93d55dae97f3edd39))
+* **runs:** store a dropped estimate's oversized result as a message ([0c11825](https://github.com/troupe-run/troupe/commit/0c11825a6208e270882e61821ab2557f0b2a2207))
+* **runtimes:** never echo a refused runtime variable's value ([610096d](https://github.com/troupe-run/troupe/commit/610096d9e03d08379a6db6c81e1928f1343beba7))
+* **runtimes:** never repeat a credential's variable name from the env ([0cabf18](https://github.com/troupe-run/troupe/commit/0cabf18e98fd6ed23863a983658652a79fbd6bfb))
+* **vcs:** name an unborn branch as git will once it's born ([f60d21d](https://github.com/troupe-run/troupe/commit/f60d21db6c4946bf32729219abc576f65dbc3e4b)), closes [#388](https://github.com/troupe-run/troupe/issues/388)
+
 ## 0.1.0 (2026-11-01)
 
 

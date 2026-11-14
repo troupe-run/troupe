@@ -1,6 +1,6 @@
 [project]
 name = "troupe-runner-anthropic"
-version = "0.0.0"
+version = "0.1.0"
 description = "An actor runner for troupe that drives the Anthropic Messages API, on Claude's API or a local engine, through the anthropic package, with troupe's own tools."
 readme = "README.md"
 license = "Apache-2.0"
