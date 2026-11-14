@@ -174,10 +174,18 @@ RUNTIMES: dict[str, dict[str, object]] = {
     # LM Studio's server root, which its own client library connects to; its OpenAI-compatible
     # API under /v1 has no built-in (lmstudio-runner design D3).
     "lm-studio": {"endpoint": "http://127.0.0.1:1234"},
+    # In-process: the mistralrs runner loads its model, a GGUF file, in its own process, so the
+    # runtime has no endpoint (in-process-runner design D5).
+    "mistralrs": {},
 }
 """troupe's built-in runtimes, each as a runtime file would hold it. None names a model, since a
 built-in model would go stale. The theatre's config overrides them field by field, and the
 person's environment overrides both."""
+
+IN_PROCESS_RUNTIMES: frozenset[str] = frozenset({"mistralrs"})
+"""The built-in runtimes whose runner loads the model in its own process: they have no endpoint,
+and config and the environment can't give them one (spec: runtimes, "An in-process runtime takes
+no endpoint"; in-process-runner design D5). Only a built-in can be in-process."""
 
 CREDENTIAL_MIN_BYTES = 8
 """The shortest credential a run may send. troupe masks the value in everything it keeps from a

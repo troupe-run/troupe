@@ -371,7 +371,9 @@ def test_each_protocol_violation_crashes_the_run_naming_it(
 # Requirement: The host drops an estimate it gave no price for (spec: runner-protocol)
 
 ESTIMATE = {**OK, "estimatedCostUsd": 0.5}
-UNPRICED = p.RunStartRuntime("lm-studio", "http://127.0.0.1:1234/v1", "m", credential=False)
+UNPRICED = p.RunStartRuntime(
+    name="lm-studio", endpoint="http://127.0.0.1:1234/v1", model="m", credential=False
+)
 
 
 @pytest.mark.parametrize(

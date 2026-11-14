@@ -835,3 +835,19 @@ def test_a_refused_endpoint_is_named_but_none_of_its_value_is_repeated(
 def test_another_pattern_checked_field_still_shows_its_value() -> None:
     with pytest.raises(p.ProtocolError, match="'has space'"):
         p.RunStartParams.from_data({**_run_start("https://example.com/v1"), "runId": "has space"})
+
+
+# Requirement: Run start carries the run's runtime (in-process-runner design D5)
+
+
+def test_an_in_process_runtime_has_no_endpoint_and_an_endpoint_null_is_refused() -> None:
+    data = _run_start("https://example.com/v1")
+    del data["runtime"]["endpoint"]
+    assert is_valid(data, "run-start.schema.json#/properties/params", runner=None)
+    assert p.RunStartParams.from_data(data).runtime == p.RunStartRuntime(
+        name="box", model="m", credential=False
+    )
+    data["runtime"]["endpoint"] = None
+    assert not is_valid(data, "run-start.schema.json#/properties/params", runner=None)
+    with pytest.raises(p.ProtocolError, match=r"runtime\.endpoint"):
+        p.RunStartParams.from_data(data)

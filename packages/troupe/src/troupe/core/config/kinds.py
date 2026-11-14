@@ -179,6 +179,15 @@ def runtime_problems(name: str, runtime: object, typed: Typed = None) -> list[Pr
     found += _schema_problems(
         base, fields, schemas.validator(RUNTIME_SCHEMA), against="runtime", typed=typed
     )
+    if name in defaults.IN_PROCESS_RUNTIMES and "endpoint" in runtime:
+        found.append(
+            Problem(
+                (*base, "endpoint"),
+                f"the runtime {name!r} runs its model in the runner's own process, so it takes no "
+                "endpoint",
+                f"Unset {shown((*base, 'endpoint'))}.",
+            )
+        )
     if name not in defaults.RUNTIMES and "endpoint" not in runtime:
         found.append(
             Problem(
@@ -366,7 +375,7 @@ def _runtime_problems(
         name
         for name, shape in sorted(known.items())
         if shape is not None
-        and not runtimes.unfit(fit, shape.endpoint.value, shape.credential is not None, name)
+        and not runtimes.unfit(fit, shape.endpoint_value, shape.credential is not None, name)
     ]
     define = (
         f"troupe config set {shown((RUNTIMES, '<name>', 'endpoint'))}=<url>, with "
@@ -424,11 +433,11 @@ def _runtime_problems(
     shape = known[runtime]
     if shape is None:
         return []  # the runtime's own problems are reported
-    reasons = runtimes.unfit(fit, shape.endpoint.value, shape.credential is not None, runtime)
+    reasons = runtimes.unfit(fit, shape.endpoint_value, shape.credential is not None, runtime)
     if not reasons:
         return []
     why = "; and ".join(
-        runtimes.unfit_words(str(runner), runtime, reason, shape.endpoint.value)
+        runtimes.unfit_words(str(runner), runtime, reason, shape.endpoint_value)
         for reason in reasons
     )
     fix = (

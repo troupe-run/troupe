@@ -133,10 +133,21 @@ class Runtime:
 
     @classmethod
     def checked(
-        cls, endpoint: str, model: str, credential: str | None, price: Price | None = None
+        cls, endpoint: str | None, model: str, credential: str | None, price: Price | None = None
     ) -> "Runtime":
-        """A Runtime from its parts, refused when the endpoint can't be used, the model is empty,
-        the credential is malformed, or it would go in the clear to another machine."""
+        """A Runtime from its parts, refused when there's no endpoint (an in-process runtime), the
+        endpoint can't be used, the model is empty, the credential is malformed, or it would go in
+        the clear to another machine."""
+        if endpoint is None:
+            # An in-process runtime, which config wouldn't let an Anthropic actor name
+            # (in-process-runner design D5).
+            raise RuntimeRefusedError(
+                "anthropic.no-runtime",
+                "The runtime has no endpoint: it's in-process, for a runner that loads its model "
+                "itself, and the Anthropic runner talks to a service at an endpoint.",
+                "Name a runtime with an endpoint for the actor, such as the built-in anthropic.",
+                {"where": "runtime.endpoint"},
+            )
         parsed = parse_endpoint(endpoint)
         if not model:
             raise RuntimeRefusedError(

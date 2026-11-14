@@ -60,7 +60,9 @@ def test_a_live_run_keeps_the_contract_and_reaches_a_result(tmp_path: Path) -> N
                 workspace,
                 {"temperature": 0, "seed": 1},
                 effects=p.EffectsDeclaration(write=["out/**"], delete=[], move=[]),
-                runtime=p.RunStartRuntime("ollama", OLLAMA_ENDPOINT, model, False),
+                runtime=p.RunStartRuntime(
+                    name="ollama", endpoint=OLLAMA_ENDPOINT, model=model, credential=False
+                ),
             ),
             store=MemoryArtifactStore(),
             effect=NoEffectExpected(),

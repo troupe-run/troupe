@@ -34,7 +34,7 @@ def runtimes_(draw: st.DrawFn) -> tuple[str, bool]:
     return f"{scheme}://{host}{port}{path}", credential
 
 
-def _ollama_accepts(endpoint: str, credential: bool) -> bool:
+def _ollama_accepts(endpoint: str | None, credential: bool) -> bool:
     try:
         ollama_runtime.checked(
             RunStartRuntime(name="box", endpoint=endpoint, model="m", credential=credential)
@@ -44,7 +44,7 @@ def _ollama_accepts(endpoint: str, credential: bool) -> bool:
     return True
 
 
-def _openai_accepts(endpoint: str, credential: bool) -> bool:
+def _openai_accepts(endpoint: str | None, credential: bool) -> bool:
     try:
         openai_runtime.Runtime.checked(endpoint, "m", KEY if credential else None)
     except openai_runtime.RuntimeRefusedError:
@@ -52,7 +52,7 @@ def _openai_accepts(endpoint: str, credential: bool) -> bool:
     return True
 
 
-def _anthropic_accepts(endpoint: str, credential: bool) -> bool:
+def _anthropic_accepts(endpoint: str | None, credential: bool) -> bool:
     try:
         anthropic_runtime.Runtime.checked(endpoint, "m", KEY if credential else None)
     except anthropic_runtime.RuntimeRefusedError:
@@ -60,7 +60,10 @@ def _anthropic_accepts(endpoint: str, credential: bool) -> bool:
     return True
 
 
-def _lm_studio_accepts(endpoint: str, credential: bool) -> bool:
+def _lm_studio_accepts(endpoint: str | None, credential: bool) -> bool:
+    runtime: dict[str, object] = {"name": "box", "model": "m", "credential": credential}
+    if endpoint is not None:
+        runtime["endpoint"] = endpoint
     start = RunStartParams.from_data(
         {
             "runId": "11111111-1111-4111-8111-111111111111",
@@ -71,12 +74,7 @@ def _lm_studio_accepts(endpoint: str, credential: bool) -> bool:
             "effects": {"write": [], "delete": [], "move": []},
             "scratch": "s",
             "onContextFull": "fail",
-            "runtime": {
-                "name": "box",
-                "endpoint": endpoint,
-                "model": "m",
-                "credential": credential,
-            },
+            "runtime": runtime,
         }
     )
     environ = {"TROUPE_RUNTIME_CREDENTIAL": KEY} if credential else {}
@@ -95,7 +93,7 @@ ORACLES = {
 }
 
 
-def _config_accepts(runner: str, endpoint: str, credential: bool) -> bool:
+def _config_accepts(runner: str, endpoint: str | None, credential: bool) -> bool:
     return not runtimes.unfit(interim.RUNNERS[runner].fit, endpoint, credential)
 
 
@@ -114,7 +112,8 @@ def test_config_and_the_runner_agree_on_every_runtime(
 def test_config_and_the_runner_agree_on_every_built_in_runtime() -> None:
     for runner, accepts in ORACLES.items():
         for name, built_in in defaults.RUNTIMES.items():
-            endpoint = str(built_in["endpoint"])
+            # An in-process built-in has no endpoint, which every runner here refuses.
+            endpoint = str(built_in["endpoint"]) if "endpoint" in built_in else None
             credential = "credential" in built_in
             assert _config_accepts(runner, endpoint, credential) == accepts(endpoint, credential), (
                 runner,

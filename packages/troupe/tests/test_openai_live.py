@@ -70,7 +70,9 @@ def test_a_live_run_writes_and_reads_back_a_file_within_its_budget(tmp_path: Pat
                 workspace,
                 dict(TEST_LIMITS),
                 effects=p.EffectsDeclaration(write=["out/**"], delete=[], move=[]),
-                runtime=p.RunStartRuntime("live", endpoint, model, credential is not None),
+                runtime=p.RunStartRuntime(
+                    name="live", endpoint=endpoint, model=model, credential=credential is not None
+                ),
                 credential=credential,
             ),
             store=MemoryArtifactStore(),

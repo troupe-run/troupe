@@ -80,15 +80,14 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "name",
-        "endpoint"
+        "name"
       ],
       "properties": {
         "name": {
           "$ref": "#/$defs/name"
         },
         "endpoint": {
-          "description": "The endpoint, and where it came from.",
+          "description": "The endpoint, and where it came from. Absent: an in-process runtime, whose runner loads its model in its own process and talks to no service.",
           "type": "object",
           "additionalProperties": false,
           "required": [

@@ -103,11 +103,17 @@ class Resolved:
     the credential's variable, never its value."""
 
     name: str
-    endpoint: Sourced
+    endpoint: Sourced | None
+    """None for an in-process runtime, which has no endpoint (in-process-runner design D5)."""
     model: Sourced | None
     credential: Sourced | None
     prices: Mapping[str, Any]
     """The runtime's prices in the theatre's config, by model name; empty when it has none."""
+
+    @property
+    def endpoint_value(self) -> str | None:
+        """The endpoint's value, or None for an in-process runtime."""
+        return self.endpoint.value if self.endpoint is not None else None
 
     def price(self, model: Sourced | None) -> Price | None:
         """The price of ``model`` on this runtime, or None."""
@@ -116,7 +122,9 @@ class Resolved:
     def to_data(self, env: Mapping[str, str]) -> dict[str, Any]:
         """The protocol's resolved runtime (runtime.schema.json#/$defs/resolved), saying whether
         the credential's variable is set in ``env``. Never the credential's value."""
-        data: dict[str, Any] = {"name": self.name, "endpoint": self.endpoint.to_data()}
+        data: dict[str, Any] = {"name": self.name}
+        if self.endpoint is not None:
+            data["endpoint"] = self.endpoint.to_data()
         if self.model is not None:
             data["model"] = self.model.to_data()
         if self.credential is not None:
@@ -148,11 +156,10 @@ class RunRuntime:
 
     def to_data(self) -> dict[str, Any]:
         """The runtime the run's start records: every value with its source, never the value."""
-        data: dict[str, Any] = {
-            "name": self.resolved.name,
-            "endpoint": self.resolved.endpoint.to_data(),
-            "model": self.model.to_data(),
-        }
+        data: dict[str, Any] = {"name": self.resolved.name}
+        if self.resolved.endpoint is not None:
+            data["endpoint"] = self.resolved.endpoint.to_data()
+        data["model"] = self.model.to_data()
         if self.resolved.credential is not None:
             data["credential"] = {"env": self.resolved.credential.to_data(), "set": True}
         price = self.resolved.price(self.model)
@@ -162,12 +169,11 @@ class RunRuntime:
 
     def run_start(self) -> dict[str, Any]:
         """``run/start``'s ``runtime``, with the run's model's price when it has one."""
-        data: dict[str, Any] = {
-            "name": self.resolved.name,
-            "endpoint": self.resolved.endpoint.value,
-            "model": self.model.value,
-            "credential": self.value is not None,
-        }
+        data: dict[str, Any] = {"name": self.resolved.name}
+        if self.resolved.endpoint is not None:  # an in-process runtime sends none, never a null
+            data["endpoint"] = self.resolved.endpoint.value
+        data["model"] = self.model.value
+        data["credential"] = self.value is not None
         price = self.resolved.price(self.model)
         if price is not None:
             data["price"] = dict(price.value)
@@ -238,7 +244,7 @@ def resolve(name: str, config: Mapping[str, Any], env: Mapping[str, str]) -> Res
     """
     built_in: Mapping[str, Any] = defaults.RUNTIMES.get(name, {})
     theatre: Mapping[str, Any] = configured(config).get(name, {})
-    if not built_in and not theatre:
+    if name not in defaults.RUNTIMES and not theatre:
         known = ", ".join(names(config))
         raise TroupeError(
             "config.invalid",
@@ -256,7 +262,17 @@ def resolve(name: str, config: Mapping[str, Any], env: Mapping[str, str]) -> Res
             else _field(name, field, built_in, theatre)
         )
     endpoint = resolved["endpoint"]
-    if endpoint is None:  # config's check refuses a runtime with no endpoint
+    if name in defaults.IN_PROCESS_RUNTIMES:
+        if endpoint is not None:  # config refuses one, so it came from the environment
+            variable = env_name(name, "endpoint")
+            raise TroupeError(
+                "runtime.invalid-value",
+                problem=f"The runtime variable {variable} is set, but the runtime {name!r} runs "
+                "its model in the runner's own process and takes no endpoint.",
+                fix=f"Unset {variable}.",
+                details={"variable": variable, "accepted": ["nothing: unset it"]},
+            )
+    elif endpoint is None:  # config's check refuses a runtime with no endpoint
         msg = f"the runtime {name!r} has no endpoint"
         raise RuntimeError(msg)
     prices = theatre.get(PRICES)
@@ -275,12 +291,15 @@ Reason = Literal[
     "endpoint-no-path",
     "endpoint-scheme",
     "endpoint-version",
+    "endpoint-missing",
+    "endpoint-unwanted",
     "built-in",
 ]
 """Why a runtime doesn't fit a runner: it has a credential the runner never sends, its endpoint has
 a path the runner can't use, it has none where the runner needs one (runtime-checks design D2),
-it's https for a runner that can only use plain http, or it's another runner's built-in
-(lmstudio-runner design D3)."""
+it's https for a runner that can only use plain http, it has no endpoint for a runner that talks to
+a service or one for a runner that loads its model in process (in-process-runner design D5), or
+it's another runner's built-in (lmstudio-runner design D3)."""
 
 
 def has_path(endpoint: str) -> bool:
@@ -290,9 +309,10 @@ def has_path(endpoint: str) -> bool:
 
 
 def unfit(
-    fit: interim.RuntimeFit, endpoint: str, has_credential: bool, runtime: str | None = None
+    fit: interim.RuntimeFit, endpoint: str | None, has_credential: bool, runtime: str | None = None
 ) -> list[Reason]:
-    """Why the runtime ``runtime``, whose endpoint is ``endpoint``, with a credential or not,
+    """Why the runtime ``runtime``, whose endpoint is ``endpoint`` (None for an in-process one),
+    with a credential or not,
     doesn't fit a runner whose fit is ``fit``: empty when it fits. The one rule config and perform
     judge fit by (runtime-checks design D2). A built-in runtime made for another runner doesn't fit
     one that has a built-in of its own (lmstudio-runner design D3)."""
@@ -306,6 +326,13 @@ def unfit(
         reasons.append("built-in")
     if has_credential and not fit.credential:
         reasons.append("credential")
+    if endpoint is None:
+        if fit.endpoint == "required":
+            reasons.append("endpoint-missing")
+        return reasons
+    if fit.endpoint == "none":
+        reasons.append("endpoint-unwanted")
+        return reasons
     if fit.path == "none" and has_path(endpoint):
         reasons.append("endpoint-path")
     if fit.path == "required" and not has_path(endpoint):
@@ -367,6 +394,16 @@ def unfit_words(runner: str, runtime: str, reason: Reason, endpoint: str | None 
             f"the {runner} runner can only reach a plain http endpoint, and the runtime "
             f"{runtime!r} has an https one"
         )
+    if reason == "endpoint-missing":
+        return (
+            f"the {runner} runner needs an endpoint, and the runtime {runtime!r} has none: it runs "
+            "its model in the runner's own process"
+        )
+    if reason == "endpoint-unwanted":
+        return (
+            f"the {runner} runner runs its model in its own process and takes a runtime with no "
+            f"endpoint, and the runtime {runtime!r} has one"
+        )
     return (
         f"the {runner} runner needs an endpoint with a path, such as /v1, and the runtime "
         f"{runtime!r} has one without"
@@ -375,6 +412,9 @@ def unfit_words(runner: str, runtime: str, reason: Reason, endpoint: str | None 
 
 def fitting(fit: interim.RuntimeFit) -> str:
     """What a runtime that fits looks like, in words, for a fix that defines one."""
+    if fit.endpoint == "none":
+        in_process = ", ".join(sorted(defaults.IN_PROCESS_RUNTIMES))
+        return f"no endpoint: an in-process built-in ({in_process})"
     parts = {
         "none": "an endpoint with no path (such as http://127.0.0.1:11434)",
         "required": "an endpoint with a path (such as https://host/v1)",
@@ -454,24 +494,37 @@ def refuse_unfit(
     (runtime-checks design D4). Names where each value came from and the runtimes that fit, judged
     the same way, leaving out any whose variables are malformed."""
     fit = interim.runner(runner).fit
-    reasons = unfit(fit, resolved.endpoint.value, resolved.credential is not None, resolved.name)
+    reasons = unfit(fit, resolved.endpoint_value, resolved.credential is not None, resolved.name)
     if not reasons:
         return
     came_from: dict[str, str] = {}
     if "credential" in reasons and resolved.credential is not None:
         came_from["credential"] = _came_from(resolved.name, "credential_env", resolved.credential)
-    if {"endpoint-path", "endpoint-no-path", "endpoint-scheme", "endpoint-version"} & set(reasons):
+    endpoint_reasons = {
+        "endpoint-path",
+        "endpoint-no-path",
+        "endpoint-scheme",
+        "endpoint-version",
+        "endpoint-unwanted",
+    }
+    if endpoint_reasons & set(reasons) and resolved.endpoint is not None:
         came_from["endpoint"] = _came_from(resolved.name, "endpoint", resolved.endpoint)
+    if "endpoint-missing" in reasons:
+        came_from["endpoint"] = "default"  # an in-process built-in has none by troupe's default
     fits: list[str] = []
     for other in names(config):
         try:
             candidate = resolve(other, config, env)
         except (RuntimeError, TroupeError):
             continue
-        if not unfit(fit, candidate.endpoint.value, candidate.credential is not None, other):
+        if not unfit(fit, candidate.endpoint_value, candidate.credential is not None, other):
             fits.append(other)
     # An endpoint the person's environment set is never repeated (runtime-checks design D8).
-    shown_endpoint = None if resolved.endpoint.source == "env" else resolved.endpoint.value
+    shown_endpoint = (
+        None
+        if resolved.endpoint is None or resolved.endpoint.source == "env"
+        else resolved.endpoint.value
+    )
     why = "; and ".join(
         unfit_words(runner, resolved.name, reason, shown_endpoint) for reason in reasons
     )
@@ -577,8 +630,8 @@ def for_run(
                 "minimumBytes": defaults.CREDENTIAL_MIN_BYTES,
             },
         )
-    endpoint = resolved.endpoint.value
-    if urlsplit(endpoint).scheme == "http" and not is_loopback(endpoint):
+    endpoint = resolved.endpoint_value
+    if endpoint is not None and urlsplit(endpoint).scheme == "http" and not is_loopback(endpoint):
         raise TroupeError(
             "runtime.insecure-endpoint",
             problem=f"The runtime {name!r} would send its credential over plain HTTP to "

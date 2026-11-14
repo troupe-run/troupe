@@ -136,6 +136,17 @@ def from_run_start(params: RunStartParams, environ: Mapping[str, str]) -> Runtim
             "Give the actor, or its runtime, the model LM Studio should run.",
             {"where": "runtime.model"},
         )
+    if runtime.endpoint is None:
+        # An in-process runtime, which config wouldn't let an LM Studio actor name
+        # (in-process-runner design D5).
+        raise RuntimeRefusedError(
+            "lm-studio.no-runtime",
+            f"The runtime {runtime.name} has no endpoint: it's in-process, for a runner that loads "
+            "its model itself, and the LM Studio runner talks to LM Studio at an endpoint.",
+            "Name a runtime with LM Studio's endpoint for the actor, such as the built-in "
+            "lm-studio (troupe config set actors.<name>.runtime=lm-studio).",
+            {"where": "runtime.endpoint"},
+        )
     if runtime.credential:
         raise RuntimeRefusedError(
             "lm-studio.credential-unsupported",

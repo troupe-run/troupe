@@ -45,10 +45,19 @@ class Runtime:
 
     @classmethod
     def checked(
-        cls, endpoint: str, model: str, credential: str | None, price: Price | None = None
+        cls, endpoint: str | None, model: str, credential: str | None, price: Price | None = None
     ) -> "Runtime":
-        """A Runtime from its parts, refused when the endpoint isn't a base http or https URL with a
-        path, the model is empty, or a credential would go in the clear to another machine."""
+        """A Runtime from its parts, refused when there's no endpoint (an in-process runtime), the
+        endpoint isn't a base http or https URL with a path, the model is empty, or a credential
+        would go in the clear to another machine."""
+        if endpoint is None:
+            raise RuntimeRefusedError(
+                "openai.no-runtime",
+                "The runtime has no endpoint: it's in-process, for a runner that loads its model "
+                "itself, and the OpenAI runner talks to a service at an endpoint.",
+                "Name a runtime with an endpoint for the actor, such as the built-in openai.",
+                {"where": "runtime.endpoint"},
+            )
         try:
             parsed = parse_endpoint(endpoint)
         except EndpointError as error:

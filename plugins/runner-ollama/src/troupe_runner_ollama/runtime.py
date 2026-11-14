@@ -125,6 +125,17 @@ def checked(runtime: RunStartRuntime) -> Runtime:
             "(troupe config set actors.<name>.runtime=ollama), or use a runner that sends a key, "
             "such as openai, for a service that needs one.",
         )
+    if runtime.endpoint is None:
+        # An in-process runtime, which config wouldn't let an Ollama actor name
+        # (in-process-runner design D5).
+        raise RuntimeRefusedError(
+            "ollama.invalid-runtime",
+            "runtime.endpoint",
+            f"The runtime {runtime.name!r} has no endpoint: it's in-process, for a runner that "
+            "loads its model itself, and the Ollama runner talks to Ollama at an endpoint.",
+            "Name a runtime with Ollama's endpoint for the actor, such as the built-in ollama "
+            "(troupe config set actors.<name>.runtime=ollama).",
+        )
     return Runtime(runtime.name, _endpoint(runtime.name, runtime.endpoint), runtime.model)
 
 

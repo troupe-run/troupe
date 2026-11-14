@@ -12,6 +12,7 @@ from hypothesis import strategies as st
 
 from protocol_schemas import PROTOCOL_BASE, validator_for
 from troupe.core import defaults, interim, runtimes
+from troupe.core.config.kinds import runtime_problems
 from troupe.core.errors import TroupeError
 from troupe.core.runtimes import Sourced, for_run, resolve
 from troupe_runner_ollama import runtime as ollama_runtime
@@ -29,6 +30,47 @@ def _error(raised: pytest.ExceptionInfo[TroupeError]) -> str:
 
 
 # Requirement: troupe has built-in runtimes
+
+
+def test_the_in_process_built_in_has_no_endpoint_and_takes_its_model_from_the_environment() -> None:
+    # Spec: runtimes, "troupe has built-in runtimes", scenario "The in-process built-in".
+    env = {"TROUPE_RUNTIME_MISTRALRS_MODEL": "/models/qwen3-0.6b.gguf"}
+    resolved = resolve("mistralrs", NO_CONFIG, env)
+    assert resolved.endpoint is None
+    assert resolved.credential is None
+    assert resolved.model == Sourced("/models/qwen3-0.6b.gguf", "env")
+    data = resolved.to_data(env)
+    assert "endpoint" not in data
+    validator_for(f"{PROTOCOL_BASE}runtime.schema.json#/$defs/resolved").validate(data)
+
+
+def test_an_in_process_runtimes_run_start_has_no_endpoint_rather_than_a_null() -> None:
+    # Spec: runner-protocol, "Run start carries the run's runtime", "An in-process runtime".
+    env = {"TROUPE_RUNTIME_MISTRALRS_MODEL": "/models/qwen3-0.6b.gguf"}
+    run = for_run("mistralrs", "tester", None, NO_CONFIG, env)
+    assert run.run_start() == {
+        "name": "mistralrs",
+        "model": "/models/qwen3-0.6b.gguf",
+        "credential": False,
+    }
+    assert "endpoint" not in run.to_data()
+
+
+def test_an_endpoint_from_the_environment_for_the_in_process_runtime_is_refused() -> None:
+    # Spec: runtimes, "An in-process runtime takes no endpoint", "An endpoint from the environment".
+    env = {"TROUPE_RUNTIME_MISTRALRS_ENDPOINT": "http://127.0.0.1:1234"}
+    with pytest.raises(TroupeError) as raised:
+        resolve("mistralrs", NO_CONFIG, env)
+    assert raised.value.code == "runtime.invalid-value"
+    assert raised.value.details["variable"] == "TROUPE_RUNTIME_MISTRALRS_ENDPOINT"
+    assert "127.0.0.1" not in raised.value.problem + raised.value.fix
+
+
+def test_an_endpoint_in_config_for_the_in_process_runtime_is_refused_naming_its_path() -> None:
+    # Spec: runtimes, "An in-process runtime takes no endpoint", "An endpoint in config".
+    found = runtime_problems("mistralrs", {"endpoint": "http://127.0.0.1:1234"})
+    assert [problem.path for problem in found] == [("runtimes", "mistralrs", "endpoint")]
+    assert "in the runner's own process" in found[0].rule
 
 
 def test_a_built_in_needs_no_config() -> None:
@@ -59,7 +101,7 @@ def test_a_runtime_that_doesnt_exist_is_refused_naming_those_that_do() -> None:
     with pytest.raises(TroupeError) as raised:
         resolve("nowhere", NO_CONFIG, {})
     assert raised.value.code == "config.invalid"
-    assert "lm-studio, ollama, openai" in raised.value.problem
+    assert "lm-studio, mistralrs, ollama, openai" in raised.value.problem
 
 
 # Requirement: The person's environment overrides a runtime's values
@@ -83,12 +125,16 @@ def test_the_credentials_variable_from_the_environment() -> None:
 
 def test_empty_counts_as_unset() -> None:
     env = {"TROUPE_RUNTIME_OLLAMA_ENDPOINT": ""}
-    assert resolve("ollama", NO_CONFIG, env).endpoint.source == "default"
+    assert resolve("ollama", NO_CONFIG, env).endpoint == Sourced(
+        "http://127.0.0.1:11434", "default"
+    )
 
 
 def test_another_runtimes_variable_is_not_read() -> None:
     env = {"TROUPE_RUNTIME_ELSEWHERE_ENDPOINT": "not a url"}
-    assert resolve("ollama", NO_CONFIG, env).endpoint.source == "default"
+    assert resolve("ollama", NO_CONFIG, env).endpoint == Sourced(
+        "http://127.0.0.1:11434", "default"
+    )
 
 
 # Requirement: A malformed runtime variable is an error
@@ -560,8 +606,9 @@ def test_the_ollama_runners_endpoint_variable_is_cores_for_any_runtime_name(name
 
 # Requirement: An actor's runtime fits its runner (runtime-checks design D1, D2)
 
-ROOT_ONLY = interim.RuntimeFit(credential=False, path="none")
-PATHED = interim.RuntimeFit(path="required")
+ROOT_ONLY = interim.RuntimeFit(credential=False, path="none", endpoint="required")
+PATHED = interim.RuntimeFit(path="required", endpoint="required")
+IN_PROCESS = interim.RuntimeFit(credential=False, endpoint="none", built_in="mistralrs")
 
 
 @pytest.mark.parametrize(
@@ -600,6 +647,28 @@ def test_what_runtime_each_runner_fits() -> None:
         ROOT_ONLY, scheme="http", built_in="lm-studio"
     )
     assert interim.RUNNERS["scripted"].fit == interim.RuntimeFit()
+
+
+# Requirement: An actor's runtime fits its runner (in-process-runner design D5)
+
+
+def test_a_runtime_without_an_endpoint_doesnt_fit_a_runner_that_needs_one() -> None:
+    assert runtimes.unfit(ROOT_ONLY, None, has_credential=False) == ["endpoint-missing"]
+    assert runtimes.unfit(PATHED, None, has_credential=False) == ["endpoint-missing"]
+
+
+def test_a_runtime_with_an_endpoint_doesnt_fit_an_in_process_runner() -> None:
+    assert runtimes.unfit(IN_PROCESS, "http://127.0.0.1:11434", False) == ["endpoint-unwanted"]
+    assert runtimes.unfit(IN_PROCESS, None, has_credential=False) == []
+
+
+def test_every_runtime_fits_a_runner_that_takes_any() -> None:
+    assert runtimes.unfit(interim.RuntimeFit(), None, has_credential=False) == []
+    assert runtimes.unfit(interim.RuntimeFit(), "http://h:1", has_credential=False) == []
+
+
+def test_a_fix_for_an_in_process_runner_names_the_in_process_built_in() -> None:
+    assert "mistralrs" in runtimes.fitting(IN_PROCESS)
 
 
 def test_an_https_endpoint_doesnt_fit_a_runner_that_needs_plain_http() -> None:

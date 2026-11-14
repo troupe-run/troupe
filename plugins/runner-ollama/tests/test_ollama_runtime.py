@@ -149,3 +149,15 @@ def test_any_endpoint_the_contract_accepts_is_used_or_refused_never_an_other_err
         return
     assert not used.endswith("/")
     assert tail in ("", "/")
+
+
+def test_an_in_process_runtime_without_an_endpoint_is_refused_naming_the_endpoint() -> None:
+    # In-process-runner design D5: config wouldn't pair one with an Ollama actor; the runner still
+    # refuses it rather than failing on a missing endpoint.
+    runtime = p.RunStartRuntime.from_data(
+        {"name": "mistralrs", "model": "/models/m.gguf", "credential": False}
+    )
+    error = _refused(runtime)
+    assert error.code == "ollama.invalid-runtime"
+    assert error.where == "runtime.endpoint"
+    assert "actors.<name>.runtime=ollama" in error.fix

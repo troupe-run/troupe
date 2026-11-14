@@ -69,7 +69,9 @@ def _run(
                 provenance.get("direction", ""),
                 workspace,
                 provenance["options"],
-                runtime=p.RunStartRuntime("ollama", endpoint, provenance["model"], False),
+                runtime=p.RunStartRuntime(
+                    name="ollama", endpoint=endpoint, model=provenance["model"], credential=False
+                ),
                 effects=p.EffectsDeclaration(
                     write=effects.get("write", []),
                     delete=effects.get("delete", []),
@@ -164,7 +166,9 @@ def test_cancelling_an_ollama_run_mid_stream_ends_it_cancelled_within_the_grace(
                     "think",
                     workspace,
                     {},
-                    runtime=p.RunStartRuntime("ollama", endpoint, "fake", False),
+                    runtime=p.RunStartRuntime(
+                        name="ollama", endpoint=endpoint, model="fake", credential=False
+                    ),
                 ),
                 store=MemoryArtifactStore(),
                 effect=NoEffectExpected(),

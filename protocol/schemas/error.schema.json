@@ -2853,7 +2853,7 @@
               "minLength": 1
             },
             "reasons": {
-              "description": "Why the runtime doesn't fit: it has a credential the runner never sends, its endpoint has a path the runner can't use, it has none where the runner needs one, it's https for a runner that can only use plain http, its path ends in /v1 for a runner that adds /v1 itself, or it's troupe's built-in runtime for another runner.",
+              "description": "Why the runtime doesn't fit: it has a credential the runner never sends, its endpoint has a path the runner can't use, it has none where the runner needs one, it's https for a runner that can only use plain http, its path ends in /v1 for a runner that adds /v1 itself, it has no endpoint for a runner that talks to a service (endpoint-missing) or one for a runner that loads its model in its own process (endpoint-unwanted), or it's troupe's built-in runtime for another runner.",
               "type": "array",
               "minItems": 1,
               "uniqueItems": true,
@@ -2864,6 +2864,8 @@
                   "endpoint-no-path",
                   "endpoint-scheme",
                   "endpoint-version",
+                  "endpoint-missing",
+                  "endpoint-unwanted",
                   "built-in"
                 ]
               }
