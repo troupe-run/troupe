@@ -96,6 +96,21 @@ def is_metal() -> bool:
     return sys.platform == "darwin"
 
 
+def windowed(loader: Loader, context_length: int | None) -> Loader:
+    """``loader``, giving the engine the run's window as its KV budget on Metal (design D7). The
+    window is the options' when they set one; otherwise the runner's default, which the
+    conversation lowers to the model's length once it's loaded. The capture tool loads through it
+    too, so a fixture is taken with the budget a run has."""
+
+    def load(spec: LoadSpec) -> Any:  # noqa: ANN401 - an Engine
+        if is_metal():
+            window = context_length if context_length is not None else DEFAULT_CONTEXT_LENGTH
+            spec = LoadSpec(model=spec.model, seed=spec.seed, kv_tokens=window)
+        return loader(spec)
+
+    return load
+
+
 class Runner:
     def __init__(
         self,
@@ -355,7 +370,7 @@ class Runner:
                 model=str(runtime.model),
                 spec=LoadSpec(model=runtime.model, seed=options.seed),
                 engine_version=engine_version,
-                loader=self._windowed_loader(options.context_length),
+                loader=windowed(self._loader, options.context_length),
                 sink=self,
             )
         except (OSError, ValueError) as error:
@@ -371,19 +386,6 @@ class Runner:
         self._result(id_, {"runId": start.run_id})
         self._worker = threading.Thread(target=self._converse, args=(conversation,), daemon=True)
         self._worker.start()
-
-    def _windowed_loader(self, context_length: int | None) -> Loader:
-        """The loader, giving the engine the run's window as its KV budget on Metal (design D7).
-        The window is the options' when they set one; otherwise the runner's default, which the
-        conversation lowers to the model's length once it's loaded."""
-
-        def load(spec: LoadSpec) -> Any:  # noqa: ANN401 - an Engine
-            if is_metal():
-                window = context_length if context_length is not None else DEFAULT_CONTEXT_LENGTH
-                spec = LoadSpec(model=spec.model, seed=spec.seed, kv_tokens=window)
-            return self._loader(spec)
-
-        return load
 
     def _requirements(self) -> str:
         """The installed engine's version, once it's the version the runner was built for (design

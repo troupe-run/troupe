@@ -34,6 +34,7 @@ from troupe_runner_mistralrs import engine
 from troupe_runner_mistralrs.conversation import Conversation
 from troupe_runner_mistralrs.options import parse_options
 from troupe_runner_mistralrs.port import Answer, ChatRequest, Engine, LoadSpec
+from troupe_runner_mistralrs.runner import windowed
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 NOTES = "The launch code is BLUE-42.\n"
@@ -162,23 +163,20 @@ def capture(model: Path, name: str) -> None:
         recordings: list[Recording] = []
 
         def load(spec: LoadSpec) -> Recording:
-            kv = spec.kv_tokens
-            if sys.platform == "darwin":
-                kv = options.get("contextLength", 16384)
-            recording = Recording(
-                engine.load(LoadSpec(spec.model, spec.seed, kv)), workspace, scratch
-            )
+            recording = Recording(engine.load(spec), workspace, scratch)
             recordings.append(recording)
             return recording
+
+        parsed = parse_options(options)
 
         sink = Sink()
         Conversation(
             start=start,
-            options=parse_options(options),
+            options=parsed,
             model="<model>",
             spec=LoadSpec(model, options.get("seed")),
             engine_version=engine.ENGINE_VERSION,
-            loader=load,
+            loader=windowed(load, parsed.context_length),
             sink=sink,
         ).run()
         out = FIXTURES / name

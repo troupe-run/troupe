@@ -174,12 +174,12 @@ def test_on_metal_the_window_is_the_engines_kv_budget(
         loaded.append(spec)
         return stand_in.load(spec)
 
-    runner = Runner(None, None, None, loader=loader, check=stand_in.check)  # type: ignore[arg-type]
     monkeypatch.setattr(runner_module, "is_metal", lambda: True)
-    runner._windowed_loader(8192)(LoadSpec(Path("/m.gguf")))
+    runner_module.windowed(loader, 8192)(LoadSpec(Path("/m.gguf")))
+    runner_module.windowed(loader, None)(LoadSpec(Path("/m.gguf")))
     monkeypatch.setattr(runner_module, "is_metal", lambda: False)
-    runner._windowed_loader(8192)(LoadSpec(Path("/m.gguf")))
-    assert [spec.kv_tokens for spec in loaded] == [8192, None]
+    runner_module.windowed(loader, 8192)(LoadSpec(Path("/m.gguf")))
+    assert [spec.kv_tokens for spec in loaded] == [8192, DEFAULT_CONTEXT_LENGTH, None]
 
 
 # Requirement: The character and the direction start the conversation
