@@ -38,6 +38,9 @@ silent cut. It also found three limits, each decided by the owner (2026-11-14):
   (`uv tool install --managed-python ...`). The install guide says the same.
   The real model loads after the acknowledgement, and a failure to load it ends the run with reason
   `configuration` (owner, 2026-11-14; design D4).
+- **The cache is warmed before the first run** (owner, 2026-11-14). `troupe init --audition` runs a runner's
+  warm-up once. For mistralrs, that loads the check model on macOS, so a first run doesn't wait for the Metal compile.
+  The run-time check stays as the backstop. A compile cut off keeps what it did (measured), so a retry finishes it.
 - **The engine never writes to the protocol channel.** Before importing `mistralrs`, the runner keeps standard output
   for itself and points file descriptor 1 at standard error, so the engine's log lines reach troupe as runner stderr.
   A test runs the real engine and checks that standard output holds only protocol messages.
@@ -71,6 +74,7 @@ file; downloading models.
 - `runtimes`: a built-in in-process runtime, `mistralrs`, with no endpoint. A runtime's endpoint becomes optional for
   it, and runtime fit adds whether a runner needs an endpoint or takes none.
 - `runner-protocol`: `run/start`'s `runtime` carries `endpoint` only when the runtime has one.
+- `cli`: `troupe init --audition` warms its runner's engine, when the runner has a warm-up.
 
 ## Impact
 

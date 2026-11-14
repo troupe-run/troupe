@@ -101,6 +101,18 @@ alone, so troupe refuses a pair your runner would refuse before anything is reco
 - `built_in`: the built-in runtime made for your runner, if troupe has one. Your runner then fits no other runner's
   built-in, whatever its shape, since built-ins of the same shape serve different engines.
 
+**Warming the engine before the first run.** If your engine does slow one-off work the first time on a machine,
+such as compiling GPU kernels into a cache, name `warm_up` arguments in your table entry. `troupe init --audition`
+then runs your command with them once, after it records the audition, with a run's environment, within
+`RUNNER_WARM_UP_TIMEOUT_SECONDS`. Your runner does the work and writes one JSON line:
+- `{"warmedUp": true, "seconds": ...}`;
+- `{"warmedUp": false}` when there's nothing to warm here;
+- `{"error": {...}}`, with the error your run would be refused with.
+
+troupe reports it as `runner.warmed-up`, `runner.warm-up-failed` (with your problem and fix) or
+`runner.warm-up-cut-off`. Keep a check at the start of each run as the backstop. The mistralrs runner is the
+example: `--warm-up` loads its check model, which compiles mistral.rs's Metal kernels into macOS's cache.
+
 Your runner should refuse the same runtimes itself, since a host other than troupe may start it.
 `packages/troupe/tests/test_runtime_fit.py` holds the table to each runner that needs a runtime: add yours to its
 `ORACLES`.
@@ -713,6 +725,8 @@ Every limit has its default in `troupe.core.defaults`, and each can be overridde
 | `RUN_TRANSCRIPT_MAX_BYTES` | 1073741824 | One run's transcript (1 GiB); past it, the run is cancelled and ends `failed` |
 | `RUNNER_STDERR_MAX_BYTES` | 1048576 | The runner's standard error kept (1 MiB): its first and last halves, with a marker between |
 | `RUNNER_FAIL_FAST_ON_AUTH_RETRY` | true | Whether a `retry` with reason `authentication` cancels the run at once |
+| `RUNNER_WARM_UP_TIMEOUT_SECONDS` | 120 | Warming a runner's engine outside any run, as `troupe init --audition` does; past it, the warm-up is stopped |
+| `RUNNER_WARM_UP_OUTPUT_MAX_BYTES` | 1048576 | What a runner's warm-up may write to its standard output and error together (1 MiB) |
 
 ## Runners with client libraries
 

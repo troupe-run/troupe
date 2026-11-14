@@ -25,6 +25,12 @@ CODES: dict[str, str] = {
     "run.interrupted": "A run has no recorded end, and the perform that ran it has stopped.",
     "run.unfinished-elsewhere": "A run started in another clone has no recorded end here.",
     "run.scratch-not-removed": "A run's scratch directory couldn't be removed when it ended.",
+    # Warming a runner's engine (in-process-runner design D4). contributing/runners.md lists them.
+    "runner.warmed-up": "A runner's engine was prepared outside any run, so its first run starts "
+    "quickly.",
+    "runner.warm-up-failed": "A runner couldn't prepare its engine outside any run, and says why.",
+    "runner.warm-up-cut-off": "Preparing a runner's engine took longer than its limit, and was "
+    "stopped; its first run finishes it.",
     # Config (config-model design D8). contributing/config.md lists them.
     "config.file-rewritten": "A config file troupe wrote was missing or older, so it was written "
     "again from config.",

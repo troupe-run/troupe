@@ -61,9 +61,16 @@
 - [x] 10.1 Write the plugin README, with every setting in `defaults.py` documented and a test that each has a row. Verify: the README test passes.
 - [x] 10.2 Update `docs/opening-night/install.md` (the extra, and on macOS `--managed-python` with why), `contributing/runners.md`, `plugins/README.md` and the changelog. Verify: the docs checks and `test_user_docs_pages.py` pass.
 
-## 11. The whole check
+## 11. Warming the engine before the first run (owner, 2026-11-14)
 
-- [ ] 11.1 Run `uv run scripts/check.py` in full, with the log kept in a scratch file. Verify: every gate passes.
+- [x] 11.1 Measure on fresh macOS CI runners whether a check-model load cut off mid-compile leaves a usable cache (design D4). Verify: the table in D4, from runs killed at 3, 8 and 12 s.
+- [x] 11.2 Add the runner's `--warm-up` mode, writing one JSON line, with the same refusal as the run-time check. Verify: tests for the three scenarios of "The runner warms its engine when troupe asks, outside any run".
+- [x] 11.3 Add `warm_up` to runner entries, `RUNNER_WARM_UP_TIMEOUT_SECONDS`, `troupe.core.runners.warm_up` and its three notices, and run it from `troupe init --audition` (not a rehearsal). Verify: tests for each notice and for "Init with an audition warms its runner's engine", and the notice catalogue tests.
+- [x] 11.4 Document the warm-up: the runner guide (`warm_up` and the notices), the plugin README and the install page. Verify: the docs checks pass.
+
+## 12. The whole check
+
+- [ ] 12.1 Run `uv run scripts/check.py` in full, with the log kept in a scratch file. Verify: every gate passes.
 
 ## Workflow follow-up
 

@@ -57,7 +57,8 @@ An actor on a runner you haven't installed is refused, and the message names the
 On a Mac, install the `mistralrs` extra on a uv-managed Python: add `--managed-python` after `uv tool install`.
 mistral.rs compiles its GPU code when it loads a model, and that works under uv's own Pythons, but not under
 python.org's Python 3.12 or Homebrew's Pythons on macOS 27. The runner refuses a Python it can't run under, and says
-so.
+so. The first time on a Mac, that compile takes 15 to 20 seconds. `troupe init --audition --runner mistralrs` does it
+for you before the first run, and says if this Python can't run the model.
 
 ## Install another version
 

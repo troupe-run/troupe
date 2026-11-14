@@ -499,6 +499,98 @@
       "required": [
         "details"
       ]
+    },
+    {
+      "description": "A runner's engine was prepared outside any run, by troupe init --audition, so its first run starts quickly.",
+      "properties": {
+        "code": {
+          "const": "runner.warmed-up"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "runner",
+            "seconds"
+          ],
+          "properties": {
+            "runner": {
+              "description": "The runner's name.",
+              "type": "string",
+              "minLength": 1
+            },
+            "seconds": {
+              "description": "How long it took, or the limit it reached, in seconds.",
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "description": "A runner couldn't prepare its engine outside any run. The problem and fix are the runner's own, when it gave them, such as a macOS Python mistral.rs can't compile its Metal kernels under.",
+      "properties": {
+        "code": {
+          "const": "runner.warm-up-failed"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "runner"
+          ],
+          "properties": {
+            "runner": {
+              "description": "The runner's name.",
+              "type": "string",
+              "minLength": 1
+            },
+            "code": {
+              "description": "The error code the runner gave, such as mistralrs.unsupported-python. Absent: it gave none.",
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "description": "Preparing a runner's engine passed RUNNER_WARM_UP_TIMEOUT_SECONDS and was stopped. What it did is kept, and the first run's own check finishes it.",
+      "properties": {
+        "code": {
+          "const": "runner.warm-up-cut-off"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "runner",
+            "seconds"
+          ],
+          "properties": {
+            "runner": {
+              "description": "The runner's name.",
+              "type": "string",
+              "minLength": 1
+            },
+            "seconds": {
+              "description": "How long it took, or the limit it reached, in seconds.",
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
     }
   ],
   "$defs": {

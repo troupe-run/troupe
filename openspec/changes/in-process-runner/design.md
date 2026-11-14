@@ -111,8 +111,40 @@ machine, and they're cached on disk after that. Measured:
 
 `initialize` and the other checks take well under a second, so a first run's acknowledgement fits troupe's 30 s
 start limit, with at least 10 s to spare on every machine measured. A much slower or heavily loaded Mac's first run
-could still pass 30 s, which troupe reports as `runner.start-timeout`. Whether a run cut off mid-compile leaves the
-cache filled for the next one isn't measured.
+could still pass 30 s, which troupe reports as `runner.start-timeout`.
+
+**A compile cut off keeps what it did.** On fresh GitHub macOS runners, a load of the check model was killed after
+3, 8 and 12 s, then loaded twice more:
+
+| Cut off after | Next load | The one after |
+|---|---|---|
+| 3 s | 16.4 s | 0.70 s |
+| 8 s | 7.6 s | 0.63 s |
+| 12 s | 2.9 s | 0.60 s |
+| not cut off (about 20 s) | 0.65 s | 0.60 s |
+
+Every next load succeeded. The cache is macOS's own, per user, keyed by the GPU compiler's version, and it keeps
+each compiled library as it's written, so a cut-off compile is never left broken. The next load picks up where the
+last stopped, and retrying finishes it.
+
+**The cache is warmed before the first run** (owner, 2026-11-14). A runner's entry in `RUNNERS` can name `warm_up`
+arguments. `troupe init --audition` runs the runner once with them, after it records the audition, within
+`RUNNER_WARM_UP_TIMEOUT_SECONDS` (120), and with the environment a run would have. For mistralrs that's
+`python -m troupe_runner_mistralrs --warm-up`, which loads the check model on macOS and does nothing elsewhere, and
+writes one JSON line. How it went is a notice:
+- `runner.warmed-up`, with how long it took;
+- `runner.warm-up-failed`, with the runner's own problem and fix (an unsupported Python is caught here, at setup);
+- `runner.warm-up-cut-off`, saying the first run finishes it.
+
+The run-time check stays as the backstop, for an actor set up without an audition, and for a warm-up that was cut
+off.
+
+*Alternatives the owner named:*
+- **Warming when the extra is installed** was rejected: a wheel has no install hook.
+- **Warming when the runtime or an actor is configured** was rejected: it would put a 20 s side effect on a
+  `troupe config set`.
+- **A `troupe` command** was deferred: a new command surface for one runner's cache. Adding it later is additive,
+  since the warm-up is already a function in core.
 
 After acknowledging, the worker sends a `log` that it is loading the model and loads it within `LOAD_TIMEOUT_SECONDS`
 (600). A load that fails ends the run with `error`, reason `configuration`, holding the engine's message. So does a

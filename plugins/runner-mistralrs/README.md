@@ -48,6 +48,11 @@ fails:
 - on macOS, that mistral.rs can compile its Metal kernels under this Python. It checks this by loading a 1.2 MB model
   the package carries ([provenance](src/troupe_runner_mistralrs/check_model/PROVENANCE.md), MIT).
 
+On a Mac, the first load of mistral.rs ever compiles its Metal kernels, which takes 15–20 s, and macOS caches them
+for every later load. `troupe init --audition --runner mistralrs` does that once, ahead of the first run, by running
+the runner with `--warm-up`, and says how it went (`runner.warmed-up`, or why it couldn't). A load cut off part-way
+keeps what it compiled, so the next one finishes it.
+
 The run's model loads after the acknowledgement, with a `log` event saying so. A model the engine won't load ends the
 run with an error result, reason `configuration`. So does a load that passes `LOAD_TIMEOUT_SECONDS`.
 
