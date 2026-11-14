@@ -1,8 +1,0 @@
-{
- "source": "recorded",
- "lmStudio": "0.4.28+2",
- "lmstudio": "1.5.0",
- "model": "google/gemma-4-e4b",
- "date": "2026-11-11",
- "tool": "tools/capture_lm_studio.py"
-}

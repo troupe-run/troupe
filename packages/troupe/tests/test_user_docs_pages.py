@@ -552,8 +552,8 @@ def test_the_runtimes_pages_commands_run_as_written_and_show_what_it_says(
     in_process = "troupe config get --resolved runtimes.mistralrs"
     shown_in_process = [body for lang, _, body in blocks_in(text) if lang == "text"][1]
     assert outputs[in_process] == shown_in_process  # the page's export set the model
-    lm_studio_openai = project.path / ".troupe" / "runtimes" / "lm-studio-openai.yaml"
-    assert "endpoint: http://127.0.0.1:1234/v1" in lm_studio_openai.read_text(encoding="utf-8")
+    local_openai = project.path / ".troupe" / "runtimes" / "local-openai.yaml"
+    assert "endpoint: http://127.0.0.1:8080/v1" in local_openai.read_text(encoding="utf-8")
 
 
 def test_the_runtimes_page_gives_the_built_in_runtimes_as_the_code_does() -> None:

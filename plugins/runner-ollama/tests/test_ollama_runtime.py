@@ -113,7 +113,7 @@ def test_an_endpoint_the_runner_cant_use_is_refused_naming_where_to_change_it(
     ("name", "variable"),
     [
         ("ollama", "TROUPE_RUNTIME_OLLAMA_ENDPOINT"),
-        ("lm-studio", "TROUPE_RUNTIME_LM_STUDIO_ENDPOINT"),
+        ("gpu-box", "TROUPE_RUNTIME_GPU_BOX_ENDPOINT"),
         ("a-b-c", "TROUPE_RUNTIME_A_B_C_ENDPOINT"),
     ],
 )
