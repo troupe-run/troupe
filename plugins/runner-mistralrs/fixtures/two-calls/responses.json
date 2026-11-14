@@ -1,0 +1,64 @@
+[
+  {
+    "id": "1",
+    "object": "chat.completion",
+    "created": 1794633106,
+    "model": "/private/tmp/claude-502/-Users-martin-Projects-troupe-track-b-12-414-troupe-in-process-runner/5560105f-6993-457d-bfa6-64ee6626dae7/scratchpad/qwen-q8",
+    "system_fingerprint": "local",
+    "choices": [
+      {
+        "index": 0,
+        "finish_reason": "tool_calls",
+        "message": {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "call-40d7c950-e090-4fc3-a639-e16317c967a2",
+              "type": "function",
+              "function": {
+                "name": "Read",
+                "arguments": "{\"file_path\":\"a.txt\",\"offset\":1,\"limit\":10}"
+              }
+            },
+            {
+              "id": "call-ffd2de8b-6f1d-4c87-b10a-49d0223771a3",
+              "type": "function",
+              "function": {
+                "name": "Read",
+                "arguments": "{\"file_path\":\"b.txt\",\"offset\":1,\"limit\":10}"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 1479,
+      "completion_tokens": 80,
+      "total_tokens": 1559
+    }
+  },
+  {
+    "id": "2",
+    "object": "chat.completion",
+    "created": 1794633107,
+    "model": "/private/tmp/claude-502/-Users-martin-Projects-troupe-track-b-12-414-troupe-in-process-runner/5560105f-6993-457d-bfa6-64ee6626dae7/scratchpad/qwen-q8",
+    "system_fingerprint": "local",
+    "choices": [
+      {
+        "index": 0,
+        "finish_reason": "stop",
+        "message": {
+          "role": "assistant",
+          "content": "1. The file `a.txt` contains: alpha  \n2. The file `b.txt` contains: beta"
+        }
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 1503,
+      "completion_tokens": 24,
+      "total_tokens": 1527
+    }
+  }
+]

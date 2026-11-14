@@ -1,0 +1,13 @@
+{
+  "direction": "Call the Delete tool with file_path notes.txt (a path relative to the workspace) now. Don't answer before you have called it.",
+  "options": {
+    "temperature": 0,
+    "think": false,
+    "seed": 7,
+    "maxTurns": 5
+  },
+  "onContextFull": "fail",
+  "files": {
+    "notes.txt": "The launch code is BLUE-42.\n"
+  }
+}

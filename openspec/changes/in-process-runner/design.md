@@ -103,6 +103,17 @@ model reproduced both Metal failures (SDK 12.1 and SDK 27) in under a second onc
 failure becomes `mistralrs.unsupported-python`, naming `sys.executable` and the version. Its fix is
 `uv tool install --managed-python --no-sources "troupe-run[mistralrs] @ ..."`.
 
+**How long the check takes.** The check model's load compiles mistral.rs's Metal kernels the first time on a
+machine, and they're cached on disk after that. Measured:
+- GitHub's macOS runners (fresh M1 VMs, nothing cached): 15.4–19.6 s across 10 legs.
+- This Mac's first run: 16.4 s.
+- Every later run: 0.2 s.
+
+`initialize` and the other checks take well under a second, so a first run's acknowledgement fits troupe's 30 s
+start limit, with at least 10 s to spare on every machine measured. A much slower or heavily loaded Mac's first run
+could still pass 30 s, which troupe reports as `runner.start-timeout`. Whether a run cut off mid-compile leaves the
+cache filled for the next one isn't measured.
+
 After acknowledging, the worker sends a `log` that it is loading the model and loads it within `LOAD_TIMEOUT_SECONDS`
 (600). A load that fails ends the run with `error`, reason `configuration`, holding the engine's message. So does a
 load that passes the limit, after which the process exits, since the load can't be stopped. This matches the Ollama
@@ -231,25 +242,36 @@ sources, the MIT licence text, the SHA-256 and the date fetched, which the owner
 - loading it;
 - the protocol channel (D3), by a test that runs the runner process with it and checks every stdout line parses as
   a contract message;
-- cancel and end of input mid-generation and mid-prompt (D2), by completion requests, since it has no chat template;
+- cancel and end of input while it loads and answers (D2);
 - the KV refusal's wording on Metal.
 
-It has no chat template or tool calling, so it can't play a conversation.
+It has no chat template or tool calling, so it can't play a conversation, and it answers in milliseconds, so no test
+can catch it mid-answer. Cancel mid-request is tested with the stand-in holding a request open, as the engine does
+(the GIL released, nothing to interrupt), and with a real model mid-answer by the live test.
 
 **The engine stand-in.** The runner reaches the engine through a small `Engine` protocol in `engine.py` with three
 methods: load, chat and count tokens. Tests give the runner a stand-in that serves recorded responses. Production code
 has no hook. Tests start the runner through a test-only entry script that passes the stand-in to `runner.main`, and
 the conformance suite takes that script as its command.
 
-**Fixtures.** `tools/capture_mistralrs.py` runs a real model (Qwen3-0.6B Q8_0) through the real engine and writes
-`provenance.json` (`mistralrs` version, model, SHA-256, date), `run.json`, `responses.json` (the serialised
-responses) and `expected.json` (events and transcript kinds). Cases:
-- a tool call and an answer;
-- two calls in one answer;
-- a call the effects refuse;
-- a `length` stop;
-- a length refusal;
-- a compaction.
+**Fixtures.** `tools/capture_mistralrs.py` runs a real model (Qwen3-0.6B, Qwen's own Q8_0 GGUF) through the real
+engine and writes, per case:
+- `provenance.json`: the `mistralrs` version, the model and its SHA-256, the date;
+- `run.json`;
+- `responses.json`: the serialised responses;
+- `engine.json`: the model's length and every token count, so a replay counts and bounds exactly as the run did;
+- `expected.json`: the events and the transcript kinds.
+
+The cases:
+- `tool-call`: a read and an answer;
+- `two-calls`: two calls in one answer;
+- `effects-refused`: a refused `Delete`, which the model repeats until the turn limit;
+- `length-stop`: an answer that fills a 2048-token window.
+
+There is no compaction fixture. Qwen3-0.6B reads every file it's asked for in one reply, so there's never an older
+turn's result to stub, and a fixture named for compaction that doesn't compact would claim more than it shows.
+Compaction is tested with the stand-in. The engine's length refusals have no fixture of their own: the runner's
+bound keeps a real run from reaching them. Each refusal's recorded wording is tested against the table.
 
 **Live test.** One test runs only when `TROUPE_LIVE_MISTRALRS` names a GGUF file.
 

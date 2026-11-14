@@ -1,0 +1,162 @@
+[
+  {
+    "id": "1",
+    "object": "chat.completion",
+    "created": 1794633109,
+    "model": "/private/tmp/claude-502/-Users-martin-Projects-troupe-track-b-12-414-troupe-in-process-runner/5560105f-6993-457d-bfa6-64ee6626dae7/scratchpad/qwen-q8",
+    "system_fingerprint": "local",
+    "choices": [
+      {
+        "index": 0,
+        "finish_reason": "tool_calls",
+        "message": {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "call-571b148c-1dce-4887-b9cb-86a897177f46",
+              "type": "function",
+              "function": {
+                "name": "Delete",
+                "arguments": "{\"file_path\":\"notes.txt\"}"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 1464,
+      "completion_tokens": 24,
+      "total_tokens": 1488
+    }
+  },
+  {
+    "id": "2",
+    "object": "chat.completion",
+    "created": 1794633109,
+    "model": "/private/tmp/claude-502/-Users-martin-Projects-troupe-track-b-12-414-troupe-in-process-runner/5560105f-6993-457d-bfa6-64ee6626dae7/scratchpad/qwen-q8",
+    "system_fingerprint": "local",
+    "choices": [
+      {
+        "index": 0,
+        "finish_reason": "tool_calls",
+        "message": {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "call-0be5fe71-9c08-4903-9a4c-0a89bd728566",
+              "type": "function",
+              "function": {
+                "name": "Delete",
+                "arguments": "{\"file_path\":\"notes.txt\"}"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 1502,
+      "completion_tokens": 23,
+      "total_tokens": 1525
+    }
+  },
+  {
+    "id": "3",
+    "object": "chat.completion",
+    "created": 1794633110,
+    "model": "/private/tmp/claude-502/-Users-martin-Projects-troupe-track-b-12-414-troupe-in-process-runner/5560105f-6993-457d-bfa6-64ee6626dae7/scratchpad/qwen-q8",
+    "system_fingerprint": "local",
+    "choices": [
+      {
+        "index": 0,
+        "finish_reason": "tool_calls",
+        "message": {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "call-83f64674-b116-44fd-9a8c-b77bbbc9251f",
+              "type": "function",
+              "function": {
+                "name": "Delete",
+                "arguments": "{\"file_path\":\"notes.txt\"}"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 1540,
+      "completion_tokens": 23,
+      "total_tokens": 1563
+    }
+  },
+  {
+    "id": "4",
+    "object": "chat.completion",
+    "created": 1794633110,
+    "model": "/private/tmp/claude-502/-Users-martin-Projects-troupe-track-b-12-414-troupe-in-process-runner/5560105f-6993-457d-bfa6-64ee6626dae7/scratchpad/qwen-q8",
+    "system_fingerprint": "local",
+    "choices": [
+      {
+        "index": 0,
+        "finish_reason": "tool_calls",
+        "message": {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "call-4342eb89-fad4-4d69-85e4-3444bba21ebf",
+              "type": "function",
+              "function": {
+                "name": "Delete",
+                "arguments": "{\"file_path\":\"notes.txt\"}"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 1578,
+      "completion_tokens": 23,
+      "total_tokens": 1601
+    }
+  },
+  {
+    "id": "5",
+    "object": "chat.completion",
+    "created": 1794633110,
+    "model": "/private/tmp/claude-502/-Users-martin-Projects-troupe-track-b-12-414-troupe-in-process-runner/5560105f-6993-457d-bfa6-64ee6626dae7/scratchpad/qwen-q8",
+    "system_fingerprint": "local",
+    "choices": [
+      {
+        "index": 0,
+        "finish_reason": "tool_calls",
+        "message": {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "call-c3e7fe3c-5131-4de3-93c3-8264502cc794",
+              "type": "function",
+              "function": {
+                "name": "Delete",
+                "arguments": "{\"file_path\":\"notes.txt\"}"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 1616,
+      "completion_tokens": 22,
+      "total_tokens": 1638
+    }
+  }
+]

@@ -1,0 +1,12 @@
+{
+  "direction": "Write a story of at least two thousand words about a lighthouse keeper.",
+  "options": {
+    "temperature": 0,
+    "think": false,
+    "seed": 7,
+    "maxTurns": 5,
+    "contextLength": 2048
+  },
+  "onContextFull": "fail",
+  "files": {}
+}
