@@ -553,23 +553,23 @@ SHALL name the actor's path, the runner and its extra. Removing the actor whole,
 SHALL NOT be refused for this.
 
 #### Scenario: Defining an actor on an uninstalled runner
-- **WHEN** a person runs `troupe config set actors.lead.runner=lm-studio` and the `lm-studio` runner, whose extra is
-  `lm-studio`, isn't installed
-- **THEN** it is refused with `runner.not-installed`, naming `actors.lead.runner`, `lm-studio` and
-  `troupe-run[lm-studio]`
+- **WHEN** a person runs `troupe config set actors.lead.runner=example` and the `example` runner, whose extra is
+  `example`, isn't installed
+- **THEN** it is refused with `runner.not-installed`, naming `actors.lead.runner`, `example` and
+  `troupe-run[example]`
 - **AND** nothing is recorded
 
 #### Scenario: Changing an existing actor's character
-- **WHEN** `lead` is on the `lm-studio` runner, which isn't installed, and a person sets `actors.lead.character`
+- **WHEN** `lead` is on the `example` runner, which isn't installed, and a person sets `actors.lead.character`
 - **THEN** it is refused with `runner.not-installed`, and nothing is recorded
 
 #### Scenario: Removing the actor
-- **WHEN** `lead` is on the `lm-studio` runner, which isn't installed, and a person runs `troupe config unset
+- **WHEN** `lead` is on the `example` runner, which isn't installed, and a person runs `troupe config unset
   actors.lead`
 - **THEN** the change is recorded
 
 #### Scenario: Moving the actor to an installed runner
-- **WHEN** `lead` is on the `lm-studio` runner, which isn't installed, and a person sets `actors.lead.runner=scripted`
+- **WHEN** `lead` is on the `example` runner, which isn't installed, and a person sets `actors.lead.runner=scripted`
   and unsets `actors.lead.options`
 - **THEN** the change is checked against the scripted runner's options schema, and recorded when it passes
 
@@ -579,17 +579,17 @@ installed SHALL be checked against the actor schema and the effects rules, and i
 rather than refused. Its options are checked when it is next changed or performed where its runner is installed.
 
 #### Scenario: Changing another actor
-- **WHEN** `lead` is on the `lm-studio` runner, which isn't installed, and a person sets `actors.tester.runner=scripted`
+- **WHEN** `lead` is on the `example` runner, which isn't installed, and a person sets `actors.tester.runner=scripted`
 - **THEN** the change is recorded
 
 #### Scenario: A merge on a machine without the runner
-- **WHEN** two branches' config streams are merged where `lead`'s `lm-studio` runner isn't installed, and one branch
+- **WHEN** two branches' config streams are merged where `lead`'s `example` runner isn't installed, and one branch
   changed `lead`'s options
 - **THEN** the merge isn't in conflict for `lead`'s options, and performing `lead` there is refused with
   `runner.not-installed`
 
 #### Scenario: The actor's effects are still checked
-- **WHEN** `lead` is on the `lm-studio` runner, which isn't installed, one branch expects `docs/a.md` while `lead` may
+- **WHEN** `lead` is on the `example` runner, which isn't installed, one branch expects `docs/a.md` while `lead` may
   write `docs/**`, and another narrows its writes to `out/**`, and they are merged
 - **THEN** the merge is in conflict, naming `lead` and that an `expect` item, by its position, isn't covered by any
   effect
@@ -658,23 +658,6 @@ runtime config doesn't define.
 #### Scenario: A name is still named
 - **WHEN** a person sets `actors.tester.runtime=nowhere` and config defines no runtime `nowhere`
 - **THEN** it is refused, naming `nowhere` and the command that defines it
-
-### Requirement: The LM Studio audition can edit files with a small local model
-The LM Studio example actor SHALL have `runner: lm-studio`, `runtime: lm-studio`, a `model` naming a small
-tool-capable model, named in one place in core, options with `maxTurns` of 10 and `maxTotalTokens` of 100000,
-`effects` with `write: ["**"]`, an empty `expect`, and the same short character as the Claude Code audition. It SHALL
-leave `workspace` unset.
-
-#### Scenario: The LM Studio actor's file
-- **WHEN** a person runs `troupe init --audition --runner lm-studio`
-- **THEN** config's `actors.lead` holds runner `lm-studio`, runtime `lm-studio`, the model, options with
-  `maxTurns` 10 and `maxTotalTokens` 100000, `effects.write: ["**"]` and `expect: []`, and no `workspace`
-- **AND** `.troupe/actors/lead.md` holds the character
-
-#### Scenario: What init prints for it
-- **WHEN** a person runs `troupe init --audition --runner lm-studio`
-- **THEN** the perform step's note names the `troupe-run[lm-studio]` extra, says LM Studio's server must be
-  running with "Require Authentication" off, and names `lms get` with the actor's model
 
 ### Requirement: An actor says what its runs do when the context fills
 An actor MAY have `onContextFull`: `fail` or `compact`. `fail`, the default when it's absent, ends a run whose

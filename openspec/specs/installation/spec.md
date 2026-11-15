@@ -205,9 +205,9 @@ differed.
   on a package index
 
 #### Scenario: A tag with an extra's runner that isn't pinned
-- **WHEN** the install check runs with a `troupe-run-v<version>` tag whose `lm-studio` extra names
-  `troupe-runner-lm-studio` bare
-- **THEN** it fails before installing, naming the tag, the extra and `troupe-runner-lm-studio`
+- **WHEN** the install check runs with a `troupe-run-v<version>` tag whose `example` extra names
+  `troupe-runner-example` bare
+- **THEN** it fails before installing, naming the tag, the extra and `troupe-runner-example`
 
 #### Scenario: A tag from before the all extra
 - **WHEN** the install check runs from GitHub with `troupe-run-v0.1.0` as the ref, whose bundle has no `all` extra
@@ -252,18 +252,18 @@ dependencies. A plugin whose only dependency is the SDK SHALL NOT have an extra.
 naming the plugin, the file and where it belongs.
 
 #### Scenario: A library-backed runner in the base dependencies
-- **WHEN** `plugins/runner-lm-studio/pyproject.toml` depends on `lmstudio` and `troupe-runner-lm-studio` is in
-  `troupe-run`'s base dependencies
-- **THEN** `scripts/check.py` fails, naming `troupe-runner-lm-studio`, `packages/troupe-run/pyproject.toml` and the
-  extra `lm-studio`
+- **WHEN** `plugins/runner-example/pyproject.toml` depends on a client library, `example-sdk`, and
+  `troupe-runner-example` is in `troupe-run`'s base dependencies
+- **THEN** `scripts/check.py` fails, naming `troupe-runner-example`, `packages/troupe-run/pyproject.toml` and the
+  extra `example`
 
 #### Scenario: A library-backed runner in its extra
-- **WHEN** the same plugin is only in `troupe-run`'s `lm-studio` extra, and troupe's runner table names its runner
-  `lm-studio`
+- **WHEN** the same plugin is only in `troupe-run`'s `example` extra, and troupe's runner table names its runner
+  `example`
 - **THEN** the bundle check passes
 
 #### Scenario: An extra named after the library
-- **WHEN** the plugin is in an extra named `lmstudio` while troupe's runner table names its runner `lm-studio`
+- **WHEN** the plugin is in an extra named `example-sdk` while troupe's runner table names its runner `example`
 - **THEN** `scripts/check.py` fails, naming the extra, the runner's name and the file
 
 #### Scenario: An SDK-only runner given an extra
@@ -280,11 +280,11 @@ extra, the difference and the file.
 - **THEN** `troupe-run`'s `all` extra is empty, and the bundle check passes
 
 #### Scenario: A runner left out of all
-- **WHEN** `troupe-run` has an `lm-studio` extra and its `all` extra doesn't name `troupe-runner-lm-studio`
-- **THEN** `scripts/check.py` fails, naming `all`, `troupe-runner-lm-studio` and `packages/troupe-run/pyproject.toml`
+- **WHEN** `troupe-run` has an `example` extra and its `all` extra doesn't name `troupe-runner-example`
+- **THEN** `scripts/check.py` fails, naming `all`, `troupe-runner-example` and `packages/troupe-run/pyproject.toml`
 
 #### Scenario: All pins another version
-- **WHEN** the `lm-studio` extra pins `troupe-runner-lm-studio-v0.1.1` and `all` pins `troupe-runner-lm-studio-v0.1.0`
+- **WHEN** the `example` extra pins `troupe-runner-example-v0.1.1` and `all` pins `troupe-runner-example-v0.1.0`
 - **THEN** `scripts/check.py` fails, naming both references
 
 #### Scenario: An extra that isn't a runner's
@@ -297,8 +297,8 @@ After installing `troupe-run` without extras, the install check SHALL rehearse a
 `troupe-run[<extra>]`. Any other outcome SHALL fail the check, naming the runner and what happened.
 
 #### Scenario: The refusal names the extra
-- **WHEN** `troupe-run` has an `lm-studio` extra and the base install rehearses an audition on `lm-studio`
-- **THEN** it is refused, its fix naming `troupe-run[lm-studio]`, and the install check passes
+- **WHEN** `troupe-run` has an `example` extra and the base install rehearses an audition on `example`
+- **THEN** it is refused, its fix naming `troupe-run[example]`, and the install check passes
 
 #### Scenario: No runner has an extra yet
 - **WHEN** `troupe-run` has no runner extras
@@ -310,8 +310,8 @@ list each extra with its runner, exactly the extras `troupe-run` has. A list tha
 naming the page and each extra missing or extra.
 
 #### Scenario: A new extra not on the page
-- **WHEN** `troupe-run` has an `lm-studio` extra and the install page's list doesn't name it
-- **THEN** the docs check fails, naming `docs/opening-night/install.md` and `lm-studio`
+- **WHEN** `troupe-run` has an `example` extra and the install page's list doesn't name it
+- **THEN** the docs check fails, naming `docs/opening-night/install.md` and `example`
 
 #### Scenario: No runner has an extra yet
 - **WHEN** `troupe-run` has only the `all` extra

@@ -176,8 +176,8 @@ phrase the steps for its own users.
 - **THEN** its result lists no perform step
 
 #### Scenario: A runner in an extra
-- **WHEN** an `init` request with an audition on the `lm-studio` runner, installed through its extra, succeeds
-- **THEN** its perform step's `extra` is `lm-studio`
+- **WHEN** an `init` request with an audition on the `example` runner, installed through its extra `example`, succeeds
+- **THEN** its perform step's `extra` is `example`
 
 #### Scenario: A runner in the base install
 - **WHEN** an `init` request with an audition on the `scripted` runner succeeds

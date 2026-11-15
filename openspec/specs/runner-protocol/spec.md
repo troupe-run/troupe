@@ -669,7 +669,7 @@ requirements that follow name what the runner keeps. The plugin SDK's own depend
 plugin-sdk).
 
 #### Scenario: A runner with a library
-- **WHEN** a runner plugin depends on `troupe-plugin-sdk` and `lmstudio`
+- **WHEN** a runner plugin depends on `troupe-plugin-sdk` and its engine's client library
 - **THEN** it is installed through its own extra of `troupe-run` (spec: installation), and every requirement that
   follows applies to it
 
@@ -730,7 +730,7 @@ package with no declared licence, or one on neither tier, SHALL fail the reposit
 runner, the licence found and the list's file.
 
 #### Scenario: A permissive licence
-- **WHEN** the lm-studio runner depends on `lmstudio`, declared MIT, and `msgspec`, declared BSD-3-Clause
+- **WHEN** a runner depends on a library declared MIT, which depends on one declared BSD-3-Clause
 - **THEN** the licence check passes
 
 #### Scenario: A licence not on the list
