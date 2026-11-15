@@ -10,9 +10,9 @@ Every change, however small, follows one path. The full guide is the org's
 [CONTRIBUTING.md](https://github.com/troupe-run/.github/blob/main/CONTRIBUTING.md).
 
 1. **An issue** (Feature, Bug or Decision) says what and why.
-2. **An OpenSpec change** says how: `/opsx:propose <name>`, on a branch named exactly `<name>`. Its proposal cites
-   the issue. Design decisions are surfaced in the proposal or design before code depends on them.
-3. **`/opsx:apply`** builds it. A task is ticked only when its verification has run and passed.
+2. **An OpenSpec change** says how: `/openspec-propose <name>`, on a branch named exactly `<name>`. Its proposal
+   cites the issue. Design decisions are surfaced in the proposal or design before code depends on them.
+3. **`/openspec-apply-change`** builds it. A task is ticked only when its verification has run and passed.
 4. **A draft pull request** closes the issue (`Closes #n`): `gh pr create --draft`. Claude reviews it; CI's legs
    wait until it's marked ready.
 5. **Claude's review is acted on**, after the review of the last push: fix or answer each finding, resolve only nits,
@@ -24,8 +24,8 @@ Every change, however small, follows one path. The full guide is the org's
    leaves no must-fix or decision open, **mark it ready** (`gh pr ready <n>`): CI runs on Linux, macOS and Windows,
    and every job must pass. Marking ready starts no review. A merge needs every
    conversation resolved ([development-workflow.md, "Claude's review"](https://github.com/troupe-run/infrastructure/blob/main/docs/development-workflow.md#claudes-review)).
-6. **`/opsx:archive`** runs on the branch before merging, so the PR lands code, tests and specs together. **The
-   owner merges** by rebase, through the merge queue, which lands the pull request once `check`,
+6. **`/openspec-archive-change`** runs on the branch before merging, so the PR lands code, tests and specs together.
+   **The owner merges** by rebase, through the merge queue, which lands the pull request once `check`,
    `guard (workflow rules)` and `DCO` pass on the commit it tested; `claude review completed`, also required, has to
    have passed on the pull request's head before it's queued. Once every check passes and every conversation is
    resolved, ask the owner to merge it. The guard refuses `gh pr merge` from an agent (`owner-only`), with or
