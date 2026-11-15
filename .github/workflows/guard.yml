@@ -38,7 +38,7 @@ jobs:
     env:
       # The OpenSpec CLI openspec-strict runs: one exact version, moved by pull request. Before a
       # move is delivered, run it over every governed repository's main (docs/development-workflow.md).
-      OPENSPEC_VERSION: 1.14.3
+      OPENSPEC_VERSION: 2.0.0
       # The Node the OpenSpec CLI runs on where the repository has no .nvmrc of its own. One exact
       # version, moved by pull request. A repository's .nvmrc wins, so its single source holds, and
       # no step names a Node version as an input (troupe-run/website#4 refuses one; #155).
