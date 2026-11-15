@@ -186,7 +186,7 @@ every code raised in any worker process, and SHALL run once per run, never in ea
 ### Requirement: Each package outside core has a scope
 Each workspace package but core SHALL have a scope: `artifacts_local`, `identity_local`, `stage_local`, `store_text`,
 `vcs_files`, `vcs_git`, `plugin_sdk` and `run` for `packages/troupe-<name>/`, and `runner_anthropic`,
-`runner_claude_code`, `runner_lm_studio`, `runner_ollama`, `runner_openai` and `runner_scripted` for
+`runner_claude_code`, `runner_mistralrs`, `runner_ollama`, `runner_openai` and `runner_scripted` for
 `plugins/runner-<name>/`. Each SHALL cover its package's files but `pyproject.toml`. Core and every `pyproject.toml`
 SHALL be in no scope, so changing them runs the full check.
 

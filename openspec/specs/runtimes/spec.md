@@ -38,35 +38,6 @@ A runtime's `credential.env` SHALL NOT name a variable that starts with `TROUPE_
 - **WHEN** a person sets `runtimes.openai.credential.env=TROUPE_RUNTIME_CREDENTIAL`
 - **THEN** it is refused, naming the path and saying a credential can't come from a `TROUPE_` variable
 
-### Requirement: troupe has built-in runtimes
-troupe SHALL define the runtimes `openai` (endpoint `https://api.openai.com/v1`, credential from `OPENAI_API_KEY`),
-`anthropic` (endpoint `https://api.anthropic.com`, credential from `ANTHROPIC_API_KEY`), `ollama` (endpoint
-`http://127.0.0.1:11434`, no credential), `lm-studio` (endpoint `http://127.0.0.1:1234`, no credential) and
-`mistralrs` (in-process: no endpoint, no credential), as defaults in one named place. No built-in runtime SHALL name
-a model or a price.
-
-#### Scenario: A built-in needs no config
-- **WHEN** config has no `runtimes` and an actor names the runtime `ollama`
-- **THEN** the actor is valid, and the runtime's endpoint is `http://127.0.0.1:11434` with source `default`
-
-#### Scenario: No built-in price
-- **WHEN** config has no `runtimes` and an actor on `openai` with the model `gpt-test` is performed
-- **THEN** the run has no price, and its `run/start` carries none
-
-#### Scenario: LM Studio's built-in is its server root
-- **WHEN** config has no `runtimes` and a person runs `troupe config get --resolved runtimes.lm-studio`
-- **THEN** it shows the endpoint `http://127.0.0.1:1234` from `default`, the base LM Studio's own API lives under
-
-#### Scenario: Claude's API is a built-in
-- **WHEN** config has no `runtimes` and a person runs `troupe config get --resolved runtimes.anthropic`
-- **THEN** it shows the endpoint `https://api.anthropic.com` and the credential variable `ANTHROPIC_API_KEY`, each
-  from `default`, and no model
-
-#### Scenario: The in-process built-in
-- **WHEN** config has no `runtimes`, `TROUPE_RUNTIME_MISTRALRS_MODEL` is `/models/qwen3-0.6b.gguf`, and a person runs
-  `troupe config get --resolved runtimes.mistralrs`
-- **THEN** it shows no endpoint and no credential, and the model `/models/qwen3-0.6b.gguf` from `env`
-
 ### Requirement: Theatre config overrides a built-in field by field
 A runtime in the theatre's config with a built-in's name SHALL override only the fields it sets. A runtime with any
 other name SHALL be defined wholly by config, and SHALL be refused without an `endpoint`.
@@ -90,8 +61,9 @@ An unset or empty variable SHALL count as absent. They SHALL be read from the se
 - **THEN** the runtime's endpoint is `https://proxy.example/v1`, with source `env`
 
 #### Scenario: A hyphenated name
-- **WHEN** `TROUPE_RUNTIME_LM_STUDIO_MODEL` is `qwen3`
-- **THEN** the runtime `lm-studio` has the model `qwen3`, with source `env`
+- **WHEN** config defines `runtimes.gpu-box.endpoint=http://10.0.0.5:11434` and `TROUPE_RUNTIME_GPU_BOX_MODEL` is
+  `qwen3`
+- **THEN** the runtime `gpu-box` has the model `qwen3`, with source `env`
 
 #### Scenario: Empty counts as unset
 - **WHEN** `TROUPE_RUNTIME_OLLAMA_ENDPOINT` is the empty string
@@ -138,7 +110,7 @@ SHALL name a runtime when its runner requires one, SHALL NOT name one when its r
 #### Scenario: An Ollama actor without a runtime
 - **WHEN** a person sets `actors.tester.runner=ollama` and `tester` names no runtime
 - **THEN** it is refused, naming `actors.tester.runtime` and saying the `ollama` runner needs one, listing only the
-  runtimes that fit it: `ollama`, and not `lm-studio` or `openai`
+  runtimes that fit it: `ollama`, and not `anthropic` or `openai`
 
 #### Scenario: No runtime fits
 - **WHEN** an `ollama` actor names no runtime, and config overrides the built-in `ollama` with a credential
@@ -351,9 +323,8 @@ A run's price SHALL be the price its runtime's `prices` holds for the run's mode
 ### Requirement: An actor's runtime fits its runner
 Config SHALL refuse an actor whose runtime doesn't fit its runner, judged from the runtime's built-in and theatre
 values: a credential it never sends, an endpoint path it can't use (a final `/v1`, for one that adds it), an unwanted or
-missing endpoint, `https` where it needs `http`, or another runner's built-in. The error SHALL name the actor's
-`runtime` path, the runner, the runtime, why, and the runtimes that fit. A runtime change that makes an actor on it
-unfit SHALL be refused the same way.
+missing endpoint, or another runner's built-in. The error SHALL name the actor's `runtime` path, the runner, the
+runtime, why, and the runtimes that fit. A runtime change that makes an actor on it unfit SHALL be refused the same way.
 
 #### Scenario: An Ollama actor on a runtime with a credential
 - **WHEN** a person sets `actors.tester.runner=ollama` and `actors.tester.runtime=openai`
@@ -361,9 +332,9 @@ unfit SHALL be refused the same way.
   runner sends no credential and `openai` has one, and listing `ollama` as a runtime that fits
 
 #### Scenario: An Ollama actor on an endpoint with a path
-- **WHEN** config defines `runtimes.lm-studio-openai.endpoint=http://127.0.0.1:1234/v1`, and a person sets
-  `actors.tester.runner=ollama` and `actors.tester.runtime=lm-studio-openai`
-- **THEN** it is refused, saying the `ollama` runner needs an endpoint with no path and `lm-studio-openai`'s has one
+- **WHEN** config defines `runtimes.local-openai.endpoint=http://127.0.0.1:1234/v1`, and a person sets
+  `actors.tester.runner=ollama` and `actors.tester.runtime=local-openai`
+- **THEN** it is refused, saying the `ollama` runner needs an endpoint with no path and `local-openai`'s has one
 
 #### Scenario: An OpenAI actor on an endpoint with no path
 - **WHEN** a person sets `actors.tester.runner=openai` and `actors.tester.runtime=ollama`
@@ -382,17 +353,17 @@ unfit SHALL be refused the same way.
 #### Scenario: An LM Studio actor on an https endpoint
 - **WHEN** config defines `runtimes.remote-lm.endpoint=https://lm.example.com`, and a person sets
   `actors.tester.runner=lm-studio` and `actors.tester.runtime=remote-lm`
-- **THEN** it is refused, saying the `lm-studio` runner can only reach a plain `http` endpoint and `remote-lm` has an
-  `https` one, and listing `lm-studio` as a runtime that fits
+- **THEN** it is refused, naming `actors.tester.runner` and saying troupe doesn't know a runner named `lm-studio`,
+  and not for the endpoint's scheme: no runner is limited to plain `http`
 
 #### Scenario: Another runner's built-in of the same shape
-- **WHEN** a person sets `actors.tester.runner=ollama` and `actors.tester.runtime=lm-studio`
-- **THEN** it is refused, saying `lm-studio` is troupe's built-in for the `lm-studio` runner, though its endpoint has
-  the shape the `ollama` runner needs, and listing `ollama` as a runtime that fits
+- **WHEN** another runner's built-in runtime has an endpoint of the shape the `ollama` runner needs, and a person sets
+  `actors.tester.runner=ollama` and `actors.tester.runtime` to that built-in
+- **THEN** it is refused, saying the runtime is troupe's built-in for the other runner, though its endpoint has the
+  shape the `ollama` runner needs, and listing `ollama` as a runtime that fits
 
 #### Scenario: A runtime of your own of the same shape
-- **WHEN** config defines `runtimes.gpu-box.endpoint=http://10.0.0.5:1234`, and an `ollama` actor or an `lm-studio`
-  actor names `gpu-box`
+- **WHEN** config defines `runtimes.gpu-box.endpoint=http://10.0.0.5:1234`, and an `ollama` actor names `gpu-box`
 - **THEN** it is accepted, since troupe can't tell which engine a runtime of your own serves
 
 #### Scenario: Every runtime fits a runner that takes any
@@ -474,3 +445,32 @@ naming the path, and a `TROUPE_RUNTIME_<NAME>_ENDPOINT` set for one SHALL fail t
 - **WHEN** `TROUPE_RUNTIME_MISTRALRS_ENDPOINT` is set and a person performs an actor on `mistralrs`
 - **THEN** perform fails with `runtime.invalid-value`, naming `TROUPE_RUNTIME_MISTRALRS_ENDPOINT`, and nothing is
   recorded
+
+### Requirement: troupe defines its built-in runtimes in one place
+troupe SHALL define the runtimes `openai` (endpoint `https://api.openai.com/v1`, credential from `OPENAI_API_KEY`),
+`anthropic` (endpoint `https://api.anthropic.com`, credential from `ANTHROPIC_API_KEY`), `ollama` (endpoint
+`http://127.0.0.1:11434`, no credential) and `mistralrs` (in-process: no endpoint, no credential), as defaults in one
+named place. No built-in runtime SHALL name a model or a price.
+
+#### Scenario: A built-in needs no config
+- **WHEN** config has no `runtimes` and an actor names the runtime `ollama`
+- **THEN** the actor is valid, and the runtime's endpoint is `http://127.0.0.1:11434` with source `default`
+
+#### Scenario: No built-in price
+- **WHEN** config has no `runtimes` and an actor on `openai` with the model `gpt-test` is performed
+- **THEN** the run has no price, and its `run/start` carries none
+
+#### Scenario: LM Studio has no built-in
+- **WHEN** config has no `runtimes` and troupe resolves the runtime `lm-studio`
+- **THEN** it is refused as a runtime that doesn't exist, naming the runtimes that do: `anthropic`, `mistralrs`,
+  `ollama` and `openai`
+
+#### Scenario: Claude's API is a built-in
+- **WHEN** config has no `runtimes` and a person runs `troupe config get --resolved runtimes.anthropic`
+- **THEN** it shows the endpoint `https://api.anthropic.com` and the credential variable `ANTHROPIC_API_KEY`, each
+  from `default`, and no model
+
+#### Scenario: The in-process built-in
+- **WHEN** config has no `runtimes`, `TROUPE_RUNTIME_MISTRALRS_MODEL` is `/models/qwen3-0.6b.gguf`, and a person runs
+  `troupe config get --resolved runtimes.mistralrs`
+- **THEN** it shows no endpoint and no credential, and the model `/models/qwen3-0.6b.gguf` from `env`

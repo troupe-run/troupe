@@ -375,19 +375,19 @@ pins no higher than the manifest, the pinning pull request moving pins that are 
 on releasing while a member is bare.
 
 #### Scenario: A pin in an extra to another subdirectory
-- **WHEN** the `lm-studio` extra pins `troupe-runner-lm-studio-v0.1.0` with `#subdirectory=plugins/runner-ollama`
-- **THEN** `scripts/check.py` fails, naming `troupe-runner-lm-studio`, the extra, `packages/troupe-run/pyproject.toml`
+- **WHEN** the `example` extra pins `troupe-runner-example-v0.1.0` with `#subdirectory=plugins/runner-ollama`
+- **THEN** `scripts/check.py` fails, naming `troupe-runner-example`, the extra, `packages/troupe-run/pyproject.toml`
   and the expected reference
 
 #### Scenario: A runner in an extra released
-- **WHEN** a release pull request that releases `troupe-runner-lm-studio` at 0.1.1 is merged
-- **THEN** the pinning pull request moves its pin to `troupe-runner-lm-studio-v0.1.1` in the `lm-studio` extra and in
+- **WHEN** a release pull request that releases `troupe-runner-example` at 0.1.1 is merged
+- **THEN** the pinning pull request moves its pin to `troupe-runner-example-v0.1.1` in the `example` extra and in
   `all`, and changes nothing else
 
 #### Scenario: A bare member in an extra
-- **WHEN** the manifest gives `packages/troupe-run` 0.1.0, every base dependency is pinned, the `lm-studio` extra names
-  `troupe-runner-lm-studio` bare, and the bundle's release configuration doesn't exclude its commits
-- **THEN** `scripts/check.py` fails, naming `troupe-runner-lm-studio`, `release-please-config.json` and the exclusion
+- **WHEN** the manifest gives `packages/troupe-run` 0.1.0, every base dependency is pinned, the `example` extra names
+  `troupe-runner-example` bare, and the bundle's release configuration doesn't exclude its commits
+- **THEN** `scripts/check.py` fails, naming `troupe-runner-example`, `release-please-config.json` and the exclusion
   to add
 
 #### Scenario: A component's first release before its pin

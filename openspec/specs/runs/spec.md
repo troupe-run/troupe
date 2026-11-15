@@ -671,9 +671,10 @@ install `troupe-run[<extra>]` with the command on the install page, or, for a ru
 or run `uv sync` in a checkout of troupe.
 
 #### Scenario: A library-backed runner that isn't installed
-- **WHEN** a person performs an actor whose runner, `lm-studio`, is in an extra, and its package isn't installed
-- **THEN** it is refused with `runner.not-installed`, with details naming the runner, the package and `lm-studio`,
-  and a fix naming `troupe-run[lm-studio]` and the install page
+- **WHEN** a person performs an actor whose runner, `example`, is in the extra `example`, and its package isn't
+  installed
+- **THEN** it is refused with `runner.not-installed`, with details naming the runner, the package and `example`,
+  and a fix naming `troupe-run[example]` and the install page
 - **AND** nothing is recorded, and no run directory or worktree is made
 
 #### Scenario: A base runner missing from a broken install
