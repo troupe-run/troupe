@@ -333,8 +333,8 @@ def commit_branch_change(root: Path, branch: str | None) -> Decision:
             "commit-branch-change",
             f"branch '{branch}' has no matching OpenSpec change "
             f"(openspec/changes/{branch}/, active or archived).",
-            f"Propose the change (/opsx:propose {branch}), or switch to the branch of the change "
-            "this work belongs to.",
+            f"Propose the change (/openspec-propose {branch}), or switch to the branch of the "
+            "change this work belongs to.",
         )
     return ALLOW
 
@@ -3045,7 +3045,7 @@ def edit_decision(root: Path, file_path: str, branch: str | None) -> Decision:
             "edit-branch-change",
             f"edits need an OpenSpec change matching the branch, and {where} has none.",
             "Create or switch to the branch named after the change (git switch -c <change-name> "
-            "after /opsx:propose <change-name>).",
+            "after /openspec-propose <change-name>).",
         )
     return ALLOW
 
@@ -4538,10 +4538,10 @@ def run_claude_pre_tool_use(payload: dict[str, object], stdout: TextIO | None = 
 WORKFLOW_SUMMARY = (
     "This repository's workflow is enforced by guardrails ("
     f"https://github.com/{SOURCE_REPOSITORY}/blob/main/docs/development-workflow.md): "
-    "issue -> OpenSpec change (/opsx:propose) on a branch named after the change -> "
-    "/opsx:apply -> PR that closes the issue -> act on Claude's review of the last push (fix or "
-    "answer each finding; resolve only nits; the review resolves its must-fixes and the nits a "
-    "push fixed) -> archive on the branch -> merge -> comment on and "
+    "issue -> OpenSpec change (/openspec-propose) on a branch named after the change -> "
+    "/openspec-apply-change -> PR that closes the issue -> act on Claude's review of the last push "
+    "(fix or answer each finding; resolve only nits; the review resolves its must-fixes and the "
+    "nits a push fixed) -> archive on the branch -> merge -> comment on and "
     "close the issue. Conventional Commits; scripts/check.py passes before every commit. "
     "When a guardrail refuses, follow its fix; don't work around it. Only the owner can grant "
     "an override."
