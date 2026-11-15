@@ -583,7 +583,7 @@ event as the library parsed it and each error body `received`, and each status a
 
 ### Mapping an engine: a model in your own process
 
-The [mistralrs runner](../plugins/runner-mistralrs/README.md) is a fifth shape: the engine is a library that loads
+The [mistralrs runner](../plugins/runner-mistralrs/README.md) is a fourth shape: the engine is a library that loads
 the model into the runner's own process, `mistralrs`, with no server and no network. The runner keeps troupe's own
 tool loop, as the Ollama runner does. What's different is what can't be closed:
 - **Stopping.** An engine call blocks a thread with the GIL released, and nothing can interrupt it. So stopping means
