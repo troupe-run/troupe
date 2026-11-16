@@ -74,7 +74,7 @@ commit message or PR, before the fix is written.
 
 - [x] 5.1 `openspec validate host-robustness --strict` passes.
 - [x] 5.2 `uv run scripts/check.py` passes, its output kept in a scratch file.
-- [ ] 5.3 With the 1-minute load under ~40: `scripts/flake_hunt.py --load 2` on the new host and flake-hunt tests;
+- [x] 5.3 With the 1-minute load under ~40: `scripts/flake_hunt.py --load 2` on the new host and flake-hunt tests;
   then no processes left (`pgrep -fl "python.*(fake_claude.py|while True: pass)"`). Verify: 0 rounds failed.
 
 ## Workflow follow-up

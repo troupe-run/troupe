@@ -3,11 +3,11 @@ a run"; runtimes design D6)."""
 
 import json
 
-from hypothesis import example, given
+from hypothesis import example, given, settings
 from hypothesis import strategies as st
 
 from masking_checks import forms_outside_the_marker, writings
-from troupe.core.masking import MARKER, Masker
+from troupe.core.masking import MARKER, WINDOW_CHARS, Masker
 
 KEY = "sk-test/abc+def=0123456789"
 MASK = Masker(KEY)
@@ -157,3 +157,29 @@ def test_a_newline_before_the_rest_of_a_credential_starting_with_n_is_masked_wit
     assert masker.data({"\nsecret-token-0123456789": ["\nsecret-token-0123456789"]}) == {
         MARKER: [MARKER]
     }
+
+
+@st.composite
+def large_strings(draw: st.DrawFn) -> tuple[str, str]:
+    """A credential and a string past one window, its pieces placed so some straddle a window's
+    edge (WINDOW_CHARS), where only the windows that can hold a form get the per-character pass."""
+    credential, text = draw(credentials_and_strings())
+    pieces = draw(st.lists(st.sampled_from([text, credential, "\n" + credential[1:]]), max_size=4))
+    out = ""
+    for piece in pieces:
+        out += "y" * draw(st.integers(0, WINDOW_CHARS + 50)) + piece
+    return credential, out + "z" * WINDOW_CHARS
+
+
+@settings(max_examples=200, deadline=None)
+@given(large_strings())
+def test_a_large_masked_string_holds_the_credential_nowhere_outside_the_marker(
+    case: tuple[str, str],
+) -> None:
+    credential, text = case
+    masker = Masker(credential)
+    masked = masker.text(text)
+    for writing in writings(masked):
+        assert forms_outside_the_marker(masker, writing) == []
+    if not any(form in writing for writing in writings(text) for form in masker.forms):
+        assert masked == text

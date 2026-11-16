@@ -52,7 +52,7 @@ default. The violations are listed in the scenarios.
 - **WHEN** two keys of one object in a runner's message are the same once the run's credential is masked in them
 - **THEN** it is a protocol violation naming the object, rather than a message kept with one of the two values lost
 
-#### Scenario: A valid line is never a violation because of masking
+#### Scenario: An escape before the rest of the credential is read, not a violation
 - **WHEN** the run's credential starts with `n`, and a runner sends a valid `run/transcript` line whose record is a
   newline written `\n` followed by the rest of the credential
 - **THEN** it is not a protocol violation, and the run carries on

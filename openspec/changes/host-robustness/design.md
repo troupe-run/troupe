@@ -57,8 +57,10 @@ message (which can quote a duplicated key) is masked with `Masker.text` before i
 the host checks the message's strings for lone surrogates (D3), masks every string in it (D2), and only then checks
 its JSON-RPC shape and handles it. Every later step works on the masked message, as it worked on the masked line.
 
-- **Why it can't break a valid line:** masking happens on Python strings after `json.loads`. Nothing it does can make
-  the parse fail, because the parse is already done. The property test (D6) checks it anyway.
+- **Why masking can't break a valid line:** masking happens on Python strings after `json.loads`, so it can't make
+  the parse fail: the parse is already done. The one exception is deliberate: an object two of whose keys mask to
+  the same text is a violation rather than a message kept with a value lost (below). The property test (D6) checks
+  both.
 - **What `on_message` and the oversized event get:** the masked message. The oversized event's stored artifact is the
   raw line, byte for byte, when masking changed nothing in the parsed message and `Masker.bytes` changes nothing in
   the raw line; otherwise it's the masked message, written compactly. The second check catches a form that's in the
@@ -230,6 +232,12 @@ Each test is written and run against today's code first, and must fail there:
   naming the last line it saw.
 
 ## Risks / Trade-offs
+
+- [Escape-aware masking costs Python objects per character, on the event loop] → Only a string that holds a form
+  pays it, and only near the form: `Masker.text` checks windows of `WINDOW_CHARS` characters at C speed and masks a
+  character at a time only in windows that can hold one, with a margin of the longest form (review of #437). Measured
+  on macOS: a 1 MB string holding the credential once, 5.0 s before the windows and 0.055 s after; 16 MB, 0.73 s. A
+  string echoing it in every window still pays in full: 1 MB holding it 40,000 times took 1.8 s.
 
 - [Escape-aware masking replaces a character the runner sent that isn't part of the credential (the newline)] →
   Only when its escape would complete the credential. Over-masking one character is safer than keeping a form, and

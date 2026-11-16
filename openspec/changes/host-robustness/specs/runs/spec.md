@@ -20,7 +20,8 @@ is split across reads.
 #### Scenario: Masking never breaks a valid line
 - **WHEN** a runner sends a line that is a valid message, whatever the run's credential and wherever its strings
   hold it
-- **THEN** troupe reads the line as the message it is, and masks the strings in it
+- **THEN** troupe reads the line as the message it is, and masks the strings in it, unless masking would make two keys
+  of one object the same, which is a protocol violation rather than a value lost (spec: actor-runners)
 
 #### Scenario: An escape before the rest of the credential
 - **WHEN** the run's credential starts with `n`, and a runner sends a string holding a newline followed by the rest of
