@@ -353,6 +353,10 @@ class Tools:
                     f"There's no tool named {name!r}. The tools are {', '.join(NAMES)}."
                 )
             data = _check_input(name, _TOOLS[name][1], arguments)
+            # Input sent as JSON text holds an escaped lone surrogate only once it's parsed: make
+            # it Unicode text too, before a tool writes it (review of #437).
+            data, escaped = unicode_text_counted(data)
+            numbering.lost(f"the input of a {name!r} tool call", escaped)
             output, is_error = self._run[name](data), False
         except _CallError as error:
             output, is_error = error.output, True
