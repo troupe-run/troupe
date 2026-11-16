@@ -53,7 +53,9 @@ commit message or PR, before the fix is written.
 - [x] 3.2 SDK: the code and its refusal words in `troupe_plugin_sdk.runner`. Verify: a unit test of the words.
 - [x] 3.3 Failing first, per runner (Claude Code, OpenAI, Ollama, Anthropic, mistral.rs, scripted): `initialize`
   (with `transcript-kinds` where the runner uses kinds), `run/start`, a second `initialize` offering none; the second
-  is refused with `runner.already-initialized`, and later records keep their kind. Verify: each fails on today's code.
+  is refused with `runner.already-initialized`, and later records keep their kind (checked for Ollama, OpenAI,
+  Anthropic and scripted; mistral.rs's in-process driver ends its run at end of input before any record, so its
+  test checks the refusal and that the run started). Verify: each fails on today's code.
 - [x] 3.4 Each runner refuses it through the SDK. Verify: 3.3 passes in every runner's tests.
 - [x] 3.5 Failing first: `check_runner` against a stand-in runner that answers a second `initialize` fails, naming it.
 - [x] 3.6 `check_runner` gains `second_initialize` (design D4). Verify: 3.5 passes, and the conformance suite passes
@@ -70,8 +72,8 @@ commit message or PR, before the fix is written.
 
 ## 5. Checks
 
-- [ ] 5.1 `openspec validate host-robustness --strict` passes.
-- [ ] 5.2 `uv run scripts/check.py` passes, its output kept in a scratch file.
+- [x] 5.1 `openspec validate host-robustness --strict` passes.
+- [x] 5.2 `uv run scripts/check.py` passes, its output kept in a scratch file.
 - [ ] 5.3 With the 1-minute load under ~40: `scripts/flake_hunt.py --load 2` on the new host and flake-hunt tests;
   then no processes left (`pgrep -fl "python.*(fake_claude.py|while True: pass)"`). Verify: 0 rounds failed.
 

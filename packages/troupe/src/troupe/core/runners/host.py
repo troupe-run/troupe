@@ -13,6 +13,7 @@ import binascii
 import contextlib
 import json
 import shutil
+import sys
 import tempfile
 import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
@@ -114,12 +115,22 @@ def parse_runner_line(mask: Masker, line: bytes, number: int) -> tuple[object, b
     """Line ``number`` of a runner's output as its message with every string masked, and the line
     to keep for it: the line as sent when masking changed nothing, else the masked message written
     out. The line is parsed before it's masked, so masking can't make a valid line invalid
-    (host-robustness design D1, #330). A string that isn't Unicode text is a violation (#311)."""
+    (host-robustness design D1, #330). A string that isn't Unicode text is a violation (#311), and
+    so is a message troupe can't read or mask without losing part of it: one nested past Python's
+    recursion limit, or two keys of an object that masking would make the same."""
     try:
         data = p.loads_strict(line)
+        found = p.lone_surrogate(data)
+        message = None if found is not None else mask.data(data)
+        merged = None if message is None else _merged_keys(data, message)
     except p.ProtocolError as error:
         raise _violation(mask.text(str(error)), number) from error
-    found = p.lone_surrogate(data)
+    except RecursionError:
+        raise _violation(
+            f"a message nested deeper than troupe reads (Python's limit of "
+            f"{sys.getrecursionlimit()} levels)",
+            number,
+        ) from None
     if found is not None:
         where, char = found
         raise _violation(
@@ -129,10 +140,36 @@ def parse_runner_line(mask: Masker, line: bytes, number: int) -> tuple[object, b
             ),
             number,
         )
-    message = mask.data(data)
+    if merged is not None:
+        raise _violation(
+            mask.text(
+                f"two keys of the object at {merged} are the same once the run's credential is "
+                "masked in them, so troupe can't keep the message without losing one; a runner "
+                "never sends the credential back"
+            ),
+            number,
+        )
     if message == data and mask.bytes(line) == line:
         return message, line
     return message, json.dumps(message, ensure_ascii=False, separators=(",", ":")).encode()
+
+
+def _merged_keys(data: object, masked: object) -> str | None:
+    """Where masking ``data`` into ``masked`` made two of an object's keys one, as a path ("the
+    message", or ``params.x``); None when it made none. ``masked`` is ``data`` with each string
+    masked, so the two have the same shape, item for item. Walked without recursion."""
+    waiting: list[tuple[object, object, str]] = [(data, masked, "")]
+    while waiting:
+        original, now, path = waiting.pop()
+        if isinstance(original, dict) and isinstance(now, dict):
+            if len(now) < len(original):
+                return path or "the message"
+            for (key, item), masked_item in zip(original.items(), now.values(), strict=True):
+                waiting.append((item, masked_item, f"{path}.{key}" if path else str(key)))
+        elif isinstance(original, list) and isinstance(now, list):
+            for index, (item, masked_item) in enumerate(zip(original, now, strict=True)):
+                waiting.append((item, masked_item, f"{path}[{index}]"))
+    return None
 
 
 class _StderrSink:

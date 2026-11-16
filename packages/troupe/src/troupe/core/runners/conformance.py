@@ -184,6 +184,15 @@ async def check_runner(
         answer = await driver.initialize([9999])
         if answer.error is None:
             raise _Failed("it accepted protocol version 9999, which no runner supports")
+        # A refused initialize isn't a handshake, so one offering a version it speaks is answered
+        # (spec: runner-protocol, "A second initialize is refused").
+        again = await driver.initialize([p.PROTOCOL_VERSION])
+        if again.error is not None:
+            raise _Failed(
+                f"it refused initialize offering version {p.PROTOCOL_VERSION} after one it refused "
+                f"for its versions ({again.error.data.code}): a refused initialize isn't a "
+                "handshake"
+            )
 
     async def second_initialize(driver: _Driver) -> None:
         # The first handshake stands (spec: runner-protocol, "A second initialize is refused";
