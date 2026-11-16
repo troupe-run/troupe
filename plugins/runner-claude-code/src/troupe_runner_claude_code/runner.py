@@ -21,6 +21,7 @@ from typing import Any, BinaryIO, NoReturn
 
 from troupe_plugin_sdk import runner as p
 from troupe_plugin_sdk.declaration import Declaration
+from troupe_plugin_sdk.events import EventNumbering
 from troupe_runner_claude_code import NAME, __version__
 from troupe_runner_claude_code.command import (
     PrivateDirectoryError,
@@ -80,7 +81,8 @@ class Runner:
         self._stderr_lock = threading.Lock()
         self._initialized = False
         self._run_id: str | None = None
-        self._next_seq = 0
+        self._numbering: EventNumbering | None = None
+        """Numbers the run's events from run/start on (host-robustness design D3b)."""
         self._mapper: Mapper | None = None
         self._claude: Claude | None = None
         self._claude_status: int | None = None
@@ -91,7 +93,10 @@ class Runner:
     # Output
 
     def _send(self, message: dict[str, Any]) -> None:
-        line = p.encode_line(message)  # a lone surrogate as U+FFFD (host-robustness design D3)
+        line, replaced = p.encode_line(message)  # lone surrogates as U+FFFD (design D3b)
+        if replaced:  # an event's were recorded when it was numbered; say so for the rest
+            self._stderr.write(p.replaced_note("Claude Code", message, replaced))
+            self._stderr.flush()
         self._stdout.write(line)
         self._stdout.flush()
 
@@ -123,6 +128,10 @@ class Runner:
             }
         )
 
+    def _send_context(self, event: p.ContextEvent) -> None:
+        """A context event recording text Claude Code sent that wasn't Unicode (design D3b)."""
+        self._send({"jsonrpc": "2.0", "method": "run/event", "params": event.to_data()})
+
     def _emit(self, outs: list[Out]) -> None:
         for out in outs:
             if isinstance(out, Transcript):
@@ -131,8 +140,9 @@ class Runner:
                     params["encoding"] = out.encoding
                 self._send({"jsonrpc": "2.0", "method": "run/transcript", "params": params})
             elif isinstance(out, Event):
-                event = {"runId": self._run_id, "seq": self._next_seq, **out.event}
-                self._next_seq += 1
+                if self._numbering is None:
+                    raise RuntimeError("an event before run/start")
+                event = self._numbering.numbered(out.event)
                 self._send({"jsonrpc": "2.0", "method": "run/event", "params": event})
 
     # Input
@@ -348,6 +358,7 @@ class Runner:
             return
         self._private = private
         self._run_id = run_id
+        self._numbering = EventNumbering(run_id, limit, send_context=self._send_context)
         self._mapper = Mapper(__version__, limit)
         self._mapper.hold_warnings(rules.warnings)
         self._result(id_, {"runId": run_id})
@@ -475,7 +486,11 @@ class Runner:
         return self._mapper
 
     def _on_engine_line(self, line: bytes) -> None:
-        self._emit(self._started_mapper().feed(line))
+        mapper = self._started_mapper()
+        outs = mapper.feed(line)
+        if self._numbering is not None:
+            self._numbering.lost("Claude Code's output", mapper.take_replaced())
+        self._emit(outs)
 
     def _on_engine_eof(self) -> None:
         mapper = self._started_mapper()

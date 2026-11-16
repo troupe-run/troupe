@@ -35,7 +35,7 @@ from troupe_plugin_sdk.defaults import ToolLimits
 from troupe_plugin_sdk.effects import READ_ONLY, Effect, Effects, PatternError, pattern_regex
 from troupe_plugin_sdk.events import EventNumbering, fit, utf8_size
 from troupe_plugin_sdk.paths import GIT, PathRefusedError, Workspace, WorkspacePath, is_troupe
-from troupe_plugin_sdk.runner import ToolCallEvent, ToolResultEvent
+from troupe_plugin_sdk.runner import ToolCallEvent, ToolResultEvent, unicode_text_counted
 
 if TYPE_CHECKING:
     from troupe_plugin_sdk.declaration import Declaration, Mode
@@ -343,6 +343,10 @@ class Tools:
             raise ValueError(
                 "a tool call needs a non-empty call id; make one up if the engine gave none"
             )
+        # The engine's input as Unicode text, each replacement recorded before either event is
+        # numbered, so its context event comes before both (host-robustness design D3b).
+        arguments, replaced = unicode_text_counted(arguments)
+        numbering.lost(f"the input of a {name!r} tool call", replaced)
         try:
             if name not in _TOOLS:
                 raise _CallError(
@@ -354,29 +358,31 @@ class Tools:
             output, is_error = error.output, True
         except PathRefusedError as error:
             output, is_error = error.problem, True
+        output, replaced = unicode_text_counted(output)
+        numbering.lost(f"the output of a {name!r} tool call", replaced)
         call = fit(
-            {
-                "runId": numbering.run_id,
-                "seq": numbering.take(),
-                "type": "tool_call",
-                "callId": call_id,
-                "tool": name or "(no name)",
-                "inputSummary": _summary(arguments),
-            },
+            numbering.numbered(
+                {
+                    "type": "tool_call",
+                    "callId": call_id,
+                    "tool": name or "(no name)",
+                    "inputSummary": _summary(arguments),
+                }
+            ),
             "inputSummary",
             min(numbering.summary_max_bytes, self.limits.summary_max_bytes),
             numbering.event_max_bytes,
         )
         result = fit(
-            {
-                "runId": numbering.run_id,
-                "seq": numbering.take(),
-                "type": "tool_result",
-                "callId": call_id,
-                "isError": is_error,
-                "outputSummary": output,
-                "outputBytes": utf8_size(output),
-            },
+            numbering.numbered(
+                {
+                    "type": "tool_result",
+                    "callId": call_id,
+                    "isError": is_error,
+                    "outputSummary": output,
+                    "outputBytes": utf8_size(output),
+                }
+            ),
             "outputSummary",
             min(numbering.summary_max_bytes, self.limits.summary_max_bytes),
             numbering.event_max_bytes,

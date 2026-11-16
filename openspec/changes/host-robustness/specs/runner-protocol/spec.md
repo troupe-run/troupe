@@ -38,6 +38,9 @@ record. The host SHALL treat a lone surrogate as a protocol violation (spec: act
 - **WHEN** a bundled runner's engine sends JSON whose string holds an escaped lone surrogate (`"x\ud800y"`), in an
   answer or an error
 - **THEN** each string the runner sends from it holds U+FFFD in its place, and the run carries on to its result
+- **AND** before the first event holding U+FFFD (just after `init`, for one in or before `init`) the runner sends a
+  `context` event of kind `other`, by `runner`, whose message names where the text was and how many characters were
+  replaced
 
 ## MODIFIED Requirements
 

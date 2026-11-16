@@ -652,3 +652,30 @@ def test_a_cut_answer_told_compact_with_nothing_to_remove_is_a_turn_and_a_counte
     assert sink.result["turns"] == 1 == len(requests(stand_in))
     assert "nothing more to remove" in sink.result["message"]
     assert "latest turn's" not in sink.result["message"]
+
+
+# Requirement: A message's strings are Unicode text: each replacement is recorded
+# (host-robustness design D3b)
+
+
+def _replacement_recorded(events: list[dict[str, Any]]) -> dict[str, Any]:
+    """The context event that records a lone surrogate replaced with U+FFFD: just before the first
+    event holding U+FFFD, kind other, by runner; ``seq`` gapless; no lone surrogate anywhere
+    (host-robustness design D3b)."""
+    assert [e["seq"] for e in events] == list(range(len(events)))
+    assert all(p.lone_surrogate(e) is None for e in events)
+    first = next(i for i, e in enumerate(events) if "\ufffd" in json.dumps(e, ensure_ascii=False))
+    context = events[first - 1]
+    assert (context["type"], context["kind"], context["by"]) == ("context", "other", "runner")
+    assert "wasn't Unicode" in context["message"]
+    assert "replaced with U+FFFD" in context["message"]
+    return context
+
+
+def test_a_lone_surrogate_in_the_engines_answer_is_recorded_in_a_context_event(
+    tmp_path: Path,
+) -> None:
+    sink, _ = converse(tmp_path, {"responses": [response("All \ud800done.")]})
+    context = _replacement_recorded(sink.events)
+    assert "lone surrogate in the turn event's text was replaced" in context["message"]
+    assert sink.result["message"] == "All \ufffddone."

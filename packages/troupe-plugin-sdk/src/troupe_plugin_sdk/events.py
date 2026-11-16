@@ -16,18 +16,28 @@ context-event design D7).
 
 import json
 import typing
+from collections.abc import Callable
 from typing import Any
 
 from troupe_plugin_sdk.defaults import SUMMARY_MAX_BYTES
 from troupe_plugin_sdk.messages import fail
-from troupe_plugin_sdk.runner import MODEL_PATTERN, ContextBy, ContextEvent, ContextKind
+from troupe_plugin_sdk.runner import (
+    MODEL_PATTERN,
+    ContextBy,
+    ContextEvent,
+    ContextKind,
+    surrogate_paths,
+    unicode_text_counted,
+)
 
 SHOWN_MODEL_MAX_BYTES = 256
 """How much of a model name that can't be recorded a ``log`` warning shows."""
 
 
 class EventNumbering:
-    """A run's event counter and its size limits. ``take`` gives the next ``seq``."""
+    """A run's event counter and its size limits. ``take`` gives the next ``seq``; ``numbered``
+    numbers an event body, after recording any text in it that wasn't Unicode (host-robustness
+    design D3b)."""
 
     def __init__(
         self,
@@ -35,7 +45,10 @@ class EventNumbering:
         event_max_bytes: int,
         next_seq: int = 0,
         summary_max_bytes: int = SUMMARY_MAX_BYTES,
+        send_context: Callable[[ContextEvent], None] | None = None,
     ) -> None:
+        """``send_context`` sends a ``context`` event the moment it's numbered, ahead of the event
+        whose numbering made it: it's how a replaced lone surrogate is recorded."""
         if next_seq < 0:
             raise ValueError("next_seq starts at 0")
         if event_max_bytes < 1 or summary_max_bytes < 1:
@@ -44,11 +57,50 @@ class EventNumbering:
         self.event_max_bytes = event_max_bytes
         self.summary_max_bytes = summary_max_bytes
         self.next_seq = next_seq
+        self.send_context = send_context
+        self._lost: list[tuple[str, int]] = []
 
     def take(self) -> int:
         seq = self.next_seq
         self.next_seq += 1
         return seq
+
+    def lost(self, where: str, replaced: int) -> None:
+        """Record that ``replaced`` lone surrogates in the engine's text ``where`` (such as
+        "Ollama's answer") were replaced with U+FFFD. The ``context`` event saying so is sent
+        before the next event ``numbered`` numbers, or after ``init`` when that's next."""
+        if replaced:
+            self._lost.append((where, replaced))
+
+    def numbered(self, body: dict[str, Any]) -> dict[str, Any]:
+        """``body`` (an event without ``runId`` or ``seq``) numbered, its strings made Unicode
+        text. Each replacement waiting, and any in ``body``, is first sent as a ``context`` event
+        of kind ``other`` by ``runner`` naming where and how many, each with the next ``seq``, so
+        the event follows them with no gap. Not before ``init``, which a ``context`` event can't
+        precede: those wait for the event after it. The caller sends the event it gets back
+        before numbering another."""
+        clean, replaced = unicode_text_counted(body)
+        if replaced:
+            fields = ", ".join(surrogate_paths(body))
+            self.lost(f"the {body.get('type')} event's {fields}", replaced)
+        if body.get("type") != "init" and self.next_seq > 0:
+            self._send_lost()
+        return {"runId": self.run_id, "seq": self.take(), **clean}
+
+    def _send_lost(self) -> None:
+        while self._lost:
+            if self.send_context is None:
+                raise RuntimeError(
+                    "a lone surrogate was replaced, but this EventNumbering has no send_context "
+                    "to record it with"
+                )
+            where, replaced = self._lost.pop(0)
+            many = replaced != 1
+            message = (
+                f"The engine's text wasn't Unicode: {replaced} lone surrogate{'s' if many else ''} "
+                f"in {where} {'were' if many else 'was'} replaced with U+FFFD."
+            )
+            self.send_context(context_event(self, "other", "runner", message))
 
 
 def utf8_size(text: str) -> int:

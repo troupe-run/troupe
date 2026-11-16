@@ -887,7 +887,8 @@ def test_unicode_text_replaces_each_lone_surrogate_with_the_replacement_characte
 
 @given(st.text(), st.text())
 def test_encode_line_writes_one_utf8_line_that_reads_back_as_text(key: str, text: str) -> None:
-    line = p.encode_line({"jsonrpc": "2.0", "method": "run/event", "params": {key: text}})
+    line, replaced = p.encode_line({"jsonrpc": "2.0", "method": "run/event", "params": {key: text}})
+    assert replaced == sum(1 for char in key + text if "\ud800" <= char <= "\udfff")
     assert line.endswith(b"\n")
     assert b"\n" not in line[:-1]
     message = json.loads(line.decode("utf-8"))
@@ -904,3 +905,11 @@ def test_a_second_initialize_is_refused_with_the_contracts_code_naming_the_runne
     assert problem.startswith("The Ollama runner already answered initialize")
     assert "stands" in problem
     assert fix == "Send initialize once, as the first message to each runner process."
+
+
+def test_replaced_note_names_the_runner_the_message_and_the_count() -> None:
+    note = p.replaced_note("Ollama", {"jsonrpc": "2.0", "id": 7, "error": {}}, 1)
+    assert note == (
+        b"Ollama runner: the engine's text wasn't Unicode: 1 lone surrogate in the answer to "
+        b"request 7 was written as U+FFFD\n"
+    )

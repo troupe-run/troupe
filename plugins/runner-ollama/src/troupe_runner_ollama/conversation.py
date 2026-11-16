@@ -180,14 +180,6 @@ class _Answer:
     """The model the answer's lines name: the first that names one."""
 
 
-def _clean(value: Any) -> Any:  # noqa: ANN401 - JSON
-    """``value`` with each lone surrogate in its strings replaced by U+FFFD (the SDK's
-    ``unicode_text``). JSON can escape one (``\\ud800``), and json.loads decodes it, but it can't
-    be UTF-8, so the SDK's summaries and tools would fail on it after an event's seq was taken.
-    The transcript keeps the line as sent."""
-    return p.unicode_text(value)
-
-
 def _count(value: object) -> int | None:
     return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
 
@@ -218,7 +210,10 @@ class Conversation:
         self._clock = clock
         self._started = clock()
         self._numbering = EventNumbering(
-            start.run_id, start.limits.event_max_bytes, summary_max_bytes=SUMMARY_MAX_BYTES
+            start.run_id,
+            start.limits.event_max_bytes,
+            summary_max_bytes=SUMMARY_MAX_BYTES,
+            send_context=self._send_context,
         )
         self._budget = tool_budget(window)
         self._tools = Tools.for_declaration(Declaration.from_run_start(start), tool_limits(window))
@@ -285,10 +280,16 @@ class Conversation:
     def _event(self, data: dict[str, Any], summary: str | None = None) -> None:
         if self._sink.stopping():
             raise _Stop
-        data = {"runId": self._start.run_id, "seq": self._numbering.take(), **data}
+        data = self._numbering.numbered(data)  # before fit, which needs Unicode text
         if summary is not None:
             data = fit(data, summary, SUMMARY_MAX_BYTES, self._start.limits.event_max_bytes)
         self._sink.event(p.parse_event(data))
+
+    def _send_context(self, event: p.ContextEvent) -> None:
+        """A context event recording text the engine sent that wasn't Unicode (design D3b)."""
+        if self._sink.stopping():
+            raise _Stop
+        self._sink.event(event)
 
     def _record(self, kind: p.TranscriptKind, line: bytes) -> None:
         if self._sink.stopping():
@@ -477,7 +478,8 @@ class Conversation:
         for line in lines:
             self._record("received", line)
             try:
-                data = _clean(json.loads(line))
+                data, replaced = p.unicode_text_counted(json.loads(line))
+                self._numbering.lost("Ollama's answer", replaced)
             except ValueError:
                 data = None
             if not isinstance(data, dict):

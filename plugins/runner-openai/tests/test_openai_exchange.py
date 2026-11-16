@@ -37,6 +37,7 @@ class Run:
         self.endpoint = fake if isinstance(fake, str) else fake.endpoint
         self.retries: list[Retry] = []
         self.records: list[tuple[str, bytes]] = []
+        self.lost: list[tuple[str, int]] = []
         """Each transcript record: its kind and its bytes."""
         self.waits: list[float] = []
         self.limits = limits
@@ -56,6 +57,7 @@ class Run:
             self.retries.append,
             lambda kind, data: self.records.append((kind, data)),
             wait,
+            on_lost=lambda where, replaced: self.lost.append((where, replaced)),
             make_call=make,
             **self.limits,
         )

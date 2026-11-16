@@ -24,6 +24,8 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
+from troupe_plugin_sdk import runner as p
+
 FINAL = ("response.completed", "response.incomplete", "response.failed")
 """The events that carry the whole response and end the stream."""
 
@@ -179,6 +181,9 @@ class StreamParser:
     def __init__(self) -> None:
         self._data: list[str] = []
         self._reply: Reply | None = None
+        self.replaced = 0
+        """How many lone surrogates (escapes in the service's JSON) were read as U+FFFD: the
+        runner records them (host-robustness design D3b)."""
 
     def feed(self, line: str) -> bool:
         """Read one line. True once the final event has been read: the caller stops there.
@@ -216,7 +221,8 @@ class StreamParser:
             return False
         data, self._data = "\n".join(self._data), []
         try:
-            event = json.loads(data)
+            event, replaced = p.unicode_text_counted(json.loads(data))
+            self.replaced += replaced
         except ValueError:
             if not finished:
                 raise StreamError(

@@ -38,6 +38,14 @@ commit message or PR, before the fix is written.
   bundled runner whose engine output is JSON (OpenAI, Anthropic, mistral.rs, Claude Code). Fix any runner that does.
   Verify: the tests pass, and a run of each through the host doesn't end `runner.protocol`.
 
+- [x] 2.4 SDK (design D3b): `unicode_text` counts what it replaced; `EventNumbering.numbered(body)` and
+  `lost(where, n)` send a `context` event (kind `other`, by `runner`) before the event, or after `init`, keeping
+  `seq` gapless; `encode_line` returns the count. Verify: SDK unit tests, failing first.
+- [x] 2.5 Each runner numbers every event through `numbered`, before `fit`; Claude Code and scripted move to
+  `EventNumbering`; Ollama records its decode-time replacements with `lost`; each writer notes a replacement on
+  standard error. Verify: per runner, a run whose engine output holds `\ud800` has the context event before the
+  event with U+FFFD, gapless `seq`, and no lone surrogate (failing first); every runner's suite passes.
+
 ## 3. A second initialize is refused (#356)
 
 - [x] 3.1 Contract: `runner.already-initialized` in `protocol/schemas/runner/errors.schema.json` and the packaged copy.

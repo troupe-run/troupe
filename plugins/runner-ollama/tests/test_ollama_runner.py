@@ -613,12 +613,13 @@ def test_end_of_input_after_the_runner_failed_exits_1() -> None:
 
 def test_a_lone_surrogate_in_a_message_is_written_as_the_replacement_character() -> None:
     # An engine's \ud800 escape decodes to a lone surrogate, which the host refuses (#311).
-    stdout = io.BytesIO()
-    writer = Runner(io.BytesIO(), stdout, io.BytesIO())
+    stdout, stderr = io.BytesIO(), io.BytesIO()
+    writer = Runner(io.BytesIO(), stdout, stderr)
     writer._write({"jsonrpc": "2.0", "method": "run/event", "params": {"x\udfff": "a\ud800b"}})
     message = json.loads(stdout.getvalue())
     assert message["params"] == {"x\ufffd": "a\ufffdb"}
     assert p.lone_surrogate(message) is None
+    assert b"2 lone surrogates in a run/event message were written as U+FFFD" in stderr.getvalue()
 
 
 # Requirement: A second initialize is refused (host-robustness design D4, #356)
@@ -643,3 +644,47 @@ def test_a_second_initialize_mid_run_is_refused_and_every_record_keeps_its_kind(
     assert records
     assert all("kind" in record for record in records)
     assert messages[-1]["params"]["status"] == "ok"
+
+
+# Requirement: A message's strings are Unicode text: each replacement is recorded
+# (host-robustness design D3b)
+
+
+def _replacement_recorded(events: list[dict[str, Any]]) -> dict[str, Any]:
+    """The context event that records a lone surrogate replaced with U+FFFD: just before the first
+    event holding U+FFFD, kind other, by runner; ``seq`` gapless; no lone surrogate anywhere
+    (host-robustness design D3b)."""
+    assert [e["seq"] for e in events] == list(range(len(events)))
+    assert all(p.lone_surrogate(e) is None for e in events)
+    first = next(i for i, e in enumerate(events) if "\ufffd" in json.dumps(e, ensure_ascii=False))
+    context = events[first - 1]
+    assert (context["type"], context["kind"], context["by"]) == ("context", "other", "runner")
+    assert "wasn't Unicode" in context["message"]
+    assert "replaced with U+FFFD" in context["message"]
+    return context
+
+
+@pytest.mark.parametrize(
+    ("answer", "where"),
+    [
+        (
+            Answer(status=400, body=b'{"error": "bad input x\\ud800y"}'),
+            "the result event's message",
+        ),
+        (
+            Answer(
+                [b'{"message":{"role":"assistant","content":"x\\ud800y"},"done":false}', done()]
+            ),
+            "Ollama's answer",
+        ),
+    ],
+    ids=["error body", "answer"],
+)
+def test_a_lone_surrogate_from_ollama_is_recorded_in_a_context_event(
+    session: Session, answer: Answer, where: str
+) -> None:
+    with serving([answer]) as fake:
+        session.start(**_run(fake))
+        events = _events(session.until_result())
+    context = _replacement_recorded(events)
+    assert f"1 lone surrogate in {where} was replaced" in context["message"]
