@@ -2,6 +2,7 @@
 runner-protocol, plugin-sdk; runner-contract design D11; runner-sdk design D3)."""
 
 import json
+import sys
 from typing import Any
 
 import pytest
@@ -913,3 +914,27 @@ def test_replaced_note_names_the_runner_the_message_and_the_count() -> None:
         b"Ollama runner: the engine's text wasn't Unicode: 1 lone surrogate in the answer to "
         b"request 7 was written as U+FFFD\n"
     )
+
+
+def test_the_unicode_text_walks_take_any_depth_json_loads_reads() -> None:
+    # Walked without recursion (review of #437): deeper than Python's recursion limit.
+    deep: object = "x\ud800"
+    for _ in range(sys.getrecursionlimit() * 3):
+        deep = [deep]
+    value = {"params": {"input": deep}}
+    clean, replaced = p.unicode_text_counted(value)
+    assert replaced == 1
+    where = p.lone_surrogate(value)
+    assert where is not None
+    assert where[0].startswith("params.input[0][0]")
+    assert p.lone_surrogate(clean) is None
+    assert p.surrogate_paths(value) == [where[0]]
+
+
+def test_unicode_text_keeps_the_order_and_shape_of_what_it_cleans() -> None:
+    value = {"b": [1, "x\ud800", {"z": None, "a\udfff": True}], "a": 2.5}
+    clean, replaced = p.unicode_text_counted(value)
+    assert replaced == 2
+    assert clean == {"b": [1, "x�", {"z": None, "a�": True}], "a": 2.5}
+    assert list(clean) == ["b", "a"]
+    assert list(clean["b"][2]) == ["z", "a�"]
