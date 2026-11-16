@@ -295,7 +295,13 @@ CASES: list[tuple[type[p.Message], str, st.SearchStrategy[Any]]] = [
         "errors.schema.json#/$defs/anyError",
         _with_optional(
             {
-                "code": st.sampled_from(["runner.invalid-params", "runner.already-started"]),
+                "code": st.sampled_from(
+                    [
+                        "runner.invalid-params",
+                        "runner.already-initialized",
+                        "runner.already-started",
+                    ]
+                ),
                 "problem": NAME,
                 "fix": NAME,
             },
@@ -887,3 +893,14 @@ def test_encode_line_writes_one_utf8_line_that_reads_back_as_text(key: str, text
     message = json.loads(line.decode("utf-8"))
     assert p.lone_surrogate(message) is None
     assert message["params"] == p.unicode_text({key: text})
+
+
+# Requirement: A second initialize is refused (host-robustness design D4)
+
+
+def test_a_second_initialize_is_refused_with_the_contracts_code_naming_the_runner() -> None:
+    problem, fix = p.already_initialized("Ollama")
+    assert p.ALREADY_INITIALIZED == "runner.already-initialized"
+    assert problem.startswith("The Ollama runner already answered initialize")
+    assert "stands" in problem
+    assert fix == "Send initialize once, as the first message to each runner process."

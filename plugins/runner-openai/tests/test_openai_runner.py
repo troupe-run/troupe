@@ -385,3 +385,28 @@ def test_a_lone_surrogate_in_a_message_is_written_as_the_replacement_character()
     message = json.loads(stdout.getvalue())
     assert message["params"] == {"x\ufffd": "a\ufffdb"}
     assert p.lone_surrogate(message) is None
+
+
+# Requirement: A second initialize is refused (host-robustness design D4, #356)
+
+SECOND_INITIALIZE = {
+    "protocolVersions": [0],
+    "host": {"name": "test", "version": "1"},
+    "capabilities": [],
+}
+"""A second initialize offering no capabilities, after one that offered transcript-kinds."""
+
+
+def test_a_second_initialize_mid_run_is_refused_and_every_record_keeps_its_kind(
+    sessions: list[Session], workspace: Path
+) -> None:
+    with FakeEndpoint([text_reply("Done.")]) as fake:
+        session = _session(sessions, workspace)
+        session.start(fake.endpoint)
+        second = session.request("initialize", SECOND_INITIALIZE)
+        messages = session.until_result()
+    assert second["error"]["data"]["code"] == "runner.already-initialized"
+    records = _records(messages)
+    assert records
+    assert all("kind" in record for record in records)
+    assert _events(messages)[-1]["status"] == "ok"

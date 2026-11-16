@@ -21,6 +21,7 @@ from troupe.core import defaults
 from troupe.core.artifacts import MemoryArtifactStore
 from troupe.core.runners.effects import NoAudit, NoEffectExpected
 from troupe.core.runners.host import (
+    OFFERED_CAPABILITIES,
     RunnerCommand,
     RunRequest,
     make_scratch,
@@ -96,10 +97,13 @@ class _Driver:
             return False
         return True
 
-    async def initialize(self, versions: list[int]) -> p.Incoming:
+    async def initialize(
+        self, versions: list[int], capabilities: list[p.Capability] | None = None
+    ) -> p.Incoming:
+        """The runner's answer to initialize, offering ``capabilities`` (none unless given)."""
         host = p.Named("troupe-conformance", version("troupe"))
         return await self.answer(
-            await self.send("initialize", p.InitializeParams(versions, host, []))
+            await self.send("initialize", p.InitializeParams(versions, host, capabilities or []))
         )
 
     async def start(
@@ -181,6 +185,23 @@ async def check_runner(
         if answer.error is None:
             raise _Failed("it accepted protocol version 9999, which no runner supports")
 
+    async def second_initialize(driver: _Driver) -> None:
+        # The first handshake stands (spec: runner-protocol, "A second initialize is refused";
+        # host-robustness design D4): offered troupe's capabilities, then none.
+        first = await driver.initialize([p.PROTOCOL_VERSION], list(OFFERED_CAPABILITIES))
+        _started(first, "initialize")
+        answer = await driver.initialize([p.PROTOCOL_VERSION])
+        if answer.error is None:
+            raise _Failed(
+                f"it answered a second initialize, which it refuses with {p.ALREADY_INITIALIZED}"
+            )
+        if answer.error.data.code != p.ALREADY_INITIALIZED:
+            raise _Failed(
+                f"it refused a second initialize with {answer.error.data.code}, not "
+                f"{p.ALREADY_INITIALIZED}"
+            )
+        _started(await driver.start(options, workspace), "run/start after a second initialize")
+
     async def second_start(driver: _Driver) -> None:
         _started(await driver.initialize([p.PROTOCOL_VERSION]), "initialize")
         _started(await driver.start(options, workspace), "run/start")
@@ -235,6 +256,7 @@ async def check_runner(
     checks: list[tuple[str, Callable[[_Driver], Awaitable[None]]]] = [
         ("handshake", handshake),
         ("version refusal", version_refusal),
+        ("second initialize refused", second_initialize),
         ("second run/start refused", second_start),
         ("unknown option refused", unknown_option),
         ("run/start with a character accepted", character),

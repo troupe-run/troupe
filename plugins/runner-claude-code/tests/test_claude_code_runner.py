@@ -664,3 +664,25 @@ def test_a_lone_surrogate_in_a_message_is_written_as_the_replacement_character()
     message = json.loads(stdout.getvalue())
     assert message["params"] == {"x\ufffd": "a\ufffdb"}
     assert p.lone_surrogate(message) is None
+
+
+# Requirement: A second initialize is refused (host-robustness design D4, #356)
+
+SECOND_INITIALIZE = {
+    "protocolVersions": [0],
+    "host": {"name": "test", "version": "1"},
+    "capabilities": [],
+}
+"""A second initialize offering no capabilities."""
+
+
+def test_a_second_initialize_mid_run_is_refused_and_the_run_carries_on(
+    tmp_path: Path, workspace: Path, record: Path, sessions: list[Session]
+) -> None:
+    env = _env(tmp_path, record, fixture=_fixture("success-with-tools"))
+    session = _session(sessions, workspace, env)
+    session.start()
+    second = session.request("initialize", SECOND_INITIALIZE)
+    messages = session.until_result()
+    assert second["error"]["data"]["code"] == "runner.already-initialized"
+    assert messages[-1]["params"]["type"] == "result"
