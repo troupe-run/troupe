@@ -149,6 +149,20 @@ def _message(failure: StatusError) -> str:
     return _cut(text) if text else "(no message)"
 
 
+def _unicode_error(failure: StatusError, on_lost: Callable[[str, int], None]) -> StatusError:
+    """``failure`` with a lone surrogate in its type or message (an escape in the service's JSON)
+    as U+FFFD, reported through ``on_lost``, so reading it can't fail and the run ends for the
+    service's own reason (host-robustness design D3b; review of #437). The transcript already
+    holds the body as sent."""
+    (kind, message), replaced = p.unicode_text_counted([failure.error_type, failure.message])
+    if not replaced:
+        return failure
+    on_lost("the Messages API's error", replaced)
+    return StatusError(
+        failure.status, failure.headers, failure.body, kind, message, in_stream=failure.in_stream
+    )
+
+
 def classify(failure: StatusError, url: str = "") -> _Retryable:
     """A status the exchange may retry, as a _Retryable. Raises ExchangeFailedError for one it
     mustn't, with its reason from this one table (spec: anthropic-runner, "Failures retrying can't
@@ -283,7 +297,7 @@ def exchange(
         try:
             return _attempt(open_, params, record, on_lost)
         except StatusError as failure:
-            retryable = classify(failure, url)
+            retryable = classify(_unicode_error(failure, on_lost), url)
         except NotAStreamError as failure:
             raise ExchangeFailedError(
                 f"The service answered HTTP {failure.status} with "
