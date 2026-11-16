@@ -118,3 +118,20 @@ def test_a_lone_surrogate_in_a_calls_input_is_recorded_before_both_of_its_events
     assert "1 lone surrogate in the input of a 'Grep' tool call was replaced" in context.message
     assert (step.call.seq, step.result.seq) == (2, 3)
     assert "�" in step.call.input_summary
+
+
+def test_a_lone_surrogate_escaped_in_a_calls_json_text_is_written_as_u_fffd_and_recorded(
+    tmp_path: Path,
+) -> None:
+    # The escape is only a surrogate once the input's text is parsed (review of #437).
+    root = workspace(tmp_path)
+    sent: list[object] = []
+    numbering = EventNumbering(RUN, 65536, next_seq=1, send_context=sent.append)
+    arguments = '{"file_path": "a.txt", "content": "x\\ud800y"}'
+    step = call(tools_for(root, Effects(write=("**",))), "Write", arguments, numbering)
+    assert not step.is_error, step.output
+    assert (root / "a.txt").read_text(encoding="utf-8") == "x�y"
+    (context,) = sent
+    assert isinstance(context, p.ContextEvent)
+    assert "1 lone surrogate in the input of a 'Write' tool call was replaced" in context.message
+    assert (context.seq, step.call.seq, step.result.seq) == (1, 2, 3)
