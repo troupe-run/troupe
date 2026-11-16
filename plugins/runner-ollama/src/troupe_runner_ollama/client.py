@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
+from troupe_plugin_sdk import runner as p
 from troupe_runner_ollama.defaults import LINE_MAX_BYTES, STREAM_IDLE_TIMEOUT_SECONDS
 
 RETRIED_STATUSES = (500, 502, 503, 504)
@@ -75,6 +76,7 @@ def error_text(body: bytes, status: int | None = None) -> str:
         text = str(data["error"])
     else:
         text = body.decode("utf-8", "replace").strip()
+    text = p.unicode_text(text)  # an escaped lone surrogate in Ollama's message: host-robustness D3
     prefix = "" if status is None else f"status {status}"
     return f"{prefix}: {text}" if prefix and text else prefix or text or "an empty answer"
 

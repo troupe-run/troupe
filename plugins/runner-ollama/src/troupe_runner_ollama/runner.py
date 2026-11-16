@@ -125,10 +125,9 @@ class Runner:
     def _write(self, message: dict[str, Any], *, from_worker: bool = False) -> bool:
         """Write one message as one line. A message from the worker is dropped once the run is
         stopping; False when it was."""
-        # backslashreplace: a lone surrogate becomes its JSON escape, so no write can fail after
-        # an event's seq was taken.
-        text = json.dumps(message, ensure_ascii=False, separators=(",", ":"))
-        line = text.encode("utf-8", "backslashreplace") + b"\n"
+        # A lone surrogate is written as U+FFFD: no write fails after an event's seq was taken,
+        # and no line holds one (host-robustness design D3).
+        line = p.encode_line(message)
         with self._out:
             if from_worker and self._stop.is_set():
                 return False
@@ -137,7 +136,7 @@ class Runner:
             return True
 
     def _diagnose(self, text: str) -> None:
-        self._stderr.write(f"ollama runner: {text}\n".encode())
+        self._stderr.write(f"ollama runner: {text}\n".encode("utf-8", "backslashreplace"))
         self._stderr.flush()
 
     def _result(self, id_: object, result: dict[str, Any]) -> None:

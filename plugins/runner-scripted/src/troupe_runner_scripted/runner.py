@@ -76,7 +76,7 @@ class Runner:
     # Output
 
     def _send(self, message: dict[str, Any]) -> None:
-        line = json.dumps(message, ensure_ascii=False, separators=(",", ":")).encode() + b"\n"
+        line = p.encode_line(message)  # a lone surrogate as U+FFFD (host-robustness design D3)
         self._raw(line)
 
     def _raw(self, data: bytes) -> None:

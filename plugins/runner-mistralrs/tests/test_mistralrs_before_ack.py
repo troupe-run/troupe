@@ -28,6 +28,7 @@ from mistralrs_harness import (
     start_message,
 )
 from stand_in import StandIn
+from troupe_plugin_sdk import runner as p
 from troupe_runner_mistralrs.options import OptionsError, parse_options
 from troupe_runner_mistralrs.port import LoadSpec
 from troupe_runner_mistralrs.requirements import load
@@ -288,3 +289,18 @@ def test_an_acknowledged_run_is_answered_before_its_model_loads(dirs: tuple[Path
     (written,) = seen
     answers = [json.loads(line) for line in written.splitlines()]
     assert any(a.get("id") == 2 and "result" in a for a in answers)  # answered, then loaded
+
+
+# Requirement: A message's strings are Unicode text (host-robustness design D3)
+
+
+def test_a_lone_surrogate_in_a_message_is_written_as_the_replacement_character() -> None:
+    # An engine's \ud800 escape decodes to a lone surrogate, which the host refuses (#311).
+    stdout = io.BytesIO()
+    writer = Runner(
+        io.BytesIO(), stdout, io.BytesIO(), loader=StandIn({}).load, check=StandIn({}).check
+    )
+    writer._write({"jsonrpc": "2.0", "method": "run/event", "params": {"x\udfff": "a\ud800b"}})
+    message = json.loads(stdout.getvalue())
+    assert message["params"] == {"x\ufffd": "a\ufffdb"}
+    assert p.lone_surrogate(message) is None

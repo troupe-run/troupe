@@ -31,8 +31,10 @@ loaded machine:
   `[credential]` in place of both, rather than as base64 of bytes that still decode to most of the credential.
 - **Lone surrogates are a protocol violation (#311).** A string anywhere in a runner's message that holds a lone
   surrogate isn't Unicode text: the host ends the run `crashed` with `runner.protocol`, naming where in the message it
-  was. A runner with bytes that aren't text sends them as a `base64` transcript record. The owner chose refusal on #311
-  (2026-11-16); a test confirms no bundled runner can send one, and any that could is fixed here.
+  was. A runner with bytes that aren't text sends them as a `base64` transcript record. The owner chose refusal on
+  #311 (2026-11-16), and asked that no real run hit it. Testing found the Ollama runner could: an error body holding
+  `\ud800` crashed its conversation thread, and five runners wrote any lone surrogate as that escape. The plugin
+  SDK now writes every runner line with lone surrogates as U+FFFD, and all six bundled runners use it.
 - **A second `initialize` is refused (#356).** After a successful handshake, a runner answers a further `initialize`
   with the new contract error `runner.already-initialized`, and the first handshake's answer stands. The plugin SDK
   carries the code and its refusal in one place; all six bundled runners use it; the conformance suite
@@ -62,8 +64,11 @@ None.
 
 - `packages/troupe/src/troupe/core/masking.py`, `core/runners/host.py`, `core/runners/conformance.py`.
 - `protocol/schemas/runner/errors.schema.json` (and its packaged copy): a new code, `runner.already-initialized`.
-- `packages/troupe-plugin-sdk/src/troupe_plugin_sdk/runner.py`: the code and refusal.
-- `plugins/runner-{claude-code,openai,ollama,anthropic,mistralrs,scripted}`: refuse a second `initialize`.
+- `packages/troupe-plugin-sdk/src/troupe_plugin_sdk/runner.py`: the code and refusal; `parse_message`,
+  `lone_surrogate`, `unicode_text` and `encode_line`.
+- `plugins/runner-{claude-code,openai,ollama,anthropic,mistralrs,scripted}`: refuse a second `initialize`; write
+  each line with the SDK's `encode_line`. Ollama: clean its error bodies.
 - `scripts/tests/test_flake_hunt.py`, `scripts/tests/conftest.py`: the per-round bound.
 - `contributing/runners.md`: the second `initialize`.
-- No change to what the host sends, or to any runner's behaviour on a contract-following host.
+- No change to what the host sends. A runner's behaviour changes only for a second `initialize` and for text
+  holding a lone surrogate.

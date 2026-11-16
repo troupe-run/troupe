@@ -13,6 +13,8 @@ from typing import Any
 import pytest
 
 from scripted_harness import TIMEOUT, Session, validate
+from troupe_plugin_sdk import runner as p
+from troupe_runner_scripted.runner import Runner
 
 INIT = {
     "type": "init",
@@ -806,3 +808,16 @@ def test_a_result_written_before_a_requests_answer_is_still_read_by_until_result
     messages = session.until_result()
     assert second["error"]["data"]["code"] == "runner.already-started"
     assert messages[-1]["params"]["type"] == "result"
+
+
+# Requirement: A message's strings are Unicode text (host-robustness design D3)
+
+
+def test_a_lone_surrogate_in_a_message_is_written_as_the_replacement_character() -> None:
+    # An engine's \ud800 escape decodes to a lone surrogate, which the host refuses (#311).
+    stdout = io.BytesIO()
+    writer = Runner(io.BytesIO(), stdout, io.BytesIO())
+    writer._send({"jsonrpc": "2.0", "method": "run/event", "params": {"x\udfff": "a\ud800b"}})
+    message = json.loads(stdout.getvalue())
+    assert message["params"] == {"x\ufffd": "a\ufffdb"}
+    assert p.lone_surrogate(message) is None

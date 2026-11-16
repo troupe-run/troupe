@@ -512,6 +512,34 @@ def loads_strict(line: bytes) -> object:
         raise ProtocolError(f"not JSON: {error}") from error
 
 
+REPLACEMENT = "\ufffd"
+"""What a lone surrogate becomes in a runner's text: U+FFFD, Unicode's replacement character."""
+
+
+def unicode_text(value: Any) -> Any:  # noqa: ANN401 - a JSON value
+    """``value`` with each lone surrogate in its strings, keys included, replaced by U+FFFD. JSON
+    can escape one (``\\ud800``) and ``json.loads`` decodes it, but it isn't Unicode text: it
+    can't be UTF-8, and the contract refuses it (spec: runner-protocol, "A message's strings are
+    Unicode text"). A runner passes what it decodes from its engine through this."""
+    if isinstance(value, str):
+        if not any("\ud800" <= char <= "\udfff" for char in value):
+            return value
+        return "".join(REPLACEMENT if "\ud800" <= char <= "\udfff" else char for char in value)
+    if isinstance(value, list):
+        return [unicode_text(item) for item in value]
+    if isinstance(value, dict):
+        return {unicode_text(key): unicode_text(item) for key, item in value.items()}
+    return value
+
+
+def encode_line(message: object) -> bytes:
+    """One message as the line a runner writes: compact JSON, UTF-8, ended by a line feed. A lone
+    surrogate in any of its strings is written as U+FFFD (``unicode_text``), so the line never
+    holds one and writing it never fails."""
+    text = json.dumps(unicode_text(message), ensure_ascii=False, separators=(",", ":"))
+    return text.encode("utf-8") + b"\n"
+
+
 def lone_surrogate(value: object, path: str = "") -> tuple[str, str] | None:
     """Where in a parsed message a string, key or value, holds a lone surrogate, and which: JSON can
     escape one (``\\ud800``) but it isn't Unicode text, so the contract refuses it (spec:

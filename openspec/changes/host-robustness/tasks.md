@@ -33,7 +33,7 @@ commit message or PR, before the fix is written.
   `UnicodeEncodeError`, or whatever the event path does, recorded).
 - [x] 2.2 Host: refuse a lone surrogate in any string, key or value, before masking, with its path (design D3).
   Remove the `assume` that excludes surrogates from the existing property test. Verify: 2.1 passes.
-- [ ] 2.3 The Ollama runner, driven with Ollama output holding `\ud800` escapes (in content, a tool call's arguments
+- [x] 2.3 The Ollama runner, driven with Ollama output holding `\ud800` escapes (in content, a tool call's arguments
   and an error body), writes no message holding a lone surrogate once parsed; and the same check for every other
   bundled runner whose engine output is JSON (OpenAI, Anthropic, mistral.rs, Claude Code). Fix any runner that does.
   Verify: the tests pass, and a run of each through the host doesn't end `runner.protocol`.
