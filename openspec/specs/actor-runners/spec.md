@@ -115,6 +115,24 @@ default. The violations are listed in the scenarios.
 - **WHEN** a runner sends `served_model` with `model` `m-2` twice in one run
 - **THEN** the second is a protocol violation naming the model
 
+#### Scenario: A lone surrogate in a message
+- **WHEN** a runner sends a `run/transcript` record, or an event string, holding a lone surrogate (`"a\ud800b"`)
+- **THEN** it is a protocol violation naming where in the message the string was, and the run ends `crashed` rather
+  than failing without an outcome
+
+#### Scenario: A message nested past what troupe reads
+- **WHEN** a runner sends a message nested deeper than Python's recursion limit
+- **THEN** it is a protocol violation saying so, and the run ends `crashed` rather than failing without an outcome
+
+#### Scenario: Two keys that masking would make one
+- **WHEN** two keys of one object in a runner's message are the same once the run's credential is masked in them
+- **THEN** it is a protocol violation naming the object, rather than a message kept with one of the two values lost
+
+#### Scenario: An escape before the rest of the credential is read, not a violation
+- **WHEN** the run's credential starts with `n`, and a runner sends a valid `run/transcript` line whose record is a
+  newline written `\n` followed by the rest of the credential
+- **THEN** it is not a protocol violation, and the run carries on
+
 ### Requirement: Runners start with an explicit environment
 The host SHALL start a runner under the runner environment policy, a named default that selects nothing from the
 host: the runner gets only the variables the caller names, plus the minimum the operating system needs to start a
@@ -235,6 +253,10 @@ event's hash. The run SHALL continue.
 - **THEN** the event passed on carries the size and a hash
 - **AND** the stored artifact with that hash is the original event, byte for byte
 
+#### Scenario: A huge event that holds the credential
+- **WHEN** a runner sends an event larger than the maximum event size that holds the run's credential
+- **THEN** the stored artifact is the event with `[credential]` in place of the credential, and holds no form of it
+
 ### Requirement: The transcript is stored and referenced by hash
 The host SHALL write the run's transcript records, and separately the runner's standard error, to the artifact
 store as the run goes, and the outcome SHALL carry the hash of each. This SHALL hold for every outcome after the
@@ -259,8 +281,9 @@ display the run while it is going.
 
 ### Requirement: Any conforming runner can be checked
 troupe SHALL provide a conformance suite that runs against any runner command and checks the runner against this
-contract: the handshake, `init` first and saying how the runner applies the effects, a run start carrying effects and
-a scratch directory, sequence numbers, the result, cancel, shutdown, and exit on end of input.
+contract: the handshake, refusing a second `initialize`, `init` first and saying how the runner applies the effects,
+a run start carrying effects and a scratch directory, sequence numbers, the result, cancel, shutdown, and exit on end
+of input.
 
 #### Scenario: Scripted runner conforms
 - **WHEN** the conformance suite runs against the scripted runner
@@ -269,6 +292,15 @@ a scratch directory, sequence numbers, the result, cancel, shutdown, and exit on
 #### Scenario: A runner that doesn't say how it applies the effects
 - **WHEN** the suite runs against a runner whose `init` has no `effects`
 - **THEN** the suite fails, naming the `init` event and `effects`
+
+#### Scenario: A runner that answers a second initialize
+- **WHEN** the suite runs against a runner that answers a second `initialize` with the handshake
+- **THEN** the suite fails, naming the second `initialize` and `runner.already-initialized`
+
+#### Scenario: A runner that counts a refused initialize as its handshake
+- **WHEN** the suite runs against a runner that refuses an `initialize` for its versions, then refuses one offering a
+  version it speaks
+- **THEN** the suite fails, saying a refused `initialize` isn't a handshake
 
 ### Requirement: The audit's findings are part of the outcome
 The host SHALL run the audit once the runner has ended, for every run whose runner started, including one that
@@ -314,7 +346,8 @@ Each line SHALL validate against the protocol's stored transcript record schema.
 #### Scenario: An escape that would complete the credential
 - **WHEN** the run's credential starts with `n`, and a runner that accepted `transcript-kinds` sends a record holding a
   newline (written `\u000a`) followed by the rest of the credential
-- **THEN** the stored line holds that record as base64 of its bytes, and no stored byte holds the credential
+- **THEN** the stored line's record holds `[credential]` in place of the newline and the rest of the credential, the
+  line is valid JSON, and no stored byte holds the credential
 
 ### Requirement: A run without kinds is stored as before
 When the runner didn't accept `transcript-kinds`, the host SHALL store each record's bytes, after masking, followed by
