@@ -639,8 +639,9 @@ callback and a cancel signal.
   request troupe never sent, a version or capability troupe didn't offer, another run's id, an event out of
   sequence, before `init` or after `result`, a `tool_result` with no earlier `tool_call`, a `served_model` naming
   `init`'s model or one already reported, a `base64` record that isn't base64, a transcript record without a kind
-  after the runner accepted `transcript-kinds` or with one when it didn't, or a message over
-  `RUNNER_MAX_MESSAGE_BYTES`. troupe never reads such a message with a guess.
+  after the runner accepted `transcript-kinds` or with one when it didn't, a string holding a lone surrogate, a
+  message nested past Python's recursion limit, an object two of whose keys are the same once the run's credential
+  is masked in them, or a message over `RUNNER_MAX_MESSAGE_BYTES`. troupe never reads such a message with a guess.
 - **Cancelling** sends `run/cancel` and gives the runner `RUNNER_CANCEL_GRACE_SECONDS` to exit, then kills it and
   every process it started. The same happens after `shutdown`.
 - **Notices** tell the caller what is happening without waiting silently. They have the shape of
@@ -746,7 +747,8 @@ install check installs `troupe-run[all]` on every platform and Python, and rehea
 ## Checking a runner
 
 troupe's conformance suite checks a runner against this contract: the handshake, refusing a protocol version it
-doesn't support, refusing a second `run/start`, refusing an option it doesn't define (the suite adds
+doesn't support and then answering an `initialize` with one it does, refusing a second `initialize` with
+`runner.already-initialized`, refusing a second `run/start`, refusing an option it doesn't define (the suite adds
 `troupeConformanceUnknownOption`), acknowledging `run/cancel` and exiting, exiting when its input
 closes, and a whole run (`init` first, gap-free `seq`, one `result`, then `shutdown`). Each check starts the runner
 afresh. Give it the runner's command line as a JSON array, and the `run/start` options for a short run that
