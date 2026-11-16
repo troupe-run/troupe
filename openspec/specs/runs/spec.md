@@ -587,6 +587,22 @@ is split across reads.
 - **WHEN** a credential holds `/` and a runner sends it inside JSON text as `\/`
 - **THEN** that form is masked too
 
+#### Scenario: Masking never breaks a valid line
+- **WHEN** a runner sends a line that is a valid message, whatever the run's credential and wherever its strings
+  hold it
+- **THEN** troupe reads the line as the message it is, and masks the strings in it, unless masking would make two keys
+  of one object the same, which is a protocol violation rather than a value lost (spec: actor-runners)
+
+#### Scenario: An escape before the rest of the credential
+- **WHEN** the run's credential starts with `n`, and a runner sends a string holding a newline followed by the rest of
+  the credential
+- **THEN** troupe keeps the string with `[credential]` in place of the newline and the rest of the credential, so the
+  JSON text it writes for the string doesn't hold the credential
+
+#### Scenario: A key that holds the credential
+- **WHEN** a runner sends a message with a duplicated key that holds the credential
+- **THEN** the protocol error troupe records names the key with `[credential]` in its place
+
 ### Requirement: A rehearsal shows the run's runtime
 A rehearsed `perform` SHALL show the runtime the run would use, with each value's source, whether its credential's
 variable is set, and the price of its model when it has one, and SHALL refuse what perform would refuse about the
