@@ -20,6 +20,10 @@ from dataclasses import dataclass, field
 MARKER = "[credential]"
 """What a masked credential reads as."""
 
+WINDOW_CHARS = 4096
+"""How many characters of a large string the escape-aware pass checks at a time: only a window
+that can hold a form of the value is masked a character at a time."""
+
 
 @dataclass(frozen=True)
 class Masker:
@@ -58,10 +62,39 @@ class Masker:
         (a newline, written ``\\n``, before the rest of a value that starts with ``n``) is replaced
         too, with the characters whose writing it covers, so neither the string nor any JSON text
         troupe writes for it holds the value outside ``[credential]``."""
-        if not self.forms or not any(
-            form in writing for writing in _writings(text) for form in self.forms
-        ):
+        if not self.forms or not self._holds_a_form(text):
             return text
+        if len(text) <= WINDOW_CHARS:
+            return self._mask_units(text)
+        # A form spans at most as many characters as it has bytes, so every form that covers a
+        # character lies within that many characters of it. Only the windows that can hold one
+        # (checked at C speed) get the per-character pass, so a large string costs little more
+        # than a bytes.replace (review of #437).
+        margin = self.longest
+        hot: list[tuple[int, int]] = []
+        for start in range(0, len(text), WINDOW_CHARS):
+            low, high = max(0, start - margin), min(len(text), start + WINDOW_CHARS + margin)
+            if self._holds_a_form(text[low:high]):
+                if hot and low <= hot[-1][1]:
+                    hot[-1] = (hot[-1][0], high)
+                else:
+                    hot.append((low, high))
+        pieces: list[str] = []
+        done = 0
+        for low, high in hot:
+            pieces += [text[done:low], self._mask_units(text[low:high])]
+            done = high
+        masked = "".join([*pieces, text[done:]])
+        # A marker put at a region's edge could complete a form with what's past it; if anything
+        # is left, mask the whole string the slow way, which handles that.
+        return masked if not self._holds_a_form(masked) else self._mask_units(text)
+
+    def _holds_a_form(self, text: str) -> bool:
+        return any(form in writing for writing in _writings(text) for form in self.forms)
+
+    def _mask_units(self, text: str) -> str:
+        """``text`` masked a character at a time: each run of characters some form covers, in
+        any writing, becomes one marker, repeated until no form covers a character."""
         units: list[str | None] = list(text)  # None is a [credential] troupe put there
         while True:
             covered = self._covered(units)
