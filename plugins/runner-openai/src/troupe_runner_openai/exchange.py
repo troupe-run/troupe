@@ -145,6 +145,23 @@ def retry_after(value: str | None, now: float | None = None) -> float | None:
     return max(0.0, seconds)
 
 
+def _unicode_error(error: StatusError, on_lost: Callable[[str, int], None]) -> StatusError:
+    """``error`` with a lone surrogate in its JSON body (an escape the service wrote) as U+FFFD,
+    reported through ``on_lost``, so reading its message can't fail and the run ends for the
+    service's own reason (host-robustness design D3b; review of #437). The transcript already
+    holds the body as sent."""
+    try:
+        data = json.loads(error.body)
+    except ValueError:
+        return error
+    clean, replaced = p.unicode_text_counted(data)
+    if not replaced:
+        return error
+    on_lost("the Responses API's error", replaced)
+    body = json.dumps(clean, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    return StatusError(error.status, error.headers, body)
+
+
 def classify(error: StatusError, url: str = "") -> _Retryable:
     """A status the exchange may retry, as a _Retryable. Raises ExchangeFailedError for one it
     mustn't."""
@@ -297,7 +314,7 @@ def exchange(
                 return reply
             retryable = _failed(reply)
         except StatusError as error:
-            retryable = classify(error, endpoint.responses_url)
+            retryable = classify(_unicode_error(error, on_lost), endpoint.responses_url)
         except ShapeError as error:
             raise ExchangeFailedError(
                 f"The service's response can't be read: {_sentence(str(error))} Retrying can't "

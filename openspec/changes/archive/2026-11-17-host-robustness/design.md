@@ -166,7 +166,9 @@ text that isn't Unicode, where, and how many characters were replaced.
   mapper's `take_replaced`). OpenAI and Anthropic pass `on_lost` into `exchange`, as they pass `record`. A tool
   call's input and output are made text before `Tools.run` numbers either event, so its context event comes before
   both. Ollama's error body is no longer cleaned where it's read: its message reaches an event (`retry`, `result`)
-  through `numbered`, which records it there. mistral.rs's engine gives Rust strings, which can't hold one, so
+  through `numbered`, which records it there. OpenAI's and Anthropic's error bodies are read as text the same way
+  before they're classified, reported as "the Responses API's error" or "the Messages API's error", so the run ends
+  for the service's own reason (review of #437). mistral.rs's engine gives Rust strings, which can't hold one, so
   `numbered` is its only check.
 - **The transcript keeps what the engine sent:** a record is written before the text is cleaned, a lone surrogate
   as its JSON escape (Anthropic's `_json(..., as_sent=True)`, like Ollama's `encode`), never U+FFFD.

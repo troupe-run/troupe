@@ -442,3 +442,17 @@ def test_a_lone_surrogate_in_streamed_text_is_recorded_in_a_context_event(
     # The text comes twice: in its delta and in the final response.
     assert "2 lone surrogates in the Responses API's answer were replaced" in context["message"]
     assert events[-1]["status"] == "ok"
+
+
+def test_an_error_body_holding_a_lone_surrogate_ends_with_its_own_reason_and_is_recorded(
+    sessions: list[Session], workspace: Path
+) -> None:
+    # Review of #437: the error's message is read as Unicode text, so the run ends for the
+    # service's reason, not as a runner failure.
+    with FakeEndpoint([error_reply(401, "bad key x\ud800y")]) as fake:
+        session = _session(sessions, workspace)
+        session.start(fake.endpoint)
+        events = _events(session.until_result())
+    assert (events[-1]["status"], events[-1]["reason"]) == ("error", "authentication")
+    context = _replacement_recorded(events)
+    assert "1 lone surrogate in the Responses API's error was replaced" in context["message"]

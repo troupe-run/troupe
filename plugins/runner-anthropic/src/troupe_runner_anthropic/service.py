@@ -72,12 +72,15 @@ def _error_of(body: object) -> tuple[str | None, str | None]:
 
 
 def _body_bytes(body: object, response: httpx2.Response | None) -> bytes:
+    # As the library exposes it: a lone surrogate (an escape in the service's JSON) is kept as
+    # that escape, so building the error can't fail (host-robustness design D3b).
     if body is not None and not isinstance(body, str | bytes):
-        return json.dumps(body, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        text = json.dumps(body, ensure_ascii=False, separators=(",", ":"))
+        return text.encode("utf-8", "backslashreplace")
     if isinstance(body, bytes):
         return body
     if isinstance(body, str):
-        return body.encode("utf-8")
+        return body.encode("utf-8", "backslashreplace")
     if response is not None:
         try:
             return response.content
