@@ -69,8 +69,14 @@ class EventNumbering:
         """Record that ``replaced`` lone surrogates in the engine's text ``where`` (such as
         "Ollama's answer") were replaced with U+FFFD. The ``context`` event saying so is sent
         before the next event ``numbered`` numbers, or after ``init`` when that's next."""
-        if replaced:
-            self._lost.append((where, replaced))
+        if not replaced:
+            return
+        # One context event per place: a streamed answer reports each delta (review of #437).
+        for index, (waiting, count) in enumerate(self._lost):
+            if waiting == where:
+                self._lost[index] = (where, count + replaced)
+                return
+        self._lost.append((where, replaced))
 
     def numbered(self, body: dict[str, Any]) -> dict[str, Any]:
         """``body`` (an event without ``runId`` or ``seq``) numbered, its strings made Unicode

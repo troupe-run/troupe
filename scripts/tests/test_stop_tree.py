@@ -96,3 +96,19 @@ def test_a_command_that_stops_making_progress_fails_naming_its_last_line() -> No
     assert f"wrote no line within {EACH_WITHIN:g}s" in message
     assert "the next line" in message
     assert "'started'" in message
+
+
+CLOSES_STDOUT = "import os, time\nprint('started', flush=True)\nos.close(1)\ntime.sleep(60)\n"
+"""Ends its standard output but doesn't exit."""
+
+
+def test_a_command_that_ends_its_output_but_not_itself_fails_within_a_bound() -> None:
+    started = time.monotonic()
+    try:
+        run_with_progress([sys.executable, "-c", CLOSES_STDOUT], EACH_WITHIN)
+    except AssertionError as error:
+        message = str(error)
+    else:
+        raise AssertionError("a command still running after its output ended should fail")
+    assert time.monotonic() - started < 45  # not the 60 s it sleeps
+    assert "didn't end" in message

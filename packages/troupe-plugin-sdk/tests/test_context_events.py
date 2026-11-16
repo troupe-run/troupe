@@ -180,3 +180,18 @@ def test_a_replacement_with_nowhere_to_record_it_is_an_error_not_silent() -> Non
     numbering = EventNumbering(RUN, 65536, next_seq=1)
     with pytest.raises(RuntimeError, match="no send_context"):
         numbering.numbered({"type": "log", "level": "info", "message": "\ud800"})
+
+
+def test_replacements_reported_for_the_same_place_are_one_context_event() -> None:
+    # A streamed answer reports each delta; the run gets one event per place (review of #437).
+    sent: list[p.RunEvent] = []
+    numbering = _numbering(sent)
+    numbering.numbered({"type": "init", "runner": {"name": "x", "version": "1"}})
+    for replaced in (1, 2, 3):
+        numbering.lost("Ollama's answer", replaced)
+    numbering.lost("Ollama's error", 1)
+    numbering.numbered({"type": "log", "level": "info", "message": "m"})
+    messages = [e.message for e in sent if isinstance(e, p.ContextEvent)]
+    assert len(messages) == 2
+    assert "6 lone surrogates in Ollama's answer were replaced" in messages[0]
+    assert "1 lone surrogate in Ollama's error was replaced" in messages[1]

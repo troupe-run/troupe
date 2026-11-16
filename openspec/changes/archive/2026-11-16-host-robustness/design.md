@@ -170,6 +170,8 @@ text that isn't Unicode, where, and how many characters were replaced.
   `numbered` is its only check.
 - **The transcript keeps what the engine sent:** a record is written before the text is cleaned, a lone surrogate
   as its JSON escape (Anthropic's `_json(..., as_sent=True)`, like Ollama's `encode`), never U+FFFD.
+- **One event per place:** `lost` adds a report to one already waiting for the same place, so a streamed answer
+  whose deltas each hold one gives one `context` event, not one per delta (review of #437).
 - **Ordering inside a site:** `numbered` comes before `fit`, because the SDK's `fit` encodes strictly and raises on a
   lone surrogate. That was the Ollama error-body crash, and the same path existed in OpenAI and Anthropic, whose
   streamed text reaches `fit` uncleaned.
@@ -203,6 +205,9 @@ reads the command's standard output line by line (on a thread, so it works on Wi
 arrives within `each_within` seconds: it stops the tree and fails naming what it was waiting for ("the hunt's next
 line after `w0r1 failed in 34.3s…`") and the output so far. The hunt prints a line at its start, after each round and
 at its end, so the gap between lines is at most one round, however many rounds the test asks for.
+
+Once its output ends, the command must also exit, and its standard error close, within the same bound, or the
+tree is stopped and the test fails (review of #437).
 
 `HUNT_RUN_WITHIN` becomes `HUNT_ROUND_WITHIN = 120.0`: "seconds for one round of a small hunt (a fresh pytest on a
 few trivial tests) to end on a slow machine". The issue's loaded round took 69.9 s. `run_hunt` uses it.

@@ -244,7 +244,22 @@ def run_with_progress(
         if line is None:
             break
         out.append(line)
-    process.wait()
+    # Its output has ended: it should exit, and its standard error close, within the bound too.
+    try:
+        process.wait(each_within)
+    except subprocess.TimeoutExpired:
+        stop_tree(process)
+        name = command[1] if len(command) > 1 else command[0]
+        raise AssertionError(
+            f"{name} didn't end within {each_within:g}s of closing its output, so its tree was "
+            f"stopped; its output:\n{b''.join(out).decode('utf-8', errors='backslashreplace')}"
+        ) from None
     for reader in readers:
-        reader.join()
+        reader.join(each_within)
+        if reader.is_alive():  # a descendant still holds standard error open
+            stop_tree(process)
+            raise AssertionError(
+                f"standard error of {command[1] if len(command) > 1 else command[0]} stayed "
+                f"open {each_within:g}s after it ended, so its tree was stopped"
+            )
     return subprocess.CompletedProcess(command, process.returncode, b"".join(out), b"".join(errors))
