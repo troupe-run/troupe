@@ -6,6 +6,7 @@ import json
 from hypothesis import example, given
 from hypothesis import strategies as st
 
+from masking_checks import forms_outside_the_marker, writings
 from troupe.core.masking import MARKER, Masker
 
 KEY = "sk-test/abc+def=0123456789"
@@ -93,3 +94,66 @@ def test_however_a_stream_is_chunked_it_masks_as_the_whole_does(
 def test_no_output_holds_the_value_whatever_surrounds_it(before: str, after: str) -> None:
     masked = MASK.text(before + KEY + after)
     assert KEY not in masked.replace(MARKER, "\0")
+
+
+# Escape-aware masking of a string (host-robustness D2, #330)
+
+VISIBLE = st.characters(min_codepoint=0x21, max_codepoint=0x7E)
+"""A credential's characters: visible ASCII (troupe_plugin_sdk.credential.well_formed)."""
+
+
+@st.composite
+def credentials_and_strings(draw: st.DrawFn) -> tuple[str, str]:
+    credential = draw(st.text(VISIBLE, min_size=1, max_size=12))
+    cut = draw(st.integers(0, len(credential)))
+    fragments = st.sampled_from(
+        [
+            credential,
+            credential[:cut],
+            credential[cut:],
+            credential[1:],
+            "\n",
+            "\\",
+            '"',
+            "/",
+            "é",
+            "\U0001f600",
+            "\x00",
+            MARKER,
+        ]
+    ) | st.text(VISIBLE, max_size=4)
+    return credential, "".join(draw(st.lists(fragments, max_size=8)))
+
+
+@given(credentials_and_strings())
+@example(("nsecret-token-0123456789", "\nsecret-token-0123456789"))
+@example(("abc", "\nb\u000abc"))
+@example(("]x", "x]xx"))
+@example(("u00e9", "é"))
+@example(("dent", MARKER))
+def test_no_writing_of_a_masked_string_holds_the_credential_outside_the_marker(
+    case: tuple[str, str],
+) -> None:
+    credential, text = case
+    masker = Masker(credential)
+    masked = masker.text(text)
+    for writing in writings(masked):
+        assert forms_outside_the_marker(masker, writing) == [], (masked, writing)
+
+
+@given(credentials_and_strings())
+def test_a_string_no_writing_of_which_holds_the_credential_is_unchanged(
+    case: tuple[str, str],
+) -> None:
+    credential, text = case
+    masker = Masker(credential)
+    if not any(form in writing for writing in writings(text) for form in masker.forms):
+        assert masker.text(text) == text
+
+
+def test_a_newline_before_the_rest_of_a_credential_starting_with_n_is_masked_with_it() -> None:
+    masker = Masker("nsecret-token-0123456789")
+    assert masker.text("key: \nsecret-token-0123456789.") == "key: [credential]."
+    assert masker.data({"\nsecret-token-0123456789": ["\nsecret-token-0123456789"]}) == {
+        MARKER: [MARKER]
+    }

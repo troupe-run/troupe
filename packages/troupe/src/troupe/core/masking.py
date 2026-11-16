@@ -12,7 +12,9 @@ back the bytes at the end of each chunk that could be the start of a value, and 
 the next chunk shows they aren't, or at the end.
 """
 
+import bisect
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 MARKER = "[credential]"
@@ -51,10 +53,53 @@ class Masker:
         return out + rest
 
     def text(self, text: str) -> str:
-        """``text`` with every form of the value replaced."""
-        if not self.forms:
+        """``text`` with every form of the value replaced, in it and in the JSON text written for it
+        (host-robustness design D2). A form that only appears once the string is written as JSON
+        (a newline, written ``\\n``, before the rest of a value that starts with ``n``) is replaced
+        too, with the characters whose writing it covers, so neither the string nor any JSON text
+        troupe writes for it holds the value outside ``[credential]``."""
+        if not self.forms or not any(
+            form in writing for writing in _writings(text) for form in self.forms
+        ):
             return text
-        return self.bytes(text.encode("utf-8", "surrogatepass")).decode("utf-8", "surrogatepass")
+        units: list[str | None] = list(text)  # None is a [credential] troupe put there
+        while True:
+            covered = self._covered(units)
+            if not covered:
+                return "".join(MARKER if unit is None else unit for unit in units)
+            merged: list[str | None] = []
+            for index, unit in enumerate(units):
+                if index not in covered:
+                    merged.append(unit)
+                elif index == 0 or index - 1 not in covered:
+                    merged.append(None)
+            units = merged
+
+    def _covered(self, units: list[str | None]) -> set[int]:
+        """The units that some form of the value in some writing of ``units`` covers, for each form
+        that covers at least one character the runner sent. A form wholly inside markers is
+        troupe's own text, and covers nothing. Each pass that covers something replaces at least
+        one character, so masking ends."""
+        marker = MARKER.encode("utf-8")
+        covered: set[int] = set()
+        for write in _WRITERS:
+            pieces = [marker if unit is None else write(unit) for unit in units]
+            starts: list[int] = []
+            joined = bytearray()
+            for piece in pieces:
+                starts.append(len(joined))
+                joined += piece
+            ends = [start + len(piece) for start, piece in zip(starts, pieces, strict=True)]
+            for form in self.forms:
+                at = joined.find(form)
+                while at != -1:
+                    first = bisect.bisect_right(starts, at) - 1
+                    last = bisect.bisect_left(ends, at + len(form))
+                    span = range(first, last + 1)
+                    if any(units[index] is not None for index in span):
+                        covered.update(span)
+                    at = joined.find(form, at + 1)
+        return covered
 
     def data(self, value: object) -> object:
         """A JSON value with every string in it, keys included, masked."""
@@ -71,6 +116,27 @@ class Masker:
     def stream(self) -> "StreamMask":
         """A mask for a stream of chunks, such as standard error."""
         return StreamMask(self)
+
+
+def _raw(text: str) -> bytes:
+    return text.encode("utf-8", "surrogatepass")
+
+
+def _json_kept(text: str) -> bytes:
+    return json.dumps(text, ensure_ascii=False)[1:-1].encode("utf-8", "surrogatepass")
+
+
+def _json_escaped(text: str) -> bytes:
+    return json.dumps(text)[1:-1].encode("ascii")
+
+
+_WRITERS: tuple[Callable[[str], bytes], ...] = (_raw, _json_kept, _json_escaped)
+"""The texts a string can be written as: itself, and JSON with non-ASCII kept and escaped. JSON
+writes a string a character at a time, so a string's writing is its characters' writings joined."""
+
+
+def _writings(text: str) -> list[bytes]:
+    return [write(text) for write in _WRITERS]
 
 
 def _replace_complete(data: bytes, forms: tuple[bytes, ...]) -> tuple[bytes, bytes]:

@@ -5,33 +5,33 @@ commit message or PR, before the fix is written.
 
 ## 1. Parse, then mask (#330)
 
-- [ ] 1.1 Failing first: the issue's repro through the run host (credential `nsecret-token-0123456789`, a stand-in
+- [x] 1.1 Failing first: the issue's repro through the run host (credential `nsecret-token-0123456789`, a stand-in
   runner sends `"\nsecret-token-0123456789"` as a record after `init`) ends as its result says, not
   `crashed`/`runner.protocol`. Verify: it fails on today's code with "Invalid \escape".
-- [ ] 1.2 Failing first: `Masker` property tests: for credentials of visible ASCII and strings built from credential
+- [x] 1.2 Failing first: `Masker` property tests: for credentials of visible ASCII and strings built from credential
   fragments, escapes, `/`, newlines and non-ASCII, `Masker.data` leaves no form of the credential in the string or in
   either JSON text written for it (outside the marker), and changes nothing in a string with no form. Verify: fails
   on today's `Masker.data` (the `\n` + rest case).
-- [ ] 1.3 Escape-aware string masking in `masking.py` (design D2), with its termination rule. Verify: 1.2 passes.
-- [ ] 1.4 SDK: split `parse_line` into `loads_strict` + `parse_message(data)`; `parse_line` unchanged for callers.
+- [x] 1.3 Escape-aware string masking in `masking.py` (design D2), with its termination rule. Verify: 1.2 passes.
+- [x] 1.4 SDK: split `parse_line` into `loads_strict` + `parse_message(data)`; `parse_line` unchanged for callers.
   Verify: the SDK's runner-type tests pass.
-- [ ] 1.5 Host: parse the raw line, mask the parsed message, then shape-check and handle it; mask the text of
+- [x] 1.5 Host: parse the raw line, mask the parsed message, then shape-check and handle it; mask the text of
   violations raised before masking (a duplicated key); `on_message` gets the masked message; the oversized event
   stores the raw line only when masking changed nothing, else the masked message (design D1). Verify: 1.1 passes; a
   test that a duplicated key holding the credential is named with `[credential]`; the oversized tests, including one
   with the credential.
-- [ ] 1.6 Property test through the host's read path: for arbitrary credentials and messages, a line parses exactly
+- [x] 1.6 Property test through the host's read path: for arbitrary credentials and messages, a line parses exactly
   when `json.loads` parses it (every valid line still parses), and no string passed on or stored, nor its JSON texts,
   holds a form of the credential. Verify: it passes, and fails when 1.5's order is reverted (mask the raw line first).
-- [ ] 1.7 The kinds escape test (#315's base64 case) now expects `[credential]` in a text record; the base64
+- [x] 1.7 The kinds escape test (#315's base64 case) now expects `[credential]` in a text record; the base64
   fallback stays as a last check. Verify: `test_run_host.py` passes.
 
 ## 2. Lone surrogates are a violation (#311)
 
-- [ ] 2.1 Failing first: the issue's repro (a record `"a\ud800b"` after `init`) ends `crashed`/`runner.protocol`
+- [x] 2.1 Failing first: the issue's repro (a record `"a\ud800b"` after `init`) ends `crashed`/`runner.protocol`
   naming `params.record`, and a `log` event holding one does too. Verify: both fail on today's code (an unhandled
   `UnicodeEncodeError`, or whatever the event path does, recorded).
-- [ ] 2.2 Host: refuse a lone surrogate in any string, key or value, before masking, with its path (design D3).
+- [x] 2.2 Host: refuse a lone surrogate in any string, key or value, before masking, with its path (design D3).
   Remove the `assume` that excludes surrogates from the existing property test. Verify: 2.1 passes.
 - [ ] 2.3 The Ollama runner, driven with Ollama output holding `\ud800` escapes (in content, a tool call's arguments
   and an error body), writes no message holding a lone surrogate once parsed; and the same check for every other
