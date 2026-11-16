@@ -84,7 +84,8 @@ from troupe_plugin_sdk.events import EventNumbering
 from troupe_plugin_sdk.tools import Tools
 
 tools = Tools.for_declaration(Declaration.from_run_start(params))  # effects, workspace, scratch
-numbering = EventNumbering(run_id, event_max_bytes, next_seq=1)  # after init, seq 0
+# After init (seq 0). send_context sends a context event that records a replaced lone surrogate.
+numbering = EventNumbering(run_id, event_max_bytes, next_seq=1, send_context=send)
 
 offered = tools.offered()  # each tool's name, description and input schema, naming scratch
 # ... ask the model, offering `offered`; for each tool call in its reply:
@@ -97,6 +98,9 @@ reply_to_model(call_id, step.output)
 `arguments` is the call's input as an object, or as the JSON text of one. An unknown tool, malformed input, a refused
 path or effect, and a call that fails are each an error result the model can read and act on. None of them ends the
 run. The two events are numbered from the same counter as the runner's other events, and fitted to `eventMaxBytes`.
+Input holding a lone surrogate (a `\ud800` escape in the model's JSON) is read with U+FFFD in its place, and a
+`context` event recording it goes out through `send_context` before the two events (see
+[Text that isn't Unicode](#text-that-isnt-unicode)).
 
 ## The model that answered
 
@@ -105,7 +109,7 @@ from troupe_plugin_sdk.events import ServedModels
 
 served = ServedModels(asked_model)  # the model init named, or None
 for body in served.note(reply_model):  # the model the service says answered
-    send({"runId": run_id, "seq": numbering.take(), **body})
+    send(numbering.numbered(body))
 ```
 
 `note` returns nothing for an empty name, the model init named, or a model already noted, and a `served_model` body
@@ -122,7 +126,7 @@ dropped or summarised part of the conversation it holds, the runner sends a `con
 ```python
 from troupe_plugin_sdk.events import EventNumbering, context_event
 
-numbering = EventNumbering(run_id, event_max_bytes, next_seq=1)  # after init, seq 0
+numbering = EventNumbering(run_id, event_max_bytes, next_seq=1, send_context=send)  # after init
 
 event = context_event(
     numbering,
@@ -137,6 +141,32 @@ send(event)
 The message is cut to the summary limit and to `eventMaxBytes`, like a tool event's summaries. A count left as `None`
 is left out of the event. A kind or `by` off the contract's list raises a `ProtocolError`, and the counter is left as
 it was. A loss that ends the run isn't a `context` event: the run's `result` reports it.
+
+## Text that isn't Unicode
+
+Every string a runner sends is Unicode text: troupe refuses a message holding a lone surrogate. An engine's JSON can
+escape one (`\ud800`), and `json.loads` decodes it, so a runner replaces each with U+FFFD and records that it did, in
+a `context` event of kind `other` by `runner` naming where and how many (spec: runner-protocol, "A message's strings
+are Unicode text"):
+
+```python
+from troupe_plugin_sdk import runner as p
+
+reply, replaced = p.unicode_text_counted(json.loads(line))  # where the engine's output is read
+# Recorded before the next event, and after init at the earliest:
+numbering.lost("the engine's answer", replaced)
+
+send(numbering.numbered({"type": "turn", "role": "assistant", "text": reply["text"]}))
+
+# The last check: a line never holds one, and encode_line says how many it replaced.
+line, replaced = p.encode_line(message)
+if replaced:
+    stderr.write(p.replaced_note("my-engine", message, replaced))
+```
+
+`numbered` numbers an event body (without `runId` and `seq`) after making its own strings text, and records any it
+replaced. Reports for the same place are added together, so a streamed answer gives one `context` event, not one per
+delta. A replacement waiting with no `send_context` to send it is a `RuntimeError`, never a silent loss.
 
 ## Compaction
 
