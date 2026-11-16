@@ -821,3 +821,50 @@ def test_a_lone_surrogate_in_a_message_is_written_as_the_replacement_character()
     message = json.loads(stdout.getvalue())
     assert message["params"] == {"x\ufffd": "a\ufffdb"}
     assert p.lone_surrogate(message) is None
+
+
+# Requirement: A second initialize is refused (host-robustness design D4, #356)
+
+SECOND_INITIALIZE = {
+    "protocolVersions": [0],
+    "host": {"name": "test", "version": "1"},
+    "capabilities": [],
+}
+"""A second initialize offering no capabilities."""
+
+
+def test_a_second_initialize_is_refused_and_the_first_handshakes_kinds_stand(
+    tmp_path: Path,
+) -> None:
+    session = Session(tmp_path, args=["--transcript-kinds"])
+    try:
+        assert session.initialize(["transcript-kinds"])["result"]["capabilities"] == [
+            "transcript-kinds"
+        ]
+        second = session.request("initialize", SECOND_INITIALIZE)
+        assert second["error"]["data"]["code"] == "runner.already-initialized"
+        script = {
+            "steps": [
+                {"event": INIT},
+                {"transcript": {"record": "r", "kind": "sent"}},
+                {"event": OK},
+            ]
+        }
+        params = {
+            "runId": session.run_id,
+            "direction": "test",
+            "workspace": str(session.workspace),
+            "options": {"script": script},
+            "limits": {"eventMaxBytes": 65536},
+            "effects": {"write": [], "delete": [], "move": []},
+            "scratch": str(session.scratch()),
+            "onContextFull": "fail",
+        }
+        assert session.request("run/start", params)["result"] == {"runId": session.run_id}
+        records = [
+            m["params"] for m in session.until_result() if m.get("method") == "run/transcript"
+        ]
+        assert records == [{"runId": session.run_id, "record": "r", "kind": "sent"}]
+        session.validate_all()
+    finally:
+        session.kill()

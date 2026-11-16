@@ -304,3 +304,21 @@ def test_a_lone_surrogate_in_a_message_is_written_as_the_replacement_character()
     message = json.loads(stdout.getvalue())
     assert message["params"] == {"x\ufffd": "a\ufffdb"}
     assert p.lone_surrogate(message) is None
+
+
+# Requirement: A second initialize is refused (host-robustness design D4, #356)
+
+SECOND_INITIALIZE = {
+    "protocolVersions": [0],
+    "host": {"name": "test", "version": "1"},
+    "capabilities": [],
+}
+"""A second initialize offering no capabilities."""
+
+
+def test_a_second_initialize_after_run_start_is_refused(dirs: tuple[Path, Path]) -> None:
+    second = {"jsonrpc": "2.0", "id": 3, "method": "initialize", "params": SECOND_INITIALIZE}
+    messages = drive([initialize(), start_message(run_start(*dirs, str(CHECK_MODEL))), second])
+    assert "result" in _answer(messages)
+    answer = next(m for m in messages if m.get("id") == 3)
+    assert answer["error"]["data"]["code"] == "runner.already-initialized"

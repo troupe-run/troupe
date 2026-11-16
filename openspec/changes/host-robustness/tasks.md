@@ -40,17 +40,17 @@ commit message or PR, before the fix is written.
 
 ## 3. A second initialize is refused (#356)
 
-- [ ] 3.1 Contract: `runner.already-initialized` in `protocol/schemas/runner/errors.schema.json` and the packaged copy.
+- [x] 3.1 Contract: `runner.already-initialized` in `protocol/schemas/runner/errors.schema.json` and the packaged copy.
   Verify: the schema tests and `test_runner_schemas.py` pass; the SDK's error-type strategy includes it.
-- [ ] 3.2 SDK: the code and its refusal words in `troupe_plugin_sdk.runner`. Verify: a unit test of the words.
-- [ ] 3.3 Failing first, per runner (Claude Code, OpenAI, Ollama, Anthropic, mistral.rs, scripted): `initialize`
+- [x] 3.2 SDK: the code and its refusal words in `troupe_plugin_sdk.runner`. Verify: a unit test of the words.
+- [x] 3.3 Failing first, per runner (Claude Code, OpenAI, Ollama, Anthropic, mistral.rs, scripted): `initialize`
   (with `transcript-kinds` where the runner uses kinds), `run/start`, a second `initialize` offering none; the second
   is refused with `runner.already-initialized`, and later records keep their kind. Verify: each fails on today's code.
-- [ ] 3.4 Each runner refuses it through the SDK. Verify: 3.3 passes in every runner's tests.
-- [ ] 3.5 Failing first: `check_runner` against a stand-in runner that answers a second `initialize` fails, naming it.
-- [ ] 3.6 `check_runner` gains `second_initialize` (design D4). Verify: 3.5 passes, and the conformance suite passes
+- [x] 3.4 Each runner refuses it through the SDK. Verify: 3.3 passes in every runner's tests.
+- [x] 3.5 Failing first: `check_runner` against a stand-in runner that answers a second `initialize` fails, naming it.
+- [x] 3.6 `check_runner` gains `second_initialize` (design D4). Verify: 3.5 passes, and the conformance suite passes
   against the scripted runner and every bundled runner it runs against.
-- [ ] 3.7 `contributing/runners.md` says what a runner does with a second `initialize`. Verify: read it.
+- [x] 3.7 `contributing/runners.md` says what a runner does with a second `initialize`. Verify: read it.
 
 ## 4. The flake-hunt tests bound each round (#397)
 

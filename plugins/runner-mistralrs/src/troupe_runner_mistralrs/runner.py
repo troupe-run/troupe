@@ -260,7 +260,11 @@ class Runner:
         id_ = message.get("id")
         method = message["method"]
         params = message.get("params", {})
-        if method == "initialize":
+        if method == "initialize" and self._initialized:
+            # The first handshake stands (spec: runner-protocol, "A second initialize is refused").
+            problem, fix = p.already_initialized("mistralrs")
+            self._error(id_, p.JSONRPC_REFUSED, p.ALREADY_INITIALIZED, problem, fix)
+        elif method == "initialize":
             self._initialize(id_, params)
         elif not self._initialized:
             self._error(

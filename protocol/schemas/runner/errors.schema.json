@@ -73,6 +73,15 @@
       }
     },
     {
+      "description": "An initialize after the handshake the runner already answered; the first answer stands. JSON-RPC code -32000.",
+      "properties": {
+        "code": {
+          "const": "runner.already-initialized"
+        },
+        "details": false
+      }
+    },
+    {
       "description": "A second run/start to a runner process already serving a run. JSON-RPC code -32000.",
       "properties": {
         "code": {

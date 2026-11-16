@@ -72,7 +72,7 @@ def test_the_scripted_runner_passes_every_conformance_check(tmp_path: Path) -> N
     )
     failed = {name: r.problem for name, r in results.items() if not r.passed}
     assert failed == {}
-    assert len(results) == 8
+    assert len(results) == 9
     assert "run/start with a character accepted" in results
 
 
@@ -98,6 +98,15 @@ def test_a_runner_that_ignores_an_unknown_option_fails_that_check(tmp_path: Path
     assert not check.passed
     assert check.problem is not None
     assert "troupeConformanceUnknownOption" in check.problem
+
+
+def test_a_runner_that_answers_a_second_initialize_fails_that_check(tmp_path: Path) -> None:
+    results = _check([sys.executable, str(FAKE), "ignore-options"], {}, tmp_path, EXPIRING)
+    check = results["second initialize refused"]
+    assert not check.passed
+    assert check.problem is not None
+    assert "second initialize" in check.problem
+    assert "runner.already-initialized" in check.problem
 
 
 def test_a_runner_that_does_not_exit_on_end_of_input_fails_that_check(tmp_path: Path) -> None:
@@ -153,7 +162,7 @@ def test_the_claude_code_runner_passes_every_check_with_a_stand_in_claude(tmp_pa
         env,
     )
     assert {name: r.problem for name, r in results.items() if not r.passed} == {}
-    assert len(results) == 8
+    assert len(results) == 9
 
 
 def test_the_ollama_runner_passes_every_check_given_a_runtime_naming_a_stand_in(
@@ -173,7 +182,7 @@ def test_the_ollama_runner_passes_every_check_given_a_runtime_naming_a_stand_in(
             RunStartRuntime(name="test", endpoint=fake.url, model="fake", credential=False),
         )
     assert {name: r.problem for name, r in results.items() if not r.passed} == {}
-    assert len(results) == 8
+    assert len(results) == 9
 
 
 def test_the_openai_style_runner_passes_every_check_given_a_runtime_naming_a_stand_in(
@@ -204,7 +213,7 @@ def test_the_openai_style_runner_passes_every_check_given_a_runtime_naming_a_sta
         assert fake.requests
         assert {r.headers["authorization"] for r in fake.requests} == {f"Bearer {key}"}
     assert {r.name: r.problem for r in results if not r.passed} == {}
-    assert len(results) == 8
+    assert len(results) == 9
 
 
 def test_the_anthropic_runner_passes_every_check_given_a_runtime_naming_a_stand_in(
@@ -235,7 +244,7 @@ def test_the_anthropic_runner_passes_every_check_given_a_runtime_naming_a_stand_
         assert fake.requests
         assert {r.headers["authorization"] for r in fake.requests} == {f"Bearer {key}"}
     assert {r.name: r.problem for r in results if not r.passed} == {}
-    assert len(results) == 8
+    assert len(results) == 9
 
 
 def test_the_mistralrs_runner_passes_every_check_with_the_engine_stand_in(tmp_path: Path) -> None:
@@ -282,7 +291,7 @@ def test_the_mistralrs_runner_passes_every_check_with_the_engine_stand_in(tmp_pa
         ),
     )
     assert {name: r.problem for name, r in results.items() if not r.passed} == {}
-    assert len(results) == 8
+    assert len(results) == 9
 
 
 # Requirement: Any conforming runner can be checked: init says how the runner applies the effects

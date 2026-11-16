@@ -430,6 +430,7 @@ Only `runner.unsupported-version` and `runner.requirement-unmet` carry `details`
 | `runner.not-initialized` | -32600 | A request other than `initialize` came first |
 | `runner.unknown-method` | -32601 | The method isn't one the runner serves |
 | `runner.unsupported-version` | -32000 | None of the offered versions is supported; `details.supportedVersions` names the ones that are |
+| `runner.already-initialized` | -32000 | An `initialize` after one the runner answered with the handshake. The first answer stands: its version and capabilities stay the run's. An `initialize` after one refused for its versions isn't a second handshake |
 | `runner.already-started` | -32000 | A second `run/start` |
 | `runner.invalid-params` | -32602 | The params aren't the ones the contract defines |
 | `runner.requirement-unmet` | -32000 | What the runner runs on doesn't meet one of its requirements, such as its engine's least version, so it refuses `run/start`. `details` name the `requirement`, what's `wanted` (such as `>= 0.12.6`) and what was `found`, left out when it found nothing. How components declare requirements in general is Decision [#281](https://github.com/troupe-run/troupe/issues/281) |

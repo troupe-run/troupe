@@ -67,6 +67,21 @@ JSONRPC_INVALID_PARAMS = -32602
 JSONRPC_REFUSED = -32000
 """The application error code for a valid request the runner refuses (design D2)."""
 
+ALREADY_INITIALIZED = "runner.already-initialized"
+"""The contract's code for an initialize after the handshake a runner already answered (spec:
+runner-protocol, "A second initialize is refused"; host-robustness design D4). JSON-RPC code
+JSONRPC_REFUSED."""
+
+
+def already_initialized(runner: str) -> tuple[str, str]:
+    """The problem and fix a runner named ``runner`` refuses a second initialize with. The first
+    handshake's answer stands: its protocol version and capabilities stay the run's."""
+    return (
+        f"The {runner} runner already answered initialize; that handshake stands, with the "
+        "protocol version and capabilities it named.",
+        "Send initialize once, as the first message to each runner process.",
+    )
+
 
 # The handshake
 

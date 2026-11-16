@@ -820,6 +820,7 @@ def _error_response(data: dict[str, Any]) -> dict[str, Any]:
         "runner.invalid-request",
         "runner.not-initialized",
         "runner.unknown-method",
+        "runner.already-initialized",
         "runner.already-started",
         "runner.invalid-params",
     ],
