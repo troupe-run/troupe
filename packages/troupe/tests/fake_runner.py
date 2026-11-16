@@ -5,7 +5,9 @@ options; ``ignore-options`` does nothing else unusual, for checks that a runner 
 option. ``write-then-silent`` writes ``stray.txt`` in its working directory and then never answers.
 ``refuse-character`` refuses a run/start that carries a character, as a runner that
 treats the contract's own field as unknown would. ``error-without-reason`` sends an error result
-with no reason, which the contract refuses.
+with no reason, which the contract refuses. ``raw-lines`` writes each line of the JSON list in
+``FAKE_RAW_LINES`` as it is, ``{run_id}`` replaced, after ``init``, then a result with seq
+``FAKE_RAW_NEXT_SEQ`` (1 if unset); with ``FAKE_RAW_KINDS`` set it accepts transcript-kinds.
 """
 
 import json
@@ -16,6 +18,7 @@ import time
 from typing import Any
 
 RUN_ID = ""
+OK_RESULT = {"type": "result", "status": "ok", "message": "done"}
 ESCAPE_CANARY = "nsecret-token-0123456789"
 """A credential that starts with n, the letter JSON's escape for a newline ends with."""
 
@@ -88,7 +91,9 @@ def main(mode: str) -> None:
                 answer_initialize(message, protocolVersion=1)
             elif mode == "capability":
                 answer_initialize(message, capabilities=["resume"])
-            elif mode in ("accept-transcript-kinds", "escaped-newline-credential"):
+            elif mode in ("accept-transcript-kinds", "escaped-newline-credential") or (
+                mode == "raw-lines" and os.environ.get("FAKE_RAW_KINDS")
+            ):
                 # accept-transcript-kinds: whether or not troupe offered it
                 answer_initialize(message, capabilities=["transcript-kinds"])
             else:
@@ -125,7 +130,12 @@ def main(mode: str) -> None:
                 event(1, type="result", status="ok", message="done")
                 continue
             init()
-            if mode == "escaped-newline-credential":
+            if mode == "raw-lines":
+                for raw in json.loads(os.environ["FAKE_RAW_LINES"]):
+                    sys.stdout.write(raw.replace("{run_id}", RUN_ID) + "\n")
+                sys.stdout.flush()
+                event(int(os.environ.get("FAKE_RAW_NEXT_SEQ", "1")), **OK_RESULT)
+            elif mode == "escaped-newline-credential":
                 # A newline written as \u000a, then the rest of ESCAPE_CANARY: the wire line never
                 # holds the credential, but JSON's own escape for the newline (\n) would.
                 record = '"\\u000a' + ESCAPE_CANARY[1:] + '"'

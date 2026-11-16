@@ -110,6 +110,31 @@ def _violation(problem: str, line: int | None = None, **details: object) -> _Vio
     )
 
 
+def parse_runner_line(mask: Masker, line: bytes, number: int) -> tuple[object, bytes]:
+    """Line ``number`` of a runner's output as its message with every string masked, and the line
+    to keep for it: the line as sent when masking changed nothing, else the masked message written
+    out. The line is parsed before it's masked, so masking can't make a valid line invalid
+    (host-robustness design D1, #330). A string that isn't Unicode text is a violation (#311)."""
+    try:
+        data = p.loads_strict(line)
+    except p.ProtocolError as error:
+        raise _violation(mask.text(str(error)), number) from error
+    found = p.lone_surrogate(data)
+    if found is not None:
+        where, char = found
+        raise _violation(
+            mask.text(
+                f"a string at {where} holds a lone surrogate (U+{ord(char):04X}), which isn't "
+                "text; bytes that aren't text go in a base64 transcript record"
+            ),
+            number,
+        )
+    message = mask.data(data)
+    if message == data and mask.bytes(line) == line:
+        return message, line
+    return message, json.dumps(message, ensure_ascii=False, separators=(",", ":")).encode()
+
+
 class _StderrSink:
     """Keeps a runner's standard error within its limit: the first half as it comes, the last half
     in a rolling buffer, and a marker saying how much was left out between them."""
@@ -188,8 +213,9 @@ class _Run:
         self.last_event = time.monotonic()
         self.silence_announced = False
         self.mask = Masker(request.credential)
-        """Masks the run's credential in every line, record and byte of standard error the runner
-        sends, before anything is parsed, stored or passed on (runtimes design D6)."""
+        """Masks the run's credential in every message, record and byte of standard error the
+        runner sends, before anything is stored or passed on (runtimes design D6). A message is
+        masked once it's parsed (host-robustness design D1)."""
 
     # Writing to the runner
 
@@ -227,13 +253,13 @@ class _Run:
         if not line:
             return None
         self.line_number += 1
-        line = self.mask.bytes(line)
+        message, line = parse_runner_line(self.mask, line, self.line_number)
         try:
-            incoming = p.parse_line(line)
+            incoming = p.parse_message(message)
         except p.ProtocolError as error:
             raise _violation(str(error), self.line_number) from error
-        if self.on_message is not None:
-            self.on_message("received", json.loads(line))
+        if self.on_message is not None and isinstance(message, dict):  # parse_message saw one
+            self.on_message("received", message)
         if incoming.method is not None:
             await self.notification(incoming, line)
         else:
@@ -373,14 +399,15 @@ class _Run:
                 raise _violation(
                     "a base64 transcript record isn't valid base64", self.line_number
                 ) from error
+            data = self.mask.bytes(data)
         else:
-            data = record.record.encode()
-        data = self.mask.bytes(data)
+            data = record.record.encode()  # masked as text when its line was read (design D2)
         if record.kind is not None:
             framed = framed_record(record.kind, data, base64_=record.encoding == "base64")
             if self.mask.bytes(framed) != framed:
-                # JSON escaping made a form of the credential (a newline before the rest of a
-                # credential that starts with n): store this record's masked bytes as base64.
+                # The framed line still holds a form of the credential. Masking each string
+                # (design D2) leaves none in the record's own writing, so only a credential made
+                # of JSON's syntax across kind and record gets here: store the bytes as base64.
                 framed = framed_record(record.kind, data, base64_=True)
             data = framed
         if self.transcript is None:

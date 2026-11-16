@@ -13,9 +13,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from hypothesis import assume, given, settings
+from hypothesis import example, given, settings
 from hypothesis import strategies as st
 
+from masking_checks import forms_outside_the_marker, writings
 from protocol_schemas import check_error, check_notice, validator_for
 from runner_schemas import is_valid, validate
 from troupe.core import defaults
@@ -1234,34 +1235,37 @@ def test_framing_that_passes_the_transcript_limit_stops_the_run(tmp_path: Path) 
     assert (ran.outcome.outcome, _code(ran)) == (Outcome.FAILED, "run.transcript-too-large")
 
 
-def test_a_record_that_framing_would_turn_into_the_credential_is_stored_as_base64(
+def test_a_record_whose_framing_would_complete_the_credential_is_stored_masked_as_text(
     tmp_path: Path,
 ) -> None:
     # JSON writes a newline as \n, so a newline before the rest of a credential that starts with
-    # n would put the whole credential in the stored line.
-    # The runner writes the newline as \u000a, so its line never holds the credential.
+    # n would put the whole credential in the stored line. The runner writes the newline as
+    # \u000a, so its line never holds the credential; troupe masks the newline with the rest
+    # (host-robustness design D2), where #315 stored it as base64 of bytes that still decode to
+    # most of the credential.
     canary = "nsecret-token-0123456789"
     ran = _run(tmp_path, argv=_fake("escaped-newline-credential"), credential=canary)
     assert ran.outcome.outcome is Outcome.SUCCEEDED, ran.outcome.error
-    assert canary.encode() not in ran.transcript()
+    assert not _holds_a_form(ran.transcript(), canary)
+    assert canary[1:].encode() not in ran.transcript()
     line = json.loads(ran.transcript())
-    assert (line["kind"], line["encoding"]) == ("received", "base64")
-    assert base64.b64decode(line["record"]) == ("\n" + canary[1:]).encode()
+    validator_for(STORED_RECORD).validate(line)
+    assert line == {"kind": "received", "record": "[credential]"}
 
 
 @settings(max_examples=200, deadline=None)
 @given(
     kind=st.sampled_from(p.TRANSCRIPT_KINDS),
-    before=st.text(),
-    after=st.text(),
+    # The host refuses a lone surrogate before a record is masked or framed (design D3).
+    before=st.text(st.characters(codec="utf-8")),
+    after=st.text(st.characters(codec="utf-8")),
     secret=st.sampled_from(["sk-test-canary-0123456789", 'sk-"q/uo\\teé-canary']),
     embed=st.booleans(),
 )
 def test_a_masked_text_record_framed_validates_and_decodes_to_the_masked_bytes(
     kind: p.TranscriptKind, before: str, after: str, secret: str, embed: bool
 ) -> None:
-    assume(not any(0xD800 <= ord(c) <= 0xDFFF for c in before + after))  # a lone surrogate: #311
-    masked = Masker(secret).bytes((before + (secret if embed else "") + after).encode())
+    masked = Masker(secret).text(before + (secret if embed else "") + after).encode()
     line = json.loads(framed_record(kind, masked, base64_=False))
     validator_for(STORED_RECORD).validate(line)
     assert line["kind"] == kind
@@ -1281,3 +1285,223 @@ def test_a_masked_byte_record_framed_validates_and_decodes_to_the_masked_bytes(
     assert (line["kind"], line["encoding"]) == (kind, "base64")
     assert base64.b64decode(line["record"]) == masked
     assert masked.endswith(b"[credential]")
+
+
+# Requirement: troupe masks the credential in everything it keeps from a run
+# (host-robustness design D1, D2)
+
+ESCAPE_CANARY = "nsecret-token-0123456789"
+"""A credential that starts with n, the letter JSON's escape for a newline ends with (#330)."""
+
+
+def _raw(
+    tmp_path: Path,
+    *lines: str,
+    next_seq: int = 1,
+    kinds: bool = False,
+    credential: str | None = ESCAPE_CANARY,
+    limits: RunLimits = FAST,
+) -> Ran:
+    """A run whose runner writes ``lines`` as they are after init, then an ok result."""
+    env = {"FAKE_RAW_LINES": json.dumps(list(lines)), "FAKE_RAW_NEXT_SEQ": str(next_seq)}
+    if kinds:
+        env["FAKE_RAW_KINDS"] = "1"
+    return _run(tmp_path, argv=_fake("raw-lines"), env=env, credential=credential, limits=limits)
+
+
+def _kept(ran: Ran) -> bytes:
+    """Every byte the run kept or passed on: its transcript, standard error, the events passed on,
+    each oversized event's stored line, its error and its notices."""
+    kept = [ran.transcript(), ran.stderr()]
+    for event in ran.events:
+        kept.append(json.dumps(event.to_data()).encode())
+        if isinstance(event, p.OversizedEvent):
+            kept.append(ran.store.read(event.ref))
+    if ran.outcome.error is not None:
+        kept.append(json.dumps(ran.outcome.error.to_data()).encode())
+    kept += [json.dumps(notice.to_data()).encode() for notice in ran.notices]
+    kept += [json.dumps(message).encode() for message in ran.received]
+    return b"\n".join(kept)
+
+
+def _holds_a_form(data: bytes, credential: str) -> bool:
+    return Masker(credential).bytes(data) != data
+
+
+TRANSCRIPT_LINE = (
+    '{"jsonrpc": "2.0", "method": "run/transcript", "params": {"runId": "{run_id}", %s}}'
+)
+
+
+def test_a_newline_escape_before_the_rest_of_the_credential_is_read_and_masked_not_a_violation(
+    tmp_path: Path,
+) -> None:
+    # #330: the wire line holds "\nsecret-token-...", whose raw bytes hold the credential.
+    ran = _raw(tmp_path, TRANSCRIPT_LINE % '"record": "\\nsecret-token-0123456789"')
+    assert ran.outcome.outcome is Outcome.SUCCEEDED, ran.outcome.error
+    assert ran.transcript() == b"[credential]\n"
+    assert not _holds_a_form(_kept(ran), ESCAPE_CANARY)
+
+
+def test_a_newline_escape_before_the_rest_of_the_credential_in_an_event_is_masked(
+    tmp_path: Path,
+) -> None:
+    log = (
+        '{"jsonrpc": "2.0", "method": "run/event", "params": {"runId": "{run_id}", "seq": 1, '
+        '"type": "log", "level": "info", "message": "key: \\nsecret-token-0123456789."}}'
+    )
+    ran = _raw(tmp_path, log, next_seq=2)
+    assert ran.outcome.outcome is Outcome.SUCCEEDED, ran.outcome.error
+    assert isinstance(ran.events[1], p.LogEvent)
+    assert ran.events[1].message == "key: [credential]."
+    assert not _holds_a_form(_kept(ran), ESCAPE_CANARY)
+
+
+def test_a_duplicated_key_holding_the_credential_is_named_masked_in_the_violation(
+    tmp_path: Path,
+) -> None:
+    line = (
+        '{"jsonrpc": "2.0", "method": "run/event", "params": {"runId": "{run_id}", "seq": 1, '
+        f'"{ESCAPE_CANARY}": 1, "{ESCAPE_CANARY}": 2}}}}'
+    )
+    ran = _raw(tmp_path, line)
+    assert (ran.outcome.outcome, _code(ran)) == (Outcome.CRASHED, "runner.protocol")
+    assert ran.outcome.error is not None
+    assert "[credential]" in ran.outcome.error.problem
+    assert not _holds_a_form(_kept(ran), ESCAPE_CANARY)
+
+
+def test_an_oversized_event_holding_the_credential_is_stored_masked(tmp_path: Path) -> None:
+    log = (
+        '{"jsonrpc": "2.0", "method": "run/event", "params": {"runId": "{run_id}", "seq": 1, '
+        '"type": "log", "level": "info", "message": "' + "y" * 3000 + ESCAPE_CANARY + '"}}'
+    )
+    ran = _raw(tmp_path, log, next_seq=2, limits=RunLimits(event_max_bytes=1024, cancel_grace=2.0))
+    assert ran.types == ["init", "oversized", "result"]
+    oversized = ran.events[1]
+    assert isinstance(oversized, p.OversizedEvent)
+    stored = json.loads(ran.store.read(oversized.ref))
+    assert stored["params"]["message"] == "y" * 3000 + "[credential]"
+    assert not _holds_a_form(_kept(ran), ESCAPE_CANARY)
+
+
+def test_an_oversized_event_with_nothing_masked_is_stored_as_the_line_it_was(
+    tmp_path: Path,
+) -> None:
+    # Spaces after the separators, which troupe's own JSON wouldn't write: byte for byte.
+    log = (
+        '{"jsonrpc": "2.0", "method": "run/event", "params": {"runId": "{run_id}", "seq": 1, '
+        '"type": "log", "level": "info", "message": "' + "y" * 3000 + '"}}'
+    )
+    ran = _raw(tmp_path, log, next_seq=2, limits=RunLimits(event_max_bytes=1024, cancel_grace=2.0))
+    oversized = ran.events[1]
+    assert isinstance(oversized, p.OversizedEvent)
+    assert ran.store.read(oversized.ref) == log.replace("{run_id}", ran.events[0].run_id).encode()
+
+
+# Requirement: A message's strings are Unicode text (#311, host-robustness D3)
+
+
+@pytest.mark.parametrize(
+    ("line", "path"),
+    [
+        (TRANSCRIPT_LINE % '"record": "a\\ud800b"', "params.record"),
+        (
+            '{"jsonrpc": "2.0", "method": "run/event", "params": {"runId": "{run_id}", "seq": 1, '
+            '"type": "log", "level": "info", "message": "x\\udfffy"}}',
+            "params.message",
+        ),
+        (
+            '{"jsonrpc": "2.0", "method": "run/event", "params": {"runId": "{run_id}", "seq": 1, '
+            '"type": "tool_call", "callId": "c1", "tool": "Write", "inputSummary": "s", '
+            '"\\ud800": 1}}',
+            "params",
+        ),
+    ],
+    ids=["transcript record", "log message", "key"],
+)
+def test_a_lone_surrogate_in_a_runners_message_is_a_violation_naming_where(
+    tmp_path: Path, line: str, path: str
+) -> None:
+    ran = _raw(tmp_path, line)
+    assert (ran.outcome.outcome, _code(ran)) == (Outcome.CRASHED, "runner.protocol")
+    assert ran.outcome.error is not None
+    assert "lone surrogate" in ran.outcome.error.problem
+    assert path in ran.outcome.error.problem
+    assert ran.transcript() == b""
+
+
+VISIBLE = st.characters(min_codepoint=0x21, max_codepoint=0x7E)
+PROTOCOL_WORDS = '{"jsonrpc":"2.0","method":"run/transcript","params":{"runId":"r","record":'
+"""The fixed text of the lines below, which a credential inside would mask."""
+JSON_OUTSIDE_STRINGS = set("{}[],:0123456789.eE+-")
+"""What JSON writes outside its strings, in the messages below (no numbers or literals)."""
+
+
+@st.composite
+def runner_lines(draw: st.DrawFn) -> tuple[str, bytes]:
+    """A credential, and a valid run/transcript line whose strings (keys included) are built from
+    pieces of it, escapes and other text, each string written with or without non-ASCII escaped
+    and with or without / escaped."""
+    credential = draw(st.text(VISIBLE, min_size=1, max_size=16))
+    cut = draw(st.integers(0, len(credential)))
+    piece = st.sampled_from(
+        [
+            *(credential, credential[:cut], credential[cut:], credential[1:]),
+            *("\n", "\t", "\\", '"', "/", "é", "\U0001f600", "\x00", "[credential]"),
+        ]
+    ) | st.text(VISIBLE, max_size=4)
+    strings = st.lists(piece, max_size=6).map("".join)
+
+    def write(text: str) -> str:
+        written = json.dumps(text, ensure_ascii=draw(st.booleans()))
+        return written.replace("/", "\\/") if draw(st.booleans()) else written
+
+    extra = draw(st.dictionaries(strings, strings, max_size=3))
+    params = '"runId": "r", "record": ' + write(draw(strings))
+    for key, value in extra.items():
+        if key not in ("runId", "record"):
+            params += f", {write(key)}: {write(value)}"
+    line = '{"jsonrpc": "2.0", "method": "run/transcript", "params": {' + params + "}}"
+    return credential, line.encode("utf-8")
+
+
+def _strings(value: object) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        return [s for key, item in value.items() for s in [key, *_strings(item)]]
+    if isinstance(value, list):
+        return [s for item in value for s in _strings(item)]
+    return []
+
+
+@settings(max_examples=500, deadline=None)
+@given(runner_lines())
+@example(
+    (
+        "nsecret-token-0123456789",
+        b'{"jsonrpc":"2.0","method":"run/transcript",'
+        b'"params":{"runId":"r","record":"\\nsecret-token-0123456789"}}',
+    )
+)
+def test_every_valid_line_is_read_and_no_string_it_keeps_holds_the_credential(
+    case: tuple[str, bytes],
+) -> None:
+    credential, line = case
+    mask = Masker(credential)
+    raw = json.loads(line)
+    message, kept = host_module.parse_runner_line(mask, line, 1)  # never a violation
+    # The same message, each string masked: masking reads, never re-reads, the line.
+    assert _strings(message) == [mask.text(s) for s in _strings(raw)]
+    for text in _strings(message):
+        for writing in writings(text):
+            assert not forms_outside_the_marker(mask, writing), (text, writing)
+    # The kept line is the line, or the message written out; both read back as the message. A
+    # form only across JSON's own syntax needs a credential of it (design, non-goals).
+    assert json.loads(kept) == message
+    if '"' not in credential and not set(credential) <= JSON_OUTSIDE_STRINGS:
+        assert not forms_outside_the_marker(mask, kept)
+    # The protocol's own words are read as themselves unless the credential is in them.
+    if credential not in PROTOCOL_WORDS:
+        assert p.parse_message(message).method == "run/transcript"

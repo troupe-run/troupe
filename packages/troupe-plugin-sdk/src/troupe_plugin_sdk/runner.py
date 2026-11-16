@@ -512,9 +512,45 @@ def loads_strict(line: bytes) -> object:
         raise ProtocolError(f"not JSON: {error}") from error
 
 
+def lone_surrogate(value: object, path: str = "") -> tuple[str, str] | None:
+    """Where in a parsed message a string, key or value, holds a lone surrogate, and which: JSON can
+    escape one (``\\ud800``) but it isn't Unicode text, so the contract refuses it (spec:
+    runner-protocol, "A message's strings are Unicode text"). The place is a dotted path to the
+    string (``params.record``), or to the object whose key holds it; None when there's none."""
+    if isinstance(value, str):
+        return _surrogate_in(value, path)
+    if isinstance(value, dict):
+        for key, item in value.items():
+            found = _surrogate_in(str(key), path) or lone_surrogate(item, _join(path, str(key)))
+            if found is not None:
+                return found
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            found = lone_surrogate(item, f"{path}[{index}]")
+            if found is not None:
+                return found
+    return None
+
+
+def _surrogate_in(text: str, path: str) -> tuple[str, str] | None:
+    for char in text:
+        if "\ud800" <= char <= "\udfff":
+            return path or "the message", char
+    return None
+
+
+def _join(path: str, key: str) -> str:
+    return f"{path}.{key}" if path else key
+
+
 def parse_line(line: bytes) -> Incoming:
     """Read one line a runner wrote: a notification, a success response or an error response."""
-    data = loads_strict(line)
+    return parse_message(loads_strict(line))
+
+
+def parse_message(data: object) -> Incoming:
+    """Read one message a runner wrote, already parsed from its line (``loads_strict``), so that a
+    host can mask its strings between the two (host-robustness design D1)."""
     if not isinstance(data, dict) or data.get("jsonrpc") != "2.0":
         raise ProtocolError("not a JSON-RPC 2.0 message")
     keys = set(data) - {"jsonrpc"}
