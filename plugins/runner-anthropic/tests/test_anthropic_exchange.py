@@ -619,3 +619,17 @@ def test_begin_returning_false_before_a_retry_raises_stopped_with_one_request_se
         run()
     assert len(run.sent) == 1
     assert run.calls == ["begin", "open", "end", "begin"]
+
+
+# Requirement: A message's strings are Unicode text: each replacement is recorded
+# (host-robustness design D3b; review of #437)
+
+
+def test_a_lone_surrogate_in_an_event_is_read_as_u_fffd_and_reported_with_where() -> None:
+    run = Run([_opened(_reply_events("x\ud800y"))])
+    reply = run()
+    assert reply.text == "x\ufffdy"
+    # The text comes in two deltas, the surrogate in the first: one replacement, one report.
+    assert [entry for entry in run.lost if entry[1]] == [("the Messages API's answer", 1)]
+    # The transcript keeps each event as the library exposed it: the escape, not U+FFFD.
+    assert any(b"\\ud800" in data for kind, data in run.records if kind == "received")

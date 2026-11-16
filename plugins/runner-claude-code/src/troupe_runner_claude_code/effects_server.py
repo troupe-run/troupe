@@ -63,7 +63,7 @@ def write_config(
 class Server:
     """One run's server: the SDK's tools for its declaration, offering only ``tools``."""
 
-    def __init__(self, config: Mapping[str, Any]) -> None:
+    def __init__(self, config: Mapping[str, Any], stderr: BinaryIO | None = None) -> None:
         declared = config["effects"]
         scratch = config.get("scratch")
         self.tools = Tools(
@@ -76,8 +76,18 @@ class Server:
             scratch=None if scratch is None else Path(scratch),
         )
         self.offered = tuple(config["tools"])
-        self.numbering = EventNumbering(config["runId"], int(config["eventMaxBytes"]))
+        self.stderr = stderr if stderr is not None else sys.stderr.buffer
+        # The server's events go nowhere: Claude Code gets only each call's result. A lone
+        # surrogate replaced in a call's input is noted on standard error; the run records it from
+        # Claude Code's own output, which carries the same input (host-robustness design D3b).
+        self.numbering = EventNumbering(
+            config["runId"], int(config["eventMaxBytes"]), send_context=self._note
+        )
         self.calls = 0
+
+    def _note(self, event: p.ContextEvent) -> None:
+        self.stderr.write(f"troupe effects server: {event.message}\n".encode())
+        self.stderr.flush()
 
     def answer(self, message: Mapping[str, Any]) -> dict[str, Any] | None:
         """The response to ``message``, or None for a notification."""
@@ -146,7 +156,8 @@ def serve(config: Mapping[str, Any], stdin: BinaryIO, stdout: BinaryIO) -> None:
         else:
             reply = server.answer(message) if isinstance(message, dict) else None
         if reply is not None:
-            stdout.write(json.dumps(reply, ensure_ascii=False).encode("utf-8") + b"\n")
+            line, _ = p.encode_line(reply)  # a lone surrogate as U+FFFD, never a failed write
+            stdout.write(line)
             stdout.flush()
 
 

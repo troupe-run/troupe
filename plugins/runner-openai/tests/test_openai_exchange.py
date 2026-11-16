@@ -37,8 +37,9 @@ class Run:
         self.endpoint = fake if isinstance(fake, str) else fake.endpoint
         self.retries: list[Retry] = []
         self.records: list[tuple[str, bytes]] = []
-        self.lost: list[tuple[str, int]] = []
         """Each transcript record: its kind and its bytes."""
+        self.lost: list[tuple[str, int]] = []
+        """Each replacement of a lone surrogate the exchange reported: where, and how many."""
         self.waits: list[float] = []
         self.limits = limits
 
@@ -515,3 +516,25 @@ def test_a_200_that_isnt_a_stream_ends_with_reason_configuration() -> None:
     body = b'{"id": "resp_1", "object": "response", "status": "completed", "output": []}'
     with FakeEndpoint([Reply(200, body=body)]) as fake:
         assert _failure(Run(fake)).reason == "configuration"
+
+
+# Requirement: A message's strings are Unicode text: each replacement is recorded
+# (host-robustness design D3b; review of #437)
+
+
+def test_a_lone_surrogate_in_the_stream_is_read_as_u_fffd_and_reported_once_per_reply() -> None:
+    with FakeEndpoint([text_reply("x\ud800y")]) as fake:
+        run = Run(fake)
+        reply = run()
+    assert reply.text == "x\ufffdy"
+    # Once in the delta, once in the final response; reported once, for the whole reply.
+    assert run.lost == [("the Responses API's answer", 2)]
+    # The transcript keeps the stream as sent: the escape, not U+FFFD.
+    assert any(b"\\ud800" in data for kind, data in run.records if kind == "received")
+
+
+def test_a_reply_with_no_lone_surrogate_reports_none_replaced() -> None:
+    with FakeEndpoint([text_reply("Done.")]) as fake:
+        run = Run(fake)
+        run()
+    assert run.lost == [("the Responses API's answer", 0)]
