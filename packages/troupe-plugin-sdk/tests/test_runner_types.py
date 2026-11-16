@@ -851,3 +851,39 @@ def test_an_in_process_runtime_has_no_endpoint_and_an_endpoint_null_is_refused()
     assert not is_valid(data, "run-start.schema.json#/properties/params", runner=None)
     with pytest.raises(p.ProtocolError, match=r"runtime\.endpoint"):
         p.RunStartParams.from_data(data)
+
+
+# Requirement: A message's strings are Unicode text (host-robustness design D3)
+
+
+@pytest.mark.parametrize(
+    ("value", "where"),
+    [
+        ({"params": {"record": "a\ud800b"}}, ("params.record", "\ud800")),
+        ({"params": {"items": ["ok", "x\udfff"]}}, ("params.items[1]", "\udfff")),
+        ({"params": {"k\udc80": 1}}, ("params", "\udc80")),
+        ("\ud800", ("the message", "\ud800")),
+        ({"params": {"record": "a\U0001f600b", "n": 1}}, None),
+    ],
+    ids=["value", "list item", "key", "the message itself", "a surrogate pair is text"],
+)
+def test_lone_surrogate_names_where_the_first_one_is(
+    value: object, where: tuple[str, str] | None
+) -> None:
+    assert p.lone_surrogate(value) == where
+
+
+def test_unicode_text_replaces_each_lone_surrogate_with_the_replacement_character() -> None:
+    value = {"k\udc80": ["a\ud800b", 1, None, "\U0001f600"]}
+    assert p.unicode_text(value) == {"k�": ["a�b", 1, None, "\U0001f600"]}
+    assert p.lone_surrogate(p.unicode_text(value)) is None
+
+
+@given(st.text(), st.text())
+def test_encode_line_writes_one_utf8_line_that_reads_back_as_text(key: str, text: str) -> None:
+    line = p.encode_line({"jsonrpc": "2.0", "method": "run/event", "params": {key: text}})
+    assert line.endswith(b"\n")
+    assert b"\n" not in line[:-1]
+    message = json.loads(line.decode("utf-8"))
+    assert p.lone_surrogate(message) is None
+    assert message["params"] == p.unicode_text({key: text})

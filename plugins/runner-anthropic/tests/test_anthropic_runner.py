@@ -2,6 +2,7 @@
 against the fake Messages API (spec: anthropic-runner; design D4, D6, D9, D11). Every run uses
 TEST_LIMITS unless a test says why not."""
 
+import io
 import json
 import threading
 import time
@@ -25,7 +26,9 @@ from fake_messages import (
     text_reply,
     tool_reply,
 )
+from troupe_plugin_sdk import runner as p
 from troupe_plugin_sdk.tools import Tools
+from troupe_runner_anthropic.runner import Runner
 
 MASKED_ECHO = "sk-ant-ca*********6789"
 """How a 401 may quote the canary with part of it hidden."""
@@ -587,3 +590,16 @@ def test_importing_the_runner_doesnt_import_the_library_so_the_handshake_isnt_ke
 
     done = subprocess.run([sys.executable, "-c", code], capture_output=True, check=False)
     assert done.returncode == 0, done.stderr.decode()[-2000:]
+
+
+# Requirement: A message's strings are Unicode text (host-robustness design D3)
+
+
+def test_a_lone_surrogate_in_a_message_is_written_as_the_replacement_character() -> None:
+    # An engine's \ud800 escape decodes to a lone surrogate, which the host refuses (#311).
+    stdout = io.BytesIO()
+    writer = Runner(io.BytesIO(), stdout, io.BytesIO())
+    writer._write({"jsonrpc": "2.0", "method": "run/event", "params": {"x\udfff": "a\ud800b"}})
+    message = json.loads(stdout.getvalue())
+    assert message["params"] == {"x\ufffd": "a\ufffdb"}
+    assert p.lone_surrogate(message) is None

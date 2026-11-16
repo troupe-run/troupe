@@ -11,7 +11,6 @@ The runner never exits while Claude Code is running, and it never invents a resu
 """
 
 import contextlib
-import json
 import os
 import queue
 import shutil
@@ -92,7 +91,7 @@ class Runner:
     # Output
 
     def _send(self, message: dict[str, Any]) -> None:
-        line = json.dumps(message, ensure_ascii=False, separators=(",", ":")).encode() + b"\n"
+        line = p.encode_line(message)  # a lone surrogate as U+FFFD (host-robustness design D3)
         self._stdout.write(line)
         self._stdout.flush()
 

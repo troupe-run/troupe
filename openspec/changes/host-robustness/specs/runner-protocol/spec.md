@@ -34,6 +34,11 @@ record. The host SHALL treat a lone surrogate as a protocol violation (spec: act
 - **WHEN** a runner has a record whose bytes aren't UTF-8
 - **THEN** it sends that record with encoding `base64`
 
+#### Scenario: An engine's lone surrogate
+- **WHEN** a bundled runner's engine sends JSON whose string holds an escaped lone surrogate (`"x\ud800y"`), in an
+  answer or an error
+- **THEN** each string the runner sends from it holds U+FFFD in its place, and the run carries on to its result
+
 ## MODIFIED Requirements
 
 ### Requirement: Failures use the shared error shape

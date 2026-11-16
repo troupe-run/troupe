@@ -13,7 +13,8 @@ See proposal.md for why. The relevant code today:
 - `transcript_record` encodes a text record with `record.record.encode()`, which raises on a lone surrogate (#311).
   For kinds, #315 (transcript-record-kinds D3) frames the masked record, and when masking the framed line would change
   it (an escape completing the credential), stores the record as base64 of its masked bytes.
-- A credential is refused unless every character is visible ASCII, `!` to `~` (`troupe_plugin_sdk.credential.well_formed`).
+- A credential is refused unless every character is visible ASCII, `!` to `~`
+  (`troupe_plugin_sdk.credential.well_formed`).
 - Each of the six bundled runners dispatches requests itself (`_handle`, `_initialize`), with its own
   `_initialized` flag set only by a successful handshake. The SDK holds the contract's types, not a dispatch loop.
 - `conformance.check_runner` runs named checks (`handshake`, `second_start`, ...) against a runner command.
@@ -115,10 +116,19 @@ with `runner.protocol`, like any violation.
 - **The owner chose this on #311 (2026-11-16)**, over storing it a defined way (keeping the `\ud800` escape in a
   framed line, U+FFFD in a native one), which would have troupe choose a lossy conversion for the runner.
 - **No real Ollama run may hit it** (owner, 2026-11-16). #311 says the Ollama runner writes a lone surrogate as a
-  JSON escape when Ollama's output holds one (local-model-runner design D3); this design says its records are bytes
-  and its event strings have them replaced with `?`. A test drives the Ollama runner with Ollama output holding
-  `\ud800` escapes (in content, a tool call's arguments and an error body) and checks that no message it writes
-  holds a lone surrogate once parsed. If one does, that runner is fixed in this change.
+  JSON escape when Ollama's output holds one; the proposal said it doesn't. Testing it found #311 right, and a worse
+  bug beside it. Ollama's chat lines were cleaned (`_clean`, lone surrogates to `?`), but an error body wasn't: its
+  message reached the SDK's `cut`, which raised `UnicodeEncodeError` on the conversation thread, so the run never
+  got a result. And every runner but Claude Code and scripted wrote its lines with `backslashreplace`, which turns a
+  lone surrogate in any string into exactly the `\ud800` escape the host now refuses; Claude Code and scripted
+  raised on one instead.
+- **So the SDK makes runner text Unicode text, in one place:** `unicode_text(value)` replaces each lone surrogate in
+  a JSON value's strings, keys included, with U+FFFD, and `encode_line(message)` writes a message as one compact
+  UTF-8 line through it. All six runners write every line with `encode_line`; Ollama's `_clean` and its error-body
+  reader use `unicode_text` (U+FFFD, Unicode's replacement character, where `_clean` wrote `?`); and its
+  standard-error diagnostics are written with `backslashreplace`, since that's not the contract. No bundled runner can
+  then send a lone surrogate, so the refusal never fails a real run. Each runner's tests write a message holding one
+  and read back U+FFFD; the Ollama runner is driven end to end with an error body and an answer holding `\ud800`.
 
 ### D4. A second initialize is refused (#356)
 

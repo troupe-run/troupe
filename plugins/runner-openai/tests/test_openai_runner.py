@@ -3,6 +3,7 @@ against the fake endpoint (spec: openai-runner; design D5). Every run uses TEST_
 test says why not (design D7)."""
 
 import base64
+import io
 import json
 import queue
 import threading
@@ -34,6 +35,8 @@ from openai_harness import (
     Session,
     check_limits,
 )
+from troupe_plugin_sdk import runner as p
+from troupe_runner_openai.runner import Runner
 
 MASKED_ECHO = "sk-cana*********6789"
 
@@ -369,3 +372,16 @@ def test_a_run_started_on_the_real_use_limits_is_refused_by_the_harness() -> Non
     check_limits(TEST_LIMITS, None)
     check_limits({"maxTurns": 3}, None)
     check_limits({}, "refused before any request")
+
+
+# Requirement: A message's strings are Unicode text (host-robustness design D3)
+
+
+def test_a_lone_surrogate_in_a_message_is_written_as_the_replacement_character() -> None:
+    # An engine's \ud800 escape decodes to a lone surrogate, which the host refuses (#311).
+    stdout = io.BytesIO()
+    writer = Runner(io.BytesIO(), stdout, io.BytesIO())
+    writer._write({"jsonrpc": "2.0", "method": "run/event", "params": {"x\udfff": "a\ud800b"}})
+    message = json.loads(stdout.getvalue())
+    assert message["params"] == {"x\ufffd": "a\ufffdb"}
+    assert p.lone_surrogate(message) is None

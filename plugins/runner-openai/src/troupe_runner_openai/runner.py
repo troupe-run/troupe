@@ -96,10 +96,9 @@ class Runner:
         """Write one message as one line, masked. A message from the worker is dropped once the
         run is stopping; False when it was."""
         masked = self._mask.json(message)
-        # backslashreplace: a lone surrogate becomes its JSON escape, so no write can fail after
-        # an event's seq was taken.
-        text = json.dumps(masked, ensure_ascii=False, separators=(",", ":"))
-        line = text.encode("utf-8", "backslashreplace") + b"\n"
+        # A lone surrogate is written as U+FFFD: no write fails after an event's seq was taken,
+        # and no line holds one (host-robustness design D3).
+        line = p.encode_line(masked)
         with self._out:
             if from_worker and self._stop.is_set():
                 return False

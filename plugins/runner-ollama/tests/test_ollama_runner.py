@@ -29,6 +29,7 @@ from fake_ollama import (
     tool_call,
 )
 from ollama_harness import TIMEOUT, Session, runtime
+from troupe_plugin_sdk import runner as p
 from troupe_runner_ollama.defaults import (
     DEFAULT_CONTEXT_LENGTH,
     PREFLIGHT_TIMEOUT_SECONDS,
@@ -574,8 +575,47 @@ def test_a_lone_surrogate_from_ollama_leaves_no_gap_in_the_events(session: Sessi
     assert events[-1]["status"] == "ok"
 
 
+@pytest.mark.parametrize(
+    "answer",
+    [
+        Answer(status=400, body=b'{"error": "bad input x\\ud800y"}'),
+        Answer(
+            [
+                b'{"message":{"role":"assistant","content":"x\\ud800y","thinking":"t\\udfff"},'
+                b'"done":false}',
+                done(),
+            ]
+        ),
+    ],
+    ids=["error body", "content and thinking"],
+)
+def test_no_message_the_runner_writes_holds_a_lone_surrogate(
+    session: Session, answer: Answer
+) -> None:
+    # The contract's strings are Unicode text, and the host refuses a lone surrogate (#311,
+    # host-robustness design D3), so none of Ollama's \ud800 escapes may reach the runner's lines.
+    with serving([answer]) as fake:
+        session.start(**_run(fake))
+        messages = session.until_result()
+    assert messages[-1]["params"]["type"] == "result"
+    assert [p.lone_surrogate(message) for message in messages] == [None] * len(messages)
+
+
 def test_end_of_input_after_the_runner_failed_exits_1() -> None:
     stdout, stderr = io.BytesIO(), io.BytesIO()
     runner = Runner(io.BytesIO(), stdout, stderr)
     runner._converse(_Exploding())  # type: ignore[arg-type]
     assert runner.run() == 1  # its standard input is already at its end
+
+
+# Requirement: A message's strings are Unicode text (host-robustness design D3)
+
+
+def test_a_lone_surrogate_in_a_message_is_written_as_the_replacement_character() -> None:
+    # An engine's \ud800 escape decodes to a lone surrogate, which the host refuses (#311).
+    stdout = io.BytesIO()
+    writer = Runner(io.BytesIO(), stdout, io.BytesIO())
+    writer._write({"jsonrpc": "2.0", "method": "run/event", "params": {"x\udfff": "a\ud800b"}})
+    message = json.loads(stdout.getvalue())
+    assert message["params"] == {"x\ufffd": "a\ufffdb"}
+    assert p.lone_surrogate(message) is None
