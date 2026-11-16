@@ -33,7 +33,12 @@ def call(
     call_id: str = "c1",
 ) -> ToolStep:
     """Run one call, and check both its events against the contract's schema."""
-    step = tools.run(call_id, name, arguments, numbering or EventNumbering(RUN, 65536, next_seq=1))
+    step = tools.run(
+        call_id,
+        name,
+        arguments,
+        numbering or EventNumbering(RUN, 65536, next_seq=1, send_context=no_context),
+    )
     for event in step.events:
         validate(event.to_data(), "run-event.schema.json#/$defs/event", runner=None)
     return step
@@ -63,3 +68,8 @@ def tools_for(root: Path, effects: Effects = READ_ONLY) -> Tools:
 def as_text(arguments: Mapping[str, object]) -> str:
     """Arguments as Chat Completions sends them: the JSON text of an object."""
     return json.dumps(arguments)
+
+
+def no_context(event: object) -> None:
+    """A send_context for a test that expects no lone surrogate, so no context event for one."""
+    raise AssertionError(f"an unexpected context event: {event}")

@@ -166,7 +166,8 @@ if replaced:
 
 `numbered` numbers an event body (without `runId` and `seq`) after making its own strings text, and records any it
 replaced. Reports for the same place are added together, so a streamed answer gives one `context` event, not one per
-delta. A replacement waiting with no `send_context` to send it is a `RuntimeError`, never a silent loss.
+delta. `send_context` is a required keyword argument of `EventNumbering`, so a runner can't leave a replacement
+unrecorded: leaving it out fails where the numbering is built, never mid-run.
 
 ## Compaction
 

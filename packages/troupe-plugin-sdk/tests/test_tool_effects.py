@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from sdk_links import link_directory
-from sdk_tools import RUN, FakeModel, call, workspace
+from sdk_tools import RUN, FakeModel, call, no_context, workspace
 from troupe_plugin_sdk.effects import Effects
 from troupe_plugin_sdk.events import EventNumbering
 from troupe_plugin_sdk.tools import Tools
@@ -43,7 +43,7 @@ def test_with_nothing_declared_reads_and_searches_work_and_every_change_is_refus
         ]
     )
 
-    model.drive(Tools(root), EventNumbering(RUN, 65536, next_seq=1))
+    model.drive(Tools(root), EventNumbering(RUN, 65536, next_seq=1, send_context=no_context))
 
     assert [is_error for _, is_error in model.seen] == [False] * 3 + [True] * 4
     assert model.seen[0][0] == "1\t# hi"
@@ -114,7 +114,9 @@ def test_a_refused_call_names_the_tool_path_and_effect_and_changes_nothing(
     before = _snapshot(root)
     model = FakeModel([(tool, data), ("Read", {"file_path": "README.md"})])
 
-    steps = model.drive(Tools(root, effects), EventNumbering(RUN, 65536, next_seq=1))
+    steps = model.drive(
+        Tools(root, effects), EventNumbering(RUN, 65536, next_seq=1, send_context=no_context)
+    )
 
     name, path, effect = named
     assert steps[0].is_error

@@ -51,6 +51,8 @@ None.
 
 ### Modified Capabilities
 
+- `plugin-sdk`: the SDK records each lone surrogate a runner replaces, and its event counter requires the way to send
+  that record (owner, 2026-11-17).
 - `runner-protocol`: the handshake requirement says a second `initialize` is refused with `runner.already-initialized`;
   the error-shape scenario names it among the contract's codes; the message requirement says each string is Unicode
   text (no lone surrogate).

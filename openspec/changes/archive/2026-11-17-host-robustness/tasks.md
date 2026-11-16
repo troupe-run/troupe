@@ -46,6 +46,9 @@ commit message or PR, before the fix is written.
   standard error. Verify: per runner, a run whose engine output holds `\ud800` has the context event before the
   event with U+FFFD, gapless `seq`, and no lone surrogate (failing first); every runner's suite passes.
 
+- [x] 2.6 `EventNumbering`'s `send_context` is a required keyword argument (owner, 2026-11-17); every call site and the
+  README pass one; the plugin-sdk spec says so. Verify: a test that building one without it fails (it didn't before).
+
 ## 3. A second initialize is refused (#356)
 
 - [x] 3.1 Contract: `runner.already-initialized` in `protocol/schemas/runner/errors.schema.json` and the packaged copy.

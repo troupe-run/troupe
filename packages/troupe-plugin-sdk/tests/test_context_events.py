@@ -8,6 +8,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from runner_schemas import validate
+from sdk_tools import no_context
 from troupe_plugin_sdk import runner as p
 from troupe_plugin_sdk.events import EventNumbering, context_event, encoded_size, utf8_size
 
@@ -16,7 +17,7 @@ EVENT = "run-event.schema.json#/$defs/event"
 
 
 def test_a_compaction_with_only_tokens_before_takes_the_next_seq_and_carries_only_it() -> None:
-    numbering = EventNumbering(RUN, 65536, next_seq=4)
+    numbering = EventNumbering(RUN, 65536, next_seq=4, send_context=no_context)
 
     event = context_event(numbering, "compacted", "engine", "compacted", tokens_before=41000)
 
@@ -34,7 +35,7 @@ def test_a_compaction_with_only_tokens_before_takes_the_next_seq_and_carries_onl
 
 
 def test_a_runner_that_counts_its_messages_sends_both_counts() -> None:
-    numbering = EventNumbering(RUN, 65536, next_seq=1)
+    numbering = EventNumbering(RUN, 65536, next_seq=1, send_context=no_context)
     event = context_event(
         numbering, "truncated", "runner", "dropped", messages_before=120, messages_after=34
     )
@@ -43,7 +44,9 @@ def test_a_runner_that_counts_its_messages_sends_both_counts() -> None:
 
 
 def test_a_message_over_the_summary_limit_is_cut_on_a_character_boundary_saying_how_much() -> None:
-    numbering = EventNumbering(RUN, 65536, next_seq=1, summary_max_bytes=40)
+    numbering = EventNumbering(
+        RUN, 65536, next_seq=1, summary_max_bytes=40, send_context=no_context
+    )
     message = "é" * 100
 
     event = context_event(numbering, "compacted", "engine", message)
@@ -55,7 +58,7 @@ def test_a_message_over_the_summary_limit_is_cut_on_a_character_boundary_saying_
 
 
 def test_a_message_that_would_overflow_the_event_is_cut_until_the_event_fits() -> None:
-    numbering = EventNumbering(RUN, 300, next_seq=1)
+    numbering = EventNumbering(RUN, 300, next_seq=1, send_context=no_context)
     event = context_event(numbering, "other", "runner", "x" * 5000, tokens_before=1)
     assert encoded_size(event.to_data()) <= 300
     assert event.message.endswith("bytes left out]")
@@ -68,14 +71,14 @@ def test_a_message_that_would_overflow_the_event_is_cut_until_the_event_fits() -
 def test_a_kind_or_by_off_the_list_raises_naming_it_and_leaves_the_counter(
     kind: str, by: str, match: str
 ) -> None:
-    numbering = EventNumbering(RUN, 65536, next_seq=3)
+    numbering = EventNumbering(RUN, 65536, next_seq=3, send_context=no_context)
     with pytest.raises(p.ProtocolError, match=match):
         context_event(numbering, kind, by, "m")  # type: ignore[arg-type]
     assert numbering.next_seq == 3
 
 
 def test_a_negative_count_raises_and_leaves_the_counter() -> None:
-    numbering = EventNumbering(RUN, 65536, next_seq=3)
+    numbering = EventNumbering(RUN, 65536, next_seq=3, send_context=no_context)
     with pytest.raises(p.ProtocolError, match="tokensAfter"):
         context_event(numbering, "compacted", "engine", "m", tokens_after=-1)
     assert numbering.next_seq == 3
@@ -101,7 +104,7 @@ def test_any_message_and_counts_give_an_event_that_validates_and_fits(
     event_max_bytes: int,
     summary_max_bytes: int,
 ) -> None:
-    numbering = EventNumbering(RUN, event_max_bytes, 7, summary_max_bytes)
+    numbering = EventNumbering(RUN, event_max_bytes, 7, summary_max_bytes, send_context=no_context)
     tokens_before, tokens_after, messages_before, messages_after = counts
 
     event = context_event(
@@ -176,12 +179,6 @@ def test_an_event_with_nothing_replaced_is_numbered_as_before() -> None:
     assert log == {"runId": RUN, "seq": 1, **body}
 
 
-def test_a_replacement_with_nowhere_to_record_it_is_an_error_not_silent() -> None:
-    numbering = EventNumbering(RUN, 65536, next_seq=1)
-    with pytest.raises(RuntimeError, match="no send_context"):
-        numbering.numbered({"type": "log", "level": "info", "message": "\ud800"})
-
-
 def test_replacements_reported_for_the_same_place_are_one_context_event() -> None:
     # A streamed answer reports each delta; the run gets one event per place (review of #437).
     sent: list[p.RunEvent] = []
@@ -195,3 +192,9 @@ def test_replacements_reported_for_the_same_place_are_one_context_event() -> Non
     assert len(messages) == 2
     assert "6 lone surrogates in Ollama's answer were replaced" in messages[0]
     assert "1 lone surrogate in Ollama's error was replaced" in messages[1]
+
+
+def test_a_numbering_without_a_way_to_record_a_replacement_fails_when_its_built() -> None:
+    # Owner, 2026-11-17: a runner can't forget it; caught where it's written, never mid-run.
+    with pytest.raises(TypeError, match="send_context"):
+        EventNumbering(RUN, 65536, next_seq=1)  # type: ignore[call-arg]
