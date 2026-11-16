@@ -157,7 +157,7 @@ class Runner:
             return True
 
     def _diagnose(self, text: str) -> None:
-        self._stderr.write(f"mistralrs runner: {text}\n".encode())
+        self._stderr.write(f"mistralrs runner: {text}\n".encode("utf-8", "backslashreplace"))
         self._stderr.flush()
 
     def _result(self, id_: object, result: dict[str, Any]) -> None:

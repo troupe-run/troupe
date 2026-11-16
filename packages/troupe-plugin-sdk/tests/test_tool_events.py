@@ -135,3 +135,18 @@ def test_a_lone_surrogate_escaped_in_a_calls_json_text_is_written_as_u_fffd_and_
     assert isinstance(context, p.ContextEvent)
     assert "1 lone surrogate in the input of a 'Write' tool call was replaced" in context.message
     assert (context.seq, step.call.seq, step.result.seq) == (1, 2, 3)
+
+
+def test_a_lone_surrogate_in_a_call_id_is_recorded_before_both_events_in_seq_order(
+    tmp_path: Path,
+) -> None:
+    # Review of #437: the id is in both events, so it's cleaned once, before either is numbered.
+    root = workspace(tmp_path, {"a.txt": b"one\n"})
+    sent: list[p.RunEvent] = []
+    numbering = EventNumbering(RUN, 65536, next_seq=1, send_context=sent.append)
+    step = call(tools_for(root), "Read", {"file_path": "a.txt"}, numbering, call_id="c\ud800")
+    sent += list(step.events)
+    assert [event.seq for event in sent] == [1, 2, 3]
+    assert isinstance(sent[0], p.ContextEvent)
+    assert "1 lone surrogate in the id of a 'Read' tool call was replaced" in sent[0].message
+    assert step.call.call_id == step.result.call_id == "c�"

@@ -146,20 +146,25 @@ def retry_after(value: str | None, now: float | None = None) -> float | None:
 
 
 def _unicode_error(error: StatusError, on_lost: Callable[[str, int], None]) -> StatusError:
-    """``error`` with a lone surrogate in its JSON body (an escape the service wrote) as U+FFFD,
-    reported through ``on_lost``, so reading its message can't fail and the run ends for the
-    service's own reason (host-robustness design D3b; review of #437). The transcript already
-    holds the body as sent."""
+    """``error`` with its body read as Unicode text (``_unicode_body``), so reading its message
+    can't fail and the run ends for the service's own reason (review of #437)."""
+    body = _unicode_body(error.body, on_lost)
+    return error if body is error.body else StatusError(error.status, error.headers, body)
+
+
+def _unicode_body(body: bytes, on_lost: Callable[[str, int], None]) -> bytes:
+    """``body`` with each lone surrogate in its JSON (an escape the service wrote) as U+FFFD,
+    reported through ``on_lost`` (host-robustness design D3b); ``body`` itself when it held none
+    or isn't JSON. The transcript already holds the body as sent."""
     try:
-        data = json.loads(error.body)
+        data = json.loads(body)
     except ValueError:
-        return error
+        return body
     clean, replaced = p.unicode_text_counted(data)
     if not replaced:
-        return error
+        return body
     on_lost("the Responses API's error", replaced)
-    body = json.dumps(clean, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-    return StatusError(error.status, error.headers, body)
+    return json.dumps(clean, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
 
 
 def classify(error: StatusError, url: str = "") -> _Retryable:
@@ -237,7 +242,9 @@ STREAM_TYPE = "text/event-stream"
 """The media type a streamed response is sent as, which the runner asks for (design D4)."""
 
 
-def _not_a_stream(response: Response, record: Record) -> ExchangeFailedError | None:
+def _not_a_stream(
+    response: Response, record: Record, on_lost: Callable[[str, int], None]
+) -> ExchangeFailedError | None:
     """The failure for a 2xx whose Content-Type is present and isn't a stream, with its body
     recorded; None for a stream, or a response that names no type and is read as one (design D4)."""
     said = response.headers.get("content-type")
@@ -249,7 +256,7 @@ def _not_a_stream(response: Response, record: Record) -> ExchangeFailedError | N
         told = f"its body couldn't be read ({str(error).rstrip('.')})."
     else:
         record("received", body)
-        told = _sentence(_service_error(body)[0])
+        told = _sentence(_service_error(_unicode_body(body, on_lost))[0])
     return ExchangeFailedError(
         f"The service answered HTTP {response.status} with {_cut(said.strip(), 200)}, not the "
         f"stream ({STREAM_TYPE}) the runner asked for: {told} Check that the runtime's endpoint "
@@ -272,7 +279,7 @@ def _attempt(call: Call, record: Record, on_lost: Callable[[str, int], None]) ->
     _note(record, {"status": response.status, "headers": _kept(response.headers)})
     parser = StreamParser()
     try:
-        failure = _not_a_stream(response, record)
+        failure = _not_a_stream(response, record, on_lost)
         if failure is not None:
             raise failure
         for line in response.lines():
