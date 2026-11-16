@@ -109,6 +109,16 @@ def test_a_runner_that_answers_a_second_initialize_fails_that_check(tmp_path: Pa
     assert "runner.already-initialized" in check.problem
 
 
+def test_a_runner_that_counts_a_refused_initialize_as_its_handshake_fails_that_check(
+    tmp_path: Path,
+) -> None:
+    results = _check([sys.executable, str(FAKE), "early-initialized"], {}, tmp_path, EXPIRING)
+    check = results["version refusal"]
+    assert not check.passed
+    assert check.problem is not None
+    assert "after one it refused for its versions" in check.problem
+
+
 def test_a_runner_that_does_not_exit_on_end_of_input_fails_that_check(tmp_path: Path) -> None:
     results = _check([sys.executable, str(FAKE), "ignore-eof"], {}, tmp_path, EXPIRING)
     check = results["exit on end of input"]

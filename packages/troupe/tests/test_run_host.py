@@ -1466,6 +1466,22 @@ def runner_lines(draw: st.DrawFn) -> tuple[str, bytes]:
     return credential, line.encode("utf-8")
 
 
+MERGING_KEYS = (
+    "0",
+    b'{"jsonrpc": "2.0", "method": "run/transcript", "params": {"runId": "r", "record": "", '
+    b'"0": "", "\xc3\xa9": ""}}',
+)
+"""A credential, and a line two of whose keys mask to the same text."""
+
+
+def _keys(value: object) -> int:
+    if isinstance(value, dict):
+        return len(value) + sum(_keys(item) for item in value.values())
+    if isinstance(value, list):
+        return sum(_keys(item) for item in value)
+    return 0
+
+
 def _strings(value: object) -> list[str]:
     if isinstance(value, str):
         return [value]
@@ -1478,6 +1494,7 @@ def _strings(value: object) -> list[str]:
 
 @settings(max_examples=500, deadline=None)
 @given(runner_lines())
+@example(MERGING_KEYS)
 @example(
     (
         "nsecret-token-0123456789",
@@ -1491,7 +1508,12 @@ def test_every_valid_line_is_read_and_no_string_it_keeps_holds_the_credential(
     credential, line = case
     mask = Masker(credential)
     raw = json.loads(line)
-    message, kept = host_module.parse_runner_line(mask, line, 1)  # never a violation
+    if _keys(mask.data(raw)) < _keys(raw):
+        # The one violation a valid line can be: masking would merge two keys, losing a value.
+        with pytest.raises(host_module._Violation, match="same once the run's credential"):
+            host_module.parse_runner_line(mask, line, 1)
+        return
+    message, kept = host_module.parse_runner_line(mask, line, 1)  # otherwise never a violation
     # The same message, each string masked: masking reads, never re-reads, the line.
     assert _strings(message) == [mask.text(s) for s in _strings(raw)]
     for text in _strings(message):
@@ -1505,3 +1527,28 @@ def test_every_valid_line_is_read_and_no_string_it_keeps_holds_the_credential(
     # The protocol's own words are read as themselves unless the credential is in them.
     if credential not in PROTOCOL_WORDS:
         assert p.parse_message(message).method == "run/transcript"
+
+
+# Review of #437: a message troupe can't read or mask without loss is a violation, never an
+# unhandled exception or a quiet merge
+
+
+def test_a_message_nested_past_pythons_recursion_limit_is_a_violation(tmp_path: Path) -> None:
+    deep = "[" * 5000 + "]" * 5000
+    line = (
+        '{"jsonrpc": "2.0", "method": "run/event", "params": {"runId": "{run_id}", "seq": 1, '
+        '"type": "log", "level": "info", "message": "m", "x": ' + deep + "}}"
+    )
+    ran = _raw(tmp_path, line, limits=RunLimits(max_message_bytes=1 << 20, cancel_grace=2.0))
+    assert (ran.outcome.outcome, _code(ran)) == (Outcome.CRASHED, "runner.protocol")
+    assert ran.outcome.error is not None
+    assert "nested" in ran.outcome.error.problem
+
+
+def test_two_keys_that_masking_would_make_one_are_a_violation_not_a_merge() -> None:
+    # Found by a flake hunt of the property test above: with a credential of 0, the key "é" is
+    # written as \u00e9 in ASCII JSON, so it masks to [credential] as the key "0" does.
+    line = MERGING_KEYS[1]
+    with pytest.raises(host_module._Violation) as raised:
+        host_module.parse_runner_line(Masker(MERGING_KEYS[0]), line, 1)
+    assert "same once the run's credential is masked" in raised.value.error.problem

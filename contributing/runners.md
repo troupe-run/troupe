@@ -31,6 +31,14 @@ mistral.rs's `mistralrs`, with troupe's own tool loop ([#414](https://github.com
   troupe stops the runner.
 - Standard error is free-form diagnostics. troupe keeps it with the run.
 - A message may be large (well over 64 KiB). troupe accepts lines up to `RUNNER_MAX_MESSAGE_BYTES`.
+- Every string in a message, keys included, is Unicode text: it never holds a lone surrogate, even though JSON can
+  escape one (`\ud800`), and an engine's JSON can decode to one. troupe treats one as a protocol violation. Bytes that
+  aren't text go in a transcript record with encoding `base64`. A runner that replaces an engine's lone surrogate
+  with U+FFFD says so in a `context` event of kind `other`, by `runner`, naming where and how many, before the
+  event that holds it (just after `init` at the earliest). In Python, the SDK does this for you:
+  `unicode_text_counted` replaces and counts, `EventNumbering.lost` records a replacement made where you read the
+  engine's output, `EventNumbering.numbered` numbers each event after recording its own, and `encode_line` writes
+  a line that never holds one, returning how many it replaced so you can note any on standard error.
 
 ### Messages
 

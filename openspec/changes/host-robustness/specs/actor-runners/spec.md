@@ -44,6 +44,14 @@ default. The violations are listed in the scenarios.
 - **THEN** it is a protocol violation naming where in the message the string was, and the run ends `crashed` rather
   than failing without an outcome
 
+#### Scenario: A message nested past what troupe reads
+- **WHEN** a runner sends a message nested deeper than Python's recursion limit
+- **THEN** it is a protocol violation saying so, and the run ends `crashed` rather than failing without an outcome
+
+#### Scenario: Two keys that masking would make one
+- **WHEN** two keys of one object in a runner's message are the same once the run's credential is masked in them
+- **THEN** it is a protocol violation naming the object, rather than a message kept with one of the two values lost
+
 #### Scenario: A valid line is never a violation because of masking
 - **WHEN** the run's credential starts with `n`, and a runner sends a valid `run/transcript` line whose record is a
   newline written `\n` followed by the rest of the credential
@@ -80,6 +88,11 @@ of input.
 #### Scenario: A runner that answers a second initialize
 - **WHEN** the suite runs against a runner that answers a second `initialize` with the handshake
 - **THEN** the suite fails, naming the second `initialize` and `runner.already-initialized`
+
+#### Scenario: A runner that counts a refused initialize as its handshake
+- **WHEN** the suite runs against a runner that refuses an `initialize` for its versions, then refuses one offering a
+  version it speaks
+- **THEN** the suite fails, saying a refused `initialize` isn't a handshake
 
 ### Requirement: A run that uses kinds stores each record with its kind
 When the runner accepted `transcript-kinds`, the host SHALL store each transcript line as a JSON object holding the

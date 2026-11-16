@@ -63,6 +63,11 @@ its JSON-RPC shape and handles it. Every later step works on the masked message,
   raw line, byte for byte, when masking changed nothing in the parsed message and `Masker.bytes` changes nothing in
   the raw line; otherwise it's the masked message, written compactly. The second check catches a form that's in the
   raw line's escapes only, such as `\/` (the actor-runners spec's oversized scenario).
+- **What the host can't read or mask without loss is a violation** (review of #437): a message nested past Python's
+  recursion limit (the walks after `json.loads` would otherwise raise out of `run_actor`), and an object two of
+  whose keys mask to the same text, which would keep one value and drop the other. A flake hunt of the property test
+  found the second, with a credential of `0`: the key `é` is written `\u00e9` in ASCII JSON. With a real credential
+  it takes two keys that each hold it, which the contract already forbids.
 - **The SDK:** `parse_line(line)` becomes `loads_strict` plus `parse_message(data)`, the shape check on a parsed value,
   so the host can mask between them. `parse_line` stays for other callers.
 - *Alternative:* make the wire masking escape-aware (the OpenAI runner's own `Mask` never takes in a backslash).
@@ -111,8 +116,8 @@ with `runner.protocol`, like any violation.
 
 - Covers events as well as records: a `log` event holding one would fail the event store's UTF-8 encode the same way.
 - The runner contract's message requirement says strings are Unicode text (runner-protocol, "A message's strings are
-  Unicode text"). No bundled runner sends one: Ollama replaces lone surrogates in event strings with `?` and sends
-  its records' bytes, as base64 when they aren't UTF-8.
+  Unicode text"). When this was proposed, the bundled runners were thought not to send one. Testing showed they
+  could (next bullets), so every runner now replaces each one with U+FFFD and records it (D3b).
 - **The owner chose this on #311 (2026-11-16)**, over storing it a defined way (keeping the `\ud800` escape in a
   framed line, U+FFFD in a native one), which would have troupe choose a lossy conversion for the runner.
 - **No real Ollama run may hit it** (owner, 2026-11-16). #311 says the Ollama runner writes a lone surrogate as a

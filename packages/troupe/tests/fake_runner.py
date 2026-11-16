@@ -3,11 +3,13 @@
 Usage: python fake_runner.py <mode>. Not collected by pytest. Every mode ignores run/start's
 options; ``ignore-options`` does nothing else unusual, for checks that a runner refuses an unknown
 option. ``write-then-silent`` writes ``stray.txt`` in its working directory and then never answers.
-``refuse-character`` refuses a run/start that carries a character, as a runner that
-treats the contract's own field as unknown would. ``error-without-reason`` sends an error result
-with no reason, which the contract refuses. ``raw-lines`` writes each line of the JSON list in
-``FAKE_RAW_LINES`` as it is, ``{run_id}`` replaced, after ``init``, then a result with seq
-``FAKE_RAW_NEXT_SEQ`` (1 if unset); with ``FAKE_RAW_KINDS`` set it accepts transcript-kinds.
+``refuse-character`` refuses a run/start that carries a character, as a runner that treats the
+contract's own field as unknown would. ``error-without-reason`` sends an error result with no
+reason, which the contract refuses. ``early-initialized`` counts an initialize it refuses for its
+versions as its handshake, and refuses every initialize after it. ``raw-lines`` writes each line of
+the JSON list in ``FAKE_RAW_LINES`` as it is, ``{run_id}`` replaced, after ``init``, then a result
+with seq ``FAKE_RAW_NEXT_SEQ`` (1 if unset); with ``FAKE_RAW_KINDS`` set it accepts
+transcript-kinds.
 """
 
 import json
@@ -18,6 +20,7 @@ import time
 from typing import Any
 
 RUN_ID = ""
+INITIALIZED = False
 OK_RESULT = {"type": "result", "status": "ok", "message": "done"}
 ESCAPE_CANARY = "nsecret-token-0123456789"
 """A credential that starts with n, the letter JSON's escape for a newline ends with."""
@@ -69,6 +72,26 @@ def main(mode: str) -> None:
         if mode == "silent":
             continue
         if method == "initialize":
+            if mode == "early-initialized":
+                # Counts a refused initialize as its handshake: refuses every later one as a second.
+                code = "runner.already-initialized" if INITIALIZED else "runner.unsupported-version"
+                data: dict[str, Any] = {"code": code, "problem": "No.", "fix": "Don't."}
+                if not INITIALIZED and 0 not in message["params"]["protocolVersions"]:
+                    data["details"] = {"supportedVersions": [0]}
+                elif not INITIALIZED:
+                    data = {}
+                globals()["INITIALIZED"] = True
+                if data:
+                    send(
+                        {
+                            "jsonrpc": "2.0",
+                            "id": message["id"],
+                            "error": {"code": -32000, "message": "no", "data": data},
+                        }
+                    )
+                else:
+                    answer_initialize(message)
+                continue
             if mode == "incompatible":
                 send(
                     {

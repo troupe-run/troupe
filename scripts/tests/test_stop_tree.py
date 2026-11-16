@@ -56,38 +56,43 @@ def test_stopping_a_tree_stops_descendants_in_other_sessions_and_spinning_ones(
 
 TICKING = """
 import time
-for i in range(7):
+for i in range(12):
     print(f"tick {i}", flush=True)
-    time.sleep(0.3)
+    time.sleep(0.5)
 """
-"""Prints a line every 0.3 s for about 2 s: always making progress, never within 1 s overall."""
+"""Prints a line every 0.5 s for about 6 s: always making progress, never within 5 s overall."""
 
 STALLING = "import time\nprint('started', flush=True)\ntime.sleep(60)\n"
 """Prints one line, then makes no progress."""
 
+EACH_WITHIN = 5.0
+"""The tests' bound: past the ticker's 0.5 s between lines, and room for a loaded machine to start
+Python before its first line (review of #437)."""
+
 
 def test_a_command_making_progress_passes_a_per_line_bound_shorter_than_its_whole_run() -> None:
     command = [sys.executable, "-c", TICKING]
-    completed = run_with_progress(command, 1.0)
+    completed = run_with_progress(command, EACH_WITHIN)
     assert completed.returncode == 0
-    assert completed.stdout.decode().splitlines()[-1] == "tick 6"
+    assert completed.stdout.decode().splitlines()[-1] == "tick 11"
     try:
-        run_within(command, 1.0)  # the fixed whole-run bound #397 replaces gives up on it
+        run_within(command, EACH_WITHIN)  # the fixed whole-run bound #397 replaces gives up on it
     except AssertionError:
         pass
     else:
-        raise AssertionError("run_within(1 s) should have stopped a 2 s command")
+        raise AssertionError("run_within(5 s) should have stopped a 6 s command")
 
 
 def test_a_command_that_stops_making_progress_fails_naming_its_last_line() -> None:
     started = time.monotonic()
     try:
-        run_with_progress([sys.executable, "-c", STALLING], 1.0, waiting_for="the next line")
+        stalling = [sys.executable, "-c", STALLING]
+        run_with_progress(stalling, EACH_WITHIN, waiting_for="the next line")
     except AssertionError as error:
         message = str(error)
     else:
         raise AssertionError("a stalled command should fail")
     assert time.monotonic() - started < 30  # stopped at the bound, not at the sleep's end
-    assert "wrote no line within 1s" in message
+    assert f"wrote no line within {EACH_WITHIN:g}s" in message
     assert "the next line" in message
     assert "'started'" in message
