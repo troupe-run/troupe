@@ -147,3 +147,35 @@ def test_declaring_delete_gives_claude_an_mcp_config_naming_the_server(tmp_path:
     }
     settings = json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))
     assert "mcp__troupe__Delete" in settings["permissions"]["allow"]
+
+
+# Requirement: A message's strings are Unicode text: each replacement is recorded
+# (host-robustness design D3b; review of #437)
+
+
+def test_a_lone_surrogate_in_a_calls_arguments_is_answered_and_noted_on_standard_error(
+    tmp_path: Path,
+) -> None:
+    workspace = _workspace(tmp_path, {"a.txt": b"one\n"})
+    config = tmp_path / "effects.json"
+    write_config(
+        config,
+        run_id=RUN,
+        declaration=Declaration(Effects(), workspace, tmp_path / "scratch"),
+        tools=("Delete",),
+        event_max_bytes=65536,
+    )
+    # Claude Code sends JSON; json.dumps writes the surrogate as the \ud800 escape it would.
+    messages = [*HANDSHAKE, _call(2, "Delete", {"path": "x\ud800.txt"})]
+    completed = subprocess.run(
+        [sys.executable, "-m", "troupe_runner_claude_code.effects_server", str(config)],
+        input="".join(json.dumps(m) + "\n" for m in messages).encode(),
+        capture_output=True,
+        timeout=60,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    answers = [json.loads(line) for line in completed.stdout.splitlines()]
+    assert answers[-1]["id"] == 2
+    assert answers[-1]["result"]["isError"] is True  # Delete isn't declared
+    assert b"1 lone surrogate in the input of a 'Delete' tool call was replaced" in completed.stderr
