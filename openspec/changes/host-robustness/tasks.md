@@ -62,10 +62,10 @@ commit message or PR, before the fix is written.
 
 ## 4. The flake-hunt tests bound each round (#397)
 
-- [ ] 4.1 Failing first: a test of `conftest.run_with_progress`: a command printing a line every 0.3 s for 2 s passes
+- [x] 4.1 Failing first: a test of `conftest.run_with_progress`: a command printing a line every 0.3 s for 2 s passes
   a 1 s per-line bound (where `run_within` with 1 s fails), and a command that prints one line then sleeps fails
   within the bound, naming the last line. Verify: fails on today's code (no such helper).
-- [ ] 4.2 `run_with_progress` in `scripts/tests/conftest.py`; `HUNT_ROUND_WITHIN` replaces `HUNT_RUN_WITHIN` and
+- [x] 4.2 `run_with_progress` in `scripts/tests/conftest.py`; `HUNT_ROUND_WITHIN` replaces `HUNT_RUN_WITHIN` and
   `run_hunt` uses it (design D5). Verify: 4.1 and `scripts/tests/test_flake_hunt.py` pass.
 
 ## 5. Checks
