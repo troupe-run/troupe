@@ -15,6 +15,7 @@ or a value out of range raises ProtocolError, which the host treats as a protoco
 
 import json
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any, ClassVar, Literal, get_args
 
@@ -541,26 +542,38 @@ def unicode_text(value: Any) -> Any:  # noqa: ANN401 - a JSON value
 
 
 def unicode_text_counted(value: Any) -> tuple[Any, int]:  # noqa: ANN401 - a JSON value
-    """``unicode_text(value)``, and how many lone surrogates it replaced."""
-    if isinstance(value, str):
-        count = sum(1 for char in value if "\ud800" <= char <= "\udfff")
-        if not count:
-            return value, 0
-        text = "".join(REPLACEMENT if "\ud800" <= char <= "\udfff" else char for char in value)
-        return text, count
-    if isinstance(value, list):
-        pairs = [unicode_text_counted(item) for item in value]
-        return [item for item, _ in pairs], sum(n for _, n in pairs)
-    if isinstance(value, dict):
-        out: dict[Any, Any] = {}
-        total = 0
-        for key, item in value.items():
-            clean_key, in_key = unicode_text_counted(key)
-            clean_item, in_item = unicode_text_counted(item)
-            out[clean_key] = clean_item
-            total += in_key + in_item
-        return out, total
-    return value, 0
+    """``unicode_text(value)``, and how many lone surrogates it replaced. Walked without recursion,
+    so a value nested as deep as ``json.loads`` reads is never a RecursionError (review of #437)."""
+    count = 0
+
+    def text(string: str) -> str:
+        nonlocal count
+        found = sum(1 for char in string if "\ud800" <= char <= "\udfff")
+        if not found:
+            return string
+        count += found
+        return "".join(REPLACEMENT if "\ud800" <= char <= "\udfff" else char for char in string)
+
+    root: list[Any] = [None]
+    waiting: list[tuple[Any, Any, Any]] = [(value, root, 0)]  # (value, its container, its key)
+    while waiting:
+        item, container, key = waiting.pop()
+        if isinstance(item, str):
+            container[key] = text(item)
+        elif isinstance(item, list):
+            copied: list[Any] = [None] * len(item)
+            container[key] = copied
+            waiting.extend((child, copied, index) for index, child in enumerate(item))
+        elif isinstance(item, dict):
+            mapping: dict[Any, Any] = {}
+            container[key] = mapping
+            for child_key, child in item.items():
+                clean_key = text(child_key) if isinstance(child_key, str) else child_key
+                mapping[clean_key] = None  # keeps the keys' order; the value is filled in below
+                waiting.append((child, mapping, clean_key))
+        else:
+            container[key] = item
+    return root[0], count
 
 
 def encode_line(message: object) -> tuple[bytes, int]:
@@ -593,23 +606,7 @@ def replaced_note(runner: str, message: object, replaced: int) -> bytes:
 
 def surrogate_paths(value: object, path: str = "") -> list[str]:
     """The dotted path of every string, or object whose key, holds a lone surrogate, in order."""
-    found = lone_surrogate(value, path)
-    if found is None:
-        return []
-    if isinstance(value, dict):
-        paths: list[str] = []
-        for key, item in value.items():
-            if _surrogate_in(str(key), path) is not None:
-                paths.append(path or "the message")
-            paths += surrogate_paths(item, _join(path, str(key)))
-        return paths
-    if isinstance(value, list):
-        return [
-            found_path
-            for index, item in enumerate(value)
-            for found_path in surrogate_paths(item, f"{path}[{index}]")
-        ]
-    return [found[0]]
+    return [where for where, _ in _surrogates(value, path)]
 
 
 def lone_surrogate(value: object, path: str = "") -> tuple[str, str] | None:
@@ -617,19 +614,28 @@ def lone_surrogate(value: object, path: str = "") -> tuple[str, str] | None:
     escape one (``\\ud800``) but it isn't Unicode text, so the contract refuses it (spec:
     runner-protocol, "A message's strings are Unicode text"). The place is a dotted path to the
     string (``params.record``), or to the object whose key holds it; None when there's none."""
-    if isinstance(value, str):
-        return _surrogate_in(value, path)
-    if isinstance(value, dict):
-        for key, item in value.items():
-            found = _surrogate_in(str(key), path) or lone_surrogate(item, _join(path, str(key)))
+    return next(_surrogates(value, path), None)
+
+
+def _surrogates(value: object, path: str) -> Iterator[tuple[str, str]]:
+    """Each lone surrogate's place and character, first to last, walked without recursion."""
+    waiting: list[tuple[object, str]] = [(value, path)]
+    while waiting:
+        item, where = waiting.pop()
+        if isinstance(item, str):
+            found = _surrogate_in(item, where)
             if found is not None:
-                return found
-    if isinstance(value, list):
-        for index, item in enumerate(value):
-            found = lone_surrogate(item, f"{path}[{index}]")
-            if found is not None:
-                return found
-    return None
+                yield found
+        elif isinstance(item, dict):
+            children: list[tuple[object, str]] = []
+            for key, child in item.items():
+                in_key = _surrogate_in(str(key), where)
+                if in_key is not None:
+                    children.append((in_key[1], in_key[0]))  # a key's own surrogate: its object
+                children.append((child, _join(where, str(key))))
+            waiting.extend(reversed(children))
+        elif isinstance(item, list):
+            waiting.extend(reversed([(child, f"{where}[{n}]") for n, child in enumerate(item)]))
 
 
 def _surrogate_in(text: str, path: str) -> tuple[str, str] | None:

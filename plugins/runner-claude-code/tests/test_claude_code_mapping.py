@@ -725,3 +725,19 @@ def test_another_status_isnt_mapped() -> None:
     assert [e["message"] for e in events if e["type"] == "log"] == [
         "Claude Code record type system/status isn't mapped"
     ]
+
+
+# Review of #437: a deeply nested line is read or warned about, never a crash
+
+
+def test_a_line_nested_deeper_than_a_python_walk_goes_is_mapped_without_raising() -> None:
+    mapper = Mapper("1.0", LIMIT)
+    mapper.feed(json.dumps(INIT).encode())
+    deep = "[" * 3000 + '"x\\ud800"' + "]" * 3000
+    tool_use = (
+        '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use",'
+        '"id":"t1","name":"Read","input":{"file_path":' + deep + "}}]}}"
+    )
+    outs = mapper.feed(tool_use.encode())  # mustn't raise
+    assert outs
+    assert mapper.take_replaced() in (0, 1)  # read and replaced, or warned about unread
