@@ -538,3 +538,15 @@ def test_a_reply_with_no_lone_surrogate_reports_none_replaced() -> None:
         run = Run(fake)
         run()
     assert run.lost == [("the Responses API's answer", 0)]
+
+
+def test_a_200_json_body_holding_a_lone_surrogate_ends_as_configuration_and_is_reported() -> None:
+    # Review of #437: read as text before its message is quoted, not a runner failure.
+    body = json.dumps({"error": {"message": "Streaming is off x\ud800y", "code": "x"}})
+    with FakeEndpoint([Reply(200, body=body.encode())]) as fake:
+        run = Run(fake)
+        with pytest.raises(ExchangeFailedError) as failed:
+            run()
+    assert failed.value.reason == "configuration"
+    assert "Streaming is off x�y" in str(failed.value)
+    assert ("the Responses API's error", 1) in run.lost

@@ -347,6 +347,10 @@ class Tools:
         # numbered, so its context event comes before both (host-robustness design D3b).
         arguments, replaced = unicode_text_counted(arguments)
         numbering.lost(f"the input of a {name!r} tool call", replaced)
+        # Both events carry the id: cleaned once here, so the record of it comes before both
+        # (review of #437).
+        call_id, replaced = unicode_text_counted(call_id)
+        numbering.lost(f"the id of a {name!r} tool call", replaced)
         try:
             if name not in _TOOLS:
                 raise _CallError(
