@@ -7,7 +7,7 @@ from pathlib import Path
 from hypothesis import given
 from hypothesis import strategies as st
 
-from sdk_tools import RUN, call, tools_for, workspace
+from sdk_tools import RUN, call, no_context, tools_for, workspace
 from troupe_plugin_sdk import runner as p
 from troupe_plugin_sdk.effects import Effects
 from troupe_plugin_sdk.events import EventNumbering, cut, encoded_size, fit, utf8_size
@@ -17,7 +17,7 @@ def test_an_allowed_call_is_a_tool_call_then_a_tool_result_continuing_the_runs_s
     tmp_path: Path,
 ) -> None:
     tools = tools_for(workspace(tmp_path, {"README.md": b"hello\n"}))
-    numbering = EventNumbering(RUN, 65536, next_seq=5)
+    numbering = EventNumbering(RUN, 65536, next_seq=5, send_context=no_context)
 
     step = call(tools, "Read", {"file_path": "README.md"}, numbering, call_id="c1")
 
@@ -47,7 +47,7 @@ def test_a_grep_returning_over_200kb_fits_event_max_bytes_and_keeps_its_full_siz
     padding = b"x" * 480
     lines = b"".join(b"match %03d %s\n" % (n, padding) for n in range(500))
     root = workspace(tmp_path, {"big.txt": lines})
-    numbering = EventNumbering(RUN, 65536, next_seq=1)
+    numbering = EventNumbering(RUN, 65536, next_seq=1, send_context=no_context)
 
     step = call(tools_for(root), "Grep", {"pattern": "match"}, numbering)
 
@@ -97,7 +97,7 @@ def test_cut_keeps_text_that_fits_and_cuts_text_that_doesnt_to_the_limit(
 
 
 def test_the_numbering_hands_out_each_seq_once_in_order() -> None:
-    numbering = EventNumbering(RUN, 1000, next_seq=3)
+    numbering = EventNumbering(RUN, 1000, next_seq=3, send_context=no_context)
     assert [numbering.take() for _ in range(3)] == [3, 4, 5]
 
 

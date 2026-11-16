@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from sdk_tools import RUN, FakeModel, as_text, call, tools_for, workspace
+from sdk_tools import RUN, FakeModel, as_text, call, no_context, tools_for, workspace
 from troupe_plugin_sdk.effects import Effects
 from troupe_plugin_sdk.events import EventNumbering
 from troupe_plugin_sdk.tools import Tools
@@ -56,7 +56,7 @@ def test_the_next_call_is_still_carried_out_after_a_malformed_one(tmp_path: Path
         ]
     )
 
-    model.drive(tools, EventNumbering(RUN, 65536, next_seq=1))
+    model.drive(tools, EventNumbering(RUN, 65536, next_seq=1, send_context=no_context))
 
     assert [is_error for _, is_error in model.seen] == [True, False]
     assert (root / "a.txt").read_bytes() == b"fine"
@@ -74,7 +74,9 @@ def test_arguments_as_json_text_and_as_an_object_do_the_same(tmp_path: Path) -> 
 def test_an_empty_call_id_is_the_runners_mistake_and_raises(tmp_path: Path) -> None:
     tools = Tools(workspace(tmp_path))
     with pytest.raises(ValueError, match="non-empty call id"):
-        tools.run("", "Read", {"file_path": "a"}, EventNumbering(RUN, 1000))
+        tools.run(
+            "", "Read", {"file_path": "a"}, EventNumbering(RUN, 1000, send_context=no_context)
+        )
 
 
 def test_a_call_with_no_tool_name_is_an_error_result(tmp_path: Path) -> None:

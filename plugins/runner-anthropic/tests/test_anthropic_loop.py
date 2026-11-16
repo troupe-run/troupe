@@ -39,6 +39,11 @@ MODEL = "fake-model"
 """The model the fake's replies say answered, so a run notes no other model."""
 
 
+def no_context(event: object) -> None:
+    """A send_context for a test that expects no lone surrogate, so no context event for one."""
+    raise AssertionError(f"an unexpected context event: {event}")
+
+
 @pytest.fixture(autouse=True)
 def clean_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     """The service removes every ANTHROPIC_* variable from the process: monkeypatch puts back any
@@ -108,7 +113,9 @@ def run(
                 runtime=runtime,
                 options=parse_options(options),
                 tools=Tools.for_declaration(Declaration(effects, workspace, scratch)),
-                numbering=EventNumbering(str(uuid.uuid4()), event_max_bytes, next_seq=1),
+                numbering=EventNumbering(
+                    str(uuid.uuid4()), event_max_bytes, next_seq=1, send_context=no_context
+                ),
                 open=service.stream,
                 send=events.append,
                 record=lambda kind, data: records.append((kind, data)),
@@ -410,7 +417,7 @@ def test_the_runners_own_failure_is_an_error_result_with_reason_runner(tmp_path:
             runtime=runtime,
             options=parse_options(TEST_LIMITS),
             tools=Tools.for_declaration(Declaration(READ_ONLY, workspace, scratch)),
-            numbering=EventNumbering(str(uuid.uuid4()), 65536, next_seq=1),
+            numbering=EventNumbering(str(uuid.uuid4()), 65536, next_seq=1, send_context=no_context),
             open=service.stream,
             send=lambda _: None,
             record=lambda _kind, _data: None,
@@ -859,7 +866,7 @@ def test_a_stop_after_one_call_carries_out_none_of_the_rest_and_sends_no_request
             runtime=runtime,
             options=parse_options(TEST_LIMITS),
             tools=Tools.for_declaration(Declaration(Effects(write=("*.txt",)), workspace, scratch)),
-            numbering=EventNumbering(str(uuid.uuid4()), 65536, next_seq=1),
+            numbering=EventNumbering(str(uuid.uuid4()), 65536, next_seq=1, send_context=no_context),
             open=service.stream,
             send=lambda _: None,
             record=lambda _kind, _data: None,

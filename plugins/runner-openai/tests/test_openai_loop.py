@@ -39,6 +39,11 @@ MODEL = "fake-model"
 """The model the fake endpoint's responses say answered, so a run notes no other model."""
 
 
+def no_context(event: object) -> None:
+    """A send_context for a test that expects no lone surrogate, so no context event for one."""
+    raise AssertionError(f"an unexpected context event: {event}")
+
+
 class Ran:
     """A loop's run: what it sent, recorded and returned, and what the fake endpoint received."""
 
@@ -87,7 +92,9 @@ def run(
             runtime=Runtime.checked(fake.endpoint, MODEL, "sk-canary-0123456789", price),
             options=parse_options(options),
             tools=Tools(workspace, effects),
-            numbering=EventNumbering(str(uuid.uuid4()), event_max_bytes, next_seq=1),
+            numbering=EventNumbering(
+                str(uuid.uuid4()), event_max_bytes, next_seq=1, send_context=no_context
+            ),
             send=events.append,
             record=lambda kind, data: records.append((kind, data)),
             wait=lambda _: False,
@@ -315,7 +322,7 @@ def test_the_runners_own_failure_is_an_error_result_with_reason_runner(tmp_path:
             runtime=Runtime.checked(fake.endpoint, MODEL, "sk-canary-0123456789"),
             options=parse_options(TEST_LIMITS),
             tools=Tools(workspace, READ_ONLY),
-            numbering=EventNumbering(str(uuid.uuid4()), 65536, next_seq=1),
+            numbering=EventNumbering(str(uuid.uuid4()), 65536, next_seq=1, send_context=no_context),
             send=lambda _: None,
             record=lambda _kind, _body: None,
             wait=lambda _: False,
@@ -593,7 +600,7 @@ def test_a_stop_after_one_call_carries_out_none_of_the_rest(tmp_path: Path) -> N
             runtime=Runtime.checked(fake.endpoint, MODEL, None),
             options=parse_options(TEST_LIMITS),
             tools=Tools(workspace, Effects(write=("*.txt",))),
-            numbering=EventNumbering(str(uuid.uuid4()), 65536, next_seq=1),
+            numbering=EventNumbering(str(uuid.uuid4()), 65536, next_seq=1, send_context=no_context),
             send=lambda _: None,
             record=lambda _kind, _data: None,
             wait=lambda _: False,

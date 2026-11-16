@@ -170,6 +170,9 @@ text that isn't Unicode, where, and how many characters were replaced.
   `numbered` is its only check.
 - **The transcript keeps what the engine sent:** a record is written before the text is cleaned, a lone surrogate
   as its JSON escape (Anthropic's `_json(..., as_sent=True)`, like Ollama's `encode`), never U+FFFD.
+- **`send_context` is required** (owner, 2026-11-17, on review of #437): a keyword argument of `EventNumbering` with no
+  default, so a runner can't build a counter that would have to drop or crash on a replacement; leaving it out fails
+  where the counter is built. No compatibility shim, pre-1.0. The plugin-sdk spec says so.
 - **One event per place:** `lost` adds a report to one already waiting for the same place, so a streamed answer
   whose deltas each hold one gives one `context` event, not one per delta (review of #437).
 - **Ordering inside a site:** `numbered` comes before `fit`, because the SDK's `fit` encodes strictly and raises on a

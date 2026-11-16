@@ -45,10 +45,12 @@ class EventNumbering:
         event_max_bytes: int,
         next_seq: int = 0,
         summary_max_bytes: int = SUMMARY_MAX_BYTES,
-        send_context: Callable[[ContextEvent], None] | None = None,
+        *,
+        send_context: Callable[[ContextEvent], None],
     ) -> None:
         """``send_context`` sends a ``context`` event the moment it's numbered, ahead of the event
-        whose numbering made it: it's how a replaced lone surrogate is recorded."""
+        whose numbering made it: it's how a replaced lone surrogate is recorded. It's required,
+        so a runner can't leave a replacement unrecorded (owner, 2026-11-17)."""
         if next_seq < 0:
             raise ValueError("next_seq starts at 0")
         if event_max_bytes < 1 or summary_max_bytes < 1:
@@ -95,11 +97,6 @@ class EventNumbering:
 
     def _send_lost(self) -> None:
         while self._lost:
-            if self.send_context is None:
-                raise RuntimeError(
-                    "a lone surrogate was replaced, but this EventNumbering has no send_context "
-                    "to record it with"
-                )
             where, replaced = self._lost.pop(0)
             many = replaced != 1
             message = (
