@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import STOP_TREE_WITHIN, run_within, stop_tree
+from conftest import STOP_TREE_WITHIN, run_with_progress, stop_tree
 
 import flake_hunt
 from troupe.platform.processes import is_running
@@ -24,9 +24,12 @@ from troupe.platform.processes import is_running
 SCRIPT = Path(flake_hunt.__file__)
 WINDOWS = sys.platform == "win32"
 
-HUNT_RUN_WITHIN = 120.0
-"""Seconds for one of these tests' small hunts to run to its end on a slow machine. Past it, the
-hunt's whole tree is stopped and the test fails with its output so far."""
+HUNT_ROUND_WITHIN = 120.0
+"""Seconds between a small hunt's lines (its start, each round's result, its summary) on a slow
+machine: about one round, a fresh pytest on a few trivial tests, which took 69.9 s under a load
+of 67 (#397). The bound is on each round, not the whole hunt, so a test may ask for as many rounds
+as it needs. Past it, the hunt's whole tree is stopped and the test fails naming the last line it
+saw and its output so far."""
 
 STOP_MARGIN = 15.0
 """Seconds past the hunt's own stop limit (flake_hunt.STOP_TIMEOUT_SECONDS) for an interrupted hunt
@@ -75,7 +78,13 @@ def hunt_command(root: Path, out: Path, *args: str) -> list[str]:
 def run_hunt(
     root: Path, out: Path, *args: str, env: dict[str, str] | None = None
 ) -> subprocess.CompletedProcess[bytes]:
-    return run_within(hunt_command(root, out, *args), HUNT_RUN_WITHIN, env=env, cwd=root)
+    return run_with_progress(
+        hunt_command(root, out, *args),
+        HUNT_ROUND_WITHIN,
+        waiting_for="the hunt's next line (a round's result or its summary)",
+        env=env,
+        cwd=root,
+    )
 
 
 def summary(out: Path) -> dict[str, Any]:
@@ -770,7 +779,11 @@ def test_on_windows_a_rounds_tests_still_get_a_real_ctrl_c(tmp_path: Path) -> No
         "::test_a_real_ctrl_c_on_windows_calls_back_too"
     )
     out = tmp_path / "out"
-    completed = run_within([sys.executable, str(SCRIPT), "--out", str(out), real], HUNT_RUN_WITHIN)
+    completed = run_with_progress(
+        [sys.executable, str(SCRIPT), "--out", str(out), real],
+        HUNT_ROUND_WITHIN,
+        waiting_for="the hunt's next line (a round's result or its summary)",
+    )
     assert completed.returncode == 0, text(completed)
     assert [each["tests"] for each in results(out)] == [1]
 

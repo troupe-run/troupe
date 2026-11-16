@@ -4,13 +4,15 @@ maintained."""
 
 import contextlib
 import os
+import queue
 import shutil
 import signal
 import subprocess
 import sys
+import threading
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import IO, Any
 
 import pytest
 
@@ -186,3 +188,63 @@ def run_within(
             f"so its tree was stopped; its output so far:\n{shown}"
         ) from None
     return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
+
+
+def run_with_progress(
+    command: list[str],
+    each_within: float,
+    *,
+    waiting_for: str = "its next line",
+    cwd: Path | None = None,
+    env: dict[str, str] | None = None,
+) -> "subprocess.CompletedProcess[bytes]":
+    """Run ``command`` to its end with captured output, as run_within does, but bound the time
+    between the lines it writes to standard output rather than its whole run (#397): a command
+    that keeps writing them may take as long as it needs. When ``each_within`` seconds pass with no
+    new line, stop its whole tree and fail naming ``waiting_for``, the last line it wrote, and its
+    output so far."""
+    process = subprocess.Popen(
+        command, cwd=cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
+    assert process.stdout is not None
+    assert process.stderr is not None
+    lines: queue.Queue[bytes | None] = queue.Queue()
+    errors: list[bytes] = []
+
+    def read_out(stream: IO[bytes]) -> None:
+        for line in iter(stream.readline, b""):
+            lines.put(line)
+        lines.put(None)
+
+    def read_err(stream: IO[bytes]) -> None:
+        errors.append(stream.read())
+
+    readers = [
+        threading.Thread(target=read_out, args=(process.stdout,), daemon=True),
+        threading.Thread(target=read_err, args=(process.stderr,), daemon=True),
+    ]
+    for reader in readers:
+        reader.start()
+    out: list[bytes] = []
+    while True:
+        try:
+            line = lines.get(timeout=each_within)
+        except queue.Empty:
+            stop_tree(process)
+            for reader in readers:
+                reader.join(STOP_TREE_WITHIN)
+            last = out[-1].decode("utf-8", errors="backslashreplace").rstrip() if out else None
+            shown = (b"".join(out) + b"".join(errors)).decode("utf-8", errors="backslashreplace")
+            name = command[1] if len(command) > 1 else command[0]
+            raise AssertionError(
+                f"{name} wrote no line within {each_within:g}s while the test waited for "
+                f"{waiting_for} (its last line: {last!r}), so its tree was stopped; its output so "
+                f"far:\n{shown[-4000:]}"
+            ) from None
+        if line is None:
+            break
+        out.append(line)
+    process.wait()
+    for reader in readers:
+        reader.join()
+    return subprocess.CompletedProcess(command, process.returncode, b"".join(out), b"".join(errors))
