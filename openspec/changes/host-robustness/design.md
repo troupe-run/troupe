@@ -130,6 +130,51 @@ with `runner.protocol`, like any violation.
   then send a lone surrogate, so the refusal never fails a real run. Each runner's tests write a message holding one
   and read back U+FFFD; the Ollama runner is driven end to end with an error body and an answer holding `\ud800`.
 
+### D3b. A runner records each replacement in a context event (owner, 2026-11-16)
+
+The owner kept U+FFFD for an engine's lone surrogate, but never silently: the runner records that the engine sent
+text that isn't Unicode, where, and how many characters were replaced.
+
+- **A `context` event, kind `other`, by `runner`.** Its message names where and how many: "The engine's text wasn't
+  Unicode: 2 lone surrogates in the turn event's text were replaced with U+FFFD." *Why not a notice:* notices are
+  the host's (#327 keeps the ones the host raises); a runner has no way to raise one, and the host can't see a
+  replacement made before the line was written. *Why a context event over a `log` warning:* the contract defines
+  `context` as content lost while the run carries on, with `kind` `other` for a loss the list doesn't name and a
+  message that names it. A replaced character is such a loss. It's numbered and kept with the run's events, so it's
+  in the run's history; a `log` line is free text with no defined meaning.
+- **Where it goes:** just before the event the replacement is in, so the event that holds U+FFFD follows the
+  event that explains it. A replacement made before `init` (or in `init` itself) waits and goes just after `init`,
+  since a `context` event before `init` is a violation. One before the `result` goes before it.
+- **How, in one place:** `EventNumbering.numbered(body)` (SDK) numbers an event body the way each site did inline
+  (`{"runId": …, "seq": take(), **body}`), after making its strings Unicode text. When it replaced any, or a
+  replacement made elsewhere is waiting (`lost(where, count)`), it first sends each waiting `context` event through
+  the sender the runner gave it, each taking the next `seq`, so `seq` stays gapless and the event follows them. Every
+  site that numbered an event inline calls it instead. Claude Code and scripted kept their own counters; they use
+  `EventNumbering` now, so all six share it.
+- **Replacements made where the engine's text is read:** each runner reads its engine's JSON in one place, and
+  replaces lone surrogates there, since tools, summaries and the next request need text. It counts them and calls
+  `lost(where, n)`, so the context event names the engine's output, before the events built from it: "Ollama's
+  answer" (each chat line), "the Responses API's answer" (OpenAI's stream parser), "the Messages API's answer"
+  (Anthropic's events as the library exposes them), "Claude Code's output" (each stream-json line, through the
+  mapper's `take_replaced`). OpenAI and Anthropic pass `on_lost` into `exchange`, as they pass `record`. A tool
+  call's input and output are made text before `Tools.run` numbers either event, so its context event comes before
+  both. Ollama's error body is no longer cleaned where it's read: its message reaches an event (`retry`, `result`)
+  through `numbered`, which records it there. mistral.rs's engine gives Rust strings, which can't hold one, so
+  `numbered` is its only check.
+- **The transcript keeps what the engine sent:** a record is written before the text is cleaned, a lone surrogate
+  as its JSON escape (Anthropic's `_json(..., as_sent=True)`, like Ollama's `encode`), never U+FFFD.
+- **Ordering inside a site:** `numbered` comes before `fit`, because the SDK's `fit` encodes strictly and raises on a
+  lone surrogate. That was the Ollama error-body crash, and the same path existed in OpenAI and Anthropic, whose
+  streamed text reaches `fit` uncleaned.
+- **The last resort:** `encode_line` returns the line and how many it replaced. A message no event carries (an
+  error answer to `run/start`, before the run has events) has none counted by `numbered`; when its writer replaced
+  any, the runner writes a line to standard error naming the message and the count. The host keeps standard error
+  with the run.
+- **Tests, per runner:** engine output holding `\ud800` (Ollama's answer and error body, an OpenAI and an Anthropic
+  streamed text, a mistral.rs stand-in answer, a Claude Code stream-json line, a scripted step) gives a run whose
+  events have gapless `seq`, a `context` event of kind `other` by `runner` naming where and the count just before
+  the event with U+FFFD, and no lone surrogate in any line.
+
 ### D4. A second initialize is refused (#356)
 
 - **The contract:** `runner.already-initialized` in `protocol/schemas/runner/errors.schema.json` (and the packaged

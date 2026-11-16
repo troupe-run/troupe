@@ -82,6 +82,7 @@ class Run:
         self.sent: list[Mapping[str, Any]] = []
         self.retries: list[Retry] = []
         self.records: list[tuple[str, bytes]] = []
+        self.lost: list[tuple[str, int]] = []
         self.waits: list[float] = []
         self.calls: list[str] = []
         """``begin``, ``open`` and ``end``, in the order exchange called them."""
@@ -112,6 +113,7 @@ class Run:
             self.retries.append,
             lambda kind, data: self.records.append((kind, data)),
             self._wait,
+            on_lost=lambda where, replaced: self.lost.append((where, replaced)),
             begin=self._begin,
             end=lambda: self.calls.append("end"),
             **limits,

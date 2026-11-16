@@ -8,6 +8,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from sdk_tools import RUN, call, tools_for, workspace
+from troupe_plugin_sdk import runner as p
 from troupe_plugin_sdk.effects import Effects
 from troupe_plugin_sdk.events import EventNumbering, cut, encoded_size, fit, utf8_size
 
@@ -98,3 +99,22 @@ def test_cut_keeps_text_that_fits_and_cuts_text_that_doesnt_to_the_limit(
 def test_the_numbering_hands_out_each_seq_once_in_order() -> None:
     numbering = EventNumbering(RUN, 1000, next_seq=3)
     assert [numbering.take() for _ in range(3)] == [3, 4, 5]
+
+
+# Requirement: A message's strings are Unicode text: each replacement is recorded
+# (host-robustness design D3b)
+
+
+def test_a_lone_surrogate_in_a_calls_input_is_recorded_before_both_of_its_events(
+    tmp_path: Path,
+) -> None:
+    root = workspace(tmp_path, {"a.txt": b"one\n"})
+    sent: list[object] = []
+    numbering = EventNumbering(RUN, 65536, next_seq=1, send_context=sent.append)
+    step = call(tools_for(root), "Grep", {"pattern": "x\ud800"}, numbering)
+    (context,) = sent
+    assert isinstance(context, p.ContextEvent)
+    assert (context.seq, context.kind, context.by) == (1, "other", "runner")
+    assert "1 lone surrogate in the input of a 'Grep' tool call was replaced" in context.message
+    assert (step.call.seq, step.result.seq) == (2, 3)
+    assert "�" in step.call.input_summary

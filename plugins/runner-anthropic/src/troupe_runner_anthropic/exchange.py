@@ -216,15 +216,19 @@ def _kept(headers: Mapping[str, str]) -> dict[str, str]:
     }
 
 
-def _json(value: object) -> bytes:
-    return json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+def _json(value: object, *, as_sent: bool = False) -> bytes:
+    """``value`` as compact UTF-8 JSON; ``as_sent`` keeps a lone surrogate as its JSON escape."""
+    text = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    return text.encode("utf-8", "backslashreplace" if as_sent else "strict")
 
 
 def _note(record: Record, note: dict[str, Any]) -> None:
     record("note", _json(note))
 
 
-def _attempt(open_: Open, params: Mapping[str, Any], record: Record) -> Reply:
+def _attempt(
+    open_: Open, params: Mapping[str, Any], record: Record, on_lost: Callable[[str, int], None]
+) -> Reply:
     try:
         opened = open_(params)
     except StatusError as failure:
@@ -239,7 +243,12 @@ def _attempt(open_: Open, params: Mapping[str, Any], record: Record) -> Reply:
     parser = ReplyParser()
     try:
         for event in opened.events:
-            record("received", _json(event))
+            # As the library exposes it: a lone surrogate (an escape in the service's JSON) is
+            # kept as that escape. Then read as Unicode text, each replacement recorded
+            # (host-robustness design D3b).
+            record("received", _json(event, as_sent=True))
+            event, replaced = p.unicode_text_counted(event)
+            on_lost("the Messages API's answer", replaced)
             if parser.feed(event):
                 return parser.reply()
     except StatusError as failure:  # an error event in the stream
@@ -255,6 +264,8 @@ def exchange(
     on_retry: Callable[[Retry], None],
     record: Record,
     wait: Wait,
+    *,
+    on_lost: Callable[[str, int], None],
     begin: Callable[[], bool] = lambda: True,
     end: Callable[[], None] = lambda: None,
     max_attempts: int = MAX_ATTEMPTS,
@@ -263,13 +274,14 @@ def exchange(
 ) -> Reply:
     """Send ``params`` and return the reply, retrying as the module docstring says. ``begin`` is
     called before each attempt and returns False when the run is stopping (so nothing is sent);
-    ``end`` after it. Raises ExchangeFailedError, or StoppedError when the run is stopping."""
+    ``end`` after it. ``on_lost`` records lone surrogates in the reply replaced with U+FFFD
+    (where, how many). Raises ExchangeFailedError, or StoppedError when the run is stopping."""
     record("sent", _json(dict(params)))
     for attempt in range(1, max_attempts + 1):
         if not begin():
             raise StoppedError
         try:
-            return _attempt(open_, params, record)
+            return _attempt(open_, params, record, on_lost)
         except StatusError as failure:
             retryable = classify(failure, url)
         except NotAStreamError as failure:

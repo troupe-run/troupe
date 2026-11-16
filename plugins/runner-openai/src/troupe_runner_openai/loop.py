@@ -331,6 +331,7 @@ class Loop:
             self._send_retry,
             self.record,
             self.wait,
+            on_lost=self.numbering.lost,
             make_call=self.make_call,
             on_call=self.on_call,
             **self.exchange_limits,
@@ -348,7 +349,7 @@ class Loop:
             self._served = ServedModels(self.runtime.model)
         for body in self._served.note(reply.model):
             if body["type"] == "served_model":
-                data = {"runId": self.numbering.run_id, "seq": self.numbering.take(), **body}
+                data = self.numbering.numbered(body)
                 self.send(ServedModelEvent.from_data(data))
             else:
                 self._log(body["level"], body["message"])
@@ -408,8 +409,6 @@ class Loop:
 
     def _send_turn(self, text: str) -> None:
         data = {
-            "runId": self.numbering.run_id,
-            "seq": self.numbering.take(),
             "type": "turn",
             "role": "assistant",
             "text": text,
@@ -418,8 +417,6 @@ class Loop:
 
     def _send_retry(self, retry: Retry) -> None:
         data = {
-            "runId": self.numbering.run_id,
-            "seq": self.numbering.take(),
             "type": "retry",
             "attempt": retry.attempt,
             "maxAttempts": retry.max_attempts,
@@ -431,8 +428,6 @@ class Loop:
 
     def _log(self, level: str, message: str) -> None:
         data = {
-            "runId": self.numbering.run_id,
-            "seq": self.numbering.take(),
             "type": "log",
             "level": level,
             "message": message,
@@ -446,8 +441,6 @@ class Loop:
         self, status: str, message: str, spend: _Spend, reason: FailureReason | None = None
     ) -> ResultEvent:
         data: dict[str, Any] = {
-            "runId": self.numbering.run_id,
-            "seq": self.numbering.take(),
             "type": "result",
             "status": status,
             "message": message,
@@ -468,9 +461,11 @@ class Loop:
                 data["estimatedCostUsd"] = estimated
         return ResultEvent.from_data(self._fit(data, "message"))
 
-    def _fit(self, data: dict[str, Any], key: str) -> dict[str, Any]:
+    def _fit(self, body: dict[str, Any], key: str) -> dict[str, Any]:
+        """``body`` numbered, after recording any text in it that wasn't Unicode (host-robustness
+        design D3b), then fitted: ``fit`` needs Unicode text."""
         limit = min(self.numbering.summary_max_bytes, SUMMARY_MAX_BYTES)
-        return fit(data, key, limit, self.numbering.event_max_bytes)
+        return fit(self.numbering.numbered(body), key, limit, self.numbering.event_max_bytes)
 
 
 __all__ = ["INCOMPLETE", "Loop", "instructions", "request_body"]

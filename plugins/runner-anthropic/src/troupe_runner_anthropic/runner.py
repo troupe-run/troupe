@@ -110,7 +110,10 @@ class Runner:
         masked = self._mask.json(message)
         # A lone surrogate is written as U+FFFD: no write fails after an event's seq was taken,
         # and no line holds one (host-robustness design D3).
-        line = p.encode_line(masked)
+        line, replaced = p.encode_line(masked)  # lone surrogates as U+FFFD (design D3b)
+        if replaced:  # an event's were recorded when it was numbered; say so for the rest
+            self._stderr.write(p.replaced_note("Anthropic", masked, replaced))
+            self._stderr.flush()
         with self._out:
             if from_worker and self._stop.is_set():
                 return False
@@ -366,6 +369,7 @@ class Runner:
             start.limits.event_max_bytes,
             next_seq=1,
             summary_max_bytes=SUMMARY_MAX_BYTES,
+            send_context=self.event,
         )
         self._runtime = runtime
         loop = Loop(

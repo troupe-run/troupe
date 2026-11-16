@@ -245,7 +245,7 @@ def _note(record: Record, note: dict[str, Any]) -> None:
     record("note", json.dumps(note, ensure_ascii=False, separators=(",", ":")).encode())
 
 
-def _attempt(call: Call, record: Record) -> Reply:
+def _attempt(call: Call, record: Record, on_lost: Callable[[str, int], None]) -> Reply:
     try:
         response = call.open()
     except StatusError as error:
@@ -264,6 +264,7 @@ def _attempt(call: Call, record: Record) -> Reply:
                 break
         return parser.reply()
     finally:
+        on_lost("the Responses API's answer", parser.replaced)
         response.close()
 
 
@@ -274,6 +275,8 @@ def exchange(
     on_retry: Callable[[Retry], None],
     record: Record,
     wait: Wait,
+    *,
+    on_lost: Callable[[str, int], None],
     make_call: Callable[[Endpoint, bytes, str | None], Call] = Call,
     on_call: Callable[[Call | None], None] = lambda _: None,
     max_attempts: int = MAX_ATTEMPTS,
@@ -281,14 +284,15 @@ def exchange(
     max_delay: float = RETRY_MAX_DELAY_SECONDS,
 ) -> Reply:
     """Send ``body`` and return the reply, retrying as the module docstring says. ``on_call`` is
-    given each call as it starts, and None when it's over, so another thread can abort it. Raises
+    given each call as it starts, and None when it's over, so another thread can abort it.
+    ``on_lost`` records lone surrogates in a reply read as U+FFFD (where, how many). Raises
     ExchangeFailedError, or AbortedError when the run is stopping."""
     record("sent", body)
     for attempt in range(1, max_attempts + 1):
         call = make_call(endpoint, body, credential)
         on_call(call)
         try:
-            reply = _attempt(call, record)
+            reply = _attempt(call, record, on_lost)
             if reply.failure is None or reply.status not in ("failed", "error"):
                 return reply
             retryable = _failed(reply)

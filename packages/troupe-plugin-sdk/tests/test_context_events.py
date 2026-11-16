@@ -124,3 +124,59 @@ def test_any_message_and_counts_give_an_event_that_validates_and_fits(
     )
     assert data.get("messagesAfter") == messages_after
     assert numbering.next_seq == 8
+
+
+# Requirement: A message's strings are Unicode text: a runner records each replacement
+# (host-robustness design D3b)
+
+
+def _numbering(sent: list[p.RunEvent]) -> EventNumbering:
+    return EventNumbering(RUN, 65536, send_context=sent.append)
+
+
+def test_an_event_holding_a_lone_surrogate_follows_a_context_event_naming_it() -> None:
+    sent: list[p.RunEvent] = []
+    numbering = _numbering(sent)
+    init = numbering.numbered({"type": "init", "runner": {"name": "x", "version": "1"}})
+    turn = numbering.numbered({"type": "turn", "role": "assistant", "text": "a\ud800b\udfff"})
+    assert init["seq"] == 0
+    assert [(e.TYPE, e.seq) for e in sent] == [("context", 1)]
+    context = sent[0]
+    assert isinstance(context, p.ContextEvent)
+    assert (context.kind, context.by) == ("other", "runner")
+    assert context.message == (
+        "The engine's text wasn't Unicode: 2 lone surrogates in the turn event's text were "
+        "replaced with U+FFFD."
+    )
+    assert (turn["seq"], turn["text"]) == (2, "a�b�")
+    assert numbering.next_seq == 3
+
+
+def test_a_replacement_before_init_is_recorded_just_after_init() -> None:
+    sent: list[p.RunEvent] = []
+    numbering = _numbering(sent)
+    numbering.lost("Ollama's answer", 1)
+    init = numbering.numbered({"type": "init", "runner": {"name": "x\ud800", "version": "1"}})
+    assert (init["seq"], init["runner"]["name"]) == (0, "x�")
+    assert sent == []  # a context event can't come before init
+    log = numbering.numbered({"type": "log", "level": "info", "message": "m"})
+    assert [(e.TYPE, e.seq) for e in sent] == [("context", 1), ("context", 2)]
+    assert "1 lone surrogate in Ollama's answer was replaced" in sent[0].message  # type: ignore[attr-defined]
+    assert "the init event's runner.name" in sent[1].message  # type: ignore[attr-defined]
+    assert log["seq"] == 3
+
+
+def test_an_event_with_nothing_replaced_is_numbered_as_before() -> None:
+    sent: list[p.RunEvent] = []
+    numbering = _numbering(sent)
+    numbering.numbered({"type": "init", "runner": {"name": "x", "version": "1"}})
+    body = {"type": "log", "level": "info", "message": "é \U0001f600"}
+    log = numbering.numbered(body)
+    assert sent == []
+    assert log == {"runId": RUN, "seq": 1, **body}
+
+
+def test_a_replacement_with_nowhere_to_record_it_is_an_error_not_silent() -> None:
+    numbering = EventNumbering(RUN, 65536, next_seq=1)
+    with pytest.raises(RuntimeError, match="no send_context"):
+        numbering.numbered({"type": "log", "level": "info", "message": "\ud800"})

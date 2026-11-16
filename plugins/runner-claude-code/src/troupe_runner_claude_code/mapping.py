@@ -17,6 +17,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any, TypeGuard
 
+from troupe_plugin_sdk import runner as p
 from troupe_plugin_sdk.events import ServedModels
 from troupe_runner_claude_code import NAME
 from troupe_runner_claude_code.defaults import SUMMARY_MAX_BYTES
@@ -178,6 +179,7 @@ class Mapper:
         summary_max_bytes: int = SUMMARY_MAX_BYTES,
     ) -> None:
         self._runner_version = runner_version
+        self._replaced = 0
         self._event_max_bytes = event_max_bytes
         self._summary_max_bytes = summary_max_bytes
         self._init_sent = False
@@ -208,6 +210,12 @@ class Mapper:
     def result_sent(self) -> bool:
         return self._result_sent
 
+    def take_replaced(self) -> int:
+        """How many lone surrogates (escapes in Claude Code's JSON) ``feed`` has replaced with
+        U+FFFD since it was last asked: the runner records them (host-robustness design D3b)."""
+        replaced, self._replaced = self._replaced, 0
+        return replaced
+
     def silence(self) -> None:
         """Send no more events, only transcript records: the run was cancelled."""
         self._silenced = True
@@ -220,7 +228,8 @@ class Mapper:
             return out
         try:
             text = line.decode("utf-8")
-            record = loads_strict(text)
+            record, replaced = p.unicode_text_counted(loads_strict(text))
+            self._replaced += replaced
         except (UnicodeDecodeError, NotJsonError):
             record = None
         if not isinstance(record, dict):

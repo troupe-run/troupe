@@ -205,7 +205,10 @@ class Conversation:
         self._clock = clock
         self._started = clock()
         self._numbering = EventNumbering(
-            start.run_id, start.limits.event_max_bytes, summary_max_bytes=SUMMARY_MAX_BYTES
+            start.run_id,
+            start.limits.event_max_bytes,
+            summary_max_bytes=SUMMARY_MAX_BYTES,
+            send_context=self._send_context,
         )
         # Made here, before run/start is answered, so a declaration the SDK can't use is refused;
         # the limits are lowered to the window once the model is loaded.
@@ -236,10 +239,16 @@ class Conversation:
     def _event(self, data: dict[str, Any], summary: str | None = None) -> None:
         if self._sink.stopping():
             raise _Stop
-        data = {"runId": self._start.run_id, "seq": self._numbering.take(), **data}
+        data = self._numbering.numbered(data)  # before fit, which needs Unicode text
         if summary is not None:
             data = fit(data, summary, SUMMARY_MAX_BYTES, self._start.limits.event_max_bytes)
         self._sink.event(p.parse_event(data))
+
+    def _send_context(self, event: p.ContextEvent) -> None:
+        """A context event recording text that wasn't Unicode (host-robustness design D3b)."""
+        if self._sink.stopping():
+            raise _Stop
+        self._sink.event(event)
 
     def _record(self, kind: p.TranscriptKind, value: object) -> None:
         if self._sink.stopping():

@@ -815,12 +815,13 @@ def test_a_result_written_before_a_requests_answer_is_still_read_by_until_result
 
 def test_a_lone_surrogate_in_a_message_is_written_as_the_replacement_character() -> None:
     # An engine's \ud800 escape decodes to a lone surrogate, which the host refuses (#311).
-    stdout = io.BytesIO()
-    writer = Runner(io.BytesIO(), stdout, io.BytesIO())
+    stdout, stderr = io.BytesIO(), io.BytesIO()
+    writer = Runner(io.BytesIO(), stdout, stderr)
     writer._send({"jsonrpc": "2.0", "method": "run/event", "params": {"x\udfff": "a\ud800b"}})
     message = json.loads(stdout.getvalue())
     assert message["params"] == {"x\ufffd": "a\ufffdb"}
     assert p.lone_surrogate(message) is None
+    assert b"2 lone surrogates in a run/event message were written as U+FFFD" in stderr.getvalue()
 
 
 # Requirement: A second initialize is refused (host-robustness design D4, #356)
@@ -868,3 +869,36 @@ def test_a_second_initialize_is_refused_and_the_first_handshakes_kinds_stand(
         session.validate_all()
     finally:
         session.kill()
+
+
+# Requirement: A message's strings are Unicode text: each replacement is recorded
+# (host-robustness design D3b)
+
+
+def _replacement_recorded(events: list[dict[str, Any]]) -> dict[str, Any]:
+    """The context event that records a lone surrogate replaced with U+FFFD: just before the first
+    event holding U+FFFD, kind other, by runner; ``seq`` gapless; no lone surrogate anywhere
+    (host-robustness design D3b)."""
+    assert [e["seq"] for e in events] == list(range(len(events)))
+    assert all(p.lone_surrogate(e) is None for e in events)
+    first = next(i for i, e in enumerate(events) if "\ufffd" in json.dumps(e, ensure_ascii=False))
+    context = events[first - 1]
+    assert (context["type"], context["kind"], context["by"]) == ("context", "other", "runner")
+    assert "wasn't Unicode" in context["message"]
+    assert "replaced with U+FFFD" in context["message"]
+    return context
+
+
+def test_a_lone_surrogate_in_a_step_is_recorded_in_a_context_event(session: Session) -> None:
+    session.play(
+        {
+            "steps": [
+                {"event": INIT},
+                {"event": {"type": "log", "level": "info", "message": "a\ud800b"}},
+                {"event": OK},
+            ]
+        }
+    )
+    events = [m["params"] for m in session.until_result() if m.get("method") == "run/event"]
+    context = _replacement_recorded(events)
+    assert "lone surrogate in the log event's message was replaced" in context["message"]

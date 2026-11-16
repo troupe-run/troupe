@@ -535,24 +535,81 @@ def unicode_text(value: Any) -> Any:  # noqa: ANN401 - a JSON value
     """``value`` with each lone surrogate in its strings, keys included, replaced by U+FFFD. JSON
     can escape one (``\\ud800``) and ``json.loads`` decodes it, but it isn't Unicode text: it
     can't be UTF-8, and the contract refuses it (spec: runner-protocol, "A message's strings are
-    Unicode text"). A runner passes what it decodes from its engine through this."""
+    Unicode text"). A runner records each replacement (``unicode_text_counted``; host-robustness
+    design D3b), so none is silent."""
+    return unicode_text_counted(value)[0]
+
+
+def unicode_text_counted(value: Any) -> tuple[Any, int]:  # noqa: ANN401 - a JSON value
+    """``unicode_text(value)``, and how many lone surrogates it replaced."""
     if isinstance(value, str):
-        if not any("\ud800" <= char <= "\udfff" for char in value):
-            return value
-        return "".join(REPLACEMENT if "\ud800" <= char <= "\udfff" else char for char in value)
+        count = sum(1 for char in value if "\ud800" <= char <= "\udfff")
+        if not count:
+            return value, 0
+        text = "".join(REPLACEMENT if "\ud800" <= char <= "\udfff" else char for char in value)
+        return text, count
     if isinstance(value, list):
-        return [unicode_text(item) for item in value]
+        pairs = [unicode_text_counted(item) for item in value]
+        return [item for item, _ in pairs], sum(n for _, n in pairs)
     if isinstance(value, dict):
-        return {unicode_text(key): unicode_text(item) for key, item in value.items()}
-    return value
+        out: dict[Any, Any] = {}
+        total = 0
+        for key, item in value.items():
+            clean_key, in_key = unicode_text_counted(key)
+            clean_item, in_item = unicode_text_counted(item)
+            out[clean_key] = clean_item
+            total += in_key + in_item
+        return out, total
+    return value, 0
 
 
-def encode_line(message: object) -> bytes:
-    """One message as the line a runner writes: compact JSON, UTF-8, ended by a line feed. A lone
-    surrogate in any of its strings is written as U+FFFD (``unicode_text``), so the line never
-    holds one and writing it never fails."""
-    text = json.dumps(unicode_text(message), ensure_ascii=False, separators=(",", ":"))
-    return text.encode("utf-8") + b"\n"
+def encode_line(message: object) -> tuple[bytes, int]:
+    """One message as the line a runner writes, compact JSON, UTF-8, ended by a line feed, and how
+    many lone surrogates in its strings were written as U+FFFD (``unicode_text``), so the line never
+    holds one and writing it never fails. A runner says so on standard error when the count isn't
+    0: an event's were already recorded by ``EventNumbering.numbered`` (design D3b)."""
+    clean, replaced = unicode_text_counted(message)
+    text = json.dumps(clean, ensure_ascii=False, separators=(",", ":"))
+    return text.encode("utf-8") + b"\n", replaced
+
+
+def replaced_note(runner: str, message: object, replaced: int) -> bytes:
+    """The line a runner writes to standard error when ``encode_line`` replaced ``replaced`` lone
+    surrogates in ``message``: where no event could record it, such as an error answer to
+    run/start (host-robustness design D3b). The host keeps standard error with the run."""
+    what = "a message"
+    if isinstance(message, dict):
+        if isinstance(message.get("method"), str):
+            what = f"a {message['method']} message"
+        elif "id" in message:
+            what = f"the answer to request {message['id']!r}"
+    many = replaced != 1
+    return (
+        f"{runner} runner: the engine's text wasn't Unicode: {replaced} lone "
+        f"surrogate{'s' if many else ''} in {what} {'were' if many else 'was'} written as "
+        "U+FFFD\n"
+    ).encode()
+
+
+def surrogate_paths(value: object, path: str = "") -> list[str]:
+    """The dotted path of every string, or object whose key, holds a lone surrogate, in order."""
+    found = lone_surrogate(value, path)
+    if found is None:
+        return []
+    if isinstance(value, dict):
+        paths: list[str] = []
+        for key, item in value.items():
+            if _surrogate_in(str(key), path) is not None:
+                paths.append(path or "the message")
+            paths += surrogate_paths(item, _join(path, str(key)))
+        return paths
+    if isinstance(value, list):
+        return [
+            found_path
+            for index, item in enumerate(value)
+            for found_path in surrogate_paths(item, f"{path}[{index}]")
+        ]
+    return [found[0]]
 
 
 def lone_surrogate(value: object, path: str = "") -> tuple[str, str] | None:

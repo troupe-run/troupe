@@ -71,12 +71,16 @@ class Runner:
         self._tools: Tools | None = None
         self._tool_steps = 0
         self._next_seq = 0
+        self._numbered: EventNumbering | None = None
         self._cancel_ignored = False
 
     # Output
 
     def _send(self, message: dict[str, Any]) -> None:
-        line = p.encode_line(message)  # a lone surrogate as U+FFFD (host-robustness design D3)
+        line, replaced = p.encode_line(message)  # lone surrogates as U+FFFD (design D3b)
+        if replaced:  # an event's were recorded when it was numbered; say so for the rest
+            self._stderr.write(p.replaced_note("scripted", message, replaced))
+            self._stderr.flush()
         self._raw(line)
 
     def _raw(self, data: bytes) -> None:
@@ -254,11 +258,31 @@ class Runner:
     # Playing
 
     def _event(self, event: dict[str, Any]) -> None:
-        sent = {"runId": self._run_id, **event}
-        if "seq" not in event:
-            sent["seq"] = self._next_seq
-        self._next_seq = int(sent["seq"]) + 1 if isinstance(sent["seq"], int) else self._next_seq
+        if "seq" in event:  # a script's own seq, as written (it may be testing a wrong one)
+            sent = {"runId": self._run_id, **event}
+            if isinstance(sent["seq"], int):
+                self._next_seq = sent["seq"] + 1
+        else:
+            body = {key: value for key, value in event.items() if key != "runId"}
+            numbering = self._numbering(self._next_seq)
+            sent = numbering.numbered(body)
+            if "runId" in event:
+                sent["runId"] = event["runId"]
+            self._next_seq = numbering.next_seq
         self._send({"jsonrpc": "2.0", "method": "run/event", "params": sent})
+
+    def _numbering(self, next_seq: int) -> EventNumbering:
+        """The run's numbering from ``next_seq``: a step that replaced a lone surrogate is
+        recorded in a context event before it (host-robustness design D3b)."""
+        if self._numbered is None:
+            limits = self._params.get("limits", {})
+            self._numbered = EventNumbering(
+                self._started_run(),
+                int(limits.get("eventMaxBytes", 65536)),
+                send_context=lambda event: self._send(p.notification("run/event", event)),
+            )
+        self._numbered.next_seq = next_seq
+        return self._numbered
 
     def _transcript(
         self,
@@ -342,10 +366,7 @@ class Runner:
         (declared-effects design D9)."""
         self._tool_steps += 1
         tools = self._tools_for_run()
-        limits = self._params.get("limits", {})
-        numbering = EventNumbering(
-            self._started_run(), int(limits.get("eventMaxBytes", 65536)), self._next_seq
-        )
+        numbering = self._numbering(self._next_seq)
         call_id = value.get("callId", f"tool-{self._tool_steps}")
         step = tools.run(call_id, value["name"], value["input"], numbering)
         for event in step.events:
