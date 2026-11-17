@@ -58,8 +58,9 @@ onto main. #332 (Ollama) edits the same extras and docs in parallel: whichever m
 
 - [x] 4.1 Update the runner's README (the library, the extra, the named timeouts, what the transcript holds and
   loses, no line limit), `contributing/runners.md` where it names the OpenAI runner as hand-written, and the module
-  docstrings that cite design D3. Verify: `test_openai_readme.py` and the docs checks pass; `grep -rn "urllib"
-  plugins/runner-openai/src` finds nothing.
+  docstrings that cite design D3. Verify: `test_openai_readme.py` and the docs checks pass; no module but `service.py` uses
+  `urllib`, and there it only parses the endpoint and chooses a proxy as urllib would, opening no connection (the
+  import contract, `uv run lint-imports`).
 - [x] 4.2 Run the whole check once, when the load is under ~40 (`uptime` first). Verify: `uv run scripts/check.py`
   passes, its full output kept in the scratchpad.
 - [ ] 4.3 Ask the owner, through the orchestrator, to run the live test (`TROUPE_LIVE_OPENAI=1`) with their key, or

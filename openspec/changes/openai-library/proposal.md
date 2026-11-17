@@ -58,8 +58,8 @@ None.
 
 - `openai-runner`: the runner talks to its service only through the `openai` package; the library finds nothing of its
   own; its logging stays out of the output; every library timeout is a named setting; its dependencies are licensed and
-  install everywhere; the transcript is what the library exposes; the self-contained requirement names its dependency;
-  a broken stream and a wrong-shaped response say when an event counts as finished; cancel abandons the request by
+  install everywhere; the transcript is what the library exposes; a stream's lines are capped below the library; a
+  broken stream and a wrong-shaped response say when an event counts as finished; cancel abandons the request by
   ending the process.
 - `cli`: the OpenAI audition needs its extra, and is refused naming `troupe-run[openai]` without it.
 
