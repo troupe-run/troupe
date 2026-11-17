@@ -118,6 +118,16 @@ as a network failure, naming the limit. An error sent encoded SHALL end the run 
 - **THEN** no `retry` is sent, and the run ends with an `error` result with `reason` `authentication`, holding the
   service's message
 
+### Requirement: A body read whole stops at a named limit
+A body the runner reads whole, an error's or a successful answer's that isn't a stream, SHALL be read no further than
+the runner's named body limit, beneath the library, however its lines are split, and the run SHALL end as that status
+or answer says.
+
+#### Scenario: An error that never ends
+- **WHEN** a request is answered 401 with a body of short lines that never ends
+- **THEN** the runner reads no further than its body limit, sends no `retry`, and the run ends with an `error` result
+  with `reason` `authentication`
+
 ## MODIFIED Requirements
 
 ### Requirement: Transient failures are retried and reported
