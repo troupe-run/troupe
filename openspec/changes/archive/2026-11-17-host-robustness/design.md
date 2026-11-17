@@ -44,7 +44,9 @@ See proposal.md for why. The relevant code today:
   format, which the host doesn't interpret (runner-protocol, "The native transcript is a separate stream"), so its
   backslash and `n` are two characters, and masking replaces `n` and the rest: the stored line reads `\[credential]`,
   which isn't valid JSON in the runner's format. That's what happens today, too, and it keeps the credential out.
-  Making it valid would need the host to know the record is JSON.
+  Making it valid would need the host to know the record is JSON. The same holds for a kinds record whose text is
+  the engine's JSON: the framed line stays valid, its record's text may not. Neither leaks the credential, and a
+  typical key (`sk-…`) never triggers it. Filed as troupe-run/troupe#438.
 - Deliberate disguise: a runner that sends the credential reversed or encoded isn't something masking can catch. It
   protects against an echo and against troupe's own escaping, as runtimes design D6 says.
 
