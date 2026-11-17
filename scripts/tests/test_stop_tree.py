@@ -105,7 +105,10 @@ CLOSES_STDOUT = "import os, time\nprint('started', flush=True)\nos.close(1)\ntim
 def test_a_command_that_ends_its_output_but_not_itself_fails_within_a_bound() -> None:
     started = time.monotonic()
     try:
-        run_with_progress([sys.executable, "-c", CLOSES_STDOUT], EACH_WITHIN)
+        # The real interpreter, not a venv's launcher: on Windows the launcher holds the pipe
+        # too, so closing it in the interpreter never ends the output (#437's Windows leg).
+        python = getattr(sys, "_base_executable", sys.executable)
+        run_with_progress([python, "-c", CLOSES_STDOUT], EACH_WITHIN)
     except AssertionError as error:
         message = str(error)
     else:
