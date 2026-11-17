@@ -16,7 +16,7 @@ import sys
 import threading
 import time
 from collections import deque
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -45,6 +45,11 @@ class Answer:
     """Close the connection after this many lines, without ending the answer."""
     silent: bool = False
     """After the lines, send nothing more until the client goes away or the server stops."""
+    before_headers: bool = False
+    """Send nothing at all, not even the status, until the client goes away or the server stops:
+    Ollama loading a model before it answers."""
+    headers: Mapping[str, str] = field(default_factory=dict)
+    """Headers to send with an answer whose status isn't 200, such as a redirect's Location."""
     model: str | None = None
     """The model the answer's built lines name. None: the model the request asked for, as Ollama
     echoes it. Recorded lines (bytes) are sent as recorded."""
@@ -137,12 +142,16 @@ class Settings:
     """Answer /api/version this many seconds late."""
     silent_show: bool = False
     """Accept /api/show and never answer it."""
+    version_redirect: str | None = None
+    """Answer /api/version with a 307 to this address instead."""
 
 
 @dataclass(frozen=True)
 class Request:
     path: str
     body: bytes
+    headers: Mapping[str, str] = field(default_factory=dict)
+    """The request's headers, each name in lower case."""
     at: float = field(default_factory=time.monotonic)
     """When the fake received it, by time.monotonic: a test can time what follows from here."""
 
@@ -193,13 +202,13 @@ class FakeOllama:
                 pass
 
             def do_GET(self) -> None:
-                fake._record(self.path, b"")
+                fake._record(self.path, b"", self.headers.items())
                 fake._get(self)
 
             def do_POST(self) -> None:
                 length = int(self.headers.get("Content-Length", "0"))
                 body = self.rfile.read(length)
-                fake._record(self.path, body)
+                fake._record(self.path, body, self.headers.items())
                 fake._post(self, body)
 
         self._server = _Server(("127.0.0.1", 0), Handler)
@@ -233,14 +242,22 @@ class FakeOllama:
         """The exact bytes of every /api/chat request, in order."""
         return [r.body for r in self.requests if r.path == "/api/chat"]
 
-    def _record(self, path: str, body: bytes) -> None:
+    def _record(self, path: str, body: bytes, headers: Iterable[tuple[str, str]] = ()) -> None:
         with self._lock:
-            self.requests.append(Request(path, body))
+            self.requests.append(Request(path, body, {k.lower(): v for k, v in headers}))
 
     # Answering
 
-    def _send(self, handler: BaseHTTPRequestHandler, status: int, body: bytes) -> None:
+    def _send(
+        self,
+        handler: BaseHTTPRequestHandler,
+        status: int,
+        body: bytes,
+        headers: Mapping[str, str] | None = None,
+    ) -> None:
         handler.send_response(status)
+        for name, value in (headers or {}).items():
+            handler.send_header(name, value)
         handler.send_header("Content-Type", "application/json")
         handler.send_header("Content-Length", str(len(body)))
         handler.end_headers()
@@ -270,6 +287,8 @@ class FakeOllama:
             self._send(handler, 404, b'{"error": "not found"}')
         elif settings.silent_preflight:
             self._hold(handler, None)
+        elif settings.version_redirect is not None:
+            self._send(handler, 307, b"", {"Location": settings.version_redirect})
         elif settings.version_delay and not self._hold(handler, settings.version_delay):
             return
         elif settings.version_body is not None:
@@ -300,8 +319,12 @@ class FakeOllama:
         if answer is None:
             self._send(handler, 500, b'{"error": "the fake has no answer left"}')
             return
+        if answer.before_headers:
+            self._hold(handler, None)
+            handler.close_connection = True
+            return
         if answer.status != 200:
-            self._send(handler, answer.status, answer.body)
+            self._send(handler, answer.status, answer.body, answer.headers)
             return
         try:
             asked = json.loads(body).get("model")

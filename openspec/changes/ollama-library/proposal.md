@@ -15,13 +15,15 @@ issuecomment-6947159287), found its public API can't keep the spec:
 - it drops `prompt_eval_cached_count` and each tool call's `id`, and raises on arguments sent as a string;
 - it has no `/api/version` call and no line-length cap.
 
-The owner chose `httpx`, the HTTP library `ollama` itself uses, directly (2026-11-17, #332 issuecomment-6947222534).
+The owner chose a maintained HTTP library directly (2026-11-17, #332 issuecomment-6947222534): `httpx2`, pydantic's
+maintained fork of the `httpx` that `ollama` uses, and the stack the Anthropic runner and #331's OpenAI runner are
+already built on, so `troupe-run[all]` carries one HTTP stack.
 
 ## What Changes
 
-- The Ollama runner talks to Ollama through `httpx` and its transport layer `httpcore` (both BSD-3-Clause, pinned
-  exactly), not the standard library's `http.client`. They bring `h11`, `anyio`, `idna` and `certifi` (MPL-2.0,
-  allowed unmodified). One module uses them, and the rest of the runner is unchanged.
+- The Ollama runner talks to Ollama through `httpx2` and its transport layer `httpcore2` (both BSD-3-Clause, pinned
+  exactly), not the standard library's `http.client`. They bring `h11`, `anyio`, `idna` and `truststore`, all
+  permissive and already locked. One module uses them, and the rest of the runner is unchanged.
 - **BREAKING (install):** the Ollama runner leaves `troupe-run`'s base install. It becomes the `troupe-run[ollama]`
   extra, and `all` lists it. An actor on `ollama` without the extra is refused with `runner.not-installed`, naming
   `troupe-run[ollama]`, as #333 built. The install page, the first-performance guide and the runner's README say so.
@@ -46,7 +48,7 @@ None.
 
 ### Modified Capabilities
 
-- `ollama-runner`: "The Ollama runner is a self-contained plugin" names its pinned dependencies (`httpx`, `httpcore`)
+- `ollama-runner`: "The Ollama runner is a self-contained plugin" names its pinned dependencies (`httpx2`, `httpcore2`)
   and its `troupe-run[ollama]` extra in place of "no dependency other than the SDK". A new requirement says its HTTP
   client takes no host, proxy, credential or header from the environment, and follows no redirect.
 - `cli`: init's audition scenario for `--runner ollama` needs the extra installed, and a new scenario covers the
@@ -56,7 +58,7 @@ None.
 
 - `plugins/runner-ollama/`:
   - `pyproject.toml`: the dependencies;
-  - `client.py`: onto `httpx`, keeping its interface and its failure classes;
+  - `client.py`: onto `httpx2`, keeping its interface and its failure classes;
   - `defaults.py`: any new named timeout;
   - the README: install, and the HTTP client's settings;
   - tests: differential tests against the old client, redirects, the environment, and cancel before and during a
@@ -64,7 +66,6 @@ None.
 - `packages/troupe-run/pyproject.toml`: the base dependencies, the `ollama` extra and `all`. Also `uv.lock`.
 - `packages/troupe/src/troupe/core/interim.py`: `in_extra=True` for `ollama`. Also the core tests that list which
   runners are extras, and those that import `troupe_runner_ollama`.
-- `scripts/licences.toml`: the MPL-2.0 tier's reason now names `certifi` through `httpx`.
 - Docs:
   - `docs/opening-night/install.md`: the extra's row;
   - `docs/opening-night/first-performance.md`, `docs/stagecraft/bring-your-own-agent.md` and `docs/prompt-book/cli.md`
