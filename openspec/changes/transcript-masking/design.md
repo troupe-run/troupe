@@ -36,9 +36,10 @@ See proposal.md for why. The relevant code, on host-robustness (#437):
   valid; reading a string as more JSON would have the host interpret what runners send, without end.
 - Pretty-printed JSON split over several records, or a server-sent event whose `data:` spans several lines: each
   record and line is masked on its own.
-- A credential that holds the text of `"[credential]"` with its quote (such as `"[creden`), so troupe's own
-  replacement would complete it: no replacement can be valid JSON then. Such a credential would also match every
-  masked record; the property test leaves these out by name.
+- A credential one of whose forms holds a quote next to a bracket (`"[` or `]"`), so troupe's own replacement,
+  `"[credential]"`, could complete it with the text round it: no replacement is sure to be valid JSON then. Masking
+  still keeps such a credential out (the last step masks as text), but the record may not stay JSON. The property
+  test leaves these credentials out by name (`_usable`).
 - Deliberate disguise beyond JSON's own escapes, as host-robustness says.
 
 ## Decisions
@@ -57,8 +58,12 @@ See proposal.md for why. The relevant code, on host-robustness (#437):
 Only objects and arrays count as JSON. A bare scalar such as `12345678` or `true` reads as plain text far more often
 than as JSON, and masking it as JSON would put quotes round it.
 
-- **Cost:** a record is parsed only when it could need it: some writing of it holds a form, or it holds `\u` (an
-  escape that can spell any character). Every other record is returned as it is, as now.
+- **Cost:** a record is parsed only when it could need it: some writing of it holds a form, or it holds a `\u`
+  escape of a visible ASCII character (`\u0020` to `\u007f`), which can spell a credential's character where no
+  writing shows it. JSON writers escape only control characters and, when asked, non-ASCII ones, so a gate on any
+  `\u` would parse most Claude Code lines (ANSI escapes are `\u001b`) for nothing. Every other record is returned
+  as it is. Timed on a 1.1 MB stream-json line: 5.2 ms before and 5.6 ms after without the credential, with or
+  without `\u` escapes.
 - *Alternative (the issue's second option):* widen the text mask to take in the backslash before the credential.
   Rejected: right for `\n`, but not for `\\` (an escaped backslash before the credential is two characters, and
   taking one leaves an odd count), `A`, or a credential holding `"`; and it still can't tell a backslash in a
@@ -110,10 +115,12 @@ record becomes `"[credential]"` (a data line, `data: "[credential]"`).
 
 ### D4. Where the host calls it
 
-- **Text records:** `parse_runner_line` masks a `run/transcript` message's `params.record` (when it's a string and
-  `encoding` isn't `base64`) with `Masker.record` before masking the rest of the message with `Masker.data`. Since
-  `Masker.record`'s result holds no form in any writing, `Masker.data`'s own `Masker.text` leaves it as it is. The
-  line kept for the message (`on_message`, the oversized-event path) is written from the masked message as now.
+- **Text records:** `parse_runner_line` masks a `run/transcript` message (when `params.record` is a string and
+  `encoding` isn't `base64`) with the record left empty, then puts the record back masked with `Masker.record`, at
+  the key's place among `params`. The record is masked once: masking it again as a string would mask inside its own
+  `[credential]` when the credential is part of that text (the message property test found it with a credential of
+  `i`), and would cost a second pass over a large record. The line kept for the message (`on_message`, the
+  oversized-event path) is written from the masked message as now.
 - **Base64 records:** `transcript_record` masks the decoded bytes with `Masker.record_bytes`: when they're UTF-8 and
   `Masker.record` would treat them as JSON (D1, cases 1 and 2), the masked text's UTF-8; otherwise `Masker.bytes`, as
   now (plain bytes aren't text, and widening the mask to JSON writings would eat bytes round them for nothing).

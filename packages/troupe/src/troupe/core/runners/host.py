@@ -121,7 +121,7 @@ def parse_runner_line(mask: Masker, line: bytes, number: int) -> tuple[object, b
     try:
         data = p.loads_strict(line)
         found = p.lone_surrogate(data)
-        message = None if found is not None else mask.data(data)
+        message = None if found is not None else _masked_message(mask, data)
         merged = None if message is None else _merged_keys(data, message)
     except p.ProtocolError as error:
         raise _violation(mask.text(str(error)), number) from error
@@ -152,6 +152,29 @@ def parse_runner_line(mask: Masker, line: bytes, number: int) -> tuple[object, b
     if message == data and mask.bytes(line) == line:
         return message, line
     return message, json.dumps(message, ensure_ascii=False, separators=(",", ":")).encode()
+
+
+def _masked_message(mask: Masker, data: object) -> object:
+    """``data`` with every string masked, and a ``run/transcript`` message's text record masked as
+    a record, once, so a record that is JSON stays valid JSON (transcript-masking design D4,
+    #438). The rest of the message is masked with the record left empty, so the record isn't
+    masked twice: masking it again as a string could mask inside its own ``[credential]``."""
+    if not (isinstance(data, dict) and data.get("method") == "run/transcript"):
+        return mask.data(data)
+    params = data.get("params")
+    if not isinstance(params, dict) or params.get("encoding") == "base64":
+        return mask.data(data)
+    record = params.get("record")
+    if not isinstance(record, str):
+        return mask.data(data)
+    message = mask.data({**data, "params": {**params, "record": ""}})
+    masked_params = message.get(mask.text("params")) if isinstance(message, dict) else None
+    if not isinstance(masked_params, dict):
+        raise RuntimeError("masking changed a message's shape")
+    # The record's key, masked as data masked it: the same place among params' keys.
+    key = list(masked_params)[list(params).index("record")]
+    masked_params[key] = mask.record(record)
+    return message
 
 
 def _merged_keys(data: object, masked: object) -> str | None:
@@ -252,7 +275,8 @@ class _Run:
         self.mask = Masker(request.credential)
         """Masks the run's credential in every message, record and byte of standard error the
         runner sends, before anything is stored or passed on (runtimes design D6). A message is
-        masked once it's parsed (host-robustness design D1)."""
+        masked once it's parsed (host-robustness design D1), a transcript record by its shape
+        (transcript-masking design D4)."""
 
     # Writing to the runner
 
@@ -436,9 +460,9 @@ class _Run:
                 raise _violation(
                     "a base64 transcript record isn't valid base64", self.line_number
                 ) from error
-            data = self.mask.bytes(data)
+            data = self.mask.record_bytes(data)
         else:
-            data = record.record.encode()  # masked as text when its line was read (design D2)
+            data = record.record.encode()  # masked as a record when its line was read
         if record.kind is not None:
             framed = framed_record(record.kind, data, base64_=record.encoding == "base64")
             if self.mask.bytes(framed) != framed:
@@ -743,7 +767,7 @@ def framed_record(kind: p.TranscriptKind, data: bytes, *, base64_: bool) -> byte
     """One stored line of a transcript whose run used kinds, without its line feed
     (protocol/schemas/transcript-record.schema.json; transcript-record-kinds design D3). ``data``
     is the record's bytes after masking. A record the runner sent as text stays text: masking
-    replaces a valid UTF-8 needle with ASCII, so the bytes still decode. One sent as base64 is
+    replaces text with text, so the bytes still decode. One sent as base64 is
     base64 of the masked bytes."""
     line: dict[str, str] = {"kind": kind}
     if base64_:

@@ -1217,6 +1217,51 @@ def test_the_credential_in_a_record_with_kinds_is_masked_and_the_line_stays_json
     assert canary.encode() not in ran.transcript()
 
 
+# A record that is JSON stays JSON once masked (transcript-masking, #438)
+
+JSON_ESCAPE_CANARY = "nsecret-token-0123456789"
+
+
+def test_a_native_json_line_with_an_escape_before_the_credential_is_stored_valid(
+    tmp_path: Path,
+) -> None:
+    line = '{"type":"assistant","text":"key:\\nsecret-token-0123456789","n":1.50}'
+    steps = [{"event": INIT}, {"transcript": line}, {"event": OK}]
+    ran = _run(tmp_path, {"steps": steps}, credential=JSON_ESCAPE_CANARY)
+    assert ran.outcome.outcome is Outcome.SUCCEEDED, ran.outcome.error
+    assert ran.transcript() == b'{"type":"assistant","text":"key:[credential]","n":1.50}\n'
+    json.loads(ran.transcript())
+
+
+@pytest.mark.parametrize(
+    ("record", "stored"),
+    [
+        ('{"input":"\\nsecret-token-0123456789"}', '{"input":"[credential]"}'),
+        ('data: {"delta":"\\nsecret-token-0123456789"}', 'data: {"delta":"[credential]"}'),
+    ],
+    ids=["engine JSON", "data line"],
+)
+def test_a_kinds_record_that_is_json_is_stored_valid_inside_a_valid_line(
+    tmp_path: Path, record: str, stored: str
+) -> None:
+    steps = [{"event": INIT}, {"transcript": {"record": record, "kind": "sent"}}, {"event": OK}]
+    ran = _run(tmp_path, {"steps": steps}, argv=KINDS, credential=JSON_ESCAPE_CANARY)
+    assert ran.outcome.outcome is Outcome.SUCCEEDED, ran.outcome.error
+    line = json.loads(ran.transcript())
+    validator_for(STORED_RECORD).validate(line)
+    assert line == {"kind": "sent", "record": stored}
+    assert not _holds_a_form(ran.transcript(), JSON_ESCAPE_CANARY)
+
+
+def test_a_base64_record_that_is_json_is_stored_as_base64_of_valid_json(tmp_path: Path) -> None:
+    raw = b'{"t":"\\nsecret-token-0123456789"}'
+    record = {"record": base64.b64encode(raw).decode(), "encoding": "base64", "kind": "received"}
+    steps = [{"event": INIT}, {"transcript": record}, {"event": OK}]
+    ran = _run(tmp_path, {"steps": steps}, argv=KINDS, credential=JSON_ESCAPE_CANARY)
+    line = json.loads(ran.transcript())
+    assert base64.b64decode(line["record"]) == b'{"t":"[credential]"}'
+
+
 # Requirement: The transcript limit counts what is stored (spec: actor-runners)
 
 
@@ -1514,8 +1559,12 @@ def test_every_valid_line_is_read_and_no_string_it_keeps_holds_the_credential(
             host_module.parse_runner_line(mask, line, 1)
         return
     message, kept = host_module.parse_runner_line(mask, line, 1)  # otherwise never a violation
-    # The same message, each string masked: masking reads, never re-reads, the line.
-    assert _strings(message) == [mask.text(s) for s in _strings(raw)]
+    # The same message, each string masked: masking reads, never re-reads, the line. The record
+    # is masked as a record, so one that is JSON stays JSON (transcript-masking design D4).
+    record = raw["params"]["record"]
+    assert _strings(message) == [
+        mask.record(s) if s is record else mask.text(s) for s in _strings(raw)
+    ]
     for text in _strings(message):
         for writing in writings(text):
             assert not forms_outside_the_marker(mask, writing), (text, writing)

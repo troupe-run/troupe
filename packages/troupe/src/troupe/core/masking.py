@@ -7,13 +7,20 @@ before anything is stored or sent on, and in any error. Each form the value can 
 replaced with ``[credential]``: its UTF-8 bytes, and its JSON-escaped forms (as ``json.dumps``
 writes it, with and without non-ASCII escaped, and with ``/`` as ``\\/``).
 
+A transcript record is masked by its shape (``Masker.record``; transcript-masking design, #438):
+a record that is JSON text, or whose lines are JSON or ``data:`` lines holding JSON, has its
+strings and numbers masked in place, so it stays valid JSON; any other record is masked as a
+string.
+
 Standard error arrives in chunks, so a value can be split across two reads. ``StreamMask`` holds
 back the bytes at the end of each chunk that could be the start of a value, and lets them go once
 the next chunk shows they aren't, or at the end.
 """
 
 import bisect
+import builtins
 import json
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
@@ -146,6 +153,108 @@ class Masker:
             return {self.text(str(key)): self.data(item) for key, item in value.items()}
         return value
 
+    def record(self, text: str) -> str:
+        """A transcript record's text masked so it stays valid in its own shape (transcript-masking
+        design D1 to D3, #438). A record that is JSON text, or whose lines are JSON or ``data:``
+        lines holding JSON, has each string and number that holds a form masked in place, and a
+        form left across JSON's syntax replaces the smallest value that holds it with
+        ``"[credential]"``; every other byte is kept. Any other record is masked as ``text``."""
+        if not self.forms or not (self._holds_a_form(text) or _ASCII_ESCAPE.search(text)):
+            return text
+        pieces = _record_pieces(text)
+        if pieces is None:
+            return self.text(text)
+        for piece in pieces:
+            if piece.kind == "json":
+                piece.text = self._mask_tokens(piece.text)
+            elif piece.kind == "text":
+                piece.text = self.text(piece.text)
+        return self._mask_across_values(pieces)
+
+    def record_bytes(self, data: builtins.bytes) -> builtins.bytes:
+        """A base64 transcript record's bytes masked: as ``record`` when they're UTF-8 text in one
+        of the JSON shapes it keeps valid, else as ``bytes`` (design D4)."""
+        if not self.forms:
+            return data
+        try:
+            text = data.decode("utf-8")
+        except UnicodeDecodeError:
+            return self.bytes(data)
+        if _record_pieces(text) is None:
+            return self.bytes(data)
+        return self.record(text).encode("utf-8", "surrogatepass")
+
+    def _mask_tokens(self, value: str) -> str:
+        """JSON text ``value`` with each string that masks differently, or whose own writing holds
+        a form, rewritten masked, and each number or literal that holds a form made
+        ``"[credential]"`` (design D2). Everything else is kept byte for byte."""
+        out: list[str] = []
+        done = 0
+        for match in _JSON_TOKEN.finditer(value):
+            lexeme = match.group()
+            if lexeme in "[]{}":
+                continue
+            raw_holds = any(form in _raw(lexeme) for form in self.forms)
+            if lexeme[0] == '"':
+                decoded = json.loads(lexeme)
+                masked = self.text(decoded)
+                if masked == decoded and not raw_holds:
+                    continue
+                written = json.dumps(masked, ensure_ascii=_has_lone_surrogate(masked))
+                if written == lexeme:
+                    continue
+            elif raw_holds:
+                written = _QUOTED_MARKER
+            else:
+                continue
+            out += [value[done : match.start()], written]
+            done = match.end()
+        return "".join([*out, value[done:]])
+
+    def _mask_across_values(self, pieces: list["_Piece"]) -> str:
+        """The record put back together, with each form still left (only across JSON's syntax)
+        replacing the smallest value that holds it, else its lines' values (design D3)."""
+        while True:
+            text = "".join(piece.text for piece in pieces)
+            if not self._holds_a_form(text):
+                return text
+            run = self._first_covered_run(text)
+            if run is None:
+                return text
+            if not _replace_run(pieces, run):
+                # Nothing left to replace but troupe's own text, a line break or a prefix: the
+                # whole record becomes the marker, a lone data line keeping its field name. Only
+                # a credential holding troupe's own replacement can still be covered then, and
+                # masking it as text keeps it out (design, non-goals).
+                first = pieces[0]
+                one_data_line = first.text.startswith("data:") and "\n" not in text
+                return self.text((first.text if one_data_line else "") + _QUOTED_MARKER)
+
+    def _first_covered_run(self, text: str) -> tuple[int, int] | None:
+        """The first maximal run of characters of ``text`` that a form covers, in some writing,
+        outside any ``[credential]`` in it, as character offsets."""
+        units: list[str | None] = []
+        offsets: list[int] = []
+        at = 0
+        while at < len(text):
+            offsets.append(at)
+            if text.startswith(MARKER, at):
+                units.append(None)
+                at += len(MARKER)
+            else:
+                units.append(text[at])
+                at += 1
+        covered = sorted(self._covered(units))
+        if not covered:
+            return None
+        first = last = covered[0]
+        for index in covered[1:]:
+            if index != last + 1:
+                break
+            last = index
+        end = offsets[last] + (len(MARKER) if units[last] is None else 1)
+        return offsets[first], end
+
     def stream(self) -> "StreamMask":
         """A mask for a stream of chunks, such as standard error."""
         return StreamMask(self)
@@ -191,6 +300,140 @@ def _replace_complete(data: bytes, forms: tuple[bytes, ...]) -> tuple[bytes, byt
         at, length = best
         out += rest[:at] + marker
         rest = rest[at + length :]
+
+
+_QUOTED_MARKER = json.dumps(MARKER)
+"""What a JSON value that held the credential across JSON's syntax becomes (design D3)."""
+
+_JSON_TOKEN = re.compile(
+    r'"(?:[^"\\]|\\.)*"|-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?|true|false|null|[\[\]{}]'
+)
+"""A token of JSON text that's already known to be valid: a string, a number, a literal, or a
+bracket. Scanned left to right, a string is matched whole, so nothing inside one is taken for
+another token."""
+
+_ASCII_ESCAPE = re.compile(r"\\u00[2-7][0-9A-Fa-f]")
+"""A ``\\u`` escape of a visible ASCII character, which can spell a credential's character where
+no writing of the record shows it. JSON writers escape only control characters and, when asked,
+non-ASCII ones, so a record without one, and without a form in some writing, is left as it is
+(design D1)."""
+
+_DATA_LINE = re.compile(r"data: ?")
+"""A server-sent-events data field's name, with the one space the format allows after it."""
+
+
+@dataclass
+class _Piece:
+    """A part of a record: ``json`` (one JSON object or array), ``text`` (a line that isn't), or
+    ``fixed`` (whitespace, a line break, a ``data:`` prefix), and the line it's on."""
+
+    kind: str
+    text: str
+    line: int
+
+
+def _is_json_container(text: str) -> bool:
+    """Whether ``text`` is one JSON object or array, with optional whitespace round it. NaN and
+    Infinity aren't JSON; a duplicate key is valid JSON text, kept as it is."""
+    stripped = text.strip(" \t\r\n")
+    if not stripped or stripped[0] not in "[{":
+        return False
+    try:
+        json.loads(stripped, parse_constant=_not_json)
+    except (ValueError, RecursionError):
+        return False
+    return True
+
+
+def _not_json(constant: str) -> object:
+    raise ValueError(f"{constant} isn't JSON")
+
+
+def _json_pieces(text: str, line: int, prefix: str = "") -> list[_Piece]:
+    body = text[len(prefix) :]
+    start = len(body) - len(body.lstrip(" \t\r\n"))
+    end = len(body.rstrip(" \t\r\n"))
+    pieces = [
+        _Piece("fixed", prefix + body[:start], line),
+        _Piece("json", body[start:end], line),
+        _Piece("fixed", body[end:], line),
+    ]
+    return [piece for piece in pieces if piece.text or piece.kind == "json"]
+
+
+def _record_pieces(text: str) -> list[_Piece] | None:
+    """``text`` split into its pieces, or None when no part of it is JSON (design D1): the whole
+    record when it's one JSON object or array, else each line, as a JSON line, a ``data:`` line
+    holding JSON, or text."""
+    if _is_json_container(text):
+        return _json_pieces(text, 0)
+    pieces: list[_Piece] = []
+    found = False
+    for number, line in enumerate(text.split("\n")):
+        if number:
+            pieces.append(_Piece("fixed", "\n", number))
+        data = _DATA_LINE.match(line)
+        if _is_json_container(line):
+            pieces += _json_pieces(line, number)
+            found = True
+        elif data is not None and _is_json_container(line[data.end() :]):
+            pieces += _json_pieces(line, number, data.group())
+            found = True
+        elif line:
+            pieces.append(_Piece("text", line, number))
+    return pieces if found else None
+
+
+def _value_spans(value: str) -> list[tuple[int, int]]:
+    """The span of every value in JSON text ``value`` (keys included), inner before outer."""
+    spans: list[tuple[int, int]] = []
+    opened: list[int] = []
+    for match in _JSON_TOKEN.finditer(value):
+        lexeme = match.group()
+        if lexeme in "[{":
+            opened.append(match.start())
+        elif lexeme in "]}":
+            spans.append((opened.pop(), match.end()))
+        else:
+            spans.append((match.start(), match.end()))
+    return spans
+
+
+def _replace_run(pieces: list[_Piece], run: tuple[int, int]) -> bool:
+    """Replace what holds the covered characters ``run`` (offsets into the joined pieces): the
+    smallest value holding it when it lies in one JSON piece, else every JSON value on the lines it
+    touches, and the covered characters of text lines. False when that changes nothing."""
+    start, end = run
+    touched: list[tuple[_Piece, int, int]] = []  # each piece, and the run's part of it
+    at = 0
+    for piece in pieces:
+        low, high = max(start, at), min(end, at + len(piece.text))
+        if low < high:
+            touched.append((piece, low - at, high - at))
+        at += len(piece.text)
+    if len(touched) == 1 and touched[0][0].kind == "json":
+        piece, low, high = touched[0]
+        for begin, finish in _value_spans(piece.text):
+            if begin <= low and high <= finish:
+                if piece.text[begin:finish] == _QUOTED_MARKER:
+                    break
+                piece.text = piece.text[:begin] + _QUOTED_MARKER + piece.text[finish:]
+                return True
+    changed = False
+    lines = {piece.line for piece, _, _ in touched}
+    for piece in pieces:
+        if piece.kind == "json" and piece.line in lines and piece.text != _QUOTED_MARKER:
+            piece.text = _QUOTED_MARKER
+            changed = True
+    for piece, low, high in touched:
+        if piece.kind == "text":
+            piece.text = piece.text[:low] + MARKER + piece.text[high:]
+            changed = True
+    return changed
+
+
+def _has_lone_surrogate(text: str) -> bool:
+    return any("\ud800" <= char <= "\udfff" for char in text)
 
 
 class StreamMask:
