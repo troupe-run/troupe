@@ -300,6 +300,11 @@ def _attempt(
                 break
         return reader.reply()
     finally:
+        # Closed here, not when the generator is collected: a response read to its final event,
+        # or abandoned, releases its connection at once (review of #440).
+        close = getattr(opened.events, "close", None)
+        if close is not None:
+            close()
         on_lost("the Responses API's answer", replaced)
 
 

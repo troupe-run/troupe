@@ -413,3 +413,41 @@ def test_a_response_whose_encoding_is_identity_is_read() -> None:
         parse_endpoint("http://127.0.0.1:9/v1"), None, transport=httpx2.MockTransport(answer)
     )
     assert [e["type"] for e in service.stream(PARAMS).events] == ["x"]
+
+
+def _encoded_error(status: int, encoding: str, body: bytes) -> Service:
+    def answer(_: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(
+            status,
+            headers={"content-type": "application/json", "content-encoding": encoding},
+            content=body,
+        )
+
+    return Service(
+        parse_endpoint("http://127.0.0.1:9/v1"), None, transport=httpx2.MockTransport(answer)
+    )
+
+
+def test_an_error_sent_gzipped_keeps_its_status_and_decoded_body() -> None:
+    body = json.dumps({"error": {"message": "Incorrect API key provided", "code": None}})
+    service = _encoded_error(401, "gzip", gzip.compress(body.encode()))
+    with pytest.raises(StatusError) as raised:
+        service.stream(PARAMS)
+    assert raised.value.status == 401
+    assert json.loads(raised.value.body)["error"]["message"] == "Incorrect API key provided"
+    assert "content-encoding" not in raised.value.headers
+
+
+def test_an_errors_encoded_body_decodes_to_no_more_than_the_body_limit() -> None:
+    bomb = gzip.compress(b"a" * (defaults.ERROR_BODY_MAX_BYTES * 8))
+    with pytest.raises(StatusError) as raised:
+        _encoded_error(500, "gzip", bomb).stream(PARAMS)
+    assert raised.value.status == 500
+    assert len(raised.value.body) <= defaults.ERROR_BODY_MAX_BYTES
+
+
+def test_an_error_in_an_encoding_zlib_cant_read_keeps_its_status_and_raw_body() -> None:
+    with pytest.raises(StatusError) as raised:
+        _encoded_error(404, "br", b"\x8b\x00not-brotli").stream(PARAMS)
+    assert raised.value.status == 404
+    assert raised.value.body == b"\x8b\x00not-brotli"

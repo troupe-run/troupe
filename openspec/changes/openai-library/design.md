@@ -100,8 +100,10 @@ async client: the runner's threads already work with the sync one, as the Anthro
   `STREAM_TIMEOUT_SECONDS` (120), write `WRITE_TIMEOUT_SECONDS` (new, 30). Today the connect timeout also covered
   waiting for the response's status; with `httpx2` that wait is a read, so it's bounded by the stream timeout. Both are
   named and both bound the request.
-- **Proxies:** `httpx2` reads `HTTPS_PROXY`, `NO_PROXY` and `SSL_CERT_*` as `urllib` did. A loopback endpoint never goes
-  through a proxy (today's rule): the client is built with no proxy for it, keeping certificate variables.
+- **Proxies and TLS** are chosen by the runner, as `urllib` chose them: the client is built with `trust_env=False`,
+  its proxy is the one `urllib.request.getproxies()` names for the endpoint's scheme unless `proxy_bypass` (which
+  reads `NO_PROXY`) says not to, with none ever for a loopback endpoint (today's rule), and its TLS context is
+  `ssl.create_default_context()`, which reads `SSL_CERT_FILE` and `SSL_CERT_DIR`.
 
 ### D4. Reading the stream through the library
 
@@ -135,7 +137,8 @@ applies to every response body the client reads, so an error body or a 2xx JSON 
 The client decodes `Content-Encoding` above the transport, so the cap would count compressed bytes: a gzip line of a
 few KB could decode to gigabytes (review of #440). So the client asks for none (`Accept-Encoding: identity`, as urllib
 did), and the transport refuses a response sent encoded anyway, before reading its body, as a network failure naming
-the encoding and the limit.
+the encoding and the limit. A non-2xx sent encoded isn't refused: its status still classifies the failure, so its
+body is read raw up to `ERROR_BODY_MAX_BYTES` and decoded (gzip or deflate, through zlib) into at most as many bytes.
 
 **Not shared with #332:** the Ollama runner moved to `httpx` 0.28.1, while `openai` is built on `httpx2`; two
 different packages, so neither a pin nor a transport can be shared. A stdlib-only line counter in the plugin SDK could

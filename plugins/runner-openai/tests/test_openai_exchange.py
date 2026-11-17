@@ -33,6 +33,7 @@ from troupe_runner_openai.exchange import (
     exchange,
     retry_after,
 )
+from troupe_runner_openai.failures import Opened
 from troupe_runner_openai.service import Service, parse_endpoint
 
 KEY = "sk-canary-0123456789"
@@ -611,3 +612,33 @@ def test_a_whole_final_event_the_body_ends_without_its_blank_line_is_retried_as_
     assert reply.text == "ok"
     assert reply.tool_calls == []
     assert [r.reason for r in run.retries] == ["network"]
+
+
+def test_a_responses_events_are_closed_when_the_attempt_ends_not_when_collected() -> None:
+    closed: list[str] = []
+
+    def events(items: list[dict[str, Any]]) -> Any:  # noqa: ANN401 - a generator
+        try:
+            yield from items
+        finally:
+            closed.append("closed")
+
+    done = final([message("ok")], used=usage(1, 1))
+    held: list[Any] = []
+
+    def open_(_: Any) -> Opened:  # noqa: ANN401 - the parameters
+        stream = events([done, {"type": "never.read"}])
+        held.append(stream)  # kept alive, so only an explicit close can run its finally
+        return Opened(200, {}, stream)
+
+    reply = exchange(
+        open_,
+        PARAMS,
+        "http://x/v1/responses",
+        lambda _: None,
+        lambda *_: None,
+        lambda _: False,
+        on_lost=lambda *_: None,
+    )
+    assert reply.text == "ok"
+    assert closed == ["closed"]
