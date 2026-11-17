@@ -4,6 +4,7 @@ credential goes only in the Authorization header", "A credential never travels i
 settings", "A stream's lines are capped below the library"; openai-library design D2-D4a)."""
 
 import contextlib
+import gzip
 import json
 from collections.abc import Iterator
 from typing import Any
@@ -361,3 +362,54 @@ def test_lines_up_to_the_cap_are_read_however_they_arrive() -> None:
 
 def test_the_cap_by_default_is_the_named_setting() -> None:
     assert defaults.STREAM_LINE_MAX_BYTES == 16 * 1024 * 1024
+
+
+def test_the_runner_asks_for_no_compression() -> None:
+    with FakeEndpoint([text_reply("hi")]) as fake:
+        _drain(fake.endpoint)
+        (request,) = fake.requests
+    assert request.headers["accept-encoding"] == "identity"
+
+
+@pytest.mark.parametrize("encoding", ["gzip", "deflate", "br", "x-gzip"])
+def test_a_response_sent_encoded_is_refused_before_its_body_is_read(encoding: str) -> None:
+    """A gzip body whose one line is past the cap once decoded, though only a few hundred bytes
+    on the wire: the transport can't count decoded lines, so it refuses the encoding (review of
+    #440)."""
+    decoded = b'data: {"type": "x", "pad": "' + b"a" * 100_000 + b'"}\n\n'
+    read: list[int] = []
+
+    def body() -> Iterator[bytes]:
+        read.append(1)
+        yield gzip.compress(decoded)
+
+    def answer(_: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(
+            200,
+            headers={"content-type": "text/event-stream", "content-encoding": encoding},
+            content=body(),
+        )
+
+    service = Service(
+        parse_endpoint("http://127.0.0.1:9/v1"),
+        None,
+        transport=httpx2.MockTransport(answer),
+        line_max_bytes=1024,
+    )
+    with pytest.raises(NetworkError, match=rf"encoded \({encoding}\).*STREAM_LINE_MAX_BYTES"):
+        list(service.stream(PARAMS).events)
+    assert read == []
+
+
+def test_a_response_whose_encoding_is_identity_is_read() -> None:
+    def answer(_: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(
+            200,
+            headers={"content-type": "text/event-stream", "content-encoding": "identity"},
+            content=b'data: {"type": "x"}\n\n',
+        )
+
+    service = Service(
+        parse_endpoint("http://127.0.0.1:9/v1"), None, transport=httpx2.MockTransport(answer)
+    )
+    assert [e["type"] for e in service.stream(PARAMS).events] == ["x"]

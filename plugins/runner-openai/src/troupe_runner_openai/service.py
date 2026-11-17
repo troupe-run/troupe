@@ -6,9 +6,11 @@ Everything the library would decide for itself, the runner decides here instead:
 - **Its HTTP client** is the runner's own ``httpx2.Client``: it follows no redirect (the library's
   own client follows them), its timeouts are the runner's named settings (the library's default is
   ten minutes), and its transport counts each line of a response as it arrives, refusing one past
-  STREAM_LINE_MAX_BYTES before more is buffered (design D4a). Proxies and certificates are read as
-  urllib reads them: ``HTTPS_PROXY`` and ``NO_PROXY`` through the standard library, no proxy for an
-  endpoint on this machine, and the platform's trust store or ``SSL_CERT_FILE``/``SSL_CERT_DIR``.
+  STREAM_LINE_MAX_BYTES before more is buffered (design D4a). It asks for no compression, and
+  refuses a response sent encoded anyway, whose decoded lines the transport couldn't count. Proxies
+  and certificates are read as urllib reads them: ``HTTPS_PROXY`` and ``NO_PROXY`` through the
+  standard library, no proxy for an endpoint on this machine, and the platform's trust store or
+  ``SSL_CERT_FILE``/``SSL_CERT_DIR``.
 - **Its retries** are off (``max_retries=0``): the runner retries in its own loop (exchange.py).
 - **Its credential** is the runtime's, given explicitly, or none: with none, the library gets a
   placeholder it never sends, since every request omits ``Authorization`` (design D2).
@@ -171,8 +173,17 @@ class _CappedStream(httpx2.SyncByteStream):
         self._inner.close()
 
 
+class EncodedResponseError(httpx2.ReadError):
+    """A response sent with a Content-Encoding, though the runner asked for none. Its decoded
+    lines can't be counted beneath the client, which decodes above the transport, so it's refused
+    before its body is read. The library reports it as a broken connection, which the runner retries
+    as a network failure."""
+
+
 class _CappedTransport(httpx2.BaseTransport):
-    """A transport whose every response's body goes through _CappedStream."""
+    """A transport whose every response's body goes through _CappedStream, and which refuses a
+    response sent encoded: the cap counts the bytes as they arrive, which for an encoded body
+    aren't the bytes the library's decoder buffers (review of #440)."""
 
     def __init__(self, inner: httpx2.BaseTransport, limit: int) -> None:
         self._inner = inner
@@ -180,12 +191,25 @@ class _CappedTransport(httpx2.BaseTransport):
 
     def handle_request(self, request: httpx2.Request) -> httpx2.Response:
         response = self._inner.handle_request(request)
+        encoding = response.headers.get("content-encoding", "").strip().lower()
+        if encoding not in ("", "identity"):
+            response.close()
+            raise EncodedResponseError(
+                f"The service sent its response encoded ({_cut_header(encoding)}), though the "
+                "runner asks for none (Accept-Encoding: identity), so its lines can't be held to "
+                "the runner's limit (STREAM_LINE_MAX_BYTES).",
+                request=request,
+            )
         assert isinstance(response.stream, httpx2.SyncByteStream)  # noqa: S101 - a sync client's
         response.stream = _CappedStream(response.stream, self._limit)
         return response
 
     def close(self) -> None:
         self._inner.close()
+
+
+def _cut_header(value: str, limit: int = 100) -> str:
+    return value if len(value) <= limit else f"{value[:limit]}…"
 
 
 def proxy_for(endpoint: Endpoint) -> str | None:
@@ -234,6 +258,9 @@ class Service:
             )
         self._http = httpx2.Client(
             transport=_CappedTransport(transport, line_max_bytes),
+            # No compression, as urllib asked for none: the line cap counts bytes as they
+            # arrive, so they must be the bytes the library reads (review of #440).
+            headers={"Accept-Encoding": "identity"},
             trust_env=False,
             follow_redirects=False,
             timeout=timeout,
@@ -309,7 +336,7 @@ class Service:
         cause."""
         url = self.endpoint.url
         cause = _cause(error)
-        if isinstance(cause, LineTooLongError):
+        if isinstance(cause, LineTooLongError | EncodedResponseError):
             return str(cause)
         if isinstance(cause, httpx2.LocalProtocolError):
             # Its text can quote a header, credential included: say only that the request was
@@ -367,6 +394,7 @@ def _words(error: BaseException) -> str:
 __all__ = [
     "NO_CREDENTIAL",
     "RESPONSES_PATH",
+    "EncodedResponseError",
     "Endpoint",
     "EndpointError",
     "LineTooLongError",

@@ -120,7 +120,7 @@ first as a `retry` event:
 | 429, unless its code is `insufficient_quota`. The delay is `Retry-After` when it gives one; a longer wait than 60 s ends the run instead | `rate-limit` |
 | 500 or above | `server` |
 | a failed response or an `error` event whose code is the service's own failure (`server_error`) | `server` |
-| no connection, a timeout, or a stream cut short: silent for 120 s, broken, ended before its final event arrived with its blank line, a line longer than 16 MiB, or bytes that aren't UTF-8 | `network` |
+| no connection, a timeout, or a stream cut short: silent for 120 s, broken, ended before its final event arrived with its blank line, a line longer than 16 MiB, a response sent compressed (the runner asks for none, since it counts each line's bytes as they arrive), or bytes that aren't UTF-8 | `network` |
 
 ## How a run ends
 

@@ -100,13 +100,18 @@ stream it abandons (`note`).
 
 ### Requirement: A stream's lines are capped below the library
 The runner SHALL refuse to read a line of a response's body longer than its named line limit, counting bytes as they
-arrive, beneath the library, so an over-long stream is never read whole into memory. Such a stream SHALL be dropped
-and retried as a network failure, with a message naming the limit.
+arrive, beneath the library, so an over-long stream is never read whole into memory. It SHALL ask for no content
+encoding, and refuse a response sent encoded before reading its body. Either SHALL be dropped and retried as a network
+failure, with a message naming the limit.
 
 #### Scenario: A line past the limit
 - **WHEN** a response's stream sends a line longer than the runner's line limit
 - **THEN** a `retry` with reason `network` follows, its message names the limit, and the runner never holds more than
   the limit and one read of that line
+
+#### Scenario: A compressed response
+- **WHEN** a response is sent with `Content-Encoding: gzip`, its one line past the limit once decoded
+- **THEN** none of its body is read, and a `retry` with reason `network` follows, naming the encoding and the limit
 
 ## MODIFIED Requirements
 

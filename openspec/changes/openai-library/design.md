@@ -132,6 +132,11 @@ error, and the runner reports it as a broken stream (`network`), with the limit 
 applies to every response body the client reads, so an error body or a 2xx JSON body is bounded too
 (`ERROR_BODY_MAX_BYTES` stays the cap on how much of such a body is recorded and parsed).
 
+The client decodes `Content-Encoding` above the transport, so the cap would count compressed bytes: a gzip line of a
+few KB could decode to gigabytes (review of #440). So the client asks for none (`Accept-Encoding: identity`, as urllib
+did), and the transport refuses a response sent encoded anyway, before reading its body, as a network failure naming
+the encoding and the limit.
+
 **Not shared with #332:** the Ollama runner moved to `httpx` 0.28.1, while `openai` is built on `httpx2`; two
 different packages, so neither a pin nor a transport can be shared. A stdlib-only line counter in the plugin SDK could
 be, as a follow-up if both are kept.
