@@ -3,6 +3,7 @@
 Retry-After is honoured within a named cap", "Failures retrying can't fix end the run at once", "A
 broken stream is retried as a network failure", "Redirects are never followed")."""
 
+import gzip
 import json
 from typing import Any
 
@@ -642,3 +643,21 @@ def test_a_responses_events_are_closed_when_the_attempt_ends_not_when_collected(
     )
     assert reply.text == "ok"
     assert closed == ["closed"]
+
+
+def test_a_401_sent_gzipped_ends_as_authentication_not_network() -> None:
+    """Spec: openai-runner, "A stream's lines are capped below the library", "An error sent
+    compressed" (review of #440)."""
+    body = json.dumps({"error": {"message": "Incorrect API key provided", "code": None}})
+    reply = Reply(
+        401,
+        headers=[("Content-Type", "application/json"), ("Content-Encoding", "gzip")],
+        body=gzip.compress(body.encode()),
+    )
+    with FakeEndpoint([reply, text_reply("never sent")]) as fake:
+        run = Run(fake)
+        failure = _failure(run)
+    assert failure.reason == "authentication"
+    assert "Incorrect API key provided" in failure.message
+    assert run.retries == []
+    assert len(fake.requests) == 1
