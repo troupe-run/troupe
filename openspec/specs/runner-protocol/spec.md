@@ -232,7 +232,7 @@ runner can't separate into a cache counter SHALL stay in `inputTokens`.
 The runner SHALL send its transcript as `run/transcript` notifications in order: its engine's native output, unchanged,
 or with kinds, each record labelled. A runner that holds the conversation SHALL also send each message it adds to it,
 verbatim, before the engine's output that follows, and SHALL NOT send re-sent history again. The host SHALL NOT
-interpret records, apart from masking the run's credential (spec: runs).
+interpret records, apart from masking the run's credential, which reads a record that is JSON as JSON (spec: runs).
 
 #### Scenario: Native records are kept verbatim
 - **WHEN** a runner that doesn't use kinds sends transcript records, in a run with no credential or whose records
@@ -249,7 +249,8 @@ interpret records, apart from masking the run's credential (spec: runs).
 
 #### Scenario: A record that holds the credential
 - **WHEN** a runner sends a transcript record that holds the run's credential
-- **THEN** the stored record is the same bytes with the credential masked
+- **THEN** the stored record is the same bytes with the credential masked, and still valid in its own format: a record
+  that was JSON text is still JSON text, changed only where it held the credential
 
 ### Requirement: Cancel is a request the runner acknowledges
 The host SHALL be able to send `run/cancel` at any time after `run/start`. The runner SHALL acknowledge it, stop

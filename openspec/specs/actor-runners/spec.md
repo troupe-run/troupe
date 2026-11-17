@@ -349,6 +349,12 @@ Each line SHALL validate against the protocol's stored transcript record schema.
 - **THEN** the stored line's record holds `[credential]` in place of the newline and the rest of the credential, the
   line is valid JSON, and no stored byte holds the credential
 
+#### Scenario: A record that is the engine's JSON, with an escape before the credential
+- **WHEN** the run's credential starts with `n`, and a runner that accepted `transcript-kinds` sends a `sent` record
+  that is JSON text holding `\n` followed by the rest of the credential in one of its strings
+- **THEN** the stored line is valid JSON, its record is still valid JSON with `[credential]` in place of the newline
+  and the rest of the credential, and no stored byte holds the credential
+
 ### Requirement: A run without kinds is stored as before
 When the runner didn't accept `transcript-kinds`, the host SHALL store each record's bytes, after masking, followed by
 `\n`, with nothing added.
@@ -356,6 +362,12 @@ When the runner didn't accept `transcript-kinds`, the host SHALL store each reco
 #### Scenario: A Claude Code run
 - **WHEN** the Claude Code runner, which accepts no capability, sends its stream-json lines
 - **THEN** the stored transcript is those lines, each followed by `\n`, byte for byte
+
+#### Scenario: A stream-json line with an escape before the credential
+- **WHEN** the run's credential starts with `n`, and the Claude Code runner sends a stream-json line whose text holds
+  `\n` followed by the rest of the credential
+- **THEN** the stored line is valid JSON with `[credential]` in place of the newline and the rest of the credential,
+  and the rest of the line is byte for byte as sent
 
 ### Requirement: The transcript limit counts what is stored
 The maximum transcript size SHALL be measured against the bytes the host stores, the framing included.
