@@ -508,8 +508,8 @@ its init): a `log` about an earlier record waits for `init`. Summaries (`turn` t
 
 The [Ollama runner](../plugins/runner-ollama/README.md) is the other shape: the engine only answers, and the runner
 holds the conversation and runs the tools. Its endpoint and model come from the actor's runtime, as the OpenAI runner's
-do. It drives Ollama's own `/api/chat`, carries out each tool call with the plugin SDK's `Tools` (so `init`'s `effects`
-is `checked`), and maps the exchange like this. Its fixtures pin it: real Ollama answers, with what the runner sent for
+do. It drives Ollama's own `/api/chat` through `httpx2`, carries out each tool call with the plugin SDK's `Tools` (so
+`init`'s `effects` is `checked`), and maps the exchange like this. Its fixtures pin it: real Ollama answers, with what the runner sent for
 each.
 
 | From Ollama | Run event |
@@ -530,6 +530,12 @@ answer and its `tool` messages), each encoded exactly as inside that request, an
 record verbatim and once. Every request asks Ollama to refuse a conversation longer than the window rather than cut
 it (`truncate` and `shift` `false`), which Ollama 0.12.6 added, so the runner requires it and refuses an older one with
 `runner.requirement-unmet`.
+
+It uses `httpx2` itself rather than Ollama's client library, `ollama`, whose API can't send `truncate` and `shift`,
+rewrites the SDK's tool schemas, and drops `prompt_eval_cached_count` and tool-call ids (#332). So its transcript is
+still the wire's bytes, not a library's objects. Its HTTP client is its own transport over `httpcore2`'s pool, on a
+network backend that records each socket, so a cancel can shut down a request Ollama hasn't started answering yet:
+closing an `httpx2` client from another thread doesn't wake that read.
 
 ### Mapping an engine: the Responses API
 

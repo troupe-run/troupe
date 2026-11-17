@@ -202,10 +202,11 @@ def test_the_scripted_audition_says_nothing_of_claude_code_or_a_character(repo: 
     assert "lead.md" not in out
 
 
-def test_the_ollama_audition_says_ollama_must_run_and_names_ollama_pull_with_its_model(
+def test_the_ollama_audition_says_ollama_must_run_names_ollama_pull_and_its_extra(
     repo: Repo,
 ) -> None:
-    # Spec: config, "What init prints for it"; cli, "The Ollama runner".
+    # Spec: config, "What init prints for it"; cli, "The Ollama runner" and "An audition on a
+    # runner in an extra names the extra".
     code, out, _ = cli("init", "--audition", "--runner", "ollama")
     assert code == ExitCode.OK
     assert "Defined the actor lead, with the ollama runner." in out
@@ -213,6 +214,7 @@ def test_the_ollama_audition_says_ollama_must_run_and_names_ollama_pull_with_its
     assert (
         f"   # Ollama must be running, with its model pulled: ollama pull {OLLAMA_MODEL}" in lines
     )
+    assert any("troupe-run[ollama]" in line for line in lines)
     assert "Claude Code must be" not in out
     assert "runner: ollama" in (repo.path / ".troupe" / "actors" / "lead.yaml").read_text(
         encoding="utf-8"

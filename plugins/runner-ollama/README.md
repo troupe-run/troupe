@@ -12,8 +12,12 @@ the run (the person's `TROUPE_RUNTIME_<NAME>_MODEL`, then the actor's `model`, t
 runner in `run/start`'s `runtime`, and nowhere else: the runner holds no endpoint of its own.
 
 It speaks the [runner contract](../../contributing/runners.md) over standard input and output, imports nothing of
-troupe's but the SDK, and depends on nothing else: it talks to Ollama with the standard library. It starts no
+troupe's but the SDK, and talks to Ollama through [httpx2](https://github.com/pydantic/httpx2), pinned. It starts no
 process. Ollama has to be running already, with the model pulled.
+
+It comes as an extra of `troupe-run`, not with the base install: install `troupe-run[ollama]` (or `troupe-run[all]`),
+as the [install page](../../docs/opening-night/install.md#runners-that-come-as-extras) shows. An actor on `ollama`
+without it is refused, naming the extra.
 
 ```yaml
 # .troupe/actors/lead.yaml
@@ -150,6 +154,22 @@ direction, as a `user` message. After each answer with tool calls, the runner ad
 and its calls, as Ollama gave them) and one `tool` message per call, naming the tool, holding the SDK's output, error
 or not. A call Ollama gives no id gets `call-<request>-<position>`.
 
+### How it reaches Ollama
+
+The runner sends each request's exact bytes through httpx2, and decides everything httpx2 would otherwise decide:
+
+- It follows no redirect. A redirect from a chat request ends the run (`other`), and one from the preflight is
+  `ollama.unreachable`.
+- It reads nothing from the environment: no proxy (`HTTP_PROXY`, `ALL_PROXY` and the rest), no `.netrc` login and no
+  certificate variable, and it sends no credential.
+- An `https` endpoint is checked against Python's default TLS context (`ssl.create_default_context()`).
+- httpx2 retries nothing and keeps no connection open between requests. Retries are the runner's own (see
+  [Retries](#retries)), and its timeouts are the named settings below.
+- It asks for answers unencoded and reads each line as Ollama sent it, so the transcript holds Ollama's own bytes.
+
+The [`ollama` package](https://github.com/ollama/ollama-python) isn't used. Its API can't send `truncate` and `shift`,
+changes the SDK's tool schemas, and drops the cached prompt count and tool-call ids (#332).
+
 The run ends when an answer has no tool call (`ok`, with the answer's text, or `(no text)`), when `maxTurns` requests
 have been made (`error`), when Ollama cuts an answer (`error`, `output-limit`), or when Ollama refuses (`error`).
 
@@ -225,8 +245,8 @@ its `defaults.py`, because every runner that holds its own conversation uses the
 | `GLOB_PATH_BYTES` | 64 | The bytes one `Glob` path is taken to need |
 | `GREP_MATCH_BYTES` | 128 | The bytes one `Grep` match is taken to need |
 | `READ_NOTE_BYTES` | 128 | Room kept in a tool result's budget for the SDK's note saying where a capped `Read` stopped |
-| `PREFLIGHT_TIMEOUT_SECONDS` | 10 | The whole preflight: both requests share one deadline |
-| `STREAM_IDLE_TIMEOUT_SECONDS` | 300 | A stream's silence before it's retried |
+| `PREFLIGHT_TIMEOUT_SECONDS` | 10 | The whole preflight: both requests share one deadline, as httpx2's timeout for each |
+| `STREAM_IDLE_TIMEOUT_SECONDS` | 300 | A stream's silence before it's retried: httpx2's connect, write and read timeout for a chat request |
 | `LINE_MAX_BYTES` | 16 MiB | The longest line read from Ollama |
 | `RETRY_MAX_ATTEMPTS` | 3 | Attempts per request, the first included |
 | `RETRY_DELAY_SECONDS` | 1 | The first retry's delay, doubled for each later one |

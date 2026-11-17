@@ -106,11 +106,15 @@ own either) and `urllib3` (lower level, and not the library #319 pointed at).
   the chat request it's an `EngineError`, which ends the run with reason `other`, naming the status (`Ollama
   answered status 307`), unretried; from the preflight it's `ollama.unreachable`. That is today's behaviour, since `http.client` never
   followed one either, now pinned by a test.
-- `trust_env=False`. `httpx2` otherwise reads `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`, `SSL_CERT_FILE`,
-  `SSL_CERT_DIR` and `NETRC`, and sends a `.netrc` login as Basic auth. The runner sends no credential (spec: "A
-  runtime with a credential is refused"), and today's client reads none of these. core already starts the runner
-  with no variables (`interim.RUNNERS["ollama"].environment == ()`), but the runner shouldn't rely on that, since a
-  person or another host can start it directly.
+- **Nothing from the environment.** `httpx2` reads the proxy variables (`HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`,
+  `NO_PROXY`) only when it builds its own transport with `trust_env` on, and the certificate variables only for its
+  own TLS context. The runner gives it its own transport and TLS context (D4), and sets `trust_env=False` as well, so
+  neither depends on the other. `httpx2` reads `.netrc` only through an explicit `NetRCAuth`, which the runner never
+  passes. The runner sends no credential (spec: "A runtime with a credential is refused"), and today's client reads
+  none of these. core already starts the runner with no variables
+  (`interim.RUNNERS["ollama"].environment == ()`), but the runner shouldn't rely on that, since a person or another
+  host can start it directly. A test that drops the runner's transport with `trust_env` on fails: the proxy
+  variables then send every request to a proxy that isn't there.
 - **TLS:** for an `https` endpoint, an `ssl.create_default_context()`, the context `http.client` uses today, rather
   than `httpx2`'s default (`truststore`'s), so which certificates are trusted doesn't change with this move. Moving to
   the operating system's own store through `truststore` would be a change of its own.

@@ -471,6 +471,38 @@ def test_the_runner_takes_nothing_from_its_environment(workspace: Path) -> None:
             running.validate_all()
 
 
+def test_a_runner_started_with_proxy_and_netrc_variables_reaches_ollama_directly_without_a_login(
+    workspace: Path, tmp_path: Path
+) -> None:
+    # Spec: ollama-runner, "Proxy and credential variables in the runner's environment". A proxy
+    # that isn't there would refuse every request; a .netrc login would arrive as Basic auth
+    # (ollama-library design D3).
+    nowhere = f"http://127.0.0.1:{_free_port()}"
+    netrc = tmp_path / "netrc"
+    netrc.write_text("machine 127.0.0.1 login someone password canary-secret\n", encoding="utf-8")
+    netrc.chmod(0o600)
+    variables = {
+        "HTTP_PROXY": nowhere,
+        "HTTPS_PROXY": nowhere,
+        "ALL_PROXY": nowhere,
+        "http_proxy": nowhere,
+        "all_proxy": nowhere,
+        "NETRC": str(netrc),
+    }
+    with serving([final("hi")]) as fake:
+        running = Session(workspace, variables)
+        try:
+            running.start(runtime=runtime(fake.url))
+            events = _events(running.until_result())
+            assert events[-1]["status"] == "ok"
+            assert [r.path for r in fake.requests] == ["/api/version", "/api/show", "/api/chat"]
+            for request in fake.requests:
+                assert "authorization" not in request.headers
+        finally:
+            running.kill()
+            running.validate_all()
+
+
 def test_a_tool_call_runs_in_the_workspace_and_its_events_validate(
     session: Session, workspace: Path
 ) -> None:

@@ -27,6 +27,8 @@ troupe ships six runners:
   [runtime](runtimes.md), the built-in `ollama` for the Ollama on your machine (any host can be named: a run sends
   what the model reads there). The actor names the model, and its options the context window (`contextLength`)
   ([Try it with a model on your own machine](../opening-night/first-performance.md#try-it-with-a-model-on-your-own-machine)).
+  It comes as the `troupe-run[ollama]` extra
+  ([Runners that come as extras](../opening-night/install.md#runners-that-come-as-extras)).
 
 - **The OpenAI runner** runs an OpenAI model through its Responses API, or a model on any service that serves that API
   (local Ollama does), with troupe's own tool loop, checked against the actor's effects. Its service comes from a

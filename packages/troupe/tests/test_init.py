@@ -475,6 +475,21 @@ def test_the_anthropic_runner_when_it_isnt_installed_is_refused_naming_its_extra
     assert not (repo.path / ".troupe").exists()
 
 
+@pytest.mark.parametrize("rehearse", [False, True], ids=["init", "rehearse"])
+def test_the_ollama_runner_when_it_isnt_installed_is_refused_naming_its_extra(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch, rehearse: bool
+) -> None:
+    """cli: "The Ollama runner when it isn't installed" (ollama-library design D9)."""
+    absent = dataclasses.replace(interim.RUNNERS["ollama"], package="troupe_runner_not_installed")
+    monkeypatch.setitem(interim.RUNNERS, "ollama", absent)
+    asked = {"audition": {"runner": "ollama"}} | ({"rehearse": True} if rehearse else {})
+    error = _refused(repo.path, _env(repo), **asked)
+    assert error.code == "runner.not-installed"
+    assert error.details["extra"] == "ollama"
+    assert "troupe-run[ollama]" in error.fix
+    assert not (repo.path / ".troupe").exists()
+
+
 # Requirement: An audition needs an identity before it makes anything (spec: config)
 
 
