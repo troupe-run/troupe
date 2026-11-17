@@ -17,6 +17,8 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
+from troupe_plugin_sdk import runner as p
+
 
 class ShapeError(Exception):
     """A reply the runner can't read: the service finished it in a shape it can't act on."""
@@ -91,6 +93,9 @@ class ReplyParser:
     _stop_reason: str | None = None
     _stop_details: object = None
     _stopped: bool = False
+    replaced: int = 0
+    """How many lone surrogates in tool inputs were read as U+FFFD: the exchange reports them
+    (host-robustness design D3b)."""
 
     def feed(self, event: dict[str, Any]) -> bool:
         """Take one event; True once it was ``message_stop``. Raises ShapeError for an event the
@@ -178,7 +183,10 @@ class ReplyParser:
                     raise ShapeError(f"a tool_use block ({name!r}) has no id", usage)
                 if not isinstance(name, str) or not name:
                     raise ShapeError(f"the tool_use block {call_id} has no name", usage)
-                arguments = _arguments(started)
+                # The input's JSON text holds an escaped lone surrogate only once it's parsed:
+                # made Unicode text here, before it joins the conversation (review of #437).
+                arguments, replaced = p.unicode_text_counted(_arguments(started))
+                self.replaced += replaced
                 block["input"] = arguments if isinstance(arguments, dict) else {}
                 tool_uses.append(ToolUse(call_id, name, arguments))
             elif block.get("type") == "text":

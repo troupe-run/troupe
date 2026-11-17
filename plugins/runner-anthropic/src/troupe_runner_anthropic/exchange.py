@@ -264,7 +264,9 @@ def _attempt(
             event, replaced = p.unicode_text_counted(event)
             on_lost("the Messages API's answer", replaced)
             if parser.feed(event):
-                return parser.reply()
+                reply = parser.reply()
+                on_lost("the Messages API's answer", parser.replaced)
+                return reply
     except StatusError as failure:  # an error event in the stream
         record("received", failure.body)
         raise
