@@ -5,8 +5,10 @@ broken stream is retried as a network failure", "Redirects are never followed").
 
 import gzip
 import json
+from collections.abc import Iterator
 from typing import Any
 
+import httpx2
 import pytest
 
 from fake_endpoint import (
@@ -661,3 +663,34 @@ def test_a_401_sent_gzipped_ends_as_authentication_not_network() -> None:
     assert "Incorrect API key provided" in failure.message
     assert run.retries == []
     assert len(fake.requests) == 1
+
+
+def test_a_401_whose_body_never_ends_is_read_to_the_limit_and_ends_as_authentication() -> None:
+    """Spec: openai-runner, "A body read whole stops at a named limit", "An error that never
+    ends" (review of #440)."""
+    read: list[int] = []
+
+    def answer(_: httpx2.Request) -> httpx2.Response:
+        def body() -> Iterator[bytes]:
+            while True:
+                read.append(1)
+                yield b"short line\n"
+
+        return httpx2.Response(401, headers={"content-type": "text/plain"}, content=body())
+
+    endpoint = parse_endpoint("http://127.0.0.1:9/v1")
+    service = Service(endpoint, KEY, transport=httpx2.MockTransport(answer), body_max_bytes=1100)
+    retries: list[Retry] = []
+    with pytest.raises(ExchangeFailedError) as raised:
+        exchange(
+            service.stream,
+            PARAMS,
+            endpoint.responses_url,
+            retries.append,
+            lambda *_: None,
+            lambda _: False,
+            on_lost=lambda *_: None,
+        )
+    assert raised.value.reason == "authentication"
+    assert retries == []
+    assert len(read) <= 1100 // len(b"short line\n") + 1
