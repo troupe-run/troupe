@@ -874,6 +874,16 @@ as a network failure, naming the limit. An error sent encoded SHALL end the run 
 - **THEN** no `retry` is sent, and the run ends with an `error` result with `reason` `authentication`, holding the
   service's message
 
+### Requirement: Each request carries only the headers it needs
+Each request the runner sends SHALL carry only the headers the request needs, named in one place in the runner, with
+the runner's own `User-Agent`. No header the library or its HTTP client adds for its own reasons, such as the
+library's telemetry naming the operating system, CPU architecture, Python version or package version, SHALL leave the
+runner.
+
+#### Scenario: The headers a request carries
+- **WHEN** the fake endpoint receives a run's request
+- **THEN** its headers are only those the runner names, its `User-Agent` is the runner's, and none starts `X-`
+
 ### Requirement: Only the runner retries
 The library's own retries SHALL be off, so the only retries a request gets are the runner's, within its named
 maximum attempts, each reported as a `retry` event.

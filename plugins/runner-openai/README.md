@@ -63,6 +63,8 @@ and hands them over in `run/start`, and puts the key, when the runtime has one, 
 - A runtime with a key and a plain `http` endpoint to another machine is refused (`openai.insecure-endpoint`). Plain
   `http` is for a server on this machine.
 - A redirect is never followed, so neither the key nor the conversation goes anywhere the runtime didn't name.
+- Each request carries only the headers it needs, with the runner's own `User-Agent`: the library's telemetry
+  headers (`X-Stainless-*`, naming the OS, CPU, Python and package versions) are removed before it leaves.
 - Everything the runner sends troupe, and its standard error, has the key masked as `[credential]`, and a masked echo
   of it too, such as OpenAI's `sk-proj-****...abcd` in a 401.
 

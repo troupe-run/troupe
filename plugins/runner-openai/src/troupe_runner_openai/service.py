@@ -14,6 +14,8 @@ Everything the library would decide for itself, the runner decides here instead:
 - **Its retries** are off (``max_retries=0``): the runner retries in its own loop (exchange.py).
 - **Its credential** is the runtime's, given explicitly, or none: with none, the library gets a
   placeholder it never sends, since every request omits ``Authorization`` (design D2).
+- **Its headers.** Each request leaves with only the headers it needs (SENT_HEADERS) and the
+  runner's own User-Agent: the library's telemetry headers never reach the service.
 - **Its environment.** The library reads ``OPENAI_*`` variables for whatever it isn't given, so
   the runner removes every one from its own environment before it builds the client (library.py).
 
@@ -37,6 +39,7 @@ from typing import Any, Final
 import httpx2
 import openai
 
+from troupe_runner_openai import NAME, __version__
 from troupe_runner_openai.defaults import (
     CONNECT_TIMEOUT_SECONDS,
     ERROR_BODY_MAX_BYTES,
@@ -217,6 +220,36 @@ def _read_whole(response: httpx2.Response) -> bool:
     return said is not None and said.partition(";")[0].strip().lower() != STREAM_TYPE
 
 
+SENT_HEADERS: Final = frozenset(
+    {
+        "accept",
+        "accept-encoding",
+        "authorization",
+        "connection",
+        "content-length",
+        "content-type",
+        "host",
+        "transfer-encoding",
+        "user-agent",
+    }
+)
+"""The only request headers the runner sends, by lower-case name: what the request needs. Every
+other header the library or its client adds (its X-Stainless-* telemetry, naming the OS, CPU,
+Python and package versions, and any it adds later) is removed before the request leaves (owner,
+2026-11-18; openai-library design D3)."""
+
+USER_AGENT: Final = f"troupe-runner-{NAME}/{__version__}"
+"""The User-Agent each request carries, in place of the library's: the runner and its version, as
+before the library."""
+
+
+def _only_needed_headers(request: httpx2.Request) -> None:
+    """Strip ``request`` to SENT_HEADERS, with the runner's own User-Agent."""
+    for name in [name for name in request.headers if name.lower() not in SENT_HEADERS]:
+        del request.headers[name]
+    request.headers["User-Agent"] = USER_AGENT
+
+
 class _CappedTransport(httpx2.BaseTransport):
     """A transport whose every streamed response's body goes through _CappedStream, whose every
     body read whole stops at ``body_limit`` bytes, and which refuses a successful response sent
@@ -229,6 +262,7 @@ class _CappedTransport(httpx2.BaseTransport):
         self._body_limit = body_limit
 
     def handle_request(self, request: httpx2.Request) -> httpx2.Response:
+        _only_needed_headers(request)
         response = self._inner.handle_request(request)
         encoding = response.headers.get("content-encoding", "").strip().lower()
         if encoding not in ("", "identity"):
@@ -475,6 +509,8 @@ def _words(error: BaseException) -> str:
 __all__ = [
     "NO_CREDENTIAL",
     "RESPONSES_PATH",
+    "SENT_HEADERS",
+    "USER_AGENT",
     "EncodedResponseError",
     "Endpoint",
     "EndpointError",
