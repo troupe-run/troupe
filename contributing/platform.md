@@ -44,7 +44,7 @@ troupe calls it and sees one behaviour on Linux, macOS and Windows. An import co
   `never_prefixes`. An explicit value for a never-passed name is refused (`EnvironmentPolicyError`), not dropped.
   Names match case-insensitively on Windows. `policy.narrow(...)` keeps a subset and adds never-passed names; it
   refuses to select anything the policy doesn't already select, so a policy can be tightened but never loosened.
-  Runners use `RUNNER_ENVIRONMENT`, which selects nothing.
+  Runners use `RUNNER_ENVIRONMENT`, which selects only `COVERAGE_PROCESS_CONFIG`, coverage.py's subprocess setting.
 - **Command lookup:** the command is resolved to an absolute path with the caller's search path before the child
   starts, so the child doesn't need `PATH` unless the caller names it.
 - **Short commands:** `run_to_completion(argv, cwd=, env=, timeout=, max_output_bytes=, announce_after=)` runs a
