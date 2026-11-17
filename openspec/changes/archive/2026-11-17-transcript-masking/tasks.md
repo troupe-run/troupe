@@ -28,9 +28,10 @@
 
 ## 3. The run host
 
-- [x] 3.1 Call `Masker.record` for a text `run/transcript` record in `parse_runner_line` before `Masker.data`, and
-  `Masker.record_bytes` in `transcript_record` (D4). Verify: `test_run_host.py` examples for a native Claude Code-style
-  line, a kinds `sent` record, a `data:` line, and a base64 record, each stored valid with `[credential]`.
+- [x] 3.1 In `parse_runner_line`, mask a text `run/transcript` message with its record left empty, then mask the
+  record once with `Masker.record` (so it isn't masked twice); in `transcript_record`, use `Masker.record_bytes` (D4).
+  Verify: `test_run_host.py` examples for a native Claude Code-style line, a kinds `sent` record, a `data:` line, and
+  a base64 record, each stored valid with `[credential]`.
 - [x] 3.2 Verify the property test from 1.2 now passes, and the existing masking and run-host tests still pass,
   unchanged (`uv run pytest packages/troupe/tests/test_masking.py packages/troupe/tests/test_run_host.py
   packages/troupe/tests/test_credential_leak.py`).
