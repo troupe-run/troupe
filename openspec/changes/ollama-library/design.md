@@ -217,8 +217,9 @@ New tests:
   and gets no `Authorization` header;
 - cancel while a request waits for headers and while a stream is held open, each checking the fake sees the
   connection close and the worker stops before the grace runs out;
-- an `https` endpoint with a context that doesn't trust the fake's certificate, which fails as unreachable, showing
-  the runner's context is the one used.
+- an `https` endpoint whose handshake goes through the runner's own context: one that records and refuses
+  `wrap_socket` sees it, and the preflight is unreachable. No certificate is needed, so no key is committed;
+- `close` shutting down the socket TLS wraps a connection in, not only the first.
 
 ### D9. Shipping it
 
