@@ -1601,3 +1601,34 @@ def test_two_keys_that_masking_would_make_one_are_a_violation_not_a_merge() -> N
     with pytest.raises(host_module._Violation) as raised:
         host_module.parse_runner_line(Masker(MERGING_KEYS[0]), line, 1)
     assert "same once the run's credential is masked" in raised.value.error.problem
+
+
+@pytest.mark.parametrize(
+    ("credential", "line"),
+    [
+        (
+            "qz",
+            b'{"jsonrpc":"2.0","method":"run/transcript","params":'
+            b'{"qz":1,"[credential]":2,"runId":"r","record":"x"}}',
+        ),
+        (
+            "qz",
+            b'{"jsonrpc":"2.0","method":"run/transcript","params":'
+            b'{"runId":"r","record":"x","qz":1,"[credential]":2}}',
+        ),
+        (
+            "params",
+            b'{"jsonrpc":"2.0","method":"run/transcript","params":{"runId":"r","record":"x"},'
+            b'"[credential]":1}',
+        ),
+    ],
+    ids=["before the record, which is last", "after the record", "after params"],
+)
+def test_keys_that_mask_to_one_around_a_record_are_a_violation_not_a_crash(
+    credential: str, line: bytes
+) -> None:
+    # Review of #439: masking the record apart from the message must not assume masking kept
+    # every key; two that merge are the protocol violation they were before.
+    with pytest.raises(host_module._Violation) as raised:
+        host_module.parse_runner_line(Masker(credential), line, 1)
+    assert "same once the run's credential is masked" in raised.value.error.problem
