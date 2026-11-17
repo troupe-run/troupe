@@ -213,15 +213,17 @@ class Masker:
 
     def _mask_across_values(self, pieces: list["_Piece"]) -> str:
         """The record put back together, with each form still left (only across JSON's syntax)
-        replacing the smallest value that holds it, else its lines' values (design D3)."""
+        replacing the smallest value that holds it, else its lines' values (design D3). Each pass
+        replaces every covered run it finds, so a record costs a few passes however many runs it
+        holds (review of #439)."""
         while True:
             text = "".join(piece.text for piece in pieces)
             if not self._holds_a_form(text):
                 return text
-            run = self._first_covered_run(text)
-            if run is None:
+            runs = self._covered_runs(text)
+            if not runs:
                 return text
-            if not _replace_run(pieces, run):
+            if not _replace_runs(pieces, runs):
                 # Nothing left to replace but troupe's own text, a line break or a prefix: the
                 # whole record becomes the marker, a lone data line keeping its field name. Only
                 # a credential holding troupe's own replacement can still be covered then, and
@@ -230,9 +232,9 @@ class Masker:
                 one_data_line = first.text.startswith("data:") and "\n" not in text
                 return self.text((first.text if one_data_line else "") + _QUOTED_MARKER)
 
-    def _first_covered_run(self, text: str) -> tuple[int, int] | None:
-        """The first maximal run of characters of ``text`` that a form covers, in some writing,
-        outside any ``[credential]`` in it, as character offsets."""
+    def _covered_runs(self, text: str) -> list[tuple[int, int]]:
+        """Each maximal run of characters of ``text`` that a form covers, in some writing,
+        outside any ``[credential]`` in it, as character offsets, in order."""
         units: list[str | None] = []
         offsets: list[int] = []
         at = 0
@@ -244,16 +246,15 @@ class Masker:
             else:
                 units.append(text[at])
                 at += 1
-        covered = sorted(self._covered(units))
-        if not covered:
-            return None
-        first = last = covered[0]
-        for index in covered[1:]:
-            if index != last + 1:
-                break
-            last = index
-        end = offsets[last] + (len(MARKER) if units[last] is None else 1)
-        return offsets[first], end
+        runs: list[tuple[int, int]] = []
+        for index in sorted(self._covered(units)):
+            start = offsets[index]
+            end = start + (len(MARKER) if units[index] is None else 1)
+            if runs and runs[-1][1] == start:
+                runs[-1] = (runs[-1][0], end)
+            else:
+                runs.append((start, end))
+        return runs
 
     def stream(self) -> "StreamMask":
         """A mask for a stream of chunks, such as standard error."""
@@ -399,37 +400,87 @@ def _value_spans(value: str) -> list[tuple[int, int]]:
     return spans
 
 
-def _replace_run(pieces: list[_Piece], run: tuple[int, int]) -> bool:
-    """Replace what holds the covered characters ``run`` (offsets into the joined pieces): the
-    smallest value holding it when it lies in one JSON piece, else every JSON value on the lines it
-    touches, and the covered characters of text lines. False when that changes nothing."""
-    start, end = run
-    touched: list[tuple[_Piece, int, int]] = []  # each piece, and the run's part of it
+def _replace_runs(pieces: list[_Piece], runs: list[tuple[int, int]]) -> bool:
+    """Replace what holds each covered run (offsets into the joined pieces): the smallest value
+    holding it when it lies in one JSON piece, else every JSON value on the lines it touches, and
+    the covered characters of text lines. False when that changes nothing."""
+    starts: list[int] = []
     at = 0
     for piece in pieces:
-        low, high = max(start, at), min(end, at + len(piece.text))
-        if low < high:
-            touched.append((piece, low - at, high - at))
+        starts.append(at)
         at += len(piece.text)
-    if len(touched) == 1 and touched[0][0].kind == "json":
-        piece, low, high = touched[0]
-        for begin, finish in _value_spans(piece.text):
-            if begin <= low and high <= finish:
-                if piece.text[begin:finish] == _QUOTED_MARKER:
-                    break
-                piece.text = piece.text[:begin] + _QUOTED_MARKER + piece.text[finish:]
-                return True
+    in_json: dict[int, list[tuple[int, int]]] = {}  # a JSON piece's runs, in its own offsets
+    in_text: dict[int, list[tuple[int, int]]] = {}
+    whole_lines: set[int] = set()
+    for start, end in runs:
+        touched = [
+            (
+                index,
+                max(start, starts[index]) - starts[index],
+                min(end, starts[index] + len(piece.text)) - starts[index],
+            )
+            for index, piece in enumerate(pieces)
+            if max(start, starts[index]) < min(end, starts[index] + len(piece.text))
+        ]
+        if len(touched) == 1 and pieces[touched[0][0]].kind == "json":
+            index, low, high = touched[0]
+            in_json.setdefault(index, []).append((low, high))
+            continue
+        whole_lines.update(pieces[index].line for index, _, _ in touched)
+        for index, low, high in touched:
+            if pieces[index].kind == "text":
+                in_text.setdefault(index, []).append((low, high))
     changed = False
-    lines = {piece.line for piece, _, _ in touched}
+    for index, piece_runs in in_json.items():
+        piece = pieces[index]
+        if piece.line in whole_lines:
+            continue
+        targets = _smallest_values(piece.text, piece_runs)
+        if targets is None:
+            whole_lines.add(piece.line)
+            continue
+        for begin, finish in reversed(targets):
+            piece.text = piece.text[:begin] + _QUOTED_MARKER + piece.text[finish:]
+        changed = True
     for piece in pieces:
-        if piece.kind == "json" and piece.line in lines and piece.text != _QUOTED_MARKER:
+        if piece.kind == "json" and piece.line in whole_lines and piece.text != _QUOTED_MARKER:
             piece.text = _QUOTED_MARKER
             changed = True
-    for piece, low, high in touched:
-        if piece.kind == "text":
+    for index, piece_runs in in_text.items():
+        piece = pieces[index]
+        for low, high in reversed(piece_runs):
             piece.text = piece.text[:low] + MARKER + piece.text[high:]
-            changed = True
+        changed = True
     return changed
+
+
+def _smallest_values(value: str, runs: list[tuple[int, int]]) -> list[tuple[int, int]] | None:
+    """For JSON text ``value`` and runs within it (in order), the smallest value holding each run,
+    with any held by another dropped, in order; None when one is held only by a value that is
+    already ``"[credential]"``. One sweep over the values, so many runs cost one scan."""
+    spans = sorted(_value_spans(value), key=lambda span: (span[0], -span[1]))
+    open_spans: list[tuple[int, int]] = []  # nested, outermost first
+    next_span = 0
+    chosen: list[tuple[int, int]] = []
+    for low, high in runs:
+        while next_span < len(spans) and spans[next_span][0] <= low:
+            span = spans[next_span]
+            while open_spans and open_spans[-1][1] <= span[0]:
+                open_spans.pop()
+            open_spans.append(span)
+            next_span += 1
+        while open_spans and open_spans[-1][1] <= low:
+            open_spans.pop()
+        holder = next((span for span in reversed(open_spans) if span[1] >= high), None)
+        if holder is None or value[holder[0] : holder[1]] == _QUOTED_MARKER:
+            return None
+        chosen.append(holder)
+    kept: list[tuple[int, int]] = []
+    for begin, finish in sorted(set(chosen), key=lambda span: (span[0], -span[1])):
+        if kept and begin < kept[-1][1]:
+            continue  # inside a value already being replaced
+        kept.append((begin, finish))
+    return kept
 
 
 def _has_lone_surrogate(text: str) -> bool:

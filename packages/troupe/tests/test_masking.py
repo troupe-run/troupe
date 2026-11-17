@@ -3,6 +3,7 @@ a run"; runtimes design D6)."""
 
 import json
 
+import pytest
 from hypothesis import example, given, settings
 from hypothesis import strategies as st
 
@@ -260,3 +261,22 @@ def test_a_base64_record_is_masked_as_json_only_when_it_is_json_text() -> None:
     assert masker.record_bytes(b'{"t":"\\nsecret-token-0123456789"}') == b'{"t":"[credential]"}'
     for data in (b"\xff\\nsecret-token-0123456789", b"x\\nsecret-token-0123456789"):
         assert masker.record_bytes(data) == masker.bytes(data)
+
+
+def test_many_spans_across_values_are_replaced_in_a_few_passes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Review of #439: replacing one span a pass cost a whole-record pass per span.
+    masker = Masker('ab","cdefg')
+    passes = 0
+    covered = Masker._covered
+
+    def counted(self: Masker, units: list[str | None]) -> set[int]:
+        nonlocal passes
+        passes += 1
+        return covered(self, units)
+
+    monkeypatch.setattr(Masker, "_covered", counted)
+    record = "[" + ",".join(['["xab","cdefgy"]'] * 500) + "]"
+    assert masker.record(record) == "[" + ",".join(['"[credential]"'] * 500) + "]"
+    assert passes <= 3
