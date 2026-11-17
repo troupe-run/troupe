@@ -675,3 +675,18 @@ def test_an_error_body_holding_a_lone_surrogate_ends_with_its_own_reason_and_is_
     assert (events[-1]["status"], events[-1]["reason"]) == ("error", "authentication")
     context = _replacement_recorded(events)
     assert "1 lone surrogate in the Messages API's error was replaced" in context["message"]
+
+
+def test_a_lone_surrogate_in_a_streamed_tool_input_is_recorded_and_the_next_request_is_sent(
+    sessions: list[Session], workspace: Path
+) -> None:
+    # Review of #437: the escape is only a surrogate once the input's JSON text is parsed.
+    replies = [tool_reply([("t1", "Glob", {"pattern": "x\ud800*"})]), text_reply("Done.")]
+    with FakeEndpoint(replies) as fake:
+        session = _session(sessions, workspace)
+        session.start(fake.endpoint)
+        events = _events(session.until_result())
+        requests = len(fake.requests)
+    assert (events[-1]["status"], requests) == ("ok", 2)
+    context = _replacement_recorded(events)
+    assert "lone surrogate in the Messages API's answer was replaced" in context["message"]
