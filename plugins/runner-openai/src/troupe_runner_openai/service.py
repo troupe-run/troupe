@@ -182,14 +182,51 @@ class EncodedResponseError(httpx2.ReadError):
     as a network failure."""
 
 
-class _CappedTransport(httpx2.BaseTransport):
-    """A transport whose every response's body goes through _CappedStream, and which refuses a
-    response sent encoded: the cap counts the bytes as they arrive, which for an encoded body
-    aren't the bytes the library's decoder buffers (review of #440)."""
+class _TruncatedStream(httpx2.SyncByteStream):
+    """A response's body, read through until ``limit`` bytes, then ended: the rest is never
+    read. For a body the runner reads whole (an error, or a 2xx that isn't a stream), which a line
+    cap alone doesn't bound (review of #440)."""
 
-    def __init__(self, inner: httpx2.BaseTransport, limit: int) -> None:
+    def __init__(self, inner: httpx2.SyncByteStream, limit: int) -> None:
         self._inner = inner
         self._limit = limit
+
+    def __iter__(self) -> Iterator[bytes]:
+        left = self._limit
+        try:
+            for chunk in self._inner:
+                if len(chunk) >= left:
+                    if left:
+                        yield chunk[:left]
+                    return
+                left -= len(chunk)
+                yield chunk
+        finally:
+            self._inner.close()
+
+    def close(self) -> None:
+        self._inner.close()
+
+
+def _read_whole(response: httpx2.Response) -> bool:
+    """Whether the runner reads ``response``'s body whole: an error, or a 2xx whose Content-Type
+    is present and isn't a stream. Every other body is a stream, read line by line."""
+    if not 200 <= response.status_code < 300:
+        return True
+    said = response.headers.get("content-type")
+    return said is not None and said.partition(";")[0].strip().lower() != STREAM_TYPE
+
+
+class _CappedTransport(httpx2.BaseTransport):
+    """A transport whose every streamed response's body goes through _CappedStream, whose every
+    body read whole stops at ``body_limit`` bytes, and which refuses a successful response sent
+    encoded: the cap counts the bytes as they arrive, which for an encoded body aren't the bytes
+    the library's decoder buffers (review of #440)."""
+
+    def __init__(self, inner: httpx2.BaseTransport, limit: int, body_limit: int) -> None:
+        self._inner = inner
+        self._limit = limit
+        self._body_limit = body_limit
 
     def handle_request(self, request: httpx2.Request) -> httpx2.Response:
         response = self._inner.handle_request(request)
@@ -198,7 +235,7 @@ class _CappedTransport(httpx2.BaseTransport):
             if not 200 <= response.status_code < 300:
                 # An error's status still counts: its body is read raw, bounded, and decoded only
                 # within that bound, so the run ends for the service's own reason (review of #440).
-                return _bounded_error(response, encoding, request)
+                return _bounded_error(response, encoding, request, self._body_limit)
             response.close()
             raise EncodedResponseError(
                 f"The service sent its response encoded ({_cut_header(encoding)}), though the "
@@ -207,7 +244,10 @@ class _CappedTransport(httpx2.BaseTransport):
                 request=request,
             )
         assert isinstance(response.stream, httpx2.SyncByteStream)  # noqa: S101 - a sync client's
-        response.stream = _CappedStream(response.stream, self._limit)
+        if _read_whole(response):
+            response.stream = _TruncatedStream(response.stream, self._body_limit)
+        else:
+            response.stream = _CappedStream(response.stream, self._limit)
         return response
 
     def close(self) -> None:
@@ -219,25 +259,25 @@ _ZLIB_WINDOWS: Final = {"gzip": 47, "x-gzip": 47, "deflate": 15}
 
 
 def _bounded_error(
-    response: httpx2.Response, encoding: str, request: httpx2.Request
+    response: httpx2.Response, encoding: str, request: httpx2.Request, limit: int
 ) -> httpx2.Response:
-    """A non-2xx sent encoded, as a plain response: at most ERROR_BODY_MAX_BYTES read from the
-    wire, decoded into at most as many bytes where zlib can, and kept as sent where it can't."""
+    """A non-2xx sent encoded, as a plain response: at most ``limit`` bytes read from the wire,
+    decoded into at most as many bytes where zlib can, and kept as sent where it can't."""
     raw = bytearray()
     assert isinstance(response.stream, httpx2.SyncByteStream)  # noqa: S101 - a sync client's
     try:
         for chunk in response.stream:
             raw += chunk
-            if len(raw) >= ERROR_BODY_MAX_BYTES:
+            if len(raw) >= limit:
                 break
     finally:
         response.close()
-    body = bytes(raw[:ERROR_BODY_MAX_BYTES])
+    body = bytes(raw[:limit])
     window = _ZLIB_WINDOWS.get(encoding)
     if window is not None:
         # Kept as sent when it won't decode: the status still says what happened.
         with contextlib.suppress(zlib.error):
-            body = zlib.decompressobj(window).decompress(body, ERROR_BODY_MAX_BYTES)
+            body = zlib.decompressobj(window).decompress(body, limit)
     headers = [(k, v) for k, v in response.headers.items() if k.lower() != "content-encoding"]
     return httpx2.Response(
         response.status_code,
@@ -282,6 +322,7 @@ class Service:
         stream_timeout: float = STREAM_TIMEOUT_SECONDS,
         write_timeout: float = WRITE_TIMEOUT_SECONDS,
         line_max_bytes: int = STREAM_LINE_MAX_BYTES,
+        body_max_bytes: int = ERROR_BODY_MAX_BYTES,
         transport: httpx2.BaseTransport | None = None,
     ) -> None:
         """``transport`` stands in for the network beneath the line cap, for tests; by default
@@ -297,7 +338,7 @@ class Service:
                 verify=ssl.create_default_context(), trust_env=False, proxy=proxy_for(endpoint)
             )
         self._http = httpx2.Client(
-            transport=_CappedTransport(transport, line_max_bytes),
+            transport=_CappedTransport(transport, line_max_bytes, body_max_bytes),
             # No compression, as urllib asked for none: the line cap counts bytes as they
             # arrive, so they must be the bytes the library reads (review of #440).
             headers={"Accept-Encoding": "identity"},
@@ -421,9 +462,9 @@ def _find(error: BaseException, kind: type[ssl.SSLCertVerificationError]) -> Bas
 
 
 def _body(response: httpx2.Response) -> bytes:
-    """Up to ERROR_BODY_MAX_BYTES of a response's body, which the library has read or reads
-    now."""
-    return response.read()[:ERROR_BODY_MAX_BYTES]
+    """A response's body read whole, which the library has read or reads now: at most
+    ERROR_BODY_MAX_BYTES, where the transport stopped reading it."""
+    return response.read()
 
 
 def _words(error: BaseException) -> str:

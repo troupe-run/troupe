@@ -131,8 +131,9 @@ The runner's `httpx2.Client` is built on a transport that wraps the default one 
 byte streams count the bytes since the last line ending. A line longer than `STREAM_LINE_MAX_BYTES` (16 MiB, as today)
 raises an `httpx2.ReadError` subclass naming the limit, before more is buffered; the library wraps it as a connection
 error, and the runner reports it as a broken stream (`network`), with the limit in its message, as today. The cap
-applies to every response body the client reads, so an error body or a 2xx JSON body is bounded too
-(`ERROR_BODY_MAX_BYTES` stays the cap on how much of such a body is recorded and parsed).
+applies to a streamed body. A body the runner reads whole (an error, or a 2xx whose `Content-Type` isn't a stream)
+is bounded in total instead: the transport stops reading it at `ERROR_BODY_MAX_BYTES`, so a body of many short lines,
+which a line cap alone wouldn't stop, is never read past that (review of #440).
 
 The client decodes `Content-Encoding` above the transport, so the cap would count compressed bytes: a gzip line of a
 few KB could decode to gigabytes (review of #440). So the client asks for none (`Accept-Encoding: identity`, as urllib
