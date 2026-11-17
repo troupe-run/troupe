@@ -31,9 +31,11 @@ from troupe_plugin_sdk.events import EventNumbering, encoded_size
 from troupe_plugin_sdk.runner import Price, ResultEvent, RunEvent
 from troupe_plugin_sdk.tools import Tools
 from troupe_runner_openai.defaults import INSTRUCTIONS
+from troupe_runner_openai.exchange import Open
 from troupe_runner_openai.loop import Loop
 from troupe_runner_openai.options import parse_options
 from troupe_runner_openai.runtime import Runtime
+from troupe_runner_openai.service import Service, parse_endpoint
 
 MODEL = "fake-model"
 """The model the fake endpoint's responses say answered, so a run notes no other model."""
@@ -42,6 +44,11 @@ MODEL = "fake-model"
 def no_context(event: object) -> None:
     """A send_context for a test that expects no lone surrogate, so no context event for one."""
     raise AssertionError(f"an unexpected context event: {event}")
+
+
+def _open(endpoint: str, credential: str | None) -> Open:
+    """What the runner gives its loop to send each request: a Service's stream."""
+    return Service(parse_endpoint(endpoint), credential).stream
 
 
 class Ran:
@@ -98,6 +105,7 @@ def run(
             send=events.append,
             record=lambda kind, data: records.append((kind, data)),
             wait=lambda _: False,
+            open_=_open(fake.endpoint, "sk-canary-0123456789"),
             exchange_limits={"base_delay": 0.0},
             compact=compact,
         )
@@ -326,6 +334,7 @@ def test_the_runners_own_failure_is_an_error_result_with_reason_runner(tmp_path:
             send=lambda _: None,
             record=lambda _kind, _body: None,
             wait=lambda _: False,
+            open_=_open(fake.endpoint, "sk-canary-0123456789"),
         )
         result = loop.failure("The OpenAI runner failed: RuntimeError: boom").to_data()
     assert (result["status"], result["reason"]) == ("error", "runner")
@@ -604,6 +613,7 @@ def test_a_stop_after_one_call_carries_out_none_of_the_rest(tmp_path: Path) -> N
             send=lambda _: None,
             record=lambda _kind, _data: None,
             wait=lambda _: False,
+            open_=_open(fake.endpoint, None),
             stopping=(workspace / "a.txt").exists,
         )
         assert loop.run("Write both.", None) is None

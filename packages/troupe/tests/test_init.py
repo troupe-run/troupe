@@ -490,6 +490,19 @@ def test_the_ollama_runner_when_it_isnt_installed_is_refused_naming_its_extra(
     assert not (repo.path / ".troupe").exists()
 
 
+def test_the_openai_runner_when_it_isnt_installed_is_refused_naming_its_extra(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """cli: "The OpenAI runner when it isn't installed"."""
+    absent = dataclasses.replace(interim.RUNNERS["openai"], package="troupe_runner_not_installed")
+    monkeypatch.setitem(interim.RUNNERS, "openai", absent)
+    error = _refused(repo.path, _env(repo), audition={"runner": "openai"})
+    assert error.code == "runner.not-installed"
+    assert error.details["extra"] == "openai"
+    assert "troupe-run[openai]" in error.fix
+    assert not (repo.path / ".troupe").exists()
+
+
 # Requirement: An audition needs an identity before it makes anything (spec: config)
 
 

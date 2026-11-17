@@ -15,7 +15,7 @@ maxTotalTokens. With no price from the service, this is what bounds a run's spen
 
 MAX_ATTEMPTS = 5
 """Attempts at one request, the first included, before a failure that retrying might fix ends the
-run."""
+run. The library's own retries are off (openai-library design D3)."""
 
 RETRY_BASE_DELAY_SECONDS = 1.0
 """The first retry's delay. Each later retry doubles it, up to RETRY_MAX_DELAY_SECONDS."""
@@ -25,10 +25,15 @@ RETRY_MAX_DELAY_SECONDS = 60.0
 than being waited out."""
 
 CONNECT_TIMEOUT_SECONDS = 30.0
-"""Connecting to the service and getting its response's status."""
+"""Connecting to the service, and waiting for a connection from the pool: the library's connect
+and pool timeouts (openai-library design D3)."""
+
+WRITE_TIMEOUT_SECONDS = 30.0
+"""Sending a request's body: the library's write timeout."""
 
 STREAM_TIMEOUT_SECONDS = 120.0
-"""Silence between two reads of a response's stream. Past it, the stream counts as broken."""
+"""Silence between two reads of a response, its status included: the library's read timeout. Past
+it, the request counts as broken and is retried."""
 
 SUMMARY_MAX_BYTES = 4096
 """The UTF-8 bytes one summary field of an event keeps, before run/start's eventMaxBytes cuts it
@@ -61,7 +66,11 @@ the request is retried as a server failure (design D8). Any other code ends the 
 nothing; a code is added here when a service is seen to use it."""
 
 STREAM_LINE_MAX_BYTES = 16 * 1024 * 1024
-"""The longest one line of a response's stream may be. A longer one counts as a broken stream."""
+"""The longest one line of a response's body may be, counted beneath the library as the bytes
+arrive. A longer one counts as a broken stream (openai-library design D4a; owner, 2026-11-17)."""
 
 ERROR_BODY_MAX_BYTES = 1024 * 1024
-"""How much of a non-streamed response's body (an error, say) the runner reads."""
+"""How much of a non-streamed response's body (an error, say) the runner records and reads."""
+
+LIBRARY_LOG_MAX_BYTES = 2048
+"""The UTF-8 bytes of one library warning the runner passes to standard error."""

@@ -41,7 +41,7 @@
 
 - The runner sends every request through `openai`, and troupe stops maintaining its own HTTP client and SSE parser.
 - Every behaviour `openai-runner` specifies stays, proved by today's fixtures and tests replayed through the same fake
-  endpoint, with two edges the library forces made explicit in the spec (D5, D8).
+  endpoint, with two edges the library forces made explicit in the spec (D5, D8), both accepted by the owner (2026-11-17).
 - Each of #319's guarantees is set by the runner and pinned by a test that would fail on the library's default.
 - `troupe-run[openai]` as #333 designed it.
 
@@ -122,6 +122,20 @@ reaching the runner as sent. Failures map as:
 A 2xx whose `Content-Type` is present and isn't `text/event-stream` is checked on the stream's response before any
 event is read, as today; its body is read and recorded.
 
+### D4a. A named cap on a stream's lines, in the transport
+
+**Owner decision (2026-11-17):** keep a size cap, enforced under the library, not by touching its private decoder.
+The runner's `httpx2.Client` is built on a transport that wraps the default one (`_CappedTransport`), whose responses'
+byte streams count the bytes since the last line ending. A line longer than `STREAM_LINE_MAX_BYTES` (16 MiB, as today)
+raises an `httpx2.ReadError` subclass naming the limit, before more is buffered; the library wraps it as a connection
+error, and the runner reports it as a broken stream (`network`), with the limit in its message, as today. The cap
+applies to every response body the client reads, so an error body or a 2xx JSON body is bounded too
+(`ERROR_BODY_MAX_BYTES` stays the cap on how much of such a body is recorded and parsed).
+
+**Not shared with #332:** the Ollama runner moved to `httpx` 0.28.1, while `openai` is built on `httpx2`; two
+different packages, so neither a pin nor a transport can be shared. A stdlib-only line counter in the plugin SDK could
+be, as a follow-up if both are kept.
+
 ### D5. When an event counts as finished
 
 The library dispatches an event only on its blank line. So a body that ends right after a final event's `data:` line,
@@ -198,9 +212,8 @@ at import). Serialiser warnings are off at the source (D4).
 
 - **A library that changes every few days.** → Pinned exactly; one seam module; fixtures and request-shape tests catch
   what a bump changes.
-- **No line or event size limit.** The library buffers an event of any size, where today a line over 16 MiB broke the
-  stream. → The stream timeout still bounds silence, troupe's own limits bound what the runner sends on, and the
-  service is the one the person named; noted in the README.
+- **The library has no line or event size limit.** → The runner's transport caps each line (D4a, owner's decision),
+  as the hand-written reader did.
 - **A final event without its blank line is retried** (D5). → One extra request in a case no recorded service shows.
 - **The transcript loses the SSE framing** (D6). → What #319 chose; the events keep every field.
 - **Cancel ends the process mid-request** (D8). → One run per process; the same as the Anthropic runner, and the

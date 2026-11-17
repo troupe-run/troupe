@@ -51,6 +51,7 @@ uv tool install --no-sources "troupe-run[all] @ git+https://github.com/troupe-ru
 | `anthropic` | The Anthropic runner, which drives a model over the Anthropic Messages API, on [Claude's API](https://platform.claude.com/docs/en/api/messages) or a local engine that serves it, through the `anthropic` package. |
 | `mistralrs` | The mistralrs runner, which loads a GGUF model inside its own process with [mistral.rs](https://github.com/EricLBuehler/mistral.rs)'s Python package, `mistralrs`. No server, no network. |
 | `ollama` | The Ollama runner, which drives a model on your own computer through [Ollama](https://ollama.com)'s own API, with troupe's tool loop. No account and no credential. |
+| `openai` | The OpenAI runner, which drives a model over [OpenAI's Responses API](https://platform.openai.com/docs/api-reference/responses), on OpenAI or another service that serves it, such as Ollama, through the `openai` package. |
 
 An actor on a runner you haven't installed is refused, and the message names the extra to install.
 

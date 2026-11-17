@@ -1,30 +1,41 @@
-"""How the runner reaches a service (spec: openai-runner, "The credential goes only in the
-Authorization header", "A credential never travels in the clear", "Redirects are never followed";
-design D3)."""
+"""How the runner reaches a service through the openai package (spec: openai-runner, "The
+credential goes only in the Authorization header", "A credential never travels in the clear",
+"Redirects are never followed", "Every timeout the library applies is one of the runner's named
+settings", "A stream's lines are capped below the library"; openai-library design D2-D4a)."""
 
 import contextlib
 import json
-import threading
-import time
+from collections.abc import Iterator
+from typing import Any
 
+import httpx2
 import pytest
 
 from fake_endpoint import Cut, FakeEndpoint, Hold, Pause, Reply, error_reply, sse, text_reply
+from troupe_runner_openai import defaults
 from troupe_runner_openai.service import (
-    AbortedError,
-    Call,
     EndpointError,
     NetworkError,
+    NotAStreamError,
+    Opened,
+    Service,
     StatusError,
     is_loopback,
     parse_endpoint,
+    proxy_for,
 )
 
 KEY = "sk-canary-0123456789"
+PARAMS = {"model": "m", "stream": True}
 
 
-def _call(endpoint: str, credential: str | None = None, **timeouts: float) -> Call:
-    return Call(parse_endpoint(endpoint), b'{"model": "m"}', credential, **timeouts)
+def _open(endpoint: str, credential: str | None = None, **settings: Any) -> Opened:  # noqa: ANN401
+    """One request to ``endpoint`` through a Service of its own, with ``settings``."""
+    return Service(parse_endpoint(endpoint), credential, **settings).stream(PARAMS)
+
+
+def _drain(endpoint: str, credential: str | None = None, **settings: Any) -> list[Any]:  # noqa: ANN401
+    return list(_open(endpoint, credential, **settings).events)
 
 
 # Endpoints
@@ -108,12 +119,35 @@ def test_requests_go_below_the_endpoint(endpoint: str, responses: str) -> None:
     assert parse_endpoint(endpoint).responses_url == responses
 
 
+@pytest.mark.parametrize(
+    ("endpoint", "responses"),
+    [
+        ("https://api.openai.com/v1", "https://api.openai.com/v1/responses"),
+        ("https://api.openai.com/v1/", "https://api.openai.com/v1/responses"),
+        ("http://127.0.0.1:8000//", "http://127.0.0.1:8000//responses"),
+    ],
+)
+def test_the_library_sends_each_request_where_the_endpoint_says(
+    endpoint: str, responses: str
+) -> None:
+    seen: list[str] = []
+
+    def answer(request: httpx2.Request) -> httpx2.Response:
+        seen.append(str(request.url))
+        return httpx2.Response(404, json={"error": {"message": "x", "code": "nope"}})
+
+    service = Service(parse_endpoint(endpoint), KEY, transport=httpx2.MockTransport(answer))
+    with pytest.raises(StatusError):
+        service.stream(PARAMS)
+    assert seen == [responses] == [parse_endpoint(endpoint).responses_url]
+
+
 # The credential
 
 
 def test_the_credential_is_sent_only_as_a_bearer_authorization_header() -> None:
     with FakeEndpoint([text_reply("hi")]) as fake:
-        list(_call(fake.endpoint, KEY).open().lines())
+        _drain(fake.endpoint, KEY)
         (request,) = fake.requests
     assert request.headers["authorization"] == f"Bearer {KEY}"
     assert KEY not in request.body.decode()
@@ -122,23 +156,30 @@ def test_the_credential_is_sent_only_as_a_bearer_authorization_header() -> None:
 
 def test_without_a_credential_there_is_no_authorization_header() -> None:
     with FakeEndpoint([text_reply("hi")]) as fake:
-        list(_call(fake.endpoint).open().lines())
+        _drain(fake.endpoint)
         (request,) = fake.requests
     assert "authorization" not in request.headers
+    assert "no-credential" not in json.dumps(request.headers)
 
 
-def test_the_request_is_a_json_post_asking_for_a_stream() -> None:
+def test_the_request_is_a_json_post_of_the_parameters() -> None:
     with FakeEndpoint([text_reply("hi")]) as fake:
-        list(_call(fake.endpoint).open().lines())
+        _drain(fake.endpoint)
         (request,) = fake.requests
     assert request.method == "POST"
     assert request.path == "/v1/responses"
     assert request.headers["content-type"] == "application/json"
-    assert request.headers["accept"] == "text/event-stream"
-    assert request.json() == {"model": "m"}
+    assert request.json() == PARAMS
 
 
-# Redirects
+def test_a_header_the_key_cant_go_in_is_reported_without_the_key() -> None:
+    with FakeEndpoint([text_reply("ok")]) as fake, pytest.raises(NetworkError) as raised:
+        _open(fake.endpoint, KEY + "\r")
+    assert KEY not in str(raised.value)
+    assert KEY[:8] not in str(raised.value)
+
+
+# Redirects, retries and proxies
 
 
 @pytest.mark.parametrize("status", [301, 302, 303, 307, 308])
@@ -149,19 +190,54 @@ def test_a_redirect_is_never_followed(status: int) -> None:
             FakeEndpoint([Reply(status, headers=[("Location", location)])]) as fake,
             pytest.raises(StatusError) as raised,
         ):
-            _call(fake.endpoint, KEY).open()
+            _open(fake.endpoint, KEY)
         assert elsewhere.requests == []
+        assert len(fake.requests) == 1
     assert raised.value.status == status
     assert raised.value.headers["location"] == location
 
 
-# Statuses and the network
+def test_the_library_never_retries_a_server_error_itself() -> None:
+    with FakeEndpoint([error_reply(500, "boom"), text_reply("ok")]) as fake:
+        with pytest.raises(StatusError):
+            _open(fake.endpoint)
+        assert len(fake.requests) == 1
+
+
+def test_an_endpoint_on_this_machine_never_goes_through_a_proxy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with FakeEndpoint([text_reply("proxied")]) as proxy, FakeEndpoint([text_reply("ok")]) as fake:
+        for name in ("HTTP_PROXY", "http_proxy"):
+            monkeypatch.setenv(name, proxy.endpoint.removesuffix("/v1"))
+        for name in ("NO_PROXY", "no_proxy"):
+            monkeypatch.delenv(name, raising=False)
+        assert proxy_for(parse_endpoint(fake.endpoint)) is None
+        _drain(fake.endpoint)
+        assert proxy.requests == []
+        assert len(fake.requests) == 1
+
+
+def test_another_hosts_proxy_is_the_one_urllib_would_choose(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HTTPS_PROXY", "http://proxy.example:3128")
+    monkeypatch.setenv("https_proxy", "http://proxy.example:3128")
+    for name in ("NO_PROXY", "no_proxy"):
+        monkeypatch.setenv(name, "")
+    assert proxy_for(parse_endpoint("https://api.openai.com/v1")) == "http://proxy.example:3128"
+    for name in ("NO_PROXY", "no_proxy"):
+        monkeypatch.setenv(name, "api.openai.com")
+    assert proxy_for(parse_endpoint("https://api.openai.com/v1")) is None
+
+
+# Statuses, timeouts and the network
 
 
 def test_an_error_status_carries_its_headers_and_body() -> None:
     reply = error_reply(429, "slow down", headers=[("Retry-After", "2")])
     with FakeEndpoint([reply]) as fake, pytest.raises(StatusError) as raised:
-        _call(fake.endpoint).open()
+        _open(fake.endpoint)
     assert raised.value.status == 429
     assert raised.value.headers["retry-after"] == "2"
     assert json.loads(raised.value.body)["error"]["message"] == "slow down"
@@ -171,70 +247,117 @@ def test_a_refused_connection_is_a_network_error_naming_the_endpoint() -> None:
     with FakeEndpoint() as fake:
         endpoint = fake.endpoint
     with pytest.raises(NetworkError) as raised:
-        _call(endpoint).open()
+        _open(endpoint)
     assert endpoint in str(raised.value)
-
-
-def test_the_streams_lines_arrive_without_their_endings() -> None:
-    with FakeEndpoint([Reply(lines=["data: {}", "", "data: [DONE]"])]) as fake:
-        assert list(_call(fake.endpoint).open().lines()) == ["data: {}", "", "data: [DONE]"]
 
 
 def test_a_stream_silent_past_the_stream_timeout_is_a_network_error() -> None:
     with FakeEndpoint([Reply(lines=sse([Pause(2)]))]) as fake:
-        response = _call(fake.endpoint, stream_timeout=0.3).open()
+        opened = _open(fake.endpoint, stream_timeout=0.3)
         with pytest.raises(NetworkError, match=r"sent nothing for 0\.3 seconds"):
-            list(response.lines())
+            list(opened.events)
+
+
+def test_a_connection_held_with_nothing_sent_is_abandoned_at_the_stream_timeout() -> None:
+    with FakeEndpoint([Reply(lines=[Hold()])]) as fake:
+        opened = _open(fake.endpoint, stream_timeout=0.3)
+        with pytest.raises(NetworkError, match=r"sent nothing for 0\.3 seconds"):
+            list(opened.events)
+
+
+def test_the_librarys_timeouts_are_the_runners_named_settings() -> None:
+    service = Service(parse_endpoint("http://127.0.0.1:9/v1"), None)
+    timeout = service._client.timeout  # what the library was given
+    assert isinstance(timeout, httpx2.Timeout)
+    assert (timeout.connect, timeout.read, timeout.write, timeout.pool) == (
+        defaults.CONNECT_TIMEOUT_SECONDS,
+        defaults.STREAM_TIMEOUT_SECONDS,
+        defaults.WRITE_TIMEOUT_SECONDS,
+        defaults.CONNECT_TIMEOUT_SECONDS,
+    )
+    assert service._client.max_retries == 0
 
 
 def test_a_stream_cut_short_ends_or_breaks_without_the_rest() -> None:
-    with FakeEndpoint([Reply(lines=["data: {}", "", Cut(), "data: [DONE]"])]) as fake:
-        received: list[str] = []
+    final = '{"type": "response.completed", "response": {"status": "completed", "output": []}}'
+    with FakeEndpoint(
+        [Reply(lines=['data: {"type": "x"}', "", Cut(), f"data: {final}", ""])]
+    ) as fake:
+        received: list[Any] = []
         with contextlib.suppress(NetworkError):
-            received.extend(_call(fake.endpoint).open().lines())
-    assert "data: [DONE]" not in received
+            received.extend(_open(fake.endpoint).events)
+    assert [e["type"] for e in received] == ["x"]
 
 
-def test_a_body_read_whole_is_returned() -> None:
-    with FakeEndpoint([Reply(200, body=b'{"id": "resp_1"}')]) as fake:
-        assert _call(fake.endpoint).open().body() == b'{"id": "resp_1"}'
+def test_a_200_with_a_json_body_is_not_a_stream_with_its_body() -> None:
+    with (
+        FakeEndpoint([Reply(200, body=b'{"id": "resp_1"}')]) as fake,
+        pytest.raises(NotAStreamError) as raised,
+    ):
+        _open(fake.endpoint)
+    assert raised.value.body == b'{"id": "resp_1"}'
+    assert raised.value.broke is None
 
 
-def test_a_body_that_breaks_off_before_its_length_is_a_network_error() -> None:
-    short = Reply(200, headers=[("Content-Length", "100")], chunks=[b'{"id": "re'])
-    with FakeEndpoint([short]) as fake:
-        response = _call(fake.endpoint).open()
-        with pytest.raises(NetworkError, match="body broke off"):
-            response.body()
+def test_a_body_that_breaks_off_before_its_length_says_so() -> None:
+    short = Reply(
+        200,
+        headers=[("Content-Type", "application/json"), ("Content-Length", "100")],
+        chunks=[b'{"id": "re'],
+    )
+    with FakeEndpoint([short]) as fake, pytest.raises(NotAStreamError) as raised:
+        _open(fake.endpoint)
+    assert raised.value.broke is not None
 
 
-def test_aborting_from_another_thread_wakes_a_blocked_read_within_a_second() -> None:
-    with FakeEndpoint([Reply(lines=["data: {}", "", Hold()])]) as fake:
-        call = _call(fake.endpoint)
-        response = call.open()
-        lines = response.lines()
-        assert next(lines) == "data: {}"
-        threading.Timer(0.2, call.abort).start()
-        started = time.monotonic()
-        with pytest.raises(AbortedError):
-            list(lines)
-        assert time.monotonic() - started < 1.2
-        assert fake.wait_for_client_to_close(5)
+# The line cap (design D4a)
 
 
-def test_a_call_aborted_before_it_opens_sends_nothing() -> None:
-    with FakeEndpoint([text_reply("hi")]) as fake:
-        call = _call(fake.endpoint)
-        call.abort()
-        with pytest.raises(AbortedError):
-            call.open()
-        assert fake.requests == []
+def _stream_of(*lines: bytes) -> Iterator[bytes]:
+    yield from lines
 
 
-def test_a_header_the_key_cant_go_in_is_reported_without_the_key() -> None:
-    with FakeEndpoint([text_reply("ok")]) as fake:
-        call = Call(parse_endpoint(fake.endpoint), b"{}", KEY + "\r")
-        with pytest.raises(NetworkError) as raised:
-            call.open()
-    assert KEY not in str(raised.value)
-    assert KEY[:8] not in str(raised.value)
+def test_a_line_past_the_cap_is_a_network_error_naming_the_limit_before_more_is_read() -> None:
+    read: list[int] = []
+
+    def answer(_: httpx2.Request) -> httpx2.Response:
+        def body() -> Iterator[bytes]:
+            yield b'data: {"type": "x"}\n\n'
+            for _ in range(1000):
+                read.append(1)
+                yield b"a" * 64
+
+        return httpx2.Response(200, headers={"content-type": "text/event-stream"}, content=body())
+
+    service = Service(
+        parse_endpoint("http://127.0.0.1:9/v1"),
+        None,
+        transport=httpx2.MockTransport(answer),
+        line_max_bytes=256,
+    )
+    opened = service.stream(PARAMS)
+    with pytest.raises(NetworkError, match=r"longer than 256 bytes.*STREAM_LINE_MAX_BYTES"):
+        list(opened.events)
+    assert len(read) <= 256 // 64 + 1
+
+
+def test_lines_up_to_the_cap_are_read_however_they_arrive() -> None:
+    line = b'data: {"type": "x", "pad": "' + b"b" * 200 + b'"}'
+    chunks = [line[:7], line[7:150], line[150:] + b"\r\n\r", b"\n"]
+
+    def answer(_: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(
+            200, headers={"content-type": "text/event-stream"}, content=_stream_of(*chunks)
+        )
+
+    service = Service(
+        parse_endpoint("http://127.0.0.1:9/v1"),
+        None,
+        transport=httpx2.MockTransport(answer),
+        line_max_bytes=len(line),
+    )
+    assert [e["type"] for e in service.stream(PARAMS).events] == ["x"]
+
+
+def test_the_cap_by_default_is_the_named_setting() -> None:
+    assert defaults.STREAM_LINE_MAX_BYTES == 16 * 1024 * 1024

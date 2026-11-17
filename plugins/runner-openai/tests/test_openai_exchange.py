@@ -11,6 +11,7 @@ import pytest
 from fake_endpoint import (
     Cut,
     FakeEndpoint,
+    Hold,
     Pause,
     Reply,
     error_event_reply,
@@ -18,16 +19,25 @@ from fake_endpoint import (
     event,
     final,
     function_call,
+    message,
     sse,
     status_reply,
     text_reply,
     tool_reply,
     usage,
 )
-from troupe_runner_openai.exchange import ExchangeFailedError, Retry, exchange, retry_after
-from troupe_runner_openai.service import AbortedError, Call, Endpoint, parse_endpoint
+from troupe_runner_openai.exchange import (
+    ExchangeFailedError,
+    Retry,
+    StoppedError,
+    exchange,
+    retry_after,
+)
+from troupe_runner_openai.service import Service, parse_endpoint
 
 KEY = "sk-canary-0123456789"
+PARAMS = {"model": "m", "stream": True}
+"""The parameters every exchange here sends: the smallest the library takes."""
 
 
 class Run:
@@ -44,24 +54,25 @@ class Run:
         self.limits = limits
 
     def __call__(self, stream_timeout: float = 5.0, stop: bool = False) -> Any:  # noqa: ANN401
-        def make(endpoint: Endpoint, body: bytes, credential: str | None) -> Call:
-            return Call(endpoint, body, credential, stream_timeout=stream_timeout)
-
         def wait(seconds: float) -> bool:
             self.waits.append(seconds)
             return stop
 
-        return exchange(
-            parse_endpoint(self.endpoint),
-            b'{"model": "m"}',
-            KEY,
-            self.retries.append,
-            lambda kind, data: self.records.append((kind, data)),
-            wait,
-            on_lost=lambda where, replaced: self.lost.append((where, replaced)),
-            make_call=make,
-            **self.limits,
-        )
+        endpoint = parse_endpoint(self.endpoint)
+        service = Service(endpoint, KEY, stream_timeout=stream_timeout)
+        try:
+            return exchange(
+                service.stream,
+                PARAMS,
+                endpoint.responses_url,
+                self.retries.append,
+                lambda kind, data: self.records.append((kind, data)),
+                wait,
+                on_lost=lambda where, replaced: self.lost.append((where, replaced)),
+                **self.limits,
+            )
+        finally:
+            service.close()
 
 
 def _failed(run: Run) -> str:
@@ -77,20 +88,33 @@ def _failure(run: Run) -> ExchangeFailedError:
 # Success, and what the transcript keeps
 
 
-def test_a_reply_is_returned_with_the_request_response_and_lines_recorded_in_order() -> None:
+def test_a_reply_is_returned_with_the_parameters_status_and_events_recorded_in_order() -> None:
+    # Spec: openai-runner, "The transcript is what the library exposes" (openai-library D6).
     with FakeEndpoint([text_reply("Done.")]) as fake:
         run = Run(fake)
         reply = run()
     assert reply.text == "Done."
     kinds = [kind for kind, _ in run.records]
-    assert kinds[:2] == ["sent", "note"]
-    assert set(kinds[2:]) == {"received"}
-    assert run.records[0] == ("sent", b'{"model": "m"}')
+    assert kinds == ["sent", "note", "received", "received", "received"]
+    assert run.records[0] == ("sent", b'{"model":"m","stream":true}')
     assert json.loads(run.records[1][1])["status"] == 200
-    *_, named, data, blank = run.records
-    assert named == ("received", b"event: response.completed")
-    assert data[1].startswith(b'data: {"type": "response.completed"')
-    assert blank == ("received", b"")
+    events = [json.loads(data) for _, data in run.records[2:]]
+    assert [e["type"] for e in events] == [
+        "response.created",
+        "response.output_text.delta",
+        "response.completed",
+    ]
+    assert events[-1]["response"]["output"][0]["content"][0]["text"] == "Done."
+
+
+def test_a_field_the_librarys_models_dont_know_reaches_the_transcript() -> None:
+    done = final([message("ok")], used=usage(1, 1))
+    done["response"]["troupe_unknown"] = {"kept": [1, 2]}
+    with FakeEndpoint([Reply(lines=sse([done]))]) as fake:
+        run = Run(fake)
+        assert run().text == "ok"
+    [(_, data)] = [record for record in run.records if record[0] == "received"]
+    assert json.loads(data)["response"]["troupe_unknown"] == {"kept": [1, 2]}
 
 
 def test_only_the_named_response_headers_are_kept_and_no_request_header() -> None:
@@ -290,7 +314,7 @@ def test_a_stream_silent_past_the_timeout_is_abandoned_and_retried_as_network() 
 def test_a_stop_during_the_retry_delay_ends_the_exchange() -> None:
     with FakeEndpoint([error_reply(500, "boom")]) as fake:
         run = Run(fake)
-        with pytest.raises(AbortedError):
+        with pytest.raises(StoppedError):
             run(stop=True)
     assert len(fake.requests) == 1
 
@@ -550,3 +574,40 @@ def test_a_200_json_body_holding_a_lone_surrogate_ends_as_configuration_and_is_r
     assert failed.value.reason == "configuration"
     assert "Streaming is off x�y" in str(failed.value)
     assert ("the Responses API's error", 1) in run.lost
+
+
+# What must hold whichever HTTP stack sends the request (openai-library design D11)
+
+
+def test_only_the_runner_retries_so_the_service_sees_exactly_its_attempts() -> None:
+    with FakeEndpoint([error_reply(500, "boom")] * 4) as fake:
+        run = Run(fake, max_attempts=3)
+        _failed(run)
+    assert len(fake.requests) == 3
+    assert [r.reason for r in run.retries] == ["server", "server"]
+
+
+def test_a_connection_held_with_nothing_sent_is_abandoned_after_the_stream_timeout() -> None:
+    with FakeEndpoint([Reply(lines=[Hold()]), text_reply("ok")]) as fake:
+        run = Run(fake)
+        assert run(stream_timeout=0.3).text == "ok"
+    assert [r.reason for r in run.retries] == ["network"]
+    assert len(fake.requests) == 2
+
+
+# Where the library reads the stream differently (openai-library design D5)
+
+
+def test_a_whole_final_event_the_body_ends_without_its_blank_line_is_retried_as_network() -> None:
+    """Fails on the runner before the openai package, which read such an event as finished
+    (openai-wrong-shape-ends-run design D1): the library dispatches an event only on its blank
+    line, so the response is retried (spec: openai-runner, "A broken stream is retried as a
+    network failure")."""
+    done = json.dumps(final([function_call("c1", "Read", {"file_path": "a"})], used=usage(1, 1)))
+    unfinished = Reply(chunks=[f"data: {done}\n".encode()])
+    with FakeEndpoint([unfinished, text_reply("ok")]) as fake:
+        run = Run(fake)
+        reply = run()
+    assert reply.text == "ok"
+    assert reply.tool_calls == []
+    assert [r.reason for r in run.retries] == ["network"]

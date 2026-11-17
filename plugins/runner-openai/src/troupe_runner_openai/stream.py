@@ -1,30 +1,28 @@
-"""Reading a streamed Responses API response into one reply (openai-style-runner design D4).
+"""Reading a streamed Responses API response, event by event, into one reply (openai-style-runner
+design D4; openai-library design D4, D5).
 
-The stream is server-sent events: an ``event:`` line naming the type, a ``data:`` line holding it as
-JSON (whose ``type`` says the same), and a blank line. There's no ``[DONE]``: the stream ends after
-its final event. The reply is the response object the final event carries, never something built
-from deltas: ``response.completed``, ``response.incomplete`` and ``response.failed`` each carry the
-whole response, its output items, status and usage. An ``error`` event, which a service can send
+The library reads the server-sent events and gives each as a dict, as the service sent it. The
+reply is the response object the final event carries, never something built from deltas:
+``response.completed``, ``response.incomplete`` and ``response.failed`` each carry the whole
+response, its output items, status and usage. An ``error`` event, which a service can send
 mid-stream, is final too. Deltas only show the model working, and are read past.
 
-A stream cut short (it ends without a final event, or ends inside an event whose data isn't whole
-JSON yet) raises StreamError: the partial response is dropped whole, tool calls it had begun
-included, and the request is retried. An event the service finished (its blank line arrived, or its
-data is whole JSON) that can't be read raises ShapeError instead: retrying can't fix a response the
-service finished, so the run ends (openai-wrong-shape-ends-run design D1, D2).
+A stream that ends without a final event raises StreamError: the partial response is dropped whole,
+tool calls it had begun included, and the request is retried. The library dispatches an event only
+on its blank line, so an event the body ended inside, or just before its blank line, never arrives
+and counts as cut short (design D5). A final event that arrived but can't be read raises ShapeError
+instead: retrying can't fix a response the service finished, so the run ends
+(openai-wrong-shape-ends-run design D1, D2).
 
-    parser = StreamParser()
-    for line in response.lines():
-        if parser.feed(line):    # true once the final event is read
+    reader = ReplyReader()
+    for event in opened.events:
+        if reader.feed(event):   # true once the final event is read
             break
-    reply = parser.reply()       # or StreamError (cut short), ShapeError (wrong shape)
+    reply = reader.reply()       # or StreamError (cut short), ShapeError (wrong shape)
 """
 
-import json
 from dataclasses import dataclass
 from typing import Any
-
-from troupe_plugin_sdk import runner as p
 
 FINAL = ("response.completed", "response.incomplete", "response.failed")
 """The events that carry the whole response and end the stream."""
@@ -175,65 +173,20 @@ def read_response(response: dict[str, Any], status: str | None = None) -> Reply:
     )
 
 
-class StreamParser:
-    """Reads one response's stream, line by line, to its final event."""
+class ReplyReader:
+    """Reads one response's events, as the library gives them, to its final event."""
 
     def __init__(self) -> None:
-        self._data: list[str] = []
         self._reply: Reply | None = None
-        self.replaced = 0
-        """How many lone surrogates (escapes in the service's JSON) were read as U+FFFD: the
-        runner records them (host-robustness design D3b)."""
 
-    def feed(self, line: str) -> bool:
-        """Read one line. True once the final event has been read: the caller stops there.
+    def feed(self, event: object) -> bool:
+        """Read one event. True once the final event has been read: the caller stops there.
         Raises ShapeError for an event that can't be read."""
         if self._reply is not None:
             raise ValueError("the stream's final event has already been read")
-        if line == "":
-            return self._dispatch(finished=True)
-        if line.startswith(":"):
-            return False
-        name, _, value = line.partition(":")
-        if name == "data":
-            self._data.append(value.removeprefix(" "))
-        # event:, id: and retry: lines: the data's own type is what's read.
-        return False
-
-    def end(self) -> None:
-        """The body ended: read an event it ended without a blank line after. Raises StreamError
-        when its data isn't whole JSON, since the stream was cut inside it."""
-        if self._data and self._reply is None:
-            self._dispatch(finished=False)
-
-    def reply(self) -> Reply:
-        """The reply, once the stream has ended. Raises StreamError when it was cut short, and
-        ShapeError when its last event can't be read."""
-        self.end()
-        if self._reply is None:
-            raise StreamError("The response's stream ended before the service finished it.")
-        return self._reply
-
-    def _dispatch(self, *, finished: bool) -> bool:
-        """Read the event gathered so far. ``finished`` is whether its blank line arrived; an event
-        without one is finished too once its data is whole JSON (design D1)."""
-        if not self._data:
-            return False
-        data, self._data = "\n".join(self._data), []
-        try:
-            event, replaced = p.unicode_text_counted(json.loads(data))
-            self.replaced += replaced
-        except ValueError:
-            if not finished:
-                raise StreamError(
-                    "The response's stream ended in the middle of an event."
-                ) from None
-            raise ShapeError(
-                f"An event in the response's stream isn't JSON: {data[:200]!r}."
-            ) from None
-        if not isinstance(event, dict) or not isinstance(event.get("type"), str):
+        kind = event.get("type") if isinstance(event, dict) else None
+        if not isinstance(event, dict) or not isinstance(kind, str):
             raise ShapeError("An event in the response's stream has no type.")
-        kind = event["type"]
         if kind in FINAL:
             response = _dict(event.get("response"), f"{kind} event's response")
             try:
@@ -248,15 +201,22 @@ class StreamParser:
             return True
         return False
 
+    def reply(self) -> Reply:
+        """The reply, once the stream has ended. Raises StreamError when it ended before its final
+        event."""
+        if self._reply is None:
+            raise StreamError("The response's stream ended before the service finished it.")
+        return self._reply
+
 
 __all__ = [
     "ERROR",
     "FINAL",
     "Failure",
     "Reply",
+    "ReplyReader",
     "ShapeError",
     "StreamError",
-    "StreamParser",
     "ToolCall",
     "read_response",
 ]
