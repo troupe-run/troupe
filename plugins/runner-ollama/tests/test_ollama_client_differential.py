@@ -10,12 +10,15 @@ only, since that text is the library's.
 import json
 import os
 import socket
+import ssl
 import threading
 import time
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, ClassVar
 
+import httpcore2
 import pytest
 
 from fake_ollama import Answer, FakeOllama, Line, Settings, done, final, message, serving
@@ -25,6 +28,8 @@ from troupe_runner_ollama.client import (
     RetryableError,
     StoppedError,
     UnreachableError,
+    _RecordedStream,
+    _Sockets,
 )
 
 BODY = b'{"model":"fake","messages":[{"role":"user","content":"hi \xc3\xa9"}],"stream":true}'
@@ -391,3 +396,74 @@ def test_close_wakes_a_stream_held_open() -> None:
         assert next(lines) == A
         _closed_within(client, lines, 1.2)
         assert fake.closed_by_client.wait(5)
+
+
+# TLS (design D3)
+
+
+class _RefusingContext(ssl.SSLContext):
+    """The default context's settings, but a handshake through it is recorded and refused."""
+
+    wrapped: ClassVar[list[str | None]] = []
+
+    def wrap_socket(self, *args: Any, **kwargs: Any) -> ssl.SSLSocket:  # noqa: ANN401
+        _RefusingContext.wrapped.append(kwargs.get("server_hostname"))
+        raise ssl.SSLError("refused by the test's context")
+
+
+def test_an_https_endpoint_goes_through_the_runners_own_tls_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The runner's context is ssl.create_default_context(), what http.client used, not httpx2's
+    # truststore default: a handshake through any other context would never reach this one.
+    _RefusingContext.wrapped.clear()
+
+    def refusing() -> ssl.SSLContext:
+        return _RefusingContext(ssl.PROTOCOL_TLS_CLIENT)
+
+    monkeypatch.setattr(ssl, "create_default_context", refusing)
+    with serving() as fake:
+        endpoint = fake.url.replace("http://", "https://")
+        with pytest.raises(UnreachableError, match="refused by the test's context"):
+            Client(endpoint).version(5)
+    assert _RefusingContext.wrapped == ["127.0.0.1"]
+
+
+class _PlainStream(httpcore2.NetworkStream):
+    """A stream over one socket, standing in for httpcore2's own after its TLS handshake."""
+
+    def __init__(self, sock: socket.socket) -> None:
+        self.sock = sock
+
+    def get_extra_info(self, info: str) -> Any:  # noqa: ANN401
+        return self.sock if info == "socket" else None
+
+
+class _Upgrading(_PlainStream):
+    """A connection whose TLS handshake gives a stream on another socket, as wrap_socket does."""
+
+    def __init__(self, sock: socket.socket, upgraded: socket.socket) -> None:
+        super().__init__(sock)
+        self.upgraded = upgraded
+
+    def start_tls(
+        self,
+        ssl_context: ssl.SSLContext,
+        server_hostname: str | None = None,
+        timeout: float | None = None,
+    ) -> httpcore2.NetworkStream:
+        return _PlainStream(self.upgraded)
+
+
+def test_close_shuts_down_the_socket_tls_wraps_a_connection_in() -> None:
+    # TLS hands the connection to a new socket; close has to shut that one, not only the first.
+    sockets = _Sockets()
+    plain, plain_peer = socket.socketpair()
+    upgraded, upgraded_peer = socket.socketpair()
+    with plain, plain_peer, upgraded, upgraded_peer:
+        sockets.add(plain)
+        stream = _RecordedStream(_Upgrading(plain, upgraded), sockets)
+        stream.start_tls(ssl.create_default_context(), "ollama.example")
+        sockets.close()
+        upgraded_peer.settimeout(5)
+        assert upgraded_peer.recv(1) == b""  # the peer sees the upgraded socket shut down

@@ -35,21 +35,23 @@
 
 ## 3. The client on httpx2 (design D3 to D7)
 
-- [ ] 3.1 Write the transport: an `httpx2.BaseTransport` over `httpcore2.ConnectionPool`, with:
+- [x] 3.1 Write the transport: an `httpx2.BaseTransport` over `httpcore2.ConnectionPool`, with:
       - the runner's `ssl.create_default_context()`;
       - `max_keepalive_connections=0` and `retries=0`;
       - a recording `network_backend`;
       - `httpcore2`'s exceptions mapped to `httpx2`'s.
-- [ ] 3.2 Rewrite `Client` on an `httpx2.Client` built with `follow_redirects=False`, `trust_env=False`, that transport
+- [x] 3.2 Rewrite `Client` on an `httpx2.Client` built with `follow_redirects=False`, `trust_env=False`, that transport
       and only the runner's headers (`Content-Type` on a body, `Accept-Encoding: identity`). Keep `version`, `show`,
       `chat`, `close`, `closed` and every failure class and message.
-- [ ] 3.3 Read `chat`'s answer with `iter_raw()`, splitting lines with the `LINE_MAX_BYTES` cap, and refuse a
+- [x] 3.3 Read `chat`'s answer with `iter_raw()`, splitting lines with the `LINE_MAX_BYTES` cap, and refuse a
       `Content-Encoding` other than identity as a network failure.
-- [ ] 3.4 Give each call its `httpx2.Timeout` from `STREAM_IDLE_TIMEOUT_SECONDS`, or the preflight's time left. Make
+- [x] 3.4 Give each call its `httpx2.Timeout` from `STREAM_IDLE_TIMEOUT_SECONDS`, or the preflight's time left. Make
       `close` set the flag, then shut down every recorded socket that's still open.
-- [ ] 3.5 Add a test that an `https` endpoint is checked against the runner's own SSL context: with a context that
-      doesn't trust the fake's certificate, the preflight is `ollama.unreachable`.
-- [ ] 3.6 Run 1.1 and 1.3 unchanged on the new client and see every case pass. Then run the plugin's whole suite
+- [x] 3.5 Add tests for TLS:
+      - an `https` endpoint's handshake goes through the runner's own context: a context that records and refuses
+        `wrap_socket` sees it, and the preflight is unreachable;
+      - `close` shuts down the socket TLS wraps a connection in, not only the first.
+- [x] 3.6 Run 1.1 and 1.3 unchanged on the new client and see every case pass. Then run the plugin's whole suite
       (`test_ollama_client.py`, `test_ollama_runner.py`, `test_ollama_fixtures.py` and the rest), unchanged, and see
       it pass with no fixture re-captured.
 
