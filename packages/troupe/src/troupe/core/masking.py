@@ -223,7 +223,8 @@ class Masker:
             runs = self._covered_runs(text)
             if not runs:
                 return text
-            if not _replace_runs(pieces, runs):
+            # A pass that leaves the record as it was can't end the loop (review of #439).
+            if not _replace_runs(pieces, runs) or "".join(p.text for p in pieces) == text:
                 # Nothing left to replace but troupe's own text, a line break or a prefix: the
                 # whole record becomes the marker, a lone data line keeping its field name. Only
                 # a credential holding troupe's own replacement can still be covered then, and
@@ -448,9 +449,10 @@ def _replace_runs(pieces: list[_Piece], runs: list[tuple[int, int]]) -> bool:
             changed = True
     for index, piece_runs in in_text.items():
         piece = pieces[index]
+        before = piece.text
         for low, high in reversed(piece_runs):
             piece.text = piece.text[:low] + MARKER + piece.text[high:]
-        changed = True
+        changed = changed or piece.text != before
     return changed
 
 

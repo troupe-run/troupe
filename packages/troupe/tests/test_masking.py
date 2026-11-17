@@ -280,3 +280,27 @@ def test_many_spans_across_values_are_replaced_in_a_few_passes(
     record = "[" + ",".join(['["xab","cdefgy"]'] * 500) + "]"
     assert masker.record(record) == "[" + ",".join(['"[credential]"'] * 500) + "]"
     assert passes <= 3
+
+
+def test_a_pass_that_changes_nothing_ends_in_the_whole_record_marker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Review of #439: a credential holding marker text, covered only across a line break and a
+    # text line that is already [credential], made a pass that changed nothing but said it did,
+    # so masking never ended. Passes are counted, so a regression fails rather than hangs.
+    masker = Masker("n[credential]")
+    passes = 0
+    covered = Masker._covered
+
+    def counted(self: Masker, units: list[str | None]) -> set[int]:
+        nonlocal passes
+        passes += 1
+        if passes > 20:
+            raise AssertionError("masking a record didn't end")
+        return covered(self, units)
+
+    monkeypatch.setattr(Masker, "_covered", counted)
+    masked = masker.record('abc\n[credential]\n{"a":1}')
+    assert masked == '"[credential]"'
+    for writing in writings(masked):
+        assert forms_outside_the_marker(masker, writing) == []
