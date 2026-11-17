@@ -22,12 +22,14 @@ library parsed it (``to_dict``), and one of a closed set of failures (failures.p
 are safe to send a credential to is decided here too, beside how they're reached.
 """
 
+import contextlib
 import ipaddress
 import json
 import re
 import ssl
 import urllib.parse
 import urllib.request
+import zlib
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from typing import Any, Final
@@ -193,6 +195,10 @@ class _CappedTransport(httpx2.BaseTransport):
         response = self._inner.handle_request(request)
         encoding = response.headers.get("content-encoding", "").strip().lower()
         if encoding not in ("", "identity"):
+            if not 200 <= response.status_code < 300:
+                # An error's status still counts: its body is read raw, bounded, and decoded only
+                # within that bound, so the run ends for the service's own reason (review of #440).
+                return _bounded_error(response, encoding, request)
             response.close()
             raise EncodedResponseError(
                 f"The service sent its response encoded ({_cut_header(encoding)}), though the "
@@ -206,6 +212,40 @@ class _CappedTransport(httpx2.BaseTransport):
 
     def close(self) -> None:
         self._inner.close()
+
+
+_ZLIB_WINDOWS: Final = {"gzip": 47, "x-gzip": 47, "deflate": 15}
+"""zlib's window bits for each encoding it can decode: 47 reads a gzip or zlib header, 15 zlib."""
+
+
+def _bounded_error(
+    response: httpx2.Response, encoding: str, request: httpx2.Request
+) -> httpx2.Response:
+    """A non-2xx sent encoded, as a plain response: at most ERROR_BODY_MAX_BYTES read from the
+    wire, decoded into at most as many bytes where zlib can, and kept as sent where it can't."""
+    raw = bytearray()
+    assert isinstance(response.stream, httpx2.SyncByteStream)  # noqa: S101 - a sync client's
+    try:
+        for chunk in response.stream:
+            raw += chunk
+            if len(raw) >= ERROR_BODY_MAX_BYTES:
+                break
+    finally:
+        response.close()
+    body = bytes(raw[:ERROR_BODY_MAX_BYTES])
+    window = _ZLIB_WINDOWS.get(encoding)
+    if window is not None:
+        # Kept as sent when it won't decode: the status still says what happened.
+        with contextlib.suppress(zlib.error):
+            body = zlib.decompressobj(window).decompress(body, ERROR_BODY_MAX_BYTES)
+    headers = [(k, v) for k, v in response.headers.items() if k.lower() != "content-encoding"]
+    return httpx2.Response(
+        response.status_code,
+        headers=headers,
+        content=body,
+        request=request,
+        extensions=response.extensions,
+    )
 
 
 def _cut_header(value: str, limit: int = 100) -> str:
