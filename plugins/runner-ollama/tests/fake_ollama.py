@@ -49,7 +49,8 @@ class Answer:
     """Send nothing at all, not even the status, until the client goes away or the server stops:
     Ollama loading a model before it answers."""
     headers: Mapping[str, str] = field(default_factory=dict)
-    """Headers to send with an answer whose status isn't 200, such as a redirect's Location."""
+    """Headers to send with the answer, whatever its status: a redirect's Location, or a streamed
+    answer's Content-Encoding."""
     model: str | None = None
     """The model the answer's built lines name. None: the model the request asked for, as Ollama
     echoes it. Recorded lines (bytes) are sent as recorded."""
@@ -334,6 +335,8 @@ class FakeOllama:
 
     def _stream(self, handler: BaseHTTPRequestHandler, answer: Answer, asked: object) -> None:
         handler.send_response(200)
+        for name, value in answer.headers.items():
+            handler.send_header(name, value)
         handler.send_header("Content-Type", "application/x-ndjson")
         handler.send_header("Transfer-Encoding", "chunked")
         handler.end_headers()

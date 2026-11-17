@@ -467,3 +467,31 @@ def test_close_shuts_down_the_socket_tls_wraps_a_connection_in() -> None:
         sockets.close()
         upgraded_peer.settimeout(5)
         assert upgraded_peer.recv(1) == b""  # the peer sees the upgraded socket shut down
+
+
+# Bytes as Ollama sent them (design D3, D5)
+
+
+def test_every_request_asks_for_its_answer_unencoded() -> None:
+    with serving([final("hi")]) as fake:
+        client = Client(fake.url)
+        client.version(5)
+        client.show("fake", 5)
+        list(client.chat(BODY))
+    assert [(r.path, r.headers.get("accept-encoding")) for r in fake.requests] == [
+        ("/api/version", "identity"),
+        ("/api/show", "identity"),
+        ("/api/chat", "identity"),
+    ]
+
+
+def test_an_answer_sent_encoded_is_refused_as_a_network_failure_never_read_as_lines() -> None:
+    answer = Answer([A, DONE], headers={"Content-Encoding": "gzip"})
+    with serving([answer]) as fake:
+        lines = Client(fake.url).chat(BODY)
+        with pytest.raises(RetryableError) as caught:
+            next(lines)
+    assert caught.value.reason == "network"
+    assert caught.value.message == (
+        "Ollama sent its answer encoded as 'gzip', though the runner asked for it unencoded"
+    )
