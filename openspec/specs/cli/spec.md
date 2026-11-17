@@ -483,7 +483,7 @@ a usage error.
 - **THEN** `.troupe/actors/lead.yaml` names the runner `ollama`
 
 #### Scenario: The OpenAI runner
-- **WHEN** a person runs `troupe init --audition --runner openai`
+- **WHEN** a person runs `troupe init --audition --runner openai` with its extra installed
 - **THEN** `.troupe/actors/lead.yaml` names the runner `openai`, and config's `actors.lead.runtime` is `openai`
 
 #### Scenario: The Anthropic runner
@@ -514,6 +514,11 @@ a usage error.
 #### Scenario: The Ollama runner when it isn't installed
 - **WHEN** a person runs `troupe init --audition --runner ollama` without its extra installed
 - **THEN** it fails with `runner.not-installed`, naming `ollama` and `troupe-run[ollama]`
+- **AND** no `.troupe/` is made
+
+#### Scenario: The OpenAI runner when it isn't installed
+- **WHEN** a person runs `troupe init --audition --runner openai` without its extra installed
+- **THEN** it fails with `runner.not-installed`, naming `openai` and `troupe-run[openai]`
 - **AND** no `.troupe/` is made
 
 #### Scenario: A runner without an audition

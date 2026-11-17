@@ -118,6 +118,14 @@ as a network failure, naming the limit. An error sent encoded SHALL end the run 
 - **THEN** no `retry` is sent, and the run ends with an `error` result with `reason` `authentication`, holding the
   service's message
 
+### Requirement: Only the runner retries
+The library's own retries SHALL be off, so the only retries a request gets are the runner's, within its named
+maximum attempts, each reported as a `retry` event.
+
+#### Scenario: Only the runner retries
+- **WHEN** every request is answered 500 and the runner's maximum attempts is 5
+- **THEN** the fake endpoint receives exactly 5 requests, and the runner sends 4 `retry` events
+
 ### Requirement: A body read whole stops at a named limit
 A body the runner reads whole, an error's or a successful answer's that isn't a stream, SHALL be read no further than
 the runner's named body limit, beneath the library, however its lines are split, and the run SHALL end as that status
@@ -129,30 +137,6 @@ or answer says.
   with `reason` `authentication`
 
 ## MODIFIED Requirements
-
-### Requirement: Transient failures are retried and reported
-A request that fails with a rate limit (429), a server error (500 or above), a network error or a timeout SHALL be
-retried up to the runner's named maximum attempts, with a growing delay, each retry reported first as a `retry` event
-with reason `rate-limit`, `server` or `network`. A server error's `Retry-After` SHALL set its delay, up to the runner's
-named maximum delay. When the attempts run out, the run SHALL end with an `error` result. The library's own retries
-SHALL be off, so these are the only retries.
-
-#### Scenario: A server error, then success
-- **WHEN** the first request is answered 503 and the second succeeds
-- **THEN** a `retry` event with attempt 1, reason `server` and the delay comes before the second request, and the run
-  goes on
-
-#### Scenario: Retries run out
-- **WHEN** every attempt is answered 500
-- **THEN** after the last attempt the run ends with an `error` result naming the status and the attempts made
-
-#### Scenario: A server error asking a long wait
-- **WHEN** a request is answered 503 with `Retry-After: 120`
-- **THEN** the `retry` event has reason `server` and the runner's maximum delay, and the request is sent again
-
-#### Scenario: Only the runner retries
-- **WHEN** every request is answered 500 and the runner's maximum attempts is 5
-- **THEN** the fake endpoint receives exactly 5 requests, and the runner sends 4 `retry` events
 
 ### Requirement: A broken stream is retried as a network failure
 A response stream cut short SHALL be dropped whole, including any tool calls it had begun, and the request retried as

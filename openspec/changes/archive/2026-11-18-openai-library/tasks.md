@@ -63,8 +63,12 @@ onto main. #332 (Ollama) edits the same extras and docs in parallel: whichever m
   import contract, `uv run lint-imports`).
 - [x] 4.2 Run the whole check once, when the load is under ~40 (`uptime` first). Verify: `uv run scripts/check.py`
   passes, its full output kept in the scratchpad.
-- [ ] 4.3 Ask the owner, through the orchestrator, to run the live test (`TROUPE_LIVE_OPENAI=1`) with their key, or
+- [x] 4.3 Ask the owner, through the orchestrator, to run the live test (`TROUPE_LIVE_OPENAI=1`) with their key, or
   to say to go without it. Verify: the owner's result, or their word, is recorded on the pull request.
+  Done: the owner ran it on 2026-11-18 (07:49 AEST, on the branch before its rebase onto #441): 1 passed in 7.43 s
+  against `https://api.openai.com/v1` with `gpt-6-luna`, outcome `succeeded`, events `init`, two `tool_call` and
+  `tool_result` pairs, `turn`, `result`; usage `inputTokens` 9, `cacheReadTokens` 2170, `cacheWriteTokens` 1142,
+  `outputTokens` 51 (input less both cache counters, as the spec's usage requirement says).
 
 ## Workflow follow-up
 
