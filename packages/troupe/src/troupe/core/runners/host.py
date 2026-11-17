@@ -168,10 +168,12 @@ def _masked_message(mask: Masker, data: object) -> object:
     if not isinstance(record, str):
         return mask.data(data)
     message = mask.data({**data, "params": {**params, "record": ""}})
-    masked_params = message.get(mask.text("params")) if isinstance(message, dict) else None
-    if not isinstance(masked_params, dict):
-        raise RuntimeError("masking changed a message's shape")
-    # The record's key, masked as data masked it: the same place among params' keys.
+    if not isinstance(message, dict) or len(message) < len(data):
+        return message  # two keys masked into one: _merged_keys makes it a violation
+    # Masking keeps each object's keys in order, so a key's masked form is at its own place.
+    masked_params = list(message.values())[list(data).index("params")]
+    if not isinstance(masked_params, dict) or len(masked_params) < len(params):
+        return message  # the same, in params (review of #439)
     key = list(masked_params)[list(params).index("record")]
     masked_params[key] = mask.record(record)
     return message
