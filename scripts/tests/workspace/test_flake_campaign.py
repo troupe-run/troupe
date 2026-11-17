@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 
 import pytest
-from conftest import git, run_within, stop_tree
+from conftest import git, run_with_progress, run_within, stop_tree
 
 import flake_campaign
 from flake_campaign import CampaignError, Hunt
@@ -22,9 +22,10 @@ SCRIPT = Path(flake_campaign.__file__)
 WINDOWS = sys.platform == "win32"
 RUNNING = f"{sys.version_info.major}.{sys.version_info.minor}"
 
-HUNT_RUN_WITHIN = 120.0
-"""Seconds for one of these tests' small hunts to run to its end on a slow machine. Past it, the
-hunt's whole tree is stopped and the test fails with its output so far."""
+HUNT_ROUND_WITHIN = 120.0
+"""Seconds between a small hunt's lines (its start, each round's result, its summary) on a slow
+machine: about one round. The bound is on each round, not the whole hunt (#397). Past it, the
+hunt's whole tree is stopped and the test fails naming the last line it saw."""
 CAMPAIGN_RUN_WITHIN = 600.0
 """Seconds for a one-hunt direct campaign to run to its end, syncing its environment included."""
 CAMPAIGN_START_WITHIN = 300.0
@@ -192,13 +193,14 @@ def run_a_hunt(tmp_path: Path, files: dict[str, str], rounds: int) -> Path:
     for name, text in files.items():
         (root / name).write_text(textwrap.dedent(text), encoding="utf-8")
     out = tmp_path / "hunt"
-    run_within(
+    run_with_progress(
         [
             sys.executable,
             str(SCRIPT.parent / "flake_hunt.py"),
             *["--root", str(root), "--out", str(out), "--rounds", str(rounds)],
         ],
-        HUNT_RUN_WITHIN,
+        HUNT_ROUND_WITHIN,
+        waiting_for="the hunt's next line (a round's result or its summary)",
     )
     return out
 
