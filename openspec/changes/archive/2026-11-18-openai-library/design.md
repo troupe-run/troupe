@@ -95,6 +95,13 @@ async client: the runner's threads already work with the sync one, as the Anthro
   connects to the location.
 - `max_retries=0`; the runner's loop (`exchange.py`) retries exactly as today: 429 with `Retry-After` within the cap,
   5xx, network errors, timeouts and cut streams, with its named attempts and backoff.
+- **Headers** (owner, 2026-11-18): each request leaves with only the headers it needs (`SENT_HEADERS`: `Host`,
+  `Content-Type`, `Content-Length` or `Transfer-Encoding`, `Accept`, `Accept-Encoding`, `Connection`,
+  `Authorization` when there's a credential, and `User-Agent`, set to the runner's own `troupe-runner-openai/<version>`
+  as before the library). The transport removes every other header the library or its client adds, the library's
+  `X-Stainless-*` telemetry (OS, CPU architecture, Python and package versions, retry count, read timeout) included,
+  so a header a later version of the library adds is stripped too rather than sent: an allowlist, not a list of
+  headers to remove, for that reason. A test inspects the headers the fake endpoint receives.
 - Timeouts: one `httpx2.Timeout` from named settings, given to both the client and the library, so the library's
   ten-minute default never applies: connect `CONNECT_TIMEOUT_SECONDS` (30), pool the same, read
   `STREAM_TIMEOUT_SECONDS` (120), write `WRITE_TIMEOUT_SECONDS` (new, 30). Today the connect timeout also covered
@@ -227,5 +234,5 @@ at import). Serialiser warnings are off at the source (D4).
 - **The transcript loses the SSE framing** (D6). → What #319 chose; the events keep every field.
 - **Cancel ends the process mid-request** (D8). → One run per process; the same as the Anthropic runner, and the
   service sees the connection closed, as the spec asks.
-- **The library's headers** (`X-Stainless-*`, its `User-Agent`) now reach the service: OS, architecture and Python
-  version. → Not a credential or anything of the person's; OpenAI's own clients send them.
+- **The library's telemetry headers** (`X-Stainless-*`: OS, CPU architecture, Python and package versions) would reach
+  the service. → Stripped by the transport, which sends only the headers a request needs (D3; owner, 2026-11-18).

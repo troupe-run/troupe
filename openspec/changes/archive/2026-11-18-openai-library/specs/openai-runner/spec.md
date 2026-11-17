@@ -136,6 +136,16 @@ or answer says.
 - **THEN** the runner reads no further than its body limit, sends no `retry`, and the run ends with an `error` result
   with `reason` `authentication`
 
+### Requirement: Each request carries only the headers it needs
+Each request the runner sends SHALL carry only the headers the request needs, named in one place in the runner, with
+the runner's own `User-Agent`. No header the library or its HTTP client adds for its own reasons, such as the
+library's telemetry naming the operating system, CPU architecture, Python version or package version, SHALL leave the
+runner.
+
+#### Scenario: The headers a request carries
+- **WHEN** the fake endpoint receives a run's request
+- **THEN** its headers are only those the runner names, its `User-Agent` is the runner's, and none starts `X-`
+
 ## MODIFIED Requirements
 
 ### Requirement: A broken stream is retried as a network failure

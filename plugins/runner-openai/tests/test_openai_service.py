@@ -15,6 +15,8 @@ import pytest
 from fake_endpoint import Cut, FakeEndpoint, Hold, Pause, Reply, error_reply, sse, text_reply
 from troupe_runner_openai import defaults
 from troupe_runner_openai.service import (
+    SENT_HEADERS,
+    USER_AGENT,
     EndpointError,
     NetworkError,
     NotAStreamError,
@@ -503,3 +505,25 @@ def test_a_2xx_body_that_isnt_a_stream_is_read_no_further_than_the_body_limit() 
 
 def test_the_body_limit_by_default_is_the_named_setting() -> None:
     assert defaults.ERROR_BODY_MAX_BYTES == 1024 * 1024
+
+
+def test_each_request_carries_only_the_headers_it_needs_and_none_of_the_librarys_telemetry() -> (
+    None
+):
+    """Owner, 2026-11-18: no X-Stainless-* header (OS, CPU, Python and package versions) or any
+    other the library adds leaves the runner."""
+    with FakeEndpoint([text_reply("hi")]) as fake:
+        _drain(fake.endpoint, KEY)
+        (request,) = fake.requests
+    assert set(request.headers) <= SENT_HEADERS
+    assert not any(name.startswith("x-") for name in request.headers)
+    assert request.headers["user-agent"] == USER_AGENT
+    assert request.headers["authorization"] == f"Bearer {KEY}"
+    assert request.headers["content-type"] == "application/json"
+
+
+def test_without_a_credential_the_headers_are_the_same_but_authorization() -> None:
+    with FakeEndpoint([text_reply("hi")]) as fake:
+        _drain(fake.endpoint)
+        (request,) = fake.requests
+    assert set(request.headers) <= SENT_HEADERS - {"authorization"}
