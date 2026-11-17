@@ -348,6 +348,17 @@ forbidden_modules = ["anthropic", "httpx2", "httpcore2", "http", "socket", "ssl"
 ignore_imports = ["troupe_runner_anthropic.service -> *"]
 
 [[tool.importlinter.contracts]]
+# The Ollama runner reaches Ollama only through httpx2, from one module, so how it talks to Ollama (no redirects, no
+# proxy or credential from the environment, the named timeouts, no retries of the library's, a close that wakes the
+# request in flight) is decided in one place (ollama-library design D2 to D4). urllib isn't listed: client.py and
+# runtime.py parse the endpoint with urllib.parse, which does no I/O.
+name = "only the Ollama runner's client module imports httpx2 or does network I/O"
+type = "forbidden"
+source_modules = ["troupe_runner_ollama"]
+forbidden_modules = ["httpx2", "httpcore2", "http", "socket", "ssl"]
+ignore_imports = ["troupe_runner_ollama.client -> *"]
+
+[[tool.importlinter.contracts]]
 # The mistralrs runner loads the engine from one module, imported only after the entry point has moved fd 1 off the
 # protocol channel, so nothing the engine writes reaches troupe's messages, and how the runner uses the engine is
 # decided in one place (in-process-runner design D3, D10). It does no network I/O.

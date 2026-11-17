@@ -187,6 +187,9 @@ RUNNERS: dict[str, Runner] = {
         # No variables: the runner reads none, not even OLLAMA_HOST. Its endpoint and model are
         # its runtime's, which reach it in run/start (ollama-uses-runtime design D1).
         runtime="required",
+        # httpx2, which it reaches Ollama through, comes with troupe-run[ollama], not the base
+        # install (runner-extras design D1, D5; ollama-library design D2).
+        in_extra=True,
         # It sends no credential, and adds /api/... to an endpoint at the root (its design D3, D4).
         fit=RuntimeFit(credential=False, path="none", endpoint="required", built_in="ollama"),
     ),

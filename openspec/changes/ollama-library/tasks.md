@@ -22,15 +22,15 @@
 
 ## 2. The dependencies and the extra (design D2, D9)
 
-- [ ] 2.1 Add `httpx2==2.16.0` and `httpcore2==2.16.0` to `plugins/runner-ollama/pyproject.toml`, with the comment
+- [x] 2.1 Add `httpx2==2.16.0` and `httpcore2==2.16.0` to `plugins/runner-ollama/pyproject.toml`, with the comment
       saying why (#319, #332, this design). Run `uv lock`, then check the lockfile package by package: every package is
       already locked, so only the plugin's own entry may change.
-- [ ] 2.2 Move `troupe-runner-ollama` from `troupe-run`'s `dependencies` to an `ollama` extra and to `all`. Set
+- [x] 2.2 Move `troupe-runner-ollama` from `troupe-run`'s `dependencies` to an `ollama` extra and to `all`. Set
       `in_extra=True` on `interim.RUNNERS["ollama"]`, with its comment. Update core's tests that list which runners
       are extras.
-- [ ] 2.3 Run `scripts/runner_licences.py` and the bundle check, and see both pass with `scripts/licences.toml`
+- [x] 2.3 Run `scripts/runner_licences.py` and the bundle check, and see both pass with `scripts/licences.toml`
       unchanged.
-- [ ] 2.4 Add an import-linter contract that only `troupe_runner_ollama.client` imports `httpx2` or `httpcore2`. See
+- [x] 2.4 Add an import-linter contract that only `troupe_runner_ollama.client` imports `httpx2` or `httpcore2`. See
       it fail on a stray import, then pass.
 
 ## 3. The client on httpx2 (design D3 to D7)
