@@ -183,3 +183,80 @@ def test_a_large_masked_string_holds_the_credential_nowhere_outside_the_marker(
         assert forms_outside_the_marker(masker, writing) == []
     if not any(form in writing for writing in writings(text) for form in masker.forms):
         assert masked == text
+
+
+# A transcript record that is JSON stays JSON (transcript-masking design D1 to D4, #438)
+
+ESCAPE_KEY = "nsecret-token-0123456789"
+"""A credential that starts with n, the letter JSON's escape for a newline ends with."""
+
+
+def test_a_record_that_is_json_with_an_escape_before_the_credential_stays_json() -> None:
+    record = '{"type":"assistant","text":"key:\\nsecret-token-0123456789"}'
+    masked = Masker(ESCAPE_KEY).record(record)
+    assert masked == '{"type":"assistant","text":"key:[credential]"}'
+    json.loads(masked)
+
+
+def test_a_record_keeps_its_spacing_duplicate_keys_and_numbers_byte_for_byte() -> None:
+    record = (
+        '{ "a" : 1.50, "a":2,\n  "t": "x\\u00e9\\nsecret-token-0123456789", "b": [true, null] }'
+    )
+    masked = Masker(ESCAPE_KEY).record(record)
+    assert masked == '{ "a" : 1.50, "a":2,\n  "t": "xé[credential]", "b": [true, null] }'
+
+
+def test_a_number_that_holds_the_credential_becomes_the_marker_string() -> None:
+    masked = Masker("12345678").record('{"n": 9123456789, "m": 1.5}')
+    assert masked == '{"n": "[credential]", "m": 1.5}'
+
+
+def test_a_lone_surrogate_escape_in_a_masked_string_stays_an_escape() -> None:
+    masked = Masker(ESCAPE_KEY).record('["\\ud800\\nsecret-token-0123456789"]')
+    assert masked == '["\\ud800[credential]"]'
+    masked.encode("utf-8")
+
+
+def test_a_credential_across_two_values_replaces_the_smallest_value_holding_it() -> None:
+    masked = Masker('ab","cdefg').record('{"keep": [1, 2], "x": [1,["xab","cdefgy"],2]}')
+    assert masked == '{"keep": [1, 2], "x": [1,"[credential]",2]}'
+
+
+def test_a_credential_reaching_into_a_data_lines_field_name_replaces_the_lines_value() -> None:
+    assert Masker('ta: {"ke').record('data: {"key":1}') == 'data: "[credential]"'
+
+
+def test_a_streamed_data_line_is_masked_as_json() -> None:
+    masked = Masker(ESCAPE_KEY).record('data: {"delta":"\\nsecret-token-0123456789"}')
+    assert masked == 'data: {"delta":"[credential]"}'
+
+
+def test_only_the_json_line_that_held_the_credential_changes() -> None:
+    record = '{"a":"\\t"}\n{"b":"\\nsecret-token-0123456789"}\n["c"]\n'
+    masked = Masker(ESCAPE_KEY).record(record)
+    assert masked == '{"a":"\\t"}\n{"b":"[credential]"}\n["c"]\n'
+
+
+def test_an_sse_event_masks_its_data_line_and_keeps_the_rest() -> None:
+    record = 'event: delta\ndata: {"t":"\\nsecret-token-0123456789"}\n\n'
+    masked = Masker(ESCAPE_KEY).record(record)
+    assert masked == 'event: delta\ndata: {"t":"[credential]"}\n\n'
+
+
+def test_a_record_that_isnt_json_is_masked_as_a_string_is() -> None:
+    text = "key:\nsecret-token-0123456789 and more"
+    assert Masker(ESCAPE_KEY).record(text) == Masker(ESCAPE_KEY).text(text)
+    assert Masker(ESCAPE_KEY).record("12345678") == "12345678"
+    assert Masker("12345678").record("12345678") == MARKER
+
+
+def test_a_record_that_cant_hold_the_credential_is_returned_as_it_is() -> None:
+    record = '{"t":"\\n plain"}'
+    assert Masker(ESCAPE_KEY).record(record) is record
+
+
+def test_a_base64_record_is_masked_as_json_only_when_it_is_json_text() -> None:
+    masker = Masker(ESCAPE_KEY)
+    assert masker.record_bytes(b'{"t":"\\nsecret-token-0123456789"}') == b'{"t":"[credential]"}'
+    for data in (b"\xff\\nsecret-token-0123456789", b"x\\nsecret-token-0123456789"):
+        assert masker.record_bytes(data) == masker.bytes(data)
