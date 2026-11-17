@@ -451,3 +451,55 @@ def test_an_error_in_an_encoding_zlib_cant_read_keeps_its_status_and_raw_body() 
         _encoded_error(404, "br", b"\x8b\x00not-brotli").stream(PARAMS)
     assert raised.value.status == 404
     assert raised.value.body == b"\x8b\x00not-brotli"
+
+
+def _endless(status: int, content_type: str, read: list[int]) -> httpx2.MockTransport:
+    """A transport answering ``status`` with a body of short lines that never ends, counting
+    each piece it's asked for."""
+
+    def answer(_: httpx2.Request) -> httpx2.Response:
+        def body() -> Iterator[bytes]:
+            while True:
+                read.append(1)
+                yield b"short line\n"
+
+        return httpx2.Response(status, headers={"content-type": content_type}, content=body())
+
+    return httpx2.MockTransport(answer)
+
+
+@pytest.mark.parametrize("status", [401, 500])
+def test_an_error_body_of_many_short_lines_is_read_no_further_than_the_body_limit(
+    status: int,
+) -> None:
+    """Review of #440: the line cap bounds one line, not a whole body read at once."""
+    read: list[int] = []
+    service = Service(
+        parse_endpoint("http://127.0.0.1:9/v1"),
+        None,
+        transport=_endless(status, "application/json", read),
+        body_max_bytes=1000,
+    )
+    with pytest.raises(StatusError) as raised:
+        service.stream(PARAMS)
+    assert raised.value.status == status
+    assert len(raised.value.body) == 1000
+    assert len(read) <= 1000 // len(b"short line\n") + 1
+
+
+def test_a_2xx_body_that_isnt_a_stream_is_read_no_further_than_the_body_limit() -> None:
+    read: list[int] = []
+    service = Service(
+        parse_endpoint("http://127.0.0.1:9/v1"),
+        None,
+        transport=_endless(200, "application/json", read),
+        body_max_bytes=1000,
+    )
+    with pytest.raises(NotAStreamError) as raised:
+        service.stream(PARAMS)
+    assert len(raised.value.body) == 1000
+    assert len(read) <= 1000 // len(b"short line\n") + 1
+
+
+def test_the_body_limit_by_default_is_the_named_setting() -> None:
+    assert defaults.ERROR_BODY_MAX_BYTES == 1024 * 1024
