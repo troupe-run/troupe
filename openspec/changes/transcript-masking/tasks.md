@@ -41,7 +41,7 @@
 
 - [x] 4.1 Check the delta specs match what was built (`openspec validate transcript-masking --strict`), and update the
   masking docstrings (`masking.py` module docstring, `framed_record`, the host's mask comment). Verify: validate passes.
-- [ ] 4.2 Run the full check (`uv run scripts/check.py`, output kept in a scratch file) and one
+- [x] 4.2 Run the full check (`uv run scripts/check.py`, output kept in a scratch file) and one
   `scripts/flake_hunt.py --load 2` over the new property test, when load is under ~40. Verify: both pass.
 
 ## Workflow follow-up
