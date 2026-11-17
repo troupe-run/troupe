@@ -31,7 +31,8 @@ troupe ships six runners:
   ([Runners that come as extras](../opening-night/install.md#runners-that-come-as-extras)).
 
 - **The OpenAI runner** runs an OpenAI model through its Responses API, or a model on any service that serves that API
-  (local Ollama does), with troupe's own tool loop, checked against the actor's effects. Its service comes from a
+  (local Ollama does), with troupe's own tool loop, checked against the actor's effects. It comes with
+  `troupe-run[openai]` ([Install](../opening-night/install.md#runners-that-come-as-extras)). Its service comes from a
   [runtime](runtimes.md), and its key from your environment, never from config. A run costs money on OpenAI, within
   the limits its options set (`maxTurns`, `maxTotalTokens`)
   ([Try it on OpenAI](../opening-night/first-performance.md#try-it-on-openai)).
