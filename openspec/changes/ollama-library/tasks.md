@@ -71,9 +71,9 @@
 
 ## 5. Verification
 
-- [ ] 5.1 Check `uptime`, and with the 1-minute load under ~40, run `uv run scripts/check.py`, with its output to a
+- [x] 5.1 Check `uptime`, and with the 1-minute load under ~40, run `uv run scripts/check.py`, with its output to a
       scratch file, and see it pass.
-- [ ] 5.2 Run the conformance suite and core's Ollama host tests (`test_ollama_host.py`, `test_perform_ollama.py`,
+- [x] 5.2 Run the conformance suite and core's Ollama host tests (`test_ollama_host.py`, `test_perform_ollama.py`,
       `test_runner_conformance.py`), and see them pass.
-- [ ] 5.3 With a local Ollama available, run `TROUPE_LIVE_OLLAMA=1` for the live test. Otherwise say it wasn't run.
-- [ ] 5.4 `openspec validate ollama-library --strict`.
+- [x] 5.3 With a local Ollama available, run `TROUPE_LIVE_OLLAMA=1` for the live test. Otherwise say it wasn't run.
+- [x] 5.4 `openspec validate ollama-library --strict`.
