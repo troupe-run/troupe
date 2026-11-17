@@ -57,16 +57,16 @@
 
 ## 4. Specs, docs and the README (design D9)
 
-- [ ] 4.1 Update the plugin's README: install with `troupe-run[ollama]`, its HTTP client's settings (no redirects,
+- [x] 4.1 Update the plugin's README: install with `troupe-run[ollama]`, its HTTP client's settings (no redirects,
       proxies, `.netrc` or retries of its own; the system trust store), and the limits table saying the timeouts are
       the HTTP client's.
-- [ ] 4.2 Update the install page's extras list, `first-performance.md` (install the extra before the audition),
+- [x] 4.2 Update the install page's extras list, `first-performance.md` (install the extra before the audition),
       `bring-your-own-agent.md`, `docs/prompt-book/cli.md` if it says how to get the runner, and
       `contributing/runners.md`'s "Mapping an engine: Ollama" (`httpx2`, and why not `ollama`). Run the docs check.
-- [ ] 4.3 Add tests for the `cli` scenarios: `troupe init --audition --runner ollama` refused with
+- [x] 4.3 Add tests for the `cli` scenarios: `troupe init --audition --runner ollama` refused with
       `runner.not-installed` naming `troupe-run[ollama]` when the plugin isn't importable, and the audition notes
       naming the extra when it is.
-- [ ] 4.4 Add a test for the `ollama-runner` spec's dependency and extra scenarios: the plugin's dependencies and
+- [x] 4.4 Add a test for the `ollama-runner` spec's dependency and extra scenarios: the plugin's dependencies and
       `troupe-run`'s extras, as read from their `pyproject.toml` files.
 
 ## 5. Verification

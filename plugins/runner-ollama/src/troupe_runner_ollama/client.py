@@ -8,8 +8,9 @@ request in flight from another thread, which wakes a blocked read on every platf
 httpx2 decides nothing for the runner (ollama-library design D3):
 
 - **No redirect** is followed: a 3xx is a status like any other.
-- **Nothing from the environment**: no proxy, no ``.netrc`` login, no certificate variables
-  (``trust_env=False``), and no credential at all.
+- **Nothing from the environment**: no proxy, no ``.netrc`` login, no certificate variables, and
+  no credential at all. The transport and TLS context are the runner's own, which httpx2 applies
+  no proxy to, and ``trust_env`` is off as well.
 - **TLS** uses ``ssl.create_default_context()``, the context http.client used before.
 - **No retries** of its own, and **no keep-alive**: each request has its own connection, which
   ``close`` can shut.

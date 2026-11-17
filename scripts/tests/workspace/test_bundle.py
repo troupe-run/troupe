@@ -362,3 +362,12 @@ def test_a_missing_runner_table_is_named(copy: Path) -> None:
         f"{RUNNER_TABLE} doesn't exist, or has no RUNNERS table: the bundle check reads each "
         "runner's name, and whether it's in an extra, from it."
     ]
+
+
+def test_the_ollama_runner_is_in_its_extra_and_all_and_not_the_base_install() -> None:
+    """ollama-runner: "The plugin's extra" (ollama-library design D9)."""
+    project = tomllib.loads((REPO / BUNDLE_PYPROJECT).read_text(encoding="utf-8"))["project"]
+    extras = project["optional-dependencies"]
+    assert names(extras["ollama"]) == ["troupe-runner-ollama"]
+    assert "troupe-runner-ollama" in names(extras["all"])
+    assert "troupe-runner-ollama" not in names(project["dependencies"])

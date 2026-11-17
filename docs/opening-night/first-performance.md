@@ -164,7 +164,9 @@ and troupe checks it did: the actor's `expect` names the file, and a run that di
 
 troupe ships a third runner, the Ollama runner, which runs a model on your own computer through
 [Ollama](https://ollama.com). It needs no account and no credential, costs nothing per run, and works offline once
-the model is downloaded. You need Ollama 0.12.6 or later, running. Try it in a new git repository:
+the model is downloaded. You need Ollama 0.12.6 or later, running, and the runner, which comes as the
+`troupe-run[ollama]` extra: install it as [Runners that come as extras](install.md#runners-that-come-as-extras)
+shows. Try it in a new git repository:
 
 ```sh
 ollama pull qwen3.5:4b
