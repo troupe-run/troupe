@@ -1,39 +1,54 @@
-"""Talking to a Responses API service: the runner's only network I/O (openai-style-runner design
-D3).
+"""The one module that uses the openai package: talking to a Responses API service (openai-library
+design D1-D4a).
 
-Requests go through the standard library's urllib, which honours HTTPS_PROXY and NO_PROXY and the
-platform's TLS trust store (or SSL_CERT_FILE and SSL_CERT_DIR). Redirects are refused, never
-followed, so neither the credential nor the conversation reaches a host the runtime didn't name. A
-loopback endpoint never goes through a proxy, which couldn't reach this machine's own server.
+Everything the library would decide for itself, the runner decides here instead:
 
-Which endpoints are safe to send a credential to is decided here too, beside how they're reached.
+- **Its HTTP client** is the runner's own ``httpx2.Client``: it follows no redirect (the library's
+  own client follows them), its timeouts are the runner's named settings (the library's default is
+  ten minutes), and its transport counts each line of a response as it arrives, refusing one past
+  STREAM_LINE_MAX_BYTES before more is buffered (design D4a). Proxies and certificates are read as
+  urllib reads them: ``HTTPS_PROXY`` and ``NO_PROXY`` through the standard library, no proxy for an
+  endpoint on this machine, and the platform's trust store or ``SSL_CERT_FILE``/``SSL_CERT_DIR``.
+- **Its retries** are off (``max_retries=0``): the runner retries in its own loop (exchange.py).
+- **Its credential** is the runtime's, given explicitly, or none: with none, the library gets a
+  placeholder it never sends, since every request omits ``Authorization`` (design D2).
+- **Its environment.** The library reads ``OPENAI_*`` variables for whatever it isn't given, so
+  the runner removes every one from its own environment before it builds the client (library.py).
 
-    call = Call(endpoint, body, credential)
-    response = call.open()       # or raises StatusError / NetworkError
-    for line in response.lines(): ...
-    call.abort()                 # from any thread: a blocked read wakes and raises AbortedError
+The rest of the runner sees plain data: a request's parameters as a dict, each stream event as the
+library parsed it (``to_dict``), and one of a closed set of failures (failures.py). Which endpoints
+are safe to send a credential to is decided here too, beside how they're reached.
 """
 
-import contextlib
-import http.client
 import ipaddress
-import socket
+import json
+import re
 import ssl
-import threading
-import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Final
 
-from troupe_runner_openai import NAME, __version__
+import httpx2
+import openai
+
 from troupe_runner_openai.defaults import (
     CONNECT_TIMEOUT_SECONDS,
     ERROR_BODY_MAX_BYTES,
     STREAM_LINE_MAX_BYTES,
     STREAM_TIMEOUT_SECONDS,
+    WRITE_TIMEOUT_SECONDS,
 )
+from troupe_runner_openai.failures import (
+    NetworkError,
+    NotAStreamError,
+    Opened,
+    ServiceError,
+    StatusError,
+    UnreadableError,
+)
+from troupe_runner_openai.library import clear_library_environment
 
 RESPONSES_PATH = "/responses"
 """Where a Responses API request goes, below the runtime's endpoint."""
@@ -112,232 +127,236 @@ def is_loopback(host: str) -> bool:
         return False
 
 
-# Failures
+# The line cap, beneath the library (design D4a)
+
+_LINE_END: Final = re.compile(rb"[\r\n]")
 
 
-class StatusError(Exception):
-    """The service answered with a status other than 2xx, redirects included."""
-
-    def __init__(self, status: int, headers: Mapping[str, str], body: bytes) -> None:
-        super().__init__(f"HTTP {status}")
-        self.status = status
-        self.headers = dict(headers)
-        """By lower-case name."""
-        self.body = body
+class LineTooLongError(httpx2.ReadError):
+    """A line of a response's body ran past the runner's cap. The library reports it as a broken
+    connection, which the runner retries as a network failure."""
 
 
-class NetworkError(Exception):
-    """The request didn't get a whole answer: it couldn't connect, timed out, or the stream broke.
-    The message says which, in words a person can act on."""
+class _CappedStream(httpx2.SyncByteStream):
+    """A response's body, read through as it arrives, with the bytes since the last line ending
+    counted, so a line past ``limit`` is refused as soon as it is."""
 
+    def __init__(self, inner: httpx2.SyncByteStream, limit: int) -> None:
+        self._inner = inner
+        self._limit = limit
+        self._run = 0
+        """Bytes since the last line ending."""
 
-class AbortedError(Exception):
-    """The call was aborted from another thread."""
+    def __iter__(self) -> Iterator[bytes]:
+        for chunk in self._inner:
+            self._count(chunk)
+            yield chunk
 
+    def _count(self, chunk: bytes) -> None:
+        start = 0
+        for end in _LINE_END.finditer(chunk):
+            self._check(self._run + end.start() - start)
+            self._run, start = 0, end.end()
+        self._run += len(chunk) - start
+        self._check(self._run)
 
-# Calls
-
-
-class _Opened:
-    """The socket a call connected, kept so the stream timeout can be set on it and another thread
-    can shut it down. urllib drops the connection's own reference once the response's headers have
-    arrived (the response keeps reading through it), so it's captured as it connects."""
-
-    def __init__(self) -> None:
-        self.sock: socket.socket | None = None
-
-
-class _HTTPConnection(http.client.HTTPConnection):
-    opened: _Opened | None = None
-
-    def connect(self) -> None:
-        super().connect()
-        if self.opened is not None:
-            self.opened.sock = self.sock
-
-
-class _HTTPSConnection(http.client.HTTPSConnection):
-    opened: _Opened | None = None
-
-    def connect(self) -> None:
-        super().connect()
-        if self.opened is not None:
-            self.opened.sock = self.sock
-
-
-class _HTTP(urllib.request.HTTPHandler):
-    def __init__(self, opened: _Opened) -> None:
-        super().__init__()
-        self._opened = opened
-
-    def _connection(self, host: str, /, **kwargs: Any) -> http.client.HTTPConnection:  # noqa: ANN401
-        connection = _HTTPConnection(host, **kwargs)
-        connection.opened = self._opened
-        return connection
-
-    def http_open(self, request: urllib.request.Request) -> http.client.HTTPResponse:
-        return self.do_open(self._connection, request)
-
-
-class _HTTPS(urllib.request.HTTPSHandler):
-    def __init__(self, opened: _Opened) -> None:
-        self._tls = ssl.create_default_context()
-        super().__init__(context=self._tls)
-        self._opened = opened
-
-    def _connection(self, host: str, /, **kwargs: Any) -> http.client.HTTPConnection:  # noqa: ANN401
-        connection = _HTTPSConnection(host, **kwargs)
-        connection.opened = self._opened
-        return connection
-
-    def https_open(self, request: urllib.request.Request) -> http.client.HTTPResponse:
-        return self.do_open(self._connection, request, context=self._tls)
-
-
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    """Refuses every redirect, so urllib raises it as an HTTPError instead of following it and
-    resending the Authorization header."""
-
-    def redirect_request(self, *_: Any) -> None:  # noqa: ANN401
-        return None
-
-
-class Response:
-    """A streamed 2xx response."""
-
-    def __init__(self, call: "Call", response: http.client.HTTPResponse) -> None:
-        self._call = call
-        self._response = response
-        self.status = response.status
-        self.headers = {name.lower(): value for name, value in response.getheaders()}
-
-    def lines(self) -> Iterator[str]:
-        """Each line of the body, without its line ending, as it arrives. Raises NetworkError when
-        the stream goes silent for the stream timeout, breaks, holds a line too long or that isn't
-        UTF-8, and AbortedError when the call is aborted."""
-        while True:
-            try:
-                line = self._response.readline(STREAM_LINE_MAX_BYTES + 1)
-            except TimeoutError:
-                self._call.raise_if_aborted()
-                raise NetworkError(
-                    f"The service sent nothing for {self._call.stream_timeout:g} seconds."
-                ) from None
-            except (OSError, http.client.HTTPException, ValueError) as error:
-                self._call.raise_if_aborted()
-                raise NetworkError(f"The response's stream broke: {_words(error)}.") from None
-            self._call.raise_if_aborted()
-            if not line:
-                return
-            if len(line) > STREAM_LINE_MAX_BYTES:
-                raise NetworkError(
-                    f"A line of the response's stream is longer than {STREAM_LINE_MAX_BYTES} bytes."
-                )
-            try:
-                text = line.decode("utf-8")
-            except UnicodeDecodeError:
-                raise NetworkError("A line of the response's stream isn't UTF-8.") from None
-            yield text.removesuffix("\n").removesuffix("\r")
-
-    def body(self) -> bytes:
-        """The body, up to ERROR_BODY_MAX_BYTES, for a 2xx that isn't a stream. Raises
-        NetworkError when it can't be read whole, and AbortedError when the call is aborted."""
-        length = self._response.length  # what Content-Length promised, when it was given
-        try:
-            # read() raises IncompleteRead when the body stops short of a Content-Length;
-            # read(n) would return the short body as if it were whole.
-            whole = length is not None and length <= ERROR_BODY_MAX_BYTES
-            data = self._response.read() if whole else self._response.read(ERROR_BODY_MAX_BYTES)
-        except TimeoutError:
-            self._call.raise_if_aborted()
-            raise NetworkError(
-                f"The service sent nothing for {self._call.stream_timeout:g} seconds."
-            ) from None
-        except (OSError, http.client.HTTPException, ValueError) as error:
-            self._call.raise_if_aborted()
-            raise NetworkError(f"The response's body broke off: {_words(error)}.") from None
-        self._call.raise_if_aborted()
-        return data
+    def _check(self, length: int) -> None:
+        if length > self._limit:
+            raise LineTooLongError(
+                f"A line of the response is longer than {self._limit} bytes, the runner's limit "
+                "(STREAM_LINE_MAX_BYTES)."
+            )
 
     def close(self) -> None:
-        self._response.close()
+        self._inner.close()
 
 
-class Call:
-    """One request to a runtime's endpoint. ``abort`` may be called from any thread."""
+class _CappedTransport(httpx2.BaseTransport):
+    """A transport whose every response's body goes through _CappedStream."""
+
+    def __init__(self, inner: httpx2.BaseTransport, limit: int) -> None:
+        self._inner = inner
+        self._limit = limit
+
+    def handle_request(self, request: httpx2.Request) -> httpx2.Response:
+        response = self._inner.handle_request(request)
+        assert isinstance(response.stream, httpx2.SyncByteStream)  # noqa: S101 - a sync client's
+        response.stream = _CappedStream(response.stream, self._limit)
+        return response
+
+    def close(self) -> None:
+        self._inner.close()
+
+
+def proxy_for(endpoint: Endpoint) -> str | None:
+    """The proxy a request to ``endpoint`` goes through, as urllib chooses it: none for this
+    machine or a host NO_PROXY names, else the scheme's from HTTPS_PROXY or HTTP_PROXY."""
+    if endpoint.is_loopback or urllib.request.proxy_bypass(endpoint.host):
+        return None
+    return urllib.request.getproxies().get(endpoint.scheme)
+
+
+# The client
+
+NO_CREDENTIAL: Final = "no-credential"
+"""What the library is given as its key for a runtime with no credential: it won't build a client
+without one. Never sent: every such request omits Authorization (design D2)."""
+
+STREAM_TYPE: Final = "text/event-stream"
+"""The media type a streamed response is sent as, which the runner asks for."""
+
+
+class Service:
+    """One run's connection to its service."""
 
     def __init__(
         self,
         endpoint: Endpoint,
-        body: bytes,
         credential: str | None,
+        *,
         connect_timeout: float = CONNECT_TIMEOUT_SECONDS,
         stream_timeout: float = STREAM_TIMEOUT_SECONDS,
+        write_timeout: float = WRITE_TIMEOUT_SECONDS,
+        line_max_bytes: int = STREAM_LINE_MAX_BYTES,
+        transport: httpx2.BaseTransport | None = None,
     ) -> None:
+        """``transport`` stands in for the network beneath the line cap, for tests; by default
+        it's an HTTP transport with urllib's proxy and the platform's certificates."""
+        clear_library_environment()
         self.endpoint = endpoint
         self.stream_timeout = stream_timeout
-        self._connect_timeout = connect_timeout
-        self._body = body
-        self._credential = credential
-        self._opened = _Opened()
-        self._aborted = threading.Event()
+        timeout = httpx2.Timeout(
+            connect=connect_timeout, read=stream_timeout, write=write_timeout, pool=connect_timeout
+        )
+        if transport is None:
+            transport = httpx2.HTTPTransport(
+                verify=ssl.create_default_context(), trust_env=False, proxy=proxy_for(endpoint)
+            )
+        self._http = httpx2.Client(
+            transport=_CappedTransport(transport, line_max_bytes),
+            trust_env=False,
+            follow_redirects=False,
+            timeout=timeout,
+        )
+        self._client = openai.OpenAI(
+            api_key=credential or NO_CREDENTIAL,
+            base_url=endpoint.url,
+            max_retries=0,
+            timeout=timeout,
+            http_client=self._http,
+        )
+        self._headers: dict[str, Any] = {} if credential else {"Authorization": openai.Omit()}
 
-    def open(self) -> Response:
-        """Send the request and return the streamed response once its status is 2xx. Raises
-        StatusError for any other status, NetworkError when there's no answer, and AbortedError."""
-        headers = {
-            "Content-Type": "application/json",
-            "Accept": "text/event-stream",
-            "User-Agent": f"troupe-runner-{NAME}/{__version__}",
-        }
-        if self._credential:
-            headers["Authorization"] = f"Bearer {self._credential}"
-        request = urllib.request.Request(  # noqa: S310 - the scheme is checked: http or https
-            self.endpoint.responses_url, data=self._body, headers=headers, method="POST"
-        )
-        proxies = urllib.request.ProxyHandler({} if self.endpoint.is_loopback else None)
-        opener = urllib.request.build_opener(
-            proxies, _HTTP(self._opened), _HTTPS(self._opened), _NoRedirect()
-        )
-        self.raise_if_aborted()
+    def close(self) -> None:
+        self._http.close()
+
+    def stream(self, params: Mapping[str, Any]) -> Opened:
+        """Send one request, streamed, and return its response once its status is in. Raises
+        StatusError, NotAStreamError or NetworkError; the events it yields raise NetworkError for a
+        stream that breaks and UnreadableError for an event whose data isn't JSON."""
         try:
-            response = opener.open(request, timeout=self._connect_timeout)
-        except urllib.error.HTTPError as error:
-            self.raise_if_aborted()
-            body = _read_some(error)
+            stream = self._client.responses.create(**params, extra_headers=self._headers)
+        except openai.APIStatusError as error:
             raise StatusError(
-                error.code, {k.lower(): v for k, v in error.headers.items()}, body
+                error.status_code, error.response.headers, _body(error.response)
             ) from None
-        except (urllib.error.URLError, OSError, http.client.HTTPException, ValueError) as error:
-            self.raise_if_aborted()
-            raise NetworkError(_connect_words(self.endpoint, error)) from None
-        if self._opened.sock is not None:
-            self._opened.sock.settimeout(self.stream_timeout)
-        self.raise_if_aborted()
-        return Response(self, response)
+        except (openai.APIConnectionError, httpx2.HTTPError) as error:
+            raise NetworkError(self._said(error)) from None
+        response = stream.response
+        headers = {name.lower(): value for name, value in response.headers.items()}
+        said = headers.get("content-type")
+        if said is not None and said.partition(";")[0].strip().lower() != STREAM_TYPE:
+            broke = None
+            try:
+                body = _body(response)
+            except (httpx2.HTTPError, openai.APIError) as error:
+                body, broke = b"", self._said(error)
+            finally:
+                stream.close()
+            raise NotAStreamError(response.status_code, headers, said, body, broke)
+        return Opened(response.status_code, headers, self._events(stream))
 
-    def abort(self) -> None:
-        """Stop the call: a blocked connect or read wakes and raises AbortedError."""
-        self._aborted.set()
-        sock = self._opened.sock
-        if sock is not None:
-            with contextlib.suppress(OSError):
-                sock.shutdown(socket.SHUT_RDWR)
+    def _events(self, stream: Any) -> Iterator[Any]:  # noqa: ANN401 - the library's Stream
+        """Each event of ``stream`` as a dict, as the service sent it, with the library's failures
+        as the runner's (design D4)."""
+        try:
+            for event in stream:
+                # The library validates nothing: a field in a shape its models don't expect is
+                # kept as sent, and its serialiser's warning about it isn't wanted (design D9).
+                # Data that isn't an object comes as it was sent, for the reader to refuse.
+                if isinstance(event, openai.BaseModel):
+                    yield event.to_dict(mode="json", warnings=False)
+                else:
+                    yield event
+        except (openai.APIConnectionError, httpx2.HTTPError) as error:
+            raise NetworkError(self._said(error)) from None
+        except openai.APIError as error:
+            # An event whose data has a top-level error: the library raises it rather than
+            # yielding it. It's the response's failure, as an error event is.
+            body = error.body if isinstance(error.body, dict) else {"message": error.message}
+            yield {"type": "error", "error": body}
+        except UnicodeDecodeError:
+            raise NetworkError("A line of the response's stream isn't UTF-8.") from None
+        except json.JSONDecodeError as error:
+            raise UnreadableError(
+                f"An event in the response's stream isn't JSON: {error.doc[:200]!r}."
+            ) from None
+        finally:
+            stream.close()
 
-    @property
-    def aborted(self) -> bool:
-        return self._aborted.is_set()
+    def _said(self, error: BaseException) -> str:
+        """A network failure in words a person can act on, from the library's error or its
+        cause."""
+        url = self.endpoint.url
+        cause = _cause(error)
+        if isinstance(cause, LineTooLongError):
+            return str(cause)
+        if isinstance(cause, httpx2.LocalProtocolError):
+            # Its text can quote a header, credential included: say only that the request was
+            # refused, as the runner always has.
+            return f"The request to {url} couldn't be made: a value in it was refused."
+        if not isinstance(cause, httpx2.HTTPError):
+            # Not the network's: its text isn't known to be safe to repeat, so only its kind is.
+            return f"The request to {url} failed ({type(cause).__name__})."
+        if isinstance(cause, httpx2.ConnectTimeout | httpx2.PoolTimeout):
+            return f"Connecting to {url} timed out."
+        if isinstance(cause, httpx2.TimeoutException):
+            return f"The service sent nothing for {self.stream_timeout:g} seconds."
+        verify = _find(error, ssl.SSLCertVerificationError)
+        if verify is not None:
+            return (
+                f"{url}'s TLS certificate couldn't be verified ({_words(verify)}). If it's signed "
+                "by an authority this machine's Python doesn't know, set SSL_CERT_FILE or "
+                "SSL_CERT_DIR to its certificates."
+            )
+        if isinstance(cause, httpx2.ConnectError):
+            return f"Couldn't reach {url}: {_words(cause)}."
+        return f"The response's stream broke: {_words(cause)}."
 
-    def raise_if_aborted(self) -> None:
-        if self._aborted.is_set():
-            raise AbortedError
+
+def _cause(error: BaseException) -> BaseException:
+    """The HTTP client's error under the library's, or ``error`` itself."""
+    if isinstance(error, httpx2.HTTPError):
+        return error
+    inner = error.__cause__ or error.__context__
+    return inner if isinstance(inner, httpx2.HTTPError) else error
 
 
-def _read_some(error: urllib.error.HTTPError) -> bytes:
-    try:
-        return error.read(ERROR_BODY_MAX_BYTES)
-    except (OSError, http.client.HTTPException, ValueError):
-        return b""
+def _find(error: BaseException, kind: type[ssl.SSLCertVerificationError]) -> BaseException | None:
+    seen: set[int] = set()
+    current: BaseException | None = error
+    while current is not None and id(current) not in seen:
+        if isinstance(current, kind):
+            return current
+        seen.add(id(current))
+        current = current.__cause__ or current.__context__
+    return None
+
+
+def _body(response: httpx2.Response) -> bytes:
+    """Up to ERROR_BODY_MAX_BYTES of a response's body, which the library has read or reads
+    now."""
+    return response.read()[:ERROR_BODY_MAX_BYTES]
 
 
 def _words(error: BaseException) -> str:
@@ -345,33 +364,20 @@ def _words(error: BaseException) -> str:
     return text.rstrip(".")
 
 
-def _connect_words(endpoint: Endpoint, error: BaseException) -> str:
-    if isinstance(error, ValueError):
-        # Its text can quote a header, credential included: say only that the request was refused.
-        return f"The request to {endpoint.url} couldn't be made: a value in it was refused."
-    reason = error.reason if isinstance(error, urllib.error.URLError) else error
-    if isinstance(reason, str):
-        return f"Couldn't reach {endpoint.url}: {reason.rstrip('.')}."
-    if isinstance(reason, TimeoutError | socket.timeout):
-        return f"Connecting to {endpoint.url} timed out."
-    if isinstance(reason, ssl.SSLCertVerificationError):
-        return (
-            f"{endpoint.url}'s TLS certificate couldn't be verified ({_words(reason)}). If it's "
-            "signed by an authority this machine's Python doesn't know, set SSL_CERT_FILE or "
-            "SSL_CERT_DIR to its certificates."
-        )
-    return f"Couldn't reach {endpoint.url}: {_words(reason)}."
-
-
 __all__ = [
+    "NO_CREDENTIAL",
     "RESPONSES_PATH",
-    "AbortedError",
-    "Call",
     "Endpoint",
     "EndpointError",
+    "LineTooLongError",
     "NetworkError",
-    "Response",
+    "NotAStreamError",
+    "Opened",
+    "Service",
+    "ServiceError",
     "StatusError",
+    "UnreadableError",
     "is_loopback",
     "parse_endpoint",
+    "proxy_for",
 ]

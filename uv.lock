@@ -980,6 +980,23 @@ wheels = [
 ]
 
 [[package]]
+name = "openai"
+version = "3.52.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio" },
+    { name = "httpx2" },
+    { name = "jiter" },
+    { name = "pydantic" },
+    { name = "sniffio" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/bb/d9/2ef76a717f5cd5d42857ae3424db2f16bf5f01070edfd63ea9347e7d041f/openai-3.52.0.tar.gz", hash = "sha256:258a4fec3e40b412c58672526ed33f20738c2e4ea27601792e73843af62466af", size = 2417464, upload-time = "2026-11-16T22:41:08.028Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/65/14/e6e4ee80bcca7c89377e4263ff9125ed5d6fe656f34215675669449fb3a2/openai-3.52.0-py3-none-any.whl", hash = "sha256:fc220b5f06d354e8f48ab38a64410ec1537957a47d6e584b77cee8c21b7cb84e", size = 2446605, upload-time = "2026-11-16T22:41:05.869Z" },
+]
+
+[[package]]
 name = "opentelemetry-api"
 version = "1.45.2"
 source = { registry = "https://pypi.org/simple" }
@@ -1532,7 +1549,6 @@ dependencies = [
     { name = "troupe-identity-local" },
     { name = "troupe-plugin-sdk" },
     { name = "troupe-runner-claude-code" },
-    { name = "troupe-runner-openai" },
     { name = "troupe-runner-scripted" },
     { name = "troupe-stage-local" },
     { name = "troupe-store-text" },
@@ -1545,6 +1561,7 @@ all = [
     { name = "troupe-runner-anthropic" },
     { name = "troupe-runner-mistralrs" },
     { name = "troupe-runner-ollama" },
+    { name = "troupe-runner-openai" },
 ]
 anthropic = [
     { name = "troupe-runner-anthropic" },
@@ -1554,6 +1571,9 @@ mistralrs = [
 ]
 ollama = [
     { name = "troupe-runner-ollama" },
+]
+openai = [
+    { name = "troupe-runner-openai" },
 ]
 
 [package.metadata]
@@ -1569,14 +1589,15 @@ requires-dist = [
     { name = "troupe-runner-mistralrs", marker = "extra == 'mistralrs'", editable = "plugins/runner-mistralrs" },
     { name = "troupe-runner-ollama", marker = "extra == 'all'", editable = "plugins/runner-ollama" },
     { name = "troupe-runner-ollama", marker = "extra == 'ollama'", editable = "plugins/runner-ollama" },
-    { name = "troupe-runner-openai", editable = "plugins/runner-openai" },
+    { name = "troupe-runner-openai", marker = "extra == 'all'", editable = "plugins/runner-openai" },
+    { name = "troupe-runner-openai", marker = "extra == 'openai'", editable = "plugins/runner-openai" },
     { name = "troupe-runner-scripted", editable = "plugins/runner-scripted" },
     { name = "troupe-stage-local", editable = "packages/troupe-stage-local" },
     { name = "troupe-store-text", editable = "packages/troupe-store-text" },
     { name = "troupe-vcs-files", editable = "packages/troupe-vcs-files" },
     { name = "troupe-vcs-git", editable = "packages/troupe-vcs-git" },
 ]
-provides-extras = ["all", "anthropic", "mistralrs", "ollama"]
+provides-extras = ["all", "anthropic", "mistralrs", "ollama", "openai"]
 
 [[package]]
 name = "troupe-runner-anthropic"
@@ -1641,11 +1662,15 @@ name = "troupe-runner-openai"
 version = "0.0.0"
 source = { editable = "plugins/runner-openai" }
 dependencies = [
+    { name = "openai" },
     { name = "troupe-plugin-sdk" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "troupe-plugin-sdk", editable = "packages/troupe-plugin-sdk" }]
+requires-dist = [
+    { name = "openai", specifier = "==3.52.0" },
+    { name = "troupe-plugin-sdk", editable = "packages/troupe-plugin-sdk" },
+]
 
 [[package]]
 name = "troupe-runner-scripted"

@@ -1,15 +1,17 @@
 [project]
 name = "troupe-runner-openai"
 version = "0.0.0"
-description = "An actor runner for troupe that drives OpenAI's Responses API, or any service that serves it, with troupe's own tool loop."
+description = "An actor runner for troupe that drives OpenAI's Responses API, or any service that serves it, through the openai package, with troupe's own tool loop."
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 requires-python = ">=3.12,<3.16"
-# The plugin SDK only, for the runner contract's types and the file tools (spec: plugin-sdk). A plugin imports nothing
-# else of troupe's; it speaks the runner contract. HTTP is the standard library's (openai-style-runner design D3).
-# Bare, like an adapter's dependency on troupe: the bundle pins it (runner-sdk D12).
-dependencies = ["troupe-plugin-sdk"]
+# The plugin SDK, for the runner contract's types and the file tools (spec: plugin-sdk), and the openai package,
+# pinned, which sends each request to the Responses API (decision #319; openai-library design D1). A plugin imports
+# nothing else of troupe's. The SDK is bare, like an adapter's dependency on troupe: the bundle pins it (runner-sdk
+# D12). With a library, this runner is troupe-run's openai extra, not part of the base install (runner-extras design
+# D1, D2).
+dependencies = ["troupe-plugin-sdk", "openai==3.52.0"]
 
 [project.urls]
 Homepage = "https://troupe.run"

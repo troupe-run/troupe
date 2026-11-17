@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+import httpx2
 import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
@@ -22,23 +23,52 @@ from fake_endpoint import (
     sse,
     usage,
 )
-from troupe_runner_openai.service import Call, parse_endpoint
+from troupe_runner_openai.failures import UnreadableError
+from troupe_runner_openai.service import Service, parse_endpoint
 from troupe_runner_openai.stream import Reply as Parsed
-from troupe_runner_openai.stream import ShapeError, StreamError, StreamParser
+from troupe_runner_openai.stream import ReplyReader, ShapeError, StreamError
 
 DATA = Path(__file__).parent / "data"
 OPENAI = DATA / "openai-responses-loop"
 OLLAMA = DATA / "ollama-responses-loop"
 
 
+class _Body:
+    """The body the next response is: what _service's transport answers every request with."""
+
+    data = b""
+
+
+def _answer(_: httpx2.Request) -> httpx2.Response:
+    return httpx2.Response(200, headers={"content-type": "text/event-stream"}, content=_Body.data)
+
+
+_SERVICE = Service(
+    parse_endpoint("http://127.0.0.1:9/v1"), None, transport=httpx2.MockTransport(_answer)
+)
+"""The library reading a body held in memory, through the runner's line cap: the stream as the
+runner reads it, without a socket (openai-library design D4)."""
+
+
+def _read(data: bytes) -> Parsed:
+    """The reply ``data`` reads as, through the library, or the error reading it raises."""
+    _Body.data = data
+    reader = ReplyReader()
+    for each in _SERVICE.stream({"model": "m", "stream": True}).events:
+        if reader.feed(each):
+            break
+    return reader.reply()
+
+
 def _parse(lines: list[Any]) -> Parsed:
-    parser = StreamParser()
+    """The reply the stream of ``lines`` reads as, each line ended with a newline, up to any
+    Cut."""
+    taken: list[str] = []
     for line in lines:
         if isinstance(line, Cut):
             break
-        if parser.feed(line):
-            break
-    return parser.reply()
+        taken.append(line)
+    return _read("".join(f"{line}\n" for line in taken).encode("utf-8"))
 
 
 def _recorded(directory: Path, n: int) -> Parsed:
@@ -154,8 +184,11 @@ def test_comments_and_event_lines_are_read_past() -> None:
     assert _parse([": keep-alive", "event: response.completed", f"data: {data}", ""]).text == "this"
 
 
-def test_a_last_event_without_its_blank_line_is_still_read() -> None:
-    assert _parse([f"data: {json.dumps(final([message('ok')]))}"]).text == "ok"
+def test_a_last_event_without_its_blank_line_is_cut_short() -> None:
+    """The library dispatches an event only on its blank line (openai-library design D5): before
+    it, such an event was read."""
+    with pytest.raises(StreamError, match="before the service finished"):
+        _parse([f"data: {json.dumps(final([message('ok')]))}"])
 
 
 def test_a_stream_cut_before_its_final_event_is_broken() -> None:
@@ -174,7 +207,6 @@ def _args_as_object() -> dict[str, Any]:
 @pytest.mark.parametrize(
     ("data", "words"),
     [
-        ("not json", r"isn't JSON: 'not json'"),
         ("[1, 2]", "has no type"),
         ('{"type": "response.completed", "response": "x"}', "response isn't an object"),
         (
@@ -192,6 +224,11 @@ def test_a_finished_event_that_cant_be_read_is_the_wrong_shape_not_a_cut(
 ) -> None:
     with pytest.raises(ShapeError, match=words):
         _parse([f"data: {data}", ""])
+
+
+def test_a_finished_event_that_isnt_json_is_unreadable_quoting_its_start() -> None:
+    with pytest.raises(UnreadableError, match=r"isn't JSON: 'not json'"):
+        _parse(["data: not json", ""])
 
 
 def test_a_final_events_usage_is_kept_when_its_output_cant_be_read() -> None:
@@ -213,31 +250,34 @@ def test_a_final_events_usage_that_cant_be_read_is_none() -> None:
 
 def test_an_event_the_body_ended_inside_is_cut_short() -> None:
     data = json.dumps(final([message("hi")]))
-    with pytest.raises(StreamError, match="ended in the middle of an event"):
+    with pytest.raises(StreamError, match="before the service finished"):
         _parse([f"data: {data[: len(data) // 2]}"])
 
 
-def test_a_whole_event_the_body_ended_before_its_blank_line_is_the_wrong_shape() -> None:
-    with pytest.raises(ShapeError, match="has no type"):
+def test_a_whole_event_the_body_ended_before_its_blank_line_is_cut_short() -> None:
+    """Before the library, such an event was finished and read as the wrong shape (design D5)."""
+    with pytest.raises(StreamError, match="before the service finished"):
         _parse(['data: {"no": "type"}'])
 
 
 # Wherever a stream is cut
 
 
-def _lines_as_received(text: str) -> list[str]:
-    """``text``'s lines as Response.lines yields them: split on newlines, each without its line
-    ending, and a last line the body ended inside yielded as it is."""
-    lines = text.split("\n")
-    if lines[-1] == "":
-        lines.pop()
-    return [line.removesuffix("\r") for line in lines]
+def _cuts(text: bytes) -> list[int]:
+    """Where to cut ``text``: on each side of every line ending and blank line, and every 97th
+    byte between, which reaches every kind of cut without reading the stream once per byte."""
+    points = {0, len(text)}
+    for at, byte in enumerate(text):
+        if byte == ord("\n"):
+            points.update({at - 1, at, at + 1, at + 2})
+    points.update(range(0, len(text), 97))
+    return sorted(p for p in points if 0 <= p <= len(text))
 
 
-def _outcome(lines: list[str]) -> Parsed | Exception:
+def _outcome(data: bytes) -> Parsed | Exception:
     """The reply, or whatever exception reading it raised, so a caller can check its exact type."""
     try:
-        return _parse(lines)
+        return _read(data)
     except Exception as error:
         return error
 
@@ -247,36 +287,36 @@ def test_a_recorded_stream_cut_anywhere_reads_whole_or_is_cut_short_never_anythi
     which: Path,
 ) -> None:
     """The guard on openai-wrong-shape-ends-run's non-goal (design D6): a stream cut short is
-    still retried, however it's cut. Each cut, at every character, either reads the same reply as
-    the whole stream (cut after the final event's data) or raises StreamError, the retried error,
-    and never anything else."""
-    text = (which / "stream-1.txt").read_text(encoding="utf-8")
-    whole = _parse(_lines_as_received(text))
-    read_early, cut_short = 0, 0
-    for at in range(len(text) + 1):
-        outcome = _outcome(_lines_as_received(text[:at]))
+    still retried, however it's cut. Each cut either reads the same reply as the whole stream or
+    raises StreamError, the retried error, and never anything else. Through the library, only a
+    cut after the final event's blank line reads whole (openai-library design D5)."""
+    text = (which / "stream-1.txt").read_bytes()
+    whole = _read(text)
+    cut_short = 0
+    for at in _cuts(text):
+        outcome = _outcome(text[:at])
         if isinstance(outcome, Exception):
             assert type(outcome) is StreamError, f"cut at {at}: {outcome!r}"
             cut_short += 1
         else:
             assert outcome == whole, f"cut at {at}"
-            read_early += at < len(text)
-    # Both outcomes happen: a cut just after the final event's data, before its blank line, still
-    # reads the whole reply, and every cut before that is cut short.
-    assert read_early > 0
+            assert text[:at].endswith(b"\n\n"), f"cut at {at} read whole before its blank line"
     assert cut_short > 0
 
 
 # However the bytes arrive
 
 
-def _through_the_service(fake: FakeEndpoint) -> Parsed:
-    call = Call(parse_endpoint(fake.endpoint), b"{}", None)
-    parser = StreamParser()
-    for line in call.open().lines():
-        if parser.feed(line):
-            break
-    return parser.reply()
+def _through_the_network(fake: FakeEndpoint) -> Parsed:
+    service = Service(parse_endpoint(fake.endpoint), None)
+    try:
+        reader = ReplyReader()
+        for each in service.stream({"model": "m", "stream": True}).events:
+            if reader.feed(each):
+                break
+        return reader.reply()
+    finally:
+        service.close()
 
 
 @settings(max_examples=25, deadline=None, suppress_health_check=[HealthCheck.too_slow])
@@ -290,5 +330,5 @@ def test_however_a_recorded_streams_bytes_are_split_into_reads_the_reply_is_the_
     points = sorted({c % (len(data) + 1) for c in cuts})
     pieces = [data[a:b] for a, b in zip([0, *points], [*points, len(data)], strict=True)]
     with FakeEndpoint([Reply(chunks=[p for p in pieces if p])]) as fake:
-        reply = _through_the_service(fake)
-    assert reply == _parse(data.decode("utf-8").splitlines())
+        reply = _through_the_network(fake)
+    assert reply == _read(data)

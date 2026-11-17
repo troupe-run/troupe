@@ -276,7 +276,8 @@ source_modules = [
     # The Ollama runner starts no process and keeps no OS-specific behaviour, so it needs no seam of its own
     # (local-model-runner design D3).
     "troupe_runner_ollama",
-    # Nor does the OpenAI runner (openai-style-runner design D3): its only seam is for the network.
+    # Nor does the OpenAI runner: its only seam is the one module that uses the openai package (openai-library
+    # design D1).
     "troupe_runner_openai",
     # Nor does the Anthropic runner: its only seam is the one module that uses the anthropic package
     # (anthropic-runner design D1).
@@ -328,12 +329,13 @@ forbidden_modules = ["signal", "ctypes", "msvcrt", "_winapi", "fcntl", "termios"
 ignore_imports = ["troupe_runner_claude_code.processes -> *"]
 
 [[tool.importlinter.contracts]]
-# The OpenAI runner does its network I/O in one module, so how it talks to a service (no redirects, timeouts,
-# proxies and TLS) is decided in one place (openai-style-runner design D3).
-name = "only the OpenAI runner's service module does network I/O"
+# The OpenAI runner reaches its service only through the openai package, from one module, so how it talks to a
+# service (its own HTTP client with no redirects, the named timeouts and line cap, urllib's proxies, no retries of
+# the library's, no credential the library finds for itself) is decided in one place (openai-library design D1-D4a).
+name = "only the OpenAI runner's service module imports the openai package or does network I/O"
 type = "forbidden"
 source_modules = ["troupe_runner_openai"]
-forbidden_modules = ["urllib", "http", "socket", "ssl"]
+forbidden_modules = ["openai", "httpx2", "httpcore2", "urllib", "http", "socket", "ssl"]
 ignore_imports = ["troupe_runner_openai.service -> *"]
 
 [[tool.importlinter.contracts]]

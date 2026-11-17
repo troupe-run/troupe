@@ -6,8 +6,16 @@ tool calls; the runner carries each one out with the [plugin SDK](../../packages
 file tools, checked against the actor's declared effects, and sends the result back. No Claude Code is involved.
 
 It speaks the [runner contract](../../contributing/runners.md) over standard input and output, imports nothing of
-troupe's but the SDK, and depends on nothing else: it talks to the service with the standard library, from one
-module, `service.py`.
+troupe's but the SDK, and talks to the service through the [`openai`](https://pypi.org/project/openai/) package,
+pinned, from one module, `service.py`. With a library, it comes as an extra: install `troupe-run[openai]`
+([Install](../../docs/opening-night/install.md#runners-that-come-as-extras)). An actor on it without the extra is
+refused, naming the extra.
+
+The runner decides for the library what the library would otherwise decide for itself: its own retries are off, it
+follows no redirect, its timeouts are the runner's [named settings](#limits), it reads proxies and certificates as the
+standard library does, and it finds no key, base URL, organisation, project or header of its own (the runner removes
+every `OPENAI_*` variable from its environment, `OPENAI_LOG` included). The library's warnings go to standard error,
+masked; nothing it logs reaches standard output.
 
 ```yaml
 # .troupe/actors/lead.yaml
@@ -112,7 +120,7 @@ first as a `retry` event:
 | 429, unless its code is `insufficient_quota`. The delay is `Retry-After` when it gives one; a longer wait than 60 s ends the run instead | `rate-limit` |
 | 500 or above | `server` |
 | a failed response or an `error` event whose code is the service's own failure (`server_error`) | `server` |
-| no connection, a timeout, or a stream cut short: silent for 120 s, broken, ended before its final event, or ended in the middle of an event | `network` |
+| no connection, a timeout, or a stream cut short: silent for 120 s, broken, ended before its final event arrived with its blank line, a line longer than 16 MiB, or bytes that aren't UTF-8 | `network` |
 
 ## How a run ends
 
@@ -136,7 +144,7 @@ nothing is retried:
 | a refusal in an output message | the model refused, with its words | `refused` |
 | a function call with no `call_id` | it can't be answered | `engine` |
 | a status the runner doesn't know | the status | `other` |
-| a response the service finished in a shape it can't read: an event (ended by its blank line, or whole JSON) that isn't JSON or has no type, or a final event with a field of the wrong type, such as a tool call's arguments as an object | what was wrong, and that retrying can't fix it; the response's usage is counted when it can be read | `engine` |
+| a response the service finished in a shape it can't read: an event (ended by its blank line) that isn't JSON or has no type, or a final event with a field of the wrong type, such as a tool call's arguments as an object | what was wrong, and that retrying can't fix it; the response's usage is counted when it can be read | `engine` |
 | a 2xx whose `Content-Type` is set and isn't `text/event-stream`, such as a plain JSON body | the status, the type, and the service's message or the start of the body | `configuration` |
 | `maxTurns` reached | the limit, and the option to raise | `turn-limit` |
 | `maxTotalTokens` spent | the budget and the tokens used, and the option to raise | `budget` |
@@ -160,19 +168,22 @@ and [`context-compaction-exhausted`](fixtures/responses/context-compaction-exhau
 
 ## The transcript
 
-The runner conducts an HTTP exchange, so it accepts the contract's `transcript-kinds` capability and gives each
-record a kind ([contributing/runners.md](../../contributing/runners.md#record-kinds)). In order:
+The runner conducts an HTTP exchange through the library, so it accepts the contract's `transcript-kinds` capability
+and gives each record a kind ([contributing/runners.md](../../contributing/runners.md#record-kinds)). The transcript
+holds what the library exposes, not the bytes on the wire. In order:
 
 | Record | Kind | What it holds |
 |---|---|---|
-| each request body | `sent` | the body as sent |
+| each request's parameters | `sent` | the parameters given to the library, compact JSON: the body it sends, but for key order and spacing |
 | each response's status | `note` | `{"status", "headers"}`, compact JSON, with only the headers in `TRANSCRIPT_HEADERS` and `TRANSCRIPT_HEADER_PREFIXES` |
-| each line of a response's stream | `received` | the line unchanged, its `event:` and blank lines too |
+| each event of a response's stream | `received` | the event as the library parsed it, compact JSON, with every field the service sent |
 | the body of an error, or of a 2xx that isn't a stream | `received` | the body's bytes, as base64 when they aren't UTF-8 |
 | a stream cut short that it abandons | `note` | `{"dropped": "<why>"}` |
 
-No request header is ever recorded, and neither is the request's URL: the run's start records the runtime's
-endpoint, and the URL is that plus `/responses`. Offered no capability (a troupe from before it), the runner sends
+Compared with the wire, it leaves out the stream's framing (`event:` lines, blank lines and comments) and an event
+the body ended before its blank line, which the library never dispatches. No request header is ever recorded, the
+library's own (`User-Agent`, `X-Stainless-*`) included, and neither is the request's URL: the run's start records the
+runtime's endpoint, and the URL is that plus `/responses`. Offered no capability (a troupe from before it), the runner sends
 the same records without a kind.
 
 ## Limits
@@ -186,12 +197,14 @@ Every setting is in [`defaults.py`](src/troupe_runner_openai/defaults.py):
 | `MAX_ATTEMPTS` | 5 | Attempts at one request, the first included |
 | `RETRY_BASE_DELAY_SECONDS` | 1 | The first retry's delay, doubled each time |
 | `RETRY_MAX_DELAY_SECONDS` | 60 | The longest delay, `Retry-After` included |
-| `CONNECT_TIMEOUT_SECONDS` | 30 | Connecting and getting the response's status |
-| `STREAM_TIMEOUT_SECONDS` | 120 | Silence between two reads of a stream |
+| `CONNECT_TIMEOUT_SECONDS` | 30 | Connecting, and waiting for a pooled connection: the library's connect and pool timeouts |
+| `WRITE_TIMEOUT_SECONDS` | 30 | Sending a request's body: the library's write timeout |
+| `STREAM_TIMEOUT_SECONDS` | 120 | Silence between two reads of a response, its status included: the library's read timeout |
 | `SUMMARY_MAX_BYTES` | 4096 | One summary field, before `eventMaxBytes` cuts it further |
-| `STOP_GRACE_SECONDS` | 5 | The loop's time to stop after a cancel |
-| `STREAM_LINE_MAX_BYTES` | 16 MiB | One line of a stream |
-| `ERROR_BODY_MAX_BYTES` | 1 MiB | How much of an error's body is read |
+| `STOP_GRACE_SECONDS` | 5 | The loop's time to stop after a cancel, between requests; with a request in flight, the runner ends its process at once, which closes the connection |
+| `STREAM_LINE_MAX_BYTES` | 16 MiB | One line of a response, counted as it arrives, beneath the library |
+| `ERROR_BODY_MAX_BYTES` | 1 MiB | How much of an error's body is recorded and read |
+| `LIBRARY_LOG_MAX_BYTES` | 2048 | One library warning passed to standard error |
 | `SERVICE_FAILURE_CODES` | `server_error` | A failed response's codes that are retried |
 | `TRANSCRIPT_HEADERS` | `retry-after`, `x-request-id` | Response headers the transcript keeps |
 | `TRANSCRIPT_HEADER_PREFIXES` | `x-ratelimit-` | Response header prefixes the transcript keeps |

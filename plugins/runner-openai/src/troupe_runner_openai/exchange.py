@@ -1,26 +1,28 @@
 """One exchange with the service: a request, its retries, and the reply (openai-style-runner design
-D8, D10; transcript-record-kinds design D5).
+D8, D10; transcript-record-kinds design D5; openai-library design D3, D6).
 
-``exchange`` sends a request, reads its streamed response into a reply, and retries what retrying
-can fix: a rate limit (429), a server error (5xx), a network error, a timeout and a stream cut
-short. Each retry is reported through ``on_retry`` before its delay. What retrying can't fix (a
+``exchange`` sends a request through the service seam, reads its streamed response into a reply,
+and retries what retrying can fix: a rate limit (429), a server error (5xx), a network error, a
+timeout and a stream cut short. The library's own retries are off, so these are the only ones. Each
+retry is reported through ``on_retry`` before its delay. What retrying can't fix (a
 refused credential, quota, a context-length error, any other client error, a redirect, a wait
 longer than the cap, a response the service finished in a shape that can't be read, a 2xx that
 isn't a stream, or attempts running out) raises ExchangeFailedError, with the message the run's
 result carries.
 
-Every request body, response status and kept header, stream line, error body and dropped stream
-is passed to ``record`` with its kind, for the transcript (transcript-record-kinds design D5): a
-request body is ``sent``, a stream line or error body ``received``, each as the bytes themselves,
-and a response's status with its kept headers, or a dropped stream, a ``note`` of the runner's own,
-compact JSON. Masking the credential is the runner's: it masks everything it sends.
+Every request's parameters, response status and kept headers, stream event, error body and
+dropped stream is passed to ``record`` with its kind, for the transcript: the parameters ``sent``,
+each event and error body ``received``, as the library gives them (an event serialised as compact
+JSON, a body as its bytes), and a response's status with its kept headers, or a dropped stream, a
+``note`` of the runner's own, compact JSON (openai-library design D6). Masking the credential is
+the runner's: it masks everything it sends.
 """
 
 import email.utils
 import json
 import math
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -35,15 +37,14 @@ from troupe_runner_openai.defaults import (
     TRANSCRIPT_HEADER_PREFIXES,
     TRANSCRIPT_HEADERS,
 )
-from troupe_runner_openai.service import (
-    AbortedError,
-    Call,
-    Endpoint,
+from troupe_runner_openai.failures import (
     NetworkError,
-    Response,
+    NotAStreamError,
+    Opened,
     StatusError,
+    UnreadableError,
 )
-from troupe_runner_openai.stream import Reply, ShapeError, StreamError, StreamParser
+from troupe_runner_openai.stream import Reply, ReplyReader, ShapeError, StreamError
 
 RetryReason = Literal["rate-limit", "server", "network"]
 
@@ -70,6 +71,10 @@ class ExchangeFailedError(Exception):
         self.usage = usage
 
 
+class StoppedError(Exception):
+    """The run is stopping: the exchange sent nothing more."""
+
+
 @dataclass(frozen=True)
 class Retry:
     """A retry about to happen: the attempt that failed, the delay before the next, and why."""
@@ -93,6 +98,8 @@ Record = Callable[[p.TranscriptKind, bytes], None]
 """Takes each transcript record: its kind and its bytes."""
 Wait = Callable[[float], bool]
 """Wait up to the given seconds; true if the wait was cut short because the run is stopping."""
+Open = Callable[[Mapping[str, Any]], Opened]
+"""Sends one request through the service seam (Service.stream)."""
 
 
 def _cut(text: str, limit: int = SUMMARY_MAX_BYTES) -> str:
@@ -243,99 +250,105 @@ STREAM_TYPE = "text/event-stream"
 
 
 def _not_a_stream(
-    response: Response, record: Record, on_lost: Callable[[str, int], None]
-) -> ExchangeFailedError | None:
-    """The failure for a 2xx whose Content-Type is present and isn't a stream, with its body
-    recorded; None for a stream, or a response that names no type and is read as one (design D4)."""
-    said = response.headers.get("content-type")
-    if said is None or said.partition(";")[0].strip().lower() == STREAM_TYPE:
-        return None
-    try:
-        body = response.body()
-    except NetworkError as error:
-        told = f"its body couldn't be read ({str(error).rstrip('.')})."
+    failure: NotAStreamError, on_lost: Callable[[str, int], None]
+) -> ExchangeFailedError:
+    """The failure for a 2xx whose Content-Type is present and isn't a stream (design D4)."""
+    if failure.broke is not None:
+        told = f"its body couldn't be read ({failure.broke.rstrip('.')})."
     else:
-        record("received", body)
-        told = _sentence(_service_error(_unicode_body(body, on_lost))[0])
+        told = _sentence(_service_error(_unicode_body(failure.body, on_lost))[0])
     return ExchangeFailedError(
-        f"The service answered HTTP {response.status} with {_cut(said.strip(), 200)}, not the "
-        f"stream ({STREAM_TYPE}) the runner asked for: {told} Check that the runtime's endpoint "
-        "serves OpenAI's Responses API with streaming.",
+        f"The service answered HTTP {failure.status} with {_cut(failure.content_type.strip(), 200)}"
+        f", not the stream ({STREAM_TYPE}) the runner asked for: {told} Check that the runtime's "
+        "endpoint serves OpenAI's Responses API with streaming.",
         "configuration",
     )
 
 
+def _json(value: object, *, as_sent: bool = False) -> bytes:
+    """``value`` as compact UTF-8 JSON; ``as_sent`` keeps a lone surrogate as its JSON escape."""
+    text = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    return text.encode("utf-8", "backslashreplace" if as_sent else "strict")
+
+
 def _note(record: Record, note: dict[str, Any]) -> None:
-    record("note", json.dumps(note, ensure_ascii=False, separators=(",", ":")).encode())
+    record("note", _json(note))
 
 
-def _attempt(call: Call, record: Record, on_lost: Callable[[str, int], None]) -> Reply:
+def _attempt(
+    open_: Open, params: Mapping[str, Any], record: Record, on_lost: Callable[[str, int], None]
+) -> Reply:
     try:
-        response = call.open()
-    except StatusError as error:
-        _note(record, {"status": error.status, "headers": _kept(error.headers)})
-        record("received", error.body)
+        opened = open_(params)
+    except (StatusError, NotAStreamError) as failure:
+        _note(record, {"status": failure.status, "headers": _kept(failure.headers)})
+        if isinstance(failure, StatusError) or failure.broke is None:
+            record("received", failure.body)
         raise
-    _note(record, {"status": response.status, "headers": _kept(response.headers)})
-    parser = StreamParser()
+    _note(record, {"status": opened.status, "headers": _kept(opened.headers)})
+    reader = ReplyReader()
+    replaced = 0
     try:
-        failure = _not_a_stream(response, record, on_lost)
-        if failure is not None:
-            raise failure
-        for line in response.lines():
-            record("received", line.encode())
-            if parser.feed(line):
+        for event in opened.events:
+            # As the library exposes it: a lone surrogate (an escape in the service's JSON) is
+            # kept as that escape. Then read as Unicode text, the replacements counted and
+            # reported once for the reply (host-robustness design D3b).
+            record("received", _json(event, as_sent=True))
+            event, count = p.unicode_text_counted(event)
+            replaced += count
+            if reader.feed(event):
                 break
-        return parser.reply()
+        return reader.reply()
     finally:
-        on_lost("the Responses API's answer", parser.replaced)
-        response.close()
+        on_lost("the Responses API's answer", replaced)
 
 
 def exchange(
-    endpoint: Endpoint,
-    body: bytes,
-    credential: str | None,
+    open_: Open,
+    params: Mapping[str, Any],
+    url: str,
     on_retry: Callable[[Retry], None],
     record: Record,
     wait: Wait,
     *,
     on_lost: Callable[[str, int], None],
-    make_call: Callable[[Endpoint, bytes, str | None], Call] = Call,
-    on_call: Callable[[Call | None], None] = lambda _: None,
+    begin: Callable[[], bool] = lambda: True,
+    end: Callable[[], None] = lambda: None,
     max_attempts: int = MAX_ATTEMPTS,
     base_delay: float = RETRY_BASE_DELAY_SECONDS,
     max_delay: float = RETRY_MAX_DELAY_SECONDS,
 ) -> Reply:
-    """Send ``body`` and return the reply, retrying as the module docstring says. ``on_call`` is
-    given each call as it starts, and None when it's over, so another thread can abort it.
-    ``on_lost`` records lone surrogates in a reply read as U+FFFD (where, how many). Raises
-    ExchangeFailedError, or AbortedError when the run is stopping."""
-    record("sent", body)
+    """Send ``params`` to ``url`` and return the reply, retrying as the module docstring says.
+    ``begin`` is called before each attempt and returns False when the run is stopping (so nothing
+    is sent); ``end`` after it. ``on_lost`` records lone surrogates in a reply read as U+FFFD
+    (where, how many). Raises ExchangeFailedError, or StoppedError when the run is stopping."""
+    record("sent", _json(dict(params)))
     for attempt in range(1, max_attempts + 1):
-        call = make_call(endpoint, body, credential)
-        on_call(call)
+        if not begin():
+            raise StoppedError
         try:
-            reply = _attempt(call, record, on_lost)
+            reply = _attempt(open_, params, record, on_lost)
             if reply.failure is None or reply.status not in ("failed", "error"):
                 return reply
             retryable = _failed(reply)
         except StatusError as error:
-            retryable = classify(_unicode_error(error, on_lost), endpoint.responses_url)
-        except ShapeError as error:
+            retryable = classify(_unicode_error(error, on_lost), url)
+        except NotAStreamError as failure:
+            raise _not_a_stream(failure, on_lost) from None
+        except (ShapeError, UnreadableError) as error:
             raise ExchangeFailedError(
                 f"The service's response can't be read: {_sentence(str(error))} Retrying can't "
                 "fix a response the service finished, so the run ends here. Check that the "
                 "runtime's endpoint serves OpenAI's Responses API.",
                 "engine",
                 answered=True,
-                usage=error.usage,
+                usage=error.usage if isinstance(error, ShapeError) else None,
             ) from None
         except (NetworkError, StreamError) as error:
             retryable = _Retryable("network", str(error))
             _note(record, {"dropped": retryable.message})
         finally:
-            on_call(None)
+            end()
         if attempt == max_attempts:
             # The run ends with its last retry's reason (spec: runner-protocol).
             raise ExchangeFailedError(
@@ -355,8 +368,19 @@ def exchange(
             delay = min(asked, max_delay)
         on_retry(Retry(attempt, max_attempts, delay, retryable.reason, retryable.message))
         if wait(delay):
-            raise AbortedError
+            raise StoppedError
     raise AssertionError("unreachable: the last attempt returns or raises")  # pragma: no cover
 
 
-__all__ = ["ExchangeFailedError", "Retry", "RetryReason", "classify", "exchange", "retry_after"]
+__all__ = [
+    "ExchangeFailedError",
+    "Open",
+    "Record",
+    "Retry",
+    "RetryReason",
+    "StoppedError",
+    "Wait",
+    "classify",
+    "exchange",
+    "retry_after",
+]

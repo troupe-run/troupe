@@ -20,7 +20,6 @@ dependencies = [
     "troupe-vcs-files @ git+https://github.com/troupe-run/troupe@troupe-vcs-files-v0.1.0#subdirectory=packages/troupe-vcs-files",
     "troupe-vcs-git @ git+https://github.com/troupe-run/troupe@troupe-vcs-git-v0.1.0#subdirectory=packages/troupe-vcs-git",
     "troupe-runner-claude-code @ git+https://github.com/troupe-run/troupe@troupe-runner-claude-code-v0.1.0#subdirectory=plugins/runner-claude-code",
-    "troupe-runner-openai",
     "troupe-runner-scripted @ git+https://github.com/troupe-run/troupe@troupe-runner-scripted-v0.1.0#subdirectory=plugins/runner-scripted",
 ]
 
@@ -33,6 +32,7 @@ all = [
     "troupe-runner-anthropic",
     "troupe-runner-mistralrs",
     "troupe-runner-ollama",
+    "troupe-runner-openai",
 ]
 anthropic = [
     "troupe-runner-anthropic",
@@ -42,6 +42,9 @@ mistralrs = [
 ]
 ollama = [
     "troupe-runner-ollama",
+]
+openai = [
+    "troupe-runner-openai",
 ]
 
 [project.urls]

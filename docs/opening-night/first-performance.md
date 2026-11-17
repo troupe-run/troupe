@@ -194,8 +194,10 @@ option.
 ## Try it on OpenAI
 
 troupe ships a fourth runner, the OpenAI runner, which runs an OpenAI model through its Responses API, with troupe's own
-tool loop. It needs an OpenAI API key in `OPENAI_API_KEY`, and **a run costs money**, on your OpenAI account. troupe
-never writes the key down: config only names the variable it's in. Set the key first.
+tool loop. It comes as an extra, `troupe-run[openai]`, so install that first
+([Runners that come as extras](install.md#runners-that-come-as-extras)). It needs an OpenAI API key in
+`OPENAI_API_KEY`, and **a run costs money**, on your OpenAI account. troupe never writes the key down: config only
+names the variable it's in. Set the key first.
 Try it in a new git repository:
 
 ```sh

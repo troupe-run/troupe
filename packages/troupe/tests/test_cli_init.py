@@ -270,7 +270,7 @@ def test_the_mistralrs_audition_says_where_the_model_comes_from_and_names_the_ex
     assert json.loads(out)["value"] == "mistralrs"
 
 
-def test_the_openai_audition_says_which_key_to_set_and_that_a_run_costs_money(
+def test_the_openai_audition_says_which_key_to_set_that_a_run_costs_money_and_its_extra(
     repo: Repo,
 ) -> None:
     # Spec: config, "What init prints for it"; cli, "The OpenAI runner".
@@ -282,6 +282,7 @@ def test_the_openai_audition_says_which_key_to_set_and_that_a_run_costs_money(
         "   # Set OPENAI_API_KEY to your API key for the openai runtime. A run costs money, "
         "and stops once it has used the actor's budget of 100,000 tokens." in lines
     )
+    assert any("troupe-run[openai]" in line for line in lines)
     assert "Claude Code must be" not in out
     # The file names the runner. Its runtime and model are in config (checked in test_init.py);
     # the file leaves them out until #288.

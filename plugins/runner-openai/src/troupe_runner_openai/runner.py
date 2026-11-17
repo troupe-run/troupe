@@ -8,8 +8,14 @@ workspace. After it answers, a worker thread sends init and runs the tool loop t
 Both threads write to standard output, one whole line at a time under one lock, and every line goes
 through the run's Mask first, so nothing the runner sends can hold the credential. Stopping (on
 run/cancel, end of input or shutdown) sets a flag under that same lock before the answer is
-written, so nothing the worker sends can follow it. Then the request in flight is aborted, which
-wakes the worker wherever it waits.
+written, so nothing the worker sends can follow it. A request in flight then is abandoned by ending
+the process, which closes its connection: closing the library's stream from another thread doesn't
+wake a blocked read (openai-library design D8). Between requests, the worker finishes on its own.
+
+The openai package is imported in the worker, after run/start is answered, and warmed by a
+background import at start, so the handshake isn't kept waiting for it. Every OPENAI_* variable is
+removed from the process's environment first, since the library reads OPENAI_LOG as it's imported
+(design D2, D9).
 """
 
 import base64
@@ -20,7 +26,8 @@ import queue
 import sys
 import threading
 import traceback
-from typing import Any, BinaryIO, NoReturn
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any, BinaryIO, NoReturn
 
 from troupe_plugin_sdk import runner as p
 from troupe_plugin_sdk.declaration import Declaration
@@ -28,11 +35,15 @@ from troupe_plugin_sdk.events import EventNumbering
 from troupe_plugin_sdk.tools import Tools
 from troupe_runner_openai import NAME, __version__
 from troupe_runner_openai.defaults import STOP_GRACE_SECONDS, SUMMARY_MAX_BYTES
+from troupe_runner_openai.failures import Opened
+from troupe_runner_openai.library import clear_library_environment, quiet_library_logging
 from troupe_runner_openai.loop import Loop
 from troupe_runner_openai.masking import Mask
 from troupe_runner_openai.options import OptionsError, parse_options
 from troupe_runner_openai.runtime import Runtime, RuntimeRefusedError, from_run_start
-from troupe_runner_openai.service import Call
+
+if TYPE_CHECKING:
+    from troupe_runner_openai.service import Service
 
 ENGINE = "responses"
 """The engine the init event names: the API the runner speaks, whichever service serves it."""
@@ -86,8 +97,10 @@ class Runner:
         self._initialized = False
         self._run_id: str | None = None
         self._worker: threading.Thread | None = None
-        self._call: Call | None = None
-        self._call_lock = threading.Lock()
+        self._in_flight = False
+        """Whether a request is in flight, set under the output lock."""
+        self._service: Service | None = None
+        self._runtime: Runtime | None = None
         self._failed = False
 
     # Output
@@ -161,11 +174,17 @@ class Runner:
             {"jsonrpc": "2.0", "method": "run/transcript", "params": params}, from_worker=True
         )
 
-    def _in_flight(self, call: Call | None) -> None:
-        with self._call_lock:
-            self._call = call
-        if call is not None and self._stop.is_set():
-            call.abort()
+    def _begin(self) -> bool:
+        """A request is about to go out: False, sending nothing, when the run is stopping."""
+        with self._out:
+            if self._stop.is_set():
+                return False
+            self._in_flight = True
+            return True
+
+    def _end_request(self) -> None:
+        with self._out:
+            self._in_flight = False
 
     # Input
 
@@ -177,6 +196,12 @@ class Runner:
     def run(self) -> int:
         """Serve troupe until the run ends; the exit code."""
         threading.Thread(target=self._read_troupe, daemon=True).start()
+        # The library reads OPENAI_LOG as it's imported, and the rest as it builds its client:
+        # none of them may reach it (design D2, D9). The run's credential was read from the copy.
+        clear_library_environment()
+        # Import the openai package in the background, so the handshake isn't kept waiting for it
+        # and the first request mostly isn't either.
+        threading.Thread(target=_warm, daemon=True).start()
         try:
             while True:
                 kind, data = self._inbox.get()
@@ -328,6 +353,7 @@ class Runner:
             return
         # From here on, everything the runner sends is masked for this run's credential.
         self._mask = Mask(runtime.credential)
+        quiet_library_logging(self._mask, _TextOut(self._stderr))
         try:
             # Made before run/start is answered: it checks the workspace and scratch directory, so
             # a run it can't make is refused, never acknowledged and then dropped.
@@ -357,11 +383,14 @@ class Runner:
             send=self.event,
             record=self.transcript,
             wait=self._stop.wait,
-            on_call=self._in_flight,
+            open_=self._open,
+            begin=self._begin,
+            end=self._end_request,
             stopping=self._stop.is_set,
             compact=start.on_context_full == "compact",
         )
         self._run_id = start.run_id
+        self._runtime = runtime
         self._result(id_, {"runId": start.run_id})
         self._worker = threading.Thread(
             target=self._perform, args=(loop, start, runtime, tools), daemon=True
@@ -399,14 +428,15 @@ class Runner:
     # Ending
 
     def _halt(self) -> None:
-        """Stop the run: nothing more from the worker, the request in flight aborted, and the
-        worker given a moment to finish."""
+        """Stop the run: nothing more from the worker, and the worker given a moment to finish
+        between requests. With a request in flight, the process ends instead (main's os._exit),
+        which closes its connection (design D8)."""
         with self._out:
             self._stop.set()
-        with self._call_lock:
-            call = self._call
-        if call is not None:
-            call.abort()
+            in_flight = self._in_flight
+        if in_flight:
+            self._diagnose("ending the process to abandon the request in flight")
+            return
         if self._worker is not None:
             self._worker.join(STOP_GRACE_SECONDS)
             if self._worker.is_alive():
@@ -421,6 +451,39 @@ class Runner:
         self._result(id_, {})
         self._halt()
         raise _Exit(1 if self._failed else 0)
+
+    def _open(self, params: Mapping[str, Any]) -> Opened:
+        """Send one request, making the service on the first: in the worker, after run/start is
+        answered, since importing the openai package takes a while."""
+        if self._service is None:
+            assert self._runtime is not None  # noqa: S101 - set before the worker starts
+            self._service = self._make_service(self._runtime)
+        return self._service.stream(params)
+
+    @staticmethod
+    def _make_service(runtime: Runtime) -> "Service":
+        from troupe_runner_openai.service import Service  # slow: see _open
+
+        return Service(runtime.endpoint, runtime.credential)
+
+
+def _warm() -> None:
+    with contextlib.suppress(Exception):
+        import troupe_runner_openai.service  # noqa: F401 - see Runner.run
+
+
+class _TextOut:
+    """A text stream over a binary one, for the library's warnings on standard error."""
+
+    def __init__(self, stream: BinaryIO) -> None:
+        self._stream = stream
+
+    def write(self, text: str) -> int:
+        self._stream.write(text.encode("utf-8", "backslashreplace"))
+        return len(text)
+
+    def flush(self) -> None:
+        self._stream.flush()
 
 
 def main() -> NoReturn:

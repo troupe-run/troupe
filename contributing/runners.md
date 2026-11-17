@@ -543,8 +543,10 @@ The [OpenAI runner](../plugins/runner-openai/README.md) is the same shape as Oll
 service only answers, and the runner holds the conversation and runs the tools with the plugin SDK's `Tools`, so
 `init`'s `effects` is `checked`. Its service comes from the actor's runtime, and the key arrives as
 `TROUPE_RUNTIME_CREDENTIAL`. Every request is `store: false` and carries the whole conversation: after tool calls, the
-response's output items unchanged, then one `function_call_output` per call. Its fixtures pin it, recorded from OpenAI
-and from local Ollama's `/v1`.
+response's output items unchanged, then one `function_call_output` per call. It sends each request through a
+[client library](#runners-with-client-libraries), the `openai` package, set up as the Anthropic runner's is (below),
+with a cap on each line of a response counted beneath the library. Its fixtures pin it, recorded from OpenAI and from
+local Ollama's `/v1`.
 
 | From the service | Run event |
 |---|---|
@@ -561,15 +563,16 @@ and from local Ollama's `/v1`.
 | a `cost` in every response's usage | summed into `result.costUsd` |
 | no cost, and a price in `run/start` | `result.estimatedCostUsd`, from the SDK's estimator |
 
-Its transcript records use the contract's [record kinds](#record-kinds): the request body as sent is `sent`; each
-stream line unchanged, and the body of an error or of a 2xx that isn't a stream, are `received`; the status with only named headers, and a stream it drops,
-are `note`s. The request's URL isn't recorded, since the run's start records the runtime's endpoint. The key, and a
+Its transcript records use the contract's [record kinds](#record-kinds): the request's parameters as given to the
+library are `sent`; each stream event as the library parsed it, and the body of an error or of a 2xx that isn't a
+stream, are `received`; the status with only named headers, and a stream it drops, are `note`s. The request's URL isn't recorded, since the run's start records the runtime's endpoint. The key, and a
 masked echo of it, are masked in everything it sends.
 
 ### Mapping an engine: a client library under troupe's own loop
 
 The [Anthropic runner](../plugins/runner-anthropic/README.md) is a third shape: troupe's own tool loop, as the OpenAI
-runner's, with each request sent through a [client library](#runners-with-client-libraries), the `anthropic` package,
+runner's, with each request sent through a [client library](#runners-with-client-libraries) (as the OpenAI runner's
+are, through `openai`), the `anthropic` package,
 whose defaults break three of troupe's guarantees and are each turned off in one module: it follows redirects, retries
 on its own terms, and looks for a credential in the environment and on disk. The runner gives it its own HTTP client,
 `max_retries=0`, the runtime's key or none, and removes the library's `ANTHROPIC_*` variables from its own

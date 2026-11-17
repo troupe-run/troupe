@@ -98,6 +98,16 @@ stream it abandons (`note`).
 - **WHEN** a response's stream breaks off and the runner abandons it
 - **THEN** the transcript holds a `note` saying why, after the stream's last `received` event
 
+### Requirement: A stream's lines are capped below the library
+The runner SHALL refuse to read a line of a response's body longer than its named line limit, counting bytes as they
+arrive, beneath the library, so an over-long stream is never read whole into memory. Such a stream SHALL be dropped
+and retried as a network failure, with a message naming the limit.
+
+#### Scenario: A line past the limit
+- **WHEN** a response's stream sends a line longer than the runner's line limit
+- **THEN** a `retry` with reason `network` follows, its message names the limit, and the runner never holds more than
+  the limit and one read of that line
+
 ## MODIFIED Requirements
 
 ### Requirement: Transient failures are retried and reported

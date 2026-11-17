@@ -47,14 +47,15 @@ from troupe_plugin_sdk.tools import Tools
 from troupe_runner_openai.defaults import INSTRUCTIONS, SUMMARY_MAX_BYTES
 from troupe_runner_openai.exchange import (
     ExchangeFailedError,
+    Open,
     Record,
     Retry,
+    StoppedError,
     Wait,
     exchange,
 )
 from troupe_runner_openai.options import Options
 from troupe_runner_openai.runtime import Runtime
-from troupe_runner_openai.service import AbortedError, Call
 from troupe_runner_openai.stream import Reply
 
 INCOMPLETE: dict[str, tuple[str, FailureReason]] = {
@@ -73,12 +74,12 @@ def instructions(character: str | None) -> str:
     return INSTRUCTIONS if character is None else f"{INSTRUCTIONS}\n\n{character}"
 
 
-def request_body(
+def request_params(
     runtime: Runtime, instructions_: str, input_: list[dict[str, Any]], tools: Tools
-) -> bytes:
-    """One request's body: the runtime's model, the instructions and the whole conversation, the
-    SDK's tools (not strict, which the Responses API defaults to and the SDK's optional fields
-    don't fit), streamed, and stored nowhere."""
+) -> dict[str, Any]:
+    """One request's parameters, which the library sends as its body: the runtime's model, the
+    instructions and the whole conversation, the SDK's tools (not strict, which the Responses API
+    defaults to and the SDK's optional fields don't fit), streamed, and stored nowhere."""
     offered = [
         {
             "type": "function",
@@ -89,7 +90,7 @@ def request_body(
         }
         for tool in tools.offered()
     ]
-    body = {
+    return {
         "model": runtime.model,
         "instructions": instructions_,
         "input": input_,
@@ -98,7 +99,11 @@ def request_body(
         "store": False,
         "include": ["reasoning.encrypted_content"],
     }
-    return json.dumps(body, ensure_ascii=False).encode("utf-8")
+
+
+def body_size(params: dict[str, Any]) -> int:
+    """The UTF-8 bytes of ``params`` as a JSON body: what compaction estimates tokens from."""
+    return len(json.dumps(params, ensure_ascii=False).encode("utf-8"))
 
 
 @dataclass
@@ -187,9 +192,10 @@ def _count(value: object) -> TypeGuard[int]:
 
 @dataclass
 class Loop:
-    """One run's tool loop. ``send`` takes each event, ``record`` each transcript record, ``wait``
-    waits out a retry's delay (true when the run is stopping), and ``on_call`` is told of each
-    request in flight so the runner can abort it."""
+    """One run's tool loop. ``open_`` sends one request through the service seam, ``send`` takes
+    each event, ``record`` each transcript record, ``wait`` waits out a retry's delay (true when the
+    run is stopping), and ``begin`` and ``end`` bracket each request in flight, ``begin`` returning
+    False, so nothing is sent, when the run is stopping (openai-library design D8)."""
 
     runtime: Runtime
     options: Options
@@ -198,9 +204,10 @@ class Loop:
     send: Callable[[RunEvent], None]
     record: Record
     wait: Wait
-    on_call: Callable[[Call | None], None] = lambda _: None
+    open_: Open
+    begin: Callable[[], bool] = lambda: True
+    end: Callable[[], None] = lambda: None
     stopping: Callable[[], bool] = lambda: False
-    make_call: Callable[..., Call] = Call
     exchange_limits: dict[str, Any] = field(default_factory=dict)
     compact: bool = False
     """Whether run/start's onContextFull is compact: a refusal as too long then compacts the
@@ -254,7 +261,7 @@ class Loop:
                 # (openai-wrong-shape-ends-run design D5).
                 spend.add(error.usage)
             return self._failed(error.reason, error.message, spend)
-        except AbortedError:
+        except StoppedError:
             return None
 
     def failure(self, message: str) -> ResultEvent:
@@ -268,13 +275,14 @@ class Loop:
         compacts the conversation and asks again, as the same turn; with nothing left to remove,
         the refusal ends the run as it would have."""
         while True:
-            body = request_body(self.runtime, told, conversation, self.tools)
+            params = request_params(self.runtime, told, conversation, self.tools)
+            size = body_size(params)
             try:
-                reply = self._exchange(body)
+                reply = self._exchange(params)
             except ExchangeFailedError as error:
                 if not (self.compact and error.reason == "context-length" and not error.answered):
                     raise
-                if not self._compact(conversation, len(body)):
+                if not self._compact(conversation, size):
                     raise ExchangeFailedError(
                         f"{error.message} onContextFull is compact, and compaction found nothing "
                         "more to remove: the function outputs left are the latest turn's.",
@@ -283,7 +291,7 @@ class Loop:
                 continue
             given = (reply.usage or {}).get("input_tokens")
             if _count(given) and given > 0:
-                self._estimate.calibrate(len(body), given)
+                self._estimate.calibrate(size, given)
                 self._accepted_tokens = given
             return reply
 
@@ -323,17 +331,17 @@ class Loop:
         )
         return True
 
-    def _exchange(self, body: bytes) -> Reply:
+    def _exchange(self, params: dict[str, Any]) -> Reply:
         return exchange(
-            self.runtime.endpoint,
-            body,
-            self.runtime.credential,
+            self.open_,
+            params,
+            self.runtime.endpoint.responses_url,
             self._send_retry,
             self.record,
             self.wait,
             on_lost=self.numbering.lost,
-            make_call=self.make_call,
-            on_call=self.on_call,
+            begin=self.begin,
+            end=self.end,
             **self.exchange_limits,
         )
 
@@ -468,4 +476,4 @@ class Loop:
         return fit(self.numbering.numbered(body), key, limit, self.numbering.event_max_bytes)
 
 
-__all__ = ["INCOMPLETE", "Loop", "instructions", "request_body"]
+__all__ = ["INCOMPLETE", "Loop", "body_size", "instructions", "request_params"]

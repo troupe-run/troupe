@@ -104,12 +104,27 @@ def absent(*, in_extra: bool) -> Runner:
     )
 
 
-def test_only_the_anthropic_mistralrs_and_ollama_runners_come_as_extras() -> None:
-    """anthropic depends on the anthropic package, mistralrs on mistral.rs's package and ollama on
-    httpx2 (#332), so each is troupe-run's extra of its name; every other shipped runner depends
-    only on the SDK, now that the LM Studio runner is gone (#414, #415, #413)."""
+def test_only_the_anthropic_mistralrs_ollama_and_openai_runners_come_as_extras() -> None:
+    """anthropic depends on the anthropic package, mistralrs on mistral.rs's package, ollama on
+    httpx2 (#332) and openai on the openai package (#331), so each is troupe-run's extra of its
+    name; every other shipped runner depends only on the SDK, now that the LM Studio runner is gone
+    (#414, #415, #413)."""
     assert {name: entry.in_extra for name, entry in RUNNERS.items()} == {
-        name: name in ("anthropic", "mistralrs", "ollama") for name in RUNNERS
+        name: name in ("anthropic", "mistralrs", "ollama", "openai") for name in RUNNERS
+    }
+
+
+def test_perform_gives_the_openai_runner_no_openai_variable_from_its_environment() -> None:
+    # The variables the openai package would read never reach the runner (openai-library D2).
+    source = {
+        "OPENAI_API_KEY": "sk-canary-0123456789",
+        "OPENAI_BASE_URL": "https://elsewhere.example/v1",
+        "OPENAI_CUSTOM_HEADERS": "X-Leak: yes",
+        "OPENAI_LOG": "debug",
+        "HTTPS_PROXY": "http://proxy.example:3128",
+    }
+    assert interim.runner_environment("openai", source) == {
+        "HTTPS_PROXY": "http://proxy.example:3128"
     }
 
 

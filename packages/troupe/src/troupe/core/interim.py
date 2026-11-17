@@ -198,6 +198,9 @@ RUNNERS: dict[str, Runner] = {
         package="troupe_runner_openai",
         environment=OPENAI_ENVIRONMENT,
         runtime="required",
+        # The openai package comes with troupe-run[openai], not the base install
+        # (runner-extras design D1, D5; openai-library design D10).
+        in_extra=True,
         # Its requests go below the endpoint, which an OpenAI-style service serves under a path
         # such as /v1 (runtime-checks design D5).
         fit=RuntimeFit(path="required", endpoint="required", built_in="openai"),
