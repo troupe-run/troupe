@@ -3,7 +3,7 @@
 ### Requirement: The Ollama runner is a self-contained plugin
 The Ollama runner SHALL be an out-of-process plugin with its own package and tests. It SHALL speak only the runner
 contract, using the plugin SDK's types for it, and SHALL import nothing of troupe's but the SDK. Besides the SDK, it
-SHALL depend directly only on its HTTP libraries, `httpx` and `httpcore`, each pinned to one version. It SHALL be
+SHALL depend directly only on its HTTP libraries, `httpx2` and `httpcore2`, each pinned to one version. It SHALL be
 installed as `troupe-run`'s `ollama` extra, not in the base install, and SHALL start no process.
 
 #### Scenario: The plugin's imports
@@ -12,7 +12,7 @@ installed as `troupe-run`'s `ollama` extra, not in the base install, and SHALL s
 
 #### Scenario: The plugin's dependencies
 - **WHEN** `plugins/runner-ollama/pyproject.toml` is read
-- **THEN** its dependencies are `troupe-plugin-sdk`, and `httpx` and `httpcore` each pinned with `==`, and nothing
+- **THEN** its dependencies are `troupe-plugin-sdk`, and `httpx2` and `httpcore2` each pinned with `==`, and nothing
   else
 
 #### Scenario: The plugin's extra

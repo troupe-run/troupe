@@ -1,6 +1,6 @@
 ## 1. Differential tests against today's client (design D8)
 
-- [ ] 1.1 Add `plugins/runner-ollama/tests/test_ollama_client_differential.py`, which runs scripted exchanges through
+- [x] 1.1 Add `plugins/runner-ollama/tests/test_ollama_client_differential.py`, which runs scripted exchanges through
       `Client` against the fake endpoint and checks each call's result or failure (class, `reason`, `status`, body)
       and what the fake received (method, path, body bytes) against expected values written as data. Cover:
       - a streamed answer;
@@ -12,8 +12,8 @@
       - a 307 redirect;
       - a closed client;
       - `version` and `show`, including a 404 model and a wrong-shaped answer.
-- [ ] 1.2 Run it on today's `http.client` client and see every case pass; commit it before `client.py` changes.
-- [ ] 1.3 Add the guarantee tests that pass on today's client too:
+- [x] 1.2 Run it on today's `http.client` client and see every case pass; commit it before `client.py` changes.
+- [x] 1.3 Add the guarantee tests that pass on today's client too:
       - a 307 to a second fake, from chat and from the preflight, which never reaches the second fake;
       - `HTTP_PROXY`, `ALL_PROXY` and `NETRC` set (with a `.netrc` login for the fake's host), with requests reaching
         the fake directly and carrying no `Authorization`;
@@ -22,30 +22,30 @@
 
 ## 2. The dependencies and the extra (design D2, D9)
 
-- [ ] 2.1 Add `httpx==0.28.1` and `httpcore==1.0.9` to `plugins/runner-ollama/pyproject.toml`, with the comment
-      saying why (#319, #332, this design). Run `uv lock`, then check the lockfile package by package: only `httpx`,
-      `httpcore` and `certifi`, and anything they need that isn't locked yet, may be added.
+- [ ] 2.1 Add `httpx2==2.16.0` and `httpcore2==2.16.0` to `plugins/runner-ollama/pyproject.toml`, with the comment
+      saying why (#319, #332, this design). Run `uv lock`, then check the lockfile package by package: every package is
+      already locked, so only the plugin's own entry may change.
 - [ ] 2.2 Move `troupe-runner-ollama` from `troupe-run`'s `dependencies` to an `ollama` extra and to `all`. Set
       `in_extra=True` on `interim.RUNNERS["ollama"]`, with its comment. Update core's tests that list which runners
       are extras.
-- [ ] 2.3 Update `scripts/licences.toml`'s MPL-2.0 reason to name `certifi` through `httpx` for the Ollama runner.
-      Run `scripts/runner_licences.py` and the bundle check, and see both pass.
-- [ ] 2.4 Add an import-linter contract that only `troupe_runner_ollama.client` imports `httpx` or `httpcore`. See
+- [ ] 2.3 Run `scripts/runner_licences.py` and the bundle check, and see both pass with `scripts/licences.toml`
+      unchanged.
+- [ ] 2.4 Add an import-linter contract that only `troupe_runner_ollama.client` imports `httpx2` or `httpcore2`. See
       it fail on a stray import, then pass.
 
-## 3. The client on httpx (design D3 to D7)
+## 3. The client on httpx2 (design D3 to D7)
 
-- [ ] 3.1 Write the transport: an `httpx.BaseTransport` over `httpcore.ConnectionPool`, with:
+- [ ] 3.1 Write the transport: an `httpx2.BaseTransport` over `httpcore2.ConnectionPool`, with:
       - the runner's `ssl.create_default_context()`;
       - `max_keepalive_connections=0` and `retries=0`;
       - a recording `network_backend`;
-      - `httpcore`'s exceptions mapped to `httpx`'s.
-- [ ] 3.2 Rewrite `Client` on an `httpx.Client` built with `follow_redirects=False`, `trust_env=False`, that transport
+      - `httpcore2`'s exceptions mapped to `httpx2`'s.
+- [ ] 3.2 Rewrite `Client` on an `httpx2.Client` built with `follow_redirects=False`, `trust_env=False`, that transport
       and only the runner's headers (`Content-Type` on a body, `Accept-Encoding: identity`). Keep `version`, `show`,
       `chat`, `close`, `closed` and every failure class and message.
 - [ ] 3.3 Read `chat`'s answer with `iter_raw()`, splitting lines with the `LINE_MAX_BYTES` cap, and refuse a
       `Content-Encoding` other than identity as a network failure.
-- [ ] 3.4 Give each call its `httpx.Timeout` from `STREAM_IDLE_TIMEOUT_SECONDS`, or the preflight's time left. Make
+- [ ] 3.4 Give each call its `httpx2.Timeout` from `STREAM_IDLE_TIMEOUT_SECONDS`, or the preflight's time left. Make
       `close` set the flag, then shut down every recorded socket that's still open.
 - [ ] 3.5 Add a test that an `https` endpoint is checked against the runner's own SSL context: with a context that
       doesn't trust the fake's certificate, the preflight is `ollama.unreachable`.
@@ -60,7 +60,7 @@
       the HTTP client's.
 - [ ] 4.2 Update the install page's extras list, `first-performance.md` (install the extra before the audition),
       `bring-your-own-agent.md`, `docs/prompt-book/cli.md` if it says how to get the runner, and
-      `contributing/runners.md`'s "Mapping an engine: Ollama" (`httpx`, and why not `ollama`). Run the docs check.
+      `contributing/runners.md`'s "Mapping an engine: Ollama" (`httpx2`, and why not `ollama`). Run the docs check.
 - [ ] 4.3 Add tests for the `cli` scenarios: `troupe init --audition --runner ollama` refused with
       `runner.not-installed` naming `troupe-run[ollama]` when the plugin isn't importable, and the audition notes
       naming the extra when it is.

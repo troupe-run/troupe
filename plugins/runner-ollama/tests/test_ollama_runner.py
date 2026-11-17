@@ -438,6 +438,25 @@ def test_end_of_input_while_a_request_waits_closes_it_and_the_runner_exits(
         assert fake.closed_by_client.wait(CLOSE_SEEN_WITHIN)
 
 
+def test_cancel_while_ollama_has_sent_nothing_stops_the_conversation_within_the_grace(
+    session: Session,
+) -> None:
+    # Ollama sends not even a status while it loads a model: the request in flight is closed, and
+    # the conversation stops on its own, not abandoned when the grace runs out (ollama-library
+    # design D4).
+    with serving([Answer(before_headers=True)]) as fake:
+        session.start(**_run(fake))
+        while not fake.chats():
+            time.sleep(0.02)
+        session.send("run/cancel", {"runId": session.run_id})
+        started = time.monotonic()
+        session.rest()
+        assert session.wait() == 0
+        assert time.monotonic() - started < STOP_GRACE_SECONDS + MARGIN
+        assert fake.closed_by_client.wait(CLOSE_SEEN_WITHIN)
+    assert b"didn't stop within" not in session.stderr()
+
+
 def test_the_runner_takes_nothing_from_its_environment(workspace: Path) -> None:
     # OLLAMA_HOST would move the endpoint if the runner read it; it's never read (design D10).
     with serving([final("hi")]) as fake:
