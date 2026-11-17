@@ -101,7 +101,8 @@ characters:
    data line it touches has its whole value replaced with `"[credential]"`, the `data: ` prefix kept, and each text
    line it touches has its covered characters replaced, as D2 does.
 
-Then check again, until nothing is covered. Each round replaces at least one character the runner sent, so it ends.
+Each round replaces every covered run it finds, choosing the smallest value for each in one sweep over the
+record's values and dropping a value inside another being replaced. Then check again, until nothing is covered. Each round replaces at least one character the runner sent, so it ends.
 If a round would change nothing (only troupe's own text, a line break or a data prefix is left covered), the whole
 record becomes `"[credential]"` (a data line, `data: "[credential]"`).
 
@@ -142,6 +143,9 @@ record becomes `"[credential]"` (a data line, `data: "[credential]"`).
 - [Parsing records costs time on big Claude Code lines] → only records whose writings hold a form or that hold `\u`
   are parsed; the scan is a C regex, and only changed tokens are re-encoded. Check timing on a large line in the
   tests.
+- [A record with many spans across values costs a pass each] → each pass replaces every run it finds (review of
+  #439): 2000 spans took 61 s replaced one a pass, and take 79 ms now; 20 000 spans (0.34 MB) take 1.2 s. A test
+  counts the passes.
 - [A replaced value loses data next to the credential] → only for a credential made of JSON's syntax, which a real
   key never is; D3 keeps the loss to the smallest value.
 - [A record that's JSON by accident (a plain text line that happens to be `[1, 2]`)] → masking it as JSON keeps it

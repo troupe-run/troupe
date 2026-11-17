@@ -22,4 +22,4 @@ interpret records, apart from masking the run's credential, which reads a record
 #### Scenario: A record that holds the credential
 - **WHEN** a runner sends a transcript record that holds the run's credential
 - **THEN** the stored record is the same bytes with the credential masked, and still valid in its own format: a record
-  that was JSON text is still JSON text, changed only in the strings that held the credential
+  that was JSON text is still JSON text, changed only where it held the credential
