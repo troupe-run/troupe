@@ -405,8 +405,10 @@ and records only their reference.
 ### Environment
 
 A runner starts with only the environment variables troupe's caller names for it, plus the minimum the operating
-system needs (`SYSTEMROOT` on Windows). Nothing is passed through from troupe's own environment: the runner policy,
-`RUNNER_ENVIRONMENT`, selects nothing. A runner that needs a credential or a setting is given it explicitly. A
+system needs (`SYSTEMROOT` on Windows). Nothing else is passed through from troupe's own environment: the runner
+policy, `RUNNER_ENVIRONMENT`, selects only `COVERAGE_PROCESS_CONFIG`, coverage.py's subprocess setting, so a test run
+under coverage measures runner code (it holds no secret). A runner that needs a credential or a setting is given it
+explicitly. A
 runtime's credential arrives as `TROUPE_RUNTIME_CREDENTIAL` ([The runtime and its
 credential](#the-runtime-and-its-credential)).
 

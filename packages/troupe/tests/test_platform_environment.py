@@ -59,13 +59,51 @@ def test_explicit_values_are_added_on_top_of_the_selection() -> None:
     assert _without_minimum(environment) == {"A": "2", "B": "3"}
 
 
-def test_the_runner_policy_selects_nothing_from_the_parent() -> None:
+def test_the_runner_policy_selects_only_coverages_variable_from_the_parent() -> None:
     environment = build_environment(
         defaults.RUNNER_ENVIRONMENT,
-        source={**MINIMUM, "HOME": "/home/x", "ANTHROPIC_API_KEY": "secret"},
+        source={
+            **MINIMUM,
+            "HOME": "/home/x",
+            "ANTHROPIC_API_KEY": "secret",
+            "COVERAGE_PROCESS_CONFIG": '{"run:branch": true}',
+        },
         explicit={"TROUPE_RUN": "1"},
     )
-    assert _without_minimum(environment) == {"TROUPE_RUN": "1"}
+    assert _without_minimum(environment) == {
+        "TROUPE_RUN": "1",
+        "COVERAGE_PROCESS_CONFIG": '{"run:branch": true}',
+    }
+
+
+OTHER_NAMES = st.sampled_from(
+    [
+        "COVERAGE_FILE",
+        "COVERAGE_PROCESS_START",
+        "COVERAGE_RCFILE",
+        "COVERAGE_PROCESS_CONFIGX",
+        "XCOVERAGE_PROCESS_CONFIG",
+        "ANTHROPIC_API_KEY",
+        "OPENAI_API_KEY",
+        "TROUPE_RUNTIME_CREDENTIAL",
+        "HOME",
+        "GIT_DIR",
+    ]
+)
+
+
+@settings(max_examples=200, deadline=None)
+@given(
+    others=st.dictionaries(OTHER_NAMES, st.text(max_size=5)),
+    coverage=st.one_of(st.none(), st.text(max_size=20)),
+)
+def test_the_runner_policy_passes_coverages_variable_and_nothing_else(
+    others: dict[str, str], coverage: str | None
+) -> None:
+    """Spec: actor-runners, "Coverage's variable is the only one passed" (owner, 2026-11-18)."""
+    source = {**others} if coverage is None else {**others, "COVERAGE_PROCESS_CONFIG": coverage}
+    environment = _without_minimum(build_environment(defaults.RUNNER_ENVIRONMENT, source=source))
+    assert environment == ({} if coverage is None else {"COVERAGE_PROCESS_CONFIG": coverage})
 
 
 NAMES = st.sampled_from(["A", "B", "GIT_DIR", "GIT_X", "GIT_INDEX_FILE", "HOME", "Path", "PATH"])

@@ -75,9 +75,12 @@ warm-up cut off keeps what it did, so a run picks up where it stopped."""
 RUNNER_WARM_UP_OUTPUT_MAX_BYTES = 1024 * 1024
 """The most a runner's warm-up may write to its standard output and error together."""
 
-RUNNER_ENVIRONMENT = EnvironmentPolicy()
-"""What a runner receives from troupe's environment: nothing. It gets only the variables its caller
-names, plus the platform minimum (design D6)."""
+RUNNER_ENVIRONMENT = EnvironmentPolicy(names=frozenset({"COVERAGE_PROCESS_CONFIG"}))
+"""What a runner receives from troupe's environment: only coverage.py's subprocess setting,
+COVERAGE_PROCESS_CONFIG, so a test run under coverage measures runner code. It holds coverage
+settings, never a secret, and is set only under coverage (owner, 2026-11-18; quality-gates design
+D1). Beyond it, a runner gets only the variables its caller names, plus the platform minimum
+(design D6)."""
 
 # Identity (spec: identity; event-store design D9). contributing/event-store.md lists it.
 
