@@ -1532,7 +1532,6 @@ dependencies = [
     { name = "troupe-identity-local" },
     { name = "troupe-plugin-sdk" },
     { name = "troupe-runner-claude-code" },
-    { name = "troupe-runner-ollama" },
     { name = "troupe-runner-openai" },
     { name = "troupe-runner-scripted" },
     { name = "troupe-stage-local" },
@@ -1545,12 +1544,16 @@ dependencies = [
 all = [
     { name = "troupe-runner-anthropic" },
     { name = "troupe-runner-mistralrs" },
+    { name = "troupe-runner-ollama" },
 ]
 anthropic = [
     { name = "troupe-runner-anthropic" },
 ]
 mistralrs = [
     { name = "troupe-runner-mistralrs" },
+]
+ollama = [
+    { name = "troupe-runner-ollama" },
 ]
 
 [package.metadata]
@@ -1564,7 +1567,8 @@ requires-dist = [
     { name = "troupe-runner-claude-code", editable = "plugins/runner-claude-code" },
     { name = "troupe-runner-mistralrs", marker = "extra == 'all'", editable = "plugins/runner-mistralrs" },
     { name = "troupe-runner-mistralrs", marker = "extra == 'mistralrs'", editable = "plugins/runner-mistralrs" },
-    { name = "troupe-runner-ollama", editable = "plugins/runner-ollama" },
+    { name = "troupe-runner-ollama", marker = "extra == 'all'", editable = "plugins/runner-ollama" },
+    { name = "troupe-runner-ollama", marker = "extra == 'ollama'", editable = "plugins/runner-ollama" },
     { name = "troupe-runner-openai", editable = "plugins/runner-openai" },
     { name = "troupe-runner-scripted", editable = "plugins/runner-scripted" },
     { name = "troupe-stage-local", editable = "packages/troupe-stage-local" },
@@ -1572,7 +1576,7 @@ requires-dist = [
     { name = "troupe-vcs-files", editable = "packages/troupe-vcs-files" },
     { name = "troupe-vcs-git", editable = "packages/troupe-vcs-git" },
 ]
-provides-extras = ["all", "anthropic", "mistralrs"]
+provides-extras = ["all", "anthropic", "mistralrs", "ollama"]
 
 [[package]]
 name = "troupe-runner-anthropic"
@@ -1620,11 +1624,17 @@ name = "troupe-runner-ollama"
 version = "0.0.0"
 source = { editable = "plugins/runner-ollama" }
 dependencies = [
+    { name = "httpcore2" },
+    { name = "httpx2" },
     { name = "troupe-plugin-sdk" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "troupe-plugin-sdk", editable = "packages/troupe-plugin-sdk" }]
+requires-dist = [
+    { name = "httpcore2", specifier = "==2.16.0" },
+    { name = "httpx2", specifier = "==2.16.0" },
+    { name = "troupe-plugin-sdk", editable = "packages/troupe-plugin-sdk" },
+]
 
 [[package]]
 name = "troupe-runner-openai"

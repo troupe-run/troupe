@@ -104,12 +104,12 @@ def absent(*, in_extra: bool) -> Runner:
     )
 
 
-def test_only_the_anthropic_and_mistralrs_runners_come_as_extras() -> None:
-    """anthropic depends on the anthropic package and mistralrs on mistral.rs's package, so each is
-    troupe-run's extra of its name; every other shipped runner depends only on the SDK, now that the
-    LM Studio runner is gone (#414, #415, #413)."""
+def test_only_the_anthropic_mistralrs_and_ollama_runners_come_as_extras() -> None:
+    """anthropic depends on the anthropic package, mistralrs on mistral.rs's package and ollama on
+    httpx2 (#332), so each is troupe-run's extra of its name; every other shipped runner depends
+    only on the SDK, now that the LM Studio runner is gone (#414, #415, #413)."""
     assert {name: entry.in_extra for name, entry in RUNNERS.items()} == {
-        name: name in ("anthropic", "mistralrs") for name in RUNNERS
+        name: name in ("anthropic", "mistralrs", "ollama") for name in RUNNERS
     }
 
 
