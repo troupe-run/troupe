@@ -112,3 +112,24 @@ the local figure. They're left out of coverage and complexity by pattern; `.gith
 delivered file, so the delivered module could read it and leave them all out by itself, which is a change for
 troupe-run/infrastructure.
 
+### D8. Baselines and tolerance
+
+Two runs of the coverage leg on f9f6bd6a (CI run 44240981380, attempts 1 and 2), with the runner exit (D6) and the
+omit fix (D7) in place, measured every package identically except runner-openai: 91.06% and 91.59%, a difference of
+0.53 points from timing-dependent paths in its tests. So the tolerance is 0.6, the smallest tenth that covers it
+(infrastructure's quality-gates design D4), and each baseline is the lower measurement rounded down to 0.1:
+
+| Package | Baseline | | Package | Baseline |
+|---|---|---|---|---|
+| troupe | 91.9 | | runner-anthropic | 86.5 |
+| troupe-artifacts-local | 91.7 | | runner-claude-code | 72.7 |
+| troupe-identity-local | 96.1 | | runner-mistralrs | 88.0 |
+| troupe-plugin-sdk | 94.9 | | runner-ollama | 89.6 |
+| troupe-stage-local | 100.0 | | runner-openai | 91.0 |
+| troupe-store-text | 93.0 | | runner-scripted | 81.7 |
+| troupe-vcs-files | 95.2 | | scripts | 88.4 |
+| troupe-vcs-git | 93.3 | | troupe-run | (no code) |
+
+Before D6 the runners measured 50.7% (scripted) to 91.5%; runner-claude-code, at 72.7%, is the one package under the
+80% floor a new package must meet, which it would fail if it were new. #325's mutation testing reports weak spots.
+

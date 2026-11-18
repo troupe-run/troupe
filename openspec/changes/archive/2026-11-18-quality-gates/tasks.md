@@ -24,8 +24,9 @@ at a time.
       before
 - [x] 2.4 `ci.yml`: every leg fetches history and passes the base (bash and PowerShell); the Linux 3.15 leg is the
       coverage leg. Update `scripts/tests/test_ci_workflow.py`. Verify it passes
-- [ ] 2.5 Baselines: set each package's from this pull request's coverage leg, rounded down to 0.1; run the leg again on
-      the same commit and set the tolerance from the difference (infrastructure design D4). Cite both runs
+- [x] 2.5 Baselines: set each package's from this pull request's coverage leg, rounded down to 0.1; run the leg again on
+      the same commit and set the tolerance from the difference (infrastructure design D4). Cite both runs. Done:
+      CI run 44240981380, attempts 1 and 2, on f9f6bd6a; tolerance 0.6 (design D8)
 
 ## 2b. Runner exits and the delivered files' omission (design D6, D7)
 
