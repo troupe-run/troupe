@@ -63,7 +63,8 @@
 
 ## 10. Integration
 
-- [ ] 10.1 `uv run scripts/check.py` passes (run when the 1-minute load is under 40)
+- [x] 10.1 `uv run scripts/check.py` passes (run when the 1-minute load is under 40): the guard's check of cacb3d78,
+  6 workers, load 9 to 18, passed in 317 s
 
 ## Workflow follow-up
 
