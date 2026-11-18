@@ -141,8 +141,17 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python: ["3.12", "3.13", "3.14", "3.15"]
+        include:
+          # The coverage leg: coverage and the dependency audit run here and nowhere else
+          # (troupe-run/infrastructure spec: quality-gates; quality-gates design D3).
+          - os: ubuntu-latest
+            python: "3.15"
+            gates: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The base, for the complexity gate's diff on every leg, and the audit's on the coverage leg.
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           python-version: ${{ matrix.python }}
@@ -150,21 +159,41 @@ jobs:
       - name: Install
         run: uv sync --locked
       # Each OS keeps its own shell (D2): troupe's real-Ctrl-C tests fail on Windows under Git Bash.
+      # Each passes what the work is judged against: a pull request's merge commit's first parent
+      # (main), a merge group's base, or what main was before a push.
       - name: Check (the same script as local runs)
         if: runner.os != 'Windows'
         env:
           # `--scope <name>` words, or nothing for the full check. Scope names are [a-z][a-z0-9_]*,
           # so they split on spaces safely.
           CHECK_ARGS: ${{ needs.changes.outputs['check-args'] }}
-        run: uv run scripts/check.py $CHECK_ARGS
+          QUALITY_GATES_LEG: ${{ matrix.gates && 'true' || '' }}
+          EVENT: ${{ github.event_name }}
+          MERGE_GROUP_BASE: ${{ github.event.merge_group.base_sha }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          case "$EVENT" in
+            pull_request) BASE=$(git rev-parse HEAD^1) ;;
+            merge_group) BASE="$MERGE_GROUP_BASE" ;;
+            *) BASE="$BEFORE" ;;
+          esac
+          uv run scripts/check.py $CHECK_ARGS --base "$BASE"
       - name: Check (the same script as local runs)
         if: runner.os == 'Windows'
         env:
           CHECK_ARGS: ${{ needs.changes.outputs['check-args'] }}
+          EVENT: ${{ github.event_name }}
+          MERGE_GROUP_BASE: ${{ github.event.merge_group.base_sha }}
+          BEFORE: ${{ github.event.before }}
         # PowerShell doesn't split on spaces: split the words, and pass none for the full check.
         run: |
           $checkArgs = if ($env:CHECK_ARGS) { -split $env:CHECK_ARGS } else { @() }
-          uv run scripts/check.py @checkArgs
+          $base = switch ($env:EVENT) {
+            'pull_request' { git rev-parse 'HEAD^1' }
+            'merge_group' { $env:MERGE_GROUP_BASE }
+            default { $env:BEFORE }
+          }
+          uv run scripts/check.py @checkArgs --base $base
       # Installs troupe the documented way from this commit, on this leg's Python, and performs with
       # it, then installs troupe-run[all] and rehearses an audition on every runner, so each extra's
       # dependencies install here (spec: installation; install-with-uv design D5; runner-extras D9).

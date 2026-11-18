@@ -364,3 +364,35 @@ def test_a_broken_copy_of_the_workflow_is_named(
     broken.write_text(text.replace(before, after), encoding="utf-8")
     [problem] = check(load(broken))
     assert expected in problem
+
+
+# The coverage leg (spec: quality-check, "One CI leg measures coverage and audits the lock file";
+# quality-gates design D3)
+
+
+def legs_job() -> dict[Any, Any]:
+    job: dict[Any, Any] = load(REPO / CI)["jobs"]["check-legs"]
+    return job
+
+
+def check_steps() -> list[dict[Any, Any]]:
+    return [s for s in legs_job()["steps"] if str(s.get("name", "")).startswith("Check (")]
+
+
+def test_only_the_linux_3_15_leg_is_the_coverage_leg() -> None:
+    include = legs_job()["strategy"]["matrix"]["include"]
+    assert include == [{"os": "ubuntu-latest", "python": "3.15", "gates": True}]
+    posix = next(s for s in check_steps() if s["if"] == "runner.os != 'Windows'")
+    assert posix["env"]["QUALITY_GATES_LEG"] == "${{ matrix.gates && 'true' || '' }}"
+    windows = next(s for s in check_steps() if s["if"] == "runner.os == 'Windows'")
+    assert "QUALITY_GATES_LEG" not in windows["env"]
+
+
+def test_every_leg_fetches_history_and_passes_each_events_base() -> None:
+    checkout = next(s for s in legs_job()["steps"] if "checkout" in str(s.get("uses", "")))
+    assert checkout["with"]["fetch-depth"] == 0
+    for step in check_steps():
+        assert step["env"]["MERGE_GROUP_BASE"] == "${{ github.event.merge_group.base_sha }}"
+        assert step["env"]["BEFORE"] == "${{ github.event.before }}"
+        assert "HEAD^1" in step["run"]
+        assert "--base" in step["run"]

@@ -1,0 +1,72 @@
+name: dependency report
+
+# The weekly dependency audit (spec: quality-check, "Advisories no gate blocks on are reported weekly";
+# troupe-run/infrastructure spec: quality-gates; quality-gates design D4). A pull request that changes
+# uv.lock is blocked only by a high or critical advisory with a fix; this audits the whole lock file
+# on main every Monday and keeps one "Dependency advisories" issue: opened when there are advisories,
+# its list replaced while there are, and closed when there are none. scripts/quality_gates.py, which
+# troupe-run/infrastructure delivers, is the same module the check runs.
+#
+#   audit   GITHUB_TOKEN, issues: write    audits uv.lock; opens, updates or closes the issue
+#   board   env board (main only)          adds a newly opened issue to the troupe roadmap board
+#                                          with the board App's token
+on:
+  schedule:
+    - cron: "23 4 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  audit:
+    name: audit the lock file
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    outputs:
+      issue-url: ${{ steps.report.outputs.issue-url }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: "3.15"
+          enable-cache: true
+      - name: Install
+        run: uv sync --locked
+      - name: Audit, and keep the issue up to date
+        id: report
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: uv run scripts/quality_gates.py report --repository "$GITHUB_REPOSITORY" --github-output "$GITHUB_OUTPUT"
+
+  board:
+    name: add the issue to the board
+    needs: audit
+    if: ${{ !cancelled() && needs.audit.outputs.issue-url != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment:
+      name: board
+      deployment: false
+    permissions: {}
+    steps:
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        id: token
+        with:
+          client-id: ${{ vars.BOARD_APP_CLIENT_ID }}
+          private-key: ${{ secrets.BOARD_APP_PRIVATE_KEY }}
+          owner: troupe-run
+          permission-organization-projects: write
+      - name: Add the issue to the troupe roadmap board
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          ISSUE_URL: ${{ needs.audit.outputs.issue-url }}
+        run: |
+          # What audit hands over is checked before it's used.
+          if [[ ! "$ISSUE_URL" =~ ^https://github\.com/troupe-run/troupe/issues/[0-9]+$ ]]; then
+            printf '::error::issue-url from the audit job is not an issue in troupe-run/troupe: %q\n' "$ISSUE_URL"
+            exit 1
+          fi
+          gh project item-add 1 --owner troupe-run --url "$ISSUE_URL"

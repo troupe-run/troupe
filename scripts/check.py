@@ -1,6 +1,6 @@
 """Run every quality gate, in order, stopping at the first failure.
 
-Usage: uv run scripts/check.py [--scope NAME ...]
+Usage: uv run scripts/check.py [--scope NAME ...] [--base REV]
 
 With --scope, every gate still runs, but the tests narrow to those marked with any of the scopes
 declared in scripts/check-paths.toml. The guard passes scopes when a commit stages only paths
@@ -9,16 +9,23 @@ they cover (spec: quality-check; troupe-run/infrastructure commit-check-paths de
 The tests run in parallel, one pytest-xdist worker per CPU this process may use; set
 PYTEST_XDIST_AUTO_NUM_WORKERS to change the count. Running pytest directly stays one process.
 
+Every run measures the complexity of the functions the work adds or edits since --base, or since
+where it left origin/main. Coverage and the dependency audit run only on CI's coverage leg, which
+sets QUALITY_GATES_LEG=true; never locally (troupe-run/infrastructure spec: quality-gates; owner,
+2026-11-18). The measures are scripts/quality_gates.py, delivered from troupe-run/infrastructure.
+
 The same script runs locally and in CI on Linux, macOS and Windows, so the two can't
 diverge. It is Python rather than shell for that reason.
 """
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -57,17 +64,66 @@ DURATIONS = ["--durations=25"]
 the log with its cause (spec: quality-check; shorten-slow-tests design D4)."""
 
 
-def gates(scopes: tuple[str, ...] = ()) -> list[tuple[str, list[str]]]:
+LEG = "QUALITY_GATES_LEG"
+"""Set to `true` by CI's coverage leg, under GitHub Actions only, to run coverage and the audit
+(quality-gates design D3)."""
+
+QUALITY_GATES = str(ROOT / "scripts" / "quality_gates.py")
+
+
+def on_leg(env: Mapping[str, str]) -> bool:
+    """Whether this run is CI's coverage leg. Set anywhere else, or to anything but `true`, the
+    variable stops the check: it is not a way to measure coverage locally."""
+    value = env.get(LEG, "")
+    if value == "":
+        return False
+    if value != "true":
+        sys.exit(
+            f"check: {LEG}={value!r} isn't valid. Fix: unset it; CI's coverage leg sets it to true."
+        )
+    if env.get("GITHUB_ACTIONS") != "true":
+        sys.exit(
+            f"check: {LEG} is set, but this isn't GitHub Actions. Coverage and the dependency "
+            f"audit run on CI's coverage leg only (quality-gates design D3). Fix: unset {LEG}."
+        )
+    return True
+
+
+def coverage_report() -> Path:
+    """Where the coverage leg's report goes: the runner's temporary directory."""
+    folder = os.environ.get("RUNNER_TEMP", tempfile.gettempdir())
+    return Path(folder) / "quality-gates-coverage.json"
+
+
+def gates(
+    scopes: tuple[str, ...] = (), base: str | None = None, leg: bool = False
+) -> list[tuple[str, list[str]]]:
     pytest = [tool("pytest"), *PARALLEL, *DURATIONS]
     if scopes:
         pytest += ["-m", guard.marker_expression(scopes)]
-    return [
+    measure = leg and not scopes
+    if measure:
+        pytest += ["--cov", "--cov-report=", f"--cov-report=json:{coverage_report()}"]
+    on_base = ["--base", base] if base else []
+    steps = [
         ("ruff lint", [tool("ruff"), "check", "."]),
         ("ruff format", [tool("ruff"), "format", "--check", "."]),
         ("mypy --strict", [tool("mypy")]),
         ("import contracts", [tool("lint-imports")]),
+        ("complexity", [sys.executable, QUALITY_GATES, "complexity", *on_base]),
         ("tests", pytest),
     ]
+    if measure:
+        report = str(coverage_report())
+        steps.append(
+            ("coverage", [sys.executable, QUALITY_GATES, "coverage", "--coveragepy", report])
+        )
+    elif leg:
+        note = "print('coverage not measured: the tests were scoped')"
+        steps.append(("coverage", [sys.executable, "-c", note]))
+    if leg:
+        steps.append(("audit", [sys.executable, QUALITY_GATES, "audit", *on_base]))
+    return steps
 
 
 def activate_git_hooks(root: Path) -> str | None:
@@ -110,7 +166,9 @@ def run_gates(steps: list[tuple[str, list[str]]], cwd: Path, scopes: tuple[str, 
 def main(argv: Sequence[str] | None = None, root: Path = ROOT) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n\n")[0])
     parser.add_argument("--scope", action="append", default=[], help="a declared scope")
-    names = parser.parse_args(argv).scope
+    parser.add_argument("--base", help="the commit the complexity and audit gates compare with")
+    args = parser.parse_args(argv)
+    names = args.scope
     scopes: tuple[str, ...] = ()
     if names:
         text = guard.read_working_tree(root)(guard.CHECK_PATHS)
@@ -122,7 +180,7 @@ def main(argv: Sequence[str] | None = None, root: Path = ROOT) -> int:
     activated = activate_git_hooks(root)
     if activated is not None:
         print(f"check: {activated}", flush=True)
-    return run_gates(gates(scopes), root, scopes)
+    return run_gates(gates(scopes, args.base, on_leg(os.environ)), root, scopes)
 
 
 if __name__ == "__main__":

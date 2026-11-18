@@ -59,6 +59,10 @@ dev = [
     # scripts/tests/test_ci_workflow.py reads CI's triggers and job conditions (ci-on-merge-queue design D2).
     "pyyaml>=6.0.3",
     "types-pyyaml>=6.0.12",
+    "coverage>=7.17.3",
+    "pytest-cov>=7.1.0",
+    "lizard>=1.26.1",
+    "pip-audit>=2.10.1",
 ]
 
 [tool.ruff]
@@ -413,3 +417,19 @@ source_modules = ["troupe.cli"]
 forbidden_modules = ["troupe.core.runs", "troupe.core.stages", "troupe.core.policy", "troupe.core.config"]
 # troupe.core.client reaches them on the CLI's behalf; only a direct import bypasses the protocol.
 allow_indirect_imports = true
+
+# How CI's coverage leg measures (troupe-run/infrastructure spec: quality-gates; quality-gates design D2). Its
+# thresholds are in quality-gates.toml. patch = subprocess measures the CLI and runners the tests start as processes;
+# the runner policy passes coverage's variable to runners for this (design D1).
+[tool.coverage.run]
+branch = true
+patch = ["subprocess"]
+source = ["packages", "plugins", "scripts"]
+omit = [
+    "*/tests/*",
+    # Delivered from troupe-run/infrastructure, and measured there.
+    "scripts/guard.py",
+    "scripts/guard_pytest.py",
+    "scripts/quality_gates.py",
+]
+

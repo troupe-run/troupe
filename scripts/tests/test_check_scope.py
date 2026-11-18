@@ -119,7 +119,14 @@ def test_main_passes_the_declared_scopes_sorted_and_once_each_to_the_gates(
 
 def test_the_unscoped_gates_are_the_full_check_with_no_marker_expression() -> None:
     labels = [label for label, _ in check.gates()]
-    assert labels == ["ruff lint", "ruff format", "mypy --strict", "import contracts", "tests"]
+    assert labels == [
+        "ruff lint",
+        "ruff format",
+        "mypy --strict",
+        "import contracts",
+        "complexity",
+        "tests",
+    ]
     assert "-m" not in dict(check.gates())["tests"]
 
 

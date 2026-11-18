@@ -1,0 +1,92 @@
+# The merge gates' thresholds for troupe (troupe-run/infrastructure spec: quality-gates). scripts/quality_gates.py,
+# delivered from infrastructure, reads it strictly: an unknown key or a wrong type fails the check. It isn't delivered:
+# these are troupe's own. Defaults approved by the owner on 2026-11-18 (openspec/changes/quality-gates/design.md).
+version = 1
+
+# Branch coverage, measured on CI's Linux, Python 3.15 leg only. A package can't measure below its baseline by more
+# than the tolerance, and a package with no baseline must meet the floor. Raise a baseline by hand when the check says
+# it could be raised.
+[coverage]
+floor = 80.0
+tolerance = 0.5
+
+[coverage.packages.troupe]
+paths = ["packages/troupe"]
+baseline = 92.1
+
+[coverage.packages.troupe-artifacts-local]
+paths = ["packages/troupe-artifacts-local"]
+baseline = 91.7
+
+[coverage.packages.troupe-identity-local]
+paths = ["packages/troupe-identity-local"]
+baseline = 96.1
+
+[coverage.packages.troupe-plugin-sdk]
+paths = ["packages/troupe-plugin-sdk"]
+baseline = 94.6
+
+[coverage.packages.troupe-run]
+paths = ["packages/troupe-run"]
+
+[coverage.packages.troupe-stage-local]
+paths = ["packages/troupe-stage-local"]
+baseline = 100.0
+
+[coverage.packages.troupe-store-text]
+paths = ["packages/troupe-store-text"]
+baseline = 93.0
+
+[coverage.packages.troupe-vcs-files]
+paths = ["packages/troupe-vcs-files"]
+baseline = 95.2
+
+[coverage.packages.troupe-vcs-git]
+paths = ["packages/troupe-vcs-git"]
+baseline = 93.3
+
+[coverage.packages.runner-anthropic]
+paths = ["plugins/runner-anthropic"]
+baseline = 76.4
+
+[coverage.packages.runner-claude-code]
+paths = ["plugins/runner-claude-code"]
+baseline = 60.5
+
+[coverage.packages.runner-mistralrs]
+paths = ["plugins/runner-mistralrs"]
+baseline = 82.8
+
+[coverage.packages.runner-ollama]
+paths = ["plugins/runner-ollama"]
+baseline = 81.0
+
+[coverage.packages.runner-openai]
+paths = ["plugins/runner-openai"]
+baseline = 91.5
+
+[coverage.packages.runner-scripted]
+paths = ["plugins/runner-scripted"]
+baseline = 50.7
+
+[coverage.packages.scripts]
+paths = ["scripts"]
+baseline = 88.3
+
+# Cyclomatic complexity (lizard) of each function a change adds or edits: above the limit, it may not be new or more
+# complex than before. Tests, the files infrastructure delivers and the generated config models are left out.
+[complexity]
+block_above = 25
+languages = ["python"]
+exclude = [
+    "**/tests/**",
+    "scripts/guard.py",
+    "scripts/guard_pytest.py",
+    "scripts/quality_gates.py",
+    "packages/troupe/src/troupe/core/config/models.py",
+]
+
+# A pull request that changes the lock file fails on an advisory of these severities that has a fix.
+[audit]
+lock_files = ["uv.lock"]
+block = ["high", "critical"]
