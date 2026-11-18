@@ -335,8 +335,10 @@ ignore_imports = ["troupe_runner_claude_code.processes -> *"]
 name = "only the OpenAI runner's service module imports the openai package or does network I/O"
 type = "forbidden"
 source_modules = ["troupe_runner_openai"]
+# endpoint.py parses the runtime's endpoint with urllib.parse, which does no I/O, apart from service.py so the runner
+# can check a run/start without loading the library (review of #440).
 forbidden_modules = ["openai", "httpx2", "httpcore2", "urllib", "http", "socket", "ssl"]
-ignore_imports = ["troupe_runner_openai.service -> *"]
+ignore_imports = ["troupe_runner_openai.service -> *", "troupe_runner_openai.endpoint -> urllib"]
 
 [[tool.importlinter.contracts]]
 # The Anthropic runner reaches its service only through the anthropic package, from one module, so how it talks to

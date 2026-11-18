@@ -17,7 +17,7 @@ from troupe_plugin_sdk.credential import (
     well_formed,
 )
 from troupe_plugin_sdk.runner import Price, RunStartParams
-from troupe_runner_openai.service import Endpoint, EndpointError, parse_endpoint
+from troupe_runner_openai.endpoint import Endpoint, EndpointError, parse_endpoint
 
 
 class RuntimeRefusedError(Exception):

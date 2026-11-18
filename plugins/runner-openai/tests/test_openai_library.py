@@ -7,6 +7,8 @@ run's output", "The runner talks to its service only through the openai package"
 import io
 import json
 import logging
+import subprocess
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -201,3 +203,16 @@ def test_a_wrong_shaped_response_ends_the_run_with_no_serialiser_warning_on_stde
     stderr = session.stderr()
     assert b"Warning" not in stderr
     assert b"PydanticSerializationUnexpectedValue" not in stderr
+
+
+def test_loading_the_runner_leaves_the_library_unloaded() -> None:
+    """openai-library design D8, D9: the library is imported in the worker, after OPENAI_LOG is
+    cleared, never as the runner loads (review of #440)."""
+    probe = (
+        "import sys, troupe_runner_openai.runner, troupe_runner_openai.runtime; "
+        "print(sorted(m for m in sys.modules if m.split('.')[0] in ('openai', 'httpx2')))"
+    )
+    done = subprocess.run(
+        [sys.executable, "-c", probe], capture_output=True, text=True, check=True, timeout=60
+    )
+    assert done.stdout.strip() == "[]"
