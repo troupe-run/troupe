@@ -12,7 +12,17 @@ It holds:
   message base (`troupe_plugin_sdk.messages`). The JSON Schemas in [`protocol/schemas/runner/`](../../protocol/schemas/runner/)
   are the source of truth, and the tests check every type against them.
 - **Running a model's tool calls** (`troupe_plugin_sdk.tools`), for a runner whose engine returns tool calls rather than
-  carrying them out itself, such as a local model or a Chat Completions API.
+  carrying them out itself, such as a local model or a Chat Completions API. The paths a tool may touch are checked in
+  `troupe_plugin_sdk.paths` (`Workspace`), and the tools' limits are in `troupe_plugin_sdk.defaults`
+  ([Limits](#limits)).
+- **The actor's effects and declaration** (`troupe_plugin_sdk.effects`, `troupe_plugin_sdk.declaration`): `Effects`,
+  the path patterns an actor may write, delete and move ([Effects](#effects)), and `Declaration.from_run_start(params)`,
+  the effects, workspace and scratch directory a run has, which a runner applies through an `EffectsTranslation`
+  ([Applying the effects](../../contributing/runners.md#applying-the-effects)).
+- **Numbering and fitting run events** (`troupe_plugin_sdk.events`): `EventNumbering`, the run's `seq` counter;
+  `ServedModels`, which says when to report the model that answered
+  ([The model that answered](#the-model-that-answered)); and `context_event`, for content the conversation lost
+  ([Lost content](#lost-content)).
 - **The run's credential** (`troupe_plugin_sdk.credential`): `runtime_credential(params, os.environ)` gives the
   value of a runtime's credential from `TROUPE_RUNTIME_CREDENTIAL`, or `None` when the run has none, and raises
   `CredentialError` when `run/start` and the environment disagree. Send it only to the runtime's endpoint
@@ -22,6 +32,9 @@ It holds:
   estimate is absent ([Cost: reported or estimated](../../contributing/runners.md#cost-reported-or-estimated)).
 - **Compaction** (`troupe_plugin_sdk.compaction`), for a runner that holds its own conversation: which old tool
   results to replace when the run may compact, and the stub that replaces them ([Compaction](#compaction)).
+- **Ending the process** (`troupe_plugin_sdk.process`): `exit_now(code)` ends the runner at once, as `os._exit` does,
+  after letting a running coverage.py save what it measured. Use it wherever a runner would call `os._exit`
+  ([Cancel, end of input and shutdown](../../contributing/runners.md#cancel-end-of-input-and-shutdown)).
 
 [#58](https://github.com/troupe-run/troupe/issues/58) grows it into the full plugin SDK, with JSON-RPC framing and a
 server loop.

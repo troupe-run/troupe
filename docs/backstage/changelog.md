@@ -38,7 +38,9 @@ changes. `troupe --version` names the protocol version that troupe carries.
 
 ## Plugins
 
-The runners are released on their own, like the other parts, and `troupe-run` ships each release.
+The runners are released on their own, like the other parts, and `troupe-run` ships each release: the Claude Code
+and scripted runners in every install, and the others as its
+[extras](../opening-night/install.md#runners-that-come-as-extras).
 
 - `troupe-runner-anthropic`
 - [troupe-runner-claude-code](https://github.com/troupe-run/troupe/blob/main/plugins/runner-claude-code/CHANGELOG.md)

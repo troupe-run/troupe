@@ -19,14 +19,11 @@ It comes as an extra of `troupe-run`, not with the base install: install `troupe
 as the [install page](../../docs/opening-night/install.md#runners-that-come-as-extras) shows. An actor on `ollama`
 without it is refused, naming the extra.
 
-```yaml
-# .troupe/actors/lead.yaml
-runner: ollama
-runtime: ollama
-model: qwen3.5:4b
-effects:
-  write: ["**"]
-expect: []
+[Try it with a model on your own machine](https://github.com/troupe-run/troupe/blob/main/docs/opening-night/first-performance.md#try-it-with-a-model-on-your-own-machine)
+runs an actor on it in a new theatre. To add one to a theatre you have, then commit `.troupe` and perform it:
+
+```sh
+troupe config set actors.writer.runner=ollama actors.writer.runtime=ollama actors.writer.model=qwen3.5:4b 'actors.writer.effects.write=["**"]' 'actors.writer.expect=[]'
 ```
 
 ## Options
@@ -50,7 +47,9 @@ person, and `troupe config get --resolved runtimes.ollama` shows where it points
 
 ## The runtime
 
-The runner refuses `run/start`, before any request, when:
+troupe refuses first: config refuses an actor on this runner with no runtime, or with one that doesn't fit, naming the
+runtimes that do, and `troupe perform` refuses one that a `TROUPE_RUNTIME_` variable makes stop fitting
+(`runtime.unfit`). The runner checks again, and refuses `run/start`, before any request, when:
 
 | Error | When | Fix |
 |---|---|---|

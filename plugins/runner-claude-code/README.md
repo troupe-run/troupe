@@ -8,6 +8,10 @@ An actor runner for troupe that runs [Claude Code](https://code.claude.com). It 
 python -m troupe_runner_claude_code
 ```
 
+[Your first performance](https://github.com/troupe-run/troupe/blob/main/docs/opening-night/first-performance.md) runs
+an actor on it in a new theatre: it comes with troupe-run's base install, and needs `claude` on your `PATH`, logged in.
+The end of [Options](#options) adds one to a theatre you have.
+
 ## Options
 
 Every option is optional. Any other option is refused, with an error naming it, and so is a value of the wrong
@@ -24,14 +28,11 @@ shape. No option names a program to run.
 
 A run always has a budget, so a runaway loop stops. The runner never grants more than config asks for: what Claude
 Code may change comes from the actor's [effects](#effects), and with none declared it can read but not write. The
-runner reports each denied tool as a `log` warning before the result. An actor that edits its source and runs its
-tests needs, for example:
+runner reports each denied tool as a `log` warning before the result. This adds an actor that edits its source and
+runs its tests to a theatre you have; then commit `.troupe` and perform it:
 
-```yaml
-options:
-  allowedTools: ["Bash(uv run pytest *)"]
-effects:
-  write: ["src/**", "tests/**"]
+```sh
+troupe config set actors.writer.runner=claude-code 'actors.writer.options.allowedTools=["Bash(uv run pytest *)"]' 'actors.writer.effects.write=["src/**","tests/**"]' 'actors.writer.expect=[]'
 ```
 
 ## Effects
@@ -85,12 +86,14 @@ claude -p --output-format stream-json --verbose --no-session-persistence \
   because a setting source the actor loads can replace that variable through its `env`, while the file passed with
   `--settings` ranks above every source the actor can load. A run whose context fills ends with an error
   ([How a run ends](#how-a-run-ends)).
-- **unless the run says `compact`.** When `run/start`'s `onContextFull` is `compact` (the actor opted in, or the
-  `compaction` policy is `all`, [#310](https://github.com/troupe-run/troupe/issues/310)), the settings file holds
-  `autoCompactEnabled: true`, and Claude Code compacts when its context fills. The run's own value beats the
-  environment, so the runner leaves `DISABLE_AUTO_COMPACT` out of Claude Code's environment, and when the person had
-  it set, says so with a `log` warning. An `env` block in a setting source the actor loads can still turn compaction
-  off, and the run then fails with `context-length`, the safe way round.
+- **unless the run says `compact`.** When `run/start`'s `onContextFull` is `compact` (the actor opted in with
+  `troupe config set actors.<name>.onContextFull=compact`, or the `compaction` policy is `all`,
+  [#310](https://github.com/troupe-run/troupe/issues/310)), the settings file holds `autoCompactEnabled: true`, and
+  Claude Code compacts when its context fills. A runner setting the actor sends with each run beats the environment,
+  which beats the default. `troupe perform` never passes `DISABLE_AUTO_COMPACT` to the runner, so setting it in your
+  shell changes nothing: the actor's setting decides. A runner started some other way, with it set, leaves it out of
+  Claude Code's environment when told `compact`, and says so with a `log` warning. An `env` block in a setting source
+  the actor loads can still turn compaction off, and the run then fails with `context-length`, the safe way round.
 - **The private files** live in a directory of the runner's own, outside the workspace (0700 on POSIX), removed when
   the runner exits. If the temporary directory is inside the workspace, the run is refused.
 - **Claude Code's environment is the runner's,** with its temporary directory pointed at the run's scratch
@@ -119,7 +122,8 @@ loaded either: the live test showed it on Claude Code 2.1.302, and reports it on
   refuses a request as too long (`terminal_reason` `prompt_too_long`) or before sending one that wouldn't fit
   (`blocking_limit`), and the runner reports it with the reason `context-length`. A long run that got through by
   compacting before this runner turned compaction off now fails: split its task, or let its actor opt in to
-  compaction (`onContextFull: compact`).
+  compaction (`troupe config set actors.<name>.onContextFull=compact`). The `compaction` policy `none` refuses that
+  actor's runs (`policy.compaction-forbidden`).
 - **A run told `compact` carries on past a compaction.** Claude Code writes `system/status` records (`compacting`,
   then a `compact_result`), which become `debug` logs, then a `compact_boundary`, which becomes a `context` event
   (`compacted`, by `engine`, with the tokens before and after) before the next turn's events. A compaction that fails

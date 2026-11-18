@@ -136,6 +136,11 @@ troupe logs <run>
 troupe recorded it: name the run by its id or its first 8 characters. Add `--follow` to watch a run from another
 terminal while it's going.
 
+A run that fails says why in `troupe logs`, such as the budget it reached, and what it should do next. Every run's
+changes are audited, whatever its outcome, so you can see whether a failed run also changed files it wasn't allowed
+to. A run whose `troupe perform` was killed before it could record the end shows as `interrupted`. [How a run
+ends](../the-company/performances-and-runs.md#how-a-run-ends) says more.
+
 Everything you've seen is recorded in `.troupe/events/`, with who started the run, on which stage, why it was
 allowed to run there, and which version of config it used. [Performances and
 runs](../the-company/performances-and-runs.md) says what a run records, and [Read the
@@ -143,7 +148,7 @@ lineage](../stagecraft/read-the-lineage.md) how to answer questions from it.
 
 ## Try it offline, with no account
 
-troupe ships a second runner, the scripted runner, which plays a script instead of running an agent. It needs no
+The scripted runner plays a script instead of running an agent, and comes with troupe. It needs no
 account, costs nothing and works offline, and it's how troupe's own tests run. Try it in a new git repository:
 
 ```sh
@@ -162,7 +167,7 @@ and troupe checks it did: the actor's `expect` names the file, and a run that di
 
 ## Try it with a model on your own machine
 
-troupe ships a third runner, the Ollama runner, which runs a model on your own computer through
+The Ollama runner runs a model on your own computer through
 [Ollama](https://ollama.com). It needs no account and no credential, costs nothing per run, and works offline once
 the model is downloaded. You need Ollama 0.12.6 or later, running, and the runner, which comes as the
 `troupe-run[ollama]` extra: install it as [Runners that come as extras](install.md#runners-that-come-as-extras)
@@ -193,8 +198,7 @@ option.
 
 ## Try it on OpenAI
 
-troupe ships a fourth runner, the OpenAI runner, which runs an OpenAI model through its Responses API, with troupe's own
-tool loop. It comes as an extra, `troupe-run[openai]`, so install that first
+The OpenAI runner runs an OpenAI model through its Responses API, with troupe's own tool loop. It comes as an extra, `troupe-run[openai]`, so install that first
 ([Runners that come as extras](install.md#runners-that-come-as-extras)). It needs an OpenAI API key in
 `OPENAI_API_KEY`, and **a run costs money**, on your OpenAI account. troupe never writes the key down: config only
 names the variable it's in. Set the key first.
@@ -219,6 +223,61 @@ lower limits still, such as `maxTurns` 5 and `maxTotalTokens` 20,000, and raise 
 that serves the Responses API. The
 [OpenAI runner's README](https://github.com/troupe-run/troupe/blob/main/plugins/runner-openai/README.md) lists every
 option.
+
+## Try it on Claude's API
+
+The Anthropic runner runs a Claude model through the Messages API, with troupe's own tool loop. It comes as an extra,
+`troupe-run[anthropic]`, so install that first ([Runners that come as extras](install.md#runners-that-come-as-extras)).
+It needs a Claude API key in `ANTHROPIC_API_KEY`, and **a run costs money**, on your Claude account. troupe never
+writes the key down: config only names the variable it's in. Set the key first. Try it in a new git repository:
+
+```sh
+mkdir troupe-anthropic
+cd troupe-anthropic
+git init
+troupe init --audition --runner anthropic
+git add .troupe
+git commit -m 'Add a troupe theatre'
+troupe perform lead
+```
+
+Allow the local stage first, as above, if this shell doesn't have it. The actor runs on the built-in `anthropic`
+runtime, Claude's API, with Claude's cheapest model, `claude-haiku-5-5`, and a small budget: a run stops after 10
+requests, or once it has used 100,000 tokens. A run that stops says which option to raise (`maxTurns`,
+`maxTotalTokens`). The same runner reaches a local engine that serves the Messages API, such as LM Studio, through a
+runtime you define: [Point actors at a service](../stagecraft/runtimes.md) says how. The
+[Anthropic runner's README](https://github.com/troupe-run/troupe/blob/main/plugins/runner-anthropic/README.md) lists
+every option.
+
+## Try it in-process with mistral.rs
+
+The mistralrs runner loads a GGUF model inside its own process with [mistral.rs](https://github.com/EricLBuehler/mistral.rs):
+no server, no account, no network once you have the model. It comes as an extra, `troupe-run[mistralrs]`
+([Runners that come as extras](install.md#runners-that-come-as-extras)); on a Mac, install it on a uv-managed Python,
+as that section says. It never downloads a model: you give it a file, by its absolute path, in
+`TROUPE_RUNTIME_MISTRALRS_MODEL`. Use one that can call tools, such as Qwen's own GGUF of Qwen3-0.6B, about 640 MB.
+The first two lines download it and point the variable at it.
+Try it in a new git repository:
+
+```sh
+curl -LO https://huggingface.co/Qwen/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf
+export TROUPE_RUNTIME_MISTRALRS_MODEL="$PWD/Qwen3-0.6B-Q8_0.gguf"
+mkdir troupe-mistralrs
+cd troupe-mistralrs
+git init
+troupe init --audition --runner mistralrs
+git add .troupe
+git commit -m 'Add a troupe theatre'
+troupe perform lead
+```
+
+Allow the local stage first, as above, if this shell doesn't have it. The actor runs on the built-in `mistralrs`
+runtime, which has no endpoint: the model runs in the runner's own process, on this machine. `troupe init --audition`
+warms the engine up before the first run, which on a Mac compiles mistral.rs's GPU code once, in 15 to 20 seconds,
+and says if this Python can't run the model. A run stops after 10 requests (`maxTurns`). A small model is less
+reliable at using tools than Claude Code: troupe's effects and audit still decide what a run may change. The
+[mistralrs runner's README](https://github.com/troupe-run/troupe/blob/main/plugins/runner-mistralrs/README.md) lists
+every option.
 
 ## Define your own actor
 

@@ -5,8 +5,8 @@ troupe's in-process runner. It loads a GGUF model inside its own process with
 own tool loop, checking each tool call against the actor's declared effects (`effects: checked`). There's no server,
 no network and no credential, and a run costs nothing.
 
-The spec is `openspec/specs/mistralrs-runner/spec.md`, and the design is in the `in-process-runner` change (under
-`openspec/changes/`, or `openspec/changes/archive/` once it's archived).
+The spec is `openspec/specs/mistralrs-runner/spec.md`, and the design is in the archived `in-process-runner` change,
+`openspec/changes/archive/2026-11-14-in-process-runner/`.
 
 ## Install
 
@@ -15,7 +15,8 @@ MIT-licensed, has no Python dependencies, and ships one wheel per platform for P
 silicon (Metal), Linux on x86_64 and aarch64, and Windows on x86_64 (CPU). There's no wheel for Intel Macs, Windows
 on Arm or musl Linux, so the extra doesn't install there.
 
-**On macOS, install troupe on a uv-managed Python** (`uv tool install --managed-python ...`). mistral.rs compiles its
+**On macOS, install troupe on a uv-managed Python:** add `--managed-python` after `uv tool install`, as the
+[install page](../../docs/opening-night/install.md#runners-that-come-as-extras) says. mistral.rs compiles its
 Metal kernels when it loads a model, and whether they compile depends on the macOS SDK the Python was built with.
 python.org's 3.12 and Homebrew's Pythons on macOS 27 fail, and uv's own Pythons work. The runner checks before it
 starts a run, and refuses an unsupported Python with `mistralrs.unsupported-python`.
@@ -35,6 +36,17 @@ Qwen3-0.6B (`Qwen/Qwen3-0.6B-GGUF`, `Qwen3-0.6B-Q8_0.gguf`) is the one the fixtu
 
 The model runs inside the runner, so it takes the runner's memory: a model too large for the machine ends the runner,
 and troupe reports a runner that exited without a result.
+
+[Try it in-process with mistral.rs](https://github.com/troupe-run/troupe/blob/main/docs/opening-night/first-performance.md#try-it-in-process-with-mistralrs)
+runs an actor on it in a new theatre, and warms the engine up first. To add one to a theatre you have, then commit
+`.troupe` and perform it:
+
+```sh
+troupe config set actors.writer.runner=mistralrs actors.writer.runtime=mistralrs 'actors.writer.effects.write=["**"]' 'actors.writer.expect=[]'
+```
+
+Adding an actor warms nothing up: on a Mac where mistral.rs has never loaded a model, its first run compiles the Metal
+kernels first ([Before the run starts](#before-the-run-starts)).
 
 ## Before the run starts
 

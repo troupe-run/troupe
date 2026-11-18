@@ -12,8 +12,11 @@ local stage does about declared effects) and #14 (no run server yet: commands an
 event store ([contributing/event-store.md](event-store.md)). The runner contract is in [contributing/runners.md](runners.md).
 
 1. **Everything that can refuse goes first:** who you are (the identity chain), the policy, the stage's admission,
-   config (a conflict, or an actor config doesn't have: `config.unknown-actor`), and the runner's name. A refused
-   `perform` runs nothing and writes nothing. With `rehearse`, perform stops here and returns what would run.
+   config (a conflict, or an actor config doesn't have: `config.unknown-actor`), the runner's name and whether it's
+   installed, every rule the actor breaks (`config.invalid`, its options included), its `onContextFull` against
+   policy, and its runtime: the runtime must fit the runner (`runtime.unfit`), and resolve a model and, when it has
+   one, a credential ([config.md](config.md#runtimes)). A refused `perform` runs nothing and writes nothing. With
+   `rehearse`, perform stops here and returns what would run, the resolved runtime included.
 2. **The actor comes from config:** its runner, the runner's options, its effect check (`expect`, each file once;
    `[]` is none) and its character, which `run/start` carries apart from the direction. The config files are
    flushed first, as every command that uses config does.
@@ -46,12 +49,12 @@ stream's version, which counts `Run.Started` too. Recording a `seq` that isn't t
 (`run.out-of-sequence`).
 
 **A run's notices** are every notice `perform` raises for it from when it mints the run id until the end is recorded:
-the run host's (`run.silent`, `run.retrying`, `run.scratch-not-removed`) and the workspace operations'
-(`workspace.*`). They're still sent live as they're raised; recording one doesn't delay it. Not a run's: the config
-notices `perform` raises before it mints the id, the event store's, those `status` and `logs` work out when they read
-a run (`run.interrupted`, `run.unfinished-elsewhere`), and those `accept` and `discard` raise, which their results
-carry. One writer records a run's events and notices, one at a time, in the order they reach it, so the stream's order
-is the order troupe raised them.
+the run host's (`run.silent`, `run.retrying`, `run.estimate-dropped`, `run.scratch-not-removed`) and the workspace
+operations' (`workspace.*`). They're still sent live as they're raised; recording one doesn't delay it. Not a run's:
+the config notices `perform` raises before it mints the id, the event store's, those `status` and `logs` work out when
+they read a run (`run.interrupted`, `run.unfinished-elsewhere`), and those `accept` and `discard` raise, which their
+results carry. One writer records a run's events and notices, one at a time, in the order they reach it, so the stream's
+order is the order troupe raised them.
 
 **A run notice says what bounds it.** A run's notices aren't capped, because each one already is: `run.silent` once
 per silence (it resets on the next event), `run.retrying` once per `retry` event, `workspace.waiting` once per
@@ -196,6 +199,14 @@ export TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE=true
   `none` and the actor doesn't set it) or `default`.
 
 ## Notices and errors
+
+These are the codes runs add. The others a run can meet are listed with their own part: the run host's outcomes,
+errors and notices (`run.silent`, `run.retrying`, `run.estimate-dropped`) in
+[runners.md](runners.md#how-troupe-runs-a-runner), the audition's warm-up notices (`runner.warming-up`,
+`runner.warmed-up`, `runner.warm-up-failed`, `runner.warm-up-cut-off`) in
+[runners.md](runners.md#the-runtime-and-its-credential), and the runtime's refusals (`runtime.unfit`,
+`runtime.no-model`, `runtime.credential-*`, `runtime.insecure-endpoint`) in
+[config.md](config.md#notices-and-errors).
 
 | Code | When |
 |---|---|

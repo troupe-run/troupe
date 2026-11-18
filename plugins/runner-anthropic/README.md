@@ -11,26 +11,19 @@ It speaks the [runner contract](../../contributing/runners.md) over standard inp
 troupe's but the SDK. It talks to its service through the [`anthropic`](https://pypi.org/project/anthropic/) package,
 pinned, from one module, `service.py`, which keeps troupe's guarantees rather than the library's defaults
 ([Runners with client libraries](../../contributing/runners.md#runners-with-client-libraries)). So it comes as
-troupe-run's `anthropic` extra, not the base install:
+troupe-run's `anthropic` extra, not the base install: install `troupe-run[anthropic]` (or `troupe-run[all]`), as the
+[install page](../../docs/opening-night/install.md#runners-that-come-as-extras) shows. An actor on `anthropic` without
+it is refused, naming the extra.
+
+[Try it on Claude's API](https://github.com/troupe-run/troupe/blob/main/docs/opening-night/first-performance.md#try-it-on-claudes-api)
+runs an actor on it in a new theatre. To add one to a theatre you have, then commit `.troupe` and perform it:
 
 ```sh
-uv tool install --no-sources "troupe-run[anthropic] @ git+https://github.com/troupe-run/troupe@<tag>#subdirectory=packages/troupe-run"
+troupe config set actors.writer.runner=anthropic actors.writer.runtime=anthropic actors.writer.model=claude-haiku-5-5 actors.writer.options.maxTurns=5 actors.writer.options.maxTotalTokens=20000 'actors.writer.effects.write=["**"]' 'actors.writer.expect=[]'
 ```
 
-```yaml
-# .troupe/actors/lead.yaml
-runner: anthropic
-runtime: anthropic
-model: claude-haiku-5-5
-options:
-  maxTurns: 5
-  maxTotalTokens: 20000
-effects:
-  write: ["**"]
-expect: []
-```
-
-Start with low limits, as here, and raise them once the actor behaves: a run on Claude's API costs money.
+Start with low limits, as here, and raise them once the actor behaves: a run on Claude's API costs money. It needs
+your key in `ANTHROPIC_API_KEY`.
 
 ## Options
 
@@ -57,13 +50,17 @@ URL, below which the library adds `/v1/messages`:
 
   ```sh
   troupe config set runtimes.lm-studio-messages.endpoint=http://127.0.0.1:1234
-  troupe config set actors.lead.runtime=lm-studio-messages actors.lead.model=google/gemma-4-e4b
+  troupe config set actors.lead.runner=anthropic actors.lead.runtime=lm-studio-messages actors.lead.model=google/gemma-4-e4b 'actors.lead.expect=[]'
   ```
 
-  Ollama's is `http://127.0.0.1:11434`. A local engine takes no key unless you've set one up.
+  For Ollama, define a runtime of your own at `http://127.0.0.1:11434`, such as
+  `troupe config set runtimes.ollama-messages.endpoint=http://127.0.0.1:11434`. The built-in `ollama` is the Ollama
+  runner's, and config refuses it for this one. A local engine takes no key unless you've set one up.
 
-An endpoint whose path ends in `/v1`, copied from an OpenAI-style setup, is refused (`anthropic.unsupported-endpoint`),
-naming the base without it: requests would otherwise go to `/v1/v1/messages`. A gateway's own path, such as
+An endpoint whose path ends in `/v1`, copied from an OpenAI-style setup, is refused: requests would otherwise go to
+`/v1/v1/messages`. Config refuses an actor on it, naming the runtimes that fit, and `troupe perform` refuses one that a
+`TROUPE_RUNTIME_<NAME>_ENDPOINT` makes end in `/v1` (`runtime.unfit`). The runner refuses it too
+(`anthropic.unsupported-endpoint`), naming the base without it. A gateway's own path, such as
 `https://gateway.example/anthropic`, is kept. troupe resolves the endpoint and model and hands them over in
 `run/start`, and puts the key, when the runtime has one, in the runner's environment as `TROUPE_RUNTIME_CREDENTIAL`,
 under no other name.

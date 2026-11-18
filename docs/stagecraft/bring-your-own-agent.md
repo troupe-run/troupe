@@ -13,7 +13,8 @@ swap the agent by swapping its runner, and your process stays the same.
 
 troupe ships six runners:
 
-- **The scripted runner** plays a script instead of running an agent, so you can try troupe offline.
+- **The scripted runner** plays a script instead of running an agent, so you can try troupe offline
+  ([Try it offline, with no account](../opening-night/first-performance.md#try-it-offline-with-no-account)).
 - **The Claude Code runner** runs [Claude Code](https://code.claude.com) with your existing login. It leaves out your
   Claude Code settings, hooks and MCP servers by default, so a run doesn't depend on whose machine it's on. It turns
   off Claude Code's automatic compaction, so a run whose conversation grows too long for the model fails rather than
@@ -43,7 +44,8 @@ troupe ships six runners:
   a [runtime](runtimes.md): the built-in `anthropic` for Claude's API, with its key in `ANTHROPIC_API_KEY`, or one of
   your own at a local engine's server root. A run on Claude's API costs money, within the limits its options set
   (`maxTurns`, `maxTotalTokens`, `maxOutputTokens`); `contextWindow` names a local engine's window, since some cut a
-  full context without saying so.
+  full context without saying so
+  ([Try it on Claude's API](../opening-night/first-performance.md#try-it-on-claudes-api)).
 
 - **The mistralrs runner** runs a model inside its own process with
   [mistral.rs](https://github.com/EricLBuehler/mistral.rs): no server and no network, with troupe's own tool loop,
@@ -51,10 +53,12 @@ troupe ships six runners:
   It comes with `troupe-run[mistralrs]` ([Install](../opening-night/install.md#runners-that-come-as-extras)). Its model
   is a GGUF file on your machine, which the built-in in-process [runtime](runtimes.md) `mistralrs` points at: set
   `TROUPE_RUNTIME_MISTRALRS_MODEL` to its absolute path. On a Mac, install troupe on a uv-managed Python. Its options
-  include the context window (`contextLength`), which it keeps to on every computer.
+  include the context window (`contextLength`), which it keeps to on every computer
+  ([Try it in-process with mistral.rs](../opening-night/first-performance.md#try-it-in-process-with-mistralrs)).
 
 You can write a runner for any agent today, and check it against the contract, but you can't run it with
-`troupe perform` yet: until config names runners ([#60](https://github.com/troupe-run/troupe/issues/60)),
+`troupe perform` yet: until config can name, pin and fetch a runner troupe doesn't ship
+([#38](https://github.com/troupe-run/troupe/issues/38), [#67](https://github.com/troupe-run/troupe/issues/67)),
 `perform` only knows the runners troupe ships with.
 
 ## The runner contract
@@ -68,11 +72,21 @@ A runner is a program, in any language, that speaks troupe's runner contract ove
 - **The runner reports as the agent works,** with `run/event` notifications (such as `init` first and one `result`
   last) and the engine's own output as `run/transcript`, which troupe keeps out of git. A runner that drives an
   API, with no output of its own to pass on, labels each record as sent, received or a note of its own.
+- **troupe hands it the runtime,** for a runner that talks to a service: `run/start` carries the actor's
+  [runtime](runtimes.md) (its endpoint, model and price), and the key, when there is one, comes only in the runner's
+  environment, as `TROUPE_RUNTIME_CREDENTIAL`.
+- **The runner applies the actor's declared effects,** checking each change its agent asks for, or translating them
+  into the agent's own rules, and its `init` event says which.
 - **troupe ends it,** with `run/cancel` if you press Ctrl-C, and `shutdown` when the run's done.
 - **Nothing in the contract belongs to one engine or vendor.** A runner maps its agent's output onto it.
 
 Your runner publishes JSON Schemas for its own options and error codes, so troupe and editors can check them, and it
 refuses an option it doesn't define rather than ignoring it.
+
+In Python, the plugin SDK, `troupe-plugin-sdk`, gives you the contract's types and the code troupe's own runners use
+to carry out a model's tool calls, with the credential, cost and compaction helpers
+([its README](https://github.com/troupe-run/troupe/blob/main/packages/troupe-plugin-sdk/README.md),
+[#240](https://github.com/troupe-run/troupe/issues/240)). Every runner troupe ships is built on it.
 
 The full contract, with every message and event, is in
 [contributing/runners.md](https://github.com/troupe-run/troupe/blob/main/contributing/runners.md), and its schemas
@@ -89,12 +103,16 @@ TROUPE_CONFORMANCE_OPTIONS='{}' \
 uv run pytest packages/troupe/tests/test_runner_conformance.py -k environment
 ```
 
-Run it from a clone of troupe ([Install](../opening-night/install.md#running-it-from-a-clone)).
+Run it from a clone of troupe ([Install](../opening-night/install.md#running-it-from-a-clone)). The check passes your
+runner no runtime, so it can't yet check a runner that needs one, such as one that talks to a service
+([#299](https://github.com/troupe-run/troupe/issues/299)). troupe's own runners that need one are checked by troupe's
+own tests, against stand-ins for their services.
 
 ## What's decided for later
 
 - **A runner runs as its own process,** speaking JSON-RPC, whether troupe ships it or you do. Policy can say which
   ways of running plugins are allowed.
-- **A Python SDK** will make plugins easier to write ([#58](https://github.com/troupe-run/troupe/issues/58)).
+- **The full Python SDK** grows the plugin SDK with the JSON-RPC framing and a server loop, so a runner needn't
+  write them ([#58](https://github.com/troupe-run/troupe/issues/58)).
 - **How config names, pins and fetches a runner you didn't ship** is open, in
   [#38](https://github.com/troupe-run/troupe/issues/38) and [#67](https://github.com/troupe-run/troupe/issues/67).

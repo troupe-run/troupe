@@ -14,12 +14,16 @@ dry-run counterpart of a performance, and isn't built yet either.
 
 ## A run
 
-`troupe perform <actor>` runs one actor, as config defines it: its runner, the runner's options, its effect check,
-its [effects](#effects) and its character. `--direction` says what this run is asked to do.
+`troupe perform <actor>` runs one actor, as config defines it: its runner, the runner's options, the
+[runtime](../stagecraft/runtimes.md) and model it uses if its runner takes one, its effect check, its
+[effects](#effects) and its character. `--direction` says what this run is asked to do.
 
 1. **Everything that can refuse goes first:** who you are, the policy, whether the stage admits the actor, the
    actor's config (an actor config doesn't have, or config with a [conflict](../stagecraft/hand-edit-config.md#branches),
-   is refused), and the runner's name. A refused `perform` runs nothing and records nothing.
+   is refused), the runner's name, whether the runner is installed (`runner.not-installed` names the extra that
+   installs it), and the actor's runtime: that it resolves, that it fits the runner, and that its credential is set
+   (`runtime.unfit` and the other `runtime.` refusals say what to change). A refused `perform` runs nothing and
+   records nothing.
 2. **The config files are made what config says,** as every command that uses config does first.
 3. **The run gets an id,** shown at once, so you can follow it from another terminal.
 4. **The direction is stored** and referred to by hash, since it can be large or hold what shouldn't be in git.
@@ -38,11 +42,17 @@ A run is recorded as its own stream of [events](../prompt-book/events.md), all s
 
 - **`Run.Started`:** the actor, the runner you asked for, the stage and what allowed it, the effect check, a
   reference to the direction, the config version the run used, so what the actor was then can always be worked out,
-  where it works, and whether it may compact when its context fills, and why. It's recorded before anything else happens, so a run that stops early is still there. You
-  started it, through the command line.
+  where it works, whether it may compact when its context fills, and why, and the runtime it talks to, as troupe
+  resolved it, with where each value came from: a credential is named by its variable, never its value. It's
+  recorded before anything else happens, so a run that stops early is still there. You started it, through the
+  command line.
 - **`Run.WorktreeMade`:** for a run in its own worktree, that the worktree is made, and how its files were copied.
 - **`Run.Reported`:** one for each event the runner reports, in order. The first is the runner's `init`, which says
-  which runner answered. The agent reported it, through its runner.
+  which runner answered. Where the engine names it, one says which model actually served the run, which
+  `troupe logs` shows. The last is the runner's result, with the tokens the run used, and its cost: as the service
+  reported it, or, when it reported none, an estimate from the runtime's `prices`, marked as one. `troupe status`
+  and `troupe logs` don't show usage or cost yet ([#456](https://github.com/troupe-run/troupe/issues/456));
+  `troupe logs <run> --json` includes them. The agent reported each event, through its runner.
 - **`Run.Noticed`:** one for each notice troupe showed about the run while it went, such as a long silence, a retry,
   a slow worktree, or a scratch directory it couldn't remove, in its place among the run's events. troupe raised it
   for you, so it's yours, through the command line.
@@ -107,9 +117,10 @@ The run then makes room and carries on, which changes what the model sees:
 - **The Claude Code runner** lets Claude Code compact, which replaces the earlier turns with a summary of them. If
   the actor loads Claude Code settings (`settingSources`) whose `env` turns compaction off, that still wins: the run
   then fails with `context-length`.
-- **The Ollama and OpenAI runners** replace old tool results, oldest first, with a short note saying what was removed
-  and to call the tool again if it's still needed. They never touch the actor's character, its direction, what the
-  model said, or the results it hasn't read yet, and they make no extra model call, so compaction costs no tokens.
+- **The Anthropic, mistral.rs, Ollama and OpenAI runners** replace old tool results, oldest first, with a short
+  note saying what was removed and to call the tool again if it's still needed. They never touch the actor's
+  character, its direction, what the model said, or the results it hasn't read yet, and they make no extra model
+  call, so compaction costs no tokens.
 
 Each compaction is recorded with the run's events, as a `context` event saying what happened and how much. When
 compaction can't make room, the run fails with `context-length` as it would have. The run's start records whether
@@ -142,9 +153,8 @@ An actor's **effects** say what its runs may change. Each is a list of patterns,
   are left out. A change outside the declaration fails the run, naming each file and the effect it needed; a run
   that had already failed keeps its error, and records the audit beside it. A run in the theatre counts every
   change made there while it ran, by anyone.
-- **Every run gets scratch space:** an empty directory outside the theatre, for temporary files, removed when the
-  run ends. Nothing written there needs an effect or reaches the theatre. `RUN_SCRATCH_ROOT` says where it's made
-  (by default, your system's temporary directory).
+- **Every run gets scratch space:** an empty directory in your system's temporary directory, outside the theatre,
+  for temporary files, removed when the run ends. Nothing written there needs an effect or reaches the theatre.
 
 **Effects aren't enforcement.** On the local stage, a run's runner is a process on your machine. troupe's tools and
 Claude Code's rules limit what the agent does through them, and the audit checks the workspace afterwards, but a
@@ -186,11 +196,8 @@ local stage therefore refuses every actor unless policy allows it, and every eve
 weren't enforced and which setting allowed it.
 
 Neither the effect check nor an actor's [effects](#effects) is enforcement: they limit what an agent does through
-troupe's tools and check the workspace afterwards. Two things are planned:
-- a stage that can enforce what an actor may touch, in a container
-  ([#65](https://github.com/troupe-run/troupe/issues/65));
-- a git worktree for each run on the local stage, so you can see exactly what a run changed and keep or discard it
-  ([#51](https://github.com/troupe-run/troupe/issues/51)).
+troupe's tools and check the workspace afterwards. A stage that can enforce what an actor may touch, in a
+container, is planned ([#65](https://github.com/troupe-run/troupe/issues/65)).
 
 ## Workspaces
 
@@ -219,7 +226,7 @@ theatre's git data. Branches, tags, stashes, config and hooks an actor makes the
 outside the diff, and discarding doesn't undo them. troupe checks them before and after each run, records what
 changed, and warns you, a changed hook first, since it runs the next time git uses it. A push can't be seen at all.
 
-An actor with `workspace: theatre` works in your files directly, as before.
+An actor with `workspace: theatre` works in your files directly.
 
 ## Policy
 
@@ -231,7 +238,7 @@ Policy decides what troupe may do, whoever asks. No command can loosen it.
 | `allow_mark_merges_resolved` | `true` | Marking a config file troupe rewrote from a conflicted merge resolved in git, when the setting `mark_merges_resolved` asks for it |
 | `compaction` | `actors` | Which actors' runs may compact when their engine's context fills: `actors` leaves it to each actor's `onContextFull`, `all` lets every actor that doesn't say `fail` compact, and `none` lets none, refusing an actor that asks |
 
-Until policy has files of its own ([#8](https://github.com/troupe-run/troupe/issues/8)), you set it with an
+Until policy has files of its own ([#71](https://github.com/troupe-run/troupe/issues/71)), you set it with an
 environment variable, `TROUPE_POLICY_` and the setting's name in capitals:
 
 ```sh
@@ -251,9 +258,7 @@ the setting were off, and says so.
 |---|---|---|
 | `mark_merges_resolved` | `false` | When troupe rewrites a config file git left conflicted, it also marks the file resolved in git, as `git add` would, so you only commit the merge ([merges](../stagecraft/hand-edit-config.md#branches)) |
 
-Until settings have files of their own ([#71](https://github.com/troupe-run/troupe/issues/71),
-[#2](https://github.com/troupe-run/troupe/issues/2)), you set one with an environment variable, `TROUPE_SETTING_` and
-the setting's name in capitals:
+Today you set a setting with an environment variable, `TROUPE_SETTING_` and the setting's name in capitals:
 
 ```sh
 export TROUPE_SETTING_MARK_MERGES_RESOLVED=true

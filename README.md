@@ -20,11 +20,12 @@ uv tool install --no-sources "git+https://github.com/troupe-run/troupe@troupe-ru
 ```
 <!-- x-release-please-end -->
 
-It installs `troupe-run`, which is troupe with the adapters and runners it bundles, and puts `troupe` on your path.
-If your shell can't find `troupe` afterwards, run `uv tool update-shell` and open a new terminal. Each release is
-tagged `troupe-run-v<version>`, on the [releases page](https://github.com/troupe-run/troupe/releases): to install
-another, put its tag in the command. To install the latest `main` or a particular commit, put it in place of the tag
-and leave out `--no-sources`.
+It installs `troupe-run`, which is troupe with its adapters and the `claude-code` and `scripted` runners, and puts
+`troupe` on your path. The other runners come as extras of `troupe-run`: see [Runners that come as
+extras](docs/opening-night/install.md#runners-that-come-as-extras). If your shell can't find `troupe` afterwards,
+run `uv tool update-shell` and open a new terminal. Each release is tagged `troupe-run-v<version>`, on the
+[releases page](https://github.com/troupe-run/troupe/releases): to install another, put its tag in the command. To
+install the latest `main` or a particular commit, put it in place of the tag and leave out `--no-sources`.
 
 - **Upgrade** to a newer release by running the install command again with its tag. `uv tool upgrade troupe-run`
   only moves an install of `main`.
@@ -62,7 +63,7 @@ The complexity gate fails a function the work adds or edits whose cyclomatic com
 package's branch coverage against its baseline in `quality-gates.toml`, and audits `uv.lock` when it changed; neither
 runs locally. Raise a package's baseline in a pull request when the check says it could be raised. The gates' measures
 are `scripts/quality_gates.py`, delivered from troupe-run/infrastructure, whose `docs/development-workflow.md` ("The
-merge gates") says more.
+merge gates") says more. [The merge gates](contributing/quality-gates.md) says what each one expects of you.
 
 CI runs the same script on all three platforms and every supported Python version. Each push to a pull request runs what
 its changed paths need, as a commit does: nothing for a change only to `openspec/`, the scoped check for scoped paths,
@@ -106,8 +107,8 @@ that reach its package; `uv run scripts/check_paths_reach.py` prints the lists t
 | `plugins/` | Out-of-process plugins ([why they're separate](plugins/README.md)) |
 | `protocol/` | Language-neutral contracts, as JSON Schema ([more](protocol/README.md)) |
 | `openspec/` | Specs and changes ([OpenSpec](https://github.com/Fission-AI/OpenSpec)) |
-| `docs/` | The user docs, published at [troupe.run/docs](https://troupe.run/docs/): reference for [the command line](docs/cli/README.md) |
-| `contributing/` | For people working on troupe: [config](contributing/config.md), [runs](contributing/runs.md), [runners](contributing/runners.md), [the platform seam](contributing/platform.md), [the event store](contributing/event-store.md), [releasing](contributing/releasing.md) and [hunting flaky tests](contributing/flake-hunt.md) |
+| `docs/` | The user docs, published at [troupe.run/docs](https://troupe.run/docs/): reference for [the command line](docs/prompt-book/cli.md) |
+| `contributing/` | For people working on troupe: [config](contributing/config.md), [runs](contributing/runs.md), [runners](contributing/runners.md), [the platform seam](contributing/platform.md), [the event store](contributing/event-store.md), [releasing](contributing/releasing.md), [the merge gates](contributing/quality-gates.md) and [hunting flaky tests](contributing/flake-hunt.md) |
 
 How work flows, from issue to OpenSpec change to pull request, is in the
 [contributing guide](https://github.com/troupe-run/.github/blob/main/CONTRIBUTING.md). Contributions are signed
