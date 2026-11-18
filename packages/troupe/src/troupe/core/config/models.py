@@ -121,7 +121,7 @@ class Actor(StrictModel):
         ),
     ] = None
     """
-    Where this file's schema is, relative to the file, so editors can check it. troupe writes it.
+    Where this file's schema is, so editors can check it: its URL on troupe.run, by the protocol's major version. troupe writes it.
     """
     runner: Annotated[str, Field(pattern="^[a-z][a-z0-9-]{0,63}$", title="Runner")]
     """

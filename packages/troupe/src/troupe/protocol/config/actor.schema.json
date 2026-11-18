@@ -12,7 +12,7 @@
   "properties": {
     "$schema": {
       "title": "Schema",
-      "description": "Where this file's schema is, relative to the file, so editors can check it. troupe writes it.",
+      "description": "Where this file's schema is, so editors can check it: its URL on troupe.run, by the protocol's major version. troupe writes it.",
       "type": "string",
       "pattern": "(^|/)config/actor\\.schema\\.json$"
     },
