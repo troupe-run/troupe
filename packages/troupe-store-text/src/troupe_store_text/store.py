@@ -108,7 +108,7 @@ class TextStore:
         self._rebuilt: list[Notice] = []
         self._listeners: set[threading.Event] = set()
         self._subscription: _Subscription | None = None
-        self._delivered = 0  # the notification ids listeners have been told of
+        self._delivered: tuple[str, int] = ("", 0)  # the order (epoch, length) listeners know of
         self._polling: Notice | None = None  # while the subscription can only poll
         self._reset_index()
 
@@ -240,13 +240,41 @@ class TextStore:
         return self._local()[0]
 
     def _local(self) -> tuple[OrderLog, TrackingLog]:
-        """This branch's order and tracking files, loaded when the branch changes."""
+        """This branch's order and tracking files, as they are now: other stores on the theatre,
+        in this process or others, append to them too (troupe-run/troupe#450). Only a store holding
+        the write lock trims a torn last line; for any other, it may be an append in progress."""
         key = branch_key(self.vcs.name, self._branch)
         if self._order is None or self._tracking is None or key != self._order_key:
             self._order_key = key
-            self._order = OrderLog.load(self.local_dir / "order" / f"{key}.jsonl")
-            self._tracking = TrackingLog.load(self.local_dir / "tracking" / f"{key}.jsonl")
+            self._order = OrderLog(self.local_dir / "order" / f"{key}.jsonl")
+            self._tracking = TrackingLog(self.local_dir / "tracking" / f"{key}.jsonl")
+        self._order.catch_up(trim=self._holding)
+        self._tracking.catch_up(trim=self._holding)
+        if self._order.conflict is not None or self._order.repeats:
+            self._mend(self._order)
         return self._order, self._tracking
+
+    def _mend(self, order: OrderLog) -> None:
+        """Mend an order that stores before troupe-run/troupe#450 was fixed damaged (design D5):
+        drop repeated lines under the same epoch, or rebuild a conflicting order under a new one.
+        A read takes the write lock to do it, as it does to number new events."""
+        if not self._holding:
+            with self._write_lock():
+                self.refresh()
+                order.catch_up(trim=True)  # another store may have mended it meanwhile
+                self._mend_locked(order)
+        else:
+            self._mend_locked(order)
+
+    def _mend_locked(self, order: OrderLog) -> None:
+        if order.conflict is not None:
+            line, reason = order.conflict
+            order.rebuild(self._replay_order(list(self._events)))
+            self._rebuilt.append(_reordered(order.path, line, reason))
+        elif order.repeats:
+            repeats = order.repeats
+            order.repair()
+            self._rebuilt.append(_repaired(order.path, repeats))
 
     def _pending(self) -> tuple[list[str], list[str]]:
         order = self._load_local()
@@ -464,7 +492,7 @@ class TextStore:
                 self.refresh()
             order, positions = self._local()
             numbers = order.append(batch_ids)
-            self._delivered = len(order.ids)  # listeners here are told below, at once
+            self._delivered = (order.epoch, len(order.ids))  # listeners here are told below
             if tracking is not None:
                 epoch = order.ensure_epoch()
                 positions.append(epoch, tracking.application_name, tracking.notification_id)
@@ -599,7 +627,8 @@ class TextStore:
     def _deliver(self) -> bool:
         """Notify listeners if the order has changed since they were last told. Whether it had."""
         with self._lock:
-            current = self.max_notification_id() or 0
+            count = self.max_notification_id() or 0
+            current = (self._load_local().epoch, count)  # a rebuild may keep the length (D6)
             if current == self._delivered:
                 return False
             self._delivered = current
@@ -698,6 +727,30 @@ def _incomplete(segment: Segment) -> Notice:
     )
 
 
+def _reordered(path: Path, line: int, reason: str) -> Notice:
+    return Notice(
+        "events.order-rebuilt",
+        problem=f"Line {line} of the local order isn't consistent ({reason}): two troupe processes "
+        "numbered events at once, before troupe-run/troupe#450 was fixed. The order was rebuilt "
+        "and followers start again.",
+        fix="Nothing to do: projections are rebuilt from the events.",
+        path=str(path.absolute()),
+        details={"line": line, "conflict": reason},
+    )
+
+
+def _repaired(path: Path, repeats: int) -> Notice:
+    return Notice(
+        "events.order-repaired",
+        problem=f"The local order repeated {repeats} line(s), written by two troupe processes at "
+        "once before troupe-run/troupe#450 was fixed. They were dropped; every notification id "
+        "still names the same event, and followers keep their place.",
+        fix="Nothing to do.",
+        path=str(path.absolute()),
+        details={"repeats": repeats},
+    )
+
+
 def _rebuilt(path: Path, gone: int) -> Notice:
     return Notice(
         "events.order-rebuilt",
@@ -732,7 +785,8 @@ class _Subscription:
         """Set up the watch before returning, so a refusal is in the store's notices at once.
         Called with the store's lock held."""
         store = self.store
-        store._delivered = store.max_notification_id() or 0
+        count = store.max_notification_id() or 0
+        store._delivered = (store._load_local().epoch, count)
         try:
             self._watch, self._on_events = store._watch_nearest()
         except (WatchUnavailableError, WatchDirectoryMissingError) as error:

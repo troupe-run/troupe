@@ -17,6 +17,8 @@ CODES: dict[str, str] = {
     # The event store (event-store design D12). contributing/event-store.md lists them.
     "events.other-branch": "Uncommitted events made on another branch were left out of a read.",
     "events.order-rebuilt": "The local notification order was rebuilt, so followers start again.",
+    "events.order-repaired": "The local notification order repeated lines, which were dropped; "
+    "followers keep their place.",
     "events.incomplete-batch": "A segment ends in an interrupted batch, which was left out.",
     "events.subscription-polling": "A subscription can't be told of other writers' events as "
     "they're recorded, so it looks for them on a timer.",

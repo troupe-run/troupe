@@ -40,8 +40,8 @@ Alternative: reload in full only under the write lock. Rejected: reads outside t
 
 Correctness under the lock: `insert`, `insert_tracking` and `ensure_ordered` take the write lock and then call
 `_local()`, so the catch-up happens after any other writer has finished, and the append that follows starts at the
-true end of the file. As a check, `OrderLog.append` compares the size `append_bytes` reports with its `offset`; a
-mismatch means another writer appended without the lock, which is a bug, so it raises rather than carry on.
+true end of the file. (An extra check that `append_bytes` started at the log's offset was considered and left out.
+Every writer appends under the lock, so it couldn't fail without a new error code that nothing could raise.)
 
 ### D2. Only a store holding the write lock trims a torn last line
 Today `_read_lines` truncates an incomplete last line wherever it's called, including a first load outside the
@@ -54,17 +54,62 @@ and not consumed, and the next catch-up reads them once they're complete.
 the check sees the current file, so a reader whose events were already ordered by another store writes nothing.
 When it does take the lock, `_order_locked` catches up again before deciding.
 
-### D4. An order log already damaged by duplicate lines (pending the owner's answer)
-Clones that ran a reader beside a run may have files with repeated lines (`n=2 e5`, `n=2 e5`). Options asked of
-the owner on troupe-run/troupe#450 (through the orchestrator):
-- **A (recommended):** while loading, a line that repeats an earlier line exactly (same `n`, same event) is
-  dropped, and a store holding the write lock rewrites the file without it (same epoch, so followers' positions
-  stay valid), with a notice saying so. Anything else (a different event under a used `n`, a gap) is refused as
-  today.
-- **B:** refuse as today, with the fix-it message naming this damage; deleting the file rebuilds it under a new
-  epoch, and followers start again from the beginning.
+### D4. Why a reader writes the order, and why the lock is the one place ids are assigned
+The owner asked for the root cause rather than the fix (troupe-run/troupe#450, 2026-11-18). The order log is a
+per-clone index that numbers events in the order this clone first sees them (event-store design D5). Events also
+arrive with no local writer, from a pull, a merge, or a crash between writing a segment and numbering it. So
+whichever store next looks, reader or writer, numbers the visible events that have no id yet, under the write lock
+(D10). The lock already makes one store at a time the numberer. The bug is that the numberer worked from a copy of
+the log it had loaded earlier: D5 says the store rescans "before every write and read under the lock", and the
+code did that for the segments only. D1 makes it do so for the order and tracking logs as well.
 
-This section and the spec delta are updated with the answer before the code depends on it.
+A stale copy doesn't only repeat lines. With three stores, the probe for this change got `n=2 E_c, n=3 E_b` from
+the writers and then `n=2 E_b, n=3 E_c` from a stale store, so live processes named different events by one id.
+
+**Owner's decision (2026-11-18):** keep D5 as designed: any store may number, under the lock, from the log as it
+is now. Rejected: a daemon that alone assigns ids (a long-running process per clone, IPC, crash handling on three
+OSes, and it would still have to number pulled events itself), and "only writers number" (pulled events would stay
+unnumbered, and unreadable, until the next write).
+
+### D5. Mending order logs this bug already damaged
+**Owner's decision (2026-11-18):** repair exact repeats, and rebuild on conflicts.
+- **An exact repeat** (a line `{"n": k, "event": e}` where id `k` already names `e`) is dropped. The log is read as
+  if the line weren't there. The first store to hold the write lock rewrites the file without the repeats, under
+  the same epoch, and reports `events.order-repaired` with how many lines it dropped. The epoch is kept, so
+  followers keep their place: every id still names the event it named before.
+- **A conflict** is a well-formed line out of sequence: an id that skips ahead, an id that names a different event
+  from the one it already names, an event that already has an id, or a second `{"epoch"}` line (a stale store
+  starting the order again). This bug can write each of these. Under the write lock the store rebuilds the order from
+  the visible events under a new epoch, as for a removed event, and reports `events.order-rebuilt`, whose details
+  now name the line and the reason instead of a count of events gone.
+- **Anything else** (a line that isn't JSON, or isn't an epoch or `{n, event}` object) is refused as today with
+  `events.malformed-record`. This bug never writes it.
+
+A read that finds damage takes the write lock to mend it, the same way `ensure_ordered` takes it to number events.
+After a rewrite or a rebuild, every other store sees a different file. A rebuild changes the epoch (D1 reloads). A
+repair keeps the epoch, so D1 also checks that the last line it read is still at the same place in the file, and
+reloads in full if not.
+
+### D6. A follower when the epoch changes
+Followers' positions are recorded per epoch (event-store design D5), and `max_tracking_id` reads only the current
+one. After a rebuild a follower's position is gone: it gets "none" and pulls again from id 1, so its projection is
+rebuilt and nothing is skipped. Delivery stays at least once. A repair keeps the epoch, so it doesn't affect
+followers.
+- **A subscriber woken by the store** (`listen`): the subscription compares the order's epoch as well as its
+  length, so a rebuild that leaves the length unchanged still wakes listeners, and they read the new order.
+- **`troupe logs --follow`** doesn't keep a notification id: on each wake it reads the run again by its sequence
+  numbers, so a rebuild changes nothing it shows.
+- **The gap that remains:** a follower that pulled notifications under the old epoch, and records a position after
+  the rebuild, has that position recorded under the new epoch. The library's `Tracking` carries no epoch, so the
+  store can't tell. This was true of every rebuild since event-store D5. No troupe code records positions yet
+  (only the recorder contract's suite does), so the gap is raised as troupe-run/troupe#454 rather than fixed here.
+
+### D7. The notices this needs
+- New notice `events.order-repaired`, details `{"repeats": <lines dropped>}`.
+- `events.order-rebuilt`'s details become one of `{"gone": <count>}` (an ordered event is no longer here, as
+  today) or `{"line": <line>, "conflict": <reason>}` (the log named two events by one id, or similar, D5). It's a
+  protocol schema change, so the commit is a `fix`, and the generated models and contributing/event-store.md change
+  with it.
 
 ## Risks / Trade-offs
 

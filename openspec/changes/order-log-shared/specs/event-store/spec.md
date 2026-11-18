@@ -37,3 +37,34 @@ another.
 - **WHEN** one store records a follower's position, and a second store on the same theatre then records a position
   for that follower that isn't greater
 - **THEN** the second store refuses it as a conflict
+
+### Requirement: The local order rebuilds itself when events disappear
+When an event named by the local order is no longer present (an event file removed by hand, or a reset), or the
+order is inconsistent (one ID names two events, an event has two IDs, or an ID is out of sequence), the store SHALL
+rebuild the branch's order from the events present, and report it. Followers' positions recorded against the old
+order SHALL be discarded, so their projections are rebuilt and nothing is skipped.
+
+#### Scenario: An event file is removed
+- **WHEN** an uncommitted event file is deleted, and the store is opened
+- **THEN** the order is rebuilt without its events
+- **AND** a notice says the order was rebuilt and why
+- **AND** every follower starts again from the beginning
+
+#### Scenario: One ID names two events
+- **WHEN** the local order gives one notification ID to two different events, and the store is opened
+- **THEN** the order is rebuilt, and each event has exactly one ID
+- **AND** a notice says the order was rebuilt, naming the line and the reason
+- **AND** every follower starts again from the beginning
+
+## ADDED Requirements
+
+### Requirement: Repeated lines in the local order are dropped
+A line of the local order that repeats an ID already given to the same event SHALL be ignored when the order is
+read. The store SHALL rewrite the file without it, keeping the order's epoch, and report how many lines it dropped.
+Followers' positions SHALL still count.
+
+#### Scenario: An order with repeated lines
+- **WHEN** the local order repeats a line (the same ID for the same event), and the store is opened
+- **THEN** every ID names the event it named before, and the file no longer repeats the line
+- **AND** a notice says the order was repaired
+- **AND** followers keep their positions

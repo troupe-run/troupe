@@ -102,13 +102,60 @@
           "const": "events.order-rebuilt"
         },
         "details": {
+          "oneOf": [
+            {
+              "description": "Events the order named are no longer here.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "gone"
+              ],
+              "properties": {
+                "gone": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            {
+              "description": "The order wasn't consistent: two processes numbered events at once (troupe-run/troupe#450).",
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "line",
+                "conflict"
+              ],
+              "properties": {
+                "line": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "conflict": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "required": [
+        "details"
+      ],
+      "properties": {
+        "code": {
+          "const": "events.order-repaired"
+        },
+        "details": {
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "gone"
+            "repeats"
           ],
           "properties": {
-            "gone": {
+            "repeats": {
               "type": "integer",
               "minimum": 1
             }
