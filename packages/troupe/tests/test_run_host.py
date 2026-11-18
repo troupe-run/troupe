@@ -22,7 +22,7 @@ from runner_schemas import is_valid, validate
 from troupe.core import defaults
 from troupe.core.artifacts import ArtifactStore, MemoryArtifactStore, load_store
 from troupe.core.errors import TroupeError
-from troupe.core.masking import Masker
+from troupe.core.masking import MARKER, Masker
 from troupe.core.notices import Notice
 from troupe.core.runners import host as host_module
 from troupe.core.runners.effects import (
@@ -1540,6 +1540,13 @@ def _strings(value: object) -> list[str]:
 @settings(max_examples=500, deadline=None)
 @given(runner_lines())
 @example(MERGING_KEYS)
+@example(  # a one-letter credential is in troupe's own words, which are masked too (#459)
+    (
+        "r",
+        b'{"jsonrpc": "2.0", "method": "run/transcript", '
+        b'"params": {"runId": "r", "record": "", "r": "", "rr": ""}}',
+    )
+)
 @example(
     (
         "nsecret-token-0123456789",
@@ -1555,8 +1562,16 @@ def test_every_valid_line_is_read_and_no_string_it_keeps_holds_the_credential(
     raw = json.loads(line)
     if _keys(mask.data(raw)) < _keys(raw):
         # The one violation a valid line can be: masking would merge two keys, losing a value.
-        with pytest.raises(host_module._Violation, match="same once the run's credential"):
+        with pytest.raises(host_module._Violation) as raised:
             host_module.parse_runner_line(mask, line, 1)
+        # The sentence after the problem's fixed prefix names the runner's keys, so it is masked
+        # whole, troupe's own words too: a one-letter credential masks letters of them (#459).
+        # Put back, they read as written; masked, the credential is in no form outside a marker.
+        problem = raised.value.error.problem
+        _, sentence = problem.split(": ", 1)
+        assert "same once the run's credential" in sentence.replace(MARKER, credential), problem
+        for writing in writings(sentence):
+            assert not forms_outside_the_marker(mask, writing), (sentence, writing)
         return
     message, kept = host_module.parse_runner_line(mask, line, 1)  # otherwise never a violation
     # The same message, each string masked: masking reads, never re-reads, the line. The record
