@@ -11,3 +11,7 @@ dist/
 build/
 .DS_Store
 .claude/settings.local.json
+
+# coverage.py data from the coverage leg, or a coverage run by hand (quality-gates design D3).
+.coverage
+.coverage.*
