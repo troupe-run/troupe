@@ -267,7 +267,9 @@ class Runtime(StrictModel):
             Annotated[
                 str,
                 StringConstraints(
-                    pattern=r"^(?![\s\S]*[\x00-\x1f\x7f])[\s\S]+$", min_length=1, max_length=256
+                    pattern=r"^(?![\s\S]*[\x00-\x1f\x7f])[\s\S]+$",
+                    min_length=1,
+                    max_length=256,
                 ),
             ],
             Prices,
