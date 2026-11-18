@@ -194,6 +194,14 @@ jobs:
             default { $env:BEFORE }
           }
           uv run scripts/check.py @checkArgs --base $base
+      # The coverage leg's report, per file, so a coverage failure can be read file by file (quality-gates design D3).
+      - name: Keep the coverage report
+        if: ${{ !cancelled() && matrix.gates }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-report
+          path: ${{ runner.temp }}/quality-gates-coverage.json
+          if-no-files-found: ignore
       # Installs troupe the documented way from this commit, on this leg's Python, and performs with
       # it, then installs troupe-run[all] and rehearses an audition on every runner, so each extra's
       # dependencies install here (spec: installation; install-with-uv design D5; runner-extras D9).

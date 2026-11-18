@@ -396,3 +396,9 @@ def test_every_leg_fetches_history_and_passes_each_events_base() -> None:
         assert step["env"]["BEFORE"] == "${{ github.event.before }}"
         assert "HEAD^1" in step["run"]
         assert "--base" in step["run"]
+
+
+def test_the_coverage_leg_keeps_its_report() -> None:
+    keep = next(s for s in legs_job()["steps"] if s.get("name") == "Keep the coverage report")
+    assert keep["if"] == "${{ !cancelled() && matrix.gates }}"
+    assert keep["with"]["path"] == "${{ runner.temp }}/quality-gates-coverage.json"
