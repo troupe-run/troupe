@@ -46,8 +46,10 @@ HEARD_WITHIN = defaults.SUBSCRIBE_CHECK_SECONDS + STALL_SECONDS
 """How long one delivery may take before the store counts as not delivering. A report the OS drops
 or holds back, as FSEvents can under load, is delivered by the store's check, every
 SUBSCRIBE_CHECK_SECONDS (watch-event-segments D5), so through the port's defaults a delivery can
-lawfully take that long (#448, load-flakes design D3). A late delivery is one slow sample; the
-fastest must still be under BOUND."""
+lawfully take that long (#448, load-flakes design D3). If the check finds the watch reported
+nothing in its whole interval, the store falls back to polling for good and says so; the test then
+subscribes afresh (D8), so a late delivery is one slow sample and the fastest must still be under
+BOUND."""
 
 
 @pytest.fixture
@@ -128,7 +130,16 @@ def test_another_writers_events_reach_a_port_subscriber_the_fastest_under_the_bo
             recorded_count += 1
             assert store.max_notification_id() == recorded_count
             delays.append(woke - recorded)
-            return delays[-1] if heard.counts(recorded) else math.inf
+            counted = heard.counts(recorded)
+            if any(n.code == "events.subscription-polling" for n in store.notices()):
+                # The OS was silent for a whole check interval and the store now polls (D8).
+                # Subscribe afresh. The restart counts as a notification, taken before the new
+                # subscription starts, so a store that polls from then on still can't count.
+                store.unlisten(heard)
+                heard.times.append(time.time())
+                store.listen(heard)
+                time.sleep(0.5)  # a fresh subscription may wake once on its own
+            return delays[-1] if counted else math.inf
 
         counted = watched_delays(measure)
     finally:

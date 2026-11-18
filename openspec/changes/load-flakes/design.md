@@ -77,7 +77,8 @@ run passes or fails within about 95 s. Before, it was about 70 s. A quiet run is
 
 It still proves "the fastest under the bound", not only "eventually": `min(delays) < BOUND` is unchanged, and a
 delivery the check makes, at a random point in its 30 s cycle, is almost never under 0.25 s. The longer wait only
-changes what a single late delivery does: it is measured, as a slow sample, instead of failing the test.
+changes what a single late delivery does: it is measured, as a slow sample, instead of failing the test. That holds
+only while the store keeps watching; when the check falls back to polling, D8 subscribes afresh.
 
 ### D4. The port test's "a store that only polls can't pass" is made true
 
@@ -136,6 +137,45 @@ reading on a timer, every 0.5 s or every 1.8 s (slow enough to get past `settle`
 Alternatives: a longer `settle`. Rejected: no settle outlasts an OS that reports arbitrarily late, and the test would
 still be timing the OS.
 
+### D7. "Nothing changes" allows a report that wasn't a change
+
+`test_a_wait_with_nothing_changing_returns_after_its_timeout_saying_nothing_changed` settles a fresh watch (1.5 s of
+quiet), then requires one 0.5 s wait to report nothing. It failed in this branch's commit check of c109c49b. A watch
+may report a change that wasn't one (the platform spec's own words), and FSEvents can report a fresh directory's
+creation more than 1.5 s late: with every callback delivered 1.55 to 1.85 s late (a scratch patch) it failed 4 of 9
+runs.
+
+The test now waits again after a wait that reports a change, within the 60 s slow-stretch budget, and the first wait
+that reports nothing must have lasted its timeout. Checked: with reports delivered late it passed 6 of 6; a watch whose
+every wait reports a change fails ("the watch never went quiet"), and one whose quiet wait returns before its timeout
+fails on the elapsed time.
+
+### D8. The port test subscribes afresh when the store falls back to polling
+
+D3 said a delivery the check makes is one slow sample. That's true only while the store keeps watching. When the watch
+reported nothing in a whole check interval (FSEvents silent for 30 s, the known limit), the check counts the event as
+missed and the store polls for good (watch-event-segments D5), every delivery about 0.9 s after its record. Then no
+delivery can count, and the test fails at `min(counted) < BOUND`. This branch's third commit check failed that way
+(load 48); the review of c109c49b pointed out that D3's claim didn't cover it.
+
+After each delivery the test reads the port's notices. If the store says it polls (`events.subscription-polling`), the
+test unlistens and listens again, which gives a fresh subscription with a fresh watch. The restart counts as a
+notification for D4, taken just before the new subscription starts: a store that polls from then on looks no sooner
+than one interval after it, so its deliveries still can't count. A store whose watch never reports falls back again
+on every restart, each one costing a check interval, and fails once the slow-stretch budget is spent.
+
+Falling back for good after one silent interval is the store's design, and stays: events still arrive within a second.
+The test restarts because it's measuring the watch, not the fallback.
+
+### D9. The raw watch tests wait `WITHIN` for a report
+
+`test_another_processs_appends_each_wake_a_wait_the_fastest_under_the_bound` failed at `watched.wait(10)` in #459's
+commit check (load about 65, PR #461): the OS reported nothing for 10 s. By the owner's decision that waits stay at
+`WITHIN` (2026-11-18), every wait in `test_platform_watching.py` for a report another process's change should cause
+now waits `WITHIN` (30 s): the append, create, remove and directory-removal tests, and #446's normal wait for a change
+a zero-timeout wait didn't report yet. The bounds those tests check are unchanged; the waits only decide when a
+report counts as never coming.
+
 ## Risks / Trade-offs
 
 - [Known limit: more than 30 s of OS silence under heavy load] → The waits stay at `WITHIN` (owner decision,
@@ -151,6 +191,7 @@ still be timing the OS.
   with logging at lower load. That fits the known limit above, but it isn't proven; it's recorded here as a known limit
   with the owner's decision rather than explained.
 
-- [The cause of #448 isn't observed directly] → It can't be without load. D3's reading and the existing check test rule out troupe;
-  the test's failure message now names the wait it gave up after, so a failure past 35 s would point at the store.
+- [The cause of #448 isn't observed directly] → It can't be without load. D3's reading and the existing check test
+  rule out troupe; the test's failure message now names the wait it gave up after, so a failure past 35 s would point
+  at the store.
 - [A failing #448 run now takes up to 35 s per delivery] → Only when a delivery is late; a passing run is unchanged.

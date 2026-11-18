@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from storetesting import BOUND, SETTLE, SLOW_STRETCH_SECONDS, STALL_SECONDS, watched_delays
+from storetesting import BOUND, SETTLE, SLOW_STRETCH_SECONDS, STALL_SECONDS, WITHIN, watched_delays
 from troupe.platform import watching
 from troupe.platform.errors import WatchDirectoryMissingError, WatchUnavailableError
 from troupe.platform.watching import DirectoryWatch, watch
@@ -82,7 +82,7 @@ def test_another_processs_appends_each_wake_a_wait_the_fastest_under_the_bound(
 
         def measure() -> float:
             changer.send("append", segment)
-            assert watched.wait(10)
+            assert watched.wait(WITHIN)
             woke = time.time()
             delay = woke - changer.done_at()
             drain(watched)
@@ -96,7 +96,7 @@ def test_another_processs_appends_each_wake_a_wait_the_fastest_under_the_bound(
 def test_another_processs_new_file_wakes_a_wait(tmp_path: Path, changer: Changer) -> None:
     with settled(tmp_path) as watched:
         changer.send("create", tmp_path / "new.jsonl")
-        assert watched.wait(10)
+        assert watched.wait(WITHIN)
         changer.done_at()
 
 
@@ -105,7 +105,7 @@ def test_another_processs_removing_a_file_wakes_a_wait(tmp_path: Path, changer: 
     doomed.write_bytes(b"x\n")
     with settled(tmp_path) as watched:
         changer.send("remove", doomed)
-        assert watched.wait(10)
+        assert watched.wait(WITHIN)
         changer.done_at()
 
 
@@ -127,7 +127,7 @@ def test_a_change_made_while_nobody_waits_is_reported_by_the_next_wait_at_once(
             time.sleep(0.5)  # the change is made, and delivered, while nobody waits
             at_once = watched.wait(0)
             if not at_once:
-                assert watched.wait(10), "a change made while nobody waited was lost"
+                assert watched.wait(WITHIN), "a change made while nobody waited was lost"
             drain(watched)
             return at_once
 
@@ -141,9 +141,17 @@ def test_a_change_made_while_nobody_waits_is_reported_by_the_next_wait_at_once(
 def test_a_wait_with_nothing_changing_returns_after_its_timeout_saying_nothing_changed(
     tmp_path: Path,
 ) -> None:
+    # A watch may report a change that wasn't one, and FSEvents can report a fresh directory's
+    # creation more than SETTLE late under load (#446's family, load-flakes design D7). So a
+    # reported change is tried again, within the slow stretch's budget; the first wait that reports
+    # nothing must have lasted its timeout. A watch that never goes quiet fails once it's spent.
     with settled(tmp_path) as watched:
-        started = time.monotonic()
-        assert not watched.wait(0.5)
+        budget = time.monotonic() + SLOW_STRETCH_SECONDS
+        while True:
+            started = time.monotonic()
+            if not watched.wait(0.5):
+                break
+            assert time.monotonic() < budget, "the watch never went quiet"
         assert time.monotonic() - started >= 0.5
 
 
@@ -194,7 +202,7 @@ def test_removing_the_watched_directory_during_a_wait_wakes_it_and_the_next_wait
     directory.mkdir()
     with settled(directory) as watched:
         threading.Timer(0.3, directory.rmdir).start()
-        assert watched.wait(10)
+        assert watched.wait(WITHIN)
         with pytest.raises(WatchDirectoryMissingError) as raised:
             drain(watched)
     assert raised.value.directory == directory
