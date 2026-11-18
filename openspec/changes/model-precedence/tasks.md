@@ -37,8 +37,8 @@ first.
 
 ## 3. Integration
 
-- [ ] 3.1 Full check (`uv run scripts/check.py`), with the orchestrator's go-ahead, output kept in a scratch file.
-      Verify it passes
+- [x] 3.1 Full check (`uv run scripts/check.py`), with the orchestrator's go-ahead, output kept in a scratch file.
+      Verify it passes. Done: 7127 passed, 20 skipped, all gates passed (b5e3fd99, rebased on #458)
 
 ## Workflow follow-up
 
