@@ -27,8 +27,9 @@ SHALL take a timeout and SHALL say whether anything changed. It MAY report a cha
   yet is reported by the next wait that has a timeout
 
 #### Scenario: Nothing changes
-- **WHEN** a process waits on a watched directory with a timeout and nothing in it changes
-- **THEN** the wait returns after the timeout, saying nothing changed
+- **WHEN** a process waits on a watched directory with a timeout and nothing in it changes, waiting again after any
+  wait that reports a change that wasn't one, for up to a 60 s allowance for a slow stretch
+- **THEN** a wait returns after the timeout, saying nothing changed
 
 #### Scenario: The platform's own wait ends early
 - **WHEN** the platform's wait gives up before the timeout has passed by `time.monotonic()`, as Windows' timer can,

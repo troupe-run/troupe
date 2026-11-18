@@ -34,8 +34,13 @@ delivery than the store's own backstop for a report the OS drops or delays.
 - **#452, the two quiet tests** (following a quiet run, and a listened text store) allow a read that follows a watch
   report, made late by the OS for an earlier change, and still fail any read with no report since the last one: a
   read on a timer. They're renamed to say so.
-- The platform spec's "A change between waits is kept" scenario, the event-store spec's delivery and quiet scenarios,
-  and the runs spec's "Nothing is recorded while following" scenario say what the tests now check.
+- **"Nothing changes"** (`test_a_wait_with_nothing_changing_…`), which failed the same way in this branch's commit
+  check, waits again after a report of a change that wasn't one, as the watch is allowed to make.
+- **The raw watch tests' waits** for a report another process's change should cause are `WITHIN` (30 s), not 10 s,
+  by the owner's decision that waits stay at `WITHIN`. One failed at 10 s in #459's commit check.
+- The platform spec's "A change between waits is kept" and "Nothing changes" scenarios, the event-store spec's delivery
+  and quiet scenarios, and the runs spec's "Nothing is recorded while following" scenario say what the tests now
+  check.
 
 ## Capabilities
 
@@ -57,4 +62,5 @@ None.
 
 Tests only: `packages/troupe/tests/test_platform_watching.py`, `test_event_subscription.py`, `test_run_queries.py` and
 `storetesting.py`, and `packages/troupe-store-text/tests/test_processes.py`.
-No runtime code changes. Found on the way, filed separately and not part of this change: #450 (two stores on one theatre append the same notification ids).
+No runtime code changes. Found on the way, filed separately and not part of this change: #450 (two stores on one
+theatre append the same notification ids).

@@ -42,9 +42,28 @@
 - [x] 6.1 `WATCH_ONLY_SECONDS` covers the five unconditional measurements (180 s); `STALL_SECONDS`' docstring names no
   single wait; `watch_reports` counts only watches in the test's theatre. Verify the touched tests pass on their own
 
-## 7. Integration
+## 7. "Nothing changes" (design D7)
 
-- [ ] 7.1 `uv run scripts/check.py` passes (run when the 1-minute load is under 40)
+- [x] 7.1 Wait again after a reported change within the slow-stretch budget; verify the test passes with FSEvents
+  callbacks 1.55 to 1.85 s late (6 of 6, against 4 of 9 failing before), and fails with a watch that always reports
+  and with one whose quiet wait returns early
+
+## 8. The port test after a fallback to polling (design D8)
+
+- [x] 8.1 Subscribe afresh when the port's notices say the store polls, the restart counting as a notification;
+  verify the test passes on its own (3.4 s)
+- [x] 8.2 Mutation-check: with FSEvents silent for the first check interval (a scratch patch dropping callbacks for
+  31 s), the new test passes after restarting (68.7 s) and c109c49b's fails as the commit check did (29.4 s, then
+  about 0.9 s each); a store whose watch is refused still fails
+
+## 9. The raw watch tests' waits (design D9)
+
+- [x] 9.1 Each wait in `test_platform_watching.py` for a report another process's change should cause waits `WITHIN`;
+  verify with ruff (the timing runs wait for a quiet machine, 10.1)
+
+## 10. Integration
+
+- [ ] 10.1 `uv run scripts/check.py` passes (run when the 1-minute load is under 40)
 
 ## Workflow follow-up
 
