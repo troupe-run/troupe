@@ -4,10 +4,9 @@
 
 ### Requirement: Runners start with an explicit environment
 The host SHALL start a runner under the runner environment policy, a named default that selects one variable from the
-host and nothing else: `COVERAGE_PROCESS_CONFIG`, coverage.py's subprocess setting, which holds coverage settings and
-never a secret, so a test run under coverage measures runner code (owner, 2026-11-18). The runner gets that variable
-when the host has it, the variables the caller names, and the minimum the operating system needs to start a process.
-It SHALL NOT pass through anything else of the host's environment.
+host, coverage.py's `COVERAGE_PROCESS_CONFIG`, and nothing else (owner, 2026-11-18). The runner gets that variable when
+the host has it, the variables the caller names, and the minimum the operating system needs to start a process. It
+SHALL NOT pass through anything else of the host's environment.
 
 #### Scenario: Host secret is not inherited
 - **WHEN** the host process has an environment variable the caller did not name

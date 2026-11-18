@@ -1,18 +1,20 @@
 # The merge gates' thresholds for troupe (troupe-run/infrastructure spec: quality-gates). scripts/quality_gates.py,
 # delivered from infrastructure, reads it strictly: an unknown key or a wrong type fails the check. It isn't delivered:
-# these are troupe's own. Defaults approved by the owner on 2026-11-18 (openspec/changes/quality-gates/design.md).
+# these are troupe's own. Defaults approved by the owner on 2026-11-18 (openspec/changes/archive/2026-11-18-quality-gates/design.md).
 version = 1
 
 # Branch coverage, measured on CI's Linux, Python 3.15 leg only. A package can't measure below its baseline by more
 # than the tolerance, and a package with no baseline must meet the floor. Raise a baseline by hand when the check says
-# it could be raised.
+# it could be raised. Baselines and tolerance from two runs of the leg on f9f6bd6a (CI run 44240981380, attempts 1 and
+# 2): each baseline is the lower measurement rounded down to 0.1; runner-openai differed by 0.53 points between them,
+# so the tolerance is 0.6 (openspec/changes/archive/2026-11-18-quality-gates/design.md, D8).
 [coverage]
 floor = 80.0
-tolerance = 0.5
+tolerance = 0.6
 
 [coverage.packages.troupe]
 paths = ["packages/troupe"]
-baseline = 92.1
+baseline = 91.9
 
 [coverage.packages.troupe-artifacts-local]
 paths = ["packages/troupe-artifacts-local"]
@@ -24,7 +26,7 @@ baseline = 96.1
 
 [coverage.packages.troupe-plugin-sdk]
 paths = ["packages/troupe-plugin-sdk"]
-baseline = 94.6
+baseline = 94.9
 
 [coverage.packages.troupe-run]
 paths = ["packages/troupe-run"]
@@ -47,31 +49,31 @@ baseline = 93.3
 
 [coverage.packages.runner-anthropic]
 paths = ["plugins/runner-anthropic"]
-baseline = 76.4
+baseline = 86.5
 
 [coverage.packages.runner-claude-code]
 paths = ["plugins/runner-claude-code"]
-baseline = 60.5
+baseline = 72.7
 
 [coverage.packages.runner-mistralrs]
 paths = ["plugins/runner-mistralrs"]
-baseline = 82.8
+baseline = 88.0
 
 [coverage.packages.runner-ollama]
 paths = ["plugins/runner-ollama"]
-baseline = 81.0
+baseline = 89.6
 
 [coverage.packages.runner-openai]
 paths = ["plugins/runner-openai"]
-baseline = 91.5
+baseline = 91.0
 
 [coverage.packages.runner-scripted]
 paths = ["plugins/runner-scripted"]
-baseline = 50.7
+baseline = 81.7
 
 [coverage.packages.scripts]
 paths = ["scripts"]
-baseline = 88.3
+baseline = 88.4
 
 # Cyclomatic complexity (lizard) of each function a change adds or edits: above the limit, it may not be new or more
 # complex than before. Tests, the files infrastructure delivers (.github/guard-delivery.json lists them) and the
