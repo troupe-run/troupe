@@ -7,7 +7,7 @@ SHALL see only the store port's subscription, never how a store learns of writes
 
 #### Scenario: Another process records events
 - **WHEN** a process subscribes to the store, with `SUBSCRIBE_POLL_SECONDS` and `SUBSCRIBE_CHECK_SECONDS` set to
-  120 s, longer than the test can last, and another process records an event, five times, and then, while no delay
+  180 s, longer than the test can last, and another process records an event, five times, and then, while no delay
   so far is under 0.25 s, once more at a time for up to a 60 s allowance for a slow stretch
 - **THEN** each event reaches the subscriber, the fastest of the delays, measured from when the writer's append
   returned, is under 0.25 s, and the median of the first five is within 0.25 s plus an allowance for a loaded machine

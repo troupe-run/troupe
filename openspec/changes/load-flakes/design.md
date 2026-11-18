@@ -110,10 +110,12 @@ Three tests set the poll and check to 60 s so that only the watch can deliver, a
 `test_the_first_event_reaches_a_listener_that_subscribed_before_events_existed`. A 10 s FSEvents stall fails them.
 
 Each wait becomes `HEARD_WITHIN` (`WITHIN`, 30 s, the repository's wait for a condition), and the poll and check
-`WATCH_ONLY_SECONDS`: the slow-stretch budget plus twice `HEARD_WITHIN` (120 s). Measurements start within the 60 s
-budget and each waits at most 30 s, so with 30 s to spare the store's first poll or check comes after the test, and
-"every delivery was the watch's" now holds for the whole test. With 60 s it didn't for a run past 60 s. How fast the
-watch delivers is still `BOUND`'s to check. The event-store spec's scenario says 120 s.
+`WATCH_ONLY_SECONDS` (180 s). `watched_delays` takes five measurements whatever the clock says, then starts more only
+within the 60 s budget, and each waits at most 30 s. So the measuring ends within the longer of five waits (150 s) and
+the budget plus one wait (90 s), and with 30 s to spare the store's first poll or check comes after the test.
+"Every delivery was the watch's" now holds for the whole test. With 60 s it didn't for a run past 60 s. How fast the
+watch delivers is still `BOUND`'s to check. The event-store spec's scenario says 180 s. (A first draft said 120 s,
+counting only the budget; the review pointed out the five unconditional measurements.)
 
 ### D6. #452: a quiet test allows a read that follows a watch report
 
@@ -135,6 +137,19 @@ Alternatives: a longer `settle`. Rejected: no settle outlasts an OS that reports
 still be timing the OS.
 
 ## Risks / Trade-offs
+
+- [Known limit: more than 30 s of OS silence under heavy load] → The waits stay at `WITHIN` (owner decision,
+  2026-11-18). While several full checks ran at once (load 40 to 80, `fseventsd` at 100%),
+  `test_another_processs_write_wakes_this_processs_subscription` once got no FSEvents report within 30 s with no
+  mutation at all, and one scratch run of these tests took 11 minutes of wall clock. No fixed wait covers an OS that
+  silent, and a longer one would only be a raised timeout. These tests need one heavy run at a time on the machine,
+  which is how the owner's sessions now run them. No CI-only or quiet-machine marker.
+- [The 12 s stall mutation lost a delivery twice in 14 runs, and once more at load 40 to 80] → Under the mutation, a
+  watch-only test sometimes heard nothing more within 30 s after the stalled callback returned. A standalone probe,
+  with two 12 s blocked callbacks and then a fresh stream, heard every later write, so neither a stream nor the
+  process goes deaf after a stall. Every failure was at load 40 or more, and the same tests passed 11 runs in a row
+  with logging at lower load. That fits the known limit above, but it isn't proven; it's recorded here as a known limit
+  with the owner's decision rather than explained.
 
 - [The cause of #448 isn't observed directly] → It can't be without load. D3's reading and the existing check test rule out troupe;
   the test's failure message now names the wait it gave up after, so a failure past 35 s would point at the store.

@@ -29,7 +29,7 @@ delivery than the store's own backstop for a report the OS drops or delays.
   its event was recorded soon enough after the last notification that a poller couldn't be under it. Before, a writer
   that paused before recording let a polling-only store pass.
 - **The three watch-only tests in `test_processes.py`**, which failed the same way in this branch's own commit check,
-  wait up to 30 s per delivery, with the poll and check set past the test's whole length (120 s) so only the watch
+  wait up to 30 s per delivery, with the poll and check set past the test's whole length (180 s) so only the watch
   can deliver.
 - **#452, the two quiet tests** (following a quiet run, and a listened text store) allow a read that follows a watch
   report, made late by the OS for an earlier change, and still fail any read with no report since the last one: a

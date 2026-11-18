@@ -162,10 +162,12 @@ than 10 s without reporting to a loaded process (#448, and three of these tests 
 load-flakes' branch), so this is the repository's wait for a condition, not a bound on delivery:
 how fast the watch delivers is what BOUND checks (load-flakes design D5)."""
 
-WATCH_ONLY_SECONDS = SLOW_STRETCH_SECONDS + 2 * HEARD_WITHIN
-"""A poll and check interval past anything these tests can last: measurements start within the
-slow stretch's budget and each waits at most HEARD_WITHIN, so with HEARD_WITHIN to spare the
-store's first poll or check comes after the test, and every delivery in it was the watch's."""
+WATCH_ONLY_SECONDS = max(5 * HEARD_WITHIN, SLOW_STRETCH_SECONDS + HEARD_WITHIN) + HEARD_WITHIN
+"""A poll and check interval past anything these tests can last (180 s). ``watched_delays`` takes
+five measurements whatever the clock says, then starts more only within the slow stretch's budget,
+and each waits at most HEARD_WITHIN: so the measuring ends within the longer of five waits and the
+budget plus one wait. With HEARD_WITHIN to spare, the store's first poll or check comes after the
+test, and every delivery in it was the watch's."""
 
 
 def test_another_processs_write_wakes_this_processs_subscription(tmp_path: Path) -> None:
@@ -475,7 +477,7 @@ def test_a_listened_store_reads_a_segment_only_when_its_watch_reports_a_change(
     writer.record()
     writer.appended_at()
     store = store_for(tmp_path, poll_seconds=60, check_seconds=60)
-    reports = watch_reports(monkeypatch)
+    reports = watch_reports(monkeypatch, tmp_path)
     looks: list[float] = []
     sizes = store._sizes
 
