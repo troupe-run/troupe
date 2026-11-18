@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING, Any, BinaryIO, NoReturn
 from troupe_plugin_sdk import runner as p
 from troupe_plugin_sdk.declaration import Declaration
 from troupe_plugin_sdk.events import EventNumbering
+from troupe_plugin_sdk.process import exit_now
 from troupe_plugin_sdk.tools import Tools
 from troupe_runner_anthropic import NAME, __version__
 from troupe_runner_anthropic.defaults import STOP_GRACE_SECONDS, SUMMARY_MAX_BYTES
@@ -425,8 +426,8 @@ class Runner:
 
     def _halt(self) -> None:
         """Stop the run: nothing more from the worker, and the worker given a moment to finish
-        between requests. With a request in flight, the process ends instead (main's os._exit),
-        which closes its connection (design D9)."""
+        between requests. With a request in flight, the process ends instead (main's exit_now,
+        an os._exit), which closes its connection (design D9)."""
         with self._out:
             self._stop.set()
             in_flight = self._in_flight
@@ -489,4 +490,4 @@ def main() -> NoReturn:
             stream.flush()
     # The reader thread may still be blocked on standard input, which would abort a normal exit
     # at interpreter shutdown; the other runners exit the same way.
-    os._exit(code)
+    exit_now(code)

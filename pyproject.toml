@@ -427,9 +427,10 @@ patch = ["subprocess"]
 source = ["packages", "plugins", "scripts"]
 omit = [
     "*/tests/*",
-    # Delivered from troupe-run/infrastructure, and measured there.
-    "scripts/guard.py",
-    "scripts/guard_pytest.py",
-    "scripts/quality_gates.py",
+    # Delivered from troupe-run/infrastructure, and measured there. Globs, not paths: coverage.py reads a relative
+    # pattern against each process's own directory, and the tests start many from temporary ones.
+    "*/scripts/guard.py",
+    "*/scripts/guard_pytest.py",
+    "*/scripts/quality_gates.py",
 ]
 

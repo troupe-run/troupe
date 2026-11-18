@@ -25,6 +25,7 @@ from typing import Any, BinaryIO, NoReturn
 from troupe_plugin_sdk import runner as p
 from troupe_plugin_sdk.declaration import Declaration
 from troupe_plugin_sdk.events import EventNumbering
+from troupe_plugin_sdk.process import exit_now
 from troupe_plugin_sdk.tools import Tools
 from troupe_runner_openai import NAME, __version__
 from troupe_runner_openai.defaults import STOP_GRACE_SECONDS, SUMMARY_MAX_BYTES
@@ -430,4 +431,4 @@ def main() -> NoReturn:
             stream.flush()
     # The reader thread may still be blocked on standard input, which would abort a normal exit
     # at interpreter shutdown; the other runners exit the same way.
-    os._exit(code)
+    exit_now(code)

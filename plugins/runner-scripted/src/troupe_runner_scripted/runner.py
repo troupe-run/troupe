@@ -20,6 +20,7 @@ from troupe_plugin_sdk import runner as p
 from troupe_plugin_sdk.credential import CredentialError, runtime_credential
 from troupe_plugin_sdk.declaration import Declaration
 from troupe_plugin_sdk.events import EventNumbering
+from troupe_plugin_sdk.process import exit_now
 from troupe_plugin_sdk.tools import Tools
 from troupe_runner_scripted import NAME, __version__
 from troupe_runner_scripted.script import (
@@ -519,7 +520,7 @@ def main() -> NoReturn:
             f"usage: troupe-runner-scripted [--transcript-kinds] (got {arguments!r})\n"
         )
         sys.stderr.flush()
-        os._exit(2)
+        exit_now(2)
     code = Runner(
         sys.stdin.buffer,
         sys.stdout.buffer,
@@ -529,7 +530,7 @@ def main() -> NoReturn:
     for stream in (sys.stdout, sys.stderr):
         with contextlib.suppress(OSError):
             stream.flush()
-    os._exit(code)  # the reader thread may still be blocked on standard input
+    exit_now(code)  # the reader thread may still be blocked on standard input
 
 
 __all__ = ["Runner", "main"]
