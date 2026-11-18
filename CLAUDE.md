@@ -22,7 +22,8 @@ Every change, however small, follows one path. The full guide is the org's
    push needs no reply or resolve; if that run fails, re-run it (`gh run rerun <id>`). Once the review of the last
    push has completed (the required `claude review completed` check passed; if it failed, re-run the run it names) and
    leaves no must-fix or decision open, **mark it ready** (`gh pr ready <n>`): CI runs on Linux, macOS and Windows,
-   and every job must pass. Marking ready starts no review. A merge needs every
+   and every job must pass ([contributing/quality-gates.md](contributing/quality-gates.md) says what the merge gates
+   expect). Marking ready starts no review. A merge needs every
    conversation resolved ([development-workflow.md, "Claude's review"](https://github.com/troupe-run/infrastructure/blob/main/docs/development-workflow.md#claudes-review)).
 6. **`/openspec-archive-change`** runs on the branch before merging, so the PR lands code, tests and specs together.
    **The owner merges** by rebase, through the merge queue, which lands the pull request once `check`,

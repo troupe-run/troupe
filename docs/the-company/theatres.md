@@ -47,12 +47,15 @@ A theatre's config lives in it, under `.troupe/`:
 ```text
 .troupe/
   actors/
-    tester.yaml      the actor tester: its runner, the runner's options, and its effect check
+    tester.yaml      the actor tester: its runner and options, its runtime and model, its effects and effect check
     tester.md        tester's character: who it is, in its own words
+  runtimes/
+    local.yaml       the runtime local: a service runners talk to, with its endpoint, model and key's variable
 ```
 
 - **Convention over configuration.** A file's name is what it defines: `actors/tester.yaml`, with
-  `actors/tester.md` for its character, is the actor `tester`.
+  `actors/tester.md` for its character, is the actor `tester`, and `runtimes/local.yaml` is the runtime `local`
+  ([Point actors at a service](../stagecraft/runtimes.md)).
 - **Changes are events.** `troupe config set` and `troupe config unset` record each change in the theatre's history,
   with who made it and why, and troupe writes the files from those changes. `troupe config get` shows what config
   holds. See [Hand-edit config safely](../stagecraft/hand-edit-config.md) for what happens if you edit a file
@@ -67,4 +70,4 @@ A theatre's config lives in it, under `.troupe/`:
   reshape troupe's.
 
 Whether policy has its own files, apart from the rest of config, is open in
-[#8](https://github.com/troupe-run/troupe/issues/8).
+[#71](https://github.com/troupe-run/troupe/issues/71).

@@ -2,7 +2,8 @@
 
 An actor runs through a **runner**: a separate process that troupe starts and talks to over its standard input
 and output. A runner can be written in any language. This page and the schemas in
-[`protocol/schemas/runner/`](../protocol/schemas/runner/) are all you need to write one.
+[`protocol/schemas/runner/`](../protocol/schemas/runner/) are all you need to write one. troupe performs only the
+runners in its own runner table, though: see [Adding a runner to troupe](#adding-a-runner-to-troupe).
 
 `troupe perform` runs an actor through a runner and records the run: see [contributing/runs.md](runs.md).
 
@@ -286,8 +287,9 @@ closed, with one value:
   you held back.
 - **Which runners need it:** one whose retry starts the run's conversation again from the direction, so the tool
   calls already carried out would be asked for and carried out again. A runner whose retry sends one request again,
-  and carries out a reply's calls only once the whole reply has arrived, never needs it: the Ollama, Responses API and
-  Claude Code runners all work that way, since the conversation each retry sends already holds every tool result.
+  and carries out a reply's calls only once the whole reply has arrived, never needs it: the Ollama, OpenAI, Anthropic
+  and Claude Code runners all work that way, since the conversation each retry sends already holds every tool result.
+  The mistralrs runner doesn't retry. None of troupe's runners sends `notRetried`; the scripted runner can, for tests.
 - **troupe's outcome carries it,** and its fix says to review the run's changes before performing the actor again
   (see [Outcomes](#outcomes)).
 
@@ -404,7 +406,8 @@ and records only their reference.
 
 ### Environment
 
-A runner starts with only the environment variables troupe's caller names for it, plus the minimum the operating
+A runner starts with only the environment variables troupe's caller names for it (for `perform`, the `environment` of
+its entry in core's runner table), plus the minimum the operating
 system needs (`SYSTEMROOT` on Windows). Nothing else is passed through from troupe's own environment: the runner
 policy, `RUNNER_ENVIRONMENT`, selects only `COVERAGE_PROCESS_CONFIG`, coverage.py's subprocess setting, so a test run
 under coverage measures runner code (it holds no secret). A runner that needs a credential or a setting is given it
@@ -425,7 +428,8 @@ runner and every process it started.
 
 A runner that ends with `os._exit`, because a reader thread may still be blocked, ends through
 `troupe_plugin_sdk.process.exit_now(code)` instead. It is `os._exit`, except that when coverage.py is already
-measuring the process it saves first, so CI's coverage leg sees the runner's code. Every runner here does.
+measuring the process it saves first, so CI's coverage leg sees the runner's code
+([quality-gates.md](quality-gates.md#coverage)). Every runner here does.
 
 ### Errors
 
@@ -482,8 +486,11 @@ contract:
 }
 ```
 
-The [scripted runner's schemas](../plugins/runner-scripted/schemas/) are a worked example. troupe doesn't load a
-runner's schemas at run time yet; how it will is decided with config ([#60](https://github.com/troupe-run/troupe/issues/60)).
+The [scripted runner's schemas](../plugins/runner-scripted/src/troupe_runner_scripted/schemas/) are a worked
+example. troupe reads a runner's `options.schema.json` from its installed package, without starting it, and config
+checks an actor's options against it (`troupe.core.interim.options_validator`; when, in
+[Runners with client libraries](#runners-with-client-libraries)). troupe doesn't load `errors.schema.json`: a
+runner's own error codes aren't checked against it yet.
 
 ### Mapping an engine: Claude Code
 
@@ -724,6 +731,39 @@ Every limit has its default in `troupe.core.defaults`, and each can be overridde
 | `RUNNER_WARM_UP_TIMEOUT_SECONDS` | 120 | Warming a runner's engine outside any run, as `troupe init --audition` does; past it, the warm-up is stopped |
 | `RUNNER_WARM_UP_OUTPUT_MAX_BYTES` | 1048576 | What a runner's warm-up may write to its standard output and error together (1 MiB) |
 
+## Adding a runner to troupe
+
+troupe performs only the runners in core's runner table, `troupe.core.interim.RUNNERS`. An actor's `runner` is a name
+in it, and the table is the only place a name becomes a command line, so no config file can carry a program to run.
+A runner outside this repository can be written and checked with the [conformance suite](#checking-a-runner), but
+troupe can't perform it until plugins are named and pinned in config
+([#38](https://github.com/troupe-run/troupe/issues/38), [#67](https://github.com/troupe-run/troupe/issues/67)), which
+deletes the table.
+
+A runner here is a plugin under `plugins/runner-<name>/` and an entry in the table, a `troupe.core.interim.Runner`:
+
+- `command`: the command line that starts it, such as `(sys.executable, "-m", "troupe_runner_<name>")`.
+- `package`: the installed package whose `schemas/` holds its published schemas
+  ([Publishing a runner's schemas](#publishing-a-runners-schemas)).
+- `environment`: the variables `perform` copies into the runner's environment, each only when it's set
+  ([Environment](#environment)).
+- `runtime` and `fit`: whether its actors name a runtime (`required`, `optional` or `none`), and which runtimes fit
+  ([The runtime and its credential](#the-runtime-and-its-credential)).
+- `warm_up`: the arguments that warm its engine, if it has slow one-off work.
+- `in_extra`: whether it installs through its own `troupe-run` extra (next section).
+
+Each of these has a check that fails when it's missed:
+
+| Step | The check that fails without it |
+|---|---|
+| Configure the plugin's package for release and for Dependabot ([releasing.md](releasing.md#adding-a-package)) | `scripts/release_config.py` and `scripts/dependabot_members.py`, in `scripts/check.py` |
+| Add `[coverage.packages.runner-<name>]` with `paths = ["plugins/runner-<name>"]` to `quality-gates.toml` ([quality-gates.md](quality-gates.md#adding-a-package-or-a-runner)) | The coverage gate on CI's Linux, Python 3.15 leg: each of its files "is in no package" |
+| For a runner whose `runtime` is `required`, add it to `ORACLES` in `packages/troupe/tests/test_runtime_fit.py` | The runtime fit test |
+| Give it a path on the first-run page, [`docs/opening-night/first-performance.md`](../docs/opening-night/first-performance.md) | The docs check (`packages/troupe/tests/test_user_docs_pages.py`) |
+
+A runner's code is held to coverage, but isn't mutation tested: only the packages under `packages/` are
+([quality-gates.md](quality-gates.md#mutation-testing)).
+
 ## Runners with client libraries
 
 A runner may depend on a maintained client library for its engine, and should prefer one to rebuilding the engine's
@@ -764,10 +804,10 @@ install check installs `troupe-run[all]` on every platform and Python, and rehea
 troupe's conformance suite checks a runner against this contract: the handshake, refusing a protocol version it
 doesn't support and then answering an `initialize` with one it does, refusing a second `initialize` with
 `runner.already-initialized`, refusing a second `run/start`, refusing an option it doesn't define (the suite adds
-`troupeConformanceUnknownOption`), acknowledging `run/cancel` and exiting, exiting when its input
-closes, and a whole run (`init` first, gap-free `seq`, one `result`, then `shutdown`). Each check starts the runner
-afresh. Give it the runner's command line as a JSON array, and the `run/start` options for a short run that
-succeeds:
+`troupeConformanceUnknownOption`), accepting a `run/start` with a `character`, acknowledging `run/cancel` and exiting,
+exiting when its input closes, and a whole run (`init` first, gap-free `seq`, one `result`, then `shutdown`). Each check
+starts the runner afresh. Give it the runner's command line as a JSON array, and the `run/start` options for a short run
+that succeeds:
 
 ```console
 TROUPE_CONFORMANCE_RUNNER='["python", "-m", "troupe_runner_scripted"]' \
@@ -775,4 +815,6 @@ TROUPE_CONFORMANCE_OPTIONS='{"script": {"steps": [{"event": {"type": "init", "ru
 uv run pytest packages/troupe/tests/test_runner_conformance.py -k environment
 ```
 
-The same checks are available to code as `troupe.core.runners.conformance.check_runner`.
+The same checks are available to code as `troupe.core.runners.conformance.check_runner`. A runner that needs a
+runtime can only be checked from code: `check_runner` takes the `runtime` and `credential` for its run, and the
+environment variables above can't give them.

@@ -129,6 +129,33 @@ A runtime is a service a runner talks to, named once in config (`runtimes.<name>
 resolved carries its source (`default`, `theatre`, `env`, or `actor` for an actor's model), and `troupe config get
 --resolved` shows them. An unset or empty variable is absent; one that's set but malformed is `runtime.invalid-value`.
 
+An **in-process runtime** (`IN_PROCESS_RUNTIMES` in `troupe.core.defaults`: `mistralrs`) is one whose runner loads the
+model in its own process. It takes no endpoint: one in the theatre's config is `config.invalid`, and a
+`TROUPE_RUNTIME_<NAME>_ENDPOINT` variable for it is `runtime.invalid-value`, refused for being set at all. Only a
+built-in runtime can be in-process.
+
+A runtime may **price** its models: `runtimes.<name>.prices`, by the model's name exactly as a run names it, each
+with `input` and `output` and optionally `cacheRead` and `cacheWrite`, in US dollars per million tokens
+([`runtime.schema.json`](../protocol/schemas/runtime.schema.json), `$defs/price`). Only the theatre's config sets a
+price: troupe has no built-in prices, and no variable sets one. A run whose model has a price gets it in `run/start`,
+and a runner whose service reports no cost estimates one from it
+([runners.md](runners.md#cost-reported-or-estimated)). The person's guide is
+[Runtimes](../docs/stagecraft/runtimes.md).
+
+**Whether a runtime fits** an actor's runner is judged from the runtime's fields and the runner's
+`troupe.core.interim.RuntimeFit` ([runners.md](runners.md#the-runtime-and-its-credential)), in config and again at
+perform with the person's environment applied. `runtime.unfit` names one or more of these reasons:
+
+| Reason | The runtime |
+|---|---|
+| `built-in` | Is another runner's built-in runtime, and the actor's runner has a built-in of its own |
+| `credential` | Has a credential, and the runner sends none |
+| `endpoint-missing` | Has no endpoint (it's in-process), and the runner talks to a service |
+| `endpoint-unwanted` | Has an endpoint, and the runner loads its model in its own process |
+| `endpoint-path` | Has an endpoint with a path, and the runner adds its API's own path |
+| `endpoint-no-path` | Has an endpoint with no path, and the runner's requests go below one, such as `/v1` |
+| `endpoint-version` | Has an endpoint ending in `/v1`, and the runner adds `/v1` itself |
+
 A credential is only ever the **name** of the variable that holds it. perform reads the value when a run starts and
 gives it to the runner as `TROUPE_RUNTIME_CREDENTIAL`, and the run host masks it as `[credential]` in everything it
 keeps from the run (`troupe.core.masking`). Accepted for now, and recorded in the design: the theatre's config, which

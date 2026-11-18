@@ -8,6 +8,7 @@ import os
 import re
 import shlex
 import subprocess
+import sys
 import tomllib
 from pathlib import Path
 from typing import get_args
@@ -15,6 +16,7 @@ from typing import get_args
 import pytest
 from ruamel.yaml import YAML
 
+import anthropic_stand_in
 import claude_stand_in
 import ollama_stand_in
 import openai_stand_in
@@ -22,8 +24,14 @@ from gitrepo import AUTHOR, Repo, make_repo
 from runtesting import ADA
 from troupe.cli import init as init_cli
 from troupe.cli import main
-from troupe.core import defaults, settings
-from troupe.core.audition import OLLAMA_AUDITION_MODEL, OPENAI_AUDITION_LIMITS
+from troupe.core import defaults, interim, settings
+from troupe.core.audition import (
+    ANTHROPIC_AUDITION_LIMITS,
+    ANTHROPIC_AUDITION_MODEL,
+    MISTRALRS_AUDITION_LIMITS,
+    OLLAMA_AUDITION_MODEL,
+    OPENAI_AUDITION_LIMITS,
+)
 from troupe.core.client.messages import State
 from troupe.core.policy import ALLOW_UNENFORCED_LOCAL_STAGE, Policy, env_name
 from troupe.core.runs.aggregate import TOPICS
@@ -61,6 +69,8 @@ PAGE = "opening-night/first-performance.md"
 OFFLINE = "Try it offline, with no account"
 LOCAL = "Try it with a model on your own machine"
 OPENAI = "Try it on OpenAI"
+ANTHROPIC = "Try it on Claude's API"
+MISTRALRS = "Try it in-process with mistral.rs"
 OWN = "Define your own actor"
 NOTICE = "Changes the run won't see"
 ALLOW = "Allow the local stage, once"
@@ -106,6 +116,27 @@ OPENAI_WALKTHROUGH = [
     "cd troupe-openai",
     "git init",
     "troupe init --audition --runner openai",
+    "git add .troupe",
+    "git commit -m 'Add a troupe theatre'",
+    "troupe perform lead",
+]
+ANTHROPIC_WALKTHROUGH = [
+    "mkdir troupe-anthropic",
+    "cd troupe-anthropic",
+    "git init",
+    "troupe init --audition --runner anthropic",
+    "git add .troupe",
+    "git commit -m 'Add a troupe theatre'",
+    "troupe perform lead",
+]
+MISTRALRS_MODEL = "Qwen3-0.6B-Q8_0.gguf"
+MISTRALRS_WALKTHROUGH = [
+    f"curl -LO https://huggingface.co/Qwen/Qwen3-0.6B-GGUF/resolve/main/{MISTRALRS_MODEL}",
+    f'export TROUPE_RUNTIME_MISTRALRS_MODEL="$PWD/{MISTRALRS_MODEL}"',
+    "mkdir troupe-mistralrs",
+    "cd troupe-mistralrs",
+    "git init",
+    "troupe init --audition --runner mistralrs",
     "git add .troupe",
     "git commit -m 'Add a troupe theatre'",
     "troupe perform lead",
@@ -386,6 +417,151 @@ def test_the_openai_walkthrough_runs_as_written_with_a_stand_in_service(
         ]
     assert code == 0, err
     assert out == f"run {out.split()[1]} succeeded\n"
+
+
+def test_the_anthropic_walkthrough_runs_as_written_with_a_stand_in_service(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Spec: user-docs, "The first run has a path for every runner". The reader's key is in
+    # ANTHROPIC_API_KEY and their runs go to Claude's API. Here the key is made up, and
+    # TROUPE_RUNTIME_ANTHROPIC_ENDPOINT, the reader's own override, points the built-in runtime at
+    # a stand-in Messages API service, so nothing reaches Claude's API.
+    made = make_repo(tmp_path)
+    for name, value in {**made.env, **ADA}.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv(env_name(ALLOW_UNENFORCED_LOCAL_STAGE), "true")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", anthropic_stand_in.CANARY)
+    lines = sh_lines(section(PAGE, ANTHROPIC))
+    assert lines == ANTHROPIC_WALKTHROUGH
+    mkdir, cd, *rest = lines
+    start = tmp_path / "work"
+    start.mkdir()
+    monkeypatch.chdir(start)
+    (Path.cwd() / mkdir.split()[1]).mkdir()
+    monkeypatch.chdir(Path.cwd() / cd.split()[1])
+    with anthropic_stand_in.serving([anthropic_stand_in.text_reply("Nothing to change.")]) as fake:
+        monkeypatch.setenv("TROUPE_RUNTIME_ANTHROPIC_ENDPOINT", fake.endpoint)
+        for line in rest[:-1]:
+            code, _, err = run_line(line, monkeypatch)
+            assert code == 0, (line, err)
+        code, out, err = run_line(rest[-1], monkeypatch)
+        assert len(fake.requests) == 1
+    assert code == 0, err
+    assert out == f"run {out.split()[1]} succeeded\n"
+
+
+def test_the_anthropic_section_states_the_auditions_model_and_limits_as_the_code_does() -> None:
+    text = " ".join(section(PAGE, ANTHROPIC).split())
+    limits = ANTHROPIC_AUDITION_LIMITS
+    assert f"`{ANTHROPIC_AUDITION_MODEL}`" in text
+    assert (
+        f"a run stops after {limits['maxTurns']} requests, or once it has used "
+        f"{limits['maxTotalTokens']:,} tokens" in text
+    )
+    assert "ANTHROPIC_API_KEY" in text
+
+
+def test_the_mistralrs_walkthrough_runs_as_written_with_the_engine_stand_in(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Spec: user-docs, "The first run has a path for every runner". The reader downloads a model
+    # and runs it in-process. Here the download is a file with the GGUF signature, and the
+    # mistralrs runner runs through its test-only entry point with the engine stand-in, as the
+    # conformance test runs it (docs-0-2-0 design D2): the warm-up and the run both reach it.
+    made = make_repo(tmp_path)
+    for name, value in {**made.env, **ADA}.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv(env_name(ALLOW_UNENFORCED_LOCAL_STAGE), "true")
+    plugin = ROOT / "plugins" / "runner-mistralrs"
+    stand_in = (sys.executable, str(plugin / "tests" / "stand_in_runner.py"))
+    monkeypatch.setitem(
+        interim.RUNNERS,
+        "mistralrs",
+        dataclasses.replace(interim.RUNNERS["mistralrs"], command=stand_in),
+    )
+    lines = sh_lines(section(PAGE, MISTRALRS))
+    assert lines == MISTRALRS_WALKTHROUGH
+    download, export, mkdir, cd, *rest = lines
+    start = tmp_path / "work"
+    start.mkdir()
+    monkeypatch.chdir(start)
+    (Path.cwd() / download.rsplit("/", 1)[1]).write_bytes(b"GGUF" + bytes(60))
+    name, _, value = export.removeprefix("export ").partition("=")
+    monkeypatch.setenv(name, shlex.split(value)[0].replace("$PWD", str(Path.cwd())))
+    (Path.cwd() / mkdir.split()[1]).mkdir()
+    monkeypatch.chdir(Path.cwd() / cd.split()[1])
+    for line in rest[:-1]:
+        code, _, err = run_line(line, monkeypatch)
+        assert code == 0, (line, err)
+    code, out, err = run_line(rest[-1], monkeypatch)
+    assert code == 0, err
+    assert out == f"run {out.split()[1]} succeeded\n"
+
+
+def test_the_mistralrs_section_states_the_auditions_limit_as_the_code_does() -> None:
+    text = " ".join(section(PAGE, MISTRALRS).split())
+    assert f"A run stops after {MISTRALRS_AUDITION_LIMITS['maxTurns']} requests" in text
+    assert "--managed-python" in (DOCS / "opening-night" / "install.md").read_text(encoding="utf-8")
+
+
+AUDITION_RUNNER = re.compile(r"^troupe init --audition(?: --runner (?P<runner>\S+))?$")
+
+
+def test_the_first_run_page_has_a_path_for_every_runner_troupe_has() -> None:
+    # Spec: user-docs, "The first run has a path for every runner". Each path auditions an actor
+    # on its runner; one with no --runner auditions the default, claude-code.
+    lines = sh_lines((DOCS / PAGE).read_text(encoding="utf-8"))
+    shown = {
+        match.group("runner") or "claude-code"
+        for line in lines
+        if (match := AUDITION_RUNNER.match(line))
+    }
+    missing = sorted(set(interim.RUNNERS) - shown)
+    assert not missing, f"{PAGE} has no path for the runner(s) {', '.join(missing)}"
+
+
+NAMED_RUNNER = re.compile(r"(?:--runner[ =]|\brunner=)(?P<runner>[a-z0-9][a-z0-9._-]*)")
+INLINE_CODE = re.compile(r"`([^`\n]+)`")
+
+
+def code_on_each_line(text: str) -> list[tuple[int, str]]:
+    """Each line's code, by line number: the whole line inside a fenced block, else its inline code
+    spans. Commands and config lines are code; prose that says "--runner says" isn't."""
+    found, fenced = [], False
+    for number, line in enumerate(text.splitlines(), 1):
+        if line.startswith("```"):
+            fenced = not fenced
+        elif fenced:
+            found.append((number, line))
+        else:
+            found.extend((number, span) for span in INLINE_CODE.findall(line))
+    return found
+
+
+def test_no_page_offers_a_runner_troupe_doesnt_have() -> None:
+    # Spec: user-docs, "No page offers a runner troupe doesn't have".
+    found = [
+        f"{path.relative_to(DOCS).as_posix()}:{number}: {match.group('runner')}"
+        for path in pages()
+        for number, code in code_on_each_line(path.read_text(encoding="utf-8"))
+        for match in NAMED_RUNNER.finditer(code)
+        if match.group("runner") not in interim.RUNNERS
+    ]
+    assert not found, f"runners troupe doesn't have ({', '.join(sorted(interim.RUNNERS))}): {found}"
+
+
+def test_a_page_offering_a_removed_runner_is_found() -> None:
+    # The check above, falsified: the removed LM Studio runner, in a command and in config.
+    text = (
+        "Unless --runner says:\n\n```sh\ntroupe init --audition --runner lm-studio\n```\n\n"
+        "Or `actors.a.runner=lm-studio`.\n"
+    )
+    named = [
+        m.group("runner")
+        for _, code in code_on_each_line(text)
+        for m in NAMED_RUNNER.finditer(code)
+    ]
+    assert named == ["lm-studio", "lm-studio"]
 
 
 def test_the_openai_section_states_the_auditions_limits_as_the_code_does() -> None:

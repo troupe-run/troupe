@@ -36,8 +36,9 @@ GitHub, and puts `troupe` on your path. [Your first theatre](first-theatre.md) s
 ## Runners that come as extras
 
 A runner that uses a client library for its engine comes as an extra of `troupe-run`, named after the runner, so an
-install only carries the libraries of the runners you use. The command above installs every runner that needs nothing
-more. To add a runner that comes as an extra, give its name in brackets, or `all` for every one:
+install only carries the libraries of the runners you use. The command above installs the two runners that need
+nothing more: `claude-code`, which drives Claude Code, and `scripted`, which plays a script and needs no model. To
+add a runner that comes as an extra, give its name in brackets, or `all` for every one:
 
 <!-- x-release-please-start-version -->
 ```sh
@@ -59,7 +60,8 @@ On a Mac, install the `mistralrs` extra on a uv-managed Python: add `--managed-p
 mistral.rs compiles its GPU code when it loads a model, and that works under uv's own Pythons, but not under
 python.org's Python 3.12 or Homebrew's Pythons on macOS 27. The runner refuses a Python it can't run under, and says
 so. The first time on a Mac, that compile takes 15 to 20 seconds. `troupe init --audition --runner mistralrs` does it
-for you before the first run, and says if this Python can't run the model.
+for you before the first run, and says if this Python can't run the model. It stops after two minutes, keeping what
+it compiled, and the first run finishes it.
 
 ## Install another version
 

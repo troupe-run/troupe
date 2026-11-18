@@ -143,6 +143,10 @@ If `troupe-run` ships it, add it to the bundle's dependencies bare, and in the s
 fails without it, naming the member. After the package's first release, the pinning pull request pins it, removes the
 key and releases the bundle (above).
 
+Add it to `quality-gates.toml` as `[coverage.packages.<name>]`, with `paths` set to its directory and no `baseline` yet.
+CI's coverage leg fails on any source file in no package, and holds a package with no baseline to the floor (80%).
+Record its baseline once the leg has measured it ([quality-gates.md](quality-gates.md#adding-a-package-or-a-runner)).
+
 ## Forcing a version
 
 To release a specific version instead of the computed one, add a commit whose body has a `Release-As: <version>`

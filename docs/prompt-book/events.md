@@ -12,9 +12,10 @@ back from these events.
 Every event carries its [lineage](../the-company/lineage.md): who made it, through what, when, why, as part of which
 command, with whose approval, and in what version-control state. Lineage is listed once, at the end.
 
-Today troupe records runs: a run's first event, one event for each thing its runner reports, and its last event.
-More events arrive as troupe grows, each listed here as it does. The tables below are generated from troupe's
-schemas, so they can't drift from what troupe writes.
+Today troupe records config changes and runs. A run records its first event, the worktree made for it if it has
+one, one event for each thing its runner reports, the notices troupe raised while it went, and its last event.
+Keeping or discarding its changes is an event too. More events arrive as troupe grows, each listed here as it
+does. The tables below are generated from troupe's schemas, so they can't drift from what troupe writes.
 
 ## The events
 

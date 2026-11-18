@@ -18,6 +18,15 @@ records names the actor that made it, in its [lineage](lineage.md):
 - **An agent** (`agent`). troupe gives an agent its identity from the actor it runs: the agent never claims one.
 - **Nobody knowable** (`unknown`), such as a hand edit to a file. troupe says so explicitly rather than guessing.
 
+An actor's config lives in its own file, named for it: `actors/tester.yaml`, with `actors/tester.md` for its
+character, is the actor `tester`. The file holds everything config sets for it: its runner and options, its effect
+check and effects, its workspace, what it does when its context fills (`onContextFull`), and its runtime and model,
+so a change to any of them shows in its diff.
+
+An actor whose runner needs a runtime names one. Usually that's a service, defined once in config, with its
+endpoint, its model and the variable its key is in, never the key. The `mistralrs` runner's runtime is in-process
+instead: a model file on your machine, with no endpoint. See [Point actors at a service](../stagecraft/runtimes.md).
+
 ## Roles, when they come
 
 This is decided, and not yet built ([#61](https://github.com/troupe-run/troupe/issues/61)):
@@ -28,13 +37,6 @@ This is decided, and not yet built ([#61](https://github.com/troupe-run/troupe/i
 - **Lineage records which holder acted, and in which role.**
 - **troupe can act by itself,** recorded as an actor of kind `system`: that's how lineage will show a change troupe
   observed, such as a merge.
-- **An actor's config lives in its own file,** named for it: `actors/tester.yaml`, with `actors/tester.md` for its
-  prompt, is the actor `tester` ([#60](https://github.com/troupe-run/troupe/issues/60)). The file holds everything
-  config sets for it: its runner and options, its effect check and effects, its workspace, and its runtime and model,
-  so a change to any of them shows in its diff.
-- **An actor whose runner talks to a service names a runtime:** the service, defined once in config, with its
-  endpoint, its model and the variable its key is in, never the key ([Point actors at a
-  service](../stagecraft/runtimes.md)).
 
 The same person can arrive as different ids: a git email on one computer, a login name in a container,
 `TROUPE_ACTOR` in CI. How those map to one person isn't decided yet: it's open in

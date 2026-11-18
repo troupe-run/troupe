@@ -17,20 +17,15 @@ standard library does, and it finds no key, base URL, organisation, project or h
 every `OPENAI_*` variable from its environment, `OPENAI_LOG` included). The library's warnings go to standard error,
 masked; nothing it logs reaches standard output.
 
-```yaml
-# .troupe/actors/lead.yaml
-runner: openai
-runtime: openai
-model: gpt-6-luna
-options:
-  maxTurns: 5
-  maxTotalTokens: 20000
-effects:
-  write: ["**"]
-expect: []
+[Try it on OpenAI](https://github.com/troupe-run/troupe/blob/main/docs/opening-night/first-performance.md#try-it-on-openai)
+runs an actor on it in a new theatre. To add one to a theatre you have, then commit `.troupe` and perform it:
+
+```sh
+troupe config set actors.writer.runner=openai actors.writer.runtime=openai actors.writer.model=gpt-6-luna actors.writer.options.maxTurns=5 actors.writer.options.maxTotalTokens=20000 'actors.writer.effects.write=["**"]' 'actors.writer.expect=[]'
 ```
 
-Start with low limits, as here, and raise them once the actor behaves: a run on a hosted model costs money.
+Start with low limits, as here, and raise them once the actor behaves: a run on a hosted model costs money. It needs
+your key in `OPENAI_API_KEY`.
 
 ## Options
 
@@ -50,8 +45,10 @@ conversation, so a long run's input grows with the square of its turns.
 
 An actor on this runner names a [runtime](../../docs/stagecraft/runtimes.md): troupe's built-in `openai`
 (`https://api.openai.com/v1`, its key in `OPENAI_API_KEY`), or one of your own whose endpoint has a path, such as
-`/v1`: requests go to `<endpoint>/responses`, and an endpoint with no path is refused (`openai.no-runtime`), since a
-server's root usually serves another API. troupe resolves its endpoint and model
+`/v1`: requests go to `<endpoint>/responses`. An endpoint with no path is refused, since a server's root usually serves
+another API: config refuses an actor on it, naming the runtimes that fit, and `troupe perform` refuses one that a
+`TROUPE_RUNTIME_<NAME>_ENDPOINT` leaves without a path (`runtime.unfit`). The runner refuses it too
+(`openai.no-runtime`). troupe resolves its endpoint and model
 and hands them over in `run/start`, and puts the key, when the runtime has one, in the runner's environment as
 `TROUPE_RUNTIME_CREDENTIAL`, under no other name.
 
@@ -68,8 +65,13 @@ and hands them over in `run/start`, and puts the key, when the runtime has one, 
 - Everything the runner sends troupe, and its standard error, has the key masked as `[credential]`, and a masked echo
   of it too, such as OpenAI's `sk-proj-****...abcd` in a 401.
 
-The built-in `ollama` runtime points at Ollama's own API, not its `/v1`. To run this runner on Ollama, give a runtime
-the endpoint `http://127.0.0.1:11434/v1`.
+The built-in `ollama` runtime points at Ollama's own API, not its `/v1`, and config refuses it for this runner. To run
+this runner on Ollama, define a runtime of your own at its `/v1`, and point the actor at it with a model Ollama has:
+
+```sh
+troupe config set runtimes.ollama-v1.endpoint=http://127.0.0.1:11434/v1
+troupe config set actors.writer.runtime=ollama-v1 actors.writer.model=qwen3.5:4b
+```
 
 ## What it sends the service
 

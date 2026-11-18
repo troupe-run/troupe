@@ -22,7 +22,10 @@ there's a theatre already, here or above, and it refuses outside a git repositor
 Add `--rehearse` to see what it would make, and make nothing.
 
 `troupe init --audition` also defines a working example actor, `lead`, that runs Claude Code, and prints what to run
-next. `--runner scripted` makes one that runs offline with no account instead. [Your first
+next. `--runner` gives it another runner: `anthropic`, `claude-code`, `mistralrs`, `ollama`, `openai` or `scripted`,
+which runs offline with no account. A runner that comes as an [extra](install.md#runners-that-come-as-extras) has to
+be installed first: `troupe init` refuses with `runner.not-installed`, naming the extra. For `mistralrs`, it also
+prepares the runner's engine once, so the first run starts quickly, and says how that went. [Your first
 performance](first-performance.md) starts there.
 
 ## Put it under git
@@ -33,9 +36,9 @@ works from your latest commit, so you'll commit before your first performance. E
 branch and commit it was made on, and commit `.troupe/` with the rest of your files: `troupe init` sets up what git
 needs.
 
-troupe can also work without git, recording to plain files with no branches, but nothing can choose that yet:
-config will ([#60](https://github.com/troupe-run/troupe/issues/60)). Which of the two a non-technical user should
-get is an open question, in [#121](https://github.com/troupe-run/troupe/issues/121).
+troupe can also work without git, recording to plain files with no branches, but nothing can choose that yet.
+Which of the two a non-technical user should get is an open question, in
+[#121](https://github.com/troupe-run/troupe/issues/121).
 
 ## What troupe writes
 
@@ -49,9 +52,11 @@ something. Reading never changes your history.
   actors/            each actor's config, written from config: lead.yaml, and lead.md for its character
   events/            your theatre's history: commit it
   local/             this clone's own state, never committed
+  runtimes/          each runtime config defines, written from config: <name>.yaml
 ```
 
-`actors/` is there once an actor is defined, which `troupe init --audition` does. The history in `events/` is
+`actors/` is there once an actor is defined, which `troupe init --audition` does, and `runtimes/` once a runtime
+is. The history in `events/` is
 append-only text, one event per line, so two people's history merges in git without conflicts.
 [Theatres](../the-company/theatres.md) says more about what lives here.
 

@@ -16,14 +16,20 @@ Every command but `init` runs in a **theatre**: the nearest directory, from wher
 `.troupe/`. `troupe init` makes one; without one, every other command fails with `theatre.not-found`.
 
 - **`troupe init`** makes a theatre in the directory you're in, which must be in a git repository and have no
-  theatre in it or above it. It writes `.troupe/.gitignore` and `.troupe/.gitattributes`, and records nothing.
-  `--audition` also defines a working example actor, `lead`, and prints what to run next: commit, allow the local
-  stage, and `troupe perform lead` with an example direction. The actor runs Claude Code, with a USD 1 budget and a
-  character in `.troupe/actors/lead.md`, which you change with `troupe config set actors.lead.character=@<file>`;
-  `--runner scripted` makes one that runs offline with no account.
+  theatre in it or above it. It writes `.troupe/.gitignore` and `.troupe/.gitattributes`, and without `--audition`
+  records nothing. `--audition` also defines a working example actor, `lead`, recorded as a config change, and
+  prints what to run next: commit, allow the local stage, and `troupe perform lead` with an example direction. The
+  actor runs Claude Code, with a USD 1 budget and a character in `.troupe/actors/lead.md`, which you change with
+  `troupe config set actors.lead.character=@<file>`. `--runner` gives it another runner: `anthropic`, `claude-code`,
+  `mistralrs`, `ollama`, `openai` or `scripted`, which runs offline with no account. A runner that comes as an
+  [extra](../opening-night/install.md#runners-that-come-as-extras) and isn't installed is refused with
+  `runner.not-installed`, naming the extra. For `mistralrs`, `init` then prepares the runner's engine, so the first
+  run starts quickly. The notice `runner.warming-up` says it has started; then `runner.warmed-up` says it's done,
+  `runner.warm-up-cut-off` that it took longer than two minutes and the first run will finish it, or
+  `runner.warm-up-failed` why the runner can't run here.
 - **`troupe perform`** runs one actor, as config defines it, and records the run. Progress goes to standard error;
-  on success, standard output gets `run <id> succeeded`. It exits by the run's outcome: 0 succeeded, 130 cancelled
-  with Ctrl-C, 1 otherwise.
+  on success, standard output gets `run <id> succeeded`, and when a run fails, standard error gets why, with its id.
+  It exits by the run's outcome: 0 succeeded, 130 cancelled with Ctrl-C, 1 otherwise.
 - **`troupe status`** lists the most recent runs, newest first, or shows one run, with what the audit of its
   changes found beside its outcome, and the notices troupe raised while it went.
 - **`troupe logs`** shows a run's events and the notices troupe raised while it went, in order, then its outcome and
@@ -33,7 +39,7 @@ Every command but `init` runs in a **theatre**: the nearest directory, from wher
 - **`troupe accept`** applies a worktree run's changes to your files, unstaged, all or nothing, then removes its
   worktree. If they don't apply cleanly it changes nothing and names the files.
 - **`troupe discard`** removes a worktree run's worktree. It removes files, not git state: branches, tags, stashes,
-  config or hooks the run made stay.
+  config, hooks or pushes the run made stay.
 - **`troupe config set`**, **`config unset`** and **`config get`** change and show config. Each change is recorded
   with who made it and why (`--reason`), and troupe writes the files under `.troupe/` from config.
 - **`troupe flush`** makes the config files exactly what config says. Every command that uses config does it first.
@@ -41,9 +47,12 @@ Every command but `init` runs in a **theatre**: the nearest directory, from wher
 A run is named by its full id or by its first 8 or more characters. [Performances and
 runs](../the-company/performances-and-runs.md) describes runs, their states and what is recorded.
 
-**`perform` names an actor, and config says the rest:** its runner (`claude-code`, `ollama`, `openai` or `scripted`),
-the runner's options, its effect check (`expect`: the files a run must create or change, relative to the theatre's root,
-where `[]` means no check), its character and its workspace. `--direction` says what this run is asked to do.
+**`perform` names an actor, and config says the rest:** its runner (`anthropic`, `claude-code`, `mistralrs`,
+`ollama`, `openai` or `scripted`), the runner's options, the runtime and model it uses, if its runner takes one, its
+effects, its effect check (`expect`: the files a run must create or change, relative to the theatre's root, where
+`[]` means no check), its character, its workspace and what it does when its context is full (`onContextFull`).
+`--direction` says what this run is asked to do. [Point actors at a service](../stagecraft/runtimes.md) says how a
+runtime is chosen and set.
 
 **A run works in its own git worktree** by default, made from your latest commit: your files change only when you
 `troupe accept` it. An actor with `workspace: theatre` works in your files directly instead. See
@@ -88,7 +97,7 @@ troupe accept 1a2b3c4d --reason "looks right"
 **Ctrl-C** during `perform` cancels the run, records it as `cancelled`, and exits 130. Pressing it again only says
 troupe is already cancelling: the run is stopped within its grace period either way.
 
-**`--json`** on `status`, `logs` and `diff` prints the query's result exactly in its protocol shape
+**`--json`** on `status`, `logs`, `diff` and `config get` prints the query's result exactly in its protocol shape
 ([`protocol/schemas/client/`](https://github.com/troupe-run/troupe/tree/main/protocol/schemas/client/)). With
 `--follow`, each update is printed on its own line first.
 

@@ -10,6 +10,14 @@ can produce every run outcome on demand: offline, instantly and for free (decisi
 python -m troupe_runner_scripted
 ```
 
+[Try it offline, with no account](https://github.com/troupe-run/troupe/blob/main/docs/opening-night/first-performance.md#try-it-offline-with-no-account)
+runs an actor on it in a new theatre. To add one to a theatre you have, put its options in a file, such as
+`script.json` holding `{"script": ...}` with the [script below](#scripts), then commit `.troupe` and perform it:
+
+```sh
+troupe config set actors.writer.runner=scripted actors.writer.options=@script.json 'actors.writer.effects.write=["out/**"]' 'actors.writer.expect=["out/hello.txt"]'
+```
+
 ## Options
 
 The runner takes a runtime optionally (troupe's runner table says `optional`): `run/start` may carry one, and

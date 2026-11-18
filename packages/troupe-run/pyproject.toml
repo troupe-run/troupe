@@ -1,7 +1,7 @@
 [project]
 name = "troupe-run"
 version = "0.1.0"
-description = "troupe, with the adapters and runners it bundles: what you install to run troupe."
+description = "troupe, with its adapters, the Claude Code and scripted runners, and the other runners as extras: what you install to run troupe."
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]

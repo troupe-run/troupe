@@ -17,9 +17,10 @@ address with no path, such as `http://gpu-box.local:11434`. It refuses a runtime
 none. An Ollama actor still holding `model` or `endpoint` in its options, as early versions of `troupe init --audition`
 wrote it, is refused with the one `troupe config set` that moves them. The Anthropic runner needs one too: the built-in
 `anthropic`, Claude's own API, or one of your own for a local engine that serves the Anthropic Messages API, such as LM
-Studio's or Ollama's server root. The mistralrs runner needs the built-in `mistralrs`, which has no endpoint at all: the
-runner loads the model, a GGUF file, in its own process, and the runtime's model is that file's absolute path. The
-scripted runner takes one optionally, for troupe's own tests.
+Studio's or Ollama's server root (for Ollama, a runtime of your own, not the built-in `ollama`). The mistralrs runner
+needs the built-in `mistralrs`, which has no endpoint at all: the runner loads the model, a GGUF file, in its own
+process, and the runtime's model is that file's absolute path. The scripted runner takes one optionally, for troupe's
+own tests.
 
 ## The runtimes troupe knows
 
@@ -105,11 +106,14 @@ the engine's server root, not a built-in. For LM Studio, define the runtime:
 troupe config set runtimes.lm-studio-messages.endpoint=http://127.0.0.1:1234
 ```
 
-Then point an actor on the `anthropic` runner at it, with a model LM Studio has:
+Then put an actor on the `anthropic` runner and point it at the runtime, with a model LM Studio has:
 
-```text
-troupe config set actors.lead.runtime=lm-studio-messages actors.lead.model=google/gemma-4-e4b
+```sh
+troupe config set actors.lead.runner=anthropic actors.lead.runtime=lm-studio-messages actors.lead.model=google/gemma-4-e4b 'actors.lead.expect=[]'
 ```
+
+For Ollama, define one the same way at `http://127.0.0.1:11434`. The built-in `ollama` is the Ollama runner's, and
+config refuses it for the `anthropic` runner.
 
 Define a service troupe doesn't know with its endpoint, and the rest as it needs:
 
@@ -120,8 +124,8 @@ troupe config get --resolved runtimes.office-llm
 
 An actor names its runtime, and can choose its own model:
 
-```text
-troupe config set actors.reviewer.runtime=openai actors.reviewer.model=gpt-4.1
+```sh
+troupe config set actors.reviewer.runner=openai actors.reviewer.runtime=openai actors.reviewer.model=gpt-4.1 'actors.reviewer.expect=[]'
 ```
 
 ## Change it for yourself
@@ -141,9 +145,10 @@ in case it's a key put there by mistake.
 
 ## Price a model, for an estimated cost
 
-Claude Code reports what a run cost. OpenAI reports only the tokens it used, so without a price an OpenAI run has no
-cost. Give a model a price, in US dollars per million tokens of each kind, and a runner whose service reports no cost
-sends an **estimate**, marked as one (`estimatedCostUsd` in the run's result, never `costUsd`):
+Claude Code reports what a run cost. OpenAI and Claude's API report only the tokens a run used, so without a price an
+OpenAI or Anthropic run has no cost. The Ollama and mistralrs runners report none and estimate none: a run on your
+own machine is free. Give a model a price, in US dollars per million tokens of each kind, and the OpenAI and Anthropic
+runners send an **estimate**, marked as one (`estimatedCostUsd` in the run's result, never `costUsd`):
 
 ```sh
 troupe config set 'runtimes.openai.prices.gpt-5-mini={"input": 0.25, "cacheRead": 0.025, "cacheWrite": 0, "output": 2}'
