@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from storetesting import BOUND, SETTLE, STALL_SECONDS, watched_delays
+from storetesting import BOUND, SETTLE, SLOW_STRETCH_SECONDS, STALL_SECONDS, watched_delays
 from troupe.platform import watching
 from troupe.platform.errors import WatchDirectoryMissingError, WatchUnavailableError
 from troupe.platform.watching import DirectoryWatch, watch
@@ -112,15 +112,30 @@ def test_another_processs_removing_a_file_wakes_a_wait(tmp_path: Path, changer: 
 def test_a_change_made_while_nobody_waits_is_reported_by_the_next_wait_at_once(
     tmp_path: Path, changer: Changer
 ) -> None:
+    # "At once" is checked with a zero timeout, not a clock, so a stalled thread can't fail it
+    # (#446, load-flakes design D2). Load can still make the OS deliver the change after the quiet
+    # half second; then a wait with a timeout must still report it, and the next change is tried,
+    # until one is reported with no waiting or the slow stretch's budget is spent. A wait that
+    # blocks on a pending change, or that only notices changes while someone waits, fails every try.
     segment = tmp_path / "segment.jsonl"
     segment.write_bytes(b"")
     with settled(tmp_path) as watched:
-        changer.send("append", segment)
-        changer.done_at()
-        time.sleep(0.5)  # the change is made and delivered while nobody waits
+
+        def reported_without_waiting() -> bool:
+            changer.send("append", segment)
+            changer.done_at()
+            time.sleep(0.5)  # the change is made, and delivered, while nobody waits
+            at_once = watched.wait(0)
+            if not at_once:
+                assert watched.wait(10), "a change made while nobody waited was lost"
+            drain(watched)
+            return at_once
+
         started = time.monotonic()
-        assert watched.wait(10)
-        assert time.monotonic() - started < BOUND
+        tries = [reported_without_waiting()]
+        while not tries[-1] and time.monotonic() - started < SLOW_STRETCH_SECONDS:
+            tries.append(reported_without_waiting())
+    assert tries[-1], f"no zero-timeout wait reported its change in {len(tries)} tries"
 
 
 def test_a_wait_with_nothing_changing_returns_after_its_timeout_saying_nothing_changed(
