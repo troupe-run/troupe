@@ -538,30 +538,35 @@ def code_on_each_line(text: str) -> list[tuple[int, str]]:
     return found
 
 
+def unknown_runners(text: str) -> list[tuple[int, str]]:
+    """Each runner a page's text names in its code (``--runner x``, ``runner=x``) that troupe
+    doesn't have, with its line number."""
+    return [
+        (number, match.group("runner"))
+        for number, code in code_on_each_line(text)
+        for match in NAMED_RUNNER.finditer(code)
+        if match.group("runner") not in interim.RUNNERS
+    ]
+
+
 def test_no_page_offers_a_runner_troupe_doesnt_have() -> None:
     # Spec: user-docs, "No page offers a runner troupe doesn't have".
     found = [
-        f"{path.relative_to(DOCS).as_posix()}:{number}: {match.group('runner')}"
+        f"{path.relative_to(DOCS).as_posix()}:{number}: {runner}"
         for path in pages()
-        for number, code in code_on_each_line(path.read_text(encoding="utf-8"))
-        for match in NAMED_RUNNER.finditer(code)
-        if match.group("runner") not in interim.RUNNERS
+        for number, runner in unknown_runners(path.read_text(encoding="utf-8"))
     ]
     assert not found, f"runners troupe doesn't have ({', '.join(sorted(interim.RUNNERS))}): {found}"
 
 
-def test_a_page_offering_a_removed_runner_is_found() -> None:
-    # The check above, falsified: the removed LM Studio runner, in a command and in config.
+def test_the_check_finds_a_removed_runner_but_not_prose_or_a_runner_troupe_has() -> None:
+    # The check above, falsified: the removed LM Studio runner, in a command and in config, beside
+    # prose that says "--runner" and a runner troupe has.
     text = (
-        "Unless --runner says:\n\n```sh\ntroupe init --audition --runner lm-studio\n```\n\n"
-        "Or `actors.a.runner=lm-studio`.\n"
+        "Unless --runner says:\n\n```sh\ntroupe init --audition --runner lm-studio\n"
+        "troupe init --audition --runner ollama\n```\n\nOr `actors.a.runner=lm-studio`.\n"
     )
-    named = [
-        m.group("runner")
-        for _, code in code_on_each_line(text)
-        for m in NAMED_RUNNER.finditer(code)
-    ]
-    assert named == ["lm-studio", "lm-studio"]
+    assert unknown_runners(text) == [(4, "lm-studio"), (8, "lm-studio")]
 
 
 def test_the_openai_section_states_the_auditions_limits_as_the_code_does() -> None:

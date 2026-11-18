@@ -31,10 +31,15 @@ The audit findings these tasks act on are in the PR description. Each task's ver
 - [x] 2.5 The actor schema's `$schema` description says troupe writes troupe.run's absolute URL; regenerate the config
   schema page (`uv run scripts/docs_reference.py`).
 - [x] 2.6 Runner settings' precedence (an actor's setting sent with each run, then the environment, then the default)
-  in `docs/stagecraft/runtimes.md` and the Claude Code README; `DISABLE_AUTO_COMPACT` doesn't reach a performed run;
-  the compaction opt-in's `troupe config set` command.
-- [ ] 2.7 The model order (actor, environment, runtime) after #451, in its own commit (design D4): `runtimes.md`,
-  `contributing/config.md`, the mistralrs README; verify against #451's merged code.
+  in the Claude Code README, where the one such setting, `onContextFull`, meets `DISABLE_AUTO_COMPACT`;
+  `DISABLE_AUTO_COMPACT` doesn't reach a performed run; the compaction opt-in's `troupe config set` command. A
+  runtime's values and their precedence are `runtimes.md`'s, in 2.7.
+- [ ] 2.7 The model order (actor, environment, runtime) after #451, in its own commit (design D4), wherever the old
+  order is stated: `docs/stagecraft/runtimes.md` (the `model` field and the `TROUPE_RUNTIME_<NAME>_MODEL` row, "the
+  actor's own included", and the prices line), `contributing/config.md`, the mistralrs README ("an actor can name its
+  own file") and `bring-your-own-agent.md`, saying where the run records the model's source. #451 changes the actor
+  schema's `model` description and the Ollama README's line itself (agreed with its worker, 2026-11-18). Verify
+  against #451's merged code, and grep for `TROUPE_RUNTIME_<NAME>_MODEL` to find any other.
 - [x] 2.8 `grep -riE "lm.?studio"` across the repo outside `openspec/changes/archive`: only LM Studio as an engine
   through `anthropic` remains.
 
