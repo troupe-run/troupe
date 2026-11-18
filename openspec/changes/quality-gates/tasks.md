@@ -34,8 +34,10 @@ at a time.
       doesn't save. Done: it failed with saving removed; both pass with it
 - [x] 2b.2 All six runners end through `exit_now`; a test runs the scripted runner under `coverage run` and finds its
       `exit_now` line in the saved data. Verify ruff, mypy and the import contracts. Done
-- [x] 2b.3 `[tool.coverage.run] omit` uses globs for the delivered files. Verify a coverage run of `scripts/tests`
-      reports none of them. Done: none reported (they were before)
+- [x] 2b.3 `[tool.coverage.run] omit` uses globs for the delivered files, the mutation scripts included, and the
+      complexity gate leaves them out too. Verify a coverage run of `scripts/tests` reports none of them, and CI's
+      report agrees with a local one file by file. Done: none reported; CI's `scripts` is 88.5% without the
+      delivered mutation files, the local figure
 
 ## 3. Weekly report (design D4)
 

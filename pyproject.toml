@@ -436,5 +436,6 @@ omit = [
     "*/scripts/guard.py",
     "*/scripts/guard_pytest.py",
     "*/scripts/quality_gates.py",
+    "*/scripts/mutation_*.py",
 ]
 

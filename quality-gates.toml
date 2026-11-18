@@ -74,7 +74,8 @@ paths = ["scripts"]
 baseline = 88.3
 
 # Cyclomatic complexity (lizard) of each function a change adds or edits: above the limit, it may not be new or more
-# complex than before. Tests, the files infrastructure delivers and the generated config models are left out.
+# complex than before. Tests, the files infrastructure delivers (.github/guard-delivery.json lists them) and the
+# generated config models are left out.
 [complexity]
 block_above = 25
 languages = ["python"]
@@ -83,6 +84,7 @@ exclude = [
     "scripts/guard.py",
     "scripts/guard_pytest.py",
     "scripts/quality_gates.py",
+    "scripts/mutation_*.py",
     "packages/troupe/src/troupe/core/config/models.py",
 ]
 

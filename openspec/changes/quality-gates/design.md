@@ -105,3 +105,10 @@ processes from temporary directories, so `scripts/guard.py` was measured in thos
 `scripts` (44.2% on CI against 88.3% measured locally without them). The patterns are `*/scripts/guard.py` and the
 like, which match from any directory.
 
+CI then measured `scripts` at 71.9%. The coverage leg's report (now kept as an artifact) showed every file troupe owns
+measuring the same on CI as locally; the difference was five `scripts/mutation_*.py` files that infrastructure#325
+delivers (626 statements, untested here, as they're tested at their source). Leaving them out too gives 88.5% on CI,
+the local figure. They're left out of coverage and complexity by pattern; `.github/guard-delivery.json` lists every
+delivered file, so the delivered module could read it and leave them all out by itself, which is a change for
+troupe-run/infrastructure.
+
