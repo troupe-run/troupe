@@ -239,10 +239,33 @@ def test_a_duplicate_key_or_infinity_in_the_tracking_file_is_refused(
     assert caught.value.code == "events.malformed-record"
 
 
-def test_a_torn_last_tracking_line_is_ignored_and_trimmed(theatre: Path) -> None:
+def test_a_torn_last_tracking_line_is_ignored_by_a_read_and_trimmed_by_a_write(
+    theatre: Path,
+) -> None:
+    # A read doesn't hold the write lock, so the torn line may be an append in progress: it's
+    # left alone. A write holds the lock, so the line was interrupted, and is cut off (#450 D2).
     _with_tracking(theatre)
     path = _local_file(theatre, "tracking")
     whole = path.read_bytes()
-    path.write_bytes(whole + b'{"epoch":"e","applic')
-    assert fresh_store(theatre).max_tracking_id("upstream") == 1
-    assert path.read_bytes() == whole
+    torn = whole + b'{"epoch":"e","applic'
+    path.write_bytes(torn)
+    store = fresh_store(theatre)
+    assert store.max_tracking_id("upstream") == 1
+    assert path.read_bytes() == torn
+    store.insert_tracking(Tracking("upstream", 2))
+    assert path.read_bytes().startswith(whole + b"{")
+    assert fresh_store(theatre).max_tracking_id("upstream") == 2
+
+
+def test_a_torn_line_completed_after_a_read_is_read_next_time(theatre: Path) -> None:
+    _with_tracking(theatre)
+    path = _local_file(theatre, "tracking")
+    whole = path.read_bytes()
+    line = whole.splitlines(keepends=True)[-1].replace(
+        b'"notification_id":1', b'"notification_id":7'
+    )
+    path.write_bytes(whole + line[:10])
+    store = fresh_store(theatre)
+    assert store.max_tracking_id("upstream") == 1
+    path.write_bytes(whole + line)  # the other writer's append finishes
+    assert store.max_tracking_id("upstream") == 7

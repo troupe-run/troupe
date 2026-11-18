@@ -86,6 +86,16 @@ keeps its own order in `local/order/`, so nothing that orders events is ever in 
   dropped it), the order is rebuilt under a new epoch and `events.order-rebuilt` says so. Follower positions from
   the old epoch no longer count, so every projection is rebuilt from the beginning. Nothing is lost: the order is
   derived from the events.
+- **Any store numbers, under the lock, from the file as it is now.** A reader numbers events too (a pull brings
+  events no local process recorded), so `troupe logs --follow` beside a run is a second numberer. Each store keeps
+  the order and tracking files in memory, but before using them it reads what other stores appended since it last
+  looked, and reads them again whole if they were rebuilt or repaired. Only a store holding the lock trims a torn
+  last line: for any other, it may be an append in progress.
+- **Damage from two numberers is mended.** Before troupe-run/troupe#450 was fixed, two stores could number the same
+  events. A line repeating an id for the same event is dropped and the file rewritten under the same epoch
+  (`events.order-repaired`; followers keep their place). A line that gives one id to two events, an event two ids,
+  skips an id or starts a second epoch rebuilds the order (`events.order-rebuilt`, naming the line), and followers
+  start again. A line that isn't valid JSON, or isn't an order line, is still refused (`events.malformed-record`).
 - **Writers queue.** Within a process, calls queue on a lock; across processes, writers queue on
   `.troupe/local/.lock`, announcing a wait and giving up after the platform's lock timeout.
 
@@ -216,7 +226,8 @@ path ([`notice.schema.json`](../protocol/schemas/notice.schema.json)).
 | Notice | When |
 |---|---|
 | `events.other-branch` | Uncommitted events made on another branch were left out |
-| `events.order-rebuilt` | An ordered event is no longer here, so the order was rebuilt and followers start again |
+| `events.order-rebuilt` | An ordered event is no longer here, or the order gave one id to two events (or similar), so the order was rebuilt and followers start again |
+| `events.order-repaired` | The order repeated lines (the same id for the same event); they were dropped, and followers keep their place |
 | `events.incomplete-batch` | A segment ends in a batch whose write was interrupted; it was left out |
 | `events.subscription-polling` | Subscribers can't be told of other writers' events as they're recorded, so the store looks for them every `SUBSCRIBE_POLL_SECONDS` |
 
