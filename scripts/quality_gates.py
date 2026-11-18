@@ -600,8 +600,8 @@ def changed_lock_files(root: Path, base: str, lock_files: Sequence[str]) -> list
 OSV_VULNS = "https://api.osv.dev/v1/vulns/"
 
 
-def osv_severity(advisory_id: str, timeout: float = 30) -> str | None:
-    """The severity GitHub's advisory database gives an advisory, through OSV, or None."""
+def osv_record(advisory_id: str, timeout: float = 30) -> dict[str, object] | None:
+    """An advisory's OSV record, or None when OSV doesn't have it. Unreachable is an error."""
     url = OSV_VULNS + urllib.parse.quote(advisory_id)
     try:
         with urllib.request.urlopen(url, timeout=timeout) as response:  # noqa: S310 (fixed https URL)
@@ -612,11 +612,38 @@ def osv_severity(advisory_id: str, timeout: float = 30) -> str | None:
         raise GateError(f"OSV answered {error.code} for {advisory_id}.") from error
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as error:
         raise GateError(f"couldn't read {advisory_id} from OSV ({url}): {error}.") from error
-    severity = record.get("database_specific", {}).get("severity")
+    return record if isinstance(record, dict) else None
+
+
+def osv_severity(advisory_id: str, timeout: float = 30) -> str | None:
+    """The severity GitHub's advisory database gives an advisory, through OSV, or None."""
+    record = osv_record(advisory_id, timeout)
+    specific = record.get("database_specific") if record else None
+    severity = specific.get("severity") if isinstance(specific, dict) else None
     return severity.lower() if isinstance(severity, str) else None
 
 
+def _version_key(version: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in re.findall(r"\d+", version))
+
+
+def osv_fixed_version(record: Mapping[str, object], package: str) -> str | None:
+    """The lowest version of `package` that OSV's record says fixes the advisory, or None.
+
+    Only the vulnerable package's own patched releases count: npm's `fixAvailable` can name a
+    downgrade of a package that depends on it, which isn't a fix (spec: quality-gates; #330)."""
+    fixed = []
+    affected = record.get("affected")
+    for entry in affected if isinstance(affected, list) else []:
+        if entry.get("package", {}).get("name") != package:
+            continue
+        for found in entry.get("ranges", []):
+            fixed += [event["fixed"] for event in found.get("events", []) if "fixed" in event]
+    return min(fixed, key=_version_key) if fixed else None
+
+
 SeverityLookup = Callable[[str], str | None]
+RecordLookup = Callable[[str], Mapping[str, object] | None]
 
 
 def pip_audit_advisories(report: Mapping[str, object], severity: SeverityLookup) -> list[Advisory]:
@@ -644,27 +671,50 @@ def pip_audit_advisories(report: Mapping[str, object], severity: SeverityLookup)
     return list(advisories.values())
 
 
-def npm_audit_advisories(report: Mapping[str, object]) -> list[Advisory]:
-    """Each vulnerable package in `npm audit --json`, with npm's own severity and fix."""
+def _npm_own_fix(entry: object, package: str) -> str | None:
+    """npm's fix for an advisory OSV has no record of, only when it names the vulnerable package
+    itself: a dependent's move, such as a downgrade, isn't a fix (owner, 2026-11-18; #330)."""
+    fix = entry.get("fixAvailable") if isinstance(entry, dict) else None
+    if isinstance(fix, dict) and fix.get("name") == package and isinstance(fix.get("version"), str):
+        return str(fix["version"])
+    return None
+
+
+def npm_audit_advisories(
+    report: Mapping[str, object], record: RecordLookup = osv_record
+) -> list[Advisory]:
+    """Each root advisory in `npm audit --json`, once, with npm's severity and OSV's fixed version.
+
+    npm lists every package that depends on a vulnerable one too; the advisories themselves are
+    the objects in each entry's `via`. Each one's fix is OSV's; npm's `fixAvailable` is read only
+    when OSV has no record, and only when it names the vulnerable package itself, since it can be a
+    downgrade of a dependent (#330)."""
     if "error" in report:
         raise GateError(f"npm audit failed: {report['error']}")
     vulnerabilities = report.get("vulnerabilities")
     if not isinstance(vulnerabilities, dict):
         raise GateError("npm audit's report has no `vulnerabilities`: is it `--json` output?")
+    roots: dict[object, Mapping[str, object]] = {}
+    for entry in vulnerabilities.values():
+        for via in entry.get("via", []):
+            if isinstance(via, dict):
+                roots.setdefault(via.get("source", via.get("url")), via)
     advisories = []
-    for name, entry in sorted(vulnerabilities.items()):
-        fix = entry.get("fixAvailable")
-        if isinstance(fix, dict):
-            fixed_in: str | None = f"{fix['name']}@{fix['version']}"
+    for via in sorted(roots.values(), key=lambda v: (str(v.get("name")), str(v.get("url")))):
+        package = str(via.get("name"))
+        advisory_id = str(via.get("url", "")).rstrip("/").rsplit("/", 1)[-1] or "npm advisory"
+        found = record(advisory_id) if advisory_id.startswith("GHSA-") else None
+        if found is not None:
+            fixed_in = osv_fixed_version(found, package)
         else:
-            fixed_in = "npm audit fix" if fix else None
-        severity = entry.get("severity")
+            fixed_in = _npm_own_fix(vulnerabilities.get(package), package)
+        severity = via.get("severity")
         advisories.append(
             Advisory(
-                name,
-                entry.get("range", "?"),
-                "npm audit",
-                severity if severity in SEVERITIES else "unknown",
+                package,
+                str(via.get("range", "?")),
+                advisory_id,
+                severity if isinstance(severity, str) and severity in SEVERITIES else "unknown",
                 fixed_in,
             )
         )
