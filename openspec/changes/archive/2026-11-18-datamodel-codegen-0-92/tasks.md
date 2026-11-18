@@ -9,7 +9,7 @@
 
 ## 2. Pull request
 
-- [ ] 2.1 Push the branch and open a draft pull request that closes #447 and #432 (`gh pr create --draft --body-file <literal path>`), linking Dependabot's #445 and design D1. Act on Claude's review of the last push, and mark it ready once the review is clean. Verify every CI leg passes, on Linux, macOS and Windows.
+- [x] 2.1 Push the branch and open a draft pull request that closes #447 and #432 (`gh pr create --draft --body-file <literal path>`), linking Dependabot's #445 and design D1. Act on Claude's review of the last push, and mark it ready once the review is clean. Verify every CI leg passes, on Linux, macOS and Windows.
 
 ## Workflow follow-up
 
