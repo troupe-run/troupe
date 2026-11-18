@@ -764,7 +764,7 @@ jobs:
       # A session that runs out of turns or fails doesn't fail its job: what it read is measured
       # all the same, and a follow-up round reads what it left (review-splits-large-prs D10).
       - id: review
-        uses: anthropics/claude-code-action@d535f5172dec02b204866b393d6b20b9b2aaf98d # v1.0.266
+        uses: anthropics/claude-code-action@4fa93a88de49bbef68b10eb15aabedf28ca0e1ed # v1.0.271
         continue-on-error: true
         with:
           github_token: ${{ steps.app-token.outputs.token }}
