@@ -54,18 +54,21 @@ Each version gets its own environment in `.venvs/`, so switching back and forth 
 `.venvs/` whenever you like. To support a new Python version, widen the bound and add the version to CI's matrix
 in the same change. `scripts/check.py` fails if either moves without the other.
 
-`scripts/check.py` runs every gate in order, and stops at the first failure: ruff (lint and format), `mypy
---strict`, the import contracts, complexity, and the tests. The complexity gate fails a function the work adds or
-edits whose cyclomatic complexity is over the limit in `quality-gates.toml` and is new or higher than before: split
-it first. CI's Linux, Python 3.15 leg also measures each package's branch coverage against its baseline in
-`quality-gates.toml`, and audits `uv.lock` when it changed; neither runs locally. Raise a package's baseline in a pull
-request when the check says it could be raised. The gates' measures are `scripts/quality_gates.py`, delivered from
-troupe-run/infrastructure, whose `docs/development-workflow.md` ("The merge gates") says more. CI runs the same script on all three platforms and every
-supported Python version. Each push to a pull request runs what its changed paths need, as a commit does: nothing
-for a change only to `openspec/`, the scoped check for scoped paths, and the full check otherwise. Its paths are
-what it changed since the last push whose check passed, or the whole pull request's when no earlier push passed. `main` runs the full check
-after every merge. The one required check, `check`, passes when every platform's run passed, or when none was
-needed.
+`scripts/check.py` runs every gate in order, and stops at the first failure: ruff (lint and format), `mypy --strict`,
+the import contracts, complexity, and the tests.
+
+The complexity gate fails a function the work adds or edits whose cyclomatic complexity is over the limit in
+`quality-gates.toml` and is new or higher than before: split it first. CI's Linux, Python 3.15 leg also measures each
+package's branch coverage against its baseline in `quality-gates.toml`, and audits `uv.lock` when it changed; neither
+runs locally. Raise a package's baseline in a pull request when the check says it could be raised. The gates' measures
+are `scripts/quality_gates.py`, delivered from troupe-run/infrastructure, whose `docs/development-workflow.md` ("The
+merge gates") says more.
+
+CI runs the same script on all three platforms and every supported Python version. Each push to a pull request runs what
+its changed paths need, as a commit does: nothing for a change only to `openspec/`, the scoped check for scoped paths,
+and the full check otherwise. Its paths are what it changed since the last push whose check passed, or the whole pull
+request's when no earlier push passed. `main` runs the full check after every merge. The one required check, `check`,
+passes when every platform's run passed, or when none was needed.
 
 The check runs the tests in parallel with pytest-xdist, one worker for each CPU it may use. Set
 `PYTEST_XDIST_AUTO_NUM_WORKERS` to change the count. Every run prints its 25 slowest tests, so a slowdown shows in
