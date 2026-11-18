@@ -1,12 +1,14 @@
 """Helpers for the text event store's tests: theatres, events and snapshots of their files."""
 
 import hashlib
+import math
 import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
+import pytest
 from eventsourcing.domain import Aggregate
 from eventsourcing.domain import event as aggregate_event
 from eventsourcing.persistence import StoredEvent
@@ -15,6 +17,7 @@ from gitrepo import Repo
 from troupe.core import strict_json
 from troupe.core.events import EventStore
 from troupe.core.vcs import Vcs, load_vcs
+from troupe.platform.watching import DirectoryWatch
 from troupe_store_text.store import TextStore
 from troupe_vcs_git import GitAdapter
 
@@ -154,3 +157,33 @@ def settle(looks: list[float]) -> None:
         lambda: time.monotonic() - max(looks, default=started) >= SETTLE,
         f"{SETTLE} s without the store reading a segment",
     )
+
+
+def watch_reports(monkeypatch: pytest.MonkeyPatch) -> list[float]:
+    """Record the ``time.monotonic()`` of every wait on a directory watch that reports a change,
+    from now until the test ends."""
+    reports: list[float] = []
+    wait = DirectoryWatch.wait
+
+    def recorded(self: DirectoryWatch, timeout: float | None) -> bool:
+        changed = wait(self, timeout)
+        if changed:
+            reports.append(time.monotonic())
+        return changed
+
+    monkeypatch.setattr(DirectoryWatch, "wait", recorded)
+    return reports
+
+
+def unprompted(looks: list[float], reports: list[float], since: float) -> list[float]:
+    """The looks from ``since`` on with no watch report after the look before them (load-flakes
+    design D6). A store reads once on each report, which the OS may make well after the change
+    it reports: FSEvents, under load, more than SETTLE seconds after (#452). So a look that
+    follows a report says nothing about the store; one that doesn't was made on a timer."""
+    found: list[float] = []
+    previous = -math.inf
+    for look in sorted(looks):
+        if look >= since and not any(previous < report <= look for report in reports):
+            found.append(look)
+        previous = look
+    return found

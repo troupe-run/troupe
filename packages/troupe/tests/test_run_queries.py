@@ -28,7 +28,9 @@ from storetesting import (
     WITHIN,
     git_service,
     settle,
+    unprompted,
     wait_until,
+    watch_reports,
     watched_delays,
 )
 from test_platform_locks import held_by_another_process
@@ -632,12 +634,16 @@ def test_following_shows_another_processs_events_each_before_the_next_the_fastes
     assert statistics.median(delays[:5]) < FOLLOW_BOUND + STALL_SECONDS, delays
 
 
-def test_following_a_quiet_run_reads_no_segment_while_it_waits(
+def test_following_a_quiet_run_reads_a_segment_only_when_the_watch_reports_a_change(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # Following has no timer of its own for finding events, and the store reads only when its
+    # watch reports. A report may come late, well after the change (#452), so a read that follows
+    # one is allowed; a read with no report since the last read was made on a timer.
     repo = theatre(tmp_path)
     child = Child(repo, HANG)
     looks: list[float] = []
+    reports = watch_reports(monkeypatch)
 
     def counting(store: EventStore) -> EventStore:
         sizes = store.recorder._sizes  # type: ignore[attr-defined]
@@ -658,9 +664,9 @@ def test_following_a_quiet_run_reads_no_segment_while_it_waits(
             "following sending the turn HANG records before it hangs (seq 1)",
         )
         settle(looks)
-        looks.clear()
+        quiet = time.monotonic()
         time.sleep(2.0)
-        assert looks == []
+        assert unprompted(looks, reports, quiet) == [], (looks, reports)
         harness.cancel.request()
         thread.join(timeout=10)
     finally:

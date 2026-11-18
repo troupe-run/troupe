@@ -17,7 +17,18 @@ from eventsourcing.persistence import Notification
 
 from gitrepo import make_repo
 from protocol_schemas import check_notice
-from storetesting import BOUND, STALL_SECONDS, event, settle, wait_until, watched_delays
+from storetesting import (
+    BOUND,
+    SLOW_STRETCH_SECONDS,
+    STALL_SECONDS,
+    WITHIN,
+    event,
+    settle,
+    unprompted,
+    wait_until,
+    watch_reports,
+    watched_delays,
+)
 from troupe.core.files import directory_lock
 from troupe.core.vcs import load_vcs
 from troupe.platform import watching
@@ -145,10 +156,25 @@ def test_a_writer_waiting_for_another_process_announces_it_and_times_out(
     assert out.strip().endswith("lock.timeout"), err
 
 
+HEARD_WITHIN = WITHIN
+"""How long a test that only the watch can satisfy waits for one delivery. FSEvents has gone more
+than 10 s without reporting to a loaded process (#448, and three of these tests in one run on
+load-flakes' branch), so this is the repository's wait for a condition, not a bound on delivery:
+how fast the watch delivers is what BOUND checks (load-flakes design D5)."""
+
+WATCH_ONLY_SECONDS = SLOW_STRETCH_SECONDS + 2 * HEARD_WITHIN
+"""A poll and check interval past anything these tests can last: measurements start within the
+slow stretch's budget and each waits at most HEARD_WITHIN, so with HEARD_WITHIN to spare the
+store's first poll or check comes after the test, and every delivery in it was the watch's."""
+
+
 def test_another_processs_write_wakes_this_processs_subscription(tmp_path: Path) -> None:
     # The poll and the check are far longer than the test, so only a notification can wake it.
     store = shared_store(
-        tmp_path, lambda: load_vcs("files", tmp_path), poll_seconds=60, check_seconds=60
+        tmp_path,
+        lambda: load_vcs("files", tmp_path),
+        poll_seconds=WATCH_ONLY_SECONDS,
+        check_seconds=WATCH_ONLY_SECONDS,
     )
     recorder = TextApplicationRecorder(store)
     received: list[Notification] = []
@@ -163,7 +189,7 @@ def test_another_processs_write_wakes_this_processs_subscription(tmp_path: Path)
         go.touch()
         writer = child(tmp_path, go, str(uuid4()))
         assert outcome(writer.communicate(timeout=60)[0]) == "recorded"
-        reader.join(timeout=10)
+        reader.join(timeout=HEARD_WITHIN)
         subscription.stop()
     assert [n.id for n in received] == [1]
 
@@ -304,7 +330,7 @@ def delays(store: TextStore, heard: threading.Event, writer: Writer) -> list[flo
         before = store.max_notification_id() or 0
         heard.clear()
         writer.record()
-        assert heard.wait(10)
+        assert heard.wait(HEARD_WITHIN), f"no delivery within {HEARD_WITHIN} s"
         woke = time.time()
         delay = woke - writer.appended_at()
         assert store.max_notification_id() == before + 1
@@ -419,12 +445,12 @@ def test_another_processs_events_each_reach_a_listener_the_fastest_under_the_bou
 ) -> None:
     writer.record()  # the segment and events/ exist before listening; later events append
     writer.appended_at()
-    store = store_for(tmp_path, poll_seconds=60, check_seconds=60)
+    store = store_for(tmp_path, poll_seconds=WATCH_ONLY_SECONDS, check_seconds=WATCH_ONLY_SECONDS)
     with listened(store) as heard:
         woken = delays(store, heard, writer)
-    # Poll and check are 60 s, so every delivery inside the 10 s waits was the watch's. The fastest
-    # shows it delivers promptly, measured past a slow stretch (#159); the median of the first five
-    # allows a loaded machine's slow stretch (#100, #89).
+    # Poll and check come after the test (WATCH_ONLY_SECONDS), so every delivery was the watch's.
+    # The fastest shows it delivers promptly, measured past a slow stretch (#159); the median of
+    # the first five allows a loaded machine's slow stretch (#100, #89).
     assert min(woken) < BOUND, woken
     assert statistics.median(woken[:5]) < BOUND + STALL_SECONDS, woken
 
@@ -432,21 +458,24 @@ def test_another_processs_events_each_reach_a_listener_the_fastest_under_the_bou
 def test_the_first_event_reaches_a_listener_that_subscribed_before_events_existed(
     tmp_path: Path, writer: Writer
 ) -> None:
-    store = store_for(tmp_path, poll_seconds=60, check_seconds=60)
+    store = store_for(tmp_path, poll_seconds=WATCH_ONLY_SECONDS, check_seconds=WATCH_ONLY_SECONDS)
     assert not store.events_dir.exists()
     with listened(store) as heard:
         writer.record()
         writer.appended_at()
-        assert heard.wait(10)
+        assert heard.wait(HEARD_WITHIN), f"no delivery within {HEARD_WITHIN} s"
         assert store.max_notification_id() == 1
 
 
-def test_a_listened_store_reads_no_segment_while_nothing_is_recorded(
+def test_a_listened_store_reads_a_segment_only_when_its_watch_reports_a_change(
     tmp_path: Path, writer: Writer, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # A report may come late, well after the change it reports (#452): a read that follows one is
+    # allowed, and a read with no report since the last read was made on a timer.
     writer.record()
     writer.appended_at()
     store = store_for(tmp_path, poll_seconds=60, check_seconds=60)
+    reports = watch_reports(monkeypatch)
     looks: list[float] = []
     sizes = store._sizes
 
@@ -459,9 +488,9 @@ def test_a_listened_store_reads_no_segment_while_nothing_is_recorded(
         # Listening's thread reads once when it starts, and a fresh watch may wake spuriously.
         wait_until(lambda: bool(looks), "listening's first read")
         settle(looks)
-        looks.clear()
+        quiet = time.monotonic()
         time.sleep(2)
-        assert looks == []
+        assert unprompted(looks, reports, quiet) == [], (looks, reports)
 
 
 def test_a_refused_watch_falls_back_to_an_announced_poll_at_its_interval_and_delivers_at_next_look(
