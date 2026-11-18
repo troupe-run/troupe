@@ -64,7 +64,7 @@
     },
     "model": {
       "title": "Model",
-      "description": "The model this actor's runs use, overriding its runtime's. The person's TROUPE_RUNTIME_<NAME>_MODEL overrides both. Only with a runtime.",
+      "description": "The model this actor's runs use. It overrides the person's TROUPE_RUNTIME_<NAME>_MODEL, which overrides the runtime's model in config. Only with a runtime.",
       "$ref": "../runtime.schema.json#/$defs/model"
     }
   },

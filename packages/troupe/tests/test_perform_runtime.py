@@ -128,6 +128,17 @@ def test_a_run_on_a_theatre_chosen_endpoint_records_where_each_value_came_from(
     assert KEY not in json.dumps(started)
 
 
+def test_a_run_records_the_actors_model_with_source_actor_when_the_variable_is_set(
+    tmp_path: Path,
+) -> None:
+    harness = _harness(tmp_path, OPENAI_API_KEY=KEY, TROUPE_RUNTIME_OPENAI_MODEL="gpt-env")
+    check = {"checkRuntime": {"model": "gpt-test"}}
+    result = harness.perform(request(script(INIT, check, OK), **OPENAI))
+    assert result.run.outcome == "succeeded"
+    started = _start(harness, result.run.run_id)
+    assert started["runtime"]["model"] == {"value": "gpt-test", "source": "actor"}
+
+
 PRICE = {"input": 2, "output": 8, "cacheRead": 0.5, "cacheWrite": 0}
 PRICED = {"openai": {"prices": {"gpt-test": PRICE, "gpt-other": {"input": 1, "output": 1}}}}
 

@@ -5,7 +5,7 @@ A runtime is named once, in config, and an actor names it. Its values come from 
 runtimes (troupe.core.defaults.RUNTIMES), then the theatre's config, then the session's
 environment (``TROUPE_RUNTIME_<NAME>_ENDPOINT``, ``_MODEL`` and ``_CREDENTIAL_ENV``), each field on
 its own, and each resolved value carries its source, as settings and policy do. A run's model is
-the environment's, then its actor's, then the runtime's.
+its actor's, then the runtime's as resolved: the environment's, then config's.
 
 A runtime may price its models (``prices``, by model name). A run's price is the price for its
 model, matched exactly, from the theatre's config only: troupe has no built-in prices and no
@@ -448,10 +448,9 @@ def as_configured(config: Mapping[str, Any]) -> dict[str, "Resolved | None"]:
 
 
 def run_model(resolved: Resolved, actor_model: str | None) -> Sourced | None:
-    """A run's model: the environment's, then the actor's, then the runtime's in config (spec:
-    runtimes, "The run's model comes from the environment, the actor, then the runtime")."""
-    if resolved.model is not None and resolved.model.source == "env":
-        return resolved.model
+    """A run's model: the actor's, then the runtime's as resolved, the environment's over config's
+    (spec: runtimes, "The run's model comes from the actor, the environment, then the runtime").
+    The actor's setting is sent with the run, so it wins, as every other setting's does (#451)."""
     if actor_model is not None:
         return Sourced(actor_model, "actor")
     return resolved.model
