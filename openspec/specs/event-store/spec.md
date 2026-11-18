@@ -257,19 +257,20 @@ git bringing in segments), within a bound, without the subscriber or the store l
 SHALL see only the store port's subscription, never how a store learns of writes.
 
 #### Scenario: Another process records events
-- **WHEN** a process subscribes to the store, with `SUBSCRIBE_POLL_SECONDS` and `SUBSCRIBE_CHECK_SECONDS` set to 60 s,
-  and another process records an event, five times, and then, while no delay so far is under 0.25 s, once more at a
-  time for up to a 60 s allowance for a slow stretch
+- **WHEN** a process subscribes to the store, with `SUBSCRIBE_POLL_SECONDS` and `SUBSCRIBE_CHECK_SECONDS` set to
+  180 s, longer than the test can last, and another process records an event, five times, and then, while no delay
+  so far is under 0.25 s, once more at a time for up to a 60 s allowance for a slow stretch
 - **THEN** each event reaches the subscriber, the fastest of the delays, measured from when the writer's append
   returned, is under 0.25 s, and the median of the first five is within 0.25 s plus an allowance for a loaded machine
 
 #### Scenario: The same guarantee through the port
 - **WHEN** the installed store is loaded by name through the port with its defaults, and another process records an
-  event while a subscriber waits, five times, and then, while no delay so far is under 0.25 s, once more at a time
-  for up to a 60 s allowance for a slow stretch
-- **THEN** each event reaches the subscriber, the fastest of the delays, measured from when the writer's call to
-  record it returned, is under 0.25 s, and the median of the first five is within 0.25 s plus an allowance for a
-  loaded machine
+  event while a subscriber waits, five times, and then, while no counted delay so far is under 0.25 s, once more at
+  a time for up to a 60 s allowance for a slow stretch, where a delay counts when its event was recorded less than
+  `SUBSCRIBE_POLL_SECONDS` minus 0.25 s after the subscriber was last notified
+- **THEN** each event reaches the subscriber, the fastest counted delay, measured from when the writer's call to
+  record it returned, is under 0.25 s, so a store that only polls can't pass, and the median of the first five delays
+  is within 0.25 s plus an allowance for a loaded machine
 
 #### Scenario: The text store's first write creates its events directory
 - **WHEN** a process subscribes to a text store that has no events yet, and another process records the first event
@@ -278,7 +279,8 @@ SHALL see only the store port's subscription, never how a store learns of writes
 #### Scenario: The text store does no work while nothing is recorded
 - **WHEN** a process subscribes to a text store, with `SUBSCRIBE_CHECK_SECONDS` set to 60 s, and nothing is recorded
   for 2 s
-- **THEN** the store reads no segment in that time
+- **THEN** the store reads a segment in that time only after its watch reports a change, once for each report, which
+  the OS may make late for a change made earlier, and never on a timer
 
 ### Requirement: A subscription that can only poll says so
 When a store can't learn of other writers' events as they're recorded, its subscription SHALL find them by looking

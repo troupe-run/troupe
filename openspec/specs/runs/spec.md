@@ -289,7 +289,8 @@ finding new events. How the store learns of other writers' events is the store's
 #### Scenario: Nothing is recorded while following
 - **WHEN** a person follows a running run's logs, with `SUBSCRIBE_CHECK_SECONDS` set to 60 s, and the run records
   nothing for 2 s
-- **THEN** no segment is read in that time
+- **THEN** a segment is read in that time only after the store's watch reports a change, once for each report, which
+  the OS may make late for a change made earlier, and never on a timer
 
 #### Scenario: The store's subscription can only poll
 - **WHEN** a person follows a running run's logs and the store's subscription can only poll
