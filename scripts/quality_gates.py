@@ -89,7 +89,9 @@ class AuditConfig:
 
 @dataclass(frozen=True)
 class Config:
-    coverage: CoverageConfig
+    coverage: CoverageConfig | None
+    """None when the repository measures no coverage: only those infrastructure's list names for
+    coverage and mutation testing declare it (#332)."""
     complexity: ComplexityConfig
     audit: AuditConfig
     mutation: Mapping[str, object] = field(default_factory=dict)
@@ -185,17 +187,19 @@ def parse_config(text: str) -> Config:
     except tomllib.TOMLDecodeError as error:
         raise GateError(f"{CONFIG_NAME} isn't valid TOML: {error}.") from error
     top = _Reader(data, "")
-    top.keys(["version", "coverage", "complexity", "audit"], ["mutation"])
+    top.keys(["version", "complexity", "audit"], ["coverage", "mutation"])
     if data["version"] != 1:
         raise GateError(f"{CONFIG_NAME}: `version` must be 1, not {data['version']!r}.")
 
-    cov = top.table_at("coverage")
-    cov.keys(["floor", "tolerance", "packages"])
-    coverage = CoverageConfig(
-        floor=cov.number("floor", 0, 100),
-        tolerance=cov.number("tolerance", 0, 100),
-        packages=_packages(cov.table_at("packages")),
-    )
+    coverage = None
+    if "coverage" in data:
+        cov = top.table_at("coverage")
+        cov.keys(["floor", "tolerance", "packages"])
+        coverage = CoverageConfig(
+            floor=cov.number("floor", 0, 100),
+            tolerance=cov.number("tolerance", 0, 100),
+            packages=_packages(cov.table_at("packages")),
+        )
 
     cx = top.table_at("complexity")
     cx.keys(["block_above", "languages"], ["exclude"])
@@ -229,8 +233,8 @@ def read_config(root: Path) -> Config:
         text = path.read_text(encoding="utf-8")
     except FileNotFoundError:
         raise GateError(
-            f"{CONFIG_NAME} is missing at {root}. Fix: add it, declaring [coverage], "
-            "[complexity] and [audit] (docs/development-workflow.md)."
+            f"{CONFIG_NAME} is missing at {root}. Fix: add it, declaring [complexity] and "
+            "[audit], and [coverage] if the repository measures it (docs/development-workflow.md)."
         ) from None
     return parse_config(text)
 
@@ -899,6 +903,9 @@ def _complexity(args: argparse.Namespace, root: Path, config: Config) -> int:
 
 
 def _coverage(args: argparse.Namespace, root: Path, config: Config) -> int:
+    if config.coverage is None:
+        print(f"coverage: not measured in this repository (no [coverage] in {CONFIG_NAME})")
+        return 0
     report_path = Path(args.coveragepy or args.vitest)
     try:
         report = json.loads(report_path.read_text(encoding="utf-8"))
