@@ -38,7 +38,7 @@ One actor's config file, .troupe/actors/<name>.yaml. The file's name is the acto
 | `workspace` | one of `"worktree"`, `"theatre"` | No | Where a run works. worktree, the default when absent: the run's own git worktree at HEAD, under .troupe/local/worktrees/, whose changes reach the theatre only through troupe accept. theatre: the theatre itself, so what the run writes lands among your files at once. |
 | `onContextFull` | one of `"fail"`, `"compact"` | No | What this actor's runs do when their engine's context fills. fail, the default when absent: the run ends with reason context-length, and nothing it was told is lost. compact: the run compacts its conversation and carries on, which changes what the model sees; each compaction is recorded with the run's events. Policy can turn compaction on for every actor that doesn't say fail (TROUPE_POLICY_COMPACTION=all), or forbid it (none). |
 | `runtime` | string | No | The runtime this actor's runs talk to, by name: one of troupe's built-in runtimes or one in config. Only for a runner that takes a runtime; required by one that needs it. |
-| `model` | string | No | The model this actor's runs use, overriding its runtime's. The person's TROUPE_RUNTIME_<NAME>_MODEL overrides both. Only with a runtime. |
+| `model` | string | No | The model this actor's runs use. It overrides the person's TROUPE_RUNTIME_<NAME>_MODEL, which overrides the runtime's model in config. Only with a runtime. |
 
 ### Runtime
 

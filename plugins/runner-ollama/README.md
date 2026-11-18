@@ -8,7 +8,7 @@ works offline.
 
 The Ollama service it talks to is the actor's [runtime](../../docs/stagecraft/runtimes.md): troupe's built-in `ollama`
 (`http://127.0.0.1:11434`) or one defined in config. The runtime gives the endpoint, and the model troupe resolves for
-the run (the person's `TROUPE_RUNTIME_<NAME>_MODEL`, then the actor's `model`, then the runtime's). Both reach the
+the run (the actor's `model`, then the person's `TROUPE_RUNTIME_<NAME>_MODEL`, then the runtime's). Both reach the
 runner in `run/start`'s `runtime`, and nowhere else: the runner holds no endpoint of its own.
 
 It speaks the [runner contract](../../contributing/runners.md) over standard input and output, imports nothing of

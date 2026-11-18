@@ -253,22 +253,24 @@ def test_an_endpoint_carrying_a_password_isnt_in_the_refusal() -> None:
     assert "example.com" not in _error(raised)
 
 
-# Requirement: The run's model comes from the environment, the actor, then the runtime
+# Requirement: The run's model comes from the actor, the environment, then the runtime
 
 
-def test_the_actors_model() -> None:
+def test_the_actors_model_wins_over_the_environment_and_the_runtime() -> None:
     config = _config(openai={"model": "gpt-a"})
-    run = for_run("openai", "tester", "gpt-b", config, {"OPENAI_API_KEY": KEY})
+    env = {"OPENAI_API_KEY": KEY, "TROUPE_RUNTIME_OPENAI_MODEL": "gpt-c"}
+    run = for_run("openai", "tester", "gpt-b", config, env)
     assert run.model == Sourced("gpt-b", "actor")
 
 
-def test_the_persons_override_wins() -> None:
+def test_the_environment_wins_over_the_runtimes_model_when_the_actor_sets_none() -> None:
+    config = _config(openai={"model": "gpt-a"})
     env = {"OPENAI_API_KEY": KEY, "TROUPE_RUNTIME_OPENAI_MODEL": "gpt-c"}
-    run = for_run("openai", "tester", "gpt-b", NO_CONFIG, env)
+    run = for_run("openai", "tester", None, config, env)
     assert run.model == Sourced("gpt-c", "env")
 
 
-def test_the_runtimes_model_when_the_actor_sets_none() -> None:
+def test_the_runtimes_model_when_neither_the_actor_nor_the_environment_sets_one() -> None:
     config = _config(openai={"model": "gpt-a"})
     run = for_run("openai", "tester", None, config, {"OPENAI_API_KEY": KEY})
     assert run.model == Sourced("gpt-a", "theatre")
@@ -368,7 +370,7 @@ def test_the_runtimes_own_model_is_priced() -> None:
 
 def test_the_model_from_the_environment_has_no_price() -> None:
     env = {"OPENAI_API_KEY": KEY, "TROUPE_RUNTIME_OPENAI_MODEL": "gpt-c"}
-    run = for_run("openai", "tester", "gpt-b", _config(**PRICED), env)
+    run = for_run("openai", "tester", None, _config(**PRICED), env)
     assert run.model == Sourced("gpt-c", "env")
     assert "price" not in run.run_start()
     assert "price" not in run.to_data()
@@ -376,7 +378,7 @@ def test_the_model_from_the_environment_has_no_price() -> None:
 
 def test_the_model_from_the_environment_is_priced_when_config_prices_it() -> None:
     env = {"OPENAI_API_KEY": KEY, "TROUPE_RUNTIME_OPENAI_MODEL": "gpt-a"}
-    run = for_run("openai", "tester", "gpt-b", _config(**PRICED), env)
+    run = for_run("openai", "tester", None, _config(**PRICED), env)
     assert run.run_start()["price"] == PRICE_A
 
 
