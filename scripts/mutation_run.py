@@ -25,10 +25,12 @@ Standard library only, Python 3.12+: delivered with the pull request report (des
 import argparse
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
 import time
+import tomllib
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
@@ -76,6 +78,69 @@ def mutmut_workdir(checkout: Path, unit: ms.Unit) -> Path:
     return checkout
 
 
+# pytest options a mutation run can't honour from mutmut's copy: the guard's tag plugin finds its
+# declarations from the repository's root, so it registers no scope markers, and strict markers
+# then refuse every tagged test (trial of troupe, 2026-11-18; quality-scope design D5).
+UNHONOURED = ("--strict-markers",)
+UNHONOURED_PLUGINS = ("guard_pytest",)
+
+
+def own_addopts(checkout: Path) -> str:
+    """The repository's own pytest `addopts`, from its root pyproject.toml, without those a
+    mutation run can't honour. With none, `-ra`."""
+    path = checkout / "pyproject.toml"
+    if not path.is_file():
+        return "-ra"
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except tomllib.TOMLDecodeError as error:
+        raise RunError(f"{path} isn't valid TOML: {error}") from error
+    addopts = data.get("tool", {}).get("pytest", {}).get("ini_options", {}).get("addopts")
+    if addopts is None:
+        return "-ra"
+    if isinstance(addopts, str):
+        args = shlex.split(addopts)
+    elif isinstance(addopts, list) and all(isinstance(arg, str) for arg in addopts):
+        args = list(addopts)
+    else:
+        raise RunError(
+            f"pyproject.toml's addopts is {addopts!r}; it must be a string or a list of strings"
+        )
+    kept: list[str] = []
+    rest = iter(args)
+    for arg in rest:
+        if arg in UNHONOURED:
+            continue
+        if arg == "-p":
+            plugin = next(rest, "")
+            if plugin not in UNHONOURED_PLUGINS:
+                kept += [arg, plugin]
+            continue
+        if arg.startswith("-p") and arg[2:] in UNHONOURED_PLUGINS:
+            continue
+        kept.append(arg)
+    return shlex.join(kept)
+
+
+def link_checkout_entries(checkout: Path, unit: ms.Unit, made: list[Path]) -> None:
+    """For a package's unit, link each top-level entry of the checkout into the source's top
+    directory (troupe's packages/), adding each link to `made` as it's made, so a failure partway
+    still leaves every one for the caller to remove.
+
+    A test that finds the repository's root by counting directories up from its own file counts
+    one too many from inside mutmut's copy (<package>/mutants/tests), and lands there; with the
+    links, what it reads is still found, packages/packages included (quality-scope design D5).
+    .git isn't linked: git would take that directory for a repository of its own.
+    """
+    into = checkout / Path(unit.source).parts[0]
+    for entry in sorted(checkout.iterdir()):
+        link = into / entry.name
+        if entry.name == ".git" or link.exists() or link.is_symlink():
+            continue
+        link.symlink_to(Path("..") / entry.name, target_is_directory=entry.is_dir())
+        made.append(link)
+
+
 def mutmut_config(workdir: Path, checkout: Path, unit: ms.Unit) -> str:
     """mutmut's setup.cfg for a unit, with paths from its working directory."""
 
@@ -115,7 +180,15 @@ def mutmut_config(workdir: Path, checkout: Path, unit: ms.Unit) -> str:
         "source_paths=src/",
         f"pytest_add_cli_args_test_selection={tests}",
         "pytest_add_cli_args="
-        + listed(["-o", "addopts=-ra", "-p", PLUGIN_COPY, *deselected(workdir, checkout, unit)]),
+        + listed(
+            [
+                "-o",
+                f"addopts={own_addopts(checkout)}",
+                "-p",
+                PLUGIN_COPY,
+                *deselected(workdir, checkout, unit),
+            ]
+        ),
         f"max_children={CHILDREN}",
     ]
     if do_not_mutate:
@@ -159,7 +232,10 @@ def run_mutmut(
             "this run writes its own, so it won't overwrite one the repository holds"
         )
     plugin = workdir / f"{PLUGIN_COPY}.py"
+    links: list[Path] = []
     try:
+        if workdir != checkout:
+            link_checkout_entries(checkout, unit, links)
         shutil.copy2(CHILDREN_PLUGIN, plugin)
         (workdir / "setup.cfg").write_text(mutmut_config(workdir, checkout, unit), encoding="utf-8")
         shutil.rmtree(workdir / "mutants", ignore_errors=True)
@@ -202,6 +278,8 @@ def run_mutmut(
     finally:
         if workdir == checkout:
             (checkout / "src").unlink()
+        for link in links:
+            link.unlink()
         plugin.unlink(missing_ok=True)
 
 
