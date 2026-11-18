@@ -643,7 +643,7 @@ def test_following_a_quiet_run_reads_a_segment_only_when_the_watch_reports_a_cha
     repo = theatre(tmp_path)
     child = Child(repo, HANG)
     looks: list[float] = []
-    reports = watch_reports(monkeypatch)
+    reports = watch_reports(monkeypatch, repo.path)
 
     def counting(store: EventStore) -> EventStore:
         sizes = store.recorder._sizes  # type: ignore[attr-defined]

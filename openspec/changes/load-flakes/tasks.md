@@ -25,12 +25,10 @@
 ## 4. The watch-only tests in `test_processes.py` (design D5)
 
 - [x] 4.1 Give the three tests `HEARD_WITHIN` and `WATCH_ONLY_SECONDS`; verify they pass on their own
-- [ ] 4.2 Verify they ride out a 12 s FSEvents stall (a scratch patch holding the first callbacks back): the new tests
-  pass and the old ones fail. So far: the old three fail; the new write-wakes and first-event tests pass; the new
-  events-each test passes alone (3 of 3) but twice in 14 runs after write-wakes got no delivery at all within 30 s
-  once the stalled callback returned (the writer's next record was never reported). Not a stream or process that
-  goes deaf: a standalone probe with two 12 s blocked callbacks, then a fresh stream, heard every later write. Open
-  until that is explained.
+- [x] 4.2 Verify they ride out a 12 s FSEvents stall (a scratch patch holding the first callbacks back): the old three
+  fail; the new write-wakes and first-event tests pass, and events-each passes alone (3 of 3). In combination, at load
+  40 or more, a delivery was sometimes lost after the stall (3 times in about 20 runs). A standalone probe rules out
+  a stream or process that goes deaf. Recorded as a known limit (design, Risks) by owner decision, 2026-11-18
 
 ## 5. #452: the quiet tests allow a read on a watch report (design D6)
 
@@ -39,9 +37,14 @@
 - [x] 5.2 Mutation-check: with FSEvents callbacks 2 s late the old tests fail and the new pass; with the store also
   reading on a timer (0.5 s, and 1.8 s to get past `settle`) the new tests fail
 
-## 6. Integration
+## 6. Review of 55dc06f7
 
-- [ ] 6.1 `uv run scripts/check.py` passes (run when the 1-minute load is under 40)
+- [x] 6.1 `WATCH_ONLY_SECONDS` covers the five unconditional measurements (180 s); `STALL_SECONDS`' docstring names no
+  single wait; `watch_reports` counts only watches in the test's theatre. Verify the touched tests pass on their own
+
+## 7. Integration
+
+- [ ] 7.1 `uv run scripts/check.py` passes (run when the 1-minute load is under 40)
 
 ## Workflow follow-up
 

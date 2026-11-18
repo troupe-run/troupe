@@ -111,8 +111,8 @@ STALL_SECONDS = 5.0
 happens once, which a median can't cover, and to the median of polled or watched deliveries, where
 a slow stretch can cover most of the samples (#91, #100). One scheduling stall has taken 1.06 s in
 CI (#81) and 3.40 s locally; #91's slow stretch had a median of 0.52 s, and #100's Windows runs
-gave watched medians of 0.40 s and 0.52 s. Well inside the 10 s wait, which is what fails a store
-that never delivers."""
+gave watched medians of 0.40 s and 0.52 s. Well inside each test's wait for a delivery, which is
+what fails a store that never delivers."""
 
 SLOW_STRETCH_SECONDS = 60.0
 """How long a slow stretch the watched-delivery tests ride out before the fastest delivery must be
@@ -159,15 +159,16 @@ def settle(looks: list[float]) -> None:
     )
 
 
-def watch_reports(monkeypatch: pytest.MonkeyPatch) -> list[float]:
-    """Record the ``time.monotonic()`` of every wait on a directory watch that reports a change,
-    from now until the test ends."""
+def watch_reports(monkeypatch: pytest.MonkeyPatch, theatre: Path) -> list[float]:
+    """Record the ``time.monotonic()`` of every wait on a watch of ``theatre`` or a directory in it
+    that reports a change, from now until the test ends. Other watches in the process don't count,
+    so they can't excuse a read in ``unprompted``."""
     reports: list[float] = []
     wait = DirectoryWatch.wait
 
     def recorded(self: DirectoryWatch, timeout: float | None) -> bool:
         changed = wait(self, timeout)
-        if changed:
+        if changed and self.directory.is_relative_to(theatre):
             reports.append(time.monotonic())
         return changed
 
