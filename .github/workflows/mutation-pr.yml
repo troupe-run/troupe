@@ -1,0 +1,123 @@
+# Source: troupe-run/infrastructure. Change it there; copies in other repositories are delivered.
+name: mutation-pr
+
+# Mutation tests what a ready pull request changed, and reports the mutants that survive on its
+# changed lines (spec: mutation-testing; #325; lint-mutation design D9). It's a report: never a
+# required check, and it succeeds when it finds survivors. Only its own failure to run fails it.
+# Its comment and summary give its runtime, so the owner can decide later whether it should block.
+#
+#   mutate   contents read, no secret   runs the pull request's code under mutation, within
+#                                       pr_budget_minutes (scripts/mutation.json), and hands on
+#                                       only its report
+#   comment  pull-requests write        checks out the base commit only, reads the report as data,
+#                                       and keeps one comment on the pull request
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions: {}
+
+# A newer push replaces the run for the older one.
+concurrency:
+  group: mutation-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  mutate:
+    name: mutate the changes
+    # A draft runs nothing, like CI; marking it ready runs it.
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    # pr_budget_minutes (scripts/mutation.json) plus 30 for setup and the report; a test holds the
+    # two together.
+    timeout-minutes: 75
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          python-version: "3.15"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: ${{ hashFiles('package-lock.json') != '' }}
+        with:
+          node-version-file: .nvmrc
+      # infrastructure's tests run tofu and, in GitHub Actions, tflint (its check's gates), at the versions its
+      # CI uses; a test holds tflint's to .tflint.hcl.
+      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
+        if: ${{ hashFiles('tofu/versions.tf') != '' }}
+        with:
+          tofu_version: 1.13.1
+          tofu_wrapper: false
+      - uses: terraform-linters/setup-tflint@6ffdbaa3be476b3431f7275c26966ef32ff60337 # v6.3.2
+        if: ${{ hashFiles('.tflint.hcl') != '' }}
+        with:
+          tflint_version: v0.66.0
+          tflint_wrapper: false
+      - name: Install the repository and the tool
+        run: |
+          set -euo pipefail
+          if [[ -f package-lock.json ]]; then
+            npm ci
+          else
+            uv sync --locked
+            uv pip install "mutmut==$(jq -r '.tools.mutmut' scripts/mutation.json)"
+          fi
+      - name: Mutate what changed
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          if [[ -f package-lock.json ]]; then
+            python3 scripts/mutation_pr.py run "$BASE" "$HEAD" out/pr-report.json
+          else
+            uv run --no-sync python scripts/mutation_pr.py run "$BASE" "$HEAD" out/pr-report.json
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: pr-report
+          path: out/pr-report.json
+          retention-days: 90
+
+  comment:
+    name: report on the pull request
+    needs: mutate
+    # Not on a fork's pull request, whose token can't comment.
+    if: ${{ needs.mutate.result == 'success' && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      # The base commit only: never the pull request's own code.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: pr-report
+          path: out
+      - name: Keep one comment on the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          python3 scripts/mutation_pr.py comment out/pr-report.json > "$RUNNER_TEMP/comment.md"
+          marker=$(head -n1 "$RUNNER_TEMP/comment.md")
+          existing=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$NUMBER/comments" \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" | head -n1)
+          if [[ -n "$existing" ]]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$existing" -F "body=@$RUNNER_TEMP/comment.md" > /dev/null
+          elif [[ "$(jq -r '.nothing' out/pr-report.json)" == true ]]; then
+            # Nothing was mutated and nothing was said before: no comment (spec: "No source changed").
+            echo "No file this repository mutation tests changed: no comment."
+          else
+            gh api "repos/$GITHUB_REPOSITORY/issues/$NUMBER/comments" -F "body=@$RUNNER_TEMP/comment.md" > /dev/null
+          fi
