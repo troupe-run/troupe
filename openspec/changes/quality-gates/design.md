@@ -42,7 +42,7 @@ floor = 80.0
 tolerance = 0.5
 
 [coverage.packages.troupe]
-paths = ["packages/troupe/src"]
+paths = ["packages/troupe"]
 baseline = …   # each from the coverage leg when the gate lands
 # … one per workspace member under packages/ and plugins/, and scripts
 
@@ -57,7 +57,8 @@ lock_files = ["uv.lock"]
 block = ["high", "critical"]
 ```
 
-A plugin's package covers the whole plugin directory (`plugins/runner-claude-code`), so its `tools/` count with it.
+Every package covers its whole directory (`packages/troupe`, `plugins/runner-claude-code`), so a plugin's `tools/`
+count with it; tests are left out by coverage.py's `omit`, not by the package's paths.
 `troupe-run` is a metapackage with no code; it's listed so a file added there has a home, and it reports "nothing to
 measure". coverage.py measures `packages`, `plugins` and `scripts`, omitting tests and the delivered files, in
 `[tool.coverage.run]` in `pyproject.toml`, with `patch = ["subprocess"]`.
