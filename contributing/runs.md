@@ -184,8 +184,8 @@ and never from a command's request, so no client can loosen them.
 | `allow_mark_merges_resolved` | `true` | Marking a rewritten conflicted config file resolved in git's index, when the setting `mark_merges_resolved` is on ([config.md](config.md#settings)) |
 | `compaction` | `actors` | Which actors' runs may compact when their engine's context fills: `actors`, each actor's `onContextFull` decides; `all`, every actor that doesn't say `fail`; `none`, no actor, and one that asks is refused with `policy.compaction-forbidden` |
 
-**Setting it, for now.** Until config brings policy files (#8), the only way to set a policy is an environment
-variable: `TROUPE_POLICY_` and the setting's name in capitals. This is interim, and config replaces it.
+**Setting it, for now.** Until policy has files of its own (#71), the only way to set a policy is an environment
+variable: `TROUPE_POLICY_` and the setting's name in capitals. This is interim, and policy files replace it.
 
 ```console
 export TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE=true
