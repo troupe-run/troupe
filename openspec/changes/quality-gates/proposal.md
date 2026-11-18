@@ -39,6 +39,8 @@ None. The gates' behaviour is infrastructure's `quality-gates` spec.
 
 - `actor-runners`: a runner's environment holds coverage.py's subprocess variable when troupe has it, and still
   nothing else of troupe's.
+- `plugin-sdk`: the SDK's `exit_now`, through which every runner ends its process, lets a running coverage.py save
+  first (owner, 2026-11-18).
 - `quality-check`: the check runs the complexity gate everywhere and the coverage and audit gates on one CI leg, with
   troupe's thresholds in `quality-gates.toml`; a weekly report covers the advisories no gate blocks on.
 

@@ -16,7 +16,6 @@ wakes the worker wherever it waits.
 import base64
 import contextlib
 import json
-import os
 import queue
 import sys
 import threading
@@ -25,6 +24,7 @@ import traceback
 from typing import Any, BinaryIO, NoReturn
 
 from troupe_plugin_sdk import runner as p
+from troupe_plugin_sdk.process import exit_now
 from troupe_runner_ollama import NAME, __version__
 from troupe_runner_ollama.client import Client, StoppedError, UnreachableError
 from troupe_runner_ollama.conversation import Conversation
@@ -215,7 +215,7 @@ class Runner:
             return done.code
         except Exception:
             # The runner's own bug on the main thread: say so, stop the worker, and exit 1
-            # through main's os._exit, never through an interpreter abort (design D3).
+            # through main's exit_now (os._exit), never through an interpreter abort (design D3).
             self._diagnose("the runner failed:\n" + traceback.format_exc())
             self._halt()
             return 1
@@ -508,4 +508,4 @@ def main() -> NoReturn:
             stream.flush()
     # The reader thread may still be blocked on standard input, which would abort a normal exit
     # at interpreter shutdown; the scripted and Claude Code runners exit the same way.
-    os._exit(code)
+    exit_now(code)

@@ -27,6 +27,16 @@ at a time.
 - [ ] 2.5 Baselines: set each package's from this pull request's coverage leg, rounded down to 0.1; run the leg again on
       the same commit and set the tolerance from the difference (infrastructure design D4). Cite both runs
 
+## 2b. Runner exits and the delivered files' omission (design D6, D7)
+
+- [x] 2b.1 `troupe_plugin_sdk.process.exit_now` with tests: plain `os._exit` without coverage loaded (never imports
+      it, no `atexit`), and a process under coverage saves its data. Verify the saving test fails when the helper
+      doesn't save. Done: it failed with saving removed; both pass with it
+- [x] 2b.2 All six runners end through `exit_now`; a test runs the scripted runner under `coverage run` and finds its
+      `exit_now` line in the saved data. Verify ruff, mypy and the import contracts. Done
+- [x] 2b.3 `[tool.coverage.run] omit` uses globs for the delivered files. Verify a coverage run of `scripts/tests`
+      reports none of them. Done: none reported (they were before)
+
 ## 3. Weekly report (design D4)
 
 - [x] 3.1 `.github/workflows/dependency-report.yml` and its test. Verify the test passes

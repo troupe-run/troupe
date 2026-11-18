@@ -84,3 +84,24 @@ with the `board` environment infrastructure#328 declares here (the owner sets it
 The runner policy (D1) can land on its own: it changes no gate. The rest needs `scripts/quality_gates.py`, which
 arrives by delivery after infrastructure#328 merges and its plan is applied; `check.py` can't run the gate before
 then. Baselines are measured on this pull request's coverage leg, with D1 in place.
+
+### D6. Runners end through an SDK exit that lets coverage save (owner, 2026-11-18)
+
+D1 passed coverage.py's variable to runners, but this pull request's coverage leg still measured runner-scripted at
+51.8% and runner-claude-code at 61.1%. Every runner ends with `os._exit` on purpose (a reader thread may still be
+blocked on standard input or a pipe), and `os._exit` skips the `atexit` hook where coverage.py saves, so a runner
+process's measurement was always lost. An experiment that let coverage save before `os._exit` took runner-scripted's
+own tests from 52.4% to 78.4%.
+
+The owner chose (a) of two: the plugin SDK gets `troupe_plugin_sdk.process.exit_now(code)`, used by all six runners in
+place of `os._exit`. When coverage.py is already measuring the process (found through `sys.modules`, never imported)
+it stops and saves it, then calls `os._exit`; without coverage it is exactly `os._exit`. *Rejected:* (b) record the
+runners' baselines as measured and revisit later.
+
+### D7. Omit patterns are globs
+
+coverage.py reads a relative `omit` pattern against each process's own working directory, and the tests start many
+processes from temporary directories, so `scripts/guard.py` was measured in those and the delivered files counted in
+`scripts` (44.2% on CI against 88.3% measured locally without them). The patterns are `*/scripts/guard.py` and the
+like, which match from any directory.
+

@@ -31,6 +31,7 @@ from collections.abc import Callable
 from typing import Any, BinaryIO, NoReturn
 
 from troupe_plugin_sdk import runner as p
+from troupe_plugin_sdk.process import exit_now
 from troupe_runner_mistralrs import NAME, __version__
 from troupe_runner_mistralrs.conversation import Conversation
 from troupe_runner_mistralrs.defaults import DEFAULT_CONTEXT_LENGTH, STOP_GRACE_SECONDS
@@ -230,7 +231,7 @@ class Runner:
             return done.code
         except Exception:
             # The runner's own bug on the main thread: say so, stop the worker, and exit 1
-            # through main's os._exit.
+            # through main's exit_now (os._exit).
             self._diagnose("the runner failed:\n" + traceback.format_exc())
             self._halt()
             return 1
@@ -543,11 +544,11 @@ def main(loader: Loader | None = None, check: PlatformCheck | None = None) -> No
     if sys.argv[1:] == [WARM_UP]:
         code = warm_up(check, protocol, time.monotonic)
         protocol.flush()
-        os._exit(code)
+        exit_now(code)
     code = Runner(sys.stdin.buffer, protocol, sys.stderr.buffer, loader=loader, check=check).run()
     for stream in (protocol, sys.stderr):
         with contextlib.suppress(OSError):
             stream.flush()
     # The reader thread may be blocked on standard input, and the engine may be mid-call on the
     # worker, neither of which can be stopped: leave without them (design D2).
-    os._exit(code)
+    exit_now(code)

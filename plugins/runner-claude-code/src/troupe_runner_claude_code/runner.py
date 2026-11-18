@@ -22,6 +22,7 @@ from typing import Any, BinaryIO, NoReturn
 from troupe_plugin_sdk import runner as p
 from troupe_plugin_sdk.declaration import Declaration
 from troupe_plugin_sdk.events import EventNumbering
+from troupe_plugin_sdk.process import exit_now
 from troupe_runner_claude_code import NAME, __version__
 from troupe_runner_claude_code.command import (
     PrivateDirectoryError,
@@ -527,7 +528,7 @@ def main() -> NoReturn:
     for stream in (sys.stdout, sys.stderr):
         with contextlib.suppress(OSError):
             stream.flush()
-    os._exit(code)  # the reader threads may still be blocked on their pipes
+    exit_now(code)  # the reader threads may still be blocked on their pipes
 
 
 __all__ = ["Runner", "main"]
