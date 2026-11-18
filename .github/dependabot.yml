@@ -22,6 +22,7 @@ updates:
   - .github/workflows/claude-review.yml
   - .github/workflows/dependabot-dispatch.yml
   - .github/workflows/guard.yml
+  - .github/workflows/mutation-pr.yml
 - package-ecosystem: uv
   directory: /
   schedule:
