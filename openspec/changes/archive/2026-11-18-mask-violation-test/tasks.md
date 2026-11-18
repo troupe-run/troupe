@@ -9,7 +9,9 @@
 
 ## 2. Integration
 
-- [ ] 2.1 `uv run scripts/check.py` passes
+- [x] 2.1 `uv run scripts/check.py` fails on no test this change touches: the capped run (6 workers, 480 s) failed only
+  on #452's test, and the commit's own check on three watch-timing tests fixed or recorded by #458. Committed under the
+  owner's one-off override (2026-11-18); CI's matrix is the passing check before merge
 
 ## Workflow follow-up
 
