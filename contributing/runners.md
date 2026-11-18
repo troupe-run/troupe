@@ -609,8 +609,8 @@ the model into the runner's own process, `mistralrs`, with no server and no netw
 tool loop, as the Ollama runner does. What's different is what can't be closed:
 - **Stopping.** An engine call blocks a thread with the GIL released, and nothing can interrupt it. So stopping means
   leaving: on `run/cancel`, end of input or `shutdown` the runner sets its stop flag under the output lock,
-  acknowledges, and ends its process with the SDK's `exit_now` (an `os._exit`), abandoning the call. Loading runs on a worker too, so end of
-  input during a load is read.
+  acknowledges, and ends its process with the SDK's `exit_now` (an `os._exit`), abandoning the call. Loading runs on a
+  worker too, so end of input during a load is read.
 - **The protocol channel.** The engine writes its log lines to file descriptor 1. Before anything imports the
   engine, the entry point keeps a duplicate of fd 1 for the contract and points fd 1 at standard error, and an
   import-linter contract keeps the engine's import in one module.
