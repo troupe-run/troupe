@@ -267,7 +267,8 @@ SHALL see only the store port's subscription, never how a store learns of writes
 - **WHEN** the installed store is loaded by name through the port with its defaults, and another process records an
   event while a subscriber waits, five times, and then, while no counted delay so far is under 0.25 s, once more at
   a time for up to a 60 s allowance for a slow stretch, where a delay counts when its event was recorded less than
-  `SUBSCRIBE_POLL_SECONDS` minus 0.25 s after the subscriber was last notified
+  `SUBSCRIBE_POLL_SECONDS` minus 0.25 s after the subscriber was last notified, subscribing afresh, which counts as a
+  notification, whenever the store says it now polls
 - **THEN** each event reaches the subscriber, the fastest counted delay, measured from when the writer's call to
   record it returned, is under 0.25 s, so a store that only polls can't pass, and the median of the first five delays
   is within 0.25 s plus an allowance for a loaded machine
