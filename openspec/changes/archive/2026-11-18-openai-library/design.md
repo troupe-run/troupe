@@ -62,7 +62,9 @@
 The runner depends on `troupe-plugin-sdk` and `openai==3.52.0`. `service.py` alone imports `openai` and `httpx2`; the
 rest of the runner works with its own types: a request's parameters as a dict, each stream event as a dict, and a
 closed set of failures in `failures.py` (which imports neither). `library.py` holds what the runner sets around the
-library (its environment and loggers) without importing it, so the handshake isn't kept waiting for the import. An
+library (its environment and loggers) without importing it, so the handshake isn't kept waiting for the import. `endpoint.py` parses
+the runtime's endpoint with `urllib.parse` alone, so checking a `run/start` never loads the library either (review
+of #440; a test imports the runner in a fresh interpreter and finds no `openai`). An
 import contract pins the seam, as for the Anthropic runner. 3.52.0 is the newest release when this was proposed; a
 bump is its own change, rerun against the fixtures and the live test.
 
