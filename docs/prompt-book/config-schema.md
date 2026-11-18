@@ -20,6 +20,8 @@ JSON Schema. This page lists them.
   wrong kind is an error that names it, never ignored.
 - **An actor's options are its runner's.** Each runner publishes a schema for its options, and `troupe config set`
   checks an actor's options against it.
+- **A runtime's file holds only what config sets.** [Point actors at a service](../stagecraft/runtimes.md) says
+  how troupe resolves a runtime, and what it refuses when one doesn't fit the actor's runner.
 
 ## The schema
 
@@ -30,7 +32,7 @@ One actor's config file, .troupe/actors/<name>.yaml. The file's name is the acto
 
 | Field | Holds | Always there | What it is |
 |---|---|---|---|
-| `$schema` | string | No | Where this file's schema is, relative to the file, so editors can check it. troupe writes it. |
+| `$schema` | string | No | Where this file's schema is, so editors can check it: its URL on troupe.run, by the protocol's major version. troupe writes it. |
 | `runner` | string | Yes | The runner that runs this actor, by name. |
 | `options` | object (an extension point, filled by the runner's options schema) | No | The runner's own options, passed to it unchanged. Absent means {}. An extension point: the runner's published options schema fills it, and without one only {} validates. |
 | `expect` | list of string | Yes | Files, relative to the theatre's root, that a run must create or change: each must exist after the run, and differ from before it, and each must match a write or move pattern in effects. A file named twice is checked once. An empty list means no file has to change; the run's changes are still audited against its effects. It has to be written. |
