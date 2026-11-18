@@ -1,0 +1,99 @@
+{
+  "threshold": 60.0,
+  "tolerance": 0.0,
+  "min_mutants": 10,
+  "budget_minutes": 240,
+  "pr_budget_minutes": 45,
+  "max_new_issues": 5,
+  "tools": {
+    "mutmut": "3.8.1",
+    "stryker": "10.1.1"
+  },
+  "repositories": {
+    "troupe": {
+      "tool": "mutmut",
+      "units": [
+        {
+          "name": "troupe",
+          "source": "packages/troupe/src",
+          "tests": "packages/troupe/tests"
+        },
+        {
+          "name": "troupe-plugin-sdk",
+          "source": "packages/troupe-plugin-sdk/src",
+          "tests": "packages/troupe-plugin-sdk/tests"
+        },
+        {
+          "name": "troupe-store-text",
+          "source": "packages/troupe-store-text/src",
+          "tests": "packages/troupe-store-text/tests"
+        },
+        {
+          "name": "troupe-vcs-git",
+          "source": "packages/troupe-vcs-git/src",
+          "tests": "packages/troupe-vcs-git/tests"
+        },
+        {
+          "name": "troupe-vcs-files",
+          "source": "packages/troupe-vcs-files/src",
+          "tests": "packages/troupe-vcs-files/tests"
+        },
+        {
+          "name": "troupe-artifacts-local",
+          "source": "packages/troupe-artifacts-local/src",
+          "tests": "packages/troupe-artifacts-local/tests"
+        },
+        {
+          "name": "troupe-identity-local",
+          "source": "packages/troupe-identity-local/src",
+          "tests": "packages/troupe-identity-local/tests"
+        },
+        {
+          "name": "troupe-stage-local",
+          "source": "packages/troupe-stage-local/src",
+          "tests": "packages/troupe-stage-local/tests"
+        }
+      ]
+    },
+    "infrastructure": {
+      "tool": "mutmut",
+      "units": [
+        {
+          "name": "scripts",
+          "source": "scripts",
+          "tests": "scripts/tests",
+          "deselect": [
+            {
+              "test": "scripts/tests/test_guard_session.py::test_nothing_is_reported_where_git_ignores_the_mode",
+              "why": "It makes pathlib act as Windows, and mutmut's stats hook builds a Path while it does, which fails (trial, 2026-11-18)."
+            },
+            {
+              "test": "scripts/tests/test_hook_modes.py::test_plan_writes_the_mode_plan_from_the_saved_plan",
+              "why": "It reads file modes from git, and mutmut's copy isn't a git checkout (trial, 2026-11-18)."
+            },
+            {
+              "test": "scripts/tests/test_hook_modes.py::test_this_repository_delivers_its_hooks_as_executable",
+              "why": "It reads the hooks' modes from git, and mutmut's copy isn't a git checkout (trial, 2026-11-18)."
+            },
+            {
+              "test": "scripts/tests/test_needs_guard_tests.py::test_every_guard_test_and_its_fixtures_need_them",
+              "why": "It matches the guard tests' paths under scripts/, which mutmut's copy has under src/ (trial, 2026-11-18)."
+            },
+            {
+              "test": "scripts/tests/test_guard_review_threads.py::test_the_guard_s_delivered_python_is_ascii_only",
+              "why": "It reads guard.py's text, which in mutmut's copy is the mutated source, whose mutant names aren't ASCII (trial, 2026-11-18)."
+            }
+          ]
+        }
+      ]
+    },
+    "website": {
+      "tool": "stryker",
+      "mutate": [
+        "src/**/*.ts",
+        "scripts/**/*.mjs"
+      ],
+      "tests": "tests/unit"
+    }
+  }
+}
