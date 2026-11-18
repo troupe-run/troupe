@@ -23,10 +23,40 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Only the repositories scripts/mutation.json lists get mutation testing (#332). infrastructure
+  # holds this workflow as its source without being listed, so its own pull requests stop here.
+  listed:
+    name: is this repository mutation tested?
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      listed: ${{ steps.listed.outputs.listed }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          sparse-checkout: scripts/mutation.json
+          sparse-checkout-cone-mode: false
+      - name: Read the list
+        id: listed
+        run: |
+          set -euo pipefail
+          name=${GITHUB_REPOSITORY#*/}
+          if jq -e --arg name "$name" '.repositories | has($name)' scripts/mutation.json >/dev/null; then
+            echo "listed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "$name isn't in scripts/mutation.json's repositories: its pull requests aren't mutation tested."
+            echo "listed=false" >> "$GITHUB_OUTPUT"
+          fi
+
   mutate:
     name: mutate the changes
+    needs: listed
     # A draft runs nothing, like CI; marking it ready runs it.
-    if: ${{ !github.event.pull_request.draft }}
+    if: ${{ !github.event.pull_request.draft && needs.listed.outputs.listed == 'true' }}
     runs-on: ubuntu-latest
     # pr_budget_minutes (scripts/mutation.json) plus 30 for setup and the report; a test holds the
     # two together.
@@ -34,9 +64,11 @@ jobs:
     permissions:
       contents: read
     steps:
+      # The merge with the base, as the pull request would merge: a branch made before a delivery
+      # lacks scripts/mutation.json and the scripts this job runs, which its merge has (#332).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
@@ -68,10 +100,13 @@ jobs:
           fi
       - name: Mutate what changed
         env:
-          BASE: ${{ github.event.pull_request.base.sha }}
-          HEAD: ${{ github.event.pull_request.head.sha }}
+          MERGE: ${{ github.sha }}
+        # Against the merge's first parent, the base it merged onto, so only the pull request's own
+        # changes are mutated, at their lines in the merge.
         run: |
           set -euo pipefail
+          BASE=$(git rev-parse "$MERGE^1")
+          HEAD=$MERGE
           mkdir -p out
           if [[ -f package-lock.json ]]; then
             python3 scripts/mutation_pr.py run "$BASE" "$HEAD" out/pr-report.json
