@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from fake_endpoint import FakeEndpoint, Reply, text_reply
+from fake_endpoint import FakeEndpoint, Reply, final, function_call, sse, text_reply, usage
 from openai_harness import CANARY, Session
 from troupe_runner_openai.defaults import LIBRARY_LOG_MAX_BYTES
 from troupe_runner_openai.failures import StatusError
@@ -184,3 +184,20 @@ def test_the_librarys_warnings_reach_standard_error_masked_and_cut_and_nothing_b
 def test_a_status_failure_keeps_its_headers_by_lower_case_name() -> None:
     failure = StatusError(429, {"Retry-After": "2"}, b"{}")
     assert failure.headers == {"retry-after": "2"}
+
+
+def test_a_wrong_shaped_response_ends_the_run_with_no_serialiser_warning_on_stderr(
+    sessions: list[Session], workspace: Path
+) -> None:
+    """Spec: openai-runner, "The library's own logging stays out of the run's output", "A
+    wrong-shaped response": the library's models serialise a field of the wrong type with a
+    warning per field unless told not to (review of #440)."""
+    done = final([function_call("c1", "Write", "{}")], used=usage(100, 10))
+    done["response"]["output"][0]["arguments"] = {"file_path": "a.txt"}
+    done["response"]["usage"]["input_tokens_details"]["cached_tokens"] = "40"
+    session, _, events = _run(sessions, workspace, [Reply(lines=sse([done]))], CANARY)
+    result = events[-1]
+    assert (result["status"], result["reason"]) == ("error", "engine")
+    stderr = session.stderr()
+    assert b"Warning" not in stderr
+    assert b"PydanticSerializationUnexpectedValue" not in stderr
