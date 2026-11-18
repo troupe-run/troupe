@@ -39,18 +39,18 @@ version = 1
 
 [coverage]
 floor = 80.0
-tolerance = 0.5
+tolerance = 0.6    # from two CI runs (D8)
 
 [coverage.packages.troupe]
 paths = ["packages/troupe"]
-baseline = …   # each from the coverage leg when the gate lands
+baseline = 91.9    # each from the coverage leg (D8)
 # … one per workspace member under packages/ and plugins/, and scripts
 
 [complexity]
 block_above = 25
 languages = ["python"]
 exclude = ["**/tests/**", "scripts/guard.py", "scripts/guard_pytest.py", "scripts/quality_gates.py",
-           "packages/troupe/src/troupe/core/config/models.py"]
+           "scripts/mutation_*.py", "packages/troupe/src/troupe/core/config/models.py"]
 
 [audit]
 lock_files = ["uv.lock"]
