@@ -127,7 +127,10 @@ A runtime is a service a runner talks to, named once in config (`runtimes.<name>
 `ollama` and `mistralrs`), then the theatre's config field by field, then the session's environment
 (`TROUPE_RUNTIME_<NAME>_ENDPOINT`, `_MODEL` and `_CREDENTIAL_ENV`, the name in capitals with `-` as `_`). Each value
 resolved carries its source (`default`, `theatre`, `env`, or `actor` for an actor's model), and `troupe config get
---resolved` shows them. An unset or empty variable is absent; one that's set but malformed is `runtime.invalid-value`.
+--resolved` shows them. A run's model is the actor's `model` when it sets one, else the runtime's resolved model, so
+an actor's model beats `TROUPE_RUNTIME_<NAME>_MODEL` (`run_model`; spec: runtimes, "The run's model comes from the
+actor, the environment, then the runtime"). An unset or empty variable is absent; one that's set but malformed is
+`runtime.invalid-value`.
 
 An **in-process runtime** (`IN_PROCESS_RUNTIMES` in `troupe.core.defaults`: `mistralrs`) is one whose runner loads the
 model in its own process. It takes no endpoint: one in the theatre's config is `config.invalid`, and a
