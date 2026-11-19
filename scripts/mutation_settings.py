@@ -19,6 +19,9 @@ TOOLS = ("mutmut", "stryker")
 SHA = re.compile(r"[0-9a-f]{40}")
 MAX_JOB_MINUTES = 360
 """GitHub's limit on one job. A budget leaves 30 minutes of it for setup and the report."""
+RUNNER_CPUS = 4
+"""GitHub's ubuntu-latest runner for a public repository: more mutants at once than CPUs only
+oversubscribes it (#337)."""
 
 
 class SettingsError(Exception):
@@ -53,6 +56,8 @@ class Settings:
     budget_minutes: int
     pr_budget_minutes: int
     max_new_issues: int
+    max_children: int
+    """How many mutants mutmut runs at once (#337: four starved the hosted runner)."""
     tools: dict[str, str]
     repositories: dict[str, Repository]
 
@@ -71,6 +76,7 @@ SETTINGS_KEYS = {
     "budget_minutes",
     "pr_budget_minutes",
     "max_new_issues",
+    "max_children",
     "tools",
     "repositories",
 }
@@ -181,6 +187,7 @@ def load_settings(source: str) -> Settings:
             raw["pr_budget_minutes"], "pr_budget_minutes", 1, MAX_JOB_MINUTES - 30
         ),
         max_new_issues=whole(raw["max_new_issues"], "max_new_issues", 0, 100),
+        max_children=whole(raw["max_children"], "max_children", 1, RUNNER_CPUS),
         tools={name: text(tools[name], f"tools.{name}") for name in TOOLS},
         repositories={name: load_repository(name, value) for name, value in repositories.items()},
     )
