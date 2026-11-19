@@ -90,13 +90,17 @@ Uncommitted patches, each reverted afterwards. The test-side ones change only `T
 - **An unlucky first batch.** The tick is skipped for the first 30 bounded calls (a counter on the test's
   `TickingEvent` subclass), so the first batch misses and the next two catch it. The check passes, after three
   batches. The current one-batch check fails with the same patch.
-- **A tick that two of three batches miss.** The tick is skipped for the first 60 bounded calls. The check fails
-  after three batches.
+- **A tick that two of three batches miss.** The tick is skipped for bounded calls 1–30 and 61–90, so the first and
+  third batches miss and the second catches it. The check fails after three batches. (Skipping the first 60 fails it
+  after two.)
 - **The real tick.** In `run_to_completion`, `output.changed.wait(...)` is replaced by `time.sleep(0.02)`, which is
   #360's regression. The latency test fails in all three batches. The power check passes, because it puts its own
   tick on top.
-- **Flake hunt:** `scripts/flake_hunt.py --load 2` on the power test alone, once the 1-minute load average is under
-  40. Then check that nothing of this session's is left running. The Windows legs in CI are the real check.
+- **Repeated runs, no generated load:** the power test alone, run repeatedly in a heavy-run slot the orchestrator
+  gives. Workers don't generate load (owner's rule), so there's no `--load`. The loaded case is covered on paper:
+  load moves q, and D1's numbers are for any q. A loaded leg with q a few times 0.27% still fails the majority only
+  about 3q² of the time. Then check that nothing of this session's is left running. The Windows legs in CI are the
+  real check.
 
 ## Risks / Trade-offs
 
