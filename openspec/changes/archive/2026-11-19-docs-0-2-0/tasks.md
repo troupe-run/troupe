@@ -67,7 +67,7 @@ The audit findings these tasks act on are in the PR description. Each task's ver
 - [x] 5.1 Run each path for real where this machine can (scripted, Ollama, mistral.rs, LM Studio through `anthropic`
   if a model is loaded), one at a time with load under ~40; record which ran for real and which against stand-ins and
   fixtures in the PR.
-- [ ] 5.2 `uv run scripts/check.py` passes.
+- [x] 5.2 `uv run scripts/check.py` passes.
 
 ## Workflow follow-up
 
