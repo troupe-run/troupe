@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.1](https://github.com/troupe-run/troupe/compare/troupe-store-text-v0.1.0...troupe-store-text-v0.1.1) (2026-11-19)
+
+
+### Bug Fixes
+
+* **store:** never reuse a notification id across an order rebuild ([24e817d](https://github.com/troupe-run/troupe/commit/24e817d5e19cf53fa08793b6c2b1f87dade2f3e8)), closes [#454](https://github.com/troupe-run/troupe/issues/454)
+* **store:** read the order log as it is now before numbering events ([5292580](https://github.com/troupe-run/troupe/commit/52925800bf2db990755136a714c78d80c37da9d6))
+* **store:** refuse a damaged local line on every read, not once ([1859332](https://github.com/troupe-run/troupe/commit/1859332c783a1ee1df45d9c008b4b66c28cf3110))
+* **store:** tell listeners of an order by its last id, not its length ([afe6d27](https://github.com/troupe-run/troupe/commit/afe6d27b427dfa8aa8b173b4f5fbbadec79e4eb2))
+
 ## 0.1.0 (2026-11-01)
 
 

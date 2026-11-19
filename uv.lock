@@ -2096,7 +2096,7 @@ wheels = [
 
 [[package]]
 name = "troupe"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "packages/troupe" }
 dependencies = [
     { name = "eventsourcing" },
@@ -2139,7 +2139,7 @@ requires-dist = [{ name = "troupe", editable = "packages/troupe" }]
 
 [[package]]
 name = "troupe-plugin-sdk"
-version = "0.0.0"
+version = "0.1.0"
 source = { editable = "packages/troupe-plugin-sdk" }
 
 [[package]]
@@ -2204,7 +2204,7 @@ provides-extras = ["all", "anthropic", "mistralrs", "ollama", "openai"]
 
 [[package]]
 name = "troupe-runner-anthropic"
-version = "0.0.0"
+version = "0.1.0"
 source = { editable = "plugins/runner-anthropic" }
 dependencies = [
     { name = "anthropic" },
@@ -2219,7 +2219,7 @@ requires-dist = [
 
 [[package]]
 name = "troupe-runner-claude-code"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "plugins/runner-claude-code" }
 dependencies = [
     { name = "troupe-plugin-sdk" },
@@ -2230,7 +2230,7 @@ requires-dist = [{ name = "troupe-plugin-sdk", editable = "packages/troupe-plugi
 
 [[package]]
 name = "troupe-runner-mistralrs"
-version = "0.0.0"
+version = "0.1.0"
 source = { editable = "plugins/runner-mistralrs" }
 dependencies = [
     { name = "mistralrs" },
@@ -2245,7 +2245,7 @@ requires-dist = [
 
 [[package]]
 name = "troupe-runner-ollama"
-version = "0.0.0"
+version = "0.1.0"
 source = { editable = "plugins/runner-ollama" }
 dependencies = [
     { name = "httpcore2" },
@@ -2262,7 +2262,7 @@ requires-dist = [
 
 [[package]]
 name = "troupe-runner-openai"
-version = "0.0.0"
+version = "0.1.0"
 source = { editable = "plugins/runner-openai" }
 dependencies = [
     { name = "openai" },
@@ -2277,7 +2277,7 @@ requires-dist = [
 
 [[package]]
 name = "troupe-runner-scripted"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "plugins/runner-scripted" }
 dependencies = [
     { name = "troupe-plugin-sdk" },
@@ -2288,7 +2288,7 @@ requires-dist = [{ name = "troupe-plugin-sdk", editable = "packages/troupe-plugi
 
 [[package]]
 name = "troupe-stage-local"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "packages/troupe-stage-local" }
 dependencies = [
     { name = "troupe" },
@@ -2299,7 +2299,7 @@ requires-dist = [{ name = "troupe", editable = "packages/troupe" }]
 
 [[package]]
 name = "troupe-store-text"
-version = "0.1.0"
+version = "0.1.1"
 source = { editable = "packages/troupe-store-text" }
 dependencies = [
     { name = "eventsourcing" },
@@ -2314,7 +2314,7 @@ requires-dist = [
 
 [[package]]
 name = "troupe-vcs-files"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "packages/troupe-vcs-files" }
 dependencies = [
     { name = "troupe" },
@@ -2325,7 +2325,7 @@ requires-dist = [{ name = "troupe", editable = "packages/troupe" }]
 
 [[package]]
 name = "troupe-vcs-git"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "packages/troupe-vcs-git" }
 dependencies = [
     { name = "troupe" },

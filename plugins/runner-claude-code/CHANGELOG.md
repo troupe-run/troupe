@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.2.0](https://github.com/troupe-run/troupe/compare/troupe-runner-claude-code-v0.1.0...troupe-runner-claude-code-v0.2.0) (2026-11-19)
+
+
+### ⚠ BREAKING CHANGES
+
+* **runner-protocol:** a runner that predates this rejects run/start's new onContextFull field. The contract is version 0, and every runner is in this repository.
+* **claude-code:** a Claude Code run whose context fills now ends with an error result instead of compacting. A long run that got through by compacting fails until its task is split or its actor opts in ([#310](https://github.com/troupe-run/troupe/issues/310)).
+* **runner-protocol:** a runner's result with status error must carry a reason from the contract's list, and an ok result must not; troupe refuses either as a protocol violation, and run.error-result's details now require the reason. Every runner that speaks the contract is in this repository and is updated here; there are no recorded theatres to migrate.
+
+### Features
+
+* carry declared effects and a scratch directory to runners ([ce62005](https://github.com/troupe-run/troupe/commit/ce6200565f60b7a1b6661f2061aa7994cedb7d86))
+* **claude-code:** capture fixtures through the runner's own rules ([2e25dce](https://github.com/troupe-run/troupe/commit/2e25dce0494625c266e59da14c113fb9c888f60d))
+* **claude-code:** Claude Code compacts when the run says compact ([dbd05a2](https://github.com/troupe-run/troupe/commit/dbd05a2afb9e05d1dc4d9dcda811ccc26e77595e))
+* **claude-code:** map Claude Code's context limit to context-length ([daa5baa](https://github.com/troupe-run/troupe/commit/daa5baa20c232941a42aefa9dd82b7788a9481f0))
+* **claude-code:** translate declared effects into permission rules ([7ed5cf1](https://github.com/troupe-run/troupe/commit/7ed5cf1e6ec9596af2fafde03e392a6084546b46))
+* **claude-code:** turn off Claude Code's automatic compaction ([d2524d0](https://github.com/troupe-run/troupe/commit/d2524d01cc119a4e15860559ba74b8a6d3e26548))
+* **lm-studio:** stop at the context limit, and warn it won't compact ([a45df7b](https://github.com/troupe-run/troupe/commit/a45df7b2516f79aa9c7c11bcc439ebb10c1d6df6))
+* **runner-protocol:** a failed result says why, in a reason ([3dcfe3f](https://github.com/troupe-run/troupe/commit/3dcfe3f344d1621109761bedbe5eda5ed773b5a7)), closes [#296](https://github.com/troupe-run/troupe/issues/296)
+* **runner-protocol:** report the model that served a run ([409a5f9](https://github.com/troupe-run/troupe/commit/409a5f9c82361e8134d88816010d98e47419defc)), closes [#295](https://github.com/troupe-run/troupe/issues/295)
+* **runner-protocol:** run/start says whether the run may compact ([21851c3](https://github.com/troupe-run/troupe/commit/21851c36e6b9e74a5cf7715325580119fe6b8cf1))
+* **runners:** end every runner through the SDK's exit_now, so coverage can save ([217e083](https://github.com/troupe-run/troupe/commit/217e083b5bc9d36dea3b2ccc84277e9e20889b9a)), closes [#443](https://github.com/troupe-run/troupe/issues/443)
+
+
+### Bug Fixes
+
+* **claude-code:** note a replaced surrogate in the effects server ([96bc001](https://github.com/troupe-run/troupe/commit/96bc00102f8478f4d7c0b528bf46716ff58e912b))
+* **runners:** clean a tool call's id and OpenAI's non-stream body ([45ab433](https://github.com/troupe-run/troupe/commit/45ab433c4f9fd08ee3c0b2d8c21c5e4dd229381f))
+* **runners:** record each lone surrogate replaced, in a context event ([ae9f7a6](https://github.com/troupe-run/troupe/commit/ae9f7a6f3abe27c9d7863c1f5c56a38b23a64cea))
+* **runners:** refuse a second initialize with already-initialized ([ad1769b](https://github.com/troupe-run/troupe/commit/ad1769bd880fbb996b1fc94fafcfdd7aad89923e))
+* **runners:** write lone surrogates as U+FFFD, never as an escape ([fef4bd5](https://github.com/troupe-run/troupe/commit/fef4bd5c222b1c13014b8e14bf3692d130624d83))
+* **sdk:** walk messages for lone surrogates without recursion ([79800e2](https://github.com/troupe-run/troupe/commit/79800e2da2777ce65cad058e86c2278cb461be6f))
+
 ## 0.1.0 (2026-11-01)
 
 
