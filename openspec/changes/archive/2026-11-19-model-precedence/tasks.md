@@ -33,7 +33,8 @@ first.
       `runtimes.py`'s module docstring changed. `defaults.py`'s docstring is about a runtime's own fields, still
       true, and `cli/runtimes.py` lists what sets a model with no order, so both stay. `git grep` finds the old order
       only in `docs/stagecraft/runtimes.md` (#460's) and the main spec (archive replaces it)
-- [ ] 2.3 Tell the 0.2.0 docs worker (#460) when this is pushed, with what changed, so its pages follow
+- [x] 2.3 Tell the 0.2.0 docs worker (#460) when this is pushed, with what changed, so its pages follow. Done:
+      sent the new schema and README wording, and that `config get --resolved`'s output is unchanged
 
 ## 3. Integration
 

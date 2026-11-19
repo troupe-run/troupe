@@ -116,24 +116,6 @@ SHALL name a runtime when its runner requires one, SHALL NOT name one when its r
 - **WHEN** an `ollama` actor names no runtime, and config overrides the built-in `ollama` with a credential
 - **THEN** it is refused, saying no runtime there is fits the `ollama` runner, and how to define one
 
-### Requirement: The run's model comes from the environment, the actor, then the runtime
-A run's model SHALL be the runtime's `TROUPE_RUNTIME_<NAME>_MODEL` when set, else the actor's `model`, else the
-runtime's `model` in config, with its source `env`, `actor` or `theatre`. A run whose runtime resolves no model SHALL
-be refused with `runtime.no-model` before anything is recorded.
-
-#### Scenario: The actor's model
-- **WHEN** config sets `runtimes.openai.model=gpt-a` and `actors.tester.model=gpt-b`, and no variable sets a model
-- **THEN** a run of `tester` uses `gpt-b`, with source `actor`
-
-#### Scenario: The person's override wins
-- **WHEN** `actors.tester.model` is `gpt-b` and `TROUPE_RUNTIME_OPENAI_MODEL` is `gpt-c`
-- **THEN** a run of `tester` uses `gpt-c`, with source `env`
-
-#### Scenario: No model anywhere
-- **WHEN** an actor on `openai` sets no model, config sets none, and no variable sets one
-- **THEN** perform fails with `runtime.no-model`, naming `actors.tester.model`, `runtimes.openai.model` and
-  `TROUPE_RUNTIME_OPENAI_MODEL`, and nothing is recorded
-
 ### Requirement: A run's credential is read from the named variable when the run starts
 When a run's runtime has a credential, perform SHALL read its value from the variable `credential.env` names, in the
 session's environment, when the run starts. An unset or empty variable SHALL refuse the run with
@@ -313,7 +295,8 @@ A run's price SHALL be the price its runtime's `prices` holds for the run's mode
 - **THEN** the run's price is `gpt-b`'s
 
 #### Scenario: The model from the environment has no price
-- **WHEN** config prices only `gpt-b`, and `TROUPE_RUNTIME_OPENAI_MODEL` makes a run use `gpt-c`
+- **WHEN** config prices only `gpt-b`, `tester` sets no model, and `TROUPE_RUNTIME_OPENAI_MODEL` makes a run of
+  `tester` use `gpt-c`
 - **THEN** the run has no price
 
 #### Scenario: A near match
@@ -474,3 +457,27 @@ named place. No built-in runtime SHALL name a model or a price.
 - **WHEN** config has no `runtimes`, `TROUPE_RUNTIME_MISTRALRS_MODEL` is `/models/qwen3-0.6b.gguf`, and a person runs
   `troupe config get --resolved runtimes.mistralrs`
 - **THEN** it shows no endpoint and no credential, and the model `/models/qwen3-0.6b.gguf` from `env`
+
+### Requirement: The run's model comes from the actor, the environment, then the runtime
+A run's model SHALL be the actor's `model` when it sets one, else the runtime's `TROUPE_RUNTIME_<NAME>_MODEL` when
+set, else the runtime's `model` in config, with its source `actor`, `env` or `theatre`. A run whose runtime resolves
+no model SHALL be refused with `runtime.no-model` before anything is recorded.
+
+#### Scenario: The actor's model wins over the environment
+- **WHEN** config sets `runtimes.openai.model=gpt-a` and `actors.tester.model=gpt-b`, and
+  `TROUPE_RUNTIME_OPENAI_MODEL` is `gpt-c`
+- **THEN** a run of `tester` uses `gpt-b`, with source `actor`
+
+#### Scenario: The environment wins over the runtime's model
+- **WHEN** config sets `runtimes.openai.model=gpt-a`, `tester` sets no model, and `TROUPE_RUNTIME_OPENAI_MODEL` is
+  `gpt-c`
+- **THEN** a run of `tester` uses `gpt-c`, with source `env`
+
+#### Scenario: The runtime's model
+- **WHEN** config sets `runtimes.openai.model=gpt-a`, `tester` sets no model, and no variable sets one
+- **THEN** a run of `tester` uses `gpt-a`, with source `theatre`
+
+#### Scenario: No model anywhere
+- **WHEN** an actor on `openai` sets no model, config sets none, and no variable sets one
+- **THEN** perform fails with `runtime.no-model`, naming `actors.tester.model`, `runtimes.openai.model` and
+  `TROUPE_RUNTIME_OPENAI_MODEL`, and nothing is recorded
