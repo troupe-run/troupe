@@ -4,7 +4,8 @@
 Notification IDs SHALL be assigned locally, per branch, from 1 with no gaps until the order is rebuilt; a rebuilt
 order SHALL be numbered with no gaps from after the highest ID ever issued on the branch, so an ID is never reused
 there. Once issued on a branch, an ID SHALL always name the same event there. Nothing that orders events SHALL
-be stored in a tracked file. This SHALL hold however many stores, in one process or several, use one theatre at once.
+be stored in a tracked file. This SHALL hold however many stores, in one process or several, read and write one
+theatre at once.
 
 #### Scenario: IDs survive a restart
 - **WHEN** events are recorded, the store is closed and opened again
