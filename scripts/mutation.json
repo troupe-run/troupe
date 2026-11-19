@@ -5,6 +5,7 @@
   "budget_minutes": 240,
   "pr_budget_minutes": 45,
   "max_new_issues": 5,
+  "max_children": 2,
   "tools": {
     "mutmut": "3.8.1",
     "stryker": "10.1.1"
