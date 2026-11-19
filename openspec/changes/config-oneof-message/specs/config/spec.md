@@ -18,7 +18,7 @@ isn't are set aside, the error SHALL name what's wrong in that alternative, not 
 #### Scenario: An object that fits none of the alternatives is checked against the closest
 - **WHEN** a person sets a scripted actor's options to `{"script": {"steps": [{"event": {"type": "init", "runner": "x"}}]}}`
 - **THEN** it is refused, naming `actors.tester.options.script.steps.0.event.tools` as required and
-  `actors.tester.options.script.steps.0.event.runner` as needing an object
+  `actors.tester.options.script.steps.0.event.runner` as needing a group
 - **AND** the error doesn't give a step's description, and doesn't end with two full stops
 
 #### Scenario: Alternatives with no closest one are described

@@ -261,6 +261,71 @@ def test_scripted_options_that_are_missing_are_refused_by_the_runners_schema() -
     error = _refused(_actor(options=...))
     assert error.details["path"] == ["actors", "tester", "options"]
     assert "a script, inline or as a path" in error.problem
+    assert error.problem.endswith("runnerOptions extension point.")
+    assert not error.problem.endswith("..")
+
+
+# An object that fits none of a schema's alternatives is checked against the closest (#453;
+# config-oneof-message design D1-D4)
+
+STEP = "An object with exactly one key, the step's kind"
+STEPS = ("actors", "tester", "options", "script", "steps")
+
+
+def _steps(*steps: object) -> dict[str, Any]:
+    return _actor(expect=[], options={"script": {"steps": list(steps)}})
+
+
+def test_the_issues_init_event_names_its_missing_tools_and_its_runner_not_an_object() -> None:
+    found = problems(_steps({"event": {"type": "init", "runner": "x"}}))
+    assert [(problem.path, problem.rule) for problem in found] == [
+        (
+            (*STEPS, "0", "event", "runner"),
+            "it must be a group, not a string (the scripted runner's options schema)",
+        ),
+        ((*STEPS, "0", "event", "tools"), "it's required"),
+    ]
+    assert "(1 more)" in _refused(_steps({"event": {"type": "init", "runner": "x"}})).problem
+
+
+def test_an_init_event_missing_only_tools_is_refused_naming_tools_with_one_full_stop() -> None:
+    error = _refused(_steps({"event": {"type": "init", "runner": {"name": "x", "version": "1"}}}))
+    assert error.details["path"] == [*STEPS, "0", "event", "tools"]
+    assert error.problem == "actors.tester.options.script.steps.0.event.tools: it's required."
+    assert error.fix == "Set actors.tester.options.script.steps.0.event.tools."
+    assert STEP not in error.problem
+
+
+def test_an_events_type_sets_the_other_kinds_aside_and_names_what_its_own_kind_needs() -> None:
+    error = _refused(_steps({"event": {"type": "turn", "role": "assistant"}}))
+    assert error.details["path"] == [*STEPS, "0", "event", "text"]
+    assert error.problem.endswith(": it's required.")
+
+
+def test_a_step_whose_one_key_is_no_kind_keeps_the_steps_description_with_one_full_stop() -> None:
+    error = _refused(_steps({"jump": 1}))
+    assert error.details["path"] == [*STEPS, "0"]
+    assert error.problem == (
+        "actors.tester.options.script.steps.0: it doesn't fit the scripted runner's options "
+        f"schema: {STEP}."
+    )
+
+
+def test_ollamas_think_outside_its_list_keeps_the_options_description_with_one_full_stop() -> None:
+    error = _refused(_actor(**OLLAMA, options={"think": "max"}))
+    assert error.details["path"] == ["actors", "tester", "options", "think"]
+    assert "true, false, or low, medium or high" in error.problem
+    assert error.problem.endswith("The thinking is kept in the transcript only.")
+    assert not error.problem.endswith("..")
+
+
+def test_a_key_under_a_map_in_the_closest_alternative_is_never_named() -> None:
+    config = _steps({"tool": {"name": "Read", "input": {CANARY: [1]}}})
+    error = _refused_typed(config, {("actors", "tester", "options")})
+    assert error.details["path"] == [*STEPS, "0", "tool", "input"]
+    assert ".tool.input: one of its entries: it must be a string" in error.problem
+    assert STEP not in error.problem
+    assert CANARY not in json.dumps([error.problem, error.fix, error.details])
 
 
 def test_every_problem_is_listed_and_the_refusal_says_how_many_more() -> None:

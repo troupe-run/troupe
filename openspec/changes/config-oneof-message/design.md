@@ -30,6 +30,9 @@ lose `tools`.
   nowhere"). The bad value's place and what's valid there are named instead, which meets the malformed-input rule's
   "unless secret": a config value may always be a secret.
 - No change to the scripted runner's schema or to any description.
+- A refusal still shows its first problem and how many more there are. For the issue's step that's `runner` (it must
+  be a group) with "(1 more)", and `tools` once `runner` is fixed. Showing every problem would change every config
+  refusal, and the owner decided on 2026-11-19 to keep the format.
 
 ## Decisions
 
