@@ -35,5 +35,5 @@
 
 ## 5. Check
 
-- [ ] 5.1 One full `uv run scripts/check.py` (heavy-run slot from the orchestrator), output kept in a scratch file.
+- [x] 5.1 One full `uv run scripts/check.py` (heavy-run slot from the orchestrator), output kept in a scratch file.
   Verify: it passes, printing the size step's line.
