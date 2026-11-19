@@ -298,6 +298,20 @@ def test_a_listener_is_woken_by_a_rebuild_that_keeps_the_orders_length(tmp_path:
         store.unlisten(listener)
 
 
+def test_recording_on_a_rebuilt_order_leaves_nothing_for_the_next_delivery_to_tell(
+    tmp_path: Path,
+) -> None:
+    # A rebuilt order starts after 0, so what listeners were told is its last id, not its length.
+    # Otherwise the subscription's next delivery wakes them again for the same event, and its
+    # check takes that for a write the watch missed (#464 review).
+    epoch, ids = recorded(tmp_path, 3)
+    store = fresh_store(tmp_path)
+    write_order(tmp_path, epoch, _conflicts(ids)["one id for two events"])
+    assert numbers(store)[0] > 3  # this store rebuilt it
+    store.insert([event(uuid4(), 1)])  # tells its listeners here, and records that it did
+    assert store._deliver() is False
+
+
 def test_a_log_reads_again_whole_when_a_repair_moved_lines_it_had_read(tmp_path: Path) -> None:
     epoch, ids = recorded(tmp_path, 3)
     a, b, c = ids

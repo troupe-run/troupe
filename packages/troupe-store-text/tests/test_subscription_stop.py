@@ -12,6 +12,7 @@ from protocol_schemas import check_error
 from storetesting import event, fresh_store, snapshot
 from troupe.core.errors import TroupeError
 from troupe.core.vcs import load_vcs
+from troupe_store_text.local import OrderLog
 from troupe_store_text.store import TextStore, _Subscription
 
 
@@ -58,16 +59,16 @@ def test_a_stop_during_a_delivery_returns_only_once_the_delivery_and_the_thread_
     store.insert([event(uuid4(), 1)])
     entered, proceed = threading.Event(), threading.Event()
     threads: list[threading.Thread] = []
-    read = TextStore.max_notification_id
+    read = TextStore.ensure_ordered
 
-    def held(self: TextStore) -> int | None:
+    def held(self: TextStore) -> OrderLog:
         if threading.current_thread().name == "troupe-subscription":
             threads.append(threading.current_thread())
             entered.set()
             proceed.wait(timeout=10)
         return read(self)
 
-    monkeypatch.setattr(TextStore, "max_notification_id", held)
+    monkeypatch.setattr(TextStore, "ensure_ordered", held)
     listener = threading.Event()
     store.listen(listener)  # the thread's start-up delivery reads the order, and is held there
     try:
