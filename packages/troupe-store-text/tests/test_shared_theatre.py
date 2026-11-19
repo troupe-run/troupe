@@ -6,7 +6,6 @@ what another store wrote to them before it relies on its own copy, so no notific
 appended twice and no follower's position goes backwards.
 """
 
-import os
 import shutil
 import subprocess
 import sys
@@ -24,6 +23,7 @@ from hypothesis.stateful import RuleBasedStateMachine, invariant, rule
 from storetesting import event, fresh_store
 from troupe.core import strict_json
 from troupe.core.errors import TroupeError
+from troupe.core.files import replace_file
 from troupe.core.notices import Notice
 from troupe_store_text.local import OrderLog
 from troupe_store_text.store import TextStore
@@ -52,12 +52,10 @@ def order_lines(theatre: Path) -> list[str]:
 
 def write_order(theatre: Path, epoch: str, lines: list[dict[str, object]]) -> None:
     """Write the order file by hand, as stores before #450 was fixed could leave it. Atomically,
-    so a subscription reading meanwhile sees the old file or the new one, never half of one."""
+    so a subscription reading meanwhile sees the old file or the new one, never half of one, and
+    through troupe's replace, which waits while another thread has the file open (Windows)."""
     rows = [{"epoch": epoch}, *lines]
-    path = order_file(theatre)
-    staged = path.with_suffix(".staged")
-    staged.write_bytes(b"".join(strict_json.dumps(r).encode() + b"\n" for r in rows))
-    os.replace(staged, path)
+    replace_file(order_file(theatre), b"".join(strict_json.dumps(r).encode() + b"\n" for r in rows))
 
 
 def notices(store: TextStore, code: str) -> list[Notice]:
@@ -255,12 +253,6 @@ def tracking_file(theatre: Path) -> Path:
     return path
 
 
-def replace_bytes(path: Path, data: bytes) -> None:
-    staged = path.with_suffix(".staged")
-    staged.write_bytes(data)
-    os.replace(staged, path)
-
-
 def test_a_damaged_order_line_after_valid_ones_is_refused_on_every_read(tmp_path: Path) -> None:
     recorded(tmp_path, 2)
     store = fresh_store(tmp_path)
@@ -273,7 +265,7 @@ def test_a_damaged_order_line_after_valid_ones_is_refused_on_every_read(tmp_path
         with pytest.raises(TroupeError) as caught:
             store.max_notification_id()
         assert caught.value.code == "events.malformed-record"
-    replace_bytes(order_file(tmp_path), good)
+    replace_file(order_file(tmp_path), good)
     assert store.max_notification_id() == 3
     assert notices(store, "events.order-repaired") == []  # n=3 wasn't taken twice
 
@@ -292,7 +284,7 @@ def test_a_damaged_tracking_line_after_valid_ones_is_refused_on_every_read(
         with pytest.raises(TroupeError) as caught:
             store.max_tracking_id("follower")
         assert caught.value.code == "events.malformed-record"
-    replace_bytes(tracking_file(tmp_path), good)
+    replace_file(tracking_file(tmp_path), good)
     assert store.max_tracking_id("follower") == 2
 
 
@@ -320,7 +312,7 @@ def test_a_live_store_forgets_positions_when_the_tracking_file_is_deleted_or_sho
     store.insert_tracking(Tracking("follower", 1))
     store.insert_tracking(Tracking("follower", 2))
     first = tracking_file(tmp_path).read_bytes().splitlines(keepends=True)[0]
-    replace_bytes(tracking_file(tmp_path), first)
+    replace_file(tracking_file(tmp_path), first)
     assert store.max_tracking_id("follower") == 1
     tracking_file(tmp_path).unlink()
     assert store.max_tracking_id("follower") is None
