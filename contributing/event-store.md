@@ -17,6 +17,7 @@ Runs are recorded here by `troupe perform`: see [contributing/runs.md](runs.md).
   local/             gitignored: this clone's own state
     .lock            the write lock
     order/           each branch's notification order
+    issued/          each branch's highest notification id issued, kept apart from its order
     tracking/        each branch's follower positions
 ```
 
@@ -77,8 +78,9 @@ A segment's first line is its header; every later line is one event. Lines are s
 
 ## Ordering
 
-The library's followers need notification ids: integers, dense from 1, that never change once issued. Each branch
-keeps its own order in `local/order/`, so nothing that orders events is ever in git.
+The library's followers need notification ids: integers that never change once issued, and that a follower can read
+on from. Each branch keeps its own order in `local/order/`, so nothing that orders events is ever in git. Ids are dense
+from 1 until the order is rebuilt, and dense within each order after that; an id is never reused on a branch.
 
 - **New events are appended.** Events that arrive by a merge or a pull get the next ids, in a fixed order:
   topological by parents, then by session, then by line. An id already issued always names the same event.
@@ -86,6 +88,18 @@ keeps its own order in `local/order/`, so nothing that orders events is ever in 
   dropped it), the order is rebuilt under a new epoch and `events.order-rebuilt` says so. Follower positions from
   the old epoch no longer count, so every projection is rebuilt from the beginning. Nothing is lost: the order is
   derived from the events.
+- **A rebuilt order never reuses an id.** It's numbered after the highest id ever issued on the branch, and its
+  epoch line says where it starts (`{"epoch": ..., "after": n}`). So a follower that read ids under the old order,
+  whether it records that position after the rebuild or is a live subscription that keeps its position in memory,
+  reads on into the new order and is given all of it, whichever eventsourcing runner or thread it uses
+  (troupe-run/troupe#454). Delivery stays at least once.
+- **The highest id issued is kept apart from the order,** in `local/issued/<branch>.json` (`{"issued": n}`, written
+  whole). It's raised ahead of the order in steps of `ORDER_ID_RESERVE` ids (one write per step, not one per
+  insert), so a rebuild can leave a gap of up to that many ids. Deleting the order file, as its error message says
+  to, renumbers after the mark; deleting the mark alone loses nothing, because the order still names its ids. A
+  damaged mark can't be rebuilt from the events, so its error says how to mend it. If the mark and the order file
+  are both deleted (or all of `local/`), ids start at 1 again: troupe's own followers' positions are in `local/`
+  too and start again with it, but a projection that keeps its position elsewhere must be rebuilt by hand.
 - **Any store numbers, under the lock, from the file as it is now.** A reader numbers events too (a pull brings
   events no local process recorded), so `troupe logs --follow` beside a run is a second numberer. Each store keeps
   the order and tracking files in memory, but before using them it reads what other stores appended since it last
@@ -274,10 +288,12 @@ lock uses the platform's lock defaults (`LOCK_TIMEOUT_SECONDS`, `LOCK_ANNOUNCE_A
 chain is `IDENTITY_CHAIN`. `SUBSCRIBE_POLL_SECONDS` is how often a subscription looks for new events when it can only
 poll, and `SUBSCRIBE_CHECK_SECONDS` how often a store with subscribers checks that its watch is delivering.
 `SUBSCRIBE_STOP_TIMEOUT_SECONDS` bounds how long stopping a subscription waits for its thread to end: once the stop
-returns, the subscription neither reads nor writes the store.
+returns, the subscription neither reads nor writes the store. `ORDER_ID_RESERVE` is how far ahead of the order the
+store raises its record of the highest notification id issued on a branch (see Ordering).
 
 | Setting | Default |
 |---|---|
 | `SUBSCRIBE_POLL_SECONDS` | 1 |
 | `SUBSCRIBE_CHECK_SECONDS` | 30 |
 | `SUBSCRIBE_STOP_TIMEOUT_SECONDS` | 5 |
+| `ORDER_ID_RESERVE` | 1024 |

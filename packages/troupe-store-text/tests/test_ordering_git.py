@@ -123,7 +123,9 @@ def test_removing_an_uncommitted_segment_rebuilds_the_order_and_restarts_followe
     dropped.unlink()
 
     reader = store(repo)
-    assert reader.max_notification_id() == 1
+    [(n, kept)] = reader.notifications(1, 100, None, ())
+    assert (kept.stream, n > 2) == (keep, True)  # renumbered after every id issued (#454)
+    assert reader.max_notification_id() == n
     assert reader.max_tracking_id("projection") is None
     [notice] = reader.notices()
     assert notice.code == "events.order-rebuilt"

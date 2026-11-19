@@ -11,21 +11,23 @@ import subprocess
 import sys
 import tempfile
 import threading
+from collections.abc import Iterator
 from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
-from eventsourcing.persistence import IntegrityError, Tracking
+from eventsourcing.persistence import IntegrityError, Notification, Tracking
 from hypothesis import HealthCheck, settings
 from hypothesis import strategies as st
 from hypothesis.stateful import RuleBasedStateMachine, invariant, rule
 
 from storetesting import event, fresh_store
-from troupe.core import strict_json
+from troupe.core import defaults, strict_json
 from troupe.core.errors import TroupeError
 from troupe.core.files import replace_file
 from troupe.core.notices import Notice
 from troupe_store_text.local import OrderLog
+from troupe_store_text.recorders import TextApplicationRecorder
 from troupe_store_text.store import TextStore
 
 TESTS = str(Path(__file__).resolve().parents[2] / "troupe" / "tests")
@@ -50,11 +52,11 @@ def order_lines(theatre: Path) -> list[str]:
     return order_file(theatre).read_text().splitlines()
 
 
-def write_order(theatre: Path, epoch: str, lines: list[dict[str, object]]) -> None:
+def write_order(theatre: Path, epoch: str, lines: list[dict[str, object]], after: int = 0) -> None:
     """Write the order file by hand, as stores before #450 was fixed could leave it. Atomically,
     so a subscription reading meanwhile sees the old file or the new one, never half of one, and
     through troupe's replace, which waits while another thread has the file open (Windows)."""
-    rows = [{"epoch": epoch}, *lines]
+    rows = [{"epoch": epoch, "after": after}, *lines]
     replace_file(order_file(theatre), b"".join(strict_json.dumps(r).encode() + b"\n" for r in rows))
 
 
@@ -179,7 +181,11 @@ def _conflicts(ids: list[str]) -> dict[str, list[dict[str, object]]]:
         "one id for two events": [{"n": 1, "event": a}, {"n": 2, "event": b}, {"n": 2, "event": c}],
         "an event with two ids": [{"n": 1, "event": a}, {"n": 2, "event": b}, {"n": 3, "event": b}],
         "a skipped id": [{"n": 1, "event": a}, {"n": 3, "event": b}],
-        "a second epoch": [{"n": 1, "event": a}, {"epoch": "f" * 32}, {"n": 2, "event": b}],
+        "a second epoch": [
+            {"n": 1, "event": a},
+            {"epoch": "f" * 32, "after": 0},
+            {"n": 2, "event": b},
+        ],
     }
 
 
@@ -192,7 +198,8 @@ def test_a_conflicting_order_is_rebuilt_under_a_new_epoch_and_followers_start_ag
     write_order(tmp_path, epoch, _conflicts(ids)[shape])
     store = fresh_store(tmp_path)
     numbers = [n for n, _ in ordered(store)]
-    assert numbers == [1, 2, 3]
+    assert numbers == list(range(numbers[0], numbers[0] + 3))
+    assert numbers[0] > 3  # no id is reused (troupe-run/troupe#454)
     assert sorted(record_id for _, record_id in ordered(store)) == sorted(ids)
     (notice,) = notices(store, "events.order-rebuilt")
     assert notice.details is not None
@@ -203,7 +210,7 @@ def test_a_conflicting_order_is_rebuilt_under_a_new_epoch_and_followers_start_ag
     assert ordered(fresh_store(tmp_path)) == ordered(store)
 
 
-def test_a_follower_mid_stream_across_a_rebuild_starts_again_from_the_first_id(
+def test_a_follower_mid_stream_across_a_rebuild_starts_again_from_the_rebuilt_orders_first_id(
     tmp_path: Path,
 ) -> None:
     epoch, ids = recorded(tmp_path, 3)
@@ -213,9 +220,65 @@ def test_a_follower_mid_stream_across_a_rebuild_starts_again_from_the_first_id(
     write_order(tmp_path, epoch, _conflicts(ids)["one id for two events"])
     fresh_store(tmp_path).max_notification_id()  # another process finds the conflict, rebuilds
     assert follower.max_tracking_id("follower") is None
-    assert [n for n, _ in follower.notifications(1, 100, None, ())] == [1, 2, 3]
-    follower.insert_tracking(Tracking("follower", 1))  # its first position under the new epoch
-    assert fresh_store(tmp_path).max_tracking_id("follower") == 1
+    first, *_ = again = [n for n, _ in follower.notifications(1, 100, None, ())]
+    assert (again, first > 3) == (list(range(first, first + 3)), True)
+    follower.insert_tracking(Tracking("follower", first))  # its first position under the new epoch
+    assert fresh_store(tmp_path).max_tracking_id("follower") == first
+
+
+def test_a_position_read_before_a_rebuild_and_recorded_after_it_skips_nothing(
+    tmp_path: Path,
+) -> None:
+    # troupe-run/troupe#454: the follower read 1..2 under the old epoch, and records 2 under the
+    # new one. Its next read, from 3, must still give it every event of the rebuilt order.
+    epoch, ids = recorded(tmp_path, 3)
+    follower = fresh_store(tmp_path)
+    assert [n for n, _ in follower.notifications(1, 2, None, ())] == [1, 2]
+    write_order(tmp_path, epoch, _conflicts(ids)["one id for two events"])
+    fresh_store(tmp_path).max_notification_id()  # another process finds the conflict, rebuilds
+    follower.insert_tracking(Tracking("follower", 2))
+    start = follower.max_tracking_id("follower") or 0
+    given = [record.id for _, record in follower.notifications(start + 1, 100, None, ())]
+    assert sorted(given) == sorted(ids)
+
+
+def test_a_live_subscription_across_a_rebuild_is_given_the_rebuilt_order(tmp_path: Path) -> None:
+    # The library's subscription keeps its own position in memory (troupe-run/troupe#454).
+    epoch, ids = recorded(tmp_path, 3)
+    store = fresh_store(tmp_path, check_seconds=0.1, poll_seconds=0.1)
+    streams = {store.event(event_id).stream for event_id in ids}  # type: ignore[union-attr]
+    given: list[Notification] = []
+    seven = threading.Event()  # three before the rebuild, three again, and the new one
+
+    def take(subscription: Iterator[Notification]) -> None:
+        for notification in subscription:  # ends when the subscription is stopped
+            given.append(notification)
+            if len(given) == 7:
+                seven.set()
+
+    with TextApplicationRecorder(store).subscribe() as subscription:
+        taker = threading.Thread(target=take, args=(subscription,))
+        taker.start()
+        try:
+            for _ in range(1000):  # bounded: the first three come at once
+                if len(given) >= 3:
+                    break
+                threading.Event().wait(0.01)
+            # Damaged as another process could leave it; this store finds it and rebuilds. Only this
+            # store takes the lock: a second one in this process could meet its subscription thread
+            # holding it (LockAlreadyHeldError, troupe-run/troupe#450).
+            write_order(tmp_path, epoch, _conflicts(ids)["one id for two events"])
+            new = uuid4()
+            store.insert([event(new, 1)])
+            seven.wait(timeout=10)  # bounded: a subscription that skips never sends all seven
+        finally:
+            subscription.stop()
+            taker.join(timeout=10)
+    assert [n.id for n in given[:3]] == [1, 2, 3]
+    after = given[3:]
+    assert [n.originator_id for n in after][-1:] == [new], [n.id for n in after]
+    assert {n.originator_id for n in after[:-1]} == streams, [n.id for n in after]
+    assert all(n.id > 3 for n in after)
 
 
 def test_a_listener_is_woken_by_a_rebuild_that_keeps_the_orders_length(tmp_path: Path) -> None:
@@ -297,10 +360,13 @@ def test_a_live_store_numbers_again_when_the_order_file_is_deleted_or_shortened(
     order_file(tmp_path).unlink()  # the malformed-record fix: delete it and troupe rebuilds it
     assert sorted(record_id for _, record_id in ordered(store)) == sorted(ids)
     renumbered = OrderLog.load(order_file(tmp_path))
-    assert renumbered.epoch != epoch
-    write_order(tmp_path, renumbered.epoch, [{"n": 1, "event": renumbered.ids[0]}])
-    assert ordered(store)[0] == (1, renumbered.ids[0])
-    assert store.max_notification_id() == 3
+    assert (renumbered.epoch != epoch, renumbered.after >= 3) == (True, True)  # no id reused
+    first = renumbered.after + 1
+    write_order(
+        tmp_path, renumbered.epoch, [{"n": first, "event": renumbered.ids[0]}], renumbered.after
+    )
+    assert ordered(store)[0] == (first, renumbered.ids[0])
+    assert store.max_notification_id() == first + 2
     assert ordered(fresh_store(tmp_path)) == ordered(store)
 
 
@@ -316,6 +382,79 @@ def test_a_live_store_forgets_positions_when_the_tracking_file_is_deleted_or_sho
     assert store.max_tracking_id("follower") == 1
     tracking_file(tmp_path).unlink()
     assert store.max_tracking_id("follower") is None
+
+
+# The highest id issued (follower-position-epoch design D3, D4; troupe-run/troupe#454).
+
+
+def issued_file(theatre: Path) -> Path:
+    order = order_file(theatre)
+    return order.parent.parent / "issued" / f"{order.stem}.json"
+
+
+def numbers(store: TextStore) -> list[int]:
+    return [n for n, _ in ordered(store)]
+
+
+def test_deleting_the_order_file_renumbers_after_every_id_issued(tmp_path: Path) -> None:
+    recorded(tmp_path, 3)
+    order_file(tmp_path).unlink()
+    again = numbers(fresh_store(tmp_path))
+    assert (len(again), again[0] > 3) == (3, True)
+    assert again == list(range(again[0], again[0] + 3))
+
+
+def test_deleting_the_issued_file_alone_loses_nothing(tmp_path: Path) -> None:
+    epoch, ids = recorded(tmp_path, 3)
+    issued_file(tmp_path).unlink()
+    # The line that conflicts names id 3: an id issued, even though reading stops there.
+    write_order(tmp_path, epoch, _conflicts(ids)["an event with two ids"])
+    again = numbers(fresh_store(tmp_path))  # rebuilt after every id the old order names
+    assert again[0] > 3
+
+
+def test_the_issued_mark_is_raised_before_the_order_passes_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(defaults, "ORDER_ID_RESERVE", 2)
+    store = fresh_store(tmp_path)
+    marks = []
+    for _ in range(6):
+        store.insert([event(uuid4(), 1)])
+        mark = strict_json.loads(issued_file(tmp_path).read_bytes())
+        assert isinstance(mark, dict)
+        marks.append(mark["issued"])
+    assert all(mark >= n for n, mark in enumerate(marks, start=1))
+    assert len(set(marks)) < len(marks)  # raised ahead, not on every insert
+
+
+def test_an_epoch_line_that_doesnt_say_where_the_order_starts_is_refused(tmp_path: Path) -> None:
+    recorded(tmp_path, 1)
+    path = order_file(tmp_path)
+    lines = path.read_bytes().splitlines(keepends=True)
+    path.write_bytes(strict_json.dumps({"epoch": "e" * 32}).encode() + b"\n" + b"".join(lines[1:]))
+    with pytest.raises(TroupeError) as caught:
+        fresh_store(tmp_path).max_notification_id()
+    assert (caught.value.code, caught.value.path) == ("events.malformed-record", str(path))
+    assert "numbering after the highest notification id it has issued" in caught.value.fix
+
+
+@pytest.mark.parametrize("content", [b"{}", b'{"issued": -1}', b'{"issued": "3"}', b"3", b"{"])
+def test_a_damaged_issued_file_is_refused_with_how_to_mend_it(
+    tmp_path: Path, content: bytes
+) -> None:
+    recorded(tmp_path, 3)
+    issued = issued_file(tmp_path)
+    issued.write_bytes(content)
+    order_file(tmp_path).unlink()  # a new order must start after the mark, so it's read
+    with pytest.raises(TroupeError) as caught:
+        fresh_store(tmp_path).max_notification_id()
+    assert (caught.value.code, caught.value.path) == (
+        "events.malformed-record",
+        str(issued.absolute()),
+    )
+    assert '{"issued": <n>}' in caught.value.fix
+    assert "must be rebuilt" in caught.value.fix
 
 
 STREAMS = [UUID(int=n) for n in range(1, 4)]

@@ -436,10 +436,10 @@ class TextStore:
             self.refresh()
             order = self.ensure_ordered()
             found: list[tuple[int, Record]] = []
-            for n in range(max(low, 1), len(order.ids) + 1):
+            for n in range(max(low, order.after + 1), order.last + 1):
                 if stop is not None and n > stop:
                     break
-                record = self._events[order.ids[n - 1]]
+                record = self._events[order.ids[n - order.after - 1]]
                 if topics and record.topic not in topics:
                     continue
                 found.append((n, record))
@@ -450,7 +450,8 @@ class TextStore:
     def max_notification_id(self) -> int | None:
         with self._lock:
             self.refresh()
-            return len(self.ensure_ordered().ids) or None
+            order = self.ensure_ordered()
+            return order.last if order.ids else None
 
     # Writes.
 

@@ -99,6 +99,12 @@ SUBSCRIBE_CHECK_SECONDS = 30.0
 """How often a store with subscribers looks for other processes' events itself, to catch a file
 system that accepts watches but doesn't deliver them (watch-event-segments design D5)."""
 
+ORDER_ID_RESERVE = 1024
+"""How far ahead of the order a text store raises its record of the highest notification id
+issued on a branch: one write per this many ids, rather than one per batch. A rebuilt order starts
+after the record, so a rebuild can leave a gap of up to this many ids (follower-position-epoch
+design D3)."""
+
 SUBSCRIBE_STOP_TIMEOUT_SECONDS = 5.0
 """How long stopping a subscription waits for its thread to end before failing with
 events.subscription-not-stopped (stopped-event-store design D3). The thread needs milliseconds."""

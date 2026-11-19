@@ -2,9 +2,10 @@
 (spec: event-store, notification ids; design D5, D7).
 
 After every step, on the branch checked out:
-- notification ids are dense from 1;
+- notification ids are dense, from 1 until the order is rebuilt;
 - no id already issued on this branch names a different event, unless the step reported that the
   order was rebuilt;
+- no id ever names a second event on a branch, even across rebuilds (troupe-run/troupe#454);
 - every visible event is ordered exactly once;
 - git never reports a conflict in .troupe/events/.
 """
@@ -35,6 +36,7 @@ class Theatre(RuleBasedStateMachine):
         self.repo: Repo = make_repo(self.root)
         self.counter = 0
         self.issued: dict[str, list[str]] = {}
+        self.named: dict[tuple[str, int], str] = {}  # (branch, id) -> the event it first named
         self.rebuilt = False
         self.record(
             STREAMS[0]
@@ -100,7 +102,10 @@ class Theatre(RuleBasedStateMachine):
         numbers = [n for n, _ in listed]
         rebuilt = self.rebuilt or any(n.code == "events.order-rebuilt" for n in reader.notices())
         self.rebuilt = False
-        assert numbers == list(range(1, len(ids) + 1))
+        start = numbers[0] if numbers else 1
+        assert numbers == list(range(start, start + len(ids)))
+        for n, record in listed:
+            assert self.named.setdefault((branch, n), record.id) == record.id, (branch, n)
         assert len(set(ids)) == len(ids)
         visible = {r.id for stream in STREAMS for r in reader.history(stream)}
         assert set(ids) == visible
