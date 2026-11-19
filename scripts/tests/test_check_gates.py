@@ -1,5 +1,5 @@
-"""check.py runs the complexity gate everywhere, and coverage and the audit on CI's coverage leg
-only (spec: quality-check; quality-gates design D3)."""
+"""check.py runs the complexity and size gates everywhere, and coverage and the audit on CI's
+coverage leg only (spec: quality-check; quality-gates design D3; size-gate design D3)."""
 
 import pytest
 
@@ -10,9 +10,10 @@ def labels(steps: list[tuple[str, list[str]]]) -> list[str]:
     return [label for label, _ in steps]
 
 
-def test_a_local_check_runs_complexity_but_never_coverage_or_audit() -> None:
+def test_a_local_check_runs_complexity_and_size_but_never_coverage_or_audit() -> None:
     steps = check.gates()
     assert "complexity" in labels(steps)
+    assert "size" in labels(steps)
     assert "coverage" not in labels(steps)
     assert "audit" not in labels(steps)
     assert not any(arg.startswith("--cov") for arg in dict(steps)["tests"])
@@ -22,6 +23,22 @@ def test_complexity_runs_before_the_tests_and_takes_the_base() -> None:
     steps = check.gates(base="abc123")
     assert labels(steps).index("complexity") < labels(steps).index("tests")
     assert dict(steps)["complexity"][-3:] == ["complexity", "--base", "abc123"]
+
+
+@pytest.mark.parametrize(
+    ("scopes", "leg"), [((), False), (("docs",), False), ((), True)], ids=["full", "scoped", "leg"]
+)
+def test_size_runs_after_complexity_before_the_tests_with_the_base(
+    scopes: tuple[str, ...], leg: bool
+) -> None:
+    steps = check.gates(scopes, base="abc123", leg=leg)
+    order = labels(steps)
+    assert order.index("complexity") + 1 == order.index("size") < order.index("tests")
+    assert dict(steps)["size"][1:] == [check.QUALITY_GATES, "size", "--base", "abc123"]
+
+
+def test_size_without_a_base_lets_the_gate_find_it() -> None:
+    assert dict(check.gates())["size"][1:] == [check.QUALITY_GATES, "size"]
 
 
 def test_the_leg_measures_coverage_from_the_full_test_run_and_audits() -> None:

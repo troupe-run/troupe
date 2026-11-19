@@ -9,10 +9,11 @@ they cover (spec: quality-check; troupe-run/infrastructure commit-check-paths de
 The tests run in parallel, one pytest-xdist worker per CPU this process may use; set
 PYTEST_XDIST_AUTO_NUM_WORKERS to change the count. Running pytest directly stays one process.
 
-Every run measures the complexity of the functions the work adds or edits since --base, or since
-where it left origin/main. Coverage and the dependency audit run only on CI's coverage leg, which
-sets QUALITY_GATES_LEG=true; never locally (troupe-run/infrastructure spec: quality-gates; owner,
-2026-11-18). The measures are scripts/quality_gates.py, delivered from troupe-run/infrastructure.
+Every run measures the complexity of the functions the work adds or edits, and the size of the
+files it adds or changes, since --base, or since where it left origin/main. Coverage and the
+dependency audit run only on CI's coverage leg, which sets QUALITY_GATES_LEG=true; never locally
+(troupe-run/infrastructure spec: quality-gates; owner, 2026-11-18). The measures are
+scripts/quality_gates.py, delivered from troupe-run/infrastructure.
 
 The same script runs locally and in CI on Linux, macOS and Windows, so the two can't
 diverge. It is Python rather than shell for that reason.
@@ -111,6 +112,7 @@ def gates(
         ("mypy --strict", [tool("mypy")]),
         ("import contracts", [tool("lint-imports")]),
         ("complexity", [sys.executable, QUALITY_GATES, "complexity", *on_base]),
+        ("size", [sys.executable, QUALITY_GATES, "size", *on_base]),
         ("tests", pytest),
     ]
     if measure:

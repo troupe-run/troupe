@@ -1,10 +1,10 @@
 # Merge gates and mutation testing
 
-Besides its linters and tests, `uv run scripts/check.py` runs troupe's merge gates: complexity on every check, and
-coverage and the dependency audit on one CI leg. Mutation testing reports on what the tests miss, and never blocks a
+Besides its linters and tests, `uv run scripts/check.py` runs troupe's merge gates: complexity and file size on every
+check, and coverage and the dependency audit on one CI leg. Mutation testing reports on what the tests miss, and never blocks a
 merge. This page says where each one runs, what its failure looks like and what to do about it.
 
-The gates' measures are `scripts/quality_gates.py`, and mutation testing's are `scripts/mutation_*.py` and
+The gates' measures are `scripts/quality_gates.py` and `scripts/quality_audit.py`, and mutation testing's are `scripts/mutation_*.py` and
 `scripts/mutation.json`. All are delivered from troupe-run/infrastructure: change them there. Its
 [development workflow](https://github.com/troupe-run/infrastructure/blob/main/docs/development-workflow.md#the-merge-gates)
 says how they work in every repository, and its
@@ -15,6 +15,7 @@ delivered. The gates read it strictly: a misspelt key or a wrong type fails the 
 | Gate | Fails on | Runs |
 |---|---|---|
 | Complexity | A function the work adds or edits whose cyclomatic complexity is above 25 and is new or higher than before | Every check, local or CI, scoped or full |
+| Size | A file the work adds or makes larger that is above 48 KiB, or above its own ceiling; an allowance a file no longer needs | Every check, local or CI, scoped or full |
 | Coverage | A package more than 0.6 points below its baseline, a package with no baseline below 80%, or a source file in no package | CI's Linux, Python 3.15 leg, on a full check only |
 | Dependency audit | A changed `uv.lock` with a high or critical advisory, or one of unknown severity, that has a fix | CI's Linux, Python 3.15 leg, when `uv.lock` changed |
 | Mutation report | Never fails on survivors: it's a report | Each ready pull request, and weekly on `main` |
@@ -42,8 +43,42 @@ into named helpers. To run the gate on its own: `uv run scripts/quality_gates.py
 
 - **"the complexity and audit gates compare with origin/main, which this clone doesn't have"**: run
   `git fetch origin main`. Fetch again after a rebase, so the comparison starts from the `main` you rebased on.
-- **Left out** (`[complexity] exclude`): tests, the files infrastructure delivers (the guard, `quality_gates.py`,
-  `mutation_*.py`) and the generated config models.
+- **Left out** (`[complexity] exclude`): tests and the generated config models.
+
+Every gate also leaves out the files infrastructure delivers (the guard, `quality_gates.py`, `quality_audit.py`,
+`mutation_*.py` and the rest): `quality_gates.py` reads them from `.github/guard-delivery.json`, so neither
+`quality-gates.toml` nor `[tool.coverage.run]` lists them.
+
+## Size
+
+A review reads every changed file whole, and one Read holds about 25,000 tokens, so the gate holds each file a review
+reads to about two Reads ([troupe-run/infrastructure#271](https://github.com/troupe-run/infrastructure/issues/271)). It
+measures each text file the work adds or changes since the same base as complexity, in bytes, counting a CRLF as one.
+Fixtures, archived OpenSpec changes, `uv.lock` and binary files aren't measured (`[size] exclude`).
+
+Each changed file above 32 KiB gets a note, which never fails:
+
+```text
+size: note contributing/runners.md is 67,684 bytes, above the warning at 32,768 (more than one Read for a review)
+```
+
+A file above 48 KiB fails if it's new or larger than at the base:
+
+```text
+size: FAIL openspec/specs/runs/spec.md: grew from 47,411 to 67,892 bytes, above the limit of 49,152
+size: split the file so a review can read it in one or two goes, or declare it with a ceiling in [size.allow] (the limits are [size] in quality-gates.toml).
+```
+
+Split it: tests by what they test, a spec or a guide by topic. The files that were already over 48 KiB when the gate
+came in have their own ceiling in `[size.allow]`, each with an issue to split it. Such a file can grow up to its
+ceiling. Once a split brings a file under 48 KiB, the gate fails until its entry is removed:
+
+```text
+size: FAIL openspec/specs/runs/spec.md is 47,411 bytes, within the limit of 49,152, so it needs no allowance. Fix: remove its entry from `size.allow`.
+```
+
+Adding an entry is a decision for the owner, with a split issue to go with it. To run the gate on its own:
+`uv run scripts/quality_gates.py size`.
 
 ## Coverage
 
