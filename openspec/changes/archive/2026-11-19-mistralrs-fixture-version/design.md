@@ -34,6 +34,16 @@ event's `runner.version` equals `importlib.metadata.version("troupe-runner-mistr
 `<package version>` when it writes `expected.json`. Otherwise the next capture would bring the literal back and the
 next release would fail again.
 
+**D3. The capture tool is tested end to end with the engine stand-in.** Importing the tool for the round-trip
+check put it in `runner-mistralrs`'s coverage, where its untested `capture()` measured 48% and pulled the plugin to
+84.2%, 3.8 below its baseline, so the merge queue's coverage leg failed. The owner chose to test the tool rather than
+drop the check or loosen the gate. A test runs `capture()` and `main()` with the module's temporary directories
+fixed, `engine.load` serving each fixture's recorded responses through the stand-in, and the output directory under
+the test's own, then checks `run.json`, `responses.json`, `engine.json` and `expected.json` come out as recorded.
+- *Alternative: drop the round-trip check.* That brings the plugin back to 88.1%, but nothing would then stop a
+  capture writing what the replay doesn't compare.
+- *Alternative: leave `tools/` out of coverage, or lower the baseline.* That loosens a gate.
+
 ## Risks / Trade-offs
 
 - [The replay replaces the version only on the `init` event] → That's the only event that carries `runner`. The
