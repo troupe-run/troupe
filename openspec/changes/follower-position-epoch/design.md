@@ -70,6 +70,9 @@ written whole, by atomic replace (`troupe.core.files.replace_file`), so it's nev
 - **Every new order starts after the mark.** When an order is started or rebuilt (a gone event, a conflict, or a
   missing file), `after` is the largest of the mark, the old order's last id (when it's still readable), and the
   last id this store has seen in memory. The gap this leaves (up to the reserve) appears only at a rebuild.
+- **A conflicting order still counts its ids.** Reading stops at a conflicting line, but the ids that line and the
+  lines after it name may have been issued, so the highest of them counts too. Found by the test that deletes the
+  mark alone: the order a@1 b@2 b@3 stops at b@3, and without this the rebuild reused id 3.
 - Why not keep it in the order's epoch line alone: deleting the file, as its own fix-it message says, would take it
   with it. Why not in the tracking file: that file is followers' state, and its fix-it is also "delete it".
 
