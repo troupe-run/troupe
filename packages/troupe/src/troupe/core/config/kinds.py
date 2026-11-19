@@ -476,13 +476,18 @@ def _schema_problems(
 ) -> list[Problem]:
     against = f"the {runner} runner's options schema" if runner else f"the {against} schema"
     found: list[Problem] = []
-    for error in sorted(validator.iter_errors(value), key=lambda e: list(e.absolute_path)):
+    errors = [each for error in validator.iter_errors(value) for each in _closest(error)]
+    for error in sorted(errors, key=lambda e: list(e.absolute_path)):
         path = (*base, *(str(part) for part in error.absolute_path))
         inside = _in_a_map(base, error, typed)
         if inside is not None:
             found.append(_in_entry(inside, error, against))
             continue
-        if error.validator == "additionalProperties" and isinstance(error.instance, Mapping):
+        if (
+            error.validator == "additionalProperties"
+            and isinstance(error.instance, Mapping)
+            and isinstance(error.schema, Mapping)
+        ):
             allowed = set(error.schema.get("properties", {}))
             extras = sorted(set(error.instance) - allowed)
             # A key troupe itself names (an option a runner moved) is its words, not the person's.
@@ -509,7 +514,11 @@ def _schema_problems(
                     )
                 )
             continue
-        if error.validator == "required" and isinstance(error.instance, Mapping):
+        if (
+            error.validator == "required"
+            and isinstance(error.instance, Mapping)
+            and isinstance(error.validator_value, list)
+        ):
             for missing in sorted(set(error.validator_value) - set(error.instance)):
                 hint = " ([] means no file has to change)" if missing == "expect" else ""
                 found.append(
@@ -528,6 +537,39 @@ def _schema_problems(
             Problem(path, _rule(error, against), f"Set {shown(path)} to a value {against} allows.")
         )
     return found
+
+
+ALTERNATIVES = ("oneOf", "anyOf")
+
+
+def _closest(error: "jsonschema.ValidationError") -> list["jsonschema.ValidationError"]:
+    """``error`` as the failures of the one alternative an object came closest to, when it fits
+    none of a ``oneOf``'s or ``anyOf``'s alternatives; otherwise ``error`` itself, worded by its
+    description (config-oneof-message design D1, D2). An alternative is set aside when the object
+    plainly isn't it: it doesn't define a key the object holds, takes another type, or has a
+    ``const`` field (a kind, such as an event's ``type``) the object's differs from. A scalar, or an
+    object with no closest alternative or several, keeps the description, which names them all."""
+    if error.validator not in ALTERNATIVES or not isinstance(error.instance, Mapping):
+        return [error]
+    depth = len(error.absolute_path)
+    branches: dict[object, list[jsonschema.ValidationError]] = {}
+    for failure in error.context or ():
+        branches.setdefault(failure.relative_schema_path[0], []).append(failure)
+
+    def set_aside(failures: list["jsonschema.ValidationError"]) -> bool:
+        return any(
+            (
+                failure.validator in ("additionalProperties", "type")
+                and len(failure.absolute_path) == depth
+            )
+            or (failure.validator == "const" and len(failure.absolute_path) == depth + 1)
+            for failure in failures
+        )
+
+    left = [failures for failures in branches.values() if not set_aside(failures)]
+    if len(left) != 1:
+        return [error]
+    return [each for failure in left[0] for each in _closest(failure)]
 
 
 MAP_KEY = "<key>"
@@ -684,7 +726,8 @@ def _rule(error: "jsonschema.ValidationError", against: str) -> str:
         return f"it must be {' or '.join(_article(n) for n in names)}, not {actual} ({against})"
     description = error.schema.get("description") if isinstance(error.schema, Mapping) else None
     if error.validator in ("pattern", "oneOf", "anyOf", "const", "not") and description:
-        return f"it doesn't fit {against}: {description}"
+        # The refusal ends the rule with its own full stop (config-oneof-message design D4).
+        return f"it doesn't fit {against}: {str(description).removesuffix('.')}"
     return f"{_words(str(error.validator), error.validator_value)} ({against})"
 
 
