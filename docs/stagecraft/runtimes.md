@@ -135,8 +135,12 @@ Your environment overrides the theatre's config, for you alone, without a change
 | Variable | Overrides |
 |---|---|
 | `TROUPE_RUNTIME_<NAME>_ENDPOINT` | the endpoint |
-| `TROUPE_RUNTIME_<NAME>_MODEL` | the model, for every actor on the runtime, the actor's own included |
+| `TROUPE_RUNTIME_<NAME>_MODEL` | the model, for every actor on the runtime that sets none of its own |
 | `TROUPE_RUNTIME_<NAME>_CREDENTIAL_ENV` | which variable the key is read from |
+
+A run's model is the actor's own `model` when it sets one, then `TROUPE_RUNTIME_<NAME>_MODEL`, then the runtime's
+`model` in config. The actor's setting goes with each run, so it wins, as every setting an actor sends does. The run
+records where its model came from (such as `actor` or `env`), and `troupe perform --rehearse` shows it.
 
 `<NAME>` is the runtime's name in capitals, with `-` as `_`: `TROUPE_RUNTIME_LOCAL_OPENAI_MODEL`. An empty variable
 counts as unset. One that's set but malformed, such as an endpoint that isn't a URL, stops the command, naming the
@@ -161,8 +165,9 @@ of token the price has no rate for**, or when the price has a rate for a kind th
 the cost out rather than guess. Copy the rates from the service's price list; troupe ships none, so they never go
 stale behind your back.
 
-A price applies to the model a run uses, matched exactly: `gpt-5-mini` doesn't price `gpt-5-mini-2026-01-01`. A
-model priced in config but overridden by `TROUPE_RUNTIME_<NAME>_MODEL` gets the overriding model's price, or none.
+A price applies to the model a run uses, matched exactly: `gpt-5-mini` doesn't price `gpt-5-mini-2026-01-01`. When
+`TROUPE_RUNTIME_<NAME>_MODEL` replaces the runtime's model for an actor that sets none, the run gets the variable's
+model's price, or none.
 No variable sets a price. `troupe config get --resolved` and `troupe perform --rehearse` show the price that applies,
 and every run records the price it used, so an estimate can always be checked against its tokens.
 

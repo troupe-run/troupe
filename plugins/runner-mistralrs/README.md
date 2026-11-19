@@ -31,7 +31,7 @@ path is your machine's:
 export TROUPE_RUNTIME_MISTRALRS_MODEL=/Users/you/models/Qwen3-0.6B-Q8_0.gguf
 ```
 
-An actor can name its own file with `model`. Use a model that can call tools, such as Qwen3. Qwen's own GGUF of
+An actor can name its own file with `model`, which it uses whatever the variable says. Use a model that can call tools, such as Qwen3. Qwen's own GGUF of
 Qwen3-0.6B (`Qwen/Qwen3-0.6B-GGUF`, `Qwen3-0.6B-Q8_0.gguf`) is the one the fixtures were captured with.
 
 The model runs inside the runner, so it takes the runner's memory: a model too large for the machine ends the runner,

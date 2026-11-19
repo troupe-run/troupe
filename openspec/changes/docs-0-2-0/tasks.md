@@ -34,7 +34,7 @@ The audit findings these tasks act on are in the PR description. Each task's ver
   in the Claude Code README, where the one such setting, `onContextFull`, meets `DISABLE_AUTO_COMPACT`;
   `DISABLE_AUTO_COMPACT` doesn't reach a performed run; the compaction opt-in's `troupe config set` command. A
   runtime's values and their precedence are `runtimes.md`'s, in 2.7.
-- [ ] 2.7 The model order (actor, environment, runtime) after #451, in its own commit (design D4), wherever the old
+- [x] 2.7 The model order (actor, environment, runtime) after #451, in its own commit (design D4), wherever the old
   order is stated: `docs/stagecraft/runtimes.md` (the `model` field and the `TROUPE_RUNTIME_<NAME>_MODEL` row, "the
   actor's own included", and the prices line), `contributing/config.md`, the mistralrs README ("an actor can name its
   own file") and `bring-your-own-agent.md`, saying where the run records the model's source. #451 changes the actor
