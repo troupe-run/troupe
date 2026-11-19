@@ -108,7 +108,7 @@ class TextStore:
         self._rebuilt: list[Notice] = []
         self._listeners: set[threading.Event] = set()
         self._subscription: _Subscription | None = None
-        self._delivered: tuple[str, int] = ("", 0)  # the order (epoch, length) listeners know of
+        self._delivered: tuple[str, int] = ("", 0)  # the order (epoch, last id) listeners know of
         self._polling: Notice | None = None  # while the subscription can only poll
         self._reset_index()
 
@@ -493,7 +493,7 @@ class TextStore:
                 self.refresh()
             order, positions = self._local()
             numbers = order.append(batch_ids)
-            self._delivered = (order.epoch, len(order.ids))  # listeners here are told below
+            self._delivered = _told(order)  # listeners here are told below
             if tracking is not None:
                 epoch = order.ensure_epoch()
                 positions.append(epoch, tracking.application_name, tracking.notification_id)
@@ -628,8 +628,8 @@ class TextStore:
     def _deliver(self) -> bool:
         """Notify listeners if the order has changed since they were last told. Whether it had."""
         with self._lock:
-            count = self.max_notification_id() or 0
-            current = (self._load_local().epoch, count)  # a rebuild may keep the length (D6)
+            self.refresh()
+            current = _told(self.ensure_ordered())  # a rebuild may keep the length (D6)
             if current == self._delivered:
                 return False
             self._delivered = current
@@ -697,6 +697,12 @@ class TextStore:
                 "onlyIn": [str(p) for p in elsewhere],
             },
         )
+
+
+def _told(order: OrderLog) -> tuple[str, int]:
+    """What listeners are told of an order: its epoch and last id. Not its length, since a rebuilt
+    order starts after 0 (follower-position-epoch design D2)."""
+    return order.epoch, order.last
 
 
 def _other_branch(segment: Segment, header: Header) -> Notice:
@@ -786,8 +792,8 @@ class _Subscription:
         """Set up the watch before returning, so a refusal is in the store's notices at once.
         Called with the store's lock held."""
         store = self.store
-        count = store.max_notification_id() or 0
-        store._delivered = (store._load_local().epoch, count)
+        store.refresh()
+        store._delivered = _told(store.ensure_ordered())
         try:
             self._watch, self._on_events = store._watch_nearest()
         except (WatchUnavailableError, WatchDirectoryMissingError) as error:
