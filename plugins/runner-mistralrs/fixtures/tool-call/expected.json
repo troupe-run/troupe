@@ -6,7 +6,7 @@
       "seq": 0,
       "runner": {
         "name": "mistralrs",
-        "version": "0.0.0"
+        "version": "<package version>"
       },
       "tools": [
         "Read",
