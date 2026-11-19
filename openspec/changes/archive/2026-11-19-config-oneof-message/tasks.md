@@ -43,6 +43,9 @@ first.
 
 ## 3. Integration
 
-- [ ] 3.1 Full check (`uv run scripts/check.py`), after asking the orchestrator, and fix anything it finds.
-- [ ] 3.2 Draft PR closing #453, act on Claude's review, mark ready once clean.
-- [ ] 3.3 Archive the change on the branch before merging.
+- [x] 3.1 Full check (`uv run scripts/check.py`), after asking the orchestrator, and fix anything it finds. Done:
+      7173 passed in the guard's check on bad78254
+- [x] 3.2 Draft PR closing #453, act on Claude's review, mark ready once clean. Done: #470; the review of bad78254
+      had no findings; the 12-job matrix passed. `mutate the changes` (not required) failed on an unrelated process
+      test in its baseline run, filed as #480
+- [x] 3.3 Archive the change on the branch before merging. Done
