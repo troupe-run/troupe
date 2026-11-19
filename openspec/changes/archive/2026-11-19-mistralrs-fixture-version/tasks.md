@@ -16,6 +16,8 @@
   (design D2)
 - [x] 2.4 The replay also checks that the capture tool's normalisation of the replayed events gives exactly
   `expected.json`, so the capture and the replay can't drift apart
+- [x] 2.5 Run the capture tool end to end with the engine stand-in serving each fixture's recorded responses,
+  and check it writes the fixture again (design D3)
 
 ## 3. Verify
 
