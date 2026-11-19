@@ -94,3 +94,15 @@ def test_the_tool_captures_the_cases_its_command_line_names(
 def test_the_tool_has_a_case_for_each_fixture() -> None:
     assert sorted(_capture().CASES) == CASES
     assert all((FIXTURES / case / "provenance.json").exists() for case in CASES)
+
+
+def test_a_count_for_a_windows_path_written_into_json_is_recorded_under_its_placeholder() -> None:
+    # The tool definitions are counted as JSON, which doubles a Windows path's backslashes. The
+    # capture must record the count under the key the replay looks it up by.
+    capture = _capture()
+    scratch = "C:\\Users\\runner\\AppData\\Local\\Temp\\s"
+    inner = SimpleNamespace(count=lambda text: 1160)
+    recording = capture.Recording(inner, "C:\\Users\\runner\\AppData\\Local\\Temp\\w", scratch)
+    assert recording.count(json.dumps({"scratch": scratch}, separators=(",", ":"))) == 1160
+    key = hashlib.sha256(b'{"scratch":"<scratch>"}').hexdigest()
+    assert recording.counts == {key: 1160}

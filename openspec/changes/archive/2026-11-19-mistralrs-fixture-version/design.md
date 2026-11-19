@@ -44,6 +44,10 @@ the test's own, then checks `run.json`, `responses.json`, `engine.json` and `exp
   capture writing what the replay doesn't compare.
 - *Alternative: leave `tools/` out of coverage, or lower the baseline.* That loosens a gate.
 
+The test found that the tool recorded a Windows capture's token counts under the wrong keys. The tool definitions
+are counted as JSON, which doubles a Windows path's backslashes, and the tool put only the path as written in its
+placeholder. It now puts the JSON-written path in the placeholder too, as the stand-in reads it.
+
 ## Risks / Trade-offs
 
 - [The replay replaces the version only on the `init` event] → That's the only event that carries `runner`. The

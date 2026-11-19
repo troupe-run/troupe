@@ -91,6 +91,10 @@ class Recording:
 
     def count(self, text: str) -> int:
         tokens = self.inner.count(text)
+        # The tool definitions are counted as JSON, which doubles a Windows path's backslashes, so
+        # the path is put in its placeholder as JSON writes it too, as the stand-in reads it.
+        for path, placeholder in ((self.workspace, "<workspace>"), (self.scratch, "<scratch>")):
+            text = text.replace(json.dumps(path)[1:-1], placeholder)
         self.counts[text_key(normalised(text, self.workspace, self.scratch, "<run>"))] = tokens
         return tokens
 
