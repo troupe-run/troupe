@@ -13,7 +13,8 @@ writes ``fixtures/<case>/``:
   the text, its paths in placeholders), so a replay counts, and so bounds each answer, exactly as
   the real run did.
 - ``expected.json``: the run's events and its transcript records' kinds, with the workspace and
-  scratch paths as ``<workspace>`` and ``<scratch>``, the run id as ``<run>`` and durations as 0.
+  scratch paths as ``<workspace>`` and ``<scratch>``, the run id as ``<run>``, durations as 0 and
+  ``init``'s runner version as ``<package version>``, so a release changes no fixture.
 
 The tests replay ``responses.json`` through the engine stand-in and check the runner sends exactly
 ``expected.json``. Run it as ``uv run plugins/runner-mistralrs/tools/capture_mistralrs.py <model>
@@ -138,6 +139,17 @@ def normalised(value: Any, workspace: str, scratch: str, run_id: str) -> Any:  #
     return value
 
 
+def versionless(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """``events`` with ``init``'s runner version as ``<package version>``: the replay checks it
+    against the installed package's, so a release changes no fixture."""
+    return [
+        {**event, "runner": {**event["runner"], "version": "<package version>"}}
+        if event["type"] == "init"
+        else event
+        for event in events
+    ]
+
+
 def capture(model: Path, name: str) -> None:
     case = CASES[name]
     options = {**BASE_OPTIONS, **case.get("options", {})}
@@ -195,7 +207,7 @@ def capture(model: Path, name: str) -> None:
             "files": case["files"],
         }
         expected = {
-            "events": normalised(sink.events, workspace, scratch, run_id),
+            "events": versionless(normalised(sink.events, workspace, scratch, run_id)),
             "transcriptKinds": sink.kinds,
         }
         recording = recordings[0]

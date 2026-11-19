@@ -3,9 +3,13 @@ engine stand-in to exactly the events and transcript kinds the real run gave (sp
 mistralrs-runner, "Fixtures pair real engine output with protocol events"; in-process-runner design
 D10)."""
 
+import importlib.util
 import json
+import sys
 import uuid
+from importlib.metadata import version
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 import pytest
@@ -19,6 +23,17 @@ from troupe_runner_mistralrs.port import LoadSpec
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 CASES = sorted(path.name for path in FIXTURES.iterdir() if path.is_dir())
+CAPTURE = Path(__file__).resolve().parents[1] / "tools" / "capture_mistralrs.py"
+
+
+def _capture() -> ModuleType:
+    spec = importlib.util.spec_from_file_location("capture_mistralrs", CAPTURE)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["capture_mistralrs"] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 def _load(case: str, name: str) -> Any:  # noqa: ANN401 - JSON
@@ -34,6 +49,9 @@ def _filled(value: Any, workspace: str, scratch: str) -> Any:  # noqa: ANN401 - 
 
 
 def _normalised(value: Any, workspace: str, scratch: str, run_id: str) -> Any:  # noqa: ANN401
+    """The events with this replay's paths, run id and durations in placeholders, and with
+    ``init``'s runner version, once checked against the installed package's, as
+    ``<package version>``, so a release changes no fixture."""
     text = json.dumps(value)
     for path, placeholder in ((workspace, "<workspace>"), (scratch, "<scratch>")):
         text = text.replace(json.dumps(path)[1:-1], placeholder)
@@ -41,6 +59,9 @@ def _normalised(value: Any, workspace: str, scratch: str, run_id: str) -> Any:  
     for event in data:
         if "durationMs" in event:
             event["durationMs"] = 0
+    (init,) = [event for event in data if event["type"] == "init"]
+    assert init["runner"]["version"] == version("troupe-runner-mistralrs")
+    init["runner"] = {**init["runner"], "version": "<package version>"}
     return data
 
 
@@ -102,6 +123,10 @@ def test_a_fixture_replayed_gives_exactly_its_events_and_transcript_kinds(
         sink=sink,
     ).run()
     assert _normalised(sink.events, str(workspace), str(scratch), run_id) == expected["events"]
+    # The capture tool writes what the replay compares, so a fresh capture matches it too.
+    capture = _capture()
+    captured = capture.normalised(sink.events, str(workspace), str(scratch), run_id)
+    assert capture.versionless(captured) == expected["events"]
     assert [kind for kind, _ in sink.records] == expected["transcriptKinds"]
     if (workspace / "notes.txt").exists() or "notes.txt" in run["files"]:
         assert (workspace / "notes.txt").exists()  # a refused Delete deleted nothing
