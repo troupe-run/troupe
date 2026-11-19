@@ -3,6 +3,7 @@
 
 Usage:
     quality_gates.py complexity [--base REV] [--lizard PATH]
+    quality_gates.py size [--base REV]
     quality_gates.py coverage (--coveragepy REPORT.json | --vitest coverage-summary.json)
     quality_gates.py audit [--base REV] [--pip-audit PATH] [--uv PATH] [--npm PATH]
     quality_gates.py report --repository OWNER/NAME [--github-output PATH] [--gh PATH] ...
@@ -28,13 +29,9 @@ import subprocess
 import sys
 import tempfile
 import tomllib
-import urllib.error
-import urllib.parse
-import urllib.request
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol
 
 CONFIG_NAME = "quality-gates.toml"
 
@@ -82,6 +79,15 @@ class ComplexityConfig:
 
 
 @dataclass(frozen=True)
+class SizeConfig:
+    block_above: int
+    warn_above: int
+    exclude: tuple[str, ...] = ()
+    allow: Mapping[str, int] = field(default_factory=dict)
+    """Each declared file's own ceiling in bytes, above `block_above` (gate-files design D6)."""
+
+
+@dataclass(frozen=True)
 class AuditConfig:
     lock_files: tuple[str, ...]
     block: tuple[str, ...]
@@ -96,6 +102,9 @@ class Config:
     audit: AuditConfig
     mutation: Mapping[str, object] = field(default_factory=dict)
     """#325's table, passed through raw: its own script validates it."""
+    size: SizeConfig | None = None
+    """None until the repository declares [size]: optional until every governed repository has it
+    (gate-files design D7)."""
 
 
 class _Reader:
@@ -187,7 +196,7 @@ def parse_config(text: str) -> Config:
     except tomllib.TOMLDecodeError as error:
         raise GateError(f"{CONFIG_NAME} isn't valid TOML: {error}.") from error
     top = _Reader(data, "")
-    top.keys(["version", "complexity", "audit"], ["coverage", "mutation"])
+    top.keys(["version", "complexity", "audit"], ["coverage", "mutation", "size"])
     if data["version"] != 1:
         raise GateError(f"{CONFIG_NAME}: `version` must be 1, not {data['version']!r}.")
 
@@ -223,7 +232,32 @@ def parse_config(text: str) -> Config:
     audit = AuditConfig(lock_files, block)
 
     mutation = top.table_at("mutation").table if "mutation" in data else {}
-    return Config(coverage, complexity, audit, mutation)
+    size = _size_config(top.table_at("size")) if "size" in data else None
+    return Config(coverage, complexity, audit, mutation, size)
+
+
+def _size_config(reader: _Reader) -> SizeConfig:
+    reader.keys(["block_above", "warn_above"], ["exclude", "allow"])
+    block_above = reader.integer("block_above", 1)
+    warn_above = reader.integer("warn_above", 1)
+    if warn_above > block_above:
+        raise GateError(
+            f"{CONFIG_NAME}: `size.warn_above` ({warn_above}) must be at or below "
+            f"`size.block_above` ({block_above})."
+        )
+    allow: dict[str, int] = {}
+    if "allow" in reader.table:
+        entries = reader.table_at("allow")
+        for path in entries.table:
+            ceiling = entries.integer(path, 1)
+            if ceiling <= block_above:
+                raise GateError(
+                    f"{CONFIG_NAME}: `size.allow.{path}` is {ceiling}, but a ceiling must be above "
+                    f"`size.block_above` ({block_above}). Fix: remove the entry, since the file "
+                    "needs no allowance."
+                )
+            allow[path] = ceiling
+    return SizeConfig(block_above, warn_above, reader.strings("exclude"), allow)
 
 
 def read_config(root: Path) -> Config:
@@ -272,6 +306,34 @@ def glob_pattern(pattern: str) -> re.Pattern[str]:
 
 def excluded(path: str, patterns: Sequence[str]) -> bool:
     return any(glob_pattern(pattern).match(path) for pattern in patterns)
+
+
+DELIVERY_LIST = ".github/guard-delivery.json"
+"""The files infrastructure delivers to this repository (spec: guard-delivery). They're measured at
+their source, so every gate leaves them out here (#333)."""
+
+
+def delivered_paths(root: Path) -> frozenset[str]:
+    """The repository-relative paths the delivered list names. No list means nothing is delivered,
+    as in infrastructure, their source; a list that can't be read is an error, never "nothing"."""
+    path = root / DELIVERY_LIST
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return frozenset()
+    except (OSError, UnicodeDecodeError) as error:
+        raise GateError(f"couldn't read {DELIVERY_LIST}: {error}.") from error
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as error:
+        raise GateError(f"{DELIVERY_LIST} isn't valid JSON: {error}.") from error
+    files = data.get("files") if isinstance(data, dict) else None
+    if not isinstance(files, list) or not all(isinstance(item, str) for item in files):
+        raise GateError(
+            f"{DELIVERY_LIST} must be an object whose `files` is a list of paths. It's written by "
+            "infrastructure's delivery: fix it there, never by hand."
+        )
+    return frozenset(files)
 
 
 # --- Git ------------------------------------------------------------------------------------------
@@ -420,11 +482,13 @@ def _base_copies(root: Path, base: str, paths: Sequence[str], into: Path) -> lis
 def complexity_problems(
     root: Path, base: str, config: ComplexityConfig, lizard: str
 ) -> list[ComplexityProblem]:
-    """Each function the work adds or edits that is above the limit, and new or more complex."""
+    """Each function the work adds or edits that is above the limit, and new or more complex.
+    Delivered files are measured at their source, not here (#333)."""
+    delivered = delivered_paths(root)
     changes = {
         path: lines
         for path, lines in changed_lines(root, base).items()
-        if measured_path(path, config) and (root / path).is_file()
+        if measured_path(path, config) and path not in delivered and (root / path).is_file()
     }
     paths = sorted(changes)
     with tempfile.TemporaryDirectory() as scratch:
@@ -446,6 +510,85 @@ def complexity_problems(
         if old is None or function.complexity > old:
             problems.append(ComplexityProblem(function, old, config.block_above))
     return problems
+
+
+# --- Size (gate-files design D4) ------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class SizeResult:
+    notes: list[str]
+    problems: list[str]
+
+
+def _text_size(data: bytes) -> int | None:
+    """A text file's size in bytes, with each CRLF counted as LF, so a Windows checkout measures
+    what Linux and macOS do; None when it's binary: a NUL byte, or not UTF-8."""
+    if b"\0" in data:
+        return None
+    try:
+        data.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    return len(data.replace(b"\r\n", b"\n"))
+
+
+def _size_at(root: Path, base: str, path: str) -> int | None:
+    """The file's size at the base, measured as in the working tree; None when it's new since."""
+    shown = subprocess.run(
+        ["git", "show", f"{base}:{path}"], cwd=root, capture_output=True, check=False
+    )
+    return _text_size(shown.stdout) if shown.returncode == 0 else None
+
+
+def _stale_allowances(root: Path, config: SizeConfig) -> list[str]:
+    """Each [size.allow] entry whose file is gone or now fits: the list only shrinks."""
+    problems = []
+    for path in sorted(config.allow):
+        target = root / path
+        size = _text_size(target.read_bytes()) if target.is_file() else 0
+        if not target.is_file() or size is None:
+            what = "isn't measured, being binary" if target.is_file() else "doesn't exist"
+            problems.append(f"`size.allow` names {path}, which {what}. Fix: remove its entry.")
+        elif size <= config.block_above:
+            problems.append(
+                f"{path} is {size:,} bytes, within the limit of "
+                f"{config.block_above:,}, so it needs no allowance. Fix: remove its entry from "
+                "`size.allow`."
+            )
+    return problems
+
+
+def _size_problem(path: str, before: int | None, size: int, limit: int, declared: bool) -> str:
+    what = f"its ceiling of {limit:,} in `size.allow`" if declared else f"the limit of {limit:,}"
+    if before is None:
+        return f"{path}: a new file of {size:,} bytes, above {what}"
+    return f"{path}: grew from {before:,} to {size:,} bytes, above {what}"
+
+
+def size_result(root: Path, base: str, config: SizeConfig) -> SizeResult:
+    """Each file the work adds or changes that is above its limit and new or larger, and each one
+    above the warning. Delivered, excluded and binary files aren't measured."""
+    delivered = delivered_paths(root)
+    notes: list[str] = []
+    problems = _stale_allowances(root, config)
+    for path in sorted(changed_lines(root, base)):
+        target = root / path
+        if path in delivered or excluded(path, config.exclude) or not target.is_file():
+            continue
+        size = _text_size(target.read_bytes())
+        if size is None:
+            continue
+        limit = config.allow.get(path, config.block_above)
+        before = _size_at(root, base, path)
+        if size > limit and (before is None or size > before):
+            problems.append(_size_problem(path, before, size, limit, path in config.allow))
+        elif size > config.warn_above:
+            notes.append(
+                f"{path} is {size:,} bytes, above the warning at {config.warn_above:,} "
+                "(more than one Read for a review)"
+            )
+    return SizeResult(notes, problems)
 
 
 # --- Coverage (design D3, D4) ---------------------------------------------------------------------
@@ -569,310 +712,6 @@ def coverage_result(files: Mapping[str, Counts], config: CoverageConfig) -> Cove
     return CoverageResult(lines, problems)
 
 
-# --- Audit (design D7) ----------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class Advisory:
-    package: str
-    version: str
-    id: str
-    severity: str
-    """One of SEVERITIES, or `unknown`."""
-    fixed_in: str | None
-    """The version that fixes it, or None when there's no fix."""
-
-    def text(self) -> str:
-        fix = f"fixed in {self.fixed_in}" if self.fixed_in else "no fix yet"
-        return f"{self.package} {self.version}: {self.id} ({self.severity}, {fix})"
-
-
-def changed_lock_files(root: Path, base: str, lock_files: Sequence[str]) -> list[str]:
-    """The configured lock files that differ between `base` and the work."""
-    changed = []
-    for lock in lock_files:
-        diff = _git(root, "diff", "--quiet", base, "--", lock)
-        if diff.returncode == 1:
-            changed.append(lock)
-        elif diff.returncode != 0:
-            raise GateError(f"git diff of {lock} from {base} failed: {diff.stderr.strip()}")
-        elif not (root / lock).exists():
-            raise GateError(f"{CONFIG_NAME} names {lock}, which doesn't exist.")
-    return changed
-
-
-OSV_VULNS = "https://api.osv.dev/v1/vulns/"
-
-
-def osv_record(advisory_id: str, timeout: float = 30) -> dict[str, object] | None:
-    """An advisory's OSV record, or None when OSV doesn't have it. Unreachable is an error."""
-    url = OSV_VULNS + urllib.parse.quote(advisory_id)
-    try:
-        with urllib.request.urlopen(url, timeout=timeout) as response:  # noqa: S310 (fixed https URL)
-            record = json.load(response)
-    except urllib.error.HTTPError as error:
-        if error.code == 404:
-            return None
-        raise GateError(f"OSV answered {error.code} for {advisory_id}.") from error
-    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as error:
-        raise GateError(f"couldn't read {advisory_id} from OSV ({url}): {error}.") from error
-    return record if isinstance(record, dict) else None
-
-
-def osv_severity(advisory_id: str, timeout: float = 30) -> str | None:
-    """The severity GitHub's advisory database gives an advisory, through OSV, or None."""
-    record = osv_record(advisory_id, timeout)
-    specific = record.get("database_specific") if record else None
-    severity = specific.get("severity") if isinstance(specific, dict) else None
-    return severity.lower() if isinstance(severity, str) else None
-
-
-def _version_key(version: str) -> tuple[int, ...]:
-    return tuple(int(part) for part in re.findall(r"\d+", version))
-
-
-def osv_fixed_version(record: Mapping[str, object], package: str) -> str | None:
-    """The lowest version of `package` that OSV's record says fixes the advisory, or None.
-
-    Only the vulnerable package's own patched releases count: npm's `fixAvailable` can name a
-    downgrade of a package that depends on it, which isn't a fix (spec: quality-gates; #330)."""
-    fixed = []
-    affected = record.get("affected")
-    for entry in affected if isinstance(affected, list) else []:
-        if entry.get("package", {}).get("name") != package:
-            continue
-        for found in entry.get("ranges", []):
-            fixed += [event["fixed"] for event in found.get("events", []) if "fixed" in event]
-    return min(fixed, key=_version_key) if fixed else None
-
-
-SeverityLookup = Callable[[str], str | None]
-RecordLookup = Callable[[str], Mapping[str, object] | None]
-
-
-def pip_audit_advisories(report: Mapping[str, object], severity: SeverityLookup) -> list[Advisory]:
-    """Each advisory in pip-audit's JSON, once, with its severity read through its GitHub alias."""
-    dependencies = report.get("dependencies")
-    if not isinstance(dependencies, list):
-        raise GateError("pip-audit's report has no `dependencies`: is it `-f json` output?")
-    advisories: dict[tuple[str, str], Advisory] = {}
-    for dependency in dependencies:
-        for vuln in dependency.get("vulns", []):
-            key = (dependency["name"], vuln["id"])
-            if key in advisories:
-                continue  # pip-audit lists some advisories twice
-            ids = [vuln["id"], *vuln.get("aliases", [])]
-            github = next((i for i in ids if i.startswith("GHSA-")), None)
-            found = severity(github) if github else None
-            fixes = vuln.get("fix_versions") or []
-            advisories[key] = Advisory(
-                dependency["name"],
-                dependency["version"],
-                github or vuln["id"],
-                found if found in SEVERITIES else "unknown",
-                fixes[0] if fixes else None,
-            )
-    return list(advisories.values())
-
-
-def _npm_own_fix(entry: object, package: str) -> str | None:
-    """npm's fix for an advisory OSV has no record of, only when it names the vulnerable package
-    itself: a dependent's move, such as a downgrade, isn't a fix (owner, 2026-11-18; #330)."""
-    fix = entry.get("fixAvailable") if isinstance(entry, dict) else None
-    if isinstance(fix, dict) and fix.get("name") == package and isinstance(fix.get("version"), str):
-        return str(fix["version"])
-    return None
-
-
-def npm_audit_advisories(
-    report: Mapping[str, object], record: RecordLookup = osv_record
-) -> list[Advisory]:
-    """Each root advisory in `npm audit --json`, once, with npm's severity and OSV's fixed version.
-
-    npm lists every package that depends on a vulnerable one too; the advisories themselves are
-    the objects in each entry's `via`. Each one's fix is OSV's; npm's `fixAvailable` is read only
-    when OSV has no record, and only when it names the vulnerable package itself, since it can be a
-    downgrade of a dependent (#330)."""
-    if "error" in report:
-        raise GateError(f"npm audit failed: {report['error']}")
-    vulnerabilities = report.get("vulnerabilities")
-    if not isinstance(vulnerabilities, dict):
-        raise GateError("npm audit's report has no `vulnerabilities`: is it `--json` output?")
-    roots: dict[object, Mapping[str, object]] = {}
-    for entry in vulnerabilities.values():
-        for via in entry.get("via", []):
-            if isinstance(via, dict):
-                roots.setdefault(via.get("source", via.get("url")), via)
-    advisories = []
-    for via in sorted(roots.values(), key=lambda v: (str(v.get("name")), str(v.get("url")))):
-        package = str(via.get("name"))
-        advisory_id = str(via.get("url", "")).rstrip("/").rsplit("/", 1)[-1] or "npm advisory"
-        found = record(advisory_id) if advisory_id.startswith("GHSA-") else None
-        if found is not None:
-            fixed_in = osv_fixed_version(found, package)
-        else:
-            fixed_in = _npm_own_fix(vulnerabilities.get(package), package)
-        severity = via.get("severity")
-        advisories.append(
-            Advisory(
-                package,
-                str(via.get("range", "?")),
-                advisory_id,
-                severity if isinstance(severity, str) and severity in SEVERITIES else "unknown",
-                fixed_in,
-            )
-        )
-    return advisories
-
-
-def blocking(advisories: Iterable[Advisory], config: AuditConfig) -> list[Advisory]:
-    """The advisories that fail the gate: a blocked or unknown severity, with a fix."""
-    return [
-        advisory
-        for advisory in advisories
-        if advisory.fixed_in is not None
-        and (advisory.severity in config.block or advisory.severity == "unknown")
-    ]
-
-
-def _run_json(command: Sequence[str], root: Path, what: str) -> dict[str, object]:
-    """Run a tool that prints JSON (exit 1 can mean "found something"), and parse it."""
-    result = _process(command, root)
-    try:
-        data = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        raise GateError(
-            f"{what} failed (exit {result.returncode}): {result.stderr.strip()[-2000:]}"
-        ) from None
-    if not isinstance(data, dict):
-        raise GateError(f"{what} printed JSON that isn't an object.")
-    return data
-
-
-def audit_uv_lock(
-    root: Path, uv: str, pip_audit: str, severity: SeverityLookup = osv_severity
-) -> list[Advisory]:
-    """Every advisory for what uv.lock pins, every group and workspace member included."""
-    with tempfile.TemporaryDirectory() as scratch:
-        requirements = Path(scratch) / "requirements.txt"
-        exported = _process(
-            [uv, "export", "--frozen", "--all-groups", "--all-packages", "--no-emit-workspace",
-             "--no-hashes", "--no-header", "--quiet", "--output-file", str(requirements)],
-            root,
-        )  # fmt: skip
-        if exported.returncode != 0:
-            raise GateError(f"uv export failed: {exported.stderr.strip()}")
-        report = _run_json(
-            [pip_audit, "-r", str(requirements), "--no-deps", "--disable-pip", "-s", "osv",
-             "-f", "json", "--progress-spinner", "off"],
-            root, "pip-audit",
-        )  # fmt: skip
-    return pip_audit_advisories(report, severity)
-
-
-def audit_package_lock(root: Path, npm: str) -> list[Advisory]:
-    return npm_audit_advisories(
-        _run_json([npm, "audit", "--package-lock-only", "--json"], root, "npm audit")
-    )
-
-
-# --- Weekly report (design D8) --------------------------------------------------------------------
-
-REPORT_TITLE = "Dependency advisories"
-REPORT_LABEL = "dependencies"
-
-
-class IssueTracker(Protocol):
-    """The one report issue: found among open issues by title and label."""
-
-    def find_open(self) -> int | None: ...
-    def create(self, body: str) -> str: ...
-    def edit(self, number: int, body: str) -> None: ...
-    def close(self, number: int, comment: str) -> None: ...
-
-
-def report_body(
-    advisories: Sequence[Advisory], config: AuditConfig, lock_files: Sequence[str]
-) -> str:
-    """The issue's body: every advisory, marking those that would block a pull request."""
-    failing = blocking(advisories, config)
-    rows = [
-        f"| {a.package} | {a.version} | {a.id} | {a.severity} | {a.fixed_in or 'no fix yet'} | "
-        f"{'yes' if a in failing else ''} |"
-        for a in sorted(advisories, key=lambda a: (a.package, a.id))
-    ]
-    return "\n".join(
-        [
-            f"The weekly dependency audit found {len(advisories)} advisories in "
-            f"{', '.join(f'`{lock}`' for lock in lock_files)} on `main` "
-            "(spec: quality-gates). This issue is kept up to date by "
-            "`.github/workflows/dependency-report.yml`: its list is replaced each week, and it's "
-            "closed when the audit finds none.",
-            "",
-            "A pull request that changes a lock file fails on the advisories marked *blocks*.",
-            "",
-            "| Package | Version | Advisory | Severity | Fixed in | Blocks |",
-            "|---|---|---|---|---|---|",
-            *rows,
-        ]
-    )
-
-
-def upkeep(
-    advisories: Sequence[Advisory],
-    config: AuditConfig,
-    issues: IssueTracker,
-    lock_files: Sequence[str],
-) -> str | None:
-    """Open, update or close the one report issue. Returns its URL when it was opened."""
-    number = issues.find_open()
-    if not advisories:
-        if number is not None:
-            issues.close(number, "The weekly dependency audit found no advisories.")
-        return None
-    body = report_body(advisories, config, lock_files)
-    if number is None:
-        return issues.create(body)
-    issues.edit(number, body)
-    return None
-
-
-class GhIssues:
-    """The report issue through the gh CLI, with the token the workflow gives it."""
-
-    def __init__(self, gh: str, repository: str) -> None:
-        self.gh = gh
-        self.repository = repository
-
-    def _run(self, *args: str, body: str | None = None) -> str:
-        result = _process([self.gh, *args, "-R", self.repository], Path.cwd(), body)
-        if result.returncode != 0:
-            raise GateError(f"gh {args[0]} {args[1]} failed: {result.stderr.strip()}")
-        return result.stdout
-
-    def find_open(self) -> int | None:
-        listed = json.loads(
-            self._run(
-                "issue", "list", "--state", "open", "--label", REPORT_LABEL,
-                "--search", f'in:title "{REPORT_TITLE}"', "--json", "number,title",
-            )
-        )  # fmt: skip
-        matches = sorted(i["number"] for i in listed if i["title"] == REPORT_TITLE)
-        return matches[0] if matches else None
-
-    def create(self, body: str) -> str:
-        return self._run(
-            "issue", "create", "--title", REPORT_TITLE, "--label", REPORT_LABEL,
-            "--body-file", "-", body=body,
-        ).strip()  # fmt: skip
-
-    def edit(self, number: int, body: str) -> None:
-        self._run("issue", "edit", str(number), "--body-file", "-", body=body)
-
-    def close(self, number: int, comment: str) -> None:
-        self._run("issue", "close", str(number), "--comment", comment)
-
-
 # --- Command line ---------------------------------------------------------------------------------
 
 
@@ -902,6 +741,25 @@ def _complexity(args: argparse.Namespace, root: Path, config: Config) -> int:
     return 0
 
 
+def _size(args: argparse.Namespace, root: Path, config: Config) -> int:
+    if config.size is None:
+        print(f"size: not declared in this repository (no [size] in {CONFIG_NAME})")
+        return 0
+    result = size_result(root, resolve_base(root, args.base), config.size)
+    for note in result.notes:
+        print(f"size: note {note}")
+    for problem in result.problems:
+        print(f"size: FAIL {problem}")
+    if result.problems:
+        print(
+            "size: split the file so a review can read it in one or two goes, or declare it with "
+            f"a ceiling in [size.allow] (the limits are [size] in {CONFIG_NAME})."
+        )
+        return 1
+    print(f"size: no added or grown file above {config.size.block_above:,} bytes")
+    return 0
+
+
 def _coverage(args: argparse.Namespace, root: Path, config: Config) -> int:
     if config.coverage is None:
         print(f"coverage: not measured in this repository (no [coverage] in {CONFIG_NAME})")
@@ -912,55 +770,14 @@ def _coverage(args: argparse.Namespace, root: Path, config: Config) -> int:
     except (OSError, json.JSONDecodeError) as error:
         raise GateError(f"couldn't read the coverage report {report_path}: {error}.") from error
     files = coveragepy_counts(report, root) if args.coveragepy else vitest_counts(report, root)
-    result = coverage_result(files, config.coverage)
+    delivered = delivered_paths(root)
+    measured = {path: counts for path, counts in files.items() if path not in delivered}
+    result = coverage_result(measured, config.coverage)
     for line in result.lines:
         print(f"coverage: {line}")
     for problem in result.problems:
         print(f"coverage: FAIL {problem}")
     return 1 if result.problems else 0
-
-
-def _audit_locks(args: argparse.Namespace, root: Path, locks: Sequence[str]) -> list[Advisory]:
-    found: list[Advisory] = []
-    for lock in locks:
-        if Path(lock).name == "uv.lock":
-            where = root / Path(lock).parent
-            found += audit_uv_lock(where, _tool("uv", args.uv), _tool("pip-audit", args.pip_audit))
-        else:
-            found += audit_package_lock(root / Path(lock).parent, _tool("npm", args.npm))
-    return found
-
-
-def _audit(args: argparse.Namespace, root: Path, config: Config) -> int:
-    base = resolve_base(root, args.base)
-    changed = changed_lock_files(root, base, config.audit.lock_files)
-    if not changed:
-        print("audit: no lock file changed, so nothing to audit")
-        return 0
-    found = _audit_locks(args, root, changed)
-    failing = blocking(found, config.audit)
-    for advisory in found:
-        mark = "FAIL" if advisory in failing else "note"
-        print(f"audit: {mark} {advisory.text()}")
-    if failing:
-        print("audit: update each package above to its fixed version, or pin a fixed version.")
-        return 1
-    print(f"audit: {', '.join(changed)}: no {'/'.join(config.audit.block)} advisory with a fix")
-    return 0
-
-
-def _report(args: argparse.Namespace, root: Path, config: Config) -> int:
-    for lock in config.audit.lock_files:
-        if not (root / lock).exists():
-            raise GateError(f"{CONFIG_NAME} names {lock}, which doesn't exist.")
-    found = _audit_locks(args, root, config.audit.lock_files)
-    issues = GhIssues(_tool("gh", args.gh), args.repository)
-    opened = upkeep(found, config.audit, issues, config.audit.lock_files)
-    print(f"report: {len(found)} advisories in {', '.join(config.audit.lock_files)}")
-    if opened is not None and args.github_output:
-        with Path(args.github_output).open("a", encoding="utf-8") as output:
-            output.write(f"issue-url={opened}\n")
-    return 0
 
 
 def main(argv: Sequence[str] | None = None, root: Path | None = None) -> int:
@@ -969,6 +786,8 @@ def main(argv: Sequence[str] | None = None, root: Path | None = None) -> int:
     complexity = gates.add_parser("complexity")
     complexity.add_argument("--base")
     complexity.add_argument("--lizard")
+    size = gates.add_parser("size")
+    size.add_argument("--base")
     coverage = gates.add_parser("coverage")
     reports = coverage.add_mutually_exclusive_group(required=True)
     reports.add_argument("--coveragepy")
@@ -987,9 +806,16 @@ def main(argv: Sequence[str] | None = None, root: Path | None = None) -> int:
     report.add_argument("--npm")
     args = parser.parse_args(argv)
     root = root or Path.cwd()
-    run = {"complexity": _complexity, "coverage": _coverage, "audit": _audit, "report": _report}[
-        args.gate
-    ]
+    # Imported here: quality_audit imports this module for the config and errors it shares.
+    import quality_audit
+
+    run = {
+        "complexity": _complexity,
+        "size": _size,
+        "coverage": _coverage,
+        "audit": quality_audit.audit_command,
+        "report": quality_audit.report_command,
+    }[args.gate]
     try:
         return run(args, root, read_config(root))
     except GateError as error:
@@ -998,4 +824,8 @@ def main(argv: Sequence[str] | None = None, root: Path | None = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # Run as the module, not as __main__: quality_audit imports `quality_gates`, and two copies
+    # would have two GateErrors, so main couldn't catch the audit's.
+    import quality_gates
+
+    sys.exit(quality_gates.main())
