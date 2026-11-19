@@ -2,6 +2,8 @@
 git as a fresh build does, however the helpers make it (theatre-template-and-guard-xdist design
 D3)."""
 
+import hashlib
+import itertools
 import json
 import os
 import subprocess
@@ -196,8 +198,11 @@ def _remove_main(git_dir: Path) -> None:
 
 
 def _make_an_empty_fan_out(git_dir: Path) -> None:
-    assert not (git_dir / "objects" / "00").exists()  # no object of the copy's is named 00...
-    (git_dir / "objects" / "00").mkdir()
+    # The commit's name changes with its time, so any prefix, 00 included, may hold an object; take
+    # the first no object of the copy's uses (troupe#442).
+    objects = git_dir / "objects"
+    free = next(p for n in range(256) if not (p := objects / f"{n:02x}").exists())
+    free.mkdir()
 
 
 @pytest.mark.parametrize(
@@ -213,6 +218,33 @@ def test_a_copy_that_differs_from_a_fresh_build_where_git_looks_compares_unequal
 
     alter(copied.path / ".git")
 
+    assert _observed(copied) != _observed(built)
+
+
+def _write_a_blob_named_00(repo: Repo, scratch: Path) -> str:
+    """Write a blob whose name starts with 00 into ``repo``, from a file outside its worktree, and
+    return its name: the case a commit's changing name meets about once in 256 runs (troupe#442)."""
+    content = next(
+        text.encode()
+        for text in map(str, itertools.count())
+        if hashlib.sha1(b"blob %d\0%s" % (len(text), text.encode())).hexdigest().startswith("00")  # noqa: S324 - git's object name
+    )
+    source = scratch / "blob-named-00"
+    source.write_bytes(content)
+    return repo.git("hash-object", "-w", str(source)).strip()
+
+
+def test_an_empty_fan_out_compares_unequal_when_an_object_is_named_00(tmp_path: Path) -> None:
+    copied = committed(tmp_path / "copied")
+    built = build_committed(tmp_path / "built", "theatre")
+    for repo in (copied, built):
+        assert _write_a_blob_named_00(repo, tmp_path).startswith("00")
+    # The premise: the same object in both leaves them equal, so only the alteration differs.
+    assert _observed(copied) == _observed(built)
+
+    _make_an_empty_fan_out(copied.path / ".git")
+
+    assert any((copied.path / ".git" / "objects" / "00").iterdir())
     assert _observed(copied) != _observed(built)
 
 
