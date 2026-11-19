@@ -35,7 +35,7 @@
 ## 4. Integration
 
 - [x] 4.1 `openspec validate follower-position-epoch --strict` passes.
-- [ ] 4.2 Ask the orchestrator, then run the full check (`uv run scripts/check.py`, output kept in a scratch file);
+- [x] 4.2 Ask the orchestrator, then run the full check (`uv run scripts/check.py`, output kept in a scratch file);
   it passes.
 
 ## Workflow follow-up
