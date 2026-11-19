@@ -17,8 +17,8 @@
   deletion and a torn tail
 - [x] 2.2 Trim a torn last line only when the caller holds the write lock; verify a test that a reader outside the
   lock leaves a part-written line in place and reads it once complete
-- [x] 2.3 Call `catch_up()` from `TextStore._local()` and check `append_bytes`'s size against the offset in
-  `OrderLog.append`; verify the tests from group 1 pass, and the existing store tests
+- [x] 2.3 Call `catch_up()` from `TextStore._local()` (design D1; the size check in `OrderLog.append` was considered
+  and left out, D1); verify the tests from group 1 pass, and the existing store tests
   (`packages/troupe-store-text/tests`, `test_event_subscription.py`) still pass
 
 ## 3. Mend already-damaged order logs (design D5 to D7, owner's decision 2026-11-18)

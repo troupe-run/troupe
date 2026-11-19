@@ -141,10 +141,20 @@ class OrderLog:
         if size <= self.offset or self.conflict is not None:
             return
         lines, offset, tail = _read_lines(self.path, self.offset, self.lines + 1, trim=trim)
-        for number, entry in lines:
-            self._take(number, entry)
-            if self.conflict is not None:
-                return  # a rebuild replaces the whole file; nothing after this line counts
+        before = (self.epoch, len(self.ids), self.repeats)
+        try:
+            for number, entry in lines:
+                self._take(number, entry)
+                if self.conflict is not None:
+                    return  # a rebuild replaces the whole file; nothing after this line counts
+        except TroupeError:
+            # A damaged line: take none of this read, so the next read refuses it again rather
+            # than finding the lines before it a second time (as repeats).
+            self.epoch, kept, self.repeats = before
+            for event in self.ids[kept:]:
+                del self.positions[event]
+            del self.ids[kept:]
+            raise
         self.offset, self.tail = offset, tail or self.tail
         self.lines += len(lines)
 
@@ -270,8 +280,8 @@ class TrackingLog:
             self.positions, self.offset, self.lines = {}, 0, 0
         if size <= self.offset:
             return
-        lines, self.offset, _ = _read_lines(self.path, self.offset, self.lines + 1, trim=trim)
-        self.lines += len(lines)
+        lines, offset, _ = _read_lines(self.path, self.offset, self.lines + 1, trim=trim)
+        positions = dict(self.positions)  # taken only once every line is valid
         for number, entry in lines:
             epoch, name, n = (
                 entry.get("epoch"),
@@ -289,7 +299,9 @@ class TrackingLog:
                     self.path, number, "a line must be {epoch, application_name, notification_id}"
                 )
             key = (epoch, name)
-            self.positions[key] = max(self.positions.get(key, n), n)
+            positions[key] = max(positions.get(key, n), n)
+        self.positions, self.offset = positions, offset
+        self.lines += len(lines)
 
     def max(self, epoch: str, name: str) -> int | None:
         return self.positions.get((epoch, name))

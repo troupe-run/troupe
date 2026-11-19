@@ -23,6 +23,7 @@ from hypothesis.stateful import RuleBasedStateMachine, invariant, rule
 
 from storetesting import event, fresh_store
 from troupe.core import strict_json
+from troupe.core.errors import TroupeError
 from troupe.core.notices import Notice
 from troupe_store_text.local import OrderLog
 from troupe_store_text.store import TextStore
@@ -247,6 +248,82 @@ def test_a_log_reads_again_whole_when_a_repair_moved_lines_it_had_read(tmp_path:
     write_order(tmp_path, epoch, [{"n": 1, "event": a}, {"n": 2, "event": b}, {"n": 3, "event": c}])
     log.catch_up(trim=False)
     assert (log.ids, log.repeats) == ([a, b, c], 0)
+
+
+def tracking_file(theatre: Path) -> Path:
+    (path,) = (theatre / ".troupe" / "local" / "tracking").glob("*.jsonl")
+    return path
+
+
+def replace_bytes(path: Path, data: bytes) -> None:
+    staged = path.with_suffix(".staged")
+    staged.write_bytes(data)
+    os.replace(staged, path)
+
+
+def test_a_damaged_order_line_after_valid_ones_is_refused_on_every_read(tmp_path: Path) -> None:
+    recorded(tmp_path, 2)
+    store = fresh_store(tmp_path)
+    assert store.max_notification_id() == 2
+    fresh_store(tmp_path).insert([event(uuid4(), 1)])  # line n=3, which store hasn't read yet
+    good = order_file(tmp_path).read_bytes()
+    with order_file(tmp_path).open("ab") as handle:
+        handle.write(b'{"n":4}\n')
+    for _ in range(2):
+        with pytest.raises(TroupeError) as caught:
+            store.max_notification_id()
+        assert caught.value.code == "events.malformed-record"
+    replace_bytes(order_file(tmp_path), good)
+    assert store.max_notification_id() == 3
+    assert notices(store, "events.order-repaired") == []  # n=3 wasn't taken twice
+
+
+def test_a_damaged_tracking_line_after_valid_ones_is_refused_on_every_read(
+    tmp_path: Path,
+) -> None:
+    recorded(tmp_path, 1)
+    store = fresh_store(tmp_path)
+    store.insert_tracking(Tracking("follower", 1))
+    fresh_store(tmp_path).insert_tracking(Tracking("follower", 2))
+    good = tracking_file(tmp_path).read_bytes()
+    with tracking_file(tmp_path).open("ab") as handle:
+        handle.write(b'{"epoch":"e"}\n')
+    for _ in range(2):
+        with pytest.raises(TroupeError) as caught:
+            store.max_tracking_id("follower")
+        assert caught.value.code == "events.malformed-record"
+    replace_bytes(tracking_file(tmp_path), good)
+    assert store.max_tracking_id("follower") == 2
+
+
+def test_a_live_store_numbers_again_when_the_order_file_is_deleted_or_shortened(
+    tmp_path: Path,
+) -> None:
+    epoch, ids = recorded(tmp_path, 3)
+    store = fresh_store(tmp_path)
+    assert store.max_notification_id() == 3
+    order_file(tmp_path).unlink()  # the malformed-record fix: delete it and troupe rebuilds it
+    assert sorted(record_id for _, record_id in ordered(store)) == sorted(ids)
+    renumbered = OrderLog.load(order_file(tmp_path))
+    assert renumbered.epoch != epoch
+    write_order(tmp_path, renumbered.epoch, [{"n": 1, "event": renumbered.ids[0]}])
+    assert ordered(store)[0] == (1, renumbered.ids[0])
+    assert store.max_notification_id() == 3
+    assert ordered(fresh_store(tmp_path)) == ordered(store)
+
+
+def test_a_live_store_forgets_positions_when_the_tracking_file_is_deleted_or_shortened(
+    tmp_path: Path,
+) -> None:
+    recorded(tmp_path, 1)
+    store = fresh_store(tmp_path)
+    store.insert_tracking(Tracking("follower", 1))
+    store.insert_tracking(Tracking("follower", 2))
+    first = tracking_file(tmp_path).read_bytes().splitlines(keepends=True)[0]
+    replace_bytes(tracking_file(tmp_path), first)
+    assert store.max_tracking_id("follower") == 1
+    tracking_file(tmp_path).unlink()
+    assert store.max_tracking_id("follower") is None
 
 
 STREAMS = [UUID(int=n) for n in range(1, 4)]
