@@ -143,12 +143,42 @@ jobs:
           BASE=$(git rev-parse "$MERGE^1")
           HEAD=$MERGE
           mkdir -p out
-          # In a session of its own: a step shares the runner agent's process group, which a mutant
-          # that kills its own group would otherwise take down (#341).
+          # containment: begin
+          # The mutation runs in a PID namespace, a session and a cgroup of its own, as the runner's user with the
+          # step's environment: a mutant that signals every process (kill -1) or its own group (kill 0), or a run
+          # that exhausts memory, ends at most the run, never the runner agent (#345; probe
+          # troupe-run/infra-probe-runner-killall). sudo resets the environment, so it's saved and restored
+          # inside; systemd-run doesn't expand $ in the command; setsid gives the run its own process group,
+          # which a PID namespace alone doesn't.
+          run_contained() {
+            local memory=${MUTATION_MEMORY_MAX:-12G} tasks=${MUTATION_TASKS_MAX:-8192}
+            local unit="mutation-${GITHUB_RUN_ID:-local}-${GITHUB_JOB:-job}-$RANDOM" since saved status=0
+            since=$(date '+%Y-%m-%d %H:%M:%S')
+            saved=$(mktemp)
+            export -p > "$saved"
+            sudo systemd-run --scope --quiet --expand-environment=no --unit="$unit" \
+                -p MemoryMax="$memory" -p MemorySwapMax=0 -p TasksMax="$tasks" \
+              unshare --pid --fork --mount-proc --kill-child \
+              setsid --wait \
+              setpriv --reuid="$(id -u)" --regid="$(id -g)" --init-groups -- \
+              bash -c 'source "$1"; shift; exec "$@"' restore "$saved" "$@" || status=$?
+            rm -f "$saved"
+            if (( status != 0 )); then
+              if sudo journalctl -k --since "$since" --no-pager 2>/dev/null | grep -F "$unit" | grep -qi "oom"; then
+                echo "::error::the mutation run ran out of memory (MemoryMax $memory)"
+              elif (( status > 128 )); then
+                echo "::error::the mutation run was killed by signal $((status - 128))"
+              else
+                echo "::error::the mutation run exited with status $status"
+              fi
+            fi
+            return "$status"
+          }
+          # containment: end
           if [[ -f package-lock.json ]]; then
-            setsid --wait python3 scripts/mutation_pr.py run "$BASE" "$HEAD" out/pr-report.json
+            run_contained python3 scripts/mutation_pr.py run "$BASE" "$HEAD" out/pr-report.json
           else
-            setsid --wait uv run --no-sync python scripts/mutation_pr.py run "$BASE" "$HEAD" out/pr-report.json
+            run_contained uv run --no-sync python scripts/mutation_pr.py run "$BASE" "$HEAD" out/pr-report.json
           fi
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
