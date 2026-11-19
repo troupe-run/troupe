@@ -429,13 +429,8 @@ allow_indirect_imports = true
 branch = true
 patch = ["subprocess"]
 source = ["packages", "plugins", "scripts"]
-omit = [
-    "*/tests/*",
-    # Delivered from troupe-run/infrastructure, and measured there. Globs, not paths: coverage.py reads a relative
-    # pattern against each process's own directory, and the tests start many from temporary ones.
-    "*/scripts/guard.py",
-    "*/scripts/guard_pytest.py",
-    "*/scripts/quality_gates.py",
-    "*/scripts/mutation_*.py",
-]
+# The files infrastructure delivers are measured there: the coverage gate leaves out each one .github/guard-delivery.json
+# lists, so they aren't listed here. A glob, not a path: coverage.py reads a relative pattern against each process's own
+# directory, and the tests start many from temporary ones.
+omit = ["*/tests/*"]
 

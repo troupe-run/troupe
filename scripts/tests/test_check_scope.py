@@ -125,6 +125,7 @@ def test_the_unscoped_gates_are_the_full_check_with_no_marker_expression() -> No
         "mypy --strict",
         "import contracts",
         "complexity",
+        "size",
         "tests",
     ]
     assert "-m" not in dict(check.gates())["tests"]

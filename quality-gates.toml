@@ -76,19 +76,37 @@ paths = ["scripts"]
 baseline = 88.4
 
 # Cyclomatic complexity (lizard) of each function a change adds or edits: above the limit, it may not be new or more
-# complex than before. Tests, the files infrastructure delivers (.github/guard-delivery.json lists them) and the
-# generated config models are left out.
+# complex than before. Tests and the generated config models are left out, and every gate leaves out the files
+# infrastructure delivers, which .github/guard-delivery.json lists: they're measured at their source.
 [complexity]
 block_above = 25
 languages = ["python"]
 exclude = [
     "**/tests/**",
-    "scripts/guard.py",
-    "scripts/guard_pytest.py",
-    "scripts/quality_gates.py",
-    "scripts/mutation_*.py",
     "packages/troupe/src/troupe/core/config/models.py",
 ]
+
+# The size in bytes of each file a change adds or changes (troupe-run/infrastructure#271): above block_above it may not
+# be new or larger than before, unless [size.allow] gives it its own ceiling; above warn_above it's noted. A review reads
+# every changed file whole, and one Read holds about 25,000 tokens. Limits set by the owner on 2026-11-19
+# (openspec/changes/archive/2026-11-20-size-gate/design.md, D1). Fixtures, archived changes and the lock file aren't
+# reviewed as code, so they aren't measured; binary files never are.
+[size]
+block_above = 49152
+warn_above = 32768
+exclude = ["**/fixtures/**", "openspec/changes/archive/**", "uv.lock"]
+
+# The files over block_above on 2026-11-20, each capped at its size then, rounded up to a whole KiB, plus 16 KiB
+# (design D2). Each has an issue to split it. Remove an entry once its file is under block_above: the check fails on an
+# entry that's no longer needed.
+[size.allow]
+"protocol/schemas/error.schema.json" = 88064                     # troupe-run/troupe#471
+"packages/troupe/src/troupe/protocol/error.schema.json" = 88064  # troupe-run/troupe#472
+"contributing/runners.md" = 84992                                # troupe-run/troupe#473
+"packages/troupe/tests/test_run_host.py" = 83968                 # troupe-run/troupe#474
+"openspec/specs/runner-protocol/spec.md" = 71680                 # troupe-run/troupe#475
+"packages/troupe/tests/test_platform_processes.py" = 70656       # troupe-run/troupe#476
+"openspec/specs/openai-runner/spec.md" = 68608                   # troupe-run/troupe#477
 
 # A pull request that changes the lock file fails on an advisory of these severities that has a fix.
 [audit]
