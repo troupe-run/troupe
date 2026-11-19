@@ -1,6 +1,6 @@
 [project]
 name = "troupe-plugin-sdk"
-version = "0.0.0"
+version = "0.1.0"
 description = "The public API troupe's plugins build against: the runner contract's types and running a model's tool calls."
 readme = "README.md"
 license = "Apache-2.0"

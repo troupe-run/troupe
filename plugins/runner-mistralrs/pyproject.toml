@@ -1,6 +1,6 @@
 [project]
 name = "troupe-runner-mistralrs"
-version = "0.0.0"
+version = "0.1.0"
 description = "An actor runner for troupe that loads a GGUF model inside its own process with mistral.rs, with troupe's own tool loop."
 readme = "README.md"
 license = "Apache-2.0"
