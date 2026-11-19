@@ -931,9 +931,11 @@ def test_the_time_after_the_end_tells_a_20_ms_tick_put_back(
     # The test above is only worth its bound if a tick that came back would fail it on every
     # platform CI runs, Windows' coarser timers included. So put one back, as the loop was
     # before #360: each wait sleeps a fixed 20 ms, or less when a deadline is nearer, whatever
-    # wakes the event. This checks one batch: the test above fails with a tick only when all of
-    # its batches catch it, so its power is this batch's power to that power, and checking all
-    # of them here would triple this test's own chance of failing on a lucky batch.
+    # wakes the event. The test above fails with a tick only when all of its batches catch it,
+    # so what matters is whether a typical batch does: go with the majority of three. This runs
+    # on every leg of every run, the merge queue included, so one batch where the tick lands
+    # under the bound by chance (about 0.27%) mustn't fail it; two of three (about 0.002%) may
+    # (troupe-run/troupe#463).
     class TickingEvent(threading.Event):
         def wait(self, timeout: float | None = None) -> bool:
             time.sleep(_OLD_TICK if timeout is None else min(_OLD_TICK, timeout))
@@ -942,9 +944,19 @@ def test_the_time_after_the_end_tells_a_20_ms_tick_put_back(
     ticking = types.SimpleNamespace(**vars(threading))
     ticking.Event = TickingEvent
     monkeypatch.setattr(processes, "threading", ticking)
-    timed = _time_after_the_end()
-    assert timed.extra() >= _A_QUARTER_OF_THE_OLD_TICK, (
-        f"with a 20 ms tick put back, {timed.describe()}: the bound wouldn't catch the tick"
+    batches: list[_AfterTheEnd] = []
+    caught = missed = 0
+    while caught < 2 and missed < 2:
+        batches.append(_time_after_the_end())
+        if batches[-1].extra() >= _A_QUARTER_OF_THE_OLD_TICK:
+            caught += 1
+        else:
+            missed += 1
+    assert caught == 2, (
+        "with a 20 ms tick put back, run_to_completion returned later after the command ended "
+        f"than subprocess.run did by under {_A_QUARTER_OF_THE_OLD_TICK * 1000:.0f} ms in "
+        f"{missed} of {len(batches)} batches, so the bound wouldn't catch the tick: "
+        + "; ".join(timed.measured() for timed in batches)
     )
 
 
