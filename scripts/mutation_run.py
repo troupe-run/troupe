@@ -121,22 +121,28 @@ def own_addopts(checkout: Path) -> str:
 
 
 def link_checkout_entries(checkout: Path, unit: ms.Unit, made: list[Path]) -> None:
-    """For a package's unit, link each top-level entry of the checkout into the source's top
-    directory (troupe's packages/), adding each link to `made` as it's made, so a failure partway
-    still leaves every one for the caller to remove.
+    """For a package's unit, link into each directory from the package's own up to, not
+    including, the checkout every entry of the directory above it, adding each link to `made` as
+    it's made, so a failure partway still leaves every one for the caller to remove.
 
-    A test that finds the repository's root by counting directories up from its own file counts
-    one too many from inside mutmut's copy (<package>/mutants/tests), and lands there; with the
-    links, what it reads is still found, packages/packages included (quality-scope design D5).
-    .git isn't linked: git would take that directory for a repository of its own.
+    Inside mutmut's copy a test file is one directory deeper (<package>/mutants/tests), so a test
+    counting directories up from its own file lands one level lower than it means to: on the
+    package's directory when it means packages/ (a sibling package, as troupe-store-text's
+    test_processes.py finds troupe's tests; #343), on packages/ when it means the checkout
+    (quality-scope design D5). With the links, it still finds what it reads: packages/packages and
+    <package>/<package> included. .git isn't linked: git would take that directory for a
+    repository of its own.
     """
-    into = checkout / Path(unit.source).parts[0]
-    for entry in sorted(checkout.iterdir()):
-        link = into / entry.name
-        if entry.name == ".git" or link.exists() or link.is_symlink():
-            continue
-        link.symlink_to(Path("..") / entry.name, target_is_directory=entry.is_dir())
-        made.append(link)
+    package = checkout / Path(unit.source).parent
+    for level in [package, *package.parents]:
+        if level == checkout or checkout not in level.parents:
+            break
+        for entry in sorted(level.parent.iterdir()):
+            link = level / entry.name
+            if entry.name == ".git" or link.exists() or link.is_symlink():
+                continue
+            link.symlink_to(Path("..") / entry.name, target_is_directory=entry.is_dir())
+            made.append(link)
 
 
 def mutmut_config(workdir: Path, checkout: Path, unit: ms.Unit, *, children: int) -> str:
@@ -180,6 +186,7 @@ def mutmut_config(workdir: Path, checkout: Path, unit: ms.Unit, *, children: int
             p.name
             for p in workdir.iterdir()
             if p.name not in own
+            and not p.is_symlink()  # a sibling package linked in by link_checkout_entries (#343)
             and not p.name.startswith(".")
             and not p.name.endswith(".egg-info")
             and p.name not in also_copy
