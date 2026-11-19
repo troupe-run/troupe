@@ -143,10 +143,12 @@ jobs:
           BASE=$(git rev-parse "$MERGE^1")
           HEAD=$MERGE
           mkdir -p out
+          # In a session of its own: a step shares the runner agent's process group, which a mutant
+          # that kills its own group would otherwise take down (#341).
           if [[ -f package-lock.json ]]; then
-            python3 scripts/mutation_pr.py run "$BASE" "$HEAD" out/pr-report.json
+            setsid --wait python3 scripts/mutation_pr.py run "$BASE" "$HEAD" out/pr-report.json
           else
-            uv run --no-sync python scripts/mutation_pr.py run "$BASE" "$HEAD" out/pr-report.json
+            setsid --wait uv run --no-sync python scripts/mutation_pr.py run "$BASE" "$HEAD" out/pr-report.json
           fi
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
