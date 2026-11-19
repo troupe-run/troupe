@@ -41,7 +41,7 @@
 
 ## 4. Integration
 
-- [ ] 4.1 Run `uv run scripts/check.py` and verify it passes
+- [x] 4.1 Run `uv run scripts/check.py` and verify it passes
 
 ## Workflow follow-up
 
