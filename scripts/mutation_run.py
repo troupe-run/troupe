@@ -44,8 +44,6 @@ CHILDREN_PLUGIN = Path(__file__).resolve().parent / "mutation_children.py"
 PLUGIN_COPY = "_mutation_children_plugin"
 """The plugin's name in mutmut's working directory: not mutation_children, since infrastructure's
 own copy of that is in the source mutmut mutates, and a mutated copy would load in its place."""
-CHILDREN = 4
-"""Parallel mutants: a hosted Linux runner has 4 CPUs."""
 
 
 class RunError(Exception):
@@ -141,7 +139,7 @@ def link_checkout_entries(checkout: Path, unit: ms.Unit, made: list[Path]) -> No
         made.append(link)
 
 
-def mutmut_config(workdir: Path, checkout: Path, unit: ms.Unit) -> str:
+def mutmut_config(workdir: Path, checkout: Path, unit: ms.Unit, *, children: int) -> str:
     """mutmut's setup.cfg for a unit, with paths from its working directory."""
 
     def local(path: str) -> str:
@@ -171,6 +169,21 @@ def mutmut_config(workdir: Path, checkout: Path, unit: ms.Unit) -> str:
         also_copy += sorted(
             p.name for p in checkout.iterdir() if p.name not in skipped and p.name not in also_copy
         )
+    else:
+        # A package's tests find its own files (a plugin's tools/ and fixtures/) by counting up
+        # from their own file, which inside mutmut's copy is under mutants/: copy them beside the
+        # source, as the root unit copies the checkout's (#337; mutation-resources design D3).
+        # Hidden entries (caches, .venv) and build output aren't the package's files.
+        own = {"src", tests.split("/")[0], "mutants", "setup.cfg", "__pycache__",
+               "node_modules", "dist", "build", f"{PLUGIN_COPY}.py"}  # fmt: skip
+        also_copy += sorted(
+            p.name
+            for p in workdir.iterdir()
+            if p.name not in own
+            and not p.name.startswith(".")
+            and not p.name.endswith(".egg-info")
+            and p.name not in also_copy
+        )
 
     def listed(values: Sequence[str]) -> str:
         return "".join(f"\n    {value}" for value in values)
@@ -189,7 +202,7 @@ def mutmut_config(workdir: Path, checkout: Path, unit: ms.Unit) -> str:
                 *deselected(workdir, checkout, unit),
             ]
         ),
-        f"max_children={CHILDREN}",
+        f"max_children={children}",
     ]
     if do_not_mutate:
         lines.append("do_not_mutate=" + listed(do_not_mutate))
@@ -220,9 +233,16 @@ def mutmut_bin() -> str:
 
 
 def run_mutmut(
-    checkout: Path, unit: ms.Unit, names: Sequence[str], deadline: float, run: Run
+    checkout: Path,
+    unit: ms.Unit,
+    names: Sequence[str],
+    deadline: float,
+    run: Run,
+    *,
+    children: int,
 ) -> dict[str, mr.Module]:
-    """One unit's modules, with paths as in the checkout. `names` limits it to those globs."""
+    """One unit's modules, with paths as in the checkout. `names` limits it to those globs, and
+    `children` is how many mutants run at once (the settings' max_children)."""
     workdir = mutmut_workdir(checkout, unit)
     if (workdir / "setup.cfg").exists():
         if workdir == checkout:
@@ -237,7 +257,9 @@ def run_mutmut(
         if workdir != checkout:
             link_checkout_entries(checkout, unit, links)
         shutil.copy2(CHILDREN_PLUGIN, plugin)
-        (workdir / "setup.cfg").write_text(mutmut_config(workdir, checkout, unit), encoding="utf-8")
+        (workdir / "setup.cfg").write_text(
+            mutmut_config(workdir, checkout, unit, children=children), encoding="utf-8"
+        )
         shutil.rmtree(workdir / "mutants", ignore_errors=True)
         if workdir == checkout:
             # In mutmut's copy, the source's own name leads to the mutated source, so code that
@@ -424,7 +446,9 @@ def collect(
                 continue
             if time.monotonic() >= deadline:
                 break  # a unit not reached has no modules in the report, so none is judged
-            modules.update(run_mutmut(checkout, unit, names, deadline, run))
+            modules.update(
+                run_mutmut(checkout, unit, names, deadline, run, children=settings.max_children)
+            )
     else:
         mutate = list(only.get("stryker", [])) if only is not None else []
         if only is None or mutate:
