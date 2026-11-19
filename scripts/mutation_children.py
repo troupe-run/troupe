@@ -13,6 +13,7 @@ What a child runs isn't seen by mutmut's stats: a function reached only through 
 no tests as far as mutmut knows, and its mutants count as not covered.
 """
 
+import contextlib
 import importlib.util
 import os
 import subprocess
@@ -59,6 +60,22 @@ def _popen_init(self: subprocess.Popen[Any], *args: Any, **kwargs: Any) -> None:
     _original_init(self, *args, **kwargs)
 
 
+MUTANT_MARK = "__mutmut_"
+"""In every mutant's name (`troupe.core.x_f__mutmut_3`), and in no pass mutmut runs in its own
+process (stats, the clean run, listing tests) or NO_MUTANT."""
+
+
 def pytest_configure(config: object) -> None:
-    """Loaded as a plugin (`-p mutation_children`): only then are children's environments set."""
+    """Loaded as a plugin (`-p mutation_children`): only then are children's environments set.
+
+    A mutant's test process (mutmut forks one per mutant) also starts a session of its own, so a
+    mutant that signals its own process group, as one of troupe's `os.killpg` can, ends only its
+    own tests: mutmut counts it as crashed and goes on. A GitHub step shares the runner agent's
+    process group, which such a mutant would otherwise kill (#341; mutation-session design D1).
+    """
     subprocess.Popen.__init__ = _popen_init  # type: ignore[method-assign]
+    if MUTANT_MARK in os.environ.get("MUTANT_UNDER_TEST", "") and hasattr(os, "setsid"):
+        # A process that already leads its group can't start a session, and a kill of its own
+        # group then reaches only itself and what it started: contained either way.
+        with contextlib.suppress(PermissionError):
+            os.setsid()
