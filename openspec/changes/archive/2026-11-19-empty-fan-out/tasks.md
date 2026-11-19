@@ -13,7 +13,7 @@
 
 ## 2. Pull request
 
-- [ ] 2.1 Push the branch and open a draft pull request that closes #442 (`gh pr create --draft --body-file <literal
+- [x] 2.1 Push the branch and open a draft pull request that closes #442 (`gh pr create --draft --body-file <literal
   path>`), with the before/after runs from 1.1 and 1.2. Act on Claude's review of the last push, and mark it ready
   once the review is clean. Verify every CI leg passes on Linux, macOS and Windows.
 
