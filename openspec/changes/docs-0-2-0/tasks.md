@@ -36,8 +36,9 @@ The audit findings these tasks act on are in the PR description. Each task's ver
   runtime's values and their precedence are `runtimes.md`'s, in 2.7.
 - [x] 2.7 The model order (actor, environment, runtime) after #451, in its own commit (design D4), wherever the old
   order is stated: `docs/stagecraft/runtimes.md` (the `model` field and the `TROUPE_RUNTIME_<NAME>_MODEL` row, "the
-  actor's own included", and the prices line), `contributing/config.md`, the mistralrs README ("an actor can name its
-  own file") and `bring-your-own-agent.md`, saying where the run records the model's source. #451 changes the actor
+  actor's own included", and the prices line), `contributing/config.md` and the mistralrs README ("an actor can name its
+  own file"), with `runtimes.md` saying where the run records the model's source. (`bring-your-own-agent.md` never
+  stated the order.) #451 changes the actor
   schema's `model` description and the Ollama README's line itself (agreed with its worker, 2026-11-18). Verify
   against #451's merged code, and grep for `TROUPE_RUNTIME_<NAME>_MODEL` to find any other.
 - [x] 2.8 `grep -riE "lm.?studio"` across the repo outside `openspec/changes/archive`: only LM Studio as an engine

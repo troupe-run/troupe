@@ -467,7 +467,9 @@ def test_the_mistralrs_walkthrough_runs_as_written_with_the_engine_stand_in(
     # Spec: user-docs, "The first run has a path for every runner". The reader downloads a model
     # and runs it in-process. Here the download is a file with the GGUF signature, and the
     # mistralrs runner runs through its test-only entry point with the engine stand-in, as the
-    # conformance test runs it (docs-0-2-0 design D2): the warm-up and the run both reach it.
+    # conformance test runs it (docs-0-2-0 design D2): the warm-up and the run both reach it. Only
+    # on macOS does the warm-up have work to do (the runner answers that there's nothing to warm
+    # elsewhere), so only there does init say it prepared the engine.
     made = make_repo(tmp_path)
     for name, value in {**made.env, **ADA}.items():
         monkeypatch.setenv(name, value)
@@ -490,9 +492,15 @@ def test_the_mistralrs_walkthrough_runs_as_written_with_the_engine_stand_in(
     monkeypatch.setenv(name, shlex.split(value)[0].replace("$PWD", str(Path.cwd())))
     (Path.cwd() / mkdir.split()[1]).mkdir()
     monkeypatch.chdir(Path.cwd() / cd.split()[1])
+    warmed = ""
     for line in rest[:-1]:
         code, _, err = run_line(line, monkeypatch)
         assert code == 0, (line, err)
+        if line.startswith("troupe init"):
+            warmed = err
+    assert "Preparing the mistralrs runner's engine" in warmed
+    assert ("Prepared the mistralrs runner's engine in" in warmed) == (sys.platform == "darwin")
+    assert "couldn't prepare its engine" not in warmed
     code, out, err = run_line(rest[-1], monkeypatch)
     assert code == 0, err
     assert out == f"run {out.split()[1]} succeeded\n"
