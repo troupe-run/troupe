@@ -149,7 +149,9 @@ jobs:
           # that exhausts memory, ends at most the run, never the runner agent (#345; probe
           # troupe-run/infra-probe-runner-killall). sudo resets the environment, so it's saved and restored
           # inside; systemd-run doesn't expand $ in the command; setsid gives the run its own process group,
-          # which a PID namespace alone doesn't.
+          # which a PID namespace alone doesn't. That bash stays pid 1, the namespace's init: it runs the command
+          # in the foreground (keeping its stdin and signal dispositions), and reaps every orphan reparented
+          # to it, which the command, as pid 1, wouldn't (#347).
           run_contained() {
             local memory=${MUTATION_MEMORY_MAX:-12G} tasks=${MUTATION_TASKS_MAX:-8192}
             local unit="mutation-${GITHUB_RUN_ID:-local}-${GITHUB_JOB:-job}-$RANDOM" since saved status=0
@@ -161,7 +163,7 @@ jobs:
               unshare --pid --fork --mount-proc --kill-child \
               setsid --wait \
               setpriv --reuid="$(id -u)" --regid="$(id -g)" --init-groups -- \
-              bash -c 'source "$1"; shift; exec "$@"' restore "$saved" "$@" || status=$?
+              bash -c 'source "$1"; shift; "$@"; exit $?' restore "$saved" "$@" || status=$?
             rm -f "$saved"
             if (( status != 0 )); then
               if sudo journalctl -k --since "$since" --no-pager 2>/dev/null | grep -F "$unit" | grep -qi "oom"; then
