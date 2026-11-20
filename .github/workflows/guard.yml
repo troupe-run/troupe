@@ -25,6 +25,10 @@ on:
 
 permissions:
   contents: read
+  # blocked-by reads the issues a pull request closes and their blockers, in any governed repository
+  # (all public), and, in a merge group, the queued pull request's description (#275; auto-merge D7).
+  issues: read
+  pull-requests: read
 
 concurrency:
   group: guard-${{ github.event_name }}-${{ github.ref }}
@@ -70,6 +74,7 @@ jobs:
         run: npm install --global --no-fund --no-audit "@fission-ai/openspec@${OPENSPEC_VERSION}"
       - name: Check the workflow rules
         env:
-          # capability-label reads troupe-run/infrastructure's declared labels, a public file, with it.
+          # capability-label reads troupe-run/infrastructure's declared labels, a public file, with it,
+          # and blocked-by reads issues' blockers and a queued pull request's description.
           GITHUB_TOKEN: ${{ github.token }}
         run: uv run --no-project python scripts/guard.py ci
