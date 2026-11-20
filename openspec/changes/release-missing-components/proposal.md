@@ -25,6 +25,10 @@ workflow notice a missing release, whatever the cause, and says how to repair on
   and re-running the release run. As a fallback, it covers creating the release by hand with the changelog
   section's notes.
 
+Out of scope, by the owner's decision of 2026-11-20: published notes that keep their non-ASCII text when a release
+pull request's body overflows (release-please cut ⚠ to U+00A0, published as U+FFFD), and a test reproducing the 0.2.0
+case from the saved notes. Both are #486.
+
 ## Capabilities
 
 ### New Capabilities
