@@ -58,6 +58,10 @@ class Settings:
     max_new_issues: int
     max_children: int
     """How many mutants mutmut runs at once (#337: four starved the hosted runner)."""
+    mutant_memory_mb: int | None
+    """The address space each mutant's test process may use, or None for no cap (#366). A runaway
+    mutant then fails on its own instead of taking the run's cgroup down. Set from a measured run's
+    peaks, never by arithmetic: it caps virtual size, which runs well above resident size."""
     tools: dict[str, str]
     repositories: dict[str, Repository]
 
@@ -77,6 +81,7 @@ SETTINGS_KEYS = {
     "pr_budget_minutes",
     "max_new_issues",
     "max_children",
+    "mutant_memory_mb",
     "tools",
     "repositories",
 }
@@ -104,6 +109,20 @@ def number(value: object, where: str, low: float, high: float) -> float:
 def whole(value: object, where: str, low: int, high: int) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= high:
         raise SettingsError(f"{where} is {value!r}; it must be a whole number from {low} to {high}")
+    return value
+
+
+MUTANT_MEMORY_MB = (256, 12_288)
+"""From a quarter of a gigabyte to the run's whole cgroup (MemoryMax 12G, #345)."""
+
+
+def optional_whole(value: object, where: str, low: int, high: int) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= high:
+        raise SettingsError(
+            f"{where} is {value!r}; it must be null or a whole number from {low} to {high}"
+        )
     return value
 
 
@@ -188,6 +207,9 @@ def load_settings(source: str) -> Settings:
         ),
         max_new_issues=whole(raw["max_new_issues"], "max_new_issues", 0, 100),
         max_children=whole(raw["max_children"], "max_children", 1, RUNNER_CPUS),
+        mutant_memory_mb=optional_whole(
+            raw["mutant_memory_mb"], "mutant_memory_mb", *MUTANT_MEMORY_MB
+        ),
         tools={name: text(tools[name], f"tools.{name}") for name in TOOLS},
         repositories={name: load_repository(name, value) for name, value in repositories.items()},
     )
