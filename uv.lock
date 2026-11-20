@@ -2144,7 +2144,7 @@ source = { editable = "packages/troupe-plugin-sdk" }
 
 [[package]]
 name = "troupe-run"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "packages/troupe-run" }
 dependencies = [
     { name = "troupe" },

@@ -3,7 +3,7 @@
   "packages/troupe-artifacts-local": "0.1.0",
   "packages/troupe-identity-local": "0.1.0",
   "packages/troupe-plugin-sdk": "0.1.0",
-  "packages/troupe-run": "0.1.0",
+  "packages/troupe-run": "0.2.0",
   "packages/troupe-stage-local": "0.2.0",
   "packages/troupe-store-text": "0.1.1",
   "packages/troupe-vcs-files": "0.2.0",
