@@ -37,6 +37,7 @@ import threading
 import time
 import tomllib
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -70,7 +71,11 @@ CAPABILITY_RULE = "capability-label"
 """Fails the GitHub check when a troupe spec in scope names no capability label, a malformed
 Capability: line, or a label troupe-run/infrastructure doesn't declare on main. Checked only on
 GitHub, so it isn't overridable (guard-capability-label-at-proposal design D1, D4)."""
-RULES = (*OVERRIDABLE_RULES, TAMPER_RULE, OPENSPEC_RULE, CAPABILITY_RULE)
+BLOCKED_RULE = "blocked-by"
+"""Fails the GitHub check while an issue a pull request closes is blocked by an issue that's still
+open, in any repository (#275; auto-merge design D7). Checked only on GitHub, where no override is
+consumed, so it isn't overridable."""
+RULES = (*OVERRIDABLE_RULES, TAMPER_RULE, OPENSPEC_RULE, CAPABILITY_RULE, BLOCKED_RULE)
 
 HOOKS_PATH = ".githooks"
 SOURCE_REPOSITORY = "troupe-run/infrastructure"
@@ -167,6 +172,18 @@ CAPABILITY_LABELS_URL = (
 )
 CAPABILITY_LABELS_TIMEOUT_SECONDS = 30.0
 """How long reading the declared labels may take before capability-label fails (design D3)."""
+GITHUB_API = "https://api.github.com"
+BLOCKED_TIMEOUT_SECONDS = 30.0
+"""How long each read of an issue's blockers may take before blocked-by fails (auto-merge D7)."""
+ISSUE_REFERENCE = re.compile(
+    r"(?:#(?P<number>\d+)"
+    r"|(?P<repository>[\w.-]+/[\w.-]+)#(?P<cross>\d+)"
+    r"|https://github\.com/(?P<url_repository>[\w.-]+/[\w.-]+)/issues/(?P<url_number>\d+))\Z"
+)
+"""The issue a CLOSING match names: the reference after its keyword, in one of CLOSING's forms."""
+QUEUE_REF = re.compile(r"refs/heads/gh-readonly-queue/.+/pr-(?P<number>\d+)-[0-9a-f]{40}")
+"""A merge group's head_ref, which names the pull request the group was built for (auto-merge D7,
+probed on a throwaway repository: refs/heads/gh-readonly-queue/main/pr-3-<sha>)."""
 CAPABILITY_STANDARD_CHANGE = (
     f"https://github.com/{SOURCE_REPOSITORY}/blob/main/docs/standard-changes.md#a-capability-label"
 )
@@ -2296,6 +2313,12 @@ OWNER_ONLY_MESSAGES = {
         "only the owner changes the org's or a repository's administration.",
         "Change it in troupe-run/infrastructure through a pull request, or ask the owner.",
     ),
+    "hold": (
+        "only the owner lifts a hold: removing the `hold` label would let auto-merge queue the "
+        "pull request.",
+        "Ask the owner to remove the label, with the pull request's link. Adding `hold` is "
+        "allowed.",
+    ),
     "credentials": (
         "agents don't handle the login's credentials.",
         "Use gh itself; if something needs the token, ask the owner.",
@@ -2741,10 +2764,74 @@ def _classify_api(rest: Sequence[str], cwd: Path) -> tuple[str, str | None, str 
     for pattern, group in GH_API_OWNER_ONLY:
         if pattern.fullmatch(endpoint) and method in _WRITES:
             return "owner", group, repository, []
+    if api_lifts_hold(endpoint, method, rest, cwd):
+        return "owner", "hold", repository, []
     for pattern, methods in GH_API_WORKFLOW_WRITES:
         if pattern.fullmatch(endpoint) and method in methods:
             return "allow", None, repository, []
     return "unlisted", None, repository, []
+
+
+HOLD_LABEL = "hold"
+"""The label that stops auto-merge for one pull request: anyone may add it, only the owner lifts it
+(spec: development-workflow; auto-merge design D9)."""
+
+
+_ISSUE = re.compile(rf"{_REPO}/issues/{_SEG}")
+_ISSUE_LABELS = re.compile(rf"{_REPO}/issues/{_SEG}/labels(?:/(?P<name>{_SEG}))?")
+
+
+def api_lifts_hold(endpoint: str, method: str, rest: Sequence[str], cwd: Path) -> bool:
+    """Whether a gh api write could remove `hold` from an issue or pull request: deleting that
+    label or every label, or a PATCH of the issue that sets its labels, which replaces them. A
+    PATCH whose --input can't be read is judged as setting them (auto-merge design D9)."""
+    labels = _ISSUE_LABELS.fullmatch(endpoint)
+    if labels is not None and method == "DELETE":
+        name = labels.group("name")
+        return name is None or urllib.parse.unquote(name).lower() == HOLD_LABEL
+    if method != "PATCH" or not _ISSUE.fullmatch(endpoint):
+        return False
+    if any(re.match(r"labels(\[\])?=", value) for value, _ in _api_fields(rest)):
+        return True
+    for index, word in enumerate(rest):
+        given = rest[index + 1] if word == "--input" and index + 1 < len(rest) else None
+        if word.startswith("--input="):
+            given = word.partition("=")[2]
+        if given is None:
+            continue
+        text = _read_named(given, cwd)
+        if text is None or re.search(r'"labels"\s*:', text):
+            return True
+    return False
+
+
+def removed_labels(rest: Sequence[str]) -> set[str]:
+    """The labels a gh pr/issue edit removes, lower-cased: --remove-label takes a comma-separated
+    list, given as the next word or after =, and may be repeated. One the shell builds counts as
+    `hold`."""
+    names: list[str] = []
+    for index, word in enumerate(rest):
+        if word == "--remove-label" and index + 1 < len(rest):
+            names.extend(rest[index + 1].split(","))
+        elif word.startswith("--remove-label="):
+            names.extend(word.removeprefix("--remove-label=").split(","))
+    # A name the shell builds ($L, `...`, $(...)) can't be read here, so it may be `hold`, as
+    # pr-closes-issue treats a shell-built description (#359's review).
+    return {HOLD_LABEL if SHELL_EXPANSION.search(name) else name.strip().lower() for name in names}
+
+
+def flagged_owner_only(key: tuple[str, str], rest: Sequence[str]) -> str | None:
+    """The owner-only group of a workflow command made the owner's by its flags, or None:
+    `gh pr merge --admin` merges past the rules, and removing `hold` lifts a hold."""
+    if key == ("pr", "merge") and any(
+        word == "--admin"
+        or (word.startswith("--admin=") and word[8:].lower() not in ("false", "0"))
+        for word in rest
+    ):
+        return "merge"
+    if key in (("pr", "edit"), ("issue", "edit")) and HOLD_LABEL in removed_labels(rest):
+        return "hold"
+    return None
 
 
 def gh_decision(words: Sequence[str], cwd: Path) -> Decision:
@@ -2809,12 +2896,9 @@ def gh_decision(words: Sequence[str], cwd: Path) -> Decision:
         word in ("-t", "--show-token") or word.startswith("--show-token=") for word in rest
     ):
         return _owner_only("credentials")
-    if key == ("pr", "merge") and any(
-        word == "--admin"
-        or (word.startswith("--admin=") and word[8:].lower() not in ("false", "0"))
-        for word in rest
-    ):
-        return ALLOW if throwaway_kind(_gh_repository(words, rest)) else _owner_only("merge")
+    flagged = flagged_owner_only(key, rest)
+    if flagged is not None:
+        return ALLOW if throwaway_kind(_gh_repository(words, rest)) else _owner_only(flagged)
     if key in GH_READS or key in GH_WORKFLOW_WRITES:
         return ALLOW
     repository = _gh_repository(words, rest)
@@ -4183,6 +4267,178 @@ def capability_label(
     )
 
 
+# --- blocked-by (#275; auto-merge design D7) -------------------------------------------------
+
+
+class UnreadableGitHubError(Exception):
+    """A read from GitHub's API that failed or returned something unexpected: never "no data"."""
+
+
+def github_get(path: str, send: Callable[[urllib.request.Request, float], bytes] = _send) -> object:
+    """GET a path of GitHub's REST API, with the run's token when there is one, sent only to the API
+    (unredirected, as declared_labels sends it, #206)."""
+    request = urllib.request.Request(  # noqa: S310 (a fixed https URL)
+        f"{GITHUB_API}/{path}", headers={"Accept": "application/vnd.github+json"}
+    )
+    token = os.environ.get("GITHUB_TOKEN")
+    if token:
+        request.add_unredirected_header("Authorization", f"Bearer {token}")
+    try:
+        body = send(request, BLOCKED_TIMEOUT_SECONDS)
+    except urllib.error.HTTPError as error:
+        raise UnreadableGitHubError(f"GitHub answered {error.code} {error.reason}") from error
+    except OSError as error:  # a timeout or a failed connection, URLError included
+        raise UnreadableGitHubError(f"the request failed: {error}") from error
+    try:
+        result: object = json.loads(body)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise UnreadableGitHubError(f"it isn't JSON: {error}") from error
+    return result
+
+
+def closed_issues(description: str, repository: str) -> list[tuple[str, int]]:
+    """The issues a description closes, read with CLOSING as pr-closes-issue reads them, each as
+    (owner/name, number); a bare #n is in ``repository``. In order, without repeats."""
+    found: list[tuple[str, int]] = []
+    for match in CLOSING.finditer(description):
+        reference = match.group(0).split()[-1]
+        parsed = ISSUE_REFERENCE.match(reference)
+        if parsed is None:  # CLOSING's forms are ISSUE_REFERENCE's, so this can't happen
+            continue
+        if parsed.group("number"):
+            issue = (repository, int(parsed.group("number")))
+        elif parsed.group("cross"):
+            issue = (parsed.group("repository"), int(parsed.group("cross")))
+        else:
+            issue = (parsed.group("url_repository"), int(parsed.group("url_number")))
+        if issue not in found:
+            found.append(issue)
+    return found
+
+
+def _repository_of(blocker: Mapping[str, object]) -> str | None:
+    url = blocker.get("repository_url")
+    prefix = f"{GITHUB_API}/repos/"
+    if isinstance(url, str) and url.startswith(prefix):
+        return url.removeprefix(prefix)
+    return None
+
+
+def open_blockers(
+    repository: str, number: int, read: Callable[[str], object] = github_get
+) -> list[str]:
+    """The issues still open that block repository#number, as owner/name#n. Every page is read; a
+    blocker of any type counts (owner, 2026-11-19), and anything unreadable raises."""
+    found: list[str] = []
+    page = 1
+    while True:
+        listing = read(
+            f"repos/{repository}/issues/{number}/dependencies/blocked_by?per_page=100&page={page}"
+        )
+        if not isinstance(listing, list):
+            raise UnreadableGitHubError("its blocked-by list isn't a list")
+        for blocker in listing:
+            if not isinstance(blocker, dict):
+                raise UnreadableGitHubError("a blocker in its list isn't an object")
+            state, blocker_number = blocker.get("state"), blocker.get("number")
+            blocker_repository = _repository_of(blocker)
+            if (
+                state not in ("open", "closed")
+                or not isinstance(blocker_number, int)
+                or blocker_repository is None
+            ):
+                raise UnreadableGitHubError("a blocker has no state, number or repository")
+            if state == "open":
+                found.append(f"{blocker_repository}#{blocker_number}")
+        if len(listing) < 100:
+            return found
+        page += 1
+
+
+def blocked_by(
+    description: str, repository: str, read: Callable[[str], object] = github_get
+) -> Decision:
+    """The blocked-by rule over a pull request's description: every issue it closes, judged by
+    its blockers' state now (#275; auto-merge design D7)."""
+    blocked: list[str] = []
+    for issue_repository, number in closed_issues(description, repository):
+        issue = f"{issue_repository}#{number}"
+        try:
+            blockers = open_blockers(issue_repository, number, read)
+        except UnreadableGitHubError as error:
+            return Decision(
+                BLOCKED_RULE,
+                f"couldn't read what blocks {issue}, which the pull request closes: {error}.",
+                "Re-run the check. If it fails again, check the issue exists, and tell the owner, "
+                "with the run's URL.",
+            )
+        for blocker in blockers:
+            blocked.append(f"{issue} is blocked by {blocker}, which is still open")
+    if not blocked:
+        return ALLOW
+    return Decision(
+        BLOCKED_RULE,
+        "; ".join(blocked) + ".",
+        "Merge what blocks it first (or remove the blocked-by link, if it was set wrongly), "
+        "then re-run this check.",
+    )
+
+
+def queued_pull_request(payload: Mapping[str, object]) -> int:
+    """The pull request a merge group was built for, from its head_ref (auto-merge design D7)."""
+    group = payload.get("merge_group")
+    head_ref = group.get("head_ref") if isinstance(group, dict) else None
+    match = QUEUE_REF.fullmatch(head_ref) if isinstance(head_ref, str) else None
+    if match is None:
+        raise UnreadableGitHubError(
+            f"the merge group's head_ref {head_ref!r} doesn't name a pull request"
+        )
+    return int(match.group("number"))
+
+
+def blocked_by_on_github(
+    event: str,
+    payload: Mapping[str, object],
+    description: str | None,
+    repository: str | None,
+    read: Callable[[str], object] = github_get,
+) -> Decision:
+    """blocked-by for this run: a pull request's description, or the description of the pull
+    request a merge group was built for, read now. A push closes nothing, so isn't judged."""
+    if event not in ("pull_request", "merge_group") or repository is None:
+        return ALLOW
+    if event == "merge_group":
+        try:
+            number = queued_pull_request(payload)
+            pull = read(f"repos/{repository}/pulls/{number}")
+        except UnreadableGitHubError as error:
+            return Decision(
+                BLOCKED_RULE,
+                f"couldn't tell which pull request this merge group is for, or read it: {error}.",
+                "Re-run the check. If it fails again, tell the owner, with the run's URL.",
+            )
+        if not isinstance(pull, dict):
+            return Decision(
+                BLOCKED_RULE,
+                f"the merge group's pull request #{number} isn't an object.",
+                "Re-run the check. If it fails again, tell the owner, with the run's URL.",
+            )
+        # A release pull request is exempt in the queue as it was as a pull request (#359's
+        # review): its own branch, not the queue's, says whether it's one.
+        head = pull.get("head")
+        head = head if isinstance(head, dict) else {}
+        head_repo = head.get("repo")
+        head_name = head_repo.get("full_name") if isinstance(head_repo, dict) else None
+        ref = head.get("ref")
+        if reserved_release_branch(
+            ref if isinstance(ref, str) else None, head_name if isinstance(head_name, str) else None
+        ):
+            return ALLOW
+        body = pull.get("body")
+        description = body if isinstance(body, str) else ""
+    return blocked_by(description or "", repository, read)
+
+
 # --- entry points ----------------------------------------------------------------------------
 
 
@@ -4342,7 +4598,9 @@ def run_ci_entry(
     repository: str | None = None,
     read_labels: Callable[[], frozenset[str]] = declared_labels,
     description: str | None = None,
+    read_github: Callable[[str], object] | None = None,
 ) -> int:
+    from_github = head is None
     if head is None:
         try:
             base, head, branch, title, repository, description = github_ci_inputs(root)
@@ -4408,6 +4666,18 @@ def run_ci_entry(
         print(note)
     if labels.refused:
         refusals.append(labels)
+    # The repository the run is in resolves a bare #n, as GitHub's own closing keywords do. A
+    # release pull request is exempt, as from pr-closes-issue: its body is release-please's
+    # changelog, whose words aren't closing lines (#359's review).
+    blocked = blocked_by_on_github(
+        os.environ.get("GITHUB_EVENT_NAME", "") if from_github else "",
+        _event_payload(),
+        None if reserved_release_branch(branch, repository) else description,
+        os.environ.get("GITHUB_REPOSITORY") or None,
+        read_github or github_get,
+    )
+    if blocked.refused:
+        refusals.append(blocked)
     for refusal in refusals:
         print(refusal.text(), file=sys.stderr)
     if not refusals:
