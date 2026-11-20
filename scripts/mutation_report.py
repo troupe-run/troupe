@@ -8,7 +8,9 @@ as data, against a closed schema: an unknown or missing field is an error naming
      "modules": {"<module>": {"killed": n, "survived": n, "no_tests": n, "timeout": n,
                               "crashed": n, "skipped": n, "finished": true,
                               "survivors": [{"name": ..., "path": ..., "line": n, "change": ...,
-                                             "commit": "<sha>" | null, "new": false}]}}}
+                                             "commit": "<sha>" | null, "new": false}],
+                              "crashed_mutants": [{"name": ..., "path": ..., "line": n,
+                                                   "change": ..., "exit_code": n | null}]}}}
 
 A module's score counts untested code against it: caught (killed, timed out or crashed) over
 caught, survived and not covered by any test. Skipped mutants don't count.
@@ -27,7 +29,8 @@ from typing import Any
 
 from mutation_settings import SettingsError, closed, text, whole
 
-VERSION = 1
+VERSION = 2
+"""2 added each module's crashed_mutants (#361)."""
 SHA = re.compile(r"[0-9a-f]{40}")
 COUNTS = ("killed", "survived", "no_tests", "timeout", "crashed", "skipped")
 
@@ -47,6 +50,18 @@ class Survivor:
 
 
 @dataclass(frozen=True)
+class Crashed:
+    """A mutant whose tests died (by a signal, or the tool's runtime error), named so the owner can
+    decide on an exclusion from it (#361)."""
+
+    name: str
+    path: str
+    line: int
+    change: str
+    exit_code: int | None  # the tool's exit code for it; None where the tool gives none (Stryker)
+
+
+@dataclass(frozen=True)
 class Module:
     killed: int
     survived: int
@@ -56,6 +71,7 @@ class Module:
     skipped: int
     finished: bool
     survivors: tuple[Survivor, ...]
+    crashed_mutants: tuple[Crashed, ...] = ()
 
     @property
     def caught(self) -> int:
@@ -105,8 +121,22 @@ def load_survivor(value: object, where: str) -> Survivor:
     )
 
 
+def load_crashed(value: object, where: str) -> Crashed:
+    fields = closed(value, {"name", "path", "line", "change", "exit_code"}, where)
+    code = fields["exit_code"]
+    if code is not None and (isinstance(code, bool) or not isinstance(code, int)):
+        raise ReportError(f"{where}.exit_code is {code!r}; it must be a whole number or null")
+    return Crashed(
+        name=text(fields["name"], f"{where}.name"),
+        path=text(fields["path"], f"{where}.path"),
+        line=whole(fields["line"], f"{where}.line", 1, 10_000_000),
+        change=text(fields["change"], f"{where}.change"),
+        exit_code=code,
+    )
+
+
 def load_module(value: object, where: str) -> Module:
-    fields = closed(value, {*COUNTS, "finished", "survivors"}, where)
+    fields = closed(value, {*COUNTS, "finished", "survivors", "crashed_mutants"}, where)
     counts = {name: whole(fields[name], f"{where}.{name}", 0, 10_000_000) for name in COUNTS}
     finished = fields["finished"]
     if not isinstance(finished, bool):
@@ -121,7 +151,17 @@ def load_module(value: object, where: str) -> Module:
         raise ReportError(
             f"{where} lists {len(loaded)} survivors but counts {counts['survived']} survived"
         )
-    return Module(**counts, finished=finished, survivors=loaded)
+    crashes = fields["crashed_mutants"]
+    if not isinstance(crashes, list):
+        raise ReportError(f"{where}.crashed_mutants must be a list")
+    crashed = tuple(
+        load_crashed(item, f"{where}.crashed_mutants[{n}]") for n, item in enumerate(crashes)
+    )
+    if len(crashed) != counts["crashed"]:
+        raise ReportError(
+            f"{where} lists {len(crashed)} crashed mutants but counts {counts['crashed']} crashed"
+        )
+    return Module(**counts, finished=finished, survivors=loaded, crashed_mutants=crashed)
 
 
 def load_report(source: str, repository: str) -> Report:
@@ -166,6 +206,7 @@ def dump_report(report: Report) -> str:
                     **{count: getattr(module, count) for count in COUNTS},
                     "finished": module.finished,
                     "survivors": [vars(survivor) for survivor in module.survivors],
+                    "crashed_mutants": [vars(crash) for crash in module.crashed_mutants],
                 }
                 for name, module in sorted(report.modules.items())
             },
@@ -299,6 +340,7 @@ def from_mutmut(
         counts = dict.fromkeys(COUNTS, 0)
         finished = True
         survivors = []
+        crashed = []
         tree = ast.parse((root / path).read_text(encoding="utf-8"))
         for name, code in sorted(codes.items()):
             if code is None:
@@ -306,13 +348,24 @@ def from_mutmut(
                 continue
             status = STATUS_BY_EXIT_CODE.get(code, "skipped")
             counts[status] += 1
-            if status != "survived":
+            if status not in ("survived", "crashed"):
                 continue
             match = MUTANT.fullmatch(name)
             start = function_start(tree, match["function"]) if match else None
             line, change = mutated_line(show(name), start or 1)
-            survivors.append(Survivor(name, path, line, change or name))
+            if status == "survived":
+                survivors.append(Survivor(name, path, line, change or name))
+            else:
+                crashed.append(Crashed(name, path, line, change or name, code))
         modules[module_name(path, source)] = Module(
-            **counts, finished=finished, survivors=tuple(survivors)
+            killed=counts["killed"],
+            survived=counts["survived"],
+            no_tests=counts["no_tests"],
+            timeout=counts["timeout"],
+            crashed=counts["crashed"],
+            skipped=counts["skipped"],
+            finished=finished,
+            survivors=tuple(survivors),
+            crashed_mutants=tuple(crashed),
         )
     return modules
