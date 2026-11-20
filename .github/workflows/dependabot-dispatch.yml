@@ -17,17 +17,28 @@ name: dependabot-dispatch
 # Delivered to troupe and website with the guard's files (tofu/guard_delivery.tf). infrastructure
 # holds it as the source, and its own dependabot-issues.yml runs on Dependabot's runs directly, so
 # the job is skipped there. scripts/tests/test_dependabot_dispatch_workflow.py pins the rest.
+#
+# It also starts infrastructure's auto-merge.yml when a pull request's state changes here: CI, guard
+# or the review completes, or a pull request's labels change (spec: dependency-updates, "The
+# dispatcher starts auto-merge when a pull request changes state"; auto-merge design D8). Each job
+# starts only its own workflow, and the only expressions that read the event are the jobs' `if:`s,
+# which choose between them. pull_request_target runs main's copy of this file, as workflow_run
+# does, so a pull request's own files never reach the environment.
 on:
   workflow_run:
-    workflows: ["Dependabot Updates"]
+    workflows: ["Dependabot Updates", "CI", "guard", "claude review"]
     types: [completed]
+  pull_request_target:
+    types: [labeled, unlabeled]
 
 permissions: {}
 
 jobs:
   dispatch:
     name: start dependabot-issues
-    if: github.repository != 'troupe-run/infrastructure'
+    if: >-
+      github.repository != 'troupe-run/infrastructure' && github.event_name == 'workflow_run' &&
+      github.event.workflow_run.name == 'Dependabot Updates'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     # Limited to main, and holds only the troupe-run-dispatch App's key (tofu/dependabot_dispatch.tf).
@@ -49,3 +60,31 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: gh workflow run dependabot-issues.yml -R troupe-run/infrastructure --ref main
+
+  auto-merge:
+    name: start auto-merge
+    if: >-
+      github.repository != 'troupe-run/infrastructure' && (github.event_name == 'pull_request_target' ||
+      github.event.workflow_run.name != 'Dependabot Updates')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # The same environment and App as dispatch: its token can start infrastructure's workflows and
+    # write nothing (spec: dependabot-dispatch-credentials).
+    environment:
+      name: dependabot-dispatch
+      deployment: false
+    permissions: {}
+    steps:
+      - name: Mint the troupe-run-dispatch App's token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.DISPATCH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.DISPATCH_APP_PRIVATE_KEY }}
+          owner: troupe-run
+          repositories: infrastructure
+          permission-actions: write
+      - name: Start auto-merge on infrastructure
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: gh workflow run auto-merge.yml -R troupe-run/infrastructure --ref main
