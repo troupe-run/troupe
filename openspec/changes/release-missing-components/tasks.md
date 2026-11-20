@@ -25,7 +25,7 @@
 
 ## 3. The repair route (D4)
 
-- [ ] 3.1 Add "Repairing a missing release" to `contributing/releasing.md`: what the check's failure means, route 1
+- [x] 3.1 Add "Repairing a missing release" to `contributing/releasing.md`: what the check's failure means, route 1
   (edit the merged release PR's body, the double escaping, relabel, re-run) and route 2 (`gh release create`).
   Link it from "When something goes wrong". Verify: the anchor the script prints matches the rendered heading
   (`#repairing-a-missing-release`), and the docs check in `uv run scripts/check.py` passes.
