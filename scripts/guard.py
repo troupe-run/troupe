@@ -203,6 +203,14 @@ sections of DEFAULT_CHANGELOG_SECTIONS in its src/util/filter-commits.ts, which 
 override (protocol-schema-commit-types design D2)."""
 BREAKING_FOOTER = re.compile(r"^BREAKING[ -]CHANGE:", re.MULTILINE)
 AUTOSQUASH_PREFIXES = ("fixup! ", "squash! ", "amend! ")
+MARKUP = re.compile(
+    r"<!--|</?[A-Za-z][-.:0-9_A-Za-z]*(?:/?>|$|"
+    r"[\t-\r \xa0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff])|&(?:lt|#|amp)",
+    re.I | re.A,
+)
+"""Text release-please's notes parser (node-html-parser) reads as HTML once its round trip has
+decoded the notes, or an entity that decodes to it (guard-markup-in-commit-messages design D2).
+ASCII letters, and JavaScript's \\s spelled out: Python's \\s under re.A is ASCII only."""
 CLOSING = re.compile(
     r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):?\s+"
     r"(?:#\d+|[\w.-]+/[\w.-]+#\d+|https://github\.com/[\w.-]+/[\w.-]+/issues/\d+)",
@@ -360,7 +368,7 @@ def commit_message(message: str) -> Decision:
     lines = [line for line in message.splitlines() if not line.startswith("#")]
     first = next((line for line in lines if line.strip()), "")
     if COMMIT_PATTERN.match(_conventional_subject(message)):
-        return ALLOW
+        return _markup(message)
     example = "feat(cli): add --version"
     if first.startswith('Revert "'):
         fix = "Write it as a Conventional Commit: revert: <what is reverted> (git revert --edit)."
@@ -374,11 +382,38 @@ def commit_message(message: str) -> Decision:
     return Decision("commit-message", f"'{first}' isn't a Conventional Commit.", fix)
 
 
+def _markup(message: str) -> Decision:
+    """Refuse markup in what release-please writes into release notes: the subject line, and each
+    BREAKING CHANGE note up to a blank line (troupe-run/troupe#484; design D3, D4). Lines end only
+    at "\n", as in git, not at every separator str.splitlines() knows. A "#" line is judged inside
+    a note: a stored or -m message keeps it, and release-please writes it."""
+    lines = message.split("\n")
+    subject = next((x for x in lines if x.strip() and not x.startswith("#")), "")
+    noted, inside = [subject], False
+    for line in lines:
+        inside = bool(line.strip()) and (inside or BREAKING_FOOTER.match(line) is not None)
+        noted += [line] if inside else []
+    for line in noted:
+        if found := MARKUP.search(line):
+            return Decision(
+                "commit-message",
+                f"'{found.group().strip()}' in '{line}' is HTML to release-please's notes parser, "
+                "which drops it or the release notes after it.",
+                "Write it without angle brackets or entities, e.g. TROUPE_RUNTIME_{NAME}_MODEL or "
+                "NAME. Backticks don't protect it: the parse is HTML, not Markdown.",
+            )
+    return ALLOW
+
+
 def pr_title(title: str) -> Decision:
     """The commit-message rule over a pull request's title: if squash merging is ever turned on,
     the title becomes the commit message on main (release-please-prs design D3)."""
-    if not commit_message(title).refused:
+    decision = commit_message(title)
+    if not decision.refused:
         return ALLOW
+    if COMMIT_PATTERN.match(_conventional_subject(title)):
+        fix = f"Edit the title (gh pr edit <n> --title '...', or on GitHub). {decision.fix}"
+        return Decision("commit-message", f"pull request title: {decision.problem}", fix)
     return Decision(
         "commit-message",
         f"pull request title '{title}' isn't a Conventional Commit.",
@@ -3221,17 +3256,23 @@ def nonconforming_commits(root: Path, commits: Iterable[str]) -> Decision:
     bad: list[str] = []
     for sha in commits:
         message = git(root, "log", "-1", "--format=%B", sha)
-        if commit_message(message).refused:
-            first = next((line for line in message.splitlines() if line.strip()), "")
-            bad.append(f"{sha[:7]} '{first}'")
+        decision = commit_message(message)
+        if decision.refused:
+            first = next((line for line in message.split("\n") if line.strip()), "")
+            conventional = COMMIT_PATTERN.match(_conventional_subject(message))
+            markup = _markup(message) if conventional else ALLOW
+            bad.append(f"{sha[:7]} " + (markup.problem if markup.refused else f"'{first}'"))
     if not bad:
         return ALLOW
     listed = "; ".join(bad[:5]) + (f"; and {len(bad) - 5} more" if len(bad) > 5 else "")
     return Decision(
         "commit-message",
-        f"{len(bad)} commit(s) aren't Conventional Commits: {listed}.",
+        f"{len(bad)} commit(s) aren't Conventional Commits, or hold text release notes read as "
+        f"HTML: {listed}.",
         "Reword them before they're shared: git commit --amend for the last commit, or git rebase "
-        "with --exec / reword for earlier ones. Expected form: 'feat(cli): add --version'.",
+        "with --exec / reword for earlier ones. Expected form: 'feat(cli): add --version', with "
+        "no angle brackets or entities in the subject or a BREAKING CHANGE note (backticks don't "
+        "help).",
     )
 
 
@@ -4738,12 +4779,21 @@ def committing_paths(root: Path) -> list[str]:
     return result.stdout.splitlines()
 
 
+def _as_git_strips(message: str) -> str:
+    """COMMIT_EDITMSG as git's editor cleanup commits it: comment lines, and everything from the
+    `git commit -v` scissors line on, dropped. The hook sees it before that cleanup, and can't tell
+    an editor from -m, so a -m message's "#" lines are left to the push and GitHub checks."""
+    lines = message.split("\n")
+    cut = next((i for i, x in enumerate(lines) if "-" * 24 + " >8 " in x), len(lines))
+    return "\n".join(x for x in lines[:cut] if not x.startswith("#"))
+
+
 def run_commit_msg(root: Path, message_file: Path) -> int:
     message = message_file.read_text(encoding="utf-8")
     first = next((line for line in message.splitlines() if line.strip()), "")
 
     def checks() -> Iterable[Decision]:
-        yield commit_message(message)
+        yield commit_message(_as_git_strips(message))
         yield schema_commit_type(message, committing_paths(root))
 
     refusal = first_refusal(root, checks(), f"commit message: {first}")
