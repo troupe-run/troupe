@@ -44,6 +44,8 @@ CHILDREN_PLUGIN = Path(__file__).resolve().parent / "mutation_children.py"
 PLUGIN_COPY = "_mutation_children_plugin"
 """The plugin's name in mutmut's working directory: not mutation_children, since infrastructure's
 own copy of that is in the source mutmut mutates, and a mutated copy would load in its place."""
+PEAKS = "_mutation_children_peaks.log"
+"""Where each process the plugin loads in records its memory peaks (#366, design D3)."""
 
 
 class RunError(Exception):
@@ -152,7 +154,10 @@ def mutmut_config(workdir: Path, checkout: Path, unit: ms.Unit, *, children: int
         return os.path.relpath(checkout / path, workdir)
 
     tests = local(unit.tests)
-    also_copy = [local(path) for path in unit.also_copy] + [f"{PLUGIN_COPY}.py"]
+    also_copy = [local(path) for path in unit.also_copy] + [
+        f"{PLUGIN_COPY}.py",
+        f"{PLUGIN_COPY}.json",
+    ]
     do_not_mutate = []
     if workdir == checkout:
         # The source is linked as src, and its tests with it: they're run, never mutated. Every
@@ -239,6 +244,46 @@ def mutmut_bin() -> str:
     return found
 
 
+LARGEST_MUTANTS = 5
+
+
+def megabytes(kilobytes: int) -> int:
+    return (kilobytes + 512) // 1024
+
+
+def memory_lines(unit: str, text: str | None) -> list[str]:
+    """A unit's recorded peaks as `memory:` log lines: mutmut's own largest (where its stats and
+    clean passes run, and every mutant's process starts from), then the largest mutant processes
+    by peak virtual size, then the count. A malformed line is skipped and counted (#366, D3)."""
+    own: list[tuple[int, int]] = []
+    mutants: list[tuple[int, int, str]] = []
+    malformed = 0
+    for line in (text or "").splitlines():
+        parts = line.split()
+        if len(parts) != 3 or not parts[1].isdigit() or not parts[2].isdigit():
+            malformed += 1
+            continue
+        name, peak, resident = parts[0], int(parts[1]), int(parts[2])
+        if name == "mutmut":
+            own.append((peak, resident))
+        else:
+            mutants.append((peak, resident, name))
+    if not own and not mutants:
+        return [f"memory: {unit} no peaks recorded"]
+    lines = []
+    if own:
+        peak = megabytes(max(p for p, _ in own))
+        resident = megabytes(max(r for _, r in own))
+        lines.append(f"memory: {unit} mutmut VmPeak={peak} MB VmHWM={resident} MB")
+    largest = sorted(mutants, key=lambda m: (-m[0], m[2]))[:LARGEST_MUTANTS]
+    for peak, resident, name in largest:
+        sizes = f"VmPeak={megabytes(peak)} MB VmHWM={megabytes(resident)} MB"
+        lines.append(f"memory: {unit} mutant {name} {sizes}")
+    skipped = f" ({malformed} malformed lines skipped)" if malformed else ""
+    lines.append(f"memory: {unit} {len(own) + len(mutants)} processes recorded{skipped}")
+    return lines
+
+
 def run_mutmut(
     checkout: Path,
     unit: ms.Unit,
@@ -247,9 +292,11 @@ def run_mutmut(
     run: Run,
     *,
     children: int,
+    memory_mb: int | None,
 ) -> dict[str, mr.Module]:
-    """One unit's modules, with paths as in the checkout. `names` limits it to those globs, and
-    `children` is how many mutants run at once (the settings' max_children)."""
+    """One unit's modules, with paths as in the checkout. `names` limits it to those globs,
+    `children` is how many mutants run at once (the settings' max_children), and `memory_mb` caps
+    each mutant's test process (the settings' mutant_memory_mb; None for no cap, #366)."""
     workdir = mutmut_workdir(checkout, unit)
     if (workdir / "setup.cfg").exists():
         if workdir == checkout:
@@ -259,11 +306,19 @@ def run_mutmut(
             "this run writes its own, so it won't overwrite one the repository holds"
         )
     plugin = workdir / f"{PLUGIN_COPY}.py"
+    plugin_config = workdir / f"{PLUGIN_COPY}.json"
+    peaks = workdir / PEAKS
     links: list[Path] = []
     try:
         if workdir != checkout:
             link_checkout_entries(checkout, unit, links)
         shutil.copy2(CHILDREN_PLUGIN, plugin)
+        # Beside the plugin, which mutmut copies into mutants/ with it (also_copy); the peaks file
+        # is named absolutely, so every process records into the one file (design D2, D3).
+        plugin_config.write_text(
+            json.dumps({"mutant_memory_mb": memory_mb, "peaks": str(peaks)}), encoding="utf-8"
+        )
+        peaks.unlink(missing_ok=True)
         (workdir / "setup.cfg").write_text(
             mutmut_config(workdir, checkout, unit, children=children), encoding="utf-8"
         )
@@ -316,6 +371,12 @@ def run_mutmut(
         for link in links:
             link.unlink()
         plugin.unlink(missing_ok=True)
+        plugin_config.unlink(missing_ok=True)
+        # Finished or not: a run that stops is when the peaks matter most.
+        recorded = peaks.read_text(encoding="utf-8", errors="replace") if peaks.exists() else None
+        for line in memory_lines(unit.name, recorded):
+            print(line, flush=True)
+        peaks.unlink(missing_ok=True)
 
 
 # Stryker
@@ -475,7 +536,15 @@ def collect(
             if time.monotonic() >= deadline:
                 break  # a unit not reached has no modules in the report, so none is judged
             modules.update(
-                run_mutmut(checkout, unit, names, deadline, run, children=settings.max_children)
+                run_mutmut(
+                    checkout,
+                    unit,
+                    names,
+                    deadline,
+                    run,
+                    children=settings.max_children,
+                    memory_mb=settings.mutant_memory_mb,
+                )
             )
     else:
         mutate = list(only.get("stryker", [])) if only is not None else []
