@@ -2066,6 +2066,40 @@ jobs:
     timeout-minutes: 5
     permissions: {}
     steps:
+      # What auto-merge reads to tell complete coverage from the floor (spec: pr-review, "The review's
+      # result for the head is recorded for auto-merge"; auto-merge design D6). Written before the
+      # check decides, and uploaded whatever it decides; it changes nothing the check does.
+      - name: Record the review's result for the head
+        shell: python3 {0}
+        env:
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          COVERAGE: ${{ needs.resolve.outputs.coverage }}
+          CODE: ${{ needs.resolve.outputs.code }}
+        run: |
+          import json
+          import os
+
+          coverage = os.environ.get("COVERAGE", "")
+          code = os.environ.get("CODE", "")
+          result = {
+              "head": os.environ.get("HEAD", ""),
+              "coverage": coverage if coverage in ("complete", "incomplete") else "unknown",
+              "code": code if code in ("none", "all", "unread") else "unknown",
+          }
+          with open("review-result.json", "w", encoding="utf-8") as out:
+              json.dump(result, out)
+          print(json.dumps(result))
+      # A failed upload mustn't fail the check for a review that completed: auto-merge reads a
+      # missing result as "no result recorded" and doesn't queue (#359's review).
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        continue-on-error: true
+        with:
+          name: review-result
+          path: review-result.json
+          if-no-files-found: error
+          # A re-run of this run records its own result in place of the attempt before.
+          overwrite: true
+          retention-days: 30
       - name: Did the review of this head complete?
         shell: python3 {0}
         env:
