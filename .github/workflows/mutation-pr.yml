@@ -102,6 +102,8 @@ jobs:
         env:
           MERGE: ${{ github.sha }}
           RESOURCES: ${{ github.workspace }}/out/resources-pr.log
+          PEAKS: ${{ github.workspace }}/out/peaks-pr.log
+          MUTATION_SCRIPTS: ${{ github.workspace }}/scripts
         # Against the merge's first parent, the base it merged onto, so only the pull request's own
         # changes are mutated, at their lines in the merge.
         run: |
@@ -146,6 +148,11 @@ jobs:
               | grep -iE 'kernel: .*(out of memory|oom-kill|oom_reaper|memory cgroup|killed process)|systemd-oomd|systemd\[1\]: .*(actions\.runner|mutation-[^ ]*\.scope)' \
               | tail -n 200 > "$journal" || true
             if [[ -s "$journal" ]]; then sed 's/^/journal: /' "$journal"; else rm -f "$journal"; fi
+            # The memory peaks, from the uploaded file: an OOM kill of the run took a summary the run
+            # printed itself down with it (#371; dry run 44673717060).
+            if [[ -n "${PEAKS:-}" && -s "$PEAKS" ]]; then
+              python3 "$MUTATION_SCRIPTS/mutation_run.py" peaks "$PEAKS" || true
+            fi
           }
           sample_resources &
           sampler=$!
@@ -206,6 +213,7 @@ jobs:
           path: |
             out/resources-pr.log
             out/journal-pr.log
+            out/peaks-pr.log
           if-no-files-found: ignore
           retention-days: 90
 
