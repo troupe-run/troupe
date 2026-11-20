@@ -38,6 +38,7 @@
 
 ## Workflow follow-up
 
+- Act on Claude's review of the last push; mark ready once it's clean.
 - The merge waits for #263's retrigger (troupe-runner-ollama-v0.1.0 and protocol-v0.2.0 exist), so this change's merge
   run passes.
 - After the merge: confirm the merge run's `release-tags` job passed, then comment on #484 with the PR and the
