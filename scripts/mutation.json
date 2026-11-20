@@ -6,7 +6,7 @@
   "pr_budget_minutes": 45,
   "max_new_issues": 5,
   "max_children": 2,
-  "mutant_memory_mb": null,
+  "mutant_memory_mb": 2048,
   "tools": {
     "mutmut": "3.8.1",
     "stryker": "10.1.1"
