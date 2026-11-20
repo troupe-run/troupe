@@ -451,10 +451,12 @@ def measured_path(path: str, config: ComplexityConfig) -> bool:
 
 
 def lizard_functions(lizard: str, tree: Path, paths: Sequence[str]) -> list[Function]:
-    """Every function lizard finds in `paths` under `tree`."""
+    """Every function lizard finds in `paths` under `tree`. Each path is given as ./<path>, so a
+    file named like an option (`--exclude=*.py`) is read as a file, never as an option that hides
+    the others (#359 review)."""
     if not paths:
         return []
-    result = _process([lizard, "--csv", *paths], tree)
+    result = _process([lizard, "--csv", *(f"./{path}" for path in paths)], tree)
     if result.returncode != 0:
         raise GateError(f"lizard failed (exit {result.returncode}): {result.stderr.strip()}")
     functions = []
