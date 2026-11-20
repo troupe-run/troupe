@@ -18,6 +18,7 @@ import importlib.util
 import json
 import os
 import subprocess
+import sys
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -143,8 +144,13 @@ def pytest_unconfigure(config: object) -> None:
 
 def cap_address_space(megabytes: int) -> None:
     """RLIMIT_AS for this process and what it starts: a runaway mutant's allocation then fails
-    here (MemoryError, or the process dies) instead of running the run's cgroup out (#366, D1)."""
-    import resource  # POSIX only, as mutation runs are
+    here (MemoryError, or the process dies) instead of running the run's cgroup out (#366, D1).
+
+    Nothing on Windows, where no mutation run happens. Narrowing on sys.platform is what lets
+    mypy check this file as Windows sees it, which troupe's Windows legs do (#369)."""
+    if sys.platform == "win32":
+        return
+    import resource
 
     limit = megabytes * 1024 * 1024
     _, hard = resource.getrlimit(resource.RLIMIT_AS)
