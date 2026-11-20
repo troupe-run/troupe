@@ -110,6 +110,7 @@ jobs:
           # The runner's memory, swap, disk and load once a minute while mutmut runs, to the log and to a
           # file uploaded with the report, so a lost runner leaves what it last saw (#337; design D1).
           mkdir -p "$(dirname "$RESOURCES")"
+          resources_since=$(date '+%Y-%m-%d %H:%M:%S')
           sample_resources() {
             local meminfo=${RESOURCES_MEMINFO:-/proc/meminfo} loadavg=${RESOURCES_LOADAVG:-/proc/loadavg} line
             while :; do
@@ -135,6 +136,16 @@ jobs:
               echo "resources: lowest mem_available_mb=$lowest"
               echo "Mutation run: lowest free memory: ${lowest/ at / MB at } UTC" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
             fi
+            # Who ended the run, if the host did: since the step began, the lines from the sources that can
+            # name a sender (the kernel's OOM lines, systemd-oomd, and systemd on the runner's service or
+            # this run's mutation-* scope), to the log and beside the readings (#361; dry run 44633465646).
+            # journal-<repository>.log beside resources-<repository>.log, never the readings file itself.
+            local journal="${RESOURCES%/*}/journal-${RESOURCES##*/}"
+            journal=${journal/journal-resources-/journal-}
+            { sudo -n journalctl --since "$resources_since" --no-pager -o short-iso 2>/dev/null || true; } \
+              | grep -iE 'kernel: .*(out of memory|oom-kill|oom_reaper|memory cgroup|killed process)|systemd-oomd|systemd\[1\]: .*(actions\.runner|mutation-[^ ]*\.scope)' \
+              | tail -n 200 > "$journal" || true
+            if [[ -s "$journal" ]]; then sed 's/^/journal: /' "$journal"; else rm -f "$journal"; fi
           }
           sample_resources &
           sampler=$!
@@ -192,7 +203,9 @@ jobs:
         if: ${{ !cancelled() }}
         with:
           name: resources
-          path: out/resources-pr.log
+          path: |
+            out/resources-pr.log
+            out/journal-pr.log
           if-no-files-found: ignore
           retention-days: 90
 
