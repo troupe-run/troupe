@@ -298,11 +298,17 @@ def run_mutmut(
                 replace(survivor, path=source + survivor.path.removeprefix("src"))
                 for survivor in module.survivors
             )
+            crashed = tuple(
+                replace(crash, path=source + crash.path.removeprefix("src"))
+                for crash in module.crashed_mutants
+            )
             # A whole run the budget stopped leaves its unrun mutants without a code, so from_mutmut
             # already reports their modules as not finished. A run limited to named functions
             # leaves every other mutant unrun on purpose: it finished unless the budget stopped it.
             finished = code != -1 if names else module.finished
-            mapped[name] = replace(module, survivors=survivors, finished=finished)
+            mapped[name] = replace(
+                module, survivors=survivors, crashed_mutants=crashed, finished=finished
+            )
         return mapped
     finally:
         if workdir == checkout:
@@ -337,13 +343,14 @@ def from_stryker(report: Mapping[str, object]) -> dict[str, mr.Module]:
         counts = dict.fromkeys(mr.COUNTS, 0)
         finished = True
         survivors = []
+        crashed = []
         for mutant in entry.get("mutants", []):
             status = STRYKER_STATUS.get(str(mutant.get("status")))
             if status is None:  # Pending: not run within the budget
                 finished = False
                 continue
             counts[status] += 1
-            if status != "survived":
+            if status not in ("survived", "crashed"):
                 continue
             start = mutant["location"]["start"]
             end = mutant["location"]["end"]
@@ -358,8 +365,22 @@ def from_stryker(report: Mapping[str, object]) -> dict[str, mr.Module]:
             else:
                 mutated = f"{mutant.get('mutatorName')}: {mutant.get('replacement', '')}"
             name = f"{mutant.get('mutatorName')}#{mutant.get('id')}"
-            survivors.append(mr.Survivor(name, path, line, f"-{original}\n+{mutated}"))
-        modules[path] = mr.Module(**counts, finished=finished, survivors=tuple(survivors))
+            change = f"-{original}\n+{mutated}"
+            if status == "survived":
+                survivors.append(mr.Survivor(name, path, line, change))
+            else:  # a RuntimeError, which Stryker reports without an exit code (#361)
+                crashed.append(mr.Crashed(name, path, line, change, None))
+        modules[path] = mr.Module(
+            killed=counts["killed"],
+            survived=counts["survived"],
+            no_tests=counts["no_tests"],
+            timeout=counts["timeout"],
+            crashed=counts["crashed"],
+            skipped=counts["skipped"],
+            finished=finished,
+            survivors=tuple(survivors),
+            crashed_mutants=tuple(crashed),
+        )
     return modules
 
 
