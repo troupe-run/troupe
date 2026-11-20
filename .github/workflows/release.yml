@@ -3,9 +3,10 @@ name: release
 # Opens or updates the release pull request from the Conventional Commits on main, and tags and
 # releases what a merged release pull request released (contributing/releasing.md; release-automation
 # design D5). After a release, opens or updates the pull request that pins the bundle at each
-# component's latest release (release-each-package design D4 to D6). Every write uses the release
-# App's token: a pull request opened with GITHUB_TOKEN starts no workflows, so the required checks
-# would never run on it (release-automation design D6).
+# component's latest release (release-each-package design D4 to D6). After every run, checks that
+# each version the manifest records has its tag (release-missing-components design D3). Every
+# write uses the release App's token: a pull request opened with GITHUB_TOKEN starts no workflows,
+# so the required checks would never run on it (release-automation design D6).
 on:
   push:
     branches: [main]
@@ -109,6 +110,32 @@ jobs:
           else
             gh pr create -R "$GITHUB_REPOSITORY" --base main --head "$BRANCH" --title "$title" --body-file "$RUNNER_TEMP/pin-body.md"
           fi
+
+  release-tags:
+    name: check the release tags
+    # Every version the manifest records needs its tag. release-please passes when it skips a
+    # component, and #263's run released 11 of 13 that way (#484), so this fails the run naming each
+    # missing tag and the repair route (release-missing-components design D3). Every push, and even
+    # when release-please failed: a gap stays one until it's repaired. GITHUB_TOKEN reads tags, so
+    # it's outside the release environment and never sees the App's key.
+    needs: release-please
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The manifest as release-please left it, this run's release included.
+          ref: main
+          persist-credentials: false
+      - name: Check every recorded version has its tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -o pipefail
+          gh api --paginate "repos/$GITHUB_REPOSITORY/git/matching-refs/tags" --jq '.[].ref' | python3 scripts/release_tags.py
 
   notify-website:
     name: notify troupe.run
