@@ -192,12 +192,58 @@ gh workflow run release-install-check.yml -f ref=troupe-run-v<version>
 The same command with `-f ref=main`, or a commit, tries the check against unreleased work. That opens no issue
 when it fails.
 
+## Repairing a missing release
+
+After every run, the `release` workflow's `release-tags` job checks that each version in
+`.release-please-manifest.json` has its tag `<component>-v<version>` ([`scripts/release_tags.py`](../scripts/release_tags.py)).
+A member at `0.0.0` hasn't released and needs none. When the job fails, it names each missing tag: a release pull
+request moved the manifest, but no release was made for that component. The check fails on every push until the
+release exists.
+
+**Find out why first.** In the failed run's `release-please` job, the merged release pull request's log has a
+`Building release for path: <path>` line for each component. A missing component is followed by
+`Pull request contains releases, but not for component: <component>`. The usual cause is release-please reading its
+own notes back. After a merge, it parses the release pull request's body, writes it back out and parses it again.
+The first parse decodes the changelog's escaped `&lt;` and `&gt;`, so text like `<NAME>` in a commit subject
+reaches the second parse as an HTML element. That element can take in the blocks after it (#484, where
+troupe-runner-ollama 0.1.0 and protocol 0.2.0 went missing). The guard refuses such text in a commit message
+(troupe-run/infrastructure#364). Backticks don't protect it, because the parse is HTML, not Markdown.
+
+**Route 1: let release-please make it.** It releases a merged pull request labelled `autorelease: pending`, from the
+pull request's body as it is now. The owner:
+
+1. Edits the merged release pull request's body down to the missing components' blocks. Keep release-please's shape:
+   a header line, a line `---`, each component as `<details><summary><component>: <version></summary>` with its
+   changelog section and `</details>`, then `---` and the footer. Escape each `&lt;` and `&gt;` in the notes twice
+   more (`&amp;amp;lt;`), because release-please decodes once per parse. Then
+   `gh pr edit <n> --body-file <file>`.
+2. Relabels it: `gh pr edit <n> --remove-label "autorelease: tagged" --add-label "autorelease: pending"`.
+3. Re-runs the release run that merged it (`gh run rerun <run>`), or lets the next push to `main` run it.
+
+Before step 1, check the body with release-please's own parser, at the version `release.yml` pins: parse it, write it
+back out with `toString()`, parse it again, and confirm each missing component comes out with the notes you expect.
+Only the components in the body are released, and release-please skips a release whose tag already exists. A
+release run then makes them, and pins the bundle if any is a bundle member, as after any release.
+
+**Route 2: make it by hand.** If route 1 can't be made to parse, create each release as release-please would:
+
+```sh
+gh release create <component>-v<version> --target <the release pull request's merge commit> --prerelease \
+  --title "<component>: v<version>" --notes-file <that version's section of the component's CHANGELOG.md>
+```
+
+The tag is permanent, so check the target commit and the notes before running it. Pre-release applies until the
+component reaches 1.0, as above. A release made by hand doesn't run `pin-bundle`. The next release run pins it,
+or the pinning pull request may already name it, since the script reads the manifest.
+
 ## When something goes wrong
 
 - **A wrong version or changelog in an open release pull request:** don't edit the pull request. release-please
   rewrites it on the next push. Fix the cause (a commit message on `main` can't change, so add a commit, or use
   `Release-As`). An entry under a component its commit didn't change comes from the page boundary ("How commits
   reach changelogs"): land any commit on `main`, which rebuilds the pull request, and comment on #223.
+- **A release that was never made** (the `release-tags` job fails): see
+  [Repairing a missing release](#repairing-a-missing-release).
 - **A wrong release:** fix it forward with a `fix` commit, or `Release-As` for the next version. Tags are never moved
   or deleted.
 - **Stopping releases:** disable the `release` workflow. Releases already made stay, because tags and changelogs

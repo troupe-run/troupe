@@ -83,3 +83,41 @@ def test_the_token_isnt_left_in_the_checkout_while_the_script_runs() -> None:
         s for s in jobs()["pin-bundle"]["steps"] if s.get("uses", "").startswith("actions/checkout")
     ]
     assert checkout["with"]["persist-credentials"] is False
+
+
+def test_the_tag_check_runs_after_release_please_even_when_it_failed() -> None:
+    """A release-please that fails partway is a case the check must catch
+    (release-missing-components design D3)."""
+    job = jobs()["release-tags"]
+    assert job["needs"] == "release-please"
+    assert job["if"] == "${{ !cancelled() }}"
+
+
+def test_the_tag_check_reads_with_github_token_outside_the_release_environment() -> None:
+    job = jobs()["release-tags"]
+    assert "environment" not in job
+    assert job["permissions"] == {"contents": "read"}
+    steps: list[dict[str, Any]] = job["steps"]
+    assert not any("create-github-app-token" in s.get("uses", "") for s in steps)
+
+
+def test_the_tag_check_reads_main_as_release_please_left_it() -> None:
+    [checkout] = [
+        s
+        for s in jobs()["release-tags"]["steps"]
+        if s.get("uses", "").startswith("actions/checkout")
+    ]
+    assert checkout["with"]["ref"] == "main"
+    assert checkout["with"]["persist-credentials"] is False
+
+
+def test_the_tag_check_pipes_every_tag_ref_into_the_script() -> None:
+    check = step("release-tags", "Check every recorded version has its tag")
+    # Read through .strip() so ruff's S105 doesn't take the token's expression for a password.
+    assert check["env"]["GH_TOKEN"].strip() == "${{ github.token }}"
+    command = " ".join(check["run"].split())
+    assert (
+        'gh api --paginate "repos/$GITHUB_REPOSITORY/git/matching-refs/tags" --jq '
+        "'.[].ref' | python3 scripts/release_tags.py"
+    ) in command
+    assert "set -o pipefail" in check["run"]

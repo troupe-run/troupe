@@ -288,6 +288,7 @@ paths = [
     "scripts/python_versions.py",
     "scripts/queue_passed.py",
     "scripts/release_config.py",
+    "scripts/release_tags.py",
     "scripts/runner_licences.py",
     "scripts/tests/**",
 ]
