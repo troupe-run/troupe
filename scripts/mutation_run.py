@@ -284,6 +284,24 @@ def memory_lines(unit: str, text: str | None) -> list[str]:
     return lines
 
 
+def peaks_summary(text: str) -> list[str]:
+    """A peaks file's `memory:` lines, unit by unit, split at the `unit <name>` lines the run
+    writes before each unit; lines before any unit go under `?`, and a unit with none says no
+    peaks were recorded (#371, design D2)."""
+    sections: list[tuple[str, list[str]]] = []
+    for line in text.splitlines():
+        if line.startswith("unit "):
+            sections.append((line.removeprefix("unit ").strip(), []))
+        elif line.strip():
+            if not sections:
+                sections.append(("?", []))
+            sections[-1][1].append(line)
+    if not sections:
+        return ["memory: no peaks recorded"]
+    # A unit with no lines (a run killed early in it) says so, which also says where it ended.
+    return [out for name, lines in sections for out in memory_lines(name, "\n".join(lines))]
+
+
 def run_mutmut(
     checkout: Path,
     unit: ms.Unit,
@@ -307,7 +325,11 @@ def run_mutmut(
         )
     plugin = workdir / f"{PLUGIN_COPY}.py"
     plugin_config = workdir / f"{PLUGIN_COPY}.json"
-    peaks = workdir / PEAKS
+    # In CI the workflow names the peaks file in out/, which the job uploads, and the step's exit
+    # trap prints the summary from it: an OOM kill of this run would take a summary printed here
+    # down with it (#371, mutation-peaks design D1). A local run keeps its own, in the workdir.
+    named = os.environ.get("PEAKS")
+    peaks = Path(named) if named else workdir / PEAKS
     links: list[Path] = []
     try:
         if workdir != checkout:
@@ -318,7 +340,12 @@ def run_mutmut(
         plugin_config.write_text(
             json.dumps({"mutant_memory_mb": memory_mb, "peaks": str(peaks)}), encoding="utf-8"
         )
-        peaks.unlink(missing_ok=True)
+        if named:
+            peaks.parent.mkdir(parents=True, exist_ok=True)
+            with peaks.open("a", encoding="utf-8") as marker:
+                marker.write(f"unit {unit.name}\n")
+        else:
+            peaks.unlink(missing_ok=True)
         (workdir / "setup.cfg").write_text(
             mutmut_config(workdir, checkout, unit, children=children), encoding="utf-8"
         )
@@ -372,11 +399,14 @@ def run_mutmut(
             link.unlink()
         plugin.unlink(missing_ok=True)
         plugin_config.unlink(missing_ok=True)
-        # Finished or not: a run that stops is when the peaks matter most.
-        recorded = peaks.read_text(encoding="utf-8", errors="replace") if peaks.exists() else None
-        for line in memory_lines(unit.name, recorded):
-            print(line, flush=True)
-        peaks.unlink(missing_ok=True)
+        if not named:
+            # Finished or not: a run that stops is when the peaks matter most.
+            recorded = (
+                peaks.read_text(encoding="utf-8", errors="replace") if peaks.exists() else None
+            )
+            for line in memory_lines(unit.name, recorded):
+                print(line, flush=True)
+            peaks.unlink(missing_ok=True)
 
 
 # Stryker
@@ -556,6 +586,14 @@ def collect(
 
 
 def main(argv: Sequence[str] | None = None, run: Run = run_command) -> int:
+    given = list(sys.argv[1:] if argv is None else argv)
+    if given[:1] == ["peaks"] and len(given) == 2:
+        # The step's exit trap: never fails, so the summary can't change how the step ends.
+        path = Path(given[1])
+        text = path.read_text(encoding="utf-8", errors="replace") if path.is_file() else ""
+        for line in peaks_summary(text):
+            print(line, flush=True)
+        return 0
     parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n\n")[0])
     parser.add_argument("repository")
     parser.add_argument("checkout", type=Path)
