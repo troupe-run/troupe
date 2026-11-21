@@ -31,8 +31,9 @@
   shows `claude` from `default`, and the config get output test shows the engine.
   Done: the rehearsal test uses a theatre-set engine (spec: runs, scenario reworded to match), and `config get
   --resolved runtimes.anthropic` shows `engine: claude (from default)`.
-- [x] 2.4 SDK: `RuntimeParams.engine`, checked against the set. Verify: SDK tests parse present and absent, refuse
-  `vllm` naming `runtime.engine`, and compare the SDK's set with the schema's enum.
+- [x] 2.4 SDK: `RunStartRuntime.engine` (`RuntimeEngine | None`, with `RUNTIME_ENGINES`), checked against the set.
+  Verify: SDK tests parse present and absent, refuse `vllm` naming `runtime.engine`, and compare the SDK's set with
+  the schema's enum.
 
 ## 3. Counting and guarding per engine (design D2 to D5)
 
@@ -63,8 +64,12 @@
 
 ## 5. Verify the whole change
 
-- [ ] 5.1 Run `uv run scripts/check.py` once the orchestrator gives the slot and the load is under 40, with its output
+- [x] 5.1 Run `uv run scripts/check.py` once the orchestrator gives the slot and the load is under 40, with its output
   kept in a scratch file. Verify: it passes, and its summary line goes in the pull request.
+  Done: the commit guard's full check on 2846a422, "check: all gates passed" (7223 passed, tests passed in 271.4s),
+  and on b27881a7, which touched only `plugins/runner-anthropic`, the guard's `runner_anthropic` scope, "check: all
+  gates passed" (5281 passed). Both summary lines are in the pull request; CI runs the whole suite on every OS once
+  it's marked ready (5.2).
 - [ ] 5.2 Open the pull request as a draft (`Closes #418`, `Closes #419`), act on the review of the last push, and mark
   it ready once it's clean. Verify: `gh pr checks` shows every job passing on the head, on Linux, macOS and Windows.
 

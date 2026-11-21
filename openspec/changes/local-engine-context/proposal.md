@@ -77,7 +77,7 @@ None.
 - Core: `troupe.core.defaults` (the built-ins' engines), `troupe.core.runtimes` (resolving `engine`, the environment
   override, `Resolved`/`RunRuntime` data), the config model and its error wording, and the CLI's resolved-runtime view
   if it lists fields.
-- `packages/troupe-plugin-sdk` (`RuntimeParams.engine`).
+- `packages/troupe-plugin-sdk` (`RunStartRuntime.engine`, `RuntimeEngine`, `RUNTIME_ENGINES`).
 - `plugins/runner-anthropic`: `context.py` (the engine table, the prompt measure), `reply.py`, `loop.py`,
   `runtime.py`, fixtures and tests.
 - Docs: `docs/stagecraft/runtimes.md`, `contributing/runners.md`, `docs/prompt-book/config-schema.md` (generated),

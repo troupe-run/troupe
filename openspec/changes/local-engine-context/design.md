@@ -59,9 +59,9 @@ Owner, 2026-11-21: the engine belongs to the service, so it's a runtime field, n
   `ollama` gets `ollama`, which is what serves that endpoint, so the Anthropic runner pointed at a copy of it counts
   correctly. `openai` and `mistralrs` get none: neither is in the set.
 - **Hand-off.** `Resolved` carries `engine: Sourced | None`. `to_data` and `RunRuntime.to_data` show it with its
-  source, and `run_start` sends its value when present, never a null. The SDK's `RuntimeParams` gains
-  `engine: str | None`, checked against the same set, so a runner refuses a `run/start` with a value it can't name
-  (a protocol error naming `runtime.engine`).
+  source, and `run_start` sends its value when present, never a null. The SDK's `RunStartRuntime` gains
+  `engine: RuntimeEngine | None` (`troupe_plugin_sdk.runner`, with `RUNTIME_ENGINES`), checked against the same
+  set, so a runner refuses a `run/start` with a value it can't name (a protocol error naming `runtime.engine`).
 - **Version.** Each field is optional, and a troupe from before this change sends none. It ships as a
   `feat(protocol)` commit, and release-please sets the version. A runner built against an older protocol, whose own
   schema check rejects unknown keys in `runtime`, would refuse a `run/start` carrying `engine`. Every runner in this

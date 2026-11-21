@@ -175,6 +175,8 @@ request it can't, since there's no earlier prompt to compare with, and counting 
 | any other | unknown: it may be cut silently |
 
 On Ollama, or an engine the runner doesn't know, give the actor a direction that fits the window with room to spare.
+`contextWindow` doesn't help there: the engine reports the prompt it kept, not the one it was sent, and Ollama keeps
+well under its window (2,046 tokens of a ~36,000-token message at a window of 4,096, in the probe).
 
 ### Compaction
 
