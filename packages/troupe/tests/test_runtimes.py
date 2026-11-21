@@ -175,6 +175,8 @@ MALFORMED = [
     ("TROUPE_RUNTIME_OLLAMA_MODEL", "a\nb"),
     ("TROUPE_RUNTIME_OLLAMA_CREDENTIAL_ENV", "MY KEY"),
     ("TROUPE_RUNTIME_OLLAMA_CREDENTIAL_ENV", "TROUPE_RUNTIME_CREDENTIAL"),
+    ("TROUPE_RUNTIME_OLLAMA_ENGINE", "lmstudio"),
+    ("TROUPE_RUNTIME_OLLAMA_ENGINE", "LM Studio"),
 ]
 
 
@@ -215,6 +217,7 @@ SHAPES = {
     ],
     "MODEL": ["{}\n", "\x00{}", "gpt-{}\r\n"],
     "CREDENTIAL_ENV": ["sk-{}", "sk-test {}", "9{}", "TROUPE_{}", "{}\n"],
+    "ENGINE": ["{}", "{}.cpp", "claude-{}"],
 }
 
 
@@ -755,3 +758,79 @@ def test_another_runners_built_in_doesnt_fit_whatever_its_shape(
     assert runtimes.unfit(ollama, "http://10.0.0.5:11434", False, "gpu-box") == []
     anything = interim.RuntimeFit()
     assert runtimes.unfit(anything, "http://127.0.0.1:1234", False, "example-engine") == []
+
+
+# Requirement: A runtime can name its engine (local-engine-context design D1)
+
+
+def test_the_built_in_anthropic_and_ollama_runtimes_name_their_engines_and_no_other_does() -> None:
+    assert resolve("anthropic", NO_CONFIG, {}).engine == Sourced("claude", "default")
+    assert resolve("ollama", NO_CONFIG, {}).engine == Sourced("ollama", "default")
+    assert resolve("openai", NO_CONFIG, {}).engine is None
+    assert resolve("mistralrs", NO_CONFIG, {}).engine is None
+
+
+def test_a_runtime_in_config_names_its_engine_from_the_theatre() -> None:
+    config = _config(box={"endpoint": "http://127.0.0.1:1234", "engine": "lm-studio"})
+    assert resolve("box", config, {}).engine == Sourced("lm-studio", "theatre")
+
+
+def test_a_runtime_with_claudes_endpoint_and_no_engine_has_none() -> None:
+    # Scenario: "No engine named": the endpoint never implies one.
+    config = _config(gateway={"endpoint": "https://api.anthropic.com"})
+    assert resolve("gateway", config, {}).engine is None
+
+
+def test_the_engine_from_the_environment_overrides_config_and_empty_counts_as_unset() -> None:
+    config = _config(box={"endpoint": "http://127.0.0.1:1234", "engine": "ollama"})
+    env = {"TROUPE_RUNTIME_BOX_ENGINE": "lm-studio"}
+    assert resolve("box", config, env).engine == Sourced("lm-studio", "env")
+    assert resolve("box", config, {"TROUPE_RUNTIME_BOX_ENGINE": ""}).engine == Sourced(
+        "ollama", "theatre"
+    )
+
+
+def test_a_malformed_engine_variable_names_every_engine_it_takes() -> None:
+    with pytest.raises(TroupeError) as raised:
+        resolve("ollama", NO_CONFIG, {"TROUPE_RUNTIME_OLLAMA_ENGINE": "vllm"})
+    for engine in ("claude", "lm-studio", "ollama", "llama.cpp"):
+        assert engine in raised.value.problem
+    assert "vllm" not in _error(raised)
+
+
+def test_an_engine_config_doesnt_name_is_refused_naming_the_path_and_the_engines() -> None:
+    (problem,) = runtime_problems(
+        "box", {"endpoint": "http://127.0.0.1:1234", "engine": "LM Studio"}
+    )
+    assert problem.path == ("runtimes", "box", "engine")
+    for engine in ("claude", "lm-studio", "ollama", "llama.cpp"):
+        assert repr(engine) in problem.rule
+
+
+def test_the_run_records_the_engine_with_its_source_and_run_start_carries_its_value() -> None:
+    run = for_run("anthropic", "tester", "claude-haiku-5-5", NO_CONFIG, {"ANTHROPIC_API_KEY": KEY})
+    recorded = run.to_data()
+    assert recorded["engine"] == {"value": "claude", "source": "default"}
+    validator_for(PROTOCOL_BASE + "runtime.schema.json#/$defs/resolved").validate(recorded)
+    assert run.run_start()["engine"] == "claude"
+    validator_for(PROTOCOL_BASE + "runner/run-start.schema.json#/$defs/runtime").validate(
+        run.run_start()
+    )
+    assert run.resolved.to_data({})["engine"] == {"value": "claude", "source": "default"}
+
+
+def test_a_runtime_with_no_engine_sends_no_engine_field_rather_than_a_null() -> None:
+    run = for_run("openai", "tester", "gpt-test", NO_CONFIG, {"OPENAI_API_KEY": KEY})
+    assert "engine" not in run.run_start()
+    assert "engine" not in run.to_data()
+    assert "engine" not in run.resolved.to_data({})
+
+
+@given(st.one_of(st.text(max_size=12), st.sampled_from(["claude", "lm-studio", "llama.cpp"])))
+@example("llama-cpp")
+@example("claude\n")
+@example("Ollama")
+def test_the_engine_check_and_the_schema_accept_the_same(value: str) -> None:
+    assert bool(runtimes.PATTERNS["engine"].match(value)) == validator_for(
+        SCHEMA + "engine"
+    ).is_valid(value)

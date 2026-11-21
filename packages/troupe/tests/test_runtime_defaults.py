@@ -18,8 +18,9 @@ def test_the_built_in_runtimes_are_openai_anthropic_ollama_and_mistralrs() -> No
     assert defaults.RUNTIMES["anthropic"] == {
         "endpoint": "https://api.anthropic.com",
         "credential": {"env": "ANTHROPIC_API_KEY"},
+        "engine": "claude",
     }
-    assert defaults.RUNTIMES["ollama"] == {"endpoint": "http://127.0.0.1:11434"}
+    assert defaults.RUNTIMES["ollama"] == {"endpoint": "http://127.0.0.1:11434", "engine": "ollama"}
     assert defaults.RUNTIMES["mistralrs"] == {}  # in-process: no endpoint (in-process-runner D5)
     assert sorted(defaults.IN_PROCESS_RUNTIMES) == ["mistralrs"]
 

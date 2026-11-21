@@ -464,6 +464,14 @@ class SourcedPrice(Message):
 
 
 @dataclass(frozen=True)
+class SourcedEngine(Message):
+    """What serves a runtime's endpoint, and where that came from."""
+
+    value: p.RuntimeEngine = json_field("value")
+    source: RuntimeSource = json_field("source")
+
+
+@dataclass(frozen=True)
 class ResolvedRuntime(Message):
     """A runtime as troupe resolves it, each value with its source."""
 
@@ -472,6 +480,8 @@ class ResolvedRuntime(Message):
     """None for an in-process runtime, which has no endpoint (in-process-runner design D5)."""
     model: SourcedValue | None = json_field("model", default=None)
     credential: ResolvedCredential | None = json_field("credential", default=None)
+    engine: SourcedEngine | None = json_field("engine", default=None)
+    """None when the runtime names no engine (local-engine-context design D1)."""
     price: SourcedPrice | None = json_field("price", default=None)
 
 

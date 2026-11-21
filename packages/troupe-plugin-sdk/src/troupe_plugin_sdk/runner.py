@@ -156,6 +156,15 @@ class Price(Message):
     cache_write: float | None = json_field("cacheWrite", default=None, minimum=0)
 
 
+RuntimeEngine = Literal["claude", "lm-studio", "ollama", "llama.cpp"]
+"""What serves a runtime's endpoint, when the runtime names it
+(protocol/schemas/runtime.schema.json#/$defs/engine). Not the init event's ``Engine``, which is
+what the runner reports driving."""
+
+RUNTIME_ENGINES: tuple[str, ...] = get_args(RuntimeEngine)
+"""Every engine a runtime may name, in the schema's order."""
+
+
 @dataclass(frozen=True)
 class RunStartRuntime(Message):
     """The service a run talks to, as troupe resolved it. The credential's value is never here:
@@ -174,6 +183,9 @@ class RunStartRuntime(Message):
     price: Price | None = json_field("price", default=None)
     """The run's model's price, when the theatre prices it: the only price a runner may estimate
     a cost from (``troupe_plugin_sdk.cost.estimate``)."""
+    engine: RuntimeEngine | None = json_field("engine", default=None)
+    """What serves the endpoint, when the runtime names it; None when it names none, and the runner
+    then assumes nothing about the service."""
 
 
 OnContextFull = Literal["fail", "compact"]

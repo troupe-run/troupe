@@ -77,7 +77,7 @@ FIELD_ORDER = (
 """The actor file's keys: every field of its schema, in its order. The character is the actor's .md
 file. A test checks it against the schema, so a field added there can't be left out of the file
 (#288)."""
-RUNTIME_FIELD_ORDER = ("$schema", "endpoint", "model", "credential", "prices")
+RUNTIME_FIELD_ORDER = ("$schema", "endpoint", "model", "credential", "engine", "prices")
 """The runtime file's keys, in its schema's order. A test checks it against the schema, so a field
 added there can't be left out of the file."""
 

@@ -217,7 +217,7 @@ class Prices(StrictModel):
 
 class Runtime(StrictModel):
     """
-    One runtime's config file, .troupe/runtimes/<name>.yaml: a service a runner talks to. The file's name is the runtime's name. It holds only what the theatre's config sets: a built-in runtime's other fields are troupe's defaults, and the person's environment overrides any of them (TROUPE_RUNTIME_<NAME>_ENDPOINT, _MODEL, _CREDENTIAL_ENV). troupe writes this file from the theatre's config events, and every field is set with troupe config set.
+    One runtime's config file, .troupe/runtimes/<name>.yaml: a service a runner talks to. The file's name is the runtime's name. It holds only what the theatre's config sets: a built-in runtime's other fields are troupe's defaults, and the person's environment overrides any of them (TROUPE_RUNTIME_<NAME>_ENDPOINT, _MODEL, _CREDENTIAL_ENV, _ENGINE). troupe writes this file from the theatre's config events, and every field is set with troupe config set.
     """
 
     model_config = ConfigDict(
@@ -261,6 +261,13 @@ class Runtime(StrictModel):
     credential: Annotated[Credential | None, Field(title="Credential")] = None
     """
     Where the runtime's credential comes from. Never the credential itself: config is committed, so it holds only a reference.
+    """
+    engine: Annotated[
+        Literal["claude", "lm-studio", "ollama", "llama.cpp"] | None,
+        Field(title="Engine"),
+    ] = None
+    """
+    What serves the endpoint: claude, lm-studio, ollama or llama.cpp. A runner that needs the service's quirks reads it, such as the anthropic runner, which counts LM Studio's cached input differently from Claude's API and Ollama; others ignore it. The built-in anthropic runtime's is claude and ollama's is ollama. Leave it unset when none fits: a runner then assumes nothing about the service.
     """
     prices: Annotated[
         dict[

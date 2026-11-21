@@ -25,6 +25,16 @@
       "maxLength": 256,
       "pattern": "^(?![\\s\\S]*[\\x00-\\x1f\\x7f])[\\s\\S]+$"
     },
+    "engine": {
+      "title": "Engine",
+      "description": "What serves a runtime's endpoint: claude (Claude's API), lm-studio, ollama or llama.cpp. A runner that needs to know the service's quirks, such as how it counts cached input, reads it; others ignore it. A runtime that names none has no engine, and troupe never infers one from the endpoint.",
+      "enum": [
+        "claude",
+        "lm-studio",
+        "ollama",
+        "llama.cpp"
+      ]
+    },
     "variable": {
       "title": "Environment variable name",
       "description": "Letters, digits and _, not starting with a digit, and not starting with TROUPE_ in any case.",
@@ -171,6 +181,23 @@
             "set": {
               "description": "Whether the variable is set, and not empty, in the person's environment. Its value is never shown.",
               "type": "boolean"
+            }
+          }
+        },
+        "engine": {
+          "description": "The engine, and where it came from. Absent: the runtime names none.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value",
+            "source"
+          ],
+          "properties": {
+            "value": {
+              "$ref": "#/$defs/engine"
+            },
+            "source": {
+              "$ref": "#/$defs/source"
             }
           }
         },

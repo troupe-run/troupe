@@ -7,8 +7,9 @@ prerelease: true
 
 Some runners talk to a service: a model served on your machine, or a hosted API that needs a key. troupe calls that
 service a **runtime**. You define it once, by name, and each actor that uses it names it. The runtime holds where the
-service is (`endpoint`), the model to use when an actor doesn't choose one (`model`), and, if it needs a key, the
-name of the environment variable the key is in (`credential.env`). Never the key itself.
+service is (`endpoint`), the model to use when an actor doesn't choose one (`model`), if it needs a key, the name of
+the environment variable the key is in (`credential.env`), never the key itself, and, optionally, which engine serves
+it (`engine`).
 
 The OpenAI runner needs a runtime: the built-in `openai`, or one of your own whose service serves OpenAI's Responses
 API, such as local Ollama's under `/v1` (`http://127.0.0.1:11434/v1`, not the built-in `ollama`'s address). The Ollama
@@ -26,12 +27,12 @@ own tests.
 
 troupe has four built in:
 
-| Runtime | Endpoint | Credential |
-|---|---|---|
-| `openai` | `https://api.openai.com/v1` | `OPENAI_API_KEY` |
-| `anthropic` | `https://api.anthropic.com` | `ANTHROPIC_API_KEY` |
-| `ollama` | `http://127.0.0.1:11434` | none |
-| `mistralrs` | none: in-process | none |
+| Runtime | Endpoint | Credential | Engine |
+|---|---|---|---|
+| `openai` | `https://api.openai.com/v1` | `OPENAI_API_KEY` | none |
+| `anthropic` | `https://api.anthropic.com` | `ANTHROPIC_API_KEY` | `claude` |
+| `ollama` | `http://127.0.0.1:11434` | none | `ollama` |
+| `mistralrs` | none: in-process | none | none |
 
 Which runner each fits:
 
@@ -103,7 +104,7 @@ The Anthropic runner reaches a local engine that serves the Anthropic Messages A
 the engine's server root, not a built-in. For LM Studio, define the runtime:
 
 ```sh
-troupe config set runtimes.lm-studio-messages.endpoint=http://127.0.0.1:1234
+troupe config set runtimes.lm-studio-messages.endpoint=http://127.0.0.1:1234 runtimes.lm-studio-messages.engine=lm-studio
 ```
 
 Then put an actor on the `anthropic` runner and point it at the runtime, with a model LM Studio has:
@@ -112,8 +113,22 @@ Then put an actor on the `anthropic` runner and point it at the runtime, with a 
 troupe config set actors.lead.runner=anthropic actors.lead.runtime=lm-studio-messages actors.lead.model=google/gemma-4-e4b 'actors.lead.expect=[]'
 ```
 
-For Ollama, define one the same way at `http://127.0.0.1:11434`. The built-in `ollama` is the Ollama runner's, and
-config refuses it for the `anthropic` runner.
+For Ollama, define one the same way at `http://127.0.0.1:11434`, with `engine` `ollama`. The built-in `ollama` is the
+Ollama runner's, and config refuses it for the `anthropic` runner.
+
+### Name the engine
+
+Engines that serve the same API don't all behave the same. LM Studio counts cached input inside its input tokens,
+where Claude's API and Ollama count it apart, so the Anthropic runner needs to know which one it's talking to, to
+count each token once and to tell when the engine has cut a conversation. Nothing in a reply says which engine sent
+it, so the runtime says, in `engine`: `claude`, `lm-studio`, `ollama` or `llama.cpp`. Any other value is refused,
+naming the ones it takes. troupe never works it out from the endpoint, so a gateway in front of Claude's API names
+`claude` itself.
+
+Leave it unset when none of these serves the runtime. A runner that needs it then assumes nothing: the Anthropic
+runner reports usage as the API defines it, warns once if a reply reports cached input, and checks for a cut
+conversation both ways. Name the engine that actually serves the endpoint: naming the wrong one makes that runner
+miscount. Runners that don't need it ignore it.
 
 Define a service troupe doesn't know with its endpoint, and the rest as it needs:
 
@@ -137,6 +152,7 @@ Your environment overrides the theatre's config, for you alone, without a change
 | `TROUPE_RUNTIME_<NAME>_ENDPOINT` | the endpoint |
 | `TROUPE_RUNTIME_<NAME>_MODEL` | the model, for every actor on the runtime that sets none of its own |
 | `TROUPE_RUNTIME_<NAME>_CREDENTIAL_ENV` | which variable the key is read from |
+| `TROUPE_RUNTIME_<NAME>_ENGINE` | the engine |
 
 A run's model is the actor's own `model` when it sets one, then `TROUPE_RUNTIME_<NAME>_MODEL`, then the runtime's
 `model` in config. The actor's setting goes with each run, so it wins, as every setting an actor sends does. The run
