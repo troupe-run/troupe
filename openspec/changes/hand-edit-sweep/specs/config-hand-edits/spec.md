@@ -234,6 +234,12 @@ conflicting value.
 - **THEN** it is refused with `config.conflict`, naming `actors.reviewer.model` as left
 - **AND** nothing is recorded, and `.troupe/actors/tester.yaml` keeps the person's edit
 
+#### Scenario: Two conflicting values in one edited file
+- **WHEN** the branches conflict on both `actors.tester.runner` and `actors.tester.model`, git merged
+  `.troupe/actors/tester.yaml` without markers, and the person edits only its runner and runs `troupe sync`
+- **THEN** both conflicts are resolved: the runner to the person's edit, and the model to the value the file holds
+- **AND** the change records both values
+
 #### Scenario: A partial resolution finished by the command
 - **WHEN** the person edits `tester`'s runner in its file, and runs `troupe config set actors.reviewer.model=m`
 - **THEN** one batch records the settle, the hand edit's change and the person's change, and config has no conflict
