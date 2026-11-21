@@ -13,8 +13,8 @@ tests against stand-ins; an outside runner that talks to a service has no route 
 - A new variable, `TROUPE_CONFORMANCE_RUNTIME`, gives the env-driven check a runtime: a JSON object holding the
   runtime's `name` and the fields a runtime has in config (`endpoint`, `model`, `credential: {env: ...}`, `prices`).
   It's checked as config checks a runtime, and resolved as a run resolves one: troupe's built-in runtime of that name,
-  then the object, then the session's `TROUPE_RUNTIME_<NAME>_*` variables. So `{"name": "openai"}` is enough for a
-  built-in, and an outside runner names its own service.
+  then the object, then the session's `TROUPE_RUNTIME_<NAME>_*` variables. So `{"name": "openai", "model": "..."}` is
+  enough for a built-in, and an outside runner names its own service.
 - The credential is a reference only, as everywhere else (#278): the object names the variable that holds it, never
   the value. Its value is read from the session's environment, given to the runner as `TROUPE_RUNTIME_CREDENTIAL` as a
   run gives it, and refused as a run refuses it (unset, malformed, too short to mask, sent over plain HTTP to a host

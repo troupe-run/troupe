@@ -103,10 +103,23 @@ TROUPE_CONFORMANCE_OPTIONS='{}' \
 uv run pytest packages/troupe/tests/test_runner_conformance.py -k environment
 ```
 
-Run it from a clone of troupe ([Install](../opening-night/install.md#running-it-from-a-clone)). The check passes your
-runner no runtime, so it can't yet check a runner that needs one, such as one that talks to a service
-([#299](https://github.com/troupe-run/troupe/issues/299)). troupe's own runners that need one are checked by troupe's
-own tests, against stand-ins for their services.
+Run it from a clone of troupe ([Install](../opening-night/install.md#running-it-from-a-clone)).
+
+If your runner talks to a service, give the check a runtime too, described as you'd describe it in config, with its
+name. Name the variable that holds your key, never the key itself: troupe reads it from your environment and gives
+it to your runner as `TROUPE_RUNTIME_CREDENTIAL`, as it does in a run, and hides it in what the check prints.
+
+```sh
+export MY_SERVICE_KEY=...
+TROUPE_CONFORMANCE_RUNNER='["my-runner"]' \
+TROUPE_CONFORMANCE_OPTIONS='{}' \
+TROUPE_CONFORMANCE_RUNTIME='{"name": "my-service", "endpoint": "https://api.example.com/v1", "model": "small", "credential": {"env": "MY_SERVICE_KEY"}}' \
+uv run pytest packages/troupe/tests/test_runner_conformance.py -k environment
+```
+
+For one of troupe's built-in runtimes, a name and a model are enough, such as
+`{"name": "openai", "model": "gpt-4.1-mini"}`, and `TROUPE_RUNTIME_OPENAI_ENDPOINT` points it at a test service. The full rules are in
+[contributing/runners.md](https://github.com/troupe-run/troupe/blob/main/contributing/runners.md#checking-a-runner).
 
 ## What's decided for later
 

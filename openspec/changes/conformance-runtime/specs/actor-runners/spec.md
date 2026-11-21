@@ -9,9 +9,14 @@ it as a run resolves one (built-in, then the object, then the session's `TROUPE_
 it to the runner in every `run/start`.
 
 #### Scenario: A built-in runtime by name
-- **WHEN** `TROUPE_CONFORMANCE_RUNTIME` is `{"name": "openai"}` and `TROUPE_RUNTIME_OPENAI_ENDPOINT` names a stand-in
-- **THEN** every `run/start` the suite sends carries the runtime `openai` with the stand-in's endpoint and the built-in's
-  model
+- **WHEN** `TROUPE_CONFORMANCE_RUNTIME` is `{"name": "openai", "model": "m"}` and `TROUPE_RUNTIME_OPENAI_ENDPOINT` names
+  a stand-in
+- **THEN** every `run/start` the suite sends carries the runtime `openai` with the stand-in's endpoint, the model `m`
+  and the built-in's credential, read from `OPENAI_API_KEY`
+
+#### Scenario: A runtime nothing gives a model
+- **WHEN** neither `TROUPE_CONFORMANCE_RUNTIME`, troupe's built-in nor `TROUPE_RUNTIME_<NAME>_MODEL` sets a model
+- **THEN** the check fails naming the object's `model` and `TROUPE_RUNTIME_<NAME>_MODEL`
 
 #### Scenario: An outside runner's own runtime
 - **WHEN** `TROUPE_CONFORMANCE_RUNTIME` names a runtime troupe doesn't build in, with an endpoint and a model
