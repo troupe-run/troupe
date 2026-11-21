@@ -617,7 +617,9 @@ def main(argv: Sequence[str] | None = None, run: Run = run_command) -> int:
         checkout = args.checkout.resolve()
         modules = collect(repository, checkout, settings, only, run)
         report = mr.Report(args.repository, head(checkout), None, modules)
-        report = mr.attribute(report, checkout, args.previous)
+        report = mr.attribute(
+            report, checkout, args.previous, log=lambda line: print(f"mutation_run: {line}")
+        )
     except (RunError, ms.SettingsError, mr.ReportError) as error:
         print(f"mutation_run: {error}", file=sys.stderr)
         return 2
