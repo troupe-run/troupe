@@ -1,62 +1,43 @@
 ## ADDED Requirements
 
-### Requirement: The runner is told its engine and never guesses it
-The runner SHALL know a run's engine only from its `engine` option, or from a runtime endpoint of
-`https://api.anthropic.com`, which is Claude's API. With neither, the engine SHALL be unknown, and the runner SHALL NOT
-infer it from a reply's headers, ids or model. Each engine's usage accounting SHALL be named in one table, each entry
-naming the fixture, probe or documentation that pins it.
+### Requirement: The runner counts by its runtime's engine and never guesses it
+The runner SHALL take a run's engine only from `run/start`'s `runtime.engine` (spec: runtimes), and SHALL NOT infer
+it from the endpoint or a reply's headers, ids or model. One table SHALL say, for each engine the protocol names,
+whether its `input_tokens` includes cache reads, or that this isn't known, each entry naming the fixture, probe or
+documentation that pins it. With no engine, the accounting SHALL be taken as not known.
 
-#### Scenario: Claude's built-in endpoint
-- **WHEN** the runtime's endpoint is `https://api.anthropic.com` and the options don't set `engine`
-- **THEN** the run's engine is Claude's API
+#### Scenario: A runtime that names LM Studio
+- **WHEN** `run/start`'s runtime has `engine` `lm-studio`
+- **THEN** the run counts LM Studio's cache reads as inside its `input_tokens`
 
-#### Scenario: A local engine named
-- **WHEN** the options set `engine` to `lm-studio`
-- **THEN** the run's engine is LM Studio, whatever the endpoint
-
-#### Scenario: A local engine not named
-- **WHEN** the endpoint is `http://127.0.0.1:1234` and the options don't set `engine`
-- **THEN** the run's engine is unknown, even when the replies look like LM Studio's
+#### Scenario: A runtime that names no engine
+- **WHEN** `run/start`'s runtime has no `engine` and the endpoint is `http://127.0.0.1:1234`
+- **THEN** the run's accounting is not known, even when the replies look like LM Studio's
 
 #### Scenario: The table pins each engine's accounting
 - **WHEN** the table is read
-- **THEN** it says that Claude's API, Ollama and llama.cpp report cache reads apart from `input_tokens` and LM Studio
-  inside it, and each entry names what it's taken from
+- **THEN** it holds one entry for each engine in the protocol's set: Claude's API and Ollama report cache reads apart
+  from `input_tokens`, LM Studio inside it, and llama.cpp not yet known, and each entry names what it's taken from
 
-### Requirement: An unknown engine's cache reads are warned about once
-When the engine is unknown, the first reply that reports `cache_read_input_tokens` above zero SHALL bring a `log`
-warning, sent once in the run, saying the usage may count those tokens twice and naming the `engine` option. A run
-whose replies report no cache reads SHALL bring no such warning.
+### Requirement: Cache reads on an engine of unknown accounting are warned about once
+When the run's accounting isn't known, the first reply that reports `cache_read_input_tokens` above zero SHALL bring a
+`log` warning, sent once in the run, saying the usage may count those tokens twice. With no engine it SHALL name the
+runtime and its `engine` field as the fix. A run whose replies report no cache reads SHALL bring no such warning.
 
-#### Scenario: Cache reads on an unnamed engine
-- **WHEN** the engine is unknown and the second reply reports 89 cache-read tokens
-- **THEN** one `log` warning names the `engine` option, and no second one follows a later reply's cache reads
+#### Scenario: Cache reads on a runtime with no engine
+- **WHEN** the runtime names no engine and the second reply reports 89 cache-read tokens
+- **THEN** one `log` warning names the runtime's `engine` field, and no second one follows a later reply's cache
+  reads
 
 #### Scenario: No cache reads
-- **WHEN** the engine is unknown and every reply reports 0 cache-read tokens
+- **WHEN** the runtime names no engine and every reply reports 0 cache-read tokens
+- **THEN** no warning about the engine is sent
+
+#### Scenario: A named engine
+- **WHEN** the runtime's engine is `lm-studio` and a reply reports cache reads
 - **THEN** no warning about the engine is sent
 
 ## MODIFIED Requirements
-
-### Requirement: The runner's options are closed
-`run/start` options SHALL be an object with only `maxTurns`, `maxTotalTokens`, `maxOutputTokens`, `contextWindow` and
-`engine`, each optional. The first four SHALL each be a positive integer, and `engine` one of `claude`, `lm-studio`,
-`ollama` and `llama.cpp`. An option the runner doesn't define, or a value of the wrong shape, SHALL be refused with an
-error naming it, and no request SHALL be sent.
-
-#### Scenario: An unknown option
-- **WHEN** the options hold `troupeConformanceUnknownOption`
-- **THEN** `run/start` is refused with `anthropic.unknown-option`, whose `details.where` names the option
-
-#### Scenario: A malformed value
-- **WHEN** `maxOutputTokens` is `0` or `contextWindow` is `"big"`
-- **THEN** `run/start` is refused with `anthropic.invalid-options`, whose `details.where` names the option and whose
-  fix names what is valid
-
-#### Scenario: An engine the runner doesn't know
-- **WHEN** `engine` is `lmstudio` or `LM Studio`
-- **THEN** `run/start` is refused with `anthropic.invalid-options`, whose `details.where` names `engine` and whose fix
-  names the engines it takes, rather than the run going on with the engine unknown
 
 ### Requirement: Usage is summed into the result
 The result SHALL carry the run's usage summed over every reply as the Messages API defines it: `inputTokens` from
@@ -76,19 +57,19 @@ SHALL make the result carry none, with a `log` warning.
 - **THEN** the result has no `cacheWriteTokens`
 
 #### Scenario: LM Studio's cache reads counted once
-- **WHEN** a run with `engine` `lm-studio` gets one reply reporting 93 input and 0 cache-read tokens, and a second 126
+- **WHEN** a run on a runtime whose engine is `lm-studio` gets one reply reporting 93 input and 0 cache-read tokens, and a second 126
   input and 89 cache-read tokens (`fixtures/lm-studio-tool-loop`)
 - **THEN** the result's usage is `inputTokens` 130 and `cacheReadTokens` 89
 
 #### Scenario: The same replies with the engine unknown
-- **WHEN** the options don't name the engine and the endpoint isn't Claude's
+- **WHEN** the runtime names no engine
 - **THEN** the result's usage is `inputTokens` 219 and `cacheReadTokens` 89, as the API defines them
 
 ### Requirement: A reply from a conversation the engine shrank isn't acted on
 The conversation only grows, so a reply whose reported prompt is smaller than the previous request's SHALL be taken as
 made from a conversation the engine cut. A reply's prompt is its input and cache-write tokens, plus its cache-read
-tokens on an engine that reports them apart. With the engine unknown, a prompt that shrank by either reading SHALL be
-taken as cut. No `turn` or tool call from such a reply SHALL be sent, and a run told `fail` SHALL end with `error` and
+tokens on an engine that reports them apart. When the accounting isn't known, a prompt that shrank by either reading
+SHALL be taken as cut. No `turn` or tool call from such a reply SHALL be sent, and a run told `fail` SHALL end with `error` and
 `reason` `context-length`. A first request has no earlier prompt, so an engine that cuts it silently isn't caught, and
 the README SHALL say so.
 
@@ -103,18 +84,18 @@ the README SHALL say so.
 - **THEN** the run goes on
 
 #### Scenario: LM Studio's cut on a turn that reports cache reads
-- **WHEN** a run with `engine` `lm-studio` gets a reply reporting 4,482 input and 115 cache-read tokens, then a reply
+- **WHEN** a run on a runtime whose engine is `lm-studio` gets a reply reporting 4,482 input and 115 cache-read tokens, then a reply
   from the cut conversation reporting 4,037 input and 3,840 cache-read tokens (`fixtures/lm-studio-conversation-cut`,
   replies 1 and 4)
 - **THEN** the second reply is taken as cut, since its prompt of 4,037 is smaller than 4,482, and nothing in it is
   acted on
 
 #### Scenario: The same cut with the engine unknown
-- **WHEN** the same replies come in a run whose engine is unknown
+- **WHEN** the same replies come in a run whose runtime names no engine
 - **THEN** the second reply is taken as cut, since its input alone shrank, though input and cache reads together grew
 
 #### Scenario: Claude's cache reads rising
-- **WHEN** a run on Claude's API gets a reply reporting 900 input and 0 cache-read tokens, then one reporting 100 input
+- **WHEN** a run on a runtime whose engine is `claude` gets a reply reporting 900 input and 0 cache-read tokens, then one reporting 100 input
   and 1,000 cache-read tokens
 - **THEN** the run goes on: the prompt grew from 900 to 1,100
 
@@ -127,7 +108,7 @@ the README SHALL say so.
 When `contextWindow` is set, a reply whose reported prompt and output reach it SHALL be acted on, and the runner SHALL
 send no further request in a run told `fail`, ending it with `error` and `reason` `context-length`, naming the
 window. A reply whose reported prompt alone reaches it SHALL NOT be acted on. The prompt SHALL be measured as the
-shrinking-prompt guard measures it, and with the engine unknown by the larger reading.
+shrinking-prompt guard measures it, and, when the accounting isn't known, by the larger reading.
 
 #### Scenario: The window is reached
 - **WHEN** a run with `contextWindow` 8192 gets a reply asking for a tool call, reported as 7,900 prompt tokens and 300
@@ -140,6 +121,6 @@ shrinking-prompt guard measures it, and with the engine unknown by the larger re
 - **THEN** only the engine's refusals and a shrinking prompt end the run for its context
 
 #### Scenario: LM Studio's cache reads don't fill the window
-- **WHEN** a run with `engine` `lm-studio` and `contextWindow` 8192 gets a reply reporting 5,000 input tokens, 4,000 of
+- **WHEN** a run on a runtime whose engine is `lm-studio` and `contextWindow` 8192 gets a reply reporting 5,000 input tokens, 4,000 of
   them cache reads, and 100 output tokens
 - **THEN** the window isn't reached: the prompt is 5,000, not 9,000
