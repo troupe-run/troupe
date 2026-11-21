@@ -52,7 +52,8 @@ other name SHALL be defined wholly by config, and SHALL be refused without an `e
 - **THEN** it is refused, naming `runtimes.myhost.endpoint` as required
 
 ### Requirement: The person's environment overrides a runtime's values
-`TROUPE_RUNTIME_<NAME>_ENDPOINT`, `TROUPE_RUNTIME_<NAME>_MODEL` and `TROUPE_RUNTIME_<NAME>_CREDENTIAL_ENV`, where
+`TROUPE_RUNTIME_<NAME>_ENDPOINT`, `TROUPE_RUNTIME_<NAME>_MODEL`, `TROUPE_RUNTIME_<NAME>_CREDENTIAL_ENV` and
+`TROUPE_RUNTIME_<NAME>_ENGINE`, where
 `<NAME>` is the runtime's name in capitals with `-` as `_`, SHALL override that runtime's field, with source `env`.
 An unset or empty variable SHALL count as absent. They SHALL be read from the session's environment, never a request.
 
@@ -68,6 +69,11 @@ An unset or empty variable SHALL count as absent. They SHALL be read from the se
 #### Scenario: Empty counts as unset
 - **WHEN** `TROUPE_RUNTIME_OLLAMA_ENDPOINT` is the empty string
 - **THEN** the runtime `ollama`'s endpoint is its built-in one, with source `default`
+
+#### Scenario: The engine from the environment
+- **WHEN** config defines `runtimes.lm-studio-messages.endpoint=http://127.0.0.1:1234` with no engine, and
+  `TROUPE_RUNTIME_LM_STUDIO_MESSAGES_ENGINE` is `lm-studio`
+- **THEN** the runtime's engine is `lm-studio`, with source `env`
 
 ### Requirement: A malformed runtime variable is an error
 A runtime variable that is set but isn't a value its field accepts SHALL fail the command that resolves the runtime
@@ -89,6 +95,11 @@ fix or its details. It SHALL NOT fall through.
 - **WHEN** `TROUPE_RUNTIME_OLLAMA_ENDPOINT` is `https://user:hunter2-secret@example.com/v1`
 - **THEN** resolving `ollama` fails with `runtime.invalid-value`, and the error holds neither the URL nor
   `hunter2-secret`
+
+#### Scenario: An engine troupe doesn't name
+- **WHEN** `TROUPE_RUNTIME_OLLAMA_ENGINE` is `lmstudio`
+- **THEN** resolving `ollama` fails with `runtime.invalid-value`, naming the variable and the engines it takes:
+  `claude`, `lm-studio`, `ollama` and `llama.cpp`
 
 ### Requirement: An actor names its runtime and may set its model
 An actor MAY name a `runtime`, which SHALL be a built-in runtime or one in config, and MAY set a `model`. An actor
@@ -213,6 +224,10 @@ for a name from the environment the variable that named it, and whether that var
 - **WHEN** config sets `runtimes.openai.model=gpt-test` and a price for `gpt-test`, and a person runs `troupe config
   get --resolved runtimes.openai`
 - **THEN** it shows that price with source `theatre`
+
+#### Scenario: The engine and its source
+- **WHEN** config has no runtimes and a person runs `troupe config get --resolved runtimes.anthropic`
+- **THEN** it shows the engine `claude` with source `default`
 
 #### Scenario: Another path
 - **WHEN** a person runs `troupe config get --resolved actors.tester`
@@ -431,9 +446,9 @@ naming the path, and a `TROUPE_RUNTIME_<NAME>_ENDPOINT` set for one SHALL fail t
 
 ### Requirement: troupe defines its built-in runtimes in one place
 troupe SHALL define the runtimes `openai` (endpoint `https://api.openai.com/v1`, credential from `OPENAI_API_KEY`),
-`anthropic` (endpoint `https://api.anthropic.com`, credential from `ANTHROPIC_API_KEY`), `ollama` (endpoint
-`http://127.0.0.1:11434`, no credential) and `mistralrs` (in-process: no endpoint, no credential), as defaults in one
-named place. No built-in runtime SHALL name a model or a price.
+`anthropic` (endpoint `https://api.anthropic.com`, credential from `ANTHROPIC_API_KEY`, engine `claude`), `ollama`
+(endpoint `http://127.0.0.1:11434`, no credential, engine `ollama`) and `mistralrs` (in-process: no endpoint, no
+credential), as defaults in one named place. No built-in runtime SHALL name a model or a price.
 
 #### Scenario: A built-in needs no config
 - **WHEN** config has no `runtimes` and an actor names the runtime `ollama`
@@ -450,8 +465,8 @@ named place. No built-in runtime SHALL name a model or a price.
 
 #### Scenario: Claude's API is a built-in
 - **WHEN** config has no `runtimes` and a person runs `troupe config get --resolved runtimes.anthropic`
-- **THEN** it shows the endpoint `https://api.anthropic.com` and the credential variable `ANTHROPIC_API_KEY`, each
-  from `default`, and no model
+- **THEN** it shows the endpoint `https://api.anthropic.com`, the credential variable `ANTHROPIC_API_KEY` and the
+  engine `claude`, each from `default`, and no model
 
 #### Scenario: The in-process built-in
 - **WHEN** config has no `runtimes`, `TROUPE_RUNTIME_MISTRALRS_MODEL` is `/models/qwen3-0.6b.gguf`, and a person runs
@@ -481,3 +496,22 @@ no model SHALL be refused with `runtime.no-model` before anything is recorded.
 - **WHEN** an actor on `openai` sets no model, config sets none, and no variable sets one
 - **THEN** perform fails with `runtime.no-model`, naming `actors.tester.model`, `runtimes.openai.model` and
   `TROUPE_RUNTIME_OPENAI_MODEL`, and nothing is recorded
+
+### Requirement: A runtime can name its engine
+A runtime SHALL accept an optional `engine`, naming what serves its endpoint: one of `claude`, `lm-studio`, `ollama` and
+`llama.cpp`, defined once in the protocol's runtime schema. Any other value SHALL be refused, naming the path and the
+values it takes. A runtime without one has no engine, and troupe SHALL NOT infer one from its endpoint. A runner that
+doesn't use the engine SHALL ignore it.
+
+#### Scenario: A local engine named
+- **WHEN** a person runs `troupe config set runtimes.lm-studio-messages.endpoint=http://127.0.0.1:1234
+  runtimes.lm-studio-messages.engine=lm-studio`
+- **THEN** config records the engine `lm-studio`
+
+#### Scenario: An engine troupe doesn't name
+- **WHEN** a person sets `runtimes.lm-studio-messages.engine` to `LM Studio`
+- **THEN** it is refused, naming the path and the engines it takes
+
+#### Scenario: No engine named
+- **WHEN** config defines `runtimes.gateway.endpoint=https://api.anthropic.com` and no engine
+- **THEN** the runtime `gateway` has no engine, though its endpoint is Claude's
