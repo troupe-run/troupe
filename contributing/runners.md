@@ -46,7 +46,7 @@ mistral.rs's `mistralrs`, with troupe's own tool loop ([#414](https://github.com
 | Method | Direction | Kind | Params | Result |
 |---|---|---|---|---|
 | `initialize` | troupe → runner | request | `protocolVersions`, `host {name, version}`, `capabilities` | `protocolVersion`, `runner {name, version}`, `capabilities` |
-| `run/start` | troupe → runner | request | `runId`, `direction`, `character` (optional), `workspace`, `effects {write, delete, move}`, `scratch`, `options`, `onContextFull`, `runtime {name, endpoint (only when the runtime has one), model, credential, price}` (optional, and `price` within it), `limits {eventMaxBytes}` | `runId` |
+| `run/start` | troupe → runner | request | `runId`, `direction`, `character` (optional), `workspace`, `effects {write, delete, move}`, `scratch`, `options`, `onContextFull`, `runtime {name, endpoint (only when the runtime has one), model, credential, price, engine}` (optional, and `price` and `engine` within it), `limits {eventMaxBytes}` | `runId` |
 | `run/event` | runner → troupe | notification | one run event | — |
 | `run/transcript` | runner → troupe | notification | `runId`, `record`, `encoding` (optional), `kind` (exactly when the runner accepted `transcript-kinds`) | — |
 | `run/cancel` | troupe → runner | request | `runId` | `{}` |
@@ -123,8 +123,11 @@ Your runner should refuse the same runtimes itself, since a host other than trou
 `ORACLES`.
 
 `run/start`'s `runtime` holds what troupe resolved: `name`, `endpoint` (the base URL your API lives under; add your
-own paths), only when the runtime has one, `model`, `credential`, a boolean, and `price` when the theatre prices the
-run's model. An in-process runtime has no endpoint. It's absent when
+own paths), only when the runtime has one, `model`, `credential`, a boolean, `price` when the theatre prices the
+run's model, and `engine` when the runtime names what serves it (`claude`, `lm-studio`, `ollama` or `llama.cpp`). A
+runner that needs an engine's quirks, as the Anthropic runner needs to know how it counts cached input, reads
+`engine` and assumes nothing without it; never work it out from the endpoint or the replies. Others ignore it. An
+in-process runtime has no endpoint. It's absent when
 the actor names no runtime.
 
 **The credential's value is never in `run/start`**, which troupe records. When `credential` is `true`, your

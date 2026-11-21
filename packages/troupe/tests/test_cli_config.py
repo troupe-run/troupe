@@ -643,6 +643,7 @@ def test_the_built_in_anthropic_runtime_resolves_to_claudes_api_with_its_key_var
         "  model: none (an actor's model, runtimes.anthropic.model or "
         "TROUPE_RUNTIME_ANTHROPIC_MODEL sets one)",
         "  credential: from ANTHROPIC_API_KEY (named by default), not set",
+        "  engine: claude (from default)",
     ]
 
 

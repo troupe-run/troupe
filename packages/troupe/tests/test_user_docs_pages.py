@@ -748,14 +748,23 @@ def test_the_runtimes_pages_commands_run_as_written_and_show_what_it_says(
 def test_the_runtimes_page_gives_the_built_in_runtimes_as_the_code_does() -> None:
     text = section(RUNTIMES_PAGE, "The runtimes troupe knows")
     rows = re.findall(
-        r"^\| `([a-z-]+)` \| `?(none: in-process|[^`]+)`? \| (?:`([A-Z_]+)`|none) \|$", text, re.M
+        r"^\| `([a-z-]+)` \| `?(none: in-process|[^`]+)`? \| (?:`([A-Z_]+)`|none) "
+        r"\| (?:`([a-z.-]+)`|none) \|$",
+        text,
+        re.M,
     )
-    documented = {name: (endpoint, env or None) for name, endpoint, env in rows}
-    built_in: dict[str, tuple[str, object]] = {}
+    documented = {
+        name: (endpoint, env or None, engine or None) for name, endpoint, env, engine in rows
+    }
+    built_in: dict[str, tuple[str, object, object]] = {}
     for name, runtime in defaults.RUNTIMES.items():
         credential = runtime.get("credential")
         env = credential.get("env") if isinstance(credential, dict) else None
-        built_in[name] = (str(runtime.get("endpoint", "none: in-process")), env)
+        built_in[name] = (
+            str(runtime.get("endpoint", "none: in-process")),
+            env,
+            runtime.get("engine"),
+        )
     assert documented == built_in
 
 

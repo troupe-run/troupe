@@ -200,3 +200,18 @@ def test_a_not_retried_value_the_schema_gains_is_named_with_the_type() -> None:
     assert _values_differences("NotRetried", p.NOT_RETRIED, [*schema["enum"], "idempotency"]) == [
         "NotRetried lacks 'idempotency', which the schema lists"
     ]
+
+
+# Requirement: The SDK parses the runtime's engine
+
+
+def test_the_runtime_engines_are_exactly_the_schemas() -> None:
+    schema = _load(ROOT + "runtime.schema.json#/$defs/engine")
+    assert _values_differences("RuntimeEngine", p.RUNTIME_ENGINES, schema["enum"]) == []
+
+
+def test_an_engine_the_schema_gains_is_named_with_the_type() -> None:
+    schema = _load(ROOT + "runtime.schema.json#/$defs/engine")
+    assert _values_differences("RuntimeEngine", p.RUNTIME_ENGINES, [*schema["enum"], "vllm"]) == [
+        "RuntimeEngine lacks 'vllm', which the schema lists"
+    ]

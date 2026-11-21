@@ -38,5 +38,5 @@ runtime.
 - **THEN** the rehearsal shows that price with source `theatre`
 
 #### Scenario: A rehearsal on a runtime with an engine
-- **WHEN** a person rehearses an actor on the built-in runtime `anthropic`
-- **THEN** the rehearsal shows the engine `claude` with source `default`
+- **WHEN** a person rehearses an actor on a runtime whose config sets `engine` `lm-studio`
+- **THEN** the rehearsal shows the engine `lm-studio` with source `theatre`

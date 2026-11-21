@@ -3,9 +3,9 @@ design D2, D3, D7).
 
 A runtime is named once, in config, and an actor names it. Its values come from troupe's built-in
 runtimes (troupe.core.defaults.RUNTIMES), then the theatre's config, then the session's
-environment (``TROUPE_RUNTIME_<NAME>_ENDPOINT``, ``_MODEL`` and ``_CREDENTIAL_ENV``), each field on
-its own, and each resolved value carries its source, as settings and policy do. A run's model is
-its actor's, then the runtime's as resolved: the environment's, then config's.
+environment (``TROUPE_RUNTIME_<NAME>_ENDPOINT``, ``_MODEL``, ``_CREDENTIAL_ENV`` and ``_ENGINE``),
+each field on its own, and each resolved value carries its source, as settings and policy do. A
+run's model is its actor's, then the runtime's as resolved: the environment's, then config's.
 
 A runtime may price its models (``prices``, by model name). A run's price is the price for its
 model, matched exactly, from the theatre's config only: troupe has no built-in prices and no
@@ -35,11 +35,11 @@ from troupe.core.config_paths import shown
 from troupe.core.errors import TroupeError
 from troupe.platform.processes import EnvironmentPolicy
 from troupe_plugin_sdk.credential import well_formed
-from troupe_plugin_sdk.runner import ENDPOINT_PATTERN, MODEL_PATTERN
+from troupe_plugin_sdk.runner import ENDPOINT_PATTERN, MODEL_PATTERN, RUNTIME_ENGINES
 
 RUNTIMES = "runtimes"
 ENV_PREFIX = "TROUPE_RUNTIME_"
-FIELDS = ("endpoint", "model", "credential_env")
+FIELDS = ("endpoint", "model", "credential_env", "engine")
 """The fields the environment can set, by the suffix of their variable's name in lower case."""
 
 VARIABLE_PATTERN = re.compile(r"\A(?![Tt][Rr][Oo][Uu][Pp][Ee]_)[A-Za-z_][A-Za-z0-9_]{0,255}\Z")
@@ -51,11 +51,13 @@ ACCEPTED = {
     "model": "a model's name: 1 to 256 characters, none of them a control character",
     "credential_env": "an environment variable's name (letters, digits and _, not starting with a "
     "digit), not one of troupe's own (TROUPE_...)",
+    "engine": f"one of {', '.join(RUNTIME_ENGINES)}",
 }
 PATTERNS = {
     "endpoint": ENDPOINT_PATTERN,
     "model": MODEL_PATTERN,
     "credential_env": VARIABLE_PATTERN,
+    "engine": re.compile(r"\A(?:" + "|".join(map(re.escape, RUNTIME_ENGINES)) + r")\Z"),
 }
 
 Source = Literal["default", "theatre", "env", "actor"]
@@ -109,6 +111,8 @@ class Resolved:
     credential: Sourced | None
     prices: Mapping[str, Any]
     """The runtime's prices in the theatre's config, by model name; empty when it has none."""
+    engine: Sourced | None = None
+    """What serves the endpoint, when the runtime names it (local-engine-context design D1)."""
 
     @property
     def endpoint_value(self) -> str | None:
@@ -139,6 +143,8 @@ class Resolved:
                 "env": named,
                 "set": bool(read_variable(env, self.credential.value)),
             }
+        if self.engine is not None:
+            data["engine"] = self.engine.to_data()
         price = self.price(self.model)
         if price is not None:
             data["price"] = price.to_data()
@@ -162,6 +168,8 @@ class RunRuntime:
         data["model"] = self.model.to_data()
         if self.resolved.credential is not None:
             data["credential"] = {"env": self.resolved.credential.to_data(), "set": True}
+        if self.resolved.engine is not None:
+            data["engine"] = self.resolved.engine.to_data()
         price = self.resolved.price(self.model)
         if price is not None:
             data["price"] = price.to_data()
@@ -174,6 +182,8 @@ class RunRuntime:
             data["endpoint"] = self.resolved.endpoint.value
         data["model"] = self.model.value
         data["credential"] = self.value is not None
+        if self.resolved.engine is not None:  # sent only when named, never a null
+            data["engine"] = self.resolved.engine.value
         price = self.resolved.price(self.model)
         if price is not None:
             data["price"] = dict(price.value)
@@ -296,6 +306,7 @@ def resolve(name: str, config: Mapping[str, Any], env: Mapping[str, str]) -> Res
         model=resolved["model"],
         credential=resolved["credential_env"],
         prices=prices if isinstance(prices, Mapping) else {},
+        engine=resolved["engine"],
     )
 
 

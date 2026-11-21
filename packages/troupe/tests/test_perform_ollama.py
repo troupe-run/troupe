@@ -64,6 +64,7 @@ def test_an_ollama_actor_succeeds_records_the_runner_and_the_engine_and_writes_i
         "name": "ollama",
         "endpoint": {"value": fake.url, "source": "theatre"},
         "model": {"value": provenance["model"], "source": "actor"},
+        "engine": {"value": "ollama", "source": "default"},
     }
 
 

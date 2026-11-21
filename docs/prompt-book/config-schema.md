@@ -44,7 +44,7 @@ One actor's config file, .troupe/actors/<name>.yaml. The file's name is the acto
 
 ### Runtime
 
-One runtime's config file, .troupe/runtimes/<name>.yaml: a service a runner talks to. The file's name is the runtime's name. It holds only what the theatre's config sets: a built-in runtime's other fields are troupe's defaults, and the person's environment overrides any of them (TROUPE_RUNTIME_<NAME>_ENDPOINT, _MODEL, _CREDENTIAL_ENV). troupe writes this file from the theatre's config events, and every field is set with troupe config set.
+One runtime's config file, .troupe/runtimes/<name>.yaml: a service a runner talks to. The file's name is the runtime's name. It holds only what the theatre's config sets: a built-in runtime's other fields are troupe's defaults, and the person's environment overrides any of them (TROUPE_RUNTIME_<NAME>_ENDPOINT, _MODEL, _CREDENTIAL_ENV, _ENGINE). troupe writes this file from the theatre's config events, and every field is set with troupe config set.
 
 | Field | Holds | Always there | What it is |
 |---|---|---|---|
@@ -52,5 +52,6 @@ One runtime's config file, .troupe/runtimes/<name>.yaml: a service a runner talk
 | `endpoint` | string | No | The base URL the runner's API is served under: http or https, a host and an optional port and path, with no user info, query or fragment. The runner adds its own paths. Required for a runtime that isn't built in, and refused for an in-process built-in (mistralrs), which loads its model in the runner's own process. |
 | `model` | string | No | The model a run uses when its actor sets none, as the service names it. |
 | `credential` | object (Credential) | No | Where the runtime's credential comes from. Never the credential itself: config is committed, so it holds only a reference. |
+| `engine` | one of `"claude"`, `"lm-studio"`, `"ollama"`, `"llama.cpp"` | No | What serves the endpoint: claude, lm-studio, ollama or llama.cpp. A runner that needs the service's quirks reads it, such as the anthropic runner, which counts LM Studio's cached input differently from Claude's API and Ollama; others ignore it. The built-in anthropic runtime's is claude and ollama's is ollama. Leave it unset when none fits: a runner then assumes nothing about the service. |
 | `prices` | object (Prices) | No | What each model costs at this service, by the model's name exactly as a run names it, in US dollars per million tokens. A runner whose service reports no cost estimates one from the run's model's price, marked as an estimate; a model with no price gets none. Set a rate for every kind of token the service's runs use, cacheRead and cacheWrite included (0 for a kind it doesn't charge for), or runs that use it get no estimate. In a config set path, a model's name that holds a dot goes in brackets: runtimes.openai.prices[gpt-4.1]. |
 <!-- end generated: config -->

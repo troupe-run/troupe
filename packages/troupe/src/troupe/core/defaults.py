@@ -186,8 +186,11 @@ RUNTIMES: dict[str, dict[str, object]] = {
     "anthropic": {
         "endpoint": "https://api.anthropic.com",
         "credential": {"env": "ANTHROPIC_API_KEY"},
+        "engine": "claude",
     },
-    "ollama": {"endpoint": "http://127.0.0.1:11434"},
+    # The engine names what serves the endpoint (local-engine-context design D1): the built-in
+    # anthropic runtime is Claude's API, and the built-in ollama runtime is Ollama.
+    "ollama": {"endpoint": "http://127.0.0.1:11434", "engine": "ollama"},
     # In-process: the mistralrs runner loads its model, a GGUF file, in its own process, so the
     # runtime has no endpoint (in-process-runner design D5).
     "mistralrs": {},

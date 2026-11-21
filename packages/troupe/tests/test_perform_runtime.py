@@ -357,6 +357,23 @@ def test_a_rehearsal_on_a_priced_model_shows_the_price(tmp_path: Path) -> None:
     assert shown["price"] == {"value": PRICE, "source": "theatre"}
 
 
+def test_a_rehearsal_on_a_runtime_that_names_its_engine_shows_it_with_its_source(
+    tmp_path: Path,
+) -> None:
+    # Spec: runs, "A rehearsal on a runtime with an engine" (local-engine-context design D1).
+    harness = _harness(tmp_path, OPENAI_API_KEY=KEY)
+    named = {"openai": {"engine": "lm-studio"}}
+    result = harness.perform_result(
+        request(script(INIT, OK), rehearse=True, runtimes=named, **OPENAI)
+    )
+    assert result.rehearsal is not None
+    assert result.rehearsal.runtime is not None
+    assert result.rehearsal.runtime.to_data()["engine"] == {
+        "value": "lm-studio",
+        "source": "theatre",
+    }
+
+
 def test_a_rehearsal_refuses_what_perform_would(tmp_path: Path) -> None:
     harness = _harness(tmp_path)
     with pytest.raises(TroupeError) as raised:

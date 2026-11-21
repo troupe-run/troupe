@@ -2,7 +2,7 @@
 
 ``config get --resolved`` and a rehearsed ``perform`` both show a runtime this way: each value with
 the source it came from, a credential by its variable's name and whether that is set, never its
-value, and the model's price when the theatre prices it.
+value, the engine when the runtime names one, and the model's price when the theatre prices it.
 """
 
 from typing import Any
@@ -34,6 +34,9 @@ def runtime_lines(runtime: dict[str, Any], indent: str = "") -> list[str]:
         state = "set" if credential["set"] else "not set"
         where = env["value"] if "value" in env else f"the variable {env['namedBy']} names"
         lines.append(f"{indent}  credential: from {where} (named by {env['source']}), {state}")
+    engine = runtime.get("engine")
+    if engine is not None:
+        lines.append(f"{indent}  engine: {engine['value']} (from {engine['source']})")
     price = runtime.get("price")
     if price is not None:
         lines.append(f"{indent}  price: {price_text(price['value'])} (from {price['source']})")

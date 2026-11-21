@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://troupe.run/protocol/config/runtime.schema.json",
   "title": "Runtime",
-  "description": "One runtime's config file, .troupe/runtimes/<name>.yaml: a service a runner talks to. The file's name is the runtime's name. It holds only what the theatre's config sets: a built-in runtime's other fields are troupe's defaults, and the person's environment overrides any of them (TROUPE_RUNTIME_<NAME>_ENDPOINT, _MODEL, _CREDENTIAL_ENV). troupe writes this file from the theatre's config events, and every field is set with troupe config set.",
+  "description": "One runtime's config file, .troupe/runtimes/<name>.yaml: a service a runner talks to. The file's name is the runtime's name. It holds only what the theatre's config sets: a built-in runtime's other fields are troupe's defaults, and the person's environment overrides any of them (TROUPE_RUNTIME_<NAME>_ENDPOINT, _MODEL, _CREDENTIAL_ENV, _ENGINE). troupe writes this file from the theatre's config events, and every field is set with troupe config set.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -37,6 +37,11 @@
           "$ref": "../runtime.schema.json#/$defs/variable"
         }
       }
+    },
+    "engine": {
+      "title": "Engine",
+      "description": "What serves the endpoint: claude, lm-studio, ollama or llama.cpp. A runner that needs the service's quirks reads it, such as the anthropic runner, which counts LM Studio's cached input differently from Claude's API and Ollama; others ignore it. The built-in anthropic runtime's is claude and ollama's is ollama. Leave it unset when none fits: a runner then assumes nothing about the service.",
+      "$ref": "../runtime.schema.json#/$defs/engine"
     },
     "prices": {
       "title": "Prices",

@@ -132,7 +132,7 @@ CASES: list[tuple[type[p.Message], str, st.SearchStrategy[Any]]] = [
                 "model": NAME.filter(lambda s: s.isprintable()),
                 "credential": st.booleans(),
             },
-            {"price": PRICES},
+            {"price": PRICES, "engine": st.sampled_from(p.RUNTIME_ENGINES)},
         ),
     ),
     (
@@ -858,6 +858,29 @@ def test_an_in_process_runtime_has_no_endpoint_and_an_endpoint_null_is_refused()
     assert not is_valid(data, "run-start.schema.json#/properties/params", runner=None)
     with pytest.raises(p.ProtocolError, match=r"runtime\.endpoint"):
         p.RunStartParams.from_data(data)
+
+
+# Requirement: The SDK parses the runtime's engine
+
+
+def test_an_engine_in_run_start_is_parsed_and_its_absence_is_none() -> None:
+    data = _run_start("https://example.com/v1")
+    assert p.RunStartParams.from_data(data).runtime.engine is None  # type: ignore[union-attr]
+    data["runtime"]["engine"] = "lm-studio"
+    assert is_valid(data, "run-start.schema.json#/properties/params", runner=None)
+    assert p.RunStartParams.from_data(data).runtime.engine == "lm-studio"  # type: ignore[union-attr]
+
+
+def test_an_engine_the_protocol_doesnt_name_is_refused_naming_the_field_and_the_engines() -> None:
+    data = _run_start("https://example.com/v1")
+    data["runtime"]["engine"] = "vllm"
+    assert not is_valid(data, "run-start.schema.json#/properties/params", runner=None)
+    with pytest.raises(p.ProtocolError) as raised:
+        p.RunStartParams.from_data(data)
+    message = str(raised.value)
+    assert "runtime.engine" in message
+    for engine in p.RUNTIME_ENGINES:
+        assert repr(engine) in message
 
 
 # Requirement: A message's strings are Unicode text (host-robustness design D3)
