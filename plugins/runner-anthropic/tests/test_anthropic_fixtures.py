@@ -135,8 +135,8 @@ def test_the_conversation_lm_studio_cut_ends_before_its_reply_is_acted_on() -> N
 def test_lm_studios_cut_on_a_turn_that_reports_cache_reads_ends_before_its_reply_is_acted_on() -> (
     None
 ):
-    # Requirement: A reply from a conversation the engine shrank isn't acted on, scenario "LM
-    # Studio's cut on a turn that reports cache reads" (troupe#418, troupe#419). The cut reply
+    # Requirement: A reply's prompt is measured by the engine's accounting, scenario "LM Studio's
+    # cut on a turn that reports cache reads" (troupe#418, troupe#419). The cut reply
     # reports 4,037 input and 3,840 cache reads: 7,877 summed, more than the 4,597 before it.
     provenance = load("lm-studio-conversation-cut-cached", "provenance.json")
     assert provenance["how"].startswith("derived from lm-studio-conversation-cut")

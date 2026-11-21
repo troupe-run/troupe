@@ -518,6 +518,8 @@ def test_a_reply_without_usage_gives_a_warning_and_a_result_without_usage(tmp_pa
     assert "usage" not in _result(ran)
 
 
+# Requirement: An engine's cache reads are counted once
+
 LM_STUDIO_LOOP = [
     tool_reply([GLOB], prompt=93, completion=82, cache_read=0, cache_write=None),
     text_reply("ok", prompt=126, completion=15, cache_read=89, cache_write=None),
@@ -692,6 +694,8 @@ def test_a_first_reply_from_a_prompt_the_engine_cut_is_acted_on_since_nothing_sh
     assert [e["callId"] for e in ran.of("tool_call")] == ["t1"]
     assert _result(ran)["status"] == "ok"
 
+
+# Requirement: A reply's prompt is measured by the engine's accounting
 
 CUT_WITH_CACHE_READS = [
     tool_reply([("t1", "Glob", {"pattern": "*"})], prompt=119, cache_read=15),
