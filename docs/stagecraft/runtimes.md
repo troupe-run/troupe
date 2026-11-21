@@ -123,7 +123,10 @@ where Claude's API and Ollama count it apart, so the Anthropic runner needs to k
 count each token once and to tell when the engine has cut a conversation. Nothing in a reply says which engine sent
 it, so the runtime says, in `engine`: `claude`, `lm-studio`, `ollama` or `llama.cpp`. Any other value is refused,
 naming the ones it takes. troupe never works it out from the endpoint, so a gateway in front of Claude's API names
-`claude` itself.
+`claude` itself. For the same reason, a built-in keeps its engine when you change only its endpoint: point the
+built-in `anthropic` at LM Studio with `TROUPE_RUNTIME_ANTHROPIC_ENDPOINT` and it still says `claude`, so its cached
+input is counted twice. Define a runtime of your own for a local engine, as above, or set the engine too
+(`TROUPE_RUNTIME_ANTHROPIC_ENGINE=lm-studio`).
 
 Leave it unset when none of these serves the runtime. A runner that needs it then assumes nothing: the Anthropic
 runner reports usage as the API defines it, warns once if a reply reports cached input, and checks for a cut
