@@ -390,7 +390,7 @@ class ConfigChangedEntry(RootModel[ConfigChangedEntry1 | ConfigChangedEntry2]):
 
 class ConfigChanged(StrictModel):
     """
-    The payload of one config change (topic troupe.core.config.aggregate:Config.Changed): every value one command changed, and every config file it wrote or removed. One command records exactly one. Field names are as recorded.
+    The payload of one config change (topic troupe.core.config.aggregate:Config.Changed): every value one command changed, and every config file it wrote or removed. A command records exactly one for its own change; the sweep before it records one more for each config file a person edited, by the unknown author, with the file in its lineage's vcs.source. Field names are as recorded.
     """
 
     model_config = ConfigDict(
@@ -398,7 +398,7 @@ class ConfigChanged(StrictModel):
     )
     changes: Annotated[list[ConfigChangedEntry], Field(min_length=1)]
     """
-    Each value the command changed, at most once each. A change that would change nothing isn't recorded.
+    Each value the change sets or unsets, at most once each. A change that would change nothing isn't recorded.
     """
     files: list[ConfigChangedFile]
     """

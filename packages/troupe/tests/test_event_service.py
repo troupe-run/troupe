@@ -90,6 +90,41 @@ def test_an_invalid_lineage_names_the_field_and_writes_nothing(tmp_path: Path) -
     assert snapshot(tmp_path) == {}
 
 
+def test_one_batch_records_each_event_with_its_own_lineage(tmp_path: Path) -> None:
+    service = files_service(tmp_path)
+    edit = service.command(via="file", actor=Unknown())
+    person = service.command(via="cli")
+    source = Source(path=".troupe/actors/tester.yaml", before=None, after="sha256:" + "0" * 64)
+    events = [*Counter(value=1).collect_events(), *Counter(value=2).collect_events()]
+    recorded = service.record_with_lineages(events, [edit.lineage(source), person.lineage()])
+    first, second = (lineage_of(tmp_path, r.event_id) for r in recorded)
+    assert first["actor"] == {"kind": "unknown"}
+    assert first["via"] == "file"
+    assert first["vcs"]["source"]["path"] == ".troupe/actors/tester.yaml"
+    assert second["actor"]["kind"] == "human"
+    assert "source" not in second["vcs"]
+    assert first["change"] != second["change"]
+
+
+def test_a_batch_with_one_invalid_lineage_writes_nothing(tmp_path: Path) -> None:
+    service = files_service(tmp_path)
+    good = service.command(via="cli").lineage()
+    bad = Lineage(
+        actor=good.actor,
+        via="email",  # type: ignore[arg-type]
+        at=good.at,
+        reason=None,
+        change=good.change,
+        cause=good.cause,
+        vcs=good.vcs,
+    )
+    events = [e for n in (1, 2, 3) for e in Counter(value=n).collect_events()]
+    with pytest.raises(TroupeError) as caught:
+        service.record_with_lineages(events, [good, good, bad])
+    assert caught.value.code == "events.lineage-invalid"
+    assert snapshot(tmp_path) == {}
+
+
 def test_a_command_run_by_a_person_records_a_human_actor_with_its_source(
     tmp_path: Path,
 ) -> None:

@@ -1,8 +1,9 @@
 """The config stream and its one event (spec: config; config-model design D2).
 
 A theatre's config is one stream, with the same id in every theatre (a store holds one theatre).
-Each command that changes config records exactly one ``Config.Changed``, holding every value it
-changed and every config file it wrote or removed:
+Each command that changes config records exactly one ``Config.Changed`` for its own change, holding
+every value it changed and every config file it wrote or removed; the sweep before it records one
+per config file a person edited (``troupe.core.config.sweep``):
 
 - ``changes``: one entry per value, ``{"path": [...keys], "before": "sha256:...", "after": value}``.
   ``before`` is the hash of the old value's canonical JSON, absent when it didn't exist; ``after``

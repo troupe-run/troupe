@@ -7,7 +7,7 @@ same batch first settles the fork, with the merged config as the settled state.
 """
 
 from collections.abc import Collection, Mapping, Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from eventsourcing.utils import get_topic
 
@@ -17,6 +17,9 @@ from troupe.core.config.kinds import ACTORS, check
 from troupe.core.config.merge import Change, Merged, merge
 from troupe.core.errors import TroupeError
 from troupe.core.events import Command, EventStore, Recorded
+
+if TYPE_CHECKING:
+    from troupe.core.config.sweep import Edit
 
 
 def read(store: EventStore) -> Merged:
@@ -96,3 +99,57 @@ def record(
         change = aggregate.changed(version + 1, list(entries), list(files))
         return command.record([settled, change], settles=list(merged.heads))
     return command.record([aggregate.changed(version, list(entries), list(files))])
+
+
+def record_with_edits(
+    store: EventStore,
+    merged: Merged,
+    edits: Sequence["Edit"],
+    own: tuple[Command, Sequence[dict[str, Any]], Sequence[dict[str, Any]]] | None = None,
+    typed: Collection[tuple[str, ...]] | None = None,
+) -> list[Recorded]:
+    """Record a sweep's hand edits, one ``Config.Changed`` per file by the unknown author, then,
+    with ``own``, a command's own change, all in one batch after ``merged`` (spec:
+    config-hand-edits; hand-edit-sweep design D7, D8). Refused, recording nothing, when the config
+    they make together breaks a rule, or leaves a conflict unresolved. When the stream has forked,
+    the batch first settles it. The sweep's changes share one change id of their own."""
+    from troupe.core.events import Source, Unknown
+    from troupe.core.theatre import THEATRE_DIR
+
+    entries = [entry for edit in edits for entry in edit.entries]
+    if own is not None:
+        entries += list(own[1])
+    if not entries:
+        return []
+    refuse_unrecordable(store, merged, entries, typed)
+    sweep = store.command(via="file", actor=Unknown()) if edits else None
+    events: list[Any] = []
+    lineages: list[Any] = []
+    version = merged.version + 1
+    forked = len(merged.heads) > 1
+    first = sweep if sweep is not None else own[0] if own is not None else None
+    if forked and first is not None:
+        events.append(
+            aggregate.Config.Settled(
+                originator_id=aggregate.STREAM,
+                originator_version=version,
+                timestamp=aggregate.Config.Settled.create_timestamp(),
+                topic=get_topic(aggregate.Config),
+                state={"config": merged.config},
+            )
+        )
+        lineages.append(first.lineage())
+        version += 1
+    if sweep is not None:
+        for edit in edits:
+            events.append(aggregate.changed(version, list(edit.entries), list(edit.files)))
+            path = f"{THEATRE_DIR}/{edit.path}"
+            lineages.append(sweep.lineage(Source(path=path, before=edit.before, after=edit.after)))
+            version += 1
+    if own is not None and own[1]:
+        command, own_entries, files = own
+        events.append(aggregate.changed(version, list(own_entries), list(files)))
+        lineages.append(command.lineage())
+    return store.record_with_lineages(
+        events, lineages, settling_parents=list(merged.heads) if forked else None
+    )

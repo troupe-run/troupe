@@ -301,21 +301,21 @@ class Plan:
         return tuple(a for a in self.actions if a.action != "refuse")
 
 
-def _troupes(path: str, data: bytes, recorded: Mapping[str, frozenset[str]]) -> bool:
+def troupes(path: str, data: bytes, recorded: Mapping[str, frozenset[str]]) -> bool:
     return file_hash(data) in recorded.get(path, frozenset())
 
 
 SIDES = ("ours", "theirs")
 
 
-def _merged_from_troupes(
+def merged_from_troupes(
     path: str, have: bytes, merge: MergeSides, vouched: Mapping[str, frozenset[str]]
 ) -> bool:
     """Whether git made ``have`` only from versions troupe wrote: every side is troupe's, and a
     clean merge's file is still exactly what git merged (design D4 step 2)."""
     if merge.kind == "clean" and have != merge.merged:
         return False
-    return all(side is None or _troupes(path, side, vouched) for side in merge.sides)
+    return all(side is None or troupes(path, side, vouched) for side in merge.sides)
 
 
 class MergeReader(Protocol):
@@ -333,7 +333,7 @@ def _markable(path: str, merge: MergeSides | None, vouched: Mapping[str, frozens
     return (
         merge is not None
         and merge.kind == "conflicted"
-        and all(side is None or _troupes(path, side, vouched) for side in merge.sides)
+        and all(side is None or troupes(path, side, vouched) for side in merge.sides)
     )
 
 
@@ -369,15 +369,15 @@ def plan(
     actions: list[Action] = []
     for staged, data in sorted(disk.staged.items()):
         target = staged_target(staged) or staged
-        if _troupes(target, data, vouched) and rendered.get(target) == data:
+        if troupes(target, data, vouched) and rendered.get(target) == data:
             reason = "a write troupe recorded and didn't finish"
             have, merge = disk.files.get(target), merged.get(target)
             if (
                 have is not None
                 and have != data
                 and merge is not None
-                and not _troupes(target, have, vouched)
-                and _merged_from_troupes(target, have, merge, vouched)
+                and not troupes(target, have, vouched)
+                and merged_from_troupes(target, have, merge, vouched)
             ):
                 # Moving the staged file into place replaces a file git merged: keep it (D5).
                 if target not in resolve:
@@ -412,9 +412,9 @@ def plan(
             actions.append(Action(path, "write", reason, want, mark=mark))
             continue
         action = "write" if want is not None else "remove"
-        if _troupes(path, have, vouched):
+        if troupes(path, have, vouched):
             actions.append(Action(path, action, "an older version troupe wrote", want, mark=mark))
-        elif merge is not None and _merged_from_troupes(path, have, merge, vouched):
+        elif merge is not None and merged_from_troupes(path, have, merge, vouched):
             if path in resolve:
                 reason = MERGE_REASONS[merge.kind]
                 actions.append(
@@ -432,7 +432,7 @@ def plan(
                 not_troupes = tuple(
                     name
                     for name, side in zip(SIDES, merge.sides, strict=True)
-                    if side is not None and not _troupes(path, side, vouched)
+                    if side is not None and not troupes(path, side, vouched)
                 )
             actions.append(Action(path, "refuse", CONFLICTED, want, not_troupes=not_troupes))
         else:
@@ -449,6 +449,11 @@ MERGE_REASONS = {
 }
 _MARKERS = re.compile(rb"^<<<<<<< .*^=======\r?$.*^>>>>>>> ", re.MULTILINE | re.DOTALL)
 """git's conflict markers, as a merge leaves them in a file both branches changed."""
+
+
+def has_markers(data: bytes) -> bool:
+    """Whether ``data`` holds git's conflict markers."""
+    return _MARKERS.search(data) is not None
 
 
 def refuse(plan_: Plan) -> None:
