@@ -94,27 +94,23 @@ def test_an_audition_names_the_actor_its_runner_and_both_files(repo: Repo) -> No
 CHARACTER_SET = "troupe config set actors.lead.character=@<file>"
 
 
-def test_an_audition_says_to_change_the_character_with_config_set_not_by_editing(
+def test_an_audition_says_to_change_the_character_by_editing_its_file(
     repo: Repo, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _, out, _ = cli("init", "--audition")
-    assert f"To change it, write yours in a file and run: {CHARACTER_SET}" in out
-    assert "edit it" not in out
-    mine = repo.path / "character.md"
-    mine.write_bytes(b"You are terse.\n")  # write_text writes CRLF on Windows
-    command = CHARACTER_SET.replace("<file>", mine.name)
-    code, _, err = cli(*shlex.split(command)[1:])
-    assert code == ExitCode.OK, err
-    code, out, _ = cli("config", "get", "actors.lead.character")
-    assert out.removesuffix("\n") == "You are terse.\n"  # config get ends its output with a newline
+    assert "To change it, edit that file" in out
+    assert "config set" not in out.split("Next:")[0]
     lead = repo.path / ".troupe" / "actors" / "lead.md"
-    assert lead.read_text(encoding="utf-8") == "You are terse.\n"
+    lead.write_bytes(b"You are terse.\n")  # write_text writes CRLF on Windows
     repo.git("add", ".troupe")
     repo.git("commit", "-m", "Add a troupe theatre")
     monkeypatch.setenv(ALLOW_VARIABLE, "true")
     code, _, err = cli("perform", "lead", "--rehearse")
     assert code == ExitCode.WOULD_CHANGE, err
-    assert "isn't what troupe wrote" not in err
+    assert "file-not-troupes" not in err
+    code, out, _ = cli("config", "get", "actors.lead.character")
+    assert out.removesuffix("\n") == "You are terse.\n"  # config get ends its output with a newline
+    assert lead.read_text(encoding="utf-8") == "You are terse.\n"
 
 
 # Requirement: Init prints the next steps for its audition

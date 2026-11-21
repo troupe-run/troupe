@@ -19,8 +19,8 @@ Every command but `init` runs in a **theatre**: the nearest directory, from wher
   theatre in it or above it. It writes `.troupe/.gitignore` and `.troupe/.gitattributes`, and without `--audition`
   records nothing. `--audition` also defines a working example actor, `lead`, recorded as a config change, and
   prints what to run next: commit, allow the local stage, and `troupe perform lead` with an example direction. The
-  actor runs Claude Code, with a USD 1 budget and a character in `.troupe/actors/lead.md`, which you change with
-  `troupe config set actors.lead.character=@<file>`. `--runner` gives it another runner: `anthropic`, `claude-code`,
+  actor runs Claude Code, with a USD 1 budget and a character in `.troupe/actors/lead.md`, which you change by
+  editing the file. `--runner` gives it another runner: `anthropic`, `claude-code`,
   `mistralrs`, `ollama`, `openai` or `scripted`, which runs offline with no account. A runner that comes as an
   [extra](../opening-night/install.md#runners-that-come-as-extras) and isn't installed is refused with
   `runner.not-installed`, naming the extra. For `mistralrs`, `init` then prepares the runner's engine, so the first

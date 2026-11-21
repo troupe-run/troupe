@@ -64,8 +64,8 @@ append-only text, one event per line, so two people's history merges in git with
 
 Config lives in your theatre, laid out by convention: the file's name is what it defines, so `actors/lead.yaml`
 (with `actors/lead.md` for its character) is the actor `lead`. Every config file names its schema, so your editor
-can check it as you type. You change config with `troupe config set`, which records each change as an event. troupe
-can't read edits to the files back yet, so change config that way rather than by hand: see [Hand-edit config
+can check it as you type. You change config by editing the files, or with `troupe config set`; either way troupe
+records each change as an event, and before each command it reads your edits back: see [Hand-edit config
 safely](../stagecraft/hand-edit-config.md) and the [config schema](../prompt-book/config-schema.md). The services
 runners talk to are config too, in `runtimes/`: see [Point actors at a service](../stagecraft/runtimes.md).
 
