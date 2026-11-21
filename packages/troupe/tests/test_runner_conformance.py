@@ -548,10 +548,11 @@ def test_the_runners_environment_holds_the_credential_as_troupe_runtime_credenti
         "model": "small",
         "credential": {"env": "MY_SERVICE_KEY"},
     }
-    monkeypatch.setenv("MY_SERVICE_KEY", KEY)
     target = conformance_target(
-        {**SCRIPTED_ENV, RUNTIME_VARIABLE: json.dumps(runtime), **os.environ}
+        {**SCRIPTED_ENV, RUNTIME_VARIABLE: json.dumps(runtime), "MY_SERVICE_KEY": KEY}
     )
+    # In the real environment too, so the check shows the runner's isn't given it from there.
+    monkeypatch.setenv("MY_SERVICE_KEY", KEY)
     # The runner's environment, built as check_runner builds it for every check.
     runner_env = processes.build_environment(defaults.RUNNER_ENVIRONMENT, explicit=target.env)
     assert runner_env["TROUPE_RUNTIME_CREDENTIAL"] == KEY
@@ -632,7 +633,7 @@ def test_a_runner_that_isnt_a_command_line_is_refused_naming_the_variable(runner
 def test_the_env_driven_check_passes_the_openai_runner_given_a_runtime_and_a_credential(
     tmp_path: Path,
 ) -> None:
-    # #299's case: with no runtime, 5 of 8 checks failed with openai.no-runtime (design D5).
+    # #299's case: with no runtime, 6 of 9 checks fail, the runner naming no runtime (design D5).
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     with openai_stand_in.serving([openai_stand_in.text_reply("Done.")] * 20) as fake:
