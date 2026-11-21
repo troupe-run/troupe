@@ -22,7 +22,7 @@ import ast
 import json
 import re
 import subprocess
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
@@ -232,17 +232,26 @@ def last_changed(root: Path, commit: str, path: str, line: int) -> str:
     return blamed.stdout[:40]
 
 
-def attribute(report: Report, root: Path, previous: str | None) -> Report:
+def attribute(
+    report: Report, root: Path, previous: str | None, log: Callable[[str], None] = lambda _: None
+) -> Report:
     """The report with each survivor's last commit, and `new` when that commit isn't in `previous`.
 
     `previous` is the commit the previous weekly run tested this repository at. Without one (the
-    first run, or one whose report has expired), nothing is new.
+    first run, or one whose report has expired), nothing is new. A survivor whose line git can't
+    blame is left with no commit and not new, and `log` is told why: one survivor's attribution
+    never costs the report (#377, mutation-blame design D2).
     """
     modules = {}
     for name, module in report.modules.items():
         survivors = []
         for survivor in module.survivors:
-            commit = last_changed(root, report.commit, survivor.path, survivor.line)
+            try:
+                commit = last_changed(root, report.commit, survivor.path, survivor.line)
+            except ReportError as error:
+                log(f"{survivor.path}:{survivor.line} unattributed: {error}")
+                survivors.append(replace(survivor, commit=None, new=False))
+                continue
             new = (
                 previous is not None
                 and git(root, "merge-base", "--is-ancestor", commit, previous).returncode != 0
@@ -250,6 +259,17 @@ def attribute(report: Report, root: Path, previous: str | None) -> Report:
             survivors.append(replace(survivor, commit=commit, new=new))
         modules[name] = replace(module, survivors=tuple(survivors))
     return replace(report, previous_commit=previous, modules=modules)
+
+
+def unattributed(report: Report) -> list[Survivor]:
+    """The survivors `attribute` couldn't attribute: after it, only a failed blame leaves a
+    survivor with no commit."""
+    return [
+        survivor
+        for _, module in sorted(report.modules.items())
+        for survivor in module.survivors
+        if survivor.commit is None
+    ]
 
 
 # mutmut's results (design D3)
@@ -285,9 +305,12 @@ def module_name(path: str, source: str) -> str:
     return ".".join(parts)
 
 
-def function_start(tree: ast.Module, mangled: str) -> int | None:
-    """The first line (its first decorator's, if any) of mutmut's `x_f`, or of `x<sep>C<sep>m`
-    for a method, <sep> being U+01C1."""
+def function_start(tree: ast.Module, mangled: str, lines: Sequence[str]) -> int | None:
+    """Where `mutmut show` counts line 1 of mutmut's `x_f`, or of `x<sep>C<sep>m` for a method
+    (<sep> being U+01C1): the function's first line (its first decorator's, if any), or the first
+    of the comments directly above it, which libcst attaches to the function and mutmut renders
+    with it (#377, mutation-blame design D1). Those are comment lines at the function's indent or
+    less, with blank lines between allowed; a comment indented deeper is the previous block's."""
     if mangled.startswith("x_"):
         wanted, scope = mangled[2:], tree.body
     else:
@@ -298,8 +321,24 @@ def function_start(tree: ast.Module, mangled: str) -> int | None:
         scope = classes[0].body
     for node in scope:
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name == wanted:
-            return min([node.lineno, *(d.lineno for d in node.decorator_list)])
+            first = min([node.lineno, *(d.lineno for d in node.decorator_list)])
+            return leading_comments_start(lines, first, node.col_offset)
     return None
+
+
+def leading_comments_start(lines: Sequence[str], first: int, indent: int) -> int:
+    """`first`, or the first of the comment lines directly above it at `indent` or less."""
+    start, number = first, first - 1
+    while number >= 1:
+        line = lines[number - 1]
+        stripped = line.lstrip()
+        if not stripped:
+            number -= 1
+        elif stripped.startswith("#") and len(line) - len(stripped) <= indent:
+            start, number = number, number - 1
+        else:
+            break
+    return start
 
 
 def mutated_line(diff: str, start: int) -> tuple[int, str]:
@@ -341,7 +380,8 @@ def from_mutmut(
         finished = True
         survivors = []
         crashed = []
-        tree = ast.parse((root / path).read_text(encoding="utf-8"))
+        code = (root / path).read_text(encoding="utf-8")
+        tree, lines = ast.parse(code), code.splitlines()
         for name, code in sorted(codes.items()):
             if code is None:
                 finished = False
@@ -351,7 +391,7 @@ def from_mutmut(
             if status not in ("survived", "crashed"):
                 continue
             match = MUTANT.fullmatch(name)
-            start = function_start(tree, match["function"]) if match else None
+            start = function_start(tree, match["function"], lines) if match else None
             line, change = mutated_line(show(name), start or 1)
             if status == "survived":
                 survivors.append(Survivor(name, path, line, change or name))
