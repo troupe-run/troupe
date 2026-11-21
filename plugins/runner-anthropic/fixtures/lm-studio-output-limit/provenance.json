@@ -3,5 +3,6 @@
   "model": "google/gemma-4-e4b",
   "captured": "2026-11-14",
   "how": "recorded with tools/capture_anthropic.py output-limit",
-  "credential": "none"
+  "credential": "none",
+  "engine": "lm-studio"
 }

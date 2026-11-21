@@ -12,11 +12,13 @@ import pytest
 
 from anthropic_fixture_replay import ECHO, NAMES, load, replay
 from anthropic_harness import CANARY, FIXTURES
+from troupe_runner_anthropic.context import ENGINES
 
 REQUIRED = {
     "lm-studio-tool-loop",
     "lm-studio-context-refused",
     "lm-studio-conversation-cut",
+    "lm-studio-conversation-cut-cached",
     "lm-studio-output-limit",
     "lm-studio-broken-stream",
     "claude-tool-loop",
@@ -126,7 +128,40 @@ def test_the_conversation_lm_studio_cut_ends_before_its_reply_is_acted_on() -> N
     result = _result("lm-studio-conversation-cut")
     assert (result["status"], result["reason"]) == ("error", "context-length")
     assert "4037" in str(result["message"])
-    assert "4597" in str(result["message"])
+    # LM Studio's 4,482 input already holds its 115 cache reads.
+    assert "4482" in str(result["message"])
+
+
+def test_lm_studios_cut_on_a_turn_that_reports_cache_reads_ends_before_its_reply_is_acted_on() -> (
+    None
+):
+    # Requirement: A reply from a conversation the engine shrank isn't acted on, scenario "LM
+    # Studio's cut on a turn that reports cache reads" (troupe#418, troupe#419). The cut reply
+    # reports 4,037 input and 3,840 cache reads: 7,877 summed, more than the 4,597 before it.
+    provenance = load("lm-studio-conversation-cut-cached", "provenance.json")
+    assert provenance["how"].startswith("derived from lm-studio-conversation-cut")
+    expected = load("lm-studio-conversation-cut-cached", "expected.json")
+    assert expected["requests"] == 3
+    assert len([e for e in expected["events"] if e["type"] == "tool_call"]) == 2
+    result = _result("lm-studio-conversation-cut-cached")
+    assert (result["status"], result["reason"]) == ("error", "context-length")
+    assert "a prompt of 4037 tokens, after 4482" in str(result["message"])
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_each_fixture_names_the_engine_it_came_from_and_its_counted_by_that_engine(
+    name: str,
+) -> None:
+    # Requirement: The runner counts by its runtime's engine (local-engine-context design D6).
+    engine = load(name, "provenance.json")["engine"]
+    assert engine in ENGINES
+    assert engine == ("claude" if name.startswith("claude-") else "lm-studio")
+
+
+def test_lm_studios_tool_loop_counts_its_cache_reads_once() -> None:
+    # Scenario "LM Studio's cache reads counted once": 93 + (126 - 89) input, 89 cache reads.
+    usage = _result("lm-studio-tool-loop")["usage"]
+    assert usage == {"inputTokens": 130, "outputTokens": 97, "cacheReadTokens": 89}
 
 
 def test_the_rejected_credential_fixture_used_no_working_credential() -> None:

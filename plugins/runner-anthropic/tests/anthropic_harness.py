@@ -245,8 +245,10 @@ class Session:
         event_max_bytes: int = EVENT_MAX_BYTES,
         effects: dict[str, list[str]] | None = None,
         on_context_full: str = "fail",
+        engine: str | None = None,
     ) -> dict[str, Any]:
-        """Initialize, then send run/start with a runtime naming ``endpoint`` (None: no runtime).
+        """Initialize, then send run/start with a runtime naming ``endpoint`` (None: no runtime)
+        and, when given, ``engine``.
         ``options`` default to TEST_LIMITS. ``valid=False`` marks a run/start the runner must
         refuse, which the contract's schema must refuse as well."""
         options = dict(TEST_LIMITS) if options is None else options
@@ -271,6 +273,8 @@ class Session:
                 "model": model,
                 "credential": self.credential is not None,
             }
+            if engine is not None:
+                params["runtime"]["engine"] = engine
         if character is not None:
             params["character"] = character
         return self.request("run/start", params)

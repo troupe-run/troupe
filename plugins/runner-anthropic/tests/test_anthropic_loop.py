@@ -99,6 +99,8 @@ def run(
     compact: bool = False,
     files: dict[str, str] | None = None,
     model: str = MODEL,
+    engine: str | None = None,
+    runtime_name: str | None = None,
 ) -> Ran:
     options = TEST_LIMITS if options is None else options
     check_limits(options, None)
@@ -106,7 +108,7 @@ def run(
     events: list[RunEvent] = []
     records: list[tuple[str, bytes]] = []
     with FakeEndpoint(script) as fake:
-        runtime = Runtime.checked(fake.endpoint, model, CANARY, price)
+        runtime = Runtime.checked(fake.endpoint, model, CANARY, price, engine, runtime_name)
         service = Service(runtime)
         try:
             loop = Loop(
@@ -516,6 +518,74 @@ def test_a_reply_without_usage_gives_a_warning_and_a_result_without_usage(tmp_pa
     assert "usage" not in _result(ran)
 
 
+LM_STUDIO_LOOP = [
+    tool_reply([GLOB], prompt=93, completion=82, cache_read=0, cache_write=None),
+    text_reply("ok", prompt=126, completion=15, cache_read=89, cache_write=None),
+]
+"""fixtures/lm-studio-tool-loop's usage: 126 input tokens of which 89 were cache reads."""
+
+
+def test_lm_studios_cache_reads_are_taken_out_of_its_input_and_counted_once(
+    tmp_path: Path,
+) -> None:
+    # Scenario: "LM Studio's cache reads counted once" (troupe#419).
+    result = _result(run(tmp_path, LM_STUDIO_LOOP, engine="lm-studio"))
+    assert result["usage"] == {"inputTokens": 130, "cacheReadTokens": 89, "outputTokens": 97}
+
+
+def test_with_the_engine_unknown_usage_stays_as_the_api_defines_it(tmp_path: Path) -> None:
+    # Scenario: "The same replies with the engine unknown": no correction without knowing it's due.
+    result = _result(run(tmp_path, LM_STUDIO_LOOP))
+    assert result["usage"] == {"inputTokens": 219, "cacheReadTokens": 89, "outputTokens": 97}
+
+
+def test_lm_studios_budget_counts_each_token_once(tmp_path: Path) -> None:
+    script = [tool_reply([GLOB], prompt=600, completion=100, cache_read=500)] * 2
+    options = {"maxTurns": 5, "maxTotalTokens": 1000}  # under test
+    ran = run(tmp_path, script, options=options, engine="lm-studio")
+    assert len(ran.fake.requests) == 2
+    assert "1400 tokens" in _result(ran)["message"]
+
+
+# Requirement: Cache reads on an engine of unknown accounting are warned about once
+
+
+def _engine_warnings(ran: Ran) -> list[dict[str, Any]]:
+    return [e for e in ran.of("log") if "engine" in e["message"]]
+
+
+def test_a_runtime_with_no_engine_warns_once_on_cache_reads_naming_its_engine_field(
+    tmp_path: Path,
+) -> None:
+    script = [
+        tool_reply([GLOB], prompt=93, cache_read=0),
+        tool_reply([("t2", "Glob", {"pattern": "*"})], prompt=126, cache_read=89),
+        text_reply("ok", prompt=160, cache_read=120),
+    ]
+    ran = run(tmp_path, script, runtime_name="lm-studio-messages")
+    (warning,) = _engine_warnings(ran)
+    assert warning["level"] == "warning"
+    assert "runtimes.lm-studio-messages.engine" in warning["message"]
+    assert "89 cache-read tokens" in warning["message"]
+    assert "twice" in warning["message"]
+
+
+def test_llama_cpps_cache_reads_warn_that_its_accounting_isnt_known_yet(tmp_path: Path) -> None:
+    ran = run(tmp_path, LM_STUDIO_LOOP, engine="llama.cpp")
+    (warning,) = _engine_warnings(ran)
+    assert "llama.cpp" in warning["message"]
+    assert _result(ran)["usage"]["inputTokens"] == 219  # as the API defines it: no correction
+
+
+def test_an_unknown_engine_without_cache_reads_brings_no_warning(tmp_path: Path) -> None:
+    script = [tool_reply([GLOB], prompt=93), text_reply("ok", prompt=126)]
+    assert _engine_warnings(run(tmp_path, script)) == []
+
+
+def test_a_named_engines_cache_reads_bring_no_warning(tmp_path: Path) -> None:
+    assert _engine_warnings(run(tmp_path, LM_STUDIO_LOOP, engine="lm-studio")) == []
+
+
 # Requirement: Cost is estimated from troupe's price
 
 PRICE = Price(input=1, output=5, cache_read=0.1)
@@ -623,6 +693,44 @@ def test_a_first_reply_from_a_prompt_the_engine_cut_is_acted_on_since_nothing_sh
     assert _result(ran)["status"] == "ok"
 
 
+CUT_WITH_CACHE_READS = [
+    tool_reply([("t1", "Glob", {"pattern": "*"})], prompt=119, cache_read=15),
+    tool_reply([("t2", "Glob", {"pattern": "*"})], prompt=4482, cache_read=115),
+    tool_reply([("t3", "Glob", {"pattern": "*"})], text="From less.", prompt=4037, cache_read=3840),
+]
+"""fixtures/lm-studio-conversation-cut's replies 0, 1 and 4: the last from the cut conversation,
+reporting cache reads that LM Studio also counts in its input (troupe#418, troupe#419)."""
+
+
+@pytest.mark.parametrize("engine", ["lm-studio", None], ids=["lm-studio", "no-engine"])
+def test_lm_studios_cut_on_a_turn_that_reports_cache_reads_isnt_acted_on(
+    tmp_path: Path, engine: str | None
+) -> None:
+    # Scenarios: "LM Studio's cut on a turn that reports cache reads", and "The same cut with the
+    # engine unknown". Input and cache reads together grew (7,877 after 4,597), the prompt didn't.
+    ran = run(tmp_path, CUT_WITH_CACHE_READS, engine=engine)
+    assert len(ran.fake.requests) == 3
+    assert [e["callId"] for e in ran.of("tool_call")] == ["t1", "t2"]
+    assert ran.of("turn") == []
+    result = _result(ran)
+    assert (result["status"], result["reason"]) == ("error", "context-length")
+    assert "4037" in result["message"]
+    assert "4482" in result["message"]
+
+
+def test_claudes_cache_reads_rising_as_its_input_falls_is_a_prompt_that_grew(
+    tmp_path: Path,
+) -> None:
+    # Scenario: "Claude's cache reads rising": 900 then 100 + 1,000. Passes on main too; it's what
+    # must stay the same for an engine that reports cache reads apart.
+    script = [
+        tool_reply([GLOB], prompt=900, cache_read=0),
+        text_reply("Done.", prompt=100, cache_read=1000),
+    ]
+    ran = run(tmp_path, script, engine="claude")
+    assert _result(ran)["status"] == "ok"
+
+
 # Requirement: A run stops before the context window the person named
 
 
@@ -651,6 +759,18 @@ def test_a_reply_whose_prompt_alone_reaches_the_window_isnt_acted_on(tmp_path: P
 def test_without_a_window_a_large_prompt_and_output_go_on(tmp_path: Path) -> None:
     script = [tool_reply([GLOB], prompt=7900, completion=300), text_reply("Done.", prompt=8300)]
     ran = run(tmp_path, script, options={"maxTurns": 5, "maxTotalTokens": 50_000})  # room for both
+    assert _result(ran)["status"] == "ok"
+    assert len(ran.fake.requests) == 2
+
+
+def test_lm_studios_cache_reads_dont_count_twice_against_the_window(tmp_path: Path) -> None:
+    # Scenario: "LM Studio's cache reads don't fill the window": the prompt is 5,000, not 9,000.
+    script = [
+        tool_reply([GLOB], prompt=5000, completion=100, cache_read=4000),
+        text_reply("Done.", prompt=5200, completion=10, cache_read=5000),
+    ]
+    options = {"maxTurns": 5, "maxTotalTokens": 50_000, "contextWindow": 8192}  # room for both
+    ran = run(tmp_path, script, options=options, engine="lm-studio")
     assert _result(ran)["status"] == "ok"
     assert len(ran.fake.requests) == 2
 

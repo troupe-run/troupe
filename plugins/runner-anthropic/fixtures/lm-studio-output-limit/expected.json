@@ -38,7 +38,7 @@
       "reason": "output-limit",
       "turns": 1,
       "usage": {
-        "inputTokens": 43,
+        "inputTokens": 28,
         "outputTokens": 4,
         "cacheReadTokens": 15
       }

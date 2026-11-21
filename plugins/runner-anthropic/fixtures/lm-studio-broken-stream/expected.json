@@ -67,7 +67,7 @@
       "message": "The file contains two tasks: buy milk and write the troupe docs.",
       "turns": 2,
       "usage": {
-        "inputTokens": 219,
+        "inputTokens": 130,
         "outputTokens": 97,
         "cacheReadTokens": 89
       }

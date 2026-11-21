@@ -3,5 +3,6 @@
   "model": "claude-haiku-5-5",
   "captured": "2026-11-14",
   "how": "recorded with tools/capture_anthropic.py rejected",
-  "credential": "a deliberately invalid key; no working credential was used"
+  "credential": "a deliberately invalid key; no working credential was used",
+  "engine": "claude"
 }
