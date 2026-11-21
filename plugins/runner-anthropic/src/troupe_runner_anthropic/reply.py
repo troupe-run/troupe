@@ -54,10 +54,6 @@ class Reply:
     tool_uses: list[ToolUse]
 
 
-def _count(value: object) -> bool:
-    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
-
-
 @dataclass
 class _Block:
     block: dict[str, Any]
