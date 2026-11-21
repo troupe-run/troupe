@@ -169,8 +169,9 @@ say so in the tick. Commit by group, so the review can be split by slice (design
       `troupe sync`. Check the events (two hand-edit changes by `unknown`, then the person's change), the files (the
       comment and formatting kept), and that a final `troupe sync --rehearse` exits 0.
       Done: `test_hand_edit_end_to_end.py`: init an audition, hand-edit `lead.yaml` (a comment and a value) and add `lead.md`, `perform --rehearse` records nothing, `config set` records both hand edits by `unknown` then the person's change, the comment survives, and `sync` then `sync --rehearse` find nothing. It found a real bug (a new `.md` and a `.yaml` edit in one sweep lost the character), fixed and kept as `test_a_new_character_file_and_a_yaml_edit_together_keep_the_character`.
-- [ ] 7.2 Ask the orchestrator for a slot, then run `uv run scripts/check.py` (log to a scratch file) and fix what it
+- [x] 7.2 Ask the orchestrator for a slot, then run `uv run scripts/check.py` (log to a scratch file) and fix what it
       finds. Run `mypy --platform win32` on the changed modules (the stat and file-id seam).
+      Done: the full check passed before every commit (4ee39f52's in 296 s, log in the session's scratchpad); `mypy --strict --platform win32` on the changed modules is clean.
 - [x] 7.3 `openspec validate hand-edit-sweep --strict`, and measure every MODIFIED requirement's collapsed text
       (≤ 500 characters).
       Done: `openspec validate hand-edit-sweep --strict` passes; the longest requirement text is under 500 characters.
