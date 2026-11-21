@@ -763,6 +763,39 @@ def test_without_a_window_a_large_prompt_and_output_go_on(tmp_path: Path) -> Non
     assert len(ran.fake.requests) == 2
 
 
+@pytest.mark.parametrize("engine", [None, "llama.cpp"], ids=["no-engine", "llama.cpp"])
+def test_with_the_accounting_not_known_the_window_judges_by_the_larger_reading(
+    tmp_path: Path, engine: str | None
+) -> None:
+    # Spec: anthropic-runner, "A run stops before the context window the person named": "when the
+    # accounting isn't known, by the larger reading". Input alone (5,000) is under the window;
+    # input and cache reads (9,000) reach it, so the reply isn't acted on.
+    script = [tool_reply([GLOB], text="Maybe cut.", prompt=5000, completion=10, cache_read=4000)]
+    options = {"maxTurns": 5, "maxTotalTokens": 50_000, "contextWindow": 8192}  # under test
+    ran = run(tmp_path, script, options=options, engine=engine)
+    assert ran.of("tool_call") == []
+    assert ran.of("turn") == []
+    result = _result(ran)
+    assert (result["status"], result["reason"]) == ("error", "context-length")
+    assert "9000" in result["message"]
+
+
+def test_with_the_accounting_not_known_a_full_window_is_judged_by_the_larger_reading(
+    tmp_path: Path,
+) -> None:
+    # The same for "prompt and output reach it": 4,000 + 4,000 cache reads + 300 output reach 8,192,
+    # though input and output alone (4,300) don't. The call is carried out, then the run ends.
+    script = [
+        tool_reply([GLOB], prompt=4000, completion=300, cache_read=4000),
+        text_reply("never asked for"),
+    ]
+    options = {"maxTurns": 5, "maxTotalTokens": 50_000, "contextWindow": 8192}  # under test
+    ran = run(tmp_path, script, options=options)
+    assert len(ran.of("tool_result")) == 1
+    assert len(ran.fake.requests) == 1
+    assert (_result(ran)["status"], _result(ran)["reason"]) == ("error", "context-length")
+
+
 def test_lm_studios_cache_reads_dont_count_twice_against_the_window(tmp_path: Path) -> None:
     # Scenario: "LM Studio's cache reads don't fill the window": the prompt is 5,000, not 9,000.
     script = [
