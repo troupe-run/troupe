@@ -22,13 +22,13 @@ does. The tables below are generated from troupe's schemas, so they can't drift 
 <!-- generated: events (from protocol/schemas/events/ and lineage; regenerate with `uv run scripts/docs_reference.py`) -->
 ### Config.Changed
 
-The payload of one config change (topic troupe.core.config.aggregate:Config.Changed): every value one command changed, and every config file it wrote or removed. One command records exactly one. Field names are as recorded.
+The payload of one config change (topic troupe.core.config.aggregate:Config.Changed): every value one command changed, and every config file it wrote or removed. A command records exactly one for its own change; the sweep before it records one more for each config file a person edited, by the unknown author, with the file in its lineage's vcs.source. Field names are as recorded.
 
 | Field | Holds | Always there | What it is |
 |---|---|---|---|
 | `lineage` | object (Lineage) | Yes | Where an event came from: who made it, through what, when, why, as part of which command and in reaction to what, with whose approval, and in what version-control state. Every event troupe records carries it. It is left out of the event's content hash, so two clones that make the same change agree on the event's id. |
 | `timestamp` | object (Library timestamp) | Yes | When the event-sourcing library created the event, as its transcoder writes a datetime. |
-| `changes` | list of any | Yes | Each value the command changed, at most once each. A change that would change nothing isn't recorded. |
+| `changes` | list of any | Yes | Each value the change sets or unsets, at most once each. A change that would change nothing isn't recorded. |
 | `files` | list of object (File written) | Yes | Each config file the change wrote or removed, so troupe can tell its own files from a person's. |
 
 ### Config.Settled

@@ -194,18 +194,36 @@ class EventStore:
         settling_parents: Sequence[str] | None = None,
     ) -> list[Recorded]:
         """Record ``events`` with ``lineage``, checked first: an invalid one writes nothing."""
-        data = lineage.to_data()
-        problem = lineage_problem(data)
-        if problem is not None:
-            raise TroupeError(
-                "events.lineage-invalid",
-                problem=f"An event's lineage isn't valid: {problem}.",
-                fix="This is a bug in whatever built the lineage: every event troupe records must "
-                "name its actor, via, time, change, cause and VCS state.",
-                details={"problem": problem},
-            )
-        self._check_cause(lineage.cause, lineage.change)
-        stored = [self._stored(event, data) for event in events]
+        return self.record_with_lineages(
+            events, [lineage] * len(events), settling_parents=settling_parents
+        )
+
+    def record_with_lineages(
+        self,
+        events: Sequence[DomainEventProtocol[UUID]],
+        lineages: Sequence[Lineage],
+        *,
+        settling_parents: Sequence[str] | None = None,
+    ) -> list[Recorded]:
+        """Record ``events``, each with its own lineage, all or nothing: every lineage is checked
+        first, and an invalid one writes nothing (hand-edit-sweep design D7: one batch can hold a
+        settle, a sweep's hand edits and a person's change, each with its own actor and change)."""
+        if len(lineages) != len(events):
+            msg = "record_with_lineages needs exactly one lineage per event"
+            raise ValueError(msg)
+        datas = [lineage.to_data() for lineage in lineages]
+        for lineage, data in zip(lineages, datas, strict=True):
+            problem = lineage_problem(data)
+            if problem is not None:
+                raise TroupeError(
+                    "events.lineage-invalid",
+                    problem=f"An event's lineage isn't valid: {problem}.",
+                    fix="This is a bug in whatever built the lineage: every event troupe records "
+                    "must name its actor, via, time, change, cause and VCS state.",
+                    details={"problem": problem},
+                )
+            self._check_cause(lineage.cause, lineage.change)
+        stored = [self._stored(event, data) for event, data in zip(events, datas, strict=True)]
         try:
             numbers = self.recorder.insert(stored, settling_parents=settling_parents)
         except IntegrityError as error:
@@ -218,7 +236,8 @@ class EventStore:
         if not numbers:
             return []
         ordered = self.recorder.notifications(numbers[0], len(numbers), numbers[-1], ())
-        return [Recorded(n, record.id, lineage.at) for n, record in ordered]
+        at = {n: lineage.at for n, lineage in zip(numbers, lineages, strict=False)}
+        return [Recorded(n, record.id, at[n]) for n, record in ordered if n in at]
 
     def _check_cause(self, cause: Cause, change: str) -> None:
         if isinstance(cause, CommandCause):

@@ -33,31 +33,38 @@ say so in the tick. Commit by group, so the review can be split by slice (design
 
 ## 2. The sweep: classify, compare, record (design D1, D3, D4, D5, D7, D9)
 
-- [ ] 2.1 `core/config/sweep.py`: classify each config path in D3's order (unknown, exactly what config renders, an
+- [x] 2.1 `core/config/sweep.py`: classify each config path in D3's order (unknown, exactly what config renders, an
       untouched merge from troupe's versions, conflict markers with a person's side, absent, anything else). Use the
       existing `merges()`, `_merged_from_troupes` and `_MARKERS`, and add "conflicted with no markers left is read".
       Verify with a table-driven test over each class, including an older version troupe wrote (read, decision 1) and
       a conflicted file resolved by hand (read).
-- [ ] 2.2 Additions and removals (D4): a new file adds its group; an absent `.md` unsets the character; an absent
+      Done: `core/config/sweep.py`; one test per class in `test_config_sweep.py` (older version read, clean merge and markers not read, hand-resolved conflict read, staged write skipped, unknown file refused).
+- [x] 2.2 Additions and removals (D4): a new file adds its group; an absent `.md` unsets the character; an absent
       `.yaml` with its `.md` gone removes the actor; with the `.md` left it's `config.file-invalid`; an absent runtime
       file removes the runtime. Verify with a test per scenario in "Adding or deleting a file adds or removes what it
       held".
-- [ ] 2.3 Each read file's change via `changes.change()` on the group it owns, restricted to its fields (D5). Equal
+      Done: tests for a new actor, a deleted character, both files, a `.md` left alone (refused) and a runtime.
+- [x] 2.3 Each read file's change via `changes.change()` on the group it owns, restricted to its fields (D5). Equal
       values give no entries. Verify: comment, reorder and re-indent record nothing and leave the bytes alone; 3 → 7
       is one entry; `.md` sets the whole text.
-- [ ] 2.4 Per-event lineage in one batch: extend `EventStore.record_with_lineage` (and `Command`) to take a lineage
+      Done: comment/order/indent give nothing; one value one entry; character whole; edit and undo nothing.
+- [x] 2.4 Per-event lineage in one batch: extend `EventStore.record_with_lineage` (and `Command`) to take a lineage
       per event, all or nothing (D7). Verify with an event-store test that a batch whose third event fails validation
       writes nothing, and that each recorded line has its own lineage.
-- [ ] 2.5 Record each file's `Config.Changed`: one sweep `Command` (actor `unknown`, `via` `file`, no reason), one
+      Done: `EventStore.record_with_lineages`; tests for per-event lineage and an invalid third lineage writing nothing.
+- [x] 2.5 Record each file's `Config.Changed`: one sweep `Command` (actor `unknown`, `via` `file`, no reason), one
       event per file, `vcs.source` with `before` (hash of what config rendered) and `after` (hash read), and `files`
       holding the read bytes' hash. Refuse the whole sweep if any file is refused. Verify with tests for the lineage
       scenarios (actor `unknown` even with `TROUPE_ACTOR` set; two files share a change id; the sweep's change id
       differs from the following `config set`'s), and that one invalid file stops every file's change.
-- [ ] 2.6 Update the `config-changed` schema's description (no longer "one command records exactly one"), in
+      Done: `stream.record_with_edits`; tests for unknown author with `TROUPE_ACTOR` set, two files sharing a change id, the command's own change id differing, and one invalid file stopping all.
+- [x] 2.6 Update the `config-changed` schema's description (no longer "one command records exactly one"), in
       `protocol/` and the package copy. Verify with the schema-copy test and `protocol_guard`.
+      Done: schema and package copy, regenerated models and `docs/prompt-book/events.md`, aggregate docstring.
 - [ ] 2.7 The no-loop test (D9): on a theatre whose files a person formatted, run each config-using command twice. The
       second records nothing and writes nothing. Also: a staged write a change vouches for is finished before the
       sweep, and nothing is recorded for its target.
+      Sweep-level part done (`test_after_recording_the_next_sweep_finds_nothing`, the staged-write test); the per-command run needs 5.2's wiring, ticked then.
 
 ## 3. Surgical write-back and compare-and-swap (design D6, D10)
 
