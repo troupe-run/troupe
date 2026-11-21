@@ -228,11 +228,9 @@ def _operations(
         if read.owns == "character":
             found[read.path] = [((kind, name, CHARACTER), read.values[CHARACTER])]
             continue
-        group = dict(read.values)
-        existing = config.get(kind, {}).get(name)
-        if isinstance(existing, Mapping) and CHARACTER in existing:
-            group[CHARACTER] = existing[CHARACTER]
-        found[read.path] = [((kind, name), group)]
+        # The group whole from the file's values; its character, which the .yaml doesn't own, is
+        # kept as the edits before this one leave it (_edits fills it in).
+        found[read.path] = [((kind, name), _FieldsOf(dict(read.values)))]
     gone = set(removed)
     for path in removed:
         located = owner(path)
@@ -258,6 +256,22 @@ def _operations(
     return found
 
 
+class _FieldsOf(dict[str, Any]):
+    """A fields file's values: the group whole but its character, which ``_resolved`` keeps."""
+
+
+def _resolved(current: Mapping[str, Any], operation: Operation) -> Operation:
+    """``operation``, with a fields file's group given the character ``current`` holds."""
+    path, value = operation
+    if not isinstance(value, _FieldsOf):
+        return operation
+    group = dict(value)
+    existing = current.get(path[0], {}).get(path[1])
+    if isinstance(existing, Mapping) and CHARACTER in existing:
+        group[CHARACTER] = existing[CHARACTER]
+    return path, group
+
+
 def _edits(
     config: Tree,
     rendered: Mapping[str, bytes],
@@ -268,7 +282,7 @@ def _edits(
     current = config
     edits: list[Edit] = []
     for path in sorted(operations):
-        entries = change(current, operations[path])
+        entries = change(current, [_resolved(current, op) for op in operations[path]])
         if not entries:
             continue
         current = apply(current, entries)

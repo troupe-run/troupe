@@ -16,7 +16,6 @@ from typing import Any, TextIO
 from troupe.cli.commands import _call, _ignore_cancel, _notices
 from troupe.cli.render import render_notice
 from troupe.core.client.session import CancelSignal, Session
-from troupe.core.config_paths import shown
 from troupe.core.defaults import RUNTIMES
 from troupe.core.errors import TroupeError
 from troupe.core.exit_codes import ExitCode
@@ -194,12 +193,10 @@ def render_init(result: dict[str, Any], directory: Path, stdout: TextIO) -> None
     )
     character = f"{THEATRE_DIR}/actors/{actor['name']}.md"
     if any(file["path"] == character for file in result["files"]):
-        # Not "edit it": troupe can't read hand edits back yet (#119), so an edited file makes the
-        # next command refuse with config.file-not-troupes (first-run-walkthrough design D8).
+        # Hand edits are read back (hand-edit-sweep, #119): the next command records the edit.
         print(
-            f"Its character, the prompt it runs with, is {character}. To change it, write yours "
-            "in a file and run: troupe config set "
-            f"{shown(('actors', actor['name'], 'character'))}=@<file>",
+            f"Its character, the prompt it runs with, is {character}. To change it, edit that "
+            "file: troupe records your edit with the next command.",
             file=stdout,
         )
     if rehearsed:

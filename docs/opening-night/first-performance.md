@@ -35,23 +35,22 @@ actor](#define-your-own-actor) in it instead.
 ## Write its character
 
 An actor's **character** is the prompt it runs with: the Claude Code runner adds it to Claude Code's system prompt.
-`lead` has one to start with, in `.troupe/actors/lead.md`. Write your own in a file, such as:
+`lead` has one to start with, in `.troupe/actors/lead.md`. Open it and write your own, such as:
 
-```markdown title="character.md"
+```markdown title=".troupe/actors/lead.md"
 You are a technical writer joining this team. Read what's there before you write anything, keep what you write
 short and plain, and finish by saying which files you read.
 ```
 
-Then make it `lead`'s character:
+That's all: the next troupe command reads your edit back and records it as a change to `lead`'s character. Who
+edited a file can't be known, so troupe records the author as unknown rather than guessing. To check it, run:
 
 ```sh
-troupe config set actors.lead.character=@character.md
+troupe config get actors.lead.character
 ```
 
-`@character.md` reads the text from the file. troupe records the change with who made it, and writes
-`.troupe/actors/lead.md` from it. Change the character this way, not by editing `lead.md`: troupe can't read edits
-to its files back yet ([#119](https://github.com/troupe-run/troupe/issues/119)), so the next command would stop with
-`config.file-not-troupes` rather than overwrite yours. Config holds the text now, so you can delete `character.md`.
+It prints your text. See [Hand-edit config safely](../stagecraft/hand-edit-config.md) for what troupe does with
+edits to its files.
 
 ## Commit
 

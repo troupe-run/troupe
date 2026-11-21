@@ -82,7 +82,7 @@ run's own."""
 
 WALKTHROUGH = [
     "troupe init --audition",
-    "troupe config set actors.lead.character=@character.md",
+    "troupe config get actors.lead.character",
     "git add .troupe",
     "git commit -m 'Add a troupe theatre'",
     "export TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE=true",
@@ -220,15 +220,19 @@ def run_line(line: str, monkeypatch: pytest.MonkeyPatch) -> tuple[int, str, str]
     return cli(*args)
 
 
+LEAD = ".troupe/actors/lead.md"
+
+
 def perform_walkthrough(monkeypatch: pytest.MonkeyPatch, lines: list[str]) -> tuple[int, str, str]:
-    """The walkthrough's lines up to and including its perform, the page's character written
-    first; perform's result."""
-    # Bytes, so the text is the page's on every platform: write_text writes CRLF on Windows.
-    (Path.cwd() / "character.md").write_bytes(titled(walkthrough(), "character.md").encode())
+    """The walkthrough's lines up to and including its perform, the page's character written into
+    lead.md by hand straight after init, as the page says; perform's result."""
     perform = next(n for n, line in enumerate(lines) if line.startswith("troupe perform"))
     for line in lines[:perform]:
         code, _, err = run_line(line, monkeypatch)
         assert code == 0, (line, err)
+        if line.startswith("troupe init"):
+            # Bytes, so the text is the page's on every platform: write_text writes CRLF on Windows.
+            (Path.cwd() / LEAD).write_bytes(titled(walkthrough(), LEAD).encode())
     return run_line(lines[perform], monkeypatch)
 
 
@@ -243,7 +247,7 @@ def test_the_claude_code_walkthrough_runs_as_written_with_a_stand_in_claude(
     run_id = out.split()[1]
     assert out == f"run {run_id} succeeded\n"
     code, out, _ = cli("config", "get", "actors.lead.character")
-    assert out.removesuffix("\n") == titled(walkthrough(), "character.md")
+    assert out.removesuffix("\n") == titled(walkthrough(), LEAD)
     assert not (project.path / "NOTES.md").exists()  # it's in the run's worktree
 
     code, out, err = run_line(lines[6].replace("<run>", run_id[:8]), monkeypatch)
@@ -291,9 +295,10 @@ def test_the_uncommitted_changes_notice_the_page_shows_is_the_one_perform_writes
         .replace(EXAMPLE_COMMIT, "[0-9a-f]{12}")
     )
     stand_in_claude(tmp_path, monkeypatch, write="NOTES.md=notes")
-    # character.md isn't committed by the page's git add .troupe, as the page says. A change of
-    # the reader's own makes 2 paths, so the page's count is read as the run's own, not matched.
+    # Two changes of the reader's own make 2 paths, so the page's count is read as the run's own,
+    # not matched.
     (project.path / "README.md").write_text("# my-app, changed\n", encoding="utf-8")
+    (project.path / "TODO.md").write_text("- more\n", encoding="utf-8")
     code, _, err = perform_walkthrough(monkeypatch, sh_lines(walkthrough()))
     assert code == 0, err
     assert "troupe: 2 path(s) differ from HEAD" in err

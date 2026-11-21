@@ -357,3 +357,17 @@ def test_after_recording_the_next_sweep_finds_nothing(tmp_path: Path) -> None:
     )
     record_with_edits(service, read(service), _sweep(service, troupe_dir).edits)
     assert _sweep(service, troupe_dir).edits == ()
+
+
+def test_a_new_character_file_and_a_yaml_edit_together_keep_the_character(tmp_path: Path) -> None:
+    # Found by the end-to-end test: the .yaml's group set dropped the character the .md had set.
+    service, troupe_dir = _theatre(tmp_path, {"actors": {"tester": FIELDS}})
+    (troupe_dir / "actors" / "tester.md").write_bytes(b"New.")
+    _yaml(troupe_dir).write_bytes(_yaml(troupe_dir).read_bytes() + b"workspace: theatre\n")
+    current = read(service)
+    swept = _sweep(service, troupe_dir)
+    from troupe.core.config.changes import apply
+
+    after = apply(current.config, swept.entries)
+    assert after["actors"]["tester"]["character"] == "New."
+    assert after["actors"]["tester"]["workspace"] == "theatre"

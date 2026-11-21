@@ -111,9 +111,9 @@ say so in the tick. Commit by group, so the review can be split by slice (design
       `config.hand-edit-unrecorded` notice naming the file and the values still unset. Verify with a test. Add the
       notice code wherever notices are catalogued.
       Done: `config get` records nothing, shows the conflict (both values, one pair of changes), and `config.hand-edit-unrecorded` names the file and the value left.
-- [ ] 4.4 Update `contributing/config.md` and `docs/stagecraft/hand-edit-config.md`'s "Branches" section: a hand edit
+- [x] 4.4 Update `contributing/config.md` and `docs/stagecraft/hand-edit-config.md`'s "Branches" section: a hand edit
       resolves a conflict, as `config set` does.
-      `contributing/config.md` is done ("The sweep"); `hand-edit-config.md`'s Branches section is rewritten with 6.2, and this is ticked then.
+      Done: `contributing/config.md` ("The sweep") and hand-edit-config.md's Branches section.
 
 ## 5. `troupe sync` replaces `troupe flush` (design D1, D11)
 
@@ -138,10 +138,10 @@ say so in the tick. Commit by group, so the review can be split by slice (design
       unknown command). Render hand edits and their notices. Verify with `test_cli_config.py` cases, including
       "Flush is gone". Check that the command table still loads only its own handlers (cli-starts-fast tests).
       Done: `troupe sync` with `--force` and `--rehearse`; `troupe flush` is an unknown command (tested); hand edits rendered.
-- [ ] 5.5 Rename every "troupe flush" in messages, errors, notices and tests to `troupe sync` (`rg -n "flush"` across
+- [x] 5.5 Rename every "troupe flush" in messages, errors, notices and tests to `troupe sync` (`rg -n "flush"` across
       `packages/troupe/src`, `packages/troupe/tests`, `docs`, `contributing`, `protocol`). Verify with an `rg` that
       finds no user-facing "flush" (the stream-flush uses in runners and the store stay).
-      Source, schemas, tests and the CLI reference are done; `docs/stagecraft/hand-edit-config.md` is rewritten in 6.2, and this is ticked then.
+      Done: no user-facing "flush" left in source, schemas, docs or contributing (`rg`); the projection's internal `flush` function keeps its name.
 - [x] 5.6 Update the existing tests whose behaviour the decisions changed: a deleted file is now a removal; an older
       version troupe wrote is now read as an edit; a clean merge edited after git made it, and a merge older than
       HEAD, are read as edits; a valid hand edit before `config set` is recorded, not refused. Verify each against
@@ -150,26 +150,30 @@ say so in the tick. Commit by group, so the review can be split by slice (design
 
 ## 6. The first run edits the character file again (design D12)
 
-- [ ] 6.1 `cli/init.py`'s `render_init`: the character line says to edit `.troupe/actors/lead.md`. Remove the D8
+- [x] 6.1 `cli/init.py`'s `render_init`: the character line says to edit `.troupe/actors/lead.md`. Remove the D8
       comment. Verify with the cli test "The character is changed by editing its file": init an audition, write
       text into `lead.md`, `troupe perform lead --rehearse` isn't refused, and `config get actors.lead.character`
       prints the text.
-- [ ] 6.2 Docs: `docs/opening-night/first-performance.md` ("Write its character"), `first-theatre.md`'s "Config"
+      Done: `render_init` says to edit the file; `test_an_audition_says_to_change_the_character_by_editing_its_file` writes `lead.md` by hand, `perform lead --rehearse` isn't refused, and `config get` prints the text.
+- [x] 6.2 Docs: `docs/opening-night/first-performance.md` ("Write its character"), `first-theatre.md`'s "Config"
       section, and `docs/prompt-book/cli.md` (`troupe init`, and `troupe sync` in place of `troupe flush`). Rewrite
       `docs/stagecraft/hand-edit-config.md` for the sweep: what counts as a change, the mid-save guard, unknown author,
       restores and deletions, write-back. Verify with the docs checks in `scripts/check.py` and rendered anchors for
       changed headings.
+      Done: first-performance.md edits `lead.md` and checks with `config get`; first-theatre.md and cli.md say config is edited by hand or set; hand-edit-config.md rewritten (the sweep, what it won't read, formatting kept, Branches with sync and conflicts resolved by hand). The walkthrough test runs the page's new lines; docs suites pass.
 
 ## 7. Integration
 
-- [ ] 7.1 An end-to-end test through the CLI in a real git theatre: init an audition, hand-edit `lead.yaml` (a comment
+- [x] 7.1 An end-to-end test through the CLI in a real git theatre: init an audition, hand-edit `lead.yaml` (a comment
       and a model change) and `lead.md`, run `troupe perform lead --rehearse`, `troupe config set` another value, then
       `troupe sync`. Check the events (two hand-edit changes by `unknown`, then the person's change), the files (the
       comment and formatting kept), and that a final `troupe sync --rehearse` exits 0.
+      Done: `test_hand_edit_end_to_end.py`: init an audition, hand-edit `lead.yaml` (a comment and a value) and add `lead.md`, `perform --rehearse` records nothing, `config set` records both hand edits by `unknown` then the person's change, the comment survives, and `sync` then `sync --rehearse` find nothing. It found a real bug (a new `.md` and a `.yaml` edit in one sweep lost the character), fixed and kept as `test_a_new_character_file_and_a_yaml_edit_together_keep_the_character`.
 - [ ] 7.2 Ask the orchestrator for a slot, then run `uv run scripts/check.py` (log to a scratch file) and fix what it
       finds. Run `mypy --platform win32` on the changed modules (the stat and file-id seam).
-- [ ] 7.3 `openspec validate hand-edit-sweep --strict`, and measure every MODIFIED requirement's collapsed text
+- [x] 7.3 `openspec validate hand-edit-sweep --strict`, and measure every MODIFIED requirement's collapsed text
       (≤ 500 characters).
+      Done: `openspec validate hand-edit-sweep --strict` passes; the longest requirement text is under 500 characters.
 
 ## Workflow follow-up
 
