@@ -196,7 +196,7 @@ def test_a_written_file_reads_back_the_same_under_yaml_1_2_and_yaml_1_1(
 # Requirement: Only a file troupe wrote is replaced
 
 
-def test_a_file_edited_by_hand_is_refused_naming_it_and_the_fix_and_nothing_is_written(
+def test_writing_without_the_sweep_refuses_a_file_troupe_didnt_write_or_read(
     tmp_path: Path,
 ) -> None:
     theatre = _theatre(tmp_path)
@@ -208,8 +208,8 @@ def test_a_file_edited_by_hand_is_refused_naming_it_and_the_fix_and_nothing_is_w
         flush(theatre, changed, {})
     assert caught.value.code == "config.file-not-troupes"
     assert caught.value.details["paths"] == [".troupe/actors/tester.yaml"]
-    assert "git restore" in caught.value.fix
-    assert "troupe flush --force" in caught.value.fix
+    assert "Run troupe sync, which reads the file back" in caught.value.fix
+    assert "troupe sync --force" in caught.value.fix
     check_error(caught.value.to_data())
     assert _actor_file(theatre).read_text(encoding="utf-8") == edited
     assert (theatre / ".troupe" / "actors" / "tester.md").read_text("utf-8") == TESTER["character"]
@@ -420,7 +420,7 @@ def test_a_conflicted_file_with_a_side_troupe_didnt_write_is_refused_naming_that
     assert caught.value.code == "config.file-not-troupes"
     assert "theirs isn't a version troupe wrote" in caught.value.problem
     assert f"git checkout --ours .troupe/{YAML_FILE}" in caught.value.fix
-    assert "troupe flush --force" in caught.value.fix
+    assert "troupe sync --force" in caught.value.fix
     check_error(caught.value.to_data())
     assert _actor_file(theatre).read_bytes() == MARKERS
 
@@ -495,7 +495,7 @@ def test_a_merged_file_this_command_may_not_resolve_is_refused_naming_flush_and_
         flush(theatre, MERGED_CONFIG, _recorded(OURS, THEIRS), vcs=_Reports(merged))
     assert caught.value.code == "config.file-not-troupes"
     assert "git merged it from versions troupe wrote" in caught.value.problem
-    assert "Run troupe flush" in caught.value.fix
+    assert "Run troupe sync" in caught.value.fix
     check_error(caught.value.to_data())
     assert _actor_file(theatre).read_bytes() == MARKERS
     assert not (theatre / ".troupe" / "local" / "artifacts").exists()

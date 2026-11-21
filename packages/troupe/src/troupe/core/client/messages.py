@@ -633,13 +633,23 @@ class ConfigGetResult(Message):
 
 
 @dataclass(frozen=True)
-class FlushRequest(Message):
+class SyncRequest(Message):
     force: bool | None = json_field("force", default=None)
     rehearse: bool | None = json_field("rehearse", default=None)
 
 
 @dataclass(frozen=True)
-class FlushResult(Message):
+class HandEdit(Message):
+    """One config file's hand edit the sweep recorded, or in a rehearsal would record."""
+
+    path: str = json_field("path", pattern=THEATRE_PATH)
+    entries: list[dict[str, object]] = json_field("entries", min_items=1)
+    change: str | None = json_field("change", default=None, pattern=ULID)
+
+
+@dataclass(frozen=True)
+class SyncResult(Message):
+    edits: list[HandEdit] = json_field("edits")
     files: list[FileAction] = json_field("files")
     notices: list[NoticeData] = json_field("notices")
 

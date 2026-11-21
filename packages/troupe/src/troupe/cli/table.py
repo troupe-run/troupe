@@ -233,24 +233,26 @@ def _run_get(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> E
     return config.run_get(arguments, stdout, stderr)
 
 
-# flush
+# sync
 
 
-def _configure_flush(parser: argparse.ArgumentParser) -> None:
+def _configure_sync(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--force",
         action="store_true",
-        help="replace files troupe didn't write too, keeping a copy of each",
+        help="replace files troupe can't read as config, keeping a copy of each",
     )
     parser.add_argument(
-        "--rehearse", action="store_true", help="change nothing: show what would be written"
+        "--rehearse",
+        action="store_true",
+        help="change nothing: show the hand edits it would record and the files it would write",
     )
 
 
-def _run_flush(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
+def _run_sync(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
     from troupe.cli import config  # loaded when the command runs (design D2)
 
-    return config.run_flush(arguments, stdout, stderr)
+    return config.run_sync(arguments, stdout, stderr)
 
 
 CONFIG_COMMANDS: tuple[Command, ...] = (
@@ -265,7 +267,10 @@ CONFIG_COMMANDS: tuple[Command, ...] = (
         "config get", "Show config, or the value or group at a path.", _configure_get, _run_get
     ),
     Command(
-        "flush", "Make the config files exactly what config says.", _configure_flush, _run_flush
+        "sync",
+        "Record hand edits to the config files, and make every file say what config says.",
+        _configure_sync,
+        _run_sync,
     ),
 )
 

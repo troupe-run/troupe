@@ -42,7 +42,9 @@ Every command but `init` runs in a **theatre**: the nearest directory, from wher
   config, hooks or pushes the run made stay.
 - **`troupe config set`**, **`config unset`** and **`config get`** change and show config. Each change is recorded
   with who made it and why (`--reason`), and troupe writes the files under `.troupe/` from config.
-- **`troupe flush`** makes the config files exactly what config says. Every command that uses config does it first.
+- **`troupe sync`** records your hand edits to the config files, each as a change by an unknown author, then makes
+  every file say what config says. Every command that uses config does it first. `--rehearse` shows what it would
+  record and write; `--force` replaces a file troupe can't read as config, keeping a copy.
 
 A run is named by its full id or by its first 8 or more characters. [Performances and
 runs](../the-company/performances-and-runs.md) describes runs, their states and what is recorded.
@@ -242,18 +244,18 @@ troupe config get [<path>] [--json] [--resolved]
 | `--json` | No | Print the result as JSON |
 | `--resolved` | No | Show runtimes as troupe resolves them, from its built-in ones, config and your environment, each value with where it came from |
 
-### `troupe flush`
+### `troupe sync`
 
-Make the config files exactly what config says.
+Record hand edits to the config files, and make every file say what config says.
 
 ```text
-troupe flush [--force] [--rehearse]
+troupe sync [--force] [--rehearse]
 ```
 
 | Argument | Required | What it is |
 |---|---|---|
-| `--force` | No | Replace files troupe didn't write too, keeping a copy of each |
-| `--rehearse` | No | Change nothing: show what would be written |
+| `--force` | No | Replace files troupe can't read as config, keeping a copy of each |
+| `--rehearse` | No | Change nothing: show the hand edits it would record and the files it would write |
 
 ### Global flags
 

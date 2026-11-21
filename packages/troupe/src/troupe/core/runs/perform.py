@@ -23,6 +23,7 @@ perform fails with run.recording-failed.
 
 import asyncio
 import contextlib
+import functools
 import hashlib
 import os
 import threading
@@ -39,8 +40,6 @@ from troupe.core.client.dispatch import Send
 from troupe.core.client.session import Session
 from troupe.core.config.kinds import check_actor
 from troupe.core.config.merge import Merged
-from troupe.core.config.projection import merges, plan, refuse, render
-from troupe.core.config.stream import read, refuse_conflicts
 from troupe.core.config_paths import shown
 from troupe.core.errors import TroupeError
 from troupe.core.events import Command, EventStore
@@ -503,6 +502,10 @@ def _pid_file() -> bytes:
     return "".join(f"{line}\n" for line in lines).encode("utf-8")
 
 
+def _ignore(_: object) -> None:
+    """Drops an update: the rehearsed sync before the real one reports nothing."""
+
+
 async def perform(
     request: m.PerformRequest, session: Session, send: Send, *, backends: Backends | None = None
 ) -> m.PerformResult:
@@ -515,8 +518,19 @@ async def perform(
     policy = read_policy(session.env)
     admission = stage.admit(policy)
     scratch_root = refuse_scratch_in_theatre(defaults.run_scratch_root(), theatre)
-    merged = await asyncio.to_thread(read, store)
-    refuse_conflicts(merged)
+    # Imported here, so the queries and changes that share this module don't load config's
+    # handlers (cli-starts-fast design D5). The sync sweeps hand edits into config first, and makes
+    # the files what config says: a rehearsal does every check and records and writes nothing
+    # (spec: config-hand-edits, "Every command that uses config sweeps first").
+    from troupe.core.config.commands import sync_files
+
+    # First as a rehearsal: every check the sync makes, and the config it would leave, so a
+    # perform refused below records and writes nothing. A rehearsed perform shows what it found.
+    quiet: Send = send if request.rehearse else _ignore
+    synced = await asyncio.to_thread(
+        functools.partial(sync_files, session, store, quiet, rehearse=True)
+    )
+    merged = synced.merged
     what = _from_config(merged, request.actor)
     argv = runner_command(what.runner)
     check_actor(what.actor, merged.config)
@@ -534,9 +548,6 @@ async def perform(
     if what.workspace == "worktree":
         base = await asyncio.to_thread(worktree_base, vcs, what.actor)
     if request.rehearse:
-        # Every check a flush makes, without writing: a rehearsal changes nothing.
-        found = merges(vcs)  # a file git merged is refused, naming troupe flush, as perform would
-        refuse(plan(theatre / ".troupe", render(merged.config), merged.files, merged=found))
         return m.PerformResult(
             rehearsal=m.Rehearsal(
                 actor=what.actor,
@@ -555,12 +566,11 @@ async def perform(
                 ),
             )
         )
-    # Imported here, so the queries and changes that share this module don't load config's
-    # handlers (cli-starts-fast design D5).
-    from troupe.core.config.commands import sync_files
-
-    for notice in await asyncio.to_thread(sync_files, session, store, merged, send):
-        send(_notice(notice))
+    # Now for real, just before the run: hand edits recorded, files written. The run uses the
+    # config this leaves, and records its version.
+    synced = await asyncio.to_thread(functools.partial(sync_files, session, store, send))
+    merged = synced.merged
+    what = _from_config(merged, request.actor)
 
     run_id = str(uuid4())
     lease = lease_dir(theatre, run_id)

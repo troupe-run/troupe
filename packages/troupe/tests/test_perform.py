@@ -584,7 +584,9 @@ def test_a_conflict_on_another_actor_refuses_the_perform(tmp_path: Path) -> None
         repo.git("switch", "-q", branch)
         harness.configure({**request(script(INIT, OK)), "character": text})
         repo.commit_all(text)
-    repo.git("merge", "-q", "--no-edit", "feature")
+    with pytest.raises(AssertionError):  # both branches wrote tester.md: git leaves it conflicted
+        repo.git("merge", "-q", "--no-edit", "feature")
+    assert "AA .troupe/actors/tester.md" in repo.git("status", "--porcelain")  # added on both
     with pytest.raises(TroupeError) as caught:
         asyncio.run(
             perform(

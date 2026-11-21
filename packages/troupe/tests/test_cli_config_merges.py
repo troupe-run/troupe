@@ -130,7 +130,7 @@ def test_flush_writes_a_conflicted_file_from_the_merged_config_keeps_it_and_leav
     _yaml_conflicted(repo)
     ours, theirs = _sides(repo, YAML)
     conflicted = (repo.path / YAML).read_bytes()
-    code, out, err = cli("flush")
+    code, out, err = cli("sync")
     assert code == 0, err
     written = (repo.path / YAML).read_bytes()
     assert written == render(_merged_config())["actors/tester.yaml"]
@@ -151,7 +151,7 @@ def test_a_resolution_started_by_hand_is_kept_under_the_hash_the_notice_names(
     _yaml_conflicted(repo)
     by_hand = (repo.path / YAML).read_bytes().replace(b"<<<<<<< HEAD\n", b"")
     (repo.path / YAML).write_bytes(by_hand)  # these bytes exactly, on Windows too
-    code, _, err = cli("flush")
+    code, _, err = cli("sync")
     assert code == 0, err
     assert file_hash(by_hand) in err
     assert _kept(repo, file_hash(by_hand)) == by_hand
@@ -202,7 +202,7 @@ def test_a_clean_line_merge_of_two_character_edits_is_rewritten_by_the_resolving
     assert _kept(repo, file_hash(merged_text)) == merged_text
 
 
-def test_a_clean_merge_edited_after_git_made_it_is_refused_as_a_hand_edit(repo: Repo) -> None:
+def test_a_clean_merge_edited_after_git_made_it_is_read_as_a_hand_edit(repo: Repo) -> None:
     _branches(
         repo,
         [*BASE, f"actors.tester.character={CHARACTER}"],
@@ -213,12 +213,13 @@ def test_a_clean_merge_edited_after_git_made_it_is_refused_as_a_hand_edit(repo: 
     edited = (repo.path / MD).read_bytes() + b"And a line of my own.\n"
     (repo.path / MD).write_bytes(edited)
     code, _, err = cli("config", "set", "actors.tester.character=Both.")
-    assert code == CODES["config.file-not-troupes"]
-    assert "git restore" in err
-    assert (repo.path / MD).read_bytes() == edited
+    assert code == 0, err
+    assert "unknown author" in err  # the edit was recorded first, then the person's change
+    assert "resolved the conflict on actors.tester.character" in err
+    assert (repo.path / MD).read_bytes() == b"Both."
 
 
-def test_a_clean_merge_older_than_head_is_refused(repo: Repo) -> None:
+def test_a_clean_merge_older_than_head_is_read_as_a_hand_edit(repo: Repo) -> None:
     _branches(
         repo,
         [*BASE, f"actors.tester.character={CHARACTER}"],
@@ -228,8 +229,10 @@ def test_a_clean_merge_older_than_head_is_refused(repo: Repo) -> None:
     assert _merge(repo) == 0
     repo.write("notes.txt", "a later commit\n")
     repo.commit_all("after the merge")
-    code, _, _ = cli("config", "set", "actors.tester.character=Both.")
-    assert code == CODES["config.file-not-troupes"]
+    code, _, err = cli("config", "set", "actors.tester.character=Both.")
+    assert code == 0, err
+    assert "unknown author" in err
+    assert (repo.path / MD).read_bytes() == b"Both."
 
 
 def test_a_rehearsed_flush_names_the_merged_file_and_its_reason_and_writes_and_keeps_nothing(
@@ -237,7 +240,7 @@ def test_a_rehearsed_flush_names_the_merged_file_and_its_reason_and_writes_and_k
 ) -> None:
     _yaml_conflicted(repo)
     conflicted = (repo.path / YAML).read_bytes()
-    code, out, err = cli("flush", "--rehearse")
+    code, out, err = cli("sync", "--rehearse")
     assert code == ExitCode.WOULD_CHANGE, err
     assert YAML in out
     assert "git left it conflicted, from versions troupe wrote" in out
@@ -251,7 +254,7 @@ def test_without_git_a_file_with_conflict_markers_is_refused(
     _yaml_conflicted(repo)
     conflicted = (repo.path / YAML).read_bytes()
     monkeypatch.setattr(defaults, "VCS", "files")
-    code, _, err = cli("flush")
+    code, _, err = cli("sync")
     assert code == CODES["config.file-not-troupes"]
     assert "conflict markers" in err
     assert (repo.path / YAML).read_bytes() == conflicted
@@ -266,7 +269,7 @@ def test_perform_refuses_a_conflicted_file_naming_flush_and_starts_no_run(repo: 
     code, _, err = cli("perform", "tester")
     assert code == CODES["config.file-not-troupes"]
     assert "git merged it from versions troupe wrote" in err
-    assert "Run troupe flush" in err
+    assert "Run troupe sync" in err
     assert (repo.path / YAML).read_bytes() == conflicted
     assert cli("status") == (0, "No runs yet.\n", "")
 
@@ -306,7 +309,7 @@ def test_a_config_set_that_doesnt_write_the_file_is_refused_naming_flush_and_rec
         STEPS.replace("tester", "reviewer") % 0,
     )
     assert code == CODES["config.file-not-troupes"]
-    assert "Run troupe flush" in err
+    assert "Run troupe sync" in err
     assert _events(repo) == events
     assert not (repo.path / ".troupe/actors/reviewer.yaml").exists()
 
@@ -371,7 +374,7 @@ def test_flush_force_past_a_hand_edited_side_leaves_the_file_unmerged_when_unset
 ) -> None:
     _hand_edited_side(repo)
     index = _index(repo)
-    code, _, err = cli("flush", "--force")
+    code, _, err = cli("sync", "--force")
     assert code == 0, err
     assert (repo.path / YAML).read_bytes() == render(_merged_config())["actors/tester.yaml"]
     assert _unmerged(repo) == [YAML]
@@ -387,7 +390,7 @@ def test_flush_with_no_merge_leaves_the_index_byte_identical(repo: Repo) -> None
     repo.commit_all("newer")
     yaml.write_bytes(older)  # an older version troupe wrote, so flush rewrites it
     index = _index(repo)
-    code, out, err = cli("flush")
+    code, out, err = cli("sync")
     assert code == 0, err
     assert YAML in out
     assert _index(repo) == index
@@ -420,7 +423,7 @@ def test_flush_marks_a_conflicted_file_resolved_and_the_merge_commits_with_no_gi
     repo: Repo,
 ) -> None:
     _yaml_conflicted(repo)
-    code, out, err = cli("flush")
+    code, out, err = cli("sync")
     assert code == 0, err
     written = (repo.path / YAML).read_bytes()
     assert written == render(_merged_config())["actors/tester.yaml"]
@@ -469,7 +472,7 @@ def test_only_the_rewritten_config_file_is_staged(repo: Repo) -> None:
     assert _merge(repo) != 0
     assert sorted(_unmerged(repo)) == [YAML, "src.txt"]
     others = [line for line in _index(repo).splitlines() if YAML not in line]
-    code, _, err = cli("flush")
+    code, _, err = cli("sync")
     assert code == 0, err
     assert _unmerged(repo) == ["src.txt"]
     assert [line for line in _index(repo).splitlines() if YAML not in line] == others
@@ -482,7 +485,7 @@ def test_an_unmerged_file_already_holding_what_config_writes_is_left_unmerged(
     _yaml_conflicted(repo)
     (repo.path / YAML).write_bytes(render(_merged_config())["actors/tester.yaml"])
     index = _index(repo)
-    code, out, err = cli("flush")
+    code, out, err = cli("sync")
     assert code == 0, err
     assert out == "Nothing to do: the config files are what config says.\n"
     assert _unmerged(repo) == [YAML]
@@ -493,7 +496,7 @@ def test_an_unmerged_file_already_holding_what_config_writes_is_left_unmerged(
 def test_a_rehearsed_flush_says_it_would_mark_the_file_and_leaves_the_index(repo: Repo) -> None:
     _yaml_conflicted(repo)
     index = _index(repo)
-    code, out, err = cli("flush", "--rehearse")
+    code, out, err = cli("sync", "--rehearse")
     assert code == ExitCode.WOULD_CHANGE, err
     assert f"would write {YAML}" in out
     assert "and mark it resolved in git" in out
@@ -507,7 +510,7 @@ def test_policy_forbidding_it_rewrites_the_file_leaves_it_unmerged_and_names_the
     monkeypatch.setenv(POLICY, "false")
     _yaml_conflicted(repo)
     conflicted = (repo.path / YAML).read_bytes()
-    code, _, err = cli("flush")
+    code, _, err = cli("sync")
     assert code == 0, err
     assert (repo.path / YAML).read_bytes() == render(_merged_config())["actors/tester.yaml"]
     assert _kept(repo, file_hash(conflicted)) == conflicted
@@ -521,7 +524,7 @@ def test_flush_force_past_a_hand_edited_side_leaves_the_file_unmerged_with_the_s
     repo: Repo,
 ) -> None:
     _hand_edited_side(repo)
-    code, _, err = cli("flush", "--force")
+    code, _, err = cli("sync", "--force")
     assert code == 0, err
     assert _unmerged(repo) == [YAML]
 
@@ -533,7 +536,7 @@ def test_a_malformed_setting_fails_flush_and_writes_and_stages_nothing(
     monkeypatch.setenv(SETTING, "yes")
     conflicted = (repo.path / YAML).read_bytes()
     index = _index(repo)
-    code, _, err = cli("flush")
+    code, _, err = cli("sync")
     assert code == CODES["settings.invalid-value"]
     assert SETTING in err
     assert (repo.path / YAML).read_bytes() == conflicted

@@ -11,9 +11,9 @@ replacing or removing a file, it checks that the file is one troupe wrote:
 
 A file git merged from versions troupe wrote also counts, when the VCS reports it conflicted or
 cleanly merged and every side it came from is one of the above (config-projection-conflicts design
-D4). Only a command that asks to resolve it (``resolve``: troupe flush, or the config set whose
+D4). Only a command that asks to resolve it (``resolve``: troupe sync, or the config set whose
 change writes it) replaces it, keeping its bytes in the artifact store first; any other command
-refuses it, naming troupe flush, so a file being resolved by hand never changes under its editor.
+refuses it, naming troupe sync, so a file being resolved by hand never changes under its editor.
 With the setting mark_merges_resolved on, each such file git left unmerged that a command rewrites
 is also marked resolved in git's index, staging exactly what troupe wrote (mark-config-resolved
 design D3, D6).
@@ -442,7 +442,7 @@ def plan(
 
 CONFLICTED = "git left it conflicted"
 MERGED = "git merged it from versions troupe wrote"
-"""A file this command may not rewrite from a merge: troupe flush does (design D7)."""
+"""A file this command may not rewrite from a merge: troupe sync does (design D7)."""
 MERGE_REASONS = {
     "conflicted": "git left it conflicted, from versions troupe wrote",
     "clean": "git merged it from versions troupe wrote",
@@ -479,7 +479,7 @@ def refuse(plan_: Plan) -> None:
             "config.file-not-troupes",
             problem=f"{listed}: git merged it from versions troupe wrote, so troupe can write it "
             "again from the merged config, but only when you ask, in case you're resolving it.",
-            fix="Run troupe flush to write it from the merged config (or, if config has a "
+            fix="Run troupe sync to write it from the merged config (or, if config has a "
             "conflict, the troupe config set that resolves it). troupe keeps a copy of what it "
             "holds now. Then git add it and commit the merge.",
             path=f"{THEATRE_DIR}/{merged[0].path}",
@@ -489,10 +489,10 @@ def refuse(plan_: Plan) -> None:
         listed = ", ".join(f".troupe/{a.path}" for a in plan_.refused)
         raise TroupeError(
             "config.file-not-troupes",
-            problem=f"{listed} isn't what troupe wrote, so troupe won't replace it: it can't read "
-            "hand edits back yet (#119), and replacing it would lose them.",
-            fix="Undo the edit (git restore the file), then make the change with troupe config "
-            "set. Or run troupe flush --force to replace it, keeping a copy of what it held.",
+            problem=f"{listed} isn't a version troupe wrote or read back, so troupe won't replace "
+            "it: replacing it would lose what it holds.",
+            fix="Run troupe sync, which reads the file back into config. Or run troupe sync "
+            "--force to replace it, keeping a copy of what it held.",
             path=f"{THEATRE_DIR}/{plan_.refused[0].path}",
             details={"paths": [f"{THEATRE_DIR}/{a.path}" for a in plan_.refused]},
         )
@@ -512,8 +512,8 @@ def _conflicted(refused: Sequence[Action]) -> TroupeError:
             "wrote, so troupe won't replace it: that side may hold a hand edit."
         )
         fix = (
-            f"Take the side troupe wrote (git checkout --{other} {named}) and run troupe flush, "
-            "or run troupe flush --force to replace it, keeping a copy of what it holds."
+            f"Take the side troupe wrote (git checkout --{other} {named}) and run troupe sync, "
+            "or run troupe sync --force to replace it, keeping a copy of what it holds."
         )
     elif first.not_troupes:
         problem = (
@@ -521,8 +521,8 @@ def _conflicted(refused: Sequence[Action]) -> TroupeError:
             "wrote, so troupe won't replace it: they may hold hand edits."
         )
         fix = (
-            "Resolve the file by hand and make the change with troupe config set, or run troupe "
-            "flush --force to replace it, keeping a copy of what it holds."
+            "Resolve the file by hand, removing every marker, and run troupe sync, which reads it "
+            "back; or run troupe sync --force to replace it, keeping a copy of what it holds."
         )
     else:
         problem = (
@@ -531,7 +531,7 @@ def _conflicted(refused: Sequence[Action]) -> TroupeError:
         )
         fix = (
             f"If a merge is part-way through, take one side (git checkout --ours {named}) and "
-            "run troupe flush. Otherwise remove the markers, or run troupe flush --force to "
+            "run troupe sync. Otherwise remove the markers, or run troupe sync --force to "
             "replace it, keeping a copy of what it holds."
         )
     return TroupeError(
@@ -722,7 +722,7 @@ def flush(
     replace a file troupe didn't write (unless ``force``), or meets an unknown file. With
     ``rehearse``, works out what it would do and does none of it. With ``vcs``, a file git merged
     from troupe's versions counts as troupe's, and with ``resolve`` it's replaced, keeping a copy;
-    without, it's refused, naming troupe flush (design D4, D7). With ``marking`` on, each file it
+    without, it's refused, naming troupe sync (design D4, D7). With ``marking`` on, each file it
     rewrites that git left unmerged from troupe's versions is marked resolved (mark-config-resolved
     design D6)."""
     troupe_dir = theatre / THEATRE_DIR

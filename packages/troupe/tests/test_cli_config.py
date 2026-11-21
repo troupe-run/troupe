@@ -1,4 +1,4 @@
-"""troupe config set, config unset, config get and flush on the command line (spec: cli, config;
+"""troupe config set, config unset, config get and sync on the command line (spec: cli, config;
 config-model design D10)."""
 
 import io
@@ -175,19 +175,20 @@ def test_a_file_git_left_conflicted_is_written_by_the_config_set_that_resolves_i
     assert code == 0, err
     assert (repo.path / ".troupe" / "actors" / "tester.md").read_bytes() == b"Both."
     assert file_hash(conflicted) in err
-    assert cli("flush", "--rehearse")[0] == 0
+    assert cli("sync", "--rehearse")[0] == 0
 
 
-def test_flush_with_nothing_to_do_says_so(repo: Repo) -> None:
+def test_sync_with_nothing_to_do_says_so(repo: Repo) -> None:
     _tester()
-    code, out, _ = cli("flush")
+    code, out, _ = cli("sync")
     assert (code, out) == (0, "Nothing to do: the config files are what config says.\n")
 
 
-def test_flush_writes_a_deleted_file_again_and_says_why(repo: Repo) -> None:
+def test_sync_writes_a_file_this_clone_never_had_and_says_why(repo: Repo) -> None:
     _tester()
+    (repo.path / ".troupe" / "local" / "config" / "present.json").unlink()  # as a fresh clone
     (repo.path / ".troupe" / "actors" / "tester.yaml").unlink()
-    code, out, err = cli("flush")
+    code, out, err = cli("sync")
     assert code == 0
     assert "wrote .troupe/actors/tester.yaml" in out
     assert "wrote it again" in err
@@ -415,28 +416,29 @@ def test_rehearsing_an_unset_records_nothing(repo: Repo) -> None:
 # Requirement: A rehearsal's exit code says what it found
 
 
-def test_flush_rehearsed_with_a_file_out_of_date_exits_would_change_naming_it(
+def test_sync_rehearsed_with_a_file_out_of_date_exits_would_change_naming_it(
     repo: Repo,
 ) -> None:
     _tester()
+    (repo.path / ".troupe" / "local" / "config" / "present.json").unlink()  # as a fresh clone
     (repo.path / ".troupe" / "actors" / "tester.yaml").unlink()
-    code, out, _ = cli("flush", "--rehearse")
+    code, out, _ = cli("sync", "--rehearse")
     assert code == ExitCode.WOULD_CHANGE
     assert int(ExitCode.WOULD_CHANGE) == 3
     assert "would write .troupe/actors/tester.yaml" in out
     assert not (repo.path / ".troupe" / "actors" / "tester.yaml").exists()
 
 
-def test_flush_rehearsed_with_files_in_line_exits_0(repo: Repo) -> None:
+def test_sync_rehearsed_with_files_in_line_exits_0(repo: Repo) -> None:
     _tester()
-    assert cli("flush", "--rehearse")[0] == ExitCode.OK
+    assert cli("sync", "--rehearse")[0] == ExitCode.OK
 
 
 def test_a_rehearsal_that_would_be_refused_exits_with_the_refusals_code(repo: Repo) -> None:
     _tester()
     (repo.path / ".troupe" / "actors" / "tester.yaml").write_text("# mine\n", encoding="utf-8")
-    code, _, err = cli("flush", "--rehearse")
-    assert code == CODES["config.file-not-troupes"]
+    code, _, err = cli("sync", "--rehearse")
+    assert code == CODES["config.file-invalid"]
     assert ".troupe/actors/tester.yaml" in err
 
 
@@ -797,3 +799,20 @@ def test_an_options_value_on_an_uninstalled_runner_is_refused_naming_the_actors_
     assert "actors.tester.runner: " in err
     assert "troupe-run[example]" in err
     assert len(git_service(repo).history(aggregate.STREAM)) == before
+
+
+def test_sync_shows_a_hand_edit_it_recorded(repo: Repo) -> None:
+    _tester()
+    actor = repo.path / ".troupe" / "actors" / "tester.yaml"
+    actor.write_text(actor.read_text("utf-8") + "workspace: theatre\n", encoding="utf-8")
+    code, out, err = cli("sync")
+    assert code == 0
+    assert "record .troupe/actors/tester.yaml: an edit by an unknown author (1 value)" in out
+    assert "config.hand-edit-recorded" not in out  # rendered, not raw codes, on stderr
+    assert "unknown author" in err
+
+
+def test_flush_is_an_unknown_command(repo: Repo) -> None:
+    code, _, err = cli("flush")
+    assert code == ExitCode.USAGE
+    assert "flush" in err

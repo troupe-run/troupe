@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://troupe.run/protocol/client/config.schema.json",
   "title": "Config: what the config methods share",
-  "description": "The definitions config-set, config-get and flush share: a value's path, a value, a change to make, a file written, and a conflict.",
+  "description": "The definitions config-set, config-get and sync share: a value's path, a value, a change to make, a file written, and a conflict.",
   "$defs": {
     "path": {
       "title": "Path",

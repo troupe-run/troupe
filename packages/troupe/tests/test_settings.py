@@ -64,10 +64,8 @@ def test_no_request_schema_declares_a_field_named_for_a_setting() -> None:
 
 
 def test_a_flush_request_carrying_the_setting_is_invalid() -> None:
-    assert is_valid({"rehearse": False}, "flush-request.schema.json")
-    assert not is_valid(
-        {"rehearse": False, "markMergesResolved": True}, "flush-request.schema.json"
-    )
+    assert is_valid({"rehearse": False}, "sync-request.schema.json")
+    assert not is_valid({"rehearse": False, "markMergesResolved": True}, "sync-request.schema.json")
 
 
 # Requirement: A malformed setting is an error

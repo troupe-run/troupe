@@ -395,11 +395,11 @@ CASES += [
         ),
     ),
     (
-        m.FlushRequest,
-        "flush-request.schema.json",
+        m.SyncRequest,
+        "sync-request.schema.json",
         st.fixed_dictionaries({}, optional={"force": st.booleans(), "rehearse": st.booleans()}),
     ),
-    (m.ConfigUpdate, "flush-update.schema.json", NOTICE_UPDATES),
+    (m.ConfigUpdate, "sync-update.schema.json", NOTICE_UPDATES),
     (m.DiffRequest, "diff-request.schema.json", st.fixed_dictionaries({"run": RUN_IDS})),
     (
         m.DiffResult,
@@ -481,10 +481,20 @@ CASES += [
         ),
     ),
     (
-        m.FlushResult,
-        "flush-result.schema.json",
+        m.SyncResult,
+        "sync-result.schema.json",
         st.fixed_dictionaries(
-            {"files": st.lists(FILES, max_size=2), "notices": st.lists(NOTICES, max_size=2)}
+            {
+                "edits": st.lists(
+                    st.fixed_dictionaries(
+                        {"path": PATHS, "entries": st.lists(ENTRIES, min_size=1, max_size=2)},
+                        optional={"change": ULIDS},
+                    ),
+                    max_size=2,
+                ),
+                "files": st.lists(FILES, max_size=2),
+                "notices": st.lists(NOTICES, max_size=2),
+            }
         ),
     ),
 ]

@@ -79,7 +79,7 @@ def test_the_core_offers_exactly_its_methods_with_their_request_types() -> None:
         "logs": m.LogsRequest,
         "config-set": m.ConfigSetRequest,
         "config-get": m.ConfigGetRequest,
-        "flush": m.FlushRequest,
+        "sync": m.SyncRequest,
         "diff": m.DiffRequest,
         "accept": m.AcceptRequest,
         "discard": m.DiscardRequest,

@@ -152,7 +152,7 @@ def test_one_command_after_any_merge_leaves_every_file_as_the_merged_config_rend
         event("config conflicts" if resolutions else "config merged cleanly")
         settled = cli("config", "set", *(f"{p}={v}" for p, v in resolutions.items()))
         if not resolutions:
-            settled = cli("flush")
+            settled = cli("sync")
         assert settled[0] == 0, settled[2]
 
         _, out, _ = cli("config", "get", "--json")

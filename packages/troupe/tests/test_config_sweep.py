@@ -12,7 +12,7 @@ from storetesting import files_service, segments
 from troupe.core.config.changes import change, leaves
 from troupe.core.config.projection import file_hash, render
 from troupe.core.config.stream import read, record, record_with_edits
-from troupe.core.config.sweep import sweep
+from troupe.core.config.sweep import remember_present, sweep
 from troupe.core.errors import TroupeError
 from troupe.core.events import EventStore
 from troupe.core.identity import Identity
@@ -41,6 +41,7 @@ def _theatre(tmp_path: Path, config: dict[str, Any]) -> tuple[EventStore, Path]:
     for path, data in files.items():
         (troupe_dir / path).parent.mkdir(parents=True, exist_ok=True)
         (troupe_dir / path).write_bytes(data)
+    remember_present(troupe_dir)  # as a sync leaves it
     return service, troupe_dir
 
 
@@ -136,6 +137,26 @@ def test_deleting_both_files_removes_the_actor_as_one_entry(tmp_path: Path) -> N
     [edit] = _sweep(service, troupe_dir).edits
     assert [e["path"] for e in edit.entries] == [["actors", "tester"]]
     assert edit.files == ({"path": "actors/tester.yaml"}, {"path": "actors/tester.md"})
+
+
+def test_a_file_this_clone_never_had_isnt_read_as_a_removal(tmp_path: Path) -> None:
+    service, troupe_dir = _theatre(tmp_path, {"actors": {"tester": TESTER}})
+    (troupe_dir / "local" / "config" / "present.json").unlink()  # a fresh clone, files missing
+    (troupe_dir / "actors" / "tester.md").unlink()
+    _yaml(troupe_dir).unlink()
+    assert _sweep(service, troupe_dir).edits == ()
+
+
+def test_an_unreadable_record_of_present_files_counts_as_none_and_is_named(
+    tmp_path: Path,
+) -> None:
+    service, troupe_dir = _theatre(tmp_path, {"actors": {"tester": TESTER}})
+    (troupe_dir / "local" / "config" / "present.json").write_text("{not json")
+    _yaml(troupe_dir).unlink()
+    (troupe_dir / "actors" / "tester.md").unlink()
+    swept = _sweep(service, troupe_dir)
+    assert swept.edits == ()  # never "all deleted"
+    assert [n.code for n in swept.notices] == ["config.present-unreadable"]
 
 
 def test_a_character_left_without_its_actors_yaml_is_refused(tmp_path: Path) -> None:

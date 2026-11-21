@@ -399,6 +399,144 @@
       ]
     },
     {
+      "required": [
+        "details"
+      ],
+      "properties": {
+        "code": {
+          "const": "config.hand-edit-recorded"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "file",
+            "entries"
+          ],
+          "properties": {
+            "file": {
+              "description": "The config file, relative to the theatre.",
+              "type": "string",
+              "minLength": 1
+            },
+            "change": {
+              "description": "The change id the sweep's changes share. Absent: a rehearsal, which records nothing.",
+              "type": "string",
+              "minLength": 1
+            },
+            "entries": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "rehearsal": {
+              "description": "Present when a rehearsal reports what the real command would do; it did none of it.",
+              "const": true
+            },
+            "removed": {
+              "description": "Present when the file went missing, recorded as removing what it held.",
+              "const": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "required": [
+        "details"
+      ],
+      "properties": {
+        "code": {
+          "const": "config.conflict-resolved"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "file",
+            "changes"
+          ],
+          "properties": {
+            "path": {
+              "description": "The config path, as keys.",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "file": {
+              "description": "The config file, relative to the theatre.",
+              "type": "string",
+              "minLength": 1
+            },
+            "value": {
+              "description": "The value the hand edit took, as config holds it. Absent: the hand edit unset the value (unset is true).",
+              "$ref": "events/config-changed.schema.json#/$defs/value"
+            },
+            "unset": {
+              "description": "Present when the hand edit unset the value, by deleting its file.",
+              "const": true
+            },
+            "changes": {
+              "description": "The ids of the changes that were in conflict.",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "rehearsal": {
+              "description": "Present when a rehearsal reports what the real command would do; it did none of it.",
+              "const": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "required": [
+        "details"
+      ],
+      "properties": {
+        "code": {
+          "const": "config.hand-edit-unrecorded"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "files",
+            "left"
+          ],
+          "properties": {
+            "files": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "left": {
+              "description": "The conflicting paths no hand edit sets.",
+              "type": "array",
+              "items": {
+                "description": "The config path, as keys.",
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
       "properties": {
         "code": {
           "const": "workspace.waiting"
@@ -663,6 +801,14 @@
       "required": [
         "details"
       ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "config.present-unreadable"
+        },
+        "details": false
+      }
     }
   ],
   "$defs": {
