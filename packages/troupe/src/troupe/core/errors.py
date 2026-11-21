@@ -125,6 +125,7 @@ CODES: dict[str, ExitCode] = {
     # Reading hand edits back (hand-edit-sweep design D2, D4, D6, D10).
     "config.file-invalid": ExitCode.FAILURE,
     "config.file-changing": ExitCode.FAILURE,
+    "config.write-back-failed": ExitCode.FAILURE,
     "config.unknown-actor": ExitCode.FAILURE,
 }
 

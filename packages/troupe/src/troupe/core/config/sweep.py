@@ -76,6 +76,9 @@ class Swept:
     seen: dict[str, bytes | None] = field(default_factory=dict)
     """The bytes the sweep read for each config path it looked at, None for no file: what a write
     checks the file still holds (design D10)."""
+    read: frozenset[str] = frozenset()
+    """The files whose values the sweep read: a person's files, which a write changes surgically
+    (design D6)."""
 
     @property
     def entries(self) -> list[Entry]:
@@ -135,7 +138,7 @@ def sweep(
     refuse_file_problems(
         reads, apply(config, [e for edit in edits for e in edit.entries]), troupe_dir
     )
-    return Swept(tuple(edits), seen)
+    return Swept(tuple(edits), seen, frozenset(r.path for r in reads))
 
 
 def _operations(
