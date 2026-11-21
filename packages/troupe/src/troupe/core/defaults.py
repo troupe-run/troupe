@@ -207,3 +207,13 @@ no endpoint"; in-process-runner design D5). Only a built-in can be in-process.""
 CREDENTIAL_MIN_BYTES = 8
 """The shortest credential a run may send. troupe masks the value in everything it keeps from a
 run, and a shorter one would match ordinary text."""
+
+# Reading hand edits back (spec: config-hand-edits; hand-edit-sweep design D4).
+# contributing/config.md lists them.
+
+CONFIG_READ_ATTEMPTS = 3
+"""How many times the sweep reads a config file that changes while it's read, before refusing it
+with config.file-changing."""
+
+CONFIG_READ_RETRY_SECONDS = 0.05
+"""How long the sweep waits before reading a changing config file again."""

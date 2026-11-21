@@ -222,8 +222,17 @@ Rejected:
 While the merged config has conflicts:
 
 - Each file the sweep reads (D3 step 6, which includes a file the person took a side of with `git checkout --ours`
-  or `--theirs`, and a conflict resolved by hand) counts as setting every conflicting path it owns, to the value it
-  holds, even if that equals a side's value. A conflicting value whose file was deleted counts as unsetting it.
+  or `--theirs`, and a conflict resolved by hand) sets every conflicting path it owns to the value it holds, as a
+  `config set` of that value would. This needs no forcing: config shows a conflicting path at the value the history
+  before the lines worked out, which neither side holds, so a side's value or a third value always gives an entry.
+  The one value that gives none is that earlier value itself, exactly as with `config set`. A conflicting value
+  whose file was deleted is unset.
+- **Every conflict the sweep resolves is named** (owner, 2026-11-21). Two conflicting values in one edited file are
+  both resolved, since the file wins, so the person may resolve a value they didn't touch. Each resolved value gets
+  a `config.conflict-resolved` notice, streamed as a `NoticeUpdate` from every command, sync included. It names the
+  path, the file, the value taken (or `unset`), and the conflicting changes' ids. A rehearsal reports the same,
+  saying it would. The notice is catalogued in `protocol/schemas/notice.schema.json`, so it travels in the shared
+  notice shape; client-protocol needs no change.
 - A file exactly what config renders now (D3 step 2) isn't read, so it resolves nothing. A person who wants the value
   the history before the lines worked out uses `troupe config set`.
 - An untouched merge git made (D3 step 3) resolves nothing.

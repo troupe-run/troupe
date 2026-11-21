@@ -170,6 +170,13 @@ Its limit, in `troupe.core.defaults`:
 |---|---|---|
 | `CREDENTIAL_MIN_BYTES` | 8 | The shortest credential a run may send: a shorter one would match ordinary text, so it can't be masked safely |
 
+The sweep's limits, in `troupe.core.defaults` (hand-edit-sweep design D4):
+
+| Setting | Default | What it is |
+|---|---|---|
+| `CONFIG_READ_ATTEMPTS` | 3 | How many times the sweep reads a config file that changes while it's read, before `config.file-changing` |
+| `CONFIG_READ_RETRY_SECONDS` | 0.05 | How long the sweep waits before reading a changing file again |
+
 ## Notices and errors
 
 | Code | When |
@@ -181,6 +188,8 @@ Its limit, in `troupe.core.defaults`:
 | `config.unknown-file` | A file in a config directory matches no kind of config file |
 | `settings.invalid-value` | A setting variable is set to something other than `true` or `false` |
 | `config.local-malformed` | This clone's record of the files flush wrote has a malformed line before its last |
+| `config.file-invalid` | A config file can't be read as config: it doesn't parse, uses an anchor, alias, tag or merge key, holds a null, a date or a number JSON can't hold, names another kind's schema, breaks a rule `config set` checks, or is present with no values (the mid-save guard: delete the file to remove what it held). `details` hold the `file`, the `rule`, and where known the `line`, `column` and config `path`; never the value. Nothing from any file is recorded |
+| `config.file-changing` | A config file changed while the sweep read it (after `CONFIG_READ_ATTEMPTS` reads), or between the sweep and the write. Names the file |
 | `runner.not-installed` | A change sets or unsets something under an actor whose runner troupe knows but isn't installed here, so its options can't be checked. Names the actor's runner path and the `troupe-run[<runner>]` extra; other changes and merges leave that actor's options unchecked instead ([runs.md](runs.md#notices-and-errors) has the same code at perform) |
 | `schemas.plugin-missing` | A plugin's package is installed but ships no schemas, or a plugin outside troupe's runner table isn't installed |
 | `config.file-rewritten` | (notice) A config file troupe wrote was missing or older, and was written again |

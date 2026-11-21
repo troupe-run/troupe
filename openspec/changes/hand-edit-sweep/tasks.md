@@ -6,26 +6,30 @@ say so in the tick. Commit by group, so the review can be split by slice (design
 
 ## 1. Reading a file's values (design D2)
 
-- [ ] 1.1 In `core/config/kinds.py` (or a new `core/config/reading.py`), read a config file into the part of config
+- [x] 1.1 In `core/config/kinds.py` (or a new `core/config/reading.py`), read a config file into the part of config
       it owns: an actor `.yaml` (every field but `character`), an actor `.md` (the character, exact UTF-8 bytes), and
       a runtime `.yaml`. YAML 1.2 safe load. Verify with tests over real rendered files: reading what `render()`
       writes gives back exactly the config it was rendered from, for every field `FIELD_ORDER` and
       `RUNTIME_FIELD_ORDER` name (a property test over generated actors and runtimes).
-- [ ] 1.2 Refuse invalid files as `config.file-invalid`, with the rule in details and the value never repeated:
+      Done: `core/config/reading.py`; property tests over generated actors and runtimes round-trip `render()` (new module, so they fail on main).
+- [x] 1.2 Refuse invalid files as `config.file-invalid`, with the rule in details and the value never repeated:
       syntax error (line and column), duplicate key, anchor, alias, tag or merge key, a non-mapping top level, a
       null, non-UTF-8 `.md`, `$schema` naming another kind, and a file with no values (rule `empty`, design D4).
       Verify with a test per rule, each checking the code, the file in the message, the rule, and that a canary value
       isn't in the message. Add `config.file-invalid` to `core/errors.py` and `protocol/schemas/error.schema.json`
       (and the package copy).
-- [ ] 1.3 Run the values through `config set`'s checks (kind schema, runner options schema) and report failures as
+      Done: 18 parametrised rules plus empty-file fixes, line/column and absolute path; codes in errors and the error schema (`write-back-failed` lands with group 3, since protocol_guard needs a raiser).
+- [x] 1.3 Run the values through `config set`'s checks (kind schema, runner options schema) and report failures as
       `config.file-invalid` naming the file and the path. Verify with tests for a misspelt field (`runnr`) and an
       option the scripted runner doesn't define (spec: config-hand-edits, "An invalid file is refused, never
       skipped").
+      Done: `refuse_file_problems` maps `kinds.problems` to the file that holds the value.
 - [ ] 1.4 The read-stability check: stat (size, mtime_ns, file id) before and after reading, through the platform
       seam (`platform/files.py`). Retry up to `config_read_attempts` (default 3) with `config_read_retry_seconds`
       (default 0.05), both in `core/defaults.py`, then `config.file-changing` (new code, in errors and the error
       schema). Verify with a test that injects a stat sequence: one change then still gives the final values; always
       changing is refused naming the file. Test on all three OSes in CI (file id on Windows).
+      Done: `platform.files.file_stamp` (size, mtime_ns, st_dev, st_ino) and `read_steady`; injected-stamp tests. Done locally; ticked once Windows CI has run it.
 
 ## 2. The sweep: classify, compare, record (design D1, D3, D4, D5, D7, D9)
 
@@ -84,10 +88,15 @@ say so in the tick. Commit by group, so the review can be split by slice (design
       each scenario in "Hand edits resolve config's conflicts": an edit resolves; a value matching neither side; a
       partial resolution refused naming what's left, with the file kept; a partial finished by `config set`; taking a
       side with `git checkout --theirs`; an untouched merge resolves nothing.
-- [ ] 4.2 `config get` with a partial resolution: records nothing, shows the conflicts, and adds the
+- [ ] 4.2 Name every resolved conflict (owner, 2026-11-21): a `config.conflict-resolved` notice per resolved value
+      (path, file, value taken or unset, the conflicting change ids), from every command and, saying "would", from a
+      rehearsal. Catalogue it in `protocol/schemas/notice.schema.json` (and the package copy). Verify with tests for
+      each scenario in "Every conflict a hand edit resolves is named", and that the two-values-in-one-file test sees
+      two notices.
+- [ ] 4.3 `config get` with a partial resolution: records nothing, shows the conflicts, and adds the
       `config.hand-edit-unrecorded` notice naming the file and the values still unset. Verify with a test. Add the
       notice code wherever notices are catalogued.
-- [ ] 4.3 Update `contributing/config.md` and `docs/stagecraft/hand-edit-config.md`'s "Branches" section: a hand edit
+- [ ] 4.4 Update `contributing/config.md` and `docs/stagecraft/hand-edit-config.md`'s "Branches" section: a hand edit
       resolves a conflict, as `config set` does.
 
 ## 5. `troupe sync` replaces `troupe flush` (design D1, D11)
