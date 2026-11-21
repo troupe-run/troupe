@@ -152,6 +152,9 @@ def test_shrank_is_true_exactly_where_a_size_drops(sizes: list[int]) -> None:
         assert shrank((previous,), (current,)) is (current < previous)
 
 
+# Requirement: A reply's prompt is measured by the engine's accounting
+
+
 def test_a_drop_in_either_reading_shrank_and_only_a_drop_does() -> None:
     """Scenario "The same cut with the engine unknown": input alone 4,482 then 4,037, though input
     and cache reads together grew from 4,597 to 7,877."""
