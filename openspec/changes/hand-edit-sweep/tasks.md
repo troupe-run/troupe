@@ -68,24 +68,29 @@ say so in the tick. Commit by group, so the review can be split by slice (design
 
 ## 3. Surgical write-back and compare-and-swap (design D6, D10)
 
-- [ ] 3.1 `core/config/writeback.py`: splice by composer node spans. Changed scalar or list replaced in place
+- [x] 3.1 `core/config/writeback.py`: splice by composer node spans. Changed scalar or list replaced in place
       (sequence span trimmed to its last item's line, indentation kept); groups recursed; flow-style group replaced
       whole; new key after the last preceding sibling in schema or sorted order; removed key's lines deleted; the
       file's own line ending used. Verify with example tests for each scenario in config-files' "Write-back changes
       only what it must", byte for byte.
-- [ ] 3.2 Verify before staging: parse the spliced bytes and compare with the target values, else
+      Done: `core/config/writeback.py`; an example test per scenario, plus CRLF, no final newline, block scalars and groups' sorted order.
+- [x] 3.2 Verify before staging: parse the spliced bytes and compare with the target values, else
       `config.write-back-failed` (new code) with nothing recorded. Verify with a test that forces a mismatch (a
       monkeypatched splice) and checks the refusal and that the event store and the file are unchanged.
-- [ ] 3.3 The property test: generated formatted actor and runtime files (comments, blank lines, key orders,
+      Done: a monkeypatched splice is refused with `config.write-back-failed`, naming `troupe sync --force`.
+- [x] 3.3 The property test: generated formatted actor and runtime files (comments, blank lines, key orders,
       indentations, quoting, flow and block lists, CRLF) and random config changes. Every line outside the changed
       keys is unchanged, and the result reads as the target, or the write-back refuses (never a wrong file). Record
       any example it finds as a fixed test.
+      Done: the property test found one bug (a group's new last key and a new key after the group, both inserted at the file's end, came out in the wrong order), fixed and kept as `test_a_groups_new_last_key_and_a_new_key_after_the_group_keep_their_order`. Measured over 4000 examples: every one written back, none refused.
 - [ ] 3.4 Wire write-back into `projection.plan`/`render`: an existing readable file's target bytes are the splice;
       a new file is rendered whole; `.md` replaced whole. A file whose values equal config is in line. Verify the
       existing `test_config_files.py` and `test_config_merge_files.py` still pass, with flush renamed to sync.
-- [ ] 3.5 Compare-and-swap (D10): under the lock, re-read each file just before replace or remove, and refuse
+      The pieces are in (`writeback.targets`, `execute`'s `expect`, `Swept.read`); 5.2's `sync()` uses them, and this is ticked with it.
+- [x] 3.5 Compare-and-swap (D10): under the lock, re-read each file just before replace or remove, and refuse
       `config.file-changing` if its bytes aren't the sweep's. Verify with a test that edits the file between the sweep
       and the replace (a hook in the test seam): refused, and the person's bytes are unchanged.
+      Done at `execute`: it checks every path against the sweep's bytes before writing anything and again just before each replace; tests for a file changed meanwhile (refused, left alone) and one still as read. The command-level scenario runs once 5.2 wires it.
 
 ## 4. Conflicts resolved by hand (design D8)
 

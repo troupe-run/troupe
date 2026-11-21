@@ -2642,6 +2642,29 @@
     {
       "properties": {
         "code": {
+          "const": "config.write-back-failed"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "file"
+          ],
+          "properties": {
+            "file": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
           "const": "config.unknown-actor"
         },
         "details": {

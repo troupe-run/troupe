@@ -748,15 +748,24 @@ def flush(
     return Flushed(plan_.changes, kept, resolved)
 
 
-def execute(troupe_dir: Path, plan_: Plan) -> dict[str, str]:
+def execute(
+    troupe_dir: Path, plan_: Plan, expect: Mapping[str, bytes | None] | None = None
+) -> dict[str, str]:
     """Carry out ``plan_``, holding the lock: each new file staged then moved into place. Returns
-    each file forced past, and the artifact its bytes were kept under."""
+    each file forced past, and the artifact its bytes were kept under. With ``expect``, the bytes
+    the sweep read for each path (None for no file), a file that no longer holds them is refused
+    with config.file-changing, before anything is written and again just before it's replaced
+    (hand-edit-sweep design D10)."""
+    expect = expect or {}
+    for action in plan_.changes:
+        _still(troupe_dir, staged_target(action.path) or action.path, expect)
     ensure_git_files(troupe_dir)
     kept: dict[str, str] = {}
     written: list[dict[str, str]] = []
     for action in plan_.changes:
         path = staged_target(action.path) or action.path
         target = troupe_dir / path
+        _still(troupe_dir, path, expect)
         if (action.forced or action.keep) and target.exists():
             store = load_store(defaults.ARTIFACT_STORE, troupe_dir / "local" / "artifacts")
             kept[path] = store.put(target.read_bytes())
@@ -772,6 +781,18 @@ def execute(troupe_dir: Path, plan_: Plan) -> dict[str, str]:
             remove(troupe_dir, action.path)
     _record_written(troupe_dir, written)
     return kept
+
+
+def _still(troupe_dir: Path, path: str, expect: Mapping[str, bytes | None]) -> None:
+    """Refuse with config.file-changing when ``path`` no longer holds what the sweep read."""
+    if path not in expect:
+        return
+    target = troupe_dir / path
+    have = read_file(target) if target.exists() else None
+    if have != expect[path]:
+        from troupe.core.config.reading import changing
+
+        raise changing(troupe_dir, path)
 
 
 def _record_written(troupe_dir: Path, written: Sequence[dict[str, str]]) -> None:
