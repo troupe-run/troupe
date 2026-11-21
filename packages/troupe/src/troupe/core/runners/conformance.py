@@ -5,7 +5,8 @@ run that succeeds, so the checks work for runners whose behaviour can't be scrip
 given a cheap prompt). A runner that requires a runtime is given one, ``runtime``, in every
 run/start; when it has a credential, the command's environment holds it as
 TROUPE_RUNTIME_CREDENTIAL, as perform's does, and ``credential`` is that value, masked in the whole
-run as perform masks it. A check passes or fails with a problem naming what the runner did.
+run as perform masks it, and in every check's problem (conformance-runtime design D4). A check
+passes or fails with a problem naming what the runner did.
 """
 
 import asyncio
@@ -19,6 +20,7 @@ from pathlib import Path
 
 from troupe.core import defaults
 from troupe.core.artifacts import MemoryArtifactStore
+from troupe.core.masking import Masker
 from troupe.core.runners.effects import NoAudit, NoEffectExpected
 from troupe.core.runners.host import (
     OFFERED_CAPABILITIES,
@@ -167,6 +169,7 @@ async def check_runner(
 ) -> list[CheckResult]:
     """Run every conformance check against the runner ``command``."""
     limits = limits or RunLimits(run_timeout=120.0)
+    masker = Masker(credential)
 
     async def handshake(driver: _Driver) -> None:
         answer = await driver.initialize([p.PROTOCOL_VERSION])
@@ -277,7 +280,7 @@ async def check_runner(
             await _with_runner(command, limits, body, runtime)
         except (_Failed, TimeoutError, OSError) as failure:
             problem = str(failure) or f"it didn't answer within {limits.start_timeout:g}s"
-            results.append(CheckResult(name, False, problem))
+            results.append(CheckResult(name, False, masker.text(problem)))
         else:
             results.append(CheckResult(name, True))
 
@@ -302,6 +305,10 @@ async def check_runner(
         if outcome.error is not None:
             whole_run += f": {outcome.error.problem}"
     results.append(
-        CheckResult("a whole run: init first, seq, result, shutdown", whole_run is None, whole_run)
+        CheckResult(
+            "a whole run: init first, seq, result, shutdown",
+            whole_run is None,
+            masker.text(whole_run) if whole_run is not None else None,
+        )
     )
     return results

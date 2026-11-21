@@ -815,6 +815,26 @@ TROUPE_CONFORMANCE_OPTIONS='{"script": {"steps": [{"event": {"type": "init", "ru
 uv run pytest packages/troupe/tests/test_runner_conformance.py -k environment
 ```
 
-The same checks are available to code as `troupe.core.runners.conformance.check_runner`. A runner that needs a
-runtime can only be checked from code: `check_runner` takes the `runtime` and `credential` for its run, and the
-environment variables above can't give them.
+A runner that talks to a service needs a runtime. Give it one in `TROUPE_CONFORMANCE_RUNTIME`: a JSON object holding
+the runtime's `name` and the fields a runtime has in config (`endpoint`, `model`, `credential`, `prices`). The check
+validates it as config validates a runtime, and resolves it as a run does: troupe's built-in runtime of that name,
+then the object, then your `TROUPE_RUNTIME_<NAME>_*` variables. Every `run/start` carries the result. The credential
+is only ever named: `credential.env` is the variable that holds the key, read from your environment, and the runner
+gets the key as `TROUPE_RUNTIME_CREDENTIAL`, as it does in a run. The key is refused as a run refuses it (unset,
+malformed, too short to mask, or sent over plain HTTP to a host that isn't loopback), and masked in every check's
+result:
+
+```console
+export MY_SERVICE_KEY=...   # the key itself stays in your environment, never in a TROUPE_CONFORMANCE_ variable
+TROUPE_CONFORMANCE_RUNNER='["my-runner"]' \
+TROUPE_CONFORMANCE_OPTIONS='{}' \
+TROUPE_CONFORMANCE_RUNTIME='{"name": "my-service", "endpoint": "https://api.example.com/v1", "model": "small", "credential": {"env": "MY_SERVICE_KEY"}}' \
+uv run pytest packages/troupe/tests/test_runner_conformance.py -k environment
+```
+
+For a built-in runtime, its name and a model are enough: `{"name": "openai", "model": "gpt-4.1-mini"}` uses the
+built-in endpoint and reads the key from `OPENAI_API_KEY`, and `TROUPE_RUNTIME_OPENAI_ENDPOINT` points it at a test
+service. A variable that's set but malformed is refused, naming it; an unset or empty one is absent.
+
+The same checks are available to code as `troupe.core.runners.conformance.check_runner`, which takes the `runtime`
+and `credential` for its run directly.

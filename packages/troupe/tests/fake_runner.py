@@ -9,7 +9,8 @@ reason, which the contract refuses. ``early-initialized`` counts an initialize i
 versions as its handshake, and refuses every initialize after it. ``raw-lines`` writes each line of
 the JSON list in ``FAKE_RAW_LINES`` as it is, ``{run_id}`` replaced, after ``init``, then a result
 with seq ``FAKE_RAW_NEXT_SEQ`` (1 if unset); with ``FAKE_RAW_KINDS`` set it accepts
-transcript-kinds.
+transcript-kinds. ``refuse-with-credential`` refuses every run/start with a problem holding its
+``TROUPE_RUNTIME_CREDENTIAL``, as a runner that echoes its key in a refusal would.
 """
 
 import json
@@ -123,17 +124,26 @@ def main(mode: str) -> None:
                 answer_initialize(message)
         elif method == "run/start":
             RUN_ID = message["params"]["runId"]
+            refusal: dict[str, str] | None = None
             if mode == "refuse-character" and "character" in message["params"]:
-                error = {
+                refusal = {
                     "code": "runner.invalid-params",
                     "problem": "unknown key character",
                     "fix": "Leave it out.",
                 }
+            if mode == "refuse-with-credential":
+                key = os.environ.get("TROUPE_RUNTIME_CREDENTIAL", "")
+                refusal = {
+                    "code": "runner.invalid-params",
+                    "problem": f"the service refused the key {key}",
+                    "fix": "Use another key.",
+                }
+            if refusal is not None:
                 send(
                     {
                         "jsonrpc": "2.0",
                         "id": message["id"],
-                        "error": {"code": -32602, "message": "unknown key", "data": error},
+                        "error": {"code": -32602, "message": "refused", "data": refusal},
                     }
                 )
                 continue
