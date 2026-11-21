@@ -610,7 +610,7 @@ run told `fail` with `context-length`, and compacts one told `compact`
 | a 429, a 5xx or `overloaded_error`, a network failure or a broken stream | `retry`, by the runner, never the library |
 | `stop_reason` `end_turn` or `stop_sequence` | `result` `ok`, with its text |
 | a refusal, the output limit, a context refusal or a cut conversation, a refused key, a turn limit or a spent budget | `result` `error`, with `refused`, `output-limit`, `context-length`, `authentication`, `turn-limit` or `budget` |
-| each reply's `input_tokens`, cache counters and `output_tokens` | summed into `result.usage`; no cost is reported, so `estimatedCostUsd` from a price |
+| each reply's `input_tokens`, cache counters and `output_tokens` | summed into `result.usage`, by the runtime's `engine`: on `lm-studio`, whose `input_tokens` holds its cache reads, `inputTokens` is `input_tokens` less `cache_read_input_tokens`; on `claude` and `ollama`, and with no engine, as the API defines them ([the runner's Usage](../plugins/runner-anthropic/README.md#usage)); no cost is reported, so `estimatedCostUsd` from a price |
 
 Its transcript is what the library exposes, with the record kinds: each request's parameters are `sent`, each stream
 event as the library parsed it and each error body `received`, and each status and dropped stream a `note`.
