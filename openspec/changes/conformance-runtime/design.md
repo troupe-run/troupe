@@ -36,7 +36,7 @@ rule, the in-process and endpoint rules).
 (`runtime.schema.json`), so what a runner author writes here is what their users will write with `troupe config set`.
 The test builds `{"runtimes": {name: entry}}` as a theatre config, checks it with `runtime_problems`, and resolves it
 with `for_run`, so built-ins, `TROUPE_RUNTIME_<NAME>_*` overrides and every credential refusal behave as in a run.
-`{"name": "openai"}` alone uses the built-in.
+`{"name": "openai", "model": "..."}` uses the built-in's endpoint and credential; no built-in names a model.
 
 Alternatives: separate variables (`TROUPE_CONFORMANCE_ENDPOINT`, `_MODEL`, `_CREDENTIAL_ENV`) would duplicate
 `TROUPE_RUNTIME_<NAME>_*` and need their own checks; naming a runtime only (`TROUPE_CONFORMANCE_RUNTIME=openai`) can't
@@ -54,7 +54,7 @@ environment and refuses before returning, no runner starts with a bad credential
 
 The variables exist only for the pytest invocation the docs give, so a helper in `test_runner_conformance.py` reads
 them, and the env-driven test calls a function that takes the environment as a mapping, so tests drive it with a dict
-rather than by changing `os.environ`. A malformed variable raises a `ConformanceSetup` error (a `ValueError`) naming
+rather than by changing `os.environ`. A malformed variable raises a `ConformanceSetupError` (a `ValueError`) naming
 the variable, what it must hold and the fix; refusals from `for_run` are `TroupeError`s and pass through unchanged
 (their codes and words are the runtimes spec's). No error-catalogue entry is added: these aren't troupe errors a
 surface shows, they fail a test. Unset or empty means absent, as `for_run` reads variables.
