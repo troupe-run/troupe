@@ -170,6 +170,21 @@ def read_bytes(
         delay = min(delay * 2, 0.25)
 
 
+FileStamp = tuple[int, int, int, int]
+"""A file's size, modification time in nanoseconds, device and file id: what changes when the
+file is written or replaced."""
+
+
+def file_stamp(path: str | os.PathLike[str]) -> FileStamp | None:
+    """``path``'s stamp, or None when there's no file. On Windows the file id is the NTFS file
+    index, which ``os.stat`` reports as ``st_ino``."""
+    try:
+        found = os.stat(path)
+    except FileNotFoundError:
+        return None
+    return (found.st_size, found.st_mtime_ns, found.st_dev, found.st_ino)
+
+
 def _fsync_directory(directory: Path) -> None:
     if _WINDOWS:
         return

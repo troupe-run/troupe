@@ -122,6 +122,9 @@ CODES: dict[str, ExitCode] = {
     "config.unknown-file": ExitCode.FAILURE,
     "config.file-not-troupes": ExitCode.FAILURE,
     "config.local-malformed": ExitCode.FAILURE,
+    # Reading hand edits back (hand-edit-sweep design D2, D4, D6, D10).
+    "config.file-invalid": ExitCode.FAILURE,
+    "config.file-changing": ExitCode.FAILURE,
     "config.unknown-actor": ExitCode.FAILURE,
 }
 

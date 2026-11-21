@@ -27,7 +27,9 @@ no watching), #6 (layout and write-back rules) and #137 (`--rehearse`), and unbl
 - **A hand edit resolves a config conflict** (owner, decision 4), as a `config set` of every conflicting value does.
   The sweep's edits, together with the command's own change, must set every conflicting value; a partial resolution
   is refused naming what's left, and the edited file is kept. A value matching neither side resolves the conflict
-  with that value.
+  with that value. Two conflicting values in one edited file are both resolved, since the file wins, and every
+  conflict a sweep resolves is named, with the value it took, in a `config.conflict-resolved` notice (owner,
+  2026-11-21).
 - **Surgical write-back.** When troupe writes a file a person edited, it changes only the values that changed and
   keeps every other line byte for byte. A new key goes where the schema's order says, among the keys already there.
   A file troupe makes new is written as today. troupe's own write-back reads back as in line, so it never records

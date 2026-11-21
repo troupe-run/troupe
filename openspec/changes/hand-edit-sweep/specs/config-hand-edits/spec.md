@@ -239,6 +239,7 @@ conflicting value.
   `.troupe/actors/tester.yaml` without markers, and the person edits only its runner and runs `troupe sync`
 - **THEN** both conflicts are resolved: the runner to the person's edit, and the model to the value the file holds
 - **AND** the change records both values
+- **AND** the output names both conflicts it resolved, and the value it took for each
 
 #### Scenario: A partial resolution finished by the command
 - **WHEN** the person edits `tester`'s runner in its file, and runs `troupe config set actors.reviewer.model=m`
@@ -258,6 +259,25 @@ conflicting value.
 - **WHEN** the branches conflict on `tester`'s runner, `.troupe/actors/tester.yaml` is still the merge git made from
   versions troupe wrote, and a person runs `troupe perform tester`
 - **THEN** it is refused with `config.conflict`, and nothing is recorded
+
+### Requirement: Every conflict a hand edit resolves is named
+When a command's sweep resolves a config conflict, the command SHALL report a `config.conflict-resolved` notice for
+each conflicting value, naming the path, the file it came from, the value taken (or that it was unset), and the
+changes that were in conflict, so nothing is resolved without the person seeing it.
+
+#### Scenario: Sync names what it resolved
+- **WHEN** the branches conflict on `actors.tester.runner`, the person sets `runner: claude-code` in
+  `.troupe/actors/tester.yaml`, and runs `troupe sync`
+- **THEN** a `config.conflict-resolved` notice names `actors.tester.runner`, `.troupe/actors/tester.yaml`,
+  `claude-code`, and the two changes that set it differently
+
+#### Scenario: Another command names it too
+- **WHEN** the same edit is swept by `troupe perform tester`
+- **THEN** the same notice is reported before the run starts
+
+#### Scenario: A rehearsal names what it would resolve
+- **WHEN** the person runs `troupe sync --rehearse` instead
+- **THEN** the output names the conflict it would resolve and the value it would take, and nothing is recorded
 
 ### Requirement: A sweep can be rehearsed
 `troupe sync --rehearse`, and every command's `--rehearse`, SHALL show the hand edits the sweep would record, file by

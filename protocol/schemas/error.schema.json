@@ -2560,6 +2560,88 @@
     {
       "properties": {
         "code": {
+          "const": "config.file-invalid"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "file",
+            "rule"
+          ],
+          "properties": {
+            "file": {
+              "type": "string",
+              "minLength": 1
+            },
+            "rule": {
+              "type": "string",
+              "enum": [
+                "empty",
+                "not-utf-8",
+                "syntax",
+                "duplicate-key",
+                "anchor",
+                "tag",
+                "merge-key",
+                "not-a-mapping",
+                "key-not-text",
+                "null",
+                "not-json",
+                "schema-url",
+                "invalid"
+              ]
+            },
+            "line": {
+              "description": "The line where reading the file failed. Absent: the problem isn't at one place in the file's text, such as a rule its values break.",
+              "type": "integer",
+              "minimum": 1
+            },
+            "column": {
+              "description": "The column where reading the file failed. Absent: as for line.",
+              "type": "integer",
+              "minimum": 1
+            },
+            "path": {
+              "description": "The config path of the value that breaks the rule, as keys. Absent: the problem is with the file as a whole, such as its syntax or being empty.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "config.file-changing"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "file"
+          ],
+          "properties": {
+            "file": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
           "const": "config.unknown-actor"
         },
         "details": {
