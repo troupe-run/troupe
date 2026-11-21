@@ -37,24 +37,10 @@ runtime and its `engine` field as the fix. A run whose replies report no cache r
 - **WHEN** the runtime's engine is `lm-studio` and a reply reports cache reads
 - **THEN** no warning about the engine is sent
 
-## MODIFIED Requirements
-
-### Requirement: Usage is summed into the result
-The result SHALL carry the run's usage summed over every reply as the Messages API defines it: `inputTokens` from
-`input_tokens`, `cacheReadTokens` from `cache_read_input_tokens` and `cacheWriteTokens` from
-`cache_creation_input_tokens`, each cache counter only when every reply reports it, and `outputTokens`. On an engine
-the table says counts cache reads inside `input_tokens`, each reply's `inputTokens` SHALL be its `input_tokens` less
-its cache reads, so the result, the token budget and the estimated cost count each token once. A reply with no usage
-SHALL make the result carry none, with a `log` warning.
-
-#### Scenario: Two replies with cached input
-- **WHEN** one reply reports 60 input, 40 cache-read and 10 output tokens, and a second 200 input, 0 cache-read and 20
-  output tokens
-- **THEN** the result's usage is `inputTokens` 260, `cacheReadTokens` 40 and `outputTokens` 30
-
-#### Scenario: Cache writes reported by only one reply
-- **WHEN** one reply reports `cache_creation_input_tokens` 50 and the other doesn't report it
-- **THEN** the result has no `cacheWriteTokens`
+### Requirement: An engine's cache reads are counted once
+On an engine the table says counts cache reads inside `input_tokens`, each reply's `inputTokens` SHALL be its
+`input_tokens` less its cache reads, so the result, the token budget and the estimated cost count each token once.
+When the accounting isn't known, usage SHALL stay as the Messages API defines it.
 
 #### Scenario: LM Studio's cache reads counted once
 - **WHEN** a run on a runtime whose engine is `lm-studio` gets one reply reporting 93 input and 0 cache-read tokens, and a second 126
@@ -65,23 +51,10 @@ SHALL make the result carry none, with a `log` warning.
 - **WHEN** the runtime names no engine
 - **THEN** the result's usage is `inputTokens` 219 and `cacheReadTokens` 89, as the API defines them
 
-### Requirement: A reply from a conversation the engine shrank isn't acted on
-The conversation only grows, so a reply whose reported prompt is smaller than the previous request's SHALL be taken as
-made from a conversation the engine cut. A reply's prompt is its input and cache-write tokens, plus its cache-read
-tokens on an engine that reports them apart. When the accounting isn't known, a prompt that shrank by either reading
-SHALL be taken as cut. No `turn` or tool call from such a reply SHALL be sent, and a run told `fail` SHALL end with `error` and
-`reason` `context-length`. A first request has no earlier prompt, so an engine that cuts it silently isn't caught, and
-the README SHALL say so.
-
-#### Scenario: An engine that cuts the middle
-- **WHEN** a run's second request is reported as 5,900 prompt tokens and its third, which adds a tool result to it, as
-  4,058
-- **THEN** no `turn` or `tool_call` event is sent for the third reply, and the run ends with `error` and `reason`
-  `context-length`, saying the engine answered from less of the conversation than it was sent
-
-#### Scenario: A conversation that grows
-- **WHEN** each reply reports a larger prompt than the one before
-- **THEN** the run goes on
+### Requirement: A reply's prompt is measured by the engine's accounting
+A reply's prompt SHALL be its input and cache-write tokens, plus its cache-read tokens on an engine that reports them
+apart from its input. When the accounting isn't known, the runner SHALL read it both ways: a prompt that shrank by
+either reading SHALL be taken as cut, and the context window SHALL judge by the larger.
 
 #### Scenario: LM Studio's cut on a turn that reports cache reads
 - **WHEN** a run on a runtime whose engine is `lm-studio` gets a reply reporting 4,482 input and 115 cache-read tokens, then a reply
@@ -98,6 +71,40 @@ the README SHALL say so.
 - **WHEN** a run on a runtime whose engine is `claude` gets a reply reporting 900 input and 0 cache-read tokens, then one reporting 100 input
   and 1,000 cache-read tokens
 - **THEN** the run goes on: the prompt grew from 900 to 1,100
+
+## MODIFIED Requirements
+
+### Requirement: Usage is summed into the result
+The result SHALL carry the run's usage summed over every reply as the Messages API defines it: `inputTokens` from
+`input_tokens`, `cacheReadTokens` from `cache_read_input_tokens` and `cacheWriteTokens` from
+`cache_creation_input_tokens`, each cache counter only when every reply reports it, and `outputTokens`, after the
+engine's correction ("An engine's cache reads are counted once"). A reply with no usage SHALL make the result carry
+none, with a `log` warning.
+
+#### Scenario: Two replies with cached input
+- **WHEN** one reply reports 60 input, 40 cache-read and 10 output tokens, and a second 200 input, 0 cache-read and 20
+  output tokens
+- **THEN** the result's usage is `inputTokens` 260, `cacheReadTokens` 40 and `outputTokens` 30
+
+#### Scenario: Cache writes reported by only one reply
+- **WHEN** one reply reports `cache_creation_input_tokens` 50 and the other doesn't report it
+- **THEN** the result has no `cacheWriteTokens`
+
+### Requirement: A reply from a conversation the engine shrank isn't acted on
+The conversation only grows, so a reply whose reported prompt ("A reply's prompt is measured by the engine's
+accounting") is smaller than the previous request's SHALL be taken as made from a conversation the engine cut. No
+`turn` or tool call from it SHALL be sent, and a run told `fail` SHALL end with `error` and `reason` `context-length`. A first request has no earlier prompt, so an engine that cuts it silently isn't caught, and
+the README SHALL say so.
+
+#### Scenario: An engine that cuts the middle
+- **WHEN** a run's second request is reported as 5,900 prompt tokens and its third, which adds a tool result to it, as
+  4,058
+- **THEN** no `turn` or `tool_call` event is sent for the third reply, and the run ends with `error` and `reason`
+  `context-length`, saying the engine answered from less of the conversation than it was sent
+
+#### Scenario: A conversation that grows
+- **WHEN** each reply reports a larger prompt than the one before
+- **THEN** the run goes on
 
 #### Scenario: A first request an engine cut
 - **WHEN** a run's first request is over an engine's window, and the engine cuts it and answers, as Ollama does

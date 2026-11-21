@@ -70,8 +70,11 @@
   and on b27881a7, which touched only `plugins/runner-anthropic`, the guard's `runner_anthropic` scope, "check: all
   gates passed" (5281 passed). Both summary lines are in the pull request; CI runs the whole suite on every OS once
   it's marked ready (5.2).
-- [ ] 5.2 Open the pull request as a draft (`Closes #418`, `Closes #419`), act on the review of the last push, and mark
+- [x] 5.2 Open the pull request as a draft (`Closes #418`, `Closes #419`), act on the review of the last push, and mark
   it ready once it's clean. Verify: `gh pr checks` shows every job passing on the head, on Linux, macOS and Windows.
+  Done: PR #489. The review of 0fcc2a84 was clean, with every conversation resolved and `claude review completed`
+  passed. Marked ready; CI run 44956910760 passed every `check` leg on Linux, macOS and Windows, Python 3.12 to 3.15.
+  The archive push changes only specs, the archived change and test comments.
 
 ## Workflow follow-up
 

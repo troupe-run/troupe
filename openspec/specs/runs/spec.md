@@ -555,8 +555,8 @@ no `audit` SHALL NOT validate.
 
 ### Requirement: A run's start records its runtime and where each value came from
 When an actor names a runtime, the run's start SHALL record the runtime's name, its endpoint and model, each with its
-source, when it has a credential, the variable's name and its source, and when the run's model has a price, that price
-with its source. It SHALL NOT record the credential's value.
+source, when it has a credential, the variable's name and its source, when the run's model has a price, that price
+with its source, and when the runtime names an engine, the engine with its source. It SHALL NOT record the credential's value.
 
 #### Scenario: A run on a theatre-chosen endpoint
 - **WHEN** config sets `runtimes.openai.endpoint=https://gateway.example/v1` and an actor on `openai` is performed
@@ -566,6 +566,11 @@ with its source. It SHALL NOT record the credential's value.
 #### Scenario: A run on a priced model
 - **WHEN** config prices `gpt-test` on `openai` and an actor on `openai` with the model `gpt-test` is performed
 - **THEN** the run's start records that price with source `theatre`, the same price its `run/start` carried
+
+#### Scenario: A run on a runtime with an engine
+- **WHEN** an actor on a runtime whose config sets `engine` `lm-studio` is performed
+- **THEN** the run's start records the engine `lm-studio` with source `theatre`, the same engine its `run/start`
+  carried
 
 #### Scenario: A run with no runtime
 - **WHEN** an actor that names no runtime is performed
@@ -648,7 +653,7 @@ a `data:` line holding JSON, is still that after masking, and none of its string
 
 ### Requirement: A rehearsal shows the run's runtime
 A rehearsed `perform` SHALL show the runtime the run would use, with each value's source, whether its credential's
-variable is set, and the price of its model when it has one, and SHALL refuse what perform would refuse about the
+variable is set, the price of its model when it has one, and its engine when it names one, and SHALL refuse what perform would refuse about the
 runtime.
 
 #### Scenario: A rehearsal on openai
@@ -659,6 +664,10 @@ runtime.
 #### Scenario: A rehearsal on a priced model
 - **WHEN** a person rehearses an actor on `openai` whose model config prices
 - **THEN** the rehearsal shows that price with source `theatre`
+
+#### Scenario: A rehearsal on a runtime with an engine
+- **WHEN** a person rehearses an actor on a runtime whose config sets `engine` `lm-studio`
+- **THEN** the rehearsal shows the engine `lm-studio` with source `theatre`
 
 ### Requirement: A run's end says which form its transcript is
 `transcriptFormat` SHALL be `kinds` when the runner accepted `transcript-kinds`, and `native` otherwise. A run's end
