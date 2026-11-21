@@ -38,7 +38,14 @@ from troupe_plugin_sdk.runner import (
     Usage,
 )
 from troupe_plugin_sdk.tools import Tools
-from troupe_runner_anthropic.context import CONTEXT_STOP_REASON, against_window, shrank
+from troupe_runner_anthropic.context import (
+    CONTEXT_STOP_REASON,
+    against_window,
+    largest,
+    prompt_readings,
+    reads_in_input,
+    shrank,
+)
 from troupe_runner_anthropic.defaults import INSTRUCTIONS, SUMMARY_MAX_BYTES
 from troupe_runner_anthropic.exchange import (
     ExchangeFailedError,
@@ -118,7 +125,8 @@ def _count(value: object) -> TypeGuard[int]:
 @dataclass
 class _Spend:
     """What the run's replies have used, as the Messages API counts it: input excludes both cache
-    counters (design D7)."""
+    counters (design D7). On an engine whose input_tokens holds its cache reads, they're taken out
+    of it, so each token is counted once (local-engine-context design D4)."""
 
     input_tokens: int = 0
     output_tokens: int = 0
@@ -138,8 +146,9 @@ class _Spend:
             + self.cache_write_tokens
         )
 
-    def add(self, usage: Mapping[str, Any] | None) -> bool:
-        """Add one reply's usage. False when it reported none, or a shape that can't be read."""
+    def add(self, usage: Mapping[str, Any] | None, reads_in_input: bool | None = False) -> bool:
+        """Add one reply's usage, its cache reads taken out of its input when ``reads_in_input``.
+        False when it reported none, or a shape that can't be read."""
         self.requests += 1
         given = None if usage is None else usage.get("input_tokens")
         made = None if usage is None else usage.get("output_tokens")
@@ -152,6 +161,10 @@ class _Spend:
         )
         if _count(read):
             self.cache_read_tokens += read
+            if reads_in_input:
+                # Clamped: a reply whose cache reads exceed its input would mean the engine changed
+                # how it counts; its own counters stay in the transcript.
+                given = max(given - read, 0)
         else:
             self.reads_known = False
         if _count(written):
@@ -207,12 +220,21 @@ class Loop:
     _results: list[_Result] = field(default_factory=list)
     _turn: int = 0
     _estimate: Estimate = field(default_factory=Estimate)
-    _previous_prompt: int | None = None
-    """The reported prompt of the last reply acted on, or None after a compaction, which shrinks the
-    conversation on purpose (design D8, guard 2)."""
+    _previous_prompt: tuple[int, ...] | None = None
+    """The reported prompt of the last reply acted on, by each reading the engine allows, or None
+    after a compaction, which shrinks the conversation on purpose (design D8, guard 2)."""
     _accepted_prompt: int | None = None
     _served: ServedModels | None = None
     _spend: _Spend = field(default_factory=_Spend)
+    _warned_reads: bool = False
+
+    @property
+    def _reads(self) -> bool | None:
+        """Whether the engine's input_tokens holds its cache reads; None when that isn't known."""
+        return reads_in_input(self.runtime.engine)
+
+    def _prompt(self, reply: Reply) -> tuple[int, ...] | None:
+        return prompt_readings(reply.usage, self._reads)
 
     def run(self, direction: str, character: str | None) -> ResultEvent | None:
         """Run the loop to its result. None when the run was stopped."""
@@ -242,7 +264,7 @@ class Loop:
                     )
                 window = against_window(
                     self.options.context_window,
-                    reply.prompt_tokens,
+                    largest(self._prompt(reply)),
                     (reply.usage or {}).get("output_tokens"),
                 )
                 if window.full:
@@ -262,7 +284,7 @@ class Loop:
             )
         except ExchangeFailedError as error:
             if error.usage is not None:
-                spend.add(error.usage)
+                spend.add(error.usage, self._reads)
             return self._failed(error.reason, error.message)
         except _Cut as cut:
             return self._failed("context-length", cut.message)
@@ -296,11 +318,12 @@ class Loop:
             self._count(reply)
             cut = self._cut(reply)
             if cut is None:
-                prompt = reply.prompt_tokens
+                readings = self._prompt(reply)
+                prompt = largest(readings)
                 if prompt is not None and prompt > 0:
                     self._estimate.calibrate(size, prompt)
                     self._accepted_prompt = prompt
-                    self._previous_prompt = prompt
+                    self._previous_prompt = readings
                 return reply
             if not self.compact:
                 raise _Cut(cut)
@@ -309,16 +332,22 @@ class Loop:
 
     def _cut(self, reply: Reply) -> str | None:
         """Why ``reply`` was made from less than the conversation, or None (guards 2 and 3)."""
-        prompt = reply.prompt_tokens
-        if shrank(self._previous_prompt, prompt):
+        readings = self._prompt(reply)
+        if shrank(self._previous_prompt, readings):
+            before, now = next(
+                pair
+                for pair in zip(self._previous_prompt or (), readings or (), strict=True)
+                if pair[1] < pair[0]
+            )
             return (
                 f"The engine answered from less of the conversation than it was sent: it reported "
-                f"a prompt of {prompt} tokens, after {self._previous_prompt} for the request "
+                f"a prompt of {now} tokens, after {before} for the request "
                 "before, though the conversation only grows. It cut the conversation to fit its "
                 "context, so the reply wasn't acted on. Give the actor a smaller task, or a model "
                 "with a longer context."
             )
         window = self.options.context_window
+        prompt = largest(readings)
         if against_window(window, prompt, None).cut:
             return (
                 f"The request's prompt was {prompt} tokens, reaching the context window of "
@@ -391,7 +420,8 @@ class Loop:
         )
 
     def _count(self, reply: Reply) -> None:
-        if not self._spend.add(reply.usage) and not self._warned_usage:
+        self._warn_reads(reply)
+        if not self._spend.add(reply.usage, self._reads) and not self._warned_usage:
             self._warned_usage = True
             self._log(
                 "warning",
@@ -399,6 +429,38 @@ class Loop:
                 "context can't be checked: only its turn limit bounds it, and its result has no "
                 "usage.",
             )
+
+    def _warn_reads(self, reply: Reply) -> None:
+        """Warn, once, when a reply reports cache reads and how the engine counts them isn't known
+        (local-engine-context design D5)."""
+        read = (reply.usage or {}).get("cache_read_input_tokens")
+        if self._warned_reads or self._reads is not None or not _count(read) or read == 0:
+            return
+        self._warned_reads = True
+        if self.runtime.engine is None:
+            where = (
+                f"runtimes.{self.runtime.name}.engine"
+                if self.runtime.name
+                else "the runtime's engine field"
+            )
+            fix = (
+                f"Name the engine that serves the runtime in {where} (such as lm-studio), so the "
+                "runner counts them once."
+            )
+            doubt = (
+                "The runtime names no engine, so the runner can't tell whether its input_tokens "
+                "already holds them"
+            )
+        else:
+            fix = "troupe will count them once when that engine's accounting is pinned."
+            doubt = (
+                f"troupe doesn't yet know whether {self.runtime.engine}'s input_tokens holds them"
+            )
+        self._log(
+            "warning",
+            f"A reply reported {read} cache-read tokens. {doubt} (LM Studio's does), so the run's "
+            f"usage may count them twice; its context is guarded under both readings. {fix}",
+        )
 
     def _note_model(self, reply: Reply) -> None:
         if self._served is None:

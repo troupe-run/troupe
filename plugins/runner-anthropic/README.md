@@ -49,13 +49,19 @@ URL, below which the library adds `/v1/messages`:
 - **A local engine**: a runtime of your own at the engine's server root. There's no built-in for one. For LM Studio:
 
   ```sh
-  troupe config set runtimes.lm-studio-messages.endpoint=http://127.0.0.1:1234
+  troupe config set runtimes.lm-studio-messages.endpoint=http://127.0.0.1:1234 runtimes.lm-studio-messages.engine=lm-studio
   troupe config set actors.lead.runner=anthropic actors.lead.runtime=lm-studio-messages actors.lead.model=google/gemma-4-e4b 'actors.lead.expect=[]'
   ```
 
   For Ollama, define a runtime of your own at `http://127.0.0.1:11434`, such as
-  `troupe config set runtimes.ollama-messages.endpoint=http://127.0.0.1:11434`. The built-in `ollama` is the Ollama
-  runner's, and config refuses it for this one. A local engine takes no key unless you've set one up.
+  `troupe config set runtimes.ollama-messages.endpoint=http://127.0.0.1:11434 runtimes.ollama-messages.engine=ollama`.
+  The built-in `ollama` is the Ollama runner's, and config refuses it for this one. A local engine takes no key unless
+  you've set one up.
+
+- **The engine.** The runtime's `engine` (`claude`, `lm-studio`, `ollama` or `llama.cpp`) tells the runner how the
+  service counts cached input; see [Usage](#usage) and [The context](#the-context). The built-in `anthropic` runtime's
+  is `claude`. The runner reads it only from `run/start`, never from the endpoint or the replies, so name it on every
+  runtime of your own that serves one of these.
 
 An endpoint whose path ends in `/v1`, copied from an OpenAI-style setup, is refused: requests would otherwise go to
 `/v1/v1/messages`. Config refuses an actor on it, naming the runtimes that fit, and `troupe perform` refuses one that a
@@ -113,11 +119,23 @@ server-side features, which a local engine doesn't serve.
 A model whose reasoning arrives inside its text, rather than as `thinking` blocks, shows it in its turns: Gemma on LM
 Studio writes its reasoning, then `<channel|>`, then its answer. The runner doesn't parse model-specific markers.
 
+## Usage
+
 `result.usage` sums each reply's usage as the Messages API defines it: `inputTokens` is `input_tokens`, which excludes
 the cache; `cacheReadTokens` is `cache_read_input_tokens` and `cacheWriteTokens` is `cache_creation_input_tokens`, each
-when every reply reports it. LM Studio counts its cache reads inside `input_tokens` as well, so its runs over-report
-input by them ([#419](https://github.com/troupe-run/troupe/issues/419)). The API reports no cost, so the result never has `costUsd`; when the theatre prices the run's model, it
-carries `estimatedCostUsd` instead. Price a model with every rate its runs use, cache reads and writes included:
+when every reply reports it. Engines don't all follow that definition, so the runner counts by the runtime's `engine`,
+from one table in [`context.py`](src/troupe_runner_anthropic/context.py) that names what pins each entry:
+
+| Engine | Its `input_tokens` | How the runner counts it |
+|---|---|---|
+| `claude` | excludes cache reads (the API's documentation) | as the API defines it |
+| `ollama` | excludes cache reads (probed, Ollama 0.40.14) | as the API defines it |
+| `lm-studio` | holds its cache reads too (`fixtures/lm-studio-tool-loop`, [#419](https://github.com/troupe-run/troupe/issues/419)) | `inputTokens` is `input_tokens` less the cache reads, so the result, the budget and the estimate count each token once |
+| `llama.cpp` | not yet probed | as for no engine |
+| none | not known | as the API defines it, with one `log` warning, the first time a reply reports cache reads, naming the runtime's `engine` field |
+
+The API reports no cost, so the result never has `costUsd`; when the theatre prices the run's model, it carries
+`estimatedCostUsd` instead. Price a model with every rate its runs use, cache reads and writes included:
 
 ```sh
 troupe config set 'runtimes.anthropic.prices.claude-haiku-5-5={"input": 0.1, "cacheRead": 0.01, "cacheWrite": 0.125, "output": 0.5}'
@@ -132,16 +150,31 @@ in the Messages API to stop them. So the runner guards against acting on a reply
 1. **A refusal.** Claude's `prompt is too long`, LM Studio's `api_error` about the context length, llama.cpp's
    `exceed_context_size_error`, and the stop reason `model_context_window_exceeded`, each named in one table in
    [`context.py`](src/troupe_runner_anthropic/context.py). None is retried.
-2. **A shrinking prompt.** The conversation only grows, so a reply reported as answering a smaller prompt (its input
-   and both cache counters) than the request before it was made from a cut conversation. Nothing in it is acted on.
+2. **A shrinking prompt.** The conversation only grows, so a reply reported as answering a smaller prompt than the
+   request before it was made from a cut conversation. Nothing in it is acted on. A reply's prompt is its input and
+   cache writes, plus its cache reads on an engine that counts them apart: LM Studio's input already holds them. When
+   how the engine counts isn't known (no `engine`, or `llama.cpp`), the runner reads the prompt both ways, and a drop
+   either way is a cut.
 3. **`contextWindow`, when you set it.** A reply whose prompt alone reaches it isn't acted on; once a reply's prompt and
-   output reach it, its calls are carried out and no further request is sent.
+   output reach it, its calls are carried out and no further request is sent. The prompt is measured as above, by
+   the larger reading when how the engine counts isn't known.
 
-In a run told `fail` (the default), each ends the run with `context-length`. **What it can't catch:** a first request
-already over the window on an engine that cuts it silently (Ollama does): there's no earlier prompt to compare with,
-and counting tokens needs the model's tokenizer. Claude's API and LM Studio refuse that case
-([#418](https://github.com/troupe-run/troupe/issues/418) tracks the engines that cut). On another engine, set
-`contextWindow` and give the actor a direction that fits.
+In a run told `fail` (the default), each ends the run with `context-length`.
+
+**What can still be lost without a word.** Through the Messages API, both local engines cut a conversation that has
+outgrown their window and answer `200`, with nothing in the API to ask them to refuse
+([#418](https://github.com/troupe-run/troupe/issues/418)). Mid-run, guard 2 catches that on every engine. On a first
+request it can't, since there's no earlier prompt to compare with, and counting tokens needs the model's tokenizer:
+
+| Engine | A first request over its window |
+|---|---|
+| `claude` | refused (`prompt is too long`): `context-length` |
+| `lm-studio` | refused (an `api_error` about the context length): `context-length` |
+| `ollama` | **cut silently**, and the reply is acted on |
+| `llama.cpp` | refused, by its documentation (`exceed_context_size_error`); not yet probed |
+| any other | unknown: it may be cut silently |
+
+On Ollama, or an engine the runner doesn't know, give the actor a direction that fits the window with room to spare.
 
 ### Compaction
 
@@ -266,7 +299,8 @@ Recorded from LM Studio with `google/gemma-4-e4b`: a tool loop, its refusal of a
 cut, and the output limit. Recorded from Claude's API with `claude-haiku-5-5`, by the owner with a working key: a tool
 loop and its refusal of a prompt over the model's context; and with a deliberately invalid key, a rejected credential. Derived or
 built from the API's documented shapes: a broken stream, a rate limit, an overload, an `error` event in a stream, and a
-refusal. [`tools/capture_anthropic.py`](tools/capture_anthropic.py) records new ones, and scrubs the key, request ids
+refusal. Each fixture's provenance names the engine it came from, and its replay runs as that engine.
+[`tools/capture_anthropic.py`](tools/capture_anthropic.py) records new ones, and scrubs the key, request ids
 and the host's home; without a key it records nothing from a service that isn't on this machine.
 
 ## Tests

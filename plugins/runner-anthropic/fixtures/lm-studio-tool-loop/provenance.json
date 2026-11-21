@@ -4,6 +4,7 @@
   "captured": "2026-11-14",
   "how": "recorded with tools/capture_anthropic.py loop",
   "credential": "none",
+  "engine": "lm-studio",
   "workspace": {
     "notes/todo.txt": "buy milk\nwrite the troupe docs\n"
   }

@@ -92,6 +92,7 @@ def replay(name: str, tmp_path: Path) -> Replayed:
                 model=model,
                 direction=DIRECTION,
                 on_context_full=provenance.get("onContextFull", "fail"),
+                engine=provenance.get("engine"),
             )
             messages = session.until_result(timeout=120)
             session.shutdown()

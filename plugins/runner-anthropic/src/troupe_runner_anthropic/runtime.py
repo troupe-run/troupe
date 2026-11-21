@@ -130,10 +130,21 @@ class Runtime:
     price: Price | None = None
     """The model's price troupe gave in run/start, the only one the runner may estimate a cost
     from; None when the theatre doesn't price the model."""
+    engine: str | None = None
+    """What serves the endpoint, when the runtime names it (local-engine-context design D1): the
+    only way the runner learns it, never inferred from the endpoint or a reply."""
+    name: str | None = None
+    """The runtime's name, for a message that tells the person which runtime to configure."""
 
     @classmethod
     def checked(
-        cls, endpoint: str | None, model: str, credential: str | None, price: Price | None = None
+        cls,
+        endpoint: str | None,
+        model: str,
+        credential: str | None,
+        price: Price | None = None,
+        engine: str | None = None,
+        name: str | None = None,
     ) -> "Runtime":
         """A Runtime from its parts, refused when there's no endpoint (an in-process runtime), the
         endpoint can't be used, the model is empty, the credential is malformed, or it would go in
@@ -176,7 +187,7 @@ class Runtime:
                 "machine (localhost or a loopback address).",
                 {"endpoint": parsed.url},
             )
-        return cls(parsed, model, credential, price)
+        return cls(parsed, model, credential, price, engine, name)
 
 
 def from_run_start(params: RunStartParams, environ: Mapping[str, str]) -> Runtime:
@@ -202,7 +213,12 @@ def from_run_start(params: RunStartParams, environ: Mapping[str, str]) -> Runtim
             {"where": CREDENTIAL_VARIABLE},
         ) from None
     return Runtime.checked(
-        params.runtime.endpoint, params.runtime.model, credential, params.runtime.price
+        params.runtime.endpoint,
+        params.runtime.model,
+        credential,
+        params.runtime.price,
+        params.runtime.engine,
+        params.runtime.name,
     )
 
 

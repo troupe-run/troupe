@@ -64,11 +64,11 @@
       "type": "result",
       "seq": 6,
       "status": "error",
-      "message": "The engine answered from less of the conversation than it was sent: it reported a prompt of 4037 tokens, after 4597 for the request before, though the conversation only grows. It cut the conversation to fit its context, so the reply wasn't acted on. Give the actor a smaller task, or a model with a longer context.",
+      "message": "The engine answered from less of the conversation than it was sent: it reported a prompt of 4037 tokens, after 4482 for the request before, though the conversation only grows. It cut the conversation to fit its context, so the reply wasn't acted on. Give the actor a smaller task, or a model with a longer context.",
       "reason": "context-length",
       "turns": 3,
       "usage": {
-        "inputTokens": 8638,
+        "inputTokens": 8508,
         "outputTokens": 175,
         "cacheReadTokens": 130
       }

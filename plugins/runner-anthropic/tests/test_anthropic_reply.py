@@ -292,39 +292,6 @@ def test_a_reply_with_no_usage_anywhere_has_none() -> None:
         [message, event("message_delta", delta={"stop_reason": "end_turn"}), event("message_stop")]
     )
     assert reply.usage is None
-    assert reply.prompt_tokens is None
-
-
-@pytest.mark.parametrize(
-    ("used", "prompt"),
-    [
-        (usage(60, 1, cache_read=40, cache_write=10), 110),
-        (usage(60, 1, cache_read=None, cache_write=None), 60),
-        (usage(0, 1, cache_read=5, cache_write=0), 5),
-        ({"input_tokens": 60, "cache_read_input_tokens": -4, "output_tokens": 1}, 60),
-        ({"input_tokens": 60, "cache_read_input_tokens": True, "output_tokens": 1}, 60),
-    ],
-    ids=["all three", "input alone", "zero input", "a negative counter", "a boolean counter"],
-)
-def test_prompt_tokens_sums_input_and_both_cache_counters(
-    used: dict[str, Any], prompt: int
-) -> None:
-    assert _parse([start(used=used), *finish("end_turn")]).prompt_tokens == prompt
-
-
-@pytest.mark.parametrize(
-    "used",
-    [
-        {"output_tokens": 1, "cache_read_input_tokens": 40},
-        {"input_tokens": None, "output_tokens": 1, "cache_read_input_tokens": 40},
-        {"input_tokens": -1, "output_tokens": 1},
-        {"input_tokens": True, "output_tokens": 1},
-        {"input_tokens": "60", "output_tokens": 1},
-    ],
-    ids=repr,
-)
-def test_prompt_tokens_is_none_without_a_count_of_input_tokens(used: dict[str, Any]) -> None:
-    assert _parse([start(used=used), *finish("end_turn")]).prompt_tokens is None
 
 
 # Stop reason and details

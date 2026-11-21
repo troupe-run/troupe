@@ -4,12 +4,15 @@ anthropic-runner, "Fixtures hold no secrets", "Fixtures that need a working cred
 by the owner"; design D12). It's loaded by path, as the owner runs it."""
 
 import importlib.util
+import json
 import sys
 from functools import cache
 from pathlib import Path
 from types import ModuleType
 
 import pytest
+
+from troupe_plugin_sdk.runner import RUNTIME_ENGINES
 
 TOOL = Path(__file__).resolve().parents[1] / "tools" / "capture_anthropic.py"
 KEY = "sk-ant-api03-capture0123456789abcd"
@@ -51,7 +54,18 @@ def test_a_capture_from_a_hosted_service_without_a_key_stops_and_writes_nothing(
     monkeypatch.setattr(tool, "FIXTURES", tmp_path)
     monkeypatch.setattr(tool, "_post", lambda *_: pytest.fail("a request was sent"))
     with pytest.raises(SystemExit, match="ANTHROPIC_API_KEY isn't set"):
-        tool.main([kind, "x", "--endpoint", "https://api.anthropic.com", "--model", "m"])
+        tool.main(
+            [
+                kind,
+                "x",
+                "--endpoint",
+                "https://api.anthropic.com",
+                "--model",
+                "m",
+                "--engine",
+                "claude",
+            ]
+        )
     assert list(tmp_path.iterdir()) == []
 
 
@@ -62,7 +76,13 @@ def test_a_capture_from_a_local_engine_needs_no_key(
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setattr(tool, "FIXTURES", tmp_path)
     monkeypatch.setattr(tool, "_post", lambda *_: {"status": 200, "headers": [], "lines": []})
-    assert (
-        tool.main(["output-limit", "x", "--endpoint", "http://127.0.0.1:1234", "--model", "m"]) == 0
-    )
+    argv = ["output-limit", "x", "--endpoint", "http://127.0.0.1:1234", "--model", "m"]
+    assert tool.main([*argv, "--engine", "lm-studio"]) == 0
     assert (tmp_path / "x" / "replies.json").is_file()
+    provenance = json.loads((tmp_path / "x" / "provenance.json").read_text(encoding="utf-8"))
+    assert list(provenance)[list(provenance).index("credential") + 1] == "engine"
+    assert provenance["engine"] == "lm-studio"
+
+
+def test_the_tools_engines_are_the_protocols() -> None:
+    assert _tool().ENGINES == RUNTIME_ENGINES

@@ -7,6 +7,7 @@ from pathlib import Path
 
 from anthropic_harness import RUNNER_SCHEMAS
 from troupe_runner_anthropic import defaults
+from troupe_runner_anthropic.context import ENGINES
 
 README = Path(__file__).resolve().parents[1] / "README.md"
 
@@ -50,6 +51,18 @@ def test_the_readme_says_a_first_request_an_engine_cuts_silently_isnt_caught() -
     # Spec: anthropic-runner, "A reply from a conversation the engine shrank isn't acted on",
     # "A first request an engine cut": the limit is stated, not claimed away.
     text = " ".join(_section("The context").split())
-    assert "What it can't catch:** a first request already over the window" in text
-    assert "Ollama does" in text
-    assert "Claude's API and LM Studio refuse that case" in text
+    assert "What can still be lost without a word." in text
+    assert "On a first request it can't" in text
+    assert "| `ollama` | **cut silently**, and the reply is acted on |" in text
+    assert "| `claude` | refused" in text
+    assert "| `lm-studio` | refused" in text
+
+
+def test_the_readme_names_every_engine_in_the_table_for_usage_and_the_first_request() -> None:
+    # Spec: anthropic-runner, "The runner counts by its runtime's engine and never guesses it";
+    # troupe#418's done-when: the README says which engines can still lose content silently.
+    usage = _section("Usage")
+    context = _section("The context")
+    for engine in ENGINES:
+        assert f"| `{engine}` |" in usage
+        assert f"| `{engine}` |" in context

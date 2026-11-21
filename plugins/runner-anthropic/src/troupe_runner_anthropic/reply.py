@@ -53,24 +53,6 @@ class Reply:
     """Its ``text`` blocks, joined."""
     tool_uses: list[ToolUse]
 
-    @property
-    def prompt_tokens(self) -> int | None:
-        """The reported size of the prompt it answered: its input and both cache counters (design
-        D8), or None when the service didn't report input tokens."""
-        usage = self.usage or {}
-        given = usage.get("input_tokens")
-        if not _count(given):
-            return None
-        total = 0
-        for value in (
-            given,
-            usage.get("cache_read_input_tokens"),
-            usage.get("cache_creation_input_tokens"),
-        ):
-            if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
-                total += value
-        return total
-
 
 def _count(value: object) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value >= 0

@@ -3,23 +3,28 @@ design D12). Run by the owner for Claude's API, or by an agent against a local e
 deliberately invalid key.
 
     # A tool loop (needs a working key for Claude's API; none for a local engine):
-    python3 -I tools/capture_anthropic.py loop <name> --endpoint <base> --model <model>
+    python3 -I tools/capture_anthropic.py loop <name> --endpoint <base> --model <model> \
+        --engine <engine>
     # A prompt longer than the model's context, refused or cut (free: a refusal isn't billed):
-    python3 -I tools/capture_anthropic.py context <name> --endpoint <base> --model <model> --words N
+    python3 -I tools/capture_anthropic.py context <name> --endpoint <base> --model <model> \
+        --engine <engine> --words N
     # A tool loop whose results outgrow the context (a local engine):
-    python3 -I tools/capture_anthropic.py outgrow <name> --endpoint <base> --model <model> --words N
+    python3 -I tools/capture_anthropic.py outgrow <name> --endpoint <base> --model <model> \
+        --engine <engine> --words N
     # A reply cut by its output limit:
-    python3 -I tools/capture_anthropic.py output-limit <name> --endpoint <base> --model <model>
+    python3 -I tools/capture_anthropic.py output-limit <name> --endpoint <base> --model <model> \
+        --engine <engine>
     # A rejected credential, with a deliberately invalid key (free):
     python3 -I tools/capture_anthropic.py rejected <name> --endpoint https://api.anthropic.com \
-        --model <model>
+        --model <model> --engine claude
 
 The key is read from ANTHROPIC_API_KEY and never written; without it, a capture from a service that
 isn't on this machine stops before sending anything. ``rejected`` sends a made-up key, and a local
 engine needs none. The tool speaks the Messages API with the standard library, as the runner's
 library sends it (the same ``anthropic-version``), streamed, and follows no redirect. Each fixture
 directory gets ``replies.json`` (what the service answered, request by request: a status, the
-headers the runner keeps, and the stream's lines or the body) and ``provenance.json``. Every string
+headers the runner keeps, and the stream's lines or the body) and ``provenance.json``, which names
+the engine (``--engine``: what serves the endpoint, as a runtime names it). Every string
 written is scrubbed of the key, any masked echo of it, request ids, and the capturing host's home
 directory. ``expected.json`` is written separately, from a replay, and reviewed by hand.
 """
@@ -167,6 +172,11 @@ def _message(reply: dict[str, Any]) -> dict[str, Any] | None:
         blocks[index]["input"] = json.loads(text) if text.strip() else {}
     message["content"] = [blocks[index] for index in sorted(blocks)]
     return message
+
+
+ENGINES = ("claude", "lm-studio", "ollama", "llama.cpp")
+"""What a runtime may name as its engine (protocol/schemas/runtime.schema.json#/$defs/engine),
+copied because the tool runs on the standard library alone; a test compares the two."""
 
 
 def _write(name: str, replies: list[dict[str, Any]], provenance: dict[str, Any]) -> Path:
@@ -323,10 +333,30 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--endpoint", required=True)
     parser.add_argument("--model", required=True)
     parser.add_argument("--words", type=int, default=12_000)
+    parser.add_argument(
+        "--engine",
+        required=True,
+        choices=ENGINES,
+        help="what serves the endpoint, as a runtime names it; the replay runs as that engine",
+    )
     args = parser.parse_args(argv)
     made = KINDS[args.kind](args.name, args.endpoint, args.model, args.words)
+    _name_engine(made, args.engine)
     print(f"wrote {made}")
     return 0
+
+
+def _name_engine(directory: Path, engine: str) -> None:
+    """Put ``engine`` in the fixture's provenance, after its credential, as the replay reads it
+    (local-engine-context design D6)."""
+    path = directory / "provenance.json"
+    provenance: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+    named: dict[str, Any] = {}
+    for key, value in provenance.items():
+        named[key] = value
+        if key == "credential":
+            named["engine"] = engine
+    path.write_text(json.dumps(named, indent=2) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":
