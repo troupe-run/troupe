@@ -1,4 +1,4 @@
-"""config set, config unset, config get and flush on the command line (spec: cli, config;
+"""config set, config unset, config get and sync on the command line (spec: cli, config;
 config-model design D10).
 
 Each builds its request as data and calls the core through the client protocol's dispatcher, then
@@ -116,7 +116,7 @@ def _render_change(result: dict[str, Any], stdout: TextIO, *, rehearse: bool) ->
 
 
 def run_set(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
-    # Only set types values by their schema: get and flush don't load YAML or schema checking
+    # Only set types values by their schema: get and sync don't load YAML or schema checking
     # (cli-starts-fast design D5).
     from troupe.cli.values import value_of
 
@@ -202,22 +202,29 @@ def run_get(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> Ex
     return ExitCode.OK
 
 
-# flush
+# sync
 
 
-def run_flush(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
+def run_sync(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
     params: dict[str, Any] = {"force": True} if arguments.force else {}
     if arguments.rehearse:
         params["rehearse"] = True
-    result = _call("flush", params, _session(), lambda u: _show_notice(u, stderr), _ignore_cancel)
+    result = _call("sync", params, _session(), lambda u: _show_notice(u, stderr), _ignore_cancel)
     _notices(result, stderr)
-    if not result["files"]:
+    would = "would " if arguments.rehearse else ""
+    for edit in result["edits"]:
+        count = len(edit["entries"])
+        print(
+            f"{would}record {edit['path']}: an edit by an unknown author "
+            f"({count} value{'s' if count != 1 else ''})",
+            file=stdout,
+        )
+    if not result["files"] and not result["edits"]:
         print("Nothing to do: the config files are what config says.", file=stdout)
         return ExitCode.OK
-    would = "would " if arguments.rehearse else ""
     for file in result["files"]:
         print(would + _file_line(file, rehearse=arguments.rehearse), file=stdout)
     if arguments.rehearse:
-        print("Rehearsal: nothing was written.", file=stdout)
+        print("Rehearsal: nothing was recorded or written.", file=stdout)
         return ExitCode.WOULD_CHANGE
     return ExitCode.OK

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/client/sync-request.schema.json",
+  "title": "sync: request",
+  "description": "Sweep hand edits to the config files into config, then make every config file say what config says.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "force": {
+      "description": "Replace files the sweep couldn't read as config, keeping a copy of each; nothing is recorded from them. Absent means false.",
+      "type": "boolean"
+    },
+    "rehearse": {
+      "description": "Change nothing: report the hand edits that would be recorded and the files that would be written. Absent means false.",
+      "type": "boolean"
+    }
+  }
+}

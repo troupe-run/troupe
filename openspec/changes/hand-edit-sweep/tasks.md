@@ -61,10 +61,10 @@ say so in the tick. Commit by group, so the review can be split by slice (design
 - [x] 2.6 Update the `config-changed` schema's description (no longer "one command records exactly one"), in
       `protocol/` and the package copy. Verify with the schema-copy test and `protocol_guard`.
       Done: schema and package copy, regenerated models and `docs/prompt-book/events.md`, aggregate docstring.
-- [ ] 2.7 The no-loop test (D9): on a theatre whose files a person formatted, run each config-using command twice. The
+- [x] 2.7 The no-loop test (D9): on a theatre whose files a person formatted, run each config-using command twice. The
       second records nothing and writes nothing. Also: a staged write a change vouches for is finished before the
       sweep, and nothing is recorded for its target.
-      Sweep-level part done (`test_after_recording_the_next_sweep_finds_nothing`, the staged-write test); the per-command run needs 5.2's wiring, ticked then.
+      Done: `test_every_command_run_twice_records_and_writes_nothing_the_second_time` (sync, config get, config set on a formatted file); the formatting survives.
 
 ## 3. Surgical write-back and compare-and-swap (design D6, D10)
 
@@ -83,10 +83,10 @@ say so in the tick. Commit by group, so the review can be split by slice (design
       keys is unchanged, and the result reads as the target, or the write-back refuses (never a wrong file). Record
       any example it finds as a fixed test.
       Done: the property test found one bug (a group's new last key and a new key after the group, both inserted at the file's end, came out in the wrong order), fixed and kept as `test_a_groups_new_last_key_and_a_new_key_after_the_group_keep_their_order`. Measured over 4000 examples: every one written back, none refused.
-- [ ] 3.4 Wire write-back into `projection.plan`/`render`: an existing readable file's target bytes are the splice;
+- [x] 3.4 Wire write-back into `projection.plan`/`render`: an existing readable file's target bytes are the splice;
       a new file is rendered whole; `.md` replaced whole. A file whose values equal config is in line. Verify the
       existing `test_config_files.py` and `test_config_merge_files.py` still pass, with flush renamed to sync.
-      The pieces are in (`writeback.targets`, `execute`'s `expect`, `Swept.read`); 5.2's `sync()` uses them, and this is ticked with it.
+      Done: `syncing.sync_config` plans `writeback.targets` with the sweep's read files vouched; the existing files and merge suites pass, flush renamed to sync.
 - [x] 3.5 Compare-and-swap (D10): under the lock, re-read each file just before replace or remove, and refuse
       `config.file-changing` if its bytes aren't the sweep's. Verify with a test that edits the file between the sweep
       and the replace (a hook in the test seam): refused, and the person's bytes are unchanged.
@@ -94,49 +94,59 @@ say so in the tick. Commit by group, so the review can be split by slice (design
 
 ## 4. Conflicts resolved by hand (design D8)
 
-- [ ] 4.1 While config has conflicts, count a read file's values at conflicting paths as set (deleted file: unset),
+- [x] 4.1 While config has conflicts, count a read file's values at conflicting paths as set (deleted file: unset),
       and check resolution on the union of the sweep's entries and the command's operations. Record the settle, the
       sweep's changes and the command's change in one batch. Verify with tests over real two-branch git theatres for
       each scenario in "Hand edits resolve config's conflicts": an edit resolves; a value matching neither side; a
       partial resolution refused naming what's left, with the file kept; a partial finished by `config set`; taking a
       side with `git checkout --theirs`; an untouched merge resolves nothing.
-- [ ] 4.2 Name every resolved conflict (owner, 2026-11-21): a `config.conflict-resolved` notice per resolved value
+      Done: `test_cli_config_hand_conflicts.py` on real two-branch theatres through the CLI: an edit resolves, a value matching neither side, a partial resolution refused naming what's left with the file kept, a partial finished by `config set` (one batch: settle, hand edit, change), `git checkout --theirs`, two values in one cleanly merged file, and an untouched merge resolving nothing.
+- [x] 4.2 Name every resolved conflict (owner, 2026-11-21): a `config.conflict-resolved` notice per resolved value
       (path, file, value taken or unset, the conflicting change ids), from every command and, saying "would", from a
       rehearsal. Catalogue it in `protocol/schemas/notice.schema.json` (and the package copy). Verify with tests for
       each scenario in "Every conflict a hand edit resolves is named", and that the two-values-in-one-file test sees
       two notices.
-- [ ] 4.3 `config get` with a partial resolution: records nothing, shows the conflicts, and adds the
+      Done: `config.conflict-resolved` from sync, perform (named before the run starts) and rehearsals ("would resolve"); the two-values test sees both named.
+- [x] 4.3 `config get` with a partial resolution: records nothing, shows the conflicts, and adds the
       `config.hand-edit-unrecorded` notice naming the file and the values still unset. Verify with a test. Add the
       notice code wherever notices are catalogued.
+      Done: `config get` records nothing, shows the conflict (both values, one pair of changes), and `config.hand-edit-unrecorded` names the file and the value left.
 - [ ] 4.4 Update `contributing/config.md` and `docs/stagecraft/hand-edit-config.md`'s "Branches" section: a hand edit
       resolves a conflict, as `config set` does.
+      `contributing/config.md` is done ("The sweep"); `hand-edit-config.md`'s Branches section is rewritten with 6.2, and this is ticked then.
 
 ## 5. `troupe sync` replaces `troupe flush` (design D1, D11)
 
-- [ ] 5.1 Protocol: rename `client/flush-{request,result,update}.schema.json` to `sync-*`, method `sync`; add the
+- [x] 5.1 Protocol: rename `client/flush-{request,result,update}.schema.json` to `sync-*`, method `sync`; add the
       result's `edits` (per file: path, change id, entries). Update `client/config.schema.json`, the package copies,
       `core/client/messages.py`, `dispatch.py` and the generated types. Record the breaking rename in
       `protocol/CHANGELOG.md`. Verify with `test_client_schemas.py` and `test_client_messages.py` (round trip from
       generated messages).
-- [ ] 5.2 Core: replace `sync_files` and `flush_files` with one `sync()` that sweeps then writes, used by `perform`,
+      Done: `client/sync-*` schemas with `edits`, `SyncRequest`/`SyncResult`/`HandEdit`, dispatch; client schema and message round-trip tests pass. The breaking rename goes in the commit's footer, since release-please writes the changelog.
+- [x] 5.2 Core: replace `sync_files` and `flush_files` with one `sync()` that sweeps then writes, used by `perform`,
       `config set`, `config unset`, `config get` (sweep only, no writes) and the `sync` method. `--force` replaces
       refused files keeping a copy, and still records the valid ones. Report each recorded hand edit as the
       `config.hand-edit-recorded` notice. Verify with tests for "Every command that uses config sweeps first"
       (perform rehearsal shows the edited runner; get prints it and records it; `status` doesn't sweep) and "Force
       replaces a file and keeps a copy".
-- [ ] 5.3 Rehearsal: `--rehearse` on every command shows the sweep's would-be edits, records nothing and writes
+      Done: `core/config/syncing.py`; every command goes through it (perform rehearses the sync first so a refused perform writes nothing, then syncs for real before the run). Tests in `test_config_sync.py`. Found while wiring: a missing file is a removal only if this clone had it at its last sync (`local/config/present.json`), agreed through the orchestrator and recorded on #119, spec and D4.
+- [x] 5.3 Rehearsal: `--rehearse` on every command shows the sweep's would-be edits, records nothing and writes
       nothing, and exits with "would change" or the refusal's code. Verify with tests for "A sweep can be rehearsed"
       and the cli exit-code scenarios.
-- [ ] 5.4 CLI: `troupe sync` (`--force`, `--rehearse`) in `cli/table.py` and `cli/config.py`; no `troupe flush` (an
+      Done: rehearsed sync and config set show the sweep's would-be edits (`rehearsal: true`) and record and write nothing; the cli exit-code scenarios pass.
+- [x] 5.4 CLI: `troupe sync` (`--force`, `--rehearse`) in `cli/table.py` and `cli/config.py`; no `troupe flush` (an
       unknown command). Render hand edits and their notices. Verify with `test_cli_config.py` cases, including
       "Flush is gone". Check that the command table still loads only its own handlers (cli-starts-fast tests).
+      Done: `troupe sync` with `--force` and `--rehearse`; `troupe flush` is an unknown command (tested); hand edits rendered.
 - [ ] 5.5 Rename every "troupe flush" in messages, errors, notices and tests to `troupe sync` (`rg -n "flush"` across
       `packages/troupe/src`, `packages/troupe/tests`, `docs`, `contributing`, `protocol`). Verify with an `rg` that
       finds no user-facing "flush" (the stream-flush uses in runners and the store stay).
-- [ ] 5.6 Update the existing tests whose behaviour the decisions changed: a deleted file is now a removal; an older
+      Source, schemas, tests and the CLI reference are done; `docs/stagecraft/hand-edit-config.md` is rewritten in 6.2, and this is ticked then.
+- [x] 5.6 Update the existing tests whose behaviour the decisions changed: a deleted file is now a removal; an older
       version troupe wrote is now read as an edit; a clean merge edited after git made it, and a merge older than
       HEAD, are read as edits; a valid hand edit before `config set` is recorded, not refused. Verify each against
       its scenario.
+      Done: the tests the decisions changed are rewritten under names that say what they check now (a deletion after a sync removes, a file never had is written, an edit before config set is recorded, an edited or older clean merge is read as an edit, an invalid edit is refused); the perform harness writes its files as config set would.
 
 ## 6. The first run edits the character file again (design D12)
 

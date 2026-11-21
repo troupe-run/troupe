@@ -49,6 +49,10 @@ def _set(repo: Repo, *operations: tuple[list[str], Any], **extra: Any) -> Any:  
     return _call(repo, "config-set", {"operations": ops, **extra})
 
 
+def _get(repo: Repo, path: list[str]) -> Any:  # noqa: ANN401
+    return _call(repo, "config-get", {"path": path})
+
+
 def _events(repo: Repo) -> list[Any]:
     return git_service(repo).history(aggregate.STREAM)
 
@@ -134,12 +138,32 @@ def test_a_refused_change_records_nothing_and_writes_no_file(
     assert not (repo.path / ".troupe" / "actors").exists()
 
 
-def test_a_change_over_a_hand_edited_file_is_refused_and_records_nothing(repo: Repo) -> None:
+def test_a_change_over_a_hand_edited_file_records_the_edit_first_then_the_change(
+    repo: Repo,
+) -> None:
     _set(repo, (TESTER_PATH, TESTER))
-    _actor_file(repo).write_text("# mine\n", encoding="utf-8")
+    _actor_file(repo).write_text(
+        "# mine\n" + _actor_file(repo).read_text("utf-8") + "workspace: theatre\n", encoding="utf-8"
+    )
+    result = _set(repo, (["actors", "tester", "onContextFull"], "compact"))
+    _, edit, change = _events(repo)
+    assert edit.lineage is not None
+    assert edit.lineage["actor"] == {"kind": "unknown"}
+    assert change.lineage is not None
+    assert change.lineage["change"] == result["change"]
+    text = _actor_file(repo).read_text("utf-8")
+    assert text.startswith("# mine\n")  # the person's comment is kept
+    assert "workspace: theatre" in text
+    assert "onContextFull: compact" in text
+    assert "config.hand-edit-recorded" in [n["code"] for n in result["notices"]]
+
+
+def test_a_change_over_an_invalid_hand_edit_is_refused_and_records_nothing(repo: Repo) -> None:
+    _set(repo, (TESTER_PATH, TESTER))
+    _actor_file(repo).write_text("# mine\n", encoding="utf-8")  # no values: maybe mid-save
     with pytest.raises(TroupeError) as caught:
         _set(repo, (["actors", "tester", "expect"], []))
-    assert caught.value.code == "config.file-not-troupes"
+    assert caught.value.code == "config.file-invalid"
     assert len(_events(repo)) == 1
     assert _actor_file(repo).read_text("utf-8") == "# mine\n"
 
@@ -156,25 +180,25 @@ def test_rehearsing_a_change_shows_it_and_records_and_writes_nothing(repo: Repo)
 def test_a_crash_after_recording_is_finished_by_the_next_flush(
     repo: Repo, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from troupe.core.config import commands
+    from troupe.core.config import syncing
 
     calls: list[object] = []
     real = projection.execute
 
     def crash(*args: Any) -> dict[str, str]:  # noqa: ANN401
         calls.append(args)
-        if len(calls) == 2:  # the first is the flush before the change; the second moves its files
+        if len(calls) == 1:  # the write after the change is recorded moves its files
             raise KeyboardInterrupt  # troupe stopped between recording and moving the files
         return real(*args)
 
-    monkeypatch.setattr(commands, "execute", crash)
+    monkeypatch.setattr(syncing, "execute", crash)
     with pytest.raises(KeyboardInterrupt):
         _set(repo, (TESTER_PATH, TESTER))
     monkeypatch.undo()
     assert len(_events(repo)) == 1
     assert (repo.path / ".troupe" / staged_name("actors/tester.yaml")).exists()
     assert not _actor_file(repo).exists()
-    result = _call(repo, "flush", {})
+    result = _call(repo, "sync", {})
     assert {(f["path"], f["action"]) for f in result["files"]} >= {
         (".troupe/actors/.tester.yaml.troupe~", "finish")
     }
@@ -229,28 +253,70 @@ def test_config_get_in_a_theatre_with_no_config_has_no_value_and_no_heads(repo: 
     assert result["heads"] == []
 
 
-# flush
+# sync
 
 
-def test_flush_writes_a_deleted_file_again_with_a_notice(repo: Repo) -> None:
+def test_a_file_deleted_after_a_sync_removes_what_it_held(repo: Repo) -> None:
     _set(repo, (TESTER_PATH, TESTER))
+    (repo.path / ".troupe" / "actors" / "tester.md").unlink()
+    result = _call(repo, "sync", {})
+    assert [e["path"] for e in result["edits"]] == [".troupe/actors/tester.md"]
+    assert "character" not in _get(repo, ["actors", "tester"])["value"]
+    assert not (repo.path / ".troupe" / "actors" / "tester.md").exists()
+
+
+def test_a_file_a_merge_deleted_is_recorded_as_a_removal_saying_it_went_missing(
+    repo: Repo,
+) -> None:
+    _set(repo, (TESTER_PATH, TESTER))
+    repo.commit_all("tester")
+    repo.git("switch", "-q", "-c", "elsewhere")
+    repo.git("rm", "-q", ".troupe/actors/tester.md")  # deleted on another branch, no events
+    repo.git("commit", "-q", "-m", "drop the character")
+    repo.git("switch", "-q", "main")
+    repo.git("merge", "-q", "--no-edit", "elsewhere")
+    updates: list[Any] = []
+    result = _call(repo, "sync", {}, updates)
+    assert [e["path"] for e in result["edits"]] == [".troupe/actors/tester.md"]
+    [recorded] = [n for n in result["notices"] if n["code"] == "config.hand-edit-recorded"]
+    assert recorded["details"]["removed"] is True
+    assert "going missing" in recorded["problem"]
+
+
+def test_a_file_this_clone_never_had_is_written_again_with_a_notice(repo: Repo) -> None:
+    _set(repo, (TESTER_PATH, TESTER))
+    (repo.path / ".troupe" / "local" / "config" / "present.json").unlink()  # as a fresh clone
     _actor_file(repo).unlink()
-    result = _call(repo, "flush", {})
+    result = _call(repo, "sync", {})
+    assert result["edits"] == []
     assert _actor_file(repo).exists()
     assert [n["code"] for n in result["notices"]] == ["config.file-rewritten"]
 
 
-def test_flush_rehearsed_reports_and_writes_nothing(repo: Repo) -> None:
+def test_sync_rehearsed_reports_and_writes_nothing(repo: Repo) -> None:
     _set(repo, (TESTER_PATH, TESTER))
+    (repo.path / ".troupe" / "local" / "config" / "present.json").unlink()
     _actor_file(repo).unlink()
-    result = _call(repo, "flush", {"rehearse": True})
+    result = _call(repo, "sync", {"rehearse": True})
     assert [f["action"] for f in result["files"]] == ["write"]
     assert not _actor_file(repo).exists()
+
+
+def test_sync_rehearsed_shows_a_hand_edit_and_records_nothing(repo: Repo) -> None:
+    _set(repo, (TESTER_PATH, TESTER))
+    _actor_file(repo).write_text(
+        _actor_file(repo).read_text("utf-8") + "workspace: theatre\n", encoding="utf-8"
+    )
+    result = _call(repo, "sync", {"rehearse": True})
+    [edit] = result["edits"]
+    assert edit["path"] == ".troupe/actors/tester.yaml"
+    assert "change" not in edit
+    assert len(_events(repo)) == 1
 
 
 def test_flush_forced_past_a_hand_edit_names_where_the_edit_was_kept(repo: Repo) -> None:
     _set(repo, (TESTER_PATH, TESTER))
     _actor_file(repo).write_bytes(b"# mine\n")  # these bytes exactly, on Windows too
-    result = _call(repo, "flush", {"force": True})
+    result = _call(repo, "sync", {"force": True})
     [forced] = [f for f in result["files"] if "kept" in f]
     assert forced["kept"] == projection.file_hash(b"# mine\n")

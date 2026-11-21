@@ -42,6 +42,31 @@ Config is worked out from the stream's whole history, both sides of every fork, 
 Any conflict blocks every use of config but `config get`, until one change that sets or unsets every conflicting
 value resolves it (`troupe.core.config.stream`). Reads record nothing.
 
+## The sweep
+
+Every command that uses config syncs first (`troupe.core.config.syncing`): it sweeps the config files
+(`troupe.core.config.sweep`), records each meaningful hand edit, works out the command's own change, then writes the
+files, all under the config files' lock (a rehearsal takes no lock and writes nothing). The sweep classifies each
+config path in this order (hand-edit-sweep design D3):
+
+| On disk | Then |
+|---|---|
+| A staged write a recorded change vouches for | finished, never read as an edit |
+| Exactly what config renders | in line, not read (ruamel isn't loaded) |
+| A merge git made only from versions troupe wrote, still as git made it (a clean merge's bytes, or a conflicted file with any marker line left) | not read: the merge rules below apply |
+| Conflict markers otherwise | not read: refused when the files are written |
+| Absent, and this clone had it at its last sync (`.troupe/local/config/present.json`) | a removal: the character, or with both files the actor, or the runtime |
+| Absent, and this clone never had it | not read: written again from config |
+| Anything else, an older version troupe wrote included | read (`troupe.core.config.reading`), and its values compared with config's |
+
+Each file whose values differ is one `Config.Changed` by the explicit `unknown` actor, `via: file`, with the file and
+its hashes in `vcs.source`; one sweep's changes share a change id of their own. Comments, order and formatting are
+never a change. A file that doesn't parse, can be read more than one way, holds no values, or breaks a rule `config
+set` checks is refused with `config.file-invalid`, and nothing from any file is recorded; `troupe sync --force`
+replaces such a file with what config says, keeping a copy. While config has conflicts, the sweep's changes and the
+command's own are recorded together only if they set every conflicting value, each one a hand edit resolves is named
+in `config.conflict-resolved`, and `config get` records nothing short of that (`config.hand-edit-unrecorded`).
+
 ## Files
 
 `troupe.core.config.projection` renders each actor to `actors/<name>.yaml` (its schema named twice, at troupe.run
@@ -53,14 +78,15 @@ file is troupe's:
 | On disk | Then |
 |---|---|
 | What troupe would write now | nothing to do |
-| A hash a `Config.Changed` recorded for that path, or this clone's record of files flush wrote (`.troupe/local/config/written.jsonl`) | written again, with `config.file-rewritten` |
-| Nothing | written again, with `config.file-rewritten` |
-| A file git merged (conflicted, or cleanly in the merge in progress or HEAD's merge commit) from versions troupe recorded | written again from the merged config by `troupe flush`, or by the `config set` whose change writes it or resolves config's conflicts, its bytes kept first, with `config.merge-rewritten`; refused by any other command, naming `troupe flush`. With `mark_merges_resolved` on, a conflicted one is also marked resolved in git's index |
+| A file the sweep read (a person's) | written back surgically (`troupe.core.config.writeback`): only the changed values, every other line byte for byte |
+| A hash a `Config.Changed` recorded for that path, or this clone's record of files troupe wrote with no event (`.troupe/local/config/written.jsonl`) | written again, with `config.file-rewritten` |
+| Nothing, and this clone never had it | written again, with `config.file-rewritten` |
+| A file git merged (conflicted, or cleanly in the merge in progress or HEAD's merge commit) from versions troupe recorded | written again from the merged config by `troupe sync`, or by the `config set` whose change writes it or resolves config's conflicts, its bytes kept first, with `config.merge-rewritten`; refused by any other command, naming `troupe sync`. With `mark_merges_resolved` on, a conflicted one is also marked resolved in git's index |
 | Anything else | refused with `config.file-not-troupes`, unless `--force`, which keeps its bytes in the artifact store |
 
 A change stages each new file beside its target (`.<name>.troupe~`), records the event with the files' hashes, then
 moves them into place with an atomic replace, all under the lock in `.troupe/local/config/`. A staged file an event
-vouches for is a write a crash cut short, and the next flush finishes it; one no event vouches for is removed.
+vouches for is a write a crash cut short, and the next sync finishes it; one no event vouches for is removed.
 
 ### Files git merged
 
@@ -184,10 +210,10 @@ The sweep's limits, in `troupe.core.defaults` (hand-edit-sweep design D4):
 | `config.invalid` | A change would make config break a rule: an unknown field, an option its runner doesn't define, a missing effect check, a bad name. Names the path and the rule, never the value refused; for a value given as JSON or YAML that can't be read, `details` also hold the `line` and `column` where reading failed |
 | `config.path-malformed` | A config path typed in a command can't be read: an unclosed `[`, an escape other than `\]` or `\\` inside brackets, a backslash outside them, an empty key, text straight after a `]`, a dot before a `[` (`a.[b]`), a stray `]`, or an `=` outside brackets anywhere but `config set`'s `<path>=<value>` (`config unset a=b`). Names the text up to the character where reading failed (or up to the `[` of a bracket it failed inside), that character's position and the rule |
 | `config.conflict` | Branches' config changes conflict, so config can't be used until they're resolved |
-| `config.file-not-troupes` | A config file isn't one troupe wrote, so it won't be replaced. A conflicted file with a side troupe didn't write names that side and the side to take; a file git merged from troupe's versions, met by a command other than `troupe flush` or the `config set` that writes it, names `troupe flush` |
+| `config.file-not-troupes` | A config file isn't one troupe wrote, so it won't be replaced. A conflicted file with a side troupe didn't write names that side and the side to take; a file git merged from troupe's versions, met by a command other than `troupe sync` or the `config set` that writes it, names `troupe sync` |
 | `config.unknown-file` | A file in a config directory matches no kind of config file |
 | `settings.invalid-value` | A setting variable is set to something other than `true` or `false` |
-| `config.local-malformed` | This clone's record of the files flush wrote has a malformed line before its last |
+| `config.local-malformed` | This clone's record of the files troupe wrote with no event has a malformed line before its last |
 | `config.file-invalid` | A config file can't be read as config: it doesn't parse, uses an anchor, alias, tag or merge key, holds a null, a date or a number JSON can't hold, names another kind's schema, breaks a rule `config set` checks, or is present with no values (the mid-save guard: delete the file to remove what it held). `details` hold the `file`, the `rule`, and where known the `line`, `column` and config `path`; never the value. Nothing from any file is recorded |
 | `config.file-changing` | A config file changed while the sweep read it (after `CONFIG_READ_ATTEMPTS` reads), or between the sweep and the write. Names the file |
 | `config.write-back-failed` | Writing a change into a file a person formatted wouldn't read back as exactly what config holds, so nothing was written or recorded. Says that `troupe sync --force` writes the file whole, keeping a copy |
@@ -195,6 +221,9 @@ The sweep's limits, in `troupe.core.defaults` (hand-edit-sweep design D4):
 | `schemas.plugin-missing` | A plugin's package is installed but ships no schemas, or a plugin outside troupe's runner table isn't installed |
 | `config.file-rewritten` | (notice) A config file troupe wrote was missing or older, and was written again |
 | `config.merge-rewritten` | (notice) A config file git merged from versions troupe wrote was written again from the merged config, its bytes kept first. Says whether troupe marked it resolved in git, and if not, why not and to `git add` it |
+| `config.hand-edit-recorded` | (notice) The sweep recorded a person's edit to a config file, by the unknown author. Names the file, the number of values and the change id; in a rehearsal, says it would |
+| `config.conflict-resolved` | (notice) A hand edit resolved a config conflict. Names the path, the file, the value taken (or that it was unset) and the conflicting changes, so nothing is resolved unseen |
+| `config.hand-edit-unrecorded` | (notice) `config get` found hand edits that leave config's conflicts unresolved, so it recorded nothing. Names the files and the paths left |
 | `runtime.invalid-value` | A `TROUPE_RUNTIME_` variable is set to something its field doesn't accept. Names the variable and what's accepted, never the value |
 | `runtime.no-model` | Nothing sets the model for a run on a runtime. Names the actor's, the runtime's and the variable's places to set one |
 | `runtime.credential-unset` | A run's runtime reads its credential from a variable that isn't set. Names the runtime and the variable, or `namedBy`, the `TROUPE_RUNTIME_` variable that named it, never the name it holds |

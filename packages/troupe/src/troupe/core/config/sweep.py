@@ -18,11 +18,13 @@ A staged write a recorded change vouches for is finished, never read as an edit 
 sweep is all or nothing: one file refused, and nothing from any file is recorded.
 """
 
+import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from troupe.core import strict_json
 from troupe.core.config.changes import UNSET, Tree, apply, change
 from troupe.core.config.kinds import ACTORS, CHARACTER, actor_files, staged_target
 from troupe.core.config.projection import (
@@ -44,6 +46,8 @@ from troupe.core.config.reading import (
     read_values,
     refuse_file_problems,
 )
+from troupe.core.errors import TroupeError
+from troupe.core.notices import Notice
 from troupe.core.vcs import MergeSides
 
 Entry = dict[str, Any]
@@ -79,6 +83,11 @@ class Swept:
     read: frozenset[str] = frozenset()
     """The files whose values the sweep read: a person's files, which a write changes surgically
     (design D6)."""
+    refused: frozenset[str] = frozenset()
+    """With ``force``, the files the sweep couldn't read as config: replaced with what config
+    says, keeping a copy, and nothing recorded from them (design D11)."""
+    notices: tuple[Notice, ...] = ()
+    """What the sweep has to say about itself, such as an unreadable record of present files."""
 
     @property
     def entries(self) -> list[Entry]:
@@ -92,13 +101,16 @@ def sweep(
     merged: Mapping[str, MergeSides],
     *,
     reader: Reader = read_steady,
+    force: bool = False,
 ) -> Swept:
     """The hand edits to the config files under ``troupe_dir`` (.troupe/), worked out against
     ``config``. ``recorded`` is every hash a change recorded for each file, and ``merged`` what
     the VCS says a merge combined into each. Refuses, recording nothing, an unknown file or a file
-    that can't be read as config."""
+    that can't be read as config; with ``force``, such a file is set aside instead (``refused``),
+    and the others are still read."""
     disk = on_disk(troupe_dir)
     refuse(Plan((), disk.unknown))
+    remembered, notices = present_at_last_sync(troupe_dir)
     rendered = render(config)
     vouched = dict(recorded)
     for path, written in written_by_flush(troupe_dir).items():
@@ -109,36 +121,96 @@ def sweep(
         if (target := staged_target(staged)) is not None and troupes(target, data, vouched)
     }
     seen: dict[str, bytes | None] = {}
+    refused: set[str] = set()
     reads: list[FileValues] = []
     removed: list[str] = []
     for path in sorted(rendered.keys() | disk.files.keys()):
         if path in finishing:
             continue
-        have = reader(troupe_dir, path)
-        seen[path] = have
-        if have == rendered.get(path):
-            continue
-        if have is None:
+        have = seen[path] = reader(troupe_dir, path)
+        kind = _classify(path, have, rendered.get(path), merged.get(path), vouched, remembered)
+        if kind == "removed":
             removed.append(path)
-            continue
-        merge = merged.get(path)
-        markers = has_markers(have)
-        if (
-            merge is not None
-            and (merge.kind == "clean" or markers)
-            and merged_from_troupes(path, have, merge, vouched)
-        ):
-            continue
-        if markers:
-            continue
-        reads.append(read_values(path, have, troupe_dir / path))
+        elif kind == "read" and have is not None:
+            read = _read(troupe_dir, path, have, force=force)
+            if read is None:
+                refused.add(path)
+            else:
+                reads.append(read)
     present = {path for path, data in seen.items() if data is not None} | finishing
-    operations = _operations(config, reads, removed, present, troupe_dir)
-    edits = _edits(config, rendered, operations, seen)
-    refuse_file_problems(
-        reads, apply(config, [e for edit in edits for e in edit.entries]), troupe_dir
+    edits = _checked_edits(
+        troupe_dir, config, rendered, reads, removed, present, seen, refused, force
     )
-    return Swept(tuple(edits), seen, frozenset(r.path for r in reads))
+    return Swept(
+        tuple(edits), seen, frozenset(r.path for r in reads), frozenset(refused), tuple(notices)
+    )
+
+
+def _classify(
+    path: str,
+    have: bytes | None,
+    want: bytes | None,
+    merge: MergeSides | None,
+    vouched: Mapping[str, frozenset[str]],
+    remembered: frozenset[str],
+) -> str:
+    """What the sweep does with one config path (design D3): ``skip`` it, read it as ``removed``,
+    or ``read`` its values."""
+    if have == want:
+        return "skip"
+    if have is None:
+        # Removed only when this clone had it at its last sync; otherwise written again.
+        return "removed" if path in remembered else "skip"
+    # A file git holds conflicted is still being resolved while any marker line is left in it;
+    # any other file only with a whole conflict in it.
+    conflicted = merge is not None and merge.kind == "conflicted"
+    markers = (conflicted and _any_marker(have)) or has_markers(have)
+    if (
+        merge is not None
+        and (merge.kind == "clean" or markers)
+        and merged_from_troupes(path, have, merge, vouched)
+    ):
+        return "skip"  # still as git made it: the merge rules apply
+    return "skip" if markers else "read"
+
+
+def _read(troupe_dir: Path, path: str, data: bytes, *, force: bool) -> FileValues | None:
+    """The file's values, or None when ``force`` sets aside a file that can't be read."""
+    try:
+        return read_values(path, data, troupe_dir / path)
+    except TroupeError as error:
+        if not (force and error.code == "config.file-invalid"):
+            raise
+        return None
+
+
+def _checked_edits(
+    troupe_dir: Path,
+    config: Tree,
+    rendered: Mapping[str, bytes],
+    reads: list[FileValues],
+    removed: Sequence[str],
+    present: set[str],
+    seen: Mapping[str, bytes | None],
+    refused: set[str],
+    force: bool,
+) -> list[Edit]:
+    """Each file's edit, once the config they make together breaks no rule in a file read; with
+    ``force``, a file whose values break one is set aside and the rest worked out again."""
+    while True:
+        operations = _operations(config, reads, removed, present, troupe_dir)
+        edits = _edits(config, rendered, operations, seen)
+        entries = [entry for edit in edits for entry in edit.entries]
+        try:
+            refuse_file_problems(reads, apply(config, entries), troupe_dir)
+        except TroupeError as error:
+            bad = next((r for r in reads if error.path == str(troupe_dir / r.path)), None)
+            if not force or bad is None:
+                raise
+            reads.remove(bad)
+            refused.add(bad.path)
+            continue
+        return edits
 
 
 def _operations(
@@ -222,3 +294,53 @@ def _edits(
             )
         )
     return edits
+
+
+_MARKER_LINE = re.compile(rb"^(<<<<<<< |=======\r?$|>>>>>>> )", re.MULTILINE)
+
+
+def _any_marker(data: bytes) -> bool:
+    """Whether ``data`` holds any of git's conflict marker lines."""
+    return _MARKER_LINE.search(data) is not None
+
+
+PRESENT = "local/config/present.json"
+"""This clone's record of the config files there were when it last synced: a file that was, and
+isn't now, a person deleted; a file that never was here is written again, never read as a
+removal (hand-edit-sweep design D4). Kept out of git, like everything under local/."""
+
+
+def present_at_last_sync(troupe_dir: Path) -> tuple[frozenset[str], list[Notice]]:
+    """The config files there were at this clone's last sync: none before its first. A record
+    that can't be read counts as none, so every missing file is written again rather than read as
+    a removal, and a notice names it (design D4)."""
+    path = troupe_dir / PRESENT
+    if not path.is_file():
+        return frozenset(), []
+    try:
+        found = strict_json.loads(path.read_bytes())
+        if not isinstance(found, list) or not all(isinstance(p, str) for p in found):
+            raise strict_json.StrictJSONError("not a list of paths")
+    except (strict_json.StrictJSONError, OSError) as error:
+        return frozenset(), [
+            Notice(
+                "config.present-unreadable",
+                problem=f"troupe's record of the config files this clone had can't be read "
+                f"({error}), so a config file that's missing was written again rather than read "
+                "as removed.",
+                fix="Nothing to do: troupe writes the record again. To remove something, delete "
+                "its file again.",
+                path=str(path),
+            )
+        ]
+    return frozenset(found), []
+
+
+def remember_present(troupe_dir: Path) -> None:
+    """Record the config files there are now, as this clone's last sync leaves them."""
+    from troupe.core.files import replace_file
+
+    paths = sorted(on_disk(troupe_dir).files)
+    target = troupe_dir / PRESENT
+    target.parent.mkdir(parents=True, exist_ok=True)
+    replace_file(target, strict_json.dumps(paths).encode("utf-8") + b"\n")

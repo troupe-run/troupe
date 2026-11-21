@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/client/sync-result.schema.json",
+  "title": "sync: result",
+  "description": "The hand edits recorded, or that would be, and what was done, or would be, to each config file.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "edits",
+    "files",
+    "notices"
+  ],
+  "properties": {
+    "edits": {
+      "description": "Each config file's hand edit, in path order: one change each, by the unknown author.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/edit"
+      }
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "$ref": "config.schema.json#/$defs/file"
+      }
+    },
+    "notices": {
+      "type": "array",
+      "items": {
+        "$ref": "../notice.schema.json"
+      }
+    }
+  },
+  "$defs": {
+    "edit": {
+      "title": "Hand edit",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "entries"
+      ],
+      "properties": {
+        "path": {
+          "description": "The file, relative to the theatre.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?![/\\\\])(?![A-Za-z]:)(?!.*\\\\)(?!(.*/)?\\.\\.(/|$)).+$"
+        },
+        "change": {
+          "description": "The change id the sweep's changes share. Absent: a rehearsal, which records nothing.",
+          "type": "string",
+          "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "entries": {
+          "description": "The change's entries.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "../events/config-changed.schema.json#/$defs/entry"
+          }
+        }
+      }
+    }
+  }
+}

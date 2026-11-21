@@ -102,7 +102,7 @@ MARKED: dict[str, Any] = {
     "kept": HASH,
     "resolve": True,
 }
-"""A file flush rewrote from a conflicted merge and marked resolved (mark-config-resolved D6)."""
+"""A file sync rewrote from a conflicted merge and marked resolved (mark-config-resolved D6)."""
 
 ACCEPTED = [
     ("perform-request.schema.json", PERFORM, "everything"),
@@ -251,7 +251,11 @@ ACCEPTED = [
         },
         "a run whose recording failed",
     ),
-    ("flush-result.schema.json", {"files": [MARKED], "notices": []}, "a file marked resolved"),
+    (
+        "sync-result.schema.json",
+        {"edits": [], "files": [MARKED], "notices": []},
+        "a file marked resolved",
+    ),
     (
         "status-result.schema.json",
         {"runs": [changed(SUMMARY, audit={"outside": [OUTSIDE]})], "notices": []},
@@ -295,8 +299,8 @@ REFUSED = [
         "none with paths",
     ),
     (
-        "flush-result.schema.json",
-        {"files": [changed(MARKED, resolve="yes")], "notices": []},
+        "sync-result.schema.json",
+        {"edits": [], "files": [changed(MARKED, resolve="yes")], "notices": []},
         "resolve that isn't a boolean",
     ),
     ("perform-request.schema.json", changed(PERFORM, actor="Tester"), "an actor in capitals"),

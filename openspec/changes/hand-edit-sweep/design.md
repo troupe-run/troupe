@@ -118,6 +118,13 @@ makes it a file whose values may differ, so it's read.
 ### D4. Additions, removals and the mid-save guard
 
 - A file config doesn't hold, of a known kind, adds what it holds.
+- **A missing file is a removal only if this clone had it at its last sync** (refinement found while wiring, agreed
+  through the orchestrator on 2026-11-22). Each sync records the config files there are in
+  `.troupe/local/config/present.json` (clone-local, out of git). A file that was there and is gone, deleted by hand
+  or by a `git pull` with no matching events, is a removal, and its `config.hand-edit-recorded` notice says it came
+  from the file going missing. A file this clone never had, such as one never committed or gitignored while files
+  were a disposable projection, is written again from config, as before #119. A missing or unreadable record counts
+  as none, never as "all deleted"; an unreadable one is named (`config.present-unreadable`).
 - An absent `.md` whose character config holds removes the character.
 - An absent `.yaml` whose actor config holds, with its `.md` absent too, removes the group `actors.<name>`. With the
   `.md` still there, the file is invalid: an actor needs its `.yaml` (the schema requires `runner` and `expect`).

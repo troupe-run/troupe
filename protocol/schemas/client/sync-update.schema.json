@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/client/sync-update.schema.json",
+  "title": "sync: update",
+  "description": "A notice while syncing, such as a hand edit recorded or a wait for another command writing config.",
+  "$ref": "run.schema.json#/$defs/noticeUpdate"
+}

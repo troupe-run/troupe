@@ -75,9 +75,10 @@ The sweep SHALL record each file whose values changed as one `Config.Changed`, w
   change id
 
 ### Requirement: Adding or deleting a file adds or removes what it held
-A config file that config doesn't hold SHALL be read as adding what it holds. A config file deleted by hand SHALL be
-read as removing what it held: an actor's `.md` file its character, and its `.yaml` and `.md` files together the
-actor.
+A config file that config doesn't hold SHALL be read as adding what it holds. A config file this clone had at its
+last sync, and that's gone, SHALL be read as removing what it held: an actor's `.md` file its character, and its
+`.yaml` and `.md` files together the actor. A missing file this clone never had SHALL be written again from config,
+never read as a removal.
 
 #### Scenario: A new actor
 - **WHEN** a person writes `.troupe/actors/qa.yaml` with a runner and an effect check, and runs `troupe sync`
@@ -96,6 +97,23 @@ actor.
 - **THEN** it is refused with `config.file-invalid`, saying the actor needs its `.yaml` file and that deleting both
   files removes the actor
 - **AND** nothing is recorded
+
+#### Scenario: A file this clone never had is written, not removed
+- **WHEN** a clone's config has the actor `tester`, its files were never committed, and a person runs `troupe sync`
+- **THEN** `.troupe/actors/tester.yaml` and `.troupe/actors/tester.md` are written from config, each with a
+  `config.file-rewritten` notice, and nothing is recorded
+
+#### Scenario: The record of the files this clone had is missing or unreadable
+- **WHEN** troupe's record of the config files this clone had is gone or can't be read, `.troupe/actors/tester.md`
+  is missing, and a person runs `troupe sync`
+- **THEN** the file is written again from config, never read as removing the character
+- **AND** when the record couldn't be read, a `config.present-unreadable` notice names it
+
+#### Scenario: A file a git pull deleted
+- **WHEN** this clone had `.troupe/actors/tester.md` at its last sync, a `git pull` deletes it with no change to
+  config from the other side, and a person runs `troupe sync`
+- **THEN** a change by the `unknown` actor removes `actors.tester.character`
+- **AND** its `config.hand-edit-recorded` notice says it was recorded from the file going missing
 
 #### Scenario: A runtime file deleted
 - **WHEN** config sets `runtimes.openai.model`, and a person deletes `.troupe/runtimes/openai.yaml` and runs `troupe

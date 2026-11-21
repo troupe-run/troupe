@@ -143,6 +143,11 @@ class Harness:
         entries = change(merged.config, [*operations, (["actors", request["actor"]], actor)])
         if entries:
             record_config(store.command(via="cli"), merged, entries, [])
+            # And its files, as config set writes them: config recorded without its files would
+            # read as a person putting back older files (hand-edit-sweep: the file wins).
+            from troupe.core.config.projection import flush
+
+            flush(self.repo.path, read_config(store).config, {})
 
     def perform(self, request: dict[str, Any]) -> "Performed":
         """Configure the actor, then perform it: the run, as perform's result names it."""

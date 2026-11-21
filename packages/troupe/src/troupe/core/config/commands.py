@@ -1,17 +1,15 @@
-"""config-set, config-get and flush behind the client protocol (spec: config, config-files;
-config-model design D9, D10).
+"""config-set, config-get and sync behind the client protocol (spec: config, config-files,
+config-hand-edits; config-model design D9, D10; hand-edit-sweep design D1, D11).
 
-Every command that uses config flushes first, so the files are right before anything reads
-config, and a file troupe didn't write stops the command before it does anything. A change is
-written in the order design D9 gives, holding the config files' lock throughout: check every file
-it touches is troupe's, stage each new file beside its target, record the ``Config.Changed`` with
-each file's hash, then move the staged files into place. A crash between recording and moving is
-finished by the next flush, since the event vouches for the staged files.
+Every command that uses config syncs first (``troupe.core.config.syncing``): it sweeps the files,
+recording each meaningful hand edit by the unknown author, then works out its own change, and
+writes the files, a person's surgically and troupe's whole, in design D9's order: stage each new
+file, record, then move the staged files into place. A crash between recording and moving is
+finished by the next sync, since the event vouches for the staged files.
 
-A file git merged from versions troupe wrote is rewritten only by troupe flush, or by a config set
-whose change writes it or resolves config's conflicts (flush can't run until they're resolved); the
-flush every other command runs first refuses it, naming troupe flush (config-projection-conflicts
-design D7).
+A file git merged from versions troupe wrote is rewritten only by troupe sync, or by a config set
+whose change writes it or resolves config's conflicts; the sync every other command runs first
+refuses it, naming troupe sync (config-projection-conflicts design D7).
 """
 
 from collections.abc import Mapping, Sequence
@@ -22,26 +20,10 @@ from troupe.core import runtimes
 from troupe.core.client import messages as m
 from troupe.core.client.dispatch import Method, Send
 from troupe.core.client.session import Session
-from troupe.core.config.changes import UNSET, apply, change, get
-from troupe.core.config.kinds import staged_name, staged_target
-from troupe.core.config.merge import Merged
-from troupe.core.config.projection import (
-    Action,
-    Flushed,
-    Resolved,
-    execute,
-    file_hash,
-    flush,
-    locked,
-    mark_resolved,
-    merge_notices,
-    merges,
-    plan,
-    refuse,
-    render,
-    stage,
-)
-from troupe.core.config.stream import read, record, refuse_conflicts, refuse_unrecordable
+from troupe.core.config.changes import UNSET, get
+from troupe.core.config.kinds import staged_target
+from troupe.core.config.projection import Action, Resolved
+from troupe.core.config.syncing import Request, Synced, file_notices, sync_config
 from troupe.core.config_paths import shown
 from troupe.core.errors import TroupeError
 from troupe.core.events import EventStore
@@ -101,62 +83,40 @@ def _notices(*groups: list[Notice]) -> list[m.NoticeData]:
     return [m.NoticeData.of(notice) for group in groups for notice in group]
 
 
-def sync_files(session: Session, store: EventStore, merged: Merged, send: Send) -> list[Notice]:
-    """Flush before a command uses config: refused when config has conflicts, or when a file
-    troupe didn't write is in the way. Returns the notices of what was written again."""
-    marks = marking(session.env)
-    refuse_conflicts(merged)
-    flushed = flush(
-        session.theatre,
-        merged.config,
-        merged.files,
-        on_wait=_waiting(send),
-        vcs=store.vcs,
-        marking=marks,
-    )
-    return [*flushed.notices(), *store.notices()]
+def _request(session: Session, send: Send, **fields: Any) -> Request:  # noqa: ANN401
+    return Request(marking=marking(session.env), on_wait=_waiting(send), **fields)
 
 
-def _resolvable(
-    merged: Merged,
-    before: Mapping[str, bytes],
-    after: Mapping[str, bytes],
-    found: Mapping[str, Any],
-) -> frozenset[str]:
-    """The files git merged that a config set may rewrite (design D7): those its change writes or
-    removes, or every one when config has conflicts, since a change is only recorded when it
-    resolves them all, and until it does, troupe flush can't run."""
-    if merged.conflicts:
-        return frozenset(found)
-    writes = {p for p in before.keys() | after.keys() if before.get(p) != after.get(p)}
-    return frozenset(writes & found.keys())
+def sync_files(
+    session: Session, store: EventStore, send: Send, *, rehearse: bool = False
+) -> Synced:
+    """Sync before a command uses config: sweep hand edits and record them, then make the files
+    what config says (spec: config-hand-edits, config-files). Refused when config has conflicts
+    the hand edits don't resolve, or when a file troupe can't read is in the way. Each notice is
+    sent as it's known."""
+    synced = sync_config(session.theatre, store, _request(session, send, rehearse=rehearse))
+    for notice in [*synced.notices, *file_notices(synced), *store.notices()]:
+        send(m.NoticeUpdate(m.NoticeData.of(notice)))
+    return synced
 
 
 async def config_set(request: m.ConfigSetRequest, session: Session, send: Send) -> Message:
     store = open_event_store(session)
-    troupe_dir = session.theatre / THEATRE_DIR
     operations = [(op.path, UNSET if op.unset else op.value) for op in request.operations]
-    marks = marking(session.env)
     if request.rehearse:
-        merged = read(store)
-        entries = change(merged.config, operations)
-        if entries:
-            refuse_unrecordable(store, merged, entries, _typed(operations))
-        rendered_after = render(apply(merged.config, entries))
-        found = merges(store.vcs)
-        resolve = _resolvable(merged, render(merged.config), rendered_after, found)
-        would = plan(troupe_dir, rendered_after, merged.files, merged=found, resolve=resolve)
-        refuse(would)
-        resolved = mark_resolved(store.vcs, would, found, marks, rehearse=True)
+        synced = sync_config(
+            session.theatre, store, _request(session, send, operations=operations, rehearse=True)
+        )
         return m.ConfigSetResult(
-            entries=entries, files=_files(would.changes, {}, resolved), notices=[]
+            entries=synced.entries,
+            files=_files(synced.actions, {}, synced.resolved),
+            notices=_notices(synced.notices),
         )
     return record_change(session, store, operations, reason=request.reason, send=send)
 
 
-def _typed(operations: Sequence[tuple[Sequence[str], object]]) -> set[tuple[str, ...]]:
-    """The paths the change's operations name: a key below them came from inside a value."""
-    return {tuple(path) for path, _ in operations}
+def _target(action: Action) -> str:
+    return staged_target(action.path) or action.path
 
 
 def record_change(
@@ -168,72 +128,34 @@ def record_change(
     send: Send,
     actor: Actor | None = None,
 ) -> m.ConfigSetResult:
-    """Record one change of ``operations`` and write its files, in design D9's order, holding the
-    config files' lock throughout. ``actor`` is who made it when the caller resolved that already
-    (troupe init does, before it makes anything; init-and-audition design D2), else the store's
-    identity chain is asked. config-set and init both record through here, so an audition's change
-    is exactly what config-set would record (init-and-audition design D3)."""
-    troupe_dir = session.theatre / THEATRE_DIR
-    marks = marking(session.env)
-    with locked(troupe_dir, _waiting(send)):
-        merged = read(store)
-        entries = change(merged.config, operations)
-        after = apply(merged.config, entries) if entries else merged.config
-        rendered_before, rendered_after = render(merged.config), render(after)
-        # A file git merged may be rewritten only when this change writes it, or resolves config's
-        # conflicts (design D7).
-        found = merges(store.vcs)
-        resolve = _resolvable(merged, rendered_before, rendered_after, found)
-        before: list[Notice] = []
-        if not merged.conflicts:
-            # Files right before the change, so the change's own files are written over troupe's.
-            first = plan(troupe_dir, rendered_before, merged.files, merged=found, resolve=resolve)
-            refuse(first)
-            first_kept = execute(troupe_dir, first)
-            first_resolved = mark_resolved(store.vcs, first, found, marks)
-            before = Flushed(first.changes, first_kept, first_resolved).notices()
-        if not entries:
-            return m.ConfigSetResult(entries=[], files=[], notices=_notices(before))
-        refuse_unrecordable(store, merged, entries, _typed(operations))
-        files: list[dict[str, Any]] = []
-        for path in sorted(rendered_before.keys() | rendered_after.keys()):
-            new = rendered_after.get(path)
-            if new == rendered_before.get(path):
-                continue
-            files.append({"path": path} if new is None else {"path": path, "hash": file_hash(new)})
-        refuse(plan(troupe_dir, rendered_after, merged.files, merged=found, resolve=resolve))
-        for written in files:
-            if "hash" in written:
-                stage(troupe_dir, written["path"], rendered_after[written["path"]])
-        command = store.command(via="cli", reason=reason, actor=actor)
-        try:
-            record(command, merged, entries, files)
-        except BaseException:
-            for written in files:
-                (troupe_dir / staged_name(written["path"])).unlink(missing_ok=True)
-            raise
-        vouched = dict(merged.files)
-        for written in files:
-            if "hash" in written:
-                vouched[written["path"]] = vouched.get(written["path"], frozenset()) | {
-                    written["hash"]
-                }
-        done = plan(troupe_dir, rendered_after, vouched, merged=found, resolve=resolve)
-        refuse(done)
-        kept = execute(troupe_dir, done)
-        resolved = mark_resolved(store.vcs, done, found, marks)
+    """Sweep, then record one change of ``operations`` and write its files, in design D9's order
+    (stage, record, replace), holding the config files' lock throughout. ``actor`` is who made it
+    when the caller resolved that already (troupe init does, before it makes anything;
+    init-and-audition design D2), else the store's identity chain is asked. config-set and init
+    both record through here, so an audition's change is exactly what config-set would record
+    (init-and-audition design D3)."""
+    synced = sync_config(
+        session.theatre,
+        store,
+        _request(session, send, operations=operations, reason=reason, actor=actor),
+    )
+    own = tuple(a for a in synced.actions if _target(a) in synced.own)
+    others = tuple(a for a in synced.actions if _target(a) not in synced.own)
     return m.ConfigSetResult(
-        change=command.change,
-        entries=entries,
-        files=_files(done.changes, kept, resolved, finished="for this change"),
-        notices=_notices(before, merge_notices(done.changes, kept, resolved), store.notices()),
+        change=synced.change,
+        entries=synced.entries,
+        files=[
+            *_files(others, synced.kept, synced.resolved),
+            *_files(own, synced.kept, synced.resolved, finished="for this change"),
+        ],
+        notices=_notices(synced.notices, file_notices(synced), store.notices()),
     )
 
 
 async def config_get(request: m.ConfigGetRequest, session: Session, send: Send) -> Message:
-    del send
     store = open_event_store(session)
-    merged = read(store)
+    synced = sync_config(session.theatre, store, _request(session, send, query=True))
+    merged = synced.merged
     value = merged.config if request.path is None else get(merged.config, request.path)
     if value == {}:
         value = None
@@ -258,7 +180,7 @@ async def config_get(request: m.ConfigGetRequest, session: Session, send: Send) 
             for conflict in merged.conflicts
         ],
         heads=list(merged.heads),
-        notices=_notices(store.notices()),
+        notices=_notices(synced.notices, store.notices()),
     )
 
 
@@ -286,25 +208,37 @@ def _resolved(
     }
 
 
-async def flush_files(request: m.FlushRequest, session: Session, send: Send) -> Message:
+async def sync_files_method(request: m.SyncRequest, session: Session, send: Send) -> Message:
+    """troupe sync: sweep hand edits into config, then make every file what config says, rewriting
+    files git merged from troupe's versions (spec: config-files, "Sync makes the files say what
+    config says")."""
     store = open_event_store(session)
-    marks = marking(session.env)
-    merged = read(store)
-    refuse_conflicts(merged)
-    flushed = flush(
+    synced = sync_config(
         session.theatre,
-        merged.config,
-        merged.files,
-        force=bool(request.force),
-        rehearse=bool(request.rehearse),
-        on_wait=_waiting(send),
-        vcs=store.vcs,
-        resolve=True,
-        marking=marks,
+        store,
+        _request(
+            session,
+            send,
+            force=bool(request.force),
+            rehearse=bool(request.rehearse),
+            resolve_all=True,
+        ),
     )
-    return m.FlushResult(
-        files=_files(flushed.actions, flushed.kept, flushed.resolved),
-        notices=_notices(flushed.notices() if not request.rehearse else [], store.notices()),
+    return m.SyncResult(
+        edits=[
+            m.HandEdit(
+                path=f"{THEATRE_DIR}/{edit.path}",
+                change=synced.sweep_change,
+                entries=[dict(e) for e in edit.entries],
+            )
+            for edit in synced.edits
+        ],
+        files=_files(synced.actions, synced.kept, synced.resolved),
+        notices=_notices(
+            synced.notices,
+            file_notices(synced) if not request.rehearse else [],
+            store.notices(),
+        ),
     )
 
 
@@ -316,8 +250,8 @@ async def _config_get(request: Any, session: Session, send: Send) -> Message:  #
     return await config_get(request, session, send)
 
 
-async def _flush(request: Any, session: Session, send: Send) -> Message:  # noqa: ANN401
-    return await flush_files(request, session, send)
+async def _sync(request: Any, session: Session, send: Send) -> Message:  # noqa: ANN401
+    return await sync_files_method(request, session, send)
 
 
 def methods() -> Mapping[str, Method]:
@@ -325,5 +259,5 @@ def methods() -> Mapping[str, Method]:
     return {
         "config-set": Method(m.ConfigSetRequest, _config_set),
         "config-get": Method(m.ConfigGetRequest, _config_get),
-        "flush": Method(m.FlushRequest, _flush),
+        "sync": Method(m.SyncRequest, _sync),
     }

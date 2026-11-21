@@ -42,6 +42,15 @@ CODES: dict[str, str] = {
     "again from the merged config, its bytes kept first; unless troupe marked it resolved, it "
     "needs a git add.",
     "config.waiting": "Another troupe command is writing config files, and this one is waiting.",
+    # Reading hand edits back (hand-edit-sweep design D8, D11). contributing/config.md lists them.
+    "config.hand-edit-recorded": "The sweep recorded a person's edit to a config file, by the "
+    "unknown author.",
+    "config.conflict-resolved": "A hand edit resolved a config conflict, taking the value its "
+    "file holds.",
+    "config.hand-edit-unrecorded": "Hand edits weren't recorded, because config has conflicts "
+    "they leave unresolved.",
+    "config.present-unreadable": "troupe's record of the config files this clone had can't be "
+    "read, so missing files were written again rather than read as removed.",
     # Run workspaces (worktree-stage design D9). contributing/runs.md lists them.
     "workspace.waiting": "Making, filling, capturing or removing a run's worktree is taking a "
     "while.",

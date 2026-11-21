@@ -65,7 +65,7 @@ FAMILIES: Mapping[str, Callable[[], Mapping[str, Method]]] = {
     "discard": _runs,
     "config-set": _config,
     "config-get": _config,
-    "flush": _config,
+    "sync": _config,
     "init": _init,
 }
 """Every method the core offers, by name: how to load its family's handlers. A method its
