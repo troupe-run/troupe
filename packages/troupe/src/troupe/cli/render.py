@@ -1,6 +1,7 @@
 """Turn structured results and errors into text for a terminal."""
 
 from collections.abc import Mapping
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from troupe.core.errors import TroupeError
@@ -42,6 +43,82 @@ def _amounts(event: Mapping[str, Any]) -> str:
     return "".join(f", {part}" for part in parts)
 
 
+# A run's tokens and cost (spec: cli, "Status shows a run's tokens and cost" and the requirements
+# after it; run-usage-display design D3, D4). One table names each counter, in both forms, so status
+# and logs can't name one differently.
+COUNTERS = (
+    ("inputTokens", "input", "in"),
+    ("outputTokens", "output", "out"),
+    ("cacheReadTokens", "cache read", "cache read"),
+    ("cacheWriteTokens", "cache write", "cache write"),
+)
+CENT_FRACTION = Decimal("0.0001")
+"""A cost is shown to four decimal places."""
+COST_KINDS = {
+    "reported": "reported by the service",
+    "estimated": "estimated from the runtime's price",
+}
+
+
+def _tokens(usage: Mapping[str, Any], *, short: bool) -> str:
+    """The counters ``usage`` carries, as ``1,204 input, 9,817 output`` (or ``in``, ``out``); a
+    counter it leaves out is left out, never shown as 0."""
+    return ", ".join(
+        f"{usage[key]:,} {brief if short else name}"
+        for key, name, brief in COUNTERS
+        if usage.get(key) is not None
+    )
+
+
+def _amount(usd: float, kind: str) -> str:
+    """A cost in US dollars to four decimal places, ``~`` before an estimate. A non-zero cost that
+    would show as $0.0000 is ``under $0.0001``, and exactly 0 is ``$0``: never a false zero."""
+    mark = "~" if kind == "estimated" else ""
+    value = Decimal(repr(usd))
+    if value == 0:
+        return f"{mark}$0"
+    shown = value.quantize(CENT_FRACTION, rounding=ROUND_HALF_UP)
+    if shown == 0:
+        return f"{mark}under ${CENT_FRACTION}"
+    return f"{mark}${shown}"
+
+
+def _result_cost(event: Mapping[str, Any]) -> tuple[float, str] | None:
+    """A result event's cost and its kind: ``costUsd`` is reported, ``estimatedCostUsd``
+    estimated."""
+    if event.get("costUsd") is not None:
+        return event["costUsd"], "reported"
+    if event.get("estimatedCostUsd") is not None:
+        return event["estimatedCostUsd"], "estimated"
+    return None
+
+
+def _result_figures(event: Mapping[str, Any]) -> str:
+    """What a result line adds: `` (tokens …; cost …)``, each part only when the result carries it,
+    and nothing when it carries neither."""
+    parts = []
+    tokens = _tokens(event.get("usage") or {}, short=True)
+    if tokens:
+        parts.append(f"tokens {tokens}")
+    cost = _result_cost(event)
+    if cost is not None:
+        usd, kind = cost
+        parts.append(f"cost {_amount(usd, kind)}, {kind}")
+    return f" ({'; '.join(parts)})" if parts else ""
+
+
+def _usage_lines(run: Mapping[str, Any]) -> list[str]:
+    """A run summary's ``tokens:`` and ``cost:`` lines, each only when the summary carries it."""
+    lines = []
+    tokens = _tokens(run.get("usage") or {}, short=False)
+    if tokens:
+        lines.append(f"  tokens: {tokens}")
+    if "cost" in run:
+        cost = run["cost"]
+        lines.append(f"  cost: {_amount(cost['usd'], cost['kind'])}, {COST_KINDS[cost['kind']]}")
+    return lines
+
+
 def render_event(logged: Mapping[str, Any]) -> str:
     """One line for a recorded run event (run.schema.json#/$defs/loggedEvent data)."""
     event = logged["event"]
@@ -61,7 +138,8 @@ def render_event(logged: Mapping[str, Any]) -> str:
         + (f" ({event['reason']}" if "reason" in event else "")
         + (f", not retried: {event['notRetried']}" if "notRetried" in event else "")
         + (")" if "reason" in event else "")
-        + f": {_first_line(event.get('message', ''))}",
+        + f": {_first_line(event.get('message', ''))}"
+        + _result_figures(event),
         "oversized": f"{event.get('originalType')}, {event.get('bytes')} bytes, {event.get('ref')}",
     }
     return f"  {logged['seq']:>4} {logged['at']} {kind}: {summaries.get(kind, '')}".rstrip()
@@ -108,6 +186,7 @@ def render_run(run: Mapping[str, Any]) -> list[str]:
         f"  state: {run['state']}",
         f"  outcome: {run.get('outcome', '-')}",
         f"  events: {run['events']}",
+        *_usage_lines(run),
     ]
     if "error" in run:
         lines.append(f"  error: {run['error']['code']}: {run['error']['problem']}")
@@ -193,7 +272,12 @@ def render_run_line(run: Mapping[str, Any]) -> str:
     status = run["outcome"] if run["state"] == "ended" else run["state"]
     count = len(run.get("notices", []))
     noticed = f", {count} {'notice' if count == 1 else 'notices'}" if count else ""
+    cost = run.get("cost")
+    costed = ""
+    if cost is not None:
+        estimated = " estimated" if cost["kind"] == "estimated" else ""
+        costed = f", {_amount(cost['usd'], cost['kind'])}{estimated}"
     return (
         f"{run['runId']}  {status:<20} {run['actor']:<16} {run['startedAt']}  "
-        f"{run['events']} events{noticed}"
+        f"{run['events']} events{noticed}{costed}"
     )

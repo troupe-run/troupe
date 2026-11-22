@@ -856,3 +856,89 @@ def test_logs_of_an_interrupted_run_show_its_recorded_notice_on_stdout_and_why_o
     assert "run.silent" not in err
     assert "has no recorded end" in err
     assert "has no recorded end" not in out
+
+
+# Requirements: Status shows a run's tokens and cost; The list of runs shows each run's cost; Logs
+# show a run's tokens and cost on its result (spec: cli; run-usage-display)
+
+USAGE = {
+    "inputTokens": 1204,
+    "outputTokens": 9817,
+    "cacheReadTokens": 182330,
+    "cacheWriteTokens": 14022,
+}
+TOKENS = "1,204 input, 9,817 output, 182,330 cache read, 14,022 cache write"
+SHORT_TOKENS = "1,204 in, 9,817 out, 182,330 cache read, 14,022 cache write"
+PRICE = '{"input": 2, "output": 8, "cacheRead": 0.5, "cacheWrite": 0}'
+
+
+def _result(**fields: Any) -> dict[str, Any]:  # noqa: ANN401
+    return {"event": {**OK["event"], **fields}}
+
+
+def _performed(repo: Repo, result: dict[str, Any], *settings: str) -> str:
+    """Perform tester, defined in config and then given each of ``settings``, once; its run id."""
+    configure(repo, script(INIT, result))
+    for setting in settings:
+        code, _, err = cli("config", "set", setting)
+        assert code == 0, err
+    code, _, err = cli("perform", "tester")
+    assert code == 0, err
+    [run] = json.loads(cli("status", "--json")[1])["runs"]
+    return str(run["runId"])
+
+
+def _result_line(logs: str) -> str:
+    [line] = [line for line in logs.splitlines() if " result: " in line]
+    return line
+
+
+def test_status_and_logs_of_a_run_whose_service_reported_its_cost(repo: Repo) -> None:
+    run_id = _performed(repo, _result(usage=USAGE, costUsd=0.4213))
+    lines = cli("status", run_id)[1].splitlines()
+    events = next(i for i, line in enumerate(lines) if line.startswith("  events: "))
+    assert lines[events + 1 : events + 3] == [
+        f"  tokens: {TOKENS}",
+        "  cost: $0.4213, reported by the service",
+    ]
+    assert cli("status")[1].splitlines()[0].endswith(" events, $0.4213")
+    logs = cli("logs", run_id)[1]
+    assert _result_line(logs).endswith(
+        f"result: ok: done (tokens {SHORT_TOKENS}; cost $0.4213, reported)"
+    )
+    assert f"run {run_id}: succeeded" in logs.splitlines()
+    assert logs.count("$0.4213") == 1  # the footer doesn't repeat it
+
+
+def test_status_logs_and_json_of_a_run_whose_cost_was_estimated(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test/canary-0123456789abcdef")
+    run_id = _performed(
+        repo,
+        _result(usage=USAGE, estimatedCostUsd=0.0136),
+        f"runtimes.openai.prices.gpt-test={PRICE}",
+        "actors.tester.runtime=openai",
+        "actors.tester.model=gpt-test",
+    )
+    status = cli("status", run_id)[1].splitlines()
+    assert "  cost: ~$0.0136, estimated from the runtime's price" in status
+    assert cli("status")[1].splitlines()[0].endswith(" events, ~$0.0136 estimated")
+    assert _result_line(cli("logs", run_id)[1]).endswith(
+        f"(tokens {SHORT_TOKENS}; cost ~$0.0136, estimated)"
+    )
+    data = json.loads(cli("status", run_id, "--json")[1])
+    check(data, "status-result.schema.json")
+    [run] = data["runs"]
+    assert (run["usage"], run["cost"]) == (USAGE, {"usd": 0.0136, "kind": "estimated"})
+
+
+def test_status_and_logs_of_a_run_that_reported_neither(repo: Repo) -> None:
+    run_id = _performed(repo, OK)
+    status = cli("status", run_id)[1].splitlines()
+    assert not any(line.startswith(("  tokens:", "  cost:")) for line in status)
+    assert re.search(r" \d+ events$", cli("status")[1].splitlines()[0])
+    assert _result_line(cli("logs", run_id)[1]).endswith("result: ok: done")
+    [run] = json.loads(cli("status", run_id, "--json")[1])["runs"]
+    assert "usage" not in run
+    assert "cost" not in run
