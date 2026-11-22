@@ -63,7 +63,7 @@ def test_no_request_schema_declares_a_field_named_for_a_setting() -> None:
         assert not names & {"mark_merges_resolved", "markMergesResolved"}, path.name
 
 
-def test_a_flush_request_carrying_the_setting_is_invalid() -> None:
+def test_a_sync_request_carrying_the_setting_is_invalid() -> None:
     assert is_valid({"rehearse": False}, "sync-request.schema.json")
     assert not is_valid({"rehearse": False, "markMergesResolved": True}, "sync-request.schema.json")
 

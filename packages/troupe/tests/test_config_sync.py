@@ -18,6 +18,7 @@ from troupe.core.client import messages as m
 from troupe.core.client.dispatch import call
 from troupe.core.client.session import Session
 from troupe.core.config import aggregate
+from troupe.core.errors import TroupeError
 from troupe.core.runs.perform import perform
 
 TESTER_PATH = ["actors", "tester"]
@@ -167,3 +168,48 @@ def test_the_record_of_present_files_lists_the_config_files_after_a_sync(repo: R
         (repo.path / ".troupe" / "local" / "config" / "present.json").read_bytes()
     )
     assert record == ["actors/tester.md", "actors/tester.yaml"]
+
+
+# Requirement: A file is replaced only while it's what the sweep read (config-files; design D10)
+
+
+def test_a_config_set_whose_file_changes_after_the_sweep_is_refused_and_leaves_the_file(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from troupe.core.config import syncing
+
+    _set(repo, TESTER_PATH, TESTER)
+    saved = b"# saved by the person meanwhile\n" + _yaml(repo).read_bytes()
+    from troupe.core.config.stream import record_with_edits as real
+
+    def record_then_save(*args: Any, **kwargs: Any) -> Any:  # noqa: ANN401
+        recorded = real(*args, **kwargs)
+        _yaml(repo).write_bytes(saved)  # the person saves after the sweep read the file
+        return recorded
+
+    monkeypatch.setattr(syncing, "record_with_edits", record_then_save)
+    with pytest.raises(TroupeError) as caught:
+        _set(repo, ["actors", "tester", "workspace"], "theatre")
+    assert caught.value.code == "config.file-changing"
+    assert _yaml(repo).read_bytes() == saved
+
+
+# Requirement: A write-back that wouldn't read as config says is refused (config-files; design D6)
+
+
+def test_a_config_set_whose_write_back_would_misread_records_nothing_and_leaves_the_file(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from troupe.core.config import writeback
+
+    _set(repo, TESTER_PATH, TESTER)
+    _formatted(repo)
+    _call(repo, "sync", {})  # the person's formatting, read back: nothing to record
+    formatted = _yaml(repo).read_bytes()
+    events = len(_events(repo))
+    monkeypatch.setattr(writeback, "_scalar", lambda value: "wrong")
+    with pytest.raises(TroupeError) as caught:
+        _set(repo, ["actors", "tester", "runner"], "claude-code")
+    assert caught.value.code == "config.write-back-failed"
+    assert len(_events(repo)) == events
+    assert _yaml(repo).read_bytes() == formatted
