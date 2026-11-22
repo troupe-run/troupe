@@ -174,7 +174,7 @@ def test_a_misspelt_field_is_refused_naming_the_file() -> None:
     assert error.details["rule"] == "invalid"
     assert error.details["path"] == ["actors", "tester", "runnr"]
     assert ".troupe/actors/tester.yaml" in error.problem
-    assert error.path == "/theatre/.troupe/actors/tester.yaml"
+    assert error.path == str(Path("/theatre/.troupe") / "actors/tester.yaml")
 
 
 def test_options_the_runner_doesnt_define_are_refused_naming_the_file() -> None:

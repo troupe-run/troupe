@@ -24,12 +24,13 @@ say so in the tick. Commit by group, so the review can be split by slice (design
       option the scripted runner doesn't define (spec: config-hand-edits, "An invalid file is refused, never
       skipped").
       Done: `refuse_file_problems` maps `kinds.problems` to the file that holds the value.
-- [ ] 1.4 The read-stability check: stat (size, mtime_ns, file id) before and after reading, through the platform
+- [x] 1.4 The read-stability check: stat (size, mtime_ns, file id) before and after reading, through the platform
       seam (`platform/files.py`). Retry up to `config_read_attempts` (default 3) with `config_read_retry_seconds`
       (default 0.05), both in `core/defaults.py`, then `config.file-changing` (new code, in errors and the error
       schema). Verify with a test that injects a stat sequence: one change then still gives the final values; always
       changing is refused naming the file. Test on all three OSes in CI (file id on Windows).
-      Done: `platform.files.file_stamp` (size, mtime_ns, st_dev, st_ino) and `read_steady`; injected-stamp tests. Done locally; ticked once Windows CI has run it.
+      Done: `platform.files.file_stamp` (size, mtime_ns, st_dev, st_ino) and `read_steady`; injected-stamp tests.
+      Windows: the read-stability tests passed on all four Windows legs of CI run 45012978872 (Python 3.12 to 3.15). That run's one Windows failure was a test comparing an error's path with a `/`-separated string, fixed to build it as the code does.
 
 ## 2. The sweep: classify, compare, record (design D1, D3, D4, D5, D7, D9)
 

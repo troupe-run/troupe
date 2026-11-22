@@ -778,7 +778,3 @@ def _recording_details(
         details["transcript"] = outcome.transcript
         details["transcriptFormat"] = str(outcome.transcript_format)
     return details
-
-
-def _notice(notice: Notice) -> m.NoticeUpdate:
-    return m.NoticeUpdate(notice=m.NoticeData.of(notice))
