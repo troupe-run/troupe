@@ -101,8 +101,9 @@ before any of it is yours.
 
 ## Changes the run won't see
 
-A run starts from your latest commit, so it doesn't see what you haven't committed: here, `character.md`, and any
-other changes you have. troupe tells you, with the notice `workspace.uncommitted-unseen`, and runs anyway:
+A run starts from your latest commit, so it doesn't see what you haven't committed. Your edit to `lead.md` is
+committed with `.troupe`, but if you have other changes, troupe tells you, with the notice
+`workspace.uncommitted-unseen`, and runs anyway. With one file changed since your last commit, it says:
 
 ```text
 troupe: 1 path(s) differ from HEAD (3f9c2a1b7d4e), and the run won't see them: it works in its own worktree, made from HEAD. Accepting its changes may conflict with yours.

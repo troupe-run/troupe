@@ -249,19 +249,14 @@ def _entry_texts(data: bytes) -> dict[str, str]:
 
 @settings(max_examples=300, deadline=None, suppress_health_check=[HealthCheck.too_slow])
 @given(data=st.data())
-def test_write_back_keeps_every_untouched_entry_and_reads_as_the_target(
+def test_write_back_writes_every_generated_edit_keeping_untouched_entries_and_reading_as_the_target(
     data: st.DataObject,
 ) -> None:
     original, current = data.draw(formatted())
     target = data.draw(changed(current))
-    refused: TroupeError | None = None
-    try:
-        out = write_back(PATH, original, target)
-    except TroupeError as error:
-        refused = error
-    if refused is not None:
-        assert refused.code == "config.write-back-failed"  # never a wrong file
-        return
+    # Every generated shape is one a person writes, so write-back must manage it: a refusal here
+    # fails the test (the refusal itself is test_a_write_back_that_wouldnt_read_as_config_says...).
+    out = write_back(PATH, original, target)
     assert read_values(PATH, out).values == target
     after = out.decode()
     for key, text in _entry_texts(original).items():

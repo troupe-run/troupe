@@ -28,6 +28,9 @@ troupe sweeps the config files for edits it didn't make, and records each meanin
   removed; delete both of `tester`'s files and the actor is. troupe only counts a file as deleted if it saw it in
   this clone before: a file this clone never had, such as one never committed, is written again from config.
 
+When an edit troupe recorded is then abandoned, because the file went back to what it was, history shows the change
+and the change back. Keeping or dropping those is [#45](https://github.com/troupe-run/troupe/issues/45).
+
 `troupe sync` does the sweep on its own, and makes every file say what config says. `troupe sync --rehearse` shows
 what it would record and write, and changes nothing.
 
@@ -61,9 +64,6 @@ Every config file names its [schema](../prompt-book/config-schema.md) at troupe.
 Schema completes and checks the file as you type. troupe.run serves the schemas from
 [website#30](https://github.com/troupe-run/website/issues/30) onwards. An actor's options depend on its runner, so
 the file's schema can't check them: troupe does, when it reads the file.
-
-When an edit troupe recorded is then abandoned, because the file went back to what it was, history shows the change
-and the change back. Keeping or dropping those is [#45](https://github.com/troupe-run/troupe/issues/45).
 
 ## Branches
 

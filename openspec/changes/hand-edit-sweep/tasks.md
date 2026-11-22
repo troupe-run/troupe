@@ -82,7 +82,7 @@ say so in the tick. Commit by group, so the review can be split by slice (design
       indentations, quoting, flow and block lists, CRLF) and random config changes. Every line outside the changed
       keys is unchanged, and the result reads as the target, or the write-back refuses (never a wrong file). Record
       any example it finds as a fixed test.
-      Done: the property test found one bug (a group's new last key and a new key after the group, both inserted at the file's end, came out in the wrong order), fixed and kept as `test_a_groups_new_last_key_and_a_new_key_after_the_group_keep_their_order`. Measured over 4000 examples: every one written back, none refused.
+      Done: the property test found one bug (a group's new last key and a new key after the group, both inserted at the file's end, came out in the wrong order), fixed and kept as `test_a_groups_new_last_key_and_a_new_key_after_the_group_keep_their_order`. Measured over 4000 examples: every one written back, none refused; after review, the test asserts it (a refusal fails it), and the refusal keeps its own test.
 - [x] 3.4 Wire write-back into `projection.plan`/`render`: an existing readable file's target bytes are the splice;
       a new file is rendered whole; `.md` replaced whole. A file whose values equal config is in line. Verify the
       existing `test_config_files.py` and `test_config_merge_files.py` still pass, with flush renamed to sync.
@@ -141,7 +141,7 @@ say so in the tick. Commit by group, so the review can be split by slice (design
 - [x] 5.5 Rename every "troupe flush" in messages, errors, notices and tests to `troupe sync` (`rg -n "flush"` across
       `packages/troupe/src`, `packages/troupe/tests`, `docs`, `contributing`, `protocol`). Verify with an `rg` that
       finds no user-facing "flush" (the stream-flush uses in runners and the store stay).
-      Done: no user-facing "flush" left in source, schemas, docs or contributing (`rg`); the projection's internal `flush` function keeps its name.
+      Done: no user-facing "flush" left in source, schemas, docs or contributing (`rg`), after review also `contributing/runs.md`, `core/init.py` and the names of tests that drive `troupe sync`; the projection's internal `flush` function, and the tests that call it, keep its name.
 - [x] 5.6 Update the existing tests whose behaviour the decisions changed: a deleted file is now a removal; an older
       version troupe wrote is now read as an edit; a clean merge edited after git made it, and a merge older than
       HEAD, are read as edits; a valid hand edit before `config set` is recorded, not refused. Verify each against

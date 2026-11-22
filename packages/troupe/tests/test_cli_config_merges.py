@@ -124,7 +124,7 @@ def _yaml_conflicted(repo: Repo) -> None:
 # Requirement: A file git merged from troupe's versions is rewritten from the merged config
 
 
-def test_flush_writes_a_conflicted_file_from_the_merged_config_keeps_it_and_leaves_git_unmerged(
+def test_sync_writes_a_conflicted_file_from_the_merged_config_keeps_it_and_leaves_git_unmerged(
     repo: Repo,
 ) -> None:
     _yaml_conflicted(repo)
@@ -235,7 +235,7 @@ def test_a_clean_merge_older_than_head_is_read_as_a_hand_edit(repo: Repo) -> Non
     assert (repo.path / MD).read_bytes() == b"Both."
 
 
-def test_a_rehearsed_flush_names_the_merged_file_and_its_reason_and_writes_and_keeps_nothing(
+def test_a_rehearsed_sync_names_the_merged_file_and_its_reason_and_writes_and_keeps_nothing(
     repo: Repo,
 ) -> None:
     _yaml_conflicted(repo)
@@ -263,7 +263,7 @@ def test_without_git_a_file_with_conflict_markers_is_refused(
 # Requirement: Only an explicit command rewrites a file git merged
 
 
-def test_perform_refuses_a_conflicted_file_naming_flush_and_starts_no_run(repo: Repo) -> None:
+def test_perform_refuses_a_conflicted_file_naming_sync_and_starts_no_run(repo: Repo) -> None:
     _yaml_conflicted(repo)
     conflicted = (repo.path / YAML).read_bytes()
     code, _, err = cli("perform", "tester")
@@ -296,7 +296,7 @@ def test_the_config_set_resolving_a_conflict_rewrites_a_merged_file_its_change_d
     assert _kept(repo, file_hash(conflicted)) == conflicted
 
 
-def test_a_config_set_that_doesnt_write_the_file_is_refused_naming_flush_and_records_nothing(
+def test_a_config_set_that_doesnt_write_the_file_is_refused_naming_sync_and_records_nothing(
     repo: Repo,
 ) -> None:
     _yaml_conflicted(repo)
@@ -369,7 +369,7 @@ def _hand_edited_side(repo: Repo) -> None:
     assert _unmerged(repo) == [YAML]
 
 
-def test_flush_force_past_a_hand_edited_side_leaves_the_file_unmerged_when_unset(
+def test_sync_force_past_a_hand_edited_side_leaves_the_file_unmerged_when_unset(
     repo: Repo,
 ) -> None:
     _hand_edited_side(repo)
@@ -381,7 +381,7 @@ def test_flush_force_past_a_hand_edited_side_leaves_the_file_unmerged_when_unset
     assert _index(repo) == index
 
 
-def test_flush_with_no_merge_leaves_the_index_byte_identical(repo: Repo) -> None:
+def test_sync_with_no_merge_leaves_the_index_byte_identical(repo: Repo) -> None:
     ok("config", "set", *BASE)
     repo.commit_all("base")
     yaml = repo.path / YAML
@@ -419,7 +419,7 @@ def _staged(repo: Repo, path: str) -> bytes:
 
 
 @pytest.mark.usefixtures("marking")
-def test_flush_marks_a_conflicted_file_resolved_and_the_merge_commits_with_no_git_add(
+def test_sync_marks_a_conflicted_file_resolved_and_the_merge_commits_with_no_git_add(
     repo: Repo,
 ) -> None:
     _yaml_conflicted(repo)
@@ -493,7 +493,7 @@ def test_an_unmerged_file_already_holding_what_config_writes_is_left_unmerged(
 
 
 @pytest.mark.usefixtures("marking")
-def test_a_rehearsed_flush_says_it_would_mark_the_file_and_leaves_the_index(repo: Repo) -> None:
+def test_a_rehearsed_sync_says_it_would_mark_the_file_and_leaves_the_index(repo: Repo) -> None:
     _yaml_conflicted(repo)
     index = _index(repo)
     code, out, err = cli("sync", "--rehearse")
@@ -520,7 +520,7 @@ def test_policy_forbidding_it_rewrites_the_file_leaves_it_unmerged_and_names_the
 
 
 @pytest.mark.usefixtures("marking")
-def test_flush_force_past_a_hand_edited_side_leaves_the_file_unmerged_with_the_setting_on(
+def test_sync_force_past_a_hand_edited_side_leaves_the_file_unmerged_with_the_setting_on(
     repo: Repo,
 ) -> None:
     _hand_edited_side(repo)
@@ -529,7 +529,7 @@ def test_flush_force_past_a_hand_edited_side_leaves_the_file_unmerged_with_the_s
     assert _unmerged(repo) == [YAML]
 
 
-def test_a_malformed_setting_fails_flush_and_writes_and_stages_nothing(
+def test_a_malformed_setting_fails_sync_and_writes_and_stages_nothing(
     repo: Repo, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _yaml_conflicted(repo)

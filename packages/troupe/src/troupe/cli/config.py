@@ -98,9 +98,36 @@ def _assignments(raw: list[str]) -> list[Assignment]:
     return found
 
 
+def _hand_edit_lines(result: dict[str, Any], *, rehearse: bool) -> list[str]:
+    """The sweep's hand edits the command recorded (or, rehearsed, would), one line each: they're
+    changes too, though not the command's own (spec: config-hand-edits)."""
+    would = "would " if rehearse else ""
+    lines = []
+    for notice in result["notices"]:
+        if notice["code"] != "config.hand-edit-recorded":
+            continue
+        count = notice["details"]["entries"]
+        lines.append(
+            f"{would}record {notice['details']['file']}: an edit by an unknown author "
+            f"({count} value{'s' if count != 1 else ''})"
+        )
+    return lines
+
+
 def _render_change(result: dict[str, Any], stdout: TextIO, *, rehearse: bool) -> ExitCode:
+    edits = _hand_edit_lines(result, rehearse=rehearse)
+    for line in edits:
+        print(line, file=stdout)
     if not result["entries"]:
-        print("Nothing changed: config already holds that.", file=stdout)
+        if edits:
+            print(
+                "The command's own change changes nothing: config already holds that.", file=stdout
+            )
+        else:
+            print("Nothing changed: config already holds that.", file=stdout)
+        if rehearse and edits:
+            print("Rehearsal: nothing was recorded or written.", file=stdout)
+            return ExitCode.WOULD_CHANGE
         return ExitCode.OK
     would = "would " if rehearse else ""
     for entry in result["entries"]:
