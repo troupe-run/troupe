@@ -1022,3 +1022,53 @@ def test_a_null_in_a_list_inside_a_config_value_is_named_by_position() -> None:
     data = {"operations": [{"path": ["actors", "a", "expect"], "value": ["x", None]}]}
     with pytest.raises(ProtocolError, match=r"operations\[0\]\.value\[1\]: must not be null"):
         m.ConfigSetRequest.from_data(data)
+
+
+# Requirement: A run summary carries its result's usage and cost (run-usage-display D1)
+
+USAGE = {
+    "inputTokens": 1204,
+    "outputTokens": 9817,
+    "cacheReadTokens": 182330,
+    "cacheWriteTokens": 14022,
+}
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"usage": USAGE, "cost": {"usd": 0.4213, "kind": "reported"}},
+        {"usage": USAGE, "cost": {"usd": 0.0136, "kind": "estimated"}},
+        {"usage": {"inputTokens": 3, "outputTokens": 4}},
+        {"cost": {"usd": 0, "kind": "reported"}},
+    ],
+    ids=["reported", "estimated", "tokens only", "a cost only"],
+)
+def test_a_summary_with_usage_and_cost_round_trips_and_validates(extra: dict[str, Any]) -> None:
+    data = {**copy.deepcopy(ENDED_SUMMARY), **extra}
+    summary = m.RunSummary.from_data(data)
+    assert summary.to_data() == data
+    check({"run": data}, "perform-result.schema.json")
+
+
+@pytest.mark.parametrize(
+    "cost",
+    [
+        {"usd": 0.5, "kind": "guessed"},
+        {"kind": "reported"},
+        {"usd": 0.5},
+        {"usd": -1, "kind": "reported"},
+        {"usd": 0.5, "kind": "reported", "source": "x"},
+    ],
+    ids=["unknown kind", "no usd", "no kind", "negative", "an unknown field"],
+)
+def test_a_summary_with_a_malformed_cost_is_refused_naming_it(cost: dict[str, Any]) -> None:
+    data = {**copy.deepcopy(ENDED_SUMMARY), "cost": cost}
+    assert "cost" in _refused(m.RunSummary, data)
+    assert not is_valid({"run": data}, "perform-result.schema.json")
+
+
+def test_a_summary_whose_usage_has_a_counter_the_result_doesnt_define_is_refused() -> None:
+    data = {**copy.deepcopy(ENDED_SUMMARY), "usage": {"inputTokens": 1, "totalTokens": 2}}
+    assert "usage" in _refused(m.RunSummary, data)
+    assert not is_valid({"run": data}, "perform-result.schema.json")

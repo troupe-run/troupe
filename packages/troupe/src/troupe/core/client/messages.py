@@ -269,6 +269,18 @@ class RunNotice(Message):
     notice: NoticeData = json_field("notice")
 
 
+CostKind = Literal["reported", "estimated"]
+
+
+@dataclass(frozen=True)
+class CostData(Message):
+    """What a run cost in US dollars, and whether its service reported it or troupe's price
+    estimated it (run-usage-display D1)."""
+
+    usd: float = json_field("usd", minimum=0)
+    kind: CostKind = json_field("kind")
+
+
 @dataclass(frozen=True, kw_only=True)
 class RunSummary(Message):
     """A run as status, logs and perform report it. A field with nothing to say is left out; an
@@ -297,6 +309,8 @@ class RunSummary(Message):
     recording: RecordingFailure | None = json_field("recording", default=None)
     notices: list[RunNotice] | None = json_field("notices", default=None, min_items=1)
     changes: ChangesData | None = json_field("changes", default=None)
+    usage: p.Usage | None = json_field("usage", default=None)
+    cost: CostData | None = json_field("cost", default=None)
 
     def _check(self, where: str) -> None:
         ended = self.state == "ended"

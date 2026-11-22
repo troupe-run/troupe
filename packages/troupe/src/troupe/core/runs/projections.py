@@ -11,6 +11,8 @@ A run's reported runner is read from its init, its first reported event, and a w
 mechanisms from Run.WorktreeMade (account-for-every-worktree design D3, D4, D7;
 require-always-written-fields design D2, D3).
 
+A run's usage and cost are read from its result, once it is recorded (run-usage-display D2).
+
 A run's recorded notices are kept always, since a run has few, and in its log among its events in
 the order they were recorded (run-notices-in-history design D8).
 """
@@ -72,6 +74,8 @@ class RunView:
     events: int = 0
     reported: dict[str, Any] | None = None
     clones: list[str] | None = None
+    usage: dict[str, Any] | None = None
+    cost: dict[str, Any] | None = None
     ended: dict[str, Any] | None = None
     ended_at: str | None = None
     settled: str | None = None
@@ -93,6 +97,8 @@ class RunView:
             if state["seq"] == 0 and event.get("type") == "init":
                 runner = event["runner"]
                 self.reported = {"name": runner["name"], "version": runner["version"]}
+            elif event.get("type") == "result":
+                self.usage, self.cost = _usage_and_cost(event)
             if keep_log:
                 self.log.append(logged(self.run_id, state, _at(recording)))
         elif recording.topic == NOTICED:
@@ -183,8 +189,24 @@ class RunView:
             "recording": (self.ended or {}).get("recording"),
             "notices": [notice.to_data() for notice in self.notices] or None,
             "changes": self.changes(),
+            "usage": self.usage,
+            "cost": self.cost,
         }
         return m.RunSummary.from_data(_present(summary))
+
+
+def _usage_and_cost(
+    result: Mapping[str, Any],
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """A result event's usage, as it carries it, and its cost with the kind of figure it is:
+    ``costUsd`` is reported, ``estimatedCostUsd`` estimated, and a result carries one or neither
+    (run-usage-display D1, D2)."""
+    cost = None
+    if "costUsd" in result:
+        cost = {"usd": result["costUsd"], "kind": "reported"}
+    elif "estimatedCostUsd" in result:
+        cost = {"usd": result["estimatedCostUsd"], "kind": "estimated"}
+    return result.get("usage"), cost
 
 
 def _present(data: dict[str, Any]) -> dict[str, Any]:

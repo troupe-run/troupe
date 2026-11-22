@@ -358,6 +358,71 @@ def test_a_worktree_not_made_yet_has_no_clones_and_one_made_has_them(tmp_path: P
     assert summary.to_data()["workspace"] == {**WORKTREE, "clones": ["copy"]}
 
 
+# A summary carries its result's usage and cost (run-usage-display D1, D2).
+
+USAGE = {
+    "inputTokens": 1204,
+    "outputTokens": 9817,
+    "cacheReadTokens": 182330,
+    "cacheWriteTokens": 14022,
+}
+
+
+def reported_result(harness: Harness, **fields: Any) -> dict[str, Any]:  # noqa: ANN401
+    """The status summary of a run whose runner sent init and a result with ``fields``, recorded
+    as perform records them, and no end yet."""
+    store = git_service(harness.repo)
+    run = started(store, {"kind": "theatre"})
+    run.report(0, init(run))
+    result = {"runId": run.run_id, "seq": 1, "type": "result", "status": "ok", "message": "m"}
+    run.report(1, {**result, **fields})
+    store.command(via="runner").record(run.collect_events())
+    [summary] = harness.status(run=run.run_id).runs
+    return summary.to_data()
+
+
+@pytest.mark.parametrize(
+    ("fields", "usage", "cost"),
+    [
+        ({"usage": USAGE, "costUsd": 0.4213}, USAGE, {"usd": 0.4213, "kind": "reported"}),
+        (
+            {"usage": USAGE, "estimatedCostUsd": 0.0136},
+            USAGE,
+            {"usd": 0.0136, "kind": "estimated"},
+        ),
+        ({}, None, None),
+        ({"usage": USAGE}, USAGE, None),
+        (
+            {"usage": {"inputTokens": 3, "outputTokens": 4}},
+            {"inputTokens": 3, "outputTokens": 4},
+            None,
+        ),
+        ({"costUsd": 0}, None, {"usd": 0, "kind": "reported"}),
+    ],
+    ids=["reported", "estimated", "neither", "tokens only", "two counters", "a zero cost"],
+)
+def test_a_summary_carries_its_results_usage_and_cost(
+    tmp_path: Path,
+    fields: dict[str, Any],
+    usage: dict[str, int] | None,
+    cost: dict[str, object] | None,
+) -> None:
+    data = reported_result(Harness(theatre(tmp_path)), **fields)
+    assert data.get("usage") == usage
+    assert data.get("cost") == cost
+
+
+def test_a_run_with_no_result_yet_has_no_usage_or_cost(tmp_path: Path) -> None:
+    harness = Harness(theatre(tmp_path))
+    store = git_service(harness.repo)
+    run = started(store, {"kind": "theatre"})
+    run.report(0, init(run))
+    store.command(via="runner").record(run.collect_events())
+    [summary] = harness.status(run=run.run_id).runs
+    assert "usage" not in summary.to_data()
+    assert "cost" not in summary.to_data()
+
+
 # 8.3: logs.
 
 
