@@ -50,9 +50,8 @@ A run is recorded as its own stream of [events](../prompt-book/events.md), all s
 - **`Run.Reported`:** one for each event the runner reports, in order. The first is the runner's `init`, which says
   which runner answered. Where the engine names it, one says which model actually served the run, which
   `troupe logs` shows. The last is the runner's result, with the tokens the run used, and its cost: as the service
-  reported it, or, when it reported none, an estimate from the runtime's `prices`, marked as one. `troupe status`
-  and `troupe logs` don't show usage or cost yet ([#456](https://github.com/troupe-run/troupe/issues/456));
-  `troupe logs <run> --json` includes them. The agent reported each event, through its runner.
+  reported it, or, when it reported none, an estimate from the runtime's `prices`, marked as one (see
+  [what a run used and cost](#what-a-run-used-and-cost)). The agent reported each event, through its runner.
 - **`Run.Noticed`:** one for each notice troupe showed about the run while it went, such as a long silence, a retry,
   a slow worktree, or a scratch directory it couldn't remove, in its place among the run's events. troupe raised it
   for you, so it's yours, through the command line.
@@ -71,6 +70,29 @@ history too, so a run nobody watched still shows them: `troupe status <run>` lis
 `troupe status` counts them on the run's line, and `troupe logs <run>` shows each in its place among the events. The
 notices about troupe itself, such as a config file it rewrote before the run, aren't the run's, and aren't kept with
 it.
+
+## What a run used and cost
+
+The runner's result says how many tokens the run used, where its engine counts them, and what it cost: as the service
+reported it, or, when it reported none and the runtime has a price for the model, an estimate from that price.
+`troupe status <run>` shows both after the run's event count, and says which kind of cost it is:
+
+```text
+  events: 17
+  tokens: 3,410 input, 2,066 output, 21,504 cache read, 0 cache write
+  cost: ~$0.0136, estimated from the runtime's price
+```
+
+A cost the service reported reads `cost: $0.4213, reported by the service`. `troupe status` adds each run's cost to
+the end of its line (`17 events, ~$0.0136 estimated`), and `troupe logs` adds the tokens and cost to the result's
+line: `result: ok: Reviewed 3 files. (tokens 3,410 in, 2,066 out, 21,504 cache read, 0 cache write; cost ~$0.0136,
+estimated)`. An estimate always has `~` before it.
+
+**A figure the runner didn't report isn't shown,** never as zero. A run on Ollama or mistralrs has no tokens line and
+no cost; an OpenAI or Anthropic run with no price shows its tokens and no cost (see
+[price a model](../stagecraft/runtimes.md#price-a-model-for-an-estimated-cost)); a cache counter the runner couldn't
+count is left out of the line. A cost is shown to four decimal places, and one too small for that reads
+`under $0.0001`. `--json` gives the summary's `usage` and `cost`, with `kind` `reported` or `estimated`.
 
 ## How a run ends
 
