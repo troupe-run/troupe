@@ -91,9 +91,6 @@ def test_an_audition_names_the_actor_its_runner_and_both_files(repo: Repo) -> No
     assert out.strip() == "claude-code"
 
 
-CHARACTER_SET = "troupe config set actors.lead.character=@<file>"
-
-
 def test_an_audition_says_to_change_the_character_by_editing_its_file(
     repo: Repo, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -77,7 +77,7 @@ say so in the tick. Commit by group, so the review can be split by slice (design
 - [x] 3.2 Verify before staging: parse the spliced bytes and compare with the target values, else
       `config.write-back-failed` (new code) with nothing recorded. Verify with a test that forces a mismatch (a
       monkeypatched splice) and checks the refusal and that the event store and the file are unchanged.
-      Done: a monkeypatched splice is refused with `config.write-back-failed`, naming `troupe sync --force`.
+      Done: a monkeypatched splice is refused with `config.write-back-failed`, naming `troupe sync --force`; after review, also at command level (`test_a_config_set_whose_write_back_would_misread_records_nothing_and_leaves_the_file`: nothing recorded, the person's file unchanged).
 - [x] 3.3 The property test: generated formatted actor and runtime files (comments, blank lines, key orders,
       indentations, quoting, flow and block lists, CRLF) and random config changes. Every line outside the changed
       keys is unchanged, and the result reads as the target, or the write-back refuses (never a wrong file). Record
@@ -90,7 +90,7 @@ say so in the tick. Commit by group, so the review can be split by slice (design
 - [x] 3.5 Compare-and-swap (D10): under the lock, re-read each file just before replace or remove, and refuse
       `config.file-changing` if its bytes aren't the sweep's. Verify with a test that edits the file between the sweep
       and the replace (a hook in the test seam): refused, and the person's bytes are unchanged.
-      Done at `execute`: it checks every path against the sweep's bytes before writing anything and again just before each replace; tests for a file changed meanwhile (refused, left alone) and one still as read. The command-level scenario runs once 5.2 wires it.
+      Done at `execute`: it checks every path against the sweep's bytes before writing anything and again just before each replace; tests for a file changed meanwhile (refused, left alone) and one still as read. After review, at command level too: `test_a_config_set_whose_file_changes_after_the_sweep_is_refused_and_leaves_the_file` (checked to fail when `syncing` doesn't pass `expect`).
 
 ## 4. Conflicts resolved by hand (design D8)
 
