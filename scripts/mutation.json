@@ -7,6 +7,7 @@
   "max_new_issues": 5,
   "max_children": 2,
   "mutant_memory_mb": 2048,
+  "full_refresh_days": 28,
   "tools": {
     "mutmut": "3.8.1",
     "stryker": "10.1.1"
