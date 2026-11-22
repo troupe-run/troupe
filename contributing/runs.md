@@ -18,8 +18,8 @@ event store ([contributing/event-store.md](event-store.md)). The runner contract
    one, a credential ([config.md](config.md#runtimes)). A refused `perform` runs nothing and writes nothing. With
    `rehearse`, perform stops here and returns what would run, the resolved runtime included.
 2. **The actor comes from config:** its runner, the runner's options, its effect check (`expect`, each file once;
-   `[]` is none) and its character, which `run/start` carries apart from the direction. The config files are
-   flushed first, as every command that uses config does.
+   `[]` is none) and its character, which `run/start` carries apart from the direction. Config is synced
+   first, as every command that uses config does: hand edits recorded, then the files written.
 3. **The run id** is a new UUID. `perform` shows it at once, so you can follow the run from another terminal.
 4. **The run's lease** is taken: a lock on `.troupe/local/runs/<run id>/`, held while `perform` runs. Once it
    holds the lock, `perform` writes its process id there as `perform.pid`, with the platform seam's namespace

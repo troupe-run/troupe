@@ -815,3 +815,34 @@ def test_flush_is_an_unknown_command(repo: Repo) -> None:
     code, _, err = cli("flush")
     assert code == ExitCode.USAGE
     assert "flush" in err
+
+
+def test_a_rehearsed_set_that_changes_nothing_but_would_record_a_hand_edit_exits_would_change(
+    repo: Repo,
+) -> None:
+    _tester()
+    actor = repo.path / ".troupe" / "actors" / "tester.yaml"
+    actor.write_text(actor.read_text("utf-8") + "workspace: theatre\n", encoding="utf-8")
+    code, out, _ = cli("config", "set", "actors.tester.runner=scripted", "--rehearse")
+    assert code == ExitCode.WOULD_CHANGE
+    assert "would record .troupe/actors/tester.yaml: an edit by an unknown author (1 value)" in out
+    assert "Nothing changed: config already holds that." not in out
+
+
+def test_a_set_that_changes_nothing_still_says_it_recorded_a_hand_edit(repo: Repo) -> None:
+    _tester()
+    actor = repo.path / ".troupe" / "actors" / "tester.yaml"
+    actor.write_text(actor.read_text("utf-8") + "workspace: theatre\n", encoding="utf-8")
+    code, out, _ = cli("config", "set", "actors.tester.runner=scripted")
+    assert code == ExitCode.OK
+    assert "record .troupe/actors/tester.yaml: an edit by an unknown author (1 value)" in out
+    assert "The command's own change changes nothing" in out
+
+
+def test_a_rehearsed_unset_that_would_record_a_hand_edit_exits_would_change(repo: Repo) -> None:
+    _tester()
+    actor = repo.path / ".troupe" / "actors" / "tester.yaml"
+    actor.write_text(actor.read_text("utf-8") + "workspace: theatre\n", encoding="utf-8")
+    code, out, _ = cli("config", "unset", "actors.tester.model", "--rehearse")
+    assert code == ExitCode.WOULD_CHANGE
+    assert "would record .troupe/actors/tester.yaml" in out

@@ -9,7 +9,7 @@ path, so its change is exactly what ``troupe config set`` would record (design D
 
 If making or recording fails before anything is recorded, the ``.troupe/`` this command made is
 removed, so trying again isn't blocked by a half-made theatre. Once the change is recorded, the
-theatre stays, and the next command's flush finishes any file not yet in place (config-model
+theatre stays, and the next command's sync finishes any file not yet in place (config-model
 design D9).
 """
 

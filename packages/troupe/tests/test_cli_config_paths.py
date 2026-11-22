@@ -194,7 +194,7 @@ def test_a_plain_key_set_in_brackets_is_shown_plain(repo: Repo) -> None:
 def test_an_entry_at_a_key_that_holds_a_dot_is_shown_in_brackets() -> None:
     shown = io.StringIO()
     cli_config._render_change(
-        {"entries": [{"path": PRICE, "after": 2}, {"path": PRICE[:4]}], "files": []},
+        {"entries": [{"path": PRICE, "after": 2}, {"path": PRICE[:4]}], "files": [], "notices": []},
         shown,
         rehearse=False,
     )

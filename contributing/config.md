@@ -1,9 +1,11 @@
 # Config
 
-A theatre's config is events: one `Config.Changed` per command that changes it, in one stream per theatre, merged
-across branches. The files under `.troupe/` are a projection that troupe writes and never reads back (yet). This
-page describes config as built by the `config-model` change (#60); the decisions behind it are #6 (layout), #7
-(schemas), #135 (values are never merged inside), #136 (config history) and #137 (`--rehearse`).
+A theatre's config is events: one `Config.Changed` per command that changes it, and one per config file a person
+edited, which the sweep before each command records (#119), in one stream per theatre, merged across branches. The
+files under `.troupe/` are a projection that troupe writes, and reads back for a person's edits. This page describes
+config as built by the `config-model` change (#60) and the `hand-edit-sweep` change (#119); the decisions behind it
+are #5 (net change at command boundaries), #6 (layout), #7 (schemas), #135 (values are never merged inside), #136
+(config history) and #137 (`--rehearse`).
 
 ## Events
 

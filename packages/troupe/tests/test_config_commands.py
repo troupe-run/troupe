@@ -177,7 +177,7 @@ def test_rehearsing_a_change_shows_it_and_records_and_writes_nothing(repo: Repo)
     assert not (repo.path / ".troupe" / "actors").exists()
 
 
-def test_a_crash_after_recording_is_finished_by_the_next_flush(
+def test_a_crash_after_recording_is_finished_by_the_next_sync(
     repo: Repo, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from troupe.core.config import syncing
@@ -314,7 +314,7 @@ def test_sync_rehearsed_shows_a_hand_edit_and_records_nothing(repo: Repo) -> Non
     assert len(_events(repo)) == 1
 
 
-def test_flush_forced_past_a_hand_edit_names_where_the_edit_was_kept(repo: Repo) -> None:
+def test_sync_forced_past_a_hand_edit_names_where_the_edit_was_kept(repo: Repo) -> None:
     _set(repo, (TESTER_PATH, TESTER))
     _actor_file(repo).write_bytes(b"# mine\n")  # these bytes exactly, on Windows too
     result = _call(repo, "sync", {"force": True})
