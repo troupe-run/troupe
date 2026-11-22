@@ -33,7 +33,7 @@
 
 ## 3. Integration
 
-- [ ] 3.1 Run the full check (`uv run scripts/check.py`, after asking the owner for the slot) and keep its log in the
+- [x] 3.1 Run the full check (`uv run scripts/check.py`, after asking the owner for the slot) and keep its log in the
   scratchpad. Verify: it passes, and `openspec validate run-usage-display --strict` passes.
 
 ## Workflow follow-up
