@@ -296,25 +296,16 @@ A rehearsal SHALL exit 0 when the command would succeed with nothing to do, with
 when it would succeed and change something, and with the refusal's own code when it would be refused.
 
 #### Scenario: Files that are out of date
-- **WHEN** a person runs `troupe flush --rehearse` and a config file isn't what config would write
+- **WHEN** a person runs `troupe sync --rehearse` and a config file isn't what config would write
 - **THEN** it exits with the "would change" code, naming the file
 
 #### Scenario: Files in line
-- **WHEN** every config file is what config would write
-- **THEN** `troupe flush --rehearse` exits 0
+- **WHEN** every config file says what config says
+- **THEN** `troupe sync --rehearse` exits 0
 
 #### Scenario: A rehearsal that would be refused
-- **WHEN** a config file was edited by hand and a person runs `troupe flush --rehearse`
-- **THEN** it exits with the code of `config.file-not-troupes`, naming the file
-
-### Requirement: Config and flush commands
-The CLI SHALL offer `troupe config set`, `troupe config unset`, `troupe config get` and `troupe flush`, each calling
-the core through the client protocol. `troupe config get` SHALL take `--json`, which writes the query's result
-exactly in its protocol shape.
-
-#### Scenario: Config get as JSON
-- **WHEN** a person runs `troupe config get --json`
-- **THEN** standard output is one JSON document that validates against the `config-get` result schema
+- **WHEN** a config file was left invalid by hand and a person runs `troupe sync --rehearse`
+- **THEN** it exits with the code of `config.file-invalid`, naming the file
 
 ### Requirement: Diff, accept and discard commands
 The CLI SHALL offer `troupe diff <run>`, `troupe accept <run>` and `troupe discard <run>`, each calling the core
@@ -409,27 +400,6 @@ troupe SHALL NOT make the repository itself.
 #### Scenario: Inside a repository's git directory
 - **WHEN** a person runs `troupe init` inside a repository's `.git/` directory
 - **THEN** it fails with `vcs.not-a-repository`
-
-### Requirement: Init with an audition defines a working example actor
-`troupe init --audition` SHALL make the theatre as `troupe init` does, and SHALL define the example actor `lead` in
-the same command. On success it SHALL print the actor, its runner, the files written, and the next steps. When the
-actor has a character, it SHALL say how to change it with `troupe config set`, and SHALL NOT say to edit the file.
-
-#### Scenario: An audition with the default runner
-- **WHEN** a person runs `troupe init --audition` in a fresh git repository
-- **THEN** `.troupe/actors/lead.yaml` names the runner `claude-code`, and `.troupe/actors/lead.md` holds its
-  character
-- **AND** standard output names `lead`, `claude-code` and both files
-
-#### Scenario: Config shows the actor
-- **WHEN** a person runs `troupe init --audition` and then `troupe config get actors.lead.runner`
-- **THEN** it prints `claude-code`
-
-#### Scenario: The character is changed through config
-- **WHEN** a person runs `troupe init --audition`, then the `troupe config set actors.lead.character=@<file>` it names
-  with a file of their own, then `troupe perform lead --rehearse`
-- **THEN** `troupe config get actors.lead.character` prints the file's text, and the rehearsal isn't refused with
-  `config.file-not-troupes`
 
 ### Requirement: Init prints the next steps for its audition
 After an audition, `troupe init` SHALL print, in order: committing `.troupe/`, allowing the local stage when policy
@@ -681,3 +651,36 @@ runner's problem and fix, or cut off at the limit. A rehearsal SHALL NOT run it.
 #### Scenario: A rehearsal
 - **WHEN** a person runs `troupe init --audition --runner mistralrs --rehearse`
 - **THEN** no warm-up runs
+
+### Requirement: Config and sync commands
+The CLI SHALL offer `troupe config set`, `troupe config unset`, `troupe config get` and `troupe sync`, each calling the
+core through the client protocol. `troupe config get` SHALL take `--json`, which writes the query's result exactly in
+its protocol shape. There SHALL be no `troupe flush`.
+
+#### Scenario: Config get as JSON
+- **WHEN** a person runs `troupe config get --json`
+- **THEN** standard output is one JSON document that validates against the `config-get` result schema
+
+#### Scenario: Flush is gone
+- **WHEN** a person runs `troupe flush`
+- **THEN** it is refused as an unknown command
+
+### Requirement: An audition defines a working example actor
+`troupe init --audition` SHALL make the theatre as `troupe init` does, and SHALL define the example actor `lead` in
+the same command. On success it SHALL print the actor, its runner, the files written, and the next steps. When the
+actor has a character, it SHALL say to change it by editing `.troupe/actors/lead.md`.
+
+#### Scenario: An audition with the default runner
+- **WHEN** a person runs `troupe init --audition` in a fresh git repository
+- **THEN** `.troupe/actors/lead.yaml` names the runner `claude-code`, and `.troupe/actors/lead.md` holds its
+  character
+- **AND** standard output names `lead`, `claude-code` and both files
+
+#### Scenario: Config shows the actor
+- **WHEN** a person runs `troupe init --audition` and then `troupe config get actors.lead.runner`
+- **THEN** it prints `claude-code`
+
+#### Scenario: The character is changed by editing its file
+- **WHEN** a person runs `troupe init --audition`, writes text of their own into the `.troupe/actors/lead.md` it
+  names, then runs `troupe perform lead --rehearse`
+- **THEN** the rehearsal isn't refused, and `troupe config get actors.lead.character` prints the file's text

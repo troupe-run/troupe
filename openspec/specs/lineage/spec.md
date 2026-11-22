@@ -42,7 +42,8 @@ as a hand edit to a file), and SHALL NOT be used when identity resolution fails.
 ### Requirement: Lineage says how, when and why
 Lineage SHALL record `via` (the surface the event came through, such as `cli`, `file` or `runner`), the time in UTC,
 the reason (left out when none was given, never recorded as null), the change ID (the correlation ID shared by every
-event that follows from one command), the cause, and the approvals given (an empty list when none).
+event that follows from one command, the sweep before a command counting as a command of its own), the cause, and the
+approvals given (an empty list when none).
 
 #### Scenario: Events from one command share a change ID
 - **WHEN** one command records several events
@@ -60,6 +61,11 @@ event that follows from one command), the cause, and the approvals given (an emp
 #### Scenario: A null reason is refused
 - **WHEN** an event is recorded with lineage whose `reason` is `null`
 - **THEN** recording fails with `events.lineage-invalid`, and nothing is written
+
+#### Scenario: A sweep's changes have a change ID of their own
+- **WHEN** a command's sweep records a hand edit, and the command then records its own change
+- **THEN** the hand edit's change ID differs from the command's
+- **AND** every change that one sweep records shares one change ID
 
 ### Requirement: Lineage names each event's cause
 Lineage SHALL name the event's cause, never null. An event a command records directly SHALL have a command cause
