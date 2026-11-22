@@ -99,8 +99,8 @@ and a boolean field rejects it by schema.
 For each path in the config directories, and each path config renders:
 
 1. **An unknown file**: refused with `config.unknown-file`, as today.
-2. **Exactly what config renders now**: in line, not read. This fast path keeps ruamel unloaded on most commands
-   (cli-starts-fast).
+2. **Exactly what config renders now**: in line, not read. This fast path skips reading and parsing the file; the
+   sweep still renders config to compare, which loads ruamel once config holds anything.
 3. **A merge git made only from versions troupe wrote, still as git made it**: not read; today's merge rules apply.
    As git made it means:
    - for a clean merge, the bytes git merged;
@@ -209,9 +209,10 @@ all or nothing, so one batch can hold:
 2. the sweep's changes;
 3. the command's own change.
 
-Without a conflict, the sweep records its own batch first and the command records as today. If the command then fails,
-the hand edits stay recorded: they're the person's edits, not the command's. With a conflict, everything is one batch
-(D8).
+The sweep's changes and the command's own are checked together and recorded in one batch, with or without a conflict
+(D8). So a command whose own change is refused, such as a `config set` that breaks a rule, records none of the hand
+edits either. Nothing is lost: they stay in the files, and the next command sweeps them again. Only `config get`
+records the sweep's changes on their own, since it has no change of its own.
 
 The lineage spec says a change id is shared by one command's events. The sweep counts as a command of its own (delta
 on `lineage`), so a person's change and an unknown author's never share a change id. A conflict listing names them

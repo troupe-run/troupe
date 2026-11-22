@@ -54,7 +54,7 @@ config path in this order (hand-edit-sweep design D3):
 | On disk | Then |
 |---|---|
 | A staged write a recorded change vouches for | finished, never read as an edit |
-| Exactly what config renders | in line, not read (ruamel isn't loaded) |
+| Exactly what config renders | in line: not read or parsed |
 | A merge git made only from versions troupe wrote, still as git made it (a clean merge's bytes, or a conflicted file with any marker line left) | not read: the merge rules below apply |
 | Conflict markers otherwise | not read: refused when the files are written |
 | Absent, and this clone had it at its last sync (`.troupe/local/config/present.json`) | a removal: the character, or with both files the actor, or the runtime |
