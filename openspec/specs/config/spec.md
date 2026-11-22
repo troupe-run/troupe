@@ -9,16 +9,6 @@ across merged branches, and defines the actor, the first kind of config.
 
 ## Requirements
 
-### Requirement: Config is read only from its events
-troupe SHALL work out config only from the theatre's config events. It SHALL NOT read a config file's content to
-decide what config holds.
-
-#### Scenario: A file edited by hand doesn't change config
-- **WHEN** a person changes `runner` in `.troupe/actors/tester.yaml` by hand, and runs `troupe config get
-  actors.tester.runner`
-- **THEN** it shows the runner the config events set
-- **AND** the edited file is refused when it is next flushed
-
 ### Requirement: One stream per theatre
 A theatre's config events SHALL be one stream, with the same id in every theatre.
 
@@ -27,9 +17,9 @@ A theatre's config events SHALL be one stream, with the same id in every theatre
 - **THEN** both changes are events in the same stream, the second following the first
 
 ### Requirement: A command records one change
-Each command that changes config SHALL record exactly one `Config.Changed` event, however many values it changes.
-Separate commands SHALL NOT be combined into one event. A command that would change nothing SHALL record nothing
-and say so.
+Each command that changes config SHALL record exactly one `Config.Changed` event for its own change, however many
+values it changes. Separate commands SHALL NOT be combined into one event. A command that would change nothing SHALL
+record nothing and say so. The sweep before a command records its own changes (spec: config-hand-edits).
 
 #### Scenario: Several values in one command
 - **WHEN** a person runs `troupe config set actors.tester.runner=scripted actors.tester.expect='["out/hello.txt"]'`
@@ -187,7 +177,7 @@ since the split that touched what failed SHALL be in conflict, even when no sing
 
 ### Requirement: Any conflict blocks config
 While config has any conflict, every command that uses config SHALL refuse with `config.conflict`, listing each
-conflict and the fix, except `config get` and a change that resolves every conflict.
+conflict and the fix, except `config get` and a command whose changes, its sweep's included, resolve every conflict.
 
 #### Scenario: Perform with a conflict elsewhere
 - **WHEN** config has a conflict on `tester` and a person runs `troupe perform reviewer`
@@ -198,8 +188,9 @@ conflict and the fix, except `config get` and a change that resolves every confl
 - **THEN** it shows the config with each conflict and both sides' changes
 
 ### Requirement: A change resolves conflicts by setting every conflicting value
-A change recorded while config has conflicts SHALL be accepted only if it sets or unsets every conflicting value, and SHALL
-be accepted when it changes other values too. One that leaves a conflict SHALL be refused, naming what's left.
+The changes one command records while config has conflicts, its sweep's and its own, SHALL be accepted only if
+together they set or unset every conflicting value, and SHALL be accepted when they change other values too. Changes
+that leave a conflict SHALL be refused, naming what's left.
 
 #### Scenario: Resolving a window
 - **WHEN** a person resolves a conflict on `min` with `troupe config set …min=4 …max=14`
@@ -724,3 +715,14 @@ GGUF file the person points `TROUPE_RUNTIME_MISTRALRS_MODEL` at, options with `m
   `TROUPE_RUNTIME_MISTRALRS_MODEL` to the absolute path of a GGUF model file that can call tools, that the model runs
   inside the runner on this machine, and that on macOS troupe is installed on a uv-managed Python
   (`uv tool install --managed-python`)
+
+### Requirement: Config is worked out only from its events
+troupe SHALL work out config only from the theatre's config events. A config file's content SHALL change config only
+through the change the sweep records from it (spec: config-hand-edits), never by being read in place of the events.
+
+#### Scenario: A hand edit changes config through the change it records
+- **WHEN** a person changes `runner` in `.troupe/actors/tester.yaml` by hand, and runs `troupe config get
+  actors.tester.runner`
+- **THEN** it shows the edited runner
+- **AND** a `Config.Changed` setting `actors.tester.runner` was recorded, so a clone that has the events and not the
+  file works out the same config
