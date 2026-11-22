@@ -23,6 +23,7 @@ Standard library only, Python 3.12+: delivered with the pull request report (des
 """
 
 import argparse
+import datetime
 import json
 import os
 import shlex
@@ -32,12 +33,13 @@ import sys
 import time
 import tomllib
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import mutation_report as mr
 import mutation_settings as ms
+import mutation_state as st
 
 SETTINGS = Path(__file__).resolve().parent / "mutation.json"
 CHILDREN_PLUGIN = Path(__file__).resolve().parent / "mutation_children.py"
@@ -302,6 +304,21 @@ def peaks_summary(text: str) -> list[str]:
     return [out for name, lines in sections for out in memory_lines(name, "\n".join(lines))]
 
 
+@dataclass
+class StateRun:
+    """The scheduled run's kept mutmut state (#378, mutation-incremental design D2, D3)."""
+
+    directory: Path
+    mutmut: str
+    run_id: str
+    commit: str
+    today: datetime.date
+    full_refresh_days: int
+    full_refresh: bool
+    previously_saved: frozenset[str]
+    records: list[st.UnitState] = field(default_factory=list)
+
+
 def run_mutmut(
     checkout: Path,
     unit: ms.Unit,
@@ -311,6 +328,7 @@ def run_mutmut(
     *,
     children: int,
     memory_mb: int | None,
+    state: StateRun | None = None,
 ) -> dict[str, mr.Module]:
     """One unit's modules, with paths as in the checkout. `names` limits it to those globs,
     `children` is how many mutants run at once (the settings' max_children), and `memory_mb` caps
@@ -331,6 +349,7 @@ def run_mutmut(
     named = os.environ.get("PEAKS")
     peaks = Path(named) if named else workdir / PEAKS
     links: list[Path] = []
+    record: st.UnitState | None = None
     try:
         if workdir != checkout:
             link_checkout_entries(checkout, unit, links)
@@ -357,6 +376,18 @@ def run_mutmut(
             (workdir / "mutants").mkdir()
             (workdir / "mutants" / unit.source.rstrip("/")).symlink_to(
                 "src", target_is_directory=True
+            )
+        if state is not None:
+            (workdir / "mutants").mkdir(exist_ok=True)
+            record = st.restore(
+                state.directory,
+                unit,
+                workdir / "mutants",
+                mutmut=state.mutmut,
+                today=state.today,
+                full_refresh_days=state.full_refresh_days,
+                full_refresh=state.full_refresh,
+                previously_saved=unit.name in state.previously_saved,
             )
         mutmut = mutmut_bin()
         code = run([mutmut, "run", *names], workdir, deadline - time.monotonic())
@@ -393,6 +424,21 @@ def run_mutmut(
             )
         return mapped
     finally:
+        if state is not None and record is not None:
+            # Finished or not: what a run that stops completed is the next run's to keep (D2).
+            mutants = workdir / "mutants"
+            record.non_python_changes = st.non_python_changes(checkout, mutants / st.STATS)
+            st.save(
+                state.directory,
+                unit,
+                mutants,
+                record,
+                mutmut=state.mutmut,
+                run_id=state.run_id,
+                commit=state.commit,
+                today=state.today,
+            )
+            state.records.append(record)
         if workdir == checkout:
             (checkout / "src").unlink()
         for link in links:
@@ -554,13 +600,24 @@ def collect(
     settings: ms.Settings,
     only: Mapping[str, Sequence[str]] | None,
     run: Run,
+    *,
+    unit: str | None = None,
+    state: StateRun | None = None,
 ) -> dict[str, mr.Module]:
+    """`unit` limits a run to one unit, run whole, so mutmut resumes: module globs would make it
+    re-run every match instead (#378)."""
     minutes = settings.pr_budget_minutes if only is not None else settings.budget_minutes
     deadline = time.monotonic() + minutes * 60
     modules: dict[str, mr.Module] = {}
+    units = list(repository.units)
+    if unit is not None:
+        units = [u for u in units if u.name == unit]
+        if not units:
+            names = [u.name for u in repository.units]
+            raise RunError(f"{repository.name} has no unit {unit!r}; its units are {names}")
     if repository.tool == "mutmut":
-        for unit in repository.units:
-            names = list(only.get(unit.name, [])) if only is not None else []
+        for unit_ in units:
+            names = list(only.get(unit_.name, [])) if only is not None else []
             if only is not None and not names:
                 continue
             if time.monotonic() >= deadline:
@@ -568,12 +625,13 @@ def collect(
             modules.update(
                 run_mutmut(
                     checkout,
-                    unit,
+                    unit_,
                     names,
                     deadline,
                     run,
                     children=settings.max_children,
                     memory_mb=settings.mutant_memory_mb,
+                    state=state,
                 )
             )
     else:
@@ -585,8 +643,8 @@ def collect(
     return modules
 
 
-def main(argv: Sequence[str] | None = None, run: Run = run_command) -> int:
-    given = list(sys.argv[1:] if argv is None else argv)
+def subcommand(given: Sequence[str]) -> int | None:
+    """The workflow's helper commands, or None for a mutation run."""
     if given[:1] == ["peaks"] and len(given) == 2:
         # The step's exit trap: never fails, so the summary can't change how the step ends.
         path = Path(given[1])
@@ -594,13 +652,102 @@ def main(argv: Sequence[str] | None = None, run: Run = run_command) -> int:
         for line in peaks_summary(text):
             print(line, flush=True)
         return 0
+    if given[:1] == ["state-merge"] and len(given) == 4:
+        # Before the save: units this run ran from its state, the rest from the newest entry (D1a).
+        record_path = Path(given[3])
+        record = json.loads(record_path.read_text(encoding="utf-8"))
+        st.merge(Path(given[1]), Path(given[2]), ran=sorted(record.get("units", {})))
+        # Every unit the saved entry holds, so the next run notices any of them gone (#380).
+        record["kept"] = sorted((st.read_manifest(Path(given[2])) or {}).get("units", {}))
+        record_path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+        return 0
+    if given[:1] == ["state-harvest"] and len(given) == 5:
+        harvest(given[1], Path(given[2]), Path(given[3]), Path(given[4]))
+        return 0
+    return None
+
+
+def harvest(repository: str, checkout: Path, state: Path, record_path: Path) -> None:
+    """After a run killed outright (no `finally` ran, no record), keep the results mutmut had
+    written to each unit's .meta files, and record that it did (#380's review)."""
+    settings = ms.load_settings(SETTINGS.read_text(encoding="utf-8"))
+    manifest = st.read_manifest(state) or {}
+    today = datetime.datetime.now(datetime.UTC).date()
+    try:
+        commit = head(checkout)
+    except RunError:
+        commit = ""
+    records = []
+    for unit in settings.repositories[repository].units:
+        source = checkout / unit.source
+        mutants = (source.parent if source.name == "src" else checkout) / "mutants"
+        if not mutants.is_dir():
+            continue
+        record = st.UnitState(unit.name)
+        record.discarded.append(
+            "the run was killed before it saved its state: the results it had finished were kept"
+        )
+        since = manifest.get("units", {}).get(unit.name, {}).get("filled_since")
+        # A refresh discarded the old state but rewrites the manifest only when it saves: a killed
+        # refresh is a fresh fill, not the stale date, or the next run discards it again (#380).
+        try:
+            age = (today - datetime.date.fromisoformat(str(since))).days
+        except ValueError:
+            age = settings.full_refresh_days + 1
+        refresh = os.environ.get("MUTATION_FULL_REFRESH") == "true"
+        record.filled_since = None if refresh or age > settings.full_refresh_days else since
+        st.save(
+            state,
+            unit,
+            mutants,
+            record,
+            mutmut=settings.tools["mutmut"],
+            run_id=os.environ.get("MUTATION_RUN_ID", "local"),
+            commit=commit,
+            today=today,
+        )
+        records.append(record)
+    record_path.parent.mkdir(parents=True, exist_ok=True)
+    body = {"version": 1, "repository": repository, "units": {r.name: r.record() for r in records}}
+    record_path.write_text(json.dumps(body, indent=2) + "\n", encoding="utf-8")
+
+
+def finish_state(state: StateRun, repository: str, out: Path) -> int:
+    """Write the run's state record beside its report, and fail visibly (3) when a unit's kept
+    state was lost or didn't fit, the report being written already (#378, design D3)."""
+    record = {
+        "version": 1,
+        "repository": repository,
+        "units": {unit.name: unit.record() for unit in state.records},
+    }
+    (out.parent / f"state-{repository}.json").write_text(
+        json.dumps(record, indent=2) + "\n", encoding="utf-8"
+    )
+    failures = [
+        f"mutation_run: {unit.name}: {reason}"
+        for unit in state.records
+        if unit.lost or unit.unfit
+        for reason in unit.discarded
+    ]
+    for failure in failures:
+        print(failure, file=sys.stderr)
+    return 3 if failures else 0
+
+
+def main(argv: Sequence[str] | None = None, run: Run = run_command) -> int:
+    given = list(sys.argv[1:] if argv is None else argv)
+    helper = subcommand(given)
+    if helper is not None:
+        return helper
     parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n\n")[0])
     parser.add_argument("repository")
     parser.add_argument("checkout", type=Path)
     parser.add_argument("out", type=Path)
     parser.add_argument("--previous", default=None)
     parser.add_argument("--only", default=None)
+    parser.add_argument("--unit", default=None)
     args = parser.parse_args(argv)
+    state: StateRun | None = None
     try:
         settings = ms.load_settings(SETTINGS.read_text(encoding="utf-8"))
         if args.repository not in settings.repositories:
@@ -615,18 +762,51 @@ def main(argv: Sequence[str] | None = None, run: Run = run_command) -> int:
             raise RunError("--only must be a JSON object of lists of strings")
         repository = settings.repositories[args.repository]
         checkout = args.checkout.resolve()
-        modules = collect(repository, checkout, settings, only, run)
-        report = mr.Report(args.repository, head(checkout), None, modules)
+        commit = head(checkout)
+        state = state_run(settings, commit) if only is None else None
+        modules = collect(
+            repository, checkout, settings, only, run, unit=args.unit or None, state=state
+        )
+        report = mr.Report(args.repository, commit, None, modules)
         report = mr.attribute(
             report, checkout, args.previous, log=lambda line: print(f"mutation_run: {line}")
         )
     except (RunError, ms.SettingsError, mr.ReportError) as error:
         print(f"mutation_run: {error}", file=sys.stderr)
+        if state is not None:
+            # The units saved before the failure are kept: record them, so the save runs (#380).
+            args.out.parent.mkdir(parents=True, exist_ok=True)
+            finish_state(state, args.repository, args.out)
         return 2
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(mr.dump_report(report), encoding="utf-8")
     print(f"mutation_run: {len(modules)} modules from {args.repository}, written to {args.out}")
-    return 0
+    return 0 if state is None else finish_state(state, args.repository, args.out)
+
+
+def state_run(settings: ms.Settings, commit: str) -> StateRun | None:
+    """The kept-state context from the workflow's environment, or None outside it (a local run,
+    or the pull request run, which keeps no state)."""
+    directory = os.environ.get("MUTATION_STATE")
+    if not directory:
+        return None
+    saved: set[str] = set()
+    previous = os.environ.get("MUTATION_PREVIOUS_STATE")
+    if previous and Path(previous).is_file():
+        record = json.loads(Path(previous).read_text(encoding="utf-8"))
+        # The units its saved entry kept, which a single-unit run's own units don't cover (#380).
+        saved = set(record.get("kept", []))
+        saved |= {name for name, unit in record.get("units", {}).items() if unit.get("saved")}
+    return StateRun(
+        directory=Path(directory),
+        mutmut=settings.tools["mutmut"],
+        run_id=os.environ.get("MUTATION_RUN_ID", "local"),
+        commit=commit,
+        today=datetime.datetime.now(datetime.UTC).date(),
+        full_refresh_days=settings.full_refresh_days,
+        full_refresh=os.environ.get("MUTATION_FULL_REFRESH") == "true",
+        previously_saved=frozenset(saved),
+    )
 
 
 if __name__ == "__main__":
