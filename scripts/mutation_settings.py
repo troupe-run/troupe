@@ -62,6 +62,9 @@ class Settings:
     """The address space each mutant's test process may use, or None for no cap (#366). A runaway
     mutant then fails on its own instead of taking the run's cgroup down. Set from a measured run's
     peaks, never by arithmetic: it caps virtual size, which runs well above resident size."""
+    full_refresh_days: int
+    """How old a unit's kept mutmut state may grow before the scheduled run discards it and fills
+    afresh, clearing what incremental runs can't see: edited tests, changed callees (#378)."""
     tools: dict[str, str]
     repositories: dict[str, Repository]
 
@@ -82,6 +85,7 @@ SETTINGS_KEYS = {
     "max_new_issues",
     "max_children",
     "mutant_memory_mb",
+    "full_refresh_days",
     "tools",
     "repositories",
 }
@@ -207,6 +211,7 @@ def load_settings(source: str) -> Settings:
         ),
         max_new_issues=whole(raw["max_new_issues"], "max_new_issues", 0, 100),
         max_children=whole(raw["max_children"], "max_children", 1, RUNNER_CPUS),
+        full_refresh_days=whole(raw["full_refresh_days"], "full_refresh_days", 1, 365),
         mutant_memory_mb=optional_whole(
             raw["mutant_memory_mb"], "mutant_memory_mb", *MUTANT_MEMORY_MB
         ),
