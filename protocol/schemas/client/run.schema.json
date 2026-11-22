@@ -160,6 +160,14 @@
         "changes": {
           "description": "What a worktree run changed, and what has been done with it. Present exactly when the workspace is a worktree.",
           "$ref": "#/$defs/changes"
+        },
+        "usage": {
+          "description": "The tokens the run used, exactly as its recorded result carries them. Absent: no result is recorded yet, or the result carried no usage.",
+          "$ref": "../runner/run-event.schema.json#/$defs/result/properties/usage"
+        },
+        "cost": {
+          "description": "What the run cost, from its recorded result. Absent: no result is recorded yet, or the result carried no cost.",
+          "$ref": "#/$defs/cost"
         }
       },
       "dependentRequired": {"transcript": ["transcriptFormat"], "transcriptFormat": ["transcript"]},
@@ -255,6 +263,17 @@
         "seq": {"type": "integer", "minimum": 0},
         "at": {"$ref": "#/$defs/timestamp"},
         "event": {"$ref": "../runner/run-event.schema.json#/$defs/hostEvent"}
+      }
+    },
+    "cost": {
+      "title": "Run cost",
+      "description": "What a run cost in US dollars, and which kind of figure it is: reported, the result's costUsd, as the engine or its service reported it; estimated, the result's estimatedCostUsd, worked out from the price troupe gave the runner.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["usd", "kind"],
+      "properties": {
+        "usd": {"type": "number", "minimum": 0},
+        "kind": {"enum": ["reported", "estimated"]}
       }
     },
     "runNotice": {
