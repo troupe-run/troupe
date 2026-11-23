@@ -31,6 +31,7 @@ from troupe.core.config import abandoned
 from troupe.core.config.changes import apply, change
 from troupe.core.config.kinds import staged_name, staged_target
 from troupe.core.config.merge import Merged
+from troupe.core.config.moves import already_moved, moved_files, refuse_move, renames
 from troupe.core.config.projection import (
     Action,
     Flushed,
@@ -137,10 +138,26 @@ class _Work:
 def _sync(troupe_dir: Path, store: EventStore, request: Request) -> Synced:
     merged = read(store)
     found = merges(store.vcs)
-    swept = sweep(troupe_dir, merged.config, merged.files, found, force=request.force)
-    after_edits = apply(merged.config, swept.entries)
-    entries = change(after_edits, request.operations) if request.operations else []
-    after = apply(after_edits, entries) if entries else after_edits
+    moves = renames(request.operations)
+    if any(already_moved(troupe_dir, path, source) for path, source in moves):
+        # A rename of files already moved by hand: the person's rename first, then the sweep
+        # against the config it leaves, so the moved files read as the renamed entity's
+        # (config-mv design D5).
+        for path, source in moves:
+            refuse_move(merged.config, path, source)
+        entries = change(merged.config, request.operations)
+        after_own = apply(merged.config, entries)
+        swept = sweep(troupe_dir, after_own, merged.files, found, force=request.force)
+        swept = replace(swept, own_first=True)
+        after_edits = merged.config
+        after = apply(after_own, swept.entries)
+    else:
+        swept = sweep(troupe_dir, merged.config, merged.files, found, force=request.force)
+        after_edits = apply(merged.config, swept.entries)
+        for path, source in moves:
+            refuse_move(after_edits, path, source)
+        entries = change(after_edits, request.operations) if request.operations else []
+        after = apply(after_edits, entries) if entries else after_edits
     if merged.conflicts and request.query and not _resolves(store, merged, swept, entries):
         return Synced(merged, notices=[*swept.notices, *_unrecorded(merged, swept)])
     if merged.conflicts and not (swept.edits or entries):
@@ -195,8 +212,9 @@ def _work(
         data = swept.seen.get(path)
         if data is not None:
             vouched[path] = vouched.get(path, frozenset()) | {file_hash(data)}
-    before_files = targets(after_edits, swept.seen, readable)
-    files = targets(after, swept.seen, readable)
+    moved = moved_files([*swept.entries, *entries])
+    before_files = targets(after_edits, swept.seen, readable, moved_files(swept.entries))
+    files = targets(after, swept.seen, readable, moved)
     changed = {p for p in before_files.keys() | files.keys() if before_files.get(p) != files.get(p)}
     own = frozenset(changed) if entries else frozenset()
     return _Work(
@@ -236,6 +254,7 @@ def _record_and_write(troupe_dir: Path, store: EventStore, request: Request, wor
             work.swept.edits,
             (command, work.entries, own_files) if command is not None else None,
             work.typed,
+            own_first=work.swept.own_first,
         )
     except BaseException:
         for written in own_files:
@@ -259,7 +278,10 @@ def _record_and_write(troupe_dir: Path, store: EventStore, request: Request, wor
     kept = execute(troupe_dir, done, expect)
     remember_present(troupe_dir)
     marks = mark_resolved(store.vcs, done, work.found, request.marking or OFF)
-    sweep_change = _sweep_change(store, recorded, len(swept.edits), len(work.merged.heads) > 1)
+    first = (1 if len(work.merged.heads) > 1 else 0) + (
+        1 if swept.own_first and work.entries else 0
+    )
+    sweep_change = _sweep_change(store, recorded, len(swept.edits), first)
     trips = abandoned.report(store, troupe_dir, sweep_change, runs_now=request.runs_now)
     if request.resolve_all:
         trips.extend(abandoned.remind(store, troupe_dir, sweep_change))
@@ -288,7 +310,8 @@ def record_check(
     or a conflict left (for a rehearsal, which records nothing)."""
     from troupe.core.config.stream import refuse_unrecordable
 
-    refuse_unrecordable(store, merged, [*swept.entries, *entries], typed)
+    ordered = [*entries, *swept.entries] if swept.own_first else [*swept.entries, *entries]
+    refuse_unrecordable(store, merged, ordered, typed)
 
 
 def _record_only(
@@ -315,7 +338,9 @@ def _record_only(
         )
     recorded = record_with_edits(store, merged, swept.edits)
     remember_present(store.theatre / THEATRE_DIR)
-    sweep_change = _sweep_change(store, recorded, len(swept.edits), len(merged.heads) > 1)
+    sweep_change = _sweep_change(
+        store, recorded, len(swept.edits), 1 if len(merged.heads) > 1 else 0
+    )
     trips = abandoned.report(store, store.theatre / THEATRE_DIR, sweep_change)
     return Synced(
         read(store),
@@ -330,13 +355,12 @@ def _record_only(
     )
 
 
-def _sweep_change(
-    store: EventStore, recorded: Sequence[Any], edits: int, settled: bool
-) -> str | None:
-    """The change id the recorded hand edits share: the lineage of the first of them."""
+def _sweep_change(store: EventStore, recorded: Sequence[Any], edits: int, at: int) -> str | None:
+    """The change id the recorded hand edits share: the lineage of the first of them, recorded at
+    index ``at`` of the batch."""
     if not edits:
         return None
-    first = recorded[1 if settled else 0]
+    first = recorded[at]
     lineage = store.recorder.event(first.event_id)
     if lineage is None or lineage.lineage is None:
         return None

@@ -44,6 +44,11 @@ Every command but `init` runs in a **theatre**: the nearest directory, from wher
   config, hooks or pushes the run made stay.
 - **`troupe config set`**, **`config unset`** and **`config get`** change and show config. Each change is recorded
   with who made it and why (`--reason`), and troupe writes the files under `.troupe/` from config.
+- **`troupe config mv`** renames a whole actor or runtime, such as `troupe config mv actors.tester actors.qa`, as one
+  change. Its files move as they are, a runtime's actors are pointed at its new name in the same change, and changes
+  made to the old name on another branch follow it when the branches merge. It's refused for anything but a whole
+  actor or runtime, a name config doesn't hold, a new name config already holds, and a built-in runtime's name. If
+  you've already moved the files by hand, it records the rename and writes nothing.
 - **`troupe sync`** records your hand edits to the config files, each as a change by an unknown author, then makes
   every file say what config says. Every command that uses config does it first. `--rehearse` shows what it would
   record and write; `--force` replaces a file troupe can't read as config, keeping a copy.
@@ -233,6 +238,21 @@ troupe config unset <path> [--reason <reason>] [--rehearse]
 | Argument | Required | What it is |
 |---|---|---|
 | `<path>` | Yes | A value or a group to remove, such as actors.tester. A key that holds a dot goes in brackets: prices[gpt-4.1] |
+| `--reason <reason>` | No | Why, recorded with the change |
+| `--rehearse` | No | Change nothing: show what would be recorded and written |
+
+### `troupe config mv`
+
+Rename an actor or runtime, as one change, keeping its history.
+
+```text
+troupe config mv <old> <new> [--reason <reason>] [--rehearse]
+```
+
+| Argument | Required | What it is |
+|---|---|---|
+| `<old>` | Yes | The actor or runtime, such as actors.tester |
+| `<new>` | Yes | Its new name, such as actors.qa |
 | `--reason <reason>` | No | Why, recorded with the change |
 | `--rehearse` | No | Change nothing: show what would be recorded and written |
 

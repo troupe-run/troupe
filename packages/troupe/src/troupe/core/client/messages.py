@@ -574,18 +574,23 @@ def _check_path(path: list[str], where: str) -> None:
 
 @dataclass(frozen=True)
 class ConfigOperation(Message):
-    """Set the value or group at ``path``, or unset it: exactly one of ``value`` and ``unset``."""
+    """Set the value or group at ``path``, unset it, or rename to it the actor or runtime at
+    ``renamedFrom``: exactly one of ``value``, ``unset`` and ``renamedFrom``."""
 
     path: list[str] = json_field("path", min_items=1)
     value: object | None = json_field("value", default=None)
     unset: bool | None = json_field("unset", default=None)
+    renamed_from: list[str] | None = json_field("renamedFrom", default=None, min_items=1)
 
     def _check(self, where: str) -> None:
         _check_path(self.path, f"{where}.path")
+        if self.renamed_from is not None:
+            _check_path(self.renamed_from, f"{where}.renamedFrom")
         if self.unset is False:
             raise fail(f"{where}.unset", "must be true: to set a value, give value instead")
-        if (self.value is None) == (self.unset is None):
-            raise fail(where, "give exactly one of value and unset")
+        given = [self.value is not None, self.unset is not None, self.renamed_from is not None]
+        if sum(given) != 1:
+            raise fail(where, "give exactly one of value, unset and renamedFrom")
 
 
 @dataclass(frozen=True)

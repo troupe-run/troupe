@@ -342,8 +342,10 @@ CONFLICTS = st.fixed_dictionaries(
     },
     optional={"rule": st.text(min_size=1, max_size=10)},
 )
-OPERATIONS = st.fixed_dictionaries({"path": CONFIG_PATHS, "value": JSON}) | st.fixed_dictionaries(
-    {"path": CONFIG_PATHS, "unset": st.just(True)}
+OPERATIONS = (
+    st.fixed_dictionaries({"path": CONFIG_PATHS, "value": JSON})
+    | st.fixed_dictionaries({"path": CONFIG_PATHS, "unset": st.just(True)})
+    | st.fixed_dictionaries({"path": CONFIG_PATHS, "renamedFrom": CONFIG_PATHS})
 )
 NAMES = st.from_regex(r"\A[a-z][a-z0-9-]{0,10}\Z")
 INIT_STEPS = (
@@ -1054,6 +1056,31 @@ def test_a_null_inside_a_config_value_never_names_the_keys_leading_to_it(value: 
 def test_a_null_in_a_list_inside_a_config_value_is_named_by_position() -> None:
     data = {"operations": [{"path": ["actors", "a", "expect"], "value": ["x", None]}]}
     with pytest.raises(ProtocolError, match=r"operations\[0\]\.value\[1\]: must not be null"):
+        m.ConfigSetRequest.from_data(data)
+
+
+# Requirement: Config commands (config mv sends a rename operation; config-mv design D5)
+
+
+def test_a_rename_operation_round_trips_with_its_old_name() -> None:
+    data = {"operations": [{"path": ["actors", "qa"], "renamedFrom": ["actors", "tester"]}]}
+    check(data, "config-set-request.schema.json")
+    request = m.ConfigSetRequest.from_data(data)
+    assert request.operations[0].renamed_from == ["actors", "tester"]
+    assert request.to_data() == data
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        {"path": ["actors", "qa"], "renamedFrom": ["actors", "tester"], "unset": True},
+        {"path": ["actors", "qa"], "renamedFrom": ["actors", "tester"], "value": "x"},
+    ],
+)
+def test_a_rename_operation_with_a_value_or_an_unset_is_refused(operation: dict[str, Any]) -> None:
+    data = {"operations": [operation]}
+    assert not is_valid(data, "config-set-request.schema.json")
+    with pytest.raises(ProtocolError, match="exactly one of value, unset and renamedFrom"):
         m.ConfigSetRequest.from_data(data)
 
 

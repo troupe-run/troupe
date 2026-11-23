@@ -208,6 +208,23 @@ def _run_unset(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) ->
     return config.run_unset(arguments, stdout, stderr)
 
 
+def _configure_mv(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("old", metavar="old", help="the actor or runtime, such as actors.tester")
+    parser.add_argument("new", metavar="new", help="its new name, such as actors.qa")
+    parser.add_argument("--reason", help="why, recorded with the change")
+    parser.add_argument(
+        "--rehearse",
+        action="store_true",
+        help="change nothing: show what would be recorded and written",
+    )
+
+
+def _run_mv(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
+    from troupe.cli import config  # loaded when the command runs (design D2)
+
+    return config.run_mv(arguments, stdout, stderr)
+
+
 # config get
 
 
@@ -293,6 +310,12 @@ CONFIG_COMMANDS: tuple[Command, ...] = (
         "Remove config values or groups, as one change.",
         _configure_unset,
         _run_unset,
+    ),
+    Command(
+        "config mv",
+        "Rename an actor or runtime, as one change, keeping its history.",
+        _configure_mv,
+        _run_mv,
     ),
     Command(
         "config get", "Show config, or the value or group at a path.", _configure_get, _run_get

@@ -375,7 +375,7 @@ def test_config_alone_needs_one_of_its_commands() -> None:
     with pytest.raises(TroupeError) as caught:
         parse(["config"], COMMANDS)
     assert caught.value.code == "usage.missing-argument"
-    assert "set, unset, get, drop or keep" in caught.value.problem
+    assert "set, unset, mv, get, drop or keep" in caught.value.problem
 
 
 def test_a_misspelt_config_command_suggests_the_closest(repo: Repo) -> None:
@@ -847,3 +847,35 @@ def test_a_rehearsed_unset_that_would_record_a_hand_edit_exits_would_change(repo
     code, out, _ = cli("config", "unset", "actors.tester.model", "--rehearse")
     assert code == ExitCode.WOULD_CHANGE
     assert "would record .troupe/actors/tester.yaml" in out
+
+
+# Requirement: Config and sync commands (config mv)
+
+
+def test_config_mv_says_the_actor_was_renamed_with_its_change_and_files(repo: Repo) -> None:
+    _tester()
+    code, out, _ = cli("config", "mv", "actors.tester", "actors.qa", "--reason", "clearer")
+    assert code == ExitCode.OK
+    lines = out.splitlines()
+    assert lines[0] == "renamed actors.tester to actors.qa"
+    assert "wrote .troupe/actors/qa.yaml (for this change)" in lines
+    assert any(line.startswith("removed .troupe/actors/tester.yaml") for line in lines)
+    assert lines[-1].startswith("recorded change ")
+    assert _get("actors.qa.runner") == "scripted"
+
+
+def test_config_mv_with_one_path_is_a_usage_error_naming_the_new_name(repo: Repo) -> None:
+    with pytest.raises(TroupeError) as caught:
+        parse(["config", "mv", "actors.tester"], COMMANDS)
+    assert caught.value.code == "usage.missing-argument"
+    assert caught.value.details == {"command": "config mv", "argument": "new"}
+
+
+def test_a_rehearsed_config_mv_records_nothing_and_exits_would_change(repo: Repo) -> None:
+    _tester()
+    before = len(git_service(repo).history(aggregate.STREAM))
+    code, out, _ = cli("config", "mv", "actors.tester", "actors.qa", "--rehearse")
+    assert code == ExitCode.WOULD_CHANGE
+    assert out.splitlines()[0] == "would rename actors.tester to actors.qa"
+    assert len(git_service(repo).history(aggregate.STREAM)) == before
+    assert (repo.path / ".troupe" / "actors" / "tester.yaml").is_file()

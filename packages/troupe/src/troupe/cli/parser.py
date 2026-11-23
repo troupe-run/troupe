@@ -452,12 +452,15 @@ def _assign(
     positionals: Sequence[_Positional], values: Sequence[str]
 ) -> tuple[list[tuple[_Positional, list[str]]], list[str]]:
     """Share ``values`` among ``positionals`` in order, each taking as many as it can while
-    leaving enough for those after it. Returns the shares and what is left over."""
+    leaving enough for those after it, but never fewer than it needs while values are left: when
+    there are too few, the earlier ones are filled first, so the one reported missing is the
+    first that got none (``config mv <old>`` is missing ``<new>``). Returns the shares and what is
+    left over."""
     shares: list[tuple[_Positional, list[str]]] = []
     at = 0
     for index, positional in enumerate(positionals):
         later = sum(each.least for each in positionals[index + 1 :])
-        room = max(len(values) - at - later, 0)
+        room = max(len(values) - at - later, min(positional.least, len(values) - at))
         take = room if positional.most is None else min(room, positional.most)
         shares.append((positional, list(values[at : at + take])))
         at += take
