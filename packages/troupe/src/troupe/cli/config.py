@@ -1,5 +1,6 @@
-"""config set, config unset, config get, config drop, config keep and sync on the command line
-(spec: cli, config, config-hand-edits; config-model design D10; abandoned-edits design D8).
+"""config set, config unset, config mv, config get, config drop, config keep and sync on the
+command line (spec: cli, config, config-hand-edits, config-renames; config-model design D10;
+abandoned-edits design D8; config-mv design D5).
 
 Each builds its request as data and calls the core through the client protocol's dispatcher, then
 renders the result: what changed on standard output, notices on standard error. Typing a value by
@@ -30,6 +31,8 @@ SHOWN = 72
 def _entry_line(entry: dict[str, Any], *, value: bool = False) -> str:
     """What one entry did. With ``value``, what it set the value to, shortened past ``SHOWN``."""
     path = shown(entry["path"])
+    if "renamedFrom" in entry:
+        return f"renamed {shown(entry['renamedFrom'])} to {path}"
     if "after" not in entry:
         return f"unset {path}"
     line = f"{'changed' if 'before' in entry else 'set'} {path}"
@@ -131,7 +134,10 @@ def _render_change(result: dict[str, Any], stdout: TextIO, *, rehearse: bool) ->
         return ExitCode.OK
     would = "would " if rehearse else ""
     for entry in result["entries"]:
-        print(would + _entry_line(entry), file=stdout)
+        line = _entry_line(entry)
+        if rehearse and "renamedFrom" in entry:
+            line = "rename" + line.removeprefix("renamed")
+        print(would + line, file=stdout)
     for file in result["files"]:
         print(would + _file_line(file, rehearse=rehearse), file=stdout)
     if "change" in result:
@@ -171,6 +177,21 @@ def run_unset(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> 
     params: dict[str, Any] = {
         "operations": [{"path": list(parse(p)), "unset": True} for p in arguments.paths]
     }
+    if arguments.reason is not None:
+        params["reason"] = arguments.reason
+    if arguments.rehearse:
+        params["rehearse"] = True
+    result = _call(
+        "config-set", params, _session(), lambda u: _show_notice(u, stderr), _ignore_cancel
+    )
+    _notices(result, stderr)
+    return _render_change(result, stdout, rehearse=arguments.rehearse)
+
+
+def run_mv(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
+    """config mv: one rename operation (config-mv design D5); the core checks it."""
+    operation = {"path": list(parse(arguments.new)), "renamedFrom": list(parse(arguments.old))}
+    params: dict[str, Any] = {"operations": [operation]}
     if arguments.reason is not None:
         params["reason"] = arguments.reason
     if arguments.rehearse:

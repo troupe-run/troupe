@@ -16,11 +16,11 @@
 
 ## 3. `troupe config mv` (design D5)
 
-- [ ] 3.1 Add the rename operation to `client/config-set-request.schema.json` and `core/client/messages.py`. Verify `test_client_schemas.py` and `test_client_messages.py` round-trip it.
-- [ ] 3.2 Add the checks to `core/config/commands.py`: `config.move-not-entity`, `config.move-built-in`, `config.move-source-missing` and `config.move-target-exists`, each with its exit code in `core/errors.py` and its entry in `error.schema.json`. Verify with `test_config_commands.py` cases for each refusal (nothing recorded), and with protocol_guard.
-- [ ] 3.3 In `syncing.py`, work the own change out first and sweep after it when the rename's files are already moved, recording the settle, then the person's rename, then the sweep's edits. Verify with `test_config_sync.py` cases: "Config mv on files already moved", "Moved and edited, then config mv", and a plain mv still sweeping first.
-- [ ] 3.4 Move files keeping their bytes in `writeback.targets` (design D7). Verify with `test_config_writeback.py`/`test_config_files.py` cases: "A hand-formatted actor renamed" (byte-identical) and "A runtime renamed under its actors" (only the `runtime` line changes).
-- [ ] 3.5 Add `troupe config mv <old> <new> [--reason] [--rehearse]` to the CLI parser and renderer. Verify with `test_cli_config.py` cases: the output names both names, the change and the files; one path is a usage error; `--rehearse` records nothing.
+- [x] 3.1 Add the rename operation to `client/config-set-request.schema.json` and `core/client/messages.py`. Verify `test_client_schemas.py` and `test_client_messages.py` round-trip it.
+- [x] 3.2 Add the checks to `core/config/commands.py`: `config.move-not-entity`, `config.move-built-in`, `config.move-source-missing` and `config.move-target-exists`, each with its exit code in `core/errors.py` and its entry in `error.schema.json`. Verify with `test_config_commands.py` cases for each refusal (nothing recorded), and with protocol_guard.
+- [x] 3.3 In `syncing.py`, work the own change out first and sweep after it when the rename's files are already moved, recording the settle, then the person's rename, then the sweep's edits. Verify with `test_config_sync.py` cases: "Config mv on files already moved", "Moved and edited, then config mv", and a plain mv still sweeping first.
+- [x] 3.4 Move files keeping their bytes in `writeback.targets` (design D7). Verify with `test_config_writeback.py`/`test_config_files.py` cases: "A hand-formatted actor renamed" (byte-identical) and "A runtime renamed under its actors" (only the `runtime` line changes).
+- [x] 3.5 Add `troupe config mv <old> <new> [--reason] [--rehearse]` to the CLI parser and renderer. Verify with `test_cli_config.py` cases: the output names both names, the change and the files; one path is a usage error; `--rehearse` records nothing.
 - [ ] 3.6 Document `troupe config mv` in `docs/prompt-book/cli.md` (its entry, and the Commands list) and in `docs/stagecraft/hand-edit-config.md`. Verify with `test_cli_docs.py` and the user-docs tests.
 
 ## 4. Hand moves in the sweep (design D6)

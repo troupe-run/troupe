@@ -134,6 +134,11 @@ CODES: dict[str, ExitCode] = {
     "config.no-round-trip": ExitCode.FAILURE,
     "config.round-trip-kept": ExitCode.FAILURE,
     "config.unknown-actor": ExitCode.FAILURE,
+    # Renaming an actor or runtime (config-mv design D5, D6).
+    "config.move-not-entity": ExitCode.FAILURE,
+    "config.move-built-in": ExitCode.FAILURE,
+    "config.move-source-missing": ExitCode.FAILURE,
+    "config.move-target-exists": ExitCode.FAILURE,
 }
 
 

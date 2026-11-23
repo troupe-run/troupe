@@ -21,7 +21,7 @@
     },
     "operation": {
       "title": "Operation",
-      "description": "Set the value or group at a path, or unset it. Exactly one of value and unset.",
+      "description": "Set the value or group at a path, unset it, or rename to it the whole actor or runtime at renamedFrom. Exactly one of value, unset and renamedFrom.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -32,12 +32,16 @@
           "$ref": "#/$defs/path"
         },
         "value": {
-          "description": "What to set: a value, or an object to set a whole group. Absent: the path is unset.",
+          "description": "What to set: a value, or an object to set a whole group. Absent: the path is unset or renamed to.",
           "$ref": "#/$defs/value"
         },
         "unset": {
-          "description": "Remove the value or group at the path. Absent: a value is given.",
+          "description": "Remove the value or group at the path. Absent: a value is given, or a rename.",
           "const": true
+        },
+        "renamedFrom": {
+          "description": "Rename the whole actor or runtime at this path, [kind, name], to the operation's path, [kind, new name] of the same kind (troupe config mv). Absent: a value is set or unset.",
+          "$ref": "#/$defs/path"
         }
       },
       "oneOf": [
@@ -49,6 +53,11 @@
         {
           "required": [
             "unset"
+          ]
+        },
+        {
+          "required": [
+            "renamedFrom"
           ]
         }
       ]

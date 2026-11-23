@@ -273,17 +273,25 @@ def _apply(text: str, splices: list[Splice]) -> str:
 
 
 def targets(
-    config: Mapping[str, Any], seen: Mapping[str, bytes | None], read: Collection[str]
+    config: Mapping[str, Any],
+    seen: Mapping[str, bytes | None],
+    read: Collection[str],
+    moved: Mapping[str, str] | None = None,
 ) -> dict[str, bytes]:
     """Every config file ``config`` makes, by its path: the files the sweep ``read`` (a person's)
     written back surgically from the bytes it saw, and every other one rendered whole, as troupe
-    renders it (design D6)."""
+    renders it (design D6). A file a rename ``moved`` (new path to old) is written back from the
+    old file's bytes, so a moved file keeps them (config-mv design D7)."""
     from troupe.core.config.projection import render
     from troupe.core.config.reading import owned
 
     files = render(config)
-    for path in read:
-        data = seen.get(path)
+    bases = {path: path for path in read}
+    for new, old in (moved or {}).items():
+        if seen.get(old) is not None and seen.get(new) is None:
+            bases[new] = old
+    for path, base in bases.items():
+        data = seen.get(base)
         located = owner(path)
         if data is None or path not in files or located is None:
             continue

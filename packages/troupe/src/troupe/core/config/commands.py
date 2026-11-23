@@ -23,7 +23,7 @@ from troupe.core.client import messages as m
 from troupe.core.client.dispatch import Method, Send
 from troupe.core.client.session import Session
 from troupe.core.config import abandoned, aggregate
-from troupe.core.config.changes import UNSET, get
+from troupe.core.config.changes import UNSET, Rename, get
 from troupe.core.config.kinds import staged_target
 from troupe.core.config.projection import Action, Resolved, locked
 from troupe.core.config.syncing import Request, Synced, file_notices, sync_config
@@ -107,7 +107,7 @@ def sync_files(
 
 async def config_set(request: m.ConfigSetRequest, session: Session, send: Send) -> Message:
     store = open_event_store(session)
-    operations = [(op.path, UNSET if op.unset else op.value) for op in request.operations]
+    operations = [_operation(op) for op in request.operations]
     if request.rehearse:
         synced = sync_config(
             session.theatre, store, _request(session, send, operations=operations, rehearse=True)
@@ -118,6 +118,13 @@ async def config_set(request: m.ConfigSetRequest, session: Session, send: Send) 
             notices=_notices(synced.notices),
         )
     return record_change(session, store, operations, reason=request.reason, send=send)
+
+
+def _operation(op: m.ConfigOperation) -> tuple[list[str], object]:
+    """A request's operation as ``changes.change`` takes it: a value, ``UNSET`` or a ``Rename``."""
+    if op.renamed_from is not None:
+        return op.path, Rename(tuple(op.renamed_from))
+    return op.path, UNSET if op.unset else op.value
 
 
 def _target(action: Action) -> str:

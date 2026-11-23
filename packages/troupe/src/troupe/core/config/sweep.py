@@ -88,6 +88,10 @@ class Swept:
     says, keeping a copy, and nothing recorded from them (design D11)."""
     notices: tuple[Notice, ...] = ()
     """What the sweep has to say about itself, such as an unreadable record of present files."""
+    own_first: bool = False
+    """Whether the command's own change goes first, before these edits: a rename of files a
+    person already moved, whose edits were worked out against the renamed config (config-mv
+    design D5)."""
 
     @property
     def entries(self) -> list[Entry]:
