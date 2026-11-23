@@ -1,5 +1,5 @@
-"""Which entity each config write names, through renames (spec: config, "A change on another line
-follows a rename", "A name after a rename is a new entity", "Renames that can't both hold are a
+"""Which entity each config write names, through renames (spec: config-renames, "A change on another
+line follows a rename", "A name after a rename is a new entity", "Renames that can't both hold are a
 conflict"; config-mv design D2, D3).
 
 The merge (``troupe.core.config.merge``) contests and replays writes by path. A rename moves a

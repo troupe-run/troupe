@@ -114,14 +114,20 @@ involved, and its fix SHALL name `troupe config mv` for each rename meant.
 
 ### Requirement: Config mv on files already moved records the rename
 When a person runs `troupe config mv <kind>.<old> <kind>.<new>` after moving the old entity's files to the new names
-by hand, it SHALL record the rename as the person's change and write no file. Then the sweep SHALL read the moved
-files against the renamed entity, and the remaining files as usual.
+by hand, it SHALL record the rename as the person's change and write only what the rename changes (a runtime's
+actors). Then the sweep SHALL read the moved files against the renamed entity, and the remaining files as usual.
 
 #### Scenario: The way out of an ambiguous move
 - **WHEN** actors `a` and `b` have equal values, a person has moved `a`'s files to `x`'s names and `b`'s to `y`'s, and
   runs `troupe config mv actors.a actors.x`
 - **THEN** the person's change renames `a` to `x`, and a change by the `unknown` actor renames `b` to `y`
 - **AND** no file is written
+
+#### Scenario: A runtime already moved, then config mv
+- **WHEN** `tester` has `runtime: gpu-box`, a person has moved `.troupe/runtimes/gpu-box.yaml` to
+  `.troupe/runtimes/gpu.yaml`, and runs `troupe config mv runtimes.gpu-box runtimes.gpu`
+- **THEN** the person's change renames the runtime and sets `actors.tester.runtime` to `gpu`, nothing else is recorded,
+  and only the `runtime` line of `.troupe/actors/tester.yaml` is written
 
 #### Scenario: Moved and edited, then config mv
 - **WHEN** a person has moved `tester`'s files to `qa`'s names and changed the runner in `qa.yaml`, and runs `troupe

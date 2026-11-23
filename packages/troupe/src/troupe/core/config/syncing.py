@@ -44,6 +44,7 @@ from troupe.core.config.projection import (
     merges,
     plan,
     refuse,
+    render,
     stage,
 )
 from troupe.core.config.stream import read, record_with_edits, refuse_conflicts
@@ -147,7 +148,14 @@ def _sync(troupe_dir: Path, store: EventStore, request: Request) -> Synced:
             refuse_move(merged.config, path, source)
         entries = change(merged.config, request.operations)
         after_own = apply(merged.config, entries)
-        swept = sweep(troupe_dir, after_own, merged.files, found, force=request.force)
+        swept = sweep(
+            troupe_dir,
+            after_own,
+            merged.files,
+            found,
+            force=request.force,
+            rendered_before=render(merged.config),
+        )
         swept = replace(swept, own_first=True)
         after_edits = merged.config
         after = apply(after_own, swept.entries)
