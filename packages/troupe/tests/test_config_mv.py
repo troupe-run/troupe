@@ -291,3 +291,23 @@ def test_config_mv_on_a_runtime_already_moved_records_only_the_rename_and_moves_
     assert config["runtimes"] == {"gpu": GPU_BOX}
     assert {actor["runtime"] for actor in config["actors"].values()} == {"gpu"}
     assert "runtime: gpu\n" in _file(repo, "actors/tester.yaml").read_text("utf-8")
+
+
+def test_config_mv_on_a_runtime_already_moved_keeps_a_hand_formatted_actor_and_its_lines(
+    repo: Repo,
+) -> None:
+    """Review of #505: an actor file a person formatted still names the old runtime, and its values
+    are what config held before the rename, so it's in line: only its runtime line changes."""
+    _on_gpu_box(repo)
+    tester = _file(repo, "actors/tester.yaml")
+    tester.write_text("# mine\n" + tester.read_text("utf-8"), encoding="utf-8")
+    _call(repo, "sync", {})
+    lines = tester.read_text("utf-8").splitlines()
+    _file(repo, "runtimes/gpu-box.yaml").rename(_file(repo, "runtimes/gpu.yaml"))
+    before = len(_events(repo))
+    _mv(repo, ["runtimes", "gpu-box"], ["runtimes", "gpu"])
+    events = _events(repo)
+    assert len(events) == before + 1
+    assert events[-1].lineage["actor"]["kind"] != "unknown"
+    after = tester.read_text("utf-8").splitlines()
+    assert [a for a, b in zip(after, lines, strict=True) if a != b] == ["runtime: gpu"]

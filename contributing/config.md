@@ -83,8 +83,9 @@ their values are equal (the whole group's hash, so formatting never counts). A v
 either side is refused (`config.move-ambiguous`); a pair naming a built-in runtime, and entities left unpaired, stay
 a removal and an addition, with `config.move-not-detected`. Each pair is one `Config.Changed` holding the rename,
 sourced from the new main file. A `config mv` whose files a person already moved records its rename first and sweeps
-against the config it leaves (design D5), counting a file that's exactly what config rendered before the rename as in
-line: a runtime's actors still name the old runtime as troupe last wrote them.
+against the config it leaves (design D5), counting a file whose values are what config held for it before the rename
+as in line: a runtime's actors still name the old runtime, however they're formatted, so they're written back
+surgically and record nothing.
 
 Each file whose values differ is one `Config.Changed` by the explicit `unknown` actor, `via: file`, with the file and
 its hashes in `vcs.source`; one sweep's changes share a change id of their own. Comments, order and formatting are
