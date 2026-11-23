@@ -149,9 +149,10 @@ run it again; a start before the drop makes the drop refuse with `run`.
 Rejected: holding the config files' lock from perform's sync to its start. It would hold every config command up
 while a worktree is planned, and a nested sync would take the lock twice.
 
-The event-store spec's "Events are never classified or dropped" becomes "Events are never classified, and leave
-only through a person's drop". The store still never decides what's abandoned. It only removes what it's told to,
-and only whole segments.
+The event-store spec's requirement "Events are never classified or dropped" keeps its title, since a MODIFIED delta
+has to name it as it is; its body changes to say the store keeps every event unless a person drops it through the
+store's drop, and still never classifies or drops one of its own accord. The store never decides what's abandoned. It
+only removes what it's told to, and only whole segments.
 
 Rejected:
 - **Removing lines from a segment.** Segments are append-only, and another session's segment is never written.
