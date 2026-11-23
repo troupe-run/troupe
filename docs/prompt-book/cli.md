@@ -52,7 +52,8 @@ Every command but `init` runs in a **theatre**: the nearest directory, from wher
   change. Its files move as they are, a runtime's actors are pointed at its new name in the same change, and changes
   made to the old name on another branch follow it when the branches merge. It's refused for anything but a whole
   actor or runtime, a name config doesn't hold, a new name config already holds, and a built-in runtime's name. If
-  you've already moved the files by hand, it records the rename and writes nothing.
+  you've already moved the files by hand, it records the rename and writes only what the rename changes: a runtime's
+  actors' `runtime` lines.
 - **`troupe sync`** records your hand edits to the config files, each as a change by an unknown author, then makes
   every file say what config says. Every command that uses config does it first. `--rehearse` shows what it would
   record and write; `--force` replaces a file troupe can't read as config, keeping a copy.

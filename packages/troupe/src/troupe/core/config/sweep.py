@@ -107,12 +107,15 @@ def sweep(
     *,
     reader: Reader = read_steady,
     force: bool = False,
+    rendered_before: Mapping[str, bytes] | None = None,
 ) -> Swept:
     """The hand edits to the config files under ``troupe_dir`` (.troupe/), worked out against
     ``config``. ``recorded`` is every hash a change recorded for each file, and ``merged`` what
     the VCS says a merge combined into each. Refuses, recording nothing, an unknown file or a file
     that can't be read as config; with ``force``, such a file is set aside instead (``refused``),
-    and the others are still read."""
+    and the others are still read. With ``rendered_before`` (what config rendered before a rename
+    the command records first), a file that's exactly that is in line too: troupe wrote it, and
+    the write updates it (config-mv design D5, review of #505)."""
     disk = on_disk(troupe_dir)
     refuse(Plan((), disk.unknown))
     remembered, notices = present_at_last_sync(troupe_dir)
@@ -133,6 +136,8 @@ def sweep(
         if path in finishing:
             continue
         have = seen[path] = reader(troupe_dir, path)
+        if have is not None and rendered_before is not None and have == rendered_before.get(path):
+            continue
         kind = _classify(path, have, rendered.get(path), merged.get(path), vouched, remembered)
         if kind == "removed":
             removed.append(path)
@@ -144,27 +149,8 @@ def sweep(
                 reads.append(read)
     present = {path for path, data in seen.items() if data is not None} | finishing
     read_paths = frozenset(r.path for r in reads)
-    # Hand moves first: an entity's files gone and another's arrived with the same values are a
-    # rename, not a removal and an addition (config-mv design D6).
-    pairs, move_notices = pair_moves(config, reads, removed)
-    moved_in = {read.path for pair in pairs for read in pair.arrived}
-    moved_out = {path for pair in pairs for path in pair.gone}
-    arrived = any(
-        r.group[0] == ACTORS and r.owns == "fields" and r.group[1] not in config.get(ACTORS, {})
-        for r in reads
-    )
-    reads = [read for read in reads if read.path not in moved_in]
-    removed = [path for path in removed if path not in moved_out]
-    edits = _checked_edits(
-        troupe_dir,
-        config,
-        rendered,
-        _Found(reads, removed, pairs, arrived),
-        present,
-        seen,
-        refused,
-        force,
-    )
+    found, move_notices = _moves_aside(config, reads, removed)
+    edits = _checked_edits(troupe_dir, config, rendered, found, present, seen, refused, force)
     return Swept(tuple(edits), seen, read_paths, frozenset(refused), (*notices, *move_notices))
 
 
@@ -215,6 +201,28 @@ class _Found:
     removed: list[str]
     pairs: list[Pair]
     arrived: bool
+
+
+def _moves_aside(
+    config: Tree, reads: list[FileValues], removed: list[str]
+) -> tuple["_Found", list[Notice]]:
+    """Hand moves first: an entity's files gone and another's arrived with the same values are a
+    rename, not a removal and an addition (config-mv design D6). The files they pair are set
+    aside from the reads and removals the rest of the sweep works edits out from."""
+    pairs, notices = pair_moves(config, reads, removed)
+    moved_in = {read.path for pair in pairs for read in pair.arrived}
+    moved_out = {path for pair in pairs for path in pair.gone}
+    arrived = any(
+        r.group[0] == ACTORS and r.owns == "fields" and r.group[1] not in config.get(ACTORS, {})
+        for r in reads
+    )
+    found = _Found(
+        [read for read in reads if read.path not in moved_in],
+        [path for path in removed if path not in moved_out],
+        pairs,
+        arrived,
+    )
+    return found, notices
 
 
 def _checked_edits(

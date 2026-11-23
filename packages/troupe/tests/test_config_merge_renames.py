@@ -1,5 +1,6 @@
-"""The config merge with renames, over generated histories (spec: config, "A change on another line
-follows a rename", "Renames that can't both hold are a conflict"; config-mv design D2, D3).
+"""The config merge with renames, over generated histories (spec: config-renames, "A change on
+another line follows a rename", "Renames that can't both hold are a conflict"; config-mv design D2,
+D3).
 
 The histories are built in memory, as in test_config_merge_properties.py, with more kinds of
 change: actors made, removed and renamed, as well as values changed, on lines that fork and settle.

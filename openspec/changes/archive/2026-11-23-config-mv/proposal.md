@@ -52,11 +52,14 @@ at all.
 
 ### New Capabilities
 
-None.
+- `config-renames`: renaming an actor or runtime as one change: the rename entry, a runtime's actors following it,
+  what `config mv` refuses, and a merge that follows renames, with its conflicts. Split out of `config`, which would
+  otherwise pass the size gate's limit (owner, 2026-11-23). Its Purpose goes in infrastructure's
+  `oob/troupe-spec-purposes.json`, in a PR that merges after this one.
 
 ### Modified Capabilities
 
-- `config`: a rename entry; `config mv` and what it refuses; a merge that follows renames, with its three conflicts.
+- `config`: the change entry names a rename's shape, `config mv` joins the config commands, and #503's merge scenario.
 - `config-hand-edits`: a hand move recorded as a rename; moved and edited; ambiguous moves; `config mv` on files
   already moved.
 - `config-files`: a rename moves an entity's files keeping their bytes, and writes back a runtime's actors

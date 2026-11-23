@@ -1,9 +1,8 @@
 """Renaming an actor or runtime: what a rename may do, the files it moves, and the hand moves a
-sweep pairs (spec: config, "Only a whole actor or runtime can be renamed", "A rename needs its
-source and refuses an existing target", "A built-in runtime's name is never renamed to or from";
+sweep pairs (spec: config-renames, "Only a whole actor or runtime can be renamed", "A rename needs
+its source and refuses an existing target", "A built-in runtime's name is never renamed to or from";
 config-hand-edits, "A hand move with the same values is a rename", "An ambiguous hand move is
-refused"; config-mv design D5, D6, D7).
-"""
+refused"; config-mv design D5, D6, D7)."""
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass

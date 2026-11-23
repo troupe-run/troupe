@@ -1,8 +1,8 @@
 """Renaming an actor or runtime with config mv, end to end through the client protocol (spec:
-config, "A rename is one entry naming the old name", "A runtime's rename carries the actors that
-name it", "Only a whole actor or runtime can be renamed", "A rename needs its source and refuses
-an existing target", "A built-in runtime's name is never renamed to or from"; config-files, "A
-rename moves an entity's files as they are"; config-hand-edits, "Config mv on files already moved
+config-renames, "A rename is one entry naming the old name", "A runtime's rename carries the actors
+that name it", "Only a whole actor or runtime can be renamed", "A rename needs its source and
+refuses an existing target", "A built-in runtime's name is never renamed to or from"; config-files,
+"A rename moves an entity's files as they are"; config-hand-edits, "Config mv on files already moved
 records the rename"; config-mv design D5, D7)."""
 
 import asyncio
@@ -273,3 +273,21 @@ def test_a_plain_config_mv_still_records_a_hand_edit_to_the_old_files_first(repo
     assert edited.lineage["actor"] == {"kind": "unknown"}
     assert renamed.lineage["actor"]["kind"] != "unknown"
     assert _config(repo)["actors"]["qa"]["workspace"] == "theatre"
+
+
+def test_config_mv_on_a_runtime_already_moved_records_only_the_rename_and_moves_its_actors(
+    repo: Repo,
+) -> None:
+    """Review of #505: the actors' files still name the old runtime as troupe last wrote them, so
+    they're in line, never read as edits setting it back."""
+    _on_gpu_box(repo)
+    _file(repo, "runtimes/gpu-box.yaml").rename(_file(repo, "runtimes/gpu.yaml"))
+    before = len(_events(repo))
+    _mv(repo, ["runtimes", "gpu-box"], ["runtimes", "gpu"])
+    events = _events(repo)
+    assert len(events) == before + 1
+    assert events[-1].lineage["actor"]["kind"] != "unknown"
+    config = _config(repo)
+    assert config["runtimes"] == {"gpu": GPU_BOX}
+    assert {actor["runtime"] for actor in config["actors"].values()} == {"gpu"}
+    assert "runtime: gpu\n" in _file(repo, "actors/tester.yaml").read_text("utf-8")

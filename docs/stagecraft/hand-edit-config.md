@@ -43,8 +43,8 @@ runs recorded under the old name, and changes made to it on other branches all f
   and writing another. The output says so. To keep the history, move first and edit after a command, or use
   `troupe config mv`, then edit.
 - **Two moves troupe can't tell apart are refused** (`config.move-ambiguous`), such as two identical actors moved at
-  once. Name each one with `troupe config mv`: run on files you've already moved, it records that rename and writes
-  nothing.
+  once. Name each one with `troupe config mv`: run on files you've already moved, it records that rename, and writes
+  only what the rename changes (a runtime's actors).
 - **Move an actor's `.yaml` and `.md` together.** An actor needs its `.yaml`, so a `.md` left behind is refused.
 - **Renaming a runtime** points every actor that names it at the new name, in the same change. A runtime with a
   built-in's name, such as `ollama`, holds overrides of troupe's own and is never renamed.
