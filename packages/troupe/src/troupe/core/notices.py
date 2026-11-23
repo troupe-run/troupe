@@ -56,6 +56,11 @@ CODES: dict[str, str] = {
     "the changes since can be kept or dropped.",
     "config.kept-unreadable": "troupe's record of the abandoned edits a person kept can't be "
     "read, so it may ask about one again.",
+    # Hand moves (config-mv design D6). contributing/config.md lists them.
+    "config.hand-move-recorded": "The sweep recorded files a person moved as renaming an actor "
+    "or runtime, by the unknown author.",
+    "config.move-not-detected": "Files a person moved were read as a removal and an addition, "
+    "not a rename: their values differ, or a built-in runtime's name is involved.",
     # Run workspaces (worktree-stage design D9). contributing/runs.md lists them.
     "workspace.waiting": "Making, filling, capturing or removing a run's worktree is taking a "
     "while.",

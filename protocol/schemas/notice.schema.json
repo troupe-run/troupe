@@ -446,6 +446,97 @@
       ],
       "properties": {
         "code": {
+          "const": "config.hand-move-recorded"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "file",
+            "from",
+            "to"
+          ],
+          "properties": {
+            "file": {
+              "description": "The renamed entity's main config file, relative to the theatre.",
+              "type": "string",
+              "minLength": 1
+            },
+            "from": {
+              "description": "The old name, as a config path such as actors.tester.",
+              "type": "string",
+              "minLength": 1
+            },
+            "to": {
+              "description": "The new name, as a config path such as actors.qa.",
+              "type": "string",
+              "minLength": 1
+            },
+            "change": {
+              "description": "The change id the sweep's changes share. Absent: a rehearsal, which records nothing.",
+              "type": "string",
+              "minLength": 1
+            },
+            "rehearsal": {
+              "description": "Present when a rehearsal reports what the real command would do; it did none of it.",
+              "const": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "required": [
+        "details"
+      ],
+      "properties": {
+        "code": {
+          "const": "config.move-not-detected"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "removed",
+            "added",
+            "reason"
+          ],
+          "properties": {
+            "removed": {
+              "description": "The entities whose files went, as config paths.",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "added": {
+              "description": "The entities whose files arrived, as config paths.",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "reason": {
+              "description": "Why it isn't a rename: their values differ, or a built-in runtime's name is involved.",
+              "enum": [
+                "values differ",
+                "built-in"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "required": [
+        "details"
+      ],
+      "properties": {
+        "code": {
           "const": "config.conflict-resolved"
         },
         "details": {

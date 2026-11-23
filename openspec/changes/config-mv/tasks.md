@@ -21,15 +21,15 @@
 - [x] 3.3 In `syncing.py`, work the own change out first and sweep after it when the rename's files are already moved, recording the settle, then the person's rename, then the sweep's edits. Verify with `test_config_sync.py` cases: "Config mv on files already moved", "Moved and edited, then config mv", and a plain mv still sweeping first.
 - [x] 3.4 Move files keeping their bytes in `writeback.targets` (design D7). Verify with `test_config_writeback.py`/`test_config_files.py` cases: "A hand-formatted actor renamed" (byte-identical) and "A runtime renamed under its actors" (only the `runtime` line changes).
 - [x] 3.5 Add `troupe config mv <old> <new> [--reason] [--rehearse]` to the CLI parser and renderer. Verify with `test_cli_config.py` cases: the output names both names, the change and the files; one path is a usage error; `--rehearse` records nothing.
-- [ ] 3.6 Document `troupe config mv` in `docs/prompt-book/cli.md` (its entry, and the Commands list) and in `docs/stagecraft/hand-edit-config.md`. Verify with `test_cli_docs.py` and the user-docs tests.
+- [x] 3.6 Document `troupe config mv` in `docs/prompt-book/cli.md` (its entry, and the Commands list) and in `docs/stagecraft/hand-edit-config.md`. Verify with `test_cli_docs.py` and the user-docs tests.
 
 ## 4. Hand moves in the sweep (design D6)
 
-- [ ] 4.1 Pair gone and new entities by value hash in `sweep.py`, making one move Edit per pair, with the files, lineage source and `config.hand-move-recorded` notice. Verify with `test_config_sweep.py` cases: "An actor moved by hand", "Formatting doesn't count", "A runtime moved by hand carries its actors", "Moved and moved back before a sweep", and "Moved back after a sweep".
-- [ ] 4.2 Refuse ambiguous pairings with `config.move-ambiguous` (exit code, error schema). Verify with "Two identical actors moved" and "One actor copied to two names", nothing recorded.
-- [ ] 4.3 Add `config.move-not-detected` for unpaired gone and new entities of a kind, and for a built-in runtime's file moved, and catalogue both new notices in `notice.schema.json`. Verify with "Moved and edited at once" and "A built-in runtime's file moved".
-- [ ] 4.4 Extend the "an actor needs its .yaml" fix when a new actor arrived in the same sweep. Verify with the modified "A character left without its actor" scenario.
-- [ ] 4.5 Add an end-to-end hand-move test to `test_hand_edit_end_to_end.py`: `git mv` both files, `troupe sync`, then `troupe config get` shows `qa`, and a second sync records nothing. Verify it passes.
+- [x] 4.1 Pair gone and new entities by value hash in `sweep.py`, making one move Edit per pair, with the files, lineage source and `config.hand-move-recorded` notice. Verify with `test_config_sweep.py` cases: "An actor moved by hand", "Formatting doesn't count", "A runtime moved by hand carries its actors", "Moved and moved back before a sweep", and "Moved back after a sweep".
+- [x] 4.2 Refuse ambiguous pairings with `config.move-ambiguous` (exit code, error schema). Verify with "Two identical actors moved" and "One actor copied to two names", nothing recorded.
+- [x] 4.3 Add `config.move-not-detected` for unpaired gone and new entities of a kind, and for a built-in runtime's file moved, and catalogue both new notices in `notice.schema.json`. Verify with "Moved and edited at once" and "A built-in runtime's file moved".
+- [x] 4.4 Extend the "an actor needs its .yaml" fix when a new actor arrived in the same sweep. Verify with the modified "A character left without its actor" scenario.
+- [x] 4.5 Add an end-to-end hand-move test to `test_hand_edit_end_to_end.py`: `git mv` both files, `troupe sync`, then `troupe config get` shows `qa`, and a second sync records nothing. Verify it passes.
 
 ## 5. Runs follow a rename (design D4)
 
@@ -40,7 +40,7 @@
 
 ## 6. Protocol and contributor docs
 
-- [ ] 6.1 Record the additions in the protocol CHANGELOG (non-breaking), and describe entities, keys and the name contest in `contributing/config.md`. Verify with `test_user_docs_changelog.py` and a read-through against design D2 and D3.
+- [x] 6.1 Describe the rename entry, entities, keys, the name contest, #503's re-contest, hand-move pairing and the new codes in `contributing/config.md`. The protocol CHANGELOG is written by release-please from the commits (`feat(protocol)`, `feat(config)`, `feat(cli)`, `fix(config)`), so it isn't edited by hand. Verify with `test_user_docs_*.py` and a read-through against design D2, D3, D6 and D9.
 
 ## 7. Integration
 

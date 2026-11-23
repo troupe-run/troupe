@@ -139,6 +139,7 @@ CODES: dict[str, ExitCode] = {
     "config.move-built-in": ExitCode.FAILURE,
     "config.move-source-missing": ExitCode.FAILURE,
     "config.move-target-exists": ExitCode.FAILURE,
+    "config.move-ambiguous": ExitCode.FAILURE,
 }
 
 

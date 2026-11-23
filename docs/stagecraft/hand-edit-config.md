@@ -5,7 +5,8 @@ status: written
 prerelease: true
 ---
 
-You change config by editing the files under `.troupe/`, or with `troupe config set` and `troupe config unset`.
+You change config by editing the files under `.troupe/`, or with `troupe config set`, `troupe config unset` and
+`troupe config mv`.
 Either way, troupe records each change as an event, and the files are written from those events: `actors/tester.yaml`
 for the actor `tester`, with `actors/tester.md` for its character, and `runtimes/<name>.yaml` for a runtime.
 
@@ -27,6 +28,26 @@ troupe sweeps the config files for edits it didn't make, and records each meanin
 - **Adding a file adds what it holds; deleting one removes it.** Delete `actors/tester.md` and the character is
   removed; delete both of `tester`'s files and the actor is. troupe only counts a file as deleted if it saw it in
   this clone before: a file this clone never had, such as one never committed, is written again from config.
+
+## Renaming
+
+To rename an actor or a runtime, use `troupe config mv actors.tester actors.qa`, or move its files yourself
+([#138](https://github.com/troupe-run/troupe/issues/138)). Either way it's one change, a rename: the history, the
+runs recorded under the old name, and changes made to it on other branches all follow it to the new name.
+
+- **A file moved by hand is a rename when its values are the same.** Move `actors/tester.yaml` and
+  `actors/tester.md` to `actors/qa.yaml` and `actors/qa.md` (with `git mv` or your editor), and troupe records
+  `tester` renamed to `qa`, by an unknown author. Comments, key order and quoting don't count, so changing those as
+  you move is fine.
+- **Moving and editing at once is a removal and an addition**, since troupe can't tell it from deleting one actor
+  and writing another. The output says so. To keep the history, move first and edit after a command, or use
+  `troupe config mv`, then edit.
+- **Two moves troupe can't tell apart are refused** (`config.move-ambiguous`), such as two identical actors moved at
+  once. Name each one with `troupe config mv`: run on files you've already moved, it records that rename and writes
+  nothing.
+- **Move an actor's `.yaml` and `.md` together.** An actor needs its `.yaml`, so a `.md` left behind is refused.
+- **Renaming a runtime** points every actor that names it at the new name, in the same change. A runtime with a
+  built-in's name, such as `ollama`, holds overrides of troupe's own and is never renamed.
 
 When an edit troupe recorded is then abandoned, because the file went back to what it was, troupe asks whether to
 keep or drop the changes it left behind: see [Undoing an edit](#undoing-an-edit).
