@@ -159,7 +159,7 @@ def test_a_parallel_run_with_no_test_past_the_stall_limit_dumps_no_stack(
 SLOWEST_TEST_MARGIN = 120
 """The stall limit must be above this many seconds: the slowest test takes 87 s on Windows CI."""
 STALL_LIMIT_CEILING = 600
-"""...and at most this many: the CI job's 20 minutes, less a Windows suite of up to 10 minutes."""
+"""...and at most this many: the CI job's 30 minutes, less a Windows leg of up to 20 minutes."""
 
 
 def test_the_repositorys_stall_limit_is_set_above_the_slowest_test_and_below_the_jobs_room() -> (

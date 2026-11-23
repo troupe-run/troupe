@@ -78,7 +78,7 @@ HTTP_RETRIES = 6
 each install as UV_HTTP_RETRIES unless whoever runs the check set it (install-check-network-retries
 design D1-D3). uv's default of 3 gave up on PyPI after 48.6 s on one CI runner (#375). Six, with
 uv's exponential backoff (about 51 s in all) and its 10 s connect timeout, outlast about two minutes
-of an unreachable index, while a CI leg that fails anyway still ends inside its 20-minute job
+of an unreachable index, while a CI leg that fails anyway still ends inside its 30-minute job
 timeout. A failure that isn't a network fault, such as a package the index doesn't have, isn't
 retried."""
 
