@@ -293,6 +293,10 @@ class PathItem(RootModel[str]):
     root: Annotated[str, Field(min_length=1)]
 
 
+class RenamedFromItem(RootModel[str]):
+    root: Annotated[str, Field(min_length=1)]
+
+
 class ConfigChangedJson(
     RootModel[Union[str, float, bool, list["ConfigChangedJson"], dict[str, "ConfigChangedJson"]]]
 ):
@@ -344,7 +348,7 @@ class ConfigChangedValue(RootModel[str | float | bool | list[ConfigChangedJson]]
 
 class ConfigChangedEntry1(StrictModel):
     """
-    One value's change. A missing before means the value didn't exist; a missing after means it was removed. An entry for a group (an object) only ever removes it.
+    One value's change. A missing before means the value didn't exist; a missing after means it was removed, unless the entry has renamedFrom: then it renames a whole actor or runtime, and before is the hash of the group it moves. An entry for a group (an object) only ever removes or renames it.
     """
 
     model_config = ConfigDict(
@@ -362,11 +366,15 @@ class ConfigChangedEntry1(StrictModel):
     """
     The new value. Never an object: an object is a group of values, each changed by its own entry.
     """
+    renamedFrom: Annotated[list[RenamedFromItem] | None, Field(max_length=2, min_length=2)] = None
+    """
+    For a rename: the old name, as [kind, name], whose whole group the entry moves to its path, also [kind, name] of the same kind. A rename has a before and no after.
+    """
 
 
 class ConfigChangedEntry2(StrictModel):
     """
-    One value's change. A missing before means the value didn't exist; a missing after means it was removed. An entry for a group (an object) only ever removes it.
+    One value's change. A missing before means the value didn't exist; a missing after means it was removed, unless the entry has renamedFrom: then it renames a whole actor or runtime, and before is the hash of the group it moves. An entry for a group (an object) only ever removes or renames it.
     """
 
     model_config = ConfigDict(
@@ -386,18 +394,22 @@ class ConfigChangedEntry2(StrictModel):
     """
     The new value. Never an object: an object is a group of values, each changed by its own entry.
     """
+    renamedFrom: Annotated[list[RenamedFromItem] | None, Field(max_length=2, min_length=2)] = None
+    """
+    For a rename: the old name, as [kind, name], whose whole group the entry moves to its path, also [kind, name] of the same kind. A rename has a before and no after.
+    """
 
 
 class ConfigChangedEntry(RootModel[ConfigChangedEntry1 | ConfigChangedEntry2]):
     root: Annotated[ConfigChangedEntry1 | ConfigChangedEntry2, Field(title="Change entry")]
     """
-    One value's change. A missing before means the value didn't exist; a missing after means it was removed. An entry for a group (an object) only ever removes it.
+    One value's change. A missing before means the value didn't exist; a missing after means it was removed, unless the entry has renamedFrom: then it renames a whole actor or runtime, and before is the hash of the group it moves. An entry for a group (an object) only ever removes or renames it.
     """
 
 
 class ConfigChanged(StrictModel):
     """
-    The payload of one config change (topic troupe.core.config.aggregate:Config.Changed): every value one command changed, and every config file it wrote or removed. A command records exactly one for its own change; the sweep before it records one more for each config file a person edited, by the unknown author, with the file in its lineage's vcs.source. Field names are as recorded.
+    The payload of one config change (topic troupe.core.config.aggregate:Config.Changed): every value one command changed (or the entity it renamed), and every config file it wrote or removed. A command records exactly one for its own change; the sweep before it records one more for each config file a person edited, by the unknown author, with the file in its lineage's vcs.source. Field names are as recorded.
     """
 
     model_config = ConfigDict(

@@ -257,6 +257,38 @@ def test_a_config_change_record_refuses(state: dict[str, Any]) -> None:
     assert not RECORD.is_valid(_record(state))
 
 
+# Requirement: A rename is one entry naming the old name
+
+RENAME: dict[str, Any] = {
+    "path": ["actors", "qa"],
+    "renamedFrom": ["actors", "tester"],
+    "before": HASH,
+}
+
+
+def _rename(**changes: object) -> dict[str, Any]:
+    return {"changes": [_changed(RENAME, **changes)], "files": []}
+
+
+def test_a_rename_entry_validates_with_its_old_name_and_the_groups_hash() -> None:
+    RECORD.validate(_record(_rename()))
+
+
+@pytest.mark.parametrize(
+    "state",
+    [
+        pytest.param(_rename(after="qa"), id="a rename with an after"),
+        pytest.param(_rename(before=...), id="a rename without the group's hash"),
+        pytest.param(_rename(renamedFrom=["actors"]), id="an old name without its kind"),
+        pytest.param(_rename(renamedFrom=["actors", "tester", "x"]), id="an old name too deep"),
+        pytest.param(_rename(renamedFrom=["actors", ""]), id="an empty old name"),
+        pytest.param(_rename(path=["actors", "qa", "runner"]), id="a rename to a value path"),
+    ],
+)
+def test_a_rename_entry_refuses(state: dict[str, Any]) -> None:
+    assert not RECORD.is_valid(_record(state))
+
+
 def test_a_config_change_held_as_opaque_bytes_is_refused() -> None:
     record = _record(CHANGE)
     del record["state"]
