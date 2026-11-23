@@ -33,10 +33,10 @@
 
 ## 5. Runs follow a rename (design D4)
 
-- [ ] 5.1 Add `actorNow` to the run summary schema and the runs projection, filled from `Merged.names`. Verify with `test_run_queries.py` cases: renamed, chain, not renamed, removed.
-- [ ] 5.2 Render `tester (now qa)` in `troupe status` (list and one run) and `troupe logs`. Verify with `test_cli_runs.py`/`test_cli_render.py` cases for each "Status and logs show an actor's current name" scenario.
-- [ ] 5.3 Name the new name in `perform`'s `config.unknown-actor` fix. Verify with a `test_perform.py` case "Performing the old name".
-- [ ] 5.4 Document both in `docs/prompt-book/cli.md`'s `status` and `logs` entries. Verify with the user-docs tests.
+- [x] 5.1 Add `actorNow` to the run summary schema and the runs projection, filled from `Merged.names`. Verify with `test_runs_follow_renames.py` cases (status `--json` validated against the result schema): renamed, chain, not renamed, removed.
+- [x] 5.2 Render `tester (now qa)` in `troupe status` (list and one run) and `troupe logs`. Logs adds its `actor:` line only when the actor was renamed, so existing logs output is unchanged. Verify with `test_runs_follow_renames.py` cases for each "Status and logs show an actor's current name" scenario, and `test_cli_runs.py` still passing.
+- [x] 5.3 Name the new name in `perform`'s `config.unknown-actor` fix. Verify with `test_runs_follow_renames.py` cases "Performing the old name" and a chain of renames.
+- [x] 5.4 Document both in `docs/prompt-book/cli.md`'s `status` and `logs` entries. Verify with the user-docs tests.
 
 ## 6. Protocol and contributor docs
 

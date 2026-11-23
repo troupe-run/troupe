@@ -202,12 +202,22 @@ def _from_config(merged: Merged, name: str) -> _What:
     if not isinstance(actor, dict):
         known = sorted(actors) if isinstance(actors, dict) else []
         listed = ", ".join(known) or "none yet"
+        renamed = merged.names.renamed_to("actors", name) if merged.names is not None else None
+        details: dict[str, object] = {"actor": name, "known": known}
+        if renamed is not None:
+            details["renamedTo"] = renamed
+            fix = f"{name} was renamed {renamed}: troupe perform {renamed}."
+        else:
+            fix = (
+                f"Perform one of the actors config has, or define {name} with troupe config "
+                f"set {shown(('actors', name, 'runner'))}=... "
+                f"{shown(('actors', name, 'expect'))}=..."
+            )
         raise TroupeError(
             "config.unknown-actor",
             problem=f"Config has no actor named {name!r} (it has: {listed}).",
-            fix=f"Perform one of the actors config has, or define {name} with troupe config set "
-            f"{shown(('actors', name, 'runner'))}=... {shown(('actors', name, 'expect'))}=...",
-            details={"actor": name, "known": known},
+            fix=fix,
+            details=details,
         )
     paths = list(dict.fromkeys(actor["expect"]))
     check: m.EffectCheck = m.FilesEffectCheck(paths=paths) if paths else m.NoEffectCheck()

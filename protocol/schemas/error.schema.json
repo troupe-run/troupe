@@ -2818,6 +2818,11 @@
                 "type": "string",
                 "minLength": 1
               }
+            },
+            "renamedTo": {
+              "description": "The actor's name now, when it was renamed away from the name given.",
+              "type": "string",
+              "minLength": 1
             }
           }
         }

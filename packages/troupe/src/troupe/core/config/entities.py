@@ -437,3 +437,26 @@ class Names:
         if token is None or (kind, token) not in self.present:
             return None
         return self.named.name((kind, token))
+
+    def renamed_to(self, kind: str, name: str) -> str | None:
+        """What the entity last renamed away from ``name`` is called now: None when nothing was,
+        when lines renamed different entities away from it, or when it holds nothing now."""
+        renames = [
+            write
+            for (k, _), writes in self.found.writes.items()
+            if k == kind
+            for write in writes
+            if write.rename and write.before == name and write.event in self.events
+        ]
+        latest = [
+            write
+            for write in renames
+            if not any(write.event in self.found.ancestors[o.event] for o in renames)
+        ]
+        keys = {write.key for write in latest}
+        if len(keys) != 1:
+            return None
+        [key] = keys
+        if key not in self.present:
+            return None
+        return self.named.name(key)

@@ -311,6 +311,8 @@ class RunSummary(Message):
     changes: ChangesData | None = json_field("changes", default=None)
     usage: p.Usage | None = json_field("usage", default=None)
     cost: CostData | None = json_field("cost", default=None)
+    actor_now: str | None = json_field("actorNow", default=None, pattern=ACTOR_NAME)
+    """The actor's name now, when it was renamed since the run (config-mv design D4)."""
 
     def _check(self, where: str) -> None:
         ended = self.state == "ended"
