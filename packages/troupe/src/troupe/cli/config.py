@@ -107,6 +107,13 @@ def _hand_edit_lines(result: dict[str, Any], *, rehearse: bool) -> list[str]:
     would = "would " if rehearse else ""
     lines = []
     for notice in result["notices"]:
+        if notice["code"] == "config.hand-move-recorded":
+            details = notice["details"]
+            lines.append(
+                f"{would}record {details['file']}: {details['from']} renamed to {details['to']} "
+                "by an unknown author"
+            )
+            continue
         if notice["code"] != "config.hand-edit-recorded":
             continue
         count = notice["details"]["entries"]
@@ -261,6 +268,14 @@ def run_sync(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> E
     _notices(result, stderr)
     would = "would " if arguments.rehearse else ""
     for edit in result["edits"]:
+        moved = next((e for e in edit["entries"] if "renamedFrom" in e), None)
+        if moved is not None:
+            print(
+                f"{would}record {edit['path']}: {shown(moved['renamedFrom'])} renamed to "
+                f"{shown(moved['path'])} by an unknown author",
+                file=stdout,
+            )
+            continue
         count = len(edit["entries"])
         print(
             f"{would}record {edit['path']}: an edit by an unknown author "

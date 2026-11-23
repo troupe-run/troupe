@@ -3,7 +3,8 @@
 A theatre's config is events: one `Config.Changed` per command that changes it, and one per config file a person
 edited, which the sweep before each command records (#119), in one stream per theatre, merged across branches. The
 files under `.troupe/` are a projection that troupe writes, and reads back for a person's edits. This page describes
-config as built by the `config-model` change (#60) and the `hand-edit-sweep` change (#119); the decisions behind it
+config as built by the `config-model` change (#60), the `hand-edit-sweep` change (#119) and the `config-mv` change
+(#138, renames); the decisions behind it
 are #5 (net change at command boundaries), #6 (layout), #7 (schemas), #135 (values are never merged inside), #136
 (config history) and #137 (`--rehearse`).
 
@@ -16,6 +17,10 @@ are #5 (net change at command boundaries), #6 (layout), #7 (schemas), #135 (valu
 - **An entry** is `{"path": [...keys], "before": "sha256:...", "after": value}`. `before` is the SHA-256 of the old
   value's canonical JSON, absent when there was none; `after` is the new value, absent when it was removed, and never
   an object, since an object is a group of values (#135). Removing a group is one entry addressed to it.
+- **A rename** is one entry, `{"path": [kind, new], "renamedFrom": [kind, old], "before": <the group's hash>}`, with no
+  `after`: a whole actor or runtime moves to the new name (#138). A runtime's rename also sets `runtime` on each actor
+  that names it, as ordinary entries in the same change. No other entry in a change touches the names a rename moves
+  between, so `changes.apply` applies it where it stands in the list.
 - **`Config.Settled`** ends a fork in the config stream, recorded with the first change after a merge, in the same
   batch ([`events/config-settled.schema.json`](../protocol/schemas/events/config-settled.schema.json)).
 
@@ -40,6 +45,17 @@ Config is worked out from the stream's whole history, both sides of every fork, 
   by the same rule, until one is left or a line stays in, so the order events arrived in never decides a value
   ([#190](https://github.com/troupe-run/troupe/issues/190)). Only the first contest's conflict is reported. A
   settling event is read as a join, never for its state.
+- **Contests until nothing changes.** A write one point's contest leaves out can cover other points too (a group's
+  removal), so a point whose covering writes lost one is contested again, until nothing changes. Otherwise two
+  concurrent writes beneath it would replay in arrival order (#503).
+- **Entities** (`troupe.core.config.entities`, config-mv design D2, D3). A write names an entity, not just a name. Each
+  event's view maps names to keys: with one parent, the parent's view after its own entries; at a join, worked out
+  from the join's history. A key is the name its entity was born with, plus the renames that had freed that name in
+  the writing event's history, so with no renames every key is its name and the merge is exactly what it was
+  (`tests/merge_oracle.py` pins that). The contests above run on entity paths. Each key's name is contested by the
+  same rule, from its births, renames and removals. Two renames, or a rename and a removal, conflict. So does a
+  clash: two keys given one name at once, whose renames are then left out. Each key is shown under its name at the
+  end, and `Merged.names` says what a name at an earlier config version is called now, for runs (`tester (now qa)`).
 
 Any conflict blocks every use of config but `config get`, until one change that sets or unsets every conflicting
 value resolves it (`troupe.core.config.stream`). Reads record nothing.
@@ -60,6 +76,14 @@ config path in this order (hand-edit-sweep design D3):
 | Absent, and this clone had it at its last sync (`.troupe/local/config/present.json`) | a removal: the character, or with both files the actor, or the runtime |
 | Absent, and this clone never had it | not read: written again from config |
 | Anything else, an older version troupe wrote included | read (`troupe.core.config.reading`), and its values compared with config's |
+
+Before working edits out, the sweep pairs hand moves (`troupe.core.config.moves.pair_moves`, config-mv design D6):
+an entity whose files are all removals, and an entity config doesn't hold whose files were read, are a rename when
+their values are equal (the whole group's hash, so formatting never counts). A value that matches more than one on
+either side is refused (`config.move-ambiguous`); a pair naming a built-in runtime, and entities left unpaired, stay
+a removal and an addition, with `config.move-not-detected`. Each pair is one `Config.Changed` holding the rename,
+sourced from the new main file. A `config mv` whose files a person already moved records its rename first and sweeps
+against the config it leaves (design D5).
 
 Each file whose values differ is one `Config.Changed` by the explicit `unknown` actor, `via: file`, with the file and
 its hashes in `vcs.source`; one sweep's changes share a change id of their own. Comments, order and formatting are
@@ -258,3 +282,10 @@ The sweep's limits, in `troupe.core.defaults` (hand-edit-sweep design D4):
 | `runtime.unfit` | The run's runtime, as it resolves with the person's environment, doesn't fit the actor's runner (`troupe.core.interim.RuntimeFit`). Names the reasons, where each value came from (never the value), and the runtimes that fit. Judged before the model and the credential |
 | `config.not-resolvable` | `config get --resolved` was given a path that isn't `runtimes` or `runtimes.<name>` |
 | `config.waiting` | (notice) Another troupe command is writing config files, and this one is waiting |
+| `config.move-not-entity` | `config mv` was given something other than two whole actors or two whole runtimes: a value path, another kind, or two kinds. `details` hold `path`, `from` and the `rule` |
+| `config.move-built-in` | `config mv` names a built-in runtime as the source or the target. Names the runtime |
+| `config.move-source-missing` | `config mv`'s source isn't in config (after the sweep) |
+| `config.move-target-exists` | `config mv`'s target is already in config. There's no option to overwrite it |
+| `config.move-ambiguous` | The sweep found files moved by hand whose values match more than one entity on either side. Names every `.yaml` involved, records nothing, and says to name each rename with `config mv` |
+| `config.hand-move-recorded` | (notice) The sweep recorded files a person moved as a rename, by the unknown author. Names the main file, the old and new names and the change id; in a rehearsal, says it would |
+| `config.move-not-detected` | (notice) Files a person moved were read as a removal and an addition, because their values differ or a built-in runtime's name is involved. Names both, and says `config mv` keeps the history |

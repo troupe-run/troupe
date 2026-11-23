@@ -482,6 +482,10 @@ def _edit_notices(
     found: list[Notice] = []
     for edit in edits:
         file = f"{THEATRE_DIR}/{edit.path}"
+        moved = next((e for e in edit.entries if "renamedFrom" in e), None)
+        if moved is not None:
+            found.append(_move_notice(file, moved, change_id, rehearse=rehearse))
+            continue
         details: dict[str, Any] = {"file": file, "entries": len(edit.entries)}
         if change_id is not None:
             details["change"] = change_id
@@ -505,6 +509,26 @@ def _edit_notices(
             )
         )
     return found
+
+
+def _move_notice(
+    file: str, entry: dict[str, Any], change_id: str | None, *, rehearse: bool
+) -> Notice:
+    """A config.hand-move-recorded notice for a hand move (config-mv design D6)."""
+    old, new = shown(entry["renamedFrom"]), shown(entry["path"])
+    details: dict[str, Any] = {"file": file, "from": old, "to": new}
+    if change_id is not None:
+        details["change"] = change_id
+    if rehearse:
+        details["rehearsal"] = True
+    verb = "would record" if rehearse else "recorded"
+    return Notice(
+        "config.hand-move-recorded",
+        problem=f"troupe {verb} the files moved to {file} as renaming {old} to {new}, by an "
+        "unknown author.",
+        fix="Nothing to do: its history and runs follow it to the new name.",
+        details=details,
+    )
 
 
 def file_notices(synced: Synced) -> list[Notice]:

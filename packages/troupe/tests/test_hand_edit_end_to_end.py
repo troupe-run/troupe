@@ -80,3 +80,37 @@ def test_config_by_hand_from_init_to_sync(repo: Repo) -> None:
     assert code == ExitCode.OK, err
     assert len(_changes(repo)) == 1 + len(edits) + 1
     assert audition["lineage"]["actor"]["kind"] == "human"  # type: ignore[index]
+
+
+def test_an_actor_moved_with_git_mv_is_renamed_end_to_end(repo: Repo) -> None:
+    """config-mv tasks 4.5: git mv both files, sync, and config has the actor under its new name;
+    a second sync records nothing."""
+    code, _, err = cli("init", "--audition", "--runner", "scripted")
+    assert code == ExitCode.OK, err
+    (repo.path / LEAD_MD).write_bytes(b"You are terse.\n")
+    code, _, err = cli("sync")
+    assert code == ExitCode.OK, err
+    repo.commit_all("Add a troupe theatre")
+    before = len(_changes(repo))
+    repo.git("mv", str(LEAD_YAML), ".troupe/actors/star.yaml")
+    repo.git("mv", str(LEAD_MD), ".troupe/actors/star.md")
+
+    code, out, err = cli("sync")
+    assert code == ExitCode.OK, err
+    assert "actors.lead renamed to actors.star by an unknown author" in out
+    changes = _changes(repo)
+    assert len(changes) == before + 1
+    entries = changes[-1]["changes"]
+    assert isinstance(entries, list)
+    [entry] = entries
+    assert {key: entry[key] for key in ("path", "renamedFrom")} == {
+        "path": ["actors", "star"],
+        "renamedFrom": ["actors", "lead"],
+    }
+    assert "after" not in entry
+    code, out, _ = cli("config", "get", "actors.star.character")
+    assert code == ExitCode.OK
+    assert out.startswith("You are terse.\n")
+    code, _, _ = cli("sync")
+    assert code == ExitCode.OK
+    assert len(_changes(repo)) == before + 1

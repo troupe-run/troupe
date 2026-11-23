@@ -25,8 +25,9 @@ from pathlib import Path
 from typing import Any
 
 from troupe.core import strict_json
-from troupe.core.config.changes import UNSET, Tree, apply, change
+from troupe.core.config.changes import UNSET, Rename, Tree, apply, change
 from troupe.core.config.kinds import ACTORS, CHARACTER, actor_files, staged_target
+from troupe.core.config.moves import Pair, pair_moves
 from troupe.core.config.projection import (
     Plan,
     file_hash,
@@ -142,12 +143,29 @@ def sweep(
             else:
                 reads.append(read)
     present = {path for path, data in seen.items() if data is not None} | finishing
+    read_paths = frozenset(r.path for r in reads)
+    # Hand moves first: an entity's files gone and another's arrived with the same values are a
+    # rename, not a removal and an addition (config-mv design D6).
+    pairs, move_notices = pair_moves(config, reads, removed)
+    moved_in = {read.path for pair in pairs for read in pair.arrived}
+    moved_out = {path for pair in pairs for path in pair.gone}
+    arrived = any(
+        r.group[0] == ACTORS and r.owns == "fields" and r.group[1] not in config.get(ACTORS, {})
+        for r in reads
+    )
+    reads = [read for read in reads if read.path not in moved_in]
+    removed = [path for path in removed if path not in moved_out]
     edits = _checked_edits(
-        troupe_dir, config, rendered, reads, removed, present, seen, refused, force
+        troupe_dir,
+        config,
+        rendered,
+        _Found(reads, removed, pairs, arrived),
+        present,
+        seen,
+        refused,
+        force,
     )
-    return Swept(
-        tuple(edits), seen, frozenset(r.path for r in reads), frozenset(refused), tuple(notices)
-    )
+    return Swept(tuple(edits), seen, read_paths, frozenset(refused), (*notices, *move_notices))
 
 
 def _classify(
@@ -188,12 +206,22 @@ def _read(troupe_dir: Path, path: str, data: bytes, *, force: bool) -> FileValue
         return None
 
 
+@dataclass
+class _Found:
+    """What the sweep found to work edits out from: the files read and removed (hand moves
+    aside), the hand moves, and whether a new actor's .yaml arrived."""
+
+    reads: list[FileValues]
+    removed: list[str]
+    pairs: list[Pair]
+    arrived: bool
+
+
 def _checked_edits(
     troupe_dir: Path,
     config: Tree,
     rendered: Mapping[str, bytes],
-    reads: list[FileValues],
-    removed: Sequence[str],
+    found: _Found,
     present: set[str],
     seen: Mapping[str, bytes | None],
     refused: set[str],
@@ -201,9 +229,10 @@ def _checked_edits(
 ) -> list[Edit]:
     """Each file's edit, once the config they make together breaks no rule in a file read; with
     ``force``, a file whose values break one is set aside and the rest worked out again."""
+    reads = found.reads
     while True:
-        operations = _operations(config, reads, removed, present, troupe_dir)
-        edits = _edits(config, rendered, operations, seen)
+        operations = _operations(config, found, present, troupe_dir)
+        edits = _edits(config, rendered, operations, seen, {p.main: p for p in found.pairs})
         entries = [entry for edit in edits for entry in edit.entries]
         try:
             refuse_file_problems(reads, apply(config, entries), troupe_dir)
@@ -218,15 +247,15 @@ def _checked_edits(
 
 
 def _operations(
-    config: Tree,
-    reads: Sequence[FileValues],
-    removed: Sequence[str],
-    present: set[str],
-    troupe_dir: Path,
+    config: Tree, files: _Found, present: set[str], troupe_dir: Path
 ) -> dict[str, list[Operation]]:
     """What each file sets or unsets: a fields file its group whole (keeping the character), a
-    character file the character, and a deleted file what it held (design D4, D5)."""
-    found: dict[str, list[Operation]] = {}
+    character file the character, a deleted file what it held (design D4, D5), and a hand move
+    the rename, keyed by the new entity's main file (config-mv design D6)."""
+    reads, removed = files.reads, files.removed
+    found: dict[str, list[Operation]] = {
+        pair.main: [((pair.kind, pair.new), Rename((pair.kind, pair.old)))] for pair in files.pairs
+    }
     for read in reads:
         kind, name = read.group
         if read.owns == "character":
@@ -252,7 +281,13 @@ def _operations(
                 md,
                 "invalid",
                 f"its actor's .yaml file, .troupe/{path}, was deleted, and an actor needs it",
-                "Restore the .yaml file, or delete this file too to remove the actor.",
+                "Restore the .yaml file, or delete this file too to remove the actor."
+                + (
+                    " If you moved the actor, move this file with its .yaml, or rename it with "
+                    "troupe config mv."
+                    if files.arrived
+                    else ""
+                ),
             )
             error.path = str(troupe_dir / md)
             raise error
@@ -281,6 +316,7 @@ def _edits(
     rendered: Mapping[str, bytes],
     operations: Mapping[str, list[Operation]],
     seen: Mapping[str, bytes | None],
+    pairs: Mapping[str, Pair],
 ) -> list[Edit]:
     """Each file's edit, in path order, each worked out on the config the ones before it leave."""
     current = config
@@ -290,6 +326,10 @@ def _edits(
         if not entries:
             continue
         current = apply(current, entries)
+        pair = pairs.get(path)
+        if pair is not None:
+            edits.append(_move(pair, entries, rendered, seen))
+            continue
         data = seen.get(path)
         before = rendered.get(path)
         files: list[dict[str, str]] = []
@@ -312,6 +352,32 @@ def _edits(
             )
         )
     return edits
+
+
+def _move(
+    pair: Pair,
+    entries: Sequence[Entry],
+    rendered: Mapping[str, bytes],
+    seen: Mapping[str, bytes | None],
+) -> Edit:
+    """A hand move's edit: the rename, the new files read and the old ones gone, with the new main
+    file as its source, from the old main file as config rendered it (config-mv design D6)."""
+    old_main = pair.gone[0]
+    files = [
+        {"path": read.path, "hash": file_hash(data)}
+        for read in pair.arrived
+        if (data := seen.get(read.path)) is not None
+    ]
+    files += [{"path": path} for path in pair.gone]
+    before = rendered.get(old_main)
+    after = seen.get(pair.main)
+    return Edit(
+        pair.main,
+        tuple(entries),
+        file_hash(before) if before is not None else None,
+        file_hash(after) if after is not None else None,
+        tuple(sorted(files, key=lambda f: f["path"])),
+    )
 
 
 _MARKER_LINE = re.compile(rb"^(<<<<<<< |=======\r?$|>>>>>>> )", re.MULTILINE)
