@@ -69,6 +69,25 @@ replaces such a file with what config says, keeping a copy. While config has con
 command's own are recorded together only if they set every conflicting value, each one a hand edit resolves is named
 in `config.conflict-resolved`, and `config get` records nothing short of that (`config.hand-edit-unrecorded`).
 
+## Abandoned edits
+
+`troupe.core.config.abandoned` finds the round trip a sweep closes, after it's recorded (abandoned-edits design D1
+to D7). For each of the sweep's edits, it takes the part of config the file owns (an actor's fields, its character,
+the whole actor when both files went, or a runtime), and replays the config stream's tail since its last settle. If
+that part is back to what it was before an earlier event, the latest such event starts the round trip, which ends at
+the sweep's last edit. One sweep's round trips are one. It compares values only and never asks git, so a stash
+looks like any restore (#1).
+
+A round trip can be dropped only while it's the tail of the stream and alone in its event files. `blocked` names the
+first reason it can't, in this order: `changes-more` (an event in it changes a value outside its files), `built-on`
+(a later config event follows it), `run` (a `Run.Started` names one of its events among its config heads, or perform
+is about to start one), `committed` and `shares-segment` (the store's `droppable`). The command whose sweep closed
+it reports `config.edit-abandoned`; `troupe sync` reports it again while the round trip at the stream's head can
+still be dropped. `config-drop` holds the config files' lock and calls the store's `drop`, whose check, run under
+the store's lock, looks again for runs and later changes ([event-store.md](event-store.md#visibility-and-abandoned-edits)).
+`config-keep` adds the closing change id to `.troupe/local/config/kept.json`, clone-local; an unreadable record
+counts as none kept (`config.kept-unreadable`).
+
 ## Files
 
 `troupe.core.config.projection` renders each actor to `actors/<name>.yaml` (its schema named twice, at troupe.run
@@ -226,6 +245,10 @@ The sweep's limits, in `troupe.core.defaults` (hand-edit-sweep design D4):
 | `config.hand-edit-recorded` | (notice) The sweep recorded a person's edit to a config file, by the unknown author. Names the file, the number of values and the change id; in a rehearsal, says it would |
 | `config.conflict-resolved` | (notice) A hand edit resolved a config conflict. Names the path, the file, the value taken (or that it was unset) and the conflicting changes, so nothing is resolved unseen |
 | `config.hand-edit-unrecorded` | (notice) `config get` found hand edits that leave config's conflicts unresolved, so it recorded nothing. Names the files and the paths left |
+| `config.edit-abandoned` | (notice) A sweep put a config file's values back to what they were before earlier changes. Names the closing change id, the files and the round trip's changes, and whether `troupe config drop` can remove them; if not, the `reason` and what blocks it |
+| `config.kept-unreadable` | (notice) This clone's record of the abandoned edits a person kept can't be read, so troupe may ask about one again |
+| `config.no-round-trip` | `config drop` or `config keep` named a change that put no file back. Names the change |
+| `config.round-trip-kept` | `config drop` was refused: the round trip can't be dropped. Names the change, the `reason` and what blocks it; nothing is removed |
 | `runtime.invalid-value` | A `TROUPE_RUNTIME_` variable is set to something its field doesn't accept. Names the variable and what's accepted, never the value |
 | `runtime.no-model` | Nothing sets the model for a run on a runtime. Names the actor's, the runtime's and the variable's places to set one |
 | `runtime.credential-unset` | A run's runtime reads its credential from a variable that isn't set. Names the runtime and the variable, or `namedBy`, the `TROUPE_RUNTIME_` variable that named it, never the name it holds |

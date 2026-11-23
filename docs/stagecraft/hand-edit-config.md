@@ -28,11 +28,46 @@ troupe sweeps the config files for edits it didn't make, and records each meanin
   removed; delete both of `tester`'s files and the actor is. troupe only counts a file as deleted if it saw it in
   this clone before: a file this clone never had, such as one never committed, is written again from config.
 
-When an edit troupe recorded is then abandoned, because the file went back to what it was, history shows the change
-and the change back. Keeping or dropping those is [#45](https://github.com/troupe-run/troupe/issues/45).
+When an edit troupe recorded is then abandoned, because the file went back to what it was, troupe asks whether to
+keep or drop the changes it left behind: see [Undoing an edit](#undoing-an-edit).
 
 `troupe sync` does the sweep on its own, and makes every file say what config says. `troupe sync --rehearse` shows
 what it would record and write, and changes nothing.
+
+## Undoing an edit
+
+Say you change `expect` in `actors/tester.yaml`, run a command, then change your mind and run `git restore` on the
+file. The command after the restore records the edit back, so history reads "changed, then changed back". Since the
+file's values are back to what they were before those changes, troupe says so with the notice
+`config.edit-abandoned`, and asks you to choose ([#45](https://github.com/troupe-run/troupe/issues/45)):
+
+```text
+troupe config drop <change>   # remove the changes, as if the edit never happened
+troupe config keep <change>   # keep them in history, and stop asking
+```
+
+`<change>` is the change id the notice names. Nothing is dropped unless you run `troupe config drop`. If you don't
+answer, the changes are kept, and `troupe sync` asks again while they can still be dropped.
+
+- **Values are what count, not bytes.** Putting the values back by hand, with a different comment, counts too.
+  Several edits undone at once count as one round trip; putting back only some of what you changed doesn't count.
+- **Whoever made the change.** A `troupe config set` undone by `git restore` is offered too.
+- **A stash looks like a restore.** troupe doesn't look at git's stash. If you drop after `git stash` and then
+  `git stash pop`, the edit is recorded again, as a new edit: nothing is lost, because the file holds it.
+
+A drop only removes event files that nobody else could have seen or used, so it never rewrites git. It's refused,
+and the notice says the changes are kept, when:
+
+- **a run used them**: a `troupe perform` ran with the edit, or with the file put back (the run's record names the
+  config it ran under);
+- **a change was recorded on top of them**, such as a `troupe config set` after the restore, or in the same command
+  that recorded it;
+- **they're committed**, or staged;
+- **they change more than the file**: another file was edited in between, or a `config set` changed other values
+  too;
+- **their event file holds other events**, such as an edit to another file that the same command recorded.
+
+Dropped changes leave the files as they are: they already say what config goes back to.
 
 ## What troupe won't read
 

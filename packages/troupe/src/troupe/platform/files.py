@@ -242,6 +242,23 @@ def remove_tree(path: str | os.PathLike[str]) -> None:
         shutil.rmtree(path, onexc=writable_then_retry)
 
 
+def remove_file(path: str | os.PathLike[str]) -> None:
+    """Remove the file ``path``; nothing when it doesn't exist.
+
+    A read-only file is made writable first, because Windows refuses to delete one (POSIX only
+    needs the directory to be writable).
+    """
+    try:
+        os.remove(path)
+    except FileNotFoundError:
+        return
+    except PermissionError:
+        if not _WINDOWS:
+            raise
+        os.chmod(path, stat.S_IWRITE | stat.S_IREAD)
+        os.remove(path)
+
+
 def temporary_directory() -> Path:
     """The platform's directory for temporary files, resolved: ``TMPDIR`` on POSIX, ``TEMP`` on
     Windows, as ``tempfile`` finds them."""

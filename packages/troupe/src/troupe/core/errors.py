@@ -52,6 +52,8 @@ CODES: dict[str, ExitCode] = {
     "events.stream-forked": ExitCode.FAILURE,
     "events.settle-incomplete": ExitCode.FAILURE,
     "events.missing-parent": ExitCode.FAILURE,
+    # A person's drop of an abandoned edit (abandoned-edits design D4).
+    "events.not-droppable": ExitCode.FAILURE,
     "events.malformed-record": ExitCode.FAILURE,
     "events.unknown-format": ExitCode.FAILURE,
     "events.lineage-invalid": ExitCode.FAILURE,
@@ -126,6 +128,10 @@ CODES: dict[str, ExitCode] = {
     "config.file-invalid": ExitCode.FAILURE,
     "config.file-changing": ExitCode.FAILURE,
     "config.write-back-failed": ExitCode.FAILURE,
+    # Dropping or keeping an abandoned edit (abandoned-edits design D6). contributing/config.md
+    # lists them.
+    "config.no-round-trip": ExitCode.FAILURE,
+    "config.round-trip-kept": ExitCode.FAILURE,
     "config.unknown-actor": ExitCode.FAILURE,
 }
 

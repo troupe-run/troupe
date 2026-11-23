@@ -92,10 +92,13 @@ order, and the first that fails is the reason:
 3. **`run`**: a recorded `Run.Started` names one of its events among its config heads, or `runs_now` says the command
    reporting it is about to start one (perform's sweep, D5). Details name the run, when there is one.
 4. **`committed`**: a recording of one of its events is in a segment that is committed (in HEAD or the index).
-5. **`other-branch`**: a recording is in a segment whose header names another branch, or no branch.
-6. **`shares-segment`**: a segment holding one of its events holds an event outside the round trip, of any stream.
+5. **`shares-segment`**: a segment holding one of its events holds an event outside the round trip, of any stream,
+   or an unfinished batch.
 
-Order matters for the message: the reason a person can act on comes first. Steps 4 to 6 are the store's (D4).
+There's no "another branch" reason: an uncommitted segment of another branch is never read on this one (event-store,
+"Uncommitted events from another branch are left out"), so its events are never part of a round trip here.
+
+Order matters for the message: the reason a person can act on comes first. Steps 4 and 5 are the store's (D4).
 
 So the drop is safe exactly when the round trip is the tail of the config stream, nothing refers to it, and its
 events are alone in uncommitted segments of this branch. At most one round trip can be droppable at a time: the one
@@ -110,15 +113,16 @@ def droppable(self, events: Sequence[str]) -> str | None: ...
 def drop(self, events: Sequence[str], check: Callable[[], None]) -> tuple[Path, ...]: ...
 ```
 
-- `droppable` returns the first of `committed`, `other-branch` or `shares-segment` that holds for any recording of
-  any of `events`, else None. It runs no git command beyond `committed_under` on the events directory, as visibility
+- `droppable` returns `committed` or `shares-segment` if either holds for any recording of any of `events`, else
+  None. It runs no git command beyond `committed_under` on the events directory, as visibility
   already does.
 - `drop` takes the store's write lock, refreshes, and calls `check`, which raises to refuse. Under the same lock it
   runs `droppable`, refuses with `events.not-droppable` (naming the reason and each segment) if that fails, and
-  refuses if any visible event outside `events` names one of them as a parent. Then it deletes each segment holding
-  them, and returns their paths. Deleting goes through the platform seam (`platform/files.py` gains `remove_file`,
-  beside `remove_tree`), so Windows' sharing rules are handled in one place. If a deletion fails partway, the remaining segments are left, the error names them, and the
-  next read rebuilds the order (a missing parent can't arise, since every event in a deleted segment belongs to the
+  refuses (reason `parent`) if any visible event outside `events` names one of them as a parent. An event that isn't
+  visible is refused as `unknown-event`. Then it deletes each segment holding them, and returns their paths.
+  Deleting goes through the platform seam (`platform/files.py` gains `remove_file`, beside `remove_tree`), so
+  Windows' sharing rules are handled in one place. If a deletion fails partway, the remaining segments are left, the
+  error (reason `remove-failed`) names them, and the next read rebuilds the order (a missing parent can't arise, since every event in a deleted segment belongs to the
   round trip and the round trip's events only point back to each other and to `X`'s parent).
 - Afterwards the store's order is rebuilt on its next read, with the `events.order-rebuilt` notice and followers
   starting again, as when a file is removed by hand. That's expected, and the drop's result says so.
@@ -144,7 +148,7 @@ person hasn't kept (D7), it adds the notice:
 - `fix`: `troupe config drop <closing> removes them; troupe config keep <closing> keeps them and stops this
   notice.` Or, when not droppable: `Nothing to do: they stay in history.`
 - `details`: `change` (the closing change id), `files`, `changes` (the round trip's change ids, in order),
-  `droppable` (boolean), and when it isn't, `reason` (one of D3's six) with `blocker` (the change id, run id or
+  `droppable` (boolean), and when it isn't, `reason` (one of D3's five) with `blocker` (the change id, run id or
   segment that blocks it, when there is one).
 
 A rehearsal records nothing, so it has no closing change and reports nothing about round trips.
@@ -175,12 +179,12 @@ id, as notices and `config get` show it.
 5. calls the store's `drop`, with `check` re-running D3 steps 1 to 3.
 
 The result: `change`, `changes` (the change ids dropped), `segments` (the event files removed, theatre-relative),
-`files` (the config files, unchanged), and notices (the store's rebuild notice). The config files aren't written.
+`rehearsed`, and notices (the store's rebuild notice). The config files aren't written.
 They already hold the values config goes back to, and the next sweep reads them as in line (values equal, so no
 entries; hand-edit-sweep D9).
 
 **config-keep** finds the round trip the same way (refusing `config.no-round-trip` likewise), then records the
-closing change id in the keep record, and returns `{change, kept: true}`. Keeping a round trip that can't be dropped
+closing change id in the keep record, and returns `{change, rehearsed, notices}`. Keeping a round trip that can't be dropped
 anyway is allowed, and changes nothing but the record. Repeating a keep is a no-op. It takes `rehearse` too, as every
 command that writes a file does (cli spec, #137).
 
@@ -204,8 +208,8 @@ one protocol call. Rendering:
 - drop: `Dropped 2 changes (<ids>): removed .troupe/events/<a>.jsonl, .troupe/events/<b>.jsonl.` A rehearsal says
   `Would drop`, and exits with the "would change" code.
 - keep: `Kept the changes of <change>; troupe won't ask about them again.`
-- Refusals render from the structured error, as every error does. `config.round-trip-kept` exits with its own code
-  from `exit_codes.py`.
+- Refusals render from the structured error, as every error does. `config.round-trip-kept` and `config.no-round-trip`
+  exit 1 (failure), as `errors.CODES` says.
 
 The notice renders like every notice, on standard error.
 
@@ -213,7 +217,7 @@ The notice renders like every notice, on standard error.
 
 `docs/stagecraft/hand-edit-config.md` gains "Undoing an edit": what's recorded, the notice, drop and keep, when a
 drop is refused and why. `docs/prompt-book/cli.md` lists the two commands. `contributing/config.md` names
-`abandoned.py` and the store's drop. The protocol CHANGELOG records two commands, one notice, three error codes.
+`abandoned.py` and the store's drop. The protocol CHANGELOG and version come from release-please, through the commits' types (`feat(protocol)`, `feat(config)`); nobody edits them by hand.
 
 ## Risks / Trade-offs
 
@@ -232,7 +236,7 @@ drop is refused and why. `docs/prompt-book/cli.md` lists the two commands. `cont
 
 ## Migration Plan
 
-Pre-1.0, additive: two new protocol commands, one notice, three error codes. No event changes shape. No
+Pre-1.0, additive: two new protocol commands, two notices, three error codes. No event changes shape. No
 infrastructure Purpose change, since no spec is added or removed and no Purpose is edited.
 
 ## Open Questions

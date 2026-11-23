@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/client/config-keep-request.schema.json",
+  "title": "config-keep: request",
+  "description": "Keep an abandoned edit's changes, and stop troupe asking about them. Recorded in this clone only, out of git.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "change"
+  ],
+  "properties": {
+    "change": {
+      "description": "The change id of the sweep that put the files back, as config.edit-abandoned names it.",
+      "type": "string",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "rehearse": {
+      "description": "Change nothing: report what would be kept. Absent means false.",
+      "type": "boolean"
+    }
+  }
+}

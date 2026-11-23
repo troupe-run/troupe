@@ -668,6 +668,37 @@ class SyncResult(Message):
     notices: list[NoticeData] = json_field("notices")
 
 
+# Abandoned edits: drop or keep (abandoned-edits design D6).
+
+
+@dataclass(frozen=True)
+class ConfigDropRequest(Message):
+    change: str = json_field("change", pattern=ULID)
+    rehearse: bool | None = json_field("rehearse", default=None)
+
+
+@dataclass(frozen=True)
+class ConfigDropResult(Message):
+    change: str = json_field("change", pattern=ULID)
+    changes: list[str] = json_field("changes", min_items=2)
+    segments: list[str] = json_field("segments", min_items=1)
+    rehearsed: bool = json_field("rehearsed")
+    notices: list[NoticeData] = json_field("notices")
+
+
+@dataclass(frozen=True)
+class ConfigKeepRequest(Message):
+    change: str = json_field("change", pattern=ULID)
+    rehearse: bool | None = json_field("rehearse", default=None)
+
+
+@dataclass(frozen=True)
+class ConfigKeepResult(Message):
+    change: str = json_field("change", pattern=ULID)
+    rehearsed: bool = json_field("rehearsed")
+    notices: list[NoticeData] = json_field("notices")
+
+
 # Making a theatre: init (init-and-audition design D1, D8).
 
 ACTOR_NAME = re.compile(r"\A[a-z][a-z0-9-]{0,63}\Z")

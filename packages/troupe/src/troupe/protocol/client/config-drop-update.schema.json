@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/client/config-drop-update.schema.json",
+  "title": "config-drop: update",
+  "description": "A notice while dropping, such as a wait for another command writing config.",
+  "$ref": "run.schema.json#/$defs/noticeUpdate"
+}

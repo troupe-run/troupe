@@ -400,6 +400,39 @@ CASES += [
         st.fixed_dictionaries({}, optional={"force": st.booleans(), "rehearse": st.booleans()}),
     ),
     (m.ConfigUpdate, "sync-update.schema.json", NOTICE_UPDATES),
+    *(
+        (
+            request_type,
+            f"{name}-request.schema.json",
+            st.fixed_dictionaries({"change": ULIDS}, optional={"rehearse": st.booleans()}),
+        )
+        for request_type, name in (
+            (m.ConfigDropRequest, "config-drop"),
+            (m.ConfigKeepRequest, "config-keep"),
+        )
+    ),
+    (m.ConfigUpdate, "config-drop-update.schema.json", NOTICE_UPDATES),
+    (m.ConfigUpdate, "config-keep-update.schema.json", NOTICE_UPDATES),
+    (
+        m.ConfigDropResult,
+        "config-drop-result.schema.json",
+        st.fixed_dictionaries(
+            {
+                "change": ULIDS,
+                "changes": st.lists(ULIDS, min_size=2, max_size=3),
+                "segments": st.lists(PATHS, min_size=1, max_size=2),
+                "rehearsed": st.booleans(),
+                "notices": st.lists(NOTICES, max_size=2),
+            }
+        ),
+    ),
+    (
+        m.ConfigKeepResult,
+        "config-keep-result.schema.json",
+        st.fixed_dictionaries(
+            {"change": ULIDS, "rehearsed": st.booleans(), "notices": st.lists(NOTICES, max_size=2)}
+        ),
+    ),
     (m.DiffRequest, "diff-request.schema.json", st.fixed_dictionaries({"run": RUN_IDS})),
     (
         m.DiffResult,

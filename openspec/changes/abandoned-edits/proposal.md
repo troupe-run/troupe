@@ -30,8 +30,9 @@ questions on 2026-11-23, recorded in the issue body.
   don't. A keep is recorded in this clone only, out of git.
 - **The event store gains a drop**, which removes whole uncommitted segments and refuses anything else. Events are
   still never classified by the store, and are kept unless a person drops them.
-- Docs: `docs/stagecraft/hand-edit-config.md` (undoing an edit), the CLI reference, `contributing/config.md`, and
-  the protocol CHANGELOG (two new commands, one notice, new error codes).
+- Docs: `docs/stagecraft/hand-edit-config.md` (undoing an edit), the CLI reference, `contributing/config.md` and
+  `contributing/event-store.md`. The protocol CHANGELOG comes from the commits (two new commands, two notices, three
+  error codes).
 
 Out of scope: changing the default (an unanswered round trip is kept), classifying stashes, rewriting git or
 committed events, hiding round trips with a marker event, and a hand move going back and forth (#138).
@@ -54,9 +55,9 @@ None.
 
 - `packages/troupe/src/troupe/core/config/`: a new module for round trips (detection, safety, keep record).
   `syncing.py` reports the notice. `commands.py` gets the two methods.
-- `packages/troupe/src/troupe/core/events/port.py` and `service.py`: the store's drop. `troupe-store-text` implements
+- `packages/troupe/src/troupe/core/events/port.py`: the store's drop. `troupe-store-text` implements
   it.
-- `packages/troupe/src/troupe/protocol/`: `client/config-{drop,keep}-{request,result}.schema.json`, a notice
-  `config.edit-abandoned`, error codes, and the CHANGELOG.
+- `packages/troupe/src/troupe/protocol/`: `client/config-{drop,keep}-{request,update,result}.schema.json`, the
+  notices `config.edit-abandoned` and `config.kept-unreadable`, and error codes.
 - `packages/troupe/src/troupe/cli/`: the two subcommands and their rendering.
 - `syncing.py` is also touched by #138 (config mv), which is in progress. Whichever merges second rebases.

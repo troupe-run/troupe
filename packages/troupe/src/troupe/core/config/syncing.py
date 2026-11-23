@@ -16,7 +16,9 @@ Holding the config files' lock (except in a rehearsal, which writes nothing), a 
 
 Each recorded hand edit is reported as ``config.hand-edit-recorded``, and each conflicting value a
 hand edit resolved as ``config.conflict-resolved``, so nothing is resolved without the person
-seeing it (owner, 2026-11-21).
+seeing it (owner, 2026-11-21). A sweep that puts a file back is reported as
+``config.edit-abandoned``, and troupe sync asks again while the round trip can be dropped
+(``troupe.core.config.abandoned``; abandoned-edits design D5).
 """
 
 from collections.abc import Collection, Mapping, Sequence
@@ -25,6 +27,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
+from troupe.core.config import abandoned
 from troupe.core.config.changes import apply, change
 from troupe.core.config.kinds import staged_name, staged_target
 from troupe.core.config.merge import Merged
@@ -97,6 +100,9 @@ class Request:
     config-projection-conflicts)."""
     marking: Marking | None = None
     on_wait: WaitCallback | None = None
+    runs_now: bool = False
+    """``perform``: the run it starts names config's new heads, so a round trip its sweep closes
+    can't be dropped (abandoned-edits design D5)."""
 
 
 def sync_config(theatre: Path, store: EventStore, request: Request) -> Synced:
@@ -254,6 +260,9 @@ def _record_and_write(troupe_dir: Path, store: EventStore, request: Request, wor
     remember_present(troupe_dir)
     marks = mark_resolved(store.vcs, done, work.found, request.marking or OFF)
     sweep_change = _sweep_change(store, recorded, len(swept.edits), len(work.merged.heads) > 1)
+    trips = abandoned.report(store, troupe_dir, sweep_change, runs_now=request.runs_now)
+    if request.resolve_all:
+        trips.extend(abandoned.remind(store, troupe_dir, sweep_change))
     return Synced(
         read(store),
         swept.edits,
@@ -264,7 +273,7 @@ def _record_and_write(troupe_dir: Path, store: EventStore, request: Request, wor
         work.own,
         kept,
         marks,
-        [*swept.notices, *_edit_notices(swept.edits, sweep_change), *work.notices],
+        [*swept.notices, *_edit_notices(swept.edits, sweep_change), *work.notices, *trips],
     )
 
 
@@ -307,11 +316,17 @@ def _record_only(
     recorded = record_with_edits(store, merged, swept.edits)
     remember_present(store.theatre / THEATRE_DIR)
     sweep_change = _sweep_change(store, recorded, len(swept.edits), len(merged.heads) > 1)
+    trips = abandoned.report(store, store.theatre / THEATRE_DIR, sweep_change)
     return Synced(
         read(store),
         swept.edits,
         sweep_change,
-        notices=[*swept.notices, *_edit_notices(swept.edits, sweep_change), *resolved_notices],
+        notices=[
+            *swept.notices,
+            *_edit_notices(swept.edits, sweep_change),
+            *resolved_notices,
+            *trips,
+        ],
     )
 
 
