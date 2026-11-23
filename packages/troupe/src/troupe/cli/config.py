@@ -272,7 +272,8 @@ def run_drop(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> E
     verb = "Would drop" if result["rehearsed"] else "Dropped"
     removed = "would remove" if result["rehearsed"] else "removed"
     print(
-        f"{verb} {count} changes ({', '.join(result['changes'])}): {removed} "
+        f"{verb} {count} change{'s' if count != 1 else ''} ({', '.join(result['changes'])}): "
+        f"{removed} "
         f"{', '.join(result['segments'])}.",
         file=stdout,
     )

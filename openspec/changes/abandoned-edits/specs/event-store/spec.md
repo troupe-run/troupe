@@ -44,3 +44,15 @@ one as a parent. Otherwise it SHALL refuse with `events.not-droppable`, naming t
 #### Scenario: A check the caller gives refuses
 - **WHEN** the caller's check, run while the store holds its write lock, raises an error
 - **THEN** the drop is refused with that error, and nothing is removed
+
+### Requirement: A batch can require events that must still be here
+Recording a batch SHALL accept events it needs still to be present, checked while holding the write lock. When any
+is gone, the batch SHALL be refused with `events.required-missing`, naming each missing event, and nothing written.
+
+#### Scenario: A required event was dropped
+- **WHEN** a session reads an event, another drops it, and the first records a batch requiring it
+- **THEN** it is refused with `events.required-missing`, naming the event, and no segment is written
+
+#### Scenario: Required events still here
+- **WHEN** a batch requires events that are present
+- **THEN** it is recorded as any batch is

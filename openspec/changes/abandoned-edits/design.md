@@ -137,6 +137,18 @@ def drop(self, events: Sequence[str], check: Callable[[], None]) -> tuple[Path, 
 `check` is how core keeps runs out: holding the store's lock, no `Run.Started` can be recorded between the check and
 the deletion. Core's `check` re-runs D3 steps 1 to 3 on a fresh read.
 
+That closes only the drop's side. A perform reads config's heads in its sync, then records `Run.Started` naming them
+later, after its lease, pid file and artifact. A drop landing in between would find no run yet, and the run would then
+name events that are gone (found by an independent review on #504). So the other side is closed too: `insert` takes
+`requires`, event ids that must still be here, checked holding the same write lock, and refuses with
+`events.required-missing` (naming them) otherwise, writing nothing. `EventStore.record_with_lineage(s)` and
+`Command.record` pass it through, and perform records its run's start requiring its config version. Whichever takes
+the lock first wins: a drop before the start makes the perform refuse before its runner starts, with a fix saying to
+run it again; a start before the drop makes the drop refuse with `run`.
+
+Rejected: holding the config files' lock from perform's sync to its start. It would hold every config command up
+while a worktree is planned, and a nested sync would take the lock twice.
+
 The event-store spec's "Events are never classified or dropped" becomes "Events are never classified, and leave
 only through a person's drop". The store still never decides what's abandoned. It only removes what it's told to,
 and only whole segments.
@@ -195,8 +207,8 @@ closing change id in the keep record, and returns `{change, rehearsed, notices}`
 anyway is allowed, and changes nothing but the record. Repeating a keep is a no-op. It takes `rehearse` too, as every
 command that writes a file does (cli spec, #137).
 
-New error codes: `config.no-round-trip`, `config.round-trip-kept`, and `events.not-droppable` (the store's own,
-which `config.round-trip-kept` normally pre-empts). Each lands with code that raises it and a test (protocol_guard).
+New error codes: `config.no-round-trip`, `config.round-trip-kept`, `events.not-droppable` (the store's own,
+which `config.round-trip-kept` normally pre-empts), and `events.required-missing` (D4). Each lands with code that raises it and a test (protocol_guard).
 
 ### D7. The keep record
 
@@ -243,7 +255,7 @@ drop is refused and why. `docs/prompt-book/cli.md` lists the two commands. `cont
 
 ## Migration Plan
 
-Pre-1.0, additive: two new protocol commands, two notices, three error codes. No event changes shape. No
+Pre-1.0, additive: two new protocol commands, two notices, four error codes. No event changes shape. No
 infrastructure Purpose change, since no spec is added or removed and no Purpose is edited.
 
 ## Open Questions

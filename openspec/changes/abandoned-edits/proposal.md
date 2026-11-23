@@ -29,9 +29,10 @@ questions on 2026-11-23, recorded in the issue body.
 - **No answer keeps it.** `troupe sync` repeats the notice while the round trip can still be dropped. Other commands
   don't. A keep is recorded in this clone only, out of git.
 - **The event store gains a drop**, which removes whole uncommitted segments and refuses anything else. Events are
-  still never classified by the store, and are kept unless a person drops them.
+  still never classified by the store, and are kept unless a person drops them. A batch can name events it needs
+  still here (`events.required-missing` otherwise), so a run's start can't race a drop of its config version.
 - Docs: `docs/stagecraft/hand-edit-config.md` (undoing an edit), the CLI reference, `contributing/config.md` and
-  `contributing/event-store.md`. The protocol CHANGELOG comes from the commits (two new commands, two notices, three
+  `contributing/event-store.md`. The protocol CHANGELOG comes from the commits (two new commands, two notices, four
   error codes).
 
 Out of scope: changing the default (an unanswered round trip is kept), classifying stashes, rewriting git or
