@@ -54,9 +54,11 @@ in the event, and the merge would have to tell a marker's values from a person's
 The merge gives each write the **entity** it names, then contests and replays in entity space. Names come back only at
 the end.
 
-- **Key.** An entity's key is `(kind, name it was born with, freed)`. `freed` is the set of rename events in the
-  writing event's history that renamed something away from that name. With no renames, `freed` is always empty, so a
-  name has one key on every line. Two lines that make the same new actor agree or conflict value by value, as today.
+- **Key.** An entity's key is `(kind, name it was born with, freed)`. `freed` is how many rename events in the
+  writing event's history renamed something away from that name: counted, not listed. So two lines that each renamed
+  `tester` away and made a new one make the same new `tester` (review of #505). With no renames, `freed` is always 0,
+  so a name has one key on every line. Two lines that make the same new actor agree or conflict value by value, as
+  today.
 - **View.** Each event's view maps the names it sees to keys, as its history leaves them. With one parent, it's the
   parent's view after the parent's own entries. At a join (a settle, or the `extra` change a resolution check adds),
   it's worked out by D3's name contest over the join's whole history.
@@ -98,6 +100,12 @@ line's net change, a line that ends where it began drops out, and differing line
   - a rename and a removal.
 
   The same rename on two lines agrees. A rename and a rename back drops out.
+- **A line that removed the entity never drops out of its name contest**, even if it made one of the same name after.
+  Against a rename, that's a rename and a removal, not a new actor's values landing on the renamed one (review of
+  #505).
+- **A removal a later rename kept the entity from is left out of replay.** The rename follows the removal with no
+  birth between, so it saw the entity only through a merge with a line that kept it. Otherwise resolving a rename
+  against a removal with `config mv` would lose the entity (review of #505).
 - **On a name conflict, both sides are left out of the name**, so the name history from before the lines decides it,
   as #190 does for values. A removal on the losing side is left out of replay too, so the entity stays with its
   values under its earlier name.
@@ -109,6 +117,9 @@ line's net change, a line that ends where it began drops out, and differing line
   changes since the split that wrote under it (as `_invalid` names changes). If a fallback name clashes again, the
   key's values are left out of config while the conflict stands. They're in its changes, and config is blocked until
   it's resolved anyway.
+- **A key whose own renames conflict keeps the name it falls back to** over any other key with that name, which waits
+  (left out of config while the conflict stands). The conflict names it, and one change to it resolves it (review of
+  #505).
 - A conflict's paths use display names (`actors.tester`), so `config get` shows it, and one `config mv`, `config
   unset` or `config set` resolves it, checked as today with `merge(…, extra=…)`. The extra change's view is the join
   of every head, so its names are the ones `config get` shows.

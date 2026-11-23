@@ -7,8 +7,8 @@ whole actor or runtime to a new name, so before it contests anything, it asks th
 entity each write names, and writes the path as ``(kind, key, rest...)``:
 
 - **A key** is the name the entity was born with, plus, when renames in the writing event's history
-  had freed that name (renamed something away from it), those renames' ids. With no renames, a
-  key is its name, so paths are what they were and the merge is unchanged.
+  had freed that name (renamed something away from it), how many. With no renames, a key is its
+  name, so paths are what they were and the merge is unchanged.
 - **A view** maps each name an event sees to its key: with one parent, the parent's view after its
   own entries; at a join (a settle, or the merge's ``extra`` change), worked out from the join's
   whole history by the name contest below.
@@ -21,13 +21,17 @@ for values: latest writes, each line's net change, a line that ends where it beg
 lines left that differ conflict whole, with the history before them deciding the name. A
 conflict with a rename among its conflicting writes is reported (two renames, or a rename and a
 removal); one without a rename is never reported, since values already contest births and
-removals. A removal on the losing side of a reported conflict is left out of replay too.
+removals. A line that removed the entity never drops out, even if it made one of the same name
+after: against a rename, that's a rename and a removal. A removal on the losing side of a reported
+conflict is left out of replay too.
 
 **Clashes.** Two keys whose names come out the same: when one key's claim to the name (the write
 that gave it the name) follows the other's, the later one has it (on one line, a name can only be
 taken when nothing's there). When they're concurrent, the renames that claimed it are left out, so
-those keys fall back to their earlier names, and the clash is reported. A fallback that clashes
-again leaves its key out of config while the conflict stands.
+those keys fall back to their earlier names, and the clash is reported. A key whose own renames
+conflict keeps the name it falls back to over any other key, which waits: the conflict names it,
+and one change to it resolves it. A fallback that clashes again leaves its key out of config while
+the conflict stands.
 """
 
 from collections.abc import Iterable, Mapping, Sequence
@@ -123,6 +127,8 @@ class _Clash:
 
     fell_back: set[Key]
     reported: set[tuple[str, str]]
+    conflicted: set[Key]
+    """Keys in a reported name conflict."""
 
 
 @dataclass
@@ -156,11 +162,13 @@ class Entities:
                 reported.append(key)
                 conflicting_events[key] = sorted({w.event for w in conflicting})
                 removals |= {w.id for w in writes if w.id in drop and w.after is None}
+        removals |= self._kept_by_a_rename(within, dropped)
         states, _, claims = self._replay(within, dropped)
         named = Named(states, self._without_removals(within), set(), conflicts, removals)
         for key in reported:
             conflicts.append((((key[0], named.name(key)),), conflicting_events[key]))
-        self._clashes(named, within, dropped, claims)
+        self._clashes(named, within, dropped, claims, set(reported))
+        conflicts.sort()
         named.view = {
             (key[0], state): key[1]
             for key, state in named.states.items()
@@ -200,9 +208,10 @@ class Entities:
         within: set[str],
         dropped: set[Id],
         claims: dict[Key, list[NameWrite]],
+        conflicted: set[Key],
     ) -> None:
         """Settle keys whose names come out the same (see the module's docstring)."""
-        clash = _Clash(fell_back=set(), reported=set())
+        clash = _Clash(fell_back=set(), reported=set(), conflicted=conflicted)
         for _ in range(len(self.writes) + 1):
             by_name: dict[tuple[str, str], list[Key]] = {}
             for key, state in named.states.items():
@@ -229,6 +238,12 @@ class Entities:
         clash: "_Clash",
     ) -> bool:
         """Settle one name that ``keys`` came out with; whether any name changed."""
+        held = sorted(k for k in keys if k in clash.conflicted)
+        if held:
+            # A key whose renames conflict fell back to this name: config shows it, the conflict
+            # names it, and one change to it resolves it; the others wait (review of #505).
+            named.hidden |= set(keys) - {held[0]}
+            return False
         later = [
             k for k in keys if all(self._follows(claims[k], claims[o]) for o in keys if o != k)
         ]
@@ -249,6 +264,30 @@ class Entities:
         dropped |= {c.id for k in renamed for c in claims[k] if c.rename}
         clash.fell_back |= set(renamed)
         return True
+
+    def _kept_by_a_rename(self, within: set[str], dropped: set[Id]) -> set[Id]:
+        """Removals a later rename of the same entity kept it from: the rename follows the
+        removal with no birth between, so it saw the entity only through a merge with a line that
+        kept it, and the person renaming it chose to keep it. Such a removal is left out of replay,
+        or resolving a rename against a removal with config mv would lose the entity (review of
+        #505)."""
+        kept: set[Id] = set()
+        for writes in self.writes.values():
+            live = [w for w in writes if w.event in within and w.id not in dropped]
+            renames = [w for w in live if w.rename]
+            births = [w for w in live if w.before is None]
+            for removal in (w for w in live if w.after is None and not w.rename):
+                for rename in renames:
+                    later = self.ancestors[rename.event]
+                    if removal.event not in later:
+                        continue
+                    if not any(
+                        removal.event in self.ancestors[b.event]
+                        and (b.event in later or b.event == rename.event)
+                        for b in births
+                    ):
+                        kept.add(removal.id)
+        return kept
 
     def _without_removals(self, within: set[str]) -> dict[Key, str]:
         """Each key's name from its births and renames alone, contested as the name is."""
@@ -340,12 +379,12 @@ def _read(
 
 
 def _token(found: Entities, event: str, kind: str, name: str) -> str:
-    """The key a write under ``name`` the view doesn't map names: the name, plus the renames in
-    the event's history that freed it."""
-    freed = sorted(
-        e for e in found.renames_from.get((kind, name), ()) if e in found.ancestors[event]
-    )
-    return _FREED.join([name, *freed]) if freed else name
+    """The key a write under ``name`` the view doesn't map names: the name, plus how many renames
+    in the event's history freed it. Counted, not listed, so two lines that each renamed tester
+    away and made a new one make the same new tester, as two lines that make one name with no
+    renames do (review of #505)."""
+    freed = sum(1 for e in found.renames_from.get((kind, name), ()) if e in found.ancestors[event])
+    return f"{name}{_FREED}{freed}" if freed else name
 
 
 def _write(
@@ -402,9 +441,7 @@ def _round(
     left: list[NameWrite] = []
     for write in latest:
         line = lines[write.event]
-        last = line[-1]
-        firsts = [w for w in line if not any(o.event in ancestors[w.event] for o in line)]
-        if all(w.before == last.after for w in firsts):
+        if _changed_nothing(line, ancestors):
             drop |= {w.id for w in line}
         else:
             left.append(write)
@@ -413,6 +450,17 @@ def _round(
     for write in latest:
         drop |= {w.id for w in lines[write.event]}
     return drop, left, latest
+
+
+def _changed_nothing(line: Sequence[NameWrite], ancestors: Mapping[str, frozenset[str]]) -> bool:
+    """Whether a line of name writes ends where each of its first writes began. A line that
+    removed the entity changed it, even if it made one of the same name after: that's a new entity
+    in all but key, so it never counts as changing nothing (review of #505)."""
+    if any(write.after is None for write in line):
+        return False
+    last = line[-1]
+    firsts = [w for w in line if not any(o.event in ancestors[w.event] for o in line)]
+    return all(w.before == last.after for w in firsts)
 
 
 @dataclass(frozen=True)
