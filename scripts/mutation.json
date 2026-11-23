@@ -26,11 +26,23 @@
               "why": "mutmut's hooks import email and importlib.metadata into the test process, which this test counts as heavy (trial, 2026-11-18)."
             },
             {
+              "test": "packages/troupe/tests/integration/test_cli_startup.py::test_importing_the_command_line_loads_none_of_the_heavy_modules",
+              "why": "mutmut's hooks import email and importlib.metadata into the test process, which this test counts as heavy (trial, 2026-11-18)."
+            },
+            {
               "test": "packages/troupe/tests/test_config_schemas.py::test_the_models_are_what_the_schemas_generate",
               "why": "It compares the generated models with the source, which in mutmut's copy is the mutated one (trial, 2026-11-18)."
             },
             {
+              "test": "packages/troupe/tests/integration/test_config_schemas_integration.py::test_the_models_are_what_the_schemas_generate",
+              "why": "It compares the generated models with the source, which in mutmut's copy is the mutated one (trial, 2026-11-18)."
+            },
+            {
               "test": "packages/troupe/tests/test_package.py::test_the_built_wheel_carries_the_recorded_protocol_version_and_every_schema",
+              "why": "uv build can't build the package from mutmut's copy (trial, 2026-11-18)."
+            },
+            {
+              "test": "packages/troupe/tests/integration/test_package_integration.py::test_the_built_wheel_carries_the_recorded_protocol_version_and_every_schema",
               "why": "uv build can't build the package from mutmut's copy (trial, 2026-11-18)."
             }
           ]
