@@ -19,6 +19,8 @@ say so in the tick. Commit by group.
       drop is the only way an event leaves. Verify by grepping `never dropped` / `never classified or dropped` in
       `packages/` and `docs/`, and leaving none that's wrong.
 
+Done (group 1): `test_drop.py` (8 tests) and two `remove_file` tests, all new API, so they fail on main.
+
 ## 2. Finding a round trip and whether it can be dropped (design D1, D2, D3, D7)
 
 - [x] 2.1 `core/config/abandoned.py`: `round_trip(history, closing)`. Find the linear tail since the last settle,
@@ -34,6 +36,10 @@ say so in the tick. Commit by group.
       `config.kept-unreadable`), add, and prune entries whose change is gone. Verify with tests for absent,
       unreadable (the notice names the file), add twice (one entry), and pruning.
 
+Done (group 2): `test_config_abandoned.py` (20 tests over streams made by real commands); a new module, so they fail on
+main. The "other-branch" reason was dropped while building: an uncommitted segment of another branch is never read here
+(design D3 updated).
+
 ## 3. Reporting (design D5)
 
 - [x] 3.1 Catalogue `config.edit-abandoned` and `config.kept-unreadable` in `protocol/notice.schema.json` (and the
@@ -45,6 +51,9 @@ say so in the tick. Commit by group.
 - [x] 3.3 `troupe sync` repeats it: when the stream's head is a sweep's last event, run `round_trip` on that sweep, and
       report it if droppable and not kept. Verify with "Sync asks again while a drop is possible": the repeat, `config
       get` staying quiet, no notice once committed, and the unreadable keep record.
+
+Done (group 3): `test_config_abandoned_notices.py` (18 tests, each notice validated against the schema); main
+reports no `config.edit-abandoned`, so they fail there.
 
 ## 4. Drop and keep commands (design D6, D8)
 
@@ -61,23 +70,30 @@ say so in the tick. Commit by group.
       tests for the two new scenarios of "Config and sync commands", a rehearsal's "would change" exit code, and a
       refusal's exit code. Also check the lazy-import test ("A command loads only its own handlers") still passes.
 
+Done (group 4): `test_config_drop.py` (9) and `test_cli_config_abandoned.py` (4, including 6.1's end-to-end test); the
+methods and subcommands don't exist on main.
+
 ## 5. Docs and the protocol record (design D9)
 
 - [x] 5.1 `docs/stagecraft/hand-edit-config.md`, "Undoing an edit"; `docs/prompt-book/cli.md`, the two commands;
       `contributing/config.md`, `abandoned.py` and the store's drop. Verify with the docs checks in `scripts/check.py`
       (links and the defaults table), and by reading each page against the specs.
-- [ ] 5.2 The protocol changes (two commands, two notices, three error codes) reach the protocol CHANGELOG and
+- [x] 5.2 The protocol changes (two commands, two notices, three error codes) reach the protocol CHANGELOG and
       version through release-please, from `feat(protocol)` and `feat(config)` commits: nobody edits either by hand
       (`contributing/releasing.md`). Verify the commits' types and scopes before the PR, and that no CHANGELOG or
       `version.json` is in the diff.
+      Done: one `feat(config)` commit (c2b91085); `git diff --stat main..HEAD` holds no CHANGELOG or version file.
 
 ## 6. Integration
 
 - [x] 6.1 An end-to-end test through the CLI in a real git theatre: edit, sync, restore, sync (notice), `config drop`,
       `git status` shows no event files from either sync, and a final sync records nothing. Verify by running it.
-- [ ] 6.2 Full `uv run scripts/check.py` (slot from the orchestrator, `uptime` under ~40), and no stray processes
+- [x] 6.2 Full `uv run scripts/check.py` (slot from the orchestrator, `uptime` under ~40), and no stray processes
       (`pgrep -fl "python.*(fake_claude.py|while True: pass)"`). Verify by keeping the full log in the scratchpad and
       reading every FAILED line.
+      Done: the commit's check (slot from the orchestrator, load ~9): first run 7550 passed, 1 failed
+      (`test_config_alone_needs_one_of_its_commands`, whose usage text now lists drop and keep; updated); second run
+      all gates passed in 296 s. No stray processes.
 
 ## Workflow follow-up
 
