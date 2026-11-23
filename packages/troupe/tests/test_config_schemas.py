@@ -425,6 +425,8 @@ def entries(draw: st.DrawFn) -> dict[str, Any]:
         data["before"] = draw(HASHES)
     if draw(st.booleans()):
         data["after"] = draw(st.one_of(VALUES, JSON))
+    if draw(st.booleans()):
+        data["renamedFrom"] = draw(st.lists(st.text(max_size=5), max_size=3))
     return _near_miss(draw, data, list(data))
 
 

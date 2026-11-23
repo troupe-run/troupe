@@ -28,7 +28,7 @@ The payload of one config change (topic troupe.core.config.aggregate:Config.Chan
 |---|---|---|---|
 | `lineage` | object (Lineage) | Yes | Where an event came from: who made it, through what, when, why, as part of which command and in reaction to what, with whose approval, and in what version-control state. Every event troupe records carries it. It is left out of the event's content hash, so two clones that make the same change agree on the event's id. |
 | `timestamp` | object (Library timestamp) | Yes | When the event-sourcing library created the event, as its transcoder writes a datetime. |
-| `changes` | list of any | Yes | Each value the change sets or unsets, at most once each. A change that would change nothing isn't recorded. |
+| `changes` | list of any or object (Rename entry) | Yes | Each value the change sets or unsets, at most once each. A change that would change nothing isn't recorded. |
 | `files` | list of object (File written) | Yes | Each config file the change wrote or removed, so troupe can tell its own files from a person's. |
 
 ### Config.Settled
