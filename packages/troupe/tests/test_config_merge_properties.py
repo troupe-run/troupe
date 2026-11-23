@@ -2,8 +2,8 @@
 design D3).
 
 The merge is a pure function of the config stream's history, so these build histories in memory:
-branches, changes and changes back, settles, and criss-cross merges where two lines settle each
-other. Two properties:
+branches, changes and changes back, actors removed and made again, settles, and criss-cross merges
+where two lines settle each other. Two properties:
 
 - **Order doesn't matter.** Every order the events can arrive in (any order that keeps parents
   before children) works out the same config and the same conflicts, so every clone agrees.
@@ -24,7 +24,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from troupe.core.config import aggregate
-from troupe.core.config.changes import Tree, apply, change, get
+from troupe.core.config.changes import UNSET, Tree, apply, change, get
 from troupe.core.config.merge import Merged, merge
 
 TESTER: dict[str, Any] = {
@@ -85,8 +85,24 @@ def _ancestry(records: Sequence[Record], tip: str) -> list[Record]:
 
 
 @st.composite
+def _operations(draw: st.DrawFn, state: Tree) -> tuple[tuple[str, ...], object]:
+    """One command's change to ``state``: mostly a value set, sometimes an actor removed whole or
+    made again (#503)."""
+    kind = draw(st.sampled_from(["set", "set", "set", "remove", "make"]))
+    actor = draw(st.sampled_from(ACTORS))
+    held = actor in state.get("actors", {})
+    if kind == "remove" and held:
+        return (("actors", actor), UNSET)
+    if kind == "make" and not held:
+        return (("actors", actor), dict(TESTER))
+    path = draw(st.sampled_from(PATHS))
+    return (path, draw(st.sampled_from(VALUES[path[-1]])))
+
+
+@st.composite
 def histories(draw: st.DrawFn) -> list[Record]:
-    """Branches that change, change back, fork and settle each other, in creation order."""
+    """Branches that change, change back, remove and make actors, fork and settle each other, in
+    creation order."""
     records, _ = _base()
     tips = [records[0].id]
     for n in range(2, draw(st.integers(4, 14)) + 2):
@@ -108,9 +124,7 @@ def histories(draw: st.DrawFn) -> list[Record]:
             continue
         index = draw(st.integers(0, len(tips) - 1))
         state = merge(_ancestry(records, tips[index])).config
-        path = draw(st.sampled_from(PATHS))
-        value = draw(st.sampled_from(VALUES[path[-1]]))
-        entries = change(state, [(path, value)])
+        entries = change(state, [draw(_operations(state))])
         if not entries:
             continue
         record = _changed(n, [tips[index]], entries)
@@ -313,3 +327,30 @@ def test_a_line_whose_first_changes_start_from_different_values_conflicts_in_eve
     assert [(c.paths, sorted(x.id for x in c.changes)) for c in merged.conflicts] == [
         ((CHARACTER,), sorted([_id(("change", 10)), _id(("change", 14))]))
     ]
+
+
+def test_a_removal_left_out_by_another_values_conflict_merges_the_same_in_every_order() -> None:
+    """#503: one line removes ``tester`` while another sets its character, a settle joins them,
+    then two lines from the settle conflict on its ``expect``, one by removing it whole. That
+    removal is left out of replay by the conflict on ``expect``, which leaves the first two
+    concurrent and overlapping on the character: they're contested, never replayed in the order
+    they arrived."""
+    tester: dict[str, Any] = {"runner": "scripted", "expect": []}
+    records = [_changed(1, [], change({}, [(("actors", "tester"), tester)]))]
+
+    def step(n: int, parent: str, operations: list[tuple[tuple[str, ...], object]]) -> str:
+        state = merge(_ancestry(records, parent)).config
+        record = _changed(n, [parent], change(state, operations))
+        records.append(record)
+        return record.id
+
+    removed = step(2, records[0].id, [(("actors", "tester"), UNSET)])
+    set_ = step(3, records[0].id, [(CHARACTER, "A")])
+    settled = _settled(4, [removed, set_])
+    records.append(settled)
+    step(5, settled.id, [(("actors", "tester", "expect"), ["a.txt"])])
+    step(6, settled.id, [(("actors", "tester"), UNSET)])
+    orders = _every_order(records)
+    assert len(orders) == 4
+    summaries = {repr(_summary(merge(order))) for order in orders}
+    assert len(summaries) == 1, summaries

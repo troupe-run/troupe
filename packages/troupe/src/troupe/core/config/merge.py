@@ -21,9 +21,11 @@ agree; otherwise their changes are in conflict, whole.
 **Replay.** Config is every entry replayed in the history's order, leaving out the lines that
 dropped out, and both sides of every conflict. Where that leaves out every latest write of a point,
 the writes beneath them decide, so they're contested by the same rule, until one is left or a line
-stays in (#190); only the first contest's conflict is reported. Entries that are left and
-concurrent then never overlap, so their order can't change the result, and every clone works out
-the same config.
+stays in (#190); only the first contest's conflict is reported. A write a point's contest leaves
+out can cover other points too (a group's removal), so a point whose covering writes lost one is
+contested again without it, until nothing changes (#503). Entries that are left and concurrent
+then never overlap, so their order can't change the result, and every clone works out the same
+config.
 
 **Conflicts from validation.** When the merged config breaks a rule (``kinds.problems``), the
 changes since the split that touched what broke it are in conflict too.
@@ -127,17 +129,7 @@ def merge(history: Sequence[RecordedEvent], *, extra: Change | None = None) -> M
         if event in changes
         for index, entry in enumerate(changes[event].entries)
     ]
-    skipped: set[tuple[str, int]] = set()
-    conflicts: list[Conflict] = []
-    for point in sorted({write.path for write in writes}):
-        found = _contest(point, writes, ancestors)
-        if found is None:
-            continue
-        drop, conflicting = found
-        skipped |= drop
-        if conflicting:
-            events_in = sorted({w.event for w in conflicting}, key=order.index)
-            conflicts.append(Conflict((point,), tuple(changes[e] for e in events_in)))
+    skipped, conflicts = _contests(writes, ancestors, changes, order)
     config = apply_in_order(writes, skipped)
     conflicts = _grouped(conflicts)
     tips = heads if extra is None else [extra.id]
@@ -155,6 +147,47 @@ def merge(history: Sequence[RecordedEvent], *, extra: Change | None = None) -> M
         changes=tuple(changes[e] for e in order if e in changes),
         files={path: frozenset(hashes) for path, hashes in files.items()},
     )
+
+
+def _contests(
+    writes: Sequence[_Write],
+    ancestors: dict[str, frozenset[str]],
+    changes: dict[str, Change],
+    order: Sequence[str],
+) -> tuple[set[tuple[str, int]], list[Conflict]]:
+    """Every point's contest: the writes to leave out of replay, and the conflicts.
+
+    A point's contest can leave out a write that covers other points too (a group's removal), so
+    a point whose covering writes lost one to another point's contest is contested again without
+    it, until nothing changes (#503). Otherwise two concurrent writes beneath the one left out
+    would both be replayed, in the order they arrived. Each point's conflict is reported once, from
+    its first contest to find one."""
+    points = sorted({write.path for write in writes})
+    skipped: set[tuple[str, int]] = set()
+    conflicts: list[Conflict] = []
+    reported: set[Point] = set()
+    seen: dict[Point, frozenset[tuple[str, int]]] = {}
+    while True:
+        live = [w for w in writes if (w.event, w.index) not in skipped]
+        changed = False
+        for point in points:
+            covering = frozenset((w.event, w.index) for w in live if _covers(w.path, point))
+            if seen.get(point) == covering:
+                continue
+            seen[point] = covering
+            found = _contest(point, live, ancestors)
+            if found is None:
+                continue
+            drop, conflicting = found
+            if drop - skipped:
+                changed = True
+            skipped |= drop
+            if conflicting and point not in reported:
+                reported.add(point)
+                events_in = sorted({w.event for w in conflicting}, key=order.index)
+                conflicts.append(Conflict((point,), tuple(changes[e] for e in events_in)))
+        if not changed:
+            return skipped, conflicts
 
 
 def _change(record: RecordedEvent) -> Change:

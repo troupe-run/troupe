@@ -73,7 +73,8 @@ the end.
 **Why this is today's merge when there are no renames:** keys are then one per name, so the entity paths are the
 names, and replay is unchanged. A property test checks it: for generated histories (forks, settles, removals,
 re-creations, no renames), the new merge's config and conflicts equal the merge as it was. The merge as it was stays
-in the test tree as an oracle (`packages/troupe/tests/merge_oracle.py`), a copy of today's `merge.py`.
+in the test tree as an oracle (`packages/troupe/tests/merge_oracle.py`), a copy of `merge.py` with #503's fix (D9)
+and without entities.
 
 Rejected:
 - **Rewriting each write's path to the final name and keeping renames as no-ops.** It's simpler, but it can't tell a
@@ -197,6 +198,20 @@ allows it. A moved file troupe never saw on disk (rendered only) is rendered who
   `config.move-ambiguous`. Each lands with code that raises it and a test (protocol_guard).
 - Notices: `config.hand-move-recorded`, `config.move-not-detected`, catalogued in `notice.schema.json`.
 - The protocol CHANGELOG records the additions as non-breaking.
+
+### D9. Contests run until nothing changes (#503)
+
+The merge contests each point once, in path order. A contest can leave out a write that covers other points too, a
+group's removal. Then, at a point whose only latest covering write was that removal, two concurrent writes beneath it
+were both replayed, in the order they arrived. So clones could disagree (#503, found by this change's property test
+once it generated removals; the bug was already on main).
+
+Now a point is contested again whenever its covering writes lose one to another point's contest, until nothing
+changes. Each point's conflict is reported once, from the first contest that finds one. Histories where no write is
+left out across points merge as before.
+
+The fix is its own commit, before the entity work (owner, 2026-11-23). The no-rename oracle (D2) is a copy of the
+merge after it, since the merge before it disagreed with itself.
 
 ## Risks / Trade-offs
 

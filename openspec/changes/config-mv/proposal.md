@@ -38,6 +38,10 @@ at all.
 - **Runs follow a rename.** A run keeps the actor name it ran under. `troupe status` and `troupe logs` show
   `tester (now qa)` when the actor has been renamed since, following a chain of renames. `troupe perform tester`
   after the rename is refused as today, and its fix names `qa`.
+- **Fixes #503**, found by this change's merge property test. The merge could work out different config from the
+  same events in different arrival orders: when a point's contest leaves out a group's removal, two concurrent writes
+  under it were replayed in arrival order. Such a point is now contested again. Owner, 2026-11-23: fix it here, as its
+  own commit.
 - Protocol (additive, `feat`):
   - the change entry's `renamedFrom`;
   - the `config-set` request's rename operation, which `config mv` sends;
