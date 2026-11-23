@@ -28,8 +28,8 @@ Done (group 1): `test_drop.py` (8 tests) and two `remove_file` tests, all new AP
       Verify with unit tests over recorded streams: restore, a comment added, several steps, a partial undo (none),
       `config set` then restore, the latest of two round trips, an actor deleted and restored (one round trip, both
       files), and a round trip that would cross a settle (none).
-- [x] 2.2 `dropping(store, trip, runs_now=False)`: D3's five reasons in order, with the blocker (change id, run id or
-      segment). Steps 4 to 6 go through the store's `droppable`. Runs are found from `Run.Started`'s `config` heads.
+- [x] 2.2 `blocked(store, trip, runs_now=False)` (and `referred`, steps 2 and 3): D3's five reasons in order, with the blocker (change id, run id or
+      segment). Steps 4 and 5 go through the store's `droppable`. Runs are found from `Run.Started`'s `config` heads.
       Verify with a test per reason, each built through real commands in a git theatre (sync, perform with the
       scripted runner, config set, commit).
 - [x] 2.3 The keep record `.troupe/local/config/kept.json` (D7): read (absent means none; unreadable means none, plus

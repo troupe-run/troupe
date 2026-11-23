@@ -165,12 +165,15 @@ it checks that every parent is here itself, and refuses with `events.missing-par
   Events around a `git stash` and `stash pop` are all kept. The store never decides what's abandoned: config does,
   and asks the person (`config.edit-abandoned`, [config.md](config.md#abandoned-edits)).
 - **A person's drop is the only way an event leaves.** `drop(events, check)` removes the segments holding `events`,
-  all of them or none, holding the write lock. It runs `check` first (config's: no run or change has used them
+  holding the write lock, the latest first, so a removal that fails partway (`remove-failed`) leaves an earlier part
+  of them, whose events still read with every parent present. It runs `check` first (config's: no run or change has used them
   since), then refuses with `events.not-droppable` unless every recording of each event is in an uncommitted segment
   of this branch that holds nothing else (reason `committed` or `shares-segment`), and no other event follows one of
   them (`parent`). An event that isn't visible is `unknown-event`. Segments are only ever deleted whole, never
   rewritten. Afterwards the order rebuilds, with `events.order-rebuilt`, as when a file is removed by hand.
-  `droppable(events)` answers the segment question without the lock.
+  `droppable(events)` answers the segment question without the lock. A batch that names events it doesn't follow (a run's start
+  names its config version) passes them to `insert(..., requires=...)`, checked under the same lock, so it can't
+  race a drop: it's refused with `events.required-missing` instead.
 - **A missing parent is refused.** If an event names a parent that isn't here (its file was deleted by hand), reads
   of its stream fail with `events.missing-parent`, naming the file and the missing event, and saying to restore the
   removed file or remove the dependent one too. If the parent is only in another branch's uncommitted file, the
@@ -259,6 +262,7 @@ path ([`notice.schema.json`](../protocol/schemas/notice.schema.json)).
 | `events.settle-incomplete` | A settling event doesn't name every head |
 | `events.missing-parent` | An event's parent isn't here |
 | `events.not-droppable` | A person's drop can't remove those events whole |
+| `events.required-missing` | A batch needs events that aren't here any more, such as a run's config version a person dropped since the run read it |
 | `events.malformed-record` | A line of a segment, or of a local file, isn't valid |
 | `events.unknown-format` | A line uses a record format this troupe doesn't read |
 | `events.lineage-invalid` | An event's lineage isn't valid |

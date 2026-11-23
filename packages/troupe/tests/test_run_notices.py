@@ -18,12 +18,16 @@ from uuid import UUID, uuid4
 import pytest
 
 from client_schemas import check
+from configtesting import TESTER
 from runtesting import INIT, OK, Harness, committed, request, script, theatre
 from storetesting import files_service, git_service
 from test_perform import configured
 from test_run_aggregate import STAGE, outcome
 from test_run_queries import Child
 from troupe.core.client import messages as m
+from troupe.core.config.changes import change
+from troupe.core.config.stream import read as read_config
+from troupe.core.config.stream import record as record_config
 from troupe.core.errors import TroupeError
 from troupe.core.identity import Identity
 from troupe.core.masking import MARKER
@@ -352,13 +356,19 @@ def new_recorder(store: Any, run_id: str, send: Any) -> Any:  # noqa: ANN401
     """perform's recorder for a run in the theatre, outside perform: called on the event loop."""
     person = store.command(via="cli")
     agent = person.acting_as(Identity(kind="agent", id="tester", source="troupe"), via="runner")
+    # A real config version: a run's start requires its config heads to be here
+    # (abandoned-edits design D4).
+    merged = read_config(store)
+    if not merged.heads:
+        record_config(person, merged, change(merged.config, [(("actors", "tester"), TESTER)]), [])
+        merged = read_config(store)
     what = perform_module._What(
         actor="tester",
         runner="scripted",
         options={},
         effect_check=m.NoEffectCheck(),
         character=None,
-        config=("sha256:" + "b" * 64,),
+        config=tuple(merged.heads),
         workspace="theatre",
     )
     return perform_module._Recorder(
