@@ -64,7 +64,10 @@ latest one, so the round trip is the shortest: 3 → 5 → 3 → 5 → 3 closes 
 
 **One sweep, one round trip.** When several of one sweep's edits close round trips, they are one round trip: from
 the earliest `X` among them, with every closing file. That covers an actor deleted and restored, whose `.md` and
-`.yaml` come back as two edits in one sweep.
+`.yaml` come back as two edits in one sweep. A closing file counts only if it's back, at that earliest `X`, to what it holds
+after the sweep. A file whose own round trip began later isn't, so it's left out of `files`, and the changes to it
+in between are outside the round trip's files: `changes-more`, never dropped while the file still holds them (found
+by an independent review on #504: dropping them deleted a person's `config set` the `.md` still held).
 
 The function is `round_trip(history, closing) -> RoundTrip | None`, in a new module `core/config/abandoned.py`. It
 replays the tail forward with `changes.apply`, from the config at the start of the tail, so it costs one pass. It
@@ -82,7 +85,8 @@ looked for. Those events come from a merge of branches, and are committed, so th
 
 ### D3. When a round trip can be dropped
 
-`dropping(store, trip, *, runs_now=False) -> Reason | None` says why not, or None when it's safe. It checks, in this
+`blocked(store, trip, *, runs_now=False) -> Blocked | None` says why not, or None when it's safe (`referred` is its
+steps 2 and 3, which a drop re-checks under the store's lock). It checks, in this
 order, and the first that fails is the reason:
 
 1. **`changes-more`**: an event in the round trip changes a value outside the closing files' scopes, such as a
@@ -119,11 +123,14 @@ def drop(self, events: Sequence[str], check: Callable[[], None]) -> tuple[Path, 
 - `drop` takes the store's write lock, refreshes, and calls `check`, which raises to refuse. Under the same lock it
   runs `droppable`, refuses with `events.not-droppable` (naming the reason and each segment) if that fails, and
   refuses (reason `parent`) if any visible event outside `events` names one of them as a parent. An event that isn't
-  visible is refused as `unknown-event`. Then it deletes each segment holding them, and returns their paths.
+  visible is refused as `unknown-event`. Then it deletes each segment holding them, the one holding the latest event in the store's order first, and returns
+  their paths.
   Deleting goes through the platform seam (`platform/files.py` gains `remove_file`, beside `remove_tree`), so
   Windows' sharing rules are handled in one place. If a deletion fails partway, the remaining segments are left, the
-  error (reason `remove-failed`) names them, and the next read rebuilds the order (a missing parent can't arise, since every event in a deleted segment belongs to the
-  round trip and the round trip's events only point back to each other and to `X`'s parent).
+  error (reason `remove-failed`) names them, and the next read rebuilds the order. Since the latest go first, what's
+  left is an earlier part of the round trip, whose parents are all still here (found by Claude's review on #504: in
+  oldest-first order a failure left later events naming removed ones). The closing sweep is then gone, so the next
+  sync reads the file back again and offers what's left as a new round trip.
 - Afterwards the store's order is rebuilt on its next read, with the `events.order-rebuilt` notice and followers
   starting again, as when a file is removed by hand. That's expected, and the drop's result says so.
 
@@ -229,8 +236,8 @@ drop is refused and why. `docs/prompt-book/cli.md` lists the two commands. `cont
 - **Followers restart** after a drop, as after any removed event file. Pre-house that's the CLI's own projections.
   Once there's a house, it rebuilds them.
 - **A deletion that fails partway** (a file locked on Windows by an indexer, say) leaves some segments. The error
-  names them and the order rebuilds. No event can be left with a missing parent, because the round trip's events
-  point only to each other and to `X`'s parent.
+  names them and the order rebuilds. Removing the latest first leaves an earlier part of the round trip, so no event
+  is left with a missing parent; nothing is lost, because the file holds the values.
 - **#138 (config mv)** also changes `syncing.py`. This change adds one call after recording and one parameter, so
   a rebase should be mechanical. A rename and back is #138's.
 

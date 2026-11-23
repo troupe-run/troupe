@@ -196,3 +196,36 @@ def test_a_drop_request_naming_segments_is_refused_naming_the_field(repo: Repo) 
     error = _refused(repo, "config-drop", {"change": closing, "segments": ["x"]})
     assert error.code == "client.invalid-request"
     assert "segments" in error.problem
+
+
+def test_a_drop_between_performs_sync_and_its_start_refuses_the_start(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The round trip is droppable when perform syncs (closed by an earlier sync, so perform's own
+    # sweep doesn't mark it), and a drop lands before the run's start is recorded.
+    harness = Harness(make_repo(tmp_path, "theatre"))
+    (harness.repo.path / ".troupe").mkdir()
+    harness.configure(request(script(INIT, OK)))
+    harness.repo.commit_all("tester")
+    closing = _abandon(harness.repo, "workspace: theatre", "workspace: worktree")
+    from troupe.core.config import commands
+
+    real = commands.sync_files
+
+    def sync_then_drop(*args: Any, **kwargs: Any) -> Any:  # noqa: ANN401
+        synced = real(*args, **kwargs)
+        if not kwargs.get("rehearse"):
+            _call(harness.repo, "config-drop", {"change": closing})
+        return synced
+
+    monkeypatch.setattr(commands, "sync_files", sync_then_drop)
+    parsed = m.PerformRequest.from_data({"actor": "tester", "direction": "go"})
+
+    with pytest.raises(TroupeError) as raised:
+        asyncio.run(perform(parsed, harness.session(), harness.send, backends=harness.backends()))
+
+    assert raised.value.code == "events.required-missing"
+    topics = [
+        r.topic for _, r in git_service(harness.repo).recorder.notifications(1, 100, None, [])
+    ]
+    assert not any(t.endswith("Run.Started") for t in topics)

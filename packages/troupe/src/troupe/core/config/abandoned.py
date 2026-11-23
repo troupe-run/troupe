@@ -105,7 +105,7 @@ def round_trip(history: Sequence[RecordedEvent], closing: str) -> RoundTrip | No
     starts: list[int] = []
     ends: list[int] = []
     scopes: list[_Scope] = []
-    files: list[str] = []
+    files: list[tuple[str, ...]] = []
     for y in edits:
         scope = _scope_of(tail[y])
         if scope is None:
@@ -117,10 +117,21 @@ def round_trip(history: Sequence[RecordedEvent], closing: str) -> RoundTrip | No
         starts.append(x)
         ends.append(y)
         scopes.append(scope)
-        files.append(_file_of(tail[y]))
+        files.append(_files_of(tail[y]))
     if not starts:
         return None
-    trip = tail[min(starts) : max(ends) + 1]
+    lo, hi = min(starts), max(ends)
+    # A file counts only if it's back to what it was where the whole round trip starts: one whose
+    # own round trip began later isn't, and the changes to it before that are outside the trip's
+    # files, so they make it changes-more rather than being dropped while the file still holds them.
+    back = [
+        n
+        for n, scope in enumerate(scopes)
+        if scope.value(states[lo]) == scope.value(states[hi + 1])
+    ]
+    scopes = [scopes[n] for n in back]
+    files = [files[n] for n in back]
+    trip = tail[lo : hi + 1]
     changes: list[str] = []
     outside: str | None = None
     for record in trip:
@@ -129,7 +140,8 @@ def round_trip(history: Sequence[RecordedEvent], closing: str) -> RoundTrip | No
             changes.append(change)
         if outside is None and any(not _inside(tuple(e["path"]), scopes) for e in _entries(record)):
             outside = change
-    return RoundTrip(closing, tuple(r.id for r in trip), tuple(changes), tuple(files), outside)
+    named = tuple(dict.fromkeys(path for group in files for path in group))
+    return RoundTrip(closing, tuple(r.id for r in trip), tuple(changes), named, outside)
 
 
 def head_sweep(history: Sequence[RecordedEvent]) -> str | None:
@@ -245,8 +257,9 @@ def _is_sweep(record: RecordedEvent, closing: str) -> bool:
     )
 
 
-def _file_of(record: RecordedEvent) -> str:
-    return str(_files(record)[0]["path"])
+def _files_of(record: RecordedEvent) -> tuple[str, ...]:
+    """The files a hand edit names: one, or an actor's two when both were deleted."""
+    return tuple(str(f["path"]) for f in _files(record))
 
 
 def _scope_of(record: RecordedEvent) -> _Scope | None:

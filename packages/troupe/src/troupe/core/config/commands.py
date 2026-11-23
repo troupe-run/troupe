@@ -318,7 +318,7 @@ async def config_drop(request: m.ConfigDropRequest, session: Session, send: Send
         change=request.change,
         changes=list(trip.changes),
         segments=[
-            Path(p).absolute().relative_to(session.theatre.absolute()).as_posix() for p in paths
+            Path(p).resolve().relative_to(session.theatre.resolve()).as_posix() for p in paths
         ],
         rehearsed=rehearse,
         notices=_notices(notices, store.notices()),

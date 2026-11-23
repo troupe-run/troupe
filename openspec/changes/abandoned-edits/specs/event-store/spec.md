@@ -16,9 +16,9 @@ An edit and the edit that reverts it SHALL both stay recorded until a person dro
 ## ADDED Requirements
 
 ### Requirement: A drop removes only whole uncommitted segments of this branch
-The store's drop SHALL remove the segments holding the events it is given, all of them or none, only when every
-recording of each is in an uncommitted segment of the current branch holding none but those events, and no other
-event names one as a parent. Otherwise it SHALL refuse with `events.not-droppable`, naming the reason and segments.
+The store's drop SHALL remove the segments holding the events it is given, latest first, only when every recording
+of each is in an uncommitted segment of the current branch holding none but those events, and no other event names
+one as a parent. Otherwise it SHALL refuse with `events.not-droppable`, naming the reason and segments.
 
 #### Scenario: Dropping events alone in their segments
 - **WHEN** two events are recorded by two sessions on the current branch, uncommitted, and nothing names them, and
@@ -36,6 +36,10 @@ event names one as a parent. Otherwise it SHALL refuse with `events.not-droppabl
 #### Scenario: An event another event names as its parent
 - **WHEN** the store is asked to drop an event that a later event, not being dropped, names as its parent
 - **THEN** it is refused with `events.not-droppable`, naming the later event, and nothing is removed
+
+#### Scenario: A removal that fails partway
+- **WHEN** removing the segment of the later of two events succeeds and removing the earlier one's fails
+- **THEN** it is refused with `events.not-droppable` naming the segment left, and the earlier event still reads
 
 #### Scenario: A check the caller gives refuses
 - **WHEN** the caller's check, run while the store holds its write lock, raises an error

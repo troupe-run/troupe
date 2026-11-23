@@ -303,3 +303,21 @@ def test_keeping_twice_records_one_entry_and_prunes_gone_changes(tmp_path: Path)
     write_kept(tmp_path, kept(tmp_path)[0] | {"a"}, frozenset({"a", "b"}))
     assert kept(tmp_path) == (frozenset({"a"}), [])
     assert (tmp_path / KEPT).read_bytes() == b'["a"]\n'
+
+
+def test_a_file_back_only_to_a_later_point_is_not_dropped_with_the_others(repo: Repo) -> None:
+    # The yaml goes back to before change 1; the .md only to before change 3, so change 2 (the
+    # character it still holds) is outside the files that went back: dropping would lose it.
+    _started(repo)
+    _set(repo, ["actors", "tester", "expect"], ["out/a.txt"])
+    second = _set(repo, ["actors", "tester", "character"], "C1")["change"]
+    _set(repo, ["actors", "tester", "character"], "C2")
+    _replace(repo, TESTER_YAML, "out/a.txt", "out/hello.txt")
+    (repo.path / TESTER_MD).write_text("C1", encoding="utf-8")
+    trip = _trip(repo, _sync(repo))
+    assert trip is not None
+    assert trip.files == ("actors/tester.yaml",)
+    assert trip.outside == second
+    found = blocked(git_service(repo), trip)
+    assert found is not None
+    assert (found.reason, found.blocker) == ("changes-more", second)

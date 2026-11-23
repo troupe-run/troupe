@@ -461,11 +461,23 @@ class TextStore:
         *,
         tracking: Tracking | None = None,
         settling_parents: Sequence[str] | None = None,
+        requires: Sequence[str] = (),
     ) -> list[int]:
-        """Record a batch, all or nothing, and return its notification ids (design D4, D5)."""
+        """Record a batch, all or nothing, and return its notification ids (design D4, D5).
+        ``requires`` names events that must still be here (abandoned-edits design D4)."""
         with self._lock, self._write_lock():
             self.refresh()
             self._order_locked()
+            missing = sorted(set(requires) - self._events.keys())
+            if missing:
+                raise TroupeError(
+                    "events.required-missing",
+                    problem=f"Events this batch depends on are no longer here: "
+                    f"{', '.join(missing)}. They were dropped, or their file removed, since "
+                    "they were read.",
+                    fix="Run the command again: it reads what's here now.",
+                    details={"missing": missing},
+                )
             self._check_unique(stored_events)
             if tracking is not None:
                 self._check_tracking(tracking)
@@ -604,7 +616,9 @@ class TextStore:
             return self._why_not(events)[0]
 
     def drop(self, events: Sequence[str], check: Callable[[], None]) -> tuple[Path, ...]:
-        """Remove the segments holding ``events``, all of them or none, holding the write lock.
+        """Remove the segments holding ``events``, holding the write lock, latest first: the
+        segment holding the latest of them in the store's order goes first, so a removal that
+        fails partway leaves the earlier ones, whose events still read with every parent present.
         ``check`` runs first under the lock, and refuses by raising. Returns the segments
         removed."""
         with self._lock, self._write_lock():
@@ -617,9 +631,13 @@ class TextStore:
             for record in self._events.values():
                 if record.id not in wanted and wanted.intersection(record.parents):
                     raise _not_droppable("parent", (record.path,), event=record.id)
+            order = {event: n for n, event in enumerate(self._replay_order(list(self._events)))}
+            latest = {
+                path: max(order[r.id] for r in self._segments[path.name].records) for path in paths
+            }
             removed: list[Path] = []
             try:
-                for path in paths:
+                for path in sorted(paths, key=latest.__getitem__, reverse=True):
                     remove_file(path)
                     removed.append(path)
             except OSError as error:
@@ -783,8 +801,8 @@ def _not_droppable(
     if event is not None:
         details["event"] = event
     fix = (
-        "Removing the other files failed partway; the ones named are still there. Run the drop "
-        "again once nothing holds them open."
+        "The files named are still there, and their events still read: the latest were removed "
+        "first. Once nothing holds them open, the next sync offers to drop what's left."
         if reason == "remove-failed"
         else "Nothing to drop: the events stay recorded."
     )

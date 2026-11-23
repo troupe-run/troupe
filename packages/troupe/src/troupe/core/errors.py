@@ -54,6 +54,7 @@ CODES: dict[str, ExitCode] = {
     "events.missing-parent": ExitCode.FAILURE,
     # A person's drop of an abandoned edit (abandoned-edits design D4).
     "events.not-droppable": ExitCode.FAILURE,
+    "events.required-missing": ExitCode.FAILURE,
     "events.malformed-record": ExitCode.FAILURE,
     "events.unknown-format": ExitCode.FAILURE,
     "events.lineage-invalid": ExitCode.FAILURE,

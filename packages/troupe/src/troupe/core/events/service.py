@@ -192,10 +192,11 @@ class EventStore:
         lineage: Lineage,
         *,
         settling_parents: Sequence[str] | None = None,
+        requires: Sequence[str] = (),
     ) -> list[Recorded]:
         """Record ``events`` with ``lineage``, checked first: an invalid one writes nothing."""
         return self.record_with_lineages(
-            events, [lineage] * len(events), settling_parents=settling_parents
+            events, [lineage] * len(events), settling_parents=settling_parents, requires=requires
         )
 
     def record_with_lineages(
@@ -204,6 +205,7 @@ class EventStore:
         lineages: Sequence[Lineage],
         *,
         settling_parents: Sequence[str] | None = None,
+        requires: Sequence[str] = (),
     ) -> list[Recorded]:
         """Record ``events``, each with its own lineage, all or nothing: every lineage is checked
         first, and an invalid one writes nothing (hand-edit-sweep design D7: one batch can hold a
@@ -225,7 +227,9 @@ class EventStore:
             self._check_cause(lineage.cause, lineage.change)
         stored = [self._stored(event, data) for event, data in zip(events, datas, strict=True)]
         try:
-            numbers = self.recorder.insert(stored, settling_parents=settling_parents)
+            numbers = self.recorder.insert(
+                stored, settling_parents=settling_parents, requires=requires
+            )
         except IntegrityError as error:
             raise TroupeError(
                 "events.version-conflict",
@@ -360,13 +364,15 @@ class Command:
         *,
         source: Source | None = None,
         settles: Sequence[str] | None = None,
+        requires: Sequence[str] = (),
     ) -> list[Recorded]:
         """Record ``events`` as this command's own, all or nothing. With ``settles``, the first
         event is a settling event whose parents are those heads, every head of its stream, and the
         events after it in that stream follow it: a fork is settled and changed in one batch, as an
-        aggregate that merges its own forks does (config-model design D5)."""
+        aggregate that merges its own forks does (config-model design D5). ``requires`` names
+        events that must still be here when the batch is written (abandoned-edits design D4)."""
         return self.store.record_with_lineage(
-            events, self.lineage(source), settling_parents=settles
+            events, self.lineage(source), settling_parents=settles, requires=requires
         )
 
     def settle(self, aggregate: Aggregate) -> Recorded:

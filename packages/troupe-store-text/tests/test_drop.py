@@ -10,6 +10,7 @@ import pytest
 from gitrepo import Repo, make_repo
 from storetesting import event, segments
 from troupe.core.errors import TroupeError
+from troupe_store_text import store as store_module
 from troupe_store_text.store import TextStore
 from troupe_vcs_git import GitAdapter
 
@@ -158,3 +159,58 @@ def test_an_unknown_event_is_refused(tmp_path: Path) -> None:
     _record(repo, uuid4(), 1)
     error = _refusal(_session(repo), ["sha256:" + "0" * 64])
     assert error.details["reason"] == "unknown-event"
+
+
+def test_a_batch_that_requires_a_dropped_event_is_refused_and_writes_nothing(
+    tmp_path: Path,
+) -> None:
+    repo = make_repo(tmp_path)
+    repo.commit_all()
+    ids = _record(repo, uuid4(), 1)
+    writer = _session(repo)
+    writer.refresh()
+    _session(repo).drop(ids, _no_check)
+
+    with pytest.raises(TroupeError) as raised:
+        writer.insert([event(uuid4(), 1)], requires=ids)
+
+    assert raised.value.code == "events.required-missing"
+    assert raised.value.details == {"missing": ids}
+    assert segments(repo.path) == []
+
+
+def test_a_batch_whose_required_events_are_here_is_recorded(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path)
+    repo.commit_all()
+    ids = _record(repo, uuid4(), 1)
+    other = uuid4()
+    _session(repo).insert([event(other, 1)], requires=ids)
+    assert [r.version for r in _session(repo).history(other)] == [1]
+
+
+def test_a_removal_failing_partway_leaves_the_earlier_events_readable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = make_repo(tmp_path)
+    repo.commit_all()
+    stream = uuid4()
+    first = _record(repo, stream, 1)
+    [earlier_segment] = segments(repo.path)
+    time.sleep(0.01)
+    second = _record(repo, stream, 2)
+    removed: list[Path] = []
+
+    def fail_second(path: Path) -> None:
+        if removed:
+            raise PermissionError("held open")
+        removed.append(Path(path))
+        Path(path).unlink()
+
+    monkeypatch.setattr(store_module, "remove_file", fail_second)
+    error = _refusal(_session(repo), [*first, *second])
+
+    assert error.details["reason"] == "remove-failed"
+    assert error.details["segments"] == [str(earlier_segment)]
+    assert segments(repo.path) == [earlier_segment]
+    reader = _session(repo)
+    assert [r.id for r in reader.select(stream)] == first  # every parent present: it loads

@@ -343,7 +343,10 @@ class _Recorder:
             on_context_full=self.context_full.to_data(),
             runtime=self.runtime.to_data() if self.runtime is not None else None,
         )
-        self.person.record(run.collect_events())
+        # The config version must still be here as the start is written: a person's drop of an
+        # abandoned edit between this perform's sync and now refuses the start, never leaving a
+        # run naming events that are gone (abandoned-edits design D4).
+        self.person.record(run.collect_events(), requires=list(self.what.config))
         self.run = run
 
     async def start(self, workspace: dict[str, Any]) -> None:

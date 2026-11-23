@@ -61,7 +61,13 @@ class EventRecorder(Protocol):
         *,
         tracking: Tracking | None = None,
         settling_parents: Sequence[str] | None = None,
-    ) -> list[int]: ...
+        requires: Sequence[str] = (),
+    ) -> list[int]:
+        """Record a batch, all or nothing. ``requires`` names events that must still be here,
+        checked holding the write lock: refused with ``events.required-missing`` otherwise, so a
+        batch that names them (a run's config version) can't race a person's drop
+        (abandoned-edits design D4)."""
+        ...
 
     def select(
         self,
@@ -91,7 +97,8 @@ class EventRecorder(Protocol):
         ...
 
     def drop(self, events: Sequence[str], check: Callable[[], None]) -> tuple[Path, ...]:
-        """Remove ``events`` from the store, all of them or none, and return the files removed.
+        """Remove ``events`` from the store, latest first, and return the files removed; a
+        removal that fails partway leaves an earlier part whose events still read.
         Holding the store's write lock, ``check`` runs first and refuses by raising; then it's
         refused with ``events.not-droppable`` unless ``droppable`` says they could go and no
         other event follows one of them (abandoned-edits design D4)."""
