@@ -5,9 +5,10 @@
 - [x] 1.1 Add `renamedFrom` to the entry in `protocol/schemas/events/config-changed.schema.json` (and its bundled copy), with a rename entry carrying no `after`. Update `Config.Changed`'s description. Verify with `test_event_schemas.py`/`test_schemas.py` passing on a valid rename entry and refusing one with an `after`.
 - [x] 1.2 Add `Rename` to `core/config/changes.py`: `change()` makes the entry, plus a runtime's actors' `runtime` entries, and `apply()` moves the group. Verify with new `test_config_changes.py` cases: an actor's rename, a runtime's rename carrying two actors, and apply moving every value.
 
-## 2. Entities in the merge (design D2, D3)
+## 2. Entities in the merge (design D2, D3, D9)
 
-- [ ] 2.1 Copy today's `merge.py` into `packages/troupe/tests/merge_oracle.py` as the oracle, and add a property test that generates histories with no renames and checks the new merge's config and conflicts equal the oracle's. Verify it passes before 2.2 starts.
+- [x] 2.0 Fix #503: contest a point again when another point's contest leaves out one of its covering writes (design D9). Verify with a plain test of the six-event reproduction, failing before and passing after, and with the merge property test generating removals and re-creations.
+- [ ] 2.1 Copy `merge.py` as fixed by 2.0 into `packages/troupe/tests/merge_oracle.py` as the oracle, and add a property test that generates histories with no renames and checks the new merge's config and conflicts equal the oracle's. Verify it passes before 2.2 starts.
 - [ ] 2.2 Give each write its entity in `merge.py`: views (with one parent: carried; at a join: contested), keys, births, renames and removals, entity paths, replay in entity space, and display names. Verify with the oracle property test still passing, and with examples for "A character set on a branch that didn't rename", "A rename and a rename back", and "A new tester after the rename" / "A concurrent change still follows".
 - [ ] 2.3 Add the name contest's conflicts: two renames, a rename and a removal, and a clash, each left out of replay as D3 says and named on its display path. Verify with examples for each "Renames that can't both hold" scenario, including resolving with `config mv` through `merge(…, extra=…)`.
 - [ ] 2.4 Add a property test for histories with renames (forks, settles, removals, re-creations). Check that every order of arrival gives the same config and conflicts, and that a rename followed by its reverse leaves config as if neither happened. Verify it passes at the `ci` hypothesis profile.
