@@ -22,7 +22,7 @@ does. The tables below are generated from troupe's schemas, so they can't drift 
 <!-- generated: events (from protocol/schemas/events/ and lineage; regenerate with `uv run scripts/docs_reference.py`) -->
 ### Config.Changed
 
-The payload of one config change (topic troupe.core.config.aggregate:Config.Changed): every value one command changed, and every config file it wrote or removed. A command records exactly one for its own change; the sweep before it records one more for each config file a person edited, by the unknown author, with the file in its lineage's vcs.source. Field names are as recorded.
+The payload of one config change (topic troupe.core.config.aggregate:Config.Changed): every value one command changed (or the entity it renamed), and every config file it wrote or removed. A command records exactly one for its own change; the sweep before it records one more for each config file a person edited, by the unknown author, with the file in its lineage's vcs.source. Field names are as recorded.
 
 | Field | Holds | Always there | What it is |
 |---|---|---|---|

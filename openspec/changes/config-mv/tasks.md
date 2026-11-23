@@ -2,8 +2,8 @@
 
 ## 1. The rename entry (design D1)
 
-- [ ] 1.1 Add `renamedFrom` to the entry in `protocol/schemas/events/config-changed.schema.json` (and its bundled copy), with a rename entry carrying no `after`. Update `Config.Changed`'s description. Verify with `test_event_schemas.py`/`test_schemas.py` passing on a valid rename entry and refusing one with an `after`.
-- [ ] 1.2 Add `Rename` to `core/config/changes.py`: `change()` makes the entry, plus a runtime's actors' `runtime` entries, and `apply()` moves the group. Verify with new `test_config_changes.py` cases: an actor's rename, a runtime's rename carrying two actors, and apply moving every value.
+- [x] 1.1 Add `renamedFrom` to the entry in `protocol/schemas/events/config-changed.schema.json` (and its bundled copy), with a rename entry carrying no `after`. Update `Config.Changed`'s description. Verify with `test_event_schemas.py`/`test_schemas.py` passing on a valid rename entry and refusing one with an `after`.
+- [x] 1.2 Add `Rename` to `core/config/changes.py`: `change()` makes the entry, plus a runtime's actors' `runtime` entries, and `apply()` moves the group. Verify with new `test_config_changes.py` cases: an actor's rename, a runtime's rename carrying two actors, and apply moving every value.
 
 ## 2. Entities in the merge (design D2, D3)
 

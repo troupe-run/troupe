@@ -10,6 +10,9 @@ A change is a list of entries, one per value it changes:
   value's canonical JSON, absent when there was none; ``after`` is the new value, absent when it's
   removed, and never an object.
 - A group is removed as one entry addressed to the group: its ``before`` hashes the whole group.
+- A whole actor or runtime is renamed as one entry: ``{"path": [kind, new], "renamedFrom": [kind,
+  old], "before": <the group's hash>}``, with no ``after`` (config-mv design D1). A runtime's rename
+  carries the actors that name it, each as an ordinary entry setting its ``runtime``.
 
 Entries are sorted by path, so the same change is always written the same way, and an entry that
 changes nothing is never written.
@@ -17,6 +20,7 @@ changes nothing is never written.
 
 import hashlib
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from troupe.core import strict_json
@@ -95,6 +99,47 @@ UNSET = object()
 """In ``change``'s operations, the value that removes a path."""
 
 
+RENAMED_FROM = "renamedFrom"
+
+
+@dataclass(frozen=True)
+class Rename:
+    """In ``change``'s operations, the value that renames the group at ``source`` to the
+    operation's path, a whole actor or runtime of the same kind (config-mv design D1)."""
+
+    source: tuple[str, ...]
+
+
+def is_rename(entry: Mapping[str, Any]) -> bool:
+    """Whether ``entry`` renames a group rather than changing a value."""
+    return RENAMED_FROM in entry
+
+
+def rename(tree: Mapping[str, Any], path: Sequence[str], source: Sequence[str]) -> list[Entry]:
+    """The entries that rename the group at ``source`` to ``path``: the rename entry and, for a
+    runtime, an entry setting ``runtime`` to the new name on each actor that names the old one, in
+    name order. None when there's no group at ``source``; the caller refuses that first."""
+    from troupe.core.config.kinds import ACTORS, RUNTIMES
+
+    group = get(tree, source)
+    if not isinstance(group, Mapping):
+        return []
+    entries: list[Entry] = [
+        {"path": list(path), RENAMED_FROM: list(source), "before": value_hash(group)}
+    ]
+    if source[0] == RUNTIMES:
+        found = tree.get(ACTORS)
+        actors: Mapping[str, Any] = found if isinstance(found, Mapping) else {}
+        for name in sorted(actors):
+            actor = actors[name]
+            if isinstance(actor, Mapping) and actor.get("runtime") == source[1]:
+                at = (ACTORS, name, "runtime")
+                entry = _entry(at, source[1], path[1])
+                if entry is not None:
+                    entries.append(entry)
+    return entries
+
+
 def change(
     tree: Mapping[str, Any], operations: Sequence[tuple[Sequence[str], object]]
 ) -> list[Entry]:
@@ -104,11 +149,18 @@ def change(
     current: Tree = _copy(tree)
     net: dict[Path, Entry] = {}
     for path, value in operations:
-        entries = unset(current, path) if value is UNSET else set_value(current, path, value)
+        if isinstance(value, Rename):
+            entries = rename(current, path, value.source)
+        elif value is UNSET:
+            entries = unset(current, path)
+        else:
+            entries = set_value(current, path, value)
         for entry in entries:
             key = tuple(entry["path"])
             first = net.get(key)
             merged: Entry = {"path": entry["path"]}
+            if is_rename(entry):
+                merged[RENAMED_FROM] = entry[RENAMED_FROM]
             before = first.get("before") if first is not None else entry.get("before")
             if before is not None:
                 merged["before"] = before
@@ -126,14 +178,30 @@ def change(
 
 
 def apply(tree: Mapping[str, Any], entries: Sequence[Mapping[str, Any]]) -> Tree:
-    """``tree`` after ``entries``, as a new tree. Empty groups are left out."""
+    """``tree`` after ``entries``, as a new tree. Empty groups are left out.
+
+    Entries are applied in path order, except that a rename applies where it stands in the list:
+    the entries before it first, then the move, then those after it. One change's entries never
+    touch the names its rename moves between (config-mv design D1), so within a change order
+    doesn't matter; across changes, callers pass the entries in the order they were made."""
     result: Tree = _copy(tree)
-    for entry in sorted(entries, key=lambda e: tuple(e["path"])):
-        path = tuple(entry["path"])
-        if "after" in entry:
-            _put(result, path, entry["after"])
-        else:
-            _remove(result, path)
+    run: list[Mapping[str, Any]] = []
+    for entry in [*entries, None]:
+        if entry is not None and not is_rename(entry):
+            run.append(entry)
+            continue
+        for value in sorted(run, key=lambda e: tuple(e["path"])):
+            path = tuple(value["path"])
+            if "after" in value:
+                _put(result, path, value["after"])
+            else:
+                _remove(result, path)
+        run = []
+        if entry is not None:
+            group = get(result, entry[RENAMED_FROM])
+            _remove(result, tuple(entry[RENAMED_FROM]))
+            if isinstance(group, Mapping):
+                _put(result, tuple(entry["path"]), _copy(group))
     return _prune(result)
 
 

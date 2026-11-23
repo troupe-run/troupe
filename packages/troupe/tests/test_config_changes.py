@@ -15,7 +15,15 @@ from protocol_schemas import PROTOCOL_BASE, SCRIPTED, validator_for
 from storetesting import git_service, segments
 from troupe.core import strict_json
 from troupe.core.config import aggregate
-from troupe.core.config.changes import UNSET, apply, change, set_value, unset, value_hash
+from troupe.core.config.changes import (
+    UNSET,
+    Rename,
+    apply,
+    change,
+    set_value,
+    unset,
+    value_hash,
+)
 from troupe.core.errors import TroupeError
 
 RECORD = validator_for(PROTOCOL_BASE + "event-record.schema.json", SCRIPTED)
@@ -228,3 +236,68 @@ def test_a_command_can_unset_one_value_and_set_another() -> None:
             "x": {"runner": "s"},
         }
     }
+
+
+# Requirement: A rename is one entry naming the old name
+
+
+def test_renaming_an_actor_is_one_entry_naming_the_old_name_and_the_groups_hash() -> None:
+    entries = change(CONFIG, [(("actors", "qa"), Rename(("actors", "tester")))])
+    assert entries == [
+        {
+            "path": ["actors", "qa"],
+            "renamedFrom": ["actors", "tester"],
+            "before": value_hash(TESTER),
+        }
+    ]
+
+
+def test_applying_a_rename_moves_every_value_and_leaves_nothing_at_the_old_name() -> None:
+    entries = change(CONFIG, [(("actors", "qa"), Rename(("actors", "tester")))])
+    assert apply(CONFIG, entries) == {"actors": {"qa": TESTER}}
+
+
+def test_renaming_what_isnt_there_changes_nothing() -> None:
+    assert change(CONFIG, [(("actors", "qa"), Rename(("actors", "ghost")))]) == []
+
+
+def test_a_rename_applies_after_the_entries_before_it_and_before_those_after_it() -> None:
+    before = {
+        "path": ["actors", "tester", "runner"],
+        "before": value_hash("scripted"),
+        "after": "x",
+    }
+    [moved] = change(CONFIG, [(("actors", "qa"), Rename(("actors", "tester")))])
+    after = {"path": ["actors", "tester", "runner"], "after": "new"}
+    assert apply(CONFIG, [before, moved, after]) == {
+        "actors": {"qa": {**TESTER, "runner": "x"}, "tester": {"runner": "new"}}
+    }
+
+
+# Requirement: A runtime's rename carries the actors that name it
+
+
+def test_a_runtimes_rename_sets_runtime_on_each_actor_that_names_it_in_name_order() -> None:
+    config: dict[str, Any] = {
+        "runtimes": {"gpu-box": {"endpoint": "http://gpu:11434"}},
+        "actors": {
+            "tester": {"runner": "ollama", "runtime": "gpu-box", "expect": []},
+            "reviewer": {"runner": "ollama", "runtime": "gpu-box", "expect": []},
+            "other": {"runner": "ollama", "runtime": "ollama", "expect": []},
+        },
+    }
+    entries = change(config, [(("runtimes", "gpu"), Rename(("runtimes", "gpu-box")))])
+    assert [entry["path"] for entry in entries] == [
+        ["actors", "reviewer", "runtime"],
+        ["actors", "tester", "runtime"],
+        ["runtimes", "gpu"],
+    ]
+    assert entries[0] == {
+        "path": ["actors", "reviewer", "runtime"],
+        "before": value_hash("gpu-box"),
+        "after": "gpu",
+    }
+    after = apply(config, entries)
+    assert after["runtimes"] == {"gpu": {"endpoint": "http://gpu:11434"}}
+    assert after["actors"]["tester"]["runtime"] == "gpu"
+    assert after["actors"]["other"]["runtime"] == "ollama"

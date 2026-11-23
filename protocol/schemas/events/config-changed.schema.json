@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://troupe.run/protocol/events/config-changed.schema.json",
   "title": "Config.Changed",
-  "description": "The payload of one config change (topic troupe.core.config.aggregate:Config.Changed): every value one command changed, and every config file it wrote or removed. A command records exactly one for its own change; the sweep before it records one more for each config file a person edited, by the unknown author, with the file in its lineage's vcs.source. Field names are as recorded.",
+  "description": "The payload of one config change (topic troupe.core.config.aggregate:Config.Changed): every value one command changed (or the entity it renamed), and every config file it wrote or removed. A command records exactly one for its own change; the sweep before it records one more for each config file a person edited, by the unknown author, with the file in its lineage's vcs.source. Field names are as recorded.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -37,7 +37,7 @@
   "$defs": {
     "entry": {
       "title": "Change entry",
-      "description": "One value's change. A missing before means the value didn't exist; a missing after means it was removed. An entry for a group (an object) only ever removes it.",
+      "description": "One value's change. A missing before means the value didn't exist; a missing after means it was removed, unless the entry has renamedFrom: then it renames a whole actor or runtime, and before is the hash of the group it moves. An entry for a group (an object) only ever removes or renames it.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -72,6 +72,39 @@
         "after": {
           "description": "The new value. Never an object: an object is a group of values, each changed by its own entry.",
           "$ref": "#/$defs/value"
+        },
+        "renamedFrom": {
+          "description": "For a rename: the old name, as [kind, name], whose whole group the entry moves to its path, also [kind, name] of the same kind. A rename has a before and no after.",
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "dependentSchemas": {
+        "renamedFrom": {
+          "required": [
+            "before"
+          ],
+          "not": {
+            "required": [
+              "after"
+            ]
+          },
+          "properties": {
+            "path": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
         }
       }
     },
