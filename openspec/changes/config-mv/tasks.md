@@ -44,8 +44,8 @@
 
 ## 7. Integration
 
-- [ ] 7.1 Run `uv run scripts/check.py` (full) once its slot is agreed with the orchestrator, and record the result. Verify it reports every check passed.
-- [ ] 7.2 Run `openspec validate config-mv --strict`. Verify it reports the change valid.
+- [x] 7.1 Run `uv run scripts/check.py` (full) once its slot is agreed with the orchestrator, and record the result. Verify it reports every check passed.
+- [x] 7.2 Run `openspec validate config-mv --strict`. Verify it reports the change valid.
 
 ## Workflow follow-up
 
