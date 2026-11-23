@@ -119,3 +119,32 @@ def test_an_old_name_follows_a_chain_of_renames_in_perform_s_fix(repo: Repo) -> 
     with pytest.raises(TroupeError) as caught:
         _from_config(read(git_service(repo)), "lead")
     assert caught.value.details["renamedTo"] == "checker"
+
+
+def test_status_still_shows_runs_when_configs_stream_cant_be_read(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from troupe.core.config import stream
+
+    run = _performed()
+    cli("config", "mv", "actors.lead", "actors.star")
+
+    def broken(store: object) -> object:
+        raise TroupeError(
+            "events.missing-parent",
+            problem="A config event follows one that isn't here.",
+            fix="Restore the file that held it.",
+            details={
+                "line": 1,
+                "event": "sha256:" + "1" * 64,
+                "missingParent": "sha256:" + "0" * 64,
+                "onlyIn": [],
+            },
+        )
+
+    monkeypatch.setattr(stream, "read", broken)
+    code, out, err = cli("status")
+    assert code == ExitCode.OK, err
+    [line] = [line for line in out.splitlines() if line.startswith(run)]
+    assert " lead " in line
+    assert "(now" not in line
