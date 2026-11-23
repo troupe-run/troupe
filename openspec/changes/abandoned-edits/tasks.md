@@ -15,6 +15,13 @@ say so in the tick. Commit by group.
       each scenario of event-store's "A drop removes only whole uncommitted segments of this branch", in a real git
       theatre (committed means in HEAD or the index), and that reads after a drop give the rebuilt order and its
       notice.
+- [x] 1.4 A batch can require events (design D4): `insert(..., requires=...)` through the port, the text store,
+      `EventStore.record_with_lineage(s)` and `Command.record`, refusing with `events.required-missing` (in errors
+      and the error schema) under the write lock; perform's run start requires its config version. Verify with
+      event-store's "A batch can require events that must still be here" (`test_drop.py`) and config-hand-edits' "A
+      drop that lands before a run's start" (`test_config_drop.py`, a drop injected between perform's sync and its
+      start).
+      Done (review on #504): each test fails with the `requires` taken out (perform's) and passes with it.
 - [x] 1.3 Change the store's docs and the module docstrings that say events are never dropped, so they say a person's
       drop is the only way an event leaves. Verify by grepping `never dropped` / `never classified or dropped` in
       `packages/` and `docs/`, and leaving none that's wrong.
@@ -78,11 +85,11 @@ methods and subcommands don't exist on main.
 - [x] 5.1 `docs/stagecraft/hand-edit-config.md`, "Undoing an edit"; `docs/prompt-book/cli.md`, the two commands;
       `contributing/config.md`, `abandoned.py` and the store's drop. Verify with the docs checks in `scripts/check.py`
       (links and the defaults table), and by reading each page against the specs.
-- [x] 5.2 The protocol changes (two commands, two notices, three error codes) reach the protocol CHANGELOG and
+- [x] 5.2 The protocol changes (two commands, two notices, four error codes) reach the protocol CHANGELOG and
       version through release-please, from `feat(protocol)` and `feat(config)` commits: nobody edits either by hand
       (`contributing/releasing.md`). Verify the commits' types and scopes before the PR, and that no CHANGELOG or
       `version.json` is in the diff.
-      Done: one `feat(config)` commit (c2b91085); `git diff --stat main..HEAD` holds no CHANGELOG or version file.
+      Done: a `feat(config)` commit (c2b91085) and the review's `fix(config)` (c3fbbd92); `git diff --stat main..HEAD` holds no CHANGELOG or version file.
 
 ## 6. Integration
 

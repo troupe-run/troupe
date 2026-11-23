@@ -93,6 +93,11 @@ and only while it can be dropped; otherwise it SHALL be refused, naming why, and
   <change>`
 - **THEN** it is refused with `config.round-trip-kept`, naming the run, and nothing is removed
 
+#### Scenario: A drop that lands before a run's start
+- **WHEN** a person runs `troupe perform tester` while a droppable abandoned edit is at the head of config, and a
+  `troupe config drop` of it lands after the perform reads config and before it records the run's start
+- **THEN** the perform is refused with `events.required-missing` before its runner starts, and no run is recorded
+
 #### Scenario: A change that closes no round trip
 - **WHEN** a person runs `troupe config drop` with a change id that closed no abandoned edit
 - **THEN** it is refused with `config.no-round-trip`, naming the change
