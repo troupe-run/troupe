@@ -170,6 +170,13 @@ def _notices(run: Mapping[str, Any]) -> list[str]:
     return lines
 
 
+def actor_shown(run: Mapping[str, Any]) -> str:
+    """A run's actor as it ran, and its name now when it was renamed since: ``tester (now qa)``
+    (config-mv design D4)."""
+    now = run.get("actorNow")
+    return f"{run['actor']} (now {now})" if now else str(run["actor"])
+
+
 def render_run(run: Mapping[str, Any]) -> list[str]:
     """A run's summary (run.schema.json#/$defs/summary data), one fact per line. A field the
     summary leaves out has nothing to say, so its line is left out too (or shows -)."""
@@ -177,7 +184,7 @@ def render_run(run: Mapping[str, Any]) -> list[str]:
     started_by = run["startedBy"]
     lines = [
         f"run {run['runId']}",
-        f"  actor: {run['actor']}",
+        f"  actor: {actor_shown(run)}",
         f"  started by: {started_by.get('id', started_by['kind'])} at {run['startedAt']}",
         f"  runner: {run['runner']['requested']}"
         + (f" ({reported['name']} {reported['version']})" if reported else ""),
@@ -278,6 +285,6 @@ def render_run_line(run: Mapping[str, Any]) -> str:
         estimated = " estimated" if cost["kind"] == "estimated" else ""
         costed = f", {_amount(cost['usd'], cost['kind'])}{estimated}"
     return (
-        f"{run['runId']}  {status:<20} {run['actor']:<16} {run['startedAt']}  "
+        f"{run['runId']}  {status:<20} {actor_shown(run):<16} {run['startedAt']}  "
         f"{run['events']} events{noticed}{costed}"
     )

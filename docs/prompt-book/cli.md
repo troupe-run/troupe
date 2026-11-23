@@ -36,6 +36,10 @@ Every command but `init` runs in a **theatre**: the nearest directory, from wher
   price (`~$0.0136, estimated`); a figure the runner didn't report isn't shown.
 - **`troupe logs`** shows a run's events and the notices troupe raised while it went, in order, with the tokens and
   cost on the result's line, then its outcome and its audit; `--follow` waits for more until the run ends.
+- **A run keeps the name its actor ran under.** When the actor has been renamed since (`troupe config mv`, or its
+  files moved by hand), `troupe status` shows it as `tester (now qa)`, following every rename to the name it has
+  now, and `troupe logs` adds the line `actor: tester (now qa)` after the outcome. `troupe perform tester` after the
+  rename is refused, and its fix names `qa`.
 - **`troupe diff`** shows what a run in its own worktree changed, as git's binary diff, byte for byte, so you can
   pipe it to `git apply`.
 - **`troupe accept`** applies a worktree run's changes to your files, unstaged, all or nothing, then removes its

@@ -16,10 +16,12 @@ that dies writes nothing that could wake it.
 
 import asyncio
 import contextlib
+import dataclasses
 import re
 import threading
 from collections.abc import Iterator
 from pathlib import Path
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from troupe.core import defaults
@@ -38,6 +40,9 @@ from troupe.platform.errors import (
     LockTimeoutError,
     ProcessStateUnknownError,
 )
+
+if TYPE_CHECKING:
+    from troupe.core.config.entities import Names
 
 _PAGE = 1000
 
@@ -147,12 +152,36 @@ def resolve(ref: str, runs: dict[str, RunView]) -> str:
     return matches[0]
 
 
-def _summary(view: RunView, theatre: Path, notices: list[Notice]) -> m.RunSummary:
+def _summary(
+    view: RunView, theatre: Path, notices: list[Notice], names: "Names | None" = None
+) -> m.RunSummary:
     state = run_state(view, theatre)
     notice = state_notice(view.run_id, state)
     if notice is not None:
         notices.append(notice)
-    return view.summary(state)
+    summary = view.summary(state)
+    return _with_name_now(summary, view, names)
+
+
+def _names(store: EventStore) -> "Names | None":
+    """What each actor name at a config version is called now (config-mv design D4)."""
+    from troupe.core.config.stream import read
+
+    return read(store).names
+
+
+def _with_name_now(summary: m.RunSummary, view: RunView, names: "Names | None") -> m.RunSummary:
+    """``summary`` with ``actorNow`` when the run's actor was renamed since: the entity its name
+    meant at the run's config version, under the name it has now."""
+    from troupe.core.config.kinds import ACTORS
+
+    if names is None or view.started is None:
+        return summary
+    heads = view.started.get("config") or []
+    now = names.current(ACTORS, summary.actor, [str(head) for head in heads])
+    if now is None or now == summary.actor:
+        return summary
+    return dataclasses.replace(summary, actor_now=now)
 
 
 def _status(request: m.StatusRequest, session: Session, backends: Backends) -> m.StatusResult:
@@ -164,7 +193,8 @@ def _status(request: m.StatusRequest, session: Session, backends: Backends) -> m
     else:
         limit = request.limit or defaults.STATUS_RUNS_LIMIT
         chosen = list(reversed(runs.values()))[:limit]
-    summaries = [_summary(view, session.theatre, notices) for view in chosen]
+    names = _names(store)
+    summaries = [_summary(view, session.theatre, notices, names) for view in chosen]
     return m.StatusResult(
         runs=summaries, notices=[m.NoticeData.of(n) for n in [*store.notices(), *notices]]
     )
@@ -234,7 +264,8 @@ async def logs(
     if not request.follow:
         view = await asyncio.to_thread(_log, store, run_id)
         notices: list[Notice] = []
-        summary = _summary(view, session.theatre, notices)
+        names = await asyncio.to_thread(_names, store)
+        summary = _summary(view, session.theatre, notices, names)
         return m.LogsResult(
             run=summary,
             log=view.log,
@@ -271,7 +302,8 @@ async def logs(
     finally:
         await asyncio.to_thread(store.recorder.unlisten, listener)
     notices = []
-    summary = _summary(view, session.theatre, notices)
+    names = await asyncio.to_thread(_names, store)
+    summary = _summary(view, session.theatre, notices, names)
     return m.LogsResult(
         run=summary,
         log=view.log,

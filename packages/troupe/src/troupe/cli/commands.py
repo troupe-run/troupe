@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, TextIO
 
 from troupe.cli.render import (
+    actor_shown,
     render_audit,
     render_error,
     render_event,
@@ -258,6 +259,8 @@ def run_logs(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> E
             print(render_log_entry(entry), file=stdout)
         run = result["run"]
         print(f"run {run['runId']}: {run.get('outcome', run['state'])}", file=stdout)
+        if "actorNow" in run:
+            print(f"  actor: {actor_shown(run)}", file=stdout)
         for line in render_audit(run):
             print(line, file=stdout)
     return ExitCode.CANCELLED if session.cancel.requested else ExitCode.OK

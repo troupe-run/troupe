@@ -25,8 +25,9 @@ query's result exactly in its protocol shape. There SHALL be no `troupe flush`.
 
 ### Requirement: Status and logs show an actor's current name
 When a run's actor has been renamed since the run, `troupe status` and `troupe logs` SHALL show the name it ran under
-followed by its current name, as `tester (now qa)`, following a chain of renames to the current name. A run's
-recorded actor SHALL NOT change.
+followed by its current name, as `tester (now qa)`, following a chain of renames to the current name: status in the
+run's actor column or line, and logs in an `actor:` line after the run's outcome. A run's recorded actor SHALL NOT
+change.
 
 #### Scenario: A run before a rename
 - **WHEN** a run of `tester` is recorded, then `tester` is renamed `qa`, and a person runs `troupe status`
@@ -39,11 +40,11 @@ recorded actor SHALL NOT change.
 
 #### Scenario: An actor that wasn't renamed
 - **WHEN** a run's actor has its name still
-- **THEN** status and logs show the name alone
+- **THEN** status shows the name alone, and logs adds no `actor:` line
 
 #### Scenario: An actor removed since
 - **WHEN** a run's actor has been removed since, with no rename
-- **THEN** status and logs show the name alone
+- **THEN** status shows the name alone, and logs adds no `actor:` line
 
 ### Requirement: Perform names the new name of a renamed actor
 `troupe perform` on a name config no longer holds because it was renamed SHALL be refused as for any unknown actor,
