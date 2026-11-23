@@ -398,3 +398,123 @@ def test_a_name_at_an_earlier_version_is_not_the_new_actor_of_that_name() -> Non
     names = merge(records).names
     assert names is not None
     assert names.current("actors", "tester", [first]) == "qa"
+
+
+# Found by an independent review of the merge slice (PR #505)
+
+
+def test_a_rename_conflict_shows_the_renamed_actor_not_a_new_one_of_its_old_name() -> None:
+    """Two lines rename tester; one then makes a new tester. The renames conflict, so the renamed
+    actor falls back to tester, and it's that actor config shows while the conflict stands: the
+    new one waits. One config mv of tester then resolves it, renaming the actor the renames were
+    about."""
+    from troupe.core.config.merge import Change
+
+    records = _base()
+    base = records[0].id
+    left = _step(records, 2, base, _rename("tester", "qa"))
+    _step(records, 3, left, [(("actors", "tester"), {**TESTER, "character": "new"})])
+    right = _step(records, 4, base, _rename("tester", "qa2"))
+    _step(records, 5, right, [(("actors", "qa2", "character"), "edited-on-B")])
+    merged = _in_every_order(records)
+    assert [c.paths for c in merged.conflicts] == [(("actors", "tester"),)]
+    assert merged.config["actors"]["tester"]["character"] == "edited-on-B"
+    resolution = change(merged.config, _rename("tester", "qa"))
+    resolved = merge(records, extra=Change("proposed", "", {}, "", tuple(resolution), ()))
+    assert resolved.conflicts == ()
+    assert resolved.config["actors"]["qa"]["character"] == "edited-on-B"
+    assert resolved.config["actors"]["tester"]["character"] == "new"
+
+
+def test_a_rename_and_a_removal_then_a_new_actor_of_the_old_name_conflict() -> None:
+    """One line renames tester; the other removes it and makes a new tester. That's a rename
+    against a removal, whatever the other line did after: a conflict, never the new actor's values
+    landing quietly on the renamed one."""
+    records = _base()
+    base = records[0].id
+    _step(records, 2, base, _rename("tester", "qa"))
+    removed = _step(records, 3, base, [(("actors", "tester"), UNSET)])
+    _step(records, 4, removed, [(("actors", "tester"), {**TESTER, "character": "fresh"})])
+    merged = _in_every_order(records)
+    assert [c.paths for c in merged.conflicts] == [(("actors", "tester"),)]
+    assert "qa" not in merged.config["actors"]
+
+
+# Properties for the review's two histories: the conflicts a rename makes, whatever each line does
+# after it. The properties above check order and equivalence, so a wrong but deterministic
+# conflict got past them.
+
+
+@st.composite
+def _after(
+    draw: st.DrawFn, records: list[Record], tip: str, start: int, keep: str | None = None
+) -> str:
+    """A few more commands on a line, any kind but renames, after ``tip``; none removes the actor
+    ``keep`` (removing it on both lines is agreement, not a conflict)."""
+    for n in range(start, start + draw(st.integers(0, 3))):
+        state = merge(_ancestry(records, tip)).config
+        operations = _operation(draw, state, renames=False)
+        if operations is None or operations == [(("actors", keep), UNSET)]:
+            continue
+        entries = change(state, operations)
+        if entries:
+            tip = _step(records, n, tip, operations)
+    return tip
+
+
+@settings(max_examples=200)
+@given(st.data())
+def test_a_rename_against_a_removal_conflicts_whatever_each_line_does_after(
+    data: st.DataObject,
+) -> None:
+    records = _base()
+    base = records[0].id
+    renamed = _step(records, 2, base, _rename("tester", "qa"))
+    data.draw(_after(records, renamed, 10, keep="qa"))
+    removed = _step(records, 3, base, [(("actors", "tester"), UNSET)])
+    data.draw(_after(records, removed, 20))
+    merged = merge(records)
+    assert any(("actors", "tester") in c.paths for c in merged.conflicts), merged.conflicts
+
+
+@settings(max_examples=200)
+@given(st.data())
+def test_two_renames_conflict_and_one_config_mv_of_the_old_name_resolves_them(
+    data: st.DataObject,
+) -> None:
+    from troupe.core.config.merge import Change
+
+    records = _base()
+    base = records[0].id
+    left = _step(records, 2, base, _rename("tester", "qa"))
+    data.draw(_after(records, left, 10, keep="qa"))
+    right = _step(records, 3, base, [(("actors", "checker"), Rename(("actors", "tester")))])
+    data.draw(_after(records, right, 20))
+    merged = merge(records)
+    assert any(("actors", "tester") in c.paths for c in merged.conflicts), merged.conflicts
+    if [c for c in merged.conflicts if ("actors", "tester") not in c.paths]:
+        return  # the lines' later commands conflict too: one rename can't resolve those
+    target = next(n for n in ("x1", "x2", "x3") if n not in merged.config.get("actors", {}))
+    resolution = change(merged.config, _rename("tester", target))
+    assert resolution, merged.config
+    resolved = merge(records, extra=Change("proposed", "", {}, "", tuple(resolution), ()))
+    assert resolved.conflicts == ()
+    assert resolved.config["actors"][target] is not None
+
+
+def test_config_mv_resolving_a_rename_against_a_rename_and_removal_keeps_the_actor() -> None:
+    """One line renames tester to qa; the other renames it to checker and removes it. Resolving
+    the conflict with config mv keeps the actor: the removal it chose against stays left out."""
+    from troupe.core.config.merge import Change
+
+    records = _base()
+    base = records[0].id
+    _step(records, 2, base, _rename("tester", "qa"))
+    renamed = _step(records, 3, base, _rename("tester", "checker"))
+    _step(records, 4, renamed, [(("actors", "checker"), UNSET)])
+    merged = _in_every_order(records)
+    assert [c.paths for c in merged.conflicts] == [(("actors", "tester"),)]
+    resolution = change(merged.config, _rename("tester", "x1"))
+    resolved = merge(records, extra=Change("proposed", "", {}, "", tuple(resolution), ()))
+    assert resolved.conflicts == ()
+    assert resolved.config["actors"]["x1"] == TESTER

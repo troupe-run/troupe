@@ -50,7 +50,7 @@ Config is worked out from the stream's whole history, both sides of every fork, 
   concurrent writes beneath it would replay in arrival order (#503).
 - **Entities** (`troupe.core.config.entities`, config-mv design D2, D3). A write names an entity, not just a name. Each
   event's view maps names to keys: with one parent, the parent's view after its own entries; at a join, worked out
-  from the join's history. A key is the name its entity was born with, plus the renames that had freed that name in
+  from the join's history. A key is the name its entity was born with, plus how many renames had freed that name in
   the writing event's history, so with no renames every key is its name and the merge is exactly what it was
   (`tests/merge_oracle.py` pins that). The contests above run on entity paths. Each key's name is contested by the
   same rule, from its births, renames and removals. Two renames, or a rename and a removal, conflict. So does a
