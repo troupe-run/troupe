@@ -746,9 +746,10 @@ runner's problem and fix, or cut off at the limit. A rehearsal SHALL NOT run it.
 - **THEN** no warm-up runs
 
 ### Requirement: Config and sync commands
-The CLI SHALL offer `troupe config set`, `troupe config unset`, `troupe config get`, `troupe config drop`, `troupe
-config keep` and `troupe sync`, each calling the core through the client protocol. `troupe config get` SHALL take
-`--json`, which writes the query's result exactly in its protocol shape. There SHALL be no `troupe flush`.
+The CLI SHALL offer `troupe config set`, `troupe config unset`, `troupe config mv`, `troupe config get`, `troupe
+config drop`, `troupe config keep` and `troupe sync`, each calling the core through the client protocol. `troupe config
+get` SHALL take `--json`, which writes the query's result exactly in its protocol shape. There SHALL be no `troupe
+flush`.
 
 #### Scenario: Config get as JSON
 - **WHEN** a person runs `troupe config get --json`
@@ -765,6 +766,14 @@ config keep` and `troupe sync`, each calling the core through the client protoco
 #### Scenario: Keeping an abandoned edit
 - **WHEN** a person runs `troupe config keep <change>`
 - **THEN** it says the changes are kept and troupe won't ask about them again, and exits 0
+
+#### Scenario: Config mv
+- **WHEN** a person runs `troupe config mv actors.tester actors.qa`
+- **THEN** standard output says `tester` was renamed `qa`, with the change id and the files written and removed
+
+#### Scenario: Config mv takes two paths
+- **WHEN** a person runs `troupe config mv actors.tester`
+- **THEN** it is refused as a usage error, saying `config mv` takes the old name and the new one
 
 ### Requirement: An audition defines a working example actor
 `troupe init --audition` SHALL make the theatre as `troupe init` does, and SHALL define the example actor `lead` in
@@ -785,3 +794,34 @@ actor has a character, it SHALL say to change it by editing `.troupe/actors/lead
 - **WHEN** a person runs `troupe init --audition`, writes text of their own into the `.troupe/actors/lead.md` it
   names, then runs `troupe perform lead --rehearse`
 - **THEN** the rehearsal isn't refused, and `troupe config get actors.lead.character` prints the file's text
+
+### Requirement: Status and logs show an actor's current name
+When a run's actor has been renamed since the run, `troupe status` and `troupe logs` SHALL show the name it ran under
+followed by its current name, as `tester (now qa)`, following a chain of renames to the current name: status in the
+run's actor column or line, and logs in an `actor:` line after the run's outcome. A run's recorded actor SHALL NOT
+change.
+
+#### Scenario: A run before a rename
+- **WHEN** a run of `tester` is recorded, then `tester` is renamed `qa`, and a person runs `troupe status`
+- **THEN** the run's line shows `tester (now qa)`
+
+#### Scenario: A chain of renames
+- **WHEN** a run of `tester` is recorded, then `tester` is renamed `qa` and `qa` renamed `checker`, and a person runs
+  `troupe logs` on the run
+- **THEN** it shows `actor: tester (now checker)`
+
+#### Scenario: An actor that wasn't renamed
+- **WHEN** a run's actor has its name still
+- **THEN** status shows the name alone, and logs adds no `actor:` line
+
+#### Scenario: An actor removed since
+- **WHEN** a run's actor has been removed since, with no rename
+- **THEN** status shows the name alone, and logs adds no `actor:` line
+
+### Requirement: Perform names the new name of a renamed actor
+`troupe perform` on a name config no longer holds because it was renamed SHALL be refused as for any unknown actor,
+and its fix SHALL name the actor's current name.
+
+#### Scenario: Performing the old name
+- **WHEN** `tester` has been renamed `qa`, and a person runs `troupe perform tester`
+- **THEN** it is refused as an unknown actor, and the fix says `tester` was renamed `qa`
