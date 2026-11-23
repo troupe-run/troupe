@@ -29,6 +29,13 @@ config.
 
 **Conflicts from validation.** When the merged config breaks a rule (``kinds.problems``), the
 changes since the split that touched what broke it are in conflict too.
+
+**Entities and renames** (config-mv design D2, D3; ``troupe.core.config.entities``). An actor or
+runtime can be renamed, so a write names an entity, not just a name. Each write is read against
+its event's view of names, and the contests and replay above run on entity paths (``kind``, key,
+the rest). With no renames every key is its name, and the merge is exactly what it was. Names come
+back at the end: each key is shown under its name, and name conflicts (two renames, a rename and a
+removal, a clash) are reported with the rest.
 """
 
 from collections.abc import Iterable, Sequence
@@ -37,8 +44,9 @@ from typing import Any
 
 from troupe.core import strict_json
 from troupe.core.config.aggregate import CHANGED
-from troupe.core.config.changes import Tree, apply, value_hash
-from troupe.core.config.kinds import ACTORS, RUNTIMES, problems
+from troupe.core.config.changes import RENAMED_FROM, Tree, apply, value_hash
+from troupe.core.config.entities import Named, Names, entities
+from troupe.core.config.kinds import ACTORS, KINDS, RUNTIMES, problems
 from troupe.core.config_paths import shown
 from troupe.core.errors import TroupeError
 from troupe.core.events.port import RecordedEvent
@@ -91,6 +99,9 @@ class Merged:
     changes: tuple[Change, ...] = ()
     files: dict[str, frozenset[str]] = field(default_factory=dict)
     """Every hash troupe recorded for each config file, on any line of history."""
+    names: "Names | None" = None
+    """Which entity a name meant at a config version, and what it's called now (config-mv
+    design D4)."""
 
 
 @dataclass(frozen=True)
@@ -123,17 +134,24 @@ def merge(history: Sequence[RecordedEvent], *, extra: Change | None = None) -> M
         parents[extra.id] = tuple(heads)
         order.append(extra.id)
     ancestors = _ancestors(order, parents)
+    ents = entities(order, parents, ancestors, {e: c.entries for e, c in changes.items()})
+    named = ents.named(order)
     writes = [
-        _Write(event, index, entry)
+        _Write(event, index, {**entry, "path": list(ents.paths[(event, index)])})
         for event in order
         if event in changes
         for index, entry in enumerate(changes[event].entries)
+        if RENAMED_FROM not in entry
     ]
-    skipped, conflicts = _contests(writes, ancestors, changes, order)
-    config = apply_in_order(writes, skipped)
-    conflicts = _grouped(conflicts)
+    skipped, conflicts = _contests(writes, ancestors, changes, order, set(named.removals_left_out))
+    keyed = apply_in_order(writes, skipped)
+    config = named.shown(keyed)
+    conflicts = _grouped(_named_conflicts(named, conflicts, changes, order))
     tips = heads if extra is None else [extra.id]
-    conflicts += _invalid(config, writes, ancestors, changes, tips, conflicts)
+    shown_writes = [
+        _Write(w.event, w.index, {**w.entry, "path": list(named.path(w.path))}) for w in writes
+    ]
+    conflicts += _invalid(config, shown_writes, ancestors, changes, tips, conflicts)
     files: dict[str, set[str]] = {}
     for change in changes.values():
         for written in change.files:
@@ -146,6 +164,7 @@ def merge(history: Sequence[RecordedEvent], *, extra: Change | None = None) -> M
         version=max((record.version for record in history), default=0),
         changes=tuple(changes[e] for e in order if e in changes),
         files={path: frozenset(hashes) for path, hashes in files.items()},
+        names=Names(ents, named, frozenset(order), _present(keyed)),
     )
 
 
@@ -154,16 +173,18 @@ def _contests(
     ancestors: dict[str, frozenset[str]],
     changes: dict[str, Change],
     order: Sequence[str],
+    left_out: set[tuple[str, int]],
 ) -> tuple[set[tuple[str, int]], list[Conflict]]:
     """Every point's contest: the writes to leave out of replay, and the conflicts.
 
     A point's contest can leave out a write that covers other points too (a group's removal), so
     a point whose covering writes lost one to another point's contest is contested again without
     it, until nothing changes (#503). Otherwise two concurrent writes beneath the one left out
-    would both be replayed, in the order they arrived. Each point's conflict is reported once, from
-    its first contest to find one."""
+    would both be replayed, in the order they arrived. Each point's conflict is reported once,
+    from its first contest to find one. ``left_out`` are writes the name contest already left
+    out: a removal that conflicts with a rename (config-mv design D3)."""
     points = sorted({write.path for write in writes})
-    skipped: set[tuple[str, int]] = set()
+    skipped: set[tuple[str, int]] = set(left_out)
     conflicts: list[Conflict] = []
     reported: set[Point] = set()
     seen: dict[Point, frozenset[tuple[str, int]]] = {}
@@ -188,6 +209,28 @@ def _contests(
                 conflicts.append(Conflict((point,), tuple(changes[e] for e in events_in)))
         if not changed:
             return skipped, conflicts
+
+
+def _named_conflicts(
+    named: Named, conflicts: Sequence[Conflict], changes: dict[str, Change], order: Sequence[str]
+) -> list[Conflict]:
+    """The value conflicts, their entity paths shown by name, and the name contest's conflicts."""
+    found = [Conflict(tuple(named.path(p) for p in c.paths), c.changes) for c in conflicts]
+    found += [
+        Conflict(paths, tuple(changes[e] for e in sorted(set(made), key=order.index)))
+        for paths, made in named.conflicts
+    ]
+    return found
+
+
+def _present(keyed: Tree) -> frozenset[tuple[str, str]]:
+    """The entities that hold values in ``keyed``, config replayed on entity paths."""
+    return frozenset(
+        (kind, token)
+        for kind in KINDS
+        if isinstance(keyed.get(kind), dict)
+        for token in keyed[kind]
+    )
 
 
 def _change(record: RecordedEvent) -> Change:
