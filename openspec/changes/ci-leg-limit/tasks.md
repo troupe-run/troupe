@@ -2,16 +2,16 @@
 
 ## 1. Raise the check legs' limit
 
-- [ ] 1.1 Set `timeout-minutes: 30` on `check-legs` in `.github/workflows/ci.yml`, and leave every other job's limit
+- [x] 1.1 Set `timeout-minutes: 30` on `check-legs` in `.github/workflows/ci.yml`, and leave every other job's limit
   alone. Verify: `git diff` shows that one line changed, and the workflow still parses
   (`python3 -c 'import yaml; yaml.safe_load(open(".github/workflows/ci.yml"))'`, and actionlint where the check runs
   it).
-- [ ] 1.2 Confirm no doc or spec outside `openspec/changes/archive/` states the check legs' 20-minute figure. Verify:
+- [x] 1.2 Confirm no doc or spec outside `openspec/changes/archive/` states the check legs' 20-minute figure. Verify:
   `git grep -n -iE "\b20[- ]?min|timeout-minutes: 20"` lists only archived changes and `release-install-check.yml`.
 
 ## 2. Verify
 
-- [ ] 2.1 `uv run scripts/check.py` passes before the commit.
+- [x] 2.1 `uv run scripts/check.py` passes before the commit.
 
 ## Workflow follow-up
 

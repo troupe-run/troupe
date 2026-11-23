@@ -135,7 +135,7 @@ jobs:
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.scope != 'none' }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
