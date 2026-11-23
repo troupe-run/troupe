@@ -2,7 +2,7 @@
 
 ## 1. The rename entry (design D1)
 
-- [x] 1.1 Add `renamedFrom` to the entry in `protocol/schemas/events/config-changed.schema.json` (and its bundled copy), with a rename entry carrying no `after`. Update `Config.Changed`'s description. Verify with `test_event_schemas.py`/`test_schemas.py` passing on a valid rename entry and refusing one with an `after`.
+- [x] 1.1 Add `renamedFrom` to the entry in `protocol/schemas/events/config-changed.schema.json` (and its bundled copy), with a rename entry carrying no `after`. Update `Config.Changed`'s description. Verify with `test_config_schemas.py`: a valid rename entry passes, one with an `after` is refused, and the generated model agrees with the schema on generated entries with `renamedFrom`.
 - [x] 1.2 Add `Rename` to `core/config/changes.py`: `change()` makes the entry, plus a runtime's actors' `runtime` entries, and `apply()` moves the group. Verify with new `test_config_changes.py` cases: an actor's rename, a runtime's rename carrying two actors, and apply moving every value.
 
 ## 2. Entities in the merge (design D2, D3, D9)
@@ -16,19 +16,19 @@
 
 ## 3. `troupe config mv` (design D5)
 
-- [x] 3.1 Add the rename operation to `client/config-set-request.schema.json` and `core/client/messages.py`. Verify `test_client_schemas.py` and `test_client_messages.py` round-trip it.
-- [x] 3.2 Add the checks to `core/config/commands.py`: `config.move-not-entity`, `config.move-built-in`, `config.move-source-missing` and `config.move-target-exists`, each with its exit code in `core/errors.py` and its entry in `error.schema.json`. Verify with `test_config_commands.py` cases for each refusal (nothing recorded), and with protocol_guard.
-- [x] 3.3 In `syncing.py`, work the own change out first and sweep after it when the rename's files are already moved, recording the settle, then the person's rename, then the sweep's edits. Verify with `test_config_sync.py` cases: "Config mv on files already moved", "Moved and edited, then config mv", and a plain mv still sweeping first.
-- [x] 3.4 Move files keeping their bytes in `writeback.targets` (design D7). Verify with `test_config_writeback.py`/`test_config_files.py` cases: "A hand-formatted actor renamed" (byte-identical) and "A runtime renamed under its actors" (only the `runtime` line changes).
+- [x] 3.1 Add the rename operation to `client/config-set-request.schema.json` and `core/client/messages.py`. Verify with `test_client_messages.py`: it round-trips, and one with a value or an unset is refused.
+- [x] 3.2 Add the checks to `core/config/commands.py`: `config.move-not-entity`, `config.move-built-in`, `config.move-source-missing` and `config.move-target-exists`, each with its exit code in `core/errors.py` and its entry in `error.schema.json`. Verify with `test_config_mv.py` cases for each refusal (nothing recorded), and with protocol_guard.
+- [x] 3.3 In `syncing.py`, work the own change out first and sweep after it when the rename's files are already moved, recording the settle, then the person's rename, then the sweep's edits. Verify with `test_config_mv.py` cases: "Config mv on files already moved", "Moved and edited, then config mv", and a plain mv still sweeping first.
+- [x] 3.4 Move files keeping their bytes in `writeback.targets` (design D7). Verify with `test_config_mv.py` cases: "A hand-formatted actor renamed" (byte-identical) and "A runtime renamed under its actors" (only the `runtime` line changes).
 - [x] 3.5 Add `troupe config mv <old> <new> [--reason] [--rehearse]` to the CLI parser and renderer. Verify with `test_cli_config.py` cases: the output names both names, the change and the files; one path is a usage error; `--rehearse` records nothing.
 - [x] 3.6 Document `troupe config mv` in `docs/prompt-book/cli.md` (its entry, and the Commands list) and in `docs/stagecraft/hand-edit-config.md`. Verify with `test_cli_docs.py` and the user-docs tests.
 
 ## 4. Hand moves in the sweep (design D6)
 
-- [x] 4.1 Pair gone and new entities by value hash in `sweep.py`, making one move Edit per pair, with the files, lineage source and `config.hand-move-recorded` notice. Verify with `test_config_sweep.py` cases: "An actor moved by hand", "Formatting doesn't count", "A runtime moved by hand carries its actors", "Moved and moved back before a sweep", and "Moved back after a sweep".
-- [x] 4.2 Refuse ambiguous pairings with `config.move-ambiguous` (exit code, error schema). Verify with "Two identical actors moved" and "One actor copied to two names", nothing recorded.
-- [x] 4.3 Add `config.move-not-detected` for unpaired gone and new entities of a kind, and for a built-in runtime's file moved, and catalogue both new notices in `notice.schema.json`. Verify with "Moved and edited at once" and "A built-in runtime's file moved".
-- [x] 4.4 Extend the "an actor needs its .yaml" fix when a new actor arrived in the same sweep. Verify with the modified "A character left without its actor" scenario.
+- [x] 4.1 Pair gone and new entities by value hash in `sweep.py`, making one move Edit per pair, with the files, lineage source and `config.hand-move-recorded` notice. Verify with `test_config_hand_moves.py` cases: "An actor moved by hand", "Formatting doesn't count", "A runtime moved by hand carries its actors", "Moved and moved back before a sweep", and "Moved back after a sweep".
+- [x] 4.2 Refuse ambiguous pairings with `config.move-ambiguous` (exit code, error schema). Verify with `test_config_hand_moves.py` cases "Two identical actors moved" and "One actor copied to two names", nothing recorded.
+- [x] 4.3 Add `config.move-not-detected` for unpaired gone and new entities of a kind, and for a built-in runtime's file moved, and catalogue both new notices in `notice.schema.json`. Verify with `test_config_hand_moves.py` cases "Moved and edited at once" and "A built-in runtime's file moved".
+- [x] 4.4 Extend the "an actor needs its .yaml" fix when a new actor arrived in the same sweep. Verify with `test_config_hand_moves.py` cases for the modified "A character left without its actor" scenario.
 - [x] 4.5 Add an end-to-end hand-move test to `test_hand_edit_end_to_end.py`: `git mv` both files, `troupe sync`, then `troupe config get` shows `qa`, and a second sync records nothing. Verify it passes.
 
 ## 5. Runs follow a rename (design D4)

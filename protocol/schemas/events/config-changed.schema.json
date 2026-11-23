@@ -37,7 +37,19 @@
   "$defs": {
     "entry": {
       "title": "Change entry",
-      "description": "One value's change. A missing before means the value didn't exist; a missing after means it was removed, unless the entry has renamedFrom: then it renames a whole actor or runtime, and before is the hash of the group it moves. An entry for a group (an object) only ever removes or renames it.",
+      "description": "One entry of a change: a value's change, or a rename.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/valueEntry"
+        },
+        {
+          "$ref": "#/$defs/rename"
+        }
+      ]
+    },
+    "valueEntry": {
+      "title": "Change entry",
+      "description": "One value's change. A missing before means the value didn't exist; a missing after means it was removed. An entry for a group (an object) only ever removes it. A rename is its own shape (see rename).",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -72,6 +84,29 @@
         "after": {
           "description": "The new value. Never an object: an object is a group of values, each changed by its own entry.",
           "$ref": "#/$defs/value"
+        }
+      }
+    },
+    "rename": {
+      "title": "Rename entry",
+      "description": "A whole actor or runtime renamed: path is the new name and renamedFrom the old, each [kind, name] of the same kind; before is the hash of the group it moves; there is no after.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "renamedFrom",
+        "before"
+      ],
+      "properties": {
+        "path": {
+          "description": "The new name, as [kind, name].",
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         },
         "renamedFrom": {
           "description": "For a rename: the old name, as [kind, name], whose whole group the entry moves to its path, also [kind, name] of the same kind. A rename has a before and no after.",
@@ -82,29 +117,10 @@
             "type": "string",
             "minLength": 1
           }
-        }
-      },
-      "dependentSchemas": {
-        "renamedFrom": {
-          "required": [
-            "before"
-          ],
-          "not": {
-            "required": [
-              "after"
-            ]
-          },
-          "properties": {
-            "path": {
-              "type": "array",
-              "minItems": 2,
-              "maxItems": 2,
-              "items": {
-                "type": "string",
-                "minLength": 1
-              }
-            }
-          }
+        },
+        "before": {
+          "description": "The SHA-256 of the whole group's canonical JSON, as it was under the old name.",
+          "$ref": "../lineage.schema.json#/$defs/hash"
         }
       }
     },

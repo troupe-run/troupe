@@ -297,6 +297,28 @@ class RenamedFromItem(RootModel[str]):
     root: Annotated[str, Field(min_length=1)]
 
 
+class ConfigChangedRename(StrictModel):
+    """
+    A whole actor or runtime renamed: path is the new name and renamedFrom the old, each [kind, name] of the same kind; before is the hash of the group it moves; there is no after.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    path: Annotated[list[PathItem], Field(max_length=2, min_length=2)]
+    """
+    The new name, as [kind, name].
+    """
+    renamedFrom: Annotated[list[RenamedFromItem], Field(max_length=2, min_length=2)]
+    """
+    For a rename: the old name, as [kind, name], whose whole group the entry moves to its path, also [kind, name] of the same kind. A rename has a before and no after.
+    """
+    before: Annotated[str, Field(pattern="^sha256:[0-9a-f]{64}$", title="Content hash")]
+    """
+    The SHA-256 of the whole group's canonical JSON, as it was under the old name.
+    """
+
+
 class ConfigChangedJson(
     RootModel[Union[str, float, bool, list["ConfigChangedJson"], dict[str, "ConfigChangedJson"]]]
 ):
@@ -346,9 +368,9 @@ class ConfigChangedValue(RootModel[str | float | bool | list[ConfigChangedJson]]
     """
 
 
-class ConfigChangedEntry1(StrictModel):
+class ConfigChangedValueEntry1(StrictModel):
     """
-    One value's change. A missing before means the value didn't exist; a missing after means it was removed, unless the entry has renamedFrom: then it renames a whole actor or runtime, and before is the hash of the group it moves. An entry for a group (an object) only ever removes or renames it.
+    One value's change. A missing before means the value didn't exist; a missing after means it was removed. An entry for a group (an object) only ever removes it. A rename is its own shape (see rename).
     """
 
     model_config = ConfigDict(
@@ -366,15 +388,11 @@ class ConfigChangedEntry1(StrictModel):
     """
     The new value. Never an object: an object is a group of values, each changed by its own entry.
     """
-    renamedFrom: Annotated[list[RenamedFromItem] | None, Field(max_length=2, min_length=2)] = None
-    """
-    For a rename: the old name, as [kind, name], whose whole group the entry moves to its path, also [kind, name] of the same kind. A rename has a before and no after.
-    """
 
 
-class ConfigChangedEntry2(StrictModel):
+class ConfigChangedValueEntry2(StrictModel):
     """
-    One value's change. A missing before means the value didn't exist; a missing after means it was removed, unless the entry has renamedFrom: then it renames a whole actor or runtime, and before is the hash of the group it moves. An entry for a group (an object) only ever removes or renames it.
+    One value's change. A missing before means the value didn't exist; a missing after means it was removed. An entry for a group (an object) only ever removes it. A rename is its own shape (see rename).
     """
 
     model_config = ConfigDict(
@@ -394,16 +412,21 @@ class ConfigChangedEntry2(StrictModel):
     """
     The new value. Never an object: an object is a group of values, each changed by its own entry.
     """
-    renamedFrom: Annotated[list[RenamedFromItem] | None, Field(max_length=2, min_length=2)] = None
+
+
+class ConfigChangedValueEntry(RootModel[ConfigChangedValueEntry1 | ConfigChangedValueEntry2]):
+    root: Annotated[
+        ConfigChangedValueEntry1 | ConfigChangedValueEntry2, Field(title="Change entry")
+    ]
     """
-    For a rename: the old name, as [kind, name], whose whole group the entry moves to its path, also [kind, name] of the same kind. A rename has a before and no after.
+    One value's change. A missing before means the value didn't exist; a missing after means it was removed. An entry for a group (an object) only ever removes it. A rename is its own shape (see rename).
     """
 
 
-class ConfigChangedEntry(RootModel[ConfigChangedEntry1 | ConfigChangedEntry2]):
-    root: Annotated[ConfigChangedEntry1 | ConfigChangedEntry2, Field(title="Change entry")]
+class ConfigChangedEntry(RootModel[ConfigChangedValueEntry | ConfigChangedRename]):
+    root: Annotated[ConfigChangedValueEntry | ConfigChangedRename, Field(title="Change entry")]
     """
-    One value's change. A missing before means the value didn't exist; a missing after means it was removed, unless the entry has renamedFrom: then it renames a whole actor or runtime, and before is the hash of the group it moves. An entry for a group (an object) only ever removes or renames it.
+    One entry of a change: a value's change, or a rename.
     """
 
 
