@@ -6,8 +6,11 @@
   alone. Verify: `git diff` shows that one line changed, and the workflow still parses
   (`python3 -c 'import yaml; yaml.safe_load(open(".github/workflows/ci.yml"))'`, and actionlint where the check runs
   it).
-- [x] 1.2 Confirm no doc or spec outside `openspec/changes/archive/` states the check legs' 20-minute figure. Verify:
-  `git grep -n -iE "\b20[- ]?min|timeout-minutes: 20"` lists only archived changes and `release-install-check.yml`.
+- [x] 1.2 Say 30 minutes wherever the code states the legs' limit: the stall-limit comment in `pyproject.toml`, the
+  `HTTP_RETRIES` docstring in `scripts/install_check.py`, and `STALL_LIMIT_CEILING`'s docstring in
+  `scripts/tests/test_check_parallel.py`. Their numbers stay: 300 s and 600 s still fit 30 minutes less a Windows leg
+  of up to 20. Verify: `git grep -n -iE "(^|[^0-9])20[- ]?min|timeout-minutes: 20" -- ':!openspec/changes/archive'`
+  lists only `release-install-check.yml` (`git grep -E` has no `\b`, which hid these three at first).
 
 ## 2. Verify
 
