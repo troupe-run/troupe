@@ -107,15 +107,16 @@ def sweep(
     *,
     reader: Reader = read_steady,
     force: bool = False,
-    rendered_before: Mapping[str, bytes] | None = None,
+    config_before: Tree | None = None,
 ) -> Swept:
     """The hand edits to the config files under ``troupe_dir`` (.troupe/), worked out against
     ``config``. ``recorded`` is every hash a change recorded for each file, and ``merged`` what
     the VCS says a merge combined into each. Refuses, recording nothing, an unknown file or a file
     that can't be read as config; with ``force``, such a file is set aside instead (``refused``),
-    and the others are still read. With ``rendered_before`` (what config rendered before a rename
-    the command records first), a file that's exactly that is in line too: troupe wrote it, and
-    the write updates it (config-mv design D5, review of #505)."""
+    and the others are still read. With ``config_before`` (config before a rename the command
+    records first), a file whose values are what that config held for it is in line too: it's the
+    person's file, unchanged but for the rename, so it's written back surgically and records
+    nothing (config-mv design D5, review of #505)."""
     disk = on_disk(troupe_dir)
     refuse(Plan((), disk.unknown))
     remembered, notices = present_at_last_sync(troupe_dir)
@@ -129,6 +130,7 @@ def sweep(
         if (target := staged_target(staged)) is not None and troupes(target, data, vouched)
     }
     seen: dict[str, bytes | None] = {}
+    unchanged: set[str] = set()
     refused: set[str] = set()
     reads: list[FileValues] = []
     removed: list[str] = []
@@ -136,7 +138,8 @@ def sweep(
         if path in finishing:
             continue
         have = seen[path] = reader(troupe_dir, path)
-        if have is not None and rendered_before is not None and have == rendered_before.get(path):
+        if config_before is not None and _holds_as_before(path, have, config_before):
+            unchanged.add(path)
             continue
         kind = _classify(path, have, rendered.get(path), merged.get(path), vouched, remembered)
         if kind == "removed":
@@ -148,7 +151,7 @@ def sweep(
             else:
                 reads.append(read)
     present = {path for path, data in seen.items() if data is not None} | finishing
-    read_paths = frozenset(r.path for r in reads)
+    read_paths = frozenset(r.path for r in reads) | unchanged
     found, move_notices = _moves_aside(config, reads, removed)
     edits = _checked_edits(troupe_dir, config, rendered, found, present, seen, refused, force)
     return Swept(tuple(edits), seen, read_paths, frozenset(refused), (*notices, *move_notices))
@@ -201,6 +204,24 @@ class _Found:
     removed: list[str]
     pairs: list[Pair]
     arrived: bool
+
+
+def _holds_as_before(path: str, have: bytes | None, config: Tree) -> bool:
+    """Whether the config file at ``path`` holds exactly the values ``config`` held for it."""
+    from troupe.core.config.reading import owned
+
+    located = owner(path)
+    if have is None or located is None:
+        return False
+    (kind, name), _ = located
+    group = config.get(kind, {}).get(name)
+    if not isinstance(group, Mapping):
+        return False
+    try:
+        values = read_values(path, have).values
+    except TroupeError:
+        return False
+    return values == owned(path, group)
 
 
 def _moves_aside(
