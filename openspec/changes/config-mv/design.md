@@ -133,6 +133,9 @@ values, or `heads` aren't in the stream.
 - The run summary (`client/run.schema.json`) gains `actorNow`, present only when it differs from `actor`. The runs
   projection fills it when status or logs ask, from one merge per query.
 - The CLI renders `tester (now qa)`.
+- If config's stream can't be read, status and logs still show runs, without `actorNow`: they read runs, and every
+  command that uses config reports the broken stream. Each config version's view is worked out once per query, so a
+  long `status --limit` pays it once per version, not once per run.
 - `perform`'s refusal, `config.unknown-actor`, asks `names.current(actors, name, heads now)`. That's None
   for a name that was renamed away, so it asks the history instead: the latest rename away from the name on the line
   config is read from. The fix then says `tester was renamed qa: troupe perform qa`.

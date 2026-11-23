@@ -472,16 +472,24 @@ class Names:
     events: frozenset[str]
     present: frozenset[Key]
     """The keys that hold values in config now."""
+    views: dict[tuple[str, ...], dict[tuple[str, str], str]] = field(
+        default_factory=dict, compare=False
+    )
+    """Each config version's view, once worked out: status asks for one per run."""
 
     def current(self, kind: str, name: str, heads: Sequence[str]) -> str | None:
         """What the entity ``name`` meant at ``heads`` is called now: None when it holds nothing
         now, or ``heads`` aren't all in the stream."""
         if not heads or any(head not in self.events for head in heads):
             return None
-        at: set[str] = set()
-        for head in heads:
-            at |= self.found.ancestors[head] | {head}
-        token = self.found.named(at).view.get((kind, name))
+        version = tuple(sorted(heads))
+        view = self.views.get(version)
+        if view is None:
+            at: set[str] = set()
+            for head in heads:
+                at |= self.found.ancestors[head] | {head}
+            view = self.views[version] = self.found.named(at).view
+        token = view.get((kind, name))
         if token is None or (kind, token) not in self.present:
             return None
         return self.named.name((kind, token))

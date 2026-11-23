@@ -164,10 +164,15 @@ def _summary(
 
 
 def _names(store: EventStore) -> "Names | None":
-    """What each actor name at a config version is called now (config-mv design D4)."""
+    """What each actor name at a config version is called now (config-mv design D4). None when
+    config's stream can't be read: status and logs read runs, so they still show them, without
+    the name now, and every command that uses config says what's wrong with it."""
     from troupe.core.config.stream import read
 
-    return read(store).names
+    try:
+        return read(store).names
+    except TroupeError:
+        return None
 
 
 def _with_name_now(summary: m.RunSummary, view: RunView, names: "Names | None") -> m.RunSummary:
