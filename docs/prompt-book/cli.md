@@ -47,6 +47,10 @@ Every command but `init` runs in a **theatre**: the nearest directory, from wher
 - **`troupe sync`** records your hand edits to the config files, each as a change by an unknown author, then makes
   every file say what config says. Every command that uses config does it first. `--rehearse` shows what it would
   record and write; `--force` replaces a file troupe can't read as config, keeping a copy.
+- **`troupe config drop`** and **`config keep`** answer the notice `config.edit-abandoned`, which says a file you
+  edited is back to what it was. `drop` removes the changes that left behind, if nothing has used them yet; `keep`
+  keeps them and stops troupe asking. [Undoing an edit](../stagecraft/hand-edit-config.md#undoing-an-edit) says
+  when each works.
 
 A run is named by its full id or by its first 8 or more characters. [Performances and
 runs](../the-company/performances-and-runs.md) describes runs, their states and what is recorded.
@@ -245,6 +249,32 @@ troupe config get [<path>] [--json] [--resolved]
 | `<path>` | No | A value or group, such as actors.tester. A key that holds a dot goes in brackets: prices[gpt-4.1] |
 | `--json` | No | Print the result as JSON |
 | `--resolved` | No | Show runtimes as troupe resolves them, from its built-in ones, config and your environment, each value with where it came from |
+
+### `troupe config drop`
+
+Drop an abandoned edit: remove the changes a file going back left behind.
+
+```text
+troupe config drop <change> [--rehearse]
+```
+
+| Argument | Required | What it is |
+|---|---|---|
+| `<change>` | Yes | The change id the notice about the abandoned edit names |
+| `--rehearse` | No | Change nothing: show what would be dropped |
+
+### `troupe config keep`
+
+Keep an abandoned edit's changes, and stop troupe asking about them.
+
+```text
+troupe config keep <change> [--rehearse]
+```
+
+| Argument | Required | What it is |
+|---|---|---|
+| `<change>` | Yes | The change id the notice about the abandoned edit names |
+| `--rehearse` | No | Change nothing: show what would be kept |
 
 ### `troupe sync`
 

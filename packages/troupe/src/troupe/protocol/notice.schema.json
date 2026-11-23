@@ -809,6 +809,78 @@
         },
         "details": false
       }
+    },
+    {
+      "required": [
+        "details"
+      ],
+      "properties": {
+        "code": {
+          "const": "config.edit-abandoned"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "change",
+            "files",
+            "changes",
+            "droppable"
+          ],
+          "properties": {
+            "change": {
+              "description": "The change id of the sweep that put the files back: what troupe config drop and troupe config keep name.",
+              "type": "string",
+              "minLength": 1
+            },
+            "files": {
+              "description": "The config files whose values went back, relative to the theatre.",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "changes": {
+              "description": "The change ids of the round trip, first to last, each once.",
+              "type": "array",
+              "minItems": 2,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "droppable": {
+              "description": "Whether troupe config drop can remove them now.",
+              "type": "boolean"
+            },
+            "reason": {
+              "description": "Present when they can't be dropped: changes-more (one of them changes other values too), built-on (a later change follows them), run (a run used them, or the run this command starts will), committed, shares-segment (their event file holds other events).",
+              "enum": [
+                "changes-more",
+                "built-on",
+                "run",
+                "committed",
+                "shares-segment"
+              ]
+            },
+            "blocker": {
+              "description": "The change id (changes-more, built-on) or run id (run) that blocks the drop. Absent: no one thing does, or it's the run this command is about to start.",
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "config.kept-unreadable"
+        },
+        "details": false
+      }
     }
   ],
   "$defs": {

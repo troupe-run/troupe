@@ -294,3 +294,19 @@ def test_a_stall_past_the_timeout_still_announces_a_file_wait_before_giving_up(
     with pytest.raises(FileInUseError):
         wait()
     assert waits == [(target, 10.0)]
+
+
+# Removing one file (abandoned-edits design D4)
+
+
+def test_remove_file_removes_a_read_only_file(tmp_path: Path) -> None:
+    target = tmp_path / "segment.jsonl"
+    target.write_bytes(b"x\n")
+    target.chmod(stat.S_IREAD)
+    files.remove_file(target)
+    assert not target.exists()
+
+
+def test_remove_file_does_nothing_when_the_file_is_already_gone(tmp_path: Path) -> None:
+    files.remove_file(tmp_path / "missing.jsonl")
+    assert list(tmp_path.iterdir()) == []

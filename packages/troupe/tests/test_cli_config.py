@@ -375,7 +375,7 @@ def test_config_alone_needs_one_of_its_commands() -> None:
     with pytest.raises(TroupeError) as caught:
         parse(["config"], COMMANDS)
     assert caught.value.code == "usage.missing-argument"
-    assert "set, unset or get" in caught.value.problem
+    assert "set, unset, get, drop or keep" in caught.value.problem
 
 
 def test_a_misspelt_config_command_suggests_the_closest(repo: Repo) -> None:

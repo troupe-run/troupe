@@ -8,7 +8,7 @@ troupe.core.events, which checks lineage first.
 import importlib.metadata
 import os
 import threading
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any, Protocol
 from uuid import UUID
@@ -83,6 +83,19 @@ class EventRecorder(Protocol):
     ) -> Sequence[tuple[int, RecordedEvent]]: ...
     def max_notification_id(self) -> int | None: ...
     def notices(self) -> list[Notice]: ...
+
+    def droppable(self, events: Sequence[str]) -> str | None:
+        """Why ``events`` can't be dropped, or None when they could be: ``committed`` or
+        ``shares-segment`` (abandoned-edits design D4). The store never
+        decides what to drop; it only says whether a person's drop could remove them whole."""
+        ...
+
+    def drop(self, events: Sequence[str], check: Callable[[], None]) -> tuple[Path, ...]:
+        """Remove ``events`` from the store, all of them or none, and return the files removed.
+        Holding the store's write lock, ``check`` runs first and refuses by raising; then it's
+        refused with ``events.not-droppable`` unless ``droppable`` says they could go and no
+        other event follows one of them (abandoned-edits design D4)."""
+        ...
 
     def listen(self, event: threading.Event) -> None:
         """Set ``event`` whenever a new event is recorded, whoever wrote it, within a bound and

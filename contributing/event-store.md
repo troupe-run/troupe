@@ -162,8 +162,15 @@ it checks that every parent is here itself, and refuses with `events.missing-par
   any other branch they are left out of every read and every version check, and `events.other-branch` names the
   file and the branch it was made on. A staged file counts as committed.
 - **Nothing is classified.** An edit and the edit that reverts it are both recorded, so history reads 3 → 5 → 3.
-  Events around a `git stash` and `stash pop` are all kept. To drop events you don't want, diff the untracked event
-  files and delete them.
+  Events around a `git stash` and `stash pop` are all kept. The store never decides what's abandoned: config does,
+  and asks the person (`config.edit-abandoned`, [config.md](config.md#abandoned-edits)).
+- **A person's drop is the only way an event leaves.** `drop(events, check)` removes the segments holding `events`,
+  all of them or none, holding the write lock. It runs `check` first (config's: no run or change has used them
+  since), then refuses with `events.not-droppable` unless every recording of each event is in an uncommitted segment
+  of this branch that holds nothing else (reason `committed` or `shares-segment`), and no other event follows one of
+  them (`parent`). An event that isn't visible is `unknown-event`. Segments are only ever deleted whole, never
+  rewritten. Afterwards the order rebuilds, with `events.order-rebuilt`, as when a file is removed by hand.
+  `droppable(events)` answers the segment question without the lock.
 - **A missing parent is refused.** If an event names a parent that isn't here (its file was deleted by hand), reads
   of its stream fail with `events.missing-parent`, naming the file and the missing event, and saying to restore the
   removed file or remove the dependent one too. If the parent is only in another branch's uncommitted file, the
@@ -251,6 +258,7 @@ path ([`notice.schema.json`](../protocol/schemas/notice.schema.json)).
 | `events.stream-forked` | A stream has two heads and hasn't been settled |
 | `events.settle-incomplete` | A settling event doesn't name every head |
 | `events.missing-parent` | An event's parent isn't here |
+| `events.not-droppable` | A person's drop can't remove those events whole |
 | `events.malformed-record` | A line of a segment, or of a local file, isn't valid |
 | `events.unknown-format` | A line uses a record format this troupe doesn't read |
 | `events.lineage-invalid` | An event's lineage isn't valid |

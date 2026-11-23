@@ -8,6 +8,7 @@ YAML, the async runtime or the core's handlers. tests/test_cli_startup.py keeps 
 """
 
 import argparse
+from collections.abc import Callable
 from typing import TextIO
 
 from troupe.cli.parser import Command
@@ -233,6 +234,36 @@ def _run_get(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> E
     return config.run_get(arguments, stdout, stderr)
 
 
+# config drop and config keep (abandoned-edits design D8)
+
+
+def _configure_answer(what: str) -> Callable[[argparse.ArgumentParser], None]:
+    def configure(parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            "change",
+            help="the change id the notice about the abandoned edit names",
+        )
+        parser.add_argument(
+            "--rehearse",
+            action="store_true",
+            help=f"change nothing: show what would be {what}",
+        )
+
+    return configure
+
+
+def _run_drop(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
+    from troupe.cli import config  # loaded when the command runs (design D2)
+
+    return config.run_drop(arguments, stdout, stderr)
+
+
+def _run_keep(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
+    from troupe.cli import config  # loaded when the command runs (design D2)
+
+    return config.run_keep(arguments, stdout, stderr)
+
+
 # sync
 
 
@@ -265,6 +296,18 @@ CONFIG_COMMANDS: tuple[Command, ...] = (
     ),
     Command(
         "config get", "Show config, or the value or group at a path.", _configure_get, _run_get
+    ),
+    Command(
+        "config drop",
+        "Drop an abandoned edit: remove the changes a file going back left behind.",
+        _configure_answer("dropped"),
+        _run_drop,
+    ),
+    Command(
+        "config keep",
+        "Keep an abandoned edit's changes, and stop troupe asking about them.",
+        _configure_answer("kept"),
+        _run_keep,
     ),
     Command(
         "sync",

@@ -51,6 +51,11 @@ CODES: dict[str, str] = {
     "they leave unresolved.",
     "config.present-unreadable": "troupe's record of the config files this clone had can't be "
     "read, so missing files were written again rather than read as removed.",
+    # Abandoned edits (abandoned-edits design D5, D7). contributing/config.md lists them.
+    "config.edit-abandoned": "A hand edit put a config file's values back to what they were, so "
+    "the changes since can be kept or dropped.",
+    "config.kept-unreadable": "troupe's record of the abandoned edits a person kept can't be "
+    "read, so it may ask about one again.",
     # Run workspaces (worktree-stage design D9). contributing/runs.md lists them.
     "workspace.waiting": "Making, filling, capturing or removing a run's worktree is taking a "
     "while.",

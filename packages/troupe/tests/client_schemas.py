@@ -22,6 +22,8 @@ MESSAGES = {
         "config-set": ("request", "update", "result"),
         "config-get": ("request", "result"),
         "sync": ("request", "update", "result"),
+        "config-drop": ("request", "update", "result"),
+        "config-keep": ("request", "update", "result"),
         "diff": ("request", "result"),
         "accept": ("request", "result"),
         "discard": ("request", "result"),

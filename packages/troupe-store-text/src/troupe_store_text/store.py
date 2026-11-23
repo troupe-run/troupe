@@ -38,7 +38,7 @@ from troupe.core.theatre import ensure_git_files
 from troupe.core.ulid import new_ulid
 from troupe.core.vcs import Vcs
 from troupe.platform.errors import WatchDirectoryMissingError, WatchUnavailableError
-from troupe.platform.files import WaitCallback, append_bytes
+from troupe.platform.files import WaitCallback, append_bytes, remove_file
 from troupe.platform.paths import friendly as display
 from troupe.platform.watching import DirectoryWatch, watch
 from troupe_store_text.codec import Header, Record, encode_event, encode_header
@@ -591,6 +591,72 @@ class TextStore:
             self._own.add(path.name)
         append_bytes(segment.path, data)
 
+    # Dropping (abandoned-edits design D4): a person's drop is the only way an event leaves, and
+    # only whole uncommitted segments of this branch that hold nothing else go.
+
+    def droppable(self, events: Sequence[str]) -> str | None:
+        """Why ``events`` can't be dropped (``committed`` or ``shares-segment``), or None when
+        every segment holding them could go. An uncommitted segment of another branch is never
+        visible here (event-store, "Uncommitted events from another branch are left out"), so its
+        events are unknown, not droppable."""
+        with self._lock:
+            self.refresh()
+            return self._why_not(events)[0]
+
+    def drop(self, events: Sequence[str], check: Callable[[], None]) -> tuple[Path, ...]:
+        """Remove the segments holding ``events``, all of them or none, holding the write lock.
+        ``check`` runs first under the lock, and refuses by raising. Returns the segments
+        removed."""
+        with self._lock, self._write_lock():
+            self.refresh()
+            check()
+            reason, paths = self._why_not(events)
+            if reason is not None:
+                raise _not_droppable(reason, paths)
+            wanted = set(events)
+            for record in self._events.values():
+                if record.id not in wanted and wanted.intersection(record.parents):
+                    raise _not_droppable("parent", (record.path,), event=record.id)
+            removed: list[Path] = []
+            try:
+                for path in paths:
+                    remove_file(path)
+                    removed.append(path)
+            except OSError as error:
+                left = tuple(p for p in paths if p not in removed)
+                raise _not_droppable("remove-failed", left, detail=str(error)) from error
+            finally:
+                if self._writing is not None and self._writing.path in removed:
+                    self._writing = None
+                for path in removed:
+                    self._own.discard(path.name)
+                self.refresh()
+                self._order_locked()
+            return tuple(removed)
+
+    def _why_not(self, events: Sequence[str]) -> tuple[str | None, tuple[Path, ...]]:
+        wanted = set(events)
+        unknown = sorted(wanted - self._events.keys())
+        if unknown:
+            raise _not_droppable("unknown-event", (), event=unknown[0])
+        if self._committed is None:
+            relative = self.events_dir.relative_to(self.theatre).as_posix()
+            self._committed = self.vcs.committed_under(relative)
+        paths: list[Path] = []
+        for event in sorted(wanted):
+            for record in self._recordings.get(event, []):
+                if record.path not in paths:
+                    paths.append(record.path)
+        paths.sort()
+        for path in paths:
+            if path.relative_to(self.theatre).as_posix() in self._committed:
+                return "committed", (path,)
+        for path in paths:
+            segment = self._segments[path.name]
+            if segment.incomplete or not {r.id for r in segment.records} <= wanted:
+                return "shares-segment", (path,)
+        return None, tuple(paths)
+
     def _write_dotfiles(self) -> None:
         if self.purpose != "events":
             return
@@ -697,6 +763,38 @@ class TextStore:
                 "onlyIn": [str(p) for p in elsewhere],
             },
         )
+
+
+_NOT_DROPPABLE = {
+    "committed": "it is committed, and nothing in git is rewritten",
+    "shares-segment": "its file holds other events too",
+    "parent": "a later event follows it",
+    "unknown-event": "no such event is here",
+    "remove-failed": "removing its file failed",
+}
+
+
+def _not_droppable(
+    reason: str, paths: Sequence[Path], *, event: str | None = None, detail: str | None = None
+) -> TroupeError:
+    where = f" ({', '.join(display(p) for p in paths)})" if paths else ""
+    extra = f": {detail}" if detail else ""
+    details: dict[str, object] = {"reason": reason, "segments": [str(p) for p in paths]}
+    if event is not None:
+        details["event"] = event
+    fix = (
+        "Removing the other files failed partway; the ones named are still there. Run the drop "
+        "again once nothing holds them open."
+        if reason == "remove-failed"
+        else "Nothing to drop: the events stay recorded."
+    )
+    return TroupeError(
+        "events.not-droppable",
+        problem=f"Events can't be dropped: {_NOT_DROPPABLE[reason]}{where}{extra}.",
+        fix=fix,
+        path=str(paths[0].absolute()) if paths else None,
+        details=details,
+    )
 
 
 def _told(order: OrderLog) -> tuple[str, int]:

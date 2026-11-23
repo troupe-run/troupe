@@ -1,5 +1,5 @@
-"""config set, config unset, config get and sync on the command line (spec: cli, config;
-config-model design D10).
+"""config set, config unset, config get, config drop, config keep and sync on the command line
+(spec: cli, config, config-hand-edits; config-model design D10; abandoned-edits design D8).
 
 Each builds its request as data and calls the core through the client protocol's dispatcher, then
 renders the result: what changed on standard output, notices on standard error. Typing a value by
@@ -254,4 +254,48 @@ def run_sync(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> E
     if arguments.rehearse:
         print("Rehearsal: nothing was recorded or written.", file=stdout)
         return ExitCode.WOULD_CHANGE
+    return ExitCode.OK
+
+
+# config drop and config keep (abandoned-edits design D8)
+
+
+def run_drop(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
+    params: dict[str, Any] = {"change": arguments.change}
+    if arguments.rehearse:
+        params["rehearse"] = True
+    result = _call(
+        "config-drop", params, _session(), lambda u: _show_notice(u, stderr), _ignore_cancel
+    )
+    _notices(result, stderr)
+    count = len(result["changes"])
+    verb = "Would drop" if result["rehearsed"] else "Dropped"
+    removed = "would remove" if result["rehearsed"] else "removed"
+    print(
+        f"{verb} {count} changes ({', '.join(result['changes'])}): {removed} "
+        f"{', '.join(result['segments'])}.",
+        file=stdout,
+    )
+    if result["rehearsed"]:
+        print("Rehearsal: nothing was removed.", file=stdout)
+        return ExitCode.WOULD_CHANGE
+    return ExitCode.OK
+
+
+def run_keep(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
+    params: dict[str, Any] = {"change": arguments.change}
+    if arguments.rehearse:
+        params["rehearse"] = True
+    result = _call(
+        "config-keep", params, _session(), lambda u: _show_notice(u, stderr), _ignore_cancel
+    )
+    _notices(result, stderr)
+    if result["rehearsed"]:
+        print(f"Would keep the changes of {result['change']}.", file=stdout)
+        print("Rehearsal: nothing was written.", file=stdout)
+        return ExitCode.WOULD_CHANGE
+    print(
+        f"Kept the changes of {result['change']}; troupe won't ask about them again.",
+        file=stdout,
+    )
     return ExitCode.OK

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/client/config-drop-request.schema.json",
+  "title": "config-drop: request",
+  "description": "Drop an abandoned edit: remove the events of the round trip a sweep closed, only while nothing has been recorded on top of them, none is committed, and each is alone in its event file.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "change"
+  ],
+  "properties": {
+    "change": {
+      "description": "The change id of the sweep that put the files back, as config.edit-abandoned names it.",
+      "type": "string",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "rehearse": {
+      "description": "Change nothing: report what would be dropped, or why it can't be. Absent means false.",
+      "type": "boolean"
+    }
+  }
+}

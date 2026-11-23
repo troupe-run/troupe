@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/client/config-keep-result.schema.json",
+  "title": "config-keep: result",
+  "description": "The abandoned edit kept, or that would be.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "change",
+    "rehearsed",
+    "notices"
+  ],
+  "properties": {
+    "change": {
+      "description": "The change id of the sweep that put the files back, as config.edit-abandoned names it.",
+      "type": "string",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "rehearsed": {
+      "description": "True when nothing was changed.",
+      "type": "boolean"
+    },
+    "notices": {
+      "type": "array",
+      "items": {
+        "$ref": "../notice.schema.json"
+      }
+    }
+  }
+}

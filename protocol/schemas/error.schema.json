@@ -1027,6 +1027,48 @@
     {
       "properties": {
         "code": {
+          "const": "events.not-droppable"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "reason",
+            "segments"
+          ],
+          "properties": {
+            "reason": {
+              "description": "Why: committed (in HEAD or the index), shares-segment (its segment holds other events, or an unfinished batch), parent (a later event follows one of them), unknown-event (no such event is visible on this branch), remove-failed (removing a segment failed partway).",
+              "enum": [
+                "committed",
+                "shares-segment",
+                "parent",
+                "unknown-event",
+                "remove-failed"
+              ]
+            },
+            "segments": {
+              "description": "The segments concerned: for remove-failed, the ones still there.",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "event": {
+              "description": "For parent, the later event; for unknown-event, the event not found. Absent otherwise.",
+              "$ref": "lineage.schema.json#/$defs/hash"
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
           "const": "events.malformed-record"
         },
         "details": {
@@ -2652,6 +2694,70 @@
           ],
           "properties": {
             "file": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "config.no-round-trip"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "change"
+          ],
+          "properties": {
+            "change": {
+              "description": "The change id the request named.",
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "config.round-trip-kept"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "change",
+            "reason"
+          ],
+          "properties": {
+            "change": {
+              "description": "The change id the request named.",
+              "type": "string",
+              "minLength": 1
+            },
+            "reason": {
+              "description": "Why the round trip can't be dropped, as config.edit-abandoned names it.",
+              "enum": [
+                "changes-more",
+                "built-on",
+                "run",
+                "committed",
+                "shares-segment"
+              ]
+            },
+            "blocker": {
+              "description": "The change id or run id that blocks the drop. Absent: no one thing does.",
               "type": "string",
               "minLength": 1
             }
