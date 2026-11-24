@@ -1,27 +1,13 @@
 """The capture tool writes a fixture from an Ollama on this machine, and from nowhere else
-(local-model-runner design D12)."""
+(local-model-runner design D12).
 
-import importlib.util
+Its tests that stay in their own process are in unit/test_ollama_capture_unit.py."""
+
 import json
-import sys
 from pathlib import Path
-from types import ModuleType
-
-import pytest
 
 from fake_ollama import Settings, calls, final, serving, tool_call
-
-TOOL = Path(__file__).resolve().parents[1] / "tools" / "capture_ollama.py"
-
-
-def _tool() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("capture_ollama", TOOL)
-    assert spec is not None
-    assert spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules["capture_ollama"] = module
-    spec.loader.exec_module(module)
-    return module
+from ollama_capture_shared import _tool
 
 
 def test_a_capture_writes_the_fixtures_files_with_no_host_path(tmp_path: Path) -> None:
@@ -68,20 +54,6 @@ def test_a_preflight_capture_writes_only_the_preflight(tmp_path: Path) -> None:
     assert sorted(p.name for p in directory.iterdir()) == ["preflight.json", "provenance.json"]
     preflight = json.loads((directory / "preflight.json").read_text(encoding="utf-8"))
     assert preflight["show"] is None
-
-
-def test_a_capture_refuses_an_endpoint_that_isnt_on_this_machine(tmp_path: Path) -> None:
-    capture = _tool()
-    with pytest.raises(SystemExit, match="isn't on this machine"):
-        capture.capture("success-with-tools", "http://example.com:11434", tmp_path)
-    assert list(tmp_path.iterdir()) == []
-
-
-def test_the_replay_starts_each_fixture_with_the_files_its_capture_made() -> None:
-    from fixture_replay import FILES
-
-    made = {name: s.files for name, s in _tool().SCENARIOS.items() if s.files}
-    assert made == FILES
 
 
 def test_a_compaction_capture_records_its_on_context_full(tmp_path: Path) -> None:

@@ -1,6 +1,8 @@
 """Finding the round trip a sweep closes, whether it can be dropped, and the keep record (spec:
 config-hand-edits; abandoned-edits design D1, D2, D3, D7). Streams are made by real commands in a
-real git theatre."""
+real git theatre.
+
+Its tests that stay in their own process are in unit/test_config_abandoned_unit.py."""
 
 import asyncio
 from pathlib import Path
@@ -17,13 +19,10 @@ from troupe.core.client.dispatch import call
 from troupe.core.client.session import Session
 from troupe.core.config import aggregate
 from troupe.core.config.abandoned import (
-    KEPT,
     RoundTrip,
     blocked,
     head_sweep,
-    kept,
     round_trip,
-    write_kept,
 )
 from troupe.core.runs.perform import perform
 
@@ -281,28 +280,6 @@ def test_head_sweep_names_the_sweep_at_the_head_only(repo: Repo) -> None:
     assert head_sweep(history) == closing
     _set(repo, ["actors", "tester", "workspace"], "theatre")
     assert head_sweep(git_service(repo).history(aggregate.STREAM)) is None
-
-
-# The keep record (design D7)
-
-
-def test_no_record_means_none_kept(tmp_path: Path) -> None:
-    assert kept(tmp_path) == (frozenset(), [])
-
-
-def test_an_unreadable_record_counts_as_none_and_is_named(tmp_path: Path) -> None:
-    (tmp_path / KEPT).parent.mkdir(parents=True)
-    (tmp_path / KEPT).write_bytes(b"{not json")
-    found, notices = kept(tmp_path)
-    assert found == frozenset()
-    assert [(n.code, n.path) for n in notices] == [("config.kept-unreadable", str(tmp_path / KEPT))]
-
-
-def test_keeping_twice_records_one_entry_and_prunes_gone_changes(tmp_path: Path) -> None:
-    write_kept(tmp_path, frozenset({"a", "gone"}), frozenset({"a", "b"}))
-    write_kept(tmp_path, kept(tmp_path)[0] | {"a"}, frozenset({"a", "b"}))
-    assert kept(tmp_path) == (frozenset({"a"}), [])
-    assert (tmp_path / KEPT).read_bytes() == b'["a"]\n'
 
 
 def test_a_file_back_only_to_a_later_point_is_not_dropped_with_the_others(repo: Repo) -> None:

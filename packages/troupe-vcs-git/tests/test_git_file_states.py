@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
+from git_worktrees_shared import adapter, git_in, put, worktree
 from gitrepo import Repo, make_repo
-from test_git_worktrees import adapter, git_in, put, worktree
 
 
 @pytest.fixture

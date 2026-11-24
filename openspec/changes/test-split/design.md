@@ -75,8 +75,33 @@ file named `<stem>_unit.py` or `<stem>_integration.py` in the other one. Keeping
 keeps the diff small. A test parametrised so that some cases reach outside and some don't (none today) would go to
 integration whole.
 
-Module-level helpers that both halves use move to a helper module beside them in `tests/` (the suite's existing
-`*testing.py` module when there is one), never imported from the other half: test modules don't import each other.
+Every comment since the previous statement travels with the next one, so a section's comment stays with the tests
+below it. Each half keeps the original docstring (the split-off half only its first paragraph) and says where the
+other half is. Where a unit half's first paragraph described the integration tests ("driving real runner
+processes"), `test-docstrings.json` gives it one that says what its tests check (#510's review found these).
+
+Module-level helpers that both halves use move to a new helper module, `<topic>_shared.py` (the stem without
+`test_`), beside them in `tests/`. A shared fixture is defined there as `<name>_fixture` with `name="<name>"`, and
+imported under that name with `# noqa: F401`: pytest registers it by its own name, and a test's parameter of the
+fixture's name then doesn't redefine the import (ruff's F811).
+
+### D3a. No test module imports another, and helpers live beside both kinds
+
+Before this change, 20 test modules imported names from other test modules (`from test_perform import
+configured`). Once tests sit in `unit/` and `integration/`, pytest finds such a module only from the importer's own
+directory, so an import across kinds fails, and mypy, whose path names each suite's `tests/`, finds none of them. So
+**no test module imports another test module**, of either kind: every name one imports from another moves, with the
+helpers it reaches, into the source's `<topic>_shared.py`, and both import it from there (two names that already had
+a natural home move to `runtesting.py` and `ollama_harness.py`).
+
+**Every helper lives in its suite's `tests/`, beside `unit/` and `integration/`**, never inside either: the stand-ins,
+harnesses, child scripts, `*testing.py` and `_shared.py` modules alike. Both kinds import them, and neither kind's
+directory depends on the other's. A helper isn't a test and has no kind: a unit test may import a helper that can
+start a process, and stays unit as long as it doesn't call that part. If it does, the detector (D4) fails it at run
+time, naming the process, however many helpers lie between.
+
+The plugin refuses the rule's breach at collection (D5): a test module that imports another test module fails,
+naming both. The split script does all of this mechanically (`untangle`), so a rebase re-runs it.
 
 The survey ran on macOS, so a test skipped there can look in-process when it isn't. Before a minority test moves to
 unit, its skip conditions are read; a test that only runs on another OS is classified from its code. CI then confirms
@@ -89,10 +114,18 @@ holds the registry, `OUTSIDE`: a tuple of named kinds of access, each listing th
 kind, and optionally a check that excuses an event that isn't really outside (owner decision 2):
 
 - **a process**: `subprocess.Popen`, `os.posix_spawn`, `os.spawn`, `os.exec`, `os.system`, `os.fork`, `os.forkpty`,
-  `os.startfile`. The failure names the program (`git`, `python`, `ruff`).
+  `os.startfile`. The failure names the program (`git`, `python`, `ruff`). A process the standard library's
+  `platform` module starts (`uname`, `file`, to describe this machine) isn't counted: libraries cache its answer
+  (the OpenAI SDK's headers do), so it would fall on whichever test asked first in a process. The serial run of the
+  unit set found exactly that.
 - **a socket**: `socket.connect` and `socket.bind`, network or Unix-domain, excusing those made inside
   `socket.socketpair` (on Windows it builds the pair with a loopback bind and connect; on Linux and macOS it makes
   no such call), since a pair only links two ends in the same process.
+- **a git theatre**: `troupe.tests.theatre`, an audit event core's `gitrepo` helper raises for every repository it
+  hands a test, copied or built. A theatre is copied from a template each test process builds once, so only the test
+  that happens to build it runs git: by processes alone, 27 theatre tests looked in-process or not depending on test
+  order (found by the detector's first full run). The event makes every test with a theatre integration, in any order.
+  It's also the pattern for a reach the hook can't see directly: the helper that does it raises its own event.
 
 An audit hook records every event in the registry while a test or a fixture runs, as `guard_pytest` records reads:
 each test's own setup, call and teardown, and each fixture's setup, charged to every test that uses that fixture,
@@ -115,20 +148,36 @@ later kinds, recorded here so whoever adds them knows where they go:
 Alternatives: deciding the kind by fixture names (`theatre`, `stand_in`) would miss a test that calls `subprocess`
 directly, and grows a list by hand; a timing threshold flakes (Non-Goals).
 
-Known limit: the hook sees this process only, and attributes an event to the test running when it fires. A thread a
-test leaves running that later starts a process charges whichever test is running then. The suite leaves no such
-threads today (the survey's unit tests recorded nothing), and the failure names the program, which points at the
-thread's owner.
+Which fixtures count: the definitions the test was actually given (pytest's own per-test record, which resolves an
+override and includes a fixture reached through `request.getfixturevalue`), not every definition of a name. Only a
+broader-scoped fixture's setup is recorded apart, and its record is replaced when it's set up again (for another
+parameter), as its cached value is; a function-scoped fixture runs inside its test's own window. What a broader-scoped
+fixture does while being torn down is no test's: that runs inside whichever test comes last, so recording pauses
+from its first finalizer to its last. (These came from a review of the plugin before the pull request's review.)
+
+Known limits: the hook sees this process only, and attributes an event to the test running when it fires. A thread a
+test leaves running that later starts a process charges whichever test is running then; the suite leaves no such
+threads today, and the failure names the program, which points at the thread's owner. `multiprocessing`'s spawn and
+forkserver start methods start their process through `_posixsubprocess.fork_exec`, which raises no audit event on
+Linux and macOS (Windows' `_winapi.CreateProcess` is declared); nothing in the repository uses `multiprocessing`, and
+a test that does would need a kind for it first.
 
 ### D5. Tagging, and what the plugin refuses
 
 At collection (`tryfirst`, before `-m` deselects), each test gets the `unit` or `integration` marker from its
 directory, so `-m unit` and `-m "not integration"` select the same tests as the `tests/unit/` directories. Both
-markers are registered by the plugin. Refused, each as a failing test so every run reports it whatever `-m` selects
-(the item carries both markers so a kind selection still includes it):
+markers are registered by the plugin.
 
-- a test in neither directory, naming its file and its suite's two directories;
-- a hand-written `unit` or `integration` mark: the directory is the one source of the kind.
+A test file in neither directory fails to collect (a collection error naming it and its suite's two directories): a
+test with no kind can't be selected by a kind, so failing the file's collection is the way every selection reports
+it. In one process that stops the run; across workers the other tests still run, and the run fails. (A usage error
+raised on xdist's workers became an internal error with the message lost, so it isn't one.) The others are refused as a failure of the test at teardown, as `guard_pytest` refuses
+(pytest counts it as an error after the test's call):
+
+- a hand-written `unit` or `integration` mark: the directory is the one source of the kind;
+- a test module that imports another test module (`from test_x import`, `import test_x`, at any depth in the
+  module), naming both: shared names belong in a helper module in `tests/` (D3a). It's read from the module's source
+  with `ast`, so it holds whichever kind of test does the importing.
 
 The plugin's tests are integration tests: they run pytest in a child process (`pytester.runpytest_subprocess`), since
 an in-process inner run would charge its events to the outer test. Its pure parts (the kind of a path, an event's
@@ -145,13 +194,14 @@ gate.
 
 The owner asked for the moves apart from the edits. Each commit must pass `scripts/check.py`, so the order is:
 
-1. **Splits**, in place: each mixed file becomes its two halves, still in `tests/` (edits).
+1. **Splits**, in place: each mixed file becomes its two halves, still in `tests/`, and every name one test module
+   imports from another moves to a helper (D3a) (edits).
 2. **Location-independent paths**: 57 test files find their suite, plugin or repository from `Path(__file__)` by a
    fixed depth (`parents[3]`, `with_name("record_child.py")`). They find the suite's `tests/` directory by name
    instead, so they work at any depth (edits).
 3. **The moves**: `git mv` of every test file, plus the strings that name moved files, which the check reads and so
    can't wait: pytest's `pythonpath`, the flake campaign's selection, `quality-gates.toml`'s per-file size limits,
-   `scripts/mutation.json`'s deselected test ids, and the scripts' tests of those. Every moved file is a pure rename.
+   and the docs that name test files. Every moved file is a pure rename.
 4. **The detector** and its tests, `-p kinds_pytest`, the contributor docs and the measurements (edits).
 
 ### D8. References that follow the moves
@@ -159,13 +209,18 @@ The owner asked for the moves apart from the edits. Each commit must pass `scrip
 - `scripts/flake_campaign.py`'s `SELECTION`: `packages/troupe/tests/*/test_platform_*.py` and the same for the
   run-host and CLI-run files, so a file moving between kinds stays hunted (flake-hunt delta).
 - `quality-gates.toml`: the size-limit keys for `test_run_host.py` and `test_platform_processes.py`.
-- `scripts/mutation.json`: the three deselected test ids. Each unit's `tests` stays the whole `tests/` directory
-  until #394 points it at the unit tests.
+- `scripts/mutation.json` is delivered by infrastructure (`.github/guard-delivery.json`), so it isn't edited here.
+  Its three deselected tests all land in `integration/`, two of them in split-off files
+  (`integration/test_cli_startup.py`, `integration/test_config_schemas_integration.py`,
+  `integration/test_package_integration.py`); infrastructure delivers a `mutation.json` naming both the old and the
+  new ids before this merges, so troupe's pull request mutation run never breaks. Once mutation runs only the unit
+  tests (#394), none of the three runs at all. The move script skips every delivered file.
 - `contributing/`: `flake-hunt.md` and `runners.md` name test files; the testing guidance gains the rule (where a
   new test goes, what the detector checks, how to add a kind).
 - Comments in files infrastructure delivers (`claude-review.yml`, `dependabot-dispatch.yml`, `guard.py`) name
-  `scripts/tests/test_*.py` files that move. They can't be edited here, so an infrastructure issue updates them
-  (on the board).
+  `scripts/tests/test_claude_review_workflow.py` and `test_dependabot_dispatch_workflow.py`. Those are
+  infrastructure's own tests (troupe has no such files), so the moves leave the comments right and need no
+  infrastructure change.
 
 ## Risks / Trade-offs
 

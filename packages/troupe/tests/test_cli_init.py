@@ -1,4 +1,6 @@
-"""troupe init on the command line (spec: cli; init-and-audition design D4, D8, D9)."""
+"""troupe init on the command line (spec: cli; init-and-audition design D4, D8, D9).
+
+Its tests that stay in their own process are in unit/test_cli_init_unit.py."""
 
 import dataclasses
 import io
@@ -169,11 +171,6 @@ def test_the_allow_step_on_windows_is_the_env_form_and_names_the_powershell_prof
     assert "once" in note
     assert "every theatre" in note
     assert "~/.zshrc" not in note
-
-
-def test_the_shell_is_powershell_on_windows_and_posix_elsewhere() -> None:
-    expected = init_cli.POWERSHELL if sys.platform == "win32" else init_cli.POSIX
-    assert init_cli.SHELL is expected
 
 
 def test_no_policy_step_when_policy_already_allows_the_local_stage(

@@ -1,11 +1,10 @@
 """The one required `check` passes only when the legs passed, or were skipped because nothing
-needed checking (spec: quality-check; ci-check-scope design D3)."""
+needed checking (spec: quality-check; ci-check-scope design D3).
 
-import subprocess
-import sys
+Its tests that start a process, open a socket or use a git theatre are in
+integration/test_check_result_integration.py."""
 
 import pytest
-from conftest import REPO
 
 import check_result
 
@@ -53,27 +52,3 @@ def test_an_unknown_legs_result_fails_naming_it_and_what_is_valid(legs: str) -> 
     assert not passed
     assert f"`{legs}`" in reason
     assert "success, failure, cancelled, skipped" in reason
-
-
-def run(*args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [sys.executable, str(REPO / "scripts" / "check_result.py"), *args],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-
-def test_the_script_exits_0_when_check_passes_and_1_when_it_fails() -> None:
-    passed = run("skipped", "success", "none")
-    failed = run("failure", "success", "full")
-    assert (passed.returncode, failed.returncode) == (0, 1)
-    assert passed.stdout.startswith("check: passed, ")
-    assert failed.stdout.startswith("check: failed, ")
-
-
-@pytest.mark.parametrize("args", [(), ("success",), ("success", "success", "none", "extra")])
-def test_a_wrong_number_of_arguments_fails_naming_what_to_pass(args: tuple[str, ...]) -> None:
-    result = run(*args)
-    assert result.returncode == 1
-    assert f"expected 3 arguments (LEGS CHANGES SCOPE), got {len(args)}" in result.stderr

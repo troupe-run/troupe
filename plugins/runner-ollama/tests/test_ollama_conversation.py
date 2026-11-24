@@ -3,92 +3,39 @@ ollama-runner; local-model-runner design D5 to D9, D15).
 
 A recording sink stands in for the runner: it keeps every event and transcript record in the order
 they were sent, and doesn't wait out retry delays.
-"""
+
+Its tests that stay in their own process are in unit/test_ollama_conversation_unit.py."""
 
 import json
 import re
 import threading
 import uuid
 from collections.abc import Sequence
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from fake_ollama import Answer, FakeOllama, Line, calls, done, final, message, serving, tool_call
+from ollama_conversation_shared import WINDOW
+from ollama_harness import Recorder
 from troupe_plugin_sdk import runner as p
 from troupe_plugin_sdk.compaction import stub
 from troupe_plugin_sdk.defaults import (
     BYTES_PER_TOKEN,
     COMPACT_AT_SHARE,
-    GLOB_MAX_PATHS,
-    GREP_MAX_MATCHES,
-    READ_MAX_BYTES,
 )
 from troupe_plugin_sdk.events import encoded_size
 from troupe_runner_ollama.client import Client
 from troupe_runner_ollama.conversation import (
     NO_TEXT,
     Conversation,
-    encode,
-    fit_output,
     tool_budget,
-    tool_limits,
 )
 from troupe_runner_ollama.defaults import (
-    DEFAULT_CONTEXT_LENGTH,
-    READ_NOTE_BYTES,
     RETRY_MAX_ATTEMPTS,
 )
 from troupe_runner_ollama.options import Options
-
-WINDOW = DEFAULT_CONTEXT_LENGTH
-
-
-@dataclass
-class Recorder:
-    """A sink that keeps what it's sent, in order."""
-
-    sent: list[p.RunEvent | tuple[p.TranscriptKind, bytes]] = field(default_factory=list)
-    """Each event, and each transcript record as its kind and bytes, in the order sent."""
-    stop: threading.Event = field(default_factory=threading.Event)
-    waits: list[float] = field(default_factory=list)
-
-    def event(self, event: p.RunEvent) -> None:
-        self.sent.append(event)
-
-    def transcript(self, kind: p.TranscriptKind, record: bytes) -> None:
-        self.sent.append((kind, record))
-
-    def stopping(self) -> bool:
-        return self.stop.is_set()
-
-    def wait(self, seconds: float) -> bool:
-        self.waits.append(seconds)
-        return self.stop.is_set()
-
-    @property
-    def events(self) -> list[p.RunEvent]:
-        return [item for item in self.sent if isinstance(item, p.RunEvent)]
-
-    @property
-    def records(self) -> list[bytes]:
-        return [item[1] for item in self.sent if isinstance(item, tuple)]
-
-    @property
-    def kinds(self) -> list[p.TranscriptKind]:
-        """Each transcript record's kind, in the order sent."""
-        return [item[0] for item in self.sent if isinstance(item, tuple)]
-
-    def of(self, kind: type[p.RunEvent]) -> list[Any]:
-        return [event for event in self.events if isinstance(event, kind)]
-
-    @property
-    def result(self) -> p.ResultEvent:
-        (result,) = self.of(p.ResultEvent)
-        assert isinstance(result, p.ResultEvent)
-        return result
 
 
 def _start(
@@ -363,22 +310,6 @@ def test_two_answers_from_the_same_other_model_send_one_served_model(tmp_path: P
 def test_answers_echoing_the_model_asked_for_send_no_served_model(tmp_path: Path) -> None:
     sink, _ = _run(tmp_path, [final("hi")])
     assert sink.of(p.ServedModelEvent) == []
-
-
-# Requirement: One tool result fits the context window
-
-
-def test_the_tool_limits_follow_the_window_and_never_pass_the_sdks_defaults() -> None:
-    default = tool_limits(WINDOW)
-    assert default.read_max_bytes == tool_budget(WINDOW) - READ_NOTE_BYTES
-    assert default.read_max_bytes < READ_MAX_BYTES
-    small, large = tool_limits(8192), tool_limits(32768)
-    assert small.read_max_bytes < default.read_max_bytes < large.read_max_bytes
-    assert small.grep_max_matches < large.grep_max_matches
-    huge = tool_limits(10_000_000)
-    assert huge.read_max_bytes == READ_MAX_BYTES
-    assert huge.glob_max_paths == GLOB_MAX_PATHS
-    assert huge.grep_max_matches == GREP_MAX_MATCHES
 
 
 @pytest.mark.parametrize("window", [8192, WINDOW, 32768])
@@ -847,10 +778,6 @@ def test_a_run_that_starts_stopping_sends_nothing_more(tmp_path: Path) -> None:
     assert sink.of(p.ResultEvent) == []
 
 
-def test_encode_is_compact_utf8() -> None:
-    assert encode({"a": "é", "b": [1, 2]}) == '{"a":"é","b":[1,2]}'.encode()
-
-
 # Found by a review of the code (troupe-run/troupe#283).
 
 
@@ -893,11 +820,6 @@ def test_fail_after_the_result_sends_only_the_log_error(tmp_path: Path) -> None:
         conversation.fail("late")
     assert [type(event).__name__ for event in sink.events][-2:] == ["ResultEvent", "LogEvent"]
     assert len(sink.of(p.ResultEvent)) == 1
-
-
-def test_fit_output_stays_within_a_budget_smaller_than_its_note() -> None:
-    assert len(fit_output("x" * 500, 40).encode("utf-8")) <= 40
-    assert fit_output("short", 40) == "short"
 
 
 # Requirement: A run told compact removes old tool results before a request that wouldn't fit

@@ -3,7 +3,8 @@
 ### Requirement: Every test is unit or integration by its directory
 Each suite's tests SHALL live in its `tests/unit/` or `tests/integration/` directory, and a test's directory SHALL be
 its kind. Every pytest run SHALL tag each test `unit` or `integration` from its directory before `-m` selects, so each
-test carries exactly one kind. A test outside both directories SHALL fail, naming its file and the two directories.
+test carries exactly one kind. A run that collects a test file outside both directories SHALL fail, whatever `-m`
+selects and in one process or across workers, naming the file and the two directories.
 
 #### Scenario: A test under unit
 - **WHEN** pytest collects `packages/troupe/tests/unit/test_errors.py`
@@ -11,11 +12,31 @@ test carries exactly one kind. A test outside both directories SHALL fail, namin
 
 #### Scenario: A new test file in neither directory
 - **WHEN** a developer adds `packages/troupe/tests/test_new.py` and runs pytest
-- **THEN** its tests fail, naming the file and the suite's `tests/unit/` and `tests/integration/` directories
+- **THEN** collecting the file fails, naming it and the suite's `tests/unit/` and `tests/integration/` directories,
+  and the run fails, as it does with `-m unit`, `-m "not integration"` or across workers
 
 #### Scenario: A hand-written kind
 - **WHEN** a test is marked `pytest.mark.unit` or `pytest.mark.integration` by hand
 - **THEN** that test fails, saying its directory gives its kind and the mark must go
+
+### Requirement: Test modules share code only through helpers beside both kinds
+No test module SHALL import another test module. Code that tests share SHALL live in helper modules in the suite's
+`tests/` directory, beside `unit/` and `integration/`, so either kind can import it without depending on the other.
+Every pytest run SHALL fail a test whose module imports a test module, naming both modules. A helper has no kind: a unit
+test that reaches outside its process through a helper still fails as a unit test that reaches outside.
+
+#### Scenario: A unit test module importing from an integration test module
+- **WHEN** `tests/unit/test_a.py` has `from test_b import configured`, and `test_b.py` is under `tests/integration/`
+- **THEN** the tests in `test_a.py` fail, naming `test_a.py` and `test_b`, and saying to move `configured` to a helper
+  in `tests/`
+
+#### Scenario: Two test modules of the same kind
+- **WHEN** `tests/unit/test_a.py` imports `test_c`, and `test_c.py` is under `tests/unit/` too
+- **THEN** the tests in `test_a.py` fail the same way
+
+#### Scenario: A unit test that starts a process through a helper
+- **WHEN** a test under `tests/unit/` calls a helper in `tests/` that runs git
+- **THEN** it fails, naming a process running `git`
 
 ### Requirement: A unit test stays inside its process
 Every pytest run, in one process or in parallel, SHALL fail a unit test that reaches outside its process, itself or
@@ -45,8 +66,8 @@ in-process. An integration test that reaches nothing SHALL pass.
 - **THEN** it passes
 
 ### Requirement: What reaching outside means is declared in one place
-The kinds of access that make a test integration SHALL be declared in one place: starting a process, and opening a
-socket, network or Unix-domain, other than a socket pair. Adding a kind there SHALL make every unit test that uses it
+The kinds of access that make a test integration SHALL be declared in one place: starting a process, opening a
+socket, network or Unix-domain, other than a socket pair, and being handed a git theatre. Adding a kind there SHALL make every unit test that uses it
 fail on the next run, with no change to any test. Each declared kind SHALL have a test that a unit test using it fails
 and an integration test using it passes.
 

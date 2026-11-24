@@ -213,3 +213,24 @@ def failing_at(reported: int, *, end_too: bool = False) -> Any:  # noqa: ANN401
         return store
 
     return wrap
+
+
+def outcome(name: str) -> dict[str, Any]:
+    """An outcome as the run host derives it (Run.Ended's schema), for a run that ended ``name``."""
+    return {
+        "outcome": name,
+        "exitCode": 0,
+        "ending": "exited",
+        "transcript": "sha256:" + "a" * 64,
+        "transcriptFormat": "native",
+        "stderr": "sha256:" + "b" * 64,
+        "audit": {"outside": []},
+        "limits": RunLimits().to_data(),
+    }
+
+
+STAGE = {
+    "name": "local",
+    "effects": "unenforced",
+    "allowedBy": {"setting": "allow_unenforced_local_stage", "source": "env"},
+}

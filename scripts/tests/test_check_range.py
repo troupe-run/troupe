@@ -1,19 +1,14 @@
 """A push is judged on its own only when its previous head's latest `check` passed; anything else
 diffs the whole pull request, and a malformed input is refused (spec: quality-check; ci-check-scope
-D1, ci-once-per-commit D3)."""
+D1, ci-once-per-commit D3).
 
-import json
-import subprocess
-import sys
-from pathlib import Path
+Its tests that start a process, open a socket or use a git theatre are in
+integration/test_check_range_integration.py."""
 
 import pytest
-from conftest import REPO
+from check_range_shared import BASE, BEFORE, EARLY, HEAD, LATE, WHOLE, check_run
 
 import check_range
-
-BEFORE, BASE, HEAD = "a" * 40, "b" * 40, "c" * 40
-WHOLE = f"{BASE}...{HEAD}"
 
 
 def test_a_push_after_a_passing_check_diffs_the_two_heads_directly() -> None:
@@ -60,13 +55,6 @@ def test_an_action_ci_doesnt_run_on_is_refused_naming_it_and_the_valid_ones(acti
         check_range.revisions(action, BEFORE, BASE, HEAD, "success")
     assert f"action `{action}`" in str(refused.value)
     assert "opened, reopened, synchronize, ready_for_review" in str(refused.value)
-
-
-def check_run(conclusion: str | None, started_at: str | None) -> dict[str, str | None]:
-    return {"status": "completed", "conclusion": conclusion, "started_at": started_at}
-
-
-EARLY, LATE = "2026-10-30T13:27:32Z", "2026-10-30T13:40:05Z"
 
 
 def test_no_check_runs_have_no_conclusion() -> None:
@@ -128,60 +116,3 @@ def test_check_runs_of_the_wrong_shape_are_refused_naming_what_is_wrong(
     with pytest.raises(check_range.RangeError) as refused:
         check_range.latest_conclusion(document)
     assert named in str(refused.value)
-
-
-def runs_file(tmp_path: Path, *runs: dict[str, str | None]) -> str:
-    path = tmp_path / "check-runs.json"
-    path.write_text(json.dumps({"total_count": len(runs), "check_runs": list(runs)}), "utf-8")
-    return str(path)
-
-
-def run(*args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [sys.executable, str(REPO / "scripts" / "check_range.py"), *args],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-
-def test_the_script_narrows_on_a_passing_latest_check_and_exits_0(tmp_path: Path) -> None:
-    passed = runs_file(tmp_path, check_run("skipped", EARLY), check_run("success", LATE))
-    result = run("synchronize", BEFORE, BASE, HEAD, passed)
-    assert (result.returncode, result.stdout, result.stderr) == (0, f"{BEFORE} {HEAD}\n", "")
-
-
-def test_the_script_diffs_the_whole_pull_request_with_no_check_runs() -> None:
-    result = run("synchronize", BEFORE, BASE, HEAD, "")
-    assert (result.returncode, result.stdout, result.stderr) == (0, f"{WHOLE}\n", "")
-
-
-def test_a_refusal_exits_1_and_prints_nothing_on_stdout(tmp_path: Path) -> None:
-    result = run("synchronize", "", BASE, HEAD, runs_file(tmp_path, check_run("success", LATE)))
-    assert (result.returncode, result.stdout) == (1, "")
-    assert result.stderr.startswith("check_range: BEFORE ``")
-
-
-@pytest.mark.parametrize("args", [(), ("synchronize", BEFORE, BASE, HEAD)])
-def test_a_wrong_number_of_arguments_fails_naming_what_to_pass(args: tuple[str, ...]) -> None:
-    result = run(*args)
-    assert (result.returncode, result.stdout) == (1, "")
-    assert f"expected 5 arguments (ACTION BEFORE BASE HEAD CHECK_RUNS), got {len(args)}" in (
-        result.stderr
-    )
-
-
-@pytest.mark.parametrize("content", ["not json", '{"check_runs": "none"}'])
-def test_unreadable_check_runs_exit_1_naming_the_file(tmp_path: Path, content: str) -> None:
-    path = tmp_path / "check-runs.json"
-    path.write_text(content, encoding="utf-8")
-    result = run("synchronize", BEFORE, BASE, HEAD, str(path))
-    assert (result.returncode, result.stdout) == (1, "")
-    assert f"CHECK_RUNS `{path}`" in result.stderr
-
-
-def test_a_missing_check_runs_file_exits_1_naming_it(tmp_path: Path) -> None:
-    missing = tmp_path / "absent.json"
-    result = run("synchronize", BEFORE, BASE, HEAD, str(missing))
-    assert (result.returncode, result.stdout) == (1, "")
-    assert f"CHECK_RUNS `{missing}` can't be read" in result.stderr

@@ -4,10 +4,9 @@ command (spec: cli; cli-starts-fast design D6).
 Each test runs a fresh interpreter, since this one has loaded everything already, and reads the
 names in its ``sys.modules`` from a file, so the command's own output is left as it is. The tests
 count modules, never time: a slow or loaded machine can't change their outcome.
-"""
 
-import asyncio
-import importlib
+Its tests that stay in their own process are in unit/test_cli_startup_unit.py."""
+
 import io
 import json
 import os
@@ -19,12 +18,10 @@ from pathlib import Path
 
 import pytest
 
+from cli_startup_shared import FAMILIES
 from gitrepo import Repo
 from runtesting import ADA, ALLOW, theatre
 from troupe.cli import main
-from troupe.core.client import dispatch
-from troupe.core.client.session import Session
-from troupe.core.errors import TroupeError
 
 HEAVY = (
     "importlib.metadata",  # package metadata, with the email parsing it reads it with
@@ -45,13 +42,6 @@ A name covers its submodules too."""
 
 METADATA = ("importlib.metadata", "email")
 """What ``--version`` may load of HEAVY: the installed package's metadata."""
-
-FAMILIES = {
-    "runs": "troupe.core.runs",
-    "config": "troupe.core.config.commands",
-    "init": "troupe.core.init",
-}
-"""Each family of the core's commands, by the module its handlers live in."""
 
 UNUSED_BY_READING = ("jsonschema", "referencing", "ruamel.yaml")
 """Schema checking and YAML, which reading runs or config never needs: a schema is checked, and a
@@ -209,18 +199,3 @@ def test_config_get_shows_config_and_loads_neither_runs_nor_inits_handlers(
     assert probed.code == 0, probed.stderr
     json.loads(probed.stdout)
     assert_none_loaded(probed.modules, [FAMILIES["runs"], FAMILIES["init"], *UNUSED_BY_READING])
-
-
-def test_the_dispatchers_table_names_every_method_the_families_offer() -> None:
-    every: set[str] = set()
-    for module in FAMILIES.values():
-        every |= set(importlib.import_module(module).methods())
-    assert set(dispatch.FAMILIES) == every
-    assert set(dispatch.handlers()) == every
-
-
-def test_an_unknown_method_is_refused_listing_every_method_troupe_offers() -> None:
-    with pytest.raises(TroupeError) as caught:
-        asyncio.run(dispatch.call("deploy", {}, Session(theatre=Path())))
-    assert caught.value.code == "client.unknown-method"
-    assert caught.value.details["known"] == sorted(dispatch.handlers())

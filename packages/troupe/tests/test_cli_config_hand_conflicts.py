@@ -8,9 +8,9 @@ from typing import Any
 
 import pytest
 
+from cli_config_merges_shared import BASE, YAML, _merge, cli, ok
 from gitrepo import Repo
 from runtesting import ADA, ALLOW, theatre
-from test_cli_config_merges import BASE, YAML, _merge, cli, ok
 
 REVIEWER = ".troupe/actors/reviewer.yaml"
 

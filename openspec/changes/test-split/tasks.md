@@ -2,16 +2,17 @@
 
 ## 1. The classification, from the survey
 
-- [ ] 1.1 Write the per-function plan from the survey: for each of the 269 test files, its kind, or for the 76 mixed
+- [x] 1.1 Write the per-function plan from the survey: for each of the 269 test files, its kind, or for the 76 mixed
   files, which functions move to `<stem>_unit.py` or `<stem>_integration.py` (D3). Verify: every collected test
   function appears in the plan exactly once.
-- [ ] 1.2 For each test the plan moves to unit, read its skip conditions; a test that only runs on Linux or Windows is
+- [x] 1.2 For each test the plan moves to unit, read its skip conditions; a test that only runs on Linux or Windows is
   classified from its code, and the plan notes it. Verify: the plan lists each such test with its reason.
 
 ## 2. Splits, in place (commit: edits only)
 
-- [ ] 2.1 Split each mixed file into its two halves in its current `tests/` directory, moving shared module-level
-  helpers into a helper module in `tests/` rather than importing between test modules. Verify: the collected test ids
+- [x] 2.1 Split each mixed file into its two halves in its current `tests/` directory, moving shared module-level
+  helpers into a helper module in `tests/`, and move every name one test module imports from another into a helper
+  (D3a). Verify: no test module imports another (ast scan); the collected test ids
   before and after are the same set apart from the file part, compared by script; `uv run scripts/check.py` passes.
 
 ## 3. Location-independent paths (commit: edits only)
@@ -26,7 +27,7 @@
   suite's `tests/` to pytest's `pythonpath`. Verify: `git show --stat -M` shows every moved test file as a 100%
   rename.
 - [ ] 4.2 Update the strings the check reads that name moved files: `scripts/flake_campaign.py`'s `SELECTION` (patterns
-  matching both kinds), `quality-gates.toml`'s size-limit keys, `scripts/mutation.json`'s deselected test ids, and
+  matching both kinds), `quality-gates.toml`'s size-limit keys, the docs naming test files (`scripts/mutation.json` is delivered: its new ids go to infrastructure), and
   any scripts' test that names one. Verify: the flake campaign's pattern test passes, the size gate passes, and
   `uv run scripts/check.py` passes on this commit.
 
@@ -34,7 +35,8 @@
 
 - [ ] 5.1 Add `scripts/kinds_pytest.py`: the `OUTSIDE` registry (a process; a socket, excusing `socket.socketpair`),
   the audit hook recording per test and per fixture, tagging from the directory before `-m`, and the refusals (neither
-  directory, hand-written kind) as failing tests (D4, D5). Verify: tests in 5.2 and 5.3.
+  directory, hand-written kind, a test module importing another) as failing tests (D3a, D4, D5). Verify: tests in
+  5.2 and 5.3.
 - [ ] 5.2 Unit tests of its pure parts: a path's kind for each suite shape (`packages/x/tests/unit`,
   `scripts/tests/workspace/integration`, a file in neither), and an audit event's kind for each registry entry.
   Verify: they pass under `tests/unit/`.
@@ -42,7 +44,8 @@
   registry, failing for a kind with no example) a unit test using it fails naming the kind and the same test under
   `tests/integration/` passes; a process started by a session fixture an earlier test set up fails the later unit
   test; a socket pair passes; a file in neither directory fails naming both directories, and is selected by `-m unit`;
-  a hand-written mark fails; `-m unit` and `-m "not integration"` select the same tests; the run ends with each
+  a hand-written mark fails; a test module importing another test module (unit from integration, and same kind)
+  fails naming both; a unit test starting git through a helper fails; `-m unit` and `-m "not integration"` select the same tests; the run ends with each
   kind's count and summed time; the same results under `-n 2`. Verify: they pass, and each fails when its check is
   removed from the plugin (tried once by hand).
 - [ ] 5.4 Add `-p kinds_pytest` to pytest's `addopts`. Verify: the full check passes with every test tagged, and
@@ -53,8 +56,9 @@
 - [ ] 6.1 Contributor docs: where a new test goes, the rule, what the detector checks, how to add a kind (D4), and
   the moved paths in `contributing/flake-hunt.md` and `contributing/runners.md`. Verify: the docs tests pass, and grep
   finds no stale `tests/test_*.py` path outside delivered files and archived changes.
-- [ ] 6.2 Open an infrastructure issue (on the board) to update the comments in delivered files that name moved
-  `scripts/tests/test_*.py` files. Verify: `gh issue view` shows it on the troupe roadmap.
+- [ ] 6.2 Check whether the comments in delivered files name moved troupe test files, and open an infrastructure
+  issue (on the board) only if they do. Verify: every `scripts/tests/test_*.py` they name is absent from troupe's
+  tree (`git ls-files`), so they name infrastructure's own tests and no issue is needed.
 
 ## 7. Measurements for troupe-run/infrastructure#394
 

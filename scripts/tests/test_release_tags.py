@@ -2,66 +2,28 @@
 naming the tag and the repair route (spec: releases; release-missing-components design D1, D2).
 
 The config and manifest are this checkout's own files, copied to a scratch root, so the tests read
-the real shapes; the tag refs are what `gh api .../git/matching-refs/tags --jq '.[].ref'` prints."""
+the real shapes; the tag refs are what `gh api .../git/matching-refs/tags --jq '.[].ref'` prints.
+
+Its tests that start a process, open a socket or use a git theatre are in
+integration/test_release_tags_integration.py."""
 
 import json
-import subprocess
-import sys
 from pathlib import Path
-from typing import Any
 
 import pytest
-from conftest import REPO, SCRIPTS
+from conftest import REPO
+from release_tags_shared import (
+    REPAIR,
+    UNCONFIGURED,
+    every_tag,
+    path_of,
+    read,
+    released_0_2_0,
+    write_root,
+)
 
 import release_tags
 from release_config import CONFIG, MANIFEST
-
-REPAIR = "contributing/releasing.md#repairing-a-missing-release"
-
-
-def read(name: str) -> dict[str, Any]:
-    loaded: dict[str, Any] = json.loads((REPO / name).read_text(encoding="utf-8"))
-    return loaded
-
-
-def write_root(
-    tmp_path: Path,
-    manifest: dict[str, str] | None = None,
-    config: dict[str, Any] | None = None,
-) -> Path:
-    (tmp_path / CONFIG).write_text(json.dumps(config or read(CONFIG)), encoding="utf-8")
-    (tmp_path / MANIFEST).write_text(json.dumps(manifest or read(MANIFEST)), encoding="utf-8")
-    return tmp_path
-
-
-def every_tag(manifest: dict[str, str], config: dict[str, Any]) -> list[str]:
-    packages = config["packages"]
-    return [
-        f"refs/tags/{packages[path]['component']}-v{version}"
-        for path, version in manifest.items()
-        if version != "0.0.0"
-    ]
-
-
-def path_of(directory: str) -> str:
-    """A configured path, found by its last segment. Neither the path nor the component's name is
-    written out: either would make this suite reach that package (scripts/check_paths_reach.py,
-    rule 4), since a component's name is also its console script's."""
-    paths: list[str] = list(read(CONFIG)["packages"])
-    [path] = [p for p in paths if p.rsplit("/", 1)[-1] == directory]
-    return path
-
-
-UNCONFIGURED = "unconfigured/member"
-"""A manifest path release-please-config.json doesn't configure."""
-
-
-def released_0_2_0() -> dict[str, str]:
-    """The manifest as #263's merge left it: troupe-runner-ollama at 0.1.0 and protocol at 0.2.0."""
-    manifest: dict[str, str] = read(MANIFEST)
-    manifest[path_of("runner-ollama")] = "0.1.0"
-    manifest[path_of("protocol")] = "0.2.0"
-    return manifest
 
 
 def test_every_version_tagged_passes(tmp_path: Path) -> None:
@@ -127,41 +89,6 @@ def test_a_version_that_isnt_x_y_z_is_an_error(tmp_path: Path, version: str) -> 
     root = write_root(tmp_path, manifest)
     with pytest.raises(release_tags.UnreadableError, match=rf"'protocol'.*{json.dumps(version)}"):
         release_tags.missing(root, every_tag(read(MANIFEST), read(CONFIG)))
-
-
-def run(root: Path, refs: list[str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [sys.executable, str(SCRIPTS / "release_tags.py"), "--root", str(root)],
-        input="".join(f"{ref}\n" for ref in refs),
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-
-def test_run_as_the_workflow_runs_it_exits_0_when_every_tag_exists(tmp_path: Path) -> None:
-    root = write_root(tmp_path)
-    result = run(root, every_tag(read(MANIFEST), read(CONFIG)))
-    assert (result.returncode, result.stderr) == (0, "")
-
-
-def test_run_as_the_workflow_runs_it_exits_1_naming_the_tags_and_the_repair(tmp_path: Path) -> None:
-    manifest = released_0_2_0()
-    root = write_root(tmp_path, manifest)
-    gone = ("troupe-runner-ollama-v0.1.0", "protocol-v0.2.0")
-    refs = [ref for ref in every_tag(manifest, read(CONFIG)) if not ref.endswith(gone)]
-    result = run(root, refs)
-    assert result.returncode == 1
-    assert "troupe-runner-ollama-v0.1.0" in result.stderr
-    assert "protocol-v0.2.0" in result.stderr
-    assert REPAIR in result.stderr
-
-
-def test_run_as_the_workflow_runs_it_exits_1_naming_an_unreadable_input(tmp_path: Path) -> None:
-    root = write_root(tmp_path, read(MANIFEST) | {UNCONFIGURED: "0.1.0"})
-    result = run(root, every_tag(read(MANIFEST), read(CONFIG)))
-    assert result.returncode == 1
-    assert UNCONFIGURED in result.stderr
 
 
 @pytest.mark.docs

@@ -1,12 +1,13 @@
 """troupe carries the schemas it was built with, and reads a plugin's published schemas from the
-installed plugin (spec: protocol, scripted-runner; config-model design D13, D17)."""
+installed plugin (spec: protocol, scripted-runner; config-model design D13, D17).
+
+Its tests that start a process, open a socket or use a git theatre are in
+integration/test_schemas_integration.py."""
 
 import importlib.util
 import io
 import json
 import shutil
-import subprocess
-import sys
 from contextlib import redirect_stderr
 from pathlib import Path
 from types import ModuleType
@@ -87,23 +88,6 @@ def test_every_protocol_schema_is_found_by_its_id_from_the_packages_copy() -> No
     for path in sorted(SCHEMAS.rglob("*.schema.json")):
         schema = json.loads(path.read_text(encoding="utf-8"))
         assert registry.contents(schema["$id"]) == schema
-
-
-# Requirement: A plugin's published schemas are installed with it
-
-
-def test_a_runners_options_schema_is_read_from_the_installed_runner_without_importing_it() -> None:
-    probe = (
-        "import sys\n"
-        "from troupe.core import interim\n"
-        "schema = interim.options_schema('scripted')\n"
-        "assert schema['$id'].endswith('/runner-scripted/options.schema.json'), schema['$id']\n"
-        "assert 'troupe_runner_scripted' not in sys.modules\n"
-    )
-    result = subprocess.run(
-        [sys.executable, "-c", probe], capture_output=True, text=True, check=False, timeout=60
-    )
-    assert result.returncode == 0, result.stderr
 
 
 def test_options_are_checked_against_the_runners_schema_and_the_contract_it_refers_to() -> None:

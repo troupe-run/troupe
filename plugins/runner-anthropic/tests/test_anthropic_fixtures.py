@@ -1,7 +1,11 @@
-"""The fixtures: each replays through the fake endpoint and the real runner to the events it
-expects, leaks no credential, says where it came from, and holds no secret (spec: anthropic-runner,
-"Fixtures pair service output with protocol events", "Fixtures hold no secrets", "Fixtures that need
-a working credential are captured by the owner"; design D12, D14)."""
+"""The fixtures, read from their files: every fixture the spec names is there, each says where it
+came from and which engine counted it, the named cases expect the outcome the spec gives them,
+and none holds a key, a request id, an account or a home directory (spec: anthropic-runner,
+"Fixtures pair service output with protocol events", "Fixtures hold no secrets", "Fixtures that
+need a working credential are captured by the owner"; design D12, D14).
+
+Its tests that start a process, open a socket or use a git theatre are in
+integration/test_anthropic_fixtures_integration.py."""
 
 import json
 import re
@@ -10,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from anthropic_fixture_replay import ECHO, NAMES, load, replay
-from anthropic_harness import CANARY, FIXTURES
+from anthropic_fixture_replay import NAMES, load
+from anthropic_harness import FIXTURES
 from troupe_runner_anthropic.context import ENGINES
 
 REQUIRED = {
@@ -63,19 +67,6 @@ def scan(directory: Path) -> list[str]:
 
 def test_every_required_fixture_is_there() -> None:
     assert set(NAMES) >= REQUIRED
-
-
-@pytest.mark.parametrize("name", NAMES)
-def test_each_fixture_replays_to_its_expected_events_and_writes_no_part_of_the_credential(
-    name: str, tmp_path: Path
-) -> None:
-    expected = load(name, "expected.json")
-    replayed = replay(name, tmp_path)
-    assert replayed.requests == expected["requests"]
-    assert replayed.events == expected["events"]
-    written = replayed.written
-    for secret in (CANARY, CANARY[:-1], CANARY[1:], ECHO):
-        assert secret.encode() not in written
 
 
 @pytest.mark.parametrize("name", NAMES)

@@ -8,8 +8,8 @@ import sys
 
 import pytest
 
+from mistralrs_before_ack_shared import METAL_FAILURE
 from stand_in import StandIn
-from test_mistralrs_before_ack import METAL_FAILURE
 from troupe_runner_mistralrs.runner import warm_up
 
 

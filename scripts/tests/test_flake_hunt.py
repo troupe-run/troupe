@@ -1,5 +1,7 @@
 """scripts/flake_hunt.py (spec: flake-hunt). Each test writes a few test files into a fresh root and
-runs the real script over them, so every report the hunt reads is one pytest actually wrote."""
+runs the real script over them, so every report the hunt reads is one pytest actually wrote.
+
+Its tests that stay in their own process are in unit/test_flake_hunt_unit.py."""
 
 import contextlib
 import json
@@ -117,7 +119,6 @@ def pids_in(directory: Path) -> list[int]:
 
 PASSING = {"test_one.py": "def test_passes():\n    pass\n"}
 
-
 # Requirement: The hunt refuses malformed options
 
 
@@ -144,30 +145,6 @@ def test_a_malformed_option_is_refused_naming_it_and_nothing_runs(
     assert completed.returncode == 2
     assert named in completed.stderr.decode()
     assert not out.exists()
-
-
-def test_workers_auto_is_three_quarters_of_the_usable_cpus_less_the_load_and_at_least_one(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    cases = (
-        (8, 0, 6),
-        (8, 2, 4),
-        (10, 0, 7),
-        (10, 2, 5),
-        (4, 0, 3),
-        (4, 3, 1),
-        (1, 0, 1),
-        (2, 1, 1),
-    )
-    for cpus, load, workers in cases:
-        monkeypatch.setattr(flake_hunt, "usable_cpus", lambda cpus=cpus: cpus)
-        chosen = flake_hunt.parse_options(
-            ["--root", str(tmp_path), "--workers", "auto", "--load", str(load)]
-        )
-        assert chosen.workers == workers, (cpus, load)
-    assert flake_hunt.parse_workers("5") == 5
-    with pytest.raises(Exception, match="--workers must be a whole number, 1 or more, or auto"):
-        flake_hunt.parse_workers("lots")
 
 
 # Requirement: The hunt repeats tests in overlapping rounds
@@ -226,34 +203,6 @@ def test_a_path_and_a_keyword_select_exactly_what_pytest_selects(tmp_path: Path)
     everything = run_hunt(root, tmp_path / "all")
     assert [each["tests"] for each in results(tmp_path / "all")] == [3]
     assert everything.returncode == 1
-
-
-def test_a_round_gets_the_hunts_environment_plus_only_its_hypothesis_directory(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # A hunt's own tests can run inside a hunt's round, which already has the variable set.
-    monkeypatch.delenv("HYPOTHESIS_STORAGE_DIRECTORY", raising=False)
-    options = flake_hunt.parse_options(["--root", str(tmp_path), "--out", str(tmp_path / "out")])
-    env = flake_hunt.round_environment(options, "w0r0")
-    assert {name: value for name, value in env.items() if name in os.environ} == dict(os.environ)
-    assert set(env) - set(os.environ) == {"HYPOTHESIS_STORAGE_DIRECTORY"}
-    assert env["HYPOTHESIS_STORAGE_DIRECTORY"] == str(tmp_path / "out" / "hypothesis" / "w0r0")
-
-
-def test_a_round_leaves_the_stall_limit_to_the_configuration_unless_the_hunt_is_given_one(
-    tmp_path: Path,
-) -> None:
-    # The limit is set once, in pyproject.toml (spec: quality-check; windows-ci-hang design D1).
-    base = ["--root", str(tmp_path), "--out", str(tmp_path / "out")]
-    report = tmp_path / "report.xml"
-
-    unset = flake_hunt.round_command(flake_hunt.parse_options(base), tmp_path, report)
-    given = flake_hunt.round_command(
-        flake_hunt.parse_options([*base, "--stall", "60"]), tmp_path, report
-    )
-
-    assert not any(part.startswith("faulthandler_timeout=") for part in unset)
-    assert given[given.index("faulthandler_timeout=60") - 1] == "-o"
 
 
 # Requirement: The hunt reports each failing test with its evidence
@@ -369,12 +318,6 @@ def test_a_round_that_collects_nothing_is_failed_not_passed(tmp_path: Path) -> N
     assert completed.returncode == 1
     [record] = results(out)
     assert (record["status"], record["exitCode"]) == ("crashed", 5)
-
-
-def test_output_that_isnt_utf_8_is_kept_as_bytes_and_shown_escaped(tmp_path: Path) -> None:
-    log = tmp_path / "w0r0.log"
-    log.write_bytes(b"before \xff\xfe after\n")
-    assert flake_hunt.tail(log) == "before \\xff\\xfe after\n"
 
 
 def test_a_clean_hunt_says_none_failed_and_exits_0(tmp_path: Path) -> None:

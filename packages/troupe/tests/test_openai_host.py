@@ -1,7 +1,9 @@
 """The OpenAI runner through troupe's own host, against a stand-in service serving the plugin's
 fixtures (spec: openai-runner, "Fixtures pair service output with protocol events", "A service's
 echo of the credential is masked"; runner-protocol; actor-runners; openai-style-runner design
-D13)."""
+D13).
+
+Its tests that stay in their own process are in unit/test_openai_host_unit.py."""
 
 import asyncio
 import uuid
@@ -94,17 +96,3 @@ def test_the_stored_transcript_of_a_rejected_key_reads_credential_where_the_serv
     assert outcome.transcript is not None
     stored = store.read(outcome.transcript).decode("utf-8")
     assert "Incorrect API key provided: [credential]." in stored
-
-
-def test_the_three_copies_of_the_test_limits_agree() -> None:
-    import importlib.util
-
-    import test_openai_live
-
-    harness = openai_stand_in.PLUGIN / "tests" / "openai_harness.py"
-    spec = importlib.util.spec_from_file_location("openai_harness_for_limits", harness)
-    assert spec is not None
-    assert spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    assert openai_stand_in.TEST_LIMITS == module.TEST_LIMITS == test_openai_live.TEST_LIMITS

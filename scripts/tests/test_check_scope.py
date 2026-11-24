@@ -1,7 +1,9 @@
 """check.py --scope runs every gate, narrows only the tests, and refuses what isn't declared
-(spec: quality-check; commit-check-paths design D8)."""
+(spec: quality-check; commit-check-paths design D8).
 
-import sys
+Its tests that start a process, open a socket or use a git theatre are in
+integration/test_check_scope_integration.py."""
+
 import tomllib
 from pathlib import Path
 
@@ -28,10 +30,6 @@ def declare(root: Path, text: str) -> Path:
     (root / "scripts").mkdir()
     (root / "scripts" / "check-paths.toml").write_text(text, encoding="utf-8")
     return root
-
-
-def exit_code(code: int) -> list[str]:
-    return [sys.executable, "-c", f"raise SystemExit({code})"]
 
 
 class Recorder:
@@ -154,40 +152,6 @@ def test_a_scoped_check_runs_every_gate_and_narrows_only_the_tests() -> None:
         if label != "tests":
             assert scoped[label] == full[label]
     assert scoped["tests"] == [*full["tests"], "-m", "docs"]
-
-
-def test_no_tests_ran_passes_a_scoped_check_and_says_nothing_was_tagged(
-    capfd: pytest.CaptureFixture[str],
-) -> None:
-    code = check.run_gates([("tests", exit_code(check.NO_TESTS_RAN))], Path.cwd(), ("docs",))
-    assert code == 0
-    output = capfd.readouterr().out
-    assert "no test is tagged `docs`, so there was nothing to test" in output
-    assert "check: all gates passed" in output
-
-
-def test_no_tests_ran_fails_the_full_check(capfd: pytest.CaptureFixture[str]) -> None:
-    code = check.run_gates([("tests", exit_code(check.NO_TESTS_RAN))], Path.cwd())
-    assert code == check.NO_TESTS_RAN
-    assert "check: tests failed (exit 5)" in capfd.readouterr().out
-
-
-@pytest.mark.parametrize("scopes", [(), ("docs",)], ids=["full", "scoped"])
-def test_a_failing_gate_stops_the_check_and_names_itself(
-    scopes: tuple[str, ...], capfd: pytest.CaptureFixture[str]
-) -> None:
-    steps = [("ruff lint", exit_code(1)), ("tests", exit_code(0))]
-    assert check.run_gates(steps, Path.cwd(), scopes) == 1
-    output = capfd.readouterr().out
-    assert "check: ruff lint failed (exit 1)" in output
-    assert "==> tests" not in output
-
-
-def test_a_scoped_check_still_fails_on_a_failing_test_gate(
-    capfd: pytest.CaptureFixture[str],
-) -> None:
-    assert check.run_gates([("tests", exit_code(1))], Path.cwd(), ("docs",)) == 1
-    assert "check: tests failed (exit 1)" in capfd.readouterr().out
 
 
 @pytest.mark.parametrize(

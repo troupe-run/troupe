@@ -1,17 +1,18 @@
 """troupe diff, accept and discard, and a worktree run's perform, on the command line (spec: cli,
-run-workspaces; worktree-stage design D6)."""
+run-workspaces; worktree-stage design D6).
 
-import io
+Its tests that stay in their own process are in unit/test_cli_changes_unit.py."""
+
 import json
 import subprocess
 from pathlib import Path
 
 import pytest
 
+from cli_runs_shared import cli, configure
 from client_schemas import check
 from gitrepo import AUTHOR, Repo
 from runtesting import ADA, ALLOW, INIT, OK, script, theatre
-from test_cli_runs import cli, configure
 from troupe.core.exit_codes import ExitCode
 
 WRITE = {"writeFile": {"path": "src/a.txt", "content": "two\n"}}
@@ -142,20 +143,6 @@ def test_rehearsing_a_worktree_perform_shows_the_base_and_makes_no_worktree(repo
     assert code == ExitCode.WOULD_CHANGE
     assert f"  workspace: its own worktree, made at {head}" in out
     assert not (repo.path / ".troupe" / "local" / "worktrees").exists()
-
-
-def test_writing_the_diff_to_a_byte_stream_adds_and_translates_nothing() -> None:
-    from troupe.cli.commands import _write_exactly
-
-    raw = io.BytesIO()
-
-    class Bytes(io.StringIO):
-        buffer = raw
-
-    stream = Bytes()
-    _write_exactly(b"line\r\nno newline at the end \xe9", stream)
-    assert raw.getvalue() == b"line\r\nno newline at the end \xe9"
-    assert stream.getvalue() == ""
 
 
 # Integration: perform, look, accept; perform again, discard (worktree-stage task 8.1)

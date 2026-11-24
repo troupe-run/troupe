@@ -1,14 +1,15 @@
-"""Several stores on one theatre, in one process or several (spec: event-store, "Notification IDs
-are local, dense and never renumbered" and "Followers' positions are local"; troupe-run/troupe#450).
-
-Each store keeps the local order and tracking logs in memory. These tests check that a store sees
+"""Several stores on one theatre, in one process (spec: event-store, "Notification IDs are local,
+dense and never renumbered" and "Followers' positions are local"; troupe-run/troupe#450). Each
+store keeps the local order and tracking logs in memory, and these tests check that a store sees
 what another store wrote to them before it relies on its own copy, so no notification id is
-appended twice and no follower's position goes backwards.
-"""
+appended twice and no follower's position goes backwards. They also check that an order, tracking
+or issued file that is repeated, conflicting, damaged, shortened or deleted is repaired, rebuilt
+under a new epoch, or refused.
+
+Its tests that start a process, open a socket or use a git theatre are in
+integration/test_shared_theatre_integration.py."""
 
 import shutil
-import subprocess
-import sys
 import tempfile
 import threading
 from collections.abc import Iterator
@@ -21,6 +22,7 @@ from hypothesis import HealthCheck, settings
 from hypothesis import strategies as st
 from hypothesis.stateful import RuleBasedStateMachine, invariant, rule
 
+from shared_theatre_shared import ordered
 from storetesting import event, fresh_store
 from troupe.core import defaults, strict_json
 from troupe.core.errors import TroupeError
@@ -29,18 +31,6 @@ from troupe.core.notices import Notice
 from troupe_store_text.local import OrderLog
 from troupe_store_text.recorders import TextApplicationRecorder
 from troupe_store_text.store import TextStore
-
-TESTS = str(Path(__file__).resolve().parents[2] / "troupe" / "tests")
-
-CHILD = """
-import sys
-from pathlib import Path
-from uuid import UUID
-sys.path.insert(0, {tests!r})
-from storetesting import event, fresh_store
-store = fresh_store(Path({theatre!r}))
-store.insert([event(UUID({stream!r}), {version})])
-"""
 
 
 def order_file(theatre: Path) -> Path:
@@ -73,10 +63,6 @@ def recorded(theatre: Path, count: int) -> tuple[str, list[str]]:
     return order.epoch, order.ids
 
 
-def ordered(store: TextStore) -> list[tuple[int, str]]:
-    return [(n, record.id) for n, record in store.notifications(1, 100_000, None, ())]
-
-
 def test_two_stores_taking_turns_in_one_process_give_each_event_one_notification_id(
     tmp_path: Path,
 ) -> None:
@@ -92,23 +78,6 @@ def test_two_stores_taking_turns_in_one_process_give_each_event_one_notification
     assert later.max_notification_id() == 3
     assert ordered(a) == ordered(b) == ordered(later)
     assert len(order_lines(tmp_path)) == 4  # the epoch, then one line per event
-
-
-def test_a_store_records_after_another_processes_events_without_reusing_their_ids(
-    tmp_path: Path,
-) -> None:
-    store = fresh_store(tmp_path)
-    stream = uuid4()
-    store.insert([event(stream, 1)])
-    for version in (2, 4):
-        child = CHILD.format(
-            tests=TESTS, theatre=str(tmp_path), stream=str(stream), version=version
-        )
-        subprocess.run([sys.executable, "-c", child], check=True, timeout=60)
-        store.insert([event(stream, version + 1)])
-    later = fresh_store(tmp_path)
-    assert later.max_notification_id() == 5
-    assert ordered(store) == ordered(later)
 
 
 def test_a_position_recorded_by_another_store_refuses_one_that_isnt_greater(

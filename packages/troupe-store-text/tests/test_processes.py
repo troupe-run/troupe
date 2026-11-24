@@ -1,5 +1,7 @@
 """The store across processes (spec: event-store, "Versions are unique within a stream" and
-"Writers wait for each other, bounded and announced"; design D10)."""
+"Writers wait for each other, bounded and announced"; design D10).
+
+Its tests that stay in their own process are in unit/test_processes_unit.py."""
 
 import statistics
 import subprocess
@@ -7,7 +9,6 @@ import sys
 import threading
 import time
 from collections.abc import Iterator
-from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -16,6 +17,7 @@ import pytest
 from eventsourcing.persistence import Notification
 
 from gitrepo import make_repo
+from processes_shared import Manual, listened, outcome, store_for
 from protocol_schemas import check_notice
 from storetesting import (
     BOUND,
@@ -95,37 +97,6 @@ def child(
     return subprocess.Popen(
         [sys.executable, "-c", code], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
     )
-
-
-def outcome(stdout: str) -> str:
-    """A child's outcome: its last line. Every earlier line must be a lock-wait announcement,
-    which the spec requires of a writer that waits ("Writers wait for each other, bounded and
-    announced")."""
-    *announcements, last = stdout.strip().splitlines()
-    for line in announcements:
-        assert line.startswith("waiting "), f"unexpected output before the outcome: {line!r}"
-    return last
-
-
-WINDOWS_LOSER = (
-    "waiting C:\\Users\\runneradmin\\AppData\\Local\\Temp\\pytest-of-runneradmin\\pytest-0\\"
-    "test_two_processes_racing_for_0\\.troupe\\local\\.lock\r\nintegrity-error\r\n"
-)
-"""A losing racer's real stdout from Windows CI (#43): it announced its wait, then its outcome."""
-
-
-def test_a_child_s_outcome_is_its_last_line_after_its_announcements() -> None:
-    assert outcome(WINDOWS_LOSER) == "integrity-error"
-    assert outcome("waiting a\nwaiting b\nrecorded\n") == "recorded"
-
-
-def test_a_child_s_outcome_without_announcements_is_its_only_line() -> None:
-    assert outcome("recorded\r\n") == "recorded"
-
-
-def test_an_unexpected_line_before_a_child_s_outcome_fails_naming_it() -> None:
-    with pytest.raises(AssertionError, match="Traceback"):
-        outcome("Traceback (most recent call last):\nrecorded\n")
 
 
 def test_two_processes_racing_for_one_version_give_exactly_one_integrity_error(
@@ -284,16 +255,6 @@ def writer(tmp_path: Path) -> Iterator[Writer]:
     process.close()
 
 
-@contextmanager
-def listened(store: TextStore) -> Iterator[threading.Event]:
-    heard = threading.Event()
-    store.listen(heard)
-    try:
-        yield heard
-    finally:
-        store.unlisten(heard)
-
-
 class Silent(watching._Backend):
     """A watch that is set up but never reports, as on a file system that doesn't deliver."""
 
@@ -317,10 +278,6 @@ def silent(directory: Path) -> DirectoryWatch:
 
 def refusing(directory: Path) -> DirectoryWatch:
     raise WatchUnavailableError(directory, "the platform refused (a test)")
-
-
-def store_for(theatre: Path, **options: object) -> TextStore:
-    return TextStore(theatre, load_vcs("files", theatre), **options)  # type: ignore[arg-type]
 
 
 def delays(store: TextStore, heard: threading.Event, writer: Writer) -> list[float]:
@@ -562,26 +519,6 @@ def test_a_watch_that_never_reports_is_caught_by_the_check_then_the_store_polls(
         assert statistics.median(e.delay for e in events) < 0.2 + STALL_SECONDS, events
 
 
-class Manual(watching._Backend):
-    """A watch that reports a change only when the test says so."""
-
-    def __init__(self) -> None:
-        self.reported = threading.Event()
-        self._stopped = False
-
-    def wait(self, timeout: float | None) -> bool:
-        changed = self.reported.wait(timeout)
-        self.reported.clear()
-        return changed and not self._stopped
-
-    def interrupt(self) -> None:
-        self._stopped = True
-        self.reported.set()
-
-    def release(self) -> None:
-        pass
-
-
 def test_a_watch_that_reports_an_event_just_after_a_check_found_it_isnt_counted_as_missing(
     tmp_path: Path, writer: Writer
 ) -> None:
@@ -602,23 +539,4 @@ def test_a_watch_that_reports_an_event_just_after_a_check_found_it_isnt_counted_
         assert heard.wait(5)  # the check found it before the watch reported it
         manual.reported.set()  # the notification arrives late, within the grace period
         time.sleep(1.5)
-        assert "events.subscription-polling" not in [n.code for n in store.notices()]
-
-
-def test_an_event_recorded_while_the_watch_is_being_set_up_reaches_the_listener_at_once(
-    tmp_path: Path,
-) -> None:
-    other = store_for(tmp_path)  # another session, as another process would be
-    other.insert([event(uuid4(), 1)])
-
-    def recording_first(directory: Path) -> DirectoryWatch:
-        other.insert([event(uuid4(), 1)])  # after the listener's read, before its watch
-        # A watch that never reports: some platforms also report a write made just before a
-        # watch starts, which would hide a store that doesn't look again once it is watching.
-        return DirectoryWatch(directory, Manual())
-
-    store = store_for(tmp_path, poll_seconds=60, check_seconds=60, watcher=recording_first)
-    with listened(store) as heard:
-        assert heard.wait(2)
-        assert store.max_notification_id() == 2
         assert "events.subscription-polling" not in [n.code for n in store.notices()]

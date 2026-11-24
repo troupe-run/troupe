@@ -9,8 +9,8 @@ from uuid import UUID, uuid4
 import pytest
 
 from protocol_schemas import PROTOCOL_BASE, validator_for
+from runtesting import STAGE, outcome
 from storetesting import files_service
-from test_run_aggregate import STAGE, outcome
 from troupe.core.errors import TroupeError
 from troupe.core.events import EventStore
 from troupe.core.runs.aggregate import Run

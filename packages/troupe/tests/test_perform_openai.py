@@ -11,11 +11,11 @@ from typing import Any
 import pytest
 
 import openai_stand_in
+from cli_runs_shared import cli
 from gitrepo import Repo
+from perform_runtime_shared import _harness, _runner_commands
+from perform_shared import FAKE_SECRET
 from runtesting import ADA, ALLOW, request, theatre
-from test_cli_runs import cli
-from test_perform import FAKE_SECRET
-from test_perform_runtime import _harness, _runner_commands
 from troupe.core.exit_codes import ExitCode
 
 KEY = "sk-test/canary-0123456789abcdef"

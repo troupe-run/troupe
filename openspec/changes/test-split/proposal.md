@@ -33,7 +33,8 @@ take 187 s summed; the other 2,140 take 1,589 s.
   `-m unit` and `-m "not integration"` select the unit tests alone. No time limit applies to unit tests, and an
   integration test that started nothing isn't failed.
 - References to moved tests follow them: the flake campaign's selection, `quality-gates.toml`'s per-file size limits,
-  `scripts/mutation.json`'s deselected test ids, the contributor docs, and pytest's and mypy's paths.
+  the contributor docs, and pytest's and mypy's paths. `scripts/mutation.json`'s deselected test ids change in
+  infrastructure, which delivers that file.
 - The unit set's time on its own is measured before and after, locally and in CI, for troupe-run/infrastructure#394.
 
 ## Capabilities
@@ -57,10 +58,10 @@ None.
 - `pyproject.toml`: pytest's `pythonpath` gains each suite's `tests/` (helpers stay there while tests move a level
   down) and `-p kinds_pytest`; mypy's paths are unchanged (they name directories).
 - New `scripts/kinds_pytest.py` (troupe's own, beside the delivered `guard_pytest.py`) and its tests.
-- `scripts/flake_campaign.py`, `quality-gates.toml`, `scripts/mutation.json`, `contributing/` docs.
+- `scripts/flake_campaign.py`, `quality-gates.toml`, `contributing/` docs. The delivered `scripts/mutation.json`'s
+  three deselected ids move in an infrastructure pull request merged first, naming old and new ids.
 - Comments in files infrastructure delivers (`claude-review.yml`, `dependabot-dispatch.yml`, `guard.py`) name
-  `scripts/tests/test_*.py` paths that move; they're updated in infrastructure by a follow-up issue, since delivered
-  files can't be changed here.
+  `scripts/tests/test_*.py` files, but those are infrastructure's own tests, not troupe's, so nothing here moves them.
 - Open pull request #505 (config-mv) touches 11 test files and will need a rebase; git's rename detection carries
   its edits to the moved files.
 - troupe-run/infrastructure#394 then points mutation at the `unit` directories or `-m unit`.

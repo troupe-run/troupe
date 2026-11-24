@@ -13,6 +13,7 @@ import sys
 import threading
 import uuid
 from collections.abc import Mapping
+from dataclasses import dataclass, field
 from functools import cache
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,8 @@ from urllib.parse import urljoin
 import jsonschema
 from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT202012
+
+from troupe_plugin_sdk import runner as p
 
 SCHEMAS = Path(__file__).resolve().parents[3] / "protocol" / "schemas"
 RUNNER_SCHEMAS = Path(__file__).resolve().parents[1] / "src" / "troupe_runner_ollama" / "schemas"
@@ -283,3 +286,48 @@ def runtime(
 ) -> dict[str, Any]:
     """run/start's ``runtime``, as troupe sends it: the service a run talks to."""
     return {"name": name, "endpoint": endpoint, "model": model, "credential": credential}
+
+
+@dataclass
+class Recorder:
+    """A sink that keeps what it's sent, in order."""
+
+    sent: list[p.RunEvent | tuple[p.TranscriptKind, bytes]] = field(default_factory=list)
+    """Each event, and each transcript record as its kind and bytes, in the order sent."""
+    stop: threading.Event = field(default_factory=threading.Event)
+    waits: list[float] = field(default_factory=list)
+
+    def event(self, event: p.RunEvent) -> None:
+        self.sent.append(event)
+
+    def transcript(self, kind: p.TranscriptKind, record: bytes) -> None:
+        self.sent.append((kind, record))
+
+    def stopping(self) -> bool:
+        return self.stop.is_set()
+
+    def wait(self, seconds: float) -> bool:
+        self.waits.append(seconds)
+        return self.stop.is_set()
+
+    @property
+    def events(self) -> list[p.RunEvent]:
+        return [item for item in self.sent if isinstance(item, p.RunEvent)]
+
+    @property
+    def records(self) -> list[bytes]:
+        return [item[1] for item in self.sent if isinstance(item, tuple)]
+
+    @property
+    def kinds(self) -> list[p.TranscriptKind]:
+        """Each transcript record's kind, in the order sent."""
+        return [item[0] for item in self.sent if isinstance(item, tuple)]
+
+    def of(self, kind: type[p.RunEvent]) -> list[Any]:
+        return [event for event in self.events if isinstance(event, kind)]
+
+    @property
+    def result(self) -> p.ResultEvent:
+        (result,) = self.of(p.ResultEvent)
+        assert isinstance(result, p.ResultEvent)
+        return result

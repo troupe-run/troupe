@@ -1,7 +1,8 @@
-"""Task 7.1: running the check turns the git hooks on by default."""
+"""Task 7.1: running the check turns the git hooks on by default.
+
+Its tests that stay in their own process are in unit/test_check_activation_unit.py."""
 
 from collections.abc import Callable
-from pathlib import Path
 
 from conftest import Repo, git
 
@@ -28,7 +29,3 @@ def test_a_second_run_changes_nothing_and_says_nothing(make_repo: Callable[[], R
     check.activate_git_hooks(repo.path)
     assert check.activate_git_hooks(repo.path) is None
     assert hooks_path(repo) == ".githooks"
-
-
-def test_a_directory_that_isn_t_a_git_checkout_is_left_alone(tmp_path: Path) -> None:
-    assert check.activate_git_hooks(tmp_path) is None

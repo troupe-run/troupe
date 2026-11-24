@@ -11,8 +11,8 @@ import jsonschema
 import pytest
 
 import ollama_stand_in
+from perform_shared import configured, nothing_written
 from runtesting import Harness, request, theatre
-from test_perform import configured, nothing_written
 from troupe.core import interim
 from troupe.core.errors import TroupeError
 from troupe.core.runs.aggregate import REPORTED, STARTED

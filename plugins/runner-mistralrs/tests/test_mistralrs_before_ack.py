@@ -17,6 +17,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
+from mistralrs_before_ack_shared import METAL_FAILURE
 from mistralrs_harness import (
     CHECK_MODEL,
     OWN,
@@ -33,12 +34,6 @@ from troupe_runner_mistralrs.options import OptionsError, parse_options
 from troupe_runner_mistralrs.port import LoadSpec
 from troupe_runner_mistralrs.requirements import load
 from troupe_runner_mistralrs.runner import Runner
-
-METAL_FAILURE = (
-    "Metal error Error while loading library: Error while loading library: program_source:318:14: "
-    "error: constructor for 'BlockMMA<float, float, 32, 32, 16, 2, 2, false, false, 20, 36>' must "
-    "explicitly initialize the member 'Asimd' which does not have a default constructor"
-)
 
 
 @pytest.fixture

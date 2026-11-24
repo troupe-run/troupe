@@ -1,5 +1,7 @@
 """diff, accept and discard: what a person does with a worktree run's changes (spec:
-run-workspaces; worktree-stage design D6; account-for-every-worktree design D5, D6)."""
+run-workspaces; worktree-stage design D6; account-for-every-worktree design D5, D6).
+
+Its tests that stay in their own process are in unit/test_run_changes_unit.py."""
 
 import asyncio
 import base64
@@ -13,11 +15,12 @@ from uuid import UUID
 import pytest
 
 from gitrepo import Repo
+from run_changes_shared import call_discard
+from run_workspaces_shared import Recording, configured, write
 from runtesting import ADA, ALLOW, INIT, OK, Harness, committed, request, script, theatre
-from test_run_workspaces import Recording, configured, write
 from troupe.core.client import messages as m
 from troupe.core.errors import TroupeError
-from troupe.core.runs.changes import accept, diff, discard
+from troupe.core.runs.changes import accept, diff
 from troupe.core.workspaces import worktree_path
 
 CHILD = Path(__file__).with_name("settle_child.py")
@@ -33,17 +36,6 @@ def call_accept(made: Harness, run: str, **fields: Any) -> m.AcceptResult:  # no
     return asyncio.run(
         accept(
             m.AcceptRequest.from_data({"run": run, **fields}),
-            made.session(),
-            made.send,
-            backends=made.backends(),
-        )
-    )
-
-
-def call_discard(made: Harness, run: str, **fields: Any) -> m.DiscardResult:  # noqa: ANN401
-    return asyncio.run(
-        discard(
-            m.DiscardRequest.from_data({"run": run, **fields}),
             made.session(),
             made.send,
             backends=made.backends(),
@@ -207,7 +199,7 @@ def test_accepting_a_run_that_changed_nothing_is_refused_as_no_changes(repo: Rep
 
 
 def test_accepting_uncaptured_changes_is_refused_naming_the_worktree(repo: Repo) -> None:
-    from test_run_workspaces import _replacing, _vcs_failed
+    from run_workspaces_shared import _replacing, _vcs_failed
 
     made = Harness(repo, store_wrapper=_replacing("capture", _vcs_failed))
     run = made.perform(configured(made, INIT, write("a.txt", "a\n"), OK)).run
@@ -267,7 +259,7 @@ def test_discarding_an_interrupted_run_removes_its_worktree_and_records_the_disc
     run = made.perform(configured(made, INIT, write("a.txt", "a\n"), OK)).run
     store = made.stores[-1]
     # Take the end away, as if perform had been killed before recording it: its lease is free.
-    from test_run_workspaces import history
+    from run_workspaces_shared import history
 
     started = history(made, run.run_id)[0]
     from troupe.core.runs.aggregate import Run
@@ -294,7 +286,7 @@ def test_discarding_an_interrupted_run_removes_its_worktree_and_records_the_disc
 
 
 def test_discarding_a_run_that_couldnt_start_removes_the_worktree_it_left(repo: Repo) -> None:
-    from test_run_workspaces import _replacing, _vcs_failed
+    from run_workspaces_shared import _replacing, _vcs_failed
 
     made = Harness(repo, store_wrapper=_replacing("shared_state", _vcs_failed))
     asked = configured(made, INIT, OK)
@@ -376,7 +368,7 @@ def test_two_accepts_at_once_apply_the_diff_once_and_refuse_the_other(repo: Repo
 def test_a_worktree_that_cant_be_removed_after_an_accept_is_a_notice_and_the_accept_stands(
     repo: Repo,
 ) -> None:
-    from test_run_workspaces import _replacing
+    from run_workspaces_shared import _replacing
 
     def cannot(*_: object) -> None:
         raise TroupeError(
@@ -425,22 +417,3 @@ def test_an_accept_request_that_names_a_diff_is_refused_naming_the_field(repo: R
         asyncio.run(call("accept", {"run": "0f8fad5b", "diff": "x"}, made.session()))
     assert caught.value.code == "client.invalid-request"
     assert "'diff'" in caught.value.problem
-
-
-def test_a_summary_in_the_theatre_with_changes_doesnt_validate() -> None:
-    from client_schemas import is_valid
-    from test_client_messages import ENDED_SUMMARY
-
-    summary = {**ENDED_SUMMARY, "changes": {"state": "none", "worktree": ".troupe/local/w"}}
-    assert not is_valid({"run": summary}, "perform-result.schema.json")
-    with pytest.raises(ValueError, match="changes are present exactly when"):
-        m.RunSummary.from_data(summary)
-
-
-def test_pending_changes_without_a_diff_dont_validate() -> None:
-    from client_schemas import is_valid
-
-    changes = {"state": "pending", "worktree": ".troupe/local/w"}
-    assert not is_valid(changes, "run.schema.json#/$defs/changes")
-    with pytest.raises(ValueError, match="pending changes have a diff"):
-        m.ChangesData.from_data(changes)

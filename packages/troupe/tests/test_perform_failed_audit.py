@@ -10,10 +10,10 @@ from typing import Any
 
 import pytest
 
+from perform_failed_audit_shared import RemovesThenCancels
 from runtesting import INIT, OK, Harness, request, script, theatre
 from troupe.core.errors import TroupeError
 from troupe.core.runners.limits import RunLimits
-from troupe_plugin_sdk.messages import Message
 from troupe_vcs_git import GitAdapter
 
 ERROR = {
@@ -57,20 +57,6 @@ def test_a_timed_out_run_keeps_its_error_and_records_the_change_outside(tmp_path
     assert run["outcome"] == "timed-out"
     assert run["error"]["code"] == "run.timeout"
     assert run["audit"] == {"outside": [{"path": "notes.md", "change": "added", "needs": "write"}]}
-
-
-class RemovesThenCancels(Harness):
-    """A person who removes README.md from the theatre once the run's first event arrives, then
-    cancels the run."""
-
-    done: bool = False
-
-    def send(self, update: Message) -> None:
-        super().send(update)
-        if not self.done and update.to_data().get("kind") == "event":
-            (self.repo.path / "README.md").unlink()
-            self.cancel.request()
-            self.done = True
 
 
 def test_a_cancelled_run_keeps_no_error_and_records_the_removal_outside(tmp_path: Path) -> None:

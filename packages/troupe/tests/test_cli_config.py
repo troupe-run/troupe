@@ -1,5 +1,7 @@
 """troupe config set, config unset, config get and sync on the command line (spec: cli, config;
-config-model design D10)."""
+config-model design D10).
+
+Its tests that stay in their own process are in unit/test_cli_config_unit.py."""
 
 import io
 import json
@@ -368,27 +370,11 @@ def test_an_assignment_without_a_value_is_refused_saying_how_to_write_one(repo: 
     assert "troupe config unset <path>" in err
 
 
-# The config group on the command line
-
-
-def test_config_alone_needs_one_of_its_commands() -> None:
-    with pytest.raises(TroupeError) as caught:
-        parse(["config"], COMMANDS)
-    assert caught.value.code == "usage.missing-argument"
-    assert "set, unset, mv, get, drop or keep" in caught.value.problem
-
-
 def test_a_misspelt_config_command_suggests_the_closest(repo: Repo) -> None:
     with pytest.raises(TroupeError) as caught:
         parse(["config", "sett", "x=1"], COMMANDS)
     assert caught.value.code == "usage.unknown-command"
     assert caught.value.fix == "Did you mean `troupe config set`?"
-
-
-def test_a_config_commands_unknown_flag_is_refused_naming_it() -> None:
-    with pytest.raises(TroupeError) as caught:
-        parse(["config", "get", "--force"], COMMANDS)
-    assert caught.value.code == "usage.unknown-flag"
 
 
 # Requirement: Every command that changes anything can be rehearsed

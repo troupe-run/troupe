@@ -1,13 +1,13 @@
 """Tests for the cli spec. Every command line goes through run_cli, which checks that the exit code
-it returns is one of the documented codes ("Every returned code is documented")."""
+it returns is one of the documented codes ("Every returned code is documented").
+
+Its tests that start a process, open a socket or use a git theatre are in
+integration/test_cli_integration.py."""
 
 import argparse
 import io
-import shutil
-import subprocess
 import sys
 from collections.abc import Callable, Sequence
-from importlib.metadata import version
 from pathlib import Path
 from typing import Any, TextIO
 
@@ -16,6 +16,7 @@ import pytest
 from hypothesis import assume, example, given, settings
 from hypothesis import strategies as st
 
+from cli_shared import VERSION_LINE
 from protocol_schemas import check_error
 from troupe.cli import COMMANDS, main
 from troupe.cli.parser import HELP_FIX, Command, _Declared, _declared, parse
@@ -127,26 +128,6 @@ def usage_error(*argv: str, commands: tuple[Command, ...] = TEST_COMMANDS) -> Tr
     with pytest.raises(TroupeError) as caught:
         parse(list(argv), commands)
     return caught.value
-
-
-# Requirement: Version reporting
-
-VERSION_LINE = f"troupe {version('troupe')} (protocol {schemas.protocol_version()})\n"
-
-
-def test_version_flag_prints_the_installed_version_from_a_directory_with_no_theatre(
-    tmp_path: Path,
-) -> None:
-    executable = shutil.which("troupe", path=str(Path(sys.executable).parent))
-    assert executable is not None, "the troupe console script is not installed in this environment"
-    result = subprocess.run(
-        [executable, "--version"], cwd=tmp_path, capture_output=True, text=True, check=False
-    )
-    assert not (tmp_path / ".troupe").exists()
-    assert result.returncode == ExitCode.OK
-    assert version("troupe") in result.stdout
-    assert result.stdout == VERSION_LINE
-    assert result.stderr == ""
 
 
 def test_version_flag_names_the_protocol_version_troupe_carries_after_its_own() -> None:

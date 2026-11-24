@@ -16,6 +16,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from client_messages_shared import ENDED_SUMMARY
 from client_schemas import check, is_valid
 from troupe.core.client import messages as m
 from troupe.core.events.lineage import timestamp
@@ -155,7 +156,6 @@ AUDITS = st.fixed_dictionaries(
 OUTCOMES = st.sampled_from(
     ["succeeded", "failed", "cancelled", "timed-out", "crashed", "could-not-start"]
 )
-
 
 RECORDINGS = st.fixed_dictionaries({"failedAt": st.integers(0, 99), "error": ERRORS}) | (
     st.fixed_dictionaries(
@@ -308,7 +308,6 @@ CASES: list[tuple[object, str, st.SearchStrategy[Any]]] = [
         ),
     ),
 ]
-
 
 # Config's messages (config-model design D10).
 
@@ -673,43 +672,6 @@ def test_an_unknown_notice_code_is_refused_when_turned_into_a_notice() -> None:
     data = m.NoticeData.from_data({"code": "run.made-up", "problem": "p", "fix": "f"})
     with pytest.raises(ProtocolError, match=r"run\.made-up"):
         data.to_notice()
-
-
-# A run summary carries what its state knows (spec: client-protocol; omit-nulls design D3).
-
-ENDED_SUMMARY: dict[str, Any] = {
-    "runId": "0f8fad5b-d9cb-469f-a165-70867728950e",
-    "actor": "tester",
-    "startedBy": {"kind": "unknown"},
-    "runner": {"requested": "scripted", "reported": {"name": "scripted", "version": "0"}},
-    "stage": {"name": "docker", "effects": "enforced"},
-    "effectCheck": {"kind": "none"},
-    "workspace": {"kind": "theatre"},
-    "state": "ended",
-    "outcome": "failed",
-    "error": {
-        "code": "run.error-result",
-        "problem": "p",
-        "fix": "f",
-        "details": {"reason": "other", "message": "m"},
-    },
-    "events": 1,
-    "startedAt": "2026-10-13T00:00:00.000Z",
-    "endedAt": "2026-10-13T00:00:01.000Z",
-    "transcript": "sha256:" + "a" * 64,
-    "transcriptFormat": "native",
-    "stderr": "sha256:" + "b" * 64,
-    "audit": {"outside": []},
-    "recording": {
-        "failedAt": 0,
-        "error": {
-            "code": "run.error-result",
-            "problem": "p",
-            "fix": "f",
-            "details": {"reason": "other", "message": "m"},
-        },
-    },
-}
 
 
 @pytest.mark.parametrize(

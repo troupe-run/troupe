@@ -3,50 +3,36 @@ design D2 to D8).
 
 Each test performs real runs with the scripted runner, then reads the run's stream back: which
 notices it recorded, where among its events, with whose lineage, and what status and logs show.
-"""
 
-import asyncio
+Its tests that stay in their own process are in unit/test_run_notices_unit.py."""
+
 import contextlib
 import importlib
 import json
-import threading
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import pytest
 
 from client_schemas import check
-from configtesting import TESTER
+from perform_shared import configured
+from run_notices_shared import interrupted_with_a_notice
+from run_queries_shared import Child
 from runtesting import INIT, OK, Harness, committed, request, script, theatre
-from storetesting import files_service, git_service
-from test_perform import configured
-from test_run_aggregate import STAGE, outcome
-from test_run_queries import Child
+from storetesting import git_service
 from troupe.core.client import messages as m
-from troupe.core.config.changes import change
-from troupe.core.config.stream import read as read_config
-from troupe.core.config.stream import record as record_config
 from troupe.core.errors import TroupeError
-from troupe.core.identity import Identity
 from troupe.core.masking import MARKER
 from troupe.core.notices import Notice
 from troupe.core.runners.limits import RunLimits
 from troupe.core.runs.aggregate import (
-    ENDED,
     NOTICED,
     REPORTED,
-    STARTED,
-    Run,
 )
-from troupe.core.runs.perform import lease_dir
 from troupe.core.workspaces import Announce
-from troupe_plugin_sdk import runner as p
-from troupe_plugin_sdk.messages import Message
 
-# troupe.core.runs re-exports perform the function, so the modules are reached by name.
-perform_module = importlib.import_module("troupe.core.runs.perform")
 host_module = importlib.import_module("troupe.core.runners.host")
 workspaces_module = importlib.import_module("troupe.core.workspaces")
 
@@ -347,159 +333,6 @@ def test_a_notice_holding_the_credential_is_recorded_and_sent_masked(
     for notice in (noticed["notice"], sent):
         assert notice["problem"].endswith(f"The key was {MARKER}.")
         assert KEY not in json.dumps(notice)
-
-
-# Design D3: one writer records the run's events and notices, in the order they arrive
-
-
-def new_recorder(store: Any, run_id: str, send: Any) -> Any:  # noqa: ANN401
-    """perform's recorder for a run in the theatre, outside perform: called on the event loop."""
-    person = store.command(via="cli")
-    agent = person.acting_as(Identity(kind="agent", id="tester", source="troupe"), via="runner")
-    # A real config version: a run's start requires its config heads to be here
-    # (abandoned-edits design D4).
-    merged = read_config(store)
-    if not merged.heads:
-        record_config(person, merged, change(merged.config, [(("actors", "tester"), TESTER)]), [])
-        merged = read_config(store)
-    what = perform_module._What(
-        actor="tester",
-        runner="scripted",
-        options={},
-        effect_check=m.NoEffectCheck(),
-        character=None,
-        config=tuple(merged.heads),
-        workspace="theatre",
-    )
-    return perform_module._Recorder(
-        run_id,
-        what,
-        store,
-        person,
-        agent,
-        STAGE,
-        "sha256:" + "a" * 64,
-        send,
-        asyncio.Event(),
-        perform_module.ContextFull("fail", "default"),
-    )
-
-
-def test_notices_from_a_thread_and_the_loop_are_each_recorded_once_in_arrival_order(
-    tmp_path: Path,
-) -> None:
-    """The recorder takes notices from the event loop and from other threads (a workspace
-    operation's timer) while it records run events, and loses none, records none twice, keeps the
-    order each reached the loop, records them all before the end, and sends each run event's
-    update only once it is recorded."""
-    store = files_service(tmp_path)
-    run_id = str(uuid4())
-    sent: list[Message] = []
-    order: list[str] = []
-    lock = threading.Lock()
-
-    def send(update: Message) -> None:
-        with lock:
-            sent.append(update)
-
-    def silent(label: str) -> Notice:
-        return Notice("run.silent", problem=label, fix="Wait.", details={"seconds": 1.0})
-
-    async def scenario() -> None:
-        recorder = new_recorder(store, run_id, send)
-        recorder.notice(silent("before the start"))
-        order.append("before the start")
-        await recorder.start({"kind": "theatre"})
-        threads = []
-        for seq in range(6):
-            event = p.LogEvent(run_id=run_id, seq=seq, level="info", message=str(seq))
-            await recorder.on_event(event)
-            assert isinstance(sent[-1], m.LoggedEvent)
-            assert sent[-1].seq == seq
-            label = f"loop after {seq}"
-            recorder.notice(silent(label))
-            order.append(label)
-            thread = threading.Thread(target=recorder.notice, args=(silent(f"thread {seq}"),))
-            thread.start()
-            threads.append(thread)
-        for thread in threads:
-            thread.join()
-        await asyncio.sleep(0)  # let call_soon_threadsafe deliver the threads' notices
-        await recorder.end(outcome("succeeded"), None)
-
-    asyncio.run(scenario())
-    stream = list(store.history(UUID(run_id)))
-    assert stream[-1].topic == ENDED
-    recorded = [json.loads(r.state)["notice"]["problem"] for r in stream if r.topic == NOTICED]
-    threaded = [f"thread {seq}" for seq in range(6)]
-    assert sorted(recorded) == sorted([*order, *threaded])  # each once, none lost
-    assert [label for label in recorded if not label.startswith("thread")] == order
-    assert recorded[0] == "before the start"
-    assert stream[1].topic == NOTICED  # straight after the start
-    reported = [json.loads(r.state)["seq"] for r in stream if r.topic == REPORTED]
-    assert reported == list(range(6))
-
-
-def test_a_run_events_waiter_cancelled_before_it_is_recorded_leaves_the_writer_recording(
-    tmp_path: Path,
-) -> None:
-    """A run event whose caller stops waiting (as the run host's start timeout cancels it) is
-    still recorded, and the writer goes on to record the notices after it and the end."""
-    store = files_service(tmp_path)
-    run_id = str(uuid4())
-
-    async def scenario() -> None:
-        recorder = new_recorder(store, run_id, lambda update: None)
-        await recorder.start({"kind": "theatre"})
-        event = p.LogEvent(run_id=run_id, seq=0, level="info", message="0")
-        waiting = asyncio.create_task(recorder.on_event(event))
-        await asyncio.sleep(0)  # the event is queued, and its caller waits for it
-        waiting.cancel()
-        recorder.notice(
-            Notice("run.silent", problem="after", fix="Wait.", details={"seconds": 1.0})
-        )
-        await recorder.end(outcome("succeeded"), None)
-        assert recorder.failure is None
-
-    asyncio.run(scenario())
-    topics = [record.topic for record in store.history(UUID(run_id))]
-    assert topics == [STARTED, REPORTED, NOTICED, ENDED]
-
-
-# Requirement: Status reads runs from a projection (a run's recorded notices)
-
-SILENT = {
-    "code": "run.silent",
-    "problem": "The run has sent no event for 30s.",
-    "fix": "Wait, or cancel the run if it seems stuck.",
-    "details": {"seconds": 30.0},
-}
-
-
-def interrupted_with_a_notice(harness: Harness) -> str:
-    """A run whose start, init and a run.silent notice are recorded, with no end, and whose lease
-    in this clone nobody holds: its perform was killed after it fell silent."""
-    store = git_service(harness.repo)
-    run_id = str(uuid4())
-    run = Run(
-        run_id=run_id,
-        actor="tester",
-        runner_requested="scripted",
-        stage=STAGE,
-        effect_check={"kind": "none"},
-        direction="sha256:" + "a" * 64,
-        config=["sha256:" + "b" * 64],
-        workspace={"kind": "theatre"},
-        on_context_full={"value": "fail", "source": "default"},
-    )
-    person = store.command(via="cli")
-    person.record(run.collect_events())
-    run.report(0, {**INIT["event"], "effects": "checked", "runId": run_id, "seq": 0})
-    store.command(via="runner").record(run.collect_events())
-    run.notice(SILENT)
-    person.record(run.collect_events())
-    lease_dir(harness.repo.path, run_id).mkdir(parents=True)
-    return run_id
 
 
 def test_status_of_a_run_that_raised_notices_holds_them_in_order_with_their_times(

@@ -18,6 +18,7 @@ from typing import Any
 
 import pytest
 
+from openai_live_shared import TEST_LIMITS
 from runner_schemas import validate
 from troupe.core.artifacts import MemoryArtifactStore
 from troupe.core.audition import OPENAI_AUDITION_MODEL
@@ -33,8 +34,6 @@ ENDPOINT = "TROUPE_LIVE_OPENAI_ENDPOINT"
 MODEL = "TROUPE_LIVE_OPENAI_MODEL"
 KEY = "OPENAI_API_KEY"
 OPENAI = "https://api.openai.com/v1"
-TEST_LIMITS = {"maxTurns": 5, "maxTotalTokens": 20_000}
-"""The plugin's test limits (openai-style-runner design D7): a few cents on a real service."""
 DIRECTION = (
     "Use the Write tool to create out/hello.txt containing exactly: hello\n"
     "Then use the Read tool to read it back, and reply with what it holds."
