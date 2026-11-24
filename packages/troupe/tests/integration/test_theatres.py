@@ -433,3 +433,20 @@ def test_across_workers_each_worker_that_made_a_repository_writes_its_own_counts
     assert 1 <= len(written) <= 2
     assert sum(counts["copies"] for counts in written) == 2
     assert all(counts["templates"] == 1 for counts in written)
+
+
+def test_every_repository_handed_out_raises_the_theatre_event_copied_or_fresh(
+    tmp_path: Path,
+) -> None:
+    # The kinds plugin counts a test with a theatre as integration by this event, since a copy runs
+    # git only when it's the first of its shape in the process.
+    seen: list[str] = []
+
+    def hook(event: str, args: tuple[object, ...]) -> None:
+        if event == gitrepo.THEATRE_EVENT:
+            seen.append(str(args[0]))
+
+    sys.addaudithook(hook)  # can't be removed; it only appends to this test's list
+    make_repo(tmp_path, "copied")
+    make_repo(tmp_path, "built", fresh=True)
+    assert seen[-2:] == [str(tmp_path / "copied"), str(tmp_path / "built")]

@@ -130,12 +130,14 @@ def test_no_handler_thread_outlives_an_error_reply_to_a_pooled_client() -> None:
     # A kept-alive connection held a handler thread open past its test, and another suite in the
     # same worker waits for every thread named process_request_thread to end (the Claude Code
     # runner's capture tests): the fake closes each connection after its reply.
+    # Only this fake's threads: another test in the same worker may have left its own running.
+    earlier = set(_handlers())
     client = anthropic.Anthropic(base_url="http://127.0.0.1:1", api_key="x", max_retries=0)
     with FakeEndpoint([error_reply(429, "slow down", "rate_limit_error")]) as fake:
         client = client.with_options(base_url=fake.endpoint)
         with pytest.raises(anthropic.RateLimitError):
             client.messages.create(**PARAMS, stream=True)
         deadline = time.monotonic() + 5
-        while _handlers() and time.monotonic() < deadline:
+        while set(_handlers()) - earlier and time.monotonic() < deadline:
             time.sleep(0.01)
-        assert _handlers() == []
+        assert set(_handlers()) - earlier == set()

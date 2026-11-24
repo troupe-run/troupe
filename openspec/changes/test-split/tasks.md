@@ -33,14 +33,14 @@
 
 ## 5. The detector
 
-- [ ] 5.1 Add `scripts/kinds_pytest.py`: the `OUTSIDE` registry (a process; a socket, excusing `socket.socketpair`),
+- [x] 5.1 Add `scripts/kinds_pytest.py`: the `OUTSIDE` registry (a process; a socket, excusing `socket.socketpair`),
   the audit hook recording per test and per fixture, tagging from the directory before `-m`, and the refusals (neither
   directory, hand-written kind, a test module importing another) as failing tests (D3a, D4, D5). Verify: tests in
   5.2 and 5.3.
-- [ ] 5.2 Unit tests of its pure parts: a path's kind for each suite shape (`packages/x/tests/unit`,
+- [x] 5.2 Unit tests of its pure parts: a path's kind for each suite shape (`packages/x/tests/unit`,
   `scripts/tests/workspace/integration`, a file in neither), and an audit event's kind for each registry entry.
   Verify: they pass under `tests/unit/`.
-- [ ] 5.3 Integration tests running pytest in a child process: for every kind in `OUTSIDE` (parametrised by the
+- [x] 5.3 Integration tests running pytest in a child process: for every kind in `OUTSIDE` (parametrised by the
   registry, failing for a kind with no example) a unit test using it fails naming the kind and the same test under
   `tests/integration/` passes; a process started by a session fixture an earlier test set up fails the later unit
   test; a socket pair passes; a file in neither directory fails naming both directories, and is selected by `-m unit`;
@@ -48,21 +48,21 @@
   fails naming both; a unit test starting git through a helper fails; `-m unit` and `-m "not integration"` select the same tests; the run ends with each
   kind's count and summed time; the same results under `-n 2`. Verify: they pass, and each fails when its check is
   removed from the plugin (tried once by hand).
-- [ ] 5.4 Add `-p kinds_pytest` to pytest's `addopts`. Verify: the full check passes with every test tagged, and
+- [x] 5.4 Add `-p kinds_pytest` to pytest's `addopts`. Verify: the full check passes with every test tagged, and
   `uv run pytest -m unit --collect-only -q` collects only files under `tests/unit/`.
 
 ## 6. Docs and references
 
-- [ ] 6.1 Contributor docs: where a new test goes, the rule, what the detector checks, how to add a kind (D4), and
+- [x] 6.1 Contributor docs: where a new test goes, the rule, what the detector checks, how to add a kind (D4), and
   the moved paths in `contributing/flake-hunt.md` and `contributing/runners.md`. Verify: the docs tests pass, and grep
   finds no stale `tests/test_*.py` path outside delivered files and archived changes.
-- [ ] 6.2 Check whether the comments in delivered files name moved troupe test files, and open an infrastructure
+- [x] 6.2 Check whether the comments in delivered files name moved troupe test files, and open an infrastructure
   issue (on the board) only if they do. Verify: every `scripts/tests/test_*.py` they name is absent from troupe's
   tree (`git ls-files`), so they name infrastructure's own tests and no issue is needed.
 
 ## 7. Measurements for troupe-run/infrastructure#394
 
-- [ ] 7.1 After the moves, locally: wall time of `pytest -m unit -n auto`, of `pytest -m unit` in one process, and of
+- [x] 7.1 After the moves, locally: wall time of `pytest -m unit -n auto`, of `pytest -m unit` in one process, and of
   the full run, against the survey's 326 s; with the owner's slot. Verify: the numbers are posted on #507.
 - [ ] 7.2 In CI: each leg's per-kind summary line from the PR's ready run, against main's tests step (259 s Ubuntu,
   651 s macOS, 781 s Windows). Verify: the table is posted on #507 and linked from infrastructure#394.

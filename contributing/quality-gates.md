@@ -140,6 +140,40 @@ it. To run it locally: `uv run scripts/quality_gates.py audit`.
 Every advisory on `main`, whatever its severity and fix, is in one "Dependency advisories" issue, which
 `.github/workflows/dependency-report.yml` opens, updates and closes each Monday, and puts on the board.
 
+## Unit and integration tests
+
+Every suite (each `testpaths` entry in `pyproject.toml`) keeps its tests in two directories, and the directory is a
+test's kind:
+
+- **`tests/unit/`**: the test stays inside its own process. It may go through as much of troupe as it likes,
+  `main([...])` included, and read and write files in `tmp_path`.
+- **`tests/integration/`**: the test reaches outside its process: it starts a process (git included, so every git
+  theatre, and troupe or a runner in a child) or opens a socket (a stand-in server, even one on loopback in a thread
+  of the test's own process).
+
+Mutation testing runs only the unit tests; the check and CI run both. Run the unit tests alone with
+`uv run pytest -m unit` (or `-m "not integration"`, or by naming the `tests/unit/` directories).
+
+`scripts/kinds_pytest.py`, loaded on every pytest run, keeps this true:
+
+- **A unit test that reaches outside fails**, at teardown, naming what it reached (`a process (git) x3`). That
+  counts what its fixtures did too (the ones it was actually given, even a session fixture an earlier test set
+  up), and what it does through a helper. What a broader-scoped fixture does while being torn
+  down isn't counted. Move it to `tests/integration/`, or keep it in-process. An integration test that reaches
+  nothing passes: some reach outside on one OS only.
+- **A test file in neither directory fails to collect**, naming the file, so the run fails whatever `-m` selects.
+- **A kind written by hand** (`@pytest.mark.unit`) fails: the directory is the only source of the kind.
+- **No test module imports another.** What tests share goes in a helper module in the suite's `tests/`, beside
+  `unit/` and `integration/` (the stand-ins, harnesses, `*testing.py` and `*_shared.py` modules), where both kinds
+  import it. A test module that imports another fails, naming both.
+- **Each run ends with each kind's count and summed time** (`kinds: unit: 5462 tests, 188.2s summed`).
+
+**What counts as reaching outside** is declared in one place, `OUTSIDE` in `scripts/kinds_pytest.py`: each kind names
+the Python [audit events](https://docs.python.org/3/library/audit_events.html) that are that reach. To add one (a
+telemetry exporter that leaves the process some other way than a socket, say), add an entry there and an example of
+it to `EXAMPLES` in `scripts/tests/integration/test_kinds_pytest_runs.py`; that test fails for a kind without one.
+Every unit test that uses the new kind then fails on the next run, naming it.
+
 ## Mutation testing
 
 Mutation testing changes the code in small ways (a `+` to a `-`, a `<` to a `<=`) and runs the tests. A change no

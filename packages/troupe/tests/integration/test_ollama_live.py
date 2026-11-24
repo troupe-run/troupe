@@ -4,7 +4,7 @@ runs a real model only when asked"; local-model-runner design D14).
 Run it with ``TROUPE_LIVE_OLLAMA=1``, Ollama running at its default address, and the model pulled:
 ``TROUPE_LIVE_OLLAMA_MODEL`` names it, or the audition's model when it isn't set.
 
-    TROUPE_LIVE_OLLAMA=1 uv run pytest packages/troupe/tests/test_ollama_live.py -s
+    TROUPE_LIVE_OLLAMA=1 uv run pytest packages/troupe/tests/integration/test_ollama_live.py -s
 
 It asserts what the runner controls: every message keeps the contract, the run reaches a result,
 and its outcome is succeeded or failed, never crashed. It prints whether the model wrote the file,
