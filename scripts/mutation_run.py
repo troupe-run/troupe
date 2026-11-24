@@ -205,7 +205,9 @@ def mutmut_config(workdir: Path, checkout: Path, unit: ms.Unit, *, children: int
     lines = [
         "[mutmut]",
         "source_paths=src/",
-        f"pytest_add_cli_args_test_selection={tests}",
+        # Only the selected tests run (troupe's unit tests; #394). The rest of `tests` is still
+        # copied or linked and never mutated: the helpers both kinds import live there (design D1).
+        f"pytest_add_cli_args_test_selection={tests}/{unit.select}",
         "pytest_add_cli_args="
         + listed(
             [
