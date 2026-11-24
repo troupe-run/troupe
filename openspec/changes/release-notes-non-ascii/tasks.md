@@ -2,9 +2,10 @@
 
 ## 1. Fixtures from the 0.2.0 run
 
-- [x] 1.1 Save eeab95c's `release-notes.md` blob from the git blob API as
-  `scripts/tests/fixtures/release-notes/release-notes-eeab95c.bin`. Verify: 69,972 bytes, eight lone `0xA0` bytes,
-  no `c2 a0`.
+- [x] 1.1 Save eeab95c's `release-notes.md` blob from the git blob API, with each lone `0xA0` put back as ⚠, as
+  `scripts/tests/fixtures/release-notes/release-notes-eeab95c-before.md` (text, so the review can read it; the first
+  push's `.bin` failed its coverage gate). Verify: encoding it with Node's `'binary'` gives 69,972 bytes with eight
+  lone `0xA0` bytes and eeab95c's git blob id.
 - [x] 1.2 Save the six affected releases' bodies as published (`<tag>.md`, from `gh release view --json body`).
   Verify: the five hold one U+FFFD each, and troupe-v0.2.0 holds eight and is 69,195 characters long.
 

@@ -18,11 +18,12 @@ request (#491) has breaking changes too, so the check has to land before it merg
   naming each release, the first line that differs, and how many U+FFFD characters the notes hold.
 - The release guide gets a "Repairing a release's notes" section. A new `--section <tag>` mode of the script prints
   the changelog section to publish with `gh release edit`. Only the owner runs that command.
-- A test reproduces the 0.2.0 case from eeab95c's saved notes, the raw git blob as release-please read it. Decoding
-  it as release-please does gives U+FFFD in place of every ⚠. The releases built from it, and the six releases as
+- A test reproduces the 0.2.0 case from eeab95c's saved notes, rebuilt byte for byte from the text release-please
+  saved. Decoding it as release-please does gives U+FFFD in place of every ⚠. The releases built from it, and the six releases as
   published, fail the check naming exactly the affected components. The 19 releases published correctly pass it.
-- Not changed: the six published releases. The owner holds their corrected notes and decides whether to edit them
-  (#486). Until they're edited, the check fails on every push, the same way `release-tags` treats a missing tag.
+- Not changed here: the six published releases. The owner edited them on 2026-11-24 from the repair files, and the
+  check passes against them. A release left wrong fails the check on every push, the same way `release-tags` treats
+  a missing tag.
 
 ## Capabilities
 

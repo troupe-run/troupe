@@ -108,11 +108,14 @@ The published heading then carries the changelog's date, which D2 allows.
 
 ### D7. The reproduction runs on the real artefacts; the Node round trip is recorded on #486
 
-The fixtures are eeab95c's raw blob (`release-notes-eeab95c.bin`, 69,972 bytes) and the six releases' bodies as
-published on 2026-11-24. The tests:
+The fixtures are #263's notes as release-please had them before saving (`release-notes-eeab95c-before.md`): eeab95c's
+blob with each lone `0xA0` put back as its ⚠. Alongside them are the six releases' bodies as published on 2026-11-24.
+The blob itself isn't kept. A binary file can't be read in full by the review, whose coverage gate failed on it (#512).
+The tests:
 
-1. **The stored text.** Turning each `### ⚠ BREAKING CHANGES` in the changelogs into Node's latin1 bytes gives the
-   exact bytes in the blob. Decoding the blob as UTF-8 with replacement, as git-file-utils does, gives U+FFFD in place
+1. **The stored text.** Encoding the notes as Node's `'binary'` does gives bytes whose git blob id is eeab95c's
+   (`055e5de4…`), so they're the blob byte for byte. Its only non-ASCII bytes are the eight low bytes of
+   `### ⚠ BREAKING CHANGES`. Decoding the blob as UTF-8 with replacement, as git-file-utils does, gives U+FFFD in place
    of every ⚠ and leaves the rest unchanged.
 2. **The check catches it.** Each released component's block is taken from the decoded blob and checked against the
    changelogs. The check fails naming troupe, troupe-plugin-sdk, troupe-runner-anthropic,
