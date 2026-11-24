@@ -119,12 +119,19 @@ def test_a_pattern_that_matches_nothing_is_refused_naming_it(tmp_path: Path) -> 
         flake_campaign.expand(tmp_path, ["tests/test_gone_*.py"])
 
 
-def test_a_new_platform_test_file_is_selected_without_an_edit(tmp_path: Path) -> None:
+def test_a_new_platform_test_file_of_either_kind_is_selected_without_an_edit(
+    tmp_path: Path,
+) -> None:
     tests = tmp_path / "packages" / "troupe" / "tests"
-    tests.mkdir(parents=True)
-    for name in ("test_platform_files.py", "test_platform_brand_new.py", "test_other.py"):
-        (tests / name).write_text("")
-    assert flake_campaign.expand(tmp_path, ["packages/troupe/tests/test_platform_*.py"]) == [
-        "packages/troupe/tests/test_platform_brand_new.py",
-        "packages/troupe/tests/test_platform_files.py",
+    for kind, name in [
+        ("unit", "test_platform_files.py"),
+        ("integration", "test_platform_brand_new.py"),
+        ("unit", "test_other.py"),
+    ]:
+        (tests / kind).mkdir(parents=True, exist_ok=True)
+        (tests / kind / name).write_text("")
+    pattern = next(p for p in flake_campaign.SELECTION if p.endswith("test_platform_*.py"))
+    assert flake_campaign.expand(tmp_path, [pattern]) == [
+        "packages/troupe/tests/integration/test_platform_brand_new.py",
+        "packages/troupe/tests/unit/test_platform_files.py",
     ]

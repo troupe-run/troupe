@@ -1,4 +1,4 @@
-"""The Claude Code runner against real Claude Code: opt-in, never in CI (spec: claude-code-runner,
+r"""The Claude Code runner against real Claude Code: opt-in, never in CI (spec: claude-code-runner,
 "A live test runs real Claude Code only when asked"; design D12).
 
 Run it with ``TROUPE_LIVE_CLAUDE_CODE=1`` and Claude Code installed. It uses

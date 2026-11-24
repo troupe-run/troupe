@@ -103,7 +103,7 @@ exclude = ["**/fixtures/**", "openspec/changes/archive/**", "uv.lock"]
 "protocol/schemas/error.schema.json" = 88064                     # troupe-run/troupe#471
 "packages/troupe/src/troupe/protocol/error.schema.json" = 88064  # troupe-run/troupe#472
 "contributing/runners.md" = 84992                                # troupe-run/troupe#473
-"packages/troupe/tests/integration/test_run_host.py" = 83968                 # troupe-run/troupe#474
+"packages/troupe/tests/integration/test_run_host.py" = 83968     # troupe-run/troupe#474
 "openspec/specs/runner-protocol/spec.md" = 71680                 # troupe-run/troupe#475
 "openspec/specs/openai-runner/spec.md" = 68608                   # troupe-run/troupe#477
 

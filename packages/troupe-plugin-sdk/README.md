@@ -44,7 +44,7 @@ server loop.
 A runner offers its model these tools, and gives each call the model makes to `Tools.run`. They're file tools only.
 There's no shell, because nothing on the local stage would contain it.
 
-<!-- The table is checked against the tool definitions by tests/test_readme.py. -->
+<!-- The table is checked against the tool definitions by tests/unit/test_readme.py. -->
 
 | Tool | Input | What it does | Effect it needs |
 |---|---|---|---|

@@ -1,4 +1,4 @@
-"""The Anthropic runner against a real Messages API service: opt-in, never in CI (spec:
+r"""The Anthropic runner against a real Messages API service: opt-in, never in CI (spec:
 anthropic-runner, "Live tests run a real service only when asked"; anthropic-runner design D14).
 
     TROUPE_LIVE_ANTHROPIC=1 \

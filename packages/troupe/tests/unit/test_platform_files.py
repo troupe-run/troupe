@@ -136,7 +136,7 @@ def test_a_file_held_open_elsewhere_is_replace_in_use_naming_the_wait_on_every_p
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Only Windows holds a file open against replacement, so the platform's answer is stood in
-    # for here; the Windows-only test above checks the platform really gives it.
+    # for here; integration/test_platform_files_integration.py checks Windows really gives it.
     def held(path: Path, *_: object, **__: object) -> None:
         raise FileInUseError(Path(path), 2.5)
 

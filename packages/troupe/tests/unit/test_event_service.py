@@ -49,8 +49,8 @@ def test_every_recorded_line_carries_lineage_that_the_schema_accepts(tmp_path: P
     service.command(via="cli").record(Counter(value=1).collect_events())
     [line] = recorded_lines(tmp_path)
     # Counter is a test aggregate, so its topic isn't one troupe defines and its line isn't an
-    # event record troupe's schema accepts; test_event_payloads.py checks troupe's own topics
-    # from real runs. Its lineage is checked here.
+    # event record troupe's schema accepts; troupe's own topics are checked from real runs in
+    # integration/test_event_payloads_integration.py. Its lineage is checked here.
     assert is_valid(line["state"]["lineage"], "lineage.schema.json")
 
 

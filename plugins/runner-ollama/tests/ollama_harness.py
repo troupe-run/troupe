@@ -1,7 +1,8 @@
 """Drive the Ollama runner over pipes, as troupe would, and check every message against the schemas.
 
-Self-contained: no troupe imports. The contract's schemas are read from protocol/ at the repository
-root, and the runner's own from its package's schemas/ directory. Messages are validated with the
+Self-contained apart from the plugin SDK's runner types (for the Recorder sink): no import of
+troupe itself. The contract's schemas are read from protocol/ at the repository root, and the
+runner's own from its package's schemas/ directory. Messages are validated with the
 runner's schemas filling the contract's extension points, as troupe would see them.
 """
 
