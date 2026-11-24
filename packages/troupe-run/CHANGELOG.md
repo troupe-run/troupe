@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.3.0](https://github.com/troupe-run/troupe/compare/troupe-run-v0.2.0...troupe-run-v0.3.0) (2026-11-24)
+
+
+### ⚠ BREAKING CHANGES
+
+* **bundle:** troupe 0.3.0 has breaking changes: see packages/troupe/CHANGELOG.md.
+
+### Features
+
+* **bundle:** ship 4 component releases ([a6406a9](https://github.com/troupe-run/troupe/commit/a6406a9ccf84d16a10f8dcb18d8529e8347d8e8c))
+
 ## [0.2.0](https://github.com/troupe-run/troupe/compare/troupe-run-v0.1.0...troupe-run-v0.2.0) (2026-11-20)
 
 
