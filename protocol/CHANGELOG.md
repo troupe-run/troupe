@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.3.0](https://github.com/troupe-run/troupe/compare/protocol-v0.2.0...protocol-v0.3.0) (2026-11-24)
+
+
+### ⚠ BREAKING CHANGES
+
+* **config:** troupe sync replaces troupe flush, and the client protocol's flush method and flush-* schemas become sync and sync-*, whose result adds the edits it recorded. There is no alias.
+
+### Features
+
+* **cli:** status and logs follow a renamed actor ([505fe47](https://github.com/troupe-run/troupe/commit/505fe470d3ec80aa481a013a52f63c69821942ac))
+* **cli:** troupe config mv renames an actor or runtime ([cdf68fb](https://github.com/troupe-run/troupe/commit/cdf68fbc610009e8915e21cfe238680d819c5936))
+* **config:** keep or drop an abandoned hand edit ([46f622a](https://github.com/troupe-run/troupe/commit/46f622a0786424e0bdd820b9898d766bb58d41d0))
+* **config:** read a config file's values for the hand-edit sweep ([032c93c](https://github.com/troupe-run/troupe/commit/032c93c153176bc3750879cc28c3842bdfa70c3d)), closes [#119](https://github.com/troupe-run/troupe/issues/119)
+* **config:** read files moved by hand as a rename ([8376f53](https://github.com/troupe-run/troupe/commit/8376f53b0f3e2077d653d09796390fb586509b36))
+* **config:** sweep hand edits before every command; troupe sync ([86337d7](https://github.com/troupe-run/troupe/commit/86337d7e86ad9337b2c70b875dadf0bab54011dd)), closes [#119](https://github.com/troupe-run/troupe/issues/119)
+* **config:** sweep hand edits to the config files into changes ([728d5c5](https://github.com/troupe-run/troupe/commit/728d5c547bf2f836b4649e62a17d13b12d2fee39)), closes [#119](https://github.com/troupe-run/troupe/issues/119)
+* **config:** write changes back into a person's config file surgically ([db42f78](https://github.com/troupe-run/troupe/commit/db42f78a23b92dddc894f6fc39a8c680d7643d0b)), closes [#119](https://github.com/troupe-run/troupe/issues/119)
+* **protocol:** a config change can rename an actor or runtime ([4afd7b5](https://github.com/troupe-run/troupe/commit/4afd7b580b32402d81368a51636235d629dde2b6))
+* **protocol:** a run summary carries its result's usage and cost ([54ce0ab](https://github.com/troupe-run/troupe/commit/54ce0ab0affb9cc0761b91bbaba8fb9f0afd1a46))
+* **protocol:** let a runtime name the engine that serves it ([f0b126f](https://github.com/troupe-run/troupe/commit/f0b126f48ead3842b8f88ef34986f839a95c1fd4))
+
+
+### Bug Fixes
+
+* **config:** drop only what's safe, and never race a run's start ([ad04b5d](https://github.com/troupe-run/troupe/commit/ad04b5d2673569099ce76bdd0a76884d52cde71c))
+* **protocol:** make a rename entry its own shape in the schema ([743d4e1](https://github.com/troupe-run/troupe/commit/743d4e1b5bd10702e32ae62ad347b5b75779190c))
+
 ## [0.2.0](https://github.com/troupe-run/troupe/compare/protocol-v0.1.0...protocol-v0.2.0) (2026-11-19)
 
 
