@@ -121,3 +121,40 @@ def test_the_tag_check_pipes_every_tag_ref_into_the_script() -> None:
         "'.[].ref' | python3 scripts/release_tags.py"
     ) in command
     assert "set -o pipefail" in check["run"]
+
+
+def test_the_notes_check_runs_after_release_please_even_when_it_failed() -> None:
+    """Bad notes stay a failure until they're repaired (release-notes-non-ascii design D3, D5)."""
+    job = jobs()["release-notes"]
+    assert job["needs"] == "release-please"
+    assert job["if"] == "${{ !cancelled() }}"
+
+
+def test_the_notes_check_reads_with_github_token_outside_the_release_environment() -> None:
+    job = jobs()["release-notes"]
+    assert "environment" not in job
+    assert job["permissions"] == {"contents": "read"}
+    steps: list[dict[str, Any]] = job["steps"]
+    assert not any("create-github-app-token" in s.get("uses", "") for s in steps)
+
+
+def test_the_notes_check_reads_main_as_release_please_left_it() -> None:
+    [checkout] = [
+        s
+        for s in jobs()["release-notes"]["steps"]
+        if s.get("uses", "").startswith("actions/checkout")
+    ]
+    assert checkout["with"]["ref"] == "main"
+    assert checkout["with"]["persist-credentials"] is False
+
+
+def test_the_notes_check_pipes_every_release_into_the_script() -> None:
+    check = step("release-notes", "Check every recorded version's notes match its changelog")
+    # Read through .strip() so ruff's S105 doesn't take the token's expression for a password.
+    assert check["env"]["GH_TOKEN"].strip() == "${{ github.token }}"
+    command = " ".join(check["run"].split())
+    assert (
+        'gh api --paginate "repos/$GITHUB_REPOSITORY/releases" --jq '
+        "'.[] | [.tag_name, .body, .draft] | @json' | python3 scripts/release_notes.py"
+    ) in command
+    assert "set -o pipefail" in check["run"]

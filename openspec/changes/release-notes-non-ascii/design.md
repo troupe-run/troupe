@@ -20,7 +20,7 @@ troupe's 0.2.0 run:
 
 The published releases bear this out. With each heading's `(YYYY-MM-DD)` set aside, 19 of the 25 published releases
 equal their changelog sections byte for byte. The other six are the ones #486 names: five differ by one U+FFFD, and
-troupe-v0.2.0 is 69,189 characters long against its 23,323-character section.
+troupe-v0.2.0 is 69,195 characters long against its 23,323-character section.
 
 `scripts/release_tags.py` (release-missing-components) is the pattern this follows. It's a standard-library script
 the release workflow pipes GitHub data into, with the config and manifest read through `release_config.py`.
