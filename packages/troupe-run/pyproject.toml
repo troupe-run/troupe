@@ -11,12 +11,12 @@ requires-python = ">=3.12,<3.16"
 # from that commit, since the root's workspace sources win (install-with-uv design D1); installing a troupe-run tag
 # with --no-sources installs each from its pin (design D3). scripts/bundle.py fails the check when one is missing.
 dependencies = [
-    "troupe @ git+https://github.com/troupe-run/troupe@troupe-v0.2.0#subdirectory=packages/troupe",
+    "troupe @ git+https://github.com/troupe-run/troupe@troupe-v0.3.0#subdirectory=packages/troupe",
     "troupe-artifacts-local @ git+https://github.com/troupe-run/troupe@troupe-artifacts-local-v0.1.0#subdirectory=packages/troupe-artifacts-local",
     "troupe-identity-local @ git+https://github.com/troupe-run/troupe@troupe-identity-local-v0.1.0#subdirectory=packages/troupe-identity-local",
-    "troupe-plugin-sdk @ git+https://github.com/troupe-run/troupe@troupe-plugin-sdk-v0.1.0#subdirectory=packages/troupe-plugin-sdk",
+    "troupe-plugin-sdk @ git+https://github.com/troupe-run/troupe@troupe-plugin-sdk-v0.2.0#subdirectory=packages/troupe-plugin-sdk",
     "troupe-stage-local @ git+https://github.com/troupe-run/troupe@troupe-stage-local-v0.2.0#subdirectory=packages/troupe-stage-local",
-    "troupe-store-text @ git+https://github.com/troupe-run/troupe@troupe-store-text-v0.1.1#subdirectory=packages/troupe-store-text",
+    "troupe-store-text @ git+https://github.com/troupe-run/troupe@troupe-store-text-v0.2.0#subdirectory=packages/troupe-store-text",
     "troupe-vcs-files @ git+https://github.com/troupe-run/troupe@troupe-vcs-files-v0.2.0#subdirectory=packages/troupe-vcs-files",
     "troupe-vcs-git @ git+https://github.com/troupe-run/troupe@troupe-vcs-git-v0.2.0#subdirectory=packages/troupe-vcs-git",
     "troupe-runner-claude-code @ git+https://github.com/troupe-run/troupe@troupe-runner-claude-code-v0.2.0#subdirectory=plugins/runner-claude-code",
@@ -29,13 +29,13 @@ dependencies = [
 # the check otherwise (runner-extras design D2, D4; owner, #333).
 [project.optional-dependencies]
 all = [
-    "troupe-runner-anthropic @ git+https://github.com/troupe-run/troupe@troupe-runner-anthropic-v0.1.0#subdirectory=plugins/runner-anthropic",
+    "troupe-runner-anthropic @ git+https://github.com/troupe-run/troupe@troupe-runner-anthropic-v0.2.0#subdirectory=plugins/runner-anthropic",
     "troupe-runner-mistralrs @ git+https://github.com/troupe-run/troupe@troupe-runner-mistralrs-v0.1.0#subdirectory=plugins/runner-mistralrs",
     "troupe-runner-ollama @ git+https://github.com/troupe-run/troupe@troupe-runner-ollama-v0.1.0#subdirectory=plugins/runner-ollama",
     "troupe-runner-openai @ git+https://github.com/troupe-run/troupe@troupe-runner-openai-v0.1.0#subdirectory=plugins/runner-openai",
 ]
 anthropic = [
-    "troupe-runner-anthropic @ git+https://github.com/troupe-run/troupe@troupe-runner-anthropic-v0.1.0#subdirectory=plugins/runner-anthropic",
+    "troupe-runner-anthropic @ git+https://github.com/troupe-run/troupe@troupe-runner-anthropic-v0.2.0#subdirectory=plugins/runner-anthropic",
 ]
 mistralrs = [
     "troupe-runner-mistralrs @ git+https://github.com/troupe-run/troupe@troupe-runner-mistralrs-v0.1.0#subdirectory=plugins/runner-mistralrs",
