@@ -134,11 +134,14 @@ def restore(
             f"state from mutmut {manifest.get('mutmut')}, not {mutmut}: discarded, filling afresh"
         )
         return record
-    if (entry.get("source"), entry.get("tests")) != (unit.source, unit.tests):
+    # A changed selection too: results an integration test killed would otherwise be carried as
+    # killed once the run uses only unit tests (#394, mutation-unit-tests design D3).
+    saved = (entry.get("source"), entry.get("tests"), entry.get("select"))
+    if saved != (unit.source, unit.tests, unit.select):
         record.unfit = True
         record.discarded.append(
-            "the settings moved the unit's sources or tests since its state was saved: discarded, "
-            "filling afresh"
+            "the settings moved the unit's sources, tests or test selection since its state was "
+            "saved: discarded, filling afresh"
         )
         return record
     since = str(entry.get("filled_since", ""))
@@ -204,6 +207,7 @@ def save(
     manifest.setdefault("units", {})[unit.name] = {
         "source": unit.source,
         "tests": unit.tests,
+        "select": unit.select,
         "filled_since": record.filled_since or today.isoformat(),
         "saved_by": run_id,
         "commit": commit,
