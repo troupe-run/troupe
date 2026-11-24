@@ -12,7 +12,10 @@ import pytest
 
 from interrupt_child import BUSY_INTERRUPTS, PADDING
 
-CHILD = Path(__file__).with_name("interrupt_child.py")
+TESTS_ROOT = next(p for p in Path(__file__).resolve().parents if p.name == "tests")
+"""This suite's tests directory, found by name so the file can sit at any depth under it."""
+
+CHILD = TESTS_ROOT / "interrupt_child.py"
 
 
 def _interrupt(process: subprocess.Popen[str]) -> None:

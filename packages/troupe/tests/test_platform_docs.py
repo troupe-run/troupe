@@ -7,9 +7,12 @@ import pytest
 from troupe.core import defaults
 from troupe_vcs_git import defaults as git_defaults
 
+TESTS_ROOT = next(p for p in Path(__file__).resolve().parents if p.name == "tests")
+"""This suite's tests directory, found by name so the file can sit at any depth under it."""
+
 pytestmark = pytest.mark.docs  # reads docs/ (scripts/check-paths.toml)
 
-DOCS = Path(__file__).resolve().parents[3] / "contributing"
+DOCS = TESTS_ROOT.parents[2] / "contributing"
 DOC = DOCS / "platform.md"
 ROW = re.compile(r"^\| `([A-Z_]+)` \| ([0-9.]+|true|false) \|", re.MULTILINE)
 

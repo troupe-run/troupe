@@ -7,7 +7,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[3]
+TESTS_ROOT = next(p for p in Path(__file__).resolve().parents if p.name == "tests")
+"""This suite's tests directory, found by name so the file can sit at any depth under it."""
+
+ROOT = TESTS_ROOT.parents[2]
 SLOW = """\
 import time
 from hypothesis import Phase, given, settings, strategies as st

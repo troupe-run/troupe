@@ -22,7 +22,10 @@ from release_notes_shared import OLDER, SECTION, WARNING, good, line, redated, w
 import release_notes
 from release_tags import UnreadableError
 
-FIXTURES = Path(__file__).parent / "fixtures" / "release-notes"
+TESTS_ROOT = next(p for p in Path(__file__).resolve().parents if p.name == "tests")
+"""This suite's tests directory, found by name so the file can sit at any depth under it."""
+
+FIXTURES = TESTS_ROOT / "fixtures" / "release-notes"
 BEFORE = FIXTURES / "release-notes-eeab95c-before.md"
 """#263's notes as release-please 17.6.0 had them before saving: eeab95c's release-notes.md blob
 with each lone 0xA0 put back as the ⚠ it was cut from (D7). Kept as text, which a review can read;

@@ -33,7 +33,10 @@ from troupe.platform import processes
 from troupe_plugin_sdk import runner as p
 from troupe_plugin_sdk.effects import Effects
 
-FAKE = Path(__file__).with_name("fake_runner.py")
+TESTS_ROOT = next(p for p in Path(__file__).resolve().parents if p.name == "tests")
+"""This suite's tests directory, found by name so the file can sit at any depth under it."""
+
+FAKE = TESTS_ROOT / "fake_runner.py"
 INIT = {"type": "init", "runner": {"name": "scripted", "version": "0.0.1"}, "tools": ["Write"]}
 OK = {"type": "result", "status": "ok", "message": "done"}
 ERROR_RESULT = {

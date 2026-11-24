@@ -29,7 +29,10 @@ from troupe.core.runners.host import RunnerCommand
 from troupe.core.runners.limits import RunLimits
 from troupe_plugin_sdk.runner import RunStartRuntime
 
-FAKE = Path(__file__).with_name("fake_runner.py")
+TESTS_ROOT = next(p for p in Path(__file__).resolve().parents if p.name == "tests")
+"""This suite's tests directory, found by name so the file can sit at any depth under it."""
+
+FAKE = TESTS_ROOT / "fake_runner.py"
 INIT = {
     "type": "init",
     "runner": {"name": "scripted", "version": "0.0.1"},
@@ -311,7 +314,7 @@ def test_the_mistralrs_runner_passes_every_check_with_the_engine_stand_in(tmp_pa
     # answer takes a moment, so the checks that cancel a run part-way find it running.
     workspace = tmp_path / "workspace"
     workspace.mkdir()
-    plugin = Path(__file__).resolve().parents[3] / "plugins" / "runner-mistralrs"
+    plugin = TESTS_ROOT.parents[2] / "plugins" / "runner-mistralrs"
     glob = {
         "id": "c",
         "type": "function",

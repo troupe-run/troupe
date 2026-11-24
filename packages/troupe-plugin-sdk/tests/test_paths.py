@@ -11,6 +11,9 @@ from hypothesis import strategies as st
 from sdk_links import link_directory
 from troupe_plugin_sdk.paths import PathRefusedError, Workspace, parts_of
 
+TESTS_ROOT = next(p for p in Path(__file__).resolve().parents if p.name == "tests")
+"""This suite's tests directory, found by name so the file can sit at any depth under it."""
+
 
 @pytest.fixture
 def workspace(tmp_path: Path) -> Workspace:
@@ -116,7 +119,7 @@ def test_no_accepted_path_resolves_outside_the_workspace(text: str) -> None:
     # A property over the syntax rules: whatever mix of parts is generated, a path either is refused
     # or lands inside the workspace. The workspace is the package's own tests directory, which
     # exists on every machine, and nothing is created.
-    root = Workspace(Path(__file__).parent)
+    root = Workspace(TESTS_ROOT)
     try:
         checked = root.path(text)
     except PathRefusedError:

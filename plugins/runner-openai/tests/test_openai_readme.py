@@ -8,7 +8,10 @@ from pathlib import Path
 from openai_harness import RUNNER_SCHEMAS
 from troupe_runner_openai import defaults
 
-README = Path(__file__).resolve().parents[1] / "README.md"
+TESTS_ROOT = next(p for p in Path(__file__).resolve().parents if p.name == "tests")
+"""This suite's tests directory, found by name so the file can sit at any depth under it."""
+
+README = TESTS_ROOT.parent / "README.md"
 
 
 def _section(heading: str) -> str:

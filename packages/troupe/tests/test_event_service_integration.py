@@ -23,6 +23,9 @@ from troupe.core.events import (
 from troupe_store_text.store import TextStore
 from troupe_vcs_git import GitAdapter
 
+TESTS_ROOT = next(p for p in Path(__file__).resolve().parents if p.name == "tests")
+"""This suite's tests directory, found by name so the file can sit at any depth under it."""
+
 
 def test_an_event_recorded_on_a_git_branch_names_the_adapter_branch_and_head(
     tmp_path: Path,
@@ -101,7 +104,7 @@ def test_lineage_names_the_branch_and_head_after_a_git_operation_within_one_sess
     assert lineage_of(repo.path, recorded.event_id)["vcs"] == expected
 
 
-RECORD_CHILD = Path(__file__).with_name("record_child.py")
+RECORD_CHILD = TESTS_ROOT / "record_child.py"
 
 CHILD_LINE_SECONDS = 30.0
 """How long the test waits for each line from record_child.py before failing, so a stuck child

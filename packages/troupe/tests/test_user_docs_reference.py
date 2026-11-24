@@ -18,9 +18,12 @@ from troupe.cli import COMMANDS
 from troupe.cli.parser import Command
 from troupe.core.exit_codes import ExitCode
 
+TESTS_ROOT = next(p for p in Path(__file__).resolve().parents if p.name == "tests")
+"""This suite's tests directory, found by name so the file can sit at any depth under it."""
+
 pytestmark = pytest.mark.docs  # reads docs/ (scripts/check-paths.toml)
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = TESTS_ROOT.parents[2]
 PAGES = ("cli.md", "events.md", "config-schema.md")
 EXIT_CODES = "packages/troupe/src/troupe/core/exit_codes.py"
 

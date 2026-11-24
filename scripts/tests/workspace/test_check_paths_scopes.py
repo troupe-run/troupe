@@ -7,10 +7,13 @@ from pathlib import Path
 
 import guard
 
+TESTS_ROOT = next(p for p in Path(__file__).resolve().parents if p.name == "tests")
+"""This suite's tests directory, found by name so the file can sit at any depth under it."""
+
 
 def _troupes_declaration() -> guard.CheckPaths:
     return guard.check_paths(
-        (Path(__file__).resolve().parents[3] / guard.CHECK_PATHS).read_text(encoding="utf-8")
+        (TESTS_ROOT.parents[1] / guard.CHECK_PATHS).read_text(encoding="utf-8")
     )
 
 
@@ -34,7 +37,7 @@ def test_troupes_declaration_scopes_the_openai_runners_source_to_runner_openai()
 
 
 def test_the_plugin_sdks_scope_reaches_every_runner_plugins_suite() -> None:
-    root = Path(__file__).resolve().parents[3]
+    root = TESTS_ROOT.parents[1]
     text = (root / guard.CHECK_PATHS).read_text(encoding="utf-8")
     sdk_tests = tomllib.loads(text)["scopes"]["plugin_sdk"]["tests"]
     runners = sorted(path.name for path in (root / "plugins").glob("runner-*") if path.is_dir())

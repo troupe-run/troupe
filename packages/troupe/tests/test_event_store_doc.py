@@ -10,9 +10,12 @@ import pytest
 from troupe.core.errors import CODES
 from troupe.core.notices import CODES as NOTICE_CODES
 
+TESTS_ROOT = next(p for p in Path(__file__).resolve().parents if p.name == "tests")
+"""This suite's tests directory, found by name so the file can sit at any depth under it."""
+
 pytestmark = pytest.mark.docs  # reads docs/ (scripts/check-paths.toml)
 
-DOC = Path(__file__).resolve().parents[3] / "contributing" / "event-store.md"
+DOC = TESTS_ROOT.parents[2] / "contributing" / "event-store.md"
 TEXT = DOC.read_text(encoding="utf-8")
 PREFIXES = {"events", "identity", "vcs"}
 

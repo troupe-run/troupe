@@ -15,6 +15,9 @@ from troupe_runner_ollama.requirements import (
     parse,
 )
 
+TESTS_ROOT = next(p for p in Path(__file__).resolve().parents if p.name == "tests")
+"""This suite's tests directory, found by name so the file can sit at any depth under it."""
+
 OLLAMA = Requirement("ollama", "0.12.6", "why")
 
 
@@ -84,12 +87,9 @@ def test_a_malformed_requirement_is_refused_naming_whats_wrong(data: object, nam
 
 def test_the_check_reads_the_data_not_a_version_in_code(tmp_path: Path) -> None:
     published = json.loads(
-        (
-            Path(__file__).resolve().parents[1]
-            / "src"
-            / "troupe_runner_ollama"
-            / "requirements.json"
-        ).read_text(encoding="utf-8")
+        (TESTS_ROOT.parent / "src" / "troupe_runner_ollama" / "requirements.json").read_text(
+            encoding="utf-8"
+        )
     )
     published["requires"][0]["minimum"] = "0.50.0"
     copy = tmp_path / "requirements.json"

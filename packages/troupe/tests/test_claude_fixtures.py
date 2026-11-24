@@ -17,7 +17,10 @@ from troupe.core.runners.host import RunnerCommand, RunRequest, run_actor
 from troupe.core.runners.limits import RunLimits
 from troupe.core.runners.outcome import RunOutcome
 
-FIXTURES = Path(__file__).resolve().parents[3] / "plugins" / "runner-claude-code" / "fixtures"
+TESTS_ROOT = next(p for p in Path(__file__).resolve().parents if p.name == "tests")
+"""This suite's tests directory, found by name so the file can sit at any depth under it."""
+
+FIXTURES = TESTS_ROOT.parents[2] / "plugins" / "runner-claude-code" / "fixtures"
 NAMES = sorted(path.name for path in (FIXTURES / "claude-code").iterdir() if path.is_dir())
 
 

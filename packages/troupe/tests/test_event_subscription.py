@@ -22,6 +22,9 @@ from troupe.core import defaults
 from troupe.core.events import load_store
 from troupe.core.vcs import load_vcs
 
+TESTS_ROOT = next(p for p in Path(__file__).resolve().parents if p.name == "tests")
+"""This suite's tests directory, found by name so the file can sit at any depth under it."""
+
 WRITER = """
 import sys, time
 from pathlib import Path
@@ -54,7 +57,7 @@ BOUND."""
 
 @pytest.fixture
 def writer(tmp_path: Path) -> Iterator[subprocess.Popen[str]]:
-    code = WRITER.format(tests=str(Path(__file__).parent), theatre=str(tmp_path))
+    code = WRITER.format(tests=str(TESTS_ROOT), theatre=str(tmp_path))
     process = subprocess.Popen(
         [sys.executable, "-c", code],
         stdin=subprocess.PIPE,

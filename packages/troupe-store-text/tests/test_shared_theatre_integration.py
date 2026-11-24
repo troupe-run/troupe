@@ -12,7 +12,10 @@ from uuid import uuid4
 from shared_theatre_shared import ordered
 from storetesting import event, fresh_store
 
-TESTS = str(Path(__file__).resolve().parents[2] / "troupe" / "tests")
+TESTS_ROOT = next(p for p in Path(__file__).resolve().parents if p.name == "tests")
+"""This suite's tests directory, found by name so the file can sit at any depth under it."""
+
+TESTS = str(TESTS_ROOT.parents[1] / "troupe" / "tests")
 
 CHILD = """
 import sys

@@ -15,9 +15,12 @@ from troupe.core.notices import CODES as NOTICE_CODES
 from troupe.core.policy import ALLOW_UNENFORCED_LOCAL_STAGE, Policy, env_name
 from troupe.core.runs.aggregate import TOPICS
 
+TESTS_ROOT = next(p for p in Path(__file__).resolve().parents if p.name == "tests")
+"""This suite's tests directory, found by name so the file can sit at any depth under it."""
+
 pytestmark = pytest.mark.docs  # reads docs/ (scripts/check-paths.toml)
 
-DOC = Path(__file__).resolve().parents[3] / "contributing" / "runs.md"
+DOC = TESTS_ROOT.parents[2] / "contributing" / "runs.md"
 TEXT = DOC.read_text(encoding="utf-8")
 RUNNERS_DOC = (DOC.parent / "runners.md").read_text(encoding="utf-8")
 PREFIXES = {"client", "perform", "policy", "stage", "theatre", "workspace"}

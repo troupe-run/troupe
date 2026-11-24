@@ -12,7 +12,10 @@ import pytest
 
 from claude_code_capture_shared import _tool
 
-FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "claude-code"
+TESTS_ROOT = next(p for p in Path(__file__).resolve().parents if p.name == "tests")
+"""This suite's tests directory, found by name so the file can sit at any depth under it."""
+
+FIXTURES = TESTS_ROOT.parent / "fixtures" / "claude-code"
 EXPECTED_REQUESTS = {"context-limit-refused": 2, "context-limit-blocked": 1}
 
 COMPACTING = '{"type":"system","subtype":"status","status":"compacting","compact_output_chars":0}'
