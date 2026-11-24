@@ -100,7 +100,7 @@ and exiting, and a whole run. Give it your runner's command line and the options
 ```sh
 TROUPE_CONFORMANCE_RUNNER='["my-runner"]' \
 TROUPE_CONFORMANCE_OPTIONS='{}' \
-uv run pytest packages/troupe/tests/test_runner_conformance.py -k environment
+uv run pytest packages/troupe/tests/unit/test_runner_conformance.py -k environment
 ```
 
 Run it from a clone of troupe ([Install](../opening-night/install.md#running-it-from-a-clone)).
@@ -114,7 +114,7 @@ export MY_SERVICE_KEY=...
 TROUPE_CONFORMANCE_RUNNER='["my-runner"]' \
 TROUPE_CONFORMANCE_OPTIONS='{}' \
 TROUPE_CONFORMANCE_RUNTIME='{"name": "my-service", "endpoint": "https://api.example.com/v1", "model": "small", "credential": {"env": "MY_SERVICE_KEY"}}' \
-uv run pytest packages/troupe/tests/test_runner_conformance.py -k environment
+uv run pytest packages/troupe/tests/unit/test_runner_conformance.py -k environment
 ```
 
 For one of troupe's built-in runtimes, a name and a model are enough, such as

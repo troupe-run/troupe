@@ -285,4 +285,4 @@ It needs no credential, refuses an Ollama that isn't on this machine, and replac
 
 The tests run against a fake Ollama (`tests/fake_ollama.py`), a loopback HTTP server that plays scripted answers, so
 they need no Ollama and run on Linux, macOS and Windows. A test against a real model runs only when asked:
-`TROUPE_LIVE_OLLAMA=1`, with `TROUPE_LIVE_OLLAMA_MODEL` naming the model (`packages/troupe/tests/test_ollama_live.py`).
+`TROUPE_LIVE_OLLAMA=1`, with `TROUPE_LIVE_OLLAMA_MODEL` naming the model (`packages/troupe/tests/integration/test_ollama_live.py`).

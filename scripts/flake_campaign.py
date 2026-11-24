@@ -47,9 +47,9 @@ three quarters of the CPUs (flake_hunt.py's --workers auto, resolved by each hun
 so a container counts its own CPUs)."""
 
 SELECTION = (
-    "packages/troupe/tests/test_platform_*.py",
-    "packages/troupe/tests/test_run_host.py",
-    "packages/troupe/tests/test_cli_runs.py",
+    "packages/troupe/tests/*/test_platform_*.py",
+    "packages/troupe/tests/*/test_run_host.py",
+    "packages/troupe/tests/*/test_cli_runs.py",
     "packages/troupe-store-text/tests",
     "packages/troupe-vcs-git/tests",
     "plugins/runner-scripted/tests",

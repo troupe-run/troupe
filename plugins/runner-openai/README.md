@@ -244,9 +244,9 @@ Tests drive the runner as a process against a fake endpoint, and every run sets 
 20,000 tokens): the test harness refuses one that doesn't. The live test runs a real service only when asked:
 
 ```console
-TROUPE_LIVE_OPENAI=1 uv run pytest packages/troupe/tests/test_openai_live.py -s
+TROUPE_LIVE_OPENAI=1 uv run pytest packages/troupe/tests/integration/test_openai_live.py -s
 TROUPE_LIVE_OPENAI=1 TROUPE_LIVE_OPENAI_ENDPOINT=http://127.0.0.1:11434/v1 TROUPE_LIVE_OPENAI_MODEL=qwen3.5:4b \
-  uv run pytest packages/troupe/tests/test_openai_live.py -s
+  uv run pytest packages/troupe/tests/integration/test_openai_live.py -s
 ```
 
 The first needs `OPENAI_API_KEY` and costs a few cents; the second runs on local Ollama, free.

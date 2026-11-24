@@ -19,7 +19,7 @@ paths = ["docs/**", "contributing/**", "plugins/runner-scripted/README.md"]
 # files except pyproject.toml, which holds the dependencies and entry points, so changing it runs the full check, as
 # does core (packages/troupe) and any file a scope doesn't list. `tests` names every suite that reaches the package,
 # and guard_pytest tags the tests there with the scope. scripts/check_paths_reach.py works the reach out from the
-# source, and scripts/tests/test_check_paths_reach.py fails a full run when a `tests` list disagrees with it: run
+# source, and scripts/tests/unit/test_check_paths_reach.py fails a full run when a `tests` list disagrees with it: run
 # `uv run scripts/check_paths_reach.py` for the lists to declare.
 
 # Reached by core's artifacts loader, and through the bundle by its tests (scripts/tests/workspace).

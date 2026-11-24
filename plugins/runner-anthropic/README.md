@@ -311,9 +311,9 @@ Tests drive the runner as a process against a fake Messages endpoint, and every 
 turns, 20,000 tokens): the test harness refuses one that doesn't. The live tests run a real service only when asked:
 
 ```console
-TROUPE_LIVE_ANTHROPIC=1 uv run pytest packages/troupe/tests/test_anthropic_live.py -s
+TROUPE_LIVE_ANTHROPIC=1 uv run pytest packages/troupe/tests/integration/test_anthropic_live.py -s
 TROUPE_LIVE_ANTHROPIC_LOCAL=1 TROUPE_LIVE_ANTHROPIC_ENDPOINT=http://127.0.0.1:1234 \
-  TROUPE_LIVE_ANTHROPIC_MODEL=google/gemma-4-e4b uv run pytest packages/troupe/tests/test_anthropic_live.py -s
+  TROUPE_LIVE_ANTHROPIC_MODEL=google/gemma-4-e4b uv run pytest packages/troupe/tests/integration/test_anthropic_live.py -s
 ```
 
 The first needs `ANTHROPIC_API_KEY` and costs a few cents; the second runs on a local engine, free.
