@@ -6,7 +6,8 @@ CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY when either is set, and otherwise t
 existing login. It costs at most BUDGET_USD, on a pinned model, and prints which credential it
 used and whether CLAUDE.md loaded with no setting sources. The owner runs it, not an agent session:
 
-    TROUPE_LIVE_CLAUDE_CODE=1 uv run pytest packages/troupe/tests/test_claude_code_live.py -s
+    TROUPE_LIVE_CLAUDE_CODE=1 \
+        uv run pytest packages/troupe/tests/integration/test_claude_code_live.py -s
 """
 
 import asyncio

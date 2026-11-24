@@ -1,7 +1,7 @@
 """The OpenAI runner against a real Responses API service: opt-in, never in CI (spec: openai-runner,
 "A live test runs a real service only when asked"; openai-style-runner design D13).
 
-    TROUPE_LIVE_OPENAI=1 uv run pytest packages/troupe/tests/test_openai_live.py -s
+    TROUPE_LIVE_OPENAI=1 uv run pytest packages/troupe/tests/integration/test_openai_live.py -s
 
 By default it runs on OpenAI with the audition's model, and needs ``OPENAI_API_KEY``: a few cents,
 within TEST_LIMITS. ``TROUPE_LIVE_OPENAI_ENDPOINT`` and ``TROUPE_LIVE_OPENAI_MODEL`` point it

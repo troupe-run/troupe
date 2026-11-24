@@ -1,10 +1,11 @@
 """The Anthropic runner against a real Messages API service: opt-in, never in CI (spec:
 anthropic-runner, "Live tests run a real service only when asked"; anthropic-runner design D14).
 
-    TROUPE_LIVE_ANTHROPIC=1 uv run pytest packages/troupe/tests/test_anthropic_live.py -s
+    TROUPE_LIVE_ANTHROPIC=1 \
+        uv run pytest packages/troupe/tests/integration/test_anthropic_live.py -s
     TROUPE_LIVE_ANTHROPIC_LOCAL=1 TROUPE_LIVE_ANTHROPIC_ENDPOINT=http://127.0.0.1:1234 \
         TROUPE_LIVE_ANTHROPIC_MODEL=google/gemma-4-e4b \
-        uv run pytest packages/troupe/tests/test_anthropic_live.py -s
+        uv run pytest packages/troupe/tests/integration/test_anthropic_live.py -s
 
 The first runs on Claude's API with the audition's model, and needs ``ANTHROPIC_API_KEY``: a few
 cents, within TEST_LIMITS. The second runs on a local engine that serves the Messages API, named by

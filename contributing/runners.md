@@ -815,7 +815,7 @@ that succeeds:
 ```console
 TROUPE_CONFORMANCE_RUNNER='["python", "-m", "troupe_runner_scripted"]' \
 TROUPE_CONFORMANCE_OPTIONS='{"script": {"steps": [{"event": {"type": "init", "runner": {"name": "scripted", "version": "0"}, "tools": []}}, {"event": {"type": "result", "status": "ok", "message": "done"}}]}}' \
-uv run pytest packages/troupe/tests/unit/test_runner_conformance.py -k environment
+uv run pytest packages/troupe/tests/integration/test_runner_conformance_integration.py -k environment
 ```
 
 A runner that talks to a service needs a runtime. Give it one in `TROUPE_CONFORMANCE_RUNTIME`: a JSON object holding
@@ -832,7 +832,7 @@ export MY_SERVICE_KEY=...   # the key itself stays in your environment, never in
 TROUPE_CONFORMANCE_RUNNER='["my-runner"]' \
 TROUPE_CONFORMANCE_OPTIONS='{}' \
 TROUPE_CONFORMANCE_RUNTIME='{"name": "my-service", "endpoint": "https://api.example.com/v1", "model": "small", "credential": {"env": "MY_SERVICE_KEY"}}' \
-uv run pytest packages/troupe/tests/unit/test_runner_conformance.py -k environment
+uv run pytest packages/troupe/tests/integration/test_runner_conformance_integration.py -k environment
 ```
 
 For a built-in runtime, its name and a model are enough: `{"name": "openai", "model": "gpt-4.1-mini"}` uses the

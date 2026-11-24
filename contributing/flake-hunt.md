@@ -66,15 +66,13 @@ something out. The agreed campaign is the default.
 A malformed option is refused before anything runs, naming the option, the value and what's allowed.
 
 **The selection used on #100**, the tests that depend on time, processes, signals or file watching. The campaign
-hunts these by default: its `SELECTION` names them as patterns, so a new `test_platform_*.py` file joins on its own.
+hunts these by default: its `SELECTION` names them as patterns that match both `unit/` and `integration/`, so a new
+`test_platform_*.py` file joins on its own, and a file moving between the kinds stays hunted.
 
 ```
-packages/troupe/tests/unit/test_platform_append.py packages/troupe/tests/unit/test_platform_environment.py
-packages/troupe/tests/unit/test_platform_files.py packages/troupe/tests/integration/test_platform_interrupts.py
-packages/troupe/tests/integration/test_platform_locks.py packages/troupe/tests/unit/test_platform_paths.py
-packages/troupe/tests/integration/test_platform_processes.py packages/troupe/tests/unit/test_platform_watching.py
-packages/troupe/tests/integration/test_run_host.py packages/troupe/tests/integration/test_cli_runs.py
-packages/troupe-store-text/tests packages/troupe-vcs-git/tests plugins/runner-scripted/tests
+packages/troupe/tests/*/test_platform_*.py packages/troupe/tests/*/test_run_host.py
+packages/troupe/tests/*/test_cli_runs.py packages/troupe-store-text/tests packages/troupe-vcs-git/tests
+plugins/runner-scripted/tests
 ```
 
 It takes about 2 minutes a round on a laptop. The whole suite takes about 4.

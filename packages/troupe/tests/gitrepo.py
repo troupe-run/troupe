@@ -119,6 +119,12 @@ _built: dict[tuple[object, ...], Path] = {}
 """Each template this process has built, by the key of the shape it holds."""
 _counts = {"templates": 0, "copies": 0, "fresh": 0}
 
+THEATRE_EVENT = "troupe.tests.theatre"
+"""The audit event raised for every repository handed to a test, copied or built. A copy runs git
+only when it's the first of its shape in its process, so the event, not git, is what makes every
+test with a theatre an integration test, whatever order the tests run in (scripts/kinds_pytest.py;
+test-split design D4)."""
+
 LEAVE_OUT_OF_COPIES = shutil.ignore_patterns("*.lock")
 """A git lock file is never part of a repository at rest. The template's own commit can start
 git's automatic maintenance in the background, which holds ``.git/objects/maintenance.lock`` for a
@@ -193,6 +199,7 @@ def from_template(
     copy is never given the template's path, so no test can change the template."""
     if _factory is None:
         _counts["fresh"] += 1
+        sys.audit(THEATRE_EVENT, str(root / name))
         return build(root, name)
     template = _built.get(key)
     if template is None:
@@ -209,6 +216,7 @@ def from_template(
         # makes --refresh exit 1, so every copy of it fails here, naming the file.
         repo.git("update-index", "--refresh")
     _counts["copies"] += 1
+    sys.audit(THEATRE_EVENT, str(path))
     return repo
 
 
@@ -229,6 +237,7 @@ def make_repo(
         require_reftable()
     if fresh:
         _counts["fresh"] += 1
+        sys.audit(THEATRE_EVENT, str(root / name))
         return _init(root, name, branch, refs)
     return from_template(
         root, name, ("make_repo", branch, refs), lambda at, as_: _init(at, as_, branch, refs)

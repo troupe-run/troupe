@@ -211,7 +211,7 @@ def test_every_project_or_repo_in_the_docs_is_recorded_with_a_reason() -> None:
     assert unrecorded(DOCS, USES) == [], (
         'Where "project" or "repo" means a theatre, say "theatre", or "project directory" when '
         "explaining one (brand guide §7). Otherwise add the line to USES in "
-        "packages/troupe/tests/test_user_docs_vocabulary.py, with why it isn't a theatre."
+        "packages/troupe/tests/unit/test_user_docs_vocabulary.py, with why it isn't a theatre."
     )
 
 

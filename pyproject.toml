@@ -219,7 +219,9 @@ testpaths = [
     # (package-check-scopes design D6).
     "scripts/tests/workspace",
 ]
-# Shared test helpers (theatres in real git repositories) live beside troupe's own tests.
+# Each suite keeps its tests in unit/ and integration/ (kinds_pytest), and its helpers (stand-ins, harnesses,
+# theatres in real git repositories, the _shared modules) beside both in tests/, where both kinds import them
+# (test-split design D2, D3a).
 pythonpath = [
     "packages/troupe/tests",
     "packages/troupe-artifacts-local/tests",
@@ -247,6 +249,9 @@ addopts = [
     "protocol_guard",
     "-p",
     "guard_pytest",
+    # Every test is unit or integration by its directory, and a unit test stays in its process (test-split design D4).
+    "-p",
+    "kinds_pytest",
     "-p",
     "hypothesis_profiles",
     # Each test process builds a git theatre's shape once and copies it per test

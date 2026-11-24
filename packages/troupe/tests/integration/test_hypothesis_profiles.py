@@ -47,7 +47,9 @@ def run_slow(
     test.write_text(SLOW, encoding="utf-8")
     return subprocess.run(
         [
+            # Without the kinds plugin: the example sits in tmp_path, in neither kind's directory.
             *[sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"],
+            *["-p", "no:kinds_pytest"],
             *["--rootdir", str(config.parent), "-c", str(config), "-o", "testpaths="],
             *["--confcutdir", str(tmp_path)],
             *[arg for plugin in plugins for arg in ("-p", plugin)],
