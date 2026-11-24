@@ -30,6 +30,7 @@ import fnmatch
 import os
 import platform
 import socket
+import subprocess
 import sys
 from collections import Counter
 from collections.abc import Callable, Generator
@@ -83,12 +84,24 @@ def _program(event: str, args: tuple[object, ...]) -> str | None:
     process (design D4)."""
     if _called_from(platform):
         return None
+    if event == "_winapi.CreateProcess" and _called_from(subprocess):
+        return None  # Popen's own CreateProcess on Windows: its subprocess.Popen event counted it
     if event == "subprocess.Popen" and len(args) > 1:
         argv = args[1]
+        if isinstance(argv, str | bytes):
+            return _first_word(os.fsdecode(argv))  # Windows: the command line, already joined
         first = argv[0] if isinstance(argv, list | tuple) and argv else argv
         if isinstance(first, str | bytes | os.PathLike):
             return os.path.basename(os.fsdecode(first))
     return event
+
+
+def _first_word(command_line: str) -> str:
+    """The program a joined command line runs, as its file name: its first word, or its first
+    quoted run when it starts with a quote (a path with spaces, as Windows joins it)."""
+    line = command_line.strip()
+    word = line[1:].split('"', 1)[0] if line.startswith('"') else line.split(" ", 1)[0]
+    return os.path.basename(word.replace("\\", "/"))
 
 
 _SOCKETPAIR = frozenset({"socketpair", "_fallback_socketpair"})

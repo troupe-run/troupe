@@ -4,6 +4,7 @@ behaviour in a real pytest run is in integration/test_kinds_pytest_runs.py."""
 
 import platform
 import socket
+import subprocess
 
 import pytest
 
@@ -57,6 +58,28 @@ def test_the_nested_suite_is_the_one_holding_its_files() -> None:
 def test_starting_a_process_names_its_program() -> None:
     args = ("/usr/bin/git", ["/usr/bin/git", "status"], None, None)
     assert kinds_pytest.reached("subprocess.Popen", args) == "a process (git)"
+
+
+@pytest.mark.parametrize(
+    "command_line",
+    ["python.exe -c pass", r'"C:\Program Files\Python 3.14\python.exe" -c pass', "git status"],
+)
+def test_a_command_line_already_joined_names_its_program(command_line: str) -> None:
+    # On Windows the subprocess.Popen event carries the command line joined into one string.
+    program = "git" if command_line.startswith("git") else "python.exe"
+    args = (None, command_line, None, None)
+    assert kinds_pytest.reached("subprocess.Popen", args) == f"a process ({program})"
+
+
+def test_popens_own_createprocess_on_windows_isnt_counted_twice() -> None:
+    create = _compiled_as(
+        subprocess,
+        "def _execute_child(reached):\n"
+        "    return reached('_winapi.CreateProcess', (None, 'python.exe -c pass'))\n",
+    )["_execute_child"]
+    assert callable(create)
+    assert create(kinds_pytest.reached) is None
+    assert kinds_pytest.reached("_winapi.CreateProcess", ()) == "a process (_winapi.CreateProcess)"
 
 
 @pytest.mark.parametrize(
