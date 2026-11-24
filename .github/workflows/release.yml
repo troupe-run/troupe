@@ -137,6 +137,33 @@ jobs:
           set -o pipefail
           gh api --paginate "repos/$GITHUB_REPOSITORY/git/matching-refs/tags" --jq '.[].ref' | python3 scripts/release_tags.py
 
+  release-notes:
+    name: check the release notes
+    # Every recorded version's release notes must be its changelog section, apart from the heading's
+    # date. When a release pull request's body overflows, release-please saves it keeping each
+    # character's low byte, and 0.2.0 published six releases with U+FFFD for ⚠ while the run passed
+    # (#486). This fails the run naming each release that differs and the repair route
+    # (release-notes-non-ascii design D3, D5). Every push, and even when release-please failed, like
+    # release-tags; GITHUB_TOKEN reads releases, so it never sees the App's key.
+    needs: release-please
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The manifest and changelogs as release-please left them, this run's release included.
+          ref: main
+          persist-credentials: false
+      - name: Check every recorded version's notes match its changelog
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -o pipefail
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases" --jq '.[] | [.tag_name, .body, .draft] | @json' | python3 scripts/release_notes.py
+
   notify-website:
     name: notify troupe.run
     # troupe.run's /docs is built from docs/ here, one version per release, so every push to main rebuilds it

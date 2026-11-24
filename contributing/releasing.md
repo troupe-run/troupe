@@ -235,6 +235,37 @@ gh release create <component>-v<version> --target <the release pull request's me
 The tag is permanent, so check the target commit and the notes before running it. Pre-release applies until the
 component reaches 1.0, as above. A release made by hand doesn't run `pin-bundle`. The next release run pins it,
 or the pinning pull request may already name it, since the script reads the manifest.
+`python3 scripts/release_notes.py --section <component>-v<version>` prints the changelog section to use as the notes
+file.
+
+## Repairing a release's notes
+
+After every run, the `release` workflow's `release-notes` job checks each tag the manifest's versions name
+([`scripts/release_notes.py`](../scripts/release_notes.py)). Each must have a published release whose notes are that
+version's section of the component's `CHANGELOG.md`, apart from the date at the end of the heading. The changelog
+is dated when the release pull request was written, and the release when it merged. When the job fails, it names
+each release that differs and the first line that differs. Like `release-tags`, it fails on every push until the
+notes are repaired.
+
+**Find out why first.** When the job says the notes hold U+FFFD, the release pull request's body overflowed. Past
+65,536 characters, release-please saves the body to `release-notes.md` on the
+`release-please--branches--main--release-notes` branch and puts a link in the pull request. release-please 17.6.0
+writes that file keeping only the low byte of each character, and reads it back as UTF-8. So every character above
+U+00FF, such as the ⚠ in `### ⚠ BREAKING CHANGES`, is published as U+FFFD. That's how six 0.2.0-era releases lost
+their ⚠ (#486). Notes that run on past their section into other components' blocks come from the `<NAME>` parse in
+[Repairing a missing release](#repairing-a-missing-release). The changelog is written separately, as UTF-8, so it's
+the copy to trust.
+
+**Repair: publish the changelog section.** Editing a published release is the owner's to do. It changes the notes
+only, never the tag:
+
+```sh
+python3 scripts/release_notes.py --section <tag> > notes.md
+gh release edit <tag> -R troupe-run/troupe --notes-file notes.md
+```
+
+The heading then carries the changelog's date, which the check allows. Re-run the failed `release-notes` job, or
+let the next push run it.
 
 ## When something goes wrong
 
@@ -244,6 +275,8 @@ or the pinning pull request may already name it, since the script reads the mani
   reach changelogs"): land any commit on `main`, which rebuilds the pull request, and comment on #223.
 - **A release that was never made** (the `release-tags` job fails): see
   [Repairing a missing release](#repairing-a-missing-release).
+- **Release notes that differ from the changelog** (the `release-notes` job fails): see
+  [Repairing a release's notes](#repairing-a-releases-notes).
 - **A wrong release:** fix it forward with a `fix` commit, or `Release-As` for the next version. Tags are never moved
   or deleted.
 - **Stopping releases:** disable the `release` workflow. Releases already made stay, because tags and changelogs
