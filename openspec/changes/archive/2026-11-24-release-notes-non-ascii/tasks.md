@@ -40,5 +40,5 @@
 ## Workflow follow-up
 
 - Draft PR closing #486; act on the review; mark ready; archive before merge (`quality_gates.py size` after).
-- After the merge: the owner runs the six `gh release edit` commands, or records a decision to leave them, which
-  switches D3 to its fallback. Check main's next `release-notes` job.
+- The six releases: the owner edited them on 2026-11-24, before the merge, and the check exits 0 against all 25 live
+  releases. After the merge, check main's next `release-notes` job.
