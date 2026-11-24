@@ -64,10 +64,13 @@
 
 - [x] 7.1 After the moves, locally: wall time of `pytest -m unit -n auto`, of `pytest -m unit` in one process, and of
   the full run, against the survey's 326 s; with the owner's slot. Verify: the numbers are posted on #507.
-- [ ] 7.2 In CI: each leg's per-kind summary line from the PR's ready run, against main's tests step (259 s Ubuntu,
-  651 s macOS, 781 s Windows). Verify: the table is posted on #507 and linked from infrastructure#394.
+
 
 ## Workflow follow-up
+
+- CI's per-kind numbers (moved from task 7.2, which needs CI on the final head, after archiving): each leg's `kinds:`
+  summary line from the ready run, against main's tests step (259 s Ubuntu, 651 s macOS, 781 s Windows), posted on #507
+  and linked from infrastructure#394.
 
 - Draft PR closing #507; act on the review; mark ready; archive on the branch; the owner merges.
 - After the merge: check #507 closed and its card is Done; tell infrastructure#394 the unit directories and `-m unit`

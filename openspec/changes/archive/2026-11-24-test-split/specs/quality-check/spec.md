@@ -100,3 +100,23 @@ asks for workers themselves.
 #### Scenario: One test run on its own
 - **WHEN** a developer runs `uv run pytest packages/troupe/tests/unit/test_cli.py -k usage`
 - **THEN** the selected tests run in the developer's own pytest process, with no worker processes
+
+### Requirement: The scripts have a scope that leaves out the check and the guard
+troupe SHALL declare a scope `scripts` covering `scripts/tests/**` and each other file under `scripts/` by its exact
+path, except `scripts/check.py`, `scripts/guard.py`, `scripts/guard_pytest.py`, `scripts/kinds_pytest.py` and
+`scripts/check-paths.toml`, which SHALL be in no scope. A file added under `scripts/` SHALL be in no scope until it is
+declared.
+
+#### Scenario: A commit that changes a script and its tests
+- **WHEN** a commit stages only `scripts/flake_hunt.py` and `scripts/tests/integration/test_flake_hunt.py`
+- **THEN** the commit guard runs `scripts/check.py --scope scripts`
+- **AND** every gate runs, and the only tests that run are those in the scripts suite
+
+#### Scenario: A commit that changes the check or the guard
+- **WHEN** a commit stages `scripts/check.py`, `scripts/guard.py`, `scripts/guard_pytest.py` or
+  `scripts/kinds_pytest.py`
+- **THEN** the commit guard runs the full check
+
+#### Scenario: A new script
+- **WHEN** a commit adds `scripts/new_tool.py` and the declaration doesn't name it
+- **THEN** the commit guard runs the full check
