@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0](https://github.com/troupe-run/troupe/compare/troupe-store-text-v0.1.1...troupe-store-text-v0.2.0) (2026-11-24)
+
+
+### Features
+
+* **config:** keep or drop an abandoned hand edit ([46f622a](https://github.com/troupe-run/troupe/commit/46f622a0786424e0bdd820b9898d766bb58d41d0))
+
+
+### Bug Fixes
+
+* **config:** drop only what's safe, and never race a run's start ([ad04b5d](https://github.com/troupe-run/troupe/commit/ad04b5d2673569099ce76bdd0a76884d52cde71c))
+
 ## [0.1.1](https://github.com/troupe-run/troupe/compare/troupe-store-text-v0.1.0...troupe-store-text-v0.1.1) (2026-11-19)
 
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/troupe-run/troupe/compare/troupe-plugin-sdk-v0.1.0...troupe-plugin-sdk-v0.2.0) (2026-11-24)
+
+
+### Features
+
+* **protocol:** let a runtime name the engine that serves it ([f0b126f](https://github.com/troupe-run/troupe/commit/f0b126f48ead3842b8f88ef34986f839a95c1fd4))
+
 ## 0.1.0 (2026-11-19)
 
 

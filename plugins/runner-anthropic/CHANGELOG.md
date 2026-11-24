@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0](https://github.com/troupe-run/troupe/compare/troupe-runner-anthropic-v0.1.0...troupe-runner-anthropic-v0.2.0) (2026-11-24)
+
+
+### Features
+
+* **check:** fail a unit test that reaches outside its process ([1847c05](https://github.com/troupe-run/troupe/commit/1847c054abbd0ad917c9f7621114bea2eff886e4)), closes [#507](https://github.com/troupe-run/troupe/issues/507)
+
+
+### Bug Fixes
+
+* **runner-anthropic:** count and guard by the runtime's engine ([d6cb1b9](https://github.com/troupe-run/troupe/commit/d6cb1b9532cbbf3bca3bd556dfffda9dc280dca9))
+
 ## 0.1.0 (2026-11-19)
 
 

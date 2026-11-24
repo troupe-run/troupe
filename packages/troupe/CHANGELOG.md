@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.3.0](https://github.com/troupe-run/troupe/compare/troupe-v0.2.0...troupe-v0.3.0) (2026-11-24)
+
+
+### ⚠ BREAKING CHANGES
+
+* **config:** troupe sync replaces troupe flush, and the client protocol's flush method and flush-* schemas become sync and sync-*, whose result adds the edits it recorded. There is no alias.
+
+### Features
+
+* **check:** fail a unit test that reaches outside its process ([1847c05](https://github.com/troupe-run/troupe/commit/1847c054abbd0ad917c9f7621114bea2eff886e4)), closes [#507](https://github.com/troupe-run/troupe/issues/507)
+* **cli:** show a run's tokens and cost in status and logs ([fd5406e](https://github.com/troupe-run/troupe/commit/fd5406eec06ba57ec494887611d624b287f5df31))
+* **cli:** status and logs follow a renamed actor ([505fe47](https://github.com/troupe-run/troupe/commit/505fe470d3ec80aa481a013a52f63c69821942ac))
+* **cli:** troupe config mv renames an actor or runtime ([cdf68fb](https://github.com/troupe-run/troupe/commit/cdf68fbc610009e8915e21cfe238680d819c5936))
+* **config:** a change on another line follows a rename ([92f7501](https://github.com/troupe-run/troupe/commit/92f750183181abe3efb3eaf0752179e12e8471cd))
+* **config:** keep or drop an abandoned hand edit ([46f622a](https://github.com/troupe-run/troupe/commit/46f622a0786424e0bdd820b9898d766bb58d41d0))
+* **config:** read a config file's values for the hand-edit sweep ([032c93c](https://github.com/troupe-run/troupe/commit/032c93c153176bc3750879cc28c3842bdfa70c3d)), closes [#119](https://github.com/troupe-run/troupe/issues/119)
+* **config:** read files moved by hand as a rename ([8376f53](https://github.com/troupe-run/troupe/commit/8376f53b0f3e2077d653d09796390fb586509b36))
+* **config:** sweep hand edits before every command; troupe sync ([86337d7](https://github.com/troupe-run/troupe/commit/86337d7e86ad9337b2c70b875dadf0bab54011dd)), closes [#119](https://github.com/troupe-run/troupe/issues/119)
+* **config:** sweep hand edits to the config files into changes ([728d5c5](https://github.com/troupe-run/troupe/commit/728d5c547bf2f836b4649e62a17d13b12d2fee39)), closes [#119](https://github.com/troupe-run/troupe/issues/119)
+* **config:** write changes back into a person's config file surgically ([db42f78](https://github.com/troupe-run/troupe/commit/db42f78a23b92dddc894f6fc39a8c680d7643d0b)), closes [#119](https://github.com/troupe-run/troupe/issues/119)
+* **protocol:** a config change can rename an actor or runtime ([4afd7b5](https://github.com/troupe-run/troupe/commit/4afd7b580b32402d81368a51636235d629dde2b6))
+* **protocol:** a run summary carries its result's usage and cost ([54ce0ab](https://github.com/troupe-run/troupe/commit/54ce0ab0affb9cc0761b91bbaba8fb9f0afd1a46))
+* **protocol:** let a runtime name the engine that serves it ([f0b126f](https://github.com/troupe-run/troupe/commit/f0b126f48ead3842b8f88ef34986f839a95c1fd4))
+* **runners:** give the env-driven conformance check a runtime ([8fbd55f](https://github.com/troupe-run/troupe/commit/8fbd55fe4d99f376243d554c651693e5fbe7b81d))
+
+
+### Bug Fixes
+
+* **cli:** count a sweep's hand edits in config set and unset ([c7d99cf](https://github.com/troupe-run/troupe/commit/c7d99cf43590579a0e39fc95812402fde6970cfd)), closes [#119](https://github.com/troupe-run/troupe/issues/119)
+* **cli:** specify the run-start guard, and count one change right ([ea7c411](https://github.com/troupe-run/troupe/commit/ea7c411998a19159fc3c53980c4aca4b26508eda))
+* **config:** a portable path in a reading test, and review nits ([fe1948c](https://github.com/troupe-run/troupe/commit/fe1948ca196ec73a9db13f764c444d51364fdbc9)), closes [#119](https://github.com/troupe-run/troupe/issues/119)
+* **config:** config mv keeps a moved runtime's actors in line ([d21c0f1](https://github.com/troupe-run/troupe/commit/d21c0f1da1e5bb33189ee5178bd3e39d5da99faf))
+* **config:** drop only what's safe, and never race a run's start ([ad04b5d](https://github.com/troupe-run/troupe/commit/ad04b5d2673569099ce76bdd0a76884d52cde71c))
+* **config:** keep a renamed actor through its own conflicts ([5881c2b](https://github.com/troupe-run/troupe/commit/5881c2b1e175a6aa12b43840c53da47369950473))
+* **config:** keep hand-formatted actors in line through config mv ([4e5e261](https://github.com/troupe-run/troupe/commit/4e5e2612be9ce5355dc7fa0c49d85cadce320db1))
+* **config:** merge the same in every arrival order ([ea5ebd9](https://github.com/troupe-run/troupe/commit/ea5ebd9f00579b564d5f4f4c625d7ff49f86dfe1))
+* **protocol:** make a rename entry its own shape in the schema ([743d4e1](https://github.com/troupe-run/troupe/commit/743d4e1b5bd10702e32ae62ad347b5b75779190c))
+* **runs:** show runs when config's stream can't be read ([f761563](https://github.com/troupe-run/troupe/commit/f76156311ffd1f9ef909bf6077714e1afe1f4920))
+
 ## [0.2.0](https://github.com/troupe-run/troupe/compare/troupe-v0.1.0...troupe-v0.2.0) (2026-11-19)
 
 
