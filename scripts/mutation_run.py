@@ -82,9 +82,11 @@ def mutmut_workdir(checkout: Path, unit: ms.Unit) -> Path:
 
 # pytest options a mutation run can't honour from mutmut's copy: the guard's tag plugin finds its
 # declarations from the repository's root, so it registers no scope markers, and strict markers
-# then refuse every tagged test (trial of troupe, 2026-11-18; quality-scope design D5).
+# then refuse every tagged test (trial of troupe, 2026-11-18; quality-scope design D5). troupe's
+# kinds plugin reads each test's kind from its path in the checkout, so in the copy it finds no
+# suite and refuses every test (#398); the run selects the unit tests by directory instead (#394).
 UNHONOURED = ("--strict-markers",)
-UNHONOURED_PLUGINS = ("guard_pytest",)
+UNHONOURED_PLUGINS = ("guard_pytest", "kinds_pytest")
 
 
 def own_addopts(checkout: Path) -> str:
