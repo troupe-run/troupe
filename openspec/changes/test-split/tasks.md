@@ -23,10 +23,10 @@
 
 ## 4. The moves (commit: renames, and the paths the check reads)
 
-- [ ] 4.1 `git mv` every test file into its suite's `tests/unit/` or `tests/integration/` per the plan, and add every
+- [x] 4.1 `git mv` every test file into its suite's `tests/unit/` or `tests/integration/` per the plan, and add every
   suite's `tests/` to pytest's `pythonpath`. Verify: `git show --stat -M` shows every moved test file as a 100%
   rename.
-- [ ] 4.2 Update the strings the check reads that name moved files: `scripts/flake_campaign.py`'s `SELECTION` (patterns
+- [x] 4.2 Update the strings the check reads that name moved files: `scripts/flake_campaign.py`'s `SELECTION` (patterns
   matching both kinds), `quality-gates.toml`'s size-limit keys, the docs naming test files (`scripts/mutation.json` is delivered: its new ids go to infrastructure), and
   any scripts' test that names one. Verify: the flake campaign's pattern test passes, the size gate passes, and
   `uv run scripts/check.py` passes on this commit.

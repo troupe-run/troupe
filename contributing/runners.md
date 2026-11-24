@@ -119,7 +119,7 @@ troupe says it has started with `runner.warming-up`, then reports how it went as
 example: `--warm-up` loads its check model, which compiles mistral.rs's Metal kernels into macOS's cache.
 
 Your runner should refuse the same runtimes itself, since a host other than troupe may start it.
-`packages/troupe/tests/test_runtime_fit.py` holds the table to each runner that needs a runtime: add yours to its
+`packages/troupe/tests/unit/test_runtime_fit.py` holds the table to each runner that needs a runtime: add yours to its
 `ORACLES`.
 
 `run/start`'s `runtime` holds what troupe resolved: `name`, `endpoint` (the base URL your API lives under; add your
@@ -761,8 +761,8 @@ Each of these has a check that fails when it's missed:
 |---|---|
 | Configure the plugin's package for release and for Dependabot ([releasing.md](releasing.md#adding-a-package)) | `scripts/release_config.py` and `scripts/dependabot_members.py`, in `scripts/check.py` |
 | Add `[coverage.packages.runner-<name>]` with `paths = ["plugins/runner-<name>"]` to `quality-gates.toml` ([quality-gates.md](quality-gates.md#adding-a-package-or-a-runner)) | The coverage gate on CI's Linux, Python 3.15 leg: each of its files "is in no package" |
-| For a runner whose `runtime` is `required`, add it to `ORACLES` in `packages/troupe/tests/test_runtime_fit.py` | The runtime fit test |
-| Give it a path on the first-run page, [`docs/opening-night/first-performance.md`](../docs/opening-night/first-performance.md) | The docs check (`packages/troupe/tests/test_user_docs_pages.py`) |
+| For a runner whose `runtime` is `required`, add it to `ORACLES` in `packages/troupe/tests/unit/test_runtime_fit.py` | The runtime fit test |
+| Give it a path on the first-run page, [`docs/opening-night/first-performance.md`](../docs/opening-night/first-performance.md) | The docs check (`packages/troupe/tests/unit/test_user_docs_pages.py`) |
 
 A runner's code is held to coverage, but isn't mutation tested: only the packages under `packages/` are
 ([quality-gates.md](quality-gates.md#mutation-testing)).
@@ -794,7 +794,7 @@ it uses. Adding one takes these steps, and each has a check that fails when it's
 | Move the plugin from `troupe-run`'s `dependencies` to an extra named exactly after its runner, not after its library, and add the same entry to `all` | The bundle check (`scripts/bundle.py`) |
 | Set `in_extra=True` on the runner's entry in core's runner table (`troupe.core.interim.RUNNERS`) | The bundle check |
 | While the plugin hasn't released, so the bundle names it bare, keep the bundle's commits out of release pull requests | The release configuration check (`scripts/release_config.py`) |
-| Add a row for the extra to the list on the [install page](../docs/opening-night/install.md) | The docs check (`scripts/tests/workspace/test_install_docs.py`) |
+| Add a row for the extra to the list on the [install page](../docs/opening-night/install.md) | The docs check (`scripts/tests/workspace/unit/test_install_docs.py`) |
 | Check every package the library pulls in has a licence on one of the two tiers of `scripts/licences.toml`. Add one only in a reviewed change, with its reason | The licence check (`scripts/runner_licences.py`) |
 
 An actor on a runner that isn't installed is refused, naming `troupe-run[<runner>]`, at `troupe config set` on that
@@ -815,7 +815,7 @@ that succeeds:
 ```console
 TROUPE_CONFORMANCE_RUNNER='["python", "-m", "troupe_runner_scripted"]' \
 TROUPE_CONFORMANCE_OPTIONS='{"script": {"steps": [{"event": {"type": "init", "runner": {"name": "scripted", "version": "0"}, "tools": []}}, {"event": {"type": "result", "status": "ok", "message": "done"}}]}}' \
-uv run pytest packages/troupe/tests/test_runner_conformance.py -k environment
+uv run pytest packages/troupe/tests/unit/test_runner_conformance.py -k environment
 ```
 
 A runner that talks to a service needs a runtime. Give it one in `TROUPE_CONFORMANCE_RUNTIME`: a JSON object holding
@@ -832,7 +832,7 @@ export MY_SERVICE_KEY=...   # the key itself stays in your environment, never in
 TROUPE_CONFORMANCE_RUNNER='["my-runner"]' \
 TROUPE_CONFORMANCE_OPTIONS='{}' \
 TROUPE_CONFORMANCE_RUNTIME='{"name": "my-service", "endpoint": "https://api.example.com/v1", "model": "small", "credential": {"env": "MY_SERVICE_KEY"}}' \
-uv run pytest packages/troupe/tests/test_runner_conformance.py -k environment
+uv run pytest packages/troupe/tests/unit/test_runner_conformance.py -k environment
 ```
 
 For a built-in runtime, its name and a model are enough: `{"name": "openai", "model": "gpt-4.1-mini"}` uses the

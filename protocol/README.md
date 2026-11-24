@@ -75,7 +75,7 @@ A field with nothing to say is left out, never sent as `null` (issue
   null today is external: a runner's error response has `"id": null` when the request couldn't be read, as
   JSON-RPC 2.0 requires.
 
-`packages/troupe/tests/test_protocol_strict.py` checks every schema against these rules, and fails naming the file
+`packages/troupe/tests/unit/test_protocol_strict.py` checks every schema against these rules, and fails naming the file
 and the location that breaks one. In the tests, every error and notice troupe constructs is validated against its
 code's schema as it's made.
 

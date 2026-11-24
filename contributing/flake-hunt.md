@@ -69,11 +69,11 @@ A malformed option is refused before anything runs, naming the option, the value
 hunts these by default: its `SELECTION` names them as patterns, so a new `test_platform_*.py` file joins on its own.
 
 ```
-packages/troupe/tests/test_platform_append.py packages/troupe/tests/test_platform_environment.py
-packages/troupe/tests/test_platform_files.py packages/troupe/tests/test_platform_interrupts.py
-packages/troupe/tests/test_platform_locks.py packages/troupe/tests/test_platform_paths.py
-packages/troupe/tests/test_platform_processes.py packages/troupe/tests/test_platform_watching.py
-packages/troupe/tests/test_run_host.py packages/troupe/tests/test_cli_runs.py
+packages/troupe/tests/unit/test_platform_append.py packages/troupe/tests/unit/test_platform_environment.py
+packages/troupe/tests/unit/test_platform_files.py packages/troupe/tests/integration/test_platform_interrupts.py
+packages/troupe/tests/integration/test_platform_locks.py packages/troupe/tests/unit/test_platform_paths.py
+packages/troupe/tests/integration/test_platform_processes.py packages/troupe/tests/unit/test_platform_watching.py
+packages/troupe/tests/integration/test_run_host.py packages/troupe/tests/integration/test_cli_runs.py
 packages/troupe-store-text/tests packages/troupe-vcs-git/tests plugins/runner-scripted/tests
 ```
 
@@ -84,7 +84,7 @@ It takes about 2 minutes a round on a laptop. The whole suite takes about 4.
 Each round is printed as it ends:
 
 ```
-w1r3 failed in 131.2s, 390 tests: packages/troupe/tests/test_run_host.py::test_a_quiet_runner_is_announced_as_silent
+w1r3 failed in 131.2s, 390 tests: packages/troupe/tests/integration/test_run_host.py::test_a_quiet_runner_is_announced_as_silent
 ```
 
 At the end, a summary names the platform, the interpreter, the workers, rounds and load, and the load average where

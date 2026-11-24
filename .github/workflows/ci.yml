@@ -30,7 +30,7 @@ name: CI
 # required checks reported on, and that commit combines main with every pull request queued ahead,
 # which no pull request tested. `changes` doesn't run on a merge group, so it gets no answer and
 # runs the full check. Nothing may filter or narrow it, or the queue waits on a `check` that never
-# reports: scripts/tests/test_ci_workflow.py fails if something does.
+# reports: scripts/tests/unit/test_ci_workflow.py fails if something does.
 on:
   pull_request:
     # GitHub's default types, written out because naming one replaces them, and ready_for_review:
