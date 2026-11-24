@@ -718,7 +718,7 @@ def test_on_windows_a_rounds_tests_still_get_a_real_ctrl_c(tmp_path: Path) -> No
     # A round started in a new process group has Ctrl-C turned off, and so does everything it
     # starts: this test failed in every round of the owner's first Windows hunt (#100).
     real = (
-        "packages/troupe/tests/test_platform_interrupts.py"
+        "packages/troupe/tests/integration/test_platform_interrupts.py"
         "::test_a_real_ctrl_c_on_windows_calls_back_too"
     )
     out = tmp_path / "out"

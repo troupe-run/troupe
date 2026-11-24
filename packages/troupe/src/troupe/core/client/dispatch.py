@@ -71,7 +71,7 @@ FAMILIES: Mapping[str, Callable[[], Mapping[str, Method]]] = {
     "init": _init,
 }
 """Every method the core offers, by name: how to load its family's handlers. A method its
-family defines but this table doesn't name fails tests/test_cli_startup.py."""
+family defines but this table doesn't name fails tests/unit/test_cli_startup_unit.py."""
 
 
 def handlers() -> Mapping[str, Method]:

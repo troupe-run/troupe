@@ -127,9 +127,9 @@ def descriptors_past_fd_setsize() -> Iterator[None]:
             resource.setrlimit(resource.RLIMIT_NOFILE, (soft, hard))
 
 
-def test_a_pause_in_a_stream_is_the_pause_timed_above(monkeypatch: pytest.MonkeyPatch) -> None:
-    # The test above times pause() on its own; this one checks the fake's stream uses it for a
-    # Pause, so a stream can't go back to a bare sleep unnoticed (#352).
+def test_a_pause_in_a_stream_is_the_pause_timed_on_its_own(monkeypatch: pytest.MonkeyPatch) -> None:
+    # unit/test_openai_fake_endpoint_unit.py times pause() on its own; this one checks the fake's
+    # stream uses it for a Pause, so a stream can't go back to a bare sleep unnoticed (#352).
     paused: list[float] = []
     monkeypatch.setattr(fake_endpoint, "pause", paused.append)
     with FakeEndpoint([Reply(lines=sse([Pause(0.3)]))]) as fake:

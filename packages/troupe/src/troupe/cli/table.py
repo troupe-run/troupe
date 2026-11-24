@@ -4,7 +4,8 @@ D2).
 Reading a command line needs only this, so it imports nothing heavy. A command's work lives in
 its family's module (troupe.cli.commands, troupe.cli.config, troupe.cli.init), which ``run``
 imports when that command runs: ``troupe --help`` or a usage error never loads schema checking,
-YAML, the async runtime or the core's handlers. tests/test_cli_startup.py keeps it that way.
+YAML, the async runtime or the core's handlers. tests/integration/test_cli_startup.py keeps it that
+way.
 """
 
 import argparse
