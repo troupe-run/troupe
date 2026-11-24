@@ -7,6 +7,7 @@ written out. The reproduction tests read the real 0.2.0 artefacts: eeab95c's rel
 as git held it, the six releases as published, and this checkout's changelogs, whose 0.2.0-era
 sections never change."""
 
+import hashlib
 import html
 import json
 import re
@@ -22,9 +23,14 @@ from release_config import CONFIG, MANIFEST
 from release_tags import UnreadableError, expected
 
 FIXTURES = Path(__file__).parent / "fixtures" / "release-notes"
-BLOB = FIXTURES / "release-notes-eeab95c.bin"
-"""eeab95c's release-notes.md from the git blob API: what release-please 17.6.0 read back (D7)."""
-PUBLISHED = sorted(FIXTURES.glob("*.md"))
+BEFORE = FIXTURES / "release-notes-eeab95c-before.md"
+"""#263's notes as release-please 17.6.0 had them before saving: eeab95c's release-notes.md blob
+with each lone 0xA0 put back as the ⚠ it was cut from (D7). Kept as text, which a review can read;
+the tests rebuild the blob from it and check its git id."""
+BLOB_ID = "055e5de4f6ab666da7ab26877b329446a5305560"
+"""The git id of eeab95c's release-notes.md blob: the `sha` the contents API gives for
+`repos/troupe-run/troupe/contents/release-notes.md?ref=eeab95c`."""
+PUBLISHED = sorted(path for path in FIXTURES.glob("*.md") if path != BEFORE)
 """The six releases #486 names, their bodies as published (fetched 2026-11-24)."""
 LOST = {path.stem for path in PUBLISHED}
 WARNING = "### ⚠ BREAKING CHANGES"
@@ -282,9 +288,14 @@ def node_binary(text: str) -> bytes:
     return text.encode("utf-16-le")[::2]
 
 
+def blob() -> bytes:
+    """What release-please saved: the notes encoded as createFileOnNewBranch encodes them."""
+    return node_binary(BEFORE.read_bytes().decode("utf-8"))
+
+
 def read_back() -> str:
     """The blob as release-please read it: git-file-utils decodes it as UTF-8, with replacement."""
-    return BLOB.read_bytes().decode("utf-8", errors="replace")
+    return blob().decode("utf-8", errors="replace")
 
 
 def blocks() -> dict[str, str]:
@@ -300,11 +311,19 @@ def blocks() -> dict[str, str]:
     return {f"{c}-v{v}": html.unescape(notes) for c, v, notes in found}
 
 
+def test_encoding_the_notes_as_release_please_does_gives_eeab95cs_blob() -> None:
+    saved = blob()
+    assert (
+        hashlib.sha1(b"blob %d\0" % len(saved) + saved, usedforsecurity=False).hexdigest()
+        == BLOB_ID
+    )
+
+
 def test_the_blob_holds_the_low_byte_of_each_warning_sign_and_no_other_non_ascii() -> None:
-    blob = BLOB.read_bytes()
+    saved = blob()
     assert node_binary(WARNING) == b"### \xa0 BREAKING CHANGES"
-    assert blob.count(node_binary(WARNING)) == 8
-    assert sum(byte > 0x7F for byte in blob) == 8
+    assert saved.count(node_binary(WARNING)) == 8
+    assert sum(byte > 0x7F for byte in saved) == 8
 
 
 def test_reading_the_blob_back_turns_each_warning_sign_into_a_replacement() -> None:

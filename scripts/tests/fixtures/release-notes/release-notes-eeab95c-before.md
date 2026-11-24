@@ -7,7 +7,7 @@
 ## [0.2.0](https://github.com/troupe-run/troupe/compare/troupe-v0.1.0...troupe-v0.2.0) (2026-11-20)
 
 
-###   BREAKING CHANGES
+### âš  BREAKING CHANGES
 
 * **openai:** the OpenAI runner is troupe-run's openai extra, no longer in the base install; install troupe-run[openai] or [all].
 * **runner-ollama:** troupe-run no longer installs the Ollama runner by default; install troupe-run[ollama] (or troupe-run[all]).
@@ -157,7 +157,7 @@
 ## 0.1.0 (2026-11-20)
 
 
-###   BREAKING CHANGES
+### âš  BREAKING CHANGES
 
 * **sdk:** EventNumbering requires send_context.
 * **runner-protocol:** a runner that predates this rejects run/start's new onContextFull field. The contract is version 0, and every runner is in this repository.
@@ -271,7 +271,7 @@
 ## 0.1.0 (2026-11-20)
 
 
-###   BREAKING CHANGES
+### âš  BREAKING CHANGES
 
 * **sdk:** EventNumbering requires send_context.
 
@@ -299,7 +299,7 @@
 ## [0.2.0](https://github.com/troupe-run/troupe/compare/troupe-runner-claude-code-v0.1.0...troupe-runner-claude-code-v0.2.0) (2026-11-20)
 
 
-###   BREAKING CHANGES
+### âš  BREAKING CHANGES
 
 * **runner-protocol:** a runner that predates this rejects run/start's new onContextFull field. The contract is version 0, and every runner is in this repository.
 * **claude-code:** a Claude Code run whose context fills now ends with an error result instead of compacting. A long run that got through by compacting fails until its task is split or its actor opts in ([#310](https://github.com/troupe-run/troupe/issues/310)).
@@ -359,7 +359,7 @@
 ## 0.1.0 (2026-11-20)
 
 
-###   BREAKING CHANGES
+### âš  BREAKING CHANGES
 
 * **runner-ollama:** troupe-run no longer installs the Ollama runner by default; install troupe-run[ollama] (or troupe-run[all]).
 * **runner-protocol:** a runner that predates this rejects run/start's new onContextFull field. The contract is version 0, and every runner is in this repository.
@@ -403,7 +403,7 @@
 ## 0.1.0 (2026-11-20)
 
 
-###   BREAKING CHANGES
+### âš  BREAKING CHANGES
 
 * **openai:** the OpenAI runner is troupe-run's openai extra, no longer in the base install; install troupe-run[openai] or [all].
 * **sdk:** EventNumbering requires send_context.
@@ -460,7 +460,7 @@
 ## [0.2.0](https://github.com/troupe-run/troupe/compare/troupe-runner-scripted-v0.1.0...troupe-runner-scripted-v0.2.0) (2026-11-20)
 
 
-###   BREAKING CHANGES
+### âš  BREAKING CHANGES
 
 * **runner-protocol:** a runner that predates this rejects run/start's new onContextFull field. The contract is version 0, and every runner is in this repository.
 * **runner-protocol:** say when a retry wasn't safe
@@ -495,7 +495,7 @@
 ## [0.2.0](https://github.com/troupe-run/troupe/compare/protocol-v0.1.0...protocol-v0.2.0) (2026-11-20)
 
 
-###   BREAKING CHANGES
+### âš  BREAKING CHANGES
 
 * **runs:** Run.Started requires on_context_full, so a run started before this no longer reads. There are no theatres to migrate.
 * **runner-protocol:** a runner that predates this rejects run/start's new onContextFull field. The contract is version 0, and every runner is in this repository.
