@@ -235,8 +235,9 @@ gh release create <component>-v<version> --target <the release pull request's me
 The tag is permanent, so check the target commit and the notes before running it. Pre-release applies until the
 component reaches 1.0, as above. A release made by hand doesn't run `pin-bundle`. The next release run pins it,
 or the pinning pull request may already name it, since the script reads the manifest.
-`python3 scripts/release_notes.py --section <component>-v<version>` prints the changelog section to use as the notes
-file.
+
+For the `--notes-file` in the command above, `python3 scripts/release_notes.py --section <component>-v<version>`
+prints that version's changelog section.
 
 ## Repairing a release's notes
 
