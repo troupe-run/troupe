@@ -19,6 +19,9 @@ from protocol_schemas import check_error
 from troupe.core import config_paths as paths
 from troupe.core.errors import TroupeError
 
+TESTS_ROOT = next(p for p in Path(__file__).resolve().parents if p.name == "tests")
+"""This suite's tests directory, found by name so the file can sit at any depth under it."""
+
 PLAIN = st.text(st.characters(codec="utf-8", exclude_characters=".[]=\\"), min_size=1)
 """A key the old reader could read: non-empty, and holding none of ``. [ ] = \\``."""
 
@@ -227,7 +230,7 @@ def test_a_dot_before_an_unclosed_bracket_is_fixed_without_the_rest() -> None:
 # No message builds a config path by hand (review of #324: runtimes.py's fix did, and a key with a
 # dot came out split). Every one goes through shown.
 
-SOURCE = Path(__file__).resolve().parents[1] / "src" / "troupe"
+SOURCE = TESTS_ROOT.parent / "src" / "troupe"
 HAND_BUILT = re.compile(
     r"""f"[^"]*\b(?:actors|runtimes)\.\{|f'[^']*\b(?:actors|runtimes)\.\{|\{RUNTIMES\}\."""
 )

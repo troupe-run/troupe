@@ -23,7 +23,10 @@ from troupe.core.errors import TroupeError
 from troupe.core.runs.changes import accept, diff
 from troupe.core.workspaces import worktree_path
 
-CHILD = Path(__file__).with_name("settle_child.py")
+TESTS_ROOT = next(p for p in Path(__file__).resolve().parents if p.name == "tests")
+"""This suite's tests directory, found by name so the file can sit at any depth under it."""
+
+CHILD = TESTS_ROOT / "settle_child.py"
 
 
 def call_diff(made: Harness, run: str) -> m.DiffResult:

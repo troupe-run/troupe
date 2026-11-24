@@ -14,7 +14,10 @@ import pytest
 
 from troupe_plugin_sdk.runner import RUNTIME_ENGINES
 
-TOOL = Path(__file__).resolve().parents[1] / "tools" / "capture_anthropic.py"
+TESTS_ROOT = next(p for p in Path(__file__).resolve().parents if p.name == "tests")
+"""This suite's tests directory, found by name so the file can sit at any depth under it."""
+
+TOOL = TESTS_ROOT.parent / "tools" / "capture_anthropic.py"
 KEY = "sk-ant-api03-capture0123456789abcd"
 
 

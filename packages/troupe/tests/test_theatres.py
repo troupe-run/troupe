@@ -19,9 +19,12 @@ import gitrepo
 from gitrepo import COUNTS_VARIABLE, Repo, counts, from_template, make_repo
 from runtesting import build_committed, committed, theatre
 
+TESTS_ROOT = next(p for p in Path(__file__).resolve().parents if p.name == "tests")
+"""This suite's tests directory, found by name so the file can sit at any depth under it."""
+
 pytest_plugins = ["pytester"]
 
-TESTS = Path(__file__).resolve().parent
+TESTS = TESTS_ROOT
 
 
 def test_a_committed_theatre_has_a_clean_status_and_no_stat_dirty_files(tmp_path: Path) -> None:

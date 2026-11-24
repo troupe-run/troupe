@@ -14,7 +14,10 @@ import pytest
 from platform_watching_shared import drain, settled
 from storetesting import BOUND, SLOW_STRETCH_SECONDS, STALL_SECONDS, WITHIN, watched_delays
 
-CHILD = Path(__file__).with_name("watch_child.py")
+TESTS_ROOT = next(p for p in Path(__file__).resolve().parents if p.name == "tests")
+"""This suite's tests directory, found by name so the file can sit at any depth under it."""
+
+CHILD = TESTS_ROOT / "watch_child.py"
 
 
 class Changer:

@@ -19,7 +19,10 @@ from fake_endpoint import FakeEndpoint, Reply, final, function_call, sse, text_r
 from openai_harness import CANARY, Session
 from openai_library_shared import LIBRARY_VARIABLES
 
-FIRST_REQUEST = Path(__file__).parent / "data" / "first-request.json"
+TESTS_ROOT = next(p for p in Path(__file__).resolve().parents if p.name == "tests")
+"""This suite's tests directory, found by name so the file can sit at any depth under it."""
+
+FIRST_REQUEST = TESTS_ROOT / "data" / "first-request.json"
 """The body of a run's first request as the runner sent it over urllib, before the openai package
 (openai-library design D1): the run below, with the direction, character and model it names."""
 

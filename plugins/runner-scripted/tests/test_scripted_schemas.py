@@ -14,8 +14,11 @@ import pytest
 
 from scripted_harness import OWN, RUNNER_SCHEMAS, SCHEMAS, _registry
 
+TESTS_ROOT = next(p for p in Path(__file__).resolve().parents if p.name == "tests")
+"""This suite's tests directory, found by name so the file can sit at any depth under it."""
+
 # The Claude Code runner's recordings, which this runner replays (claude-code-runner design D13).
-FIXTURES = Path(__file__).resolve().parents[2] / "runner-claude-code" / "fixtures" / "claude-code"
+FIXTURES = TESTS_ROOT.parents[1] / "runner-claude-code" / "fixtures" / "claude-code"
 RECORDINGS = sorted(FIXTURES.glob("*/recording.jsonl"))
 OPTIONS = json.loads((RUNNER_SCHEMAS / "options.schema.json").read_text(encoding="utf-8"))
 CONTRACT_EVENTS = json.loads(
@@ -108,7 +111,7 @@ def test_options_outside_the_schema_do_not_validate(options: dict[str, Any]) -> 
 
 @pytest.mark.docs  # reads the README (scripts/check-paths.toml)
 def test_the_readmes_options_table_lists_exactly_the_options_schemas_properties() -> None:
-    readme = (Path(__file__).resolve().parents[1] / "README.md").read_text(encoding="utf-8")
+    readme = (TESTS_ROOT.parent / "README.md").read_text(encoding="utf-8")
     section = readme.split("## Options", 1)[1].split("\n## ", 1)[0]
     documented = set(re.findall(r"^\| `([^`]+)` \|", section, re.M))
     assert documented == set(OPTIONS["properties"])

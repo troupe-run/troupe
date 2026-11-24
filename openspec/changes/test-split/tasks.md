@@ -17,7 +17,7 @@
 
 ## 3. Location-independent paths (commit: edits only)
 
-- [ ] 3.1 Make every test file that finds its suite, plugin or repository from `Path(__file__)` by a fixed depth find
+- [x] 3.1 Make every test file that finds its suite, plugin or repository from `Path(__file__)` by a fixed depth find
   the suite's `tests/` directory by name instead (D7.2). Verify: no test file uses `parents[` or `with_name(` on its
   own `__file__` (grep), and the check passes.
 

@@ -4,7 +4,10 @@ ollama-library design D2)."""
 import tomllib
 from pathlib import Path
 
-PYPROJECT = Path(__file__).resolve().parents[1] / "pyproject.toml"
+TESTS_ROOT = next(p for p in Path(__file__).resolve().parents if p.name == "tests")
+"""This suite's tests directory, found by name so the file can sit at any depth under it."""
+
+PYPROJECT = TESTS_ROOT.parent / "pyproject.toml"
 
 
 def test_the_plugin_depends_on_the_sdk_and_on_httpx2_and_httpcore2_pinned_and_nothing_else() -> (

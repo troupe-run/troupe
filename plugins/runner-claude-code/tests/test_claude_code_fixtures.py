@@ -7,7 +7,10 @@ from pathlib import Path
 
 import pytest
 
-FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "claude-code"
+TESTS_ROOT = next(p for p in Path(__file__).resolve().parents if p.name == "tests")
+"""This suite's tests directory, found by name so the file can sit at any depth under it."""
+
+FIXTURES = TESTS_ROOT.parent / "fixtures" / "claude-code"
 NAMES = sorted(path.name for path in FIXTURES.iterdir() if path.is_dir())
 
 SECRET_PATTERNS = {

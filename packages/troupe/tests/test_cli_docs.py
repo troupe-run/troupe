@@ -13,9 +13,12 @@ import pytest
 
 from troupe.cli import main
 
+TESTS_ROOT = next(p for p in Path(__file__).resolve().parents if p.name == "tests")
+"""This suite's tests directory, found by name so the file can sit at any depth under it."""
+
 pytestmark = pytest.mark.docs  # reads docs/ (scripts/check-paths.toml)
 
-DOC = Path(__file__).resolve().parents[3] / "docs" / "prompt-book" / "cli.md"
+DOC = TESTS_ROOT.parents[2] / "docs" / "prompt-book" / "cli.md"
 BLOCK = re.compile(r"```console\n(.*?)```", re.DOTALL)
 
 

@@ -17,6 +17,9 @@ import pytest
 from openai_fixture_replay import NAMES, load
 from openai_harness import FIXTURES
 
+TESTS_ROOT = next(p for p in Path(__file__).resolve().parents if p.name == "tests")
+"""This suite's tests directory, found by name so the file can sit at any depth under it."""
+
 REQUIRED = {
     "openai-tool-loop",
     "ollama-tool-loop",
@@ -35,7 +38,7 @@ REQUIRED = {
 each way a hosted service fails that a fixture can show, and a run told to compact that does and
 one that can't."""
 
-DATA = Path(__file__).parent / "data"
+DATA = TESTS_ROOT / "data"
 """The raw recordings the fixtures were made from, scanned as well."""
 
 SECRETS = {

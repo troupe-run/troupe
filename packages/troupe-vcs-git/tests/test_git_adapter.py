@@ -17,6 +17,9 @@ from troupe.platform.processes import is_running
 from troupe_vcs_git import GitAdapter
 from troupe_vcs_git.defaults import GIT_ENVIRONMENT, GIT_REPOSITORY_LOCATION_VARIABLES
 
+TESTS_ROOT = next(p for p in Path(__file__).resolve().parents if p.name == "tests")
+"""This suite's tests directory, found by name so the file can sit at any depth under it."""
+
 
 def adapter(repo: Repo, **extra_env: str) -> GitAdapter:
     return GitAdapter(repo.path, source={**repo.env, **extra_env})
@@ -223,7 +226,7 @@ def test_every_repository_location_variable_the_installed_git_lists_is_excluded(
         ["git", "rev-parse", "--local-env-vars"],  # noqa: S607 - the installed git, from PATH
         capture_output=True,
         check=True,
-        cwd=Path(__file__).parent,
+        cwd=TESTS_ROOT,
     ).stdout.decode("utf-8")
     names = set(listed.split())
     assert names

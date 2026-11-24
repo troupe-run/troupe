@@ -12,6 +12,9 @@ import pytest
 import check
 import guard
 
+TESTS_ROOT = next(p for p in Path(__file__).resolve().parents if p.name == "tests")
+"""This suite's tests directory, found by name so the file can sit at any depth under it."""
+
 DECLARATION = """\
 version = 1
 
@@ -165,6 +168,6 @@ def test_a_scoped_check_runs_every_gate_and_narrows_only_the_tests() -> None:
 )
 def test_troupes_declaration_scopes_the_user_and_contributor_docs_to_docs(paths: list[str]) -> None:
     declaration = guard.check_paths(
-        (Path(__file__).resolve().parents[2] / guard.CHECK_PATHS).read_text(encoding="utf-8")
+        (TESTS_ROOT.parents[1] / guard.CHECK_PATHS).read_text(encoding="utf-8")
     )
     assert guard.check_scope(paths, declaration).names == ("docs",)

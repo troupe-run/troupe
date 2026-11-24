@@ -13,9 +13,12 @@ import pytest
 
 from troupe.core import errors
 
+TESTS_ROOT = next(p for p in Path(__file__).resolve().parents if p.name == "tests")
+"""This suite's tests directory, found by name so the file can sit at any depth under it."""
+
 pytest_plugins = ["pytester"]
 
-HERE = Path(__file__).resolve().parent
+HERE = TESTS_ROOT
 UNEXERCISED = "protocol_guard: no test raised these codes"
 
 

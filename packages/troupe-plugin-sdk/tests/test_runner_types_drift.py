@@ -20,7 +20,10 @@ import pytest
 from troupe_plugin_sdk import runner as p
 from troupe_plugin_sdk.messages import Message
 
-PROTOCOL = Path(__file__).resolve().parents[3] / "protocol" / "schemas"
+TESTS_ROOT = next(p for p in Path(__file__).resolve().parents if p.name == "tests")
+"""This suite's tests directory, found by name so the file can sit at any depth under it."""
+
+PROTOCOL = TESTS_ROOT.parents[2] / "protocol" / "schemas"
 ROOT = "https://troupe.run/protocol/"
 BASE = ROOT + "runner/"
 
