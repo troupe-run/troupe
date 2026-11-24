@@ -119,7 +119,8 @@ kind, and optionally a check that excuses an event that isn't really outside (ow
   (the OpenAI SDK's headers do), so it would fall on whichever test asked first in a process. The serial run of the
   unit set found exactly that.
 - **a socket**: `socket.connect` and `socket.bind`, network or Unix-domain, excusing those made inside
-  `socket.socketpair` (on Windows it builds the pair with a loopback bind and connect; on Linux and macOS it makes
+  `socket.socketpair` (where the platform has no native pair, Windows, `socket.py` binds that name to
+  `_fallback_socketpair`, which builds the pair with a loopback bind and connect; on Linux and macOS it makes
   no such call), since a pair only links two ends in the same process.
 - **a git theatre**: `troupe.tests.theatre`, an audit event core's `gitrepo` helper raises for every repository it
   hands a test, copied or built. A theatre is copied from a template each test process builds once, so only the test
